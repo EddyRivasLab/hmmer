@@ -221,8 +221,8 @@ PAMPrior(char *pamfile, struct p7prior_s *pri, float wt)
   blastpamfile = FileConcat("aa", pamfile);
 
   if ((fp = fopen(pamfile, "r")) == NULL &&
-      (fp = EnvFileOpen(pamfile, "BLASTMAT")) == NULL &&
-      (fp = EnvFileOpen(blastpamfile, "BLASTMAT")) == NULL)
+      (fp = EnvFileOpen(pamfile, "BLASTMAT", NULL)) == NULL &&
+      (fp = EnvFileOpen(blastpamfile, "BLASTMAT", NULL)) == NULL)
     Die("Failed to open PAM scoring matrix file %s", pamfile);
   if (! ParsePAMFile(fp, &pam, &scale))
     Die("Failed to parse PAM scoring matrix file %s", pamfile);
