@@ -237,7 +237,7 @@ main(int argc, char **argv)
 
       if (do_null2)  sc -= TraceScoreCorrection(hmm, tr, dsq);
 
-#if DEBUGLEVEL >= DEBUG_LOTS
+#if DEBUGLEVEL >= 2
       P7PrintTrace(stdout, tr, hmm, dsq); 
 #endif
 
@@ -487,7 +487,7 @@ record_domains(struct tophit_s *h,
       pvalue = PValue(hmm, score); 
       TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
       
-#if DEBUGLEVEL >= DEBUG_LOTS
+#if DEBUGLEVEL >= 2
       P7PrintTrace(stdout, tarr[idx], hmm, dsq); 
 #endif
 

@@ -168,10 +168,8 @@ AddToHistogram(struct histogram_s *h, float sc)
   if (score < h->lowscore) h->lowscore   = score;
   if (score > h->highscore) h->highscore = score;
 
-#if DEBUGLEVEL >= DEBUG_AGGRESSIVE
-  fprintf(stderr, "AddToHistogram(): added %.1f; rounded to %d; in bin %d (%d-%d)\n",
-	  sc, score, score-h->min, h->min, h->max);
-#endif
+  SQD_DPRINTF3(("AddToHistogram(): added %.1f; rounded to %d; in bin %d (%d-%d)\n",
+	  sc, score, score-h->min, h->min, h->max));
   return;
 }
 
@@ -1171,7 +1169,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
   if (i == 100)
     {
       float left, right, mid;
-      Worry(DEBUG_LIGHT, "Newton/Raphson failed; switchover to bisection");
+      SQD_DPRINTF2(("EVDMaxLikelyFit(): Newton/Raphson failed; switchover to bisection"));
 
 				/* First we need to bracket the root */
       lambda = right = left = 0.2;
@@ -1181,7 +1179,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 	  do {
 	    left -= 0.1;
 	    if (left < 0.) { 
-	      Worry(DEBUG_LIGHT, "failed to bracket root"); 
+	      SQD_DPRINTF2(("EVDMaxLikelyFit(): failed to bracket root")); 
 	      return 0; 
 	    }
 	    Lawless416(x, c, n, left, &fx, &dfx);
@@ -1193,7 +1191,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 	    right += 0.1;
 	    Lawless416(x, c, n, right, &fx, &dfx);
 	    if (right > 100.) {
-	      Worry(DEBUG_LIGHT, "failed to bracket root"); 
+	      SQD_DPRINTF2(("EVDMaxLikelyFit(): failed to bracket root")); 
 	      return 0; 
 	    }
 	  } while (fx > 0.);
@@ -1208,7 +1206,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 	  else          right = mid;
 	}
       if (i == 100) { 
-	Worry(DEBUG_LIGHT, "even the bisection search failed"); 
+	SQD_DPRINTF2(("EVDMaxLikelyFit(): even the bisection search failed")); 
 	return 0; 
       }
       lambda = mid;
@@ -1296,7 +1294,7 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
     {
       float left, right, mid;
 				/* First we need to bracket the root */
-      Worry(DEBUG_LIGHT, "Newton/Raphson failed; switched to bisection");
+      SQD_DPRINTF2(("EVDCensoredFit(): Newton/Raphson failed; switched to bisection"));
       lambda = right = left = 0.2;
       Lawless422(x, y, n, z, c, lambda, &fx, &dfx);
       if (fx < 0.) 
@@ -1304,7 +1302,7 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 	  do {
 	    left -= 0.03;
 	    if (left < 0.) { 
-	      Worry(DEBUG_LIGHT, "failed to bracket root"); 
+	      SQD_DPRINTF2(("EVDCensoredFit(): failed to bracket root")); 
 	      return 0;
 	    }
 	    Lawless422(x, y, n, z, c, left, &fx, &dfx);
@@ -1316,7 +1314,7 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 	    right += 0.1;
 	    Lawless422(x, y, n, z, c, left, &fx, &dfx);
 	    if (right > 100.) {
-	      Worry(DEBUG_LIGHT, "failed to bracket root");
+	      SQD_DPRINTF2(("EVDCensoredFit(): failed to bracket root"));
 	      return 0;
 	    }
 	  } while (fx > 0.);
@@ -1331,7 +1329,7 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 	  else          right = mid;
 	}
       if (i == 100) {
-	Worry(DEBUG_LIGHT, "even the bisection search failed");
+	SQD_DPRINTF2(("EVDCensoredFit(): even the bisection search failed"));
 	return 0;
       }
       lambda = mid;
