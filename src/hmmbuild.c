@@ -1012,7 +1012,7 @@ maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
         }
       avgs /= nseq;
       printf("%4d %6.1f %6.1f %6.1f %7.2f %7.2f %4d %5d %7.2f %8.5f\n",
-             iteration, 
+             i1, 
              avgs, mins, maxs, 
              minw, maxw, posw, highw,
              relative_entropy, converge_criterion);
