@@ -251,26 +251,30 @@ extern void Renormalize(struct hmm_struc *hmm);
 /* from tophits.c
  * Support for keeping/sorting top scoring hit/alignment lists
  */
-extern struct tophit_s *AllocTophits(int H, int A);
-extern void   FreeTophits(struct tophit_s *hitlist);
+extern struct tophit_s *AllocTophits(int lumpsize);
+extern void   GrowTophits(struct tophit_s *h);
+extern void   FreeTophits(struct tophit_s *h);
 extern struct fancyali_s *AllocFancyAli(void);
 extern void   FreeFancyAli(struct fancyali_s *ali);
-extern void   RegisterHit(struct tophit_s *hitlist, 
-			  double sortkey, double evalue, float score, 
-			  char *name, char *desc, int sqfrom, int sqto, int sqlen, 
+extern void   RegisterHit(struct tophit_s *h, double sortkey, 
+			  double pvalue, float score, 
+			  double motherp, float mothersc,
+			  char *name, char *desc, 
+			  int sqfrom, int sqto, int sqlen, 
 			  int hmmfrom, int hmmto, int hmmlen, 
 			  int domidx, int ndom, 
 			  struct fancyali_s *ali);
 extern void GetRankedHit(struct tophit_s *h, int rank, 
-			 double *r_evalue, float *r_score, 
+			 double *r_pvalue, float *r_score, 
+			 double *r_motherp, float *r_mothersc,
 			 char **r_name, char **r_desc,
 			 int *r_sqfrom, int *r_sqto, int *r_sqlen,
 			 int *r_hmmfrom, int *r_hmmto, int *r_hmmlen,
 			 int *r_domidx, int *r_ndom,
 			 struct fancyali_s **r_ali);
 extern int    TophitsMaxName(struct tophit_s *h);
-extern void   FastSortTophits(struct tophit_s *h);
 extern void   FullSortTophits(struct tophit_s *h);
+extern void   TophitsReport(struct tophit_s *h, double E, int nseq);
 
 /* from trace.c
  * Support for traceback (state path) structure
