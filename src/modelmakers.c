@@ -97,7 +97,7 @@ P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
   int      apos;                /* counter for aligned columns         */
 
   /* Make sure we have all the info about the alignment that we need */
-  if (! (ainfo->flags & AINFO_RF))
+  if (ainfo->rf == NULL)
     Die("Alignment must have #=RF annotation to hand-build an HMM");
 				/* Allocation */
   matassign = (int *) MallocOrDie (sizeof(int) * (ainfo->alen+1));
@@ -549,8 +549,7 @@ matassign2hmm(char **aseq, char **dsq, AINFO *ainfo,
    * of match, delete. matassign is valid from 1..alen and is off
    * by one from ainfo->rf.
    */
-  if (ainfo->flags & AINFO_RF) free(ainfo->rf);
-  ainfo->flags |= AINFO_RF;
+  if (ainfo->rf != NULL) free(ainfo->rf);
   ainfo->rf = (char *) MallocOrDie (sizeof(char) * (ainfo->alen + 1));
   for (apos = 0; apos < ainfo->alen; apos++)
     ainfo->rf[apos] = matassign[apos+1] & ASSIGN_MATCH ? 'x' : '.';
@@ -834,7 +833,7 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
   /* Transfer reference coord annotation from alignment,
    * if available
    */
-  if (ainfo->flags & AINFO_RF) {
+  if (ainfo->rf != NULL) {
     hmm->rf[0] = ' ';
     for (apos = k = 1; apos <= ainfo->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH) /* ainfo is off by one from HMM */
@@ -846,7 +845,7 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
   /* Transfer consensus structure annotation from alignment, 
    * if available
    */
-  if (ainfo->flags & AINFO_CS) {
+  if (ainfo->cs != NULL) {
     hmm->cs[0] = ' ';
     for (apos = k = 1; apos <= ainfo->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH)
