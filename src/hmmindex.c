@@ -46,7 +46,7 @@ main(int argc, char **argv)
   char    *ssifile;             /* name of SSI index on disk       */
   HMMFILE *hmmfp;               /* opened hmm file pointer         */
   struct plan7_s     *hmm;      /* a hidden Markov model           */
-  int     idx, nhmm;		/* counter over HMMs               */
+  int     nhmm;		        /* counter over HMMs               */
   int     npri, nsec;		/* # of names, accessions          */
   int     fh;			/* file handle                     */
   int     status;		/* return status from SSI call     */

@@ -116,8 +116,10 @@ main(void)
 	  sc = P7SmallViterbi(dsq, L, hmm, &tr);
 	}
 
-      if (do_forward) sc  = P7Forward(dsq, L, hmm, NULL);
-      if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
+      if (do_forward) {
+	sc  = P7Forward(dsq, L, hmm, NULL);
+	if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
+      }
 	
       pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;

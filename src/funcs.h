@@ -56,7 +56,7 @@ extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm,
 			     struct dpmatrix_s **ret_mx);
 extern struct p7trace_s *P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm);
 extern struct p7trace_s *ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L);
-extern void   PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *dhit, struct p7trace_s   *tr, struct plan7_s *hmm, char *dsq, int L, char *seqname, char *seqacc, char *seqdesc, int do_forward, float sc_override, int do_null2, struct threshold_s *thresh, int hmmpfam_mode);
+extern float  PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *dhit, struct p7trace_s   *tr, struct plan7_s *hmm, char *dsq, int L, char *seqname, char *seqacc, char *seqdesc, int do_forward, float sc_override, int do_null2, struct threshold_s *thresh, int hmmpfam_mode);
 
 
 /* from debug.c

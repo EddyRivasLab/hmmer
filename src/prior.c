@@ -8,14 +8,12 @@
  * Support for Dirichlet prior data structure, p7prior_s.
  */
 
+#include <string.h>
+
 #include "config.h"
 #include "structs.h"
 #include "funcs.h" 
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static struct p7prior_s *default_amino_prior(void);
 static struct p7prior_s *default_nucleic_prior(void);

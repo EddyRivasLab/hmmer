@@ -81,6 +81,19 @@ static struct opt_s OPTIONS[] = {
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 
+static void main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh,
+			     int do_forward, int do_null2, int do_xnu, 
+			     struct histogram_s *histogram, struct tophit_s *ghit, 
+			     struct tophit_s *dhit, int *ret_nseq);
+static void main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
+			  int do_forward, int do_null2, int do_xnu, 
+			  struct histogram_s *histogram, struct tophit_s *ghit, 
+			  struct tophit_s *dhit, int *ret_nseq);
+static void main_loop_threaded(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh,
+			       int do_forward, int do_null2, int do_xnu, int num_threads,
+			       struct histogram_s *histogram, struct tophit_s *ghit, 
+			       struct tophit_s *dhit, int *ret_nseq);
+
 #ifdef HMMER_THREADS
 /* POSIX threads version:
  * the threads share a workpool_s structure amongst themselves,
@@ -124,15 +137,6 @@ static void  workpool_free(struct workpool_s *wpool);
 static void *worker_thread(void *ptr);
 #endif /* HMMER_THREADS */
 
-static void main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
-			     int do_null2, int do_xnu, int num_threads,
-			     struct histogram_s *histogram, struct tophit_s *ghit, 
-			     struct tophit_s *dhit, int *ret_nseq);
-#ifdef HMMER_PVM
-static void main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
-			  int do_null2, int do_xnu, struct histogram_s *histogram, 
-			  struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq);
-#endif
 
 
 int
@@ -157,7 +161,7 @@ main(int argc, char **argv)
   float   mothersc;		/* score of a whole seq parent of domain   */
   int     sqfrom, sqto;		/* coordinates in sequence                 */
   int     hmmfrom, hmmto;	/* coordinate in HMM                       */
-  char   *name, *acc, *desc;    /* hit sequence name and description       */
+  char   *name, *desc;          /* hit sequence name and description       */
   int     sqlen;		/* length of seq that was hit              */
   int     nseq;			/* number of sequences searched            */
   int     Z;			/* # of seqs for purposes of E-val calc    */
@@ -179,6 +183,8 @@ main(int argc, char **argv)
   int   do_pvm;			/* TRUE to run on Parallel Virtual Machine  */
   int   be_backwards;		/* TRUE to be backwards-compatible in output*/
   int   num_threads;		/* number of worker threads                 */
+  int   threads_support;	/* TRUE if threads support compiled in      */
+  int   pvm_support;		/* TRUE if PVM support compiled in          */
 
   /*********************************************** 
    * Parse command line
@@ -192,6 +198,17 @@ main(int argc, char **argv)
   Z           = 0;
   be_backwards= FALSE; 
 
+  pvm_support     = FALSE;
+  threads_support = FALSE;
+  num_threads     = 0;
+#ifdef HMMER_THREADS
+  num_threads     = ThreadNumber(); 
+  threads_support = TRUE;
+#endif
+#ifdef HMMER_PVM
+  pvm_support     = TRUE;
+#endif
+
   Alimit         = INT_MAX;	/* no limit on alignment output       */
   thresh.globE   = 10.0;	/* use a reasonable Eval threshold;   */
   thresh.globT   = -FLT_MAX;	/*   but no bit threshold,            */
@@ -199,12 +216,6 @@ main(int argc, char **argv)
   thresh.domE    = FLT_MAX;     /*   and no domain Eval threshold.    */
   thresh.autocut = CUT_NONE;	/*   and no Pfam cutoffs used         */
   thresh.Z       = 0;           /* Z not preset; use actual # of seqs */
-
-#ifdef HMMER_THREADS
-  num_threads = ThreadNumber(); /* only matters if we're threaded */
-#else
-  num_threads = 0;
-#endif 
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -241,13 +252,10 @@ main(int argc, char **argv)
   hmmfile = argv[optind++];
   seqfile = argv[optind++]; 
   
-#ifndef HMMER_PVM
-  if (do_pvm) Die("PVM support is not compiled into your HMMER software; --pvm doesn't work.");
-#endif
-#ifndef HMMER_THREADS
-  if (num_threads) Die("Posix threads support is not compiled into HMMER; --cpu doesn't have any effect");
-#endif
-
+  if (do_pvm && ! pvm_support) 
+    Die("PVM support is not compiled into your HMMER software; --pvm doesn't work.");
+  if (num_threads && ! threads_support)
+    Die("POSIX threads support is not compiled into HMMER; --cpu doesn't have any effect");
 
   /*********************************************** 
    * Open sequence database (might be in BLASTDB or current directory)
@@ -327,14 +335,15 @@ main(int argc, char **argv)
   ghit      = AllocTophits(200);         /* per-seq hits: 200=lumpsize */
   dhit      = AllocTophits(200);         /* domain hits:  200=lumpsize */
 
-  if (! do_pvm)
-    main_loop_serial(hmm, sqfp, &thresh, do_forward, do_null2, do_xnu, num_threads,
-		     histogram, ghit, dhit, &nseq);
-#ifdef HMMER_PVM
-  else
+  if (pvm_support && do_pvm)
     main_loop_pvm(hmm, sqfp, &thresh, do_forward, do_null2, do_xnu, 
 		  histogram, ghit, dhit, &nseq);
-#endif
+  else if (threads_support && num_threads)
+    main_loop_threaded(hmm, sqfp, &thresh, do_forward, do_null2, do_xnu, num_threads,
+		       histogram, ghit, dhit, &nseq);    
+  else
+    main_loop_serial(hmm, sqfp, &thresh, do_forward, do_null2, do_xnu, 
+		     histogram, ghit, dhit, &nseq);
 
   /*********************************************** 
    * Process hit lists, produce text output
@@ -529,7 +538,6 @@ main(int argc, char **argv)
  *           do_forward - TRUE to score using Forward()        
  *           do_null2   - TRUE to use ad hoc null2 score correction
  *           do_xnu     - TRUE to apply XNU mask
- *           num_threads- number of worker threads to start, or 0
  *           histogram  - RETURN: score histogram
  *           ghit       - RETURN: ranked global scores
  *           dhit       - RETURN: ranked domain scores
@@ -539,13 +547,10 @@ main(int argc, char **argv)
  */
 static void
 main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
-		 int do_null2, int do_xnu, int num_threads,
+		 int do_null2, int do_xnu,
 		 struct histogram_s *histogram, 
 		 struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
 {
-#ifdef HMMER_THREADS
-  struct workpool_s *wpool;	/* pool of worker threads                  */
-#else
   struct p7trace_s *tr;         /* traceback                               */
   char   *seq;                  /* target sequence                         */
   char   *dsq;		        /* digitized target sequence               */
@@ -553,17 +558,8 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
   float  sc;	        	/* score of an HMM search                  */
   double pvalue;		/* pvalue of an HMM score                  */
   double evalue;		/* evalue of an HMM score                  */
-#endif
   int    nseq;			/* number of sequences searched            */
  
-#ifdef HMMER_THREADS
-  wpool = workpool_start(hmm, sqfp, do_xnu, do_forward, do_null2, thresh,
-			 ghit, dhit, histogram, num_threads);
-  workpool_stop(wpool);
-  nseq = wpool->nseq;
-  workpool_free(wpool);
-
-#else /* unthreaded code: */
   nseq = 0;
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo))
     {
@@ -614,22 +610,22 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nseq * pvalue;
       if (sc >= thresh->globT && evalue <= thresh->globE) 
 	{
-	  PostprocessSignificantHit(ghit, dhit, 
-				    tr, hmm, dsq, sqinfo.len,
-				    sqinfo.name, 
-				    sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
-				    sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
-				    do_forward, sc,
-				    do_null2,
-				    thresh,
-				    FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
+	  sc = PostprocessSignificantHit(ghit, dhit, 
+					 tr, hmm, dsq, sqinfo.len,
+					 sqinfo.name, 
+					 sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
+					 sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
+					 do_forward, sc,
+					 do_null2,
+					 thresh,
+					 FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
 	}
+      SQD_DPRINTF2(("AddToHistogram: %s\t%f\n", sqinfo.name, sc));
       AddToHistogram(histogram, sc);
       FreeSequence(seq, &sqinfo); 
       P7FreeTrace(tr);
       free(dsq);
     }
-#endif
 
   *ret_nseq = nseq;
   return;
@@ -791,13 +787,13 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
 				/* process output */
       if (sent_trace)
 	{
-	  PostprocessSignificantHit(ghit, dhit, 
-				    tr, hmm, dsqlist[slaveidx], lenlist[slaveidx],
-				    namelist[slaveidx], acclist[slaveidx], desclist[slaveidx],
-				    do_forward, sc,
-				    do_null2,
-				    thresh,
-				    FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
+	  sc = PostprocessSignificantHit(ghit, dhit, 
+					 tr, hmm, dsqlist[slaveidx], lenlist[slaveidx],
+					 namelist[slaveidx], acclist[slaveidx], desclist[slaveidx],
+					 do_forward, sc,
+					 do_null2,
+					 thresh,
+					 FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
 	  P7FreeTrace(tr);
 	}
       AddToHistogram(histogram, sc);
@@ -836,15 +832,16 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
       			/* process output */
       if (sent_trace)
 	{
-	  PostprocessSignificantHit(ghit, dhit, 
-				    tr, hmm, dsqlist[slaveidx], lenlist[slaveidx],
-				    namelist[slaveidx], acclist[slaveidx], desclist[slaveidx],
-				    do_forward, sc,
-				    do_null2,
-				    thresh,
-				    FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
+	  sc = PostprocessSignificantHit(ghit, dhit, 
+					 tr, hmm, dsqlist[slaveidx], lenlist[slaveidx],
+					 namelist[slaveidx], acclist[slaveidx], desclist[slaveidx],
+					 do_forward, sc,
+					 do_null2,
+					 thresh,
+					 FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
 	  P7FreeTrace(tr);
 	}
+      SQD_DPRINTF2(("AddToHistogram: %s\t%f\n", namelist[slaveidx], sc));
       AddToHistogram(histogram, sc);
 
 				/* free seq info */
@@ -873,7 +870,15 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
   *ret_nseq = nseq;
   return;
 }
-#endif /* HMMER_PVM */
+#else /* HMMER_PVM off, no PVM support, dummy function: */
+static void
+main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
+	      int do_null2, int do_xnu, struct histogram_s *histogram, 
+	      struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
+{
+  Die("No PVM support");
+}
+#endif /*HMMER_PVM*/
 
 #ifdef HMMER_THREADS
 /*****************************************************************
@@ -887,7 +892,47 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
  * Threads:
  *      worker_thread()    (the actual parallelized worker thread).
  *****************************************************************/
+/* Function: main_loop_threaded
+ * Date:     SRE, Wed Feb 27 11:38:11 2002 [St. Louis]
+ *
+ * Purpose:  Search an HMM against a sequence database.
+ *           main loop for the threaded version.
+ *           
+ *           In:   HMM and open sqfile, plus options
+ *           Out:  histogram, global hits list, domain hits list, nseq.
+ *
+ * Args:     hmm        - the HMM to search with. 
+ *           sqfp       - open SQFILE for sequence database
+ *           thresh     - score/evalue threshold info
+ *           do_forward - TRUE to score using Forward()        
+ *           do_null2   - TRUE to use ad hoc null2 score correction
+ *           do_xnu     - TRUE to apply XNU mask
+ *           num_threads- number of worker threads to start, >=1
+ *           histogram  - RETURN: score histogram
+ *           ghit       - RETURN: ranked global scores
+ *           dhit       - RETURN: ranked domain scores
+ *           ret_nseq   - RETURN: actual number of seqs searched
+ *           
+ * Returns:  (void)
+ */
+static void
+main_loop_threaded(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
+		   int do_null2, int do_xnu, int num_threads,
+		   struct histogram_s *histogram, 
+		   struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
+{
+  struct workpool_s *wpool;	/* pool of worker threads                  */
+  int    nseq;			/* number of sequences searched            */
+ 
+  wpool = workpool_start(hmm, sqfp, do_xnu, do_forward, do_null2, thresh,
+			 ghit, dhit, histogram, num_threads);
+  workpool_stop(wpool);
+  nseq = wpool->nseq;
+  workpool_free(wpool);
 
+  *ret_nseq = nseq;
+  return;
+}
 /* Function: workpool_start()
  * Date:     SRE, Mon Oct  5 16:44:53 1998
  *
@@ -1061,8 +1106,10 @@ worker_thread(void *ptr)
      *    to get it; else, we already have a Viterbi score
      *    in sc.
      */
-    if (wpool->do_forward) sc  = P7Forward(dsq, sqinfo.len, wpool->hmm, NULL);
-    if (wpool->do_null2)   sc -= TraceScoreCorrection(wpool->hmm, tr, dsq);
+    if (wpool->do_forward) {
+      sc  = P7Forward(dsq, sqinfo.len, wpool->hmm, NULL);
+      if (wpool->do_null2) sc -= TraceScoreCorrection(wpool->hmm, tr, dsq);
+    }
 
     /* 3. Save the output in tophits and histogram structures, after acquiring a lock
      */
@@ -1075,16 +1122,17 @@ worker_thread(void *ptr)
  
     if (sc >= wpool->thresh->globT && evalue <= wpool->thresh->globE) 
       { 
-	PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
-				  tr, wpool->hmm, dsq, sqinfo.len,
-				  sqinfo.name, 
-				  sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
-				  sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
-				  wpool->do_forward, sc,
-				  wpool->do_null2,
-				  wpool->thresh,
-				  FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
+	sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
+				       tr, wpool->hmm, dsq, sqinfo.len,
+				       sqinfo.name, 
+				       sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
+				       sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
+				       wpool->do_forward, sc,
+				       wpool->do_null2,
+				       wpool->thresh,
+				       FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
       }
+    SQD_DPRINTF2(("AddToHistogram: %s\t%f\n", sqinfo.name, sc));
     AddToHistogram(wpool->hist, sc);
     if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
       Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
@@ -1094,6 +1142,14 @@ worker_thread(void *ptr)
     free(dsq);
   } /* end 'infinite' loop over seqs in this thread */
 }
-
+#else /*HMMER_THREADS off; no threads support; dummy stub: */
+static void
+main_loop_threaded(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
+		   int do_null2, int do_xnu, int num_threads,
+		   struct histogram_s *histogram, 
+		   struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
+{
+  Die("No threads support");
+}
 #endif /* HMMER_THREADS */
 

@@ -293,7 +293,7 @@ DisplayPlan7Matrix(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx)
   int k;
 
   printf("         *      ");
-  for (i=1;i<=L;i++) printf("    %c      ",Alphabet[dsq[i]]);
+  for (i=1;i<=L;i++) printf("    %c      ",Alphabet[(int)dsq[i]]);
   printf("\nN    ");
   for (i=0;i<=L;i++) PrintIscore(mx->xmx[i][XMN]);
   for (k=1;k<=hmm->M;k++) {

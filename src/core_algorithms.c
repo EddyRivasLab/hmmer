@@ -2289,9 +2289,10 @@ ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
  *           hmmpfam_mode - TRUE if called by hmmpfam, else assumes hmmsearch;
  *                          affects how the lists' sort keys are set.
  *
- * Returns:  (void)
+ * Returns:  the recalculated per-seq score (or sc_override),
+ *           as appropriate, for subsequent storage in the histogram
  */
-void
+float
 PostprocessSignificantHit(struct tophit_s    *ghit, 
 			  struct tophit_s    *dhit,
 			  struct p7trace_s   *tr,
@@ -2325,7 +2326,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   /* Special case: rarely, the alignment was totally impossible
    * and tr is NULL.
    */
-  if (tr == NULL) return;
+  if (tr == NULL) return whole_sc;
 
   /* Break the trace into one or more individual domains.
    */
@@ -2452,5 +2453,5 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   free(tarr);
   free(score);
   free(usedomain);
-  return;
+  return whole_sc;
 }

@@ -84,7 +84,16 @@ static struct opt_s OPTIONS[] = {
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
-
+static void main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
+			     struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
+			     struct tophit_s *ghit, struct tophit_s *dhit, int *nhmm);
+static void main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
+			  struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
+			  struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm);
+static void main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
+			       struct threshold_s *thresh, int do_xnu, 
+			       int do_forward, int do_null2, int num_threads,
+			       struct tophit_s *ghit, struct tophit_s *dhit, int *nhmm);
 
 #ifdef HMMER_THREADS
 /* POSIX threads version:
@@ -133,15 +142,7 @@ static void *worker_thread(void *ptr);
 #endif /* HMMER_THREADS */
 
 
-#ifdef HMMER_PVM
-static void main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
-			  struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
-			  struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm);
-#endif
-static void main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
-			     struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
-			     int num_threads,
-			     struct tophit_s *ghit, struct tophit_s *dhit, int *nhmm);
+
 
 int
 main(int argc, char **argv) 
@@ -189,6 +190,8 @@ main(int argc, char **argv)
   int   nreported;
 
   int   num_threads;            /* number of worker threads */   
+  int   threads_support;	/* TRUE if threads support compiled in */
+  int   pvm_support;		/* TRUE if PVM support compiled in     */
 
   /*********************************************** 
    * Parse command line
@@ -203,6 +206,17 @@ main(int argc, char **argv)
   be_backwards= FALSE; 
   show_acc    = FALSE;
   
+  pvm_support     = FALSE;
+  threads_support = FALSE;
+  num_threads     = 0;
+#ifdef HMMER_THREADS
+  num_threads     = ThreadNumber(); 
+  threads_support = TRUE;
+#endif
+#ifdef HMMER_PVM
+  pvm_support     = TRUE;
+#endif
+
   Alimit         = INT_MAX;	/* no limit on alignment output     */
   thresh.globE   = 10.0;	/* use a reasonable Eval threshold; */
   thresh.globT   = -FLT_MAX;	/*   but no bit threshold,          */
@@ -210,12 +224,6 @@ main(int argc, char **argv)
   thresh.domE    = FLT_MAX;     /*   and no domain Eval threshold.  */
   thresh.autocut = CUT_NONE;	/*   and no Pfam cutoffs used.      */
   thresh.Z       = 0;		/* Z not preset, so determined by # of HMMs */
-
-#ifdef HMMER_THREADS
-  num_threads = ThreadNumber(); /* only matters if we're threaded */
-#else
-  num_threads = 0;
-#endif 
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -254,12 +262,10 @@ main(int argc, char **argv)
   hmmfile = argv[optind++];
   seqfile = argv[optind++]; 
 
-#ifndef HMMER_PVM
-  if (do_pvm) Die("PVM support is not compiled into HMMER; --pvm doesn't work.");
-#endif
-#ifndef HMMER_THREADS
-  if (num_threads) Die("Posix threads support is not compiled into HMMER; --cpu doesn't have any effect");
-#endif
+  if (do_pvm && ! pvm_support)
+    Die("PVM support is not compiled into HMMER; --pvm doesn't work.");
+  if (num_threads && ! threads_support)
+    Die("Posix threads support is not compiled into HMMER; --cpu doesn't have any effect");
 
   /*********************************************** 
    * Open sequence database (must be in curr directory);
@@ -305,20 +311,18 @@ main(int argc, char **argv)
       /* 1. Search sequence against all HMMs.
        *    Significant scores+alignments accumulate in ghit, dhit.
        */
-      if (!do_pvm)
+      if (pvm_support && do_pvm)
+	main_loop_pvm(hmmfile, hmmfp, seq, &sqinfo, 
+		      &thresh, do_xnu, do_forward, do_null2,
+		      ghit, dhit, &nhmm);
+      else if (threads_support && num_threads)
+	main_loop_threaded(hmmfile, hmmfp, seq, &sqinfo, 
+			   &thresh, do_xnu, do_forward, do_null2, num_threads,
+			   ghit, dhit, &nhmm);
+      else 
 	main_loop_serial(hmmfile, hmmfp, seq, &sqinfo, 
-			 &thresh, do_xnu, do_forward, do_null2, num_threads,
+			 &thresh, do_xnu, do_forward, do_null2, 
 			 ghit, dhit, &nhmm);
-#ifdef HMMER_PVM
-      else if (do_pvm)
-	{
-	  SQD_DPRINTF1(("Entering PVM main loop\n"));
-	  main_loop_pvm(hmmfile, hmmfp, seq, &sqinfo, 
-			&thresh, do_xnu, do_forward, do_null2,
-			ghit, dhit, &nhmm);
-	}
-#endif
-      else Die("wait. that can't happen. I didn't do anything.");
 
 				/* set Z for good now that we're done */
       if (!thresh.Z) thresh.Z = nhmm;	
@@ -535,14 +539,10 @@ main(int argc, char **argv)
 static void
 main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
 		 struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
-		 int num_threads,
 		 struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm) 
 {
   char              *dsq;       /* digitized sequence                      */
   int     nhmm;			/* number of HMMs searched                 */
-#ifdef HMMER_THREADS
-  struct workpool_s *wpool;     /* pool of worker threads  */
-#endif
   struct plan7_s    *hmm;       /* current HMM to search with              */ 
   struct p7trace_s  *tr;	/* traceback of alignment                  */
   float   sc;                   /* an alignment score                      */ 
@@ -554,21 +554,6 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   dsq = DigitizeSequence(seq, sqinfo->len);
   if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo->len);
 
-#ifdef HMMER_THREADS
-  if (num_threads > 0) {
-    wpool = workpool_start(hmmfile, hmmfp, dsq, sqinfo->name, sqinfo->len, 
-			   do_forward, do_null2, thresh,
-			   ghit, dhit, num_threads);
-    workpool_stop(wpool);
-    nhmm = wpool->nhmm;
-    workpool_free(wpool);
-
-    free(dsq);
-    *ret_nhmm = nhmm;
-    return;
-  } 
-#endif
-				/* unthreaded code: */
   nhmm = 0;
   while (HMMFileRead(hmmfp, &hmm)) {
     if (hmm == NULL) 
@@ -617,13 +602,13 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
     pvalue = PValue(hmm, sc);
     evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nhmm * pvalue;
     if (sc >= thresh->globT && evalue <= thresh->globE) {
-      PostprocessSignificantHit(ghit, dhit, 
-				tr, hmm, dsq, sqinfo->len, 
-				sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
-				do_forward, sc,
-				do_null2,
-				thresh,
-				TRUE); /* TRUE -> hmmpfam mode */
+      sc = PostprocessSignificantHit(ghit, dhit, 
+				     tr, hmm, dsq, sqinfo->len, 
+				     sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
+				     do_forward, sc,
+				     do_null2,
+				     thresh,
+				     TRUE); /* TRUE -> hmmpfam mode */
     }
     P7FreeTrace(tr);
     FreePlan7(hmm);
@@ -778,15 +763,15 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	  if (! SetAutocuts(thresh, hmm))
 	    Die("HMM %s did not contain your GA, NC, or TC cutoffs", hmm->name);
 	
-	  PostprocessSignificantHit(ghit, dhit, 
-				    tr, hmm, dsq, sqinfo->len, 
-				    sqinfo->name, 
-				    sqinfo->flags & SQINFO_ACC ? sqinfo->acc : NULL,
-				    sqinfo->flags & SQINFO_DESC ? sqinfo->desc : NULL,
-				    do_forward, sc,
-				    do_null2,
-				    thresh,
-				    TRUE); /* TRUE -> hmmpfam mode */
+	  sc = PostprocessSignificantHit(ghit, dhit, 
+					 tr, hmm, dsq, sqinfo->len, 
+					 sqinfo->name, 
+					 sqinfo->flags & SQINFO_ACC ? sqinfo->acc : NULL,
+					 sqinfo->flags & SQINFO_DESC ? sqinfo->desc : NULL,
+					 do_forward, sc,
+					 do_null2,
+					 thresh,
+					 TRUE); /* TRUE -> hmmpfam mode */
 
 	  FreePlan7(hmm);
 	  P7FreeTrace(tr);
@@ -823,13 +808,13 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	  if (! SetAutocuts(thresh, hmm))
 	    Die("HMM %s did not contain your GA, NC, or TC cutoffs", hmm->name);
 	  
-	  PostprocessSignificantHit(ghit, dhit, 
-				    tr, hmm, dsq, sqinfo->len, 
-				    sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
-				    do_forward, sc,
-				    do_null2,
-				    thresh,
-				    TRUE); /* TRUE -> hmmpfam mode */
+	  sc = PostprocessSignificantHit(ghit, dhit, 
+					 tr, hmm, dsq, sqinfo->len, 
+					 sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
+					 do_forward, sc,
+					 do_null2,
+					 thresh,
+					 TRUE); /* TRUE -> hmmpfam mode */
 
 	  FreePlan7(hmm);
 	  P7FreeTrace(tr);
@@ -855,7 +840,14 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   *ret_nhmm = nhmm;
   return;
 }
-
+#else /* HMMER_PVM off; insert dummy stub function: */
+static void
+main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
+	      struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
+	      struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm)
+{
+  Die("no PVM support");
+}
 #endif /*HMMER_PVM*/
 
 
@@ -871,7 +863,69 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
  * Threads:
  *      worker_thread()    (the actual parallelized worker thread).
  *****************************************************************/
+/* Function: main_loop_threaded()
+ * Date:     SRE, Wed Feb 27 11:10:13 2002 [St. Louis]
+ *
+ * Purpose:  Search a sequence against an HMM database;
+ *           main loop for the threaded version. 
+ *           
+ *           On return, ghit and dhit contain info for all hits
+ *           that satisfy the set thresholds. If an evalue
+ *           cutoff is used at all, the lists will be overestimated --
+ *           because the evalue will be underestimated until
+ *           we know the final Z. (Thus the main program must recheck
+ *           thresholds before printing any results.) If only
+ *           score cutoffs are used, then the lists are correct,
+ *           and may be printed exactly as they come (after 
+ *           appropriate sorting, anyway). This is especially
+ *           important for dynamic thresholding using Pfam
+ *           score cutoffs -- the main caller cannot afford to
+ *           rescan the HMM file just to get the GA/TC/NC cutoffs
+ *           back out for each HMM, and neither do I want to
+ *           burn the space to store them as I make a pass thru
+ *           Pfam.
+ *
+ * Args:     hmmfile - name of HMM file
+ *           hmmfp   - open HMM file (and at start of file)
+ *           dsq     - digitized sequence
+ *           sqinfo  - ptr to SQINFO optional info for dsq
+ *           thresh  - score/evalue threshold information
+ *           do_xnu     - TRUE to apply XNU filter to sequence
+ *           do_forward - TRUE to use Forward() scores
+ *           do_null2   - TRUE to adjust scores w/ ad hoc null2 model
+ *           num_threads- number of threads, >= 1
+ *           ghit    - global hits list
+ *           dhit    - domain hits list
+ *           ret_nhmm    - number of HMMs searched.
+ *
+ * Returns:  (void)
+ */
+static void
+main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
+		   struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
+		   int num_threads,
+		   struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm) 
+{
+  char              *dsq;       /* digitized sequence      */
+  int                nhmm;	/* number of HMMs searched */
+  struct workpool_s *wpool;     /* pool of worker threads  */
 
+  /* Prepare sequence.
+   */
+  dsq = DigitizeSequence(seq, sqinfo->len);
+  if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo->len);
+
+  wpool = workpool_start(hmmfile, hmmfp, dsq, sqinfo->name, sqinfo->len, 
+			 do_forward, do_null2, thresh,
+			 ghit, dhit, num_threads);
+  workpool_stop(wpool);
+  nhmm = wpool->nhmm;
+  workpool_free(wpool);
+
+  free(dsq);
+  *ret_nhmm = nhmm;
+  return;
+}
 /* Function: workpool_start()
  * Date:     SRE, Mon Sep 28 11:10:58 1998 [St. Louis]
  *
@@ -1072,14 +1126,14 @@ worker_thread(void *ptr)
     evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) wpool->nhmm * pvalue;
     if (sc >= thresh.globT && evalue <= thresh.globE) 
       { 
-	PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
-				  tr, hmm, wpool->dsq, wpool->L, 
-				  wpool->seqname, 
-				  NULL, NULL, /* won't need seq's acc or desc */
-				  wpool->do_forward, sc,
-				  wpool->do_null2,
-				  &thresh,
-				  TRUE); /* TRUE -> hmmpfam mode */
+	sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
+				       tr, hmm, wpool->dsq, wpool->L, 
+				       wpool->seqname, 
+				       NULL, NULL, /* won't need seq's acc or desc */
+				       wpool->do_forward, sc,
+				       wpool->do_null2,
+				       &thresh,
+				       TRUE); /* TRUE -> hmmpfam mode */
       }
     if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
       Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
@@ -1089,5 +1143,13 @@ worker_thread(void *ptr)
 
   } /* end 'infinite' loop over HMMs in this thread */
 }
-
+#else /* HMMER_THREADS off; put in a dummy stub: */
+static void
+main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
+		   struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
+		   int num_threads,
+		   struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm) 
+{
+  Die("no threads support");
+}
 #endif /* HMMER_THREADS */

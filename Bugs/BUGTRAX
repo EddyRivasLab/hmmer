@@ -196,3 +196,15 @@ CLOSED_DATE
 CLOSED_XREF     STL5 p.66
 CLOSED_ACTION   pvm.c:PVMConfirmSlaves()... replace pvm_config() w/ pvm_tasks().
 //
+ID              17
+STATUS          closed
+DESCRIPTION     threaded, unthreaded hmmsearch don't give exactly same histogram
+NOTED_DATE      2/27/02
+NOTED_XREF      STL6 p.1
+REPORTED_BY     Yang Yang
+REPRODUCE_WITH  bug17.sh
+REPRODUCE_ON    any
+CLOSED_DATE     2/27/02
+CLOSED_XREF     STL6 p.1
+CLOSED_ACTION   modifications to hmmsearch.c; see notes.
+//
