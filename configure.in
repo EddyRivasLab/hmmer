@@ -65,23 +65,62 @@ AC_ARG_ENABLE(threads,
 [  --disable-threads  disable POSIX threads support],
 [case $enable_threads in 
    yes) echo "Enabling POSIX threads support"
-	AC_CHECK_HEADER(pthread.h,
-	[ LIBS="${LIBS} -lpthread"
-	  MDEFS="${MDEFS} -DHMMER_THREADS"
-
-	])
+	DO_PTHREADS=yes
 	;;
    no)  echo "POSIX threads support disabled"
+	DO_PTHREADS=no
         ;;
    *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
 	;;
 esac],
-[AC_CHECK_HEADER(pthread.h,
+[
 	[ echo "   Enabling POSIX threads support by default"
-	  LIBS="${LIBS} -lpthread"
-	  MDEFS="${MDEFS} -DHMMER_THREADS"
-	])
+	  DO_PTHREADS=yes
+	]
 ])
+dnl 
+dnl The following code for detecting pthreads libraries
+dnl is based on code from XMMS's configure.in: see http://cvs.xmms.org/
+dnl
+if test "$DO_PTHREADS" = yes; then 
+  FOUND_PTHREADS=notyet
+  AC_MSG_CHECKING(for FreeBSD -pthread)
+  AC_EGREP_CPP(yes,
+	     [#if defined(__FreeBSD_cc_version) && __FreeBSD_cc_version <= 500001
+               yes
+              #endif
+             ], AC_MSG_RESULT(yes)
+             CFLAGS="$CFLAGS -D_THREAD_SAFE -pthread"
+             MDEFS="${MDEFS} -DHMMER_THREADS"
+             FOUND_PTHREADS=ok,
+             AC_MSG_RESULT(no))
+  if test "$FOUND_PTHREADS" = notyet; then
+    AC_CHECK_LIB(pthread, pthread_attr_init, 
+               FOUND_PTHREADS=ok
+	       LIBS="${LIBS} -lpthread"
+	       MDEFS="${MDEFS} -DHMMER_THREADS")
+  fi
+  if test "$FOUND_PTHREADS" = notyet; then
+    AC_CHECK_LIB(pthreads, pthread_attr_init, 
+               FOUND_PTHREADS=ok
+	       LIBS="${LIBS} -lpthreads"
+	       MDEFS="${MDEFS} -DHMMER_THREADS")
+  fi
+  if test "$FOUND_PTHREADS" = notyet; then
+    AC_CHECK_LIB(c_r, pthread_attr_init, 
+               FOUND_PTHREADS=ok
+	       LIBS="${LIBS} -lc_r"
+	       MDEFS="${MDEFS} -DHMMER_THREADS")
+  fi
+  dnl The following test is a bit too desperate.
+  if test "$FOUND_PTHREADS" = notyet; then
+  AC_CHECK_HEADER(pthread.h,
+               FOUND_PTHREADS=ok
+	       LIBS="${LIBS} -lpthread"
+	       MDEFS="${MDEFS} -DHMMER_THREADS")
+  fi  
+fi
+
 
 dnl Add the math library
 dnl Note that AC_CHECK_LIB should work but doesn't, on AIX and FreeBSD.
