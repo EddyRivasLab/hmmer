@@ -1,7 +1,18 @@
+/************************************************************
+ * HMMER - Biological sequence analysis with profile-HMMs
+ * Copyright (C) 1992-1998 Sean R. Eddy
+ *
+ *   This source code is distributed under the terms of the
+ *   GNU General Public License. See the files COPYING and
+ *   GNULICENSE for details.
+ *
+ ************************************************************/
+
 /* hmmbuild.c
  * SRE, Mon Nov 18 12:41:29 1996
  *
  * main() for HMM construction from an alignment.
+ * RCS $Id$
  */
 
 #include <stdio.h>
@@ -25,9 +36,9 @@ Usage: hmmb [-options] <hmmfile output> <alignment file>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -A        : append; append this HMM to <hmmfile>\n\
-   -b        : binary; write the HMM in binary format (default is ASCII)\n\
-   -F        : force; allow overwriting of <hmmfile> or other output files\n\
-   -n <s>    : name; name this HMM <s> (default is <hmmfile>)\n\
+   -b        : binary; write the HMM in binary format\n\
+   -F        : force; allow overwriting of <hmmfile>\n\
+   -n <s>    : name; name this HMM <s>\n\
    -o <file> : re-save annotated alignment to <file>\n\
 \n\
   Alternative model construction strategies: (default: MAP)\n\
@@ -35,9 +46,15 @@ Usage: hmmb [-options] <hmmfile output> <alignment file>\n\
    -m        : manual construction (requires SELEX file, #=RF annotation)\n\
 \n\
   Alternative sequence weighting strategies: (default: none)\n\
-   --wgsc       : Gerstein/Sonnhammer/Chothia tree weights\n\
-   --wblosum <x>: Henikoff^2 BLOSUM filter weights, at <x> frac id (e.g. 0.62)\n\
-   --wvoronoi   : Sibbald/Argos Voronoi weights\n\
+   --wgsc        Gerstein/Sonnhammer/Chothia tree weights\n\
+   --wblosum <x> Henikoff^2 BLOSUM filter weights, at <x> frac id (e.g. 0.62)\n\
+   --wvoronoi    Sibbald/Argos Voronoi weights\n\
+\n\
+  Alternative search algorithm styles: (default: hmmls domain alignment)\n\
+   -g            : global alignment (Needleman/Wunsch)\n\
+   -l            : local alignment (Smith/Waterman)\n\
+   --swentry <x> : set S/W aggregate entry prob. to <x> [0.5]\n\
+   --swexit <x>  : set S/W aggregate exit prob. to <x>  [0.5]\n\
 \n\
   Alternative parameter optimization strategies: (default: MAP)\n\
    -d            : maximum discrimination (MD)\n\
@@ -67,7 +84,9 @@ static struct opt_s OPTIONS[] = {
   { "-d", TRUE, sqdARG_NONE },
   { "-e", TRUE, sqdARG_NONE }, 
   { "-F", TRUE, sqdARG_NONE },
+  { "-g", TRUE, sqdARG_NONE }, 
   { "-h", TRUE, sqdARG_NONE }, 
+  { "-l", TRUE, sqdARG_NONE }, 
   { "-n", TRUE, sqdARG_STRING},  
   { "-k", TRUE, sqdARG_NONE },
   { "-m", TRUE, sqdARG_NONE },
@@ -82,6 +101,8 @@ static struct opt_s OPTIONS[] = {
   { "--nucleic", FALSE, sqdARG_NONE },
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--star"  ,  FALSE, sqdARG_STRING },
+  { "--swentry", FALSE, sqdARG_FLOAT },
+  { "--swexit",  FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_FLOAT },
@@ -122,6 +143,7 @@ main(int argc, char **argv)
   enum p7_param p_strategy;	/* parameterization strategy choice      */
   enum p7_weight {		/* weighting strategy */
     WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_VORONOI} w_strategy;
+  enum p7_config cfg_strategy;  /* algorithm configuration strategy      */
 
   float gapmax;			/* max frac gaps in mat col for -k       */
   int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
@@ -136,7 +158,9 @@ main(int argc, char **argv)
   float pamwgt;			/* weight on PAM for heuristic prior     */
   int   do_append;		/* TRUE to append to hmmfile             */
   int   do_binary;		/* TRUE to write in binary format        */
-  float blosumlevel;		/* BLOSUM frac id filtering level, e.g. 0.62 */
+  float blosumlevel;		/* BLOSUM frac id filtering level [0.62] */
+  float swentry;		/* S/W aggregate entry probability       */
+  float swexit;			/* S/W aggregate exit probability        */
 
 #ifdef MEMDEBUG
   unsigned long histid1, histid2;
@@ -151,7 +175,9 @@ main(int argc, char **argv)
   
   c_strategy        = P7_MAP_CONSTRUCTION;
   p_strategy        = P7_MAP_PARAM;
-  w_strategy        = WGT_NONE;
+  w_strategy        = WGT_BLOSUM;
+  blosumlevel       = 0.62;
+  cfg_strategy      = P7_LS_CONFIG;
   gapmax            = 0.5;
   overwrite_protect = TRUE;
   verbose           = FALSE;
@@ -167,7 +193,8 @@ main(int argc, char **argv)
   name              = NULL;
   do_append         = FALSE; 
   do_binary         = FALSE;
-  
+  swentry           = 0.5;
+  swexit            = 0.5;
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -176,9 +203,11 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-d") == 0) p_strategy        = P7_MD_PARAM;
     else if (strcmp(optname, "-e") == 0) p_strategy        = P7_MRE_PARAM;  
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
+    else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
     else if (strcmp(optname, "-k") == 0) c_strategy        = P7_FAST_CONSTRUCTION;
+    else if (strcmp(optname, "-l") == 0) cfg_strategy      = P7_SW_CONFIG;
     else if (strcmp(optname, "-m") == 0) c_strategy        = P7_HAND_CONSTRUCTION;
-    else if (strcmp(optname, "-m") == 0) name              = Strdup(optarg); 
+    else if (strcmp(optname, "-n") == 0) name              = Strdup(optarg); 
     else if (strcmp(optname, "-o") == 0) align_ofile       = optarg;
     else if (strcmp(optname, "-p") == 0) prifile           = optarg;
     else if (strcmp(optname, "-r") == 0) rndfile           = optarg;
@@ -190,9 +219,12 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--star")    == 0) starfile      = optarg; 
+    else if (strcmp(optname, "--swentry") == 0) swentry       = atof(optarg); 
+    else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg); 
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
-    else if (strcmp(optname, "--wblosum") == 0) {w_strategy = WGT_BLOSUM; blosumlevel = atof(optarg);}
+    else if (strcmp(optname, "--wblosum") == 0) { w_strategy   = WGT_BLOSUM; 
+                                                  blosumlevel  = atof(optarg);}
     else if (strcmp(optname, "--wvoronoi")== 0) w_strategy    = WGT_VORONOI;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
@@ -257,6 +289,20 @@ main(int argc, char **argv)
   Banner(stdout, banner);
   printf("Training alignment:                %s\n", seqfile);
   printf("Number of sequences:               %d\n", ainfo.nseq);
+
+  printf("Search algorithm configuration:    ");
+  if      (cfg_strategy == P7_BASE_CONFIG)   puts("Global alignment (hmms)");
+  else if (cfg_strategy == P7_SW_CONFIG)     {
+    puts("Local  (hmmsw)");
+    printf("S/W aggregate entry probability:   %.2f\n", swentry);
+    printf("S/W aggregate exit probability:    %.2f\n", swexit);
+  }
+  else if (cfg_strategy == P7_LS_CONFIG)     puts("Multiple domain (hmmls)");
+  else if (cfg_strategy == P7_FS_CONFIG)     {
+    puts("Multiple local (hmmfs)");
+    printf("S/W aggregate entry probability:   %.2f\n", swentry);
+    printf("S/W aggregate exit probability:    %.2f\n", swexit);
+  }
 
   printf("Model construction strategy:       ");
   if (c_strategy == P7_HAND_CONSTRUCTION)    puts("Manual, from #=RF annotation");
@@ -325,9 +371,18 @@ main(int argc, char **argv)
   Plan7SetCtime(hmm);
   hmm->nseq = ainfo.nseq;
    
+  /* Configure the model for chosen algorithm
+   */
+  switch (cfg_strategy) {
+  case P7_BASE_CONFIG:  Plan7GlobalConfig(hmm);              break;
+  case P7_SW_CONFIG:    Plan7SWConfig(hmm, swentry, swexit); break;
+  case P7_LS_CONFIG:    Plan7LSConfig(hmm);                  break;
+  case P7_FS_CONFIG:    Die("unimplemented");                break;
+  default:              Die("bogus configuration choice");
+  }
+
   /* Save new HMM to disk: open a file for appending or writing.
    */
-  Plan7LSConfig(hmm);
   save_model(hmm, hmmfile, do_append, do_binary);
 
 				/* the annotated alignment may be resaved */
@@ -403,7 +458,6 @@ static void
 save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do_binary)
 {
   FILE    *fp;
-  HMMFILE *hmmfp;
 
   if (hmmfile == NULL)
     fp = stdout;
@@ -413,6 +467,7 @@ save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do_binary)
 #ifdef REMOVED			/* This code induces an unresolved Linux/SGI NFS bug! */
       if (FileExists(hmmfile)) 
 	{ 
+	  HMMFILE *hmmfp;
 	  hmmfp = HMMFileOpen(hmmfile, NULL);
 	  if (hmmfp == NULL) {
 	    Warn("%s not an HMM file; I refuse to append to it; using stdout instead\n",
