@@ -35,9 +35,9 @@ print "[done]\n";
 
 print "Cleaning up...              \t";
 system "ssh $node rm -f $arena/nodebuild";
-if ($? != 0) { die "rm failed" };
+if ($? != 0) { die "rm -f failed" };
 system "ssh $node rm -f $arena/$pkg.bin.$platform.tar.gz";
-if ($? != 0) { die "rm failed" };
+if ($? != 0) { die "rm -f failed" };
 print "[done]\n";
 
 exit 0;

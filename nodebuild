@@ -51,7 +51,7 @@ if (-e $binpkg) {
 }
 if (-e $binpkg.tar.gz) {
     system "rm -f $binpkg.tar.gz";
-    if ($? != 0) { die "rm -f failed"; 
+    if ($? != 0) { die "rm -f failed"; }
 }
 print "[done]\n";
 
@@ -105,8 +105,8 @@ print "[done]\n";
 print "cleaning up...\t";
 system "rm -rf $binpkg";
 if ($? != 0) { die "rm -rf failed"; }
-system "rm $pkg.tar.gz";
-if ($? != 0) { die "rm failed"; }
+system "rm -f $pkg.tar.gz";
+if ($? != 0) { die "rm -f failed"; }
 print "[done]\n";
 
 exit 0;
