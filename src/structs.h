@@ -406,54 +406,6 @@ struct tophit_s {
 
 
 /**********************************************************
- * BLAST-HMMs.
- *
- * The following structures and definitions are relevant to 
- * the implementation of BLAST algorithms for HMM searching.
- **********************************************************/
-
-/* Struct: hmmword_s
- * 
- * Information about a single HMM neighborhood word.
- */
-struct hmmword_s {
-  char word[BLAST_MAXWORD];     /* in unambiguous DNA or protein seq  */
-  int   len;                    /* length of the word */   
-  int   startk;			/* starting node on model */
-  int   starty;			/* starts on MATCH, DELETE, or INSERT state */
-  int   currk;			/* ending node on model   */
-  int   curry;			/* ends on MATCH, DELETE, or INSERT state */
-  float logp;			/* current logp for prefix. */
-  float bound;			/* logp + bck: best logp attainable, upper bound */
-};
-
-/* Struct: wordheap_s
- * 
- * Manages a heap of neighborhood words. Sometimes this structure
- * is really a heap. Sometimes it is just a pushdown stack.
- */
-struct wordheap_s {
-  int                alloc;	/* max N allocated for          */
-  int                N;		/* current number of nodes used */
-  struct hmmword_s **node;      /* array of ptrs to words       */ 
-};
-
-/* Struct: wordpool_s
- * 
- * Manages allocation of lots of words. Implemented
- * as an array of arrays of words and a pushdown stack of
- * valid pointers. "Freeing" a pointer just pushes it
- * back into the pool.
- */
-struct wordpool_s {
-  int lev;			/* which level of the pool we're on  */
-  int N;			/* index of next ptr to give away    */
-  struct hmmword_s **node;      /* 2D array of nodes                 */
-  struct hmmword_s **ptr;       /* array of active pointers to give out */
-};
-
-
-/**********************************************************
  * Plan 9: obsolete HMMER1.x code. We still need these structures
  * for reading old HMM files (e.g. reverse compatibility)
  **********************************************************/
