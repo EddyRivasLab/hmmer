@@ -215,7 +215,7 @@ main(int argc, char **argv)
       /* Silently skip empty sequences, which, God help us, appear
        * sometimes in wormpep. (AGB bug)
        */
-      if (sqinfo.len == 0) next;
+      if (sqinfo.len == 0) continue;
 
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
