@@ -325,11 +325,10 @@ NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 	  
 	  printf("NSYM = %d   NULL2 = %.1f\n", nsym, null2score);
 
-	  /* Apply an ad hoc 8 bit fudge factor penalty, per domain.
+	  /* Apply an ad hoc 12 bit fudge factor penalty, per domain.
 	   * Interpreted probabilistically, saying that there's about
            * a 1/256 probability to transition into the second null model.
 	   */
-	  /* null2score -= 5.5452;	/* our scores are in nats right now, not bits */
 	  null2score  -= 12.;
 	  
 	  /* Now correct score1 using the null2 score.
@@ -358,5 +357,5 @@ NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 float
 SantaCruzCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 {
-
+  return 0.0;			/* UNFINISHED CODE */
 }

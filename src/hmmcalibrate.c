@@ -294,10 +294,12 @@ main(int argc, char **argv)
 	main_loop_serial(hmm, seed, nsample, lenmean, lensd, fixedlen, 
 			 &hist, &max);
 #ifdef HMMER_PVM
-      else if (do_pvm)
+      else if (do_pvm) {
+	pvm_nslaves = 0;	/* solely to silence compiler warnings */
 	main_loop_pvm(hmm, seed, nsample, pvm_lumpsize, 
 		      lenmean, lensd, fixedlen, 
 		      &hist, &max, &extrawatch, &pvm_nslaves);
+      }
 #endif 
 #ifdef HMMER_THREADS
       else if (num_threads > 0)
@@ -764,6 +766,7 @@ worker_thread(void *ptr)
     Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
 
   pthread_exit(NULL);
+  return NULL; /* solely to silence compiler warnings */
 }
 #endif /* HMMER_THREADS */
 
