@@ -279,7 +279,7 @@ dist:
 	#
 	# RCS extraction of HMMER Man/ manual pages
 	#
-	for file in $(PROGS); do\
+	for file in $(PROGS) hmmer; do\
 	   rcs -N$(RELCODE): Man/RCS/$$file.man,v;\
 	   co -p Man/RCS/$$file.man,v | sed -e 's/@RELEASE@/${RELEASE}/g' \
                                             -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
