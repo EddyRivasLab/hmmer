@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Sean R. Eddy
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -168,7 +168,6 @@ AddToHistogram(struct histogram_s *h, float sc)
   /* Bump the correct bin.
    * The bin number is score - h->min
    */
-
   h->histogram[score - h->min]++;
   h->total++;
   if (score < h->lowscore) h->lowscore   = score;
@@ -935,7 +934,11 @@ EVDDistribution(float x, float mu, float lambda)
 double
 ExtremeValueP(float x, float mu, float lambda)
 {
- return (1.0 - exp(-1.0* exp(-1.0 * lambda * (x - mu))));
+  double y;
+			/* a roundoff issue arises; use 1 - e^-x --> x for small x */
+  y = exp(-1. * lambda * (x - mu));
+  if (y < 1e-7) return y;
+  else          return (1.0 - exp(-1. * y));
 }
 
 
@@ -955,7 +958,10 @@ ExtremeValueP(float x, float mu, float lambda)
 double
 ExtremeValueP2(float x, float mu, float lambda, int N)
 {
-  return (1.0 - exp(-1.0 * N * ExtremeValueP(x,mu,lambda)));
+  double y;
+  y = N * ExtremeValueP(x,mu,lambda);
+  if (y < 1e-7) return y;
+  else          return (1.0 - exp(-1. * y));
 }
 
 /* Function: ExtremeValueE()
