@@ -299,7 +299,7 @@ ftpdist:
 # make stable: Set up the FTP site symlink to the current stable HMMER release.
 #
 stable:
-	(cd ${FTPDIR}; rm -f CURRENT; ln -s ${RELEASE} CURRENT)
+	(cd ${FTPDIR}; \rm -f CURRENT; ln -s ${RELEASE} CURRENT)
 
 # make optcheck:
 #    Check that all program options are documented in man pages,

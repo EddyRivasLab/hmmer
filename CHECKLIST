@@ -31,7 +31,7 @@ Checklist for a HMMER distribution.
         % cd testsuite
 	% echo quit| pvm pvm.conf
 	% ../src/hmmpfam --pvm Pfam_ls8.0 ../tutorial/7LES_DROME > foo.pvm
-	% echo halt| pvm pvm.conf
+	% echo halt| pvm 
      Test threads and nonthreads (whelk01): 
         % ../src/hmmpfam Pfam_ls8.0 ../tutorial/7LES_DROME > foo.pthread
         % ../src/hmmpfam --cpu 0 Pfam_ls8.0 ../tutorial/7LES_DROME > foo.normal
@@ -60,38 +60,51 @@ Checklist for a HMMER distribution.
 	
 
 8. Create the binary distributions, on w001, the compile farm master node.
-   ssh -x w001.
-   Make a directory somewhere, go there.
+   Check the buildall script - make sure passwordless ssh works for
+   each machine in the compile farm.
+         ssh w001
+	 eval `ssh-agent`; ssh-add
+         mkdir hmmer-2.3.1; cd hmmer-2.3.1
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/nodebuild .
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/rootbuild .
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/buildall .
-         ln -s /nfs/wol2/people/eddy/src/hmmer/hmmer-2.3.tar.gz .
-         ./buildall hmmer-2.3 >& build.log &
+         ln -s /nfs/wol2/people/eddy/src/hmmer/hmmer-2.3.1.tar.gz .
+         ./buildall hmmer-2.3.1 >& build.log &
          tail -f build.log
 
     darwin (dual800) is done manually:
     ssh into dual800 in Warren's lab.
-      scp eddy@wrasse.wustl.edu:src/hmmer/hmmer-2.3.tar.gz .
-      scp eddy@wrasse.wustl.edu:src/hmmer/ssdk/nodebuild .
-      ./nodebuild /Users/seddy hmmer-2.3  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O" 
-      scp hmmer-2.3.bin.powerpc-apple-osx.tar.gz eddy@wrasse.wustl.edu:
-      scp hmmer-2.3.powerpc-apple-osx.log eddy@wrasse.wustl.edu:
+      scp eddy@genetics.wustl.edu:src/hmmer/hmmer-2.3.1.tar.gz .
+      scp eddy@genetics.wustl.edu:src/hmmer/ssdk/nodebuild .
+      ./nodebuild /Users/seddy hmmer-2.3.1  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O" 
+      scp hmmer-2.3.1.bin.powerpc-apple-osx.tar.gz eddy@genetics.wustl.edu:
+      scp hmmer-2.3.1.powerpc-apple-osx.log eddy@genetics.wustl.edu:
 
+      tar zxf hmmer-2.3.1.bin.powerpc-apple-osx.tar.gz
+      cd hmmer-2.3.1.bin.powerpc-apple-osx
       [cpu0/pkinase/50000 =  513.270u  w/o altivec]
       [cpu0/pkinase/50000 =  177.360u 2:58.04   w/  altivec]
       [cpu2/pkinase/50000 =  206.610u 1:44.90   w/  altivec]
       
-    whippet is also done manually:
-      ssh -x -vv whippet
+    whippet is also done manually. NFS is fucked up?
+      ssh whippet
       cd /scratch/eddy
-      cp ~/src/hmmer/hmmer-2.3.tar.gz .
-      cp ~/src/hmmer/ssdk/nodebuild .
-      ./nodebuild /scratch/eddy hmmer-2.3  hp-hpux "--enable-threads" CFLAGS="-O"
+      ftp genetics
+         ~/src/hmmer/hmmer-2.3.1.tar.gz 
+         ~/src/hmmer/ssdk/nodebuild .
+      ./nodebuild /scratch/eddy hmmer-2.3.1  hp-hpux "--enable-threads" CFLAGS="-O"
       cp hmmer-2.3.bin.hp-hpux.tar.gz ~/
       cp hmmer-2.3.hp-hpux.log ~/
 
-    Move all binary distros to the FTP site,
+    Collect all binary distros in a notebook/ page.
+
+    Check the logs:
+	emacs *.log	
+
+    Copy all binary distros to the FTP site,
     /nfs/ftp/eddy/hmmer/(RELEASE)/
+           mkdir /nfs/ftp/eddy/hmmer/2.3.1
+           cp *.tar.gz /nfs/ftp/eddy/hmmer/2.3.1/
 
 9.  Install all the files on the FTP site; change CURRENT symlink.
     (Check that FTPDIR is correct in Makefile).
@@ -105,3 +118,5 @@ Checklist for a HMMER distribution.
 
 11. Email hmmer@genetics.wustl.edu and make the announcement.
 
+12. Commit again, after a successful release:
+	% cvs commit
