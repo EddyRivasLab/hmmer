@@ -661,7 +661,11 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
       if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
 	ali->model[tpos] = tolower(ali->model[tpos]);
       if (dsq[tr->pos[tpos]] == bestsym)
-	ali->mline[tpos] = Alphabet[(int) dsq[tr->pos[tpos]]];
+	{
+	  ali->mline[tpos] = Alphabet[(int) dsq[tr->pos[tpos]]];
+	  if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
+	    ali->mline[tpos] = tolower(ali->mline[tpos]);
+	}
       else if (hmm->msc[(int) dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
 	ali->mline[tpos] = '+';
       ali->aseq[tpos]  = Alphabet[(int) dsq[tr->pos[tpos]]];
