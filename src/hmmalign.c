@@ -37,8 +37,10 @@ Available options are:\n\
    -m     : only print symbols aligned to match states\n\
    -o <f> : save alignment in file <f> in SELEX format\n\
    -q     : quiet - suppress verbose banner\n\
-\n";
+";
 
+static char experts[] = "\
+\n";
 
 static struct opt_s OPTIONS[] = {
   { "-h", TRUE, sqdARG_NONE   }, 
@@ -99,6 +101,7 @@ main(int argc, char **argv)
       {
 	Banner(stdout, banner);
 	puts(usage);
+	puts(experts);
 	exit(0);
       }
   }

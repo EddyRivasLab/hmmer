@@ -39,9 +39,13 @@ Usage: hmmconvert [-options] <old hmm file> <new hmm file>\n\
    -a        : convert to HMMER ASCII file (the default)\n\
    -b        : convert to HMMER binary file\n\
    -p        : convert to GCG Profile .prf format\n\
+   -P        : convert to Compugen extended .eprf profile format\n\
 \n\
    -A        : append mode; append to <new hmm file>\n\
    -F        : force mode; allow overwriting of existing files\n\
+";
+
+static char experts[] = "\
 \n";
 
 
@@ -52,6 +56,7 @@ static struct opt_s OPTIONS[] = {
   { "-p",        TRUE,  sqdARG_NONE },
   { "-A",        TRUE,  sqdARG_NONE },
   { "-F",        TRUE,  sqdARG_NONE },
+  { "-P",        TRUE,  sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -72,7 +77,7 @@ main(int argc, char **argv)
 
   int   do_append;		/* TRUE to append to existing outfile       */
   int   do_force;		/* TRUE to allow overwriting */
-  enum hmmfmt_e { P7ASCII, P7BINARY, GCGPROFILE } 
+  enum hmmfmt_e { P7ASCII, P7BINARY, GCGPROFILE, BICPROFILE } 
       outfmt;			/* output format */
       
 
@@ -98,9 +103,11 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-p") == 0) { outfmt    = GCGPROFILE; } 
     else if (strcmp(optname, "-A") == 0) { do_append = TRUE;       } 
     else if (strcmp(optname, "-F") == 0) { do_force  = TRUE;       } 
+    else if (strcmp(optname, "-P") == 0) { outfmt    = BICPROFILE; } 
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
+      puts(experts);
       exit(0);
     }
   }
@@ -135,6 +142,7 @@ main(int argc, char **argv)
       case P7ASCII:    mode = "a";  break;
       case P7BINARY:   mode = "ab"; break;
       case GCGPROFILE: Die("You cannot append GCG profiles");
+      case BICPROFILE: Die("You cannot append Compugen extended profiles");
       default:         Die("unexpected format");
       }
     }
@@ -146,6 +154,7 @@ main(int argc, char **argv)
       case P7ASCII:    mode = "w";  break;
       case P7BINARY:   mode = "wb"; break;
       case GCGPROFILE: mode = "w";  break;
+      case BICPROFILE: mode = "w";  break;
       default:         Die("unexpected format");
       }
     }
@@ -161,9 +170,10 @@ main(int argc, char **argv)
   printf(   "Output HMM file:          %s\n", outfile);
   printf(   "Converting to:            ");
   switch (outfmt) {
-  case P7ASCII:    puts("HMMER Plan7 ASCII");  break;
-  case P7BINARY:   puts("HMMER Plan7 binary"); break;
-  case GCGPROFILE: puts("GCG Profile .prf");   break;
+  case P7ASCII:    puts("HMMER Plan7 ASCII");      break;
+  case P7BINARY:   puts("HMMER Plan7 binary");     break;
+  case GCGPROFILE: puts("GCG Profile .prf");       break;
+  case BICPROFILE: puts("Compugen .eprf profile"); break;
   default:         Die("unexpected fault");
   }
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
@@ -178,9 +188,10 @@ main(int argc, char **argv)
       Die("HMM file %s may be corrupt or in incorrect format; parse failed", infile);
 
     switch(outfmt) {
-    case P7ASCII:    WriteAscHMM(outfp, hmm);  break;
-    case P7BINARY:   WriteBinHMM(outfp, hmm);  break;
-    case GCGPROFILE: WriteProfile(outfp, hmm); break;
+    case P7ASCII:    WriteAscHMM(outfp, hmm);         break;
+    case P7BINARY:   WriteBinHMM(outfp, hmm);         break;
+    case GCGPROFILE: WriteProfile(outfp, hmm, FALSE); break;
+    case BICPROFILE: WriteProfile(outfp, hmm, TRUE);  break;
     default:         Die("unexpected format");
     }
 
