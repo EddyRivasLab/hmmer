@@ -10,19 +10,48 @@ I. Compiled test drivers.
   stderr, and exit with EXIT_FAILURE.
 - The -v option always activates rudimentary verbose output on stdout.
 
+
 Current tests:
 ---------------
 
-evd_test.c           -- exercises code in histogram.c, especially EVD fitting
-masks.c              -- exercises code in masks.c
-tophits_test.c       -- exercises code in tophits.c
-trace_test.c         -- exercises traceback code in core_algorithms.c
-   trace_test.hmm        -- HMM used by trace_test.c
-   trace_test.seq        -- test set used by trace_test.c
-   trace_test.slx        -- alignment used to build trace_test.hmm
+evd_test    
+	Exercises code in histogram.c, especially EVD fitting
+	Default generates 1000 EVD samples; fits EVD; tests that fitted
+        parameters are reasonably close to real ones. 
 
+masks_test  
+	Exercises code in masks.c 
+	Default runs XNU on a sequence and compares to a known result.
 
+parsingviterbi_test
+	Exercises P7ParsingViterbi() in core_algorithms.c
+	Runs Fn3 model against titin using both standard Viterbi and
+	ParsingViterbi; compares results for identity.
 
+tophits_test
+	Exercises tophits.c
+	Generates random scores in three tiers (good, middling, bad).
+	Uses RegisterHit() API; FullSort's them; tests that they
+	end up in the right number/order.
+
+trace_test
+	Exercises traceback code in core_algorithms.c
+	Runs a simple HMM against synthetic sequences designed to
+	exercise all possible arrangements of transitions, and
+	does a TraceVerify() to be sure resulting trace is internally
+	consistent. 
+
+viterbi_exercise
+	Exercises P7Viterbi and P7SmallViterbi in core_algorithms.c
+	Configures Fn3 model into various modes; generates 100 random
+ 	seqs from each configuration; does P7Viterbi and P7SmallViterbi
+	alignments, TraceVerify()'s them, checks them for identity.
+
+weeviterbi_test
+	Exercises P7WeeViterbi in core_algorithms.c
+	Runs RRM model against two subsequences of human U1A;
+	compares Viterbi trace to WeeViterbi trace.
+	
 
 
 #####################################################################
