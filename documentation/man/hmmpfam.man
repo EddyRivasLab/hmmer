@@ -1,7 +1,7 @@
 .TH "hmmpfam" 1 @RELEASEDATE@ "HMMER @RELEASE@" "HMMER Manual"
 
 .SH NAME
-.TP 
+.TP
 hmmpfam - search one or more sequences against an HMM database
 
 .SH SYNOPSIS

@@ -410,7 +410,7 @@ main(int argc, char **argv)
   else if (num_threads > 0) StopwatchInclude(&stopwatch, &extrawatch);
 #endif
 
-  StopwatchDisplay(stdout, "CPU Time: ", &stopwatch);
+  /*  StopwatchDisplay(stdout, "CPU Time: ", &stopwatch); */
 
   free(mu);
   free(lambda);

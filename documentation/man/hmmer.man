@@ -27,6 +27,14 @@ Convert HMMER profile HMMs to other formats, such as GCG profiles.
 Generate sequences probabilistically from a profile HMM.
 
 .TP
+.B hmmfetch
+Retrieve an HMM from an HMM database
+
+.TP 
+.B hmmindex
+Create a binary SSI index for an HMM database
+
+.TP
 .B hmmpfam
 Search a profile HMM database with a sequence (i.e., annotate various
 kinds of domains in the query sequence).

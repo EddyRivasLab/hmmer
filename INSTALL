@@ -1,12 +1,12 @@
-Brief installation instructions for HMMER 2.1
-SRE, Wed Oct  7 10:45:15 1998
+Brief installation instructions for HMMER 2.2
+SRE, Sun Aug  5 16:22:52 2001
 ------------------------------------------
 
-For a source distribution (hmmer-2.1.tar.Z):
+For a source distribution (hmmer-2.2.tar.gz):
 
-    uncompress hmmer-2.1.tar.Z   Uncompresses the archive.
-    tar xf hmmer-2.1.tar         Unpacks the archive. (makes a new directory, hmmer-2.1)
-    cd hmmer-2.1                 Moves into the distribution toplevel directory.
+    uncompress hmmer-2.2.tar.gz  Uncompresses the archive.
+    tar xf hmmer-2.2.tar         Unpacks the archive. (makes a new directory, hmmer-2.2)
+    cd hmmer-2.2                 Moves into the distribution toplevel directory.
     ./configure                  Configures the software for your system.
     make                         Builds the binaries. 
     make check                   Runs the test suite to test the new binaries.
@@ -14,11 +14,12 @@ For a source distribution (hmmer-2.1.tar.Z):
 
     It should build cleanly on just about any UNIX machine.
 
-For a binary distribution (hmmer-2.1-<platform>-<os>.tar.Z, for example, sun-solaris):
+For a binary distribution (hmmer-2.2.bin.<platform>-<os>.tar.gz),
+for example, the sun-solaris distro:
 
-    uncompress hmmer-2.1-sun-solaris.tar.Z
-    tar xf hmmer-2.1-sun-solaris.tar
-    cd hmmer-2.1
+    uncompress hmmer-2.2.bin.sun-solaris.tar.Z
+    tar xf hmmer-2.2.bin.sun-solaris.tar
+    cd hmmer-2.2
     ./configure
     make install
 
@@ -34,7 +35,11 @@ For a binary distribution (hmmer-2.1-<platform>-<os>.tar.Z, for example, sun-sol
     cp Man/*      /usr/local/man/man1/
     cp binaries/* /usr/local/bin/
 
-For (much) more detail, see the Installation chapter in the HMMER
-User's Guide.
+    HMMER doesn't depend on any external data files, so the installation is
+    simple - the binaries are free standing, and you can install
+    them anywhere you like.
+
+For more detail, see the Installation chapter in the HMMER User's
+Guide.
 
 

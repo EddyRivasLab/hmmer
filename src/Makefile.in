@@ -93,7 +93,7 @@ HDRS =  config.h\
 all: 	$(PROGS) 
 
 $(PROGS): @EXEC_DEPENDENCY@ $(OBJS) 
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(PTHREAD_LIBS) $(MYLIBS) $(LIBS)
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
 
 
 #################################################################

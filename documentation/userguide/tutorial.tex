@@ -28,31 +28,22 @@ emulation of GCG profiles.
 \end{wideitem}
 
 HMMER also provides a number of utility programs which are not HMM
-programs, but may be useful:
+programs, but may be useful. These programs are from the SQUID
+sequence utility library that HMMER uses:
 
 \begin{wideitem}
+\item[\emprog{afetch}] Retrieve an alignment from an alignment database
 \item[\emprog{alistat}] Show some simple statistics about a sequence
 alignment file.
-\item[\emprog{sfetch}] Retrieve a (sub-)sequence from a sequence file.
 \item[\emprog{seqstat}] Show some simple statistics about a sequence file.
+\item[\emprog{sfetch}] Retrieve a (sub-)sequence from a sequence file.
+\item[\emprog{shuffle}] Randomize sequences in a sequence file.
 \item[\emprog{sreformat}] Reformat a sequence file into a different format.
-\end{wideitem}
-
-The following four programs are not included in the current release,
-but are planned (i.e. they're vaporware, but it may be useful to you
-to know that they're on the drawing board:)
-
-\begin{wideitem}
-\item[\emprog{hmmconfig}] Alter the search configuration of an existing model.
-\item[\emprog{hmminfo}] Display summary information about the model(s) in a file.
-\item[\emprog{hmmtrain}] Train a model from initially unaligned sequences,
-producing both a model and a multiple alignment.
-\item[\emprog{hmmview}] Graphical viewer and editor for HMMs.
 \end{wideitem}
 
 \section{Files used in the tutorial}
 
-The subdirectory \prog{/Demos} in the HMMER distribution contains the
+The subdirectory \prog{/tutorial} in the HMMER distribution contains the
 files used in the tutorial, as well as a number of examples of various
 file formats that HMMER reads. The important files for the tutorial
 are:
@@ -63,6 +54,7 @@ are:
 \item[\emprog{ fn3.slx}] A SELEX format alignment file of fibronectin type III domains.
 \item[\emprog{ rrm.slx}] A SELEX format alignment file of RNA recognition
 motif domains.
+\item[\emprog{ rrm.hmm}] An example HMM, built from rrm.slx.
 \item[\emprog{ pkinase.slx}] A SELEX format alignment file of protein kinase
 catalytic domains.
 \item[\emprog{ Artemia.fa}] A FASTA file of brine shrimp globin, which contains
@@ -72,10 +64,11 @@ Sevenless sequence, a receptor tyrosine kinase with multiple domains.
 \end{wideitem}
 
 Create a new directory that you can work in, and copy all the files in
-\prog{Demos} there. I'll assume for the following examples that you've
+\prog{tutorial} there. I'll assume for the following examples that you've
 installed the HMMER programs in your path; if not, you'll need to give
 a complete path name to the HMMER programs (e.g. something like \prog{
-/usr/people/eddy/ hmmer-2.0/hmmbuild} instead of just \prog{hmmbuild}).
+/usr/people/eddy/hmmer-2.2/binaries/hmmbuild} instead of just
+\prog{hmmbuild}).
 
 \section{Searching a sequence database with a single profile HMM}
 
@@ -100,36 +93,43 @@ HMM from the alignment of 50 globin sequences in \prog{ globins50.msf}:
 \vspace{-1.5em}
 {\small\begin{verbatim}
 hmmbuild - build a hidden Markov model from an alignment
-HMMER 2.0 (June 1998)
-Copyright (C) 1992-1998 Washington University School of Medicine
-HMMER is freely distributed under the GNU General Public License (GPL).
+HMMER 2.2 (August 2001)
+Copyright (C) 1992-2001 HHMI/Washington University School of Medicine
+Freely distributed under the GNU General Public License (GPL)
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Training alignment:                globins50.msf
-Number of sequences:               50
+Alignment file:                    globins50.msf
+File format:                       MSF
 Search algorithm configuration:    Multiple domain (hmmls)
 Model construction strategy:       MAP (gapmax hint: 0.50)
+Null model used:                   (default)
 Prior used:                        (default)
-Prior strategy:                    Dirichlet
 Sequence weighting method:         G/S/C tree weights
+New HMM file:                      globin.hmm 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Determining effective sequence number    ... done. [13]
+
+Alignment:           #1
+Number of sequences: 50
+Number of columns:   308
+
+Determining effective sequence number    ... done. [2]
 Weighting sequences heuristically        ... done.
 Constructing model architecture          ... done.
 Converting counts to probabilities       ... done.
 Setting model name, etc.                 ... done. [globins50]
 
-Constructed a profile HMM (length 162)
-Average score:      283.03 bits
-Minimum score:      137.32 bits
-Maximum score:      343.50 bits
-Std. deviation:      53.21 bits
+Constructed a profile HMM (length 148)
+Average score:      194.97 bits
+Minimum score:      -17.88 bits
+Maximum score:      242.22 bits
+Std. deviation:      55.12 bits
 
 Finalizing model configuration           ... done.
-Saving model to file                     ... done. [globin.hmm]
+Saving model to file                     ... done.
+//
 \end{verbatim}}
 
-The process takes a second or two.  \prog{ hmmbuild} create a new HMM
-file called \prog{ globin.hmm}. This is a human and computer readable
+The process takes a second or two.  \prog{hmmbuild} create a new HMM
+file called \prog{globin.hmm}. This is a human and computer readable
 ASCII text file, but for now you don't care. You also don't care for
 now what all the stuff in the output means; I'll describe it in detail
 later. The profile HMM can be treated as a compiled model of your
@@ -159,22 +159,23 @@ calibrate the E-value calculations for the globin model, type:
 \vspace{-1.5em}
 {\small\begin{verbatim}
 hmmcalibrate -- calibrate HMM search statistics
-HMMER 2.0 (June 1998)
-Copyright (C) 1992-1998 Washington University School of Medicine
-HMMER is freely distributed under the GNU General Public License (GPL).
+HMMER 2.2 (August 2001)
+Copyright (C) 1992-2001 HHMI/Washington University School of Medicine
+Freely distributed under the GNU General Public License (GPL)
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 HMM file:                 globin.hmm
 Length distribution mean: 325
 Length distribution s.d.: 200
 Number of samples:        5000
-random seed:              895790561
+random seed:              997047045
 histogram(s) saved to:    [not saved]
+POSIX threads:            1
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 HMM    : globins50
-mu     :  -107.928612
-lambda :     0.186579
-max    :   -63.859001
+mu     :   -38.963402
+lambda :     0.256441
+max    :   -11.779000
 //
 \end{verbatim}}
 
@@ -204,15 +205,21 @@ ran, on what, and with what options:
 
 {\small\begin{verbatim}
 hmmsearch - search a sequence database with a profile HMM
-HMMER 2.0 (June 1998)
-Copyright (C) 1992-1998 Washington University School of Medicine
-HMMER is freely distributed under the GNU General Public License (GPL).
+HMMER 2.2 (August 2001)
+Copyright (C) 1992-2001 HHMI/Washington University School of Medicine
+Freely distributed under the GNU General Public License (GPL)
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-HMM file:                 globin.hmm [globins50]
-Sequence database:        Artemia.fa
+HMM file:                   globin.hmm [globins50]
+Sequence database:          Artemia.fa
+per-sequence score cutoff:  [none]
+per-domain score cutoff:    [none]
+per-sequence Eval cutoff:   <= 10        
+per-domain Eval cutoff:     [none]
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Query HMM:  globins50  
+Query HMM:   globins50
+Accession:   [none]
+Description: [none]
   [HMM has been calibrated; E-values are empirical estimates]
 \end{verbatim}}
 
@@ -224,39 +231,41 @@ formatted in a BLAST-like style:
 Scores for complete sequences (score includes all domains):
 Sequence Description                                    Score    E-value  N 
 -------- -----------                                    -----    ------- ---
-S13421   S13421 GLOBIN - BRINE SHRIMP                   335.5     1e-101   8
+S13421   S13421 GLOBIN - BRINE SHRIMP                   496.2   4.3e-150   9
 \end{verbatim}}
 
 The first field is the name of the target sequence, then followed by
 the description line for the sequence. The last three fields are the
 raw score (in units of ``bits''), the estimated E-value, and the total
 number of domains detected in the sequence.  By default, every
-sequence with an E-value over 10.0 is listed in this output.
+sequence with an E-value less than 10.0 is listed in this output.
 
 The second section is the {\em domain top hits} list. By default, for
-every sequence with an E-value less than 10, every domain with a
-non-zero raw score is listed. (Read that carefully. In a later chapter
-we'll discuss some caveats about how \prog{ hmmsearch} identifies
-domains, and how to control its output in different ways.) Each domain
-detected in the search is output in a list ranked by E-value:
+every sequence with an E-value less than 10, every domain with a raw
+score greater than 0 is listed. (Read that carefully. In a later
+chapter we'll discuss some caveats about how \prog{ hmmsearch}
+identifies domains, and how to control its output in different ways.)
+Each domain detected in the search is output in a list ranked by
+E-value:
 
 {\small\begin{verbatim}
 Parsed for domains:
 Sequence Domain  seq-f seq-t    hmm-f hmm-t      score  E-value
 -------- ------- ----- -----    ----- -----      -----  -------
-S13421     6/8     928  1075 ..     1   162 []    65.8  1.5e-20
-S13421     2/8     149   288 ..     1   162 []    59.4  1.3e-18
-S13421     3/8     303   450 ..     1   162 []    58.4  2.6e-18
-S13421     8/8    1238  1390 ..     1   162 []    42.5  1.6e-13
-S13421     5/8     771   918 ..     1   162 []    33.8  3.3e-12
-S13421     7/8    1085  1234 ..     1   162 []    32.0  4.6e-12
-S13421     4/8     454   607 ..     1   162 []    26.1  1.4e-11
-S13421     1/8       1   139 [.     1   162 []    21.9    3e-11
+S13421     7/9     927  1075 ..     1   148 []    82.2  1.8e-25
+S13421     2/9     148   293 ..     1   148 []    66.2  1.2e-20
+S13421     3/9     302   450 ..     1   148 []    63.7  6.8e-20
+S13421     8/9    1084  1234 ..     1   148 []    60.7  5.2e-19
+S13421     9/9    1243  1390 ..     1   148 []    55.9  1.5e-17
+S13421     4/9     459   607 ..     1   148 []    52.6  1.5e-16
+S13421     6/9     770   918 ..     1   148 []    46.6  9.6e-15
+S13421     1/9       1   143 [.     1   148 []    44.7  3.5e-14
+S13421     5/9     618   762 ..     1   148 []    23.6  7.8e-08
 \end{verbatim}}
 
 The first field is the name of the target sequence. The second field
-is the number of this domain: e.g. ``6/8'' means the sixth domain of
-eight total domains detected. 
+is the number of this domain: e.g. ``6/9'' means the sixth domain of
+nine total domains detected.
 
 The fields marked ``seq-f'' and ``seq-t'' mean ``sequence from'' and
 ``sequence to'': the start and end points of the alignment on the
@@ -280,10 +289,8 @@ alignments}. We'll discuss later how to modify the profile HMM for
 other search styles.
 
 The final two fields are the raw score in bits and the estimated
-E-value, {\em for the isolated domain}. Because of the method HMMER
-uses to correct raw scores for biased sequence composition, the raw
-scores for the domains do not necessarily sum up to the raw score of
-the sequence.
+E-value, {\em for the isolated domain}.  The scores for the domains
+sum up to the raw score of the complete sequence.
 
 The next section is the {\em alignment output}. By default, every
 domain that appeared in the domain top hits list now appears as a
@@ -291,22 +298,22 @@ BLAST-like alignment. For example:
 
 {\small\begin{verbatim}
 Alignments of top-scoring domains:
-S13421: domain 6 of 8, from 928 to 1075: score 65.8, E = 1.5e-20
-                   *->vilealvnssShLSaeekalVkslWYgKVegnaeeiGaeaLgRlFvv
-                      +           LSa e a Vk++W   V+ ++ ++G  ++  lF +
-      S13421   928    G-----------LSAREVAVVKQTW-NLVKPDLMGVGMRIFKSLFEA 962  
+S13421: domain 7 of 9, from 927 to 1075: score 82.2, E = 1.8e-25
+                   *->vhlsaeekalvksvwgkveknveevGaeaLerllvvyPetkryFpkF
+                       +lsa+e a vk+ w+ v+ ++  vG  +++ l++ +P+ +++FpkF
+      S13421   927    TGLSAREVAVVKQTWNLVKPDLMGVGMRIFKSLFEAFPAYQAVFPKF 973  
 
-                   YPwTqryFphFgdLssldavkgspkvKaHGkKVltalgdavkhLDdtgnl
-                   +P  q+ Fp+F+d+ +ld +++ p v +H   V t l++ ++ LD   nl
-      S13421   963 FPAYQAVFPKFSDV-PLDKLEDTPAVGKHSISVTTKLDELIQTLDEPANL 1011 
+                   kdLssadavkgsakvkahgkkVltalgdavkkldd...lkgalakLselH
+                    d+   d++++++ v +h   V t+l++ ++ ld++ +l+   ++L+e H
+      S13421   974 SDVPL-DKLEDTPAVGKHSISVTTKLDELIQTLDEpanLALLARQLGEDH 1022 
 
-                   kgalakLSelHadklrVDPeNFklLghvlvvvLaehfgkdftPevqAAwd
-                   +    +L+e H   lrV+   Fk +g+vlv  L   +g  f+  +  +w 
-      S13421  1012 ALLARQLGEDH-IVLRVNKPMFKSFGKVLVRLLENDLGQRFSSFASRSWH 1060 
+                   aqklrvdpenfkllsevllvvlaeklgkeftpevqaalekllaavataLa
+                   +  lrv+   fk +++vl+  l++ lg+ f+  ++ +++k+++++++ ++
+      S13421  1023 IV-LRVNKPMFKSFGKVLVRLLENDLGQRFSSFASRSWHKAYDVIVEYIE 1071 
 
-                   KflagvanaLahKYr<-*
-                   K++++++  +++      
-      S13421  1061 KAYDVIVEYIEEGLQ    1075 
+                   akYk<-*
+                   +  +   
+      S13421  1072 EGLQ    1075 
 \end{verbatim}}
 
 The top line is the HMM consensus. The amino acid shown for the
@@ -334,7 +341,7 @@ boring:
 Histogram of all scores:
 score    obs    exp  (one = represents 1 sequences)
 -----    ---    ---
-  335      1      0|=                                                          
+  489      1      0|=                                                          
 \end{verbatim}}
 
 Notice though that it's a histogram of the whole sequence hits, not
@@ -344,22 +351,24 @@ You can ignore the rest of the \prog{ hmmsearch} output:
 
 {\small\begin{verbatim}
 % Statistical details of theoretical EVD fit:
-              mu =  -107.9286
-          lambda =     0.1866
+              mu =   -38.9634
+          lambda =     0.2564
 chi-sq statistic =     0.0000
   P(chi-square)  =          0
+
+Total sequences searched: 1
 
 Whole sequence top hits:
 tophits_s report:
      Total hits:           1
      Satisfying E cutoff:  1
-     Total memory:         15K
+     Total memory:         16K
 
 Domain top hits:
 tophits_s report:
-     Total hits:           8
-     Satisfying E cutoff:  8
-     Total memory:         20K
+     Total hits:           9
+     Satisfying E cutoff:  9
+     Total memory:         21K
 \end{verbatim}}
 
 This is just some trailing internal info about the search that's
@@ -379,12 +388,15 @@ If you have BLAST installed locally, it's likely that you have a
 directory (or directories) in which the BLAST databases are kept.
 These directories are specified in an environment variable called \prog{
 BLASTDB}. HMMER will read the same environment variable. For example,
-if you have a BLAST database called \prog{
-/nfs/databases/blast-db/swiss35}, the following commands will work:
+if you have BLAST databases in directories
+called \prog{/nfs/databases/blast-db/}
+and \prog{/nfs/databases/golden-path/blast/}, and
+you want to search \prog{/nfs/databases/blast-db/swissprot},
+the following commands will work:
 
 \vspace{1.5em}
-\user{setenv BLASTDB /nfs/databases/blast-db/}
-\user{hmmsearch globin.hmm swiss35}
+\user{setenv BLASTDB /nfs/databases/blast-db/:/nfs/databases/golden-path/blast/}
+\user{hmmsearch globin.hmm swissprot}
 
 Obviously, you'd tend to have the \prog{ setenv} command as part of the
 local configuration of your machine, rather than typing it at the
@@ -479,15 +491,18 @@ Like \prog{ hmmsearch}, the \prog{ hmmpfam} output comes in several
 sections. The first section is the {\em header}:
 
 {\small\begin{verbatim}
-hmmpfam - search a single seq against HMM database
-HMMER 2.0 (June 1998)
-Copyright (C) 1992-1998 Washington University School of Medicine
-HMMER is freely distributed under the GNU General Public License (GPL).
+hmmpfam - search one or more sequences against HMM database
+HMMER 2.2 (August 2001)
+Copyright (C) 1992-2001 HHMI/Washington University School of Medicine
+Freely distributed under the GNU General Public License (GPL)
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 HMM file:                 myhmms
 Sequence file:            7LES_DROME
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Query:  7LES_DROME  SEVENLESS PROTEIN (EC 2.7.1.112).
+
+Query sequence: 7LES_DROME
+Accession:      P13368
+Description:    SEVENLESS PROTEIN (EC 2.7.1.112).
 \end{verbatim}}
 
 The next section is the {\em sequence family classification} top hits
@@ -498,11 +513,11 @@ belonging to a domain family. The fields have the same meaning as in
 the HMM that's been hit.
 
 {\small\begin{verbatim}
-Scores for sequence family classification (score includes all domains):
-Sequence Description                                    Score    E-value  N 
+Model    Description                                    Score    E-value  N 
 -------- -----------                                    -----    ------- ---
-pkinase                                                 303.3      3e-87   1
-fn3                                                     171.8    1.1e-47   6
+pkinase                                                 304.1    1.1e-91   1
+fn3                                                     176.3    3.5e-53   6
+rrm      RNA recognition motif. (aka RRM, RBD, or RNP   -44.5       0.72   1
 \end{verbatim}}
 
 The next section is the {\em domain parse} list, ordered by position
@@ -511,23 +526,31 @@ as in \prog{ hmmsearch} output:
 
 {\small\begin{verbatim}
 Parsed for domains:
-Sequence Domain  seq-f seq-t    hmm-f hmm-t      score  E-value
+Model    Domain  seq-f seq-t    hmm-f hmm-t      score  E-value
 -------- ------- ----- -----    ----- -----      -----  -------
-fn3        1/6     437   522 ..     1    84 []    48.0  2.1e-10
-fn3        2/6     825   914 ..     1    84 []    12.6     0.21
-fn3        3/6    1292  1389 ..     1    84 []    15.2     0.13
-fn3        4/6    1799  1891 ..     1    84 []    62.4  9.4e-15
-fn3        5/6    1899  1978 ..     1    84 []    13.7     0.17
-fn3        6/6    1993  2107 ..     1    84 []    18.4    0.067
-pkinase    1/1    2209  2483 ..     1   278 []   303.3    3e-87
+fn3        1/6     437   522 ..     1    84 []    49.0  7.1e-15
+fn3        2/6     825   914 ..     1    84 []    13.6  4.3e-06
+fn3        3/6    1292  1389 ..     1    84 []    16.2  2.4e-06
+rrm        1/1    1300  1364 ..     1    72 []   -44.5     0.72
+fn3        4/6    1799  1891 ..     1    84 []    63.5  3.2e-19
+fn3        5/6    1899  1978 ..     1    84 []    14.6  3.4e-06
+fn3        6/6    1993  2107 ..     1    84 []    19.4  1.2e-06
+pkinase    1/1    2209  2483 ..     1   278 []   304.1  1.1e-91
 \end{verbatim}}
+
+Note how it's showing us an ``rrm'' hit - \prog{7LES\_DROME} doesn't
+have any RRM domains. You have to notice for yourself that the hit is
+insignificant (with a negative score, and an E-value of nearly 1).  By
+default, like BLAST, the search programs report well down into the
+noise. If you want the output to be cleaner, set an E-value threshold;
+for example \prog{hmmpfam -E 0.1}.
 
 The final output section is the {\em alignment output}, just like \prog{
 hmmsearch}:
 
 {\small\begin{verbatim}
 Alignments of top-scoring domains:
-fn3: domain 1 of 6, from 437 to 522: score 48.0, E = 2.1e-10
+fn3: domain 1 of 6, from 437 to 522: score 49.0, E = 7.1e-15
                    *->P.saPtnltvtdvtstsltlsWsppt.gngpitgYevtyRqpkngge
                       P saP   + +++ ++ l ++W p +  ngpi+gY+++  ++++g+ 
   7LES_DROME   437    PiSAPVIEHLMGLDDSHLAVHWHPGRfTNGPIEGYRLRL-SSSEGNA 482  
@@ -582,9 +605,9 @@ called \prog{ globins630.ali}, we'd do:
 \vspace{-1.5em}
 {\small\begin{verbatim}
 hmmalign - align sequences to an HMM profile
-HMMER 2.0 (June 1998)
-Copyright (C) 1992-1998 Washington University School of Medicine
-HMMER is freely distributed under the GNU General Public License (GPL).
+HMMER 2.2 (August 2001)
+Copyright (C) 1992-2001 HHMI/Washington University School of Medicine
+Freely distributed under the GNU General Public License (GPL)
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 HMM file:             globin.hmm
 Sequence file:        globins630.fa

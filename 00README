@@ -1,6 +1,6 @@
 HMMER - profile hidden Markov models for biological sequence analysis
-Version 2.1.2 (May 1999)
-Copyright (C) 1992-1999 Washington University School of Medicine
+Version 2.2 (August 2001)
+Copyright (C) 1992-2001 Washington University School of Medicine
 ------------------------------------------------------------------
 
 o About this software...
@@ -30,7 +30,7 @@ o Installing HMMER
    COPYING and LICENSE will refer to the terms of that agreement.
 
 o Getting started with HMMER
-   The User's Guide is in Userguide/Userguide.ps [PostScript]. 
+   The User's Guide is in Userguide/Userguide.pdf [Adobe PDF format]. 
    It is also available online as hypertext:
 	http://hmmer.wustl.edu/hmmer-html/ 
 
@@ -49,7 +49,7 @@ o Reporting bugs
 
    
 Sean Eddy
-Dept. of Genetics 
+Howard Hughes Medical Institute and Dept. of Genetics 
 Washington University School of Medicine, St. Louis, Missouri, USA
 -------------------------------------------------------------------
 

@@ -2,7 +2,7 @@
 # RCS $Id$
 ##########
 # HMMER - Biological sequence analysis with profile HMMs
-# Copyright (C) 1992-1998 Washington University School of Medicine
+# Copyright (C) 1992-2001 Washington University School of Medicine
 #
 #   This source code is distributed under the terms of the 
 #   GNU General Public License. See the files COPYING and 
@@ -20,8 +20,23 @@
 
 SHELL       = /bin/sh
 
-MANS = hmmer hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmfetch hmmindex hmmpfam hmmsearch\
-	alistat sfetch seqstat sreformat	
+HMMERMANS = hmmer\
+	hmmalign\
+	hmmbuild\
+	hmmcalibrate\
+	hmmconvert\
+	hmmemit\
+	hmmfetch\
+	hmmindex\
+	hmmpfam\
+	hmmsearch
+
+SQUIDMANS = afetch\
+	alistat\
+	seqstat\
+	sfetch\
+	shuffle\
+	sreformat	
 
 all:
 	make manpages
@@ -36,8 +51,11 @@ manpages:
 				# write the manpages.tex "chapter" by conversion
 	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
 	@echo "\chapter{Manual pages}" >> manpages.tex 
-	for file in $(MANS); do\
-	   rman	-f LaTeX2e ../Man/$$file.man | ./rmanprocess.pl >> manpages.tex;\
+	for file in $(HMMERMANS); do\
+	   rman	-f LaTeX2e ../man/$$file.man | ./rmanprocess.pl >> manpages.tex;\
+	done
+	for file in $(SQUIDMANS); do\
+	   rman -f LaTeX2e ../../squid/Man/$$file.man | ./rmanprocess.pl >> manpages.tex;\
 	done
 
 # dvi: make the dvi file
@@ -48,16 +66,22 @@ dvi:
 	latex main
 	latex main
 
+# pdf: make the PDF for distribution
+#
+pdf:
+	make manpages
+	pdflatex main
+	bibtex main
+	pdflatex main
+	pdflatex main
+	mv main.pdf Userguide.pdf
+
 # postscript: make the PostScript copy, Userguide.ps
 #             "make manpages" and "make dvi" first
 #
 postscript: 
 	dvips -o Userguide.ps main
 
-# pdf: convert Postscript copy to PDF
-#
-pdf: 	
-	ps2pdf Userguide.ps Userguide.pdf
 
 # html: invoke the LaTeX2html converter to create the hmmer-html/ HTML directory.
 #       Do "make manpages" and "make dvi" first.

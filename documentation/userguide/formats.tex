@@ -571,7 +571,8 @@ GCG        & Wisconsin GCG single sequence format \\
 
 \begin{tabular}{ll}
 \multicolumn{2}{l}{\textbf{Multiple sequence alignment formats}}\\
-SELEX   &   The preferred format for HMMER/Pfam (see below)\\
+Stockholm & The preferred format for HMMER/Pfam (see below)\\
+SELEX     & The old format for HMMER/Pfam\\
 MSF     &   GCG alignment format \\
 CLUSTAL &   CLUSTALW and CLUSTALV format \\
 A2M     &   ``Aligned FASTA'' \\ 
@@ -626,6 +627,255 @@ when you try to use the file.
 HMMER currently has a limit of 4095 characters on lines in files.  You
 may see this limitation in NCBI NR databases, where some description
 lines will be truncated by HMMER. 
+
+
+\subsection{Stockholm, the recommended multiple sequence alignment format}
+
+While we recommend a community standard format (FASTA) for unaligned
+sequence files, the recommended multiple alignment file format is not
+a community standard.  The Pfam Consortium developed a format (based
+on extended SELEX) called ``Stockholm format''.  The reasons for this
+are two-fold. First, there really is no standard accepted format for
+multiple sequence alignment files, so we don't feel guilty about
+inventing a new one. Second, the formats of popular multiple alignment
+software (e.g. CLUSTAL, GCG MSF, PHYLIP) do not support rich
+documentation and markup of the alignment.  Stockholm format was
+developed to support extensible markup of multiple sequence
+alignments, and we use this capability extensively in both RNA work
+(with structural markup) and the Pfam database (with extensive use of
+both annotation and markup).
+
+\subsubsection{A minimal Stockholm file}
+\begin{verbatim}
+# STOCKHOLM 1.0
+
+seq1  ACDEF...GHIKL
+seq2  ACDEF...GHIKL
+seq3  ...EFMNRGHIKL
+
+seq1  MNPQTVWY
+seq2  MNPQTVWY
+seq3  MNPQT...
+
+\end{verbatim}
+
+The simplest Stockholm file is pretty intuitive, easily generated in a
+text editor. It is usually easy to convert alignment formats into a
+``least common denominator'' Stockholm format. For instance, SELEX,
+GCG's MSF format, and the output of the CLUSTALV multiple alignment
+program are all similar interleaved formats.
+
+The first line in the file must be \verb+# STOCKHOLM 1.x+, where
+\verb+x+ is a minor version number for the format specification
+(and which currently has no effect on my parsers). This line allows a
+parser to instantly identify the file format.
+
+In the alignment, each line contains a name, followed by the aligned
+sequence. A dash or period denotes a gap. If the alignment is too long
+to fit on one line, the alignment may be split into multiple blocks,
+with blocks separated by blank lines. The number of sequences, their
+order, and their names must be the same in every block. Within a given
+block, each (sub)sequence (and any associated \verb+#=GR+ and
+\verb+#=GC+ markup, see below) is of equal length, called the
+\textit{block length}. Block lengths may differ from block to block;
+the block length must be at least one residue, and there is no
+maximum.  
+
+Other blank lines are ignored. You can add comments to the file on
+lines starting with a \verb+#+.
+
+All other annotation is added using a tag/value comment style. The
+tag/value format is inherently extensible, and readily made
+backwards-compatible; unrecognized tags will simply be ignored. Extra
+annotation includes consensus and individual RNA or protein secondary
+structure, sequence weights, a reference coordinate system for the
+columns, and database source information including name, accession
+number, and coordinates (for subsequences extracted from a longer
+source sequence) See below for details.
+
+\subsection{Syntax of Stockholm markup}
+
+There are four types of Stockholm markup annotation, for per-file,
+per-sequence, per-column, and per-residue annotation:
+
+\begin{wideitem}
+\item {\emprog{\#=GF <tag> <s>}}
+        Per-file annotation. \prog{<s>} is a free format text line
+        of annotation type \prog{<tag>}. For example, \prog{\#=GF DATE
+        April 1, 2000}. Can occur anywhere in the file, but usually
+        all the \prog{\#=GF} markups occur in a header.
+
+\item {\emprog{\#=GS <seqname> <tag> <s>}}
+        Per-sequence annotation. \prog{<s>} is a free format text line
+        of annotation type \prog{tag} associated with the sequence
+        named \prog{<seqname>}. For example, \prog{\#=GS seq1
+        SPECIES\_SOURCE Caenorhabditis elegans}. Can occur anywhere
+        in the file, but in single-block formats (e.g. the Pfam
+        distribution) will typically follow on the line after the
+        sequence itself, and in multi-block formats (e.g. HMMER
+        output), will typically occur in the header preceding the
+        alignment but following the \prog{\#=GF} annotation.
+
+\item {\emprog{\#=GC <tag> <...s...>}}
+        Per-column annotation. \prog{<...s...>} is an aligned text line
+        of annotation type \prog{<tag>}.
+        \verb+#=GC+ lines are
+        associated with a sequence alignment block; \prog{<...s...>}
+        is aligned to the residues in the alignment block, and has
+        the same length as the rest of the block.
+        Typically \verb+#=GC+ lines are placed at the end of each block.
+
+\item {\emprog{\#=GR <seqname> <tag> <.....s.....>}}
+        Per-residue annotation. \prog{<...s...>} is an aligned text line
+        of annotation type \prog{<tag>}, associated with the sequence
+        named \prog{<seqname>}. 
+        \verb+#=GR+ lines are 
+        associated with one sequence in a sequence alignment block; 
+        \prog{<...s...>}
+        is aligned to the residues in that sequence, and has
+        the same length as the rest of the block.
+        Typically
+        \verb+#=GR+ lines are placed immediately following the
+        aligned sequence they annotate.
+\end{wideitem}
+\subsection{Semantics of Stockholm markup}
+
+Any Stockholm parser will accept syntactically correct files, but is
+not obligated to do anything with the markup lines. It is up to the
+application whether it will attempt to interpret the meaning (the
+semantics) of the markup in a useful way. At the two extremes are the
+Belvu alignment viewer and the HMMER profile hidden Markov model
+software package.
+
+Belvu simply reads Stockholm markup and displays it, without trying to
+interpret it at all. The tag types (\prog{\#=GF}, etc.) are sufficient
+to tell Belvu how to display the markup: whether it is attached to the
+whole file, sequences, columns, or residues.
+
+HMMER uses Stockholm markup to pick up a variety of information from
+the Pfam multiple alignment database. The Pfam consortium therefore
+agrees on additional syntax for certain tag types, so HMMER can parse
+some markups for useful information. This additional syntax is imposed
+by Pfam, HMMER, and other software of mine, not by Stockholm format
+per se. You can think of Stockholm as akin to XML, and what my
+software reads as akin to an XML DTD, if you're into that sort of
+structured data format lingo.
+
+The Stockholm markup tags that are parsed semantically by my software
+are as follows:
+
+\subsubsection{Recognized \#=GF annotations}
+\begin{wideitem}
+\item [\emprog{ID  <s>}] 
+        Identifier. \emprog{<s>} is a name for the alignment;
+        e.g. ``rrm''. One word. Unique in file.
+
+\item [\emprog{AC  <s>}]
+        Accession. \emprog{<s>} is a unique accession number for the
+        alignment; e.g. 
+        ``PF00001''. Used by the Pfam database, for instance. 
+        Often a alphabetical prefix indicating the database
+        (e.g. ``PF'') followed by a unique numerical accession.
+        One word. Unique in file. 
+        
+\item [\emprog{DE  <s>}]
+        Description. \emprog{<s>} is a free format line giving
+        a description of the alignment; e.g.
+        ``RNA recognition motif proteins''. One line. Unique in file.
+
+\item [\emprog{AU  <s>}]
+        Author. \emprog{<s>} is a free format line listing the 
+        authors responsible for an alignment; e.g. 
+        ``Bateman A''. One line. Unique in file.
+
+\item [\emprog{GA  <f> <f>}]
+        Gathering thresholds. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs used in gathering the
+        members of Pfam full alignments. See Pfam and HMMER
+        documentation for more detail.
+        
+\item [\emprog{NC  <f> <f>}]
+        Noise cutoffs. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs, set according to the
+        highest scores seen for unrelated sequences when gathering
+        members of Pfam full alignments. See Pfam and HMMER
+        documentation for more detail.
+
+\item [\emprog{TC  <f> <f>}]
+        Trusted cutoffs. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs, set according to the
+        lowest scores seen for true homologous sequences that
+        were above the GA gathering thresholds, when gathering
+        members of Pfam full alignments. See Pfam and HMMER
+        documentation for more detail.
+\end{wideitem}
+
+\subsection{Recognized \#=GS annotations}
+
+\begin{wideitem}
+\item [\emprog{WT  <f>}]
+        Weight. \emprog{<f>} is a positive real number giving the
+        relative weight for a sequence, usually used to compensate
+        for biased representation by downweighting similar sequences.   
+        Usually the weights average 1.0 (e.g. the weights sum to
+        the number of sequences in the alignment) but this is not
+        required. Either every sequence must have a weight annotated, 
+        or none of them can.  
+
+\item [\emprog{AC  <s>}]
+        Accession. \emprog{<s>} is a database accession number for 
+        this sequence. (Compare the \prog{\#=GF AC} markup, which gives
+        an accession for the whole alignment.) One word. 
+        
+\item [\emprog{DE  <s>}]
+        Description. \emprog{<s>} is one line giving a description for
+        this sequence. (Compare the \prog{\#=GF DE} markup, which gives
+        a description for the whole alignment.)
+\end{wideitem}
+
+
+\subsection{Recognized \#=GC annotations}
+
+\begin{wideitem}
+\item [\emprog{RF}]
+        Reference line. Any character is accepted as a markup for a
+        column. The intent is to allow labeling the columns with some
+        sort of mark.
+        
+\item [\emprog{SS\_cons}]
+        Secondary structure consensus. For protein alignments,
+        DSSP codes or gaps are accepted as markup: [HGIEBTSCX.-\_], where
+        H is alpha helix, G is 3/10-helix, I is p-helix, E is extended
+        strand, B is a residue in an isolated b-bridge, T is a turn, 
+        S is a bend, C is a random coil or loop, and X is unknown
+        (for instance, a residue that was not resolved in a crystal
+        structure). For RNA alignments
+        the symbols \verb+>+ and \verb+<+ are
+        used for base pairs (pairs point at each other).  \verb-+- indicate
+        definitely single-stranded positions, and any gap symbol indicates
+        unassigned bases or single-stranded positions.  This description
+        roughly follows \cite{Konings89}. 
+        RNA pseudoknots are represented by alphabetic characters, with upper
+        case letters representing the 5' side of the helix and lower case
+        letters representing the 3' side. Note that this limits the
+        annotation to a maximum of 26 pseudoknots per sequence.
+        
+
+\item [\emprog{SA\_cons}]
+        Surface accessibility consensus. 0-9, gap symbols, or X are
+        accepted as markup. 0 means <10\% accessible residue surface
+        area, 1 means <20\%, 9 means <100\%, etc. X means unknown
+        structure.
+\end{wideitem}
+
+\subsection{Recognized \#=GR annotations}
+\begin{wideitem}
+\item [\emprog{SS}]
+        Secondary structure consensus. See \prog{\#=GC SS\_cons} above.
+\item [\emprog{SA}]
+        Surface accessibility consensus. See \prog{\#=GC SA\_cons} above.
+\end{wideitem}
+
 
 \subsection{SELEX alignment format}
 

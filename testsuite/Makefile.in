@@ -15,7 +15,8 @@ PTHREAD_LIBS   = @PTHREAD_LIBS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 
 SHELL     = /bin/sh
-LIBS      = -lhmmer -lsquid @LIBS@ -lm
+MYLIBS    = -lhmmer -lsquid
+LIBS      = @LIBS@ -lm
 
 SHIVA = alignalign_test\
 	evd_test\
@@ -36,7 +37,7 @@ SHIVA = alignalign_test\
 all: 	$(SHIVA)
 
 $(SHIVA): @EXEC_DEPENDENCY@
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) -o $@ -L../squid -L../src $@.o $(PTHREAD_LIBS) $(LIBS)
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) -o $@ -L../squid -L../src $@.o $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
 
 #######
 ## `make check` actually runs the tests.

@@ -2,11 +2,24 @@
 %
 
 \documentclass[11pt]{report}
-\usepackage{fullpage}
-\usepackage{times}
-\usepackage{epsfig}
+\newif\ifpdf
+\ifx\pdfoutput\undefined
+  \pdffalse
+  \typeout{Configured for dvips (PS not PDF)}
+\else
+  \pdftrue
+  \typeout{Configured for PDF output.}
+\fi
+\ifpdf
+  \usepackage[pdftex]{graphicx}     % comment out if not using graphicx
+\else  
+  \usepackage[dvips]{graphicx}      % comment out if not using graphicx
+\fi
 \usepackage{html}		% From the LaTeX2html translator
 \usepackage{apalike}
+\usepackage{fullpage}
+\usepackage{times}
+
 \setcounter{secnumdepth}{1}
 
 \input{macros}
@@ -28,6 +41,6 @@
 \input{license}
 \input{ack}
 
-\bibliography{master,new}
+\bibliography{master}
 
 \end{document}

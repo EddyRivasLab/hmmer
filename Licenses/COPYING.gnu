@@ -1,5 +1,5 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
-Copyright (C) 1992-1999 Washington University School of Medicine
+Copyright (C) 1992-2001 Washington University School of Medicine
 
 This suite of programs is free software. You can redistribute it
 and/or modify it under the terms of the GNU General Public License as
@@ -19,9 +19,9 @@ license, or the Netscape Public License), please contact me
 (eddy@genetics.wustl.edu) for permission.
 
 Incorporation into commercial software under non-GPL terms is possible
-only by prior formal negotation with Washington University School of
-Medicine to obtain a specially licensed version. Contact Jack Pincus
-(jhpincus@cris.com) to arrange licensing terms.
+by obtaining a specially licensed version from Washington University
+School of Medicine. Contact Jack Pincus (jhpincus@cris.com) to arrange
+licensing terms.
 
 This software is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of

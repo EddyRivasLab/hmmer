@@ -28,8 +28,8 @@ while (<>)
 	next;
     }
     if (/^\\begin\{document\}/) { next; }
-    
-    if (/^\\section\{See Also/) {
+  
+    if (/^\s*\\section\{See/ || /^\\end\{document\}/) {
 	print "\\setlength{\\parindent}{\\sresavei}\n";
 	print "\\setlength{\\parskip}{\\sresaves}\n";
 	print "\\newpage";
@@ -43,12 +43,21 @@ while (<>)
     }
 
     if (/^\\section\{Name/) {
-	$line = <>;			# get begin itemize
-	$line = <>;			# get item
-	if ($line =~ /^\\item\s*\[(\S+)\s*-\s*(.+)\]/) {
-	    print "\\section{\\texttt{$1} - $2}\n";
+	while ($line = <>) { 
+	    if ($line =~ /\\begin\{itemize\}/) { last; }
 	}
-	<>;			# get end itemize
+	while ($line = <>) {			# get item
+	    if ($line =~ /^\\item\s*\[(\S+)\s*-\s*(.+)\]/) {
+		print "\\section{\\texttt{$1} - $2}\n";
+		last;
+	    } elsif ($line =~ /^\\item\s*\[(\S+)\s*-\s*(.+)/) {
+		print "\\section{\\texttt{$1} - $2}\n";
+		last;
+	    }
+	}
+	while (<>) { 
+	    if (/\\end\{itemize\}/) { last; }
+	}
 	next;
     }
 

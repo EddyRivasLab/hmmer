@@ -32,15 +32,20 @@ HMMER to any platform.
 
 \section{Installing a precompiled distribution}
 
-Precompiled binary distributions of HMMER are available for at least
-the following platforms:
+Thanks to generous hardware support from Compaq, Hewlett-Packard, IBM,
+Intel, Silicon Graphics, and Sun Microsystems, precompiled binary
+distributions of HMMER are available for at least the following
+platforms:
 \begin{itemize}
 \item Intel PC/Linux
 \item Intel PC/FreeBSD
-\item Intel PC/Sun Solaris 2.x
-\item Silicon Graphics/IRIX 5.x and 6.x
-\item Sun Sparc/ Solaris 2.x
-\item DEC Alpha/Digital UNIX 4.0
+\item Intel PC/OpenBSD
+\item Intel PC/Sun Solaris 
+\item Silicon Graphics/IRIX
+\item Sun Sparc/Solaris 
+\item Compaq Alpha/Tru64
+\item Hewlett Packard P/HP-UX
+\item IBM/AIX
 \end{itemize}
 
 To install a precompiled distribution, do the following:
@@ -49,15 +54,19 @@ To install a precompiled distribution, do the following:
 \item Download the distribution from \prog{http://hmmer.wustl.edu/}.
 
 \item Uncompress and un-tar it; for example, \\
-	\user{uncompress hmmer-intel-linux.tar.Z}
-	\user{tar xf hmmer-intel-linux.tar}
+	\user{uncompress hmmer.bin.intel-linux.tar.gz}
+	\user{tar xf hmmer.bin.intel-linux.tar}
 	A new directory \prog{hmmer-xx} is created, where ``xx'' is
-	the HMMER version number.
+	the current HMMER version number.
 \item Go to the top level directory and run the
       configure script.\\
 \user{cd hmmer-xx}
 \user{./configure}
-\item Edit the Makefile in the top level directory.
+\item Edit the Makefile in the top level directory, if you want.
+
+The executables are in the \prog{binaries} directory. The man pages
+are in the \prog{documentation/man} directory.  The PDF copy of the
+Userguide is in the top level HMMER directory (Userguide.pdf).
 
 To run HMMER in the distribution directory, you don't need
 to edit the Makefile at all. But to permanently install HMMER on your
@@ -79,10 +88,10 @@ You may have to become root, depending on where you're installing.
 \item Download the distribution from \prog{http://hmmer.wustl.edu/}.
 
 \item Uncompress and un-tar it:\\
-	\user{uncompress hmmer.tar.Z}
+	\user{uncompress hmmer.tar.gz}
 	\user{tar xf hmmer.tar}
 A new directory \prog{hmmer-xx} is created, where ``xx'' is
-the HMMER version number.
+the current HMMER version number.
 
 \item Go to the top level directory and run the
       configure script.\\
@@ -97,6 +106,19 @@ library.
 
 If you want to disable POSIX threads support, do:\\
 \user{./configure --disable-threads}
+Sometimes this is necessary, if your system has a screwy 
+Pthreads installation. HMMER can run fine without threads,
+it just won't utilize multiple processors.
+
+If you want to specify a different default installation directory,
+such as \prog{/usr/share}, do:\\
+\user{./configure -prefix=/usr/share}
+In a multiplatform environment, you might have your binaries
+in one platform-specific hierarchy (say, \prog{/usr/share/Linux/bin}
+and your man pages and other platform independent stuff somewhere
+else (say \prog{/usr/share/man}. You can install in 
+separate binary and data directories:\\
+\user{./configure -prefix=/usr/share -exec\_prefix=/usr/share/Linux}
 
 If you want to change the choice of compilation flags (CFLAGS) or the
 compiler (CC), set these as environment variables:\\
@@ -105,35 +127,38 @@ For other generic configuration options, see the documentation for GNU
 autoconf 2.12. -- but it may be easier to just edit the
 Makefile (see below).
 
-\item Edit the top of the Makefile. 
+\item Edit the top of the Makefile, if needed. 
 
 To build and test HMMER in its source directory, you don't need to
-edit the Makefile at all. 
+edit the Makefile at all. If the configure script did a good job with
+the installation directories, you also don't need to edit the
+Makefile, but you might check to be sure.
 
-To permanently install HMMER on your system, set the make variables
-BINDIR and MANDIR to be the directories where you want HMMER
-executables and man pages to be installed. If you are installing the
-programs in \prog{/usr/local/bin} and the man pages in
+To permanently install HMMER on your system, be sure that the make
+variables BINDIR and MANDIR are set to be the directories where you
+want HMMER executables and man pages to be installed. If you are
+installing the programs in \prog{/usr/local/bin} and the man pages in
 \prog{/usr/local/man/man1}, you don't need to change anything.
 
 The default Makefile gets configured into a reliable but not
 necessarily optimal choice of compiler and compilation flags. The
 package is known to build "out of the box" on SGI IRIX, Sun Solaris,
-GNU/Linux, FreeBSD, or DEC Digital Unix platforms without any special
+Intel/Linux, Intel/FreeBSD, Intel/OpenBSD, HP/HP-UX, IBM/AIX, or
+Compaq Tru64 Unix platforms without any special
 modifications. However, you may want to change the CC or CFLAGS
 variables to suit your system.  In particular, you can play with the
 compiler options in CFLAGS to try to get more speed, if you're
-compiler-fluent. The Makefile includes some hints for various
-platforms. 
+compiler-fluent. The Makefile may include some hints for various
+platforms.
 
-On SunOS 4.1.x systems, you will have to use the GNU gcc compiler,
-because SunOS cc is not ANSI-compliant.
+On SunOS 4.1.x systems (God help you), you will have to use the GNU
+gcc compiler, because ancient SunOS cc is not ANSI-compliant.
 
 \item Type \prog{make} to build the programs.
 
 \item (Optional) Type \prog{make check} to compile and run a test suite.
 Some of the tests require that you have Perl installed. None of these
-tests should fail.
+tests should fail. Ever.
 
 \item Type \prog{make install} to install the programs and man pages. 
 You may have to become root, depending on where you're installing.
@@ -412,24 +437,14 @@ lights than an Origin, so it's more impressive to look at.
 
 \section{Recommended systems}
 
-HMMER is currently developed and maintained on the following three
-systems:
+HMMER is currently developed and maintained on Intel/GNU/Linux
+systems. Since these are the development systems, similar systems are
+the least likely to show portability problems.
 
-\begin{itemize}
-\item Silicon Graphics Origin200 dual R10K server, IRIX 6.5
-\item NEC Versa 6050MX laptop, Intel Pentium, 
-      Red Hat Linux 4.2, configured by VA/Research
-\item Dell Dimension desktop, Intel PentiumII, Red Hat
-      Linux 4.2
-\end{itemize}
-
-Since these are the development systems, similar systems are the least
-likely to show portability problems.
-
-At each release, HMMER is also tested on the following platforms: Sun
-Sparc Solaris, Sun x86 Solaris, DEC Alpha/Digital Unix, and Intel
-PC/FreeBSD. These systems are also unlikely to show portability
-problems.
+At each release, HMMER is also tested on a compile farm that includes
+most major commercial and open source UNIX platforms (see start of the
+chapter for a list).  These systems are also unlikely to show
+portability problems.
 
 \section{Make targets}
 
@@ -449,7 +464,10 @@ programs in the binaries/ subdirectory.
 the man pages in MANDIR.
 
 \item[\textbf{clean}] Cleans up the directory, leaving the
-distribution files.
+distribution files and binaries.
+
+\item[\textbf{distclean}] Like 'make clean', but removes everything
+that isn't part of a pristine source distribution.
 
 \item[\textbf{verify}] Runs consistency checks on the package.
 (Private)
@@ -464,9 +482,6 @@ site. (Private)
 
 \item[\textbf{stable}] Symlinks a new FTP release to hmmer.tar.Z. (Private)
 
-\item[\textbf{almostclean}] Like 'make clean', but leaves the
-binaries/ subdirectory. Used for making an executable distribution.
-(Private)
 \end{wideitem}
 
 
