@@ -831,7 +831,7 @@ PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, int nseq,
   if (nseq > 1) {
     stddev = (sqsum - (total * total / (float) nseq)) / ((float) nseq - 1.);
     stddev = (stddev > 0) ? sqrt(stddev) : 0.0;
-  }
+  } else stddev = 0.0;
 				/* print out stuff. */
   fprintf(fp, "Average score:  %10.2f bits\n", total / (float) nseq);
   fprintf(fp, "Minimum score:  %10.2f bits\n", worst);
