@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <pvm3.h>
 
@@ -94,6 +95,71 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
   free(dtid);
   return;
 }
+
+/* Function: PVMConfirmSlaves()
+ * Date:     SRE, Mon Oct 26 17:31:42 1998 [St. Louis]
+ *
+ * Purpose:  Make sure all the slaves initialized properly;
+ *           after the master spawns and initializes them,
+ *           they're supposed to send back a code. Valid 
+ *           codes are in structs.h and include:
+ *              HMMPVM_OK          everything's fine
+ *              HMMPVM_NO_HMMFILE  file not found (hmmpfam)
+ *              HMMPVM_NO_INDEX    no GSI file found (hmmpfam)
+ *              HMMPVM_BAD_INIT    miscellaneous error
+ *              
+ * Args:     slave_tid     array of nslaves TIDs
+ *           nslaves       number of slaves
+ *
+ * Returns:  (void)
+ *           If everything isn't OK, we Die() here.
+ */
+void
+PVMConfirmSlaves(int *slave_tid, int nslaves)
+{
+  int i;
+  struct timeval tmout;
+  int code;			/* code returned by slave */
+  int bufid;
+
+  tmout.tv_sec  = 5;		/* wait 5 sec before giving up on a slave. */
+  tmout.tv_usec = 0;
+
+  SQD_DPRINTF1(("Slaves, count off!\n"));
+  for (i = 0; i < nslaves; i++)
+    {
+      /* Do a timeout receive. If we don't hear back pronto
+       * from our slaves, we've got a problem.
+       */
+      if ((bufid = pvm_trecv(-1, HMMPVM_RESULTS, &tmout)) <= 0) 
+	{ 
+	  SQD_DPRINTF1(("Slave %d gives bufid %d.\n", i, bufid));
+	  PVMKillSlaves(slave_tid, nslaves); 
+	  pvm_exit(); 
+	  Die("One or more slaves started but died before initializing.");
+	}
+	
+      SQD_DPRINTF1(("Slave %d: present, sir!\n", i));
+      pvm_upkint(&code, 1, 1);
+      if (code != HMMPVM_OK)
+	{
+	  PVMKillSlaves(slave_tid, nslaves);
+	  pvm_exit();
+	  switch (code) {
+	  case HMMPVM_NO_HMMFILE: 
+	    Die("One or more PVM slaves couldn't open hmm file. Check installation.");
+	  case HMMPVM_NO_INDEX:
+	    Die("One or more PVM slaves couldn't open GSI index for hmm file. Check installation.");
+	  case HMMPVM_BAD_INIT:
+	    Die("One or more PVM slaves reports a failure to initialize.");
+	  default:
+	    Die("Unknown error code. A slave is confused.");
+	  }
+	}
+    }
+}
+
+
 
 /* Function: PVMCheckSlaves()
  * Date:     SRE, Fri Aug 14 09:04:25 1998 [St. Louis]
