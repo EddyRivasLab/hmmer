@@ -94,7 +94,6 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   int sc;			/* a score to print       */
   float nx;			/* expected # of symbol x */
   int gap, len, qgap, qlen;	/* penalties to charge    */
-  int maxmd;			/* maximum TMD so far     */
   
   Plan7Logoddsify(hmm);
 
@@ -157,7 +156,6 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
  
   /* Now, the profile; for each position in the HMM, write a line of profile.
    */
-  maxmd = -999999;
   for (k = 1; k <= hmm->M; k++)
     {
 				/* GCG adds some indexing as comments */
@@ -200,9 +198,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 				/* gap open (deletion) */
       if (k > 1)
 	{
-	  if (hmm->tsc[k-1][TMD] > maxmd) maxmd = hmm->tsc[k-1][TMD]; /* upper bound */
-
-	  qgap = -1 * (hmm->tsc[k-1][TDM] + maxmd - hmm->tsc[k-1][TMM] - hmm->tsc[k-1][TDD]);
+	  qgap = -1 * (hmm->tsc[k-1][TDM] + hmm->tsc[k-1][TMD] - hmm->tsc[k-1][TMM] - hmm->tsc[k-1][TDD]);
 	  qgap = qgap * 100 / (10.0 * INTSCALE);
 	}
       else qgap = 100;
@@ -218,7 +214,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
       if (do_xsw)
 	fprintf(fp, "%5d %5d %5d %5d\n", gap, len, qgap, qlen);
       else
-	fprintf(fp, "%5d %5d\n", MIN(gap,qgap), MIN(len,qlen)); /* upper bound: minimum cost */
+	fprintf(fp, "%5d %5d\n", gap, len); /* assume insertions >= deletions */
     }
 
   /* The final line of the profile is a count of the observed
