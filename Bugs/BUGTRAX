@@ -396,4 +396,28 @@ DESCRIPTION
   This appears to be a Linux 2.4 SMP scheduler problem.
   No action taken.	
 //
+ID              h30
+TITLE           get_wee_midpt crashes out if given seq of L=1
+STATUS          CLOSED
+XREF            2004:1119-hmmer-bug-h30
+REPORTED_BY     James Stroud <jstroud@mbi.ucla.edu>
+OPENED_DATE     SRE, Fri Nov 19 13:28:55 2004
+CLOSED_DATE     SRE, Fri Nov 19 13:58:08 2004
+DESCRIPTION     
+  hmmpfam crashes on Pfam_fs w/ "FATAL: you can't init get_wee_midpt
+  with a T", on a long HMM Arena_RNA_pol.
+
+  The problem is that P7WeeViterbi() is called w/ subseq of L=1. The
+  init of P7WeeViterbi sets begin,end points initially to STS, STT;
+  but when 1==L, assignment of tassign[L] to STT clobbers tassign[1].
+
+  Fixing this properly will require rethinking get_wee_midpt carefully.
+
+  Instead, hack around it. P7WeeViterbi() is only called once, from
+  within P7SmallViterbi(). Insert an extra test; if sqlen==1, do not
+  call P7WeeViterbi(), instead allocate a tiny L=1 matrix and use 
+  P7Viterbi().
+
+  Document P7WeeViterbi(): it can't take L=1.
+//
 

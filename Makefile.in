@@ -13,12 +13,18 @@
 #   MANDIR  - where the man pages will be installed by a 'make install'
 #   CC      - which compiler to use
 #   CFLAGS  - compiler flags to use
-
-# where you want things installed
+#
 # Sort of uses GNU coding standards. ${prefix} might be /usr/local.
 # ${exec_prefix} gives you some flexibility for installing architecture
 # dependent files (e.g. the programs): an example ${exec_prefix} might be
 # /nfs/share/irix64/
+#
+# You can also provide DESTDIR from the commandline, for installation
+# in a buildroot; for example:
+#     make DESTDIR=~/rpm/tmp/buildroot install
+# By default, DESTDIR is null.
+# This was added by request (rousse@ccr.jussieu.fr), to support 
+# packaging of an official Mandrake Linux contrib RPM.
 #
 prefix      = @prefix@
 exec_prefix = @exec_prefix@
@@ -102,14 +108,16 @@ src/libhmmer.a:
 # install: installs the binaries in BINDIR/
 #          installs man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 #          Creates these directories if they don't exist.
+#          Prefix those paths with ${DESTDIR} (rarely used, usually null;
+#          may be set on a make command line when building contrib RPMs).
 install: 
-	mkdir -p ${BINDIR}
-	-mkdir -p ${MANDIR}/man${MANSUFFIX}
+	mkdir -p ${DESTDIR}/${BINDIR}
+	-mkdir -p ${DESTDIR}/${MANDIR}/man${MANSUFFIX}
 	for file in $(PROGS) $(PVMPROGS); do\
-	   cp src/$$file $(BINDIR)/;\
+	   cp src/$$file ${DESTDIR}/$(BINDIR)/;\
 	done
 	-for file in hmmer $(PROGS); do\
-	   $(INSTMAN) documentation/man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+	   $(INSTMAN) documentation/man/$$file.man ${DESTDIR}/$(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 
 # uninstall: Reverses the steps of "make install".
@@ -128,7 +136,7 @@ uninstall:
 #
 bindist:
 	mkdir binaries
-	for prog in $(PROGS); do\
+	for prog in ${PROGS} ${PVMPROGS}; do\
 	   (cd binaries; ln -s ../src/$$prog .);\
 	done
 	make binclean
