@@ -283,7 +283,7 @@ struct dpmatrix_s {
   int **dmx;			/* delete scores [0.1..N][0.1..M-1.M] */
 
   /* Hidden ptrs where the real memory is kept; this trick was
-   * introduced by Eric Lindahl with the Altivec port; it's used to
+   * introduced by Erik Lindahl with the Altivec port; it's used to
    * align xmx, etc. on 16-byte boundaries for cache optimization.
    */
   void *xmx_mem, *mmx_mem, *imx_mem, *dmx_mem;

@@ -466,17 +466,21 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 }
 
       
-#if ! defined SPEEDY && ! defined ALTIVEC && ! defined INTEL_VECTORIZED
+#ifdef SLOW
 /* Function: P7Viterbi()
  * 
  * Purpose:  The Viterbi dynamic programming algorithm. 
  *           Identical to Forward() except that max's
  *           replace sum's. 
  *           
- *           This function is replaced by different implementations
- *           if SPEEDY or ALTIVEC is defined. SPEEDY replaces it
- *           with a portably optimized version. ALTIVEC replaces
- *           it with Erik Lindahl's altivec-enabled code for Mac OSX.
+ *           This is the slower, more understandable version
+ *           of P7Viterbi(). The default version in fast_algorithms.c
+ *           is portably optimized and more difficult to understand;
+ *           the ALTIVEC version in fast_algorithms.c is vectorized
+ *           with Altivec-specific code, and is pretty opaque.
+ *           
+ *           This function is not enabled by default; it is only
+ *           activated by -DSLOW at compile time.
  *           
  * Args:     dsq    - sequence in digitized form
  *           L      - length of dsq
@@ -594,7 +598,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
 
   return Scorify(sc);		/* the total Viterbi score. */
 }
-#endif /*! SPEEDY && ! ALTIVEC*/
+#endif /*SLOW*/
 
 /* Function: P7ViterbiTrace()
  * Date:     SRE, Sat Aug 23 10:30:11 1997 (St. Louis Lambert Field) 

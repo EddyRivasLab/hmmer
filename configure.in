@@ -50,32 +50,6 @@ AC_DEFUN(CHECK_GNU_MAKE,[
 ])
 CHECK_GNU_MAKE
 
-# Configure optional Altivec support from Eric Lindahl.
-#    --enable-altivec : force altivec support to be on.
-#    --disable-altivec: force altivec support to be off.
-#    Default: enable if host = powerpc-apple-darwin*
-#
-AC_ARG_ENABLE(altivec,
-[  --enable
-
-
-# Configure optional PVM (not default)
-#
-AC_ARG_ENABLE(pvm, 
-[  --enable-pvm         enable PVM, Parallel Virtual Machine],
-[case $enable_pvm in
-   yes)  echo 'Configuring optional PVM (Parallel Virtual Machine) support'
- 	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
-	 PVMINCDIR="-I${PVM_ROOT}/include"
-	 PVMFLAG="-DHMMER_PVM"
-	 PVMPROGS="hmmcalibrate-pvm hmmpfam-pvm hmmsearch-pvm"
-	 PVMLIBS="-lpvm3"
-	 ;;
-   no)   ;;
-   *)    echo "Ignoring unknown argument to --enable-pvm: $enable_pvm"
-	 ;;
-esac])
-
 # Configure debugging
 #
 AC_ARG_ENABLE(debugging,
@@ -100,6 +74,40 @@ AC_ARG_ENABLE(debugging,
      *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
 	 ;;
 esac])
+
+# Configure optional Altivec support from Eric Lindahl.
+#    --enable-altivec turns it on.
+#
+AC_ARG_ENABLE(altivec,
+[  --enable-altivec     enable Altivec-specific code for Macintosh],
+[case $enable_altivec in
+   yes)  echo 'Enabling optional Altivec optimization for Macintosh (Eric Lindahl, Stanford)'
+         MDEFS="$MDEFS -DALTIVEC"
+         CFLAGS="$CFLAGS -faltivec"
+         ;;
+    no)  ;;
+     *)  echo "Ignoring unknown argument to --enable-altivec: $enable_altivec"
+	 ;;
+esac])
+
+# Configure optional PVM (not default)
+#     --enable-pvm turns it on.
+#
+AC_ARG_ENABLE(pvm, 
+[  --enable-pvm         enable PVM, Parallel Virtual Machine],
+[case $enable_pvm in
+   yes)  echo 'Configuring optional PVM (Parallel Virtual Machine) support'
+ 	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
+	 PVMINCDIR="-I${PVM_ROOT}/include"
+	 PVMFLAG="-DHMMER_PVM"
+	 PVMPROGS="hmmcalibrate-pvm hmmpfam-pvm hmmsearch-pvm"
+	 PVMLIBS="-lpvm3"
+	 ;;
+   no)   ;;
+   *)    echo "Ignoring unknown argument to --enable-pvm: $enable_pvm"
+	 ;;
+esac])
+
 
 # Enable optional threads by default.
 # Uses ACX_PTHREAD macro from GNU macro archive.

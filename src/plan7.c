@@ -91,6 +91,7 @@ AllocPlan7Shell(void)
   hmm->flags = 0;
   return hmm;
 }  
+#ifndef ALTIVEC  /* in Altivec port, replaced in fast_algorithms.c */
 void
 AllocPlan7Body(struct plan7_s *hmm, int M) 
 {
@@ -110,19 +111,16 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
   hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
 
-  hmm->tsc_mem    = MallocOrDie (7     *           sizeof(int *));
-  hmm->msc_mem    = MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc_mem    = MallocOrDie (MAXCODE   *       sizeof(int *)); 
-  hmm->tsc_mem[0] = MallocOrDie ((7*M)     *       sizeof(int));
-  hmm->msc_mem[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc_mem[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
+  hmm->tsc     = MallocOrDie (7     *           sizeof(int *));
+  hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
 
-  hmm->tsc    = hmm->tsc_mem;
-  hmm->tsc[0] = hmm->tsc_mem[0];
-  hmm->msc    = hmm->msc_mem;
-  hmm->msc[0] = hmm->msc_mem[0];
-  hmm->isc    = hmm->isc_mem;
-  hmm->isc[0] = hmm->isc_mem[0];
+  hmm->tsc[0] = hmm->tsc_mem;
+  hmm->msc[0] = hmm->msc_mem;
+  hmm->isc[0] = hmm->isc_mem;
 
   /* note allocation strategy for important 2D arrays -- trying
    * to keep locality as much as possible, cache efficiency etc.
@@ -158,7 +156,7 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
 
   return;
 }  
-
+#endif /* ALTIVEC */
 
 void
 FreePlan7(struct plan7_s *hmm)
@@ -178,17 +176,17 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->esc_mem != NULL) free(hmm->esc_mem);
   if (hmm->end     != NULL) free(hmm->end);
-  if (hmm->msc_mem != NULL) free(hmm->msc_mem[0]);
-  if (hmm->mat     != NULL) free(hmm->mat[0]);
-  if (hmm->isc_mem != NULL) free(hmm->isc_mem[0]);
-  if (hmm->ins     != NULL) free(hmm->ins[0]);
-  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem[0]);
-  if (hmm->t       != NULL) free(hmm->t[0]);
   if (hmm->msc_mem != NULL) free(hmm->msc_mem);
-  if (hmm->mat     != NULL) free(hmm->mat);
   if (hmm->isc_mem != NULL) free(hmm->isc_mem);
-  if (hmm->ins     != NULL) free(hmm->ins);
   if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
+  if (hmm->mat     != NULL) free(hmm->mat[0]);
+  if (hmm->ins     != NULL) free(hmm->ins[0]);
+  if (hmm->t       != NULL) free(hmm->t[0]);
+  if (hmm->msc     != NULL) free(hmm->msc);
+  if (hmm->isc     != NULL) free(hmm->isc);
+  if (hmm->tsc     != NULL) free(hmm->tsc);
+  if (hmm->mat     != NULL) free(hmm->mat);
+  if (hmm->ins     != NULL) free(hmm->ins);
   if (hmm->t       != NULL) free(hmm->t);
   if (hmm->dnam    != NULL) free(hmm->dnam);
   if (hmm->dnai    != NULL) free(hmm->dnai);
