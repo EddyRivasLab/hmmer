@@ -343,22 +343,22 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
   tr->nodeidx[1]   = 0;
   tr->pos[1]       = 0;
   tpos = 2;
-  i    = N;			/* current i for tpos -1*/
+  i    = N;			/* current i (seq pos) we're trying to assign */
 
   /* Traceback
    */
   while (tr->statetype[tpos-1] != STS) {
     switch (tr->statetype[tpos-1]) {
     case STM:			/* M connects from i-1,k-1, or B */
-      sc = mmx[i][k] - hmm->msc[(int) dsq[i]][k];
-      if (sc == xmx[i-1][XMB] + hmm->bsc[k])
+      sc = mmx[i+1][k+1] - hmm->msc[(int) dsq[i+1]][k+1];
+      if (sc == xmx[i][XMB] + hmm->bsc[k+1])
 	{
 				/* Check for wing unfolding */
-	  if (Prob2Score(hmm->begin[k], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k])
-	    while (k > 1)
+	  if (Prob2Score(hmm->begin[k+1], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k+1])
+	    while (k > 0)
 	      {
 		tr->statetype[tpos] = STD;
-		tr->nodeidx[tpos]   = --k;
+		tr->nodeidx[tpos]   = k--;
 		tr->pos[tpos]       = 0;
 		tpos++;
 		if (tpos == curralloc) 
@@ -371,59 +371,57 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->statetype[tpos] = STB;
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
-	  i--;
 	}
-      else if (sc == mmx[i-1][k-1] + hmm->tsc[k-1][TMM])
+      else if (sc == mmx[i][k] + hmm->tsc[k][TMM])
 	{
 	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = --k;
-	  tr->pos[tpos]       = --i;
+	  tr->nodeidx[tpos]   = k--;
+	  tr->pos[tpos]       = i--;
 	}
-      else if (sc == imx[i-1][k-1] + hmm->tsc[k-1][TIM])
+      else if (sc == imx[i][k] + hmm->tsc[k][TIM])
 	{
 	  tr->statetype[tpos] = STI;
-	  tr->nodeidx[tpos]   = --k;
-	  tr->pos[tpos]       = --i;
+	  tr->nodeidx[tpos]   = k;
+	  tr->pos[tpos]       = i--;
 	}
-      else if (sc == dmx[i-1][k-1] + hmm->tsc[k-1][TDM])
+      else if (sc == dmx[i][k] + hmm->tsc[k][TDM])
 	{
 	  tr->statetype[tpos] = STD;
-	  tr->nodeidx[tpos]   = --k;
+	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = 0;
-	  i--;
 	}
       else Die("traceback failed");
       break;
 
     case STD:			/* D connects from M,D */
-      if (dmx[i][k] == mmx[i][k-1] + hmm->tsc[k-1][TMD])
+      if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[k][TMD])
 	{
 	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = --k;
-	  tr->pos[tpos]       = i;
+	  tr->nodeidx[tpos]   = k--;
+	  tr->pos[tpos]       = i--;
 	}
-      else if (dmx[i][k] == dmx[i][k-1] + hmm->tsc[k-1][TDD]) 
+      else if (dmx[i][k+1] == dmx[i][k] + hmm->tsc[k][TDD]) 
 	{
 	  tr->statetype[tpos] = STD;
-	  tr->nodeidx[tpos]   = --k;
+	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = 0;
 	}
       else Die("traceback failed");
       break;
 
     case STI:			/* I connects from M,I */
-      sc = imx[i][k] - hmm->isc[(int) dsq[i]][k];
-      if (sc == mmx[i-1][k] + hmm->tsc[k][TMI])
+      sc = imx[i+1][k] - hmm->isc[(int) dsq[i+1]][k];
+      if (sc == mmx[i][k] + hmm->tsc[k][TMI])
 	{
 	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k;
-	  tr->pos[tpos]       = --i;
+	  tr->nodeidx[tpos]   = k--;
+	  tr->pos[tpos]       = i--;
 	}
-      else if (sc == imx[i-1][k] + hmm->tsc[k][TII])
+      else if (sc == imx[i][k] + hmm->tsc[k][TII])
 	{
 	  tr->statetype[tpos] = STI;
 	  tr->nodeidx[tpos]   = k;
-	  tr->pos[tpos]       = --i;
+	  tr->pos[tpos]       = i--;
 	}
       else Die("traceback failed");
       break;
@@ -435,12 +433,12 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
 	}
-      else if (i > 0 && xmx[i][XMN] == xmx[i-1][XMN] + hmm->xsc[XTN][LOOP])
+      else if (i > 0 && xmx[i+1][XMN] == xmx[i][XMN] + hmm->xsc[XTN][LOOP])
 	{
 	  tr->statetype[tpos] = STN;
 	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos-1]     = --i;
-	  tr->pos[tpos]       = 0;
+	  tr->pos[tpos]       = 0;    /* note convention adherence:  */
+	  tr->pos[tpos-1]     = i--;  /* first N doesn't emit        */
 	}
       else Die("traceback failed");
       break;
@@ -484,8 +482,8 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	      }
 
 	    tr->statetype[tpos] = STM;
-	    tr->nodeidx[tpos]   = k;
-	    tr->pos[tpos]       = i;
+	    tr->nodeidx[tpos]   = k--;
+	    tr->pos[tpos]       = i--;
 	    break;
 	  }
       if (k < 1) Die("traceback failed");
