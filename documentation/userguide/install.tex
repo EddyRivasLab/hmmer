@@ -77,9 +77,9 @@ edit the Makefile at all.
 
 To permanently install HMMER on your system, set the make variables
 BINDIR and MANDIR to be the directories where you want HMMER
-executables and man pages to be installed. If you are installing in
-directories called bin/ and man/ in your home directory, you don't
-need to change anything.
+executables and man pages to be installed. If you are installing the
+programs in /usr/local/bin and the man pages in /usr/local/man/man1,
+you don't need to change anything.
 
 The default Makefile is configured for cc (your vendor's compiler) and
 -O optimization. The package is known to build "out of the box" on SGI
@@ -101,8 +101,9 @@ tests should fail.
 \item Type 'make install' to install the programs and man pages. 
 You may have to become root, depending on where you're installing.
 
-\item Type 'make clean' to clean up.
+\item Type 'make clean' to clean up. 
 \end{enumerate}
+
 
 \section{Environment variable configuration}
 
@@ -152,5 +153,48 @@ At each release, HMMER is also tested on the following systems:
 \begin{itemize}
 \item Sun UltraSparc 1, Solaris 5.5
 \end{itemize}
+
+\section{Make targets}
+
+There are a variety of make targets in the toplevel Makefile.  For
+completeness, they are summarized here. \textit{You shouldn't need to
+know this stuff.} Targets marked (Private) are targets which are not
+supported in the public HMMER release. They only run in my local
+development environment.
+
+\begin{wideitem}
+\item[\textbf{all}]  Compiles the source code; puts the compiled
+programs in the binaries/ subdirectory.
+ 
+\item[\textbf{test}]  Compiles and runs the Shiva testsuite.
+
+\item[\textbf{install}] Installs the programs in BINDIR and
+the man pages in MANDIR.
+
+\item[\textbf{clean}] Cleans up the directory, leaving the
+distribution files.
+
+\item[\textbf{verify}] Runs consistency checks on the package.
+(Private)
+
+\item[\textbf{doc}] Builds the Userguide from \latex source. (Private)
+
+\item[\textbf{dist}] Checks out a complete distribution from RCS
+and assembles the .tar.Z file. (Private)
+
+\item[\textbf{ftpdist}] Installs a new release on the FTP
+site. (Private)
+
+\item[\textbf{stable}] Symlinks a new FTP release to hmmer.tar.Z. (Private)
+
+\item[\textbf{almostclean}] Like 'make clean', but leaves the
+binaries/ subdirectory. Used for making an executable distribution.
+(Private)
+\end{wideitem}
+
+
+
+
+
 
 
