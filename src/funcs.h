@@ -201,11 +201,11 @@ extern void Plan7SetComline(struct plan7_s *hmm, int argc, char **argv);
 extern void Plan7SetCtime(struct plan7_s *hmm);
 extern void Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1);
 extern void Plan7Logoddsify(struct plan7_s *hmm);
-extern void Plan7Probify(struct plan7_s *hmm);
 extern void Plan7Renormalize(struct plan7_s *hmm);
 extern void Plan7GlobalConfig(struct plan7_s *hmm);
 extern void Plan7LSConfig(struct plan7_s *hmm);
 extern void Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit);
+extern void Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit); 
 extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, 
 			    int nseq, struct p7trace_s **tr);
 extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
