@@ -215,7 +215,7 @@ static void leave_pvm(void)
 #include <stdio.h>
 int main(void)
 {
-  printf("hmmpfam-slave is disabled. PVM support was not compiled into HMMER.\n");
+  printf("hmmpfam-pvm is disabled. PVM support was not compiled into HMMER.\n");
   exit(0);
 } 
 

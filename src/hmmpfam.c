@@ -834,14 +834,19 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	  FreePlan7(hmm);
 	  P7FreeTrace(tr);
 	}
-				/* send cleanup/shutdown flag */
-      pvm_initsend(PvmDataDefault);
-      msg = -1;
-      pvm_pkint(&msg, 1, 1);
-      pvm_send(slave_tid[slaveidx], HMMPVM_WORK);
     }
 
-  /* Cleanup; quit the VM; and return
+  /* Shut down all the slaves. (xref bug #15/STL5 p.66).
+   */
+  for (slave = 0; slave < nslaves; slave++)
+    {
+      pvm_initsend(PvmDataDefault);
+      msg = -1;			/* the special "shut down now" flag */
+      pvm_pkint(&msg, 1, 1);
+      pvm_send(slave_tid[slave], HMMPVM_WORK);
+    }
+
+  /* Cleanup; quit the PVM; and return
    */
   free(slave_tid);
   free(hmmlist);

@@ -172,3 +172,27 @@ CLOSED_DATE     SRE, Sun Dec 24 15:33:11 2000
 CLOSED_XREF     STL3 p. 133
 CLOSED_ACTION   hmmconvert.c now tests for this case
 //
+ID              15
+STATUS          untested
+DESCRIPTION     hmmpfam slave process leak when nhmm < nslaves
+NOTED_DATE      10/25/01
+NOTED_XREF      STL5 p. 66
+REPORTED_BY     John Blanchard (johnb@incyte.com), email 10/17/01
+REPRODUCE_WITH  
+REPRODUCE_ON    any PVM
+CLOSED_DATE     
+CLOSED_XREF     STL5 p.66
+CLOSED_ACTION   hmmpfam.c modified: kill slaves off in a separate loop
+//
+ID              16
+STATUS          untested
+DESCRIPTION     PVMConfirmSlaves() assumes nslaves=nhosts 
+NOTED_DATE      10/25/01
+NOTED_XREF      STL5 p. 66
+REPORTED_BY     John Blanchard (johnb@incyte.com), email 10/17/01
+REPRODUCE_WITH  
+REPRODUCE_ON    any PVM; only when DEBUGLEVEL>0
+CLOSED_DATE     
+CLOSED_XREF     STL5 p.66
+CLOSED_ACTION   pvm.c:PVMConfirmSlaves()... replace pvm_config() w/ pvm_tasks().
+//

@@ -98,7 +98,7 @@ the current HMMER version number.
 \user{cd hmmer-xx}
 \user{./configure}
 If you want to include the optional PVM support, do:\\
-\user{./configure --with-pvm}
+\user{./configure --enable-pvm}
 If you include PVM, the system that you're compiling on must already
 be set up for PVM; specifically, the environment variables PVM\_ROOT
 and PVM\_ARCH must be set, so HMMER can find the PVM headers and
@@ -231,7 +231,7 @@ see the environment variables PVM\_ROOT and PVM\_ARCH, and the PVM
 header files and libraries must be found in the appropriate place
 under \$PVM\_ROOT.
 
-To enable PVM support in HMMER, add \prog{--with-pvm} to the command line
+To enable PVM support in HMMER, add \prog{--enable-pvm} to the command line
 for \prog{./configure} before you compile a source distribution.  PVM is
 completely optional, and the software will work fine without it.
 

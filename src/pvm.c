@@ -35,7 +35,7 @@
  *           the relative speed of the processor(s) is 
  *           irrelevant.
  *
- * Args:     slave       - name of slave process to spawn ("hmmpfam-slave")
+ * Args:     slave       - name of slave process to spawn ("hmmpfam-pvm")
  *           ret_tid     - RETURN: malloc'ed list of slave tid's.
  *           ret_nslaves - RETURN: total number of slaves.
  *
@@ -132,8 +132,6 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
 void
 PVMConfirmSlaves(int *slave_tid, int nslaves)
 {
-  struct pvmhostinfo *hostp;
-  int nodes;
   int i;
   struct timeval tmout;
   int code;			/* code returned by slave */
@@ -143,23 +141,21 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
   tmout.tv_sec  = 5;		/* wait 5 sec before giving up on a slave. */
   tmout.tv_usec = 0;
 
-  SQD_DPRINTF1(("requesting PVM configuration...\n"));
-  if (pvm_config(&nodes, NULL, &hostp) != 0) Die("PVM not responding");
   SQD_DPRINTF1(("Slaves, count off!\n"));
   for (i = 0; i < nslaves; i++)
     {
       /* Do a timeout receive. If we don't hear back pronto
        * from our slaves, we've got a problem.
        */
-      if ((bufid = pvm_trecv(-1, HMMPVM_RESULTS, &tmout)) <= 0) 
+      if ((bufid = pvm_trecv(slave_tid[i], HMMPVM_RESULTS, &tmout)) <= 0) 
 	{ 
-	  SQD_DPRINTF1(("Slave %d (%s) gives bufid %d.\n", i, hostp[i].hi_name, bufid));
+	  SQD_DPRINTF1(("Slave %d shows no response: bufid %d.\n", i, bufid));
 	  PVMKillSlaves(slave_tid, nslaves); 
 	  pvm_exit(); 
 	  Die("One or more slaves started but died before initializing.");
 	}
 	
-      SQD_DPRINTF1(("Slave %d (%s): present, sir!\n", i, hostp[i].hi_name));
+      SQD_DPRINTF1(("Slave %d: present, sir!\n", i));
       pvm_upkint(&code, 1, 1);
       slaverelease = PVMUnpackString();
 
@@ -237,7 +233,7 @@ PVMKillSlaves(int *slave_tid, int nslaves)
   
   for (i = 0; i < nslaves; i++)
     if (pvm_kill(slave_tid[i]) != 0)
-      Warn("a slave refuses to die");
+      Warn("a slave refuses to die. how annoying");
   return;
 }
 

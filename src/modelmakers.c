@@ -355,10 +355,11 @@ P7Maxmodelmaker(MSA *msa, char **dsq, float maxgap,
    * is a constant. So we only have to evaluate BM transitions.
    */
   bestsc = -FLT_MAX;
+  first  = 0;
   for (i = 1; i <= last; i++) {
     new = sc[i]; 
     for (idx = 0; idx < msa->nseq; idx++) {
-      if (isgap(msa->aseq[idx][j-1])) 
+      if (isgap(msa->aseq[idx][i-1])) 
 	new += bm2;		/* internal B->M transition */
       else
 	new += bm1;		/* B->M1 transition         */
@@ -513,6 +514,14 @@ matassign2hmm(MSA *msa, char **dsq, int *matassign,
     if (matassign[apos] & ASSIGN_MATCH) 
       M++;
   }
+
+  if (M == 0) 
+    Die("No conserved consensus columns found; aborting construction!\n\
+This is an unusual situation. Reexamine your sequence alignment. It is\n\
+probably unusually full of gaps, or lots of sequence fragments. You may be\n\
+able to force HMMER to model it; see the --fast (and --gapmax), or --hand\n\
+options to hmmbuild.");
+
 				/* delimit N-terminal tail */
   for (apos=1; matassign[apos] & ASSIGN_INSERT && apos <= msa->alen; apos++)
     matassign[apos] |= EXTERNAL_INSERT_N;
