@@ -514,8 +514,8 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
    * Build ainfo
    ***********************************************/
         
+  ainfo->au = MallocOrDie(sizeof(char) * (strlen(RELEASE)+7));
   sprintf(ainfo->au, "HMMER %s", RELEASE);
-  ainfo->flags |= AINFO_AUTH;
 				/* copy sqinfo array and weights */
   for (idx = 0; idx < nseq; idx++)
     {
@@ -525,7 +525,6 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 
   /* #=RF annotation: x for match column, . for insert column
    */
-  ainfo->flags |= AINFO_RF;
   ainfo->rf = (char *) MallocOrDie (sizeof(char) * (alen+1));
   for (apos = 0; apos < alen; apos++)
     ainfo->rf[apos] = '.';
