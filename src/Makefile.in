@@ -49,9 +49,9 @@ HDRS =  config.h funcs.h globals.h structs.h version.h
 
 SQUIDHDRS = gnuregex.h squid.h sqfuncs.h 
 
-SRC =   hmmalign.c      hmmbuild.c        hmmcalibrate.c    hmmcalibrate-slave.c\
+SRC =   hmmalign.c      hmmbuild.c        hmmcalibrate.c    hmmcalibrate-pvm.c\
 	hmmconvert.c    hmmfetch.c        hmmindex.c        hmmpfam.c\
-	hmmpfam-slave.c hmmsearch.c       hmmsearch-slave.c\
+	hmmpfam-pvm.c hmmsearch.c       hmmsearch-pvm.c\
 	alphabet.c    core_algorithms.c debug.c           emit.c\
 	emulation.c   histogram.c       hmmio.c           mathsupport.c\
         masks.c       misc.c            modelmakers.c     plan7.c\
@@ -115,14 +115,14 @@ hmmpfam: $(OBJ) $(PVMOBJ) hmmpfam.o
 hmmsearch: $(OBJ) hmmsearch.o
 	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
-hmmcalibrate-slave: $(OBJ) $(PVMOBJ) hmmcalibrate-slave.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate-slave.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+hmmcalibrate-pvm: $(OBJ) $(PVMOBJ) hmmcalibrate-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate-pvm.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
-hmmpfam-slave: $(OBJ) $(PVMOBJ) hmmpfam-slave.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam-slave.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+hmmpfam-pvm: $(OBJ) $(PVMOBJ) hmmpfam-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam-pvm.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
-hmmsearch-slave: $(OBJ) $(PVMOBJ) hmmsearch-slave.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch-slave.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+hmmsearch-pvm: $(OBJ) $(PVMOBJ) hmmsearch-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch-pvm.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
 
 #######
