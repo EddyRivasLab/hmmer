@@ -2044,7 +2044,7 @@ ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
 
   /* Overallocate for the trace.
    * S-N-B- ... - E-C-T  : 6 states + L is minimum trace;
-   * add N more as buffer.             
+   * add L more as buffer.             
    */
   curralloc = L * 2 + 6; 
   P7AllocTrace(curralloc, &tr);
