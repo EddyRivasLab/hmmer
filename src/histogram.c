@@ -923,7 +923,7 @@ ExtremeValueP(float x, float mu, float lambda)
 			/* avoid overflow fp exceptions */
   if ((lambda * (x - mu)) < -1. * log(log(DBL_MAX))) return 1.0;
 			/* avoid underflow fp exceptions */
-  if ((lambda * (x - mu)) > log(DBL_MAX)) return 0.0;
+  if ((lambda * (x - mu)) > log(log(DBL_MAX))) return 0.0;
 			/* a roundoff issue arises; use 1 - e^-x --> x for small x */
   y = exp(-1. * lambda * (x - mu));
   if (y < 1e-7) return y;
