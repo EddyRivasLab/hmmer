@@ -77,8 +77,6 @@ AllocHistogram(int min, int max, int lumpsize)
   h->expect    = NULL;
   h->fit_type  = HISTFIT_NONE;
 
-  h->param[EVD_WONKA] = 1.0;	/* just in case, make sure this initializes */
-
   return h;
 }
 
@@ -302,16 +300,6 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
        */
       if (h->fit_type != HISTFIT_NONE && (int) h->expect[idx] > 0)
 	{
-				/* "corrected" line */
-#ifdef SRE_REMOVED
-	  if (h->fit_type == HISTFIT_EVD)
-	    {
-	      pos = 20 + (int)(h->param[EVD_WONKA] * h->expect[idx] - 1) / units;
-	      if (pos >= 78) pos = 78; /* be careful of buffer bounds */
-	      buffer[pos] = 'o';
-	    }
-#endif
-				/* true (uncorrected) line */
 	  pos = 20 + (int)(h->expect[idx]-1) / units;
 	  if (pos >= 78) pos = 78; /* be careful of buffer bounds */
 	  buffer[pos] = '*';
@@ -333,9 +321,6 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
     fprintf(fp, "\n\n%% Statistical details of theoretical EVD fit:\n");
     fprintf(fp, "              mu = %10.4f\n", h->param[EVD_MU]);
     fprintf(fp, "          lambda = %10.4f\n", h->param[EVD_LAMBDA]);
-#ifdef SRE_REMOVED
-    fprintf(fp, "    fraction fit = %10.4f\n", h->param[EVD_WONKA]);
-#endif
     fprintf(fp, "chi-sq statistic = %10.4f\n", h->chisq);
     fprintf(fp, "  P(chi-square)  = %10.4g\n", h->chip);
     break;
@@ -539,7 +524,7 @@ EVDBasicFit(struct histogram_s *h)
   /* Set the EVD parameters in the histogram;
    * pass 2 for additional lost degrees of freedom because we fit mu, lambda.
    */
-  ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 1.0, 2);
+  ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 2);
 
   free(x);
   free(d);
@@ -665,15 +650,11 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
     }
 
   /* Set the histogram parameters;
-   * - the wonka factor is n+z / h->total : e.g. that's the fraction of the
-   *   hits that we expect to match the EVD, others are generally lower
    * - we fit from lowbound to highbound; thus we lose 2 degrees of freedom
    *   for fitting mu, lambda, but we get 1 back because we're unnormalized
    *   in this interval, hence we pass 2-1 = 1 as ndegrees.
-   *   
-   *   Mon Jan 19 06:18:14 1998: wonka = 1.0, temporarily disabled.
    */    
-  ExtremeValueSetHistogram(h, mu, lambda, lowbound, highbound, 1.0, 1); 
+  ExtremeValueSetHistogram(h, mu, lambda, lowbound, highbound, 1); 
   return 1;
 
 FITFAILED:
@@ -689,23 +670,18 @@ FITFAILED:
  * Purpose:  Instead of fitting the histogram to an EVD,
  *           simply set the EVD parameters from an external source.
  *
- *           Note that the fudge factor "wonka" is used /only/
- *           for prettification of expected/theoretical curves
- *           in PrintASCIIHistogram displays.
- *           
  * Args:     h        - the histogram to set
  *           mu       - mu location parameter                
  *           lambda   - lambda scale parameter
  *           lowbound - low bound of the histogram that was fit
  *           highbound- high bound of histogram that was fit
- *           wonka    - fudge factor; fraction of hits estimated to be "EVD-like"
  *           ndegrees - extra degrees of freedom to subtract in X^2 test:
  *                        typically 0 if mu, lambda are parametric,
  *                        else 2 if mu, lambda are estimated from data
  */
 void
 ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, 
-			 float lowbound, float highbound, float wonka, int ndegrees)
+			 float lowbound, float highbound, int ndegrees)
 {
   int   sc;
   int   hsize, idx;
@@ -716,7 +692,6 @@ ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda,
   h->fit_type          = HISTFIT_EVD;
   h->param[EVD_LAMBDA] = lambda;
   h->param[EVD_MU]     = mu;
-  h->param[EVD_WONKA]  = wonka;
 
   hsize     = h->max - h->min + 1;
   h->expect = (float *) MallocOrDie(sizeof(float) * hsize);
