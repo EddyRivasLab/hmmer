@@ -52,20 +52,20 @@ CFLAGS = @CFLAGS@
 ## and building the release (indeed, several commands will only work in 
 ## St. Louis)
 #######
-RELEASE     = 2.1.1
-RELEASEDATE = "Dec 1998"
-RELCODE     = "rel2_1_1"
+RELEASE     = 2.1.2
+RELEASEDATE = "May 1999"
+RELCODE     = "rel2_1_2"
 LICENSE     = gnu
 
 SHELL       = /bin/sh
 SQUIDSRCDIR = $(HOME)/src/squid
 COMPRESS    = compress
-FTPDIR      = /nfs/newftp/eddy/hmmer/
+FTPDIR      = /nfs/ftp/eddy/hmmer/
 
 PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit\
 	hmmfetch hmmindex hmmpfam hmmsearch
 
-SQUIDPROGS = alistat getseq seqstat sreformat
+SQUIDPROGS = alistat sfetch seqstat sreformat
 
 PVMPROGS = @PVMPROGS@
 
@@ -83,7 +83,7 @@ SRC =   hmmalign.c    hmmbuild.c        hmmcalibrate.c    hmmconvert.c\
 	plan9.c       prior.c           pvm.c		  threads.c\
 	tophits.c     trace.c 
 
-SQUIDSRC = alistat_main.c getseq_main.c seqstat_main.c sreformat_main.c\
+SQUIDSRC = alistat_main.c sfetch_main.c seqstat_main.c sreformat_main.c\
 	   aligneval.c  alignio.c   cluster.c   dayhoff.c\
 	   file.c       getopt.c    gsi.c       hsregex.c   interleaved.c\
 	   iupac.c      msf.c       revcomp.c   selex.c\
@@ -237,10 +237,13 @@ dist:
 	mkdir build/hmmer-$(RELEASE)/Shiva
 	mkdir build/hmmer-$(RELEASE)/Userguide
 	# 
-	# Make the configure script
+	# Make the configure script; copy it and other GNU config material to distribution
 	#
 	autoconf
-	cp configure build/hmmer-$(RELEASE)/
+	cp configure    build/hmmer-$(RELEASE)/
+	cp config.guess build/hmmer-$(RELEASE)/
+	cp config.sub   build/hmmer-$(RELEASE)/
+	cp install-sh   build/hmmer-$(RELEASE)/
 	# 
 	# Attach the license and release notes
 	#
@@ -314,14 +317,14 @@ dist:
 	#
 	(cd Userguide; make clean)
 	(cd Userguide; make)
-	cp Userguide/Userguide.ps      build/hmmer-$(RELEASE)/Userguide/
-	cp Userguide/Userguide.pdf     build/hmmer-$(RELEASE)/Userguide/
-	cp Userguide/hmmer-html.tar.Z  build/hmmer-$(RELEASE)/Userguide/
+	cp -f Userguide/Userguide.ps      build/hmmer-$(RELEASE)/Userguide/
+	cp -f Userguide/Userguide.pdf     build/hmmer-$(RELEASE)/Userguide/
+	cp -f Userguide/hmmer-html.tar.Z  build/hmmer-$(RELEASE)/Userguide/
 #
 # Packaging commands
 #
 	(cd build; tar cvf hmmer-$(RELEASE).tar hmmer-$(RELEASE))
-	$(COMPRESS) build/hmmer-$(RELEASE).tar
+	$(COMPRESS) -f build/hmmer-$(RELEASE).tar
 
 
 # make ftpdist: install FTP distribution. Assumes a "make dist"
@@ -329,20 +332,20 @@ dist:
 #               doesn't install the on-line manual for the Web site.
 #
 ftpdist:
-	cp $(READMES)                     $(FTPDIR)
-	cp build/hmmer-$(RELEASE)/COPYING $(FTPDIR)
-	cp build/hmmer-$(RELEASE)/LICENSE $(FTPDIR)
-	cp build/hmmer-$(RELEASE)/NOTES   $(FTPDIR)
-	cp build/hmmer-$(RELEASE).tar.Z   $(FTPDIR)
-	cp build/hmmer-$(RELEASE)-*.tar.Z $(FTPDIR)
-	cp Userguide/Userguide.ps         $(FTPDIR)
-	cp Userguide/Userguide.pdf        $(FTPDIR)
-	cp Userguide/hmmer-html.tar.Z     $(FTPDIR)
+	cp -f $(READMES)                     $(FTPDIR)
+	cp -f build/hmmer-$(RELEASE)/COPYING $(FTPDIR)
+	cp -f build/hmmer-$(RELEASE)/LICENSE $(FTPDIR)
+	cp -f build/hmmer-$(RELEASE)/NOTES   $(FTPDIR)
+	cp -f build/hmmer-$(RELEASE).tar.Z   $(FTPDIR)
+	cp -f build/hmmer-$(RELEASE)-*.tar.Z $(FTPDIR)
+	cp -f Userguide/Userguide.ps         $(FTPDIR)
+	cp -f Userguide/Userguide.pdf        $(FTPDIR)
+	cp -f Userguide/hmmer-html.tar.Z     $(FTPDIR)
 
 
 # make stable: Set up the FTP site symlink to the current stable HMMER release.
 #
 stable:
-	ln -s $(FTPDIR)/hmmer-$(RELEASE).tar.Z $(FTPDIR)/hmmer.tar.Z
+	ln -sf $(FTPDIR)/hmmer-$(RELEASE).tar.Z $(FTPDIR)/hmmer.tar.Z
 
 

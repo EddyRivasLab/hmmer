@@ -38,11 +38,9 @@ PROGS = hmmalign hmmbuild hmmcalibrate \
 	hmmconvert hmmemit hmmfetch hmmindex\
 	hmmpfam hmmsearch
 
-SQUIDPROGS = alistat getseq seqstat sreformat
+SQUIDPROGS = alistat sfetch seqstat sreformat
 
 HDRS =  config.h funcs.h globals.h structs.h version.h
-
-SQUIDHDRS = gnuregex.h squid.h sqfuncs.h 
 
 SRC =   hmmalign.c      hmmbuild.c        hmmcalibrate.c    hmmcalibrate-pvm.c\
 	hmmconvert.c    hmmfetch.c        hmmindex.c        hmmpfam.c\
@@ -52,13 +50,6 @@ SRC =   hmmalign.c      hmmbuild.c        hmmcalibrate.c    hmmcalibrate-pvm.c\
         masks.c       misc.c            modelmakers.c     plan7.c\
 	plan9.c	      prior.c           pvm.c             threads.c\
 	tophits.c     trace.c
-
-SQUIDSRC = aligneval.c  alignio.c   cluster.c   dayhoff.c\
-	   file.c       getopt.c    gsi.c       hsregex.c   interleaved.c\
-	   iupac.c      msf.c       revcomp.c   selex.c\
-	   sqerror.c    sqio.c      sre_ctype.c sre_math.c\
-	   sre_string.c stack.c     translate.c types.c\
-	   weight.c
 
 OBJ =  	alphabet.o    core_algorithms.o debug.o	          emit.o\
 	emulation.o   histogram.o       hmmio.o           mathsupport.o\
@@ -114,8 +105,8 @@ hmmsearch-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch-pvm.o
 
 alistat:   $(SQUIDOBJ) alistat_main.o
 	$(CC) $(CFLAGS) $(MDEFS) -o $@ alistat_main.o   $(SQUIDOBJ) $(LIBS)
-getseq:    $(SQUIDOBJ) getseq_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ getseq_main.o    $(SQUIDOBJ) $(LIBS)
+sfetch:    $(SQUIDOBJ) sfetch_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ sfetch_main.o    $(SQUIDOBJ) $(LIBS)
 seqstat:   $(SQUIDOBJ) seqstat_main.o
 	$(CC) $(CFLAGS) $(MDEFS) -o $@ seqstat_main.o   $(SQUIDOBJ) $(LIBS)
 sreformat: $(SQUIDOBJ) sreformat_main.o
@@ -147,12 +138,6 @@ dbv:
 	make clean	
 	make CFLAGS="-g -Wall -pedantic" MDEFS="" LIBS="-lm"
 
-# Make a memory debugging copy
-memv: 
-	make clean	
-	make CFLAGS="-g -Wall" MDEFS="-DHMMER_THREADS -DDEBUGLEVEL=1 -DMEMDEBUG -L." LIBS="-lm -lpthread -ldbmalloc"
-
-
 # Make an Electric Fence version
 efencev:
 	make clean
@@ -173,8 +158,4 @@ clean:
 
 tags:
 	etags -t $(SRC) $(HDRS) $(READMES) 
-
-lint:
-	lint $(MDEFS) $(SRC) 
-
 

@@ -67,6 +67,9 @@ viterbi_exercise: $(OBJ) viterbi_exercise.o
 weeviterbi_test: $(OBJ) weeviterbi_test.o
 	$(CC) $(CFLAGS) -o $@ -L../src/ weeviterbi_test.o $(LIBS)
 
+generic_test: $(OBJ) generic_test.o
+	$(CC) $(CFLAGS) -o $@ -L../src/ generic_test.o $(LIBS)
+
 #######
 ## `make shiva` runs the tests.
 #######
