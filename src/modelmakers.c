@@ -239,6 +239,7 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
   float   new, bestsc;		/* new score, best score so far     */
   int     code;			/* optimization: return code from build_cij() */
   int     ngap;			/* gap count in a column                      */
+  float   wgtsum;		/* sum of weights; do not assume it is nseq */
 
   /* Allocations
    */
@@ -262,6 +263,7 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
   
   FCopy(insp, prior->i[0], Alphabet_size);
   FNorm(insp, Alphabet_size);
+  wgtsum = FSum(ainfo->wgt, ainfo->nseq);
   for (x = 0; x < Alphabet_size; x++)
     insp[x] = sreLOG2(insp[x] / null[x]);
   
@@ -345,8 +347,8 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
 	if (!isgap(aseqs[idx][j-1])) insopt[idx]++;
     }
 				/* add in constant contributions for col i */
-				/* note ad hoc scaling of mpri by nseq     */
-    sc[i] += FDot(matp, matc[i], Alphabet_size) + mpri * ainfo->nseq;
+				/* note ad hoc scaling of mpri by wgtsum (us. nseq)*/
+    sc[i] += FDot(matp, matc[i], Alphabet_size) + mpri * wgtsum;
   } /* end loop over start positions i */
 
   /* Termination: place the begin state.
@@ -459,17 +461,23 @@ build_cij(char **aseqs, int nseq, int *insopt, int i, int j,
  *           based on the lengths of the sequences.
  *           
  *           Algorithm is dumb: use weighted average length.
+ *           
+ *           Don't assume that weights sum to nseq!
  */
 static int
 estimate_model_length(AINFO *ainfo, float *wgt, int nseq)
 {
   int   idx;
   float total = 0.;
+  float wgtsum = 0.;
 
   for (idx = 0; idx < nseq; idx++)
-    total += wgt[idx] * (float) ainfo->sqinfo[idx].len;
+    {
+      total  += wgt[idx] * (float) ainfo->sqinfo[idx].len;
+      wgtsum += wgt[idx];
+    }
     
-  return (int) (total / (float) nseq);
+  return (int) (total / wgtsum);
 }
  
 
