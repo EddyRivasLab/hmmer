@@ -12,6 +12,8 @@
  * funcs.h 
  *
  * Declarations of external functions in HMMER.
+ * 
+ * RCS $Id$
  */            
 
 #ifndef FUNCSH_INCLUDED
@@ -85,6 +87,7 @@ extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm,
  * from debug.c
  * Debugging output of various sorts.
  */
+extern void VerboseWorry(int level, char *file, int line, char *fmt, ...);
 extern char *Statetype(enum p7stype st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
@@ -114,9 +117,9 @@ extern double ExtremeValueP (float x, float mu, float lambda);
 extern double ExtremeValueP2(float x, float mu, float lambda, int N);
 extern double ExtremeValueE (float x, float mu, float lambda, int N);
 extern float  EVDrandom(float mu, float lambda);
-extern void   EVDMaxLikelyFit(float *x, int *y, int n, 
+extern int    EVDMaxLikelyFit(float *x, int *y, int n, 
 			      float *ret_mu, float *ret_lambda);
-extern void   EVDCensoredFit(float *x, int *y, int n, int z, float c, 
+extern int    EVDCensoredFit(float *x, int *y, int n, int z, float c, 
 			     float *ret_mu, float *ret_lambda);
 extern void   Lawless416(float *x, int *y, int n, float lambda, 
 			 float *ret_f, float *ret_df);
@@ -133,6 +136,11 @@ extern int      HMMFileFormat(HMMFILE *hmmfp);
 extern void     HMMFileRewind(HMMFILE *hmmfp);
 extern void     WriteAscHMM(FILE *fp, struct plan7_s *hmm);
 extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
+
+/* masks.c
+ * Repetitive sequence masking.
+ */
+extern void XNU(char *dsq, int len);
 
 /* mathsupport.c
  * Much of this code deals with Dirichlet prior mathematics. 
