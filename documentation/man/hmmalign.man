@@ -50,34 +50,6 @@ instead of to standard output.
 quiet; suppress all output except the alignment itself.
 Useful for piping or redirecting the output.
 
-.TP 
-.B -A
-Append mode; append to
-.I newhmmfile
-rather than creating a new file. 
-
-.TP
-.B -F
-Force overwriting of 
-.I newhmmfile.
-E.g., if 
-.I newhmmfile
-already exists, and
-.I -A 
-is not being used to append to the file,
-hmmconvert will refuse to clobber the existing
-file unless 
-.I -F 
-is used.
-
-.TP
-.B -P
-Convert the HMM to Compugen XSW extended profile format,
-which is similar to GCG profile format but has two
-extra columns for delete-open and delete-extend costs.
-(I do not believe that Compugen publicly supports this
-format; it may be undocumented.)
-
 .SH SEE ALSO
 
 .PP
