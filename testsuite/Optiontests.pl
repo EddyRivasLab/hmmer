@@ -88,7 +88,7 @@
 
 while ($testline = shift(@tests))
 {
-    $status = system("../src/$testline 2>&1 > tmp.out");
+    $status = system("../binaries/$testline 2>&1 > tmp.out");
     if ($status > 0) {
 	print "failure: $testline\n";
 	$failed++;
