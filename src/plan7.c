@@ -350,7 +350,7 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
 }
 
 
-/* Function: Plan7Logoddsify()
+/* Function: P7Logoddsify()
  * 
  * Purpose:  Take an HMM with valid probabilities, and
  *           fill in the integer log-odds score section of the model.
@@ -380,17 +380,22 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
  *         or "wing retraction"... the analogy is to a swept-wing
  *         fighter in landing vs. high speed flight configuration.
  *         
- *    Incorrectness note: Wing retraction should take forward/Viterbi
+ *    Note on Viterbi vs. forward flag:     
+ *         Wing retraction must take forward vs. Viterbi
  *         into account. If forward, sum two paths; if Viterbi, take
- *         max. Instead, here we sum always.  
+ *         max. I tried to slide this by as a sum, without
+ *         the flag, but Alex detected it as a bug, because you can
+ *         then find cases where the Viterbi score doesn't match
+ *         the P7TraceScore().
  *             
- * Args:      hmm - the hmm to calculate scores in.
+ * Args:      hmm          - the hmm to calculate scores in.
+ *            viterbi_mode - TRUE to fold wings in Viterbi configuration.
  *                  
  * Return:    (void)
  *            hmm scores are filled in.
  */  
 void
-Plan7Logoddsify(struct plan7_s *hmm)
+P7Logoddsify(struct plan7_s *hmm, int viterbi_mode)
 {
   int k;			/* counter for model position */
   int x;			/* counter for symbols        */
@@ -447,15 +452,16 @@ Plan7Logoddsify(struct plan7_s *hmm)
 
   /* B->M entry transitions. Note how D_1 is folded out.
    * M1 is just B->M1
-   * M2 is sum of B->M2 and B->D1->M2
-   * M_k is sum of B->M_k and B->D1...D_k-1->M_k
+   * M2 is sum (or max) of B->M2 and B->D1->M2
+   * M_k is sum (or max) of B->M_k and B->D1...D_k-1->M_k
    */
   accum = hmm->tbd1;
   for (k = 1; k <= hmm->M; k++)
     {
-      tbm = hmm->begin[k];                     /* B->M_k part */
-      if (k > 1) {
-	tbm += accum * hmm->t[k-1][TDM];       /* B->D1...D_k-1->M_k part */
+      tbm = hmm->begin[k];	/* B->M_k part */
+      if (k > 1) {		/* B->D1...D_k-1->M_k part we get from accum*/
+	if (viterbi_mode) tbm =  MAX(tbm, accum * hmm->t[k-1][TDM]);
+	else              tbm += accum * hmm->t[k-1][TDM];
 	accum *= hmm->t[k-1][TDD];
       }
       hmm->bsc[k] = Prob2Score(tbm, hmm->p1); /* entries are to emitters */
@@ -470,7 +476,9 @@ Plan7Logoddsify(struct plan7_s *hmm)
   accum = 1.;
   for (k = hmm->M-1; k >= 1; k--)
     {
-      tme         = hmm->end[k] + accum * hmm->t[k][TMD];
+      if (viterbi_mode) tme = MAX(hmm->end[k], accum * hmm->t[k][TMD]);
+      else              tme = hmm->end[k] + accum * hmm->t[k][TMD];
+
       accum      *= hmm->t[k][TDD];
       hmm->esc[k] = Prob2Score(tme, 1.); /* exits are to non-emitter */
     }
@@ -542,6 +550,36 @@ Plan7Renormalize(struct plan7_s *hmm)
 }
   
 
+/* Function: Plan7NakedConfig()
+ * 
+ * Purpose:  Set the alignment-independent, algorithm-dependent parameters
+ *           of a Plan7 model so that no special states (N,C,J) emit anything:
+ *           one simple, full global pass through the model.
+ * 
+ * Args:     hmm - the plan7 model
+ *                 
+ * Return:   (void)
+ *           The HMM is modified; algorithm dependent parameters are set.
+ *           Previous scores are invalidated if they existed.
+ */
+void
+Plan7NakedConfig(struct plan7_s *hmm)                           
+{
+  hmm->xt[XTN][MOVE] = 1.;	      /* disallow N-terminal tail */
+  hmm->xt[XTN][LOOP] = 0.;
+  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
+  hmm->xt[XTE][LOOP] = 0.;
+  hmm->xt[XTC][MOVE] = 1.;	      /* disallow C-terminal tail */
+  hmm->xt[XTC][LOOP] = 0.;
+  hmm->xt[XTJ][MOVE] = 0.;	      /* J state unused */
+  hmm->xt[XTJ][LOOP] = 1.;
+  FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
+  hmm->begin[1]    = 1. - hmm->tbd1;
+  FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
+  hmm->end[hmm->M] = 1.;
+  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
+}
+   
 /* Function: Plan7GlobalConfig()
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
@@ -571,7 +609,6 @@ Plan7GlobalConfig(struct plan7_s *hmm)
   hmm->begin[1]    = 1. - hmm->tbd1;
   FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
   hmm->end[hmm->M] = 1.;
-  hmm->config      = P7_BASE_CONFIG;  /* set flag */
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
    
@@ -600,7 +637,6 @@ Plan7LSConfig(struct plan7_s *hmm)
   hmm->begin[1]    = 1. - hmm->tbd1;
   FSet(hmm->end+1,   hmm->M-1, 0.);  /* end at M_m/D_m */
   hmm->end[hmm->M] = 1.;
-  hmm->config      = P7_LS_CONFIG;    /* set flag */
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }  
                              
@@ -668,7 +704,6 @@ Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
       FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
     }
 
-  hmm->config      = P7_SW_CONFIG;    /* set flag */
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
 
@@ -728,7 +763,6 @@ Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
       FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
     }
 
-  hmm->config      = P7_FS_CONFIG;    /* set flag */
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
 
@@ -814,7 +848,7 @@ PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, int nseq,
   float total, best, worst;	/* for the avg. and range of the scores */
   float sqsum, stddev;		/* for the std. deviation of the scores */
 
-  Plan7Logoddsify(hmm);		/* make sure model scores are ready */
+  P7Logoddsify(hmm, TRUE);	/* make sure model scores are ready */
 
 				/* find individual trace scores */
   score = P7TraceScore(hmm, dsq[0], tr[0]);
@@ -992,7 +1026,7 @@ Plan7toPlan9Search(struct plan7_s *hmm, struct shmm_s **ret_shmm)
     if (! hmm->flags & PLAN7_HASPROB)
       Die("yo, that plan7 HMM is empty");
     else
-      Plan7Logoddsify(hmm);
+      P7Logoddsify(hmm, TRUE);
 				/* note: should unfold terminal deletes */
   }
       
