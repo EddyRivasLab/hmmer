@@ -269,21 +269,18 @@ AC_SUBST(PVMLIBS)
 # Synopsis: ACX_PTHREAD([ACTION-IF-FOUND[, ACTION-IF-NOT-FOUND]]) 
 # Authors:  Steven G. Johnson <stevenj@alum.mit.edu>
 #           Alejandro Forero Cuervo <bachue@bachue.com>
-# Version:  1.4 (2001/03/16)
-# Source:   http://www.gnu.org/software/ac-archive/Installed_Packages/acx_pthread.html
+# Version:  1.8 (2003/05/21)
+# Source:   http://www.gnu.org/software/ac-archive/htmldoc/acx_pthread.html
 #
 AC_DEFUN([ACX_PTHREAD], [
 AC_REQUIRE([AC_CANONICAL_HOST])
+AC_LANG_SAVE
+AC_LANG_C
 acx_pthread_ok=no
 
-# First, check if the POSIX threads header, pthread.h, is available.
-# If it isn't, don't bother looking for the threads libraries.
-AC_CHECK_HEADER(pthread.h, , acx_pthread_ok=noheader)
-
-# We must check for the threads library under a number of different
-# names; the ordering is very important because some systems
-# (e.g. DEC) have both -lpthread and -lpthreads, where one of the
-# libraries is broken (non-POSIX).
+# We used to check for pthread.h first, but this fails if pthread.h
+# requires special compiler flags (e.g. on True64 or Sequent).
+# It gets checked for in the link test anyway.
 
 # First of all, check if the user has set any of the PTHREAD_LIBS,
 # etcetera environment variables, and if threads linking works using
@@ -297,12 +294,17 @@ if test x"$PTHREAD_LIBS$PTHREAD_CFLAGS" != x; then
         AC_TRY_LINK_FUNC(pthread_join, acx_pthread_ok=yes)
         AC_MSG_RESULT($acx_pthread_ok)
         if test x"$acx_pthread_ok" = xno; then
-       PTHREAD_LIBS=""
-       PTHREAD_CFLAGS=""
+                PTHREAD_LIBS=""
+                PTHREAD_CFLAGS=""
         fi
         LIBS="$save_LIBS"
         CFLAGS="$save_CFLAGS"
 fi
+
+# We must check for the threads library under a number of different
+# names; the ordering is very important because some systems
+# (e.g. DEC) have both -lpthread and -lpthreads, where one of the
+# libraries is broken (non-POSIX).
 
 # Create a list of thread flags to try.  Items starting with a "-" are
 # C compiler flags, and other items are library names, except for "none"
@@ -347,19 +349,19 @@ if test x"$acx_pthread_ok" = xno; then
 for flag in $acx_pthread_flags; do
 
         case $flag in
-       none)
-       AC_MSG_CHECKING([whether pthreads work without any flags])
-       ;;
+                none)
+                AC_MSG_CHECKING([whether pthreads work without any flags])
+                ;;
 
-       -*)
-       AC_MSG_CHECKING([whether pthreads work with $flag])
-       PTHREAD_CFLAGS="$flag"
-       ;;
+                -*)
+                AC_MSG_CHECKING([whether pthreads work with $flag])
+                PTHREAD_CFLAGS="$flag"
+                ;;
 
-       *)
-       AC_MSG_CHECKING([for the pthreads library -l$flag])
-       PTHREAD_LIBS="-l$flag"
-       ;;
+                *)
+                AC_MSG_CHECKING([for the pthreads library -l$flag])
+                PTHREAD_LIBS="-l$flag"
+                ;;
         esac
 
         save_LIBS="$LIBS"
@@ -377,17 +379,17 @@ for flag in $acx_pthread_flags; do
         # functions on Solaris that doesn't have a non-functional libc stub.
         # We try pthread_create on general principles.
         AC_TRY_LINK([#include <pthread.h>],
-  [pthread_t th; pthread_join(th, 0);
-   pthread_attr_init(0); pthread_cleanup_push(0, 0);
-   pthread_create(0,0,0,0); pthread_cleanup_pop(0); ],
-  [acx_pthread_ok=yes])
+                    [pthread_t th; pthread_join(th, 0);
+                     pthread_attr_init(0); pthread_cleanup_push(0, 0);
+                     pthread_create(0,0,0,0); pthread_cleanup_pop(0); ],
+                    [acx_pthread_ok=yes])
 
         LIBS="$save_LIBS"
         CFLAGS="$save_CFLAGS"
 
         AC_MSG_RESULT($acx_pthread_ok)
         if test "x$acx_pthread_ok" = xyes; then
-       break;
+                break;
         fi
 
         PTHREAD_LIBS=""
@@ -406,32 +408,32 @@ if test "x$acx_pthread_ok" = xyes; then
         # and the JOINABLE attribute has a nonstandard name (UNDETACHED).
         AC_MSG_CHECKING([for joinable pthread attribute])
         AC_TRY_LINK([#include <pthread.h>],
-  [int attr=PTHREAD_CREATE_JOINABLE;],
-  ok=PTHREAD_CREATE_JOINABLE, ok=unknown)
+                    [int attr=PTHREAD_CREATE_JOINABLE;],
+                    ok=PTHREAD_CREATE_JOINABLE, ok=unknown)
         if test x"$ok" = xunknown; then
-       AC_TRY_LINK([#include <pthread.h>],
- [int attr=PTHREAD_CREATE_UNDETACHED;],
- ok=PTHREAD_CREATE_UNDETACHED, ok=unknown)
+                AC_TRY_LINK([#include <pthread.h>],
+                            [int attr=PTHREAD_CREATE_UNDETACHED;],
+                            ok=PTHREAD_CREATE_UNDETACHED, ok=unknown)
         fi
         if test x"$ok" != xPTHREAD_CREATE_JOINABLE; then
-       AC_DEFINE(PTHREAD_CREATE_JOINABLE, $ok,
-        [Define to the necessary symbol if this constant
-uses a non-standard name on your system.])
+                AC_DEFINE(PTHREAD_CREATE_JOINABLE, $ok,
+                          [Define to the necessary symbol if this constant
+                           uses a non-standard name on your system.])
         fi
         AC_MSG_RESULT(${ok})
         if test x"$ok" = xunknown; then
-       AC_MSG_WARN([we do not know how to create joinable pthreads])
+                AC_MSG_WARN([we do not know how to create joinable pthreads])
         fi
 
         AC_MSG_CHECKING([if more special flags are required for pthreads])
         flag=no
         case "${host_cpu}-${host_os}" in
-       *-aix* | *-freebsd*)     flag="-D_THREAD_SAFE";;
-       *solaris* | alpha*-osf*) flag="-D_REENTRANT";;
+                *-aix* | *-freebsd*)     flag="-D_THREAD_SAFE";;
+                *solaris* | *-osf* | *-hpux*) flag="-D_REENTRANT";;
         esac
         AC_MSG_RESULT(${flag})
         if test "x$flag" != xno; then
-       PTHREAD_CFLAGS="$flag $PTHREAD_CFLAGS"
+                PTHREAD_CFLAGS="$flag $PTHREAD_CFLAGS"
         fi
 
         LIBS="$save_LIBS"
@@ -455,8 +457,8 @@ else
         acx_pthread_ok=no
         $2
 fi
-
-])
+AC_LANG_RESTORE
+])dnl ACX_PTHREAD
 # ACX_PTHREAD macro end.
 # ****************************************************************
 # ****************************************************************
