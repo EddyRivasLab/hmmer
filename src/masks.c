@@ -123,3 +123,110 @@ XNU(char *dsq, int len)
   free(hit);
   return;
 }
+
+
+
+/* Function: MiniSEG()
+ * Date:     SRE, Tue Dec 16 14:04:58 1997 [StL]
+ * 
+ * Purpose:  A two-state HMM with a random amino acid distribution in
+ *           state R and and a biased one in state X. Viterbi parse 
+ *           the sequence, then replace X out all residues
+ *           assigned to state X.
+ *           
+ * Args:     dsq  - 1..len digitized sequence
+ *           len  - length of sequence
+ *           
+ * Returns:  number of x's introduced.          
+ */
+int
+MiniSEG(char *dsq, int len, float *ret_max)
+{
+  float xp[20] = { 0.0681, 0.0120, 0.0623, 0.0651, 0.0313, 0.0902, 0.0241, 0.0371, 0.0687, 0.0676,
+		   0.0143, 0.0548, 0.0647, 0.0415, 0.0551, 0.0926, 0.0623, 0.0505, 0.0102, 0.0269
+                 };
+  float p1 = 0.9999;		/* R->R transition prob. */
+  float p2 = 0.95;		/* X->X transition prob. */
+  int re[23];
+  int xe[23];
+  int trx,trr,txr,txx;
+  int x,i;
+  int osx, nsx;			/* old S_x, new S_x: two rows of DP matrix */
+  int osr, nsr;			/* old S_r, new S_r  */
+  char *tbr;                    /* traceback pointers for R: 0 = from R, 1 = from X */
+  char *tbx;                    /* traceback ptrs for X: 0 = from R, 1 = from X */
+  int  state;
+  int  score;			/* running score   */
+  int  max;			/* maximum score   */
+  int  xnum;			/* number x'ed out */
+  
+  /* Set up the miniseg two state HMM, as integer log probabilities.
+   * Should be generalized: parameters elsewhere (and shared with prior.c),
+   * and capable of doing other alphabets besides protein. miniseg
+   * model could be a structure.
+   */
+  for (x = 0; x < 20; x++)
+    {
+      re[x] = Prob2Score(aafq[x], 1.);
+      xe[x] = Prob2Score(xp[x], 1.);
+    }
+  re[20] = Prob2Score(aafq[2] + aafq[11], 1.); /* B = D,N */
+  re[21] = Prob2Score(aafq[3] + aafq[13], 1.); /* Z = E,Q */
+  re[22] = 0;			               /* X */
+  xe[20] = Prob2Score(xp[2] + xp[11], 1.);     /* B = D,N */
+  xe[21] = Prob2Score(xp[3] + xp[13], 1.);     /* Z = E,Q */
+  xe[22] = 0;	                               /* X */
+  trr    = Prob2Score(p1,    1.);
+  trx    = Prob2Score(1.-p1, 1.);
+  txx    = Prob2Score(p2,    1.);
+  txr    = Prob2Score(1.-p2, 1.);
+  
+  /* Allocate for dp
+   */
+  tbr = MallocOrDie(sizeof(char) * (len+1));
+  tbx = MallocOrDie(sizeof(char) * (len+1));
+
+  /* Initialize at position 0, in R state. 
+   * in either state
+   */
+  osx    = -999999;
+  osr    = 0;
+  tbr[0] = tbx[0] = -1;
+  score  = 0;
+  max    = 0;
+
+  /* Dynamic programming, Viterbi fill
+   */
+
+  for (i = 1; i <= len; i++) 
+    {
+      nsx = osr + txr; tbx[i] = 0;
+      if (osx + txx > nsx) { nsx = osx + txx; tbx[i] = 1; }
+      nsx += xe[(int) dsq[i]];
+
+      nsr = osr + trr; tbr[i] = 0;
+      if (osx + txr > nsr) {nsr = osx + txr; tbr[i] = 1; }
+      nsr += re[(int) dsq[i]];
+
+      score += xe[(int) dsq[i]] - re[(int) dsq[i]];
+      score = MAX(score, 0);
+      if (score > max) max = score;
+
+      osr = nsr; osx = nsx;
+    }
+      
+  /* Traceback
+   */
+  state = (osx + txr > osr) ? 1 : 0;	         /* initialize */
+  xnum = 0;
+  for (i = len; i >= 1; i--)
+    {
+      if (state == 1) { xnum++; dsq[i] = Alphabet_iupac-1;} /* X out */
+      state = (state == 0) ? tbr[i] : tbx[i];
+    }
+
+  free(tbr);
+  free(tbx);
+  *ret_max = Scorify(max);
+  return xnum;
+}
