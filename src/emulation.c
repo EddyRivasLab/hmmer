@@ -31,43 +31,70 @@
  *
  * Purpose:  Given an HMM, write a GCG profile .prf file as
  *           output. Based on examination of Michael Gribskov's Fortran
- *           source in GCG 9.0; on reverse engineering
- *           by examination of GCG 9.0 output from "profilemake"
+ *           source in GCG 9.1; on reverse engineering
+ *           by examination of GCG 9.1 output from "profilemake"
  *           and how the .prf file is used by "profilesearch";
  *           and on the GCG 9.0 documentation.
  *           
- *           The profile for symbol i at model position k is:
- *
- *           PROF(i,k)   = log P(i,k) + TMM
- *           m_open(k)   = (TMI + TIM - TMM) - TII     
- *           m_extend(k) = TII
+ *           See notes 28 Jan 98 for detail; in brief, the conversion goes like:
  *           
- *           Note that GCG affine gaps are gop + n * gex;
- *           HMMER affine gaps are gop + (n-1) * gex, thus an
- *           extra TII gets taken away from gop, since GCG will charge it.
+ *           PROF(i,k) = match score         =  msc(i,k) + TMM(k-1)
  *           
- *           This is a simple mapping of HMM to
- *           profile. It ignores the delete transitions entirely,
- *           fitting only the match and inserts. Note the somewhat
- *           tricky method by which the M->M transition score is
- *           smuggled into the profile. 
+ *           GAP(k)    = cost per insertion  =  TMI(k-1) + TIM(k-1) - TMM(k-1) - TII(k-1)
+ *           LEN(k)    = cost per inserted x =  TII(k-1)
+ *           
+ *           QGAP(k)   = cost per deletion   =  TDM(k-1) + TMD(unknown) - TMM(k-1) - TDD(k-1)
+ *           QLEN(k)   = cost per deleted k  =  TDD(k-1)
+ *           
+ *           Note that GCG affine gaps are GAP + n * LEN;
+ *           HMMER affine gaps count (n-1) * gap-extend, thus an
+ *           extra TII gets taken away from GAP (and TDD from QGAP),
+ *           since GCG will charge it.
+ *           
+ *           Also note how the TMM transitions, which have no equivalent
+ *           in a profile, get smuggled in OK.
+ *           
+ *           Also note that GCG charges gaps using the profile position
+ *           /after/ the gap, not preceding the gap as HMMER does.
+ *           
+ *           Also note the TMD(unknown) in the QGAP calculation. HMMER
+ *           distinguishes between gap-open and gap-close, but GCG does not,
+ *           so there is a fundamental incompatibility here. Here
+ *           we use an upper (best-scoring, minimum-cost) bound. 
+ *           
+ *           And finally note that GCG's implementation forces GAP=QGAP and
+ *           LEN=QLEN. Here, we upper bound again. Compugen's implementation
+ *           allows an "extended profile" format which distinguishes between
+ *           the two. 
+ *           
+ *           The upper bound approach to these scores means that a 
+ *           score given by an emulated profile is an upper bound: the HMMER
+ *           score (for a single Smith/Waterman style local alignment)
+ *           cannot be better than this. This is intentional, so that
+ *           the Compugen BIC can be used for rapid prefiltering of
+ *           the database.
  *           
  *           To get a close approximation of hmmsw scores, call
  *           profilesearch as
  *                profilesearch -noave -nonor -gap 10 -len 1
+ *           On the Compugen BIC, using extended profiles, you want:
+ *                om -model=xsw.model -gapop=10 -gapext=1 -qgapop=10 -qgapext=1 -noave -nonor
  *
- * Args:     fp   - open FILE to write to (or stdout, possibly)
- *           hmm  - the HMM to write   
+ * Args:     fp      - open FILE to write to (or stdout, possibly)
+ *           hmm     - the HMM to write   
+ *           do_xsw  - TRUE to write Compugen's experimental extended profile format
  *
  * Returns:  (void)
  */
 void
-WriteProfile(FILE *fp, struct plan7_s *hmm)
+WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 {
   int k;			/* position in model      */
   int x;			/* symbol index           */
   int sc;			/* a score to print       */
   float nx;			/* expected # of symbol x */
+  int gap, len, qgap, qlen;	/* penalties to charge    */
+  int maxmd;			/* maximum TMD so far     */
   
   Plan7Logoddsify(hmm);
 
@@ -79,7 +106,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm)
 	hmm->name, hmm->M);
 
   /* Header information.
-   * GCG 9.0 will look for sequence type and length of model.
+   * GCG will look for sequence type and length of model.
    * Other than this, nothing is parsed until we get to the 
    * Cons line that has a ".." on it.
    * Lines that begin with "!" are comments.
@@ -95,12 +122,27 @@ WriteProfile(FILE *fp, struct plan7_s *hmm)
   
   /* Insert some HMMER-specific commentary
    */
-  fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", RELEASE);
-  fprintf(fp, "   Use -nonor -noave -gap 10.0 -len 1.0 with profilesearch and friends\n");
-  fprintf(fp, "      to get the closest approximation to HMMER bit scores.\n");
-  fprintf(fp, "   WARNING: There is a loss of information in this conversion.\n");
-  fprintf(fp, "      Neither the scores nor even the rank order of hits will be precisely\n");
-  fprintf(fp, "      preserved in a comparison of HMMER hmmsearch to GCG profilesearch.\n\n");
+  if (do_xsw)
+    {
+      fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", RELEASE);
+      fprintf(fp, "   Compugen XSW extended profile format.\n");
+      fprintf(fp, "   Use -model=xsw.model -nonor -noave -gapop=10 -gapext=1 -qgapop=10 -qgapext=1\n");
+      fprintf(fp, "      with om on the Compugen BIC to get the closest approximation to HMMER bit scores.\n");
+      fprintf(fp, "   WARNING: There is a loss of information in this conversion.\n");
+      fprintf(fp, "      Neither the scores nor even the rank order of hits will be precisely\n");
+      fprintf(fp, "      preserved in a comparison of HMMER hmmsearch to GCG profilesearch.\n");
+      fprintf(fp, "      The profile score is an upper bound on the (single-hit) HMMER score.\n\n");
+    }
+  else
+    {
+      fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", RELEASE);
+      fprintf(fp, "   Use -nonor -noave -gap=10 -len=1 with profilesearch and friends\n");
+      fprintf(fp, "      to get the closest approximation to HMMER bit scores.\n");
+      fprintf(fp, "   WARNING: There is a loss of information in this conversion.\n");
+      fprintf(fp, "      Neither the scores nor even the rank order of hits will be precisely\n");
+      fprintf(fp, "      preserved in a comparison of HMMER hmmsearch to GCG profilesearch.\n");
+      fprintf(fp, "      The profile score is an upper bound on the (single-hit) HMMER score.\n\n");
+    }
 
 
   /* Do the CONS line, which gives the valid IUPAC symbols and their order
@@ -108,10 +150,14 @@ WriteProfile(FILE *fp, struct plan7_s *hmm)
   fprintf(fp, "Cons");
   for (x = 0; x < Alphabet_iupac; x++)
     fprintf(fp, "    %c ", Alphabet[x]);
-  fprintf(fp, "  Gap   Len ..\n");
+  if (do_xsw)
+    fprintf(fp, "  Gap   Len  QGap  Qlen ..\n"); 
+  else
+    fprintf(fp, "  Gap   Len ..\n");
  
   /* Now, the profile; for each position in the HMM, write a line of profile.
    */
+  maxmd = -999999;
   for (k = 1; k <= hmm->M; k++)
     {
 				/* GCG adds some indexing as comments */
@@ -132,25 +178,47 @@ WriteProfile(FILE *fp, struct plan7_s *hmm)
 	  fprintf(fp, "%5d ", sc);
 	}
 				/* Generate gap open, gap extend penalties;
-				   note profilesearch defaults of 10, 1,
+				   note we will force profilesearch to weights of 10, 1,
 				   and that GCG profile values are percentages
 				   of these base penalties, 0..100.*/
-				/* gap open */
-      if (k < hmm->M)
+				/* gap open (insertion)*/
+      if (k > 1)
 	{
-	  sc = -1 * (hmm->tsc[k][TMI] + hmm->tsc[k][TIM] - hmm->tsc[k][TMM] - hmm->tsc[k][TII]);
-	  sc = sc * 100 / (10.0 * INTSCALE);
+	  gap = -1 * (hmm->tsc[k-1][TMI] + hmm->tsc[k-1][TIM] - hmm->tsc[k-1][TMM] - hmm->tsc[k-1][TII]);
+	  gap = gap * 100 / (10.0 * INTSCALE);
 	}
-      else sc = 100;
-      fprintf(fp, "%5d ", sc);
-				/* gap extend */
-      if (k < hmm->M)
+      else gap = 100;		/* doesn't matter because GAP_1 is never used */
+
+				/* gap extend (insertion)*/
+      if (k > 1)
 	{
-	  sc = -1 * hmm->tsc[k][TII];
-	  sc = sc * 100 / (1.0 * INTSCALE);
+	  len = -1 * hmm->tsc[k-1][TII];
+	  len = len * 100 / (1.0 * INTSCALE);
 	}
-      else sc = 100;
-      fprintf(fp, "%5d\n", sc);
+      else len = 100;		/* again, doesn't matter because LEN_1 is never used */
+
+				/* gap open (deletion) */
+      if (k > 1)
+	{
+	  if (hmm->tsc[k-1][TMD] > maxmd) maxmd = hmm->tsc[k-1][TMD]; /* upper bound */
+
+	  qgap = -1 * (hmm->tsc[k-1][TDM] + maxmd - hmm->tsc[k-1][TMM] - hmm->tsc[k-1][TDD]);
+	  qgap = qgap * 100 / (10.0 * INTSCALE);
+	}
+      else qgap = 100;
+				/* gap extend (deletion) */
+      if (k > 1)
+	{
+	  qlen = -1 * hmm->tsc[k-1][TDD];
+	  qlen = qlen * 100 / (1.0 * INTSCALE);
+	}
+      else qlen = 100;
+
+      
+      if (do_xsw)
+	fprintf(fp, "%5d %5d %5d %5d\n", gap, len, qgap, qlen);
+      else
+	fprintf(fp, "%5d %5d\n", MIN(gap,qgap), MIN(len,qlen)); /* upper bound: minimum cost */
     }
 
   /* The final line of the profile is a count of the observed
