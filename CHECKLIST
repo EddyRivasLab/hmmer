@@ -35,17 +35,19 @@ Checklist for a HMMER distribution.
 	% pvm pvm.conf
              conf
              quit
-	% ../src/hmmpfam --pvm Pfam_ls ../tutorial/7LES_DROME > foo.pvm
+	% time ../src/hmmpfam --pvm Pfam_ls ../tutorial/7LES_DROME > foo.pvm
 	% echo halt| pvm 
      Test threads and nonthreads (whelk01): 
-        % ../src/hmmpfam Pfam_ls ../tutorial/7LES_DROME > foo.pthread
-        % ../src/hmmpfam --cpu 0 Pfam_ls ../tutorial/7LES_DROME > foo.normal
+        % time ../src/hmmpfam Pfam_ls ../tutorial/7LES_DROME > foo.pthread
+        % time ../src/hmmpfam --cpu 0 Pfam_ls ../tutorial/7LES_DROME > foo.normal
      Make sure that foo.* all work (7LES_DROME is big enough to exercise bug #h22)
      Check that foo.* all give identical E-values (bug #h20).
         % diff foo.normal foo.pvm
         % diff foo.normal foo.pthread
 	% rm foo.*
 	
+     [2.4dev1 wall times: pvm = 48.95s; pthread=4:21.22; 
+
      [TODO: Add tests for swissprot searches, w/ and w/o ccmalloc instrumentation;
       test for bug #h25]
 
