@@ -198,7 +198,7 @@ CLOSED_ACTION   pvm.c:PVMConfirmSlaves()... replace pvm_config() w/ pvm_tasks().
 //
 ID              17
 STATUS          closed
-DESCRIPTION     threaded, unthreaded hmmsearch don't give exactly same histogram
+DESCRIPTION     threaded, unthreaded hmmsearch don't give same histogram
 NOTED_DATE      2/27/02
 NOTED_XREF      STL6 p.1
 REPORTED_BY     Yang Yang
@@ -207,4 +207,16 @@ REPRODUCE_ON    any
 CLOSED_DATE     2/27/02
 CLOSED_XREF     STL6 p.1
 CLOSED_ACTION   modifications to hmmsearch.c; see notes.
+//
+ID              18
+STATUS          closed
+DESCRIPTION     HMMs differ when built from mul vs. Stockholm format
+NOTED_DATE      3/16/02
+NOTED_XREF      STL6 p.12
+REPORTED_BY     Sam Griffiths (sjg@sanger.ac.uk)
+REPRODUCE_WITH  bug18.sh - was deleted from CVS.
+REPRODUCE_ON    Alpha (waterbug) 
+CLOSED_DATE     3/29/02
+CLOSED_XREF     STL6 p.12
+CLOSED_ACTION   Not a bug. 
 //
