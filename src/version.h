@@ -8,15 +8,9 @@
  */
 
 
-#define RELEASE     "2.1.2"
-#define RELEASEDATE "May 1999"
+#define PACKAGE     "HMMER"
+#define RELEASE     "2.1.3"
+#define RELEASEDATE "December 1999"
+#define COPYRIGHT   "Copyright (C) 1992-1999 Washington University School of Medicine."
+#define LICENSE     "HMMER is freely distributed under the GNU General Public License."
 
-#ifndef LINTING			/* compiled-in stamp for all binaries  */
-static char *copyright = "\
-   HMMER -- Biological sequence analysis with profile HMMs.\n\
-   Copyright (C) 1992-1999 Washington University School of Medicine.\n\
-\n\
-   HMMER is distributed under the terms of the GNU General Public\n\
-   License, unless otherwise stated; see the files COPYING and LICENSE\n\
-   for details.";
-#endif /* LINTING */
