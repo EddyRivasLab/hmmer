@@ -30,9 +30,14 @@
 #endif
 
 
-/* Functions: AllocPlan7(), FreePlan7()
+/* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
  * 
  * Purpose:   Allocate or free a Plan7 HMM structure.
+ *            Can either allocate all at one (AllocPlan7()) or
+ *            in two steps (AllocPlan7Shell(), AllocPlan7Body()).
+ *            The two step method is used in hmmio.c where we start
+ *            parsing the header of an HMM file but don't 
+ *            see the size of the model 'til partway thru the header.
  */
 struct plan7_s *
 AllocPlan7(int M) 
@@ -47,7 +52,7 @@ AllocPlan7(int M)
   hmm->desc   = NULL;
   hmm->rf     = (char *) MallocOrDie ((M+2) * sizeof(char));
   hmm->cs     = (char *) MallocOrDie ((M+2) * sizeof(char));
-  hmm->comline= NULL; 
+  hmm->comlog= NULL; 
   hmm->nseq   = 0;
   hmm->ctime  = NULL;
 
@@ -102,6 +107,98 @@ AllocPlan7(int M)
   hmm->flags = 0;
   return hmm;
 }  
+struct plan7_s *
+AllocPlan7Shell(void) 
+{
+  struct plan7_s *hmm;
+
+  hmm    = (struct plan7_s *) MallocOrDie (sizeof(struct plan7_s));
+  hmm->M = 0;
+
+  hmm->name   = NULL;
+  hmm->desc   = NULL;
+  hmm->rf     = NULL;
+  hmm->cs     = NULL;
+  hmm->comlog = NULL; 
+  hmm->nseq   = 0;
+  hmm->ctime  = NULL;
+
+  hmm->t      = NULL;
+  hmm->tsc    = NULL;
+  hmm->mat    = NULL;
+  hmm->ins    = NULL;
+  hmm->msc    = NULL;
+  hmm->isc    = NULL;
+
+  hmm->begin  = NULL;
+  hmm->bsc    = NULL;
+  hmm->end    = NULL;
+  hmm->esc    = NULL;
+				/* DNA translation is not enabled by default */
+  hmm->dnam   = NULL;
+  hmm->dnai   = NULL;
+  hmm->dna2   = -INFTY;
+  hmm->dna4   = -INFTY;
+			/* statistical parameters set to innocuous empty values */
+  hmm->mu     = 0.; 
+  hmm->lambda = 0.;
+  
+  hmm->flags = 0;
+  return hmm;
+}  
+void
+AllocPlan7Body(struct plan7_s *hmm, int M) 
+{
+  int k, x;
+
+  hmm->M = M;
+
+  hmm->rf     = (char *)   MallocOrDie ((M+2) * sizeof(char));
+  hmm->cs     = (char *)   MallocOrDie ((M+2) * sizeof(char));
+
+  hmm->t      = (float **) MallocOrDie (M     *           sizeof(float *));
+  hmm->tsc    = (int **)   MallocOrDie (M     *           sizeof(int *));
+  hmm->mat    = (float **) MallocOrDie ((M+1) *           sizeof(float *));
+  hmm->ins    = (float **) MallocOrDie (M     *           sizeof(float *));
+  hmm->msc    = (int **)   MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc    = (int **)   MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->t[0]   = (float *)  MallocOrDie ((7*M)     *       sizeof(float));
+  hmm->tsc[0] = (int *)    MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->mat[0] = (float *)  MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
+  hmm->ins[0] = (float *)  MallocOrDie ((MAXABET*M) *     sizeof(float));
+  hmm->msc[0] = (int *)    MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc[0] = (int *)    MallocOrDie ((MAXCODE*M) *     sizeof(int));
+
+  /* note allocation strategy for important 2D arrays -- trying
+   * to keep locality as much as possible, cache efficiency etc.
+   */
+  for (k = 1; k <= M; k++) {
+    hmm->mat[k] = hmm->mat[0] + k * MAXABET;
+    if (k < M) {
+      hmm->ins[k] = hmm->ins[0] + k * MAXABET;
+      hmm->t[k]   = hmm->t[0]   + k * 7;
+      hmm->tsc[k] = hmm->tsc[0] + k * 7;
+    }
+  }
+  for (x = 1; x < MAXCODE; x++) {
+    hmm->msc[x] = hmm->msc[0] + x * (M+1);
+    hmm->isc[x] = hmm->isc[0] + x * M;
+  }
+  /* tsc[0] is used as a boundary condition sometimes [Viterbi()],
+   * so set to -inf always.
+   */
+  for (x = 0; x < 7; x++)
+    hmm->tsc[0][x] = -INFTY;
+
+  hmm->begin  = (float *) MallocOrDie  ((M+1) * sizeof(float));
+  hmm->bsc    = (int *)   MallocOrDie  ((M+1) * sizeof(int));
+  hmm->end    = (float *) MallocOrDie  ((M+1) * sizeof(float));
+  hmm->esc    = (int *)   MallocOrDie  ((M+1) * sizeof(int));
+
+  return;
+}  
+
+
 void
 FreePlan7(struct plan7_s *hmm)
 {
@@ -109,26 +206,26 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->desc    != NULL) free(hmm->desc);
   if (hmm->rf      != NULL) free(hmm->rf);
   if (hmm->cs      != NULL) free(hmm->cs);
-  if (hmm->comline != NULL) free(hmm->comline);
+  if (hmm->comlog  != NULL) free(hmm->comlog);
   if (hmm->ctime   != NULL) free(hmm->ctime);
-  free(hmm->bsc);
-  free(hmm->begin);
-  free(hmm->esc);
-  free(hmm->end);
-  free(hmm->msc[0]);
-  free(hmm->mat[0]);
-  free(hmm->isc[0]);
-  free(hmm->ins[0]);
-  free(hmm->tsc[0]);
-  free(hmm->t[0]);
-  free(hmm->msc);
-  free(hmm->mat);
-  free(hmm->isc);
-  free(hmm->ins);
-  free(hmm->tsc);
-  free(hmm->t);
-  if (hmm->dnam != NULL) free(hmm->dnam);
-  if (hmm->dnai != NULL) free(hmm->dnai);
+  if (hmm->bsc     != NULL) free(hmm->bsc);
+  if (hmm->begin   != NULL) free(hmm->begin);
+  if (hmm->esc     != NULL) free(hmm->esc);
+  if (hmm->end     != NULL) free(hmm->end);
+  if (hmm->msc     != NULL) free(hmm->msc[0]);
+  if (hmm->mat     != NULL) free(hmm->mat[0]);
+  if (hmm->isc     != NULL) free(hmm->isc[0]);
+  if (hmm->ins     != NULL) free(hmm->ins[0]);
+  if (hmm->tsc     != NULL) free(hmm->tsc[0]);
+  if (hmm->t       != NULL) free(hmm->t[0]);
+  if (hmm->msc     != NULL) free(hmm->msc);
+  if (hmm->mat     != NULL) free(hmm->mat);
+  if (hmm->isc     != NULL) free(hmm->isc);
+  if (hmm->ins     != NULL) free(hmm->ins);
+  if (hmm->tsc     != NULL) free(hmm->tsc);
+  if (hmm->t       != NULL) free(hmm->t);
+  if (hmm->dnam    != NULL) free(hmm->dnam);
+  if (hmm->dnai    != NULL) free(hmm->dnai);
   free(hmm);
 }
 
@@ -185,32 +282,41 @@ Plan7SetDescription(struct plan7_s *hmm, char *desc)
   StringChop(hmm->desc);
 }
 
-/* Function: Plan7SetComline()
+/* Function: Plan7ComlogAppend()
  * Date:     SRE, Wed Oct 29 09:57:30 1997 [TWA 721 over Greenland] 
  * 
- * Purpose:  Concatenate command line options and record the
- *           command line.
+ * Purpose:  Concatenate command line options and append to the
+ *           command line log.
  */
 void
-Plan7SetComline(struct plan7_s *hmm, int argc, char **argv)
+Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv)
 {
   int len;
   int i;
-				/* figure out length, w/ spaces */
-  len = argc-1;
+
+  /* figure out length of command line, w/ spaces and \n */
+  len = argc;
   for (i = 0; i < argc; i++)
     len += strlen(argv[i]);
-				/* allocate */
-  if (hmm->comline != NULL && len > strlen(hmm->comline))
-    hmm->comline = ReallocOrDie(hmm->comline, sizeof(char)* (len+1));
+
+  /* allocate */
+  if (hmm->comlog != NULL)
+    {
+      len += strlen(hmm->comlog);
+      hmm->comlog = ReallocOrDie(hmm->comlog, sizeof(char)* (len+1));
+    }
   else
-    hmm->comline = MallocOrDie(sizeof(char)* (len+1));
-				/* write */
-  *(hmm->comline) = '\0';
+    {
+      hmm->comlog = MallocOrDie(sizeof(char)* (len+1));
+      *(hmm->comlog) = '\0'; /* need this to make strcat work */
+    }
+
+  /* append */
+  strcat(hmm->comlog, "\n");
   for (i = 0; i < argc; i++)
     {
-      strcat(hmm->comline, argv[i]);
-      if (i < argc-1) strcat(hmm->comline, " ");
+      strcat(hmm->comlog, argv[i]);
+      if (i < argc-1) strcat(hmm->comlog, " ");
     }
 }
 
@@ -267,8 +373,16 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
  *         these states are removed from a search form model to
  *         prevent B->D...D->E->J->B mute cycles, which would complicate
  *         dynamic programming algorithms. The data-independent
- *         S/W B->M and M->E transitions are folded ogether with
+ *         S/W B->M and M->E transitions are folded together with
  *         data-dependent B->D...D->M and M->D...D->E paths.
+ *         
+ *         This process is referred to in the code as "wing folding"
+ *         or "wing retraction"... the analogy is to a swept-wing
+ *         fighter in landing vs. high speed flight configuration.
+ *         
+ *    Incorrectness note: Wing retraction should take forward/Viterbi
+ *         into account. If forward, sum two paths; if Viterbi, take
+ *         max. Instead, here we sum always.  
  *             
  * Args:      hmm - the hmm to calculate scores in.
  *                  
@@ -339,9 +453,9 @@ Plan7Logoddsify(struct plan7_s *hmm)
   accum = hmm->tbd1;
   for (k = 1; k <= hmm->M; k++)
     {
-      tbm = (1. - hmm->tbd1) * hmm->begin[k];    /* B->M_k part */
+      tbm = hmm->begin[k];                     /* B->M_k part */
       if (k > 1) {
-	tbm += accum * hmm->t[k-1][TDM];       /* B->D1...D_k-1->M_k */
+	tbm += accum * hmm->t[k-1][TDM];       /* B->D1...D_k-1->M_k part */
 	accum *= hmm->t[k-1][TDD];
       }
       hmm->bsc[k] = Prob2Score(tbm, hmm->p1); /* entries are to emitters */
@@ -349,7 +463,7 @@ Plan7Logoddsify(struct plan7_s *hmm)
 
   /* M->E exit transitions. Note how D_M is folded out.
    * M_M is 1 by definition
-   * M_M-1 is sum of M_M-1->E and M_M-1->D_M->E
+   * M_M-1 is sum of M_M-1->E and M_M-1->D_M->E, where D_M->E is 1 by definition
    * M_k is sum of M_k->E and M_k->D_k+1...D_M->E
    */
   hmm->esc[hmm->M] = 0;
@@ -537,7 +651,7 @@ Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
   /* Configure entry.
    */
   hmm->begin[1] = (1. - pentry) * (1. - hmm->tbd1);
-  FSet(hmm->begin+2, hmm->M-1, pentry / (float)(hmm->M-1));
+  FSet(hmm->begin+2, hmm->M-1, (pentry * (1.- hmm->tbd1)) / (float)(hmm->M-1));
   
   /* Configure exit.
    */
@@ -597,7 +711,7 @@ Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
   /* Configure entry.
    */
   hmm->begin[1] = (1. - pentry) * (1. - hmm->tbd1);
-  FSet(hmm->begin+2, hmm->M-1, pentry / (float)(hmm->M-1));
+  FSet(hmm->begin+2, hmm->M-1, (pentry * (1.-hmm->tbd1)) / (float)(hmm->M-1));
   
   /* Configure exit.
    */
