@@ -67,7 +67,6 @@ extern struct p7trace_s *ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm,
 /* from debug.c
  * Debugging output of various sorts.
  */
-extern void Panic(char *file, int line);
 extern char *Statetype(char st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
@@ -128,6 +127,9 @@ extern int      HMMFileRead(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 extern void     HMMFileClose(HMMFILE *hmmfp);
 extern int      HMMFileFormat(HMMFILE *hmmfp);
 extern void     HMMFileRewind(HMMFILE *hmmfp);
+extern void     HMMFilePositionByOffset(HMMFILE *hmmfp, long offset);
+extern int      HMMFilePositionByName(HMMFILE *hmmfp, char *name);
+extern int      HMMFilePositionByIndex(HMMFILE *hmmfp, int idx);
 extern void     WriteAscHMM(FILE *fp, struct plan7_s *hmm);
 extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
 
@@ -191,6 +193,7 @@ extern void Plan7SetCtime(struct plan7_s *hmm);
 extern void Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1);
 extern void P7Logoddsify(struct plan7_s *hmm, int viterbi_mode);
 extern void Plan7Renormalize(struct plan7_s *hmm);
+extern void Plan7RenormalizeExits(struct plan7_s *hmm);
 extern void Plan7NakedConfig(struct plan7_s *hmm);
 extern void Plan7GlobalConfig(struct plan7_s *hmm);
 extern void Plan7LSConfig(struct plan7_s *hmm);
@@ -230,23 +233,26 @@ extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
 				     float *ret_mix);
 
 
+#ifdef HMMER_PVM
+/* from pvm.c
+ * PVM Parallel Virtual Machine implementation
+ */
+extern void              PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves);
+extern void              PVMCheckSlaves(int *slave_tid, int nslaves);
+extern void              PVMKillSlaves(int *slave_tid, int nslaves);
+extern int               PVMPackString(char *s);
+extern char *            PVMUnpackString(void);
+extern int               PVMPackTrace(struct p7trace_s *tr);
+extern struct p7trace_s *PVMUnpackTrace(void);
+extern int               PVMPackHMM(struct plan7_s *hmm);
+extern struct plan7_s *  PVMUnpackHMM(void);
+#endif /*HMMER_PVM*/
+
 #ifdef HMMER_THREADS
 /* from threads.c
  * POSIX threads implementation
  */
 extern int   ThreadNumber(void);
-extern struct vpool_s *VpoolInit(int do_forward, int do_null, int num_threads, int max_queue);
-extern void  VpoolShutdown(struct vpool_s *vpool);
-extern void  VpoolDestroy(struct vpool_s *vpool);
-extern void *VpoolThread(void *ptr);
-extern void  VpoolAddWork(struct vpool_s *vpool, struct plan7_s *hmm, char *dsq, 
-			 SQINFO *sqinfo, int len);
-extern int VpoolGetResults(struct vpool_s *vpool, struct plan7_s **ret_hmm,
-			   char **ret_dsq, SQINFO **ret_sqinfo, int *ret_len,
-			   float *ret_score, struct p7trace_s **ret_tr);
-extern void VpoolPrintInputQueue(struct vpool_s *vpool);
-extern void VpoolPrintOutputQueue(struct vpool_s *vpool);
-
 #endif /*HMMER_THREADS*/
 
 
