@@ -222,3 +222,143 @@ P7PrintPrior(FILE *fp, struct p7prior_s *pri)
       fputs("\n", fp);
     }
 }
+
+/* Function: TraceVerify()
+ * Date:     SRE, Mon Feb  2 07:48:52 1998 [St. Louis]
+ *
+ * Purpose:  Check a traceback structure for internal consistency.
+ *           Used in Shiva testsuite, for example.
+ *
+ * Args:     tr  - traceback to verify
+ *           M   - length of HMM
+ *           N   - length of sequence      
+ *
+ * Returns:  1 if OK. 0 if not.
+ */
+int
+TraceVerify(struct p7trace_s *tr, int M, int N)
+{
+  int tpos;			/* position in trace                  */
+  int k;			/* current position in HMM nodes 1..M */
+  int i;			/* current position in seq 1..N       */
+  int nn, nc, nj;		/* number of STN's, STC's, STJ's seen */
+  int nm;			/* number of STM's seen */
+  
+  /* Basic checks on ends.
+   */
+  if (tr->statetype[0] != STS)          return 0;
+  if (tr->statetype[1] != STN)          return 0;
+  if (tr->statetype[tr->tlen-2] != STC) return 0;
+  if (tr->statetype[tr->tlen-1] != STT) return 0;
+  if (tr->pos[1] != 0)                  return 0;
+
+  /* Check for consistency throughout trace
+   */
+  k = i = nn = nc = nj = nm = 0;
+  for (tpos = 0; tpos < tr->tlen; tpos++)
+    {
+      switch (tr->statetype[tpos]) {
+      case STS:
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (tr->pos[tpos]     != 0) return 0;
+	if (k != 0)                 return 0;
+	if (i != 0)                 return 0;
+	if (tpos != 0)              return 0;
+	break;
+
+      case STN:			/* first N doesn't emit. */
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (k != 0)                 return 0;
+	if (nn > 0)
+	  {
+	    if (tr->pos[tpos] != i+1) return 0;
+	    i++;
+	  }
+	else 
+	  {
+	    if (tr->pos[tpos] != 0) return 0;
+	    if (i != 0)             return 0;
+	  }
+	nn++;
+	break;
+
+      case STB:
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (tr->pos[tpos]     != 0) return 0;
+	nm = 0;
+	break;
+
+      case STM:			/* can enter anywhere on first M */
+	if (tr->pos[tpos] != i+1) return 0;
+	i++;
+	if (nm == 0)
+	  {
+	    if (tr->nodeidx[tpos] < 1 || tr->nodeidx[tpos] > M) return 0;
+	    k = tr->nodeidx[tpos];
+	  }
+	else
+	  {
+	    if (tr->nodeidx[tpos] != k+1) return 0;
+	    k++;
+	  }
+	nm++;
+	break;
+
+      case STI:
+	if (tr->pos[tpos] != i+1)   return 0;
+	if (tr->nodeidx[tpos] != k) return 0;
+	if (k >= M)                 return 0;
+	i++;
+	break;
+
+      case STD:
+	if (tr->pos[tpos] != 0)       return 0;
+	if (tr->nodeidx[tpos] != k+1) return 0;
+	k++;
+	break;
+
+      case STE:
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (tr->pos[tpos]     != 0) return 0;
+	nj = 0;
+	break;
+
+      case STJ:
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (nj > 0)
+	  {
+	    if (tr->pos[tpos] != i+1) return 0;
+	    i++;
+	  }
+	else if (tr->pos[tpos] != 0) return 0;
+	nj++;
+	break;
+
+      case STC:
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (nc > 0)
+	  {
+	    if (tr->pos[tpos] != i+1) return 0;
+	    i++;
+	  }
+	else if (tr->pos[tpos] != 0)  return 0;
+	nc++;
+	break;
+
+      case STT:
+	if (tpos != tr->tlen - 1)   return 0;
+	if (tr->nodeidx[tpos] != 0) return 0;
+	if (tr->pos[tpos]     != 0) return 0;
+	if (i != N)                 return 0;
+	break;
+
+      case STBOGUS:
+      default:
+	return 0;
+      }	/* end switch over statetypes */
+    } /* end loop over trace positions */
+
+  return 1;
+}
+
+
