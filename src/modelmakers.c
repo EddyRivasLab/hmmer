@@ -785,7 +785,7 @@ trace_doctor(struct p7trace_s *tr, int mlen, int *ret_ndi, int *ret_nid)
 	     && tr->statetype[opos+2]==STC) { 
       tr->statetype[npos]   = STM;
       tr->nodeidx[npos]     = mlen;
-      tr->pos[npos]         = tr->pos[opos+1];
+      tr->pos[npos]         = tr->pos[opos+2];
       tr->statetype[npos+1] = STE;
       tr->nodeidx[npos+1]   = 0;
       tr->pos[npos+1]       = 0;
