@@ -26,12 +26,12 @@
 #define RAMLIMIT 32
 #endif
 
-#define INTSCALE    1000.0 /* scaling constant for floats to integer scores   */
-#define MAXABET     20	   /* maximum size of alphabet (4 or 20)              */
-#define MAXCODE     23	   /* maximum degenerate alphabet size (17 or 23)     */
-#define MAXDCHLET   200	   /* maximum # Dirichlet components in mixture prior */
-#define NINPUTS     4	   /* number of inputs into structural prior          */
-#define INFTY       999999 /* infinity for purposes of integer DP cells       */
+#define INTSCALE    1000.0      /* scaling constant for floats to integer scores   */
+#define MAXABET     20	        /* maximum size of alphabet (4 or 20)              */
+#define MAXCODE     23	        /* maximum degenerate alphabet size (17 or 23)     */
+#define MAXDCHLET   200	        /* maximum # Dirichlet components in mixture prior */
+#define NINPUTS     4	        /* number of inputs into structural prior          */
+#define INFTY       987654321   /* infinity for purposes of integer DP cells       */
 #define NXRAY       4           /* number of structural inputs                */
 #define LOGSUM_TBL  20000       /* controls precision of Logsum()             */
 #define ALILENGTH   50		/* length of displayed alignment lines        */
