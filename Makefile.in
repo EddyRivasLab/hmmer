@@ -79,11 +79,17 @@ SQUIDPROGS = afetch\
 	shuffle\
 	sreformat
 
-# all: Compile everything (except the testsuite),
+# all: Compile everything.
 #
 all: 
-	(cd squid; make; make module)
-	(cd src;   make; make module)
+	@ if ! test -d src && test -d binaries; then\
+	  echo "This appears to be a binary distribution; nothing needs to be compiled." ; \
+          echo "Use make install to install the precompiled binaries." ; \
+	else\
+	  (cd squid;     ${MAKE}; ${MAKE} module);\
+	  (cd src;       ${MAKE}; ${MAKE} module);\
+	  (cd testsuite; ${MAKE});\
+	fi
 
 # check: compiles and runs test suite in testsuite/
 #       These are public tests, distributed with the package.
@@ -114,6 +120,23 @@ install:
 	for file in $(SQUIDPROGS); do\
 	   $(INSTMAN) squid/Man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
+
+# uninstall: remove the binaries. Reverses the steps of "make install".
+#
+uninstall: 
+	for file in $(PROGS) $(PVMPROGS); do\
+	   rm ${BINDIR}/$$file;\
+	done
+	for file in $(SQUIDPROGS); do\
+	   rm ${BINDIR}/$$file;\
+	done
+	for file in hmmer $(PROGS); do\
+	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+	done
+	for file in $(SQUIDPROGS); do\
+	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+	done
+
 
 # "make clean" removes almost everything except configuration files
 #              and binaries.
@@ -199,7 +222,7 @@ dist:
 	find ${BASENAME}-${RELEASE}/documentation -type f -exec ssdk/sedition RELEASE ${RELEASE} RELEASEDATE ${RELEASEDATE} PACKAGE ${PACKAGE} COPYRIGHT ${COPYRIGHT} LICENSELINE ${LICENSELINE} {} \;
 	ssdk/sedition RELEASE ${RELEASE} RELEASEDATE ${RELEASEDATE} COPYRIGHT ${COPYRIGHT} ${BASENAME}-${RELEASE}/00README
 	ssdk/sedition RELEASE ${RELEASE} ${BASENAME}-${RELEASE}/INSTALL
-	ssdk/sedition COPYRIGHT ${COPYRIGHT} ${BASENAME}-${RELEASE}/COPYING
+	ssdk/sedition COPYRIGHT ${COPYRIGHT} ${BASENAME}-${RELEASE}/COPYRIGHT
 	#
 	# Compilation of the documentation.
 	# Documentation is not provided in source form.
@@ -213,7 +236,7 @@ dist:
 	# user guide steals and uses the pre-boilerplate man pages.
 	#
 	for prog in $(PROGS); do\
-	   cat ${BASENAME}-${RELEASE}/documentation/man/boilerplate >> ${BASENAME}-${RELEASE}/documentation/manpages/$$prog.man;\
+	   cat ${BASENAME}-${RELEASE}/documentation/man/boilerplate >> ${BASENAME}-${RELEASE}/documentation/man/$$prog.man;\
 	done
 	-rm -f ${BASENAME}-${RELEASE}/documentation/man/boilerplate
 	#

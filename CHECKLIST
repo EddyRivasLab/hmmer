@@ -23,6 +23,7 @@ Checklist for a HMMER distribution.
 	% ./configure --enable-threads --enable-lfs
 	% make
 	% make check
+	% make optcheck
 
 3. Write release notes.
    cvs2cl.pl creates ChangeLog; a useful summary of CVS logs
@@ -37,7 +38,12 @@ Checklist for a HMMER distribution.
 5. Commit to CVS. Include package and release # in the log message.
 	% cvs commit
 
-6. Make a distro.
+6. Make a distro. 
+   yes, you have to autoconf and make a new configure script; you
+   just updated the info in configure.ac, remember?
+	% make distclean
+	% autoconf; (cd squid; autoconf)
+	% ./configure
 	% make dist
 	
 

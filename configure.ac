@@ -45,6 +45,20 @@ AC_DEFINE_UNQUOTED(PACKAGE_COPYRIGHT, "$PACKAGE_COPYRIGHT")
 AC_DEFINE_UNQUOTED(PACKAGE_LICENSE, "$PACKAGE_LICENSE")
 
 
+# Check if we're a binary distribution. 
+# The trigger for this is the existence of the binaries/ subdirectory,
+# and the nonexistence of a src/ subdirectory.
+# 
+# If we are a binary dist, we only do a minimal configuration, setting up
+# version information and installation path names.
+# This makes ./configure independent of having a working
+# C compiler.
+#
+# Watch out: this is implemented as a sneaky if statement that wraps the
+# majority of the configure.ac M4 code.
+#
+if (! (test -d binaries && ! test -d src)); then 
+AC_MSG_NOTICE([This is a full source distribution - using full config])
 
 # Checks for programs.
 # Sets output variables CC, CFLAGS, and RANLIB.
@@ -498,9 +512,16 @@ AC_CONFIG_HEADERS(src/config.h)
 
 # Write out Makefiles
 #
-AC_CONFIG_FILES(Makefile)
 AC_CONFIG_FILES(src/Makefile)
 AC_CONFIG_FILES(testsuite/Makefile)
+
+# remember that sneaky if statement that wraps the source
+# configuration? well, it ends here.
+else
+  AC_MSG_NOTICE([This is a precompiled binary distribution - using abbreviated config])
+fi
+
+AC_CONFIG_FILES(Makefile)
 AC_OUTPUT
 
 
