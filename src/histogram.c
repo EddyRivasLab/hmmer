@@ -598,7 +598,8 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
     {
       /* Construct x, y vectors.
        */
-      x = y = NULL;
+      x = NULL;
+      y = NULL;
       hsize = highbound - lowbound + 1;
       if (hsize < 5) goto FITFAILED; /* require at least 5 bins or we don't fit */
 
@@ -612,7 +613,7 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
 	  n             += h->histogram[sc - h->min];
 	}
 
-      if (n < 1000) goto FITFAILED;  /* require fitting to at least 1000 points */
+      if (n < 100) goto FITFAILED;  /* require fitting to at least 100 points */
 
       /* If we're censoring, estimate z, the number of censored guys
        * left of the bound. Our initial estimate is crudely that we're
