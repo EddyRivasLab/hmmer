@@ -62,7 +62,9 @@ SQUIDSRCDIR = $(HOME)/src/squid
 COMPRESS    = compress
 FTPDIR      = /nfs/newftp/eddy/hmmer/
 
-PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmfetch hmmindex hmmpfam hmmsearch 
+PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit\
+	hmmfetch hmmindex hmmpfam hmmsearch\
+	@PVMPROGS@
 
 READMES = 00README INSTALL 
 
