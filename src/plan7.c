@@ -532,7 +532,7 @@ Plan7Rescale(struct plan7_s *hmm, float scale)
   for(k = 1; k <= hmm->M; k++) 
     FScale(hmm->mat[k], Alphabet_size, scale);
   for(k = 1; k <  hmm->M; k++) 
-    FScale(hmm->mat[k], Alphabet_size, scale);
+    FScale(hmm->ins[k], Alphabet_size, scale);
   for(k = 1; k <  hmm->M; k++) 
     FScale(hmm->t[k],   7,             scale);
 
