@@ -22,37 +22,6 @@
 #endif
 
 
-/* Function: VerboseWorry()
- * 
- * Purpose:  A warning from inside the package, conditional
- *           on the compile-time setting of the debug level.
- *           Print an error message and return. The arguments
- *           are formatted exactly like arguments to printf().
- *
- *           This is usually called by the macro Worry() which
- *           adds the __FILE__ and __LINE__ information. See
- *           structs.h.
- *           
- * Return:   (void)
- */          
-/* VARARGS0 */
-void
-VerboseWorry(int level, char *file, int line, char *format, ...)
-{
-  va_list  argp;
-                                /* format the error mesg */
-  if (DEBUGLEVEL >= level)
-    {
-      fprintf(stderr, "WORRY: (%s line %d): ", file, line);
-      va_start(argp, format);
-      vfprintf(stderr, format, argp);
-      va_end(argp);
-      fprintf(stderr, "\n");
-      fflush(stderr);
-    }
-}
-
-
 /* Function: Panic()
  * 
  * Purpose:  Die from a lethal error that's not my problem,
@@ -82,7 +51,7 @@ Panic(char *file, int line)
  * Example:  Statetype(S) = "S"
  */
 char *
-Statetype(enum p7stype st)
+Statetype(char st)
 {
   switch (st) {
   case STS: return "S";
