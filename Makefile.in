@@ -53,11 +53,10 @@ RELCODE     = @PACKAGE_RELCODE@
 LICENSETAG  = gnu
 COMPRESS    = gzip
 
-# The program lists below for HMMER and SQUID are not necessarily
+# The program lists below for HMMER are not necessarily
 # a complete manifest. They are the list of stable programs that the
 # package will install. There must be a man page for each one of them
-# in the appropriate places (documentation/man for HMMER, squid/Man
-# for the SQUID library). 
+# in the appropriate places (documentation/man for HMMER)
 #
 PROGS = hmmalign\
 	hmmbuild\
@@ -71,20 +70,15 @@ PROGS = hmmalign\
 
 PVMPROGS = @PVMPROGS@
 
-SQUIDPROGS = afetch\
-	alistat\
-	seqstat\
-	sfetch\
-	sindex\
-	shuffle\
-	sreformat
 
 # all: Compile everything.
 #
 all: 
-	@ if test ! -d src && test -d binaries; then\
+	@ if test -d binaries; then\
 	  echo "This appears to be a binary distribution; nothing needs to be compiled." ; \
           echo "Use make install to install the precompiled binaries." ; \
+	  echo "If you really want to rebuild from source, move or delete the" ;\
+	  echo "binaries/ subdirectory."; \
 	else\
 	  (cd squid;     ${MAKE}; ${MAKE} module);\
 	  (cd src;       ${MAKE}; ${MAKE} module);\
@@ -110,14 +104,8 @@ install:
 	for file in $(PROGS) $(PVMPROGS); do\
 	   cp src/$$file $(BINDIR)/;\
 	done
-	for file in $(SQUIDPROGS); do\
-	   cp squid/$$file $(BINDIR)/;\
-	done
 	for file in hmmer $(PROGS); do\
 	   $(INSTMAN) documentation/man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
-	done
-	for file in $(SQUIDPROGS); do\
-	   $(INSTMAN) squid/Man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 
 # uninstall: Reverses the steps of "make install".
@@ -126,16 +114,9 @@ uninstall:
 	for file in $(PROGS) $(PVMPROGS); do\
 	   rm ${BINDIR}/$$file;\
 	done
-	for file in $(SQUIDPROGS); do\
-	   rm ${BINDIR}/$$file;\
-	done
 	for file in hmmer $(PROGS); do\
 	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
-	for file in $(SQUIDPROGS); do\
-	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
-	done
-
 
 # bindist: after building, prep the whole directory for a binary
 #          distribution: symlink supported binaries in binaries/

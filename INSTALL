@@ -1,5 +1,5 @@
 Brief installation instructions for HMMER @RELEASE@
-SRE, Sun Aug  5 16:22:52 2001
+SRE, Tue May 27 13:21:52 2003
 ------------------------------------------
 
 These are quick installation instructions. For complete documentation,
@@ -35,15 +35,19 @@ for example, the sun-solaris distro:
   make check
      
      And you can configure it with installation paths, and install 
-     it (default is to put programs in /usr/local/bin and man pages
-     in /usr/local/man):
+     it. The default is to put programs in /usr/local/bin and man pages
+     in /usr/local/man. To change these, see the instructions in
+     Userguide.pdf for providing alternative paths to the ./configure
+     script:
   
   ./configure
   make install
 
     HMMER doesn't depend on any external data files, so the installation is
     simple - the binaries are free standing. You can install
-    them anywhere you like.
+    them anywhere you like, just by using cp or mv if you like.
+
+
 
 
 

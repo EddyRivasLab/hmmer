@@ -20,8 +20,9 @@ o Getting HMMER
 
 o Installing HMMER
    See the file INSTALL for brief instructions.
-   See the chapter Installation in the HMMER User's Guide (Userguide.pdf) for more 
-   detailed instructions.
+   See the chapter Installation in the HMMER User's Guide (Userguide.pdf)
+   for more detailed instructions.
+   See the file NOTES for notes particular to this release.
 
    You should also read the following files:
    COPYING   -- copyright notice, and information on the free software license

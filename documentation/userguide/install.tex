@@ -54,9 +54,11 @@ including how to change the default installation directories for
 
 Alternatively, you can obtain a precompiled binary distribution of
 HMMER from \htmladdnormallink{http://hmmer.wustl.edu/}
-{http://hmmer.wustl.edu/}. Binary distributions are available for most
-common UNIX and UNIX-like OS's. For example, the distribution for
-Intel x86/GNU Linux machines is \prog{hmmer.bin.intel-linux.tar.gz}.
+{http://hmmer.wustl.edu/}. Thanks to generous hardware support from
+many manufacturers, binary distributions are available for most common
+UNIX and UNIX-like OS's. For example, the distribution for Intel
+x86/GNU Linux machines is
+\prog{hmmer-@RELEASE@.bin.intel-linux.tar.gz}.
 
 After you download a binary distribution, unpack it:
 
@@ -94,37 +96,14 @@ POSIX-compliant ANSI C.  You need a UNIX operating system to run it.
 You need an ANSI C compiler if you want to build it from source. 
 
 Linux and Apple Macintosh OS/X both count as UNIX. Microsoft operating
-systems do not. HMMER is known to be easy to port to MS Windows and
-other non-UNIX operating systems, provided that they support ANSI C
-and some reasonable level of POSIX compliance.
+systems do not. However, HMMER is known to be easy to port to
+Microsoft Windows and other non-UNIX operating systems, provided that
+the platform supports ANSI C and some reasonable level of POSIX
+compliance.
 
-Specifically, thanks to generous support from manufacturers, HMMER
-distributions are tested and created on the following hardware and
-operating systems:
-
-\begin{tabular}{l}
-Intel x86/GNU Linux\\
-Intel x86/FreeBSD\\
-Intel x86/OpenBSD\\
-Intel x86/Sun Solaris \\
-Intel Itanium2/GNU Linux\\
-Intel Itanium2/HP-UX\\
-Apple Macintosh OS/X\\
-Silicon Graphics/IRIX\\
-Sun Sparc/Solaris \\
-Compaq Alpha/Tru64\\
-Compaq Alpha/GNU Linux\\
-Hewlett Packard HP-UX\\
-IBM/AIX\\
-\end{tabular}
-
-Additional community-contributed ports to other systems are made
-available from
-\htmladdnormallink{http://hmmer.wustl.edu/}{http://hmmer.wustl.edu/}, if they
-are sent to me.
-
-Running the testsuite (\prog{make check}) requires that you have
-Perl. However, Perl isn't necessary to make HMMER work.
+Running the testsuite (\prog{make check}) requires that you have Perl
+(specifically, \verb+/usr/bin/perl+). However, Perl isn't necessary to
+make HMMER work.
 
 HMMER has support for two kinds of parallelization: POSIX
 multithreading and PVM (Parallel Virtual Machine) clustering.  Both
