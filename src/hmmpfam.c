@@ -31,10 +31,10 @@
 #include "globals.h"		/* alphabet global variables            */
 #include "version.h"		/* version info                         */
 
-static char banner[] = "hmmpfam - search a single seq against HMM database";
+static char banner[] = "hmmpfam - search one or more sequences against HMM database";
 
 static char usage[]  = "\
-Usage: hmmpfam [-options] <hmm database> <sequence file>\n\
+Usage: hmmpfam [-options] <hmm database> <sequence file or database>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -n        : nucleic acid models/sequence (default protein)\n\

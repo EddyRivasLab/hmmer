@@ -104,6 +104,11 @@ database file
 .SH EXPERT OPTIONS
 
 .TP
+.B --compat
+Use the output format of HMMER 2.1.1, the 1998-2001 public
+release; provided so 2.1.1 parsers don't have to be rewritten.
+
+.TP
 .BI --cpu " <n>"
 Sets the maximum number of CPUs that the program
 will run on. The default is to use all CPUs
@@ -192,6 +197,21 @@ Forward is a more sensitive algorithm for detecting remote
 sequence homologues; my experiments with HMMER have not
 confirmed this, however.
 
+.TP
+.BI --informat " <s>"
+Assert that the input 
+.I seqfile
+is in format
+.I <s>;
+do not run Babelfish format autodection. This increases
+the reliability of the program somewhat, because 
+the Babelfish can make mistakes; particularly
+recommended for unattended, high-throughput runs
+of HMMER. Valid format strings include FASTA,
+GENBANK, EMBL, GCG, PIR, STOCKHOLM, SELEX, MSF,
+CLUSTAL, and PHYLIP. See the User's Guide for a complete
+list.
+
 .TP 
 .B --null2
 Turn off the post hoc second null model. By default, each alignment
@@ -222,26 +242,36 @@ on nucleic acid sequences. In trial experiments,
 appears to perform less well than the default
 post hoc null2 model.
 
+
+
 .SH SEE ALSO
 
 .PP
-@SEEALSO@
+Master man page, with full list of and guide to the individual man
+pages: see 
+.B hmmer(1).
 .PP
-User guide and tutorial: Userguide.ps
+A User guide and tutorial came with the distribution:
+.B Userguide.ps
+[Postscript] and/or
+.B Userguide.pdf
+[PDF].
 .PP
-WWW: 
+Finally, all documentation is also available online via WWW: 
 .B http://hmmer.wustl.edu/
 
 .SH AUTHOR
 
-This software and documentation is Copyright (C) 1992-1998 Washington
-University School of Medicine.  It is freely distributable under terms
-of the GNU General Public License. See COPYING in the source code
-distribution for more details, or contact me.
+This software and documentation is: 
+.nf
+@COPYRIGHT@
+@LICENSE@
+.fi
+See the file COPYING in your distribution for complete details.
 
 .nf
 Sean Eddy
-Dept. of Genetics
+HHMI/Dept. of Genetics
 Washington Univ. School of Medicine
 4566 Scott Ave.
 St Louis, MO 63110 USA

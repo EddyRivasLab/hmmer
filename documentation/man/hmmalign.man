@@ -24,8 +24,9 @@ and outputs a multiple sequence alignment.
 .I seqfile 
 may be in any unaligned or aligned file format
 accepted by HMMER. If it is in a multiple alignment format
-(e.g. MSF, SELEX, ClustalW), the existing alignment
-is ignored.
+(e.g. Stockholm, MSF, SELEX, ClustalW), the existing alignment
+is ignored (i.e., the sequences are read as if they were
+unaligned - hmmalign will align them the way it wants).
 
 .SH OPTIONS
 
@@ -51,6 +52,21 @@ quiet; suppress all output except the alignment itself.
 Useful for piping or redirecting the output.
 
 .SH EXPERT OPTIONS
+
+.TP
+.BI --informat " <s>"
+Assert that the input 
+.I seqfile
+is in format
+.I <s>;
+do not run Babelfish format autodection. This increases
+the reliability of the program somewhat, because 
+the Babelfish can make mistakes; particularly
+recommended for unattended, high-throughput runs
+of HMMER. Valid format strings include FASTA,
+GENBANK, EMBL, GCG, PIR, STOCKHOLM, SELEX, MSF,
+CLUSTAL, and PHYLIP. See the User's Guide for a complete
+list.
 
 .TP
 .BI --mapali " <f>"
@@ -96,23 +112,31 @@ option.
 .SH SEE ALSO
 
 .PP
-@SEEALSO@
+Master man page, with full list of and guide to the individual man
+pages: see 
+.B hmmer(1).
 .PP
-User guide and tutorial: Userguide.ps
+A User guide and tutorial came with the distribution:
+.B Userguide.ps
+[Postscript] and/or
+.B Userguide.pdf
+[PDF].
 .PP
-WWW: 
+Finally, all documentation is also available online via WWW: 
 .B http://hmmer.wustl.edu/
 
 .SH AUTHOR
 
-This software and documentation is Copyright (C) 1992-1998 Washington
-University School of Medicine.  It is freely distributable under terms
-of the GNU General Public License. See COPYING in the source code
-distribution for more details, or contact me.
+This software and documentation is: 
+.nf
+@COPYRIGHT@
+@LICENSE@
+.fi
+See the file COPYING in your distribution for complete details.
 
 .nf
 Sean Eddy
-Dept. of Genetics
+HHMI/Dept. of Genetics
 Washington Univ. School of Medicine
 4566 Scott Ave.
 St Louis, MO 63110 USA

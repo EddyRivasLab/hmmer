@@ -3,11 +3,11 @@
 # checkoptions.pl <program>
 #
 # - Runs binaries/<program> -h to extract a list of options.
-# - Checks Shiva/Optiontests.pl to be sure each one is run at least
+# - Checks testsuite/Optiontests.pl to be sure each one is run at least
 #   once in an option test.
 #     Special case: don't check --pvm or --cpu, because we don't know
 #     whether support was compiled in.
-# - Checks Man/<program>.man to check that each option is documented.
+# - Checks documentation/man/<program>.man to check that each option is documented.
 #
 $program = shift;
 
@@ -21,9 +21,9 @@ foreach $line (@lines) {
     if ($line =~ /^\s+(\S+)\s*(\S*)\s*:/) { $progoption{$1} = 1; $progarg{$1} = $2;}
 }
 
-# Get tested options from Shiva/Optiontests.pl
+# Get tested options from testsuite/Optiontests.pl
 #
-open(FILE, "Shiva/Optiontests.pl") || die "oops";
+open(FILE, "testsuite/Optiontests.pl") || die "oops";
 while (<FILE>) {
     if (/^\s+\"(\S+) (\S+?)[\" ]/) {
 	$prg = $1;
@@ -39,8 +39,8 @@ close FILE;
 
 # Get documented options from Man/<program>.man
 #
-die "Man/$program.man doesn't exist!\n" unless -e "Man/$program.man";
-open(MAN, "Man/$program.man") || die "oops";
+die "documentation/man/$program.man doesn't exist!\n" unless -e "documentation/man/$program.man";
+open(MAN, "documentation/man/$program.man") || die "oops";
 while (<MAN>) {
     if (/^\.SH OPTIONS/ || /^\.SH EXPERT OPTIONS/) {$inoptions = 1;}
     elsif (/^\.SH/)      {$inoptions = 0;}

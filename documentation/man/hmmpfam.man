@@ -2,7 +2,7 @@
 
 .SH NAME
 .TP 
-hmmpfam - search a single sequence against an HMM database
+hmmpfam - search one or more sequences against an HMM database
 
 .SH SYNOPSIS
 .B hmmpfam
@@ -13,9 +13,9 @@ hmmpfam - search a single sequence against an HMM database
 .SH DESCRIPTION
 
 .B hmmpfam
-reads a single sequence from
+reads a sequence file
 .I seqfile
-and compares it against all the HMMs in
+and compares each sequence in it, one at a time, against all the HMMs in
 .I hmmfile
 looking for significantly similar sequence matches.
 
@@ -28,7 +28,9 @@ This lets administrators install HMM library(s) such as
 Pfam in a common location.
 
 .PP
-The output consists of three sections: a ranked list
+There is a separate output report for each sequence in
+.I seqfile.
+This report consists of three sections: a ranked list
 of the best scoring HMMs, a list of the
 best scoring domains in order of their occurrence
 in the sequence, and alignments for all the best scoring
@@ -107,12 +109,66 @@ Swissprot 34.
 .SH EXPERT OPTIONS
 
 .TP
+.B --acc
+Report HMM accessions instead of names in the output reports.
+Useful for high-throughput annotation, where the data are being
+parsed for storage in a relational database.
+
+.TP
+.B --compat
+Use the output format of HMMER 2.1.1, the 1998-2001 public
+release; provided so 2.1.1 parsers don't have to be rewritten.
+
+.TP
 .BI --cpu " <n>"
 Sets the maximum number of CPUs that the program
 will run on. The default is to use all CPUs
 in the machine. Overrides the HMMER_NCPU
 environment variable. Only affects threaded
 versions of HMMER (the default on most systems).
+
+.TP
+.B --cut_ga
+Use Pfam GA (gathering threshold) score cutoffs. 
+Equivalent
+to --globT <GA1> --domT <GA2>, but the GA1 and GA2 cutoffs
+are read from each HMM in
+.I hmmfile
+individually. hmmbuild puts these cutoffs there
+if the alignment file was annotated in a Pfam-friendly
+alignment format (extended SELEX or Stockholm format) and 
+the optional GA annotation line was present. If these
+cutoffs are not set in the HMM file, 
+.B --cut_ga 
+doesn't work.
+
+.TP
+.B --cut_tc
+Use Pfam TC (trusted cutoff) score cutoffs. Equivalent
+to --globT <TC1> --domT <TC2>, but the TC1 and TC2 cutoffs
+are read from each HMM in
+.I hmmfile
+individually. hmmbuild puts these cutoffs there
+if the alignment file was annotated in a Pfam-friendly
+alignment format (extended SELEX or Stockholm format) and 
+the optional TC annotation line was present. If these
+cutoffs are not set in the HMM file, 
+.B --cut_tc
+doesn't work.
+
+.TP
+.B --cut_nc
+Use Pfam NC (noise cutoff) score cutoffs. Equivalent
+to --globT <NC1> --domT <NC2>, but the NC1 and NC2 cutoffs
+are read from each HMM in
+.I hmmfile
+individually. hmmbuild puts these cutoffs there
+if the alignment file was annotated in a Pfam-friendly
+alignment format (extended SELEX or Stockholm format) and 
+the optional NC annotation line was present. If these
+cutoffs are not set in the HMM file, 
+.B --cut_nc
+doesn't work.
 
 .TP
 .BI --domE " <x>"
@@ -158,6 +214,21 @@ Forward is a more sensitive algorithm for detecting remote
 sequence homologues; my experiments with HMMER have not
 confirmed this, however.
 
+.TP
+.BI --informat " <s>"
+Assert that the input 
+.I seqfile
+is in format
+.I <s>;
+do not run Babelfish format autodection. This increases
+the reliability of the program somewhat, because 
+the Babelfish can make mistakes; particularly
+recommended for unattended, high-throughput runs
+of HMMER. Valid format strings include FASTA,
+GENBANK, EMBL, GCG, PIR, STOCKHOLM, SELEX, MSF,
+CLUSTAL, and PHYLIP. See the User's Guide for a complete
+list.
+
 .TP 
 .B --null2
 Turn off the post hoc second null model. By default, each alignment
@@ -202,26 +273,36 @@ on nucleic acid sequences. In trial experiments,
 appears to perform less well than the default
 post hoc null2 model.
 
+
+
 .SH SEE ALSO
 
 .PP
-@SEEALSO@
+Master man page, with full list of and guide to the individual man
+pages: see 
+.B hmmer(1).
 .PP
-User guide and tutorial: Userguide.ps
+A User guide and tutorial came with the distribution:
+.B Userguide.ps
+[Postscript] and/or
+.B Userguide.pdf
+[PDF].
 .PP
-WWW: 
+Finally, all documentation is also available online via WWW: 
 .B http://hmmer.wustl.edu/
 
 .SH AUTHOR
 
-This software and documentation is Copyright (C) 1992-1998 Washington
-University School of Medicine.  It is freely distributable under terms
-of the GNU General Public License. See COPYING in the source code
-distribution for more details, or contact me.
+This software and documentation is: 
+.nf
+@COPYRIGHT@
+@LICENSE@
+.fi
+See the file COPYING in your distribution for complete details.
 
 .nf
 Sean Eddy
-Dept. of Genetics
+HHMI/Dept. of Genetics
 Washington Univ. School of Medicine
 4566 Scott Ave.
 St Louis, MO 63110 USA

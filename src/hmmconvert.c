@@ -122,10 +122,10 @@ main(int argc, char **argv)
 	      outfile);
 
 	/* bug #14 fix. 12/24/00, xref STL3 p.133. */
-	if (test->is_binary && outfmt == P7ASCII) 
-	  Die("File %s is in binary format. Can't append ASCII format to it.", outfile);
-	else if (! test->is_binary && outfmt == P7BINARY) 
-	  Die("File %s is in ASCII format. Can't append binary format to it.", outfile);
+	if (test->is_binary && outfmt != P7BINARY) 
+	  Die("File %s is in Plan 7 binary format; must append the same fmt.", outfile);
+	else if (! test->is_binary && outfmt != P7ASCII) 
+	  Die("File %s is in Plan 7 ASCII format; must append the same fmt.", outfile);
 	      
 	HMMFileClose(test);
       }

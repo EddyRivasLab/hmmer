@@ -57,6 +57,7 @@ main(int argc, char **argv)
   FILE            *fp;          /* output file handle                      */
   int              L;		/* length of a sequence                    */
   int              i;		/* counter over sequences                  */
+  int              nhmm;	/* counter over HMMs                       */
 
   char            *ofile;       /* output sequence file                    */
   int              nseq;	/* number of seqs to sample                */
@@ -110,33 +111,18 @@ main(int argc, char **argv)
 
   /*********************************************** 
    * Open HMM file (might be in HMMERDB or current directory).
-   * Read a single HMM from it.
+   * Open output file, if needed.
    ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, "HMMERDB")) == NULL)
     Die("Failed to open HMM file %s\n%s", hmmfile, usage);
-  if (!HMMFileRead(hmmfp, &hmm)) 
-    Die("Failed to read any HMMs from %s\n", hmmfile);
-  HMMFileClose(hmmfp);
-  if (hmm == NULL) 
-    Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-
-  /* Configure the HMM to shut off N,J,C emission: so we
-   * do a simple single pass through the model.
-   */
-  Plan7NakedConfig(hmm);
-  Plan7Renormalize(hmm);
-
-  /*********************************************** 
-   * Open the output file, or stdout
-   ***********************************************/ 
 
    if (ofile == NULL) fp = stdout;
    else {
      if ((fp = fopen(ofile, "w")) == NULL)
        Die("Failed to open output file %s for writing", ofile);
    }
- 
+
   /*********************************************** 
    * Show the options banner
    ***********************************************/
@@ -148,97 +134,127 @@ main(int argc, char **argv)
       if (! do_consensus) {
 	printf("Number of seqs:       %d\n", nseq);
 	printf("Random seed:          %d\n", seed);
+      } else {
+	printf("Generating consensus sequence.\n");
       }
       printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
     }
 
   /*********************************************** 
-   * Do the work.
-   * If we're generating an alignment, we have to collect
-   * all our traces, then output. If we're generating unaligned
-   * sequences, we can emit one at a time.
+   * For every HMM in the file, do some emission.
    ***********************************************/
 
-  if (do_consensus) 
-    {
-      char    *seq;
-      SQINFO   sqinfo;      /* info about sequence (name/desc)        */
+  nhmm = 0;
+  while (HMMFileRead(hmmfp, &hmm)) {
+    if (hmm == NULL) 
+      Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
 
-      EmitConsensusSequence(hmm, &seq, NULL, &L, NULL);
-      strcpy(sqinfo.name, "consensus");
-      sqinfo.len = L;
-      sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
+    /* Configure the HMM to shut off N,J,C emission: so we
+     * do a simple single pass through the model.
+     */
+    Plan7NakedConfig(hmm);
+    Plan7Renormalize(hmm);
 
-      WriteSeq(fp, SQFILE_FASTA, seq, &sqinfo);
-      free(seq);
-    }
-  else if (do_alignment)
-    {
-      struct p7trace_s **tr;        /* traces for aligned sequences            */
-      char           **dsq;         /* digitized sequences                     */
-      SQINFO          *sqinfo;      /* info about sequences (name/desc)        */
-      MSA             *msa;         /* alignment */
-      float           *wgt;
+    /*********************************************** 
+     * Do the work.
+     * If we're generating an alignment, we have to collect
+     * all our traces, then output. If we're generating unaligned
+     * sequences, we can emit one at a time.
+     ***********************************************/
 
-      dsq    = MallocOrDie(sizeof(char *)             * nseq);
-      tr     = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
-      sqinfo = MallocOrDie(sizeof(SQINFO)             * nseq);
-      wgt    = MallocOrDie(sizeof(float)              * nseq);
-      FSet(wgt, nseq, 1.0);
+    if (do_consensus) 
+      {
+	char    *seq;
+	SQINFO   sqinfo;      /* info about sequence (name/desc)        */
+	
+	EmitConsensusSequence(hmm, &seq, NULL, &L, NULL);
+	strcpy(sqinfo.name, hmm->name);
+	strcpy(sqinfo.desc, "profile HMM generated consensus sequence [hmmemit]");
+	
+	sqinfo.len = L;
+	sqinfo.flags = SQINFO_NAME | SQINFO_DESC | SQINFO_LEN;
 
-      for (i = 0; i < nseq; i++)
-	{
-	  EmitSequence(hmm, &(dsq[i]), &L, &(tr[i]));
-	  sprintf(sqinfo[i].name, "seq%d", i+1);
-	  sqinfo[i].len   = L;
-	  sqinfo[i].flags = SQINFO_NAME | SQINFO_LEN;
-	}
+	WriteSeq(fp, SQFILE_FASTA, seq, &sqinfo);
+	free(seq);
+      }
+    else if (do_alignment)
+      {
+	struct p7trace_s **tr;        /* traces for aligned sequences            */
+	char           **dsq;         /* digitized sequences                     */
+	SQINFO          *sqinfo;      /* info about sequences (name/desc)        */
+	MSA             *msa;         /* alignment */
+	float           *wgt;
 
-      msa = P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, FALSE);
+	dsq    = MallocOrDie(sizeof(char *)             * nseq);
+	tr     = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
+	sqinfo = MallocOrDie(sizeof(SQINFO)             * nseq);
+	wgt    = MallocOrDie(sizeof(float)              * nseq);
+	FSet(wgt, nseq, 1.0);
+
+	for (i = 0; i < nseq; i++)
+	  {
+	    EmitSequence(hmm, &(dsq[i]), &L, &(tr[i]));
+	    sprintf(sqinfo[i].name, "seq%d", i+1);
+	    sqinfo[i].len   = L;
+	    sqinfo[i].flags = SQINFO_NAME | SQINFO_LEN;
+	  }
+
+	msa = P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, FALSE);
+	msa->name = sre_strdup(hmm->name, -1);
+	msa->desc = sre_strdup("Synthetic sequence alignment generated by hmmemit", -1);
 
 				/* Output the alignment */
-      WriteStockholm(fp, msa);
-      if (ofile != NULL && !be_quiet) printf("Alignment saved in file %s\n", ofile);
+	WriteStockholm(fp, msa);
 
-      /* Free memory
-       */
-      for (i = 0; i < nseq; i++) 
-	{
-	  P7FreeTrace(tr[i]);
-	  free(dsq[i]);
-	}
-      MSAFree(msa);
-      free(sqinfo);
-      free(dsq);
-      free(wgt);
-      free(tr);
-    }
-  else				/* unaligned sequence output */
-    {
-      struct p7trace_s *tr;         /* generated trace                        */
-      char             *dsq;        /* digitized sequence                     */
-      char             *seq;        /* alphabetic sequence                    */
-      SQINFO            sqinfo;     /* info about sequence (name/len)         */
+	/* Free memory
+	 */
+	for (i = 0; i < nseq; i++) 
+	  {
+	    P7FreeTrace(tr[i]);
+	    free(dsq[i]);
+	  }
+	MSAFree(msa);
+	free(sqinfo);
+	free(dsq);
+	free(wgt);
+	free(tr);
+      }
+    else				/* unaligned sequence output */
+      {
+	struct p7trace_s *tr;         /* generated trace                        */
+	char             *dsq;        /* digitized sequence                     */
+	char             *seq;        /* alphabetic sequence                    */
+	SQINFO            sqinfo;     /* info about sequence (name/len)         */
 
-      for (i = 0; i < nseq; i++)
-	{
-	  EmitSequence(hmm, &dsq, &L, &tr);
-	  sprintf(sqinfo.name, "seq%d", i+1);
-	  sqinfo.len   = L;
-	  sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
+	for (i = 0; i < nseq; i++)
+	  {
+	    EmitSequence(hmm, &dsq, &L, &tr);
+	    sprintf(sqinfo.name, "%s-%d", hmm->name, i+1);
+	    sqinfo.len   = L;
+	    sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
 
-	  seq = DedigitizeSequence(dsq, L);
+	    seq = DedigitizeSequence(dsq, L);
 
-	  WriteSeq(fp, SQFILE_FASTA, seq, &sqinfo);
+	    WriteSeq(fp, SQFILE_FASTA, seq, &sqinfo);
 	  
-	  P7FreeTrace(tr);
-	  free(dsq);
-	  free(seq);
-	}
-    }
+	    P7FreeTrace(tr);
+	    free(dsq);
+	    free(seq);
+	  }
+      }
+    nhmm++;
+    FreePlan7(hmm);
+  }
 
-  if (ofile != NULL) fclose(fp);
-  FreePlan7(hmm);
+  /* We're done; clean up and exit.
+   */
+  if (nhmm == 0)
+    Die("Failed to read any HMMs from %s\n", hmmfile);
+  if (ofile != NULL) {
+    fclose(fp);
+    if (!be_quiet) printf("Output saved in file %s\n", ofile);
+  }
+  HMMFileClose(hmmfp);
   SqdClean();
   return 0;
 }
