@@ -77,9 +77,9 @@ There is no length limit (at least not one imposed by HMMER;
 your shell will complain about command line lengths first).
 
 .TP
-.BI -o " <file>"
+.BI -o " <f>"
 Re-save the starting alignment to 
-.I <file>,
+.I <f>,
 in SELEX format.
 The columns which were assigned to match states will be
 marked with x's in an #=RF annotation line. 
@@ -150,9 +150,9 @@ Write the HMM to
 in HMMER binary format instead of readable ASCII text.
 
 .TP
-.BI --cfile " <file>"
+.BI --cfile " <f>"
 Save the observed emission and transition counts to 
-.I <file> 
+.I <f> 
 after the architecture has been determined (e.g. after residues/gaps
 have been assigned to match, delete, and insert states).
 This option is used in HMMER development for generating data files
@@ -234,9 +234,9 @@ autodetection is ambiguous. See
 .B --amino.
 
 .TP
-.BI --null " <file>"
+.BI --null " <f>"
 Read a null model from 
-.I <file>.
+.I <f>.
 The default for protein is to use average amino acid frequencies from
 Swissprot 34 and p1 = 350/351; for nucleic acid, the default is
 to use 0.25 for each base and p1 = 1000/1001. For documentation
@@ -244,11 +244,11 @@ of the format of the null model file and further explanation
 of how the null model is used, see the User's Guide.
 
 .TP
-.BI --pam " <file>"
+.BI --pam " <f>"
 Apply a heuristic PAM- (substitution matrix-) based prior instead of
 the default mixture Dirichlet. The substitution matrix is read
 from 
-.I <file>. 
+.I <f>. 
 See 
 .B --pamwgt.
 
@@ -268,9 +268,9 @@ substitution matrix, making
 HMMER somewhat approximate Gribskov profiles.
 
 .TP
-.BI --prior " <file>"
+.BI --prior " <f>"
 Read a Dirichlet prior from 
-.I <file>, 
+.I <f>, 
 replacing the default mixture Dirichlet.
 The format of prior files is documented in the User's Guide,
 and an example is given in the Demos directory of the HMMER
