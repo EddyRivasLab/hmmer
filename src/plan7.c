@@ -627,6 +627,32 @@ Plan7RenormalizeExits(struct plan7_s *hmm)
 }
 
 
+/*****************************************************************
+ * Plan7 configuration functions
+ * The following few functions are the Plan7 equivalent of choosing
+ * different alignment styles (fully local, fully global, global/local,
+ * multihit, etc.)
+ * 
+ * There is (at least) one constraint worth noting.
+ * If you want per-domain scores to sum up to per-sequence scores,
+ * then one of the following two sets of conditions must be met:
+ *   
+ *   1) t(E->J) = 0    
+ *      e.g. no multidomain hits
+ *      
+ *   2) t(N->N) = t(C->C) = t(J->J) = hmm->p1 
+ *      e.g. unmatching sequence scores zero, and 
+ *      N->B first-model score is equal to J->B another-model score.
+ *      
+ * These constraints are obeyed in the default Config() functions below,
+ * but in the future (when HMM editing may be allowed) we'll have
+ * to remember this. Non-equality of the summed domain scores and
+ * the total sequence score is a really easy "red flag" for people to
+ * notice and report as a bug, even if it may make probabilistic
+ * sense not to meet either constraint for certain modeling problems.
+ *****************************************************************
+ */
+
 /* Function: Plan7NakedConfig()
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
