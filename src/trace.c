@@ -409,7 +409,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
       }
       else if (statetype == STI) {
 	if (matchonly) 
-	  aseqs[idx][apos] = 'x'; /* insert compression option */
+	  aseqs[idx][apos] = '*'; /* insert compression option */
 	else {
 	  aseqs[idx][apos] = tolower(Alphabet[(int) dsq[idx][rpos]]);
 	  apos++;
