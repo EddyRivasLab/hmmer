@@ -432,7 +432,7 @@ P7Logoddsify(struct plan7_s *hmm, int viterbi_mode)
    * algorithms (see code below). However, we use their log transitions
    * when we save the model! So the following log transition probs
    * are used *only* in save files, *never* in search algorithms:
-   *    log (tbd1), D1 -> M1, D1 -> D2
+   *    log (tbd1), D1 -> M2, D1 -> D2
    *    Mm-1 -> Dm, Dm-1 -> Dm
    *    
    * In a search algorithm, these have to be interpreted as -INFTY    
