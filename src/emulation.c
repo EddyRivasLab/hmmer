@@ -111,8 +111,10 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 
   if (Alphabet_type == hmmAMINO)        fprintf(fp, "(Peptide) ");
   else if (Alphabet_type == hmmNUCLEIC) fprintf(fp, "(Nucleotide) ");
-  fprintf(fp, "HMMCONVERT v%s of: %s  Length: %d\n",
-	  RELEASE, hmm->name, hmm->M);
+  fprintf(fp, "HMMCONVERT v%s Length: %d %s|%s|%s\n",
+	  RELEASE, hmm->M, hmm->name,
+	  hmm->flags & PLAN7_ACC ? hmm->acc : "",
+	  hmm->flags & PLAN7_DESC ? hmm->desc : "");
   
   /* Insert some HMMER-specific commentary
    */
@@ -125,7 +127,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
       fprintf(fp, "   WARNING: There is a loss of information in this conversion.\n");
       fprintf(fp, "      Neither the scores nor even the rank order of hits will be precisely\n");
       fprintf(fp, "      preserved in a comparison of HMMER hmmsearch to GCG profilesearch.\n");
-      fprintf(fp, "      The profile score is an upper bound on the (single-hit) HMMER score.\n\n");
+      fprintf(fp, "      The profile score is an approximation of the (single-hit) HMMER score.\n\n");
     }
   else
     {
@@ -135,7 +137,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
       fprintf(fp, "   WARNING: There is a loss of information in this conversion.\n");
       fprintf(fp, "      Neither the scores nor even the rank order of hits will be precisely\n");
       fprintf(fp, "      preserved in a comparison of HMMER hmmsearch to GCG profilesearch.\n");
-      fprintf(fp, "      The profile score is an upper bound on the (single-hit) HMMER score.\n\n");
+      fprintf(fp, "      The profile score is an approximation of the (single-hit) HMMER score.\n\n");
     }
 
 
