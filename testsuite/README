@@ -14,6 +14,14 @@ I. Compiled test drivers.
 Current tests:
 ---------------
 
+alignalign_test
+	Exercises P7ViterbiAlignAlignment() -- alignment of a fixed
+	multiple alignment to an HMM. Aligns fn3 seed alignment to
+	fn3 model, compares to results of aligning sequences individually;
+	if an excessive number of discrepancies are detected, test
+	fails.
+	Other files: fn3.seed, fn3.hmm.
+
 evd_test    
 	Exercises code in histogram.c, especially EVD fitting
 	Default generates 1000 EVD samples; fits EVD; tests that fitted
@@ -52,6 +60,13 @@ weeviterbi_test
 	Runs RRM model against two subsequences of human U1A;
 	compares Viterbi trace to WeeViterbi trace.
 	
+#####################################################################
+II. Scripted test drivers.
+---------------------------------------------------------------------
+
+Optiontests.pl
+	Runs every documented option for every program, to be
+	sure they're really connected up.
 
 
 #####################################################################
@@ -63,8 +78,5 @@ fitting_test.c	Tests of EVD and Gaussian histogram fitting code.
 
 
 
-#####################################################################
-"Shiva" refers to Shiva the Destroyer, from Hindu mythology. Shiva
-destroys to keep the world in balance. It seems an obvious name for
-a test suite directory.
+
 

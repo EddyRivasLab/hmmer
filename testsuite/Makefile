@@ -29,8 +29,8 @@ RANLIB = ranlib
 SHELL  = /bin/sh
 LIBS   = -lhmmer -lm
 
-SHIVA = evd_test        masks_test       parsingviterbi_test   tophits_test\
-	trace_test	viterbi_exercise weeviterbi_test
+SHIVA = alignalign_test evd_test      masks_test       parsingviterbi_test\
+	tophits_test	trace_test    viterbi_exercise weeviterbi_test
 
 OBJ  = ../src/libhmmer.a
 
@@ -42,6 +42,9 @@ OBJ  = ../src/libhmmer.a
 #######
 
 all: 	$(SHIVA)
+
+alignalign_test: $(OBJ) alignalign_test.o
+	$(CC) $(CFLAGS) -o $@ -L../src/ alignalign_test.o $(LIBS)
 
 evd_test: $(OBJ) evd_test.o
 	$(CC) $(CFLAGS) -o $@ -L../src/ evd_test.o $(LIBS)
@@ -69,13 +72,17 @@ weeviterbi_test: $(OBJ) weeviterbi_test.o
 #######
 
 shiva:   $(SHIVA)
-	@echo Compiled Shiva exercises:
+	@echo 
+	@echo Running compiled Shiva exercises:
+	@echo Warning: some tests may take several minutes to complete. 
 	@for shivatest in $(SHIVA); do\
 	   ./$$shivatest;\
 	   echo $$shivatest: ok;\
 	done
-	@echo Scripted Shiva tests:
-	./Optiontests.pl
+	@echo
+	@echo Running scripted Shiva tests:
+	@echo Warning: This also may take several minutes.
+	perl ./Optiontests.pl
 
 #######
 ## Miscellaneous
