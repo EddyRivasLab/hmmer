@@ -10,7 +10,6 @@
 
 /* misc.c
  * SRE, Thu Jul 15 18:49:19 1993
- * (from cove)
  * 
  * Functions that I don't know quite where to put yet.
  */
@@ -38,45 +37,10 @@ void
 Banner(FILE *fp, char *banner)
 {
   fputs(banner, fp);
-  fprintf(fp, "\nHMMER %s (%s) ", RELEASE, RELEASEDATE);
-  fprintf(fp, "using squid %s (%s)\n", squid_version, squid_date);
+  fprintf(fp, "\nHMMER %s (%s) Copyright (C) 1992-1998 Sean R. Eddy\n", 
+	  RELEASE, RELEASEDATE);
   fprintf(fp, "HMMER is freely distributed under the GNU General Public License (GPL).\n");
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
-}
-
-
-/* Function: BlockRaggedEdgedAlignment()
- * 
- * Purpose:  A brutal hack for ignoring exterior gaps on an
- *           alignment in Maxmodelmaker(). Convert all
- *           exterior gaps to the symbol ',' and hope to
- *           God nobody ever uses commas to mean anything
- *           in an alignment. 
- *           
- * Args:     aseqs  - [0..nseq-1][0..alen-1] alignment to block
- *           nseq   - number of seqs in the alignment
- *           alen   - width of alignment, columns
- *           
- * Return:   (void). Data in aseqs is changed.
- */
-void
-BlockRaggedEdgedAlignment(char **aseqs, int nseq, int alen)
-{
-  int  idx, pos;
-
-  for (idx = 0; idx < nseq; idx++)
-    {
-      for (pos = 0; pos < alen; pos++)
-	{
-	  if (isgap(aseqs[idx][pos])) aseqs[idx][pos] = ',';
-	  else break;
-	}
-      for (pos = alen-1; pos >= 0; pos--)
-	{
-	  if (isgap(aseqs[idx][pos])) aseqs[idx][pos] = ',';
-	  else break;
-	}
-    }
 }
 
 
@@ -100,68 +64,6 @@ AlignmentTooBig(int L, int M)
     return TRUE;
   else
     return FALSE;
-}
-
-
-/* Function: Shuffle()
- * 
- * Purpose:  Given a sequence of a given length, shuffle
- *           it randomly (zeroth order, simplest possible
- *           shuffle) and fill in the provided storage.
- *           Caller is responsible for alloc'ing s1.
- *           
- * Args:     s1 - RETURN: newly shuffled string
- *           s2 - string to be shuffled
- *           n  - length of string
- */     
-void
-Shuffle(char *s1, char *s2, int n)
-{
-  int x;
-  int pos;
-
-  for (x = n-1; x >= 0; x++)
-    {
-      pos = CHOOSE(x);		/* pick position in x     */
-      *s1 = s2[pos];            /* copy that guy to s1    */
-      s2[pos] = s2[x];		/* shorten s2 by one      */
-      s1++;                     /* move forward one in s1 */
-    }
-  *s1 = '\0';
-}
-
-
-
-/* Function: SuppressChatter()
- * 
- * Purpose:  Large numbers of sequences in simulated annealing can
- *           lead to a peculiar artifact in which D->I and I->D
- *           transitions are grossly overused, leading to a "chattery"
- *           alignment. This appears to be an entirely fair attempt
- *           on the model's part to "branch" and accomodate two 
- *           distinct major subfamilies as best as possible in the
- *           linear structure.
- *           
- *           One solution is to abandon the Haussler "Plan9" nine-transition
- *           HMM architecture, and adopt a "Plan7" which lacks the D->I
- *           and I->D transitions. However, many alignments imply such
- *           transitions, so going to Plan7 will obliterate Maxmodelmaker().
- *           
- *           This is a temporary hack for simulating Plan7. An annealing-style
- *           model is modified so that D->I and I->D transitions
- *           are prohibitive. This is done prior to the expectation
- *           (alignment) step of simulated annealing.
- */
-void
-SuppressChatter(struct hmm_struc *hmm)
-{
-  int k;
-
-  for (k = 0; k <= hmm->M; k++)
-    {
-      hmm->del[k].t[INSERT] = 0.0;
-      hmm->ins[k].t[DELETE] = 0.0;
-    }
 }
 
 
