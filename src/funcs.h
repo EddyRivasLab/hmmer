@@ -67,9 +67,8 @@ extern struct p7trace_s *ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm,
 /* from debug.c
  * Debugging output of various sorts.
  */
-extern void VerboseWorry(int level, char *file, int line, char *fmt, ...);
 extern void Panic(char *file, int line);
-extern char *Statetype(enum p7stype st);
+extern char *Statetype(char st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
@@ -285,7 +284,7 @@ extern void   TophitsReport(struct tophit_s *h, double E, int nseq);
 extern void  P7AllocTrace(int tlen, struct p7trace_s **ret_tr);
 extern void  P7ReallocTrace(struct p7trace_s *tr, int tlen);
 extern void  P7FreeTrace(struct p7trace_s *tr);
-extern void  TraceSet(struct p7trace_s *tr, int tpos, enum p7stype type, int idx, int pos);
+extern void  TraceSet(struct p7trace_s *tr, int tpos, char type, int idx, int pos);
 extern struct p7trace_s **MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2);
 extern void  P7ReverseTrace(struct p7trace_s *tr);
 extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
@@ -294,8 +293,8 @@ extern float P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr);
 extern void  P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int M, 
 				struct p7trace_s **tr, int matchonly, 
 				char ***ret_aseqs, AINFO *ainfo);
-extern int  TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, 
-				  int k1, enum p7stype st2, int k2);
+extern int  TransitionScoreLookup(struct plan7_s *hmm, char st1, 
+				  int k1, char st2, int k2);
 extern struct fancyali_s *CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
 					 char *dsq, char *name);
 extern void PrintFancyAli(FILE *fp, struct fancyali_s *ali);
