@@ -27,81 +27,32 @@ static char usage[]  = "\
 Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
-   -E <x>    : sets E value cutoff to <x>\n\
+   -A <n>    : sets alignment output limit to <n> best domain alignments\n\
+   -E <x>    : sets E value cutoff (globE) to <x>\n\
+   -T <x>    : sets T bit threshold (globT) to <x>\n\
+   --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
+   --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
-   --xnu     : turn on xnu filtering of sequences\n\
    --null2   : turn on the auxiliary null model\n\
+   --xnu     : turn on XNU filtering of sequences\n\
 \n";
-
 
 static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
-  { "-E",        TRUE,  sqdARG_FLOAT },  
-  { "--forward", FALSE, sqdARG_NONE},
-  { "--xnu",     FALSE, sqdARG_NONE},
-  { "--null2",   FALSE, sqdARG_NONE},
+  { "-A",        TRUE,  sqdARG_INT  },  
+  { "-E",        TRUE,  sqdARG_FLOAT},  
+  { "-T",        TRUE,  sqdARG_FLOAT},  
+  { "--domE",    FALSE, sqdARG_FLOAT},
+  { "--domT",    FALSE, sqdARG_FLOAT},
+  { "--forward", FALSE, sqdARG_NONE },
+  { "--xnu",     FALSE, sqdARG_NONE },
+  { "--null2",   FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
-
-/* Function: record_by_domain()
- * Date:     SRE, Tue Nov  4 11:25:14 1997 [St. Louis]
- * 
- * Purpose:  Decompose a trace, and register scores, P-values, alignments,
- *           etc. for individual domains in a hitlist. 
- *           
- * Return:   (void)          
- */
-static void
-record_by_domain(struct tophit_s *h, 
-		 struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
-		 struct p7trace_s *tr, float domT, float domE)
-{
-  struct p7trace_s **tarr;      /* array of per-domain traces */
-  struct fancyali_s *ali;       /* alignment of a domain      */ 
-  int ntr;			/* number of domain traces    */
-  int idx;			/* index for traces           */
-  int k1, k2;			/* start, stop coord in model */
-  int i1, i2;			/* start, stop in sequence    */
-  float  score;
-  double pvalue;
-
-  TraceDecompose(tr, &tarr, &ntr);
-  if (ntr == 0) return;		/* "can't happen" */
-
-  for (idx = 0; idx < ntr; idx++)
-    {
-      /* Get the score and bounds of the match.
-       */
-      score  = P7TraceScore(hmm, dsq, tarr[idx]);
-      pvalue = PValue(hmm, score); 
-      TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
-      
-      /* Record the match. 
-       * since we don't yet necessarily know our EVD statistics, we can't
-       * screen by E-value; but pvalue is a bound.
-       * Note that we store the name, desc of the /sequence/.
-       * Also, we record the score as the sort key.
-       */
-      if (score > domT && pvalue <= domE)
-	{
-	  ali = CreateFancyAli(tarr[idx], hmm, dsq, sqinfo->name);
-	  RegisterHit(h, score, pvalue, score,
-		      sqinfo->name, 
-		      sqinfo->flags & SQINFO_DESC ? sqinfo->desc : NULL, 
-		      i1,i2, sqinfo->len, 
-		      k1,k2, hmm->M, 
-		      idx+1, ntr,
-		      ali);
-	}
-    }
-
-  for (idx = 0; idx < ntr; idx++)
-    P7FreeTrace(tarr[idx]);
-  free(tarr);
-  return;
-}
-
+static void record_domains(struct tophit_s *h, 
+			   struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
+			   struct p7trace_s *tr, double whole_pval, float whole_sc);
 
 int
 main(int argc, char **argv) 
@@ -115,7 +66,6 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
   float     sc;	        	/* score of an HMM search                  */
-  int       validfit;           /* TRUE if histogram gave us an EVD fit    */
   int       i; 
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
   struct histogram_s *histogram;/* histogram of all scores                 */
@@ -127,6 +77,8 @@ main(int argc, char **argv)
 
   double  pvalue;		/* pvalue of an HMM score                  */
   double  evalue;		/* evalue of an HMM score                  */
+  double  motherp;		/* pvalue of a whole seq HMM score         */
+  float   mothersc;		/* score of a whole seq parent of domain   */
   int     sqfrom, sqto;		/* coordinates in sequence                 */
   int     hmmfrom, hmmto;	/* coordinate in HMM                       */
   char   *name, *desc;          /* hit sequence name and description       */
@@ -136,15 +88,11 @@ main(int argc, char **argv)
   int     ndom;			/* total # of domains in this seq          */
   int     namewidth;		/* max width of sequence name              */
 
-  float  globT;			/* T parameter: reporting threshold in bits */
-  double globE;			/* E parameter: reporting thresh in E-value */
-  int    globH;			/* H parameter: save at most top H hits     */
-  int    globA;			/* A parameter: save at most top A hits     */
-
-  float  domT;			/* T parameter for individual domains */
-  double domE;			/* E parameter for individual domains */
-  int    domH;			/* H parameter for individual domains */
-  int    domA;			/* A parameter for individual domains */
+  int    Alimit;		/* A parameter limiting output alignments   */
+  float  globT;			/* T parameter: keep only hits > globT bits */
+  double globE;			/* E parameter: keep hits < globE E-value   */
+  float  domT;			/* T parameter for individual domains       */
+  double domE;			/* E parameter for individual domains       */
 
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
@@ -166,19 +114,20 @@ main(int argc, char **argv)
   do_adjust   = FALSE;
   do_forward  = FALSE;
   do_xnu      = FALSE;
-  globT       = -999999.;
-  globE       = 10.0;
-  globH       = -1;		/* unlimited */
-  globA       = -1;		/* unlimited */
-  domT        = -999999.;
-  domE        = 10.0;
-  domH        = -1;		/* unlimited */
-  domA        = -1;		/* unlimited */
+
+  Alimit      = INT_MAX;	/* no limit on alignment output     */
+  globE       = 10.0;		/* use a reasonable Eval threshold; */
+  globT       = -FLT_MAX;	/*   but no bit threshold,          */
+  domT        = -FLT_MAX;	/*   no domain bit threshold,       */
+  domE        = FLT_MAX;        /*   and no domain Eval threshold.  */
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-E") == 0)        { globE      = atof(optarg);
-                                                  domE       = atof(optarg); }
+    if      (strcmp(optname, "-A") == 0)        Alimit     = atoi(optarg);  
+    else if (strcmp(optname, "-E") == 0)        globE      = atof(optarg);
+    else if (strcmp(optname, "-T") == 0)        globT      = atof(optarg);
+    else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
+    else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
     else if (strcmp(optname, "--null2")   == 0) do_adjust  = TRUE;
     else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE;
@@ -219,7 +168,7 @@ main(int argc, char **argv)
   if (!HMMFileRead(hmmfp, &hmm)) 
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
-    Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
+    Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   Plan7Logoddsify(hmm);
   
   /*********************************************** 
@@ -237,14 +186,16 @@ main(int argc, char **argv)
 
   /* set up structures for storing output
      */
-  histogram = AllocHistogram(-200, 200, 100);	 /* keeps full histogram    */
-  ghit      = AllocTophits(globH, globA);      /* keeps global seq scores */
-  dhit      = AllocTophits(domH, domA);        /* keeps domain scores     */
+  histogram = AllocHistogram(-200, 200, 100);  /* keeps full histogram */
+  ghit      = AllocTophits(200);         /* per-seq hits: 200=lumpsize */
+  dhit      = AllocTophits(200);         /* domain hits:  200=lumpsize */
 
   nseq = 0;
   while (ReadSeq(sqfp, format, &seq, &sqinfo)) 
     {
+      nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
+
       if (do_xnu) XNU(dsq, sqinfo.len);
       
       /* 1. Score the sequence. */
@@ -259,174 +210,190 @@ main(int argc, char **argv)
 
       /* P7PrintTrace(stdout, tr, hmm, dsq); */
 
-      /* 2. Store score/pvalue for global alignment. Sort on score. */
-      if (globH != 0 && sc > globT) 
+      /* 2. Store score/pvalue for global alignment; will sort on score. 
+       *    Keep all domains in a significant sequence hit.
+       *    We can only make a lower bound estimate of E-value since
+       *    we don't know the final value of nseq yet. 
+       */
+      pvalue = PValue(hmm, sc);
+      if (sc > globT && pvalue * (double) nseq < globE) 
 	{
-	  pvalue = PValue(hmm, sc);
-	  if (pvalue <= globE)
-	    RegisterHit(ghit, sc, pvalue, sc,
-			sqinfo.name, 
-			sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
-			0,0,0,                	/* seq positions  */
-			0,0,0,	                /* HMM positions  */
-			0, TraceDomainNumber(tr), /* domain info    */
-			NULL);	                /* alignment info */
+	  RegisterHit(ghit, sc, pvalue, sc, 
+		      0., 0.,	                /* no mother seq */
+		      sqinfo.name, 
+		      sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
+		      0,0,0,                	/* seq positions  */
+		      0,0,0,	                /* HMM positions  */
+		      0, TraceDomainNumber(tr), /* domain info    */
+		      NULL);	                /* alignment info */
+
+	  record_domains(dhit, hmm, dsq, &sqinfo, tr, pvalue, sc); 
 	}
       AddToHistogram(histogram, sc);
 
-      /* 3. Parse domains out of the trace */
-      if (domH != 0 && sc > domT) 
-	{
-	  record_by_domain(dhit, hmm, dsq, &sqinfo, tr, domT, domE); 
-	}
-
-      P7FreeTrace(tr);
-      FreePlan7Matrix(mx);
-      free(dsq);
       FreeSequence(seq, &sqinfo); 
-      nseq++;
+      FreePlan7Matrix(mx);
+      P7FreeTrace(tr);
+      free(dsq);
     }
 
   /* We're done searching an HMM over the whole sequence database.
-   * Fit the histogram now if we use it for E-values. The "TRUE"
-   * left-censors the histogram and fits only the right slope. The "20"
-   * is a hint to the fitting program that we expect scores over
-   * 20 to be true positives.
+   * Set the theoretical EVD curve in our histogram using 
+   * calibration in the HMM, if available. 
    */
-  validfit = ExtremeValueFitHistogram(histogram, TRUE, 20.);
+  if (hmm->flags & PLAN7_STATS)
+    ExtremeValueSetHistogram(histogram, hmm->mu, hmm->lambda, 0);
 
   /* Now format and report our output 
    */
 
   /* 1. Report overall sequence hits (sorted on E-value) */
-  printf("\nQuery HMM:  %s  %s\n", hmm->name, hmm->desc != NULL ? hmm->desc : "");
+  printf("\nQuery HMM:  %s  %s\n", 
+	 hmm->name, hmm->desc != NULL ? hmm->desc : "");
+  if (hmm->flags & PLAN7_STATS)
+    printf("  [HMM has been calibrated; E-values are empirical estimates]\n");
+  else
+    printf("  [No calibration for HMM; E-values are upper bounds]\n");
+
   FullSortTophits(ghit);
   namewidth = MAX(8, TophitsMaxName(ghit));
-  if (globH != 0)
+
+  printf("\nScores for complete sequences (score includes all domains):\n");
+  printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Sequence", 52-namewidth, "Description", "Score", "E-value", " N ");
+  printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", 52-namewidth, "-----------", "-----", "-------", "---");
+  for (i = 0; i < ghit->num; i++)
     {
-      printf("\nScores for complete sequences (score includes all domains):\n");
-      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Sequence", 52-namewidth, "Description", "Score", "E-value", " N ");
-      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", 52-namewidth, "-----------", "-----", "-------", "---");
-      for (i = 0; i < ghit->pos; i++)
+      GetRankedHit(ghit, i, 
+		   &pvalue, &sc, NULL, NULL,
+		   &name, &desc,
+		   NULL, NULL, NULL,               /* sequence positions */
+		   NULL, NULL, NULL,               /* HMM positions      */
+		   NULL, &ndom,	                   /* domain info        */
+		   NULL);	                   /* alignment info     */
+      evalue = pvalue * (double) nseq;
+      if (evalue < globE && sc > globT) 
+	printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
+	       namewidth, name, 
+	       52-namewidth, 52-namewidth, desc != NULL ? desc : "",
+	       sc, evalue, ndom);
+      else if (evalue >= globE)
 	{
-	  GetRankedHit(ghit, i, 
-		       &pvalue, &sc, &name, &desc,
-		       NULL, NULL, NULL,               /* sequence positions */
-		       NULL, NULL, NULL,               /* HMM positions      */
-		       NULL, &ndom,	                   /* domain info        */
-		       NULL);	                   /* alignment info     */
-	  evalue = pvalue * (double) nseq;
-	  if (evalue <= globE && sc >= globT) 
-	    printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
-		   namewidth, name, 
-		   52-namewidth, 52-namewidth, desc != NULL ? desc : "",
-		   sc, evalue, ndom);
-	  else if (evalue > globE)
-	    {
-	      if (i > 0) printf("          [no more scores below E = %.2g]\n", globE);
-	      break;
-	    }
-	  else if (sc < globT)
-	    {
-	      if (i > 0) printf("          [no more scores above T = %.1f]\n", globT);
-	      break;
-	    }
+	  if (i > 0) printf("\t[no more scores below E threshold]\n");
+	  break;
 	}
-      if (i == 0)     printf("          [no hits above E = %.2g, T = %.1f]\n", globE, globT);
-      if (i == globH) printf("          [output cut off at H = %d top hits]\n", globH);
+      else if (sc <= globT)
+	{
+	  if (i > 0) printf("\t[no more scores above T threshold]");
+	  break;
+	}
     }
+  if (i == 0) printf("\t[no hits above thresholds]\n");
+
+
 
 
   /* 2. Report domain hits (also sorted on E-value) */
   FullSortTophits(dhit);
   namewidth = MAX(8, TophitsMaxName(dhit));
-  if (domH != 0)
-    {
-      printf("\nParsed for domains:\n");
-      printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
-	     namewidth, "Sequence", "Domain ", "seq-f", "seq-t", "hmm-f", "hmm-t", "score", "E-value");
-      printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
-	     namewidth, "--------", "-------", "-----", "-----", "-----", "-----", "-----", "-------");
+
+  printf("\nParsed for domains:\n");
+  printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
+	 namewidth, "Sequence", "Domain ", "seq-f", "seq-t", "hmm-f", "hmm-t", "score", "E-value");
+  printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
+	 namewidth, "--------", "-------", "-----", "-----", "-----", "-----", "-----", "-------");
       
-      for (i = 0; i < dhit->pos; i++)
-	{
-	  GetRankedHit(dhit, i, 
-		       &pvalue, &sc, &name, NULL,
-		       &sqfrom, &sqto, &sqlen,            /* seq position info  */
-		       &hmmfrom, &hmmto, NULL,            /* HMM position info  */
-		       &domidx, &ndom,                    /* domain info        */
-		       NULL);	                      /* alignment info     */
-	  evalue = pvalue * (double) nseq;
-	  if (evalue <= domE && sc >= domT) 
-	    printf("%-*s %3d/%-3d %5d %5d %c%c %5d %5d %c%c %7.1f %8.2g\n",
-		   namewidth, name, 
-		   domidx, ndom,
-		   sqfrom, sqto, 
-		   sqfrom == 1 ? '[' : '.', sqto == sqlen ? ']' : '.',
-		   hmmfrom, hmmto,
-		   hmmfrom == 1 ? '[':'.', hmmto == hmm->M ? ']' : '.',
-		   sc, evalue);
-	  else if (evalue > domE) {
-	    if (i > 0) printf("          [no more scores below E = %.2g]\n", domE);
-	    break;
-	  }
-	  else if (sc < domT) {
-	    if (i > 0) printf("          [no more scores above T = %.1f]\n", domT);
-	    break;
-	  }
-	}
-      if (i == 0)    printf("          [no hits above E = %.2g, T = %.1f]\n", domE, domT);
-      if (i == domH) printf("          [output cut off at H = %d top hits]\n", domH);
+  for (i = 0; i < dhit->num; i++)
+    {
+      GetRankedHit(dhit, i, 
+		   &pvalue, &sc, &motherp, &mothersc,
+		   &name, NULL,
+		   &sqfrom, &sqto, &sqlen,            /* seq position info  */
+		   &hmmfrom, &hmmto, NULL,            /* HMM position info  */
+		   &domidx, &ndom,                    /* domain info        */
+		   NULL);	                      /* alignment info     */
+      evalue = pvalue * (double) nseq;
+
+      if (motherp * (double) nseq >= globE || mothersc <= globT) 
+	continue;
+      else if (evalue < domE && sc > domT)
+	printf("%-*s %3d/%-3d %5d %5d %c%c %5d %5d %c%c %7.1f %8.2g\n",
+	       namewidth, name, 
+	       domidx, ndom,
+	       sqfrom, sqto, 
+	       sqfrom == 1 ? '[' : '.', sqto == sqlen ? ']' : '.',
+	       hmmfrom, hmmto,
+	       hmmfrom == 1 ? '[':'.', hmmto == hmm->M ? ']' : '.',
+	       sc, evalue);
+      else if (evalue >= domE) {
+	if (i > 0) printf("\t[no more scores below domE threshold]\n");
+	break;
+      }
+      else if (sc <= domT) {
+	if (i > 0) printf("\t[no more scores above domT threshold]\n");
+	break;
+      }
     }
+  if (i == 0) printf("\t[no hits above thresholds\n");
+
+
 
   /* 3. Alignment output, also by domain.
    *    dhits is already sorted and namewidth is set, from above code.
-   *    Number of displayed alignments is limited by domA parameter;
+   *    Number of displayed alignments is limited by Alimit parameter;
    *    also by domE (evalue threshold), domT (score theshold).
    */
-  if (domA != 0)
+  if (Alimit != 0)
     {
       printf("\nAlignments of top-scoring domains:\n");
-      for (i = 0; i < dhit->pos; i++)
+      for (i = 0; i < dhit->num; i++)
 	{
-	  if (i == domA) break; /* limit to domA output alignments */
+	  if (i == Alimit) break; /* limit to Alimit output alignments */
 	  GetRankedHit(dhit, i, 
-		       &pvalue, &sc, &name, NULL,
+		       &pvalue, &sc, &motherp, &mothersc,
+		       &name, NULL,
 		       &sqfrom, &sqto, &sqlen,            /* seq position info  */
 		       &hmmfrom, &hmmto, NULL,            /* HMM position info  */
 		       &domidx, &ndom,                    /* domain info        */
 		       &ali);	                      /* alignment info     */
 	  evalue = pvalue * (double) nseq;
-	  if (evalue <= domE && sc >= domT) 
+
+	  if (motherp * (double) nseq >= globE || mothersc <= globT) 
+	    continue;
+	  else if (evalue < domE && sc > domT) 
 	    {
 	      printf("%s: domain %d of %d, from %d to %d: score %.1f, E = %.2g\n", 
 		     name, domidx, ndom, sqfrom, sqto, sc, evalue);
 	      PrintFancyAli(stdout, ali);
 	    }
-	  else if (evalue > domE) {
-	    if (i > 0) printf("          [no more alignments below E = %.2g]\n", domE);
+	  else if (evalue >= domE) {
+	    if (i > 0) printf("\t[no more alignments below E threshold\n");
 	    break;
 	  }
-	  else if (sc < domT) {
-	    if (i > 0) printf("          [no more alignments above T = %.1f]\n", domT);
+	  else if (sc <= domT) {
+	    if (i > 0) printf("\t[no more alignments above T threshold\n");
 	    break;
 	  }
 	}
-      if (i == 0)    printf("          [no hits above E = %.2g, T = %.1f]\n", domE, domT);
-      if (i == domA) printf("          [output cut off at A = %d top alignments]\n", domA);
+      if (i == 0)      printf("\t[no hits above thresholds\n");
+      if (i == Alimit) printf("\t[output cut off at A = %d top alignments]\n", Alimit);
     }
 
   /* 4. Histogram output */
   printf("\nHistogram of all scores:\n");
   PrintASCIIHistogram(stdout, histogram);
 
+  /* 5. Tophits summaries, while developing...
+   */
+  printf("\nWhole sequence top hits:\n");
+  TophitsReport(ghit, globE, nseq);
+  printf("\nDomain top hits:\n");
+  TophitsReport(dhit, domE, nseq);
+
   /*********************************************** 
    * Clean-up and exit.
    ***********************************************/
 
-  printf("//\n");
   FreePlan7(hmm);
-  SeqfileRewind(sqfp);
   FreeTophits(ghit);
   FreeTophits(dhit);
   FreeHistogram(histogram);
@@ -443,3 +410,53 @@ main(int argc, char **argv)
 }
 
 
+/* Function: record_domains()
+ * Date:     SRE, Tue Nov  4 11:25:14 1997 [St. Louis]
+ * 
+ * Purpose:  Decompose a trace, and register scores, P-values, alignments,
+ *           etc. for individual domains in a hitlist. 
+ *           
+ * Return:   (void)          
+ */
+static void
+record_domains(struct tophit_s *h, 
+	       struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
+	       struct p7trace_s *tr, double whole_pval, float whole_sc)
+{
+  struct p7trace_s **tarr;      /* array of per-domain traces */
+  struct fancyali_s *ali;       /* alignment of a domain      */ 
+  int ntr;			/* number of domain traces    */
+  int idx;			/* index for traces           */
+  int k1, k2;			/* start, stop coord in model */
+  int i1, i2;			/* start, stop in sequence    */
+  float  score;
+  double pvalue;
+
+  TraceDecompose(tr, &tarr, &ntr);
+  if (ntr == 0) Die("TraceDecompose() screwup"); /* "can't happen" (!) */
+
+  for (idx = 0; idx < ntr; idx++)
+    {
+      /* Get the score and bounds of the match.
+       */
+      score  = P7TraceScore(hmm, dsq, tarr[idx]);
+				/* score correction here?? */
+      pvalue = PValue(hmm, score); 
+      TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
+      
+      /* Record the match. Use score as the sort key.
+       */
+      ali = CreateFancyAli(tarr[idx], hmm, dsq, sqinfo->name);
+      RegisterHit(h, score, pvalue, score, whole_pval, whole_sc,
+		  sqinfo->name, 
+		  sqinfo->flags & SQINFO_DESC ? sqinfo->desc : NULL, 
+		  i1,i2, sqinfo->len, 
+		  k1,k2, hmm->M, 
+		  idx+1, ntr,
+		  ali);
+    }
+  for (idx = 0; idx < ntr; idx++)
+    P7FreeTrace(tarr[idx]);
+  free(tarr);
+  return;
+}
