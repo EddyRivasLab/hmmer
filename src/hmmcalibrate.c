@@ -51,6 +51,7 @@ Option        : Default : Description\n\
   -s <x>      :     350 : set random seq length std. dev to <x>\n\
 \n\
   --histfile <f> :    - : save histogram(s) to file <f>\n\
+  --seed <n>     :time(): set random seed to <n>\n\
 ";
 
 static struct opt_s OPTIONS[] = {
@@ -60,6 +61,7 @@ static struct opt_s OPTIONS[] = {
    { "-n", TRUE, sqdARG_INT   },
    { "-s", TRUE, sqdARG_FLOAT },   
    { "--histfile", FALSE, sqdARG_STRING },
+   { "--seed",     FALSE, sqdARG_INT}, 
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -121,6 +123,7 @@ main(int argc, char **argv)
       else if (strcmp(optname, "-n") == 0) nsample  = atoi(optarg); 
       else if (strcmp(optname, "-s") == 0) lensd    = atof(optarg); 
       else if (strcmp(optname, "--histfile") == 0) histfile = optarg;
+      else if (strcmp(optname, "--seed")     == 0) seed     = atoi(optarg);
       else if (strcmp(optname, "-h") == 0)
 	{
 	  Banner(stdout, banner);
