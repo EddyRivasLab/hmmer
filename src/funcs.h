@@ -223,8 +223,17 @@ extern void Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit);
 extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, 
 			    int nseq, struct p7trace_s **tr);
 extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
-extern void Plan9toPlan7(struct hmm_struc *hmm, struct plan7_s **ret_plan7);
-extern void Plan7toPlan9Search(struct plan7_s *hmm, struct shmm_s **ret_shmm);
+extern void Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7);
+
+/* 
+ * from plan9.c
+ * Backwards compatibility for the Plan 9 data structures of HMMER 1.x
+ */
+extern struct plan9_s *P9AllocHMM(int M);
+extern void P9ZeroHMM(struct plan9_s *hmm);
+extern int  P9FreeHMM(struct plan9_s *hmm);
+extern void P9Renormalize(struct plan9_s *hmm);
+extern void P9DefaultNullModel(float *null);
 
 /* from prior.c
  * Dirichlet priors
@@ -244,23 +253,6 @@ extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
 				     float e[MAXDCHLET][MAXABET],
 				     float *ret_mix);
 
-/* 
- * from states.c
- * Obsolete support for the Plan 9 data structures
- */
-extern struct hmm_struc *AllocHMM(int M);
-extern void ZeroHMM(struct hmm_struc *hmm);
-extern void LogifyHMM(struct hmm_struc *hmm);
-extern void LogoddsifyHMM(struct hmm_struc *hmm);
-extern int  WriteFlatPriorHMM(struct hmm_struc *hmm, struct prior_s *prior);
-extern struct hmm_struc *HMMDup(struct hmm_struc *hmm);
-extern void HMMCopy(struct hmm_struc *hmm1, struct hmm_struc *hmm2);
-extern int  FreeHMM(struct hmm_struc *hmm);
-extern struct shmm_s *AllocSearchHMM(int M);
-extern void  FreeSearchHMM(struct shmm_s *shmm);
-extern int  CountSymbol(char sym, float wt, float *counters);
-extern float HMMDistance(struct hmm_struc *newhmm, struct hmm_struc *oldhmm);
-extern void Renormalize(struct hmm_struc *hmm);
 
 /* from tophits.c
  * Support for keeping/sorting top scoring hit/alignment lists
