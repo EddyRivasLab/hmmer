@@ -536,7 +536,7 @@ main_loop_pvm(HMMFILE *hmmfp, FILE *hfp, int seed, int nsample, int fixedlen, fl
    */
   if ((master_tid = pvm_mytid()) < 0)
     Die("pvmd not responding -- do you have PVM running?");
-  PVMSpawnSlaves("hmmcalibrate-slave", &slave_tid, &nslaves);
+  PVMSpawnSlaves("hmmcalibrate-pvm", &slave_tid, &nslaves);
 
   /* Initialize the slaves
    */

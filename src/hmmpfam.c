@@ -708,7 +708,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   SQD_DPRINTF1(("Requesting master TID...\n"));
   master_tid = pvm_mytid();
   SQD_DPRINTF1(("Spawning slaves...\n"));
-  PVMSpawnSlaves("hmmpfam-slave", &slave_tid, &nslaves);
+  PVMSpawnSlaves("hmmpfam-pvm", &slave_tid, &nslaves);
   hmmlist   = MallocOrDie(sizeof(int) * nslaves);
   SQD_DPRINTF1(("Spawned a total of %d slaves...\n", nslaves));
 
