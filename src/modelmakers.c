@@ -830,8 +830,8 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
   if (ainfo->flags & AINFO_RF) {
     hmm->rf[0] = ' ';
     for (apos = k = 1; apos <= ainfo->alen; apos++)
-      if (matassign[apos] & ASSIGN_MATCH)
-	hmm->rf[k++] = ainfo->rf[apos-1]; /* ainfo is off by one from HMM */
+      if (matassign[apos] & ASSIGN_MATCH) /* ainfo is off by one from HMM */
+	hmm->rf[k++] = (ainfo->rf[apos-1] == ' ') ? '.' : ainfo->rf[apos-1];
     hmm->rf[k] = '\0';
     hmm->flags |= PLAN7_RF;
   }
@@ -840,7 +840,7 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
     hmm->cs[0] = ' ';
     for (apos = k = 1; apos <= ainfo->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH)
-	hmm->cs[k++] = ainfo->cs[apos-1];
+	hmm->cs[k++] = (ainfo->cs[apos-1] == ' ') ? '.' : ainfo->cs[apos-1];
     hmm->cs[k] = '\0';
     hmm->flags |= PLAN7_CS;
   }
