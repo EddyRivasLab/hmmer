@@ -7,6 +7,7 @@
 # option tests
 #
 1 prep        hmm                  @hmmbuild@ -F %OPT.HMM% Optiontests.sto
+1 prep        hmmindex             @hmmindex@ %OPT.HMM%
 1 exercise    hmmcalibrate/cpu     @hmmcalibrate@ --pvm --fixed 15 %OPT.HMM%
 1 exercise    hmmpfam/cpu          @hmmpfam@ --pvm %OPT.HMM% Optiontests.fa
 1 exercise    hmmsearch/cpu        @hmmsearch@ --pvm %OPT.HMM% Optiontests.fa
