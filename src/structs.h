@@ -171,16 +171,26 @@ struct plan7_s {
    * not just the unambiguous protein or DNA alphabet: we
    * precalculate the scores for all IUPAC degenerate symbols we
    * may see. Non-IUPAC symbols simply have a -INFTY score.
-   * Note the reversed indexing on msc and isc -- for efficiency reasons.
+   *
+   * Note the reversed indexing on msc, isc, tsc -- for efficiency reasons.
+   * They're not probability vectors any more so we can reorder them
+   * without wildly complicating our life.
+   * 
+   * The _mem ptrs are where the real memory is alloc'ed and free'd,
+   * as opposed to where it is accessed.
+   * This came in with Erik Lindahl's altivec port; it allows alignment on
+   * 16-byte boundaries. In the non-altivec code, this is just a little
+   * redundancy; tsc and tsc_mem point to the same thing, for example.
    * 
    * Only valid if PLAN7_HASBITS is set.
    */
-  int  **tsc;                   /* transition scores     [1.M-1][0.6]       -*/
+  int  **tsc;                   /* transition scores     [0.6][1.M-1]       -*/
   int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] -*/
   int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] -*/
   int    xsc[4][2];             /* N,E,C,J transitions                      -*/
   int   *bsc;                   /* begin transitions     [1.M]              -*/
   int   *esc;			/* end transitions       [1.M]              -*/
+  int  **tsc_mem, **msc_mem, **isc_mem, *bsc_mem, *esc_mem;
 
   /* DNA translation scoring parameters
    * For aligning protein Plan7 models to DNA sequence.

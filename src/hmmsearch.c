@@ -44,18 +44,18 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
 ";
 
 static char experts[] = "\
-   --compat  : make best effort to use last version's output style\n\
-   --cpu <n> : run <n> threads in parallel (if threaded)\n\
-   --cut_ga  : use Pfam GA gathering threshold cutoffs\n\
-   --cut_nc  : use Pfam NC noise threshold cutoffs\n\
-   --cut_tc  : use Pfam TC trusted threshold cutoffs\n\
-   --domE <x>: sets domain Eval cutoff (2nd threshold) to <= x\n\
-   --domT <x>: sets domain T bit thresh (2nd threshold) to >= x\n\
-   --forward : use the full Forward() algorithm instead of Viterbi\n\
-   --informat <s>: sequence file is in format <s>\n\
-   --null2   : turn OFF the post hoc second null model\n\
-   --pvm     : run on a Parallel Virtual Machine (PVM)\n\
-   --xnu     : turn ON XNU filtering of target protein sequences\n\
+   --compat       : make best effort to use last version's output style\n\
+   --cpu <n>      : run <n> threads in parallel (if threaded)\n\
+   --cut_ga       : use Pfam GA gathering threshold cutoffs\n\
+   --cut_nc       : use Pfam NC noise threshold cutoffs\n\
+   --cut_tc       : use Pfam TC trusted threshold cutoffs\n\
+   --domE <x>     : sets domain Eval cutoff (2nd threshold) to <= x\n\
+   --domT <x>     : sets domain T bit thresh (2nd threshold) to >= x\n\
+   --forward      : use the full Forward() algorithm instead of Viterbi\n\
+   --informat <s> : sequence file is in format <s>\n\
+   --null2        : turn OFF the post hoc second null model\n\
+   --pvm          : run on a Parallel Virtual Machine (PVM)\n\
+   --xnu          : turn ON XNU filtering of target protein sequences\n\
 ";
 
 static struct opt_s OPTIONS[] = {
@@ -190,7 +190,7 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  format      = SQFILE_UNKNOWN;	/* default: autodetect seq file format w/ Babelfish */
+  format      = SQFILE_UNKNOWN;	/* default: autodetect seq file format  */
   do_forward  = FALSE;
   do_null2    = TRUE;
   do_xnu      = FALSE;
@@ -219,7 +219,7 @@ main(int argc, char **argv)
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-A") == 0)        Alimit         = atoi(optarg);  
+    if      (strcmp(optname, "-A") == 0)        Alimit         = atoi(optarg); 
     else if (strcmp(optname, "-E") == 0)        thresh.globE   = atof(optarg);
     else if (strcmp(optname, "-T") == 0)        thresh.globT   = atof(optarg);
     else if (strcmp(optname, "-Z") == 0)        thresh.Z       = atoi(optarg);

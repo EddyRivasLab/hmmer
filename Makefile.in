@@ -80,27 +80,10 @@ SQUIDPROGS = afetch\
 	sreformat
 
 # all: Compile everything (except the testsuite),
-#      and stick the supported programs in binaries/
 #
 all: version.h
-	@if test -d binaries; then\
-	   echo "You appear to already have a compiled HMMER distribution.";\
-	   echo "You don't need to make.";\
-	   echo "";\
-	   echo "If I'm wrong, it's because I'm only looking to see if you have";\
-	   echo "a 'binaries' directory; do 'make distclean' to revert HMMER";\
-	   echo "to a pristine source distribution.";\
-	else\
-	   (cd squid; make; make module);\
-	   (cd src;   make; make module);\
-	   mkdir binaries;\
-	      for prog in $(PROGS) $(PVMPROGS); do\
-	      mv src/$$prog binaries/;\
-	   done;\
-	   for prog in $(SQUIDPROGS); do\
-	      mv squid/$$prog binaries/;\
-	   done;\
-	fi
+	(cd squid; make; make module)
+	(cd src;   make; make module)
 
 # version.h: 
 #   create the version.h file that will define stamps used by 
@@ -137,10 +120,13 @@ src/libhmmer.a: version.h
 # install: installs the binaries in BINDIR/
 #          installs man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 install: 
-	for file in $(PROGS) $(SQUIDPROGS) $(PVMPROGS); do\
-	   cp binaries/$$file $(BINDIR)/;\
+	for file in $(PROGS) $(PVMPROGS); do\
+	   cp src/$$file $(BINDIR)/;\
 	done
-	for file in hmmer $(PROGS) $(SQUIDPROGS); do\
+	for file in $(SQUIDPROGS); do\
+	   cp squid/$$file $(BINDIR)/;\
+	done
+	for file in hmmer $(PROGS); do\
 	   $(INSTMAN) documentation/man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 	for file in $(SQUIDPROGS); do\
@@ -150,10 +136,10 @@ install:
 # "make clean" removes almost everything except configuration files
 #              and binaries.
 clean:
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	(cd src;       make clean)
 	(cd squid;     make clean)
 	(cd testsuite; make clean)
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
 # "make distclean" leaves a pristine source distribution.
 #
@@ -161,10 +147,10 @@ distclean:
 	-rm -rf binaries
 	-rm config.cache config.log config.status
 	-rm version.h
-	make clean
 	(cd src;       make distclean)
 	(cd squid;     make distclean)
 	(cd testsuite; make distclean)
+	make clean
 	-rm Makefile
 
 # verify: consistency checks on the package
@@ -273,6 +259,6 @@ ftpdist:
 # make stable: Set up the FTP site symlink to the current stable HMMER release.
 #
 stable:
-	ln -sf $(FTPDIR)/hmmer-$(RELEASE).tar.Z $(FTPDIR)/hmmer.tar.Z
+	(cd ${FTPDIR}; ln -sf hmmer-$(RELEASE).tar.Z hmmer.tar.Z)
 
 

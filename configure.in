@@ -297,6 +297,8 @@ AC_ARG_ENABLE(threads,
 [  --disable-threads  disable POSIX threads support],
 [case $enable_threads in 
    yes) echo "Enabling POSIX threads support"
+        AC_CHECK_FUNCS(pthread_setconcurrency)
+        AC_CHECK_FUNCS(pthread_attr_setscope)
 	ACX_PTHREAD([MDEFS="${MDEFS} -DHMMER_THREADS"])
 	;;
    no)  echo "POSIX threads support disabled"
@@ -306,14 +308,10 @@ AC_ARG_ENABLE(threads,
 esac],
 [
    echo "   Trying to enable default POSIX threads support"
+   AC_CHECK_FUNCS(pthread_setconcurrency)
+   AC_CHECK_FUNCS(pthread_attr_setscope)
    ACX_PTHREAD([MDEFS="${MDEFS} -DHMMER_THREADS"])
 ])
-
-
-# Check for functions
-AC_CHECK_FUNCS(pthread_setconcurrency)
-AC_CHECK_FUNCS(pthread_attr_setscope)
-
 
 # Although we configure our fixed-size integers in squid,
 # we do need some of that configuration code here, because

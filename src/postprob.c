@@ -156,7 +156,7 @@ P7Backward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
    * Scores for transitions to D_M also have to be hacked to -INFTY,
    * as Plan7Logoddsify does not do this for us (I think? - ihh).
    */
-  hmm->tsc[hmm->M-1][TDD] = hmm->tsc[hmm->M-1][TMD] = -INFTY;    /* no D_M state -- HACK -- should be in Plan7Logoddsify */
+  hmm->tsc[TDD][hmm->M-1] = hmm->tsc[TMD][hmm->M-1] = -INFTY;    /* no D_M state -- HACK -- should be in Plan7Logoddsify */
   for (i = L-1; i >= 0; i--)
     {
       /* Do the special states first.
@@ -194,17 +194,17 @@ P7Backward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 	for (k = hmm->M-1; k >= 1; k--)
 	  {
 	    mmx[i][k]  = ILogsum(ILogsum(xmx[i][XME] + hmm->esc[k],
-					 mmx[i+1][k+1] + hmm->tsc[k][TMM]),
-				 ILogsum(imx[i+1][k] + hmm->tsc[k][TMI],
-					 dmx[i][k+1] + hmm->tsc[k][TMD]));
+					 mmx[i+1][k+1] + hmm->tsc[TMM][k]),
+				 ILogsum(imx[i+1][k] + hmm->tsc[TMI][k],
+					 dmx[i][k+1] + hmm->tsc[TMD][k]));
 	    mmx[i][k] += hmm->msc[(int) dsq[i]][k];
 	    
-	    imx[i][k]  = ILogsum(imx[i+1][k] + hmm->tsc[k][TII],
-				 mmx[i+1][k+1] + hmm->tsc[k][TIM]);
+	    imx[i][k]  = ILogsum(imx[i+1][k] + hmm->tsc[TII][k],
+				 mmx[i+1][k+1] + hmm->tsc[TIM][k]);
 	    imx[i][k] += hmm->isc[(int) dsq[i]][k];
 	    
-	    dmx[i][k]  = ILogsum(dmx[i][k+1] + hmm->tsc[k][TDD],
-				 mmx[i+1][k+1] + hmm->tsc[k][TDM]);
+	    dmx[i][k]  = ILogsum(dmx[i][k+1] + hmm->tsc[TDD][k],
+				 mmx[i+1][k+1] + hmm->tsc[TDM][k]);
 	    
 	  }
       }
@@ -264,24 +264,24 @@ P7EmitterPosterior(int L,
       
       for (k = 1; k < hmm->M; k++) {
 	mx->mmx[i][k]  = backward->mmx[i][k];
-	mx->mmx[i][k] += ILogsum(ILogsum(forward->mmx[i-1][k-1] + hmm->tsc[k-1][TMM],
-					     forward->imx[i-1][k-1] + hmm->tsc[k-1][TIM]),
+	mx->mmx[i][k] += ILogsum(ILogsum(forward->mmx[i-1][k-1] + hmm->tsc[TMM][k-1],
+					     forward->imx[i-1][k-1] + hmm->tsc[TIM][k-1]),
 				     ILogsum(forward->xmx[i-1][XMB] + hmm->bsc[k],
-					     forward->dmx[i-1][k-1] + hmm->tsc[k-1][TDM]));
+					     forward->dmx[i-1][k-1] + hmm->tsc[TDM][k-1]));
 	mx->mmx[i][k] -= sc;
 	
 	mx->imx[i][k]  = backward->imx[i][k];
-	mx->imx[i][k] += ILogsum(forward->mmx[i-1][k] + hmm->tsc[k][TMI],
-				     forward->imx[i-1][k] + hmm->tsc[k][TII]);
+	mx->imx[i][k] += ILogsum(forward->mmx[i-1][k] + hmm->tsc[TMI][k],
+				     forward->imx[i-1][k] + hmm->tsc[TII][k]);
 	mx->imx[i][k] -= sc;
 	
 	mx->dmx[i][k] = -INFTY;
       }
       mx->mmx[i][hmm->M]  = backward->mmx[i][hmm->M];
-      mx->mmx[i][hmm->M] += ILogsum(ILogsum(forward->mmx[i-1][hmm->M-1] + hmm->tsc[hmm->M-1][TMM],
-					   forward->imx[i-1][hmm->M-1] + hmm->tsc[hmm->M-1][TIM]),
+      mx->mmx[i][hmm->M] += ILogsum(ILogsum(forward->mmx[i-1][hmm->M-1] + hmm->tsc[TMM][hmm->M-1],
+					   forward->imx[i-1][hmm->M-1] + hmm->tsc[TIM][hmm->M-1]),
 				   ILogsum(forward->xmx[i-1][XMB] + hmm->bsc[hmm->M],
-					   forward->dmx[i-1][hmm->M-1] + hmm->tsc[hmm->M-1][TDM]));
+					   forward->dmx[i-1][hmm->M-1] + hmm->tsc[TDM][hmm->M-1]));
       mx->mmx[i][hmm->M] -= sc;
 
       mx->imx[i][hmm->M] = mx->dmx[i][hmm->M] = mx->dmx[i][0] = -INFTY;

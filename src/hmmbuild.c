@@ -566,18 +566,18 @@ main(int argc, char **argv)
       free(name);
 
       /* Transfer other information from the alignment to
-       * the HMM. This typically only works for SELEX format
+       * the HMM. This typically only works for Stockholm or SELEX format
        * alignments, so these things are conditional/optional.
        */
       if (msa->acc  != NULL) Plan7SetAccession(hmm,   msa->acc);
       if (msa->desc != NULL) Plan7SetDescription(hmm, msa->desc);
 
-      if (msa->flags & MSA_SET_GA) 
-	{ hmm->flags |= PLAN7_GA; hmm->ga1 = msa->ga1; hmm->ga2 = msa->ga2; }
-      if (msa->flags & MSA_SET_TC) 
-	{ hmm->flags |= PLAN7_TC; hmm->tc1 = msa->tc1; hmm->tc2 = msa->tc2; }
-      if (msa->flags & MSA_SET_NC) 
-	{ hmm->flags |= PLAN7_NC; hmm->nc1 = msa->nc1; hmm->nc2 = msa->nc2; }
+      if (msa->cutoff_is_set[MSA_CUTOFF_GA1] && msa->cutoff_is_set[MSA_CUTOFF_GA2])
+	{ hmm->flags |= PLAN7_GA; hmm->ga1 = msa->cutoff[MSA_CUTOFF_GA1]; hmm->ga2 = msa->cutoff[MSA_CUTOFF_GA2]; }
+      if (msa->cutoff_is_set[MSA_CUTOFF_TC1] && msa->cutoff_is_set[MSA_CUTOFF_TC2])
+	{ hmm->flags |= PLAN7_TC; hmm->tc1 = msa->cutoff[MSA_CUTOFF_TC1]; hmm->tc2 = msa->cutoff[MSA_CUTOFF_TC2]; }
+      if (msa->cutoff_is_set[MSA_CUTOFF_NC1] && msa->cutoff_is_set[MSA_CUTOFF_NC2])
+	{ hmm->flags |= PLAN7_NC; hmm->nc1 = msa->cutoff[MSA_CUTOFF_NC1]; hmm->nc2 = msa->cutoff[MSA_CUTOFF_NC2]; }
 
       /* Record some other miscellaneous information in the HMM,
        * like how/when we built it.

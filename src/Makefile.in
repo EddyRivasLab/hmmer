@@ -63,6 +63,7 @@ OBJS =  alphabet.o\
 	display.o\
 	emit.o\
 	emulation.o\
+	fast_algorithms.o\
 	histogram.o\
 	hmmio.o\
 	mathsupport.o\

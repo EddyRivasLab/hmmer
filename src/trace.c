@@ -19,10 +19,6 @@
 #include "funcs.h"
 #include "version.h"
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static void rightjustify(char *s, int n);
 
 /* Function: P7AllocTrace(), P7ReallocTrace(), P7FreeTrace()
@@ -593,24 +589,24 @@ TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1,
     break;
   case STM:
     switch (st2) {
-    case STM: return hmm->tsc[k1][TMM];
-    case STI: return hmm->tsc[k1][TMI];
-    case STD: return hmm->tsc[k1][TMD];
+    case STM: return hmm->tsc[TMM][k1];
+    case STI: return hmm->tsc[TMI][k1];
+    case STD: return hmm->tsc[TMD][k1];
     case STE: return hmm->esc[k1];
     default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STI:
     switch (st2) {
-    case STM: return hmm->tsc[k1][TIM];
-    case STI: return hmm->tsc[k1][TII];
+    case STM: return hmm->tsc[TIM][k1];
+    case STI: return hmm->tsc[TII][k1];
     default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STD:
     switch (st2) {
-    case STM: return hmm->tsc[k1][TDM]; 
-    case STD: return hmm->tsc[k1][TDD];
+    case STM: return hmm->tsc[TDM][k1]; 
+    case STD: return hmm->tsc[TDD][k1];
     case STE: return 0;	/* D_m->E has probability 1.0 by definition in Plan7 */
     default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
@@ -743,7 +739,7 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
     case STM:
       if (hmm->flags & PLAN7_RF) ali->rfline[tpos] = hmm->rf[tr->nodeidx[tpos]];
       if (hmm->flags & PLAN7_CS) ali->csline[tpos] = hmm->cs[tr->nodeidx[tpos]];
-      bestsym = FMax(hmm->mat[tr->nodeidx[tpos]], Alphabet_size);
+      bestsym = FArgMax(hmm->mat[tr->nodeidx[tpos]], Alphabet_size);
       ali->model[tpos] = Alphabet[bestsym];
       if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
 	ali->model[tpos] = tolower(ali->model[tpos]);
@@ -761,7 +757,7 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
     case STD:
       if (hmm->flags & PLAN7_RF) ali->rfline[tpos] = hmm->rf[tr->nodeidx[tpos]];
       if (hmm->flags & PLAN7_CS) ali->csline[tpos] = hmm->cs[tr->nodeidx[tpos]];
-      bestsym = FMax(hmm->mat[tr->nodeidx[tpos]], Alphabet_size);
+      bestsym = FArgMax(hmm->mat[tr->nodeidx[tpos]], Alphabet_size);
       ali->model[tpos] = Alphabet[bestsym];
       if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
 	ali->model[tpos] = tolower(ali->model[tpos]);

@@ -66,16 +66,19 @@ AllocPlan7Shell(void)
   hmm->nc1 = hmm->nc2 = 0.0;
 
   hmm->t      = NULL;
-  hmm->tsc    = NULL;
   hmm->mat    = NULL;
   hmm->ins    = NULL;
-  hmm->msc    = NULL;
-  hmm->isc    = NULL;
+
+  hmm->tsc = hmm->tsc_mem = NULL;
+  hmm->msc = hmm->msc_mem = NULL;
+  hmm->isc = hmm->isc_mem = NULL;
 
   hmm->begin  = NULL;
-  hmm->bsc    = NULL;
   hmm->end    = NULL;
-  hmm->esc    = NULL;
+
+  hmm->bsc = hmm->bsc_mem = NULL;
+  hmm->esc = hmm->esc_mem = NULL;
+
 				/* DNA translation is not enabled by default */
   hmm->dnam   = NULL;
   hmm->dnai   = NULL;
@@ -101,17 +104,25 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   hmm->map    = MallocOrDie ((M+1) * sizeof(int));
 
   hmm->t      = MallocOrDie (M     *           sizeof(float *));
-  hmm->tsc    = MallocOrDie (M     *           sizeof(int *));
   hmm->mat    = MallocOrDie ((M+1) *           sizeof(float *));
   hmm->ins    = MallocOrDie (M     *           sizeof(float *));
-  hmm->msc    = MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc    = MallocOrDie (MAXCODE   *       sizeof(int *)); 
   hmm->t[0]   = MallocOrDie ((7*M)     *       sizeof(float));
-  hmm->tsc[0] = MallocOrDie ((7*M)     *       sizeof(int));
   hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
   hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
-  hmm->msc[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
+
+  hmm->tsc_mem    = MallocOrDie (7     *           sizeof(int *));
+  hmm->msc_mem    = MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc_mem    = MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->tsc_mem[0] = MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->msc_mem[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc_mem[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
+
+  hmm->tsc    = hmm->tsc_mem;
+  hmm->tsc[0] = hmm->tsc_mem[0];
+  hmm->msc    = hmm->msc_mem;
+  hmm->msc[0] = hmm->msc_mem[0];
+  hmm->isc    = hmm->isc_mem;
+  hmm->isc[0] = hmm->isc_mem[0];
 
   /* note allocation strategy for important 2D arrays -- trying
    * to keep locality as much as possible, cache efficiency etc.
@@ -121,13 +132,15 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
     if (k < M) {
       hmm->ins[k] = hmm->ins[0] + k * MAXABET;
       hmm->t[k]   = hmm->t[0]   + k * 7;
-      hmm->tsc[k] = hmm->tsc[0] + k * 7;
     }
   }
   for (x = 1; x < MAXCODE; x++) {
     hmm->msc[x] = hmm->msc[0] + x * (M+1);
     hmm->isc[x] = hmm->isc[0] + x * M;
   }
+  for (x = 0; x < 7; x++)
+    hmm->tsc[x] = hmm->tsc[0] + x * M;
+
   /* tsc[0] is used as a boundary condition sometimes [Viterbi()],
    * so set to -inf always.
    */
@@ -135,9 +148,13 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
     hmm->tsc[0][x] = -INFTY;
 
   hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
-  hmm->bsc    = MallocOrDie  ((M+1) * sizeof(int));
   hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
-  hmm->esc    = MallocOrDie  ((M+1) * sizeof(int));
+
+  hmm->bsc_mem  = MallocOrDie  ((M+1) * sizeof(int));
+  hmm->esc_mem  = MallocOrDie  ((M+1) * sizeof(int));
+
+  hmm->bsc = hmm->bsc_mem;
+  hmm->esc = hmm->esc_mem;
 
   return;
 }  
@@ -157,21 +174,21 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->tpri    != NULL) free(hmm->tpri);
   if (hmm->mpri    != NULL) free(hmm->mpri);
   if (hmm->ipri    != NULL) free(hmm->ipri);
-  if (hmm->bsc     != NULL) free(hmm->bsc);
+  if (hmm->bsc_mem != NULL) free(hmm->bsc_mem);
   if (hmm->begin   != NULL) free(hmm->begin);
-  if (hmm->esc     != NULL) free(hmm->esc);
+  if (hmm->esc_mem != NULL) free(hmm->esc_mem);
   if (hmm->end     != NULL) free(hmm->end);
-  if (hmm->msc     != NULL) free(hmm->msc[0]);
+  if (hmm->msc_mem != NULL) free(hmm->msc_mem[0]);
   if (hmm->mat     != NULL) free(hmm->mat[0]);
-  if (hmm->isc     != NULL) free(hmm->isc[0]);
+  if (hmm->isc_mem != NULL) free(hmm->isc_mem[0]);
   if (hmm->ins     != NULL) free(hmm->ins[0]);
-  if (hmm->tsc     != NULL) free(hmm->tsc[0]);
+  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem[0]);
   if (hmm->t       != NULL) free(hmm->t[0]);
-  if (hmm->msc     != NULL) free(hmm->msc);
+  if (hmm->msc_mem != NULL) free(hmm->msc_mem);
   if (hmm->mat     != NULL) free(hmm->mat);
-  if (hmm->isc     != NULL) free(hmm->isc);
+  if (hmm->isc_mem != NULL) free(hmm->isc_mem);
   if (hmm->ins     != NULL) free(hmm->ins);
-  if (hmm->tsc     != NULL) free(hmm->tsc);
+  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
   if (hmm->t       != NULL) free(hmm->t);
   if (hmm->dnam    != NULL) free(hmm->dnam);
   if (hmm->dnai    != NULL) free(hmm->dnai);
@@ -407,13 +424,13 @@ P7Logoddsify(struct plan7_s *hmm, int viterbi_mode)
    */
   for (k = 1; k < hmm->M; k++)
     {
-      hmm->tsc[k][TMM] = Prob2Score(hmm->t[k][TMM], hmm->p1);
-      hmm->tsc[k][TMI] = Prob2Score(hmm->t[k][TMI], hmm->p1);
-      hmm->tsc[k][TMD] = Prob2Score(hmm->t[k][TMD], 1.0);
-      hmm->tsc[k][TIM] = Prob2Score(hmm->t[k][TIM], hmm->p1);
-      hmm->tsc[k][TII] = Prob2Score(hmm->t[k][TII], hmm->p1);
-      hmm->tsc[k][TDM] = Prob2Score(hmm->t[k][TDM], hmm->p1);
-      hmm->tsc[k][TDD] = Prob2Score(hmm->t[k][TDD], 1.0);
+      hmm->tsc[TMM][k] = Prob2Score(hmm->t[k][TMM], hmm->p1);
+      hmm->tsc[TMI][k] = Prob2Score(hmm->t[k][TMI], hmm->p1);
+      hmm->tsc[TMD][k] = Prob2Score(hmm->t[k][TMD], 1.0);
+      hmm->tsc[TIM][k] = Prob2Score(hmm->t[k][TIM], hmm->p1);
+      hmm->tsc[TII][k] = Prob2Score(hmm->t[k][TII], hmm->p1);
+      hmm->tsc[TDM][k] = Prob2Score(hmm->t[k][TDM], hmm->p1);
+      hmm->tsc[TDD][k] = Prob2Score(hmm->t[k][TDD], 1.0);
     }
 
   /* B->M entry transitions. Note how D_1 is folded out.

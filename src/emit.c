@@ -245,11 +245,11 @@ EmitBestSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace
       
       /* Best emissions
        */
-      x = FMax(hmm->mat[k+1], Alphabet_size);
+      x = FArgMax(hmm->mat[k+1], Alphabet_size);
       mmx[k+1] += log(hmm->mat[k+1][x]);
 
       if (k < hmm->M-1) {
-	x = FMax(hmm->ins[k+1], Alphabet_size);
+	x = FArgMax(hmm->ins[k+1], Alphabet_size);
 	imx[k+1] += log(hmm->ins[k+1][x]);
       }
     }
@@ -334,7 +334,7 @@ EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, char **ret_dsq, int *
     {
       if (mp[k] >= 0.5)
 	{
-	  x = FMax(hmm->mat[k], Alphabet_size);
+	  x = FArgMax(hmm->mat[k], Alphabet_size);
 	  TraceSet(tr, tpos, STM, k, i+1);
 	  seq[i]   = Alphabet[x];
 	  dsq[i+1] = x;

@@ -139,17 +139,17 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 		case STM:
 		  if (i<L && k<hmm->M)
 		    PrintTransition (STM,i,k, STM,i+1,k+1,
-				     forward->mmx[i][k] + hmm->tsc[k][TMM] + backward->mmx[i+1][k+1] - sc,
+				     forward->mmx[i][k] + hmm->tsc[TMM][k] + backward->mmx[i+1][k+1] - sc,
 				     alignment, min, max, on, A);
 
 		  if (i<L && k<hmm->M)
 		    PrintTransition (STM,i,k, STI,i+1,k,
-				     forward->mmx[i][k] + hmm->tsc[k][TMI] + backward->imx[i+1][k] - sc,
+				     forward->mmx[i][k] + hmm->tsc[TMI][k] + backward->imx[i+1][k] - sc,
 				     alignment, min, max, on, A);
 
 		  if (k<hmm->M-1)
 		    PrintTransition (STM,i,k, STD,i,k+1,
-				     forward->mmx[i][k] + hmm->tsc[k][TMD] + backward->dmx[i][k+1] - sc,
+				     forward->mmx[i][k] + hmm->tsc[TMD][k] + backward->dmx[i][k+1] - sc,
 				     alignment, min, max, on, A);
 		  
 		  PrintTransition (STM,i,k, STE,i,0,
@@ -160,11 +160,11 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 		case STD:
 		  if (i<L)
 		    PrintTransition (STD,i,k, STM,i+1,k+1,
-				     forward->dmx[i][k] + hmm->tsc[k][TDM] + backward->mmx[i+1][k+1] - sc,
+				     forward->dmx[i][k] + hmm->tsc[TDM][k] + backward->mmx[i+1][k+1] - sc,
 				     alignment, min, max, on, A);
 
 		  PrintTransition (STD,i,k, STD,i,k+1,
-				   forward->dmx[i][k] + hmm->tsc[k][TDD] + backward->dmx[i][k+1] - sc,
+				   forward->dmx[i][k] + hmm->tsc[TDD][k] + backward->dmx[i][k+1] - sc,
 				   alignment, min, max, on, A);
 
 		  break;
@@ -172,12 +172,12 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 		case STI:
 		  if (i<L)
 		    PrintTransition (STI,i,k, STM,i+1,k+1,
-				     forward->imx[i][k] + hmm->tsc[k][TIM] + backward->mmx[i+1][k+1] - sc,
+				     forward->imx[i][k] + hmm->tsc[TIM][k] + backward->mmx[i+1][k+1] - sc,
 				     alignment, min, max, on, A);
 
 		  if (i<L)
 		    PrintTransition (STI,i,k, STI,i+1,k,
-				     forward->imx[i][k] + hmm->tsc[k][TII] + backward->imx[i+1][k] - sc,
+				     forward->imx[i][k] + hmm->tsc[TII][k] + backward->imx[i+1][k] - sc,
 				     alignment, min, max, on, A);
 
 		  break;

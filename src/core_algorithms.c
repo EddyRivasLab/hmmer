@@ -299,22 +299,22 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
       mmx[i][0] = imx[i][0] = dmx[i][0] = -INFTY;
       for (k = 1; k < hmm->M; k++)
 	{
-	  mmx[i][k]  = ILogsum(ILogsum(mmx[i-1][k-1] + hmm->tsc[k-1][TMM],
-				     imx[i-1][k-1] + hmm->tsc[k-1][TIM]),
+	  mmx[i][k]  = ILogsum(ILogsum(mmx[i-1][k-1] + hmm->tsc[TMM][k-1],
+				     imx[i-1][k-1] + hmm->tsc[TIM][k-1]),
 			      ILogsum(xmx[i-1][XMB] + hmm->bsc[k],
-				     dmx[i-1][k-1] + hmm->tsc[k-1][TDM]));
+				     dmx[i-1][k-1] + hmm->tsc[TDM][k-1]));
 	  mmx[i][k] += hmm->msc[(int) dsq[i]][k];
 
-	  dmx[i][k]  = ILogsum(mmx[i][k-1] + hmm->tsc[k-1][TMD],
-			      dmx[i][k-1] + hmm->tsc[k-1][TDD]);
-	  imx[i][k]  = ILogsum(mmx[i-1][k] + hmm->tsc[k][TMI],
-			      imx[i-1][k] + hmm->tsc[k][TII]);
+	  dmx[i][k]  = ILogsum(mmx[i][k-1] + hmm->tsc[TMD][k-1],
+			      dmx[i][k-1] + hmm->tsc[TDD][k-1]);
+	  imx[i][k]  = ILogsum(mmx[i-1][k] + hmm->tsc[TMI][k],
+			      imx[i-1][k] + hmm->tsc[TII][k]);
 	  imx[i][k] += hmm->isc[(int) dsq[i]][k];
 	}
-      mmx[i][hmm->M] = ILogsum(ILogsum(mmx[i-1][hmm->M-1] + hmm->tsc[hmm->M-1][TMM],
-				   imx[i-1][hmm->M-1] + hmm->tsc[hmm->M-1][TIM]),
+      mmx[i][hmm->M] = ILogsum(ILogsum(mmx[i-1][hmm->M-1] + hmm->tsc[TMM][hmm->M-1],
+				   imx[i-1][hmm->M-1] + hmm->tsc[TIM][hmm->M-1]),
 			       ILogsum(xmx[i-1][XMB] + hmm->bsc[hmm->M-1],
-				   dmx[i-1][hmm->M-1] + hmm->tsc[hmm->M-1][TDM]));
+				   dmx[i-1][hmm->M-1] + hmm->tsc[TDM][hmm->M-1]));
       mmx[i][hmm->M] += hmm->msc[(int) dsq[i]][hmm->M];
 
       /* Now the special states.
@@ -345,11 +345,17 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 }
 
       
+#if ! defined SPEEDY && ! defined ALTIVEC
 /* Function: P7Viterbi()
  * 
  * Purpose:  The Viterbi dynamic programming algorithm. 
  *           Identical to Forward() except that max's
  *           replace sum's. 
+ *           
+ *           This function is replaced by different implementations
+ *           if SPEEDY or ALTIVEC is defined. SPEEDY replaces it
+ *           with a portably optimized version. ALTIVEC replaces
+ *           it with Erik Lindahl's altivec-enabled code for Mac OSX.
  *           
  * Args:     dsq    - sequence in digitized form
  *           L      - length of dsq
@@ -393,30 +399,30 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
     for (k = 1; k <= hmm->M; k++) {
 				/* match state */
       mmx[i][k]  = -INFTY;
-      if ((sc = mmx[i-1][k-1] + hmm->tsc[k-1][TMM]) > mmx[i][k])
+      if ((sc = mmx[i-1][k-1] + hmm->tsc[TMM][k-1]) > mmx[i][k])
 	mmx[i][k] = sc;
-      if ((sc = imx[i-1][k-1] + hmm->tsc[k-1][TIM]) > mmx[i][k])
+      if ((sc = imx[i-1][k-1] + hmm->tsc[TIM][k-1]) > mmx[i][k])
 	mmx[i][k] = sc;
       if ((sc = xmx[i-1][XMB] + hmm->bsc[k]) > mmx[i][k])
 	mmx[i][k] = sc;
-      if ((sc = dmx[i-1][k-1] + hmm->tsc[k-1][TDM]) > mmx[i][k])
+      if ((sc = dmx[i-1][k-1] + hmm->tsc[TDM][k-1]) > mmx[i][k])
 	mmx[i][k] = sc;
       if (hmm->msc[(int) dsq[i]][k] != -INFTY) mmx[i][k] += hmm->msc[(int) dsq[i]][k];
       else                                     mmx[i][k] = -INFTY;
 
 				/* delete state */
       dmx[i][k] = -INFTY;
-      if ((sc = mmx[i][k-1] + hmm->tsc[k-1][TMD]) > dmx[i][k])
+      if ((sc = mmx[i][k-1] + hmm->tsc[TMD][k-1]) > dmx[i][k])
 	dmx[i][k] = sc;
-      if ((sc = dmx[i][k-1] + hmm->tsc[k-1][TDD]) > dmx[i][k])
+      if ((sc = dmx[i][k-1] + hmm->tsc[TDD][k-1]) > dmx[i][k])
 	dmx[i][k] = sc;
 
 				/* insert state */
       if (k < hmm->M) {
 	imx[i][k] = -INFTY;
-	if ((sc = mmx[i-1][k] + hmm->tsc[k][TMI]) > imx[i][k])
+	if ((sc = mmx[i-1][k] + hmm->tsc[TMI][k]) > imx[i][k])
 	  imx[i][k] = sc;
-	if ((sc = imx[i-1][k] + hmm->tsc[k][TII]) > imx[i][k])
+	if ((sc = imx[i-1][k] + hmm->tsc[TII][k]) > imx[i][k])
 	  imx[i][k] = sc;
 	if (hmm->isc[(int)dsq[i]][k] != -INFTY) imx[i][k] += hmm->isc[(int) dsq[i]][k];
 	else                                    imx[i][k] = -INFTY;   
@@ -468,7 +474,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
   FreePlan7Matrix(mx);
   return Scorify(sc);		/* the total Viterbi score. */
 }
-
+#endif /*! SPEEDY && ! ALTIVEC*/
 
 /* Function: P7ViterbiTrace()
  * Date:     SRE, Sat Aug 23 10:30:11 1997 (St. Louis Lambert Field) 
@@ -549,19 +555,19 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
 	}
-      else if (sc == mmx[i][k] + hmm->tsc[k][TMM])
+      else if (sc == mmx[i][k] + hmm->tsc[TMM][k])
 	{
 	  tr->statetype[tpos] = STM;
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = i--;
 	}
-      else if (sc == imx[i][k] + hmm->tsc[k][TIM])
+      else if (sc == imx[i][k] + hmm->tsc[TIM][k])
 	{
 	  tr->statetype[tpos] = STI;
 	  tr->nodeidx[tpos]   = k;
 	  tr->pos[tpos]       = i--;
 	}
-      else if (sc == dmx[i][k] + hmm->tsc[k][TDM])
+      else if (sc == dmx[i][k] + hmm->tsc[TDM][k])
 	{
 	  tr->statetype[tpos] = STD;
 	  tr->nodeidx[tpos]   = k--;
@@ -573,13 +579,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 
     case STD:			/* D connects from M,D */
       if (dmx[i][k+1] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[k][TMD])
+      else if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[TMD][k])
 	{
 	  tr->statetype[tpos] = STM;
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = i--;
 	}
-      else if (dmx[i][k+1] == dmx[i][k] + hmm->tsc[k][TDD]) 
+      else if (dmx[i][k+1] == dmx[i][k] + hmm->tsc[TDD][k]) 
 	{
 	  tr->statetype[tpos] = STD;
 	  tr->nodeidx[tpos]   = k--;
@@ -591,13 +597,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
     case STI:			/* I connects from M,I */
       sc = imx[i+1][k] - hmm->isc[(int) dsq[i+1]][k];
       if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (sc == mmx[i][k] + hmm->tsc[k][TMI])
+      else if (sc == mmx[i][k] + hmm->tsc[TMI][k])
 	{
 	  tr->statetype[tpos] = STM;
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = i--;
 	}
-      else if (sc == imx[i][k] + hmm->tsc[k][TII])
+      else if (sc == imx[i][k] + hmm->tsc[TII][k])
 	{
 	  tr->statetype[tpos] = STI;
 	  tr->nodeidx[tpos]   = k;
@@ -977,13 +983,13 @@ P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_t
     for (k = 1; k <= hmm->M; k++) {
 				/* match state */
       mmx[cur][k] = -INFTY;
-      if ((sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > -INFTY)
+      if ((sc = mmx[prv][k-1] + hmm->tsc[TMM][k-1]) > -INFTY)
 	{ mmx[cur][k] = sc; mtr[cur][k] = mtr[prv][k-1]; }
-      if ((sc = imx[prv][k-1] + hmm->tsc[k-1][TIM]) > mmx[cur][k])
+      if ((sc = imx[prv][k-1] + hmm->tsc[TIM][k-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtr[cur][k] = itr[prv][k-1]; }
       if ((sc = xmx[prv][XMB] + hmm->bsc[k]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtr[cur][k] = i-1; }
-      if ((sc = dmx[prv][k-1] + hmm->tsc[k-1][TDM]) > mmx[cur][k])
+      if ((sc = dmx[prv][k-1] + hmm->tsc[TDM][k-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtr[cur][k] = dtr[prv][k-1]; }
       if (hmm->msc[(int) dsq[i]][k] != -INFTY)
 	mmx[cur][k] += hmm->msc[(int) dsq[i]][k];
@@ -992,17 +998,17 @@ P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_t
 
 				/* delete state */
       dmx[cur][k] = -INFTY;
-      if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > -INFTY)
+      if ((sc = mmx[cur][k-1] + hmm->tsc[TMD][k-1]) > -INFTY)
 	{ dmx[cur][k] = sc; dtr[cur][k] = mtr[cur][k-1]; }
-      if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+      if ((sc = dmx[cur][k-1] + hmm->tsc[TDD][k-1]) > dmx[cur][k])
 	{ dmx[cur][k] = sc; dtr[cur][k] = dtr[cur][k-1]; }
 
 				/* insert state */
       if (k < hmm->M) {
 	imx[cur][k] = -INFTY;
-	if ((sc = mmx[prv][k] + hmm->tsc[k][TMI]) > -INFTY)
+	if ((sc = mmx[prv][k] + hmm->tsc[TMI][k]) > -INFTY)
 	  { imx[cur][k] = sc; itr[cur][k] = mtr[prv][k]; }
-	if ((sc = imx[prv][k] + hmm->tsc[k][TII]) > imx[cur][k])
+	if ((sc = imx[prv][k] + hmm->tsc[TII][k]) > imx[cur][k])
 	  { imx[cur][k] = sc; itr[cur][k] = itr[prv][k]; }
 	if (hmm->isc[(int) dsq[i]][k] != -INFTY)
 	  imx[cur][k] += hmm->isc[(int) dsq[i]][k];
@@ -1394,60 +1400,60 @@ Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_m
     for (k = 1; k <= hmm->M; k++) {
 				/* match state */
       if (i > 2) {
-	mmx[i][k]  = mmx[i-3][k-1] + hmm->tsc[k-1][TMM];
-	if ((sc = imx[i-3][k-1] + hmm->tsc[k-1][TIM]) > mmx[i][k])
+	mmx[i][k]  = mmx[i-3][k-1] + hmm->tsc[TMM][k-1];
+	if ((sc = imx[i-3][k-1] + hmm->tsc[TIM][k-1]) > mmx[i][k])
 	  mmx[i][k] = sc;
 	if ((sc = xmx[i-3][XMB] + hmm->bsc[k]) > mmx[i][k])
 	  mmx[i][k] = sc;
-	if ((sc = dmx[i-3][k-1] + hmm->tsc[k-1][TDM]) > mmx[i][k])
+	if ((sc = dmx[i-3][k-1] + hmm->tsc[TDM][k-1]) > mmx[i][k])
 	  mmx[i][k] = sc;
 	mmx[i][k] += hmm->dnam[codon][k];
       }
 				/* -1 frameshifts into match state */
-      if ((sc = mmx[i-2][k-1] + hmm->tsc[k-1][TMM] + hmm->dna2) > mmx[i][k])
+      if ((sc = mmx[i-2][k-1] + hmm->tsc[TMM][k-1] + hmm->dna2) > mmx[i][k])
 	mmx[i][k] = sc;
-      if ((sc = imx[i-2][k-1] + hmm->tsc[k-1][TIM] + hmm->dna2) > mmx[i][k])
+      if ((sc = imx[i-2][k-1] + hmm->tsc[TIM][k-1] + hmm->dna2) > mmx[i][k])
 	mmx[i][k] = sc;
       if ((sc = xmx[i-2][XMB] + hmm->bsc[k] + hmm->dna2) > mmx[i][k])
 	mmx[i][k] = sc;
-      if ((sc = dmx[i-2][k-1] + hmm->tsc[k-1][TDM] + hmm->dna2) > mmx[i][k])
+      if ((sc = dmx[i-2][k-1] + hmm->tsc[TDM][k-1] + hmm->dna2) > mmx[i][k])
 	mmx[i][k] = sc;
       
 				/* +1 frameshifts into match state */
       if (i > 3) {
-	if ((sc = mmx[i-4][k-1] + hmm->tsc[k-1][TMM] + hmm->dna4) > mmx[i][k])
+	if ((sc = mmx[i-4][k-1] + hmm->tsc[TMM][k-1] + hmm->dna4) > mmx[i][k])
 	  mmx[i][k] = sc;
-	if ((sc = imx[i-4][k-1] + hmm->tsc[k-1][TIM] + hmm->dna4) > mmx[i][k])
+	if ((sc = imx[i-4][k-1] + hmm->tsc[TIM][k-1] + hmm->dna4) > mmx[i][k])
 	  mmx[i][k] = sc;
 	if ((sc = xmx[i-4][XMB] + hmm->bsc[k] + hmm->dna4) > mmx[i][k])
 	  mmx[i][k] = sc;
-	if ((sc = dmx[i-4][k-1] + hmm->tsc[k-1][TDM] + hmm->dna4) > mmx[i][k])
+	if ((sc = dmx[i-4][k-1] + hmm->tsc[TDM][k-1] + hmm->dna4) > mmx[i][k])
 	  mmx[i][k] = sc;
       }
       				/* delete state */
-      dmx[i][k]  = mmx[i][k-1] + hmm->tsc[k-1][TMD];
-      if ((sc = dmx[i][k-1] + hmm->tsc[k-1][TDD]) > dmx[i][k])
+      dmx[i][k]  = mmx[i][k-1] + hmm->tsc[TMD][k-1];
+      if ((sc = dmx[i][k-1] + hmm->tsc[TDD][k-1]) > dmx[i][k])
 	dmx[i][k] = sc;
 
 				/* insert state */
       if (i > 2) {
-	imx[i][k] = mmx[i-3][k] + hmm->tsc[k][TMI];
-	if ((sc = imx[i-3][k] + hmm->tsc[k][TII]) > imx[i][k])
+	imx[i][k] = mmx[i-3][k] + hmm->tsc[TMI][k];
+	if ((sc = imx[i-3][k] + hmm->tsc[TII][k]) > imx[i][k])
 	  imx[i][k] = sc;
 	imx[i][k] += hmm->dnai[codon][k];
       }
 
 				/* -1 frameshifts into insert state */
-      if ((sc = mmx[i-2][k] + hmm->tsc[k][TMI] + hmm->dna2) > imx[i][k])
+      if ((sc = mmx[i-2][k] + hmm->tsc[TMI][k] + hmm->dna2) > imx[i][k])
 	imx[i][k] = sc;
-      if ((sc = imx[i-2][k] + hmm->tsc[k][TII] + hmm->dna2) > imx[i][k])
+      if ((sc = imx[i-2][k] + hmm->tsc[TII][k] + hmm->dna2) > imx[i][k])
 	imx[i][k] = sc;
 
 				/* +1 frameshifts into insert state */
       if (i > 4) {
-	if ((sc = mmx[i-4][k] + hmm->tsc[k][TMI] + hmm->dna4) > imx[i][k])
+	if ((sc = mmx[i-4][k] + hmm->tsc[TMI][k] + hmm->dna4) > imx[i][k])
 	  imx[i][k] = sc;
-	if ((sc = imx[i-4][k] + hmm->tsc[k][TII] + hmm->dna4) > imx[i][k])
+	if ((sc = imx[i-4][k] + hmm->tsc[TII][k] + hmm->dna4) > imx[i][k])
 	  imx[i][k] = sc;
       }
     }
@@ -1584,9 +1590,9 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       for (k = k1+1; k <= k3; k++)
 	{				/* transits into STD */
 	  dmx[cur][k] = -INFTY;
-	  if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > -INFTY)
+	  if ((sc = mmx[cur][k-1] + hmm->tsc[TMD][k-1]) > -INFTY)
 	    dmx[cur][k] = sc;
-	  if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+	  if ((sc = dmx[cur][k-1] + hmm->tsc[TDD][k-1]) > dmx[cur][k])
 	    dmx[cur][k] = sc;
 	}
 				/* transit into STE */
@@ -1616,9 +1622,9 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
      */
     if (k1 < hmm->M) {
       imx[cur][k1] = -INFTY;
-      if ((sc = mmx[prv][k1] + hmm->tsc[k1][TMI]) > -INFTY)
+      if ((sc = mmx[prv][k1] + hmm->tsc[TMI][k1]) > -INFTY)
 	imx[cur][k1] = sc;
-      if ((sc = imx[prv][k1] + hmm->tsc[k1][TII]) > imx[cur][k1])
+      if ((sc = imx[prv][k1] + hmm->tsc[TII][k1]) > imx[cur][k1])
 	imx[cur][k1] = sc;
       if (hmm->isc[(int) dsq[i]][k1] != -INFTY)
 	imx[cur][k1] += hmm->isc[(int) dsq[i]][k1];
@@ -1637,13 +1643,13 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
     for (k = k1+1; k <= k3; k++) {
 				/* match state */
       mmx[cur][k]  = -INFTY;
-      if ((sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > -INFTY)
+      if ((sc = mmx[prv][k-1] + hmm->tsc[TMM][k-1]) > -INFTY)
 	mmx[cur][k] = sc;
-      if ((sc = imx[prv][k-1] + hmm->tsc[k-1][TIM]) > mmx[cur][k])
+      if ((sc = imx[prv][k-1] + hmm->tsc[TIM][k-1]) > mmx[cur][k])
 	mmx[cur][k] = sc;
       if ((sc = xmx[prv][XMB] + hmm->bsc[k]) > mmx[cur][k])
 	mmx[cur][k] = sc;
-      if ((sc = dmx[prv][k-1] + hmm->tsc[k-1][TDM]) > mmx[cur][k])
+      if ((sc = dmx[prv][k-1] + hmm->tsc[TDM][k-1]) > mmx[cur][k])
 	mmx[cur][k] = sc;
       if (hmm->msc[(int) dsq[i]][k] != -INFTY)
 	mmx[cur][k] += hmm->msc[(int) dsq[i]][k];
@@ -1653,18 +1659,18 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 				/* delete state */
       dmx[cur][k] = -INFTY;
       if (k < hmm->M) {
-	if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > -INFTY)
+	if ((sc = mmx[cur][k-1] + hmm->tsc[TMD][k-1]) > -INFTY)
 	  dmx[cur][k] = sc;
-	if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+	if ((sc = dmx[cur][k-1] + hmm->tsc[TDD][k-1]) > dmx[cur][k])
 	  dmx[cur][k] = sc;
       }
 
 				/* insert state */
       imx[cur][k] = -INFTY;
       if (k < hmm->M) {
-	if ((sc = mmx[prv][k] + hmm->tsc[k][TMI]) > -INFTY)
+	if ((sc = mmx[prv][k] + hmm->tsc[TMI][k]) > -INFTY)
 	  imx[cur][k] = sc;
-	if ((sc = imx[prv][k] + hmm->tsc[k][TII]) > imx[cur][k])
+	if ((sc = imx[prv][k] + hmm->tsc[TII][k]) > imx[cur][k])
 	  imx[cur][k] = sc;
 	if (hmm->isc[(int) dsq[i]][k] != -INFTY)
 	  imx[cur][k] += hmm->isc[(int) dsq[i]][k];
@@ -1784,26 +1790,26 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       mmx[cur][k] = -INFTY;
       if ((sc = xmx[cur][XME] + hmm->esc[k]) > -INFTY)
 	mmx[cur][k] = sc; 
-      if ((sc = mmx[nxt][k+1] + hmm->tsc[k][TMM]) > mmx[cur][k])
+      if ((sc = mmx[nxt][k+1] + hmm->tsc[TMM][k]) > mmx[cur][k])
 	mmx[cur][k] = sc; 
-      if ((sc = imx[nxt][k] + hmm->tsc[k][TMI]) > mmx[cur][k])
+      if ((sc = imx[nxt][k] + hmm->tsc[TMI][k]) > mmx[cur][k])
 	mmx[cur][k] = sc; 
-      if ((sc = dmx[cur][k+1] + hmm->tsc[k][TMD]) > mmx[cur][k])
+      if ((sc = dmx[cur][k+1] + hmm->tsc[TMD][k]) > mmx[cur][k])
 	mmx[cur][k] = sc;
       if (i != s2) 
 	mmx[cur][k] += hmm->msc[(int)dsq[i]][k];
 
 				/* pull into delete state */
       dmx[cur][k] = -INFTY;
-      if ((sc = mmx[nxt][k+1] + hmm->tsc[k][TDM]) > -INFTY)
+      if ((sc = mmx[nxt][k+1] + hmm->tsc[TDM][k]) > -INFTY)
 	dmx[cur][k] = sc;
-      if ((sc = dmx[cur][k+1] + hmm->tsc[k][TDD]) > dmx[cur][k])
+      if ((sc = dmx[cur][k+1] + hmm->tsc[TDD][k]) > dmx[cur][k])
 	dmx[cur][k] = sc;
 				/* pull into insert state */
       imx[cur][k] = -INFTY;
-      if ((sc = mmx[nxt][k+1] + hmm->tsc[k][TIM]) > -INFTY)
+      if ((sc = mmx[nxt][k+1] + hmm->tsc[TIM][k]) > -INFTY)
 	imx[cur][k] = sc;
-      if ((sc = imx[nxt][k] + hmm->tsc[k][TII]) > imx[cur][k])
+      if ((sc = imx[nxt][k] + hmm->tsc[TII][k]) > imx[cur][k])
 	imx[cur][k] = sc;
       if (i != s2)
 	imx[cur][k] += hmm->isc[(int)dsq[i]][k];
@@ -1957,16 +1963,16 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 				/* match state */
       mmx[cur][k]  = -INFTY;
       mtb[i][k]    = STBOGUS;
-      if (mmx[prv][k-1] > -INFTY && hmm->tsc[k-1][TMM] > -INFTY &&
-	  (sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > mmx[cur][k])
+      if (mmx[prv][k-1] > -INFTY && hmm->tsc[TMM][k-1] > -INFTY &&
+	  (sc = mmx[prv][k-1] + hmm->tsc[TMM][k-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STM; }
-      if (imx[prv][k-1] > -INFTY && hmm->tsc[k-1][TIM] > -INFTY &&
-	  (sc = imx[prv][k-1] + hmm->tsc[k-1][TIM] * mocc[i-1]) > mmx[cur][k])
+      if (imx[prv][k-1] > -INFTY && hmm->tsc[TIM][k-1] > -INFTY &&
+	  (sc = imx[prv][k-1] + hmm->tsc[TIM][k-1] * mocc[i-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STI; }
       if ((sc = xmx[prv][XMB] + hmm->bsc[k]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STB; }
-      if (dmx[prv][k-1] > -INFTY && hmm->tsc[k-1][TDM] > -INFTY &&
-	  (sc = dmx[prv][k-1] + hmm->tsc[k-1][TDM]) > mmx[cur][k])
+      if (dmx[prv][k-1] > -INFTY && hmm->tsc[TDM][k-1] > -INFTY &&
+	  (sc = dmx[prv][k-1] + hmm->tsc[TDM][k-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STD; }
 				/* average over "consensus" sequence */
       for (sym = 0; sym < Alphabet_size; sym++)
@@ -1978,22 +1984,22 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 				/* delete state */
       dmx[cur][k] = -INFTY;
       dtb[i][k]   = STBOGUS;
-      if (mmx[cur][k-1] > -INFTY && hmm->tsc[k-1][TMD] > -INFTY &&
-	  (sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > dmx[cur][k])
+      if (mmx[cur][k-1] > -INFTY && hmm->tsc[TMD][k-1] > -INFTY &&
+	  (sc = mmx[cur][k-1] + hmm->tsc[TMD][k-1]) > dmx[cur][k])
 	{ dmx[cur][k] = sc; dtb[i][k] = STM; }
-      if (dmx[cur][k-1] > -INFTY && hmm->tsc[k-1][TDD] > -INFTY &&
-	  (sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+      if (dmx[cur][k-1] > -INFTY && hmm->tsc[TDD][k-1] > -INFTY &&
+	  (sc = dmx[cur][k-1] + hmm->tsc[TDD][k-1]) > dmx[cur][k])
 	{ dmx[cur][k] = sc; dtb[i][k] = STD; }
 
 				/* insert state */
       if (k < hmm->M) {
 	imx[cur][k] = -INFTY;
 	itb[i][k]   = STBOGUS;
-	if (mmx[prv][k] > -INFTY && hmm->tsc[k][TMI] > -INFTY &&
-	    (sc = mmx[prv][k] + hmm->tsc[k][TMI] * mocc[i]) > imx[cur][k])
+	if (mmx[prv][k] > -INFTY && hmm->tsc[TMI][k] > -INFTY &&
+	    (sc = mmx[prv][k] + hmm->tsc[TMI][k] * mocc[i]) > imx[cur][k])
 	  { imx[cur][k] = sc; itb[i][k] = STM; }
-	if (imx[prv][k] > -INFTY && hmm->tsc[k][TII] > -INFTY &&
-	    (sc = imx[prv][k] + hmm->tsc[k][TII] * mocc[i-1] * mocc[i]) > imx[cur][k])
+	if (imx[prv][k] > -INFTY && hmm->tsc[TII][k] > -INFTY &&
+	    (sc = imx[prv][k] + hmm->tsc[TII][k] * mocc[i-1] * mocc[i]) > imx[cur][k])
 	  { imx[cur][k] = sc; itb[i][k] = STI; }
 				/* average over "consensus" sequence */
 	for (sym = 0; sym < Alphabet_size; sym++)
@@ -2360,7 +2366,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
    * one negative scoring domain but not more.)
    */
   if (ndom == 0) {
-    tidx            = FMax(score, ntr);
+    tidx            = FArgMax(score, ntr);
     usedomain[tidx] = TRUE;
     whole_sc        = score[tidx];
     ndom            = 1;
