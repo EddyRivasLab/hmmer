@@ -1,0 +1,86 @@
+HMMER - Hidden Markov models for protein and nucleic acid sequence analysis
+Version 2.0 (January 1998)
+Copyright (C) 1992-1998 Sean R. Eddy. 
+
+HMMER is freely distributed under the GNU General Public License (GPL).
+See the file COPYING for information on HMMER's free license.
+------------------------------------------------------------------
+
+o About this software...
+
+   HMMER is an implementation of profile HMM methods for
+   sensitive database searches using multiple sequence alignments as queries.
+   
+
+o Getting HMMER
+
+   Source code:    ftp://genome.wustl.edu/pub/eddy/
+   WWW home:       http://genome.wustl.edu/eddy/hmmer.html
+
+
+o Installing HMMER
+
+   In short: type "make" if you're on any UNIX system.
+   For more detailed instructions, see INSTALL.
+   You should also read the following files:
+
+   COPYING      -- copyright notice, and information on the free software license
+   GNULICENSE   -- Full text of the GNU Public License, version 2 (see COPYING)
+   NOTES        -- Release notes
+
+
+o Quick start (...to hell with the documentation...)
+
+
+o Slow start (ok, where's the documentation?)
+
+
+
+o Registering HMMER
+
+   Email eddy@genetics.wustl.edu to register and get on my
+   infrequent mailing list of HMMER news, patches, and updates.
+
+
+o Reporting bugs
+
+   These programs are under active development. Though this
+   release has been tested and appears to be stable, bugs may crop up. If
+   you use these programs, please help me out and e-mail me with
+   suggestions, comments, and bug reports. (eddy@genetics.wustl.edu)
+
+
+o References
+
+   D. Haussler, A. Krogh, S. Mian, K. Sjolander. "Protein Modeling 
+      Using Hidden Markov Models", C.I.S. Technical Report 
+      UCSC-CRL-92-23, University of California at Santa Cruz, 1992.
+
+   A. Krogh, M. Brown. I.S. Mian, K. Sjolander, D. Haussler. "Hidden Markov 
+      Models in Computational Biology: Applications to Protein Modeling",
+      J. Mol. Biol. 235:1501-1531, 1994.	
+
+   P. Baldi, Y. Chauvin, and T. Hunkapiller. "Hidden Markov Models of 
+      Biological Primary Sequence Information", PNAS 91:1059-1063, 1994.
+
+   L.R. Rabiner. "A Tutorial on Hidden Markov Models and Selected
+      Applications in Speech Recognition", Proc. IEEE 77:257-286, 1989.
+
+   S.R. Eddy, G. Mitchison, R. Durbin. "Maximum Discrimination Hidden Markov 
+      Models of Sequence Consensus", J. Computational Biology, 2:9-23, 1995.
+
+   S.R. Eddy, "Multiple Alignment Using Hidden Markov Models",
+      Proc. Third Int. Conf. Intelligent Systems for Molecular Biology,
+      p. 114-120, 1995.
+
+   S.R. Eddy, "Hidden Markov models", Curr. Opin. Struct. Biol. 
+      6:361-365, 1996.
+      
+   
+Sean Eddy
+Dept. of Genetics 
+Washington University School of Medicine, St. Louis, Missouri, USA
+-------------------------------------------------------------------
+
+
+
