@@ -29,10 +29,10 @@
 #include "dbmalloc.h"
 #endif
 
-static char banner[] = "hmmb - build a hidden Markov model from an alignment";
+static char banner[] = "hmmbuild - build a hidden Markov model from an alignment";
 
 static char usage[]  = "\
-Usage: hmmb [-options] <hmmfile output> <alignment file>\n\
+Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -A        : append; append this HMM to <hmmfile>\n\
@@ -41,25 +41,23 @@ Usage: hmmb [-options] <hmmfile output> <alignment file>\n\
    -n <s>    : name; name this HMM <s>\n\
    -o <file> : re-save annotated alignment to <file>\n\
 \n\
+  Alternative sequence weighting strategies: (default: none)\n\
+   -d            : Eddy/Mitchison/Durbin maximum discrimination (MD)\n\
+   -e            : Krogh/Mitchison maximum relative entropy (MRE)\n\
+   --wgsc        : Gerstein/Sonnhammer/Chothia tree weights\n\
+   --wblosum <x> : Henikoff simple filter weights, at <x> frac id (e.g. 0.62)\n\
+   --wvoronoi    : Sibbald/Argos Voronoi weights\n\
+   --weff        : guess an effective sequence number; else use nseq\n\
+\n\
   Alternative model construction strategies: (default: MAP)\n\
    -k        : Krogh/Haussler fast heuristic construction (see --gapmax)\n\
    -m        : manual construction (requires SELEX file, #=RF annotation)\n\
-\n\
-  Alternative sequence weighting strategies: (default: none)\n\
-   --wgsc        Gerstein/Sonnhammer/Chothia tree weights\n\
-   --wblosum <x> Henikoff^2 BLOSUM filter weights, at <x> frac id (e.g. 0.62)\n\
-   --wvoronoi    Sibbald/Argos Voronoi weights\n\
 \n\
   Alternative search algorithm styles: (default: hmmls domain alignment)\n\
    -g            : global alignment (Needleman/Wunsch)\n\
    -l            : local alignment (Smith/Waterman)\n\
    --swentry <x> : set S/W aggregate entry prob. to <x> [0.5]\n\
    --swexit <x>  : set S/W aggregate exit prob. to <x>  [0.5]\n\
-\n\
-  Alternative parameter optimization strategies: (default: MAP)\n\
-   -d            : maximum discrimination (MD)\n\
-   -e            : maximum relative entropy (MRE)\n\
-   --star <file> : Star model (experimental)\n\
 \n\
   Expert customization of parameters and priors:\n\
    -r <file> : read null (random sequence) model from <file>\n\
@@ -71,11 +69,12 @@ Usage: hmmb [-options] <hmmfile output> <alignment file>\n\
    --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
 \n\
   Other expert options:\n\
-   --archpri <x>: set architecture size prior to <x> {0.85} [0..1]\n\
+   --archpri <x> : set architecture size prior to <x> {0.85} [0..1]\n\
    --cfile <file>: save count vectors to <file>\n\
-   --gapmax <x> : max fraction of gaps in mat column {0.50} [0..1]\n\
-   --pamwgt <x> : set weight on PAM-based prior to <x> {20.}[>=0]\n\
-   --verbose    : print a lot of boring information\n\
+   --gapmax <x>  : max fraction of gaps in mat column {0.50} [0..1]\n\
+   --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
+   --star <file> : Star model (experimental)\n\
+   --verbose     : print a lot of boring information\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
@@ -106,6 +105,7 @@ static struct opt_s OPTIONS[] = {
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_FLOAT },
+  { "--weff",    FALSE, sqdARG_NONE },
   { "--wvoronoi",FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
@@ -161,6 +161,8 @@ main(int argc, char **argv)
   float blosumlevel;		/* BLOSUM frac id filtering level [0.62] */
   float swentry;		/* S/W aggregate entry probability       */
   float swexit;			/* S/W aggregate exit probability        */
+  int   do_eff;			/* TRUE to set an effective seq number   */
+  float eff_nseq;		/* effective sequence number             */
 
 #ifdef MEMDEBUG
   unsigned long histid1, histid2;
@@ -175,7 +177,7 @@ main(int argc, char **argv)
   
   c_strategy        = P7_MAP_CONSTRUCTION;
   p_strategy        = P7_MAP_PARAM;
-  w_strategy        = WGT_BLOSUM;
+  w_strategy        = WGT_NONE;
   blosumlevel       = 0.62;
   cfg_strategy      = P7_LS_CONFIG;
   gapmax            = 0.5;
@@ -195,6 +197,7 @@ main(int argc, char **argv)
   do_binary         = FALSE;
   swentry           = 0.5;
   swexit            = 0.5;
+  do_eff            = FALSE;
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -223,9 +226,10 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg); 
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
-    else if (strcmp(optname, "--wblosum") == 0) { w_strategy   = WGT_BLOSUM; 
-                                                  blosumlevel  = atof(optarg);}
+    else if (strcmp(optname, "--wblosum") == 0) { w_strategy  = WGT_BLOSUM; 
+                                                  blosumlevel = atof(optarg);}
     else if (strcmp(optname, "--wvoronoi")== 0) w_strategy    = WGT_VORONOI;
+    else if (strcmp(optname, "--weff")    == 0) do_eff        = TRUE;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -331,11 +335,28 @@ main(int argc, char **argv)
    * Build an HMM
    ***********************************************/
 
-  /* Weight the sequences first, if asked.
+  /* Determine the effective sequence number to use (optional)
+   * Must precede weighting, because of the way I do this using
+   * BlosumWeights... possibly temporary code.
+   */
+  eff_nseq = (float) ainfo.nseq;
+  if (do_eff)
+    {
+      BlosumWeights(aseq, &ainfo, blosumlevel);
+      eff_nseq = FSum(ainfo.wgt, ainfo.nseq);
+    }
+
+  /* Weight the sequences (optional),
    */
   if      (w_strategy == WGT_GSC)     GSCWeights(aseq, &ainfo);
   else if (w_strategy == WGT_BLOSUM)  BlosumWeights(aseq, &ainfo, blosumlevel);
   else if (w_strategy == WGT_VORONOI) VoronoiWeights(aseq, &ainfo); 
+
+  /* Set the effective sequence number (if do_eff is FALSE, eff_nseq 
+   * was set to nseq).
+   */
+  FNorm(ainfo.wgt, ainfo.nseq);
+  FScale(ainfo.wgt, ainfo.nseq, eff_nseq);
 
   /* Build a model architecture.
    * If we're not doing MD or MRE, that's all we need to do.
