@@ -1,0 +1,32 @@
+
+.SH SEE ALSO
+
+Master man page, with full list of and guide to the individual man
+pages: see 
+.B hmmer(1).
+.PP
+For complete documentation, see the user guide that came with the
+distribution (Userguide.pdf); or see the HMMER web page,
+http://hmmer.wustl.edu/.
+
+.SH COPYRIGHT
+
+.nf
+@COPYRIGHT@.
+@LICENSELINE@.
+.fi
+See the file COPYING in your distribution for details on redistribution
+conditions.
+
+.SH AUTHOR 
+
+.nf
+Sean Eddy
+HHMI/Dept. of Genetics
+Washington Univ. School of Medicine
+4566 Scott Ave.
+St Louis, MO 63110 USA
+http://www.genetics.wustl.edu/eddy/
+.fi
+
+

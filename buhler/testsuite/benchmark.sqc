@@ -1,0 +1,8 @@
+# HMMER benchmark exercises, in sqc command format
+# SRE, Fri Apr 11 16:15:45 2003
+# CVS $Id$
+
+1 prep        hmm            @hmmbuild@ -F --wnone %BENCH.HMM% fn3.seed
+1 prep        seqs           @shuffle@ -i -n 10000 -t 350 --amino -o %BENCH.FA%
+1 benchmark   hmmcalibrate   @hmmcalibrate@ --cpu 0 --num 10000 %BENCH.HMM%
+1 benchmark   hmmsearch      @hmmsearch@ --cpu 0 %BENCH.HMM% %BENCH.FA%
