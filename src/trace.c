@@ -360,19 +360,14 @@ P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr)
  *           mlen       - length of model (number of match states)
  *           tr         - array of tracebacks
  *           matchonly  - TRUE if we don't print insert-generated symbols at all
- *           ret_aseqs  - RETURN: multiple sequence alignment           
- *           ainfo      - RETURN: optional info about alignment 
- *           
- * Return:   1 on success, 0 on failure.
- *           ret_aseqs is alloc'ed here and ainfo is filled in; 
- *           FreeAlignment(aseqs, &ainfo).
+ * Return:   MSA structure; NULL on failure.
+ *           Caller responsible for freeing msa with MSAFree(msa);
  */          
-void
+MSA *
 P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen, 
-		   struct p7trace_s **tr, int matchonly, 
-		   char ***ret_aseqs, AINFO *ainfo)
+		   struct p7trace_s **tr, int matchonly) 
 {
-  char **aseqs;                 /* RETURN: aligned sequence set */
+  MSA   *msa;                   /* RETURN: new alignment */
   int    idx;                   /* counter for sequences */
   int    alen;                  /* width of alignment */
   int   *inserts;               /* array of max gaps between aligned columns */
@@ -450,16 +445,16 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
     matmap[k] = alen;
     alen += inserts[k] + 1;
   }
-                                /* allocations for new alignment */
-  AllocAlignment(nseq, alen, &aseqs, ainfo);
+                                /* allocation for new alignment */
+  msa = MSAAlloc(nseq, alen);
 
   for (idx = 0; idx < nseq; idx++) {
 				/* blank an aseq */
     for (apos = 0; apos < alen; apos++)
-      aseqs[idx][apos] = '.';
+      msa->aseq[idx][apos] = '.';
     for (k = 1; k <= mlen; k++)
-      aseqs[idx][matmap[k]] = '-';
-    aseqs[idx][alen] = '\0';
+      msa->aseq[idx][matmap[k]] = '-';
+    msa->aseq[idx][alen] = '\0';
 				/* align the sequence */
     apos = 0;
     for (tpos = 0; tpos < tr[idx]->tlen; tpos++) {
@@ -469,22 +464,22 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 
       if (statetype == STM) {
 	apos = matmap[k];
-	aseqs[idx][apos] = Alphabet[(int) dsq[idx][rpos]];
+	msa->aseq[idx][apos] = Alphabet[(int) dsq[idx][rpos]];
 	apos++;
       }
       else if (statetype == STI) {
 	if (matchonly) 
-	  aseqs[idx][apos] = '*'; /* insert compression option */
+	  msa->aseq[idx][apos] = '*'; /* insert compression option */
 	else {
-	  aseqs[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
+	  msa->aseq[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
 	  apos++;
 	}
       }
       else if ((statetype == STN || statetype == STC) && rpos > 0) {
 	if (matchonly)
-	  aseqs[idx][apos] = '*'; /* insert compression option */
+	  msa->aseq[idx][apos] = '*'; /* insert compression option */
 	else {
-	  aseqs[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
+	  msa->aseq[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
 	  apos++;
 	}
       }
@@ -497,40 +492,57 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
    * C-terminal extension remains left-justified.
    */
     if (! matchonly) {
-      rightjustify(aseqs[idx], inserts[0]);
+      rightjustify(msa->aseq[idx], inserts[0]);
 
       for (k = 1; k < mlen; k++) 
 	if (inserts[k] > 1) {
-	  for (nins = 0, apos = matmap[k]+1; islower((int) (aseqs[idx][apos])); apos++)
+	  for (nins = 0, apos = matmap[k]+1; islower((int) (msa->aseq[idx][apos])); apos++)
 	    nins++;
 	  nins /= 2;		/* split the insertion in half */
-	  rightjustify(aseqs[idx]+matmap[k]+1+nins, inserts[k]-nins);
+	  rightjustify(msa->aseq[idx]+matmap[k]+1+nins, inserts[k]-nins);
 	}
     }
 
   }
     
   /***********************************************
-   * Build ainfo
+   * Build the rest of the MSA annotation.
    ***********************************************/
         
-  ainfo->au = MallocOrDie(sizeof(char) * (strlen(RELEASE)+7));
-  sprintf(ainfo->au, "HMMER %s", RELEASE);
+  msa->nseq = nseq;
+  msa->alen = alen;
+  msa->au   = MallocOrDie(sizeof(char) * (strlen(RELEASE)+7));
+  sprintf(msa->au, "HMMER %s", RELEASE);
 				/* copy sqinfo array and weights */
   for (idx = 0; idx < nseq; idx++)
     {
-      SeqinfoCopy(&(ainfo->sqinfo[idx]), &(sqinfo[idx]));
-      ainfo->wgt[idx] = wgt[idx];
+      msa->sqname[idx] = sre_strdup(sqinfo[idx].name, -1);
+      if (sqinfo[idx].flags & SQINFO_ACC)
+	MSASetSeqAccession(msa, idx, sqinfo[idx].acc);
+      if (sqinfo[idx].flags & SQINFO_DESC)
+	MSASetSeqAccession(msa, idx, sqinfo[idx].desc);
+
+      if (sqinfo[idx].flags & SQINFO_SS) {
+	if (msa->ss == NULL) msa->ss = MallocOrDie(sizeof(char *) * nseq);
+	MakeAlignedString(msa->aseq[idx], alen, 
+			  sqinfo[idx].ss, &(msa->ss[idx]));
+      }
+      if (sqinfo[idx].flags & SQINFO_SA) {
+	if (msa->sa == NULL) msa->sa = MallocOrDie(sizeof(char *) * nseq);
+	MakeAlignedString(msa->aseq[idx], alen, 
+			  sqinfo[idx].sa, &(msa->sa[idx]));
+      }
+      msa->wgt[idx] = wgt[idx];
     }
 
   /* #=RF annotation: x for match column, . for insert column
    */
-  ainfo->rf = (char *) MallocOrDie (sizeof(char) * (alen+1));
+  msa->rf = (char *) MallocOrDie (sizeof(char) * (alen+1));
   for (apos = 0; apos < alen; apos++)
-    ainfo->rf[apos] = '.';
+    msa->rf[apos] = '.';
   for (k = 1; k <= mlen; k++)
-    ainfo->rf[matmap[k]] = 'x';
-  ainfo->rf[alen] = '\0';
+    msa->rf[matmap[k]] = 'x';
+  msa->rf[alen] = '\0';
 
     /* Currently, we produce no consensus structure. 
      * #=CS, generated from HMM structural annotation, would go here.
@@ -538,8 +550,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 
   free(inserts);
   free(matmap);
-  *ret_aseqs = aseqs;
-  return;
+  return msa;
 }
 
 /* Function: TransitionScoreLookup()
