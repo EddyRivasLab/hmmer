@@ -1,7 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1998,
- * Sean R. Eddy and Washington University School of Medicine
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -85,7 +84,6 @@ main(int argc, char **argv)
   int       i; 
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
   struct histogram_s *histogram;/* histogram of all scores                 */
-  struct dpmatrix_s *mx;	/* DP matrix after alignment               */
   struct p7trace_s  *tr;	/* traceback                               */
   struct fancyali_s *ali;       /* displayed alignment info                */ 
   struct tophit_s   *ghit;      /* list of top hits for whole sequences    */
@@ -190,7 +188,7 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  Plan7Logoddsify(hmm);
+  P7Logoddsify(hmm, !do_forward);
   
   /*********************************************** 
    * Show the banner
@@ -219,13 +217,18 @@ main(int argc, char **argv)
 
       if (do_xnu) XNU(dsq, sqinfo.len);
       
-      /* 1. Score the sequence. */
-      if (do_forward) sc  = Plan7Forward(dsq, sqinfo.len, hmm, NULL);
-      else            sc  = Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
+      /* 1. Recover a trace by Viterbi.
+       */
+      if (P7ViterbiSize(sqinfo.len, hmm->M) <= RAMLIMIT)
+	sc = P7Viterbi(dsq, sqinfo.len, hmm, &tr);
+      else
+	sc = P7SmallViterbi(dsq, sqinfo.len, hmm, &tr);
 
-      /* 2. Recover a trace.    */
-      if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
-      P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
+      /* 2. If we're using Forward scores, do another DP
+       *    to get it; else, we already have a Viterbi score
+       *    in sc.
+       */
+      if (do_forward) sc = P7Forward(dsq, sqinfo.len, hmm, NULL);
 
       if (do_null2)  sc -= TraceScoreCorrection(hmm, tr, dsq);
 
@@ -256,7 +259,6 @@ main(int argc, char **argv)
       AddToHistogram(histogram, sc);
 
       FreeSequence(seq, &sqinfo); 
-      FreePlan7Matrix(mx);
       P7FreeTrace(tr);
       free(dsq);
     }

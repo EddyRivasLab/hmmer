@@ -1,7 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1998,
- * Sean R. Eddy and Washington University School of Medicine
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -13,6 +12,7 @@
  * SRE, Thu Dec 18 16:05:29 1997 [St. Louis]
  * 
  * main() for aligning a set of sequences to an HMM.
+ * RCS $Id$
  */ 
 
 #include <stdio.h>
@@ -67,7 +67,6 @@ main(int argc, char **argv)
   int              i;
   struct plan7_s    *hmm;       /* HMM to align to                         */ 
   struct p7trace_s **tr;        /* traces for aligned sequences            */
-  struct dpmatrix_s *mx;        /* DP matrix after alignment               */
 
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
@@ -120,9 +119,10 @@ main(int argc, char **argv)
     Die("Failed to open HMM file %s\n%s", hmmfile, usage);
   if (!HMMFileRead(hmmfp, &hmm)) 
     Die("Failed to read any HMMs from %s\n", hmmfile);
+  HMMFileClose(hmmfp);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  Plan7Logoddsify(hmm);
+  P7Logoddsify(hmm, TRUE);
   
   /*********************************************** 
    * Open sequence file in current directory.
@@ -168,9 +168,11 @@ main(int argc, char **argv)
   for (i = 0; i < nseq; i++)
     {
       dsq[i] = DigitizeSequence(rseq[i], sqinfo[i].len);
-      (void) Plan7Viterbi(dsq[i], sqinfo[i].len, hmm, &mx);
-      P7ViterbiTrace(hmm, dsq[i], sqinfo[i].len, mx, &(tr[i]));
-      FreePlan7Matrix(mx);
+
+      if (P7ViterbiSize(sqinfo[i].len, hmm->M) <= RAMLIMIT)
+	(void) P7Viterbi(dsq[i], sqinfo[i].len, hmm, &(tr[i]));
+      else
+	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, &(tr[i]));
     }
 
   /* Turn traces into a multiple alignment

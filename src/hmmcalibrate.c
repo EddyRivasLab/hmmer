@@ -1,7 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1998,
- * Sean R. Eddy and Washington University School of Medicine
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -199,7 +198,7 @@ main(int argc, char **argv)
     {	
       if (hmm == NULL) 
 	Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
-      Plan7Logoddsify(hmm);
+      P7Logoddsify(hmm, TRUE);
 				/* we could use the null model in the HMM? */
       P7DefaultNullModel(randomseq, &p1);
       
@@ -215,7 +214,10 @@ main(int argc, char **argv)
 	  seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
 	  dsq = DigitizeSequence(seq, sqlen);
 
-	  score = Plan7Viterbi(dsq, sqlen, hmm, NULL);
+	  if (P7ViterbiSize(sqlen, hmm->M) <= RAMLIMIT)
+	    score = P7Viterbi(dsq, sqlen, hmm, NULL);
+	  else
+	    score = P7SmallViterbi(dsq, sqlen, hmm, NULL);
 
 	  AddToHistogram(hist, score);
 	  if (score > max) max = score;

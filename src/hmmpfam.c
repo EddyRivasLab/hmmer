@@ -1,7 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1998,
- * Sean R. Eddy and Washington University School of Medicine
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -86,7 +85,6 @@ main(int argc, char **argv)
   SQINFO             sqinfo;	/* optional info for seq                   */
   char              *dsq;	/* digitized target sequence               */
   struct plan7_s    *hmm;       /* current HMM to search with              */ 
-  struct dpmatrix_s *mx;	/* DP matrix after alignment               */
   struct p7trace_s  *tr;	/* traceback of alignment                  */
   struct fancyali_s *ali;	/* an alignment for display                */
   struct tophit_s   *ghit;      /* list of top hits and alignments for seq  */
@@ -224,17 +222,18 @@ main(int argc, char **argv)
       while (HMMFileRead(hmmfp, &hmm)) {
 	if (hmm == NULL) 
 	  Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
-	Plan7Logoddsify(hmm);
+	P7Logoddsify(hmm, TRUE);
 
 	/* 1a. Score sequence, do alignment (Viterbi), recover trace
 	 */
-	if (do_forward) sc  = Plan7Forward(dsq, sqinfo.len, hmm, NULL);
-	else            sc  = Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
+	if (P7ViterbiSize(sqinfo.len, hmm->M) <= RAMLIMIT)
+	  sc = P7Viterbi(dsq, sqinfo.len, hmm, &tr);
+	else
+	  sc = P7SmallViterbi(dsq, sqinfo.len, hmm, &tr);
+	
+	if (do_forward) sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
 
-	if (do_forward) (void) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
-	P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
-
-	if (do_null2)  sc -= TraceScoreCorrection(hmm, tr, dsq);
+	if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
 
 	/* 1b. Store scores/pvalue for each HMM aligned to this sequence, overall
 	 */
@@ -254,7 +253,6 @@ main(int argc, char **argv)
 	    record_domains(dhit, hmm, dsq, &sqinfo, tr, pvalue, sc, do_null2);
 	  }
 
-	FreePlan7Matrix(mx);
 	P7FreeTrace(tr);
 	FreePlan7(hmm);
 	nhmm++;
@@ -342,7 +340,7 @@ main(int argc, char **argv)
 	    break;
 	  }
 	}
-      if (i == 0) printf("\t[no hits above thresholds\n");      
+      if (i == 0) printf("\t[no hits above thresholds]\n");      
 
 
       /* 3. Alignment output, also by domain.
@@ -374,15 +372,15 @@ main(int argc, char **argv)
 		  PrintFancyAli(stdout, ali);
 		}
 	      else if (evalue >= domE) {
-		if (i > 0) printf("\t[no more alignments below E threshold\n");
+		if (i > 0) printf("\t[no more alignments below E threshold]\n");
 		break;
 	      }
 	      else if (sc <= domT) {
-		if (i > 0) printf("\t[no more alignments above T threshold\n");
+		if (i > 0) printf("\t[no more alignments above T threshold]\n");
 		break;
 	      }
 	    }
-	  if (i == 0)      printf("\t[no hits above thresholds\n");
+	  if (i == 0)      printf("\t[no hits above thresholds]\n");
 	  if (i == Alimit) printf("\t[output cut off at A = %d top alignments]\n", Alimit);
 	}
 
