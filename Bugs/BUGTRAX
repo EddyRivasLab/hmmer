@@ -299,3 +299,15 @@ DESCRIPTION
   ./configure claims to use CPPFLAGS, LDFLAGS from environment,
   but doesn't.
 //
+ID              h25
+TITLE           Memory-related hmmsearch crash on Swissprot.
+STATUS          OPEN
+XREF            STL7 p.121
+REPORTED_BY     Niklaus Fankhauser <niklaus.fankhauser@izb.unibe.ch> 26 Sept 2003;
+		Kaivalya Dixit <dixit@austin.ibm.com>, 24 Sept 2003.
+OPENED_DATE	SRE, Tue Sep 30 14:53:19 2003
+CLOSED_DATE     
+DESCRIPTION     
+  hmmsearch crashes unpredictably on Swissprot searches (EMBL
+  format). 
+//

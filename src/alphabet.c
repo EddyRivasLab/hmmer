@@ -112,10 +112,10 @@ SetAlphabet(int type)
       return;
     }
 
-  switch(type) { /* Alphabet is not a string - careful! */
+  switch(type) { 
   case hmmAMINO: 
     Alphabet_type     = type;
-    strncpy(Alphabet, "ACDEFGHIKLMNPQRSTVWYUBZX", 24);
+    strcpy(Alphabet, "ACDEFGHIKLMNPQRSTVWYUBZX");
     Alphabet_size     = 20; 
     Alphabet_iupac    = 24;
     for (x = 0; x < Alphabet_iupac; x++) {
@@ -132,7 +132,7 @@ SetAlphabet(int type)
     break;
   case hmmNUCLEIC:
     Alphabet_type     = type;
-    strncpy(Alphabet, "ACGTUNRYMKSWHBVDX", 17); 
+    strcpy(Alphabet, "ACGTUNRYMKSWHBVDX");
     Alphabet_size     = 4; 
     Alphabet_iupac    = 17;
     for (x = 0; x < Alphabet_iupac; x++) {

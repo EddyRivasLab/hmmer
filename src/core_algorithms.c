@@ -104,8 +104,8 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
  *           We know (because of the way hmmsearch and hmmpfam are coded)
  *           that only one of the two dimensions is going to change
  *           in size after the first call to ResizePlan7Matrix();
- *           that is, for hmmpfam, we have one HMM of fixed size M
- *           and our target sequences may grow in N; for hmmsearch,
+ *           that is, for hmmsearch, we have one HMM of fixed size M
+ *           and our target sequences may grow in N; for hmmpfam,
  *           we have one sequence of fixed size N and our target models
  *           may grow in M. What we have to watch out for is P7SmallViterbi()
  *           working on a divide and conquer problem and passing us N < maxN,

@@ -45,10 +45,10 @@
  * 
  * MAXCODE and MAXABET constants are defined in config.h
  */   
-extern char  Alphabet[MAXCODE]; /* "ACDEFGHIKLMNPQRSTVWYBZX" for example */
-extern int   Alphabet_type;     /* hmmNUCLEIC or hmmAMINO                */
-extern int   Alphabet_size;     /* uniq alphabet size: 4 or 20           */
-extern int   Alphabet_iupac;    /* total size of alphabet + IUPAC degen. */
+extern char  Alphabet[MAXCODE+1]; /* "ACDEFGHIKLMNPQRSTVWYBZX" for example */
+extern int   Alphabet_type;       /* hmmNUCLEIC or hmmAMINO                */
+extern int   Alphabet_size;       /* uniq alphabet size: 4 or 20           */
+extern int   Alphabet_iupac;      /* total size of alphabet + IUPAC degen. */
 extern char  Degenerate[MAXCODE][MAXABET];
 extern int   DegenCount[MAXCODE];
 #define hmmNOTSETYET 0

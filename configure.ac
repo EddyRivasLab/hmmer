@@ -34,6 +34,11 @@ PACKAGE_COPYRIGHT="Copyright (C) 1992-2003 HHMI/Washington University School of 
 PACKAGE_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 PACKAGE_LICENSETAG=gnu
 
+
+
+
+# For a normal release, you don't need to edit below this line.
+#
 AC_SUBST(PACKAGE_RELCODE)
 AC_SUBST(PACKAGE_DATE)
 AC_SUBST(PACKAGE_COPYRIGHT)

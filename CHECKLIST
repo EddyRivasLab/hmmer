@@ -38,6 +38,9 @@ Checklist for a HMMER distribution.
      Make sure that foo.* all work (7LES_DROME is big enough to exercise bug #h22)
      Check that foo.* all give identical E-values (bug #h20).
 	
+     [TODO: Add tests for swissprot searches, w/ and w/o ccmalloc instrumentation;
+      test for bug #h25]
+
 4. Write release notes.
    cvs2cl.pl creates ChangeLog; a useful summary of CVS logs
 	% ssdk/cvs2cl.pl    

@@ -15,7 +15,7 @@ and Southwest Parallel Software, March 2003:
 
 ________________________________________________________________
 
-Some parts of this source code is copyrighted but freely
+Some parts of this source code are copyrighted but freely
 redistributable work of other authors, as follows:
 
 Portions of src/sqio.c are 
@@ -38,7 +38,7 @@ ________________________________________________________________
 Portions of HMMER cannot be redistributed under non-GPL licenses.
 These have been removed from this distribution. These include:
    
-   configure.in, squid/configure.in:
+   configure.ac, squid/configure.ac:
        These Autoconf scripts contain GPL'ed macros from the
        GNU Autoconf macro archive.
 
