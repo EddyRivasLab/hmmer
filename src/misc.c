@@ -32,7 +32,7 @@ Banner(FILE *fp, char *banner)
 {
   fputs(banner, fp);
   fprintf(fp, "\nHMMER %s (%s)\n", RELEASE, RELEASEDATE);
-  fprintf(fp, "Copyright (C) 1992-1998 Washington University School of Medicine\n"); 
+  fprintf(fp, "Copyright (C) 1992-1999 Washington University School of Medicine\n"); 
   fprintf(fp, "HMMER is freely distributed under the GNU General Public License (GPL).\n");
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 }
