@@ -715,7 +715,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   pvm_pkfloat(&(thresh->globT), 1, 1);
   pvm_pkdouble(&(thresh->globE), 1, 1);
   pvm_pkint(&(thresh->Z), 1, 1);
-  pvm_pkint(&(thresh->autocut), 1, 1);
+  pvm_pkint((int *)&(thresh->autocut), 1, 1);
   pvm_pkint(&do_xnu, 1, 1);
   pvm_pkint(&do_forward, 1, 1);
   pvm_pkint(&do_null2, 1, 1);

@@ -112,5 +112,5 @@ unlink "tmp.hmm";
 unlink "tmp2.hmm";
 unlink "Optiontests.hmm";
 unlink "Optiontests.nhmm";
-unlink "Optiontests.hmm.gsi";
-unlink "Optiontests.hmm.sgsi";
+unlink "Optiontests.hmm.ssi";
+

@@ -129,8 +129,7 @@ static void main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold
 			     struct histogram_s *histogram, struct tophit_s *ghit, 
 			     struct tophit_s *dhit, int *ret_nseq);
 #ifdef HMMER_PVM
-static void main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, 
-			  float globT, double globE, int Z, int do_forward,
+static void main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int do_forward,
 			  int do_null2, int do_xnu, struct histogram_s *histogram, 
 			  struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq);
 #endif

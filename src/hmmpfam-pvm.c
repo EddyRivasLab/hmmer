@@ -84,7 +84,7 @@ main(void)
   pvm_upkfloat(&(thresh.globT), 1, 1);
   pvm_upkdouble(&(thresh.globE), 1, 1);
   pvm_upkint(&(thresh.Z), 1, 1);
-  pvm_upkint(&(thresh.autocut), 1, 1);
+  pvm_upkint((int *) &(thresh.autocut), 1, 1);
   pvm_upkint(&do_xnu, 1, 1);
   pvm_upkint(&do_forward, 1, 1);
   pvm_upkint(&do_null2, 1, 1);
