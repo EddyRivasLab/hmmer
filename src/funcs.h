@@ -89,6 +89,7 @@ extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm,
  * Debugging output of various sorts.
  */
 extern void VerboseWorry(int level, char *file, int line, char *fmt, ...);
+extern void Panic(char *file, int line);
 extern char *Statetype(enum p7stype st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
@@ -144,6 +145,7 @@ extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
 extern int   XNU(char *dsq, int len);
 extern int   MiniSEG(char *dsq, int len, float *ret_max);
 extern float SeqScoreCorrection(char *dsq, int L);
+extern float TraceScoreCorrection(struct p7trace_s *tr, char *dsq);
 
 /* mathsupport.c
  * Much of this code deals with Dirichlet prior mathematics. 
