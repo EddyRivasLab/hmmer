@@ -80,7 +80,7 @@ shiva:   $(SHIVA)
               echo $$shivatest: ok;\
            else\
               echo $$shivatest: FAILED;\
-           fi\
+           fi;\
 	done
 	@echo
 	@echo Running scripted Shiva tests:
