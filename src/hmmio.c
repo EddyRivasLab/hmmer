@@ -32,6 +32,35 @@
  * that generated it; rather, the number of the last major version in which
  * save format changed.
  * 
+ ****************************************************************** 
+ * 
+ * The HMM input API:
+ * 
+ *       HMMFILE        *hmmfp;
+ *       char           *hmmfile;
+ *       struct plan7_s *hmm;
+ *       char            env[] = "HMMERDB";  (a la BLASTDB) 
+ *
+ *       hmmfp = HMMFileOpen(hmmfile, env)   NULL on failure
+ *       while (HMMFileRead(hmmfp, &hmm))    0 if no more HMMs
+ *          if (hmm == NULL) Die();          NULL on file parse failure
+ *          whatever;
+ *          FreeHMM(hmm);
+ *       }
+ *       HMMFileClose(hmmfp);
+ *       
+ *****************************************************************
+ *
+ * The HMM output API:
+ * 
+ *       FILE           *ofp;
+ *       struct plan7_s *hmm;
+ *       
+ *       WriteAscHMM(ofp, hmm);    to write/append an HMM to open file
+ *   or  WriteBinHMM(ofp, hmm);    to write/append binary format HMM to open file
+ * 
+ ***************************************************************** 
+ * 
  * V1.0: original implementation
  * V1.1: regularizers removed from model structure
  * V1.7: ref and cs annotation lines added from alignment, one 
@@ -71,6 +100,17 @@ static unsigned int  v19swap  = 0xb4edede8; /* V1.9 binary, byteswapped         
 static unsigned int  v20magic = 0xe8ededb5; /* V2.0 binary: "hmm5" + 0x80808080 */
 static unsigned int  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
 
+/* Old HMMER 1.x file formats.
+ */
+#define HMMER1_0B  1            /* binary HMMER 1.0     */
+#define HMMER1_0F  2            /* flat ascii HMMER 1.0 */
+#define HMMER1_1B  3            /* binary HMMER 1.1     */
+#define HMMER1_1F  4            /* flat ascii HMMER 1.1 */
+#define HMMER1_7B  5            /* binary HMMER 1.7     */
+#define HMMER1_7F  6            /* flat ascii HMMER 1.7 */
+#define HMMER1_9B  7            /* HMMER 1.9 binary     */
+#define HMMER1_9F  8            /* HMMER 1.9 flat ascii */
+
 static int  read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
@@ -81,6 +121,7 @@ static int  read_asc11hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_bin11hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_asc10hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_bin10hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
+
 static void  byteswap(char *swap, int nbytes);
 static char *prob2ascii(float p, float null);
 static float ascii2prob(char *s, float null);
@@ -88,24 +129,16 @@ static void  write_bin_string(FILE *fp, char *s);
 static int   read_bin_string(FILE *fp, int doswap, char **ret_s);
 static void  multiline(FILE *fp, char *pfx, char *s);
 
-/***************************************************************** 
- * 
- * The HMM input interface, allowing HMM libraries:
- * 
- *       HMMFILE        *hmmfp;
- *       char           *hmmfile;
- *       struct plan7_s *hmm;
- *       char            env[] = "HMMERDB";  (a la BLASTDB) 
- *
- *       hmmfp = HMMFileOpen(hmmfile, env)   NULL on failure
- *       while (HMMFileRead(hmmfp, &hmm))    0 if no more HMMs
- *          if (hmm == NULL) Die();          NULL on file parse failure
- *          whatever;
- *          FreeHMM(hmm);
- *       }
- *       HMMFileClose(hmmfp);
- *       
- *****************************************************************/
+static struct plan9_s *read_plan9_binhmm(FILE *fp, int version, int swapped);
+static struct plan9_s *read_plan9_aschmm(FILE *fp, int version);
+
+/*****************************************************************
+ * HMM input API functions:
+ *   HMMFileOpen()
+ *   HMMFileRead()
+ *   HMMFileClose()
+ *   HMMFileRewind()
+ *****************************************************************/   
 
 /* Function: HMMFileOpen()
  * 
@@ -146,7 +179,7 @@ HMMFileOpen(char *hmmfile, char *env)
   /* Check for binary or byteswapped binary format
    * by peeking at first 4 bytes.
    */ 
-  if (! fread((char *) &magic, sizeof(int), 1, hmmfp->f)) {
+  if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) {
     HMMFileClose(hmmfp);
     return NULL;
   }
@@ -228,19 +261,19 @@ or may be a different kind of binary altogether.\n", hmmfile);
   }
   rewind(hmmfp->f);
   
-  if        (Strparse("^HMMER2\\.0", buf, 0) == 0) {
+  if        (strncmp("HMMER2.0", buf, 8) == 0) {
     hmmfp->parser = read_asc20hmm;
     return hmmfp;
-  } else if (Strparse("^HMMER v1\\.9", buf, 0) == 0) {
+  } else if (strncmp("HMMER v1.9", buf, 10) == 0) {
     hmmfp->parser = read_asc19hmm;
     return hmmfp;
-  } else if (Strparse("^# HMM v1\\.7", buf, 0) == 0) {
+  } else if (strncmp("# HMM v1.7", buf, 10) == 0) {
     hmmfp->parser = read_asc17hmm;
     return hmmfp;
-  } else if (Strparse("^# HMM v1\\.1", buf, 0) == 0) {
+  } else if (strncmp("# HMM v1.1", buf, 10) == 0) {
     hmmfp->parser = read_asc11hmm;
     return hmmfp;
-  } else if (Strparse("^# HMM v1\\.0", buf, 0) == 0) {
+  } else if (strncmp("# HMM v1.0", buf, 10) == 0) {
     hmmfp->parser = read_asc10hmm;
     return hmmfp;
   } 
@@ -269,8 +302,9 @@ HMMFileRewind(HMMFILE *hmmfp)
 			       
 
 /*****************************************************************
- *
- * HMM output interface for current code version, allowing libraries
+ * HMM output API:
+ *    WriteAscHMM()
+ *    WriteBinHMM()
  * 
  *****************************************************************/ 
 
@@ -426,7 +460,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
 
 /*****************************************************************
  *
- * HMM file parsers for various releases of HMMER.
+ * Internal: HMM file parsers for various releases of HMMER.
  * 
  * read_{asc,bin}xxhmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
  *
@@ -537,12 +571,9 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
       }
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;
   }
-  if (feof(hmmfp->f)) goto FAILURE;
-
-  /* Parse the stuff we stored.
-   */
 
 				/* partial check for mandatory fields */
+  if (feof(hmmfp->f))                goto FAILURE;
   if (M < 1)                         goto FAILURE;
   if (hmm->name == NULL)             goto FAILURE;
   if (Alphabet_type == hmmNOTSETYET) goto FAILURE;
@@ -738,436 +769,238 @@ FAILURE:
 }
 
 
-#ifdef SRE_REMOVED
-
-/* Function: read_binhmm()
- * 
- * Read binary HMM save files.
- * V1.0 saved regularizer and sympvec info, which V1.1 ignores.
- * V1.7 and later may include optional ref, cs annotation lines.
- * V1.9 added name, null model.
- * 
- * Returns pointer to the HMM on success; NULL
- * on failure.
- */
-static struct hmm_struc *
-read_binhmm(FILE *fp, int version, int swapped)
-{
-  struct hmm_struc *hmm;
-  int   M;			/* length of model  */
-  int   k;			/* state number  */
-  int   x;			/* symbol or transition number */
-  int   len;			/* length of variable length string */
-  
-  /* read M and alphabet_size */
-  if (! fread((char *) &(M), sizeof(int), 1, fp))  return NULL;
-  if (! fread((char *) &Alphabet_size, sizeof(int), 1, fp)) return NULL;
-  if (swapped) { 
-    byteswap((char *) &M, sizeof(int));
-    byteswap((char *) &Alphabet_size, sizeof(int));
-  }
-  
-  /* now, create space for hmm */
-  if ((hmm = AllocHMM(M)) == NULL)
-    Die("malloc failed for reading hmm in\n");
-  
-  /* version 1.9+ files have a name */
-  if (version == HMMER1_9B) {
-    if (! fread((char *) &len, sizeof(int), 1, fp))  return NULL;
-    if (swapped) byteswap((char *) &len, sizeof(int));
-    hmm->name = (char *) ReallocOrDie (hmm->name, sizeof(char) * (len+1));
-    if (! fread((char *) hmm->name, sizeof(char), len, fp)) return NULL;
-    hmm->name[len] = '\0';
-  }
-
-  /* read alphabet_type and alphabet*/
-  if (! fread((char *) &Alphabet_type, sizeof(int), 1, fp)) return NULL;
-  if (swapped) byteswap((char *) &Alphabet_type, sizeof(int));
-  if (! fread((char *) Alphabet, sizeof(char), Alphabet_size, fp)) return NULL;
-  
-  /* skip the random symbol frequencies in V1.0 */
-  if (version == HMMER1_0B)
-    fseek(fp, (long) (sizeof(float) * Alphabet_size), SEEK_CUR);
-  
-  /* Get optional info in V1.7 and later
-   */
-  if (version == HMMER1_7B || version == HMMER1_9B)
-    {
-      if (! fread((char *) &(hmm->flags), sizeof(int), 1, fp)) return NULL;
-      if (swapped) byteswap((char *) &hmm->flags, sizeof(int));
-      if ((hmm->flags & HMM_REF) &&
-	  ! fread((char *) hmm->ref, sizeof(char), hmm->M+1, fp)) return NULL;
-      hmm->ref[hmm->M+1] = '\0';
-      if ((hmm->flags & HMM_CS) &&
-	  ! fread((char *) hmm->cs,  sizeof(char), hmm->M+1, fp)) return NULL;
-      hmm->cs[hmm->M+1]  = '\0';
-    }
-
-  /* Get the null model in V1.9 and later
-   */
-  if (version == HMMER1_9B)
-    {
-      if (! fread((char *) hmm->null, sizeof(float), Alphabet_size, fp)) return NULL;
-      if (swapped)
-	for (x = 0; x < Alphabet_size; x++)
-	  byteswap((char *) &(hmm->null[x]), sizeof(float));
-    }
-  else DefaultNullModel(hmm->null);
-
-  /* everything else is states */
-  for (k = 0; k <= hmm->M; k++)
-    {
-      /* get match state info */
-      if (! fread((char *) &(hmm->mat[k].t[MATCH]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) &(hmm->mat[k].t[DELETE]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) &(hmm->mat[k].t[INSERT]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) hmm->mat[k].p, sizeof(float), Alphabet_size, fp)) return NULL;
-      if (swapped) {
-	byteswap((char *) &(hmm->mat[k].t[MATCH]),  sizeof(float));
-	byteswap((char *) &(hmm->mat[k].t[DELETE]), sizeof(float));
-	byteswap((char *) &(hmm->mat[k].t[INSERT]), sizeof(float));
-	for (x = 0; x < Alphabet_size; x++)
-	  byteswap((char *) &(hmm->mat[k].p[x]), sizeof(float));
-      }
-      
-      /* skip the regularizer info in V1.0 */
-      if (version == HMMER1_0B)
-	fseek(fp, (long)(sizeof(float) * (3 + Alphabet_size)), SEEK_CUR);
-      
-      /* get delete state info */
-      if (! fread((char *) &(hmm->del[k].t[MATCH]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) &(hmm->del[k].t[DELETE]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) &(hmm->del[k].t[INSERT]), sizeof(float), 1, fp)) return NULL;
-      if (swapped) {
-	byteswap((char *) &(hmm->del[k].t[MATCH]),  sizeof(float));
-	byteswap((char *) &(hmm->del[k].t[DELETE]), sizeof(float));
-	byteswap((char *) &(hmm->del[k].t[INSERT]), sizeof(float));
-      }
-      
-      /* skip the regularizer info in V1.0 */
-      if (version == HMMER1_0B)
-	fseek(fp, (long)(sizeof(float) * 3), SEEK_CUR);
-      
-      /* get insert state info */
-      if (! fread((char *) &(hmm->ins[k].t[MATCH]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) &(hmm->ins[k].t[DELETE]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) &(hmm->ins[k].t[INSERT]), sizeof(float), 1, fp)) return NULL;
-      if (! fread((char *) hmm->ins[k].p, sizeof(float), Alphabet_size, fp)) return NULL;
-      if (swapped) {
-	byteswap((char *) &(hmm->ins[k].t[MATCH]),  sizeof(float));
-	byteswap((char *) &(hmm->ins[k].t[DELETE]), sizeof(float));
-	byteswap((char *) &(hmm->ins[k].t[INSERT]), sizeof(float));
-	for (x = 0; x < Alphabet_size; x++)
-	  byteswap((char *) &(hmm->ins[k].p[x]), sizeof(float));
-      }
-      
-      /* skip the regularizer info in V1.0 */
-      if (version == HMMER1_0B)
-	fseek(fp, (long)(sizeof(float) * (3 + Alphabet_size)), SEEK_CUR);
-    }
-  Renormalize(hmm);
-  return hmm;
-}
 
 
 
-
-/* Function: read_ascii_hmm()
+/* Function: read_asc19hmm()
+ * Date:     Tue Apr  7 17:11:29 1998 [StL]           
  * 
  * Purpose:  Read ASCII-format tabular (1.9 and later) save files.
- *
- * Args:     fp      - open save file, header has been read already
- *           version - HMMER1_9F, for instance
- *
- * Returns ptr to the (allocated) new HMM on success,
- * or NULL on failure.
+ * 
+ *           HMMER 1.9 was only used internally at WashU, as far as
+ *           I know, so this code shouldn't be terribly important
+ *           to anyone.
  */
-static struct hmm_struc *
-read_ascii_hmm(FILE *fp, int version)
+static int
+read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  struct hmm_struc *hmm;
-  int   M;			/* length of model  */
+  struct plan7_s *hmm;
+  FILE *fp;
+  char  buffer[512];
   char *s;
+  int   M;			/* length of model  */
   int   k;			/* state number  */
   int   x;			/* symbol number */
 
+  hmm = NULL;
+  fp  = hmmfp->f;
+  if (feof(fp) || fgets(buffer, 512, fp) == NULL) return 0;
+  if (strncmp(buffer, "HMMER v1.9", 10) != 0)             goto FAILURE;
+
+  hmm = AllocPlan7Shell();
   				/* read M from first line */
-  if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;  M = atoi(s);
-  if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;  Alphabet_size = atoi(s);
-
-  if ((hmm = AllocHMM(M)) == NULL) Die("malloc failed for reading hmm in\n");
-
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;  hmm->name = Strdup(s);
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;  s2upper(s);
-  if      (strcmp(s, "AMINO") == 0)   Alphabet_type = hmmAMINO;
-  else if (strcmp(s, "NUCLEIC") == 0) Alphabet_type = hmmNUCLEIC;
-  else return NULL;
-				/* read alphabet */
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;
-  strncpy(Alphabet, s, Alphabet_size);
+  if ((s = Getword(fp, sqdARG_INT))    == NULL) goto FAILURE;  M = atoi(s);          /* model length */
+  if ((s = Getword(fp, sqdARG_INT))    == NULL) goto FAILURE;                        /* ignore alphabet size */
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;  Plan7SetName(hmm, s); /* name */
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;  s2upper(s);           /* alphabet type */ 
+  if      (strcmp(s, "AMINO") == 0)   SetAlphabet(hmmAMINO);
+  else if (strcmp(s, "NUCLEIC") == 0) SetAlphabet(hmmNUCLEIC);
+  else goto FAILURE;
+				/* read alphabet, make sure it's Plan7-compatible... */
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+  if (strncmp(s, Alphabet, Alphabet_size) != 0) goto FAILURE;
 
 				/* whether we have ref, cs info */
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;
-  if (strcmp(s, "yes") == 0) hmm->flags |= HMM_REF;
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;
-  if (strcmp(s, "yes") == 0) hmm->flags |= HMM_CS;
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+  if (strcmp(s, "yes") == 0) hmm->flags |= PLAN7_RF;
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+  if (strcmp(s, "yes") == 0) hmm->flags |= PLAN7_CS;
 
-				/* null model */
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;
-  if (strcmp(s, "null") != 0) return NULL;
+				/* null model. 1.9 has emissions only. invent transitions. */
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+  if (strcmp(s, "null") != 0) goto FAILURE;
   for (x = 0; x < Alphabet_size; x++) {
-    if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-    hmm->null[x] = Score2Prob(atoi(s), 1.0);
+    if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+    hmm->null[x] = ascii2prob(s, 1.0);
   }
-				/* table of emissions, transitions, annotation */
-  for (k = 0; k <= hmm->M; k++)
+  hmm->p1 = (Alphabet_type == hmmAMINO)? 350./351. : 1000./1001.; 
+
+  /* Done with header; check some stuff before proceeding
+   */
+  if (feof(hmmfp->f))                goto FAILURE;
+  if (M < 1)                         goto FAILURE;
+  if (hmm->name == NULL)             goto FAILURE;
+  if (Alphabet_type == hmmNOTSETYET) goto FAILURE;
+
+  /* Allocate the model. Set up the probabilities that Plan9
+   * doesn't set.
+   */
+  AllocPlan7Body(hmm, M);
+  ZeroPlan7(hmm);
+  Plan7LSConfig(hmm);
+
+  /* The zero row has: 4 or 20 unused scores for nonexistent M0 state
+   * then: B->M, tbd1, a B->I that Plan7 doesn't have;
+   *       three unused D-> transitions; then three I0 transitions that Plan7 doesn't have;
+   *       then two unused rf, cs annotations.
+   */
+  if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE; /* position index ignored */
+  for (x = 0; x < Alphabet_size; x++)
+    if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE; /* emissions ignored */
+  if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+  hmm->begin[1] = ascii2prob(s, 1.0);
+  if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+  hmm->tbd1 = ascii2prob(s, 1.0);
+				/* renormalize */
+  hmm->begin[1] = hmm->begin[1] / (hmm->begin[1] + hmm->tbd1);
+  hmm->tbd1     = hmm->tbd1     / (hmm->begin[1] + hmm->tbd1);
+				/* skip rest of line, seven integer fields, two char fields */
+  for (x = 0; x < 7; x++)
+    if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+
+				/* main model: table of emissions, transitions, annotation */
+  for (k = 1; k <= hmm->M; k++)
     {
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL; /* position index ignored */
+				/* position index ignored */
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
 				/* match emissions */
       for (x = 0; x < Alphabet_size; x++) {
-	if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-	hmm->mat[k].p[x] = (k > 0) ? Score2Prob(atoi(s), hmm->null[x]) : 0.0;
+	if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+	hmm->mat[k][x] = ascii2prob(s, hmm->null[x]);
       }
-				/* nine transitions */
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->mat[k].t[MATCH]  = Score2Prob(atoi(s), 1.0);
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->mat[k].t[DELETE] = (k == hmm->M) ? 0.0 : Score2Prob(atoi(s), 1.0);
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->mat[k].t[INSERT] = Score2Prob(atoi(s), 1.0);
+				/* nine transitions; two are ignored */
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TMM] = ascii2prob(s, 1.0);
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TMD] = (k == hmm->M) ? 0.0 : ascii2prob(s, 1.0);
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TMI] = ascii2prob(s, 1.0);
       
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->del[k].t[MATCH]  = (k > 0) ? Score2Prob(atoi(s), 1.0) : 0.0;
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->del[k].t[DELETE] = (k == hmm->M || k == 0) ? 0.0 : Score2Prob(atoi(s), 1.0);
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->del[k].t[INSERT] = (k > 0)? Score2Prob(atoi(s), 1.0) : 0.0;
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TDM] = ascii2prob(s, 1.0);
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TDD] = (k == hmm->M) ? 0.0 : ascii2prob(s, 1.0);
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;/* TDI ignored. */
 
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->ins[k].t[MATCH]  = Score2Prob(atoi(s), 1.0);
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->ins[k].t[DELETE] = (k == hmm->M) ? 0.0 : Score2Prob(atoi(s), 1.0);
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-      hmm->ins[k].t[INSERT] = Score2Prob(atoi(s), 1.0);
+				/* no insert state at k == M, be careful */
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TIM]  = ascii2prob(s, 1.0);
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE; /* TID ignored. */
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][TII] = ascii2prob(s, 1.0);
 	
 				/* annotations */
-      if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;
-      if (hmm->flags & HMM_REF) hmm->ref[k] = *s;
-      if ((s = Getword(fp, sqdARG_STRING)) == NULL) return NULL;
-      if (hmm->flags & HMM_CS) hmm->cs[k] = *s;
+      if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+      if (hmm->flags & PLAN7_RF) hmm->rf[k] = *s;
+      if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
+      if (hmm->flags & PLAN7_CS) hmm->cs[k] = *s;
     }
-				/* table of insert emissions */
+				/* table of insert emissions; 
+                                 * Plan7 has no insert state at 0 or M  */
   for (k = 0; k <= hmm->M; k++)
     {
-      if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL; /* position index ignored */
+      if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE; /* position index ignored */
       for (x = 0; x < Alphabet_size; x++) {
-	if ((s = Getword(fp, sqdARG_INT)) == NULL) return NULL;
-	hmm->ins[k].p[x] = Score2Prob(atoi(s), hmm->null[x]);
+	if ((s = Getword(fp, sqdARG_INT)) == NULL) goto FAILURE;
+	if (k > 0 && k < hmm->M)
+	  hmm->ins[k][x] = ascii2prob(s, hmm->null[x]);
       }
     }
 
-  Renormalize(hmm);
-  return hmm;
-}      
-	
-  
-
-/* Function: read_old_hmm()
- * 
- * Purpose:  Read ASCII-format save files.
- *           V1.0 contained sympvec and regularizers; these are ignored
- *                in V1.1 and later
- *           V1.7 and later contain ref and cs annotation.
- *
- * Args:     fp      - open save file, header has been read already
- *           version - HMMER1_7F, for instance
- *
- * Returns ptr to the (allocated) new HMM on success,
- * or NULL on failure.
- */
-static struct hmm_struc *
-read_old_hmm(FILE *fp, int version)
-{
-  struct hmm_struc *hmm;
-  int   M;			/* length of model  */
-  char buffer[512];
-  char *statetype;
-  char *s;
-  int   k;			/* state number  */
-  int   i;			/* symbol number */
-  
-				/* read M from first line */
-  if (fgets(buffer, 512, fp) == NULL) return NULL;
-  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (!isdigit(*s)) return NULL;
-  M = atoi(s);
-				/* read alphabet_length */
-  if (fgets(buffer, 512, fp) == NULL) return NULL;
-  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (!isdigit(*s)) return NULL;
-  Alphabet_size = atoi(s);
-				/* now, create space for hmm */
-  if ((hmm = AllocHMM(M)) == NULL)
-    Die("malloc failed for reading hmm in\n");
-  
-				/* read alphabet_type */
-  if (fgets(buffer, 512, fp) == NULL) return NULL;
-  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (!isdigit(*s)) return NULL;
-  Alphabet_type = atoi(s);
-				/* read alphabet */
-  if (fgets(buffer, 512, fp) == NULL) return NULL;
-  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (strlen(s) != Alphabet_size) return NULL;
-  memcpy(Alphabet, s, Alphabet_size * sizeof(char));
-				
-  /* skip the random symbol frequencies in V1.0 files. now unused */
-  if (version == HMMER1_0F)
-    for (i = 0; i < Alphabet_size; i++)
-      if (fgets(buffer, 512, fp) == NULL) return NULL;
-
-  /* V1.7 has lines for whether we have valid ref, cs info
+  /* Set flags and return
    */
-  if (version == HMMER1_7F)
-    {
-      if (fgets(buffer, 512, fp) == NULL) return NULL;
-      if (strncmp(buffer, "yes", 3) == 0) hmm->flags |= HMM_REF;
-      if (fgets(buffer, 512, fp) == NULL) return NULL;
-      if (strncmp(buffer, "yes", 3) == 0) hmm->flags |= HMM_CS;
-    }
+  hmm->flags |= PLAN7_HASPROB;	/* probabilities are valid */
+  hmm->flags &= ~PLAN7_HASBITS;	/* scores are not valid    */
+  Plan7Renormalize(hmm);
+  hmm->comlog = Strdup("[converted from an old Plan9 HMM]");
+  Plan7SetCtime(hmm);
+  *ret_hmm = hmm;
+  return 1;
 
-				/* everything else is states */
-  while (fgets(buffer, 512, fp) != NULL)
-    {
-				/* get state type and index info */
-      if ((statetype = strtok(buffer, " \t\n")) == NULL) return NULL;
-      if ((s = strtok((char *) NULL, " \t\n")) == NULL) return NULL;
-      if (!isdigit(*s)) return NULL;
-      k = atoi(s);
-      if (k < 0 || k > hmm->M+1) return NULL;
-      
-      if (strcmp(statetype, "###MATCH_STATE") == 0)
-	{
-				/* V1.7: get ref, cs info:   */
-	                        /* ###MATCH_STATE 16 (x) (H) */
-	  if (version == HMMER1_7F)
-	    {
-	      s = strtok(NULL, "\n");
-	      while (*s != '(' && *s != '\0') s++;
-	      if (*s != '(') return NULL;
-	      hmm->ref[k] = *(s+1);
-	      while (*s != '(' && *s != '\0') s++;
-	      if (*s != '(') return NULL;
-	      hmm->cs[k] = *(s+1);
-	    }
-
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->mat[k].t[MATCH] = (float) atof(s);
-	  
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->mat[k].t[DELETE] = (float) atof(s);
-	  
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->mat[k].t[INSERT] = (float) atof(s);
-	  
-	  for (i = 0; i < Alphabet_size; i++)
-	    {
-	      if (fgets(buffer, 512, fp) == NULL) return NULL;
-	      if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	      hmm->mat[k].p[i] = (float) atof(s);
-	    }
-
-				/* Skip all regularizer info for V1.0 */
-	  if (version == HMMER1_0F)
-	    for (i = 0; i < Alphabet_size + 3; i++)
-	      if (fgets(buffer, 512, fp) == NULL) return NULL;
-
-	}
-      else if (strcmp(statetype, "###INSERT_STATE") == 0)
-	{
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->ins[k].t[MATCH] = (float) atof(s);
-	  
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->ins[k].t[DELETE] = (float) atof(s);
-	  
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->ins[k].t[INSERT] = (float) atof(s);
-	  
-	  for (i = 0; i < Alphabet_size; i++)
-	    {
-	      if (fgets(buffer, 512, fp) == NULL) return NULL;
-	      if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	      hmm->ins[k].p[i] = (float) atof(s);
-	    }
-	  
-	  /* Skip all regularizer info in V1.0 files */
-	  if (version == HMMER1_0F)
-	    for (i = 0; i < Alphabet_size + 3; i++)
-	      if (fgets(buffer, 512, fp) == NULL) return NULL;
-
-	}
-      else if (strcmp(statetype, "###DELETE_STATE") == 0)
-	{
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->del[k].t[MATCH] = (float) atof(s);
-	  
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->del[k].t[DELETE] = (float) atof(s);
-	  
-	  if (fgets(buffer, 512, fp) == NULL) return NULL;
-	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-	  hmm->del[k].t[INSERT] = (float) atof(s);
-	  
-	  /* Skip all regularizer info in V1.0 files*/
-	  if (version == HMMER1_0F)
-	    for (i = 0; i < 3; i++)
-	      if (fgets(buffer, 512, fp) == NULL) return NULL;
-	}
-      else
-	return NULL;
-    }
-  
-  DefaultNullModel(hmm->null);
-  Renormalize(hmm);
-  return hmm;
-}
-#endif /*SRE_REMOVED*/
-
-
-
-static int  
-read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
-{
-  Die("1.9 ASCII HMMs unsupported");
+FAILURE:
+  if (hmm  != NULL) FreePlan7(hmm);
+  *ret_hmm = NULL;
   return 1;
 }
+
 static int  
 read_bin19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  Die("1.9 binary HMMs unsupported");
+  unsigned int     magic;
+  struct plan7_s  *hmm;     /* plan7 HMM */ 
+  struct plan9_s  *p9hmm;   /* old style 1.x HMM */
+  
+  /* Read the magic number; if we don't see it, then we
+   * must be out of data in the file.
+   */
+  if (feof(hmmfp->f)) return 0;
+  if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) return 0;
+
+  p9hmm = read_plan9_binhmm(hmmfp->f, HMMER1_9B, hmmfp->byteswap);
+  if (p9hmm == NULL) { *ret_hmm = NULL; return 1; }
+
+  Plan9toPlan7(p9hmm, &hmm);
+
+  hmm->comlog = Strdup("[converted from an old Plan9 HMM]");
+  Plan7SetCtime(hmm);
+
+  P9FreeHMM(p9hmm);
+ *ret_hmm = hmm;
   return 1;
 }
 static int  
 read_asc17hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  Die("1.7 ASCII HMMs unsupported");
+  struct plan7_s  *hmm;     /* plan7 HMM */ 
+  struct plan9_s  *p9hmm;   /* old style 1.x HMM */
+  char   buffer[512];
+
+  /* Read the magic header; if we don't see it, then
+   * we must be out of data in the file.
+   */
+  if (feof(hmmfp->f) || fgets(buffer, 512, hmmfp->f) == NULL) return 0;
+
+  p9hmm = read_plan9_aschmm(hmmfp->f, HMMER1_7F);
+  if (p9hmm == NULL) { *ret_hmm = NULL; return 1; }
+
+  Plan9toPlan7(p9hmm, &hmm);
+
+  hmm->comlog = Strdup("[converted from an old Plan9 HMM]");
+  Plan7SetCtime(hmm);
+
+  P9FreeHMM(p9hmm);
+ *ret_hmm = hmm;
   return 1;
 }
+
 static int  
 read_bin17hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  Die("1.7 binary HMMs unsupported");
+  unsigned int     magic;
+  struct plan7_s  *hmm;     /* plan7 HMM */ 
+  struct plan9_s  *p9hmm;   /* old style 1.x HMM */
+  
+  /* Read the magic number; if we don't see it, then we
+   * must be out of data in the file.
+   */
+  if (feof(hmmfp->f)) return 0;
+  if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) return 0;
+
+  p9hmm = read_plan9_binhmm(hmmfp->f, HMMER1_7B, hmmfp->byteswap);
+  if (p9hmm == NULL) { *ret_hmm = NULL; return 1; }
+
+  Plan9toPlan7(p9hmm, &hmm);
+
+  hmm->comlog = Strdup("[converted from an old Plan9 HMM]");
+  Plan7SetCtime(hmm);
+
+  P9FreeHMM(p9hmm);
+ *ret_hmm = hmm;
   return 1;
 }
+
 static int  
 read_asc11hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
@@ -1177,22 +1010,65 @@ read_asc11hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 static int  
 read_bin11hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  Die("1.1 binary HMMs unsupported");
+  unsigned int     magic;
+  struct plan7_s  *hmm;     /* plan7 HMM */ 
+  struct plan9_s  *p9hmm;   /* old style 1.x HMM */
+  
+  /* Read the magic number; if we don't see it, then we
+   * must be out of data in the file.
+   */
+  if (feof(hmmfp->f)) return 0;
+  if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) return 0;
+
+  p9hmm = read_plan9_binhmm(hmmfp->f, HMMER1_1B, hmmfp->byteswap);
+  if (p9hmm == NULL) { *ret_hmm = NULL; return 1; }
+
+  Plan9toPlan7(p9hmm, &hmm);
+
+  hmm->comlog = Strdup("[converted from an old Plan9 HMM]");
+  Plan7SetCtime(hmm);
+
+  P9FreeHMM(p9hmm);
+ *ret_hmm = hmm;
   return 1;
 }
+
 static int  
 read_asc10hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
   Die("1.0 ASCII HMMs unsupported");
   return 1;
 }
+
 static int  
 read_bin10hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  Die("1.0 binary HMMs unsupported");
-  return 1;
+  unsigned int     magic;
+  struct plan7_s  *hmm;     /* plan7 HMM */ 
+  struct plan9_s  *p9hmm;   /* old style 1.x HMM */
+  
+  /* Read the magic number; if we don't see it, then we
+   * must be out of data in the file.
+   */
+  if (feof(hmmfp->f)) return 0;
+  if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) return 0;
+
+  p9hmm = read_plan9_binhmm(hmmfp->f, HMMER1_0B, hmmfp->byteswap);
+  if (p9hmm == NULL) { *ret_hmm = NULL; return 1; }
+
+  Plan9toPlan7(p9hmm, &hmm);
+
+  hmm->comlog = Strdup("[converted from an old Plan9 HMM]");
+  Plan7SetCtime(hmm);
+
+  P9FreeHMM(p9hmm);
+ *ret_hmm = hmm;
+  return 1; 
 }
 
+/*****************************************************************
+ * Some miscellaneous utility functions
+ *****************************************************************/
 
 /* Function: prob2ascii()
  * 
@@ -1347,4 +1223,343 @@ multiline(FILE *fp, char *pfx, char *s)
       sptr = strtok(NULL, "\n");
     }
   free(buf);
+}
+
+
+/*****************************************************************
+ * HMMER 1.x save file reading functions, modified from the
+ * corpse of 1.9m. 
+ *****************************************************************/
+
+
+/* Function: read_plan9_binhmm()
+ * 
+ * Read old (Plan9) binary HMM save files from HMMER 1.9 and earlier.
+ * V1.0 saved regularizer and sympvec info, which V1.1 ignores.
+ * V1.7 and later may include optional ref, cs annotation lines.
+ * V1.9 added name, null model.
+ * 
+ * Returns pointer to the HMM on success; NULL
+ * on failure. Sets global alphabet information based on  
+ * whether it reads 4 or 20 as alphabet size (don't rely
+ * on ancient HMMER macro definitions).
+ */
+static struct plan9_s *
+read_plan9_binhmm(FILE *fp, int version, int swapped)
+{
+  struct plan9_s *hmm;
+  int   M;                      /* length of model  */
+  int   k;                      /* state number  */
+  int   x;                      /* symbol or transition number */
+  int   len;                    /* length of variable length string */
+  int   asize;			/* alphabet size */
+  int   atype;			/* alphabet type (read but ignored) */
+  char  abet[20];		/* alphabet (read but ignored) */
+  
+ /* read M and alphabet size */
+  if (! fread((char *) &(M), sizeof(int), 1, fp))  return NULL;
+  if (! fread((char *) &asize, sizeof(int), 1, fp)) return NULL;
+  if (swapped) { 
+    byteswap((char *) &M, sizeof(int));
+    byteswap((char *) &asize, sizeof(int));
+  }
+  
+  /* Set global alphabet information
+   */
+  if (Alphabet_type == hmmNOTSETYET)
+    {
+      if      (asize == 4)  SetAlphabet(hmmNUCLEIC);
+      else if (asize == 20) SetAlphabet(hmmAMINO);
+      else    
+	Die("A nonbiological alphabet size of %d; so I can't convert plan9 to plan7", asize);
+    }
+  else
+    {
+      if (asize != Alphabet_size)
+	Die("Plan9 model's alphabet size (%d) doesn't match previous setting (%d)", asize, Alphabet_size);
+    }
+
+  /* now, create space for hmm */
+  if ((hmm = P9AllocHMM(M)) == NULL)
+    Die("malloc failed for reading hmm in\n");
+  
+  /* version 1.9+ files have a name */
+  if (version == HMMER1_9B) {
+    if (! fread((char *) &len, sizeof(int), 1, fp))  return NULL;
+    if (swapped) byteswap((char *) &len, sizeof(int));
+    hmm->name = (char *) ReallocOrDie (hmm->name, sizeof(char) * (len+1));
+    if (! fread((char *) hmm->name, sizeof(char), len, fp)) return NULL;
+    hmm->name[len] = '\0';
+  }
+
+  /* read alphabet_type and alphabet, but ignore: we've already set them */
+  if (! fread((char *) &atype, sizeof(int), 1, fp)) return NULL;
+  if (! fread((char *) abet, sizeof(char), Alphabet_size, fp)) return NULL;
+  
+  /* skip the random symbol frequencies in V1.0 */
+  if (version == HMMER1_0B)
+    fseek(fp, (long) (sizeof(float) * Alphabet_size), SEEK_CUR);
+  
+  /* Get optional info in V1.7 and later
+   */
+  if (version == HMMER1_7B || version == HMMER1_9B)
+    {
+      if (! fread((char *) &(hmm->flags), sizeof(int), 1, fp)) return NULL;
+      if (swapped) byteswap((char *) &hmm->flags, sizeof(int));
+      if ((hmm->flags & HMM_REF) &&
+          ! fread((char *) hmm->ref, sizeof(char), hmm->M+1, fp)) return NULL;
+      hmm->ref[hmm->M+1] = '\0';
+      if ((hmm->flags & HMM_CS) &&
+          ! fread((char *) hmm->cs,  sizeof(char), hmm->M+1, fp)) return NULL;
+      hmm->cs[hmm->M+1]  = '\0';
+    }
+
+  /* Get the null model in V1.9 and later
+   */
+  if (version == HMMER1_9B)
+    {
+      if (! fread((char *) hmm->null, sizeof(float), Alphabet_size, fp)) return NULL;
+      if (swapped)
+        for (x = 0; x < Alphabet_size; x++)
+          byteswap((char *) &(hmm->null[x]), sizeof(float));
+    }
+  else P9DefaultNullModel(hmm->null);
+
+  /* everything else is states */
+  for (k = 0; k <= hmm->M; k++)
+    {
+      /* get match state info */
+      if (! fread((char *) &(hmm->mat[k].t[MATCH]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) &(hmm->mat[k].t[DELETE]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) &(hmm->mat[k].t[INSERT]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) hmm->mat[k].p, sizeof(float), Alphabet_size, fp)) return NULL
+;
+      if (swapped) {
+        byteswap((char *) &(hmm->mat[k].t[MATCH]),  sizeof(float));
+        byteswap((char *) &(hmm->mat[k].t[DELETE]), sizeof(float));
+        byteswap((char *) &(hmm->mat[k].t[INSERT]), sizeof(float));
+        for (x = 0; x < Alphabet_size; x++)
+          byteswap((char *) &(hmm->mat[k].p[x]), sizeof(float));
+      }
+      
+      /* skip the regularizer info in V1.0 */
+      if (version == HMMER1_0B)
+        fseek(fp, (long)(sizeof(float) * (3 + Alphabet_size)), SEEK_CUR);
+      
+      /* get delete state info */
+      if (! fread((char *) &(hmm->del[k].t[MATCH]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) &(hmm->del[k].t[DELETE]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) &(hmm->del[k].t[INSERT]), sizeof(float), 1, fp)) return NULL;
+      if (swapped) {
+        byteswap((char *) &(hmm->del[k].t[MATCH]),  sizeof(float));
+        byteswap((char *) &(hmm->del[k].t[DELETE]), sizeof(float));
+        byteswap((char *) &(hmm->del[k].t[INSERT]), sizeof(float));
+      }
+      
+      /* skip the regularizer info in V1.0 */
+      if (version == HMMER1_0B)
+        fseek(fp, (long)(sizeof(float) * 3), SEEK_CUR);
+      
+      /* get insert state info */
+      if (! fread((char *) &(hmm->ins[k].t[MATCH]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) &(hmm->ins[k].t[DELETE]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) &(hmm->ins[k].t[INSERT]), sizeof(float), 1, fp)) return NULL;
+      if (! fread((char *) hmm->ins[k].p, sizeof(float), Alphabet_size, fp)) return NULL
+;
+      if (swapped) {
+        byteswap((char *) &(hmm->ins[k].t[MATCH]),  sizeof(float));
+        byteswap((char *) &(hmm->ins[k].t[DELETE]), sizeof(float));
+        byteswap((char *) &(hmm->ins[k].t[INSERT]), sizeof(float));
+        for (x = 0; x < Alphabet_size; x++)
+          byteswap((char *) &(hmm->ins[k].p[x]), sizeof(float));
+      }
+      
+      /* skip the regularizer info in V1.0 */
+      if (version == HMMER1_0B)
+        fseek(fp, (long)(sizeof(float) * (3 + Alphabet_size)), SEEK_CUR);
+    }
+  P9Renormalize(hmm);
+  return hmm;
+}
+
+
+/* Function: read_plan9_aschmm()
+ * 
+ * Purpose:  Read ASCII-format save files from 1.8.4 and earlier.
+ *           V1.0 contained sympvec and regularizers; these are ignored
+ *                in V1.1 and later
+ *           V1.7 and later contain ref and cs annotation.
+ *
+ * Args:     fp      - open save file, header has been read already
+ *           version - HMMER1_7F, for instance
+ *
+ * Returns ptr to the (allocated) new HMM on success,
+ * or NULL on failure.
+ */
+static struct plan9_s *
+read_plan9_aschmm(FILE *fp, int version)
+{
+  struct plan9_s *hmm;
+  int   M;			/* length of model  */
+  char buffer[512];
+  char *statetype;
+  char *s;
+  int   k;			/* state number  */
+  int   i;			/* symbol number */
+  int   asize;
+				/* read M from first line */
+  if (fgets(buffer, 512, fp) == NULL) return NULL;
+  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+  if (!isdigit(*s)) return NULL;
+  M = atoi(s);
+				/* read alphabet_length */
+  if (fgets(buffer, 512, fp) == NULL) return NULL;
+  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+  if (!isdigit(*s)) return NULL;
+  asize = atoi(s);
+
+  /* Set global alphabet information
+   */
+  if (Alphabet_type == hmmNOTSETYET)
+    {
+      if      (asize == 4)  SetAlphabet(hmmNUCLEIC);
+      else if (asize == 20) SetAlphabet(hmmAMINO);
+      else    
+	Die("A nonbiological alphabet size of %d; so I can't convert plan9 to plan7", asize);
+    }
+  else
+    {
+      if (asize != Alphabet_size)
+	Die("Plan9 model's alphabet size (%d) doesn't match previous setting (%d)", asize, Alphabet_size);
+    }
+				/* now, create space for hmm */
+  if ((hmm = P9AllocHMM(M)) == NULL)
+    Die("malloc failed for reading hmm in\n");
+  
+				/* read alphabet_type but ignore */
+  if (fgets(buffer, 512, fp) == NULL) return NULL;
+  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+  if (!isdigit(*s)) return NULL;
+				/* read alphabet but ignore */
+  if (fgets(buffer, 512, fp) == NULL) return NULL;
+  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+				
+  /* skip the random symbol frequencies in V1.0 files. now unused */
+  if (version == HMMER1_0F)
+    for (i = 0; i < Alphabet_size; i++)
+      if (fgets(buffer, 512, fp) == NULL) return NULL;
+
+  /* V1.7 has lines for whether we have valid ref, cs info
+   */
+  if (version == HMMER1_7F)
+    {
+      if (fgets(buffer, 512, fp) == NULL) return NULL;
+      if (strncmp(buffer, "yes", 3) == 0) hmm->flags |= HMM_REF;
+      if (fgets(buffer, 512, fp) == NULL) return NULL;
+      if (strncmp(buffer, "yes", 3) == 0) hmm->flags |= HMM_CS;
+    }
+
+				/* everything else is states */
+  while (fgets(buffer, 512, fp) != NULL)
+    {
+				/* get state type and index info */
+      if ((statetype = strtok(buffer, " \t\n")) == NULL) return NULL;
+      if ((s = strtok((char *) NULL, " \t\n")) == NULL) return NULL;
+      if (!isdigit(*s)) return NULL;
+      k = atoi(s);
+      if (k < 0 || k > hmm->M+1) return NULL;
+      
+      if (strcmp(statetype, "###MATCH_STATE") == 0)
+	{
+				/* V1.7: get ref, cs info:   */
+	                        /* ###MATCH_STATE 16 (x) (H) */
+	  if (version == HMMER1_7F)
+	    {
+	      s = strtok(NULL, "\n");
+	      while (*s != '(' && *s != '\0') s++;
+	      if (*s != '(') return NULL;
+	      hmm->ref[k] = *(s+1);
+	      while (*s != '(' && *s != '\0') s++;
+	      if (*s != '(') return NULL;
+	      hmm->cs[k] = *(s+1);
+	    }
+
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->mat[k].t[MATCH] = (float) atof(s);
+	  
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->mat[k].t[DELETE] = (float) atof(s);
+	  
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->mat[k].t[INSERT] = (float) atof(s);
+	  
+	  for (i = 0; i < Alphabet_size; i++)
+	    {
+	      if (fgets(buffer, 512, fp) == NULL) return NULL;
+	      if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	      hmm->mat[k].p[i] = (float) atof(s);
+	    }
+
+				/* Skip all regularizer info for V1.0 */
+	  if (version == HMMER1_0F)
+	    for (i = 0; i < Alphabet_size + 3; i++)
+	      if (fgets(buffer, 512, fp) == NULL) return NULL;
+
+	}
+      else if (strcmp(statetype, "###INSERT_STATE") == 0)
+	{
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->ins[k].t[MATCH] = (float) atof(s);
+	  
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->ins[k].t[DELETE] = (float) atof(s);
+	  
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->ins[k].t[INSERT] = (float) atof(s);
+	  
+	  for (i = 0; i < Alphabet_size; i++)
+	    {
+	      if (fgets(buffer, 512, fp) == NULL) return NULL;
+	      if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	      hmm->ins[k].p[i] = (float) atof(s);
+	    }
+	  
+	  /* Skip all regularizer info in V1.0 files */
+	  if (version == HMMER1_0F)
+	    for (i = 0; i < Alphabet_size + 3; i++)
+	      if (fgets(buffer, 512, fp) == NULL) return NULL;
+
+	}
+      else if (strcmp(statetype, "###DELETE_STATE") == 0)
+	{
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->del[k].t[MATCH] = (float) atof(s);
+	  
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->del[k].t[DELETE] = (float) atof(s);
+	  
+	  if (fgets(buffer, 512, fp) == NULL) return NULL;
+	  if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
+	  hmm->del[k].t[INSERT] = (float) atof(s);
+	  
+	  /* Skip all regularizer info in V1.0 files*/
+	  if (version == HMMER1_0F)
+	    for (i = 0; i < 3; i++)
+	      if (fgets(buffer, 512, fp) == NULL) return NULL;
+	}
+      else
+	return NULL;
+    }
+  
+  P9DefaultNullModel(hmm->null);
+  P9Renormalize(hmm);
+  return hmm;
 }
