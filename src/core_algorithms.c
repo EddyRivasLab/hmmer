@@ -486,7 +486,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	    tr->pos[tpos]       = i--;
 	    break;
 	  }
-      if (k < 1) Die("traceback failed");
+      if (k < 0) Die("traceback failed");
       break;
 
     case STC:			/* C comes from C, E */
