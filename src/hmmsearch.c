@@ -1101,7 +1101,7 @@ worker_thread(void *ptr)
 	  Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
 	pthread_exit(NULL);
       }
-    SQD_DPRINTF1(("a thread is working on %s\n", sqinfo->name));
+    SQD_DPRINTF1(("a thread is working on %s\n", sqinfo.name));
 				/* release the lock */
     if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
       Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
