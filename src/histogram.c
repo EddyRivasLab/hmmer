@@ -564,45 +564,106 @@ EVDBasicFit(struct histogram_s *h)
  *           a chi-square test as a measure of goodness of fit. 
  *           
  * Methods:  Uses a maximum likelihood method [Lawless82].
+ *           Lower outliers are removed by censoring the data below the peak.
  *           Upper outliers are removed iteratively using method 
  *           described by [Mott92].
  *           
  * Args:     h         - histogram to fit
+ *           censor    - TRUE to censor data left of the peak
  *           high_hint - score cutoff; above this are `real' hits that aren't fit
  *           
  * Return:   1 if fit is judged to be valid.
  *           else 0 if fit is invalid (too few seqs.)
  */
 int
-ExtremeValueFitHistogram(struct histogram_s *h, float high_hint) 
+ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint) 
 {
-  double *x;                     /* array of EVD samples to fit */
-  int    n;			/* number of EVD samples in x  */
-  double lambda, mu;		/* new estimates of lambda, mu */
-  int    sc, idx;		/* loop indices for score or score-h->min*/
+  float *x;                     /* array of EVD samples to fit */
+  int   *y;                     /* histogram counts            */ 
+  int    n;			/* number of observed samples  */
+  int    z;			/* number of censored samples  */
+  int    hsize;			/* size of histogram           */
+  float  lambda, mu;		/* new estimates of lambda, mu */
+  int    sc;		        /* loop index for score        */
+  int    lowbound;		/* lower bound of fitted region*/
+  int    highbound;		/* upper bound of fitted region*/
+  int    new_highbound;
+  int    iteration;
 
-  /* Determine if we have enough hits to fit the histogram;
-   * arbitrarily require 1000.
+  /* Determine lower bound on fitted region;
+   * if we're censoring the data, choose the peak of the histogram.
+   * if we're not, then we take the whole histogram.
    */
-  if (h->total < 1000) { h->fit_type = HISTFIT_NONE; return 0; }
-
-  /* Construct x vector.
-   */
-  x = MallocOrDie(sizeof(double) * h->total);
-  n = 0;
-  for (sc = h->lowscore; sc <= h->highscore; sc++)
+  lowbound = h->lowscore;
+  if (censor) 
     {
-      for (idx = 0; idx < h->histogram[sc-h->min]; idx++)
-	x[n++] = (double) sc + 0.5;
+      int max = -1;
+      for (sc = h->lowscore; sc <= h->highscore; sc++)
+	if (h->histogram[sc - h->min] > max) 
+	  {
+	    max      = h->histogram[sc - h->min];
+	    lowbound = sc;
+	  }
     }
 
-  /* Do an ML fit
+  /* Determine initial upper bound on fitted region.
    */
-  EVDMaxLikelyFit(x, n, &mu, &lambda);
+  highbound = MIN(high_hint, h->highscore);
+
+  /* Now, iteratively converge on our lambda, mu:
+   */
+  for (iteration = 0; iteration < 100; iteration++)
+    {
+      /* Construct x, y vectors.
+       */
+      hsize = highbound - lowbound + 1;
+      x = MallocOrDie(sizeof(float) * hsize);
+      y = MallocOrDie(sizeof(int)   * hsize);
+      n = 0;
+      for (sc = lowbound; sc <= highbound; sc++)
+	{
+	  x[sc-lowbound] = (float) sc + 0.5; /* crude, but tests OK */
+	  y[sc-lowbound] = h->histogram[sc - h->min];
+	  n             += h->histogram[sc - h->min];
+	}
+
+      /* If we're censoring, estimate z, the number of censored guys
+       * left of the bound. Our initial estimate is crudely that we're
+       * missing e^-1 of the total distribution (which would be exact
+       * if we censored exactly at mu; but we censored at the observed peak).
+       * Subsequent estimates are more exact based on our current estimate of mu.
+       */
+      if (censor)
+	{
+	  if (iteration == 0)
+	    z = MIN(h->total-n, (int) (0.58198 * (float) n));
+	  else
+	    {
+	      double psx;
+	      psx = EVDDistribution((float) lowbound, mu, lambda);
+	      z = MIN(h->total-n, (int) ((double) n * psx / (1. - psx)));
+	    }
+	}
+
+      /* Do an ML fit
+       */
+      if (censor) EVDCensoredFit(x, y, hsize, z, (float) lowbound, &mu, &lambda);
+      else        EVDMaxLikelyFit(x, y, hsize, &mu, &lambda);
+
+      /* Find the Eval = 1 point as a new highbound;
+       * the total number of samples estimated to "belong" to the EVD is n+z  
+       */
+      new_highbound = (int)
+	(mu - (log (-1. * log((double) (n+z-1) / (double)(n+z))) / lambda));
+
+      free(x);
+      free(y);
+      if (new_highbound >= highbound) break; 
+      highbound = new_highbound;
+    }
 
   ExtremeValueSetHistogram(h, mu, lambda, 2);
   
-  free(x);
   return 1;
 }
 
@@ -820,6 +881,33 @@ GaussianSetHistogram(struct histogram_s *h, float mean, float sd)
 
 
 
+/* Function: EVDDensity()
+ * Date:     SRE, Sat Nov 15 19:37:52 1997 [St. Louis]
+ * 
+ * Purpose:  Return the extreme value density P(S=x) at
+ *           a given point x, for an EVD controlled by
+ *           parameters mu and lambda.
+ */
+double
+EVDDensity(float x, float mu, float lambda)
+{
+  return (lambda * exp(-1. * lambda * (x - mu) 
+		       - exp(-1. * lambda * (x - mu))));
+}
+
+/* Function: EVDDistribution()
+ * Date:     SRE, Tue Nov 18 08:02:22 1997 [St. Louis]
+ * 
+ * Purpose:  Returns the extreme value distribution P(S < x)
+ *           evaluated at x, for an EVD controlled by parameters
+ *           mu and lambda.
+ */
+double
+EVDDistribution(float x, float mu, float lambda)
+{
+  return (exp(-1. * exp(-1. * lambda * (x - mu))));
+}
+
 /* Function: ExtremeValueP()
  * 
  * Purpose:  Calculate P(S>x) according to an extreme
@@ -902,15 +990,19 @@ EVDrandom(float mu, float lambda)
 /* Function: Lawless416()
  * Date:     SRE, Thu Nov 13 11:48:50 1997 [St. Louis]
  * 
- * Purpose:  Equation 4.1.6 from [Lawless82], pg. 143:
+ * Purpose:  Equation 4.1.6 from [Lawless82], pg. 143, and
+ *           its first derivative with respect to lambda,
  *           for finding the ML fit to EVD lambda parameter.
  *           This equation gives a result of zero for the maximum
  *           likelihood lambda.
  *           
+ *           Can either deal with a histogram or an array.
+ *           
  *           Warning: beware overflow/underflow issues! not bulletproof.
  *           
- * Args:     x      - array of EVD-distributed samples
- *           n      - number of samples
+ * Args:     x      - array of sample values (or x-axis of a histogram)
+ *           y      - NULL (or y-axis of a histogram)
+ *           n      - number of samples (or number of histogram bins)
  *           lambda - a lambda to test
  *           ret_f  - RETURN: 4.1.6 evaluated at lambda
  *           ret_df - RETURN: first derivative of 4.1.6 evaluated at lambda
@@ -918,27 +1010,96 @@ EVDrandom(float mu, float lambda)
  * Return:   (void)
  */ 
 void
-Lawless416(double *x, int n, double lambda, double *ret_f, double *ret_df)
+Lawless416(float *x, int *y, int n, float lambda, float *ret_f, float *ret_df)
 {
 
   double esum;			/* \sum e^(-lambda xi)      */
   double xesum;			/* \sum xi e^(-lambda xi)   */
   double xxesum;		/* \sum xi^2 e^(-lambda xi) */
   double xsum;			/* \sum xi                  */
+  double mult;			/* histogram count multiplier */
+  double total;			/* total samples            */
   int i;
 
-  esum = xesum = xsum  = xxesum = 0.;
+
+  esum = xesum = xsum  = xxesum = total = 0.;
   for (i = 0; i < n; i++)
     {
-      xsum   += x[i];
-      xesum  += x[i] * exp(-1. * lambda * x[i]);
-      xxesum += x[i] * x[i] * exp(-1. * lambda * x[i]);
-      esum   += exp(-1. * lambda * x[i]);
+      mult = (y == NULL) ? 1. : (double) y[i];
+      xsum   += mult * x[i];
+      xesum  += mult * x[i] * exp(-1. * lambda * x[i]);
+      xxesum += mult * x[i] * x[i] * exp(-1. * lambda * x[i]);
+      esum   += mult * exp(-1. * lambda * x[i]);
+      total  += mult;
     }
-  *ret_f  = 1./lambda - xsum / (double) n + xesum / esum;
+  *ret_f  = 1./lambda - xsum / total + xesum / esum;
   *ret_df = ((xesum / esum) * (xesum / esum))
-             - (xxesum / esum)
-             - (1. / (lambda * lambda));
+    - (xxesum / esum)
+    - (1. / (lambda * lambda));
+
+  return;
+}
+
+
+/* Function: Lawless422()
+ * Date:     SRE, Mon Nov 17 09:42:48 1997 [St. Louis]
+ * 
+ * Purpose:  Equation 4.2.2 from [Lawless82], pg. 169, and
+ *           its first derivative with respect to lambda,
+ *           for finding the ML fit to EVD lambda parameter
+ *           for Type I censored data. 
+ *           This equation gives a result of zero for the maximum
+ *           likelihood lambda.
+ *           
+ *           Can either deal with a histogram or an array.
+ *           
+ *           Warning: beware overflow/underflow issues! not bulletproof.
+ *           
+ * Args:     x      - array of sample values (or x-axis of a histogram)
+ *           y      - NULL (or y-axis of a histogram)
+ *           n      - number of observed samples (or number of histogram bins)
+ *           z      - number of censored samples 
+ *           c      - censoring value; all observed x_i >= c         
+ *           lambda - a lambda to test
+ *           ret_f  - RETURN: 4.2.2 evaluated at lambda
+ *           ret_df - RETURN: first derivative of 4.2.2 evaluated at lambda
+ *           
+ * Return:   (void)
+ */ 
+void
+Lawless422(float *x, int *y, int n, int z, float c,
+	   float lambda, float *ret_f, float *ret_df)
+{
+  double esum;			/* \sum e^(-lambda xi)      + z term    */
+  double xesum;			/* \sum xi e^(-lambda xi)   + z term    */
+  double xxesum;		/* \sum xi^2 e^(-lambda xi) + z term    */
+  double xsum;			/* \sum xi                  (no z term) */
+  double mult;			/* histogram count multiplier */
+  double total;			/* total samples            */
+  int i;
+
+  esum = xesum = xsum  = xxesum = total = 0.;
+  for (i = 0; i < n; i++)
+    {
+      mult = (y == NULL) ? 1. : (double) y[i];
+      xsum   += mult * x[i];
+      esum   += mult *               exp(-1. * lambda * x[i]);
+      xesum  += mult * x[i] *        exp(-1. * lambda * x[i]);
+      xxesum += mult * x[i] * x[i] * exp(-1. * lambda * x[i]);
+      total  += mult;
+    }
+
+  /* Add z terms for censored data
+   */
+  esum   += (double) z *         exp(-1. * lambda * c);
+  xesum  += (double) z * c *     exp(-1. * lambda * c);
+  xxesum += (double) z * c * c * exp(-1. * lambda * c);
+
+  *ret_f  = 1./lambda - xsum / total + xesum / esum;
+  *ret_df = ((xesum / esum) * (xesum / esum))
+    - (xxesum / esum)
+    - (1. / (lambda * lambda));
+
   return;
 }
 
@@ -947,9 +1108,9 @@ Lawless416(double *x, int n, double lambda, double *ret_f, double *ret_df)
 /* Function: EVDMaxLikelyFit()
  * Date:     SRE, Fri Nov 14 07:56:29 1997 [St. Louis]
  * 
- * Purpose:  Given a list of EVD-distributed samples x,
+ * Purpose:  Given a list or a histogram of EVD-distributed samples,
  *           find maximum likelihood parameters lambda and
- *           mu.  
+ *           mu. 
  *           
  * Algorithm: Uses approach described in [Lawless82]. Solves
  *           for lambda using Newton/Raphson iterations;
@@ -959,23 +1120,25 @@ Lawless416(double *x, int n, double lambda, double *ret_f, double *ret_df)
  *           Newton/Raphson algorithm developed from description in
  *           Numerical Recipes in C [Press88]. 
  *           
- * Args:     x          - list of EVD distributed samples
- *           n          - number of samples
+ * Args:     x          - list of EVD distributed samples or x-axis of histogram
+ *           c          - NULL, or y-axis of histogram
+ *           n          - number of samples, or number of histogram bins 
  *           ret_mu     : RETURN: ML estimate of mu
  *           ret_lambda : RETURN: ML estimate of lambda
  *           
  * Return:   (void)
  */
 void
-EVDMaxLikelyFit(double *x, int n, double *ret_mu, double *ret_lambda)
+EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 {
-  double lambda, mu;
-  double fx;			/* f(x)  */
-  double dfx;			/* f'(x) */
+  float  lambda, mu;
+  float  fx;			/* f(x)  */
+  float  dfx;			/* f'(x) */
   double esum;                  /* \sum e^(-lambda xi) */ 
-  double tol = 1e-6;
+  double mult;
+  double total;
+  float  tol = 1e-5;
   int    i;
-  
 
   /* 1. Find an initial guess at lambda: linear regression here?
    */
@@ -985,24 +1148,185 @@ EVDMaxLikelyFit(double *x, int n, double *ret_mu, double *ret_lambda)
    */
   for (i = 0; i < 100; i++)
     {
-      Lawless416(x, n, lambda, &fx, &dfx);
+      Lawless416(x, c, n, lambda, &fx, &dfx);
       if (fabs(fx) < tol) break;             /* success */
-      lambda = lambda - fx / dfx;	     /* Newton/Raphson is simple! */
+      lambda = lambda - fx / dfx;	     /* Newton/Raphson is simple */
+      if (lambda <= 0.) lambda = 0.001;      /* but be a little careful  */
     }
-  if (i == 100) Die("too many Newton/Raphson iterations");
-  /* printf("I did %d iterations of Newton/Raphson\n", i);*/
+
+  /* 2.5: If we did 100 iterations but didn't converge, Newton/Raphson failed.
+   *      Resort to a bisection search. Worse convergence speed
+   *      but guaranteed to converge (unlike Newton/Raphson).
+   *      We assume (!?) that fx is a monotonically decreasing function of x;
+   *      i.e. fx > 0 if we are left of the root, fx < 0 if we
+   *      are right of the root.
+   */ 
+  if (i == 100)
+    {
+      float left, right, mid;
+				/* First we need to bracket the root */
+      lambda = right = left = 0.2;
+      Lawless416(x, c, n, lambda, &fx, &dfx);
+      if (fx < 0.) 
+	{			/* fix right; search left. */
+	  do {
+	    left -= 0.1;
+	    if (left < 0.) { Die("failed to bracket root"); }
+	    Lawless416(x, c, n, left, &fx, &dfx);
+	  } while (fx < 0.);
+	}
+      else
+	{			/* fix left; search right. */
+	  do {
+	    right += 0.1;
+	    Lawless416(x, c, n, right, &fx, &dfx);
+	    if (right > 100.) Die("failed to bracket root");
+	  } while (fx > 0.);
+	}
+			/* now we bisection search in left/right interval */
+      for (i = 0; i < 100; i++)
+	{
+	  mid = (left + right) / 2.; 
+	  Lawless416(x, c, n, mid, &fx, &dfx);
+	  if (fabs(fx) < tol) break;             /* success */
+	  if (fx > 0.)	left = mid;
+	  else          right = mid;
+	}
+      if (i == 100) Die("even the bisection search failed");
+      lambda = mid;
+    }
 
   /* 3. Substitute into Lawless 4.1.5 to find mu
    */
   esum = 0.;
   for (i = 0; i < n; i++)
-    esum += exp(-1 * lambda * x[i]);
-  mu = -1. * log(esum / (double) n) / lambda;
+    {
+      mult   = (c == NULL) ? 1. : (double) c[i];
+      esum  += mult * exp(-1 * lambda * x[i]);
+      total += mult;
+    }
+  mu = -1. * log(esum / total) / lambda;
 
   *ret_lambda = lambda;
   *ret_mu     = mu;   
   return;
 }
+
+
+/* Function: EVDCensoredFit()
+ * Date:     SRE, Mon Nov 17 10:01:05 1997 [St. Louis]
+ * 
+ * Purpose:  Given a /left-censored/ list or histogram of EVD-distributed 
+ *           samples, as well as the number of censored samples z and the
+ *           censoring value c,              
+ *           find maximum likelihood parameters lambda and
+ *           mu. 
+ *           
+ * Algorithm: Uses approach described in [Lawless82]. Solves
+ *           for lambda using Newton/Raphson iterations;
+ *           then substitutes lambda into Lawless' equation 4.2.3
+ *           to get mu. 
+ *           
+ *           Newton/Raphson algorithm developed from description in
+ *           Numerical Recipes in C [Press88]. 
+ *           
+ * Args:     x          - list of EVD distributed samples or x-axis of histogram
+ *           y          - NULL, or y-axis of histogram
+ *           n          - number of observed samples,or number of histogram bins 
+ *           z          - number of censored samples
+ *           c          - censoring value (all x_i >= c)
+ *           ret_mu     : RETURN: ML estimate of mu
+ *           ret_lambda : RETURN: ML estimate of lambda
+ *           
+ * Return:   (void)
+ */
+void
+EVDCensoredFit(float *x, int *y, int n, int z, float c, 
+	       float *ret_mu, float *ret_lambda)
+{
+  float  lambda, mu;
+  float  fx;			/* f(x)  */
+  float  dfx;			/* f'(x) */
+  double esum;                  /* \sum e^(-lambda xi) */ 
+  double mult;
+  double total;
+  float  tol = 1e-5;
+  int    i;
+
+  /* 1. Find an initial guess at lambda: linear regression here?
+   */
+  lambda = 0.2;
+
+  /* 2. Use Newton/Raphson to solve Lawless 4.2.2 and find ML lambda
+   */
+  for (i = 0; i < 100; i++)
+    {
+      Lawless422(x, y, n, z, c, lambda, &fx, &dfx);
+      if (fabs(fx) < tol) break;             /* success */
+      lambda = lambda - fx / dfx;	     /* Newton/Raphson is simple */
+      if (lambda <= 0.) lambda = 0.001;      /* but be a little careful  */
+    }
+
+ /* 2.5: If we did 100 iterations but didn't converge, Newton/Raphson failed.
+   *      Resort to a bisection search. Worse convergence speed
+   *      but guaranteed to converge (unlike Newton/Raphson).
+   *      We assume (!?) that fx is a monotonically decreasing function of x;
+   *      i.e. fx > 0 if we are left of the root, fx < 0 if we
+   *      are right of the root.
+   */ 
+  if (i == 100)
+    {
+      float left, right, mid;
+				/* First we need to bracket the root */
+      lambda = right = left = 0.2;
+      Lawless422(x, y, n, z, c, lambda, &fx, &dfx);
+      if (fx < 0.) 
+	{			/* fix right; search left. */
+	  do {
+	    left -= 0.03;
+	    if (left < 0.) { Die("failed to bracket root"); }
+	    Lawless422(x, y, n, z, c, left, &fx, &dfx);
+	  } while (fx < 0.);
+	}
+      else
+	{			/* fix left; search right. */
+	  do {
+	    right += 0.1;
+	    Lawless422(x, y, n, z, c, left, &fx, &dfx);
+	    if (right > 100.) Die("failed to bracket root");
+	  } while (fx > 0.);
+	}
+			/* now we bisection search in left/right interval */
+      for (i = 0; i < 100; i++)
+	{
+	  mid = (left + right) / 2.; 
+	  Lawless422(x, y, n, z, c, left, &fx, &dfx);
+	  if (fabs(fx) < tol) break;             /* success */
+	  if (fx > 0.)	left = mid;
+	  else          right = mid;
+	}
+      if (i == 100) Die("even the bisection search failed");
+      lambda = mid;
+    }
+
+  /* 3. Substitute into Lawless 4.2.3 to find mu
+   */
+  esum =  total = 0.;
+  for (i = 0; i < n; i++)
+    {
+      mult   = (y == NULL) ? 1. : (double) y[i];
+      esum  += mult * exp(-1. * lambda * x[i]);
+      total += mult;
+    }
+  esum += (double) z * exp(-1. * lambda * c);    /* term from censored data */
+  mu = -1. * log(esum / total) / lambda;        
+
+  *ret_lambda = lambda;
+  *ret_mu     = mu;   
+  return;
+}
+
+
 
 
 
