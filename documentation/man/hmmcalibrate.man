@@ -120,7 +120,7 @@ hmmconvert(1), hmmer(1), hmmemit(1), hmmpfam(1), hmmsearch(1)
 User guide and tutorial: Userguide.ps
 .PP
 WWW: 
-.B http://genome.wustl.edu/eddy/hmmer.html
+.B http://hmmer.wustl.edu/
 
 .SH AUTHOR
 
