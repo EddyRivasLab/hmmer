@@ -296,6 +296,7 @@ display_by_domain(struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
 		  struct p7trace_s *tr)
 {
   struct p7trace_s **tarr;      /* array of per-domain traces */
+  struct fancyali_s *ali;	/* alignment for display      */
   int ntr;			/* number of domain traces    */
   int idx;			/* index for traces           */
   float sc;			/* score of a trace           */
@@ -325,8 +326,10 @@ display_by_domain(struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
 
   for (idx = 0; idx < ntr; idx++)
     {
-      P7PrintFancyTrace(stdout, tarr[idx], hmm, dsq, sqinfo->name);
+      ali = CreateFancyAli(tarr[idx], hmm, dsq, sqinfo->name);
+      PrintFancyAli(stdout, ali);
       P7FreeTrace(tarr[idx]);
+      FreeFancyAli(ali);
     }
   free(tarr);
   return;
