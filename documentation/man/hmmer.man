@@ -2,8 +2,7 @@
 
 .SH NAME
 .TP 
-.B HMMER
-- profile hidden Markov model software
+HMMER - profile hidden Markov model software
 
 .SH SYNOPSIS
 .TP
@@ -62,7 +61,7 @@ There is also a user's guide that came
 with the software distribution, which includes a tutorial introduction
 and more detailed descriptions of the programs.
 All documentation is also available on line from 
-.B http://genome.wustl.edu/eddy/hmmer.html.
+http://genome.wustl.edu/eddy/hmmer.html.
 
 .PP
 In general, no command line options should be needed by beginning users.
@@ -93,14 +92,14 @@ Standard IUPAC degeneracy codes are allowed in addition
 to the usual 4-letter or 20-letter codes. 
 
 .TP
-.B Unaligned sequence files 
+.B Unaligned sequences
 Unaligned sequence files may be in FASTA, Swissprot, EMBL, GenBank,
 PIR, Intelligenetics, Strider, or GCG format. 
 These formats
 are documented in the User's Guide.
 
 .TP 
-.B Multiple sequence alignment files
+.B Sequence alignments
 Multiple sequence alignments may be in CLUSTALW, SELEX, or GCG MSF
 format. These formats
 are documented in the User's Guide.
