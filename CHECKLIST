@@ -13,31 +13,45 @@ Checklist for a HMMER distribution.
    With and without memory leak tests ('make check' doesn't include -m flag)
    ccmalloc 0.3.9 is installed in /usr/local on wren and wrasse.
    Note: ccmalloc not threadsafe, so this doesn't test threads implementation.
-   PVM isn't tested at all (yet).
+   Note: glibc qsort() has a 6-byte "leak": tophits test will leak 6 bytes and fail.
     	% autoconf; (cd squid; autoconf)
      	% ./configure --enable-ccmalloc
         % make
 	% (cd testsuite; ../ssdk/sqc -m -p ../squid 2 exercises.sqc . ../src)
+	% (cd Bugs;      ../ssdk/sqc -m -p ../squid 2 bugs.sqc      . ../src)
 	% make distclean
-	% ./configure --enable-threads --enable-lfs
+	% ./configure --enable-threads --enable-lfs --enable-pvm
 	% make
 	% make check
+        % (cd Bugs;      ../ssdk/sqc -p ../squid 2 bugs.sqc      . ../src)
 	% make optcheck
 
-3. Write release notes.
+3. More manual testing.
+     Test the pvm (wrasse):
+        % cd testsuite
+	% echo quit| pvm pvm.conf
+	% ../src/hmmpfam --pvm Pfam_ls8.0 ../tutorial/7LES_DROME > foo.pvm
+	% echo halt| pvm pvm.conf
+     Test threads and nonthreads (whelk01): 
+        % ../src/hmmpfam Pfam_ls8.0 ../tutorial/7LES_DROME > foo.pthread
+        % ../src/hmmpfam --cpu 0 Pfam_ls8.0 ../tutorial/7LES_DROME > foo.normal
+     Make sure that foo.* all work (7LES_DROME is big enough to exercise bug #h22)
+     Check that foo.* all give identical E-values (bug #h20).
+	
+4. Write release notes.
    cvs2cl.pl creates ChangeLog; a useful summary of CVS logs
 	% ssdk/cvs2cl.pl    
         % emacs Release-Notes/RELEASE-${RELEASE}
 	% cvs add Release-Notes/RELEASE-${RELEASE}
 
-4. Update copyright, year, relcode, etc:
+5. Update copyright, year, relcode, etc:
         configure.ac
 	Licenses/gnu   (year only)
 
-5. Commit to CVS. Include package and release # in the log message.
+6. Commit to CVS. Include package and release # in the log message.
 	% cvs commit
 
-6. Make a distro. 
+7. Make a distro. 
    yes, you have to autoconf and make a new configure script; you
    just updated the info in configure.ac, remember?
 	% make distclean
@@ -45,7 +59,7 @@ Checklist for a HMMER distribution.
 	% make dist
 	
 
-7. Create the binary distributions, on w001, the compile farm master node.
+8. Create the binary distributions, on w001, the compile farm master node.
    ssh -x w001.
    Make a directory somewhere, go there.
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/nodebuild .
@@ -79,15 +93,15 @@ Checklist for a HMMER distribution.
     Move all binary distros to the FTP site,
     /nfs/ftp/eddy/hmmer/(RELEASE)/
 
-8.  Install all the files on the FTP site; change CURRENT symlink.
+9.  Install all the files on the FTP site; change CURRENT symlink.
     (Check that FTPDIR is correct in Makefile).
 
       % make ftpdist
       % make stable
 
-9. Update and install the web page, which is in ~/web/hmmer.
+10. Update and install the web page, which is in ~/web/hmmer.
 
       % make install
 
-10. Email hmmer@genetics.wustl.edu and make the announcement.
+11. Email hmmer@genetics.wustl.edu and make the announcement.
 

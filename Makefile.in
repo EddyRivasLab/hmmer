@@ -309,6 +309,6 @@ stable:
 optcheck:
 	@echo Checking options for consistency and documentation...
 	@for prog in $(PROGS); do\
-	   ssdk/checkoptions.pl src/$$prog documentation/man/$$prog.man testsuite/exercises.sqc testsuite/exercises-threaded.sqc;\
+	   ssdk/checkoptions.pl src/$$prog documentation/man/$$prog.man testsuite/exercises.sqc testsuite/exercises-threaded.sqc testsuite/exercises-pvm.sqc;\
 	done
 
