@@ -55,7 +55,20 @@ static int xpam120[23][23] = {
 };
 
 
-void 
+/* Function: XNU()
+ * Date:     18 Nov 1997 [StL]
+ * 
+ * Purpose:  x-out of repetitive sequence. XNU tends to be
+ *           good at x'ing out short period tandem repeats.
+ *           
+ * Note:     Apply /only/ to protein sequence.            
+ * 
+ * Args:     dsq: 1..len digitized sequence
+ *           len: length of dsq
+ *           
+ * Return:   number of characters x'ed out.
+ */            
+int
 XNU(char *dsq, int len)
 {
   int    i,k,off,sum,beg,end,top;
@@ -68,8 +81,9 @@ XNU(char *dsq, int len)
   double lambda = 0.346574;
   double K      = 0.2;
   double H      = 0.664;
+  int    xnum   = 0;
 
-  if (len == 0) return;
+  if (len == 0) return 0;
 
   hit = MallocOrDie(sizeof(int) * (len+1));
   for (i=1; i<=len; i++) hit[i]=0;
@@ -118,10 +132,10 @@ XNU(char *dsq, int len)
   /* Now mask off detected repeats
    */
   for (i=1; i<=len; i++) 
-    if (hit[i]) dsq[i] = Alphabet_iupac-1; /* e.g. 'X' */
+    if (hit[i]) { xnum++; dsq[i] = Alphabet_iupac-1;} /* e.g. 'X' */
 
   free(hit);
-  return;
+  return xnum;
 }
 
 
@@ -145,11 +159,9 @@ MiniSEG(char *dsq, int len, float *ret_max)
   float xp[20] = { 0.0681, 0.0120, 0.0623, 0.0651, 0.0313, 0.0902, 0.0241, 0.0371, 0.0687, 0.0676,
 		   0.0143, 0.0548, 0.0647, 0.0415, 0.0551, 0.0926, 0.0623, 0.0505, 0.0102, 0.0269
                  };
-  float p1 = 0.9999;		/* R->R transition prob. */
-  float p2 = 0.95;		/* X->X transition prob. */
   int re[23];
   int xe[23];
-  int trx,trr,txr,txx;
+  int T1,T2;			/* switching penalty */
   int x,i;
   int osx, nsx;			/* old S_x, new S_x: two rows of DP matrix */
   int osr, nsr;			/* old S_r, new S_r  */
@@ -176,10 +188,8 @@ MiniSEG(char *dsq, int len, float *ret_max)
   xe[20] = Prob2Score(xp[2] + xp[11], 1.);     /* B = D,N */
   xe[21] = Prob2Score(xp[3] + xp[13], 1.);     /* Z = E,Q */
   xe[22] = 0;	                               /* X */
-  trr    = Prob2Score(p1,    1.);
-  trx    = Prob2Score(1.-p1, 1.);
-  txx    = Prob2Score(p2,    1.);
-  txr    = Prob2Score(1.-p2, 1.);
+  T1     = -40000;
+  T2     = -40000;
   
   /* Allocate for dp
    */
@@ -200,12 +210,12 @@ MiniSEG(char *dsq, int len, float *ret_max)
 
   for (i = 1; i <= len; i++) 
     {
-      nsx = osr + txr; tbx[i] = 0;
-      if (osx + txx > nsx) { nsx = osx + txx; tbx[i] = 1; }
+      nsx = osr + T1; tbx[i] = 0;
+      if (osx > nsx) { nsx = osx; tbx[i] = 1; }
       nsx += xe[(int) dsq[i]];
 
-      nsr = osr + trr; tbr[i] = 0;
-      if (osx + txr > nsr) {nsr = osx + txr; tbr[i] = 1; }
+      nsr = osr; tbr[i] = 0;
+      if (osx + T2 > nsr) {nsr = osx + T2; tbr[i] = 1; }
       nsr += re[(int) dsq[i]];
 
       score += xe[(int) dsq[i]] - re[(int) dsq[i]];
@@ -217,7 +227,7 @@ MiniSEG(char *dsq, int len, float *ret_max)
       
   /* Traceback
    */
-  state = (osx + txr > osr) ? 1 : 0;	         /* initialize */
+  state = (osx + T2 > osr) ? 1 : 0;	         /* initialize */
   xnum = 0;
   for (i = len; i >= 1; i--)
     {
