@@ -1,19 +1,10 @@
 /************************************************************
- * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1998 Sean R. Eddy
- * Copyright (C) 1998 Ian Holmes
- *
- *   This source code is distributed under the terms of the
- *   GNU General Public License. See the files COPYING and
- *   GNULICENSE for details.
- *
+ * @LICENSE@
  ************************************************************/
 
-/* hmmbuild.c
- * SRE, Mon Nov 18 12:41:29 1996
- *
- * main() for HMM construction from an alignment.
- * RCS $Id$
+/* Derived from code developed by Ian Holmes (Sanger Centre and UC Berkeley)
+ * Copyright (C) 1998 Ian Holmes
+ * Distributed under the GNU General Public License
  */
 
 #include <stdio.h>
@@ -37,7 +28,6 @@ Usage: hmmbuildpost [-options] <alignment file>\n\
    -m <hmmfile> : save HMM to <file>\n\
    -o <file>    : re-save annotated alignment to <file>\n\
    -A           : append; append this HMM to <hmmfile>\n\
-   -B           : Babelfish; autodetect alignment file format\n\
    -F           : force; allow overwriting of <hmmfile>\n\
 \n\
   Alternative search algorithm styles: (default: hmmls domain alignment)\n\
@@ -95,7 +85,6 @@ static struct opt_s OPTIONS[] = {
   { "-o", TRUE, sqdARG_STRING},
   { "-s", TRUE, sqdARG_NONE }, 
   { "-A", TRUE, sqdARG_NONE },
-  { "-B", TRUE, sqdARG_NONE },
   { "-F", TRUE, sqdARG_NONE },
   { "--amino",   FALSE, sqdARG_NONE  },
   { "--archpri", FALSE, sqdARG_FLOAT }, 
@@ -196,18 +185,11 @@ main(int argc, char **argv)
   struct dpmatrix_s *posterior_mx; /* Posterior matrix                      */
   struct dpmatrix_s *optacc_mx;    /* Optimal accuracy matrix               */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2;
-  size_t orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-
   /*********************************************** 
    * Parse command line
    ***********************************************/
   
-  format            = MSAFILE_STOCKHOLM;
+  format            = MSAFILE_UNKNOWN;
   c_strategy        = P7_MAP_CONSTRUCTION;
   w_strategy        = WGT_GSC;
   blosumlevel       = 0.62;
@@ -244,7 +226,6 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-r") == 0) rndfile           = optarg;
     else if (strcmp(optname, "-s") == 0) cfg_strategy      = P7_SW_CONFIG;
     else if (strcmp(optname, "-A") == 0) do_append         = TRUE; 
-    else if (strcmp(optname, "-B") == 0) format            = MSAFILE_UNKNOWN;
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
     else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
     else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);

@@ -7,7 +7,7 @@
  * 
  * Create a GSI index file for an HMM database.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>

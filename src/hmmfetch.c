@@ -8,7 +8,7 @@
  * Recover a specific HMM file from an HMM database, using
  * a GSI index (created with hmmindex).
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -20,10 +20,6 @@
 #include "structs.h"
 #include "funcs.h"
 #include "version.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 #include "globals.h"
 
@@ -55,12 +51,6 @@ main(int argc, char **argv)
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
-
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
 
   /***********************************************
    * Parse the command line
@@ -111,15 +101,6 @@ main(int argc, char **argv)
    ***********************************************/
 
   SqdClean();
-
-#ifdef MEMDEBUG
-  current_size = malloc_size(&histid2);
-  if (current_size != orig_size)
-    malloc_list(2, histid1, histid2);
-  else
-    fprintf(stderr, "[No memory leaks]\n");
-#endif
-
   return 0;
 }
 

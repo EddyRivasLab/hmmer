@@ -8,7 +8,7 @@
  * Score an HMM against random sequence data sets;
  * set histogram fitting parameters.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>

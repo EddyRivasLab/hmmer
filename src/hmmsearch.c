@@ -38,7 +38,6 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
-   -B        : Babelfish; autodetect sequence file format\n\
    -E <x>    : sets E value cutoff (globE) to <= x\n\
    -T <x>    : sets T bit threshold (globT) to >= x\n\
    -Z <n>    : sets Z (# seqs) for E-value calculation\n\
@@ -62,7 +61,6 @@ static char experts[] = "\
 static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-A",        TRUE,  sqdARG_INT  },  
-  { "-B",        TRUE,  sqdARG_NONE  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
   { "-Z",        TRUE,  sqdARG_INT  },
@@ -186,7 +184,7 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  format      = SQFILE_FASTA;	/* expect FASTA format by default */
+  format      = SQFILE_UNKNOWN;	/* default: autodetect seq file format w/ Babelfish */
   do_forward  = FALSE;
   do_null2    = TRUE;
   do_xnu      = FALSE;
@@ -211,7 +209,6 @@ main(int argc, char **argv)
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-A") == 0)        Alimit         = atoi(optarg);  
-    else if (strcmp(optname, "-B")        == 0) format         = SQFILE_UNKNOWN;
     else if (strcmp(optname, "-E") == 0)        thresh.globE   = atof(optarg);
     else if (strcmp(optname, "-T") == 0)        thresh.globT   = atof(optarg);
     else if (strcmp(optname, "-Z") == 0)        thresh.Z       = atoi(optarg);

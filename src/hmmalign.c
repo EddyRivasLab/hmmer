@@ -28,7 +28,6 @@ Available options are:\n\
    -m     : only print symbols aligned to match states\n\
    -o <f> : save alignment in file <f> in SELEX format\n\
    -q     : quiet - suppress verbose banner\n\
-   -B     : Babelfish; autodetect sequence file format\n\
 ";
 
 static char experts[] = "\
@@ -42,7 +41,6 @@ static struct opt_s OPTIONS[] = {
   { "-m", TRUE, sqdARG_NONE   } ,
   { "-o", TRUE, sqdARG_STRING },
   { "-q", TRUE, sqdARG_NONE   },
-  { "-B", TRUE, sqdARG_NONE   },
   { "--informat",FALSE, sqdARG_STRING },
   { "--mapali",  FALSE, sqdARG_STRING },
   { "--withali", FALSE, sqdARG_STRING },
@@ -84,7 +82,7 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  format    = SQFILE_FASTA;	/* default: expect FASTA */
+  format    = SQFILE_UNKNOWN;	/* default: autodetect format */
   matchonly = FALSE;
   outfile   = NULL;
   be_quiet  = FALSE;
@@ -96,7 +94,6 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-m")        == 0) matchonly= TRUE;
     else if (strcmp(optname, "-o")        == 0) outfile  = optarg;
     else if (strcmp(optname, "-q")        == 0) be_quiet = TRUE; 
-    else if (strcmp(optname, "-B")        == 0) format   = SQFILE_UNKNOWN; 
     else if (strcmp(optname, "--mapali")  == 0) mapali   = optarg;
     else if (strcmp(optname, "--withali") == 0) withali  = optarg;
     else if (strcmp(optname, "--informat") == 0) {

@@ -8,6 +8,7 @@
  * main() for converting between HMM file formats, and
  * for converting HMMs to other software formats like GCG profiles.
  * 
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -18,10 +19,6 @@
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static char banner[] = "hmmconvert - convert between profile HMM file formats";
 
@@ -74,14 +71,6 @@ main(int argc, char **argv)
   enum hmmfmt_e { P7ASCII, P7BINARY, GCGPROFILE, BICPROFILE } 
       outfmt;			/* output format */
       
-
-
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-
   /*********************************************** 
    * Parse command line
    ***********************************************/
@@ -203,10 +192,5 @@ main(int argc, char **argv)
   HMMFileClose(infp);
   fclose(outfp);
   SqdClean();
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) malloc_list(2, histid1, histid2);
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   return EXIT_SUCCESS;
 }

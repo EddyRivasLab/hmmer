@@ -9,7 +9,7 @@
  * Conditionally includes PVM parallelization when HMMER_PVM is defined
  *    at compile time; hmmpfam --pvm runs the PVM version.
  *    
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -39,7 +39,6 @@ Usage: hmmpfam [-options] <hmm database> <sequence file>\n\
    -h        : help; print brief help on version and usage\n\
    -n        : nucleic acid models/sequence (default protein)\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
-   -B        : Babelfish; autodetect sequence file format\n\
    -E <x>    : sets E value cutoff (globE) to <x>; default 10\n\
    -T <x>    : sets T bit threshold (globT) to <x>; no threshold by default\n\
    -Z <n>    : sets Z (# models) for E-value calculation\n\
@@ -66,7 +65,6 @@ static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-n",        TRUE,  sqdARG_NONE },
   { "-A",        TRUE,  sqdARG_INT  },  
-  { "-B",        TRUE,  sqdARG_NONE  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
   { "-Z",        TRUE,  sqdARG_INT  },
@@ -194,7 +192,7 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  format      = SQFILE_FASTA;	/* default: expect FASTA format */
+  format      = SQFILE_UNKNOWN;	/* default: autodetect format w/ Babelfish */
   do_forward  = FALSE;
   do_nucleic  = FALSE;
   do_null2    = TRUE;
@@ -221,7 +219,6 @@ main(int argc, char **argv)
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-n")        == 0) do_nucleic     = TRUE; 
     else if (strcmp(optname, "-A")        == 0) Alimit         = atoi(optarg);  
-    else if (strcmp(optname, "-B")        == 0) format         = SQFILE_UNKNOWN;
     else if (strcmp(optname, "-E")        == 0) thresh.globE   = atof(optarg);
     else if (strcmp(optname, "-T")        == 0) thresh.globT   = atof(optarg);
     else if (strcmp(optname, "-Z")        == 0) thresh.Z       = atoi(optarg);

@@ -6,7 +6,7 @@
  * SRE, Mon Nov 18 12:41:29 1996
  *
  * main() for HMM construction from an alignment.
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -29,7 +29,6 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    -n <s> : name; name this (first) HMM <s>\n\
    -o <f> : re-save annotated alignment to <f>\n\
    -A     : append; append this HMM to <hmmfile>\n\
-   -B     : Babelfish; autodetect alignment file format\n\
    -F     : force; allow overwriting of <hmmfile>\n\
 \n\
   Alternative search algorithm styles: (default: hmmls domain alignment)\n\
@@ -83,7 +82,6 @@ static struct opt_s OPTIONS[] = {
   { "-o", TRUE, sqdARG_STRING},
   { "-s", TRUE, sqdARG_NONE }, 
   { "-A", TRUE, sqdARG_NONE },
-  { "-B", TRUE, sqdARG_NONE },
   { "-F", TRUE, sqdARG_NONE },
   { "--amino",   FALSE, sqdARG_NONE  },
   { "--archpri", FALSE, sqdARG_FLOAT }, 
@@ -182,7 +180,7 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  format            = MSAFILE_STOCKHOLM;
+  format            = MSAFILE_UNKNOWN;        /* autodetect format by default. */
   c_strategy        = P7_MAP_CONSTRUCTION;
   w_strategy        = WGT_GSC;
   blosumlevel       = 0.62;
@@ -217,7 +215,6 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-o") == 0) align_ofile       = optarg;
     else if (strcmp(optname, "-s") == 0) cfg_strategy      = P7_SW_CONFIG;
     else if (strcmp(optname, "-A") == 0) do_append         = TRUE; 
-    else if (strcmp(optname, "-B") == 0) format            = MSAFILE_UNKNOWN;
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
     else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
     else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);

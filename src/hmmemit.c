@@ -6,7 +6,7 @@
  * SRE, Sun Mar  8 14:11:24 1998 [St. Louis]
  * 
  * main() for generating sequences from an HMM
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -240,7 +240,6 @@ main(int argc, char **argv)
   if (ofile != NULL) fclose(fp);
   FreePlan7(hmm);
   SqdClean();
-
   return 0;
 }
 
