@@ -48,6 +48,8 @@ main(int argc, char **argv)
   struct plan7_s     *hmm;      /* a hidden Markov model           */
   int     idx, nhmm;		/* counter over HMMs               */
   int     npri, nsec;		/* # of names, accessions          */
+  SSIOFFSET offset;		/* disk offset in the HMM file     */
+  int     mode;			/* SSI index mode                  */
   int     fh;			/* file handle                     */
   int     status;		/* return status from SSI call     */
 
@@ -88,7 +90,8 @@ main(int argc, char **argv)
   if (FileExists(ssifile))   /* shouldn't happen */
     Die("An SSI file %s already exists; please delete it first", ssifile);
 
-  if ((ssi = SSICreateIndex(hmmfp->mode)) == NULL)
+  mode = SSIRecommendMode(hmmfile);
+  if ((ssi = SSICreateIndex(mode)) == NULL)
     Die("Failed to initialize the SSI index structure");
   if (SSIAddFileToIndex(ssi, hmmfile, hmmfp->is_binary, &fh) != 0)
     Die("SSIAddFileToIndex() failed");
@@ -99,7 +102,7 @@ main(int argc, char **argv)
 
   Banner(stdout, banner);
   printf("HMM file:                 %s\n", hmmfile);
-  if (hmmfp->mode == SSI_OFFSET_I64) 
+  if (mode == SSI_OFFSET_I64) 
     printf("Index file mode:          64-bit (large HMM file)\n");
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
@@ -109,6 +112,9 @@ main(int argc, char **argv)
 
   printf("Determining offsets for %s, please be patient...\n", hmmfile);
 
+  status = SSIGetFilePosition(hmmfp->f, mode, &offset);
+  if (status != 0) Die("SSIGetFilePosition() failed");
+
   nhmm = npri = nsec = 0;
   while (HMMFileRead(hmmfp, &hmm)) 
     {	
@@ -116,7 +122,7 @@ main(int argc, char **argv)
 	Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
 
 				/* record name of HMM as the primary retrieval key */
-      status = SSIAddPrimaryKeyToIndex(ssi, hmm->name, fh, &(hmmfp->offset), NULL, 0);
+      status = SSIAddPrimaryKeyToIndex(ssi, hmm->name, fh, &offset, NULL, 0);
       if (status != 0) Die("SSIAddPrimaryKeyToIndex() failed");
       npri++;
 
@@ -126,7 +132,9 @@ main(int argc, char **argv)
 	if (status != 0) Die("SSIAddSecondaryKeyToIndex() failed");
 	nsec++;
       }
-
+				/* reset the offset */
+      status = SSIGetFilePosition(hmmfp->f, mode, &offset);
+      if (status != 0) Die("SSIGetFilePosition() failed");
       nhmm++;
       FreePlan7(hmm);
     }

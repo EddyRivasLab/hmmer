@@ -150,14 +150,12 @@ HMMFileOpen(char *hmmfile, char *env)
   char         buf[512];
   char        *ssifile;
   char        *dir;        /* dir name in which HMM file was found */
-  int          status;
 
   hmmfp = (HMMFILE *) MallocOrDie (sizeof(HMMFILE));
   hmmfp->f          = NULL; 
   hmmfp->parser     = NULL;
   hmmfp->is_binary  = FALSE;
   hmmfp->byteswap   = FALSE;
-  hmmfp->is_seekable= TRUE;	/* always; right now, an HMM must always be in a file. */
   
   /* Open the file. Look in current directory.
    * If that doesn't work, check environment var for
@@ -191,12 +189,6 @@ HMMFileOpen(char *hmmfile, char *env)
   SQD_DPRINTF1(("Opening ssifile %s...\n", ssifile));
   SSIOpen(ssifile, &(hmmfp->ssi));
   free(ssifile);
-
-  /* Initialize the disk offset stuff.
-   */
-  hmmfp->mode = SSIRecommendMode(hmmfile);
-  status = SSIGetFilePosition(hmmfp->f, hmmfp->mode, &(hmmfp->offset));
-  if (status != 0) Die("SSIGetFilePosition() failed");
 
   /* Check for binary or byteswapped binary format
    * by peeking at first 4 bytes.
@@ -309,13 +301,6 @@ or may be a different kind of binary altogether.\n", hmmfile);
 int
 HMMFileRead(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
-  int status;
-				/* Set the disk position marker. */
-  if (hmmfp->is_seekable) {
-    status = SSIGetFilePosition(hmmfp->f, hmmfp->mode, &(hmmfp->offset));
-    if (status != 0) Die("SSIGetFilePosition() failed");
-  }
-				/* Parse the HMM and return it. */
   return (*hmmfp->parser)(hmmfp, ret_hmm);
 }
 void

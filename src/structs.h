@@ -296,17 +296,6 @@ struct hmmfile_s {
   int (*parser)(struct hmmfile_s *, struct plan7_s **);  /* parsing function    */
   int   is_binary;		/* TRUE if format is a binary one               */
   int   byteswap;               /* TRUE if binary and byteswapped               */
-
-  /* Ewan (GeneWise) needs the input API to know the offset of each
-   * HMM on the disk, as it's being read. This might be enough
-   * support for him. hmmindex also uses this. Ewan, see
-   * HMMFilePositionByIndex() for an example of how to use this
-   * opaque offset type in the SSI API - the call you need 
-   * is SSISetFilePosition().
-   */
-  int       is_seekable;	/* TRUE if we use offsets in this HMM file      */
-  int       mode;		/* type of offset                               */
-  SSIOFFSET offset;		/* Disk offset for beginning of the current HMM */
 };
 typedef struct hmmfile_s HMMFILE; 
 
