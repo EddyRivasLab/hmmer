@@ -37,33 +37,10 @@ void
 Banner(FILE *fp, char *banner)
 {
   fputs(banner, fp);
-  fprintf(fp, "\nHMMER %s (%s) Copyright (C) 1992-1998 Sean R. Eddy\n", 
-	  RELEASE, RELEASEDATE);
+  fprintf(fp, "\nHMMER %s (%s)\n", RELEASE, RELEASEDATE);
+  fprintf(fp, "Copyright (C) 1992-1998 Washington University School of Medicine\n"); 
   fprintf(fp, "HMMER is freely distributed under the GNU General Public License (GPL).\n");
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
-}
-
-
-/* Function: AlignmentTooBig()
- * 
- * Purpose:  Return TRUE if a full dynamic programming alignment
- *           of a sequence of length L against a model of length M
- *           is likely to exceed the available memory of the machine.
- *           Used to determine switching into the slower, linear-memory
- *           cost alignment algorithms.
- */
-int
-AlignmentTooBig(int L, int M)
-{
-  float ram;
-
-  /* DP cells hold three ints; hence 4 bytes * 3 ints = 12 bytes/cell
-   */
-  ram = 12.0 * (float) (L+2) * (float) (M+2) / 1.0e6;
-  if (ram > (float) RAMLIMIT)
-    return TRUE;
-  else
-    return FALSE;
 }
 
 
