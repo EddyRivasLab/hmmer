@@ -96,7 +96,7 @@ SHIVADIST = README\
 	    tophits_test.c     trace_test.c viterbi_exercise.c\
 	    weeviterbi_test.c\
 	    Optiontests.pl   Optiontests.fa  Optiontests.nfa Optiontests.nslx\
-	    Optiontests.pam  Optiontests.pri Optiontests.slx\
+	    Optiontests.pam  Optiontests.slx\
 	    fn3.hmm fn3.seed titin.fa\
 	    trace_test.hmm trace_test.seq trace_test.slx \
 	    weeviterbi_test.hmm weeviterbi_test.seq
@@ -105,7 +105,7 @@ DEMOS = globins50.msf  globins630.fa Artemia.fa\
 	rrm.slx pkinase.slx fn3.slx\
 	rrm.hmm\
 	RU1A_HUMAN 7LES_DROME\
-
+	amino.null nucleic.null amino.pri nucleic.pri
 
 # all: compiles the src package, if we don't have precompiled binaries,
 #      and moves them into binaries/ subdirectory.
