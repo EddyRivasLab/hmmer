@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <pvm3.h>
 
+#include "version.h"
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "config.h"		/* compile-time configuration constants */
 #include "funcs.h"		/* function declarations                */
@@ -104,6 +105,7 @@ main(void)
    */
   pvm_initsend(PvmDataDefault);
   pvm_pkint(&code, 1, 1);	
+  PVMPackString(RELEASE);	/* proofing against bug#1 */
   pvm_send(master_tid, HMMPVM_RESULTS);
 
   dsq = DigitizeSequence(seq, len);

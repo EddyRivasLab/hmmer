@@ -16,6 +16,7 @@
 #include <float.h>
 #include <pvm3.h>
 
+#include "version.h"
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "config.h"		/* compile-time configuration constants */
 #include "funcs.h"		/* function declarations                */
@@ -85,6 +86,7 @@ main(void)
   if (hmm == NULL) code = HMMPVM_BAD_INIT;
   pvm_initsend(PvmDataDefault);
   pvm_pkint(&code, 1, 1);	
+  PVMPackString(RELEASE);
   pvm_send(master_tid, HMMPVM_RESULTS);
 
   /*****************************************************************
