@@ -462,7 +462,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   int k;
 
   /* ye olde magic number */
-  fwrite((char *) &(v20magic), sizeof(long), 1, fp);
+  fwrite((char *) &(v20magic), sizeof(unsigned int), 1, fp);
 
   /* header section
    */
@@ -714,15 +714,15 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    struct plan7_s *hmm;
    int    k,x;
    int    type;
-   unsigned long magic;
+   unsigned int magic;
 
    hmm = NULL;
 
    /* Header section
     */
    if (feof(hmmfp->f))                                      return 0;
-   if (! fread((char *) &magic, sizeof(long), 1, hmmfp->f)) return 0;
-   if (hmmfp->byteswap) byteswap((char *)&magic, sizeof(long));
+   if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) return 0;
+   if (hmmfp->byteswap) byteswap((char *)&magic, sizeof(unsigned int));
    if (magic != v20magic) goto FAILURE;
 				/* allocate HMM shell for header info */
    hmm = AllocPlan7Shell();
