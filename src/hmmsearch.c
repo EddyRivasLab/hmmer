@@ -315,8 +315,10 @@ main(int argc, char **argv)
   /* Format and report our output 
    */
   /* 1. Report overall sequence hits (sorted on E-value) */
-  printf("\nQuery HMM:  %s  %s\n", 
-	 hmm->name, hmm->desc != NULL ? hmm->desc : "");
+  printf("\nQuery HMM: %s|%s|%s\n", 
+	 hmm->name, 
+	 hmm->flags & PLAN7_ACC  ? hmm->acc  : "",
+	 hmm->flags & PLAN7_DESC ? hmm->desc : "");
   if (hmm->flags & PLAN7_STATS)
     printf("  [HMM has been calibrated; E-values are empirical estimates]\n");
   else
@@ -647,7 +649,6 @@ record_domains(struct tophit_s *h,
   TraceDecompose(tr, &tarr, &ntr);
   if (ntr == 0) Die("TraceDecompose() screwup"); /* "can't happen" (!) */
 
-  SQD_DPRINTF1(("dsq is %d%d%d%d\n", dsq[0], dsq[1], dsq[2], dsq[3]));
   for (idx = 0; idx < ntr; idx++)
     {
       /* Get the score and bounds of the match.
@@ -737,6 +738,9 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
    */
   SQD_DPRINTF1(("Requesting master TID...\n"));
   master_tid = pvm_mytid();
+#if DEBUGLEVEL >= 1
+  pvm_catchout(stderr);		/* catch output for debugging */
+#endif
   SQD_DPRINTF1(("Spawning slaves...\n"));
   PVMSpawnSlaves("hmmsearch-pvm", &slave_tid, &nslaves);
   SQD_DPRINTF1(("Spawned a total of %d slaves...\n", nslaves));
@@ -757,22 +761,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
 
   /* Confirm slaves' OK status.
    */
-  for (slaveidx = 0; slaveidx < nslaves; slaveidx++)
-    {
-      pvm_recv(-1, HMMPVM_RESULTS);
-      pvm_upkint(&code, 1, 1);
-      if (code != HMMPVM_OK)
-	{
-	  PVMKillSlaves(slave_tid, nslaves);
-	  pvm_exit();
-	  switch (code) {
-	  case HMMPVM_BAD_INIT: 
-	    Die("One or more PVM slaves didn't initialize properly.");
-	  default:
-	    Die("Unknown init error code. One or more slaves is confused.");
-	  }
-	}
-    }
+  PVMConfirmSlaves(slave_tid, nslaves);
   SQD_DPRINTF1(("Slaves confirm that they're ok...\n"));
   
   /* Alloc arrays for remembering what seq each
