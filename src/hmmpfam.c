@@ -39,21 +39,23 @@ Usage: hmmpfam [-options] <hmm database> <sequence file>\n\
    -h        : help; print brief help on version and usage\n\
    -n        : nucleic acid models/sequence (default protein)\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
-   -E <x>    : sets E value cutoff (globE) to <x>\n\
-   -T <x>    : sets T bit threshold (globT) to <x>\n\
-   -Z <n>    : sets Z (# seqs) for E-value calculation\n\
+   -B        : Babelfish; autodetect sequence file format\n\
+   -E <x>    : sets E value cutoff (globE) to <x>; default 10\n\
+   -T <x>    : sets T bit threshold (globT) to <x>; no threshold by default\n\
+   -Z <n>    : sets Z (# models) for E-value calculation\n\
 ";
 
 static char experts[] = "\
-   --acc     : use HMM accession numbers instead of names in output\n\
-   --compat  : make best effort to use last version's output style\n\
-   --cpu <n> : run <n> threads in parallel (if threaded)\n\
-   --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
-   --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
-   --forward : use the full Forward() algorithm instead of Viterbi\n\
-   --null2   : turn OFF the post hoc second null model\n\
-   --pvm     : run on a PVM (Parallel Virtual Machine) cluster\n\
-   --xnu     : turn ON XNU filtering of query protein sequence\n\
+   --acc         : use HMM accession numbers instead of names in output\n\
+   --compat      : make best effort to use last version's output style\n\
+   --cpu <n>     : run <n> threads in parallel (if threaded)\n\
+   --domE <x>    : sets domain Eval cutoff (2nd threshold) to <x>\n\
+   --domT <x>    : sets domain T bit thresh (2nd threshold) to <x>\n\
+   --forward     : use the full Forward() algorithm instead of Viterbi\n\
+   --informat <s>: sequence file is in format <s>, not FASTA\n\
+   --null2       : turn OFF the post hoc second null model\n\
+   --pvm         : run on a PVM (Parallel Virtual Machine) cluster\n\
+   --xnu         : turn ON XNU filtering of query protein sequence\n\
 \n";
 
 
@@ -61,6 +63,7 @@ static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-n",        TRUE,  sqdARG_NONE },
   { "-A",        TRUE,  sqdARG_INT  },  
+  { "-B",        TRUE,  sqdARG_NONE  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
   { "-Z",        TRUE,  sqdARG_INT  },
@@ -70,6 +73,7 @@ static struct opt_s OPTIONS[] = {
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
   { "--forward", FALSE, sqdARG_NONE },
+  { "--informat",FALSE, sqdARG_STRING},
   { "--null2",   FALSE, sqdARG_NONE },  
   { "--pvm",     FALSE, sqdARG_NONE },  
   { "--xnu",     FALSE, sqdARG_NONE },
@@ -190,12 +194,13 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
+  format      = SQFILE_FASTA;	/* default: expect FASTA format */
   do_forward  = FALSE;
   do_nucleic  = FALSE;
   do_null2    = TRUE;
   do_pvm      = FALSE;
   do_xnu      = FALSE;
-  Z           = 59021;		/* default: nseq in Swissprot34     */
+  Z           = 0;		
   be_backwards= FALSE; 
   show_acc    = FALSE;
   
@@ -214,6 +219,7 @@ main(int argc, char **argv)
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-n")        == 0) do_nucleic = TRUE; 
     else if (strcmp(optname, "-A")        == 0) Alimit     = atoi(optarg);  
+    else if (strcmp(optname, "-B")        == 0) format     = SQFILE_UNKNOWN;
     else if (strcmp(optname, "-E")        == 0) globE      = atof(optarg);
     else if (strcmp(optname, "-T")        == 0) globT      = atof(optarg);
     else if (strcmp(optname, "-Z")        == 0) Z          = atoi(optarg);
@@ -225,7 +231,12 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
     else if (strcmp(optname, "--null2")   == 0) do_null2   = FALSE;
     else if (strcmp(optname, "--pvm")     == 0) do_pvm     = TRUE;
-    else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE;
+    else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE; 
+    else if (strcmp(optname, "--informat") == 0) {
+      format = String2SeqfileFormat(optarg);
+      if (format == SQFILE_UNKNOWN) 
+	Die("unrecognized sequence file format \"%s\"", optarg);
+    }
     else if (strcmp(optname, "-h")      == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -254,15 +265,6 @@ main(int argc, char **argv)
   if (do_nucleic) SetAlphabet(hmmNUCLEIC);
   else            SetAlphabet(hmmAMINO);
 
-  if (! SeqfileFormat(seqfile, &format, NULL))
-    switch (squid_errno) {
-    case SQERR_NOFILE: 
-      Die("Sequence file %s could not be opened for reading", seqfile); 
-      break;
-    case SQERR_FORMAT: 
-    default:           
-      Die("Failed to determine format of sequence file %s", seqfile);
-    }
   if ((sqfp = SeqfileOpen(seqfile, format, NULL)) == NULL)
     Die("Failed to open sequence file %s\n%s\n", seqfile, usage);
 
@@ -310,6 +312,9 @@ main(int argc, char **argv)
 	}
 #endif
       else Die("wait. that can't happen. I didn't do anything.");
+
+				/* set Z for good now that we're done */
+      if (!Z) Z = nhmm;	
 
       /* 2. (Done searching all HMMs for this query seq; start output)
        *    Report the overall sequence hits, sorted by significance.
@@ -497,7 +502,7 @@ main(int argc, char **argv)
  *           sqinfo  - ptr to SQINFO optional info for dsq
  *           globT   - bit threshold for significant global score
  *           globE   - E-value threshold for significant global sc
- *           Z       - effective number of seqs to calc E with
+ *           Z       - 0, or forced # of HMMs for E-value calc
  *           do_xnu     - TRUE to apply XNU filter to sequence
  *           do_forward - TRUE to use Forward() scores
  *           do_null2   - TRUE to adjust scores w/ ad hoc null2 model
@@ -523,6 +528,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   struct p7trace_s  *tr;	/* traceback of alignment                  */
   float   sc;                   /* an alignment score                      */ 
   double  pvalue;		/* pvalue of an HMM score                  */
+  double  evalue;		/* evalue of an HMM score                  */
 #endif
 
   /* Prepare sequence.
@@ -563,7 +569,8 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
     /* Store scores/pvalue for each HMM aligned to this sequence, overall
      */
     pvalue = PValue(hmm, sc);
-    if (sc > globT && pvalue * (float) Z < globE) 
+    evalue = Z ? (double) Z * pvalue : (double) nhmm * pvalue;
+    if (sc > globT && evalue < globE) 
       { 
 	RegisterHit(ghit, sc, pvalue, sc,
 		    0., 0.,	                  /* no mother seq */
@@ -573,7 +580,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 		    0, TraceDomainNumber(tr), /* domain info    */
 		    NULL);	                  /* alignment info */
 	/* 1c. Store scores/evalue/position/alignment for each HMM
-	 *    aligned to domains of this sequence; UNFINISHED
+	 *    aligned to domains of this sequence
 	 */
 	record_domains(dhit, hmm, dsq, sqinfo->len, sqinfo->name, tr, pvalue, sc, do_null2);
       }
@@ -661,7 +668,7 @@ record_domains(struct tophit_s *h,
  *           sqinfo  - ptr to SQINFO optional info for dsq
  *           globT   - bit threshold for significant global score
  *           globE   - E-value threshold for significant global sc
- *           Z       - effective number of seqs to calc E with
+ *           Z       - 0, or forced # of hmms for E-value calc
  *           do_xnu     - TRUE to apply XNU filter to sequence
  *           do_forward - TRUE to use Forward() scores
  *           do_null2   - TRUE to adjust scores w/ ad hoc null2 model
@@ -1009,6 +1016,7 @@ worker_thread(void *ptr)
   float  sc;			/* score of an alignment           */
   int    rtn;			/* a return code from pthreads lib */
   double pvalue;		/* P-value of score                */
+  double evalue;		/* E-value of a score              */
 
   wpool = (struct workpool_s *) ptr;
   for (;;) {
@@ -1055,7 +1063,8 @@ worker_thread(void *ptr)
     SQD_DPRINTF1(("model %s scores %f\n", hmm->name, sc));
 
     pvalue = PValue(hmm, sc);
-    if (sc > wpool->globT && pvalue * (float) wpool->Z < wpool->globE) 
+    evalue = wpool->Z ? (double) wpool->Z * pvalue : (double) wpool->nhmm * pvalue;
+    if (sc > wpool->globT && evalue < wpool->globE) 
       { 
 	RegisterHit(wpool->ghit, sc, pvalue, sc,
 		    0., 0.,	                  /* no mother seq */
