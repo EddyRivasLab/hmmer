@@ -143,8 +143,8 @@ main(int argc, char **argv)
 
       if (be_verbose)
 	{
-	  printf("test sequence %d: %s %s\n",
-		 nseq, sqinfo.name, 
+	  printf("test sequence %d: score %.1f : %s %s\n",
+		 nseq, sc, sqinfo.name, 
 		 sqinfo.flags & SQINFO_DESC ? sqinfo.desc : "");
 	  P7PrintTrace(stdout, tr, hmm, dsq); 
 	}
