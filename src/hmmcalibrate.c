@@ -132,7 +132,9 @@ main(int argc, char **argv)
   seed         = (int) time ((time_t *) NULL);
   do_benchmark = FALSE;
   histfile     = NULL;
+#ifdef HMMER_THREADS
   num_threads  = ThreadNumber(); /* only matters if we're threaded */
+#endif
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
