@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the 
  *   GNU General Public License. See the files COPYING and 
@@ -82,16 +82,6 @@ extern int   DegenCount[MAXCODE];
  * an evolutionary rather than revolutionary manner. 
  *
  **********************************************************************/
-
-/* Plan 7 search algorithm strategies
- */
-enum p7_config {
- P7_NO_CONFIG,			/* no config; log odds aren't set yet */
- P7_BASE_CONFIG,		/* global alignment style             */
- P7_SW_CONFIG,			/* Smith/Waterman style               */
- P7_LS_CONFIG,			/* multi-hit global/local hmmls style */
- P7_FS_CONFIG			/* multi-hit Smith/Waterman style     */
-};
 
 /* Plan 7 construction strategies.
  */
@@ -195,7 +185,6 @@ struct plan7_s {
   float  lambda;		/* EVD lambda   +*/
   float  wonka;			/* EVD fit display fudge factor +*/
 
-  enum p7_config config;	/* search configuration                  */
   int flags;                    /* bit flags indicating state of HMM    +*/
 };
 
