@@ -217,7 +217,6 @@ main(int argc, char **argv)
   Banner(stdout, banner);
   printf(   "HMM file:                 %s [%s]\n", hmmfile, hmm->name);
   printf(   "Sequence database:        %s\n", seqfile);
-  printf(   "Search strategy:          global alignment\n");
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 
   /*********************************************** 
@@ -243,6 +242,8 @@ main(int argc, char **argv)
       /* 2. Recover a trace.    */
       if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
       P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
+
+      /* P7PrintTrace(stdout, tr, hmm, dsq); */
 
       /* 2. Store score/pvalue for global alignment. Sort on score. */
       if (sc > globT) 
@@ -285,7 +286,7 @@ main(int argc, char **argv)
   /* 1. Report overall sequence hits (sorted on E-value) */
   printf("\nQuery HMM:  %s  %s\n", hmm->name, hmm->desc != NULL ? hmm->desc : "");
   FullSortTophits(ghit);
-  namewidth = TophitsMaxName(ghit, globH);
+  namewidth = MAX(8, TophitsMaxName(ghit, globH));
   printf("\nScores for complete sequences (score includes all domains):\n");
   printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Sequence", 52-namewidth, "Description", "Score", "E-value", " N ");
   printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", 52-namewidth, "-----------", "-----", "-------", "---");
@@ -321,7 +322,7 @@ main(int argc, char **argv)
 
   /* 2. Report domain hits (also sorted on E-value) */
   FullSortTophits(dhit);
-  namewidth = TophitsMaxName(dhit, domH);
+  namewidth = MAX(8, TophitsMaxName(dhit, domH));
   printf("\nParsed for domains:\n");
   printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
 	 namewidth, "Sequence", "Domain ", "seq-f", "seq-t", "hmm-f", "hmm-t", "score", "E-value");
@@ -345,7 +346,7 @@ main(int argc, char **argv)
 	       sqfrom == 1 ? '[' : '.', sqto == sqlen ? ']' : '.',
 	       hmmfrom, hmmto,
 	       hmmfrom == 1 ? '[':'.', hmmto == hmm->M ? ']' : '.',
-	       sc, pvalue);
+	       sc, evalue);
       else if (evalue > domE) {
 	if (i > 0) printf("          [no more scores below E = %.2g]\n", domE);
 	break;
