@@ -46,7 +46,7 @@ main(int argc, char **argv)
   SQFILE   *sqfp;               /* opened seqfile for reading              */
   char     *seq;		/* target sequence                         */
   SQINFO    sqinfo;	        /* optional info for seq                   */
-  char     *dsq;		/* digitized target sequence               */
+  unsigned char   *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
   struct dpmatrix_s *mx;        /* growable, reusable DP matrix            */
   struct p7trace_s  *tr1;	/* traceback from P7Viterbi()              */

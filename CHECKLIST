@@ -70,12 +70,12 @@ Checklist for a HMMER distribution.
    each machine in the compile farm.
          ssh w001
 	 eval `ssh-agent`; ssh-add
-         mkdir hmmer-2.3.1; cd hmmer-2.3.1
+         mkdir hmmer-2.3.2; cd hmmer-2.3.2
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/nodebuild .
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/rootbuild .
          ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/buildall .
-         ln -s /nfs/wol2/people/eddy/src/hmmer/hmmer-2.3.1.tar.gz .
-         ./buildall hmmer-2.3.1 >& build.log &
+         ln -s /nfs/wol2/people/eddy/src/hmmer/hmmer-2.3.2.tar.gz .
+         ./buildall hmmer-2.3.2 >& build.log &
          tail -f build.log
 
     darwin (dual800) is done manually:

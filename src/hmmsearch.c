@@ -757,7 +757,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
       pvm_initsend(PvmDataDefault);
       pvm_pkint(&nseq, 1, 1);
       pvm_pkint(&(sqinfo.len), 1, 1);
-      pvm_pkbyte(dsq, sqinfo.len+2, 1);
+      pvm_pkbyte((char *) dsq, sqinfo.len+2, 1); /* is this char * casting safe?  */
       pvm_send(slave_tid[nseq], HMMPVM_WORK);
       SQD_DPRINTF1(("sent a dsq : %d bytes\n", sqinfo.len+2));
 
@@ -797,7 +797,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
       pvm_initsend(PvmDataDefault);
       pvm_pkint(&nseq, 1, 1);
       pvm_pkint(&(sqinfo.len), 1, 1);
-      pvm_pkbyte(dsq, sqinfo.len+2, 1);
+      pvm_pkbyte((char *) dsq, sqinfo.len+2, 1); /* safety of char * cast unknown. */
       pvm_send(slave_tid[slaveidx], HMMPVM_WORK);
       
 				/* process output */

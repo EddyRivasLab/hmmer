@@ -103,7 +103,7 @@ main(void)
       pvm_upkint(&L,    1, 1);
       SQD_DPRINTF1(("Slave received nseq=%d L=%d my_idx=%d\n", nseq, L, my_idx));
       dsq = MallocOrDie(sizeof(unsigned char) * (L + 2));
-      pvm_upkbyte(dsq, L+2, 1);
+      pvm_upkbyte((char *) dsq, L+2, 1); /* char * cast is dubious practice */
       SQD_DPRINTF1(("Slave unpacked a seq of %d bytes; beginning processing\n", L+2));
       
       /* Score sequence, do alignment (Viterbi), recover trace

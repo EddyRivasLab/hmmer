@@ -198,7 +198,7 @@ EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, unsigned char **ret_d
 {
   struct p7trace_s *tr;         /* RETURN: traceback */
   unsigned char    *dsq;        /* RETURN: sequence in digitized form */
-  unsigned char    *seq;        /* RETURN: sequence in undigitized form */
+  char             *seq;        /* RETURN: sequence in undigitized form */
   float *mp, *ip, *dp;          /* state occupancies from StateOccupancy() */
   int    nmat, ndel, nins;	/* number of matches, deletes, inserts used */
   int    k;			/* counter for nodes */

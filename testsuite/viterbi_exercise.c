@@ -45,7 +45,7 @@ main(int argc, char **argv)
   char    *hmmfile;	        /* file to read HMM(s) from                */
   HMMFILE *hmmfp;               /* opened hmmfile for reading              */
   struct plan7_s  *hmm;         /* the HMM to search with                  */ 
-  char    *dsq;			/* digitized target sequence               */
+  unsigned char   *dsq;		/* digitized target sequence               */
   char    *seq;
   SQINFO   sqinfo;
   int      L;			/* length of dsq                           */

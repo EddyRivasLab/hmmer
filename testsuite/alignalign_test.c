@@ -63,7 +63,7 @@ main(int argc, char **argv)
   MSAFILE *afp;                 /* afile, open for reading                 */
   MSA     *msa;			/* multiple sequence alignment from afile  */
   char   **rseq;                /* raw, dealigned aseq                     */
-  char     *dsq;		/* digitized target sequence               */
+  unsigned char     *dsq;	/* digitized target sequence               */
   struct dpmatrix_s *mx;        /* reused DP alignment matrix              */
   struct p7trace_s  *mtr;	/* master traceback from alignment         */
   struct p7trace_s  *maptr;     /* master traceback from mapping           */
