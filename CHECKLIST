@@ -14,8 +14,7 @@ Checklist for a HMMER distribution.
    ccmalloc 0.3.9 is installed in /usr/local on wren and wrasse.
    Note: ccmalloc not threadsafe, so this doesn't test threads implementation.
    PVM isn't tested at all (yet).
-    	% autoconf
-	% (cd squid; autoconf)
+    	% autoconf; (cd squid; autoconf)
      	% ./configure --enable-ccmalloc
         % make
 	% (cd testsuite; ../ssdk/sqc -m -p ../squid 2 exercises.sqc . ../src)
