@@ -285,7 +285,8 @@ Plan7SetDescription(struct plan7_s *hmm, char *desc)
 {
   if (hmm->desc != NULL) free(hmm->desc);
   hmm->desc = Strdup(desc);
-  StringChop(hmm->desc);
+  StringChop(hmm->desc); 
+  hmm->flags |= PLAN7_DESC;
 }
 
 /* Function: Plan7ComlogAppend()
@@ -557,6 +558,31 @@ Plan7Renormalize(struct plan7_s *hmm)
 }
   
 
+/* Function: Plan7RenormalizeExits()
+ * Date:     SRE, Fri Aug 14 11:22:19 1998 [St. Louis]
+ *
+ * Purpose:  Renormalize just the match state transitions;
+ *           for instance, after a Config() function has
+ *           modified the exit distribution.
+ *
+ * Args:     hmm - hmm to renormalize
+ *
+ * Returns:  void
+ */
+void
+Plan7RenormalizeExits(struct plan7_s *hmm)
+{
+  int   k;
+  float d;
+
+  for (k = 1; k < hmm->M; k++)
+    {
+      d = FSum(hmm->t[k], 3);
+      FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
+    }
+}
+
+
 /* Function: Plan7NakedConfig()
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
@@ -584,6 +610,7 @@ Plan7NakedConfig(struct plan7_s *hmm)
   hmm->begin[1]    = 1. - hmm->tbd1;
   FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
   hmm->end[hmm->M] = 1.;
+  Plan7RenormalizeExits(hmm);
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
    
@@ -616,6 +643,7 @@ Plan7GlobalConfig(struct plan7_s *hmm)
   hmm->begin[1]    = 1. - hmm->tbd1;
   FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
   hmm->end[hmm->M] = 1.;
+  Plan7RenormalizeExits(hmm);
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
    
@@ -644,6 +672,7 @@ Plan7LSConfig(struct plan7_s *hmm)
   hmm->begin[1]    = 1. - hmm->tbd1;
   FSet(hmm->end+1,   hmm->M-1, 0.);  /* end at M_m/D_m */
   hmm->end[hmm->M] = 1.;
+  Plan7RenormalizeExits(hmm);
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }  
                              
@@ -678,7 +707,6 @@ Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
 {
   float basep;			/* p1 for exits: the base p */
   int   k;			/* counter over states      */
-  float d;
 
   /* Configure special states.
    */
@@ -702,15 +730,7 @@ Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
   basep = pexit / (float) (hmm->M-1);
   for (k = 1; k < hmm->M; k++)
     hmm->end[k] = basep / (1. - basep * (float) (k-1));
-  
-  /* Renormalize transitions to deal with new exits.
-   */
-  for (k = 1; k < hmm->M; k++)
-    {
-      d = FSum(hmm->t[k], 3);
-      FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
-    }
-
+  Plan7RenormalizeExits(hmm);
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
 
@@ -737,7 +757,6 @@ Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
 {
   float basep;			/* p1 for exits: the base p */
   int   k;			/* counter over states      */
-  float d;
 
   /* Configure special states.
    */
@@ -761,15 +780,7 @@ Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
   basep = pexit / (float) (hmm->M-1);
   for (k = 1; k < hmm->M; k++)
     hmm->end[k] = basep / (1. - basep * (float) (k-1));
-  
-  /* Renormalize transitions to deal with new exits.
-   */
-  for (k = 1; k < hmm->M; k++)
-    {
-      d = FSum(hmm->t[k], 3);
-      FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
-    }
-
+  Plan7RenormalizeExits(hmm);
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
 
