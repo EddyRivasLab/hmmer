@@ -25,7 +25,7 @@ AC_ARG_WITH(pvm,
  	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
 	 PVMINCDIR="-I${PVM_ROOT}/include"
 	 PVMFLAG="-DHMMER_PVM"
-	 PVMPROGS="hmmcalibrate-slave hmmpfam-slave hmmsearch-slave"
+	 PVMPROGS="hmmcalibrate-pvm hmmpfam-pvm hmmsearch-pvm"
 	 PVMLIBS="-lpvm3"
 	 ;;
    no)   ;;
@@ -49,9 +49,9 @@ AC_ARG_ENABLE(threads,
    *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
 	;;
 esac],
-[echo "Enabling POSIX threads support by default"
- AC_CHECK_LIB(pthread, pthread_create, 
-	[ LIBS="${LIBS} -lpthread"
+[AC_CHECK_LIB(pthread, pthread_create, 
+	[ echo "Enabling POSIX threads support by default"
+	  LIBS="${LIBS} -lpthread"
 	  MDEFS="${MDEFS} -DHMMER_THREADS"
 	])
 ])
@@ -61,6 +61,7 @@ AC_CHECK_LIB(m, sqrt, LIBS="${LIBS} -lm")
 
 dnl Check for functions
 AC_CHECK_FUNCS(pthread_setconcurrency)
+AC_CHECK_FUNCS(pthread_attr_setscope)
 
 dnl Write out Makefiles
 AC_MSG_RESULT("Configuration complete. Writing Makefiles and such...")
