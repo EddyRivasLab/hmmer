@@ -257,7 +257,7 @@ PAMPrior(char *pamfile, struct p7prior_s *pri, float wt)
       FScale(pri->m[xi], Alphabet_size, wt);
     }
 
-  Free2DArray(pam,27);
+  Free2DArray((void **)pam,27);
 }
 
 
@@ -336,6 +336,9 @@ P7PriorifyHMM(struct plan7_s *hmm, struct p7prior_s *pri)
 {
   int k;			/* counter for model position   */
   float d;			/* a denominator */
+  float tq[MAXDCHLET];		/* prior distribution over mixtures */
+  float mq[MAXDCHLET];		/* prior distribution over mixtures */
+  float iq[MAXDCHLET];		/* prior distribution over mixtures */
 
   /* Model-dependent transitions are handled simply; Laplace.
    */
@@ -350,12 +353,62 @@ P7PriorifyHMM(struct plan7_s *hmm, struct p7prior_s *pri)
    */
   for (k = 1; k < hmm->M; k++)
     {
-      P7PriorifyTransitionVector(hmm->t[k], pri);
-      P7PriorifyEmissionVector(hmm->mat[k], pri, pri->mnum, pri->mq, pri->m, NULL);
-      P7PriorifyEmissionVector(hmm->ins[k], pri, pri->inum, pri->iq, pri->i, NULL);
-    }
-  P7PriorifyEmissionVector(hmm->mat[hmm->M], pri, pri->mnum, pri->mq, pri->m, NULL);
+      /* The following code chunk is experimental. 
+       * Collaboration with Michael Asman, Erik Sonnhammer, CGR Stockholm.
+       * Only activated if X-PR* annotation has been used, in which
+       * priors are overridden and a single Dirichlet component is
+       * specified for each column (using structural annotation).
+       * If X-PR* annotation is not used, which is usually the case, 
+       * the following code has no effect (observe how the real prior 
+       * distributions are copied into tq, mq, iq).
+       */
+      if (hmm->tpri != NULL && hmm->tpri[k] >= 0)
+	{
+	  if (hmm->tpri[k] >= pri->tnum) Die("X-PRT annotation out of range");
+	  FSet(tq, pri->tnum, 0.0);
+	  tq[hmm->tpri[k]] = 1.0;
+	}
+      else 
+	FCopy(tq, pri->tq, pri->tnum);
+      if (hmm->mpri != NULL && hmm->mpri[k] >= 0)
+	{
+	  if (hmm->mpri[k] >= pri->mnum) Die("X-PRM annotation out of range");
+	  FSet(mq, pri->mnum, 0.0);
+	  mq[hmm->mpri[k]] = 1.0;
+	}
+      else 
+	FCopy(mq, pri->mq, pri->mnum);
+      if (hmm->ipri != NULL && hmm->ipri[k] >= 0)
+	{
+	  if (hmm->ipri[k] >= pri->inum) Die("X-PRI annotation out of range");
+	  FSet(iq, pri->inum, 0.0);
+	  iq[hmm->ipri[k]] = 1.0;
+	}
+      else 
+	FCopy(iq, pri->iq, pri->inum);
 
+      /* This is the main line of the code:
+       */
+      P7PriorifyTransitionVector(hmm->t[k], pri, tq);
+      P7PriorifyEmissionVector(hmm->mat[k], pri, pri->mnum, mq, pri->m, NULL);
+      P7PriorifyEmissionVector(hmm->ins[k], pri, pri->inum, iq, pri->i, NULL);
+    }
+
+  /* We repeat the above steps just for the final match state, M.
+   */
+  if (hmm->mpri != NULL && hmm->mpri[hmm->M] >= 0)
+    {
+      if (hmm->mpri[hmm->M] >= pri->mnum) Die("X-PRM annotation out of range");
+      FSet(mq, pri->mnum, 0.0);
+      mq[hmm->mpri[hmm->M]] = 1.0;
+    }
+  else 
+    FCopy(mq, pri->mq, pri->mnum);
+
+  P7PriorifyEmissionVector(hmm->mat[hmm->M], pri, pri->mnum, mq, pri->m, NULL);
+
+  /* Now we're done. Convert the counts-based HMM to probabilities.
+   */
   Plan7Renormalize(hmm);
 }
 
@@ -442,13 +495,17 @@ P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
  *           
  * Args:     t     - state transitions, counts: 3 for M, 2 for I, 2 for D.   
  *           prior - Dirichlet prior information
+ *           tq    - prior distribution over Dirichlet components.
+ *                   (overrides prior->iq[]; used for alternative
+ *                   methods of conditioning prior on structural data)  
  *           
  * Return:   (void)
  *           t is changed, and renormalized -- comes back as
  *           probability vectors.
  */          
 void
-P7PriorifyTransitionVector(float *t, struct p7prior_s *prior)
+P7PriorifyTransitionVector(float *t, struct p7prior_s *prior, 
+			   float tq[MAXDCHLET])
 {
   int   ts;
   int   q;
@@ -461,7 +518,7 @@ P7PriorifyTransitionVector(float *t, struct p7prior_s *prior)
     {
       for (q = 0; q < prior->tnum; q++)
         {
-          mix[q] =  prior->tq[q] > 0.0 ? log(prior->tq[q]) : -999.;
+          mix[q] =  tq[q] > 0.0 ? log(tq[q]) : -999.;
           mix[q] += Logp_cvec(t,   3, prior->t[q]);   /* 3 match  */
           mix[q] += Logp_cvec(t+3, 2, prior->t[q]+3); /* 2 insert */
 	  mix[q] += Logp_cvec(t+5, 2, prior->t[q]+5); /* 2 delete */
