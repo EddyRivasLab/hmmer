@@ -38,8 +38,13 @@
 /* Worry() is a conditional warning macro, used for debugging;
  * it inserts file name and line number information and
  * calls VerboseWorry(). See debug.c. 
+ * 
+ * PANIC is called for failures of Std C/POSIX functions,
+ * instead of my own functions. It calls perror() and exits
+ * abnormally.
  */
-#define Worry(x,s)  VerboseWorry(x, __FILE__, __LINE__, s);
+#define Worry(x,s)  VerboseWorry(x, __FILE__, __LINE__, s)
+#define PANIC       (Panic(__FILE__, __LINE__))
 
 /* The symbol alphabet.
  * Must deal with IUPAC degeneracies. Nondegenerate symbols 
