@@ -14,6 +14,8 @@
 #include "funcs.h"
 #include "squid.h"
 
+#include <ctype.h>
+
 #ifdef MEMDEBUG
 #include "dbmalloc.h"
 #endif
@@ -337,7 +339,7 @@ EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, char **ret_dsq, int *
 	  seq[i]   = Alphabet[x];
 	  dsq[i+1] = x;
 	  if (hmm->mat[k][x] < mthresh)
-	    seq[i] = tolower(seq[i]);
+	    seq[i] = tolower((int) seq[i]);
 	  i++;
 	  tpos++;
 	}

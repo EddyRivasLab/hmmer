@@ -476,7 +476,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 	if (matchonly) 
 	  aseqs[idx][apos] = '*'; /* insert compression option */
 	else {
-	  aseqs[idx][apos] = tolower(Alphabet[(int) dsq[idx][rpos]]);
+	  aseqs[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
 	  apos++;
 	}
       }
@@ -484,7 +484,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 	if (matchonly)
 	  aseqs[idx][apos] = '*'; /* insert compression option */
 	else {
-	  aseqs[idx][apos] = tolower(Alphabet[(int) dsq[idx][rpos]]);
+	  aseqs[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
 	  apos++;
 	}
       }
@@ -501,7 +501,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 
       for (k = 1; k < mlen; k++) 
 	if (inserts[k] > 1) {
-	  for (nins = 0, apos = matmap[k]+1; islower(aseqs[idx][apos]); apos++)
+	  for (nins = 0, apos = matmap[k]+1; islower((int) (aseqs[idx][apos])); apos++)
 	    nins++;
 	  nins /= 2;		/* split the insertion in half */
 	  rightjustify(aseqs[idx]+matmap[k]+1+nins, inserts[k]-nins);
@@ -749,7 +749,7 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
       ali->model[tpos] = '.';
       if (hmm->isc[(int) dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
 	ali->mline[tpos] = '+';
-      ali->aseq[tpos]  = tolower(Alphabet[(int) dsq[tr->pos[tpos]]]);
+      ali->aseq[tpos]  = (char) tolower((int) Alphabet[(int) dsq[tr->pos[tpos]]]);
       break;
 
     default:

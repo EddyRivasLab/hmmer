@@ -1569,12 +1569,12 @@ read_plan9_aschmm(FILE *fp, int version)
 				/* read M from first line */
   if (fgets(buffer, 512, fp) == NULL) return NULL;
   if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (!isdigit(*s)) return NULL;
+  if (!isdigit((int) (*s))) return NULL;
   M = atoi(s);
 				/* read alphabet_length */
   if (fgets(buffer, 512, fp) == NULL) return NULL;
   if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (!isdigit(*s)) return NULL;
+  if (!isdigit((int) (*s))) return NULL;
   asize = atoi(s);
 
   /* Set global alphabet information
@@ -1598,7 +1598,7 @@ read_plan9_aschmm(FILE *fp, int version)
 				/* read alphabet_type but ignore */
   if (fgets(buffer, 512, fp) == NULL) return NULL;
   if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
-  if (!isdigit(*s)) return NULL;
+  if (!isdigit((int) (*s))) return NULL;
 				/* read alphabet but ignore */
   if (fgets(buffer, 512, fp) == NULL) return NULL;
   if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
@@ -1624,7 +1624,7 @@ read_plan9_aschmm(FILE *fp, int version)
 				/* get state type and index info */
       if ((statetype = strtok(buffer, " \t\n")) == NULL) return NULL;
       if ((s = strtok((char *) NULL, " \t\n")) == NULL) return NULL;
-      if (!isdigit(*s)) return NULL;
+      if (!isdigit((int) (*s))) return NULL;
       k = atoi(s);
       if (k < 0 || k > hmm->M+1) return NULL;
       

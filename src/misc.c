@@ -107,7 +107,7 @@ Getline(char *s, int n, FILE *fp)
 
   do {
     if (fgets(s, n, fp) == NULL) return NULL;
-    first = s; while (isspace(*first)) first++;
+    first = s; while (isspace((int) (*first))) first++;
   } while (*first == '#' || *first == '\0');
   return s;
 }
