@@ -53,6 +53,28 @@ VerboseWorry(int level, char *file, int line, char *format, ...)
 }
 
 
+/* Function: Panic()
+ * 
+ * Purpose:  Die from a lethal error that's not my problem,
+ *           but instead a failure of a StdC/POSIX call that
+ *           shouldn't fail. Call perror() to get the
+ *           errno flag, then die.
+ *           
+ *           Usually called by the PANIC macro which adds
+ *           the __FILE__ and __LINE__ information; see
+ *           structs.h.
+ *           
+ *           Inspired by code in Donald Lewine's book, _POSIX 
+ *           Programmer's Guide_.
+ */
+void
+Panic(char *file, int line)
+{
+  (void) fprintf(stderr, "\nPANIC [%s line %d] ", file, line);
+  (void) perror("Unusual error");
+  exit(EXIT_FAILURE);
+}
+
 
 /* Function: Statetype()
  * 
