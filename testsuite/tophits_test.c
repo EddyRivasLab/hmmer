@@ -1,11 +1,10 @@
 /* tophits_test.c
  * SRE, Tue Oct 28 08:03:10 1997 [Newton Institute, Cambridge UK]
- * cp tophits_test.c ../testdriver.c; cd ..; make testdriver
  * 
  * Test driver for tophits.c. Returns 0 if everything is OK.
  * 
  * Options:
- *    -v   Verbose; print stuff. (not currently functional)
+ *    -v   Verbose; print stuff.
  */
 
 #include <stdio.h>
@@ -29,7 +28,10 @@ Usage: tophits_test [-options]\n\
     -h     : help; display this usage info\n\
     -s <x> : set random seed to <x>\n\
     -v     : be verbose (default is to simply exit with status 1 or 0)\n\
-\n"; 
+"; 
+
+static char experts[] = "\
+\n";
 
 static struct opt_s OPTIONS[] = {
   { "-h", TRUE, sqdARG_NONE },
@@ -78,6 +80,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
+      puts(experts);
       exit(0);
     }
   }
@@ -117,55 +120,16 @@ main(int argc, char **argv)
       printf("%8.2f\tTest set\n", list[i]);
 
   /*********************************************** 
-   * Test of FastSortTophits.
-   *     Fill up a hit list with random numbers;
-   *     FastSort it;
-   *     check that all top H are >= 100. 
-   ***********************************************/
-  
-  hit = AllocTophits(paramH, paramA);
-  for (i = 0; i < nsamples; i++)
-    RegisterHit(hit, list[i], 0., (float) list[i], 
-		NULL, NULL, 
-		0,0,0,
-		0,0,0, 
-		0,0,
-		NULL);
-  FastSortTophits(hit);
-
-  for (i = 0; i < hit->H; i++)
-    {
-      GetRankedHit(hit, i, NULL, &score, NULL, NULL, 
-		   NULL, NULL, NULL, 
-		   NULL, NULL, NULL,
-		   NULL, NULL,
-		   NULL);
-      if (score < 100.)
-	Die("FastSortTophits() fails test");
-    }
-
-  for (i = hit->H; i < hit->pos; i++)
-    {
-      GetRankedHit(hit, i, NULL, &score, NULL, NULL, 
-		   NULL, NULL, NULL, 
-		   NULL, NULL, NULL, 
-		   NULL, NULL,
-		   NULL);
-      if (score >= 100.)
-	Die("FastSortTophits() fails test");
-    }
-  FreeTophits(hit);
-
-  /*********************************************** 
    * Test of FullSortTophits().
    *     Fill up a hit list with random numbers;
    *     FullSort it;
    *     check that all top H are >= 100 and sorted.
    ***********************************************/
 
-  hit = AllocTophits(paramH, paramA);
+  hit = AllocTophits(100);
   for (i = 0; i < nsamples; i++)
-    RegisterHit(hit, list[i], 0., (float) list[i], NULL, NULL, 
+    RegisterHit(hit, list[i], 0., (float) list[i], 0., 0., 
+		NULL, NULL, 
 		0,0,0,
 		0,0,0,
 		0,0,
@@ -174,33 +138,38 @@ main(int argc, char **argv)
 
   if (be_verbose)
     {
-      for (i = 0; i < hit->pos; i++)
+      for (i = 0; i < hit->num; i++)
 	{
 	  GetRankedHit(hit, i,  NULL, &score, NULL, NULL, 
+		       NULL, NULL,
 		       NULL, NULL, NULL, 
 		       NULL, NULL, NULL, 
 		       NULL, NULL,
 		       NULL);
 	  printf("%8.2f  FullSort()\n", score);
 	}
-      printf("%d\tNumber of sorts\n", hit->sorts);
-      printf("%8.2f\tBest\n", hit->best);
     }
 
-  for (i = 0; i < hit->H-1; i++)
+  for (i = 0; i < hit->num-1; i++)
     {
       GetRankedHit(hit, i,  NULL, &score, NULL, NULL, 
+		   NULL, NULL,
 		   NULL, NULL, NULL, 
 		   NULL, NULL, NULL,
 		   NULL, NULL,
 		   NULL);
       GetRankedHit(hit, i+1,NULL, &score2,NULL, NULL, 
+		   NULL, NULL,
 		   NULL, NULL, NULL, 
 		   NULL, NULL, NULL, 
 		   NULL, NULL,
 		   NULL);
-      if (score < 100. || score < score2)
-	Die("FullSortTophits() fails test");
+      if (score < score2)
+	Die("FullSortTophits() fails test: order wrong");
+      if (i < paramA && score < 1000.)
+	Die("FullSortTophits() fails test: lost a number");
+      if (i < paramA + paramH && score < 100.)
+	Die("FullSortTophits() fails test: lost a number");
     }
 
   FreeTophits(hit);
