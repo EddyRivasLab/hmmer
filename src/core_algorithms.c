@@ -21,6 +21,7 @@
 #include "funcs.h"
 #include "squid.h"
 
+#include <string.h>
 #include <assert.h>
 
 #ifdef MEMDEBUG
@@ -98,6 +99,72 @@ FreePlan7Matrix(struct dpmatrix_s *mx)
   free (mx->imx);
   free (mx->dmx);
   free (mx);
+}
+
+/* Function: AllocShadowMatrix()
+ * 
+ * Purpose:  Allocate a dynamic programming traceback pointer matrix for 
+ *           a Viterbi algorithm. 
+ *           
+ * Args:     rows  - number of rows to allocate; typically L+1
+ *           M     - size of model
+ *           xtb, mtb, itb, dtb 
+ *                 - RETURN: ptrs to four mx components as a convenience
+ *                 
+ * Return:   mx
+ *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
+ */
+
+struct dpshadow_s *
+AllocShadowMatrix(int rows, int M, char ***xtb, char ***mtb, char ***itb, char ***dtb)
+{
+  struct dpshadow_s *tb;
+  int i;
+
+  tb         = (struct dpshadow_s *) MallocOrDie (sizeof(struct dpshadow_s));
+  tb->xtb    = (char **) MallocOrDie (sizeof(char *) * rows);
+  tb->mtb    = (char **) MallocOrDie (sizeof(char *) * rows);
+  tb->itb    = (char **) MallocOrDie (sizeof(char *) * rows);
+  tb->dtb    = (char **) MallocOrDie (sizeof(char *) * rows);
+  tb->esrc   = (int *)   MallocOrDie (sizeof(int)  * rows);
+  tb->xtb[0] = (char *)  MallocOrDie (sizeof(char) * (rows*5));
+  tb->mtb[0] = (char *)  MallocOrDie (sizeof(char) * (rows*(M+2)));
+  tb->itb[0] = (char *)  MallocOrDie (sizeof(char) * (rows*(M+2)));
+  tb->dtb[0] = (char *)  MallocOrDie (sizeof(char) * (rows*(M+2)));
+  for (i = 1; i < rows; i++)
+    {
+      tb->xtb[i] = tb->xtb[0] + (i*5); 
+      tb->mtb[i] = tb->mtb[0] + (i*(M+2));
+      tb->itb[i] = tb->itb[0] + (i*(M+2));
+      tb->dtb[i] = tb->dtb[0] + (i*(M+2));
+    }
+
+  if (xtb != NULL) *xtb = tb->xtb;
+  if (mtb != NULL) *mtb = tb->mtb;
+  if (itb != NULL) *itb = tb->itb;
+  if (dtb != NULL) *dtb = tb->dtb;
+  return tb;
+}
+
+/* Function: FreeShadowMatrix()
+ * 
+ * Purpose:  Free a dynamic programming matrix allocated by AllocShadowMatrix().
+ * 
+ * Return:   (void)
+ */
+void
+FreeShadowMatrix(struct dpshadow_s *tb)
+{
+  free (tb->xtb[0]);
+  free (tb->mtb[0]);
+  free (tb->itb[0]);
+  free (tb->dtb[0]);
+  free (tb->esrc);
+  free (tb->xtb);
+  free (tb->mtb);
+  free (tb->itb);
+  free (tb->dtb);
+  free (tb);
 }
 
 /* Function: P7ViterbiSize()
@@ -1749,3 +1816,370 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
   *ret_s2 = s2;
   return Scorify(max);
 }
+
+
+/* Function: P7ViterbiAlignAlignment()
+ * Date:     SRE, Sat Jul  4 13:39:00 1998 [St. Louis]
+ *
+ * Purpose:  Align a multiple alignment to an HMM without
+ *           changing the multiple alignment itself.
+ *           Adapted from P7Viterbi().
+ *           
+ *           Heuristic; not a guaranteed optimal alignment.
+ *           Guaranteeing an optimal alignment appears difficult.
+ *           [cryptic note to myself:] In paths connecting to I* metastates,
+ *           recursion breaks down; if there is a gap in the
+ *           previous column for a given seq, we can't determine what state the
+ *           I* metastate corresponds to for this sequence, unless we
+ *           look back in the DP matrix. The lookback would either involve
+ *           recursing back to the previous M* metastate (giving a
+ *           O(MN^2) algorithm instead of O(MN)) or expanding the I*
+ *           metastate into 3^nseq separate I* metastates to keep track
+ *           of which of three states each seq is in. Since the second
+ *           option blows up exponentially w/ nseq, it is not attractive.
+ *           If the first option were used, the correct algorithm would be related to 
+ *           modelmakers.c:Maxmodelmaker(), but somewhat more difficult.
+ *           
+ *           The heuristic approach here is to calculate a "consensus"
+ *           sequence from the alignment, and align the consensus to the HMM.
+ *           Some hackery is employed, weighting transitions and emissions
+ *           to make things work (re: con and mocc arrays).
+ *
+ * Args:     aseq  - aligned sequences
+ *           ainfo - info for aseqs (includes alen, nseq, wgt)
+ *           hmm   - model to align to        
+ *
+ * Returns:  Traceback. Caller must free with P7FreeTrace().
+ *           pos[] contains alignment columns, indexed 1..alen.
+ *           statetype[] contains metastates M*, etc. as STM, etc.
+ */
+struct p7trace_s *
+P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
+{
+  struct dpmatrix_s *mx;        /* Viterbi calculation lattice (two rows) */
+  struct dpshadow_s *tb;        /* shadow matrix of traceback pointers */
+  struct p7trace_s  *tr;        /* RETURN: traceback */
+  int  **xmx, **mmx, **imx, **dmx;
+  char **xtb, **mtb, **itb, **dtb;
+  float **con;                  /* [1..alen][0..Alphabet_size-1], consensus counts */
+  float  *mocc;                 /* fractional occupancy of a column; used to weight transitions */
+  int     i;			/* counter for columns */
+  int     k;			/* counter for model positions */
+  int     idx;			/* counter for seqs */
+  int     sym;			/* counter for alphabet symbols */
+  int     sc;			/* temp variable for holding score */
+  float   denom;		/* total weight of seqs; used to "normalize" counts */
+  int     cur, prv;
+
+  /* The "consensus" is a counts matrix, [1..alen][0..Alphabet_size-1].
+   * Gaps are not counted explicitly, but columns with lots of gaps get
+   * less total weight because they have fewer counts.
+   */
+				/* allocation */
+  con  = MallocOrDie(sizeof(float *) * (ainfo->alen+1));
+  mocc = MallocOrDie(sizeof(float)   * (ainfo->alen+1));
+  for (i = 1; i <= ainfo->alen; i++) {
+    con[i] = MallocOrDie(sizeof(float) * Alphabet_size);
+    FSet(con[i], Alphabet_size, 0.0);
+  }
+  mocc[0] = -9999.;
+				/* initialization */
+				/* note: aseq is off by one, 0..alen-1 */
+				/* "normalized" to have a max total count of 1 per col */
+  denom = FSum(ainfo->wgt, ainfo->nseq);
+  for (i = 1; i <= ainfo->alen; i++)
+    {
+      for (idx = 0; idx < ainfo->nseq; idx++)
+	if (! isgap(aseq[idx][i-1]))
+	  P7CountSymbol(con[i], SYMIDX(aseq[idx][i-1]), ainfo->wgt[idx]);
+      FScale(con[i], Alphabet_size, 1./denom);
+      mocc[i] = FSum(con[i], Alphabet_size);
+    }
+  
+  /* Allocate a DP matrix with 2 rows, 0..M columns,
+   * and a shadow matrix with 0,1..alen rows, 0..M columns.
+   */ 
+  mx = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  tb = AllocShadowMatrix(ainfo->alen+1, hmm->M, &xtb, &mtb, &itb, &dtb);
+
+  /* Initialization of the zero row.
+   */
+  xmx[0][XMN] = 0;		                     /* S->N, p=1            */
+  xtb[0][XMN] = STS;
+  xmx[0][XMB] = hmm->xsc[XTN][MOVE];                 /* S->N->B, no N-tail   */
+  xtb[0][XMB] = STN;
+  xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /* need seq to get here */
+  tb->esrc[0] = 0;
+  xtb[0][XMC] = xtb[0][XMJ] = STBOGUS;  
+  for (k = 0; k <= hmm->M; k++) {
+    mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /* need seq to get here */
+    mtb[0][k] = itb[0][k] = dtb[0][k] = STBOGUS;
+  }
+  
+  /* Recursion. Done as a pull.
+   * Note some slightly wasteful boundary conditions:  
+   *    tsc[0] = -INFTY for all eight transitions (no node 0)
+   *    D_M and I_M are wastefully calculated (they don't exist)
+   */
+  for (i = 1; i <= ainfo->alen; i++) {
+    cur = i % 2;
+    prv = ! cur;
+
+    mmx[cur][0] = imx[cur][0] = dmx[cur][0] = -INFTY;
+    mtb[i][0]   = itb[i][0]   = dtb[i][0]   = STBOGUS;
+
+    for (k = 1; k <= hmm->M; k++) {
+				/* match state */
+      mmx[cur][k]  = -INFTY;
+      mtb[i][k]    = STBOGUS;
+      if ((sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > mmx[cur][k])
+	{ mmx[cur][k] = sc; mtb[i][k] = STM; }
+      if ((sc = imx[prv][k-1] + hmm->tsc[k-1][TIM] * mocc[i-1]) > mmx[cur][k])
+	{ mmx[cur][k] = sc; mtb[i][k] = STI; }
+      if ((sc = xmx[prv][XMB] + hmm->bsc[k]) > mmx[cur][k])
+	{ mmx[cur][k] = sc; mtb[i][k] = STB; }
+      if ((sc = dmx[prv][k-1] + hmm->tsc[k-1][TDM]) > mmx[cur][k])
+	{ mmx[cur][k] = sc; mtb[i][k] = STD; }
+				/* average over "consensus" sequence */
+      for (sym = 0; sym < Alphabet_size; sym++)
+	{
+	  if (con[i][sym] > 0 && hmm->msc[sym][k] == -INFTY) { mmx[cur][k] = -INFTY; break; }
+	  mmx[cur][k] += hmm->msc[sym][k] * con[i][sym];
+	}
+
+				/* delete state */
+      dmx[cur][k] = -INFTY;
+      dtb[i][k]   = STBOGUS;
+      if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > dmx[cur][k])
+	{ dmx[cur][k] = sc; dtb[i][k] = STM; }
+      if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+	{ dmx[cur][k] = sc; dtb[i][k] = STD; }
+
+				/* insert state */
+      if (k < hmm->M) {
+	imx[cur][k] = -INFTY;
+	itb[i][k]   = STBOGUS;
+	if ((sc = mmx[prv][k] + hmm->tsc[k][TMI] * mocc[i]) > imx[cur][k])
+	  { imx[cur][k] = sc; itb[i][k] = STM; }
+	if ((sc = imx[prv][k] + hmm->tsc[k][TII] * mocc[i-1] * mocc[i]) > imx[cur][k])
+	  { imx[cur][k] = sc; itb[i][k] = STI; }
+				/* average over "consensus" sequence */
+	for (sym = 0; sym < Alphabet_size; sym++)
+	  {
+	    if (con[i][sym] > 0 && hmm->isc[sym][k] == -INFTY) { imx[cur][k] = -INFTY; break; }
+	    imx[cur][k] += hmm->isc[sym][k] * con[i][sym];
+	  }
+      }
+    }
+    
+    /* Now the special states. Order is important here.
+     * remember, N, C, and J emissions are zero score by definition.
+     */
+				/* N state */
+    xmx[cur][XMN] = -INFTY;
+    xtb[i][XMN]   = STBOGUS;
+    if ((sc = xmx[prv][XMN] + hmm->xsc[XTN][LOOP] * mocc[i]) > -INFTY)
+      { xmx[cur][XMN] = sc; xtb[i][XMN] = STN; }
+				/* E state */
+    xmx[cur][XME] = -INFTY;
+    xtb[i][XME]   = STBOGUS;
+    for (k = 1; k <= hmm->M; k++)
+      if ((sc =  mmx[cur][k] + hmm->esc[k]) > xmx[cur][XME])
+	{ xmx[cur][XME] = sc; tb->esrc[i] = k; }
+
+				/* we don't check J state */
+				/* B state; don't connect from J */
+    xmx[cur][XMB] = -INFTY;
+    xtb[i][XMB]   = STBOGUS;
+    if ((sc = xmx[cur][XMN] + hmm->xsc[XTN][MOVE]) > xmx[cur][XMB])
+      { xmx[cur][XMB] = sc; xtb[i][XMB] = STN; }
+
+				/* C state */
+    xmx[cur][XMC] = -INFTY;
+    xtb[i][XMC]   = STBOGUS;
+    if ((sc = xmx[prv][XMC] + hmm->xsc[XTC][LOOP] * mocc[i]) > -INFTY)
+      { xmx[cur][XMC] = sc; xtb[i][XMC] = STC; }
+    if ((sc = xmx[cur][XME] + hmm->xsc[XTE][MOVE]) > xmx[cur][XMC])
+      { xmx[cur][XMC] = sc; xtb[i][XMC] = STE; }
+  }
+				/* T state (not stored in mx) */
+  sc = xmx[ainfo->alen%2][XMC] + hmm->xsc[XTC][MOVE];
+
+				/* do the traceback */
+  tr = ShadowTrace(tb, hmm, ainfo->alen);
+				/* cleanup and return */
+  FreePlan7Matrix(mx);
+  FreeShadowMatrix(tb);
+  for (i = 1; i <= ainfo->alen; i++)
+    free(con[i]);
+  free(con);
+  free(mocc);
+
+  return tr;
+}
+
+
+
+/* Function: ShadowTrace()
+ * Date:     SRE, Sun Jul  5 11:38:24 1998 [St. Louis]
+ *
+ * Purpose:  Given a shadow matrix, trace it back, and return
+ *           the trace.
+ *
+ * Args:     tb  - shadow matrix of traceback pointers
+ *           hmm - the model (needed for figuring out wing unfolding)
+ *           L   - sequence length
+ *
+ * Returns:  traceback. Caller must free w/ P7FreeTrace().
+ */
+struct p7trace_s *
+ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
+{
+  struct p7trace_s *tr;
+  int curralloc;		/* current allocated length of trace */
+  int tpos;			/* position in trace */
+  int i;			/* position in seq (1..N) */
+  int k;			/* position in model (1..M) */
+  int nxtstate;			/* next state to assign in traceback */
+
+  /* Overallocate for the trace.
+   * S-N-B- ... - E-C-T  : 6 states + L is minimum trace;
+   * add N more as buffer.             
+   */
+  curralloc = L * 2 + 6; 
+  P7AllocTrace(curralloc, &tr);
+
+  /* Initialization of trace
+   * We do it back to front; ReverseTrace() is called later.
+   */
+  tr->statetype[0] = STT;
+  tr->nodeidx[0]   = 0;
+  tr->pos[0]       = 0;
+  tpos     = 1;
+  i        = L;			/* current i (seq pos) we're trying to assign   */
+  k        = 0;			/* current k (model pos) we're trying to assign */
+  nxtstate = STC;		/* assign the C state first, for C->T */
+
+  /* Traceback
+   */
+  while (nxtstate != STS) {
+    switch (nxtstate) {
+    case STM:
+      tr->statetype[tpos] = STM;
+      nxtstate            = tb->mtb[i][k];
+      tr->nodeidx[tpos]   = k--;
+      tr->pos[tpos]       = i--;
+      tpos++;
+      break;
+
+    case STI:
+      tr->statetype[tpos] = STI;
+      nxtstate            = tb->itb[i][k];
+      tr->nodeidx[tpos]   = k;
+      tr->pos[tpos]       = i--;
+      tpos++;
+      break;
+      
+    case STD:
+      tr->statetype[tpos] = STD;
+      nxtstate            = tb->dtb[i][k];
+      tr->nodeidx[tpos]   = k--;
+      tr->pos[tpos]       = 0;
+      tpos++;
+      break;
+
+    case STN:	
+      tr->statetype[tpos] = STN;
+      nxtstate            = tb->xtb[i][XMN];
+      tr->nodeidx[tpos]   = 0;
+      tr->pos[tpos]  = (nxtstate == STN) ? i-- : 0; /* N->N; 2nd one emits. */
+      tpos++;
+      break;
+
+    case STB:
+				/* Check for wing unfolding */
+      if (Prob2Score(hmm->begin[k+1], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k+1])
+	while (k > 0)
+	  {
+	    tr->statetype[tpos] = STD;
+	    tr->nodeidx[tpos]   = k--;
+	    tr->pos[tpos]       = 0;
+	    tpos++;
+	    if (tpos == curralloc) 
+	      {				/* grow trace if necessary  */
+		curralloc += L;
+		P7ReallocTrace(tr, curralloc);
+	      }
+	  }
+
+      tr->statetype[tpos] = STB;
+      nxtstate            = tb->xtb[i][XMB];
+      tr->nodeidx[tpos]   = 0;
+      tr->pos[tpos]       = 0;
+      tpos++;
+      break;
+
+    case STJ:
+      tr->statetype[tpos] = STJ;
+      nxtstate            = tb->xtb[i][XMJ];
+      tr->nodeidx[tpos]   = 0;
+      tr->pos[tpos]  = (nxtstate == STJ) ? i-- : 0; /* J->J; 2nd one emits. */
+      tpos++;
+      break;
+
+    case STE:			
+      tr->statetype[tpos] = STE;
+      tr->nodeidx[tpos]   = 0;
+      tr->pos[tpos]       = 0;
+      k                   = tb->esrc[i];
+      nxtstate            = STM;
+      tpos++;
+				/* check for wing unfolding */
+      if (Prob2Score(hmm->end[k], 1.) + 1*INTSCALE <=  hmm->esc[k])
+	{
+	  int dk;		/* need a tmp k while moving thru delete wing */
+	  for (dk = hmm->M; dk > k; dk--)
+	    {
+	      tr->statetype[tpos] = STD;
+	      tr->nodeidx[tpos]   = dk;
+	      tr->pos[tpos]       = 0;
+	      tpos++;
+	      if (tpos == curralloc) 
+		{				/* grow trace if necessary  */
+		  curralloc += L;
+		  P7ReallocTrace(tr, curralloc);
+		}
+	    }
+	}
+      break;
+
+    case STC:	
+      tr->statetype[tpos] = STC;
+      nxtstate            = tb->xtb[i][XMC];
+      tr->nodeidx[tpos]   = 0;
+      tr->pos[tpos]  = (nxtstate == STC) ? i-- : 0; /* C->C; 2nd one emits. */
+      tpos++;
+      break;
+
+    default:
+      Die("HMMER: Bad state (%s) in ShadowTrace()\n", Statetype(nxtstate));
+
+    } /* end switch over nxtstate */
+    
+    if (tpos == curralloc) 
+      {				/* grow trace if necessary  */
+	curralloc += L;
+	P7ReallocTrace(tr, curralloc);
+      }
+
+  } /* end traceback, just before assigning S state */
+  
+  tr->statetype[tpos] = STS;
+  tr->nodeidx[tpos]   = 0;
+  tr->pos[tpos]       = 0;
+  tr->tlen            = tpos + 1;
+
+  P7ReverseTrace(tr);
+  return tr;
+}
+
