@@ -14,8 +14,8 @@
  */
 
 
-#define RELEASE     "2.0"
-#define RELEASEDATE "June 1998"
+#define RELEASE     "2.0.1"
+#define RELEASEDATE "July 1998"
 
 #ifndef LINTING			/* compiled-in stamp for all binaries  */
 static char *copyright = "\
