@@ -12,13 +12,15 @@ o About this software...
    which you can then use as a query into a sequence database
    to find (and/or align) additional homologues of the sequence family.
 
+
 o Getting HMMER
    WWW home:       http://hmmer.wustl.edu/
    Distribution:   ftp://ftp.genetics.wustl.edu/pub/eddy/hmmer/
 
+
 o Installing HMMER
    See the file INSTALL for brief instructions.
-   See the chapter Installation in the HMMER User's Guide for more 
+   See the chapter Installation in the HMMER User's Guide (Userguide.pdf) for more 
    detailed instructions.
 
    You should also read the following files:
@@ -29,17 +31,16 @@ o Installing HMMER
    a non-GPL license as part of a special licensing agreement,
    COPYING and LICENSE will refer to the terms of that agreement.
 
-o Getting started with HMMER
-   The User's Guide is in Userguide/Userguide.pdf [Adobe PDF format]. 
-   It is also available online as hypertext:
-	http://hmmer.wustl.edu/hmmer-html/ 
 
-   A quick tutorial intro is given as the first chapter of
-   the User's Guide.
+o Getting started with HMMER
+   See the Tutorial section of the User's Guide (Userguide.pdf)
+   for a quick introduction to how to use HMMER.
+
 
 o Registering HMMER
    Email eddy@genetics.wustl.edu to register and get on my
-   infrequent mailing list of HMMER news, patches, and updates.
+   very infrequent mailing list of HMMER news, patches, and updates.
+
 
 o Reporting bugs
    These programs are under active development. Though this

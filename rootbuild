@@ -1,42 +1,61 @@
-#! /usr/local/bin/perl
+#! /usr/bin/perl
+
+# Example: 
+# ./rootbuild whelk01 /tmp hmmer-2.3 intel-linux "--enable-lfs --enable-threads" CC=icc CFLAGS="-O -static"
+#
+# CVS $Id$
 
 $node       = shift;
 $arena      = shift;
 $pkg        = shift;
 $platform   = shift;
 $configopts = shift;
-$makeopts   = shift;
+
+$makeenv = "";
+while ($opt = shift) {
+    if ($opt =~ /(\S+)=(.+)/) {
+	$newopt = qq/$1=\\\"$2\\\"/;
+	if ($makeenv ne "") { $makeenv = $makeenv." "; }
+	$makeenv = $makeenv.$newopt;
+    } else {
+	die ("malformed make environment option $opt?");
+    }
+}
 
 print "pkg        = $pkg\n";
 print "node       = $node\n";
 print "arena      = $arena\n";
 print "platform   = $platform\n";
 print "configopts = $configopts\n";
-print "makeopts   = $makeopts\n";
+print "makeenv    = $makeenv\n";
+print "\n";
 
-print "Copying files...            \t";
-system "scp nodebuild $node:$arena/";
-if ($? != 0) { die "copy failed" };
-system "scp $pkg.tar.gz $node:$arena/";
-if ($? != 0) { die "copy failed" };
+print "Copying files...                 ";
+system "scp nodebuild $node:$arena/ 2>&1 > /dev/null";
+if ($? != 0) { die "copy of nodebuild failed" };
+system "ssh $node chmod +x $arena/nodebuild";
+if ($? != 0) { die "chmod failed" };
+system "scp $pkg.tar.gz $node:$arena/ 2>&1 > /dev/null";
+if ($? != 0) { die "copy of tarball failed" };
 print "[done]\n";
 
-print "Running nodebuild...        \t";
-print "ssh $node $arena/nodebuild $arena $pkg $platform $configopts $makeopts\n";
-system "ssh $node $arena/nodebuild $arena $pkg $platform $configopts $makeopts";
-
+print "Running nodebuild...\n";
+print "ssh $node $arena/nodebuild $arena $pkg $platform \\\"$configopts\\\" $makeenv\n";
+system "ssh $node $arena/nodebuild $arena $pkg $platform \\\"$configopts\\\" $makeenv";
 if ($? != 0) { die "nodebuild failed" };
+print "...nodebuild complete.\n\n";
+
+print "Getting log and tarball back...  ";
+system "scp $node:$arena/$pkg.bin.$platform.tar.gz . 2>&1 >/dev/null";
+if ($? != 0) { die "scp of binary tarball failed" };
+system "scp $node:$arena/$pkg.$platform.log . 2>&1 >/dev/null";
+if ($? != 0) { die "scp of log failed" };
 print "[done]\n";
 
-print "Getting the tarball back... \t";
-system "scp $node:$arena/$pkg.bin.$platform.tar.gz .";
-if ($? != 0) { die "scp failed" };
-print "[done]\n";
-
-print "Cleaning up...              \t";
-system "ssh $node \"\\rm -f $arena/nodebuild\"";
+print "Cleaning up...                   ";
+system "ssh $node rm -f $arena/nodebuild";
 if ($? != 0) { die "rm -f failed" };
-system "ssh $node \"\\rm -f $arena/$pkg.bin.$platform.tar.gz\"";
+system "ssh $node rm -f $arena/$pkg.bin.$platform.tar.gz";
 if ($? != 0) { die "rm -f failed" };
 print "[done]\n";
 

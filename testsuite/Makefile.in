@@ -43,7 +43,7 @@ $(SHIVA): @EXEC_DEPENDENCY@
 ## `make check` actually runs the tests.
 #######
 
-check: $(SHIVA)
+check: 
 	@echo 
 	@echo Running test suite exercises.
 	@echo Warning: some tests may take several minutes to complete. 

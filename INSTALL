@@ -2,6 +2,9 @@ Brief installation instructions for HMMER @RELEASE@
 SRE, Sun Aug  5 16:22:52 2001
 ------------------------------------------
 
+These are quick installation instructions. For complete documentation,
+see the Installation chapter in the HMMER User's Guide (Userguide.pdf).
+
 For a source distribution (hmmer-@RELEASE@.tar.gz):
 
  uncompress hmmer-@RELEASE@.tar.gz  Uncompresses the archive.
@@ -14,32 +17,33 @@ For a source distribution (hmmer-@RELEASE@.tar.gz):
  make install                  Installs the software. (You may need to be root.)
  It should build cleanly on just about any UNIX machine.
 
+
+
 For a binary distribution (hmmer-@RELEASE@.bin.<platform>-<os>.tar.gz),
 for example, the sun-solaris distro:
 
-    uncompress hmmer-@RELEASE@.bin.sun-solaris.tar.Z
-    tar xf hmmer-@RELEASE@.bin.sun-solaris.tar
-    cd hmmer-@RELEASE@
-    ./configure
-    make install
+  uncompress hmmer-@RELEASE@.bin.sun-solaris.tar.Z
+  tar xf hmmer-@RELEASE@.bin.sun-solaris.tar
+  cd hmmer-@RELEASE@
 
-    Note that "make" and "make check" aren't necessary, since you
-    have a precompiled distribution.
+     The programs are linked in the binaries/ subdirectory;
+     man pages are in the documentation/man subdirectory;
+     and the userguide is Userguide.pdf. 
 
-    If your machine doesn't have a C compiler, the ./configure will
-    fail, and you won't be able to do a "make install". This is
-    an artifact of the way I have the configure script built.
-    If this happens, just copy the man pages and binaries whereever
-    you want them, for instance:
+     Optionally, you can test the software:
 
-    cp Man/*      /usr/local/man/man1/
-    cp binaries/* /usr/local/bin/
+  make check
+     
+     And you can configure it with installation paths, and install 
+     it (default is to put programs in /usr/local/bin and man pages
+     in /usr/local/man):
+  
+  ./configure
+  make install
 
     HMMER doesn't depend on any external data files, so the installation is
-    simple - the binaries are free standing, and you can install
+    simple - the binaries are free standing. You can install
     them anywhere you like.
 
-For more detail, see the Installation chapter in the HMMER User's
-Guide.
 
 
