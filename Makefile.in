@@ -206,10 +206,10 @@ dist:
 	# prep: must have done "cvs commit", and CVSROOT must be set
 	# We also need the squid library, so tag and export it too.
 	#
-	cvs tag -c -F $(RELCODE)
+	cvs tag -F $(RELCODE)
 	cvs export -r $(RELCODE) -d ${BASENAME}-${RELEASE} ${BASENAME}
 	cvs rtag -F ${BASENAME}_${RELCODE} squid
-	(cd lib; cvs export -r ${BASENAME}_${RELCODE} -d squid squid)
+	(cd ${BASENAME}-${RELEASE}/lib; cvs export -r ${BASENAME}_${RELCODE} -d squid squid)
 	# 
 	# Make the configure script from configure.in
 	#
@@ -225,61 +225,21 @@ dist:
 	# licenseadd.pl is basically harmless, so we can overannotate here by
 	# trying to licenseadd everything.
 	#
-	find ${BASENAME}-${RELEASE}
-	  licenseadd.pl Licenses/$(LICENSETAG) ${BASENAME}-${RELEASE}/$$file;\
-        done
-	for file in src/*.c src/*.h src/Makefile.in; do \
-	   licenseadd.pl Licenses/$(LICENSETAG) ${BASENAME}-${RELEASE}/$$file;\
-	done	
-	for file in lib/squid/*.c lib/squid/*.h lib/squid/Makefile.in; do \
-	   licenseadd.pl Licenses/$(LICENSETAG) ${BASENAME}-${RELEASE}/$$file;\
-	done
-	#
-	# RCS extraction of HMMER Man/ manual pages
-	#
-	for file in $(PROGS) hmmer; do\
-	   rcs -N$(RELCODE): Man/RCS/$$file.man,v;\
-	   co -p Man/RCS/$$file.man,v | sed -e 's/@RELEASE@/${RELEASE}/g' \
-                                            -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
-	                                    -e 's/@SEEALSO@/${PROGS}/g'\
-                > build/hmmer-$(RELEASE)/Man/$$file.man;\
-	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Man/$$file.man;\
-	done
-	#
-	# RCS extraction of SQUID Man/ manual pages
-	#
-	for file in $(SQUIDPROGS); do\
-	   rcs -Nhmmer_$(RELCODE): ${SQUIDSRCDIR}/Man/RCS/$$file.man,v;\
-	   co -p ${SQUIDSRCDIR}/Man/RCS/$$file.man,v |\
-               sed -e 's/@RELEASE@/${RELEASE}/g' \
-                   -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
-                   -e 's/@PACKAGE@/HMMER/g' \
-	           -e 's/@SEEALSO@/${SQUIDPROGS}/g'\
-                > build/hmmer-$(RELEASE)/Man/$$file.man;\
-	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Man/$$file.man;\
-	done
-	#
-	# RCS extraction of Shiva/ testsuite
-	#
-	for file in $(SHIVADIST) Makefile.in; do\
-	   rcs -N$(RELCODE): Shiva/RCS/$$file,v;\
-	   co Shiva/RCS/$$file,v build/hmmer-$(RELEASE)/Shiva/$$file;\
-	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Shiva/$$file;\
-	done
+	find ${BASENAME}-${RELEASE} -type f -exec licenseadd.pl Licenses/$(LICENSETAG) {} \;
 	# 
 	# Compilation of documentation: includes hmmer-html.tar.Z and Userguide.ps
 	# Documentation not provided in source form.
 	#
-	(cd Userguide; make clean)
-	(cd Userguide; make)
-	cp -f Userguide/Userguide.ps      build/hmmer-$(RELEASE)/Userguide/
-	cp -f Userguide/Userguide.pdf     build/hmmer-$(RELEASE)/Userguide/
-	cp -f Userguide/hmmer-html.tar.Z  build/hmmer-$(RELEASE)/Userguide/
-#
-# Packaging commands
-#
-	(cd build; tar cvf hmmer-$(RELEASE).tar hmmer-$(RELEASE))
-	$(COMPRESS) -f build/hmmer-$(RELEASE).tar
+	#(cd Userguide; make clean)
+	#(cd Userguide; make)
+	#cp -f Userguide/Userguide.ps      build/hmmer-$(RELEASE)/Userguide/
+	#cp -f Userguide/Userguide.pdf     build/hmmer-$(RELEASE)/Userguide/
+	#cp -f Userguide/hmmer-html.tar.Z  build/hmmer-$(RELEASE)/Userguide/
+	#
+	# Packaging commands
+	#
+	tar cvf ${BASENAME}-${RELEASE}.tar ${BASENAME}-${RELEASE}
+	$(COMPRESS) ${BASENAME}-$(RELEASE).tar
 
 
 # make ftpdist: install FTP distribution. Assumes a "make dist"
