@@ -52,9 +52,9 @@ CFLAGS = @CFLAGS@
 ## and building the release (indeed, several commands will only work in 
 ## St. Louis)
 #######
-RELEASE     = 2.1
-RELEASEDATE = "Oct 1998"
-RELCODE     = "rel2_1"
+RELEASE     = 2.1.1
+RELEASEDATE = "Dec 1998"
+RELCODE     = "rel2_1_1"
 LICENSE     = gnu
 
 SHELL       = /bin/sh
@@ -65,16 +65,17 @@ FTPDIR      = /nfs/newftp/eddy/hmmer/
 PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit\
 	hmmfetch hmmindex hmmpfam hmmsearch
 
+SQUIDPROGS = alistat getseq seqstat sreformat
+
 PVMPROGS = @PVMPROGS@
 
 READMES = 00README INSTALL 
 
-MANS =  hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmer hmmfetch hmmindex hmmpfam hmmsearch 
-
 HDRS =  config.h funcs.h globals.h structs.h version.h
 
 SRC =   hmmalign.c    hmmbuild.c        hmmcalibrate.c    hmmconvert.c\
-	hmmemit.c     hmmfetch.c        hmmindex.c        hmmpfam.c         hmmsearch.c\
+	hmmemit.c     hmmfetch.c        hmmindex.c        hmmpfam.c\
+	hmmsearch.c\
 	hmmcalibrate-pvm.c hmmpfam-pvm.c hmmsearch-pvm.c\
 	alphabet.c    core_algorithms.c debug.c           emit.c\
 	emulation.c   histogram.c       hmmio.c           mathsupport.c\
@@ -82,7 +83,8 @@ SRC =   hmmalign.c    hmmbuild.c        hmmcalibrate.c    hmmconvert.c\
 	plan9.c       prior.c           pvm.c		  threads.c\
 	tophits.c     trace.c 
 
-SQUIDSRC = aligneval.c  alignio.c   cluster.c   dayhoff.c\
+SQUIDSRC = alistat_main.c getseq_main.c seqstat_main.c sreformat_main.c\
+	   aligneval.c  alignio.c   cluster.c   dayhoff.c\
 	   file.c       getopt.c    gsi.c       hsregex.c   interleaved.c\
 	   iupac.c      msf.c       revcomp.c   selex.c\
 	   sqerror.c    sqio.c      sre_ctype.c sre_math.c\
@@ -117,7 +119,7 @@ all:
 	else\
 	   (cd src; make CC="$(CC)" CFLAGS="$(CFLAGS)");\
 	   mkdir binaries;\
-	   for prog in $(PROGS) $(PVMPROGS); do\
+	   for prog in $(PROGS) $(SQUIDPROGS) $(PVMPROGS); do\
 	      mv src/$$prog binaries/;\
 	   done;\
 	fi
@@ -133,10 +135,10 @@ check:
 # install: installs the binaries in BINDIR/
 #          installs man pages in MANDIR/man1/  (if MANSUFFIX is 1)
 install: 
-	for file in $(PROGS) $(PVMPROGS); do\
+	for file in $(PROGS) $(SQUIDPROGS) $(PVMPROGS); do\
 	   cp binaries/$$file $(BINDIR)/;\
 	done
-	for file in $(MANS); do\
+	for file in hmmer $(PROGS) $(SQUIDPROGS); do\
 	   $(INSTMAN) Man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 
@@ -177,15 +179,18 @@ verify:
 	@for file in $(DEMOS); do\
 	   if test -w Demos/$$file; then echo "Demos/$$file not checked in"; fi;\
 	done;
-	@for file in $(MANS); do\
-	   if test -w Man/$$file; then echo "Man/$$file not checked in"; fi;\
+	@for file in $(PROGS); do\
+	   if test -w Man/$$file.man; then echo "Man/$$file not checked in"; fi;\
+	done;
+	@for file in $(SQUIDPROGS); do\
+	   if test -w $(SQUIDSRCDIR)/Man/$$file.man; then echo "SQUID Man/$$file not checked in"; fi;\
 	done;
 	@for file in $(SHIVADIST) Makefile.in; do\
 	   if test -w Shiva/$$file; then echo "Shiva/$$file not checked in"; fi;\
 	done;
 	@echo
-	@echo Checking options for consistency...
-	@for prog in $(PROGS); do\
+	@echo Checking options for consistency and documentation...
+	@for prog in $(PROGS) $(SQUIDPROGS); do\
 	   ./checkoptions.pl $$prog;\
 	done
 
@@ -194,6 +199,19 @@ verify:
 #
 doc:
 	(cd Userguide; make)
+
+# squid: update files from squid library.
+#
+squid:
+	for file in $(SQUIDHDRS); do\
+	   co $(HOME)/src/squid/RCS/$$file,v src/$$file;\
+	done
+	for file in $(SQUIDSRC); do\
+	   co ${SQUIDSRCDIR}/RCS/$$file,v src/$$file;\
+	done
+	for file in $(SQUIDPROGS); do\
+	   co ${SQUIDSRCDIR}/Man/RCS/$$file.man,v Man/$$file.man;\
+	done
 
 # dist: build a new distribution directory in build/hmmer-$RELEASE
 #       checks out RCS files read-only
@@ -259,13 +277,26 @@ dist:
 	  licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Demos/$$file;\
         done
 	#
-	# RCS extraction of Man/ manual pages
+	# RCS extraction of HMMER Man/ manual pages
 	#
-	for file in $(MANS); do\
+	for file in $(PROGS); do\
 	   rcs -N$(RELCODE): Man/RCS/$$file.man,v;\
 	   co -p Man/RCS/$$file.man,v | sed -e 's/@RELEASE@/${RELEASE}/g' \
                                             -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
-	                                    -e 's/@SEEALSO@/${MANS}/g'\
+	                                    -e 's/@SEEALSO@/${PROGS}/g'\
+                > build/hmmer-$(RELEASE)/Man/$$file.man;\
+	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Man/$$file.man;\
+	done
+	#
+	# RCS extraction of SQUID Man/ manual pages
+	#
+	for file in $(SQUIDPROGS); do\
+	   rcs -Nhmmer_$(RELCODE): ${SQUIDSRCDIR}/Man/RCS/$$file.man,v;\
+	   co -p ${SQUIDSRCDIR}/Man/RCS/$$file.man,v |\
+               sed -e 's/@RELEASE@/${RELEASE}/g' \
+                   -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
+                   -e 's/@PACKAGE@/HMMER/g' \
+	           -e 's/@SEEALSO@/${SQUIDPROGS}/g'\
                 > build/hmmer-$(RELEASE)/Man/$$file.man;\
 	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Man/$$file.man;\
 	done
