@@ -41,11 +41,6 @@
 
 #include <assert.h>
 
-static void  evd_bruteforce(struct histogram_s *h, int lowbound, int highbound);
-static float evd_goodness(struct histogram_s *h, int lowbound, int highbound,
-			  float mu, float lambda);
-
-
 /* Function: AllocHistogram()
  * 
  * Purpose:  Allocate and return a histogram structure.
@@ -81,6 +76,8 @@ AllocHistogram(int min, int max, int lumpsize)
 
   h->expect    = NULL;
   h->fit_type  = HISTFIT_NONE;
+
+  h->param[EVD_WONKA] = 1.0;	/* just in case, make sure this initializes */
 
   return h;
 }
@@ -305,6 +302,14 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
        */
       if (h->fit_type != HISTFIT_NONE && (int) h->expect[idx] > 0)
 	{
+				/* "corrected" line */
+	  if (h->fit_type == HISTFIT_EVD)
+	    {
+	      pos = 20 + (int)(h->param[EVD_WONKA] * h->expect[idx] - 1) / units;
+	      if (pos >= 78) pos = 78; /* be careful of buffer bounds */
+	      buffer[pos] = 'o';
+	    }
+				/* true (uncorrected) line */
 	  pos = 20 + (int)(h->expect[idx]-1) / units;
 	  if (pos >= 78) pos = 78; /* be careful of buffer bounds */
 	  buffer[pos] = '*';
@@ -326,6 +331,7 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
     fprintf(fp, "\n\n%% Statistical details of theoretical EVD fit:\n");
     fprintf(fp, "              mu = %10.4f\n", h->param[EVD_MU]);
     fprintf(fp, "          lambda = %10.4f\n", h->param[EVD_LAMBDA]);
+    fprintf(fp, "    fraction fit = %10.4f\n", h->param[EVD_WONKA]);
     fprintf(fp, "chi-sq statistic = %10.4f\n", h->chisq);
     fprintf(fp, "  P(chi-square)  = %10.4g\n", h->chip);
     break;
@@ -529,7 +535,7 @@ EVDBasicFit(struct histogram_s *h)
   /* Set the EVD parameters in the histogram;
    * pass 2 for additional lost degrees of freedom because we fit mu, lambda.
    */
-  ExtremeValueSetHistogram(h, mu, lambda, 2);
+  ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 1.0, 2);
 
   free(x);
   free(d);
@@ -654,7 +660,15 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
       highbound = new_highbound;
     }
 
-  ExtremeValueSetHistogram(h, mu, lambda, 2);
+  /* Set the histogram parameters;
+   * - the wonka factor is n+z / h->total : e.g. that's the fraction of the
+   *   hits that we expect to match the EVD, others are generally lower
+   * - we fit from lowbound to highbound; thus we lose 2 degrees of freedom
+   *   for fitting mu, lambda, but we get 1 back because we're unnormalized
+   *   in this interval, hence we pass 2-1 = 1 as ndegrees.
+   */    
+  ExtremeValueSetHistogram(h, mu, lambda, lowbound, highbound, 
+			   (float)(n+z)/(float)h->total, 1);
   return 1;
 
 FITFAILED:
@@ -669,16 +683,24 @@ FITFAILED:
  * 
  * Purpose:  Instead of fitting the histogram to an EVD,
  *           simply set the EVD parameters from an external source.
+ *
+ *           Note that the fudge factor "wonka" is used /only/
+ *           for prettification of expected/theoretical curves
+ *           in PrintASCIIHistogram displays.
  *           
  * Args:     h        - the histogram to set
  *           mu       - mu location parameter                
  *           lambda   - lambda scale parameter
+ *           lowbound - low bound of the histogram that was fit
+ *           highbound- high bound of histogram that was fit
+ *           wonka    - fudge factor; fraction of hits estimated to be "EVD-like"
  *           ndegrees - extra degrees of freedom to subtract in X^2 test:
  *                        typically 0 if mu, lambda are parametric,
  *                        else 2 if mu, lambda are estimated from data
  */
 void
-ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, int ndegrees)
+ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, 
+			 float lowbound, float highbound, float wonka, int ndegrees)
 {
   int   sc;
   int   hsize, idx;
@@ -689,6 +711,7 @@ ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, int ndeg
   h->fit_type          = HISTFIT_EVD;
   h->param[EVD_LAMBDA] = lambda;
   h->param[EVD_MU]     = mu;
+  h->param[EVD_WONKA]  = wonka;
 
   hsize     = h->max - h->min + 1;
   h->expect = (float *) MallocOrDie(sizeof(float) * hsize);
@@ -708,7 +731,7 @@ ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, int ndeg
    */
   h->chisq = 0.;
   nbins    = 0;
-  for (sc = h->lowscore; sc <= h->highscore; sc++)
+  for (sc = lowbound; sc <= highbound; sc++)
     if (h->expect[sc-h->min] >= 5. && h->histogram[sc-h->min] >= 5)
       {
 	delta = (float) h->histogram[sc-h->min] - h->expect[sc-h->min];
@@ -1352,81 +1375,4 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 }
 
 
-
-
-
-/***********************************************************************
- *
- * Additional optimization of EVD fits -- not used in production code
- * 
- *********************************************************************** 
- */
-void
-evd_bruteforce(struct histogram_s *h, int lowbound, int highbound)
-{
-  float bestmu, bestlambda, bestchisq;
-  float mu, lambda, chisq;
-
-  bestmu     = h->param[EVD_MU];
-  bestlambda = h->param[EVD_LAMBDA];
-  bestchisq  = evd_goodness(h, lowbound, highbound, bestmu, bestlambda);
-
-  for (mu = h->param[EVD_MU] - 0.5; mu <= h->param[EVD_MU] + 0.5; mu += 0.01)
-    for (lambda = h->param[EVD_LAMBDA] - 0.05; lambda <= h->param[EVD_LAMBDA] + 0.05; lambda += 0.001)
-      {
-	chisq = evd_goodness(h, lowbound, highbound, mu, lambda);
-	if (chisq < bestchisq) 
-	  {
-	    bestmu = mu;
-	    bestlambda = lambda;
-	    bestchisq = chisq;
-	  }
-      }
-
-  h->param[EVD_MU]     = bestmu;
-  h->param[EVD_LAMBDA] = bestlambda;
-}
-
-
-/* Function: evd_goodness()
- * 
- * Purpose:  Calculate the chi-square for a given histogram for
- *           a given mu and lambda. Returns the chi-square value.
- *           
- *           Warning: uses histogram->expect and ->chisq as temp space;
- *           histogram->expect must already be properly allocated.
- */
-float
-evd_goodness(struct histogram_s *h, int lowbound, int highbound,
-	     float mu, float lambda)
-{
-  int   sc;			/* loop index for score (histogram bin)  */
-  int   nbins;			/* number of bins included in chi-square */
-  float delta;
-
-  /* Calculate the expected values for the histogram
-   * within fitted region.
-   */
-  for (sc = lowbound; sc <= highbound; sc++)
-    {
-      h->expect[sc - h->min] =
-	ExtremeValueE((float)(sc), mu, lambda, h->total) -
-	ExtremeValueE((float)(sc+1), mu, lambda, h->total);
-      assert(h->expect[sc - h->min] > 0.);
-    }
-
-  /* Calculate the chi-square.
-   */
-  h->chisq = 0.;
-  nbins = 0;
-  for (sc = lowbound; sc <= highbound; sc++)
-    if (h->expect[sc-h->min] >= 5. && h->histogram[sc-h->min] >= 5)
-    {
-      delta = (float) h->histogram[sc-h->min] - h->expect[sc-h->min];
-      h->chisq += delta * delta / h->expect[sc-h->min];
-      nbins++;
-    }
-  if (nbins < 3) h->chisq = 9999999.;
-  return h->chisq;
-}
 
