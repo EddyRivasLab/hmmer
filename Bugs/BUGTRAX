@@ -1,0 +1,15 @@
+Bug	Status	Noted		Closed		Reported by	Description
+---- 	------	-----		------		-----------	--------------------------
+1	closed	1/16/98		1/16/98		David Kerk	BPA1_HUMAN crashes Pfam server
+2	OPEN	1/7/99				David Kerk	null2 consistency problem between per-seq and per-domain
+3	closed	1/15/99		1/19/99		SRE		(Solaris) hmmbuild segfaults on alignments labeled with #=ID
+4	closed	1/18/99		1/19/99		SRE		sreformat core dumps when reformatting single seq to SELEX
+5	closed	1/18/99		1/19/99		agb		hmmbuild core dumps when building model from single seqs FASTA file
+6	closed	1/18/99		1/19/99		SRE		getseq clashes with GCG program of same name
+7	closed	1/18/99		1/19/99		Bill Pearson	(Digital) 4.0d binaries do not run on 4.0b; pthread_setconcurrency() missing
+8	closed	1/19/99		1/19/99		James Holzwarth	hmmpfam segfaults on GCG-reformatted Swissprot file 
+9	OPEN	6/29/99				Bob Farrington	C->T transition doesn't seem to be parsed from save files
+10	closed  7/2/99		9/17/99		ju@harvard	Floating point exception in ExtremeValueP() on Digital 4.0b: range error. 
+11	OPEN	11/15/99			marcel@cs.berkeley.edu	hmmbuild, illegal B->E in traceback
+								to reproduce: hmmbuild -FB foo.hmm bug11.msf 
+
