@@ -12,6 +12,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <float.h>
 #include <pvm3.h>
 
@@ -24,6 +25,8 @@
 #ifdef MEMDEBUG
 #include "dbmalloc.h"
 #endif
+
+static void leave_pvm(void);
 
 int 
 main(void)
@@ -48,6 +51,12 @@ main(void)
   float    p1;
   int      alphatype;		/* alphabet type, hmmAMINO or hmmNUCLEIC    */
   int      idx;
+  int      code;
+
+  /* Register leave_pvm() cleanup function so any exit() call
+   * first calls pvm_exit().
+   */
+  if (atexit(leave_pvm) != 0) { pvm_exit(); Die("slave couldn't register leave_pvm()"); }
 
   /*****************************************************************
    * initialization.
@@ -62,6 +71,13 @@ main(void)
   pvm_upkint(&fixedlen, 1, 1);
   pvm_upkfloat(&lenmean,  1, 1);
   pvm_upkfloat(&lensd,    1, 1);
+
+  /* tell the master we're OK and ready to go (or not)
+   */
+  code = HMMPVM_OK;
+  pvm_initsend(PvmDataDefault);
+  pvm_pkint(&code, 1, 1);	
+  pvm_send(master_tid, HMMPVM_RESULTS);
 
   /*****************************************************************
    * Main loop.
@@ -140,10 +156,20 @@ main(void)
    * Cleanup, return.
    ***********************************************/
 
-  pvm_exit();
-  return 0;
+  return 0;			/* pvm_exit() is called by atexit() registration. */
 }
 
+/* Function: leave_pvm()
+ * 
+ * Purpose:  Cleanup function, to deal with crashes. We register
+ *           this function using atexit() so it gets called before
+ *           the slave dies.
+ */
+void leave_pvm(void)
+{
+  SQD_DPRINTF1(("slave leaving PVM.\n"));
+  pvm_exit();
+}
 
 #else /* if HMMER_PVM not defined: include a dummy */
 

@@ -12,6 +12,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <pvm3.h>
 
 #include "structs.h"		/* data structures, macros, #define's   */
@@ -23,6 +24,8 @@
 #ifdef MEMDEBUG
 #include "dbmalloc.h"
 #endif
+
+static void leave_pvm(void);
 
 int 
 main(void)
@@ -48,6 +51,12 @@ main(void)
   int      do_null2;		/* TRUE to correct scores w/ ad hoc null2   */
   int      alphatype;		/* alphabet type, hmmAMINO or hmmNUCLEIC    */
   int      code;		/* return code after initialization         */
+
+  
+  /* Register leave_pvm() cleanup function so any exit() call
+   * first calls pvm_exit().
+   */
+  if (atexit(leave_pvm) != 0) { pvm_exit(); Die("slave couldn't register leave_pvm()"); }
 
   /*****************************************************************
    * initialization.
@@ -165,9 +174,22 @@ main(void)
   free(seq);
   free(dsq);
   free(hmmfile);
-  pvm_exit();
   return 0;
 }
+
+
+/* Function: leave_pvm()
+ * 
+ * Purpose:  Cleanup function, to deal with crashes. We register
+ *           this function using atexit() so it gets called before
+ *           the slave dies.
+ */
+static void leave_pvm(void)
+{
+  SQD_DPRINTF1(("slave leaving PVM.\n"));
+  pvm_exit();
+}
+
 
 
 #else /* if HMMER_PVM not defined: include a dummy */
@@ -180,3 +202,4 @@ int main(void)
 } 
 
 #endif
+

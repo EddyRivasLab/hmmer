@@ -4,7 +4,7 @@
 
 #ifdef HMMER_PVM
 
-/* hmmsearch-slave.c
+/* hmmsearch-pvm.c
  * SRE, Wed Sep 23 09:30:53 1998
  * 
  * PVM slave for hmmsearch.
@@ -12,6 +12,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <float.h>
 #include <pvm3.h>
 
@@ -24,6 +25,8 @@
 #ifdef MEMDEBUG
 #include "dbmalloc.h"
 #endif
+
+static void leave_pvm(void);
 
 int 
 main(void)
@@ -47,6 +50,10 @@ main(void)
   int    nseq;			/* actual nseq so far (master keeps updating this) */
   int    send_trace;		/* TRUE if sc looks significant and we return tr */
   
+  /* Register leave_pvm() cleanup function so any exit() call
+   * first calls pvm_exit().
+   */
+  if (atexit(leave_pvm) != 0) { pvm_exit(); Die("slave couldn't register leave_pvm()"); }
 
   /*****************************************************************
    * Initialization.
@@ -87,23 +94,29 @@ main(void)
  
   for (;;)
     {
+      SQD_DPRINTF1(("Slave about to do a blocking receive, waiting for input.\n"));
       pvm_recv(master_tid, HMMPVM_WORK);
       pvm_upkint(&nseq, 1, 1);
+      if (nseq == -1) break;	/* shutdown signal */
       if (my_idx == -1) my_idx = nseq;
       pvm_upkint(&L,    1, 1);
-      if (L == -1) break;	/* shutdown signal */
-      printf("received nseq=%d L=%d my_idx=%d\n", nseq, L, my_idx);
+      SQD_DPRINTF1(("Slave received nseq=%d L=%d my_idx=%d\n", nseq, L, my_idx));
       dsq = MallocOrDie(sizeof(char) * (L + 2));
-      printf("unpacking a seq of %d bytes\n", L+2);
       pvm_upkbyte(dsq, L+2, 1);
-      printf("unpacked a seq of %d bytes\n", L+2);
+      SQD_DPRINTF1(("Slave unpacked a seq of %d bytes; beginning processing\n", L+2));
       
       /* Score sequence, do alignment (Viterbi), recover trace
        */
       if (P7ViterbiSize(L, hmm->M) <= RAMLIMIT)
-	sc = P7Viterbi(dsq, L, hmm, &tr);
+	{
+	  SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
+	  sc = P7Viterbi(dsq, L, hmm, &tr);
+	}
       else
-	sc = P7SmallViterbi(dsq, L, hmm, &tr);
+	{
+	  SQD_DPRINTF1(("Slave going small after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
+	  sc = P7SmallViterbi(dsq, L, hmm, &tr);
+	}
 
       if (do_forward) sc  = P7Forward(dsq, L, hmm, NULL);
       if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
@@ -114,6 +127,7 @@ main(void)
      
       /* return output
        */
+      SQD_DPRINTF1(("Slave has a result (sc = %.1f); sending back to master\n", sc));
       pvm_initsend(PvmDataDefault);
       pvm_pkint   (&my_idx,  1, 1);   
       pvm_pkfloat (&sc,      1, 1);
@@ -132,9 +146,21 @@ main(void)
    * Cleanup, return.
    ***********************************************/
 
+  SQD_DPRINTF1(("Slave is done; performing a normal exit.\n"));
   FreePlan7(hmm);
+  exit(0);			/* pvm_exit() gets called by atexit() registration. */
+}
+
+/* Function: leave_pvm()
+ * 
+ * Purpose:  Cleanup function, to deal with crashes. We register
+ *           this function using atexit() so it gets called before
+ *           the slave dies.
+ */
+void leave_pvm(void)
+{
+  SQD_DPRINTF1(("slave leaving PVM.\n"));
   pvm_exit();
-  return 0;
 }
 
 
@@ -143,7 +169,7 @@ main(void)
 #include <stdio.h>
 int main(void)
 {
-  printf("hmmsearch-slave is disabled. PVM support was not compiled into HMMER.\n");
+  printf("hmmsearch-pvm is disabled. PVM support was not compiled into HMMER.\n");
   exit(0);
 } 
 
