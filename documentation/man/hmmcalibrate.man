@@ -44,6 +44,16 @@ all options, including expert options.
 .SH EXPERT OPTIONS
 
 .TP
+.B --benchmark
+Run hmmcalibrate in Viterbi benchmark mode. Suppresses normal output,
+and does not modify the HMM file. Sets seed=0, fixed=300,
+num=5000. Outputs elapsed CPU and clock time. Calculates
+DP cells/sec and relative performance assuming that rrm.hmm (72
+positions) was used. Baseline for relative performance is
+woozle, an SGI Indy R4600/PC/133; 265 sec. This option is normally 
+only invoked by "make benchmark" from the toplevel HMMER Makefile.
+
+.TP
 .BI --fixed " <n>"
 Fix the length of the random sequences to
 .I <n>,

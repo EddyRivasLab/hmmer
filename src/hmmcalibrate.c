@@ -47,6 +47,7 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
+  --benchmark    : run hmmcalibrate in benchmarking mode\n\
   --fixed <n>    : fix random sequence length at <n>\n\
   --histfile <f> : save histogram(s) to file <f>\n\
   --mean <x>     : set random seq length mean at <x> [350]\n\
@@ -57,6 +58,7 @@ static char experts[] = "\
 
 static struct opt_s OPTIONS[] = {
    { "-h", TRUE, sqdARG_NONE  },
+   { "--benchmark",FALSE, sqdARG_NONE }, 
    { "--fixed",    FALSE, sqdARG_INT   },
    { "--histfile", FALSE, sqdARG_STRING },
    { "--mean",     FALSE, sqdARG_FLOAT },
@@ -92,8 +94,11 @@ main(int argc, char **argv)
   int     fixedlen;		/* fixed length, or 0 if unused    */
   float   lenmean;		/* mean of length distribution     */
   float   lensd;		/* std dev of length distribution  */
+  int     do_benchmark;		/* TRUE to go into benchmark mode  */
   char   *histfile;             /* histogram save file             */
   FILE   *hfp;                  /* open file pointer for histfile  */
+  time_t  sttime, endtime;	/* start, end time for run         */
+  clock_t stcpu, endcpu;	/* start, end CPU time for run     */
 
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
@@ -109,17 +114,19 @@ main(int argc, char **argv)
    * Parse the command line
    ***********************************************/
 
-  nsample  = 5000;
-  fixedlen = 0;
-  lenmean  = 325.;
-  lensd    = 200.;
-  seed     = (int) time ((time_t *) NULL);
-  histfile = NULL;
+  nsample      = 5000;
+  fixedlen     = 0;
+  lenmean      = 325.;
+  lensd        = 200.;
+  seed         = (int) time ((time_t *) NULL);
+  do_benchmark = FALSE;
+  histfile     = NULL;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
-      if      (strcmp(optname, "--fixed")    == 0) fixedlen = atoi(optarg);
+      if      (strcmp(optname, "--benchmark")== 0) do_benchmark = TRUE;
+      else if (strcmp(optname, "--fixed")    == 0) fixedlen = atoi(optarg);
       else if (strcmp(optname, "--histfile") == 0) histfile = optarg;
       else if (strcmp(optname, "--mean")     == 0) lenmean  = atof(optarg); 
       else if (strcmp(optname, "--num")      == 0) nsample  = atoi(optarg); 
@@ -138,6 +145,24 @@ main(int argc, char **argv)
   hmmfile = argv[optind++];
 
   sre_srandom(seed);
+
+  /* Benchmark mode: timing of HMMER on different platforms/compilers.
+   * overrides several defaults and options. 
+   * Sets --seed 0, --fixed 300, --num 5000.
+   * Will not show banner; shows an alternative output that
+   * is the benchmark result. Does not save results in hmm file.
+   * Expects to be called with the Demos/rrm.hmm file.
+   */
+  if (do_benchmark) 
+    {
+      fixedlen = 300;
+      nsample  = 5000;
+      seed     = 0;
+      sttime   = time(NULL);
+      stcpu    = clock();
+      printf("HMMER Viterbi benchmark \n");
+      printf("  (will take about 1-4 minutes...)\n"); 
+    }
 
   /***********************************************
    * Open our i/o file pointers, make sure all is well
@@ -176,19 +201,22 @@ main(int argc, char **argv)
    * Show the banner
    ***********************************************/
 
-  Banner(stdout, banner);
-  printf("HMM file:                 %s\n", hmmfile);
-  if (fixedlen) 
-    printf("Length fixed to:          %d\n", fixedlen);
-  else {
-    printf("Length distribution mean: %.0f\n", lenmean);
-    printf("Length distribution s.d.: %.0f\n", lensd);
-  }
-  printf("Number of samples:        %d\n", nsample);
-  printf("random seed:              %d\n", seed);
-  printf("histogram(s) saved to:    %s\n",
-	 histfile != NULL ? histfile : "[not saved]");
-  printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  if (! do_benchmark) 
+    {
+      Banner(stdout, banner);
+      printf("HMM file:                 %s\n", hmmfile);
+      if (fixedlen) 
+	printf("Length fixed to:          %d\n", fixedlen);
+      else {
+	printf("Length distribution mean: %.0f\n", lenmean);
+	printf("Length distribution s.d.: %.0f\n", lensd);
+      }
+      printf("Number of samples:        %d\n", nsample);
+      printf("random seed:              %d\n", seed);
+      printf("histogram(s) saved to:    %s\n",
+	     histfile != NULL ? histfile : "[not saved]");
+      printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+    }
 
   /***********************************************
    * Calibrate each model in turn
@@ -255,19 +283,22 @@ main(int argc, char **argv)
 
       /* Output results
        */
-      printf("HMM    : %s\n", hmm->name);
-      if (fitok)
+      if (! do_benchmark)
 	{
-	  printf("mu     : %12f\n", hmm->mu);
-	  printf("lambda : %12f\n", hmm->lambda);
+	  printf("HMM    : %s\n", hmm->name);
+	  if (fitok)
+	    {
+	      printf("mu     : %12f\n", hmm->mu);
+	      printf("lambda : %12f\n", hmm->lambda);
+	    }
+	  else
+	    {
+	      printf("mu     : [undetermined]\n");
+	      printf("lambda : [undetermined]\n");
+	    }
+	  printf("max    : %12f\n", max);
+	  printf("//\n");
 	}
-      else
-	{
-	  printf("mu     : [undetermined]\n");
-	  printf("lambda : [undetermined]\n");
-	}
-      printf("max    : %12f\n", max);
-      printf("//\n");
 
       if (histfile != NULL) 
 	{
@@ -287,12 +318,47 @@ main(int argc, char **argv)
    */
   HMMFileClose(hmmfp);
   if (fclose(outfp)   != 0) PANIC;
-  if (sigemptyset(&blocksigs) != 0) PANIC;
-  if (sigaddset(&blocksigs, SIGINT) != 0) PANIC;
-  if (sigprocmask(SIG_BLOCK, &blocksigs, NULL) != 0)   PANIC;
-  if (remove(hmmfile) != 0)                            PANIC;
-  if (rename(tmpfile, hmmfile) != 0)                   PANIC;
-  if (sigprocmask(SIG_UNBLOCK, &blocksigs, NULL) != 0) PANIC;
+
+  if (! do_benchmark) 
+    {
+      if (sigemptyset(&blocksigs) != 0) PANIC;
+      if (sigaddset(&blocksigs, SIGINT) != 0) PANIC;
+      if (sigprocmask(SIG_BLOCK, &blocksigs, NULL) != 0)   PANIC;
+      if (remove(hmmfile) != 0)                            PANIC;
+      if (rename(tmpfile, hmmfile) != 0)                   PANIC;
+      if (sigprocmask(SIG_UNBLOCK, &blocksigs, NULL) != 0) PANIC;
+    }
+  else
+    {
+      remove(tmpfile);
+      endtime = time(NULL);
+      endcpu  = clock();
+    }
+
+  /***********************************************
+   * Benchmark output.
+   ***********************************************/
+
+  /* Benchmark output assumes that rrm.hmm (72 positions)
+   * was used: 72 x 300 x 5000 = 108 million cells
+   * 264.922 sec is a baseline for woozle, an SGI Indy R4600PC/133.
+   */
+  if (do_benchmark)
+    {
+      double clocksec;
+      double cpusec;
+
+      if (sttime == -1 || endtime == -1 || stcpu == -1 || endcpu == -1)
+	Die("Time was not available for some reason.");
+
+      clocksec = difftime(endtime,sttime);
+      cpusec   = (double) (endcpu - stcpu) / (double) CLOCKS_PER_SEC;
+
+      printf("   Wall clock: %.1f sec\n", clocksec);
+      printf("   CPU time:   %.1f sec\n", cpusec);
+      printf("   Mcells/sec: %.3f\n", 108./cpusec);
+      printf("   Relative:   %.1f\n", 264.922/cpusec);
+    }
 
   /***********************************************
    * Exit
