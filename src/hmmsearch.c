@@ -41,6 +41,7 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
    -E <x>    : sets E value cutoff (globE) to <x>\n\
    -T <x>    : sets T bit threshold (globT) to <x>\n\
+   -Z <n>    : sets Z (# seqs) for E-value calculation\n\
 ";
 
 static char experts[] = "\
@@ -56,6 +57,7 @@ static struct opt_s OPTIONS[] = {
   { "-A",        TRUE,  sqdARG_INT  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
+  { "-Z",        TRUE,  sqdARG_INT },
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
   { "--forward", FALSE, sqdARG_NONE },
@@ -99,6 +101,7 @@ main(int argc, char **argv)
   char   *name, *desc;          /* hit sequence name and description       */
   int     sqlen;		/* length of seq that was hit              */
   int     nseq;			/* number of sequences searched            */
+  int     Z;			/* # of seqs for purposes of E-val calc    */
   int     domidx;		/* number of this domain                   */
   int     ndom;			/* total # of domains in this seq          */
   int     namewidth;		/* max width of sequence name              */
@@ -129,6 +132,7 @@ main(int argc, char **argv)
   do_forward  = FALSE;
   do_null2    = TRUE;
   do_xnu      = FALSE;
+  Z           = 0;
 
   Alimit      = INT_MAX;	/* no limit on alignment output     */
   globE       = 10.0;		/* use a reasonable Eval threshold; */
@@ -141,6 +145,7 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-A") == 0)        Alimit     = atoi(optarg);  
     else if (strcmp(optname, "-E") == 0)        globE      = atof(optarg);
     else if (strcmp(optname, "-T") == 0)        globT      = atof(optarg);
+    else if (strcmp(optname, "-Z") == 0)        Z          = atoi(optarg);
     else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
     else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
@@ -234,7 +239,8 @@ main(int argc, char **argv)
        *    we don't know the final value of nseq yet. 
        */
       pvalue = PValue(hmm, sc);
-      if (sc > globT && pvalue * (double) nseq < globE) 
+      evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
+      if (sc > globT && evalue < globE) 
 	{
 	  RegisterHit(ghit, sc, pvalue, sc, 
 		      0., 0.,	                /* no mother seq */
@@ -263,6 +269,7 @@ main(int argc, char **argv)
     ExtremeValueSetHistogram(histogram, hmm->mu, hmm->lambda, 
 			     histogram->lowscore, histogram->highscore, 
 			     1.0, 0);
+  if (!Z) Z = nseq;		/* set Z for good now that we're done. */
 
   /* Now format and report our output 
    */
@@ -290,7 +297,7 @@ main(int argc, char **argv)
 		   NULL, NULL, NULL,               /* HMM positions      */
 		   NULL, &ndom,	                   /* domain info        */
 		   NULL);	                   /* alignment info     */
-      evalue = pvalue * (double) nseq;
+      evalue = pvalue * (double) Z;
       if (evalue < globE && sc > globT) 
 	printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
 	       namewidth, name, 
@@ -331,9 +338,9 @@ main(int argc, char **argv)
 		   &hmmfrom, &hmmto, NULL,            /* HMM position info  */
 		   &domidx, &ndom,                    /* domain info        */
 		   NULL);	                      /* alignment info     */
-      evalue = pvalue * (double) nseq;
+      evalue = pvalue * (double) Z;
 
-      if (motherp * (double) nseq >= globE || mothersc <= globT) 
+      if (motherp * (double) Z >= globE || mothersc <= globT) 
 	continue;
       else if (evalue < domE && sc > domT)
 	printf("%-*s %3d/%-3d %5d %5d %c%c %5d %5d %c%c %7.1f %8.2g\n",
@@ -375,9 +382,9 @@ main(int argc, char **argv)
 		       &hmmfrom, &hmmto, NULL,            /* HMM position info  */
 		       &domidx, &ndom,                    /* domain info        */
 		       &ali);	                      /* alignment info     */
-	  evalue = pvalue * (double) nseq;
+	  evalue = pvalue * (double) Z;
 
-	  if (motherp * (double) nseq >= globE || mothersc <= globT) 
+	  if (motherp * (double) Z >= globE || mothersc <= globT) 
 	    continue;
 	  else if (evalue < domE && sc > domT) 
 	    {

@@ -47,6 +47,7 @@ Usage: hmmpfam [-options] <hmm database> <sequence file>\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
    -E <x>    : sets E value cutoff (globE) to <x>\n\
    -T <x>    : sets T bit threshold (globT) to <x>\n\
+   -Z <n>    : sets Z (# seqs) for E-value calculation\n\
 ";
 
 static char experts[] = "\
@@ -64,6 +65,7 @@ static struct opt_s OPTIONS[] = {
   { "-A",        TRUE,  sqdARG_INT  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
+  { "-Z",        TRUE,  sqdARG_INT },
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
   { "--forward", FALSE, sqdARG_NONE },
@@ -149,6 +151,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-A")        == 0) Alimit     = atoi(optarg);  
     else if (strcmp(optname, "-E")        == 0) globE      = atof(optarg);
     else if (strcmp(optname, "-T")        == 0) globT      = atof(optarg);
+    else if (strcmp(optname, "-Z")        == 0) Z          = atoi(optarg);
     else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
     else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
