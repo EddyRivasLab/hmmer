@@ -95,6 +95,12 @@ extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr,
 			 struct plan7_s *hmm, char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
 
+/* from emulation.c
+ * Interfaces between HMMER and other software packages
+ */
+extern void WriteProfile(FILE *fp, struct plan7_s *hmm);
+
+
 /* from histogram.c
  * accumulation of scores
  */
