@@ -127,9 +127,6 @@ static void *worker_thread(void *ptr);
 static void main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
 			  float globT, double globE, int Z, int do_xnu, int do_forward, int do_null2,
 			  struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm);
-static void init_slaves(int *slave_tid, int nslaves, char *hmmfile, char *seq, int L,
-			float globT, double globE, int Z, 
-			int do_xnu, int do_forward, int do_null2);
 #endif
 static void main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo, 
 			     float globT, double globE, int Z, int do_xnu, int do_forward, int do_null2,
@@ -323,7 +320,7 @@ main(int argc, char **argv)
       namewidth =  MAX(8, TophitsMaxName(ghit));
 
       printf("\nScores for sequence family classification (score includes all domains):\n");
-      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Sequence", 52-namewidth, "Description", "Score", "E-value", " N ");
+      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Model", 52-namewidth, "Description", "Score", "E-value", " N ");
       printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", 52-namewidth, "-----------", "-----", "-------", "---");
       for (i = 0; i < ghit->num; i++)
 	{
@@ -376,7 +373,7 @@ main(int argc, char **argv)
 
       printf("\nParsed for domains:\n");
       printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
-	     namewidth, "Sequence", "Domain ", "seq-f", "seq-t", "hmm-f", "hmm-t", "score", "E-value");
+	     namewidth, "Model", "Domain ", "seq-f", "seq-t", "hmm-f", "hmm-t", "score", "E-value");
       printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
 	     namewidth, "--------", "-------", "-----", "-----", "-----", "-----", "-----", "-------");
       
@@ -686,6 +683,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   int    sent_trace;		/* TRUE if slave sent us a trace */
   char   slavename[32];		/* name of HMM that slave actually did */
   double pvalue;		/* pvalue of HMM score */
+  int    arglen;
 
   /* Sanity checks.
    */
@@ -699,8 +697,10 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 
   /* Initialize PVM
    */
-  SQD_DPRINTF1(("Requesting master TID...\n"));
   master_tid = pvm_mytid();
+#if DEBUGLEVEL >= 1  
+  pvm_catchout(stderr);		/* catch output for debugging */
+#endif
   SQD_DPRINTF1(("Spawning slaves...\n"));
   PVMSpawnSlaves("hmmpfam-pvm", &slave_tid, &nslaves);
   hmmlist   = MallocOrDie(sizeof(int) * nslaves);
@@ -708,8 +708,25 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 
   /* Initialize the slaves
    */
-  init_slaves(slave_tid, nslaves, hmmfile, seq, sqinfo->len,
-	      globT, globE, Z, do_xnu, do_forward, do_null2);
+  SQD_DPRINTF1(("Broadcasting to %d slaves...\n", nslaves));
+  pvm_initsend(PvmDataDefault);
+  arglen = strlen(hmmfile);
+  pvm_pkint(&arglen, 1, 1);
+  pvm_pkstr(hmmfile);
+  pvm_pkint(&(sqinfo->len), 1, 1);
+  pvm_pkstr(seq);
+  pvm_pkfloat(&globT, 1, 1);
+  pvm_pkdouble(&globE, 1, 1);
+  pvm_pkint(&Z, 1, 1);
+  pvm_pkint(&do_xnu, 1, 1);
+  pvm_pkint(&do_forward, 1, 1);
+  pvm_pkint(&do_null2, 1, 1);
+  pvm_pkint(&Alphabet_type, 1, 1);
+  pvm_mcast(slave_tid, nslaves, HMMPVM_INIT);
+  SQD_DPRINTF1(("Slaves should be ready...\n"));
+				/* get their OK codes. */
+  PVMConfirmSlaves(slave_tid, nslaves);
+  SQD_DPRINTF1(("Slaves confirm that they're ok...\n"));
 
   /* Load the slaves.
    * For efficiency reasons, we don't want the master to
@@ -736,7 +753,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
       pvm_upkint(&slaveidx, 1, 1);     /* # of slave who's sending us stuff */
       pvm_upkstr(slavename);           /* name of HMM that slave did */
       pvm_upkfloat(&sc, 1, 1);         /* score   */
-      pvm_upkdouble(&pvalue, 1, 1);	   /* P-value */
+      pvm_upkdouble(&pvalue, 1, 1);    /* P-value */
       pvm_upkint(&sent_trace, 1, 1);   /* TRUE if trace is coming */
       tr = (sent_trace) ? PVMUnpackTrace() : NULL;
       SQD_DPRINTF1(("Slave %d finished %s for me...\n", slaveidx, slavename));
@@ -832,78 +849,6 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   return;
 }
 
-
-
-/* Function: init_slaves()
- * Date:     SRE, Thu Aug 13 16:11:09 1998 [St. Louis]
- *
- * Purpose:  Send initialization information to slaves.
- *           Wait until slaves reply "ok" before going ahead.
- *
- * Args:     slave_tid- slave tid array to broadcast to
- *           nslaves  - number of slaves
- *           hmmfile  - name of hmm file for slaves to open
- *           seq      - sequence to search 
- *           L        - length of sequence
- *           globT    - bit threshold
- *           globE    - Evalue threshold
- *           Z        - effective # seqs to use in calc of Eval
- *           do_xnu   - TRUE to use XNU on sequence
- *           do_forward - TRUE to use Forward() to score
- *           do_null2 - TRUE to apply null2 bias filter
- *
- * Returns:  void
- */
-static void
-init_slaves(int *slave_tid, int nslaves, char *hmmfile, char *seq, int L,
-	    float globT, double globE, int Z, 
-	    int do_xnu, int do_forward, int do_null2)
-{
-  int arglen;
-  int i;
-  int initflag;
-
-  /* Send init info
-   */
-  SQD_DPRINTF1(("Broadcasting to %d slaves...\n", nslaves));
-  pvm_initsend(PvmDataDefault);
-  arglen = strlen(hmmfile);
-  pvm_pkint(&arglen, 1, 1);
-  pvm_pkstr(hmmfile);
-  pvm_pkint(&L, 1, 1);
-  pvm_pkstr(seq);
-  pvm_pkfloat(&globT, 1, 1);
-  pvm_pkdouble(&globE, 1, 1);
-  pvm_pkint(&Z, 1, 1);
-  pvm_pkint(&do_xnu, 1, 1);
-  pvm_pkint(&do_forward, 1, 1);
-  pvm_pkint(&do_null2, 1, 1);
-  pvm_pkint(&Alphabet_type, 1, 1);
-  pvm_mcast(slave_tid, nslaves, HMMPVM_INIT);
-  SQD_DPRINTF1(("Slaves should be ready...\n"));
-
-  /* Wait for slaves to say ok; else they send error codes
-   */
-  for (i = 0; i < nslaves; i++)
-    {
-      pvm_recv(-1, HMMPVM_RESULTS);
-      pvm_upkint(&initflag, 1, 1);
-      if (initflag != HMMPVM_OK)
-	{
-	  PVMKillSlaves(slave_tid, nslaves);
-	  pvm_exit();
-	  switch (initflag) {
-	  case HMMPVM_NO_HMMFILE: 
-	    Die("One or more PVM slaves couldn't open hmm file. Check installation of %s", hmmfile);
-	  case HMMPVM_NO_INDEX:
-	    Die("One or more PVM slaves couldn't open GSI index. Check installation of %s", hmmfile);
-	  default:
-	    Die("Unknown error code. A slave is confused.");
-	  }
-	}
-    }
-  return;
-}
 #endif /*HMMER_PVM*/
 
 
