@@ -90,7 +90,7 @@ if test "$DO_PTHREADS" = yes; then
                yes
               #endif
              ], [AC_MSG_RESULT(yes)
-             LIBS = "-D_THREAD_SAFE -pthread ${LIBS}"
+             LIBS="-D_THREAD_SAFE -pthread ${LIBS}"
              MDEFS="${MDEFS} -DHMMER_THREADS"
              FOUND_PTHREADS=ok],
              AC_MSG_RESULT(no))
