@@ -38,6 +38,7 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
+   -B        : Babelfish; autodetect sequence file format\n\
    -E <x>    : sets E value cutoff (globE) to <x>\n\
    -T <x>    : sets T bit threshold (globT) to <x>\n\
    -Z <n>    : sets Z (# seqs) for E-value calculation\n\
@@ -52,6 +53,7 @@ static char experts[] = "\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
+   --informat <s>: sequence file is in format <s>, not FASTA\n\
    --null2   : turn OFF the post hoc second null model\n\
    --pvm     : run on a Parallel Virtual Machine (PVM)\n\
    --xnu     : turn ON XNU filtering of target protein sequences\n\
@@ -60,6 +62,7 @@ static char experts[] = "\
 static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-A",        TRUE,  sqdARG_INT  },  
+  { "-B",        TRUE,  sqdARG_NONE  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
   { "-Z",        TRUE,  sqdARG_INT  },
@@ -70,7 +73,8 @@ static struct opt_s OPTIONS[] = {
   { "--cut_tc",  FALSE, sqdARG_NONE },
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
-  { "--forward", FALSE, sqdARG_NONE },
+  { "--forward", FALSE, sqdARG_NONE },  
+  { "--informat",FALSE, sqdARG_STRING},
   { "--null2",   FALSE, sqdARG_NONE },
   { "--pvm",     FALSE, sqdARG_NONE },
   { "--xnu",     FALSE, sqdARG_NONE },
@@ -188,16 +192,11 @@ main(int argc, char **argv)
   int   num_threads;		/* number of worker threads                 */
   int   do_ga, do_nc, do_tc;    /* TRUE to use GA, NC, or TC cutoffs        */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-
   /*********************************************** 
    * Parse command line
    ***********************************************/
   
+  format      = SQFILE_FASTA;	/* expect FASTA format by default */
   do_forward  = FALSE;
   do_null2    = TRUE;
   do_xnu      = FALSE;
@@ -222,6 +221,7 @@ main(int argc, char **argv)
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-A") == 0)        Alimit     = atoi(optarg);  
+    else if (strcmp(optname, "-B")        == 0) format     = SQFILE_UNKNOWN;
     else if (strcmp(optname, "-E") == 0)        globE      = atof(optarg);
     else if (strcmp(optname, "-T") == 0)        globT      = atof(optarg);
     else if (strcmp(optname, "-Z") == 0)        Z          = atoi(optarg);
@@ -236,6 +236,11 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--null2")   == 0) do_null2   = FALSE;
     else if (strcmp(optname, "--pvm")     == 0) do_pvm     = TRUE;
     else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE;
+    else if (strcmp(optname, "--informat") == 0) {
+      format = String2SeqfileFormat(optarg);
+      if (format == SQFILE_UNKNOWN) 
+	Die("unrecognized sequence file format \"%s\"", optarg);
+    }
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -261,14 +266,6 @@ main(int argc, char **argv)
    * Open sequence database (might be in BLASTDB or current directory)
    ***********************************************/
 
-  if (! SeqfileFormat(seqfile, &format, "BLASTDB"))
-    switch (squid_errno) {
-    case SQERR_NOFILE: 
-      Die("Sequence file %s could not be opened for reading", seqfile); break;
-    case SQERR_FORMAT: 
-    default:           
-      Die("Failed to determine format of sequence file %s", seqfile);
-    }
   if ((sqfp = SeqfileOpen(seqfile, format, "BLASTDB")) == NULL)
     Die("Failed to open sequence database file %s\n%s\n", seqfile, usage);
 
@@ -297,16 +294,19 @@ main(int argc, char **argv)
       Die("GA thresholds are not available for the HMM");
     globT = hmm->ga1;
     domT  = hmm->ga2;
+    globE = domE = FLT_MAX;
   } else if (do_nc) {
     if (! hmm->flags & PLAN7_NC)
       Die("NC thresholds are not available for the HMM");
     globT = hmm->nc1;
     domT  = hmm->nc2;
+    globE = domE = FLT_MAX;
   } else if (do_tc) {
     if (! hmm->flags & PLAN7_TC)
       Die("TC thresholds are not available for the HMM");
     globT = hmm->tc1;
     domT  = hmm->tc2;
+    globE = domE = FLT_MAX;
   }
 
   /*********************************************** 
