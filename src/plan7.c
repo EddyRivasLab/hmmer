@@ -253,7 +253,7 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
  *         type of parameter       probability        score
  *         -----------------       -----------        ------
  *         any emission             p_x           log_2 p_x/null_x
- *             N,J,C assume p_x = null_x so score zero.  
+ *             N,J,C /assume/ p_x = null_x so /always/ score zero.  
  *         transition to emitters   t_x           log_2 t_x/p1
  *            (M,I; N,C; J)
  *             NN and CC loops are often equal to p1, so usu. score zero.
@@ -271,7 +271,6 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
  *         data-dependent B->D...D->M and M->D...D->E paths.
  *             
  * Args:      hmm - the hmm to calculate scores in.
- *            folddeletes - TRUE to fold terminal deletes 
  *                  
  * Return:    (void)
  *            hmm scores are filled in.
@@ -377,53 +376,6 @@ Plan7Logoddsify(struct plan7_s *hmm)
 
 
 
-/* Function: Plan7Probify()
- * 
- * Purpose:  Use integer log odds scores (as read from an HMM save
- *           file) to fill in the HMM probabilities. 
- * KNOWN TO BE SUSPECT
- */
-void
-Plan7Probify(struct plan7_s *hmm)
-{
-  int k,x;			/* counter for model position, sym or transit */
-  
-  if (hmm->flags & PLAN7_HASPROB) return; /* probabilities already valid */
-
-  for (k = 1; k < hmm->M; k++) {
-    hmm->t[k][TMM] = Score2Prob(hmm->tsc[k][TMM], hmm->p1);
-    hmm->t[k][TMI] = Score2Prob(hmm->tsc[k][TMI], hmm->p1);
-    hmm->t[k][TMD] = Score2Prob(hmm->tsc[k][TMD], 1.0);
-    hmm->t[k][TIM] = Score2Prob(hmm->tsc[k][TIM], hmm->p1);
-    hmm->t[k][TII] = Score2Prob(hmm->tsc[k][TII], hmm->p1);
-    hmm->t[k][TDM] = Score2Prob(hmm->tsc[k][TDM], hmm->p1);
-    hmm->t[k][TDD] = Score2Prob(hmm->tsc[k][TDD], 1.0);
-  }
-  for (k = 1; k <= hmm->M; k++) { 
-    for (x = 0; x < Alphabet_size; x++) {
-      hmm->mat[k][x] = Score2Prob(hmm->msc[x][k], hmm->null[x]);
-      if (k < hmm->M)
-	hmm->ins[k][x] = Score2Prob(hmm->isc[x][k], hmm->null[x]);
-    }
-			/* FIXME: watch the below guys: model dep. vs. model indep. */
-    hmm->begin[k] = Score2Prob(hmm->bsc[k], hmm->p1);
-    hmm->end[k]   = Score2Prob(hmm->esc[k], 1.0);
-  }
-  
-				/* special transitions */
-  hmm->xt[XTN][LOOP] = Score2Prob(hmm->xsc[XTN][LOOP], hmm->p1);
-  hmm->xt[XTN][MOVE] = Score2Prob(hmm->xsc[XTN][MOVE], 1.0);
-  hmm->xt[XTE][LOOP] = Score2Prob(hmm->xsc[XTE][LOOP], 1.0);
-  hmm->xt[XTE][MOVE] = Score2Prob(hmm->xsc[XTE][MOVE], 1.0);
-  hmm->xt[XTC][LOOP] = Score2Prob(hmm->xsc[XTC][LOOP], hmm->p1);
-  hmm->xt[XTC][MOVE] = Score2Prob(hmm->xsc[XTC][MOVE], 1.-hmm->p1);
-  hmm->xt[XTJ][LOOP] = Score2Prob(hmm->xsc[XTJ][LOOP], hmm->p1);
-  hmm->xt[XTJ][MOVE] = Score2Prob(hmm->xsc[XTJ][MOVE], 1.0);
-
-  hmm->flags |= PLAN7_HASPROB;	/* probabilities valid now */
-  return;
-}
-
 /* Function: Plan7Renormalize()
  * 
  * Purpose:  Take an HMM in counts form, and renormalize
@@ -480,26 +432,30 @@ Plan7Renormalize(struct plan7_s *hmm)
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
  *           of a Plan7 model to global (Needleman/Wunsch) configuration.
+ * 
+ *           Like a non-looping hmmls, since we actually allow flanking
+ *           N and C terminal sequence. 
  *           
  * Args:     hmm - the plan7 model
  *                 
  * Return:   (void)
- *           The HMM is modified.
+ *           The HMM is modified; algorithm dependent parameters are set.
+ *           Previous scores are invalidated if they existed.
  */
 void
 Plan7GlobalConfig(struct plan7_s *hmm)                           
 {
-  hmm->xt[XTN][MOVE] = 1.;
-  hmm->xt[XTN][LOOP] = 0.;
-  hmm->xt[XTE][MOVE] = 1.;
+  hmm->xt[XTN][MOVE] = 1. - hmm->p1;  /* allow N-terminal tail */
+  hmm->xt[XTN][LOOP] = hmm->p1;
+  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
   hmm->xt[XTE][LOOP] = 0.;
-  hmm->xt[XTC][MOVE] = 1.;
-  hmm->xt[XTC][LOOP] = 0.;
-  hmm->xt[XTJ][MOVE] = 1.;
-  hmm->xt[XTJ][LOOP] = 0.;
-  FSet(hmm->begin+2, hmm->M-1, 0.);
+  hmm->xt[XTC][MOVE] = 1. - hmm->p1;  /* allow C-terminal tail */
+  hmm->xt[XTC][LOOP] = hmm->p1;
+  hmm->xt[XTJ][MOVE] = 0.;	      /* J state unused */
+  hmm->xt[XTJ][LOOP] = 1.;
+  FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
   hmm->begin[1]    = 1. - hmm->tbd1;
-  FSet(hmm->end+1,   hmm->M-1, 0.);
+  FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
   hmm->end[hmm->M] = 1.;
   hmm->config      = P7_BASE_CONFIG;  /* set flag */
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
@@ -602,6 +558,66 @@ Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
   hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
 }
 
+/* Function: Plan7FSConfig()
+ * Date:     SRE, Fri Jan  2 15:34:40 1998 [StL]
+ * 
+ * Purpose:  Set the alignment independent parameters of
+ *           a Plan7 model to hmmfs (multihit Smith/Waterman) configuration.
+ *           
+ *           See comments on Plan7SWConfig() for explanation of
+ *           how pentry and pexit are used.
+ *           
+ * Args:     hmm    - the Plan7 model w/ data-dep prob's valid
+ *           pentry - probability of an internal entry somewhere;
+ *                    will be evenly distributed over M-1 match states
+ *           pexit  - probability of an internal exit somewhere; 
+ *                    will be distributed over M-1 match states.
+ *                    
+ * Return:   (void)
+ *           HMM probabilities are modified.
+ */
+void
+Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
+{
+  float basep;			/* p1 for exits: the base p */
+  int   k;			/* counter over states      */
+  float d;
+
+  /* Configure special states.
+   */
+  hmm->xt[XTN][MOVE] = 1-hmm->p1;    /* allow N-terminal tail     */
+  hmm->xt[XTN][LOOP] = hmm->p1;
+  hmm->xt[XTE][MOVE] = 0.5;	     /* allow loops / multihits   */
+  hmm->xt[XTE][LOOP] = 0.5;
+  hmm->xt[XTC][MOVE] = 1-hmm->p1;    /* allow C-terminal tail     */
+  hmm->xt[XTC][LOOP] = hmm->p1;
+  hmm->xt[XTJ][MOVE] = 1.-hmm->p1;   /* allow J junction between domains */
+  hmm->xt[XTJ][LOOP] = hmm->p1;
+
+  /* Configure entry.
+   */
+  hmm->begin[1] = (1. - pentry) * (1. - hmm->tbd1);
+  FSet(hmm->begin+2, hmm->M-1, pentry / (float)(hmm->M-1));
+  
+  /* Configure exit.
+   */
+  hmm->end[hmm->M] = 1.0;
+  basep = pexit / (float) (hmm->M-1);
+  for (k = 1; k < hmm->M; k++)
+    hmm->end[k] = basep / (1. - basep * (float) (k-1));
+  
+  /* Renormalize transitions to deal with new exits.
+   */
+  for (k = 1; k < hmm->M; k++)
+    {
+      d = FSum(hmm->t[k], 3);
+      FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
+    }
+
+  hmm->config      = P7_FS_CONFIG;    /* set flag */
+  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
+}
+
 
 
 
@@ -609,6 +625,8 @@ Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
  * 
  * Purpose:  Configure a Plan7 model for EST Smith/Waterman
  *           analysis.
+ *           
+ *           OUTDATED; DO NOT USE WITHOUT RECHECKING
  *           
  * Args:     hmm        - hmm to configure.
  *           aacode     - 0..63 vector mapping genetic code to amino acids
@@ -934,3 +952,4 @@ Plan7toPlan9Search(struct plan7_s *hmm, struct shmm_s **ret_shmm)
   *ret_shmm = shmm;
   return;
 }
+
