@@ -18,10 +18,7 @@
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
+#include "msa.h"		/* squid's multiple sequence i/o        */
 
 static char banner[] = "hmmemit - generate sequences from a profile HMM";
 
@@ -37,7 +34,7 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
-   --seed <n> : set random number seed to <n>\n\
+   --seed <n>     : set random number seed to <n>\n\
 ";
 
 static struct opt_s OPTIONS[] = {
@@ -55,9 +52,9 @@ int
 main(int argc, char **argv) 
 {
   char            *hmmfile;	/* file to read HMMs from                  */
-  FILE            *fp;          /* output file handle                      */
   HMMFILE         *hmmfp;       /* opened hmmfile for reading              */
   struct plan7_s  *hmm;         /* HMM to generate from                    */
+  FILE            *fp;          /* output file handle                      */
   int              L;		/* length of a sequence                    */
   int              i;		/* counter over sequences                  */
 
@@ -71,12 +68,6 @@ main(int argc, char **argv)
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
-
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
 
   /*********************************************** 
    * Parse command line
@@ -178,7 +169,7 @@ main(int argc, char **argv)
       sqinfo.len = L;
       sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
 
-      WriteSeq(fp, kPearson, seq, &sqinfo);
+      WriteSeq(fp, SQFILE_FASTA, seq, &sqinfo);
       free(seq);
     }
   else if (do_alignment)
@@ -186,8 +177,7 @@ main(int argc, char **argv)
       struct p7trace_s **tr;        /* traces for aligned sequences            */
       char           **dsq;         /* digitized sequences                     */
       SQINFO          *sqinfo;      /* info about sequences (name/desc)        */
-      char           **aseq;        /* sequence alignment                      */
-      AINFO            ainfo;	    /* optional alignment info                 */
+      MSA             *msa;         /* alignment */
       float           *wgt;
 
       dsq    = MallocOrDie(sizeof(char *)             * nseq);
@@ -204,11 +194,10 @@ main(int argc, char **argv)
 	  sqinfo[i].flags = SQINFO_NAME | SQINFO_LEN;
 	}
 
-      P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, FALSE, 
-			 &aseq, &ainfo);
+      msa = P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, FALSE);
 
 				/* Output the alignment */
-      WriteSELEX(fp, aseq, &ainfo, 50);
+      WriteStockholm(fp, msa);
       if (ofile != NULL && !be_quiet) printf("Alignment saved in file %s\n", ofile);
 
       /* Free memory
@@ -218,7 +207,7 @@ main(int argc, char **argv)
 	  P7FreeTrace(tr[i]);
 	  free(dsq[i]);
 	}
-      FreeAlignment(aseq, &ainfo);
+      MSAFree(msa);
       free(sqinfo);
       free(dsq);
       free(wgt);
@@ -240,7 +229,7 @@ main(int argc, char **argv)
 
 	  seq = DedigitizeSequence(dsq, L);
 
-	  WriteSeq(fp, kPearson, seq, &sqinfo);
+	  WriteSeq(fp, SQFILE_FASTA, seq, &sqinfo);
 	  
 	  P7FreeTrace(tr);
 	  free(dsq);
@@ -252,11 +241,6 @@ main(int argc, char **argv)
   FreePlan7(hmm);
   SqdClean();
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) malloc_list(2, histid1, histid2);
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   return 0;
 }
 
