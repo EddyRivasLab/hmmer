@@ -76,10 +76,7 @@ packages that don't work:
       on real data.
 \end{itemize}
 
-
-
-
-
+Everything else, you can read later.
 
 
 \subsection {Profile HMMs}
@@ -117,23 +114,20 @@ alignment, and the varying degree to which gaps and insertions are
 permitted.
 
 The advantage of using HMMs is that HMMs have a formal probabilistic
-basis. We can use Bayesian probability theory to guide how all the
-probability (scoring) parameters should be set. Though this might
-sound like a purely academic issue, this probabilistic basis lets us
-do things that the more heuristic methods cannot do easily. For
-example, an HMM can be trained from unaligned sequences, if a trusted
-alignment isn't yet known. Another consequence is that HMMs have a
-consistent theory behind gap and insertion scores.\footnote{
-Surprisingly, this is still controversial.  People have been saying
-``there is no theory for setting gap scores'' for so long that many
-people believe it.} In most details, HMMs are a slight improvement
-over a carefully constructed profile -- but far less skill and manual
-intervention is necessary to train a good HMM and use it.  This allows
-us to make libraries of hundreds of profile HMMs and apply them on a
-very large scale to whole-genome or EST sequence analysis.  One such
-database of protein domain models is Pfam \cite{Sonnhammer97}; the
-construction and use of Pfam is tightly tied to the HMMER software
-package.
+basis. We can use probability theory to guide how all the probability
+(scoring) parameters should be set. Though this might sound like a
+purely academic issue, this probabilistic basis lets us do things that
+the more heuristic methods cannot do easily. For example, an HMM can
+be trained from unaligned sequences, if a trusted alignment isn't yet
+known. Another consequence is that HMMs have a consistent theory
+behind gap and insertion scores.  In most details, HMMs are a slight
+improvement over a carefully constructed profile -- but less skill and
+manual intervention are necessary to train a good HMM and use it.
+This allows us to make libraries of hundreds of profile HMMs and apply
+them on a very large scale to whole-genome or EST sequence analysis.
+One such database of protein domain models is Pfam
+\cite{Sonnhammer97}. The construction and use of Pfam is tightly tied
+to the HMMER software package.
 
 HMMs do have important limitations. One is that HMMs do not capture
 any higher-order correlations.  An HMM assumes that the identity of a
@@ -148,12 +142,13 @@ scoring terms for nearby amino acids in a three-dimensional protein
 structure. 
 
 A general definition of HMMs and an excellent tutorial introduction to
-their use has been written by Rabiner \cite{Rabiner89}. Throughout, I
-will often use ``HMM'' to refer to the specific case of profile HMMs
-as described by Krogh et al. \cite{Krogh94}. This shorthand usage is
-for convenience only. For a review of profile HMMs, see \cite{Eddy96},
-and for a complete book on the subject of probabilistic modeling in
-computational biology, see \cite{Durbin98} 
+the technical and mathematical details their use has been written by
+Rabiner \cite{Rabiner89}. Throughout, I will often use ``HMM'' to
+refer to the specific case of profile HMMs as described by Krogh et
+al. \cite{Krogh94}. This shorthand usage is for convenience only. For
+a review of profile HMMs, see \cite{Eddy96}, and for a complete book
+on the subject of probabilistic modeling in computational biology, see
+\cite{Durbin98}
 \begin{htmlonly}
 \htmladdnormallink{[More information on-line]}
 {http://www.genetics.wustl.edu/eddy/publications/cupbook.html}
