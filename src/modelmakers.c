@@ -539,6 +539,7 @@ matassign2hmm(char **aseq, char **dsq, AINFO *ainfo,
   }
 				/* annotate new model */
   annotate_model(hmm, matassign, ainfo);
+  hmm->checksum = GCGMultchecksum(aseq, ainfo->nseq);
 
   /* Set #=RF line of alignment to reflect our assignment
    * of match, delete. matassign is valid from 1..alen and is off
@@ -826,7 +827,9 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
   int apos;			/* position in matassign, 1.alen */
   int k;			/* position in model, 1.M        */
 
-                                /* reference coord annotation */
+  /* Transfer reference coord annotation from alignment,
+   * if available
+   */
   if (ainfo->flags & AINFO_RF) {
     hmm->rf[0] = ' ';
     for (apos = k = 1; apos <= ainfo->alen; apos++)
@@ -835,7 +838,10 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
     hmm->rf[k] = '\0';
     hmm->flags |= PLAN7_RF;
   }
-                                /* consensus structure annotation */
+
+  /* Transfer consensus structure annotation from alignment, 
+   * if available
+   */
   if (ainfo->flags & AINFO_CS) {
     hmm->cs[0] = ' ';
     for (apos = k = 1; apos <= ainfo->alen; apos++)
@@ -844,6 +850,13 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
     hmm->cs[k] = '\0';
     hmm->flags |= PLAN7_CS;
   }
+
+  /* Store the alignment map
+   */
+  for (apos = k = 1; apos <= ainfo->alen; apos++)
+    if (matassign[apos] & ASSIGN_MATCH)
+      hmm->map[k++] = apos;
+  hmm->flags |= PLAN7_MAP;
 }
 
 static void
