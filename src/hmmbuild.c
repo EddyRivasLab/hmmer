@@ -444,13 +444,35 @@ main(int argc, char **argv)
       printf("----------------------------------------------\n\n");
     }
 
-  /* Give the model a name; by default, the name of the alignment file
+  /* Give the model a name.
+   * If -n option is used (to override naming), use that name.
+   * Else if the alignment carries a name, use that.
+   * Else, if all that failed, use the name of the alignment file
    * without any filename extension (i.e. "globins.slx" becomes "globins"
    */
   printf("%-40s ... ", "Setting model name, etc.");
   fflush(stdout);
-  if (name == NULL) name = FileTail(seqfile, TRUE);
-  Plan7SetName(hmm, name);
+  if      (name       != NULL) Plan7SetName(hmm, name);
+  else if (ainfo.name != NULL) Plan7SetName(hmm, ainfo.name);
+  else {
+    name = FileTail(seqfile, TRUE);
+    Plan7SetName(hmm, name);
+  }
+
+  /* Transfer other information from the alignment to
+   * the HMM. This typically only works for SELEX format
+   * alignments, so these things are conditional/optional.
+   */
+  if (ainfo.acc  != NULL) Plan7SetAccession(hmm, ainfo.acc);
+  if (ainfo.desc != NULL) Plan7SetDescription(hmm, ainfo.desc);
+
+  if (ainfo.flags & AINFO_GA) { hmm->ga1 = ainfo.ga1; hmm->ga2 = ainfo.ga2; }
+  if (ainfo.flags & AINFO_TC) { hmm->tc1 = ainfo.tc1; hmm->tc2 = ainfo.tc2; }
+  if (ainfo.flags & AINFO_NC) { hmm->nc1 = ainfo.nc1; hmm->nc2 = ainfo.nc2; }
+
+  /* Record some other miscellaneous information in the HMM,
+   * like how/when we built it.
+   */
   Plan7ComlogAppend(hmm, argc, argv);
   Plan7SetCtime(hmm);
   hmm->nseq = ainfo.nseq;
