@@ -58,17 +58,13 @@ To install a precompiled distribution, do the following:
 \user{./configure}
 \item Edit the Makefile in the top level directory.
 
-To build and test HMMER in the distribution directory, you don't need
+To run HMMER in the distribution directory, you don't need
 to edit the Makefile at all. But to permanently install HMMER on your
 system, set the make variables BINDIR and MANDIR to be the directories
 where you want HMMER executables and man pages to be installed. If you
 are installing in directories \prog{/usr/local/bin/} and
 \prog{/usr/local/man/man1/},
 you don't need to change anything.
-
-\item (Optional) Type \prog{make check} to compile and run a test suite.
-Some of the tests require that you have Perl installed. None of these
-tests should fail.
 
 \item Type \prog{make install} to install the programs and man pages. 
 You may have to become root, depending on where you're installing.
@@ -105,7 +101,7 @@ If you want to change the choice of compilation flags (CFLAGS) or the
 compiler (CC), set these as environment variables:\\
 \user{env CC=gcc CFLAGS="-O6" ./configure}
 For other generic configuration options, see the documentation for GNU
-autoconf 2.12. -- but it'll probably be easier to just edit the
+autoconf 2.12. -- but it may be easier to just edit the
 Makefile (see below).
 
 \item Edit the top of the Makefile. 
