@@ -2219,7 +2219,9 @@ ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
  *           score.
  *  
  *          [doesn't really belong in core_algorithms.c, because
- *           it's more of a hack than an algorithm.]
+ *           it's more of a hack than an algorithm, but on the other
+ *           hand it's now part of the core of how HMMER scores
+ *           things. Maybe there should be a core_hacks.c.]
  *
  *           Given: active hit lists for per-seq and per-domain
  *           scores (e.g. hmmpfam and hmmsearch, collating their
@@ -2343,6 +2345,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
     tidx            = FMax(score, ntr);
     usedomain[tidx] = TRUE;
     whole_sc        = score[tidx];
+    ndom            = 1;
   }
 
   /* Implement --do_forward: override the trace-dependent sum-of-domain
@@ -2400,16 +2403,30 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   else
     sortkey = whole_sc;
 
-  RegisterHit(ghit, sortkey,
-	      whole_pval, whole_sc,
-	      0., 0.,	                  /* no mother seq */
-	      hmmpfam_mode ? hmm->name : seqname,
-	      hmmpfam_mode ? hmm->acc  : seqacc,
-	      hmmpfam_mode ? hmm->desc : seqdesc,
-	      0,0,0,                	  /* seq positions  */
-	      0,0,0,	                  /* HMM positions  */
-	      0, ndom,	                  /* # domains info    */
-	      NULL);	                  /* alignment info */
+  /* Note: we've recalculated whole_sc and it may have decreased
+   *       after the null2 correction was applied. For Pfam GA, TC,
+   *       or NC cutoffs, we have to be sure that everything on the
+   *       hitlist is correct (the hmmpfam output routine assumes it, 
+   *       otherwise it would have to reload each HMM to get its
+   *       cutoffs). In all other cases, though, we don't care if
+   *       the hit list has a bit too many things on it, because the
+   *       output routine in hmmsearch or hmmpfam will check against
+   *       the cutoffs. Hence we only need to check against globT
+   *       (it may be set by GA, TC, or NC) but not globE.
+   *                 - SRE, CSHL genome mtg May 2001
+   */ 
+  if (whole_sc >= thresh->globT) {
+    RegisterHit(ghit, sortkey,
+		whole_pval, whole_sc,
+		0., 0.,	                  /* no mother seq */
+		hmmpfam_mode ? hmm->name : seqname,
+		hmmpfam_mode ? hmm->acc  : seqacc,
+		hmmpfam_mode ? hmm->desc : seqdesc,
+		0,0,0,                	  /* seq positions  */
+		0,0,0,	                  /* HMM positions  */
+		0, ndom,	          /* # domains info    */
+		NULL);	                  /* alignment info */
+  }
 
   /* Clean up and return.
    */

@@ -179,6 +179,7 @@ HMMFileOpen(char *hmmfile, char *env)
       sprintf(ssifile, "%s.ssi", full);
 
       free(full);
+      free(dir);
     }
   else return NULL;
   
