@@ -41,12 +41,13 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    -n <s>    : name; name this HMM <s>\n\
    -o <file> : re-save annotated alignment to <file>\n\
 \n\
-  Alternative sequence weighting strategies: (default: none)\n\
+  Alternative sequence weighting strategies: (default: ME)\n\
    -e            : maximum entropy (ME)\n\
    --wgsc        : Gerstein/Sonnhammer/Chothia tree weights\n\
    --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
    --wvoronoi    : Sibbald/Argos Voronoi weights\n\
-   --weff        : guess an effective sequence number; else use nseq\n\
+   --wnone       : don't do any weighting\n\
+   --noeff       : don't use effective sequence number; just use nseq\n\
 \n\
   Alternative model construction strategies: (default: MAP)\n\
    -k        : Krogh/Haussler fast heuristic construction (see --gapmax)\n\
@@ -97,6 +98,7 @@ static struct opt_s OPTIONS[] = {
   { "--cfile",   FALSE, sqdARG_STRING},
   { "--gapmax",  FALSE, sqdARG_FLOAT },
   { "--idlevel", FALSE, sqdARG_FLOAT },
+  { "--noeff",   FALSE, sqdARG_NONE },
   { "--nucleic", FALSE, sqdARG_NONE },
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--star"  ,  FALSE, sqdARG_STRING },
@@ -105,7 +107,7 @@ static struct opt_s OPTIONS[] = {
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_NONE },
-  { "--weff",    FALSE, sqdARG_NONE },
+  { "--wnone",   FALSE, sqdARG_NONE },
   { "--wvoronoi",FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
@@ -183,7 +185,7 @@ main(int argc, char **argv)
    ***********************************************/
   
   c_strategy        = P7_MAP_CONSTRUCTION;
-  w_strategy        = WGT_NONE;
+  w_strategy        = WGT_ME;
   blosumlevel       = 0.62;
   cfg_strategy      = P7_LS_CONFIG;
   gapmax            = 0.5;
@@ -203,7 +205,7 @@ main(int argc, char **argv)
   do_binary         = FALSE;
   swentry           = 0.5;
   swexit            = 0.5;
-  do_eff            = FALSE;
+  do_eff            = TRUE;
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -225,6 +227,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
     else if (strcmp(optname, "--gapmax")  == 0) gapmax        = atof(optarg);
     else if (strcmp(optname, "--idlevel") == 0) blosumlevel   = atof(optarg);
+    else if (strcmp(optname, "--noeff")   == 0) do_eff        = FALSE;
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--star")    == 0) starfile      = optarg; 
@@ -233,8 +236,8 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
     else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM; 
+    else if (strcmp(optname, "--wnone")   == 0) w_strategy    = WGT_NONE; 
     else if (strcmp(optname, "--wvoronoi")== 0) w_strategy    = WGT_VORONOI;
-    else if (strcmp(optname, "--weff")    == 0) do_eff        = TRUE;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
