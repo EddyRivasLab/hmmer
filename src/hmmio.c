@@ -86,6 +86,7 @@ static char *prob2ascii(float p, float null);
 static float ascii2prob(char *s, float null);
 static void  write_bin_string(FILE *fp, char *s);
 static int   read_bin_string(FILE *fp, int doswap, char **ret_s);
+static void  multiline(FILE *fp, char *pfx, char *s);
 
 /***************************************************************** 
  * 
@@ -304,7 +305,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
           (hmm->flags & PLAN7_RF) ? "yes" : "no");
   fprintf(fp, "CS    %s\n",
           (hmm->flags & PLAN7_CS) ? "yes" : "no");
-  fprintf(fp, "COM   %s\n", hmm->comline);
+  multiline(fp, "COM   ", hmm->comlog);
   fprintf(fp, "NSEQ  %d\n", hmm->nseq);
   fprintf(fp, "DATE  %s\n", hmm->ctime); 
 
@@ -448,7 +449,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   if (hmm->flags & PLAN7_DESC) write_bin_string(fp, hmm->desc);
   if (hmm->flags & PLAN7_RF)   fwrite((char *) hmm->rf, sizeof(char), hmm->M+1, fp);
   if (hmm->flags & PLAN7_CS)   fwrite((char *) hmm->cs, sizeof(char), hmm->M+1, fp);
-  write_bin_string(fp, hmm->comline);
+  write_bin_string(fp, hmm->comlog);
   fwrite((char *) &(hmm->nseq),     sizeof(int),  1,   fp);
   write_bin_string(fp, hmm->ctime);
 
@@ -502,10 +503,7 @@ static int
 read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm) 
 {
   struct plan7_s *hmm;
-  char buffer[512];
-  char *name, *desc, *alph, *xt, *nult, *nule, *evd, *com, *ctime;
-  int   nseq;
-  char  rf, cs;
+  char  buffer[512];
   char *s;
   int   M;
   float p;
@@ -516,109 +514,104 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   if (strncmp(buffer, "HMMER2.0", 8) != 0)             goto FAILURE;
 
   /* Get the header information: tag/value pairs in any order,
-   * ignore unknown tags, stop when "HMM" is reached.
-   * Because we need LENG before we can allocate an HMM and start
-   * storing stuff in it, we store some of our lines temporarily,
-   * incurring some minor malloc() overhead.
+   * ignore unknown tags, stop when "HMM" is reached (signaling
+   * start of main model)
    */
+  hmm = AllocPlan7Shell();
   M = -1;
-  rf = cs = 'N';
-  name = desc = xt = nult = nule = evd = NULL;
-  com = ctime = NULL;
-  nseq = 0;
   while (fgets(buffer, 512, hmmfp->f) != NULL) {
-    if      (strncmp(buffer, "NAME ", 5) == 0) name = Strdup(buffer+6);
-    else if (strncmp(buffer, "DESC ", 5) == 0) desc = Strdup(buffer+6);
-    else if (strncmp(buffer, "LENG ", 5) == 0) M    =   atoi(buffer+6);
-    else if (strncmp(buffer, "ALPH ", 5) == 0) alph = Strdup(buffer+6); 
-    else if (strncmp(buffer, "RF   ", 5) == 0) rf   =      *(buffer+6);
-    else if (strncmp(buffer, "CS   ", 5) == 0) cs   =      *(buffer+6); 
-    else if (strncmp(buffer, "COM  ", 5) == 0) com  = Strdup(buffer+6);
-    else if (strncmp(buffer, "NSEQ ", 5) == 0) nseq =   atoi(buffer+6);
-    else if (strncmp(buffer, "DATE ", 5) == 0) ctime= Strdup(buffer+6); 
-    else if (strncmp(buffer, "XT   ", 5) == 0) xt   = Strdup(buffer+6);
-    else if (strncmp(buffer, "NULT ", 5) == 0) nult = Strdup(buffer+6);
-    else if (strncmp(buffer, "NULE ", 5) == 0) nule = Strdup(buffer+6);
-    else if (strncmp(buffer, "EVD  ", 5) == 0) evd  = Strdup(buffer+6); 
+    if      (strncmp(buffer, "NAME ", 5) == 0) Plan7SetName(hmm, buffer+6);
+    else if (strncmp(buffer, "DESC ", 5) == 0) Plan7SetDescription(hmm, buffer+6);
+    else if (strncmp(buffer, "LENG ", 5) == 0) M = atoi(buffer+6);
+    else if (strncmp(buffer, "NSEQ ", 5) == 0) hmm->nseq = atoi(buffer+6);
+    else if (strncmp(buffer, "ALPH ", 5) == 0) 
+      {				/* Alphabet type */
+	s2upper(buffer+6);
+	if      (strncmp(buffer+6, "AMINO",   5) == 0) SetAlphabet(hmmAMINO);
+	else if (strncmp(buffer+6, "NUCLEIC", 7) == 0) SetAlphabet(hmmNUCLEIC);
+	else goto FAILURE;
+      }
+    else if (strncmp(buffer, "RF   ", 5) == 0) 
+      {				/* Reference annotation present? */
+	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_RF;
+      }
+    else if (strncmp(buffer, "CS   ", 5) == 0) 
+      {				/* Consensus annotation present? */
+	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_CS;
+      }
+    else if (strncmp(buffer, "COM  ", 5) == 0) 
+      {				/* Command line log */
+	StringChop(buffer+6);
+	if (hmm->comlog == NULL)
+	  hmm->comlog = Strdup(buffer+6);
+	else
+	  {
+	    hmm->comlog = ReallocOrDie(hmm->comlog, sizeof(char *) * 
+				       (strlen(hmm->comlog) + 1 + strlen(buffer+6)));
+	    strcat(hmm->comlog, "\n");
+	    strcat(hmm->comlog, buffer+6);
+	  }
+      }
+    else if (strncmp(buffer, "DATE ", 5) == 0) 
+      {				/* Date file created */
+	StringChop(buffer+6);
+	hmm->ctime= Strdup(buffer+6); 
+      }
+    else if (strncmp(buffer, "XT   ", 5) == 0) 
+      {				/* Special transition section */
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	for (k = 0; k < 4; k++) 
+	  for (x = 0; x < 2; x++)
+	    {
+	      if (s == NULL) goto FAILURE;
+	      hmm->xt[k][x] = ascii2prob(s, 1.0);
+	      s = strtok(NULL, " \t\n");
+	    }
+      }
+    else if (strncmp(buffer, "NULT ", 5) == 0) 
+      {				/* Null model transitions */
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->p1 = ascii2prob(s, 1.);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->p1 = hmm->p1 / (hmm->p1 + ascii2prob(s, 1.0));
+      }
+    else if (strncmp(buffer, "NULE ", 5) == 0) 
+      {				/* Null model emissions */
+	if (Alphabet_type == hmmNOTSETYET)
+	  Die("ALPH must precede NULE in HMM save files");
+	s = strtok(buffer+6, " \t\n");
+	for (x = 0; x < Alphabet_size; x++) {
+	  if (s == NULL) goto FAILURE;
+	  hmm->null[x] = ascii2prob(s, 1./(float)Alphabet_size);    
+	  s = strtok(NULL, " \t\n");
+	}
+      }
+    else if (strncmp(buffer, "EVD  ", 5) == 0) 
+      {				/* EVD parameters */
+	hmm->flags |= PLAN7_STATS;
+	if ((s = strtok(buffer+6, " \t\n")) == NULL)    goto FAILURE;
+	hmm->mu = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
+	hmm->lambda = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
+	hmm->wonka  = atof(s);
+      }
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;
   }
   if (feof(hmmfp->f)) goto FAILURE;
 
   /* Parse the stuff we stored.
    */
-				/* length: mandatory */
-  if (M < 0) goto FAILURE;
-  if ((hmm = AllocPlan7(M)) == NULL) goto FAILURE;
-				/* name: mandatory */
-  if (name == NULL) goto FAILURE;
-  Plan7SetName(hmm, name);
-  free(name); name = NULL;
-				/* desc: optional */
-  if (desc != NULL) {
-    Plan7SetDescription(hmm, desc); 
-    free(desc); desc = NULL;
-  }
-				/* alph: mandatory */
-  if (alph == NULL) goto FAILURE;
-  s2upper(alph);
-  if      (strncmp(alph, "AMINO",   5) == 0) SetAlphabet(hmmAMINO);
-  else if (strncmp(alph, "NUCLEIC", 6) == 0) SetAlphabet(hmmNUCLEIC);
-  else goto FAILURE;
-  free(alph); alph = NULL;
-				/* RF, CS: optional */
-  if (sre_toupper(rf)   == 'Y')  hmm->flags |= PLAN7_RF;
-  if (sre_toupper(cs)   == 'Y')  hmm->flags |= PLAN7_CS;
-				/* other optional info */
-  if (com != NULL)   StringChop(com);   
-  hmm->comline = com;
-  if (ctime != NULL) StringChop(ctime); 
-  hmm->ctime   = ctime;
-  hmm->nseq    = nseq;
 
-				/* specials: mandatory     */
-				/* assume N, E, C, J order */
-  if (xt == NULL) goto FAILURE;
-  if ((s = strtok(xt, " \t\n")) == NULL) goto FAILURE;
-  for (k = 0; k < 4; k++) 
-    for (x = 0; x < 2; x++)
-      {
-	if (s == NULL) goto FAILURE;
-	hmm->xt[k][x] = ascii2prob(s, 1.0);
-	s = strtok(NULL, " \t\n");
-      }
-  free(xt); xt = NULL;
-				/* null model transitions: mandatory */
-  if (nult == NULL) goto FAILURE;
-  if ((s = strtok(nult, " \t\n")) == NULL) goto FAILURE;
-  hmm->p1 = ascii2prob(s, 1.);
-  if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
-  hmm->p1 = hmm->p1 / (hmm->p1 + ascii2prob(s, 1.0));
-  free(nult); nult = NULL;
-				/* null model emissions: mandatory */
-  if (nule == NULL) goto FAILURE;
-  s = strtok(nule, " \t\n");
-  for (x = 0; x < Alphabet_size; x++) {
-    if (s == NULL) goto FAILURE;
-    hmm->null[x] = ascii2prob(s, 1./(float)Alphabet_size);    
-    s = strtok(NULL, " \t\n");
-  }
-  free(nule); nule = NULL;
-
-				/* EVD: optional */
-  if (evd != NULL) {
-    hmm->flags |= PLAN7_STATS;
-    if ((s = strtok(evd, " \t\n")) == NULL)    goto FAILURE;
-    hmm->mu = atof(s);
-    if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
-    hmm->lambda = atof(s);
-    if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
-    hmm->wonka  = atof(s);
-    free(evd); evd = NULL;
-  }
+				/* partial check for mandatory fields */
+  if (M < 1)                         goto FAILURE;
+  if (hmm->name == NULL)             goto FAILURE;
+  if (Alphabet_type == hmmNOTSETYET) goto FAILURE;
 
   /* Main model section. Read as integer log odds, convert
    * to probabilities
    */
+  AllocPlan7Body(hmm, M);  
 				/* skip an annotation line */
   if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
 				/* parse tbd1 line */
@@ -679,13 +672,6 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 
 FAILURE:
   if (hmm  != NULL) FreePlan7(hmm);
-  if (name != NULL) free(name);
-  if (desc != NULL) free(desc);
-  if (alph != NULL) free(alph);
-  if (xt   != NULL) free(xt);
-  if (nult != NULL) free(nult);
-  if (nule != NULL) free(nule);
-  if (evd  != NULL) free(evd);
   *ret_hmm = NULL;
   return 0;
 }
@@ -737,7 +723,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
        !fread((char *) hmm->cs, sizeof(char), hmm->M+1, hmmfp->f)) goto FAILURE;
    hmm->cs[hmm->M+1]  = '\0';
 
-   if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->comline))) goto FAILURE;
+   if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->comlog)))  goto FAILURE;
    if (!fread((char *) &(hmm->nseq),sizeof(int), 1, hmmfp->f))       goto FAILURE;
    if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->ctime)))   goto FAILURE;
      
@@ -1384,4 +1370,42 @@ read_bin_string(FILE *fp, int doswap, char **ret_s)
 
   *ret_s = s;
   return 1;
+}
+
+/* Function: multiline()
+ * Date:     Mon Jan  5 14:57:50 1998 [StL]
+ * 
+ * Purpose:  Given a record (like the comlog) that contains 
+ *           multiple lines, print it as multiple lines with
+ *           a given prefix. e.g.:
+ *           
+ *           given:   "COM   ", "foo\nbar\nbaz"
+ *           print:   COM   foo
+ *                    COM   bar
+ *                    COM   baz
+ *                    
+ *                    
+ *           Used to print the command log to ASCII save files.
+ *           
+ * Args:     fp:   FILE to print to
+ *           pfx:  prefix for each line
+ *           s:    line to break up and print; tolerates a NULL
+ *
+ * Return:   (void)
+ */
+static void
+multiline(FILE *fp, char *pfx, char *s)
+{
+  char *buf;
+  char *sptr;
+
+  if (s == NULL) return;
+  buf  = Strdup(s);
+  sptr = strtok(buf, "\n");
+  while (sptr != NULL)
+    {
+      fprintf(fp, "%s%s\n", pfx, sptr);
+      sptr = strtok(NULL, "\n");
+    }
+  free(buf);
 }
