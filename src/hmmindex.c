@@ -71,6 +71,7 @@ main(int argc, char **argv)
   FILE    *outfp;               /* open gsifile for writing        */
   struct plan7_s     *hmm;      /* a hidden Markov model           */
   int     idx, nhmm;		/* counter over HMMs               */
+  int     nkeys;		/* number of keys                  */
   long    offset;		/* offset in HMM file              */
   struct gsikey_s *keylist;     /* list of keys                    */
   char    fname[GSI_KEYSIZE];
@@ -137,7 +138,7 @@ main(int argc, char **argv)
 
   printf("Determining offsets for %s, please be patient...\n", hmmfile);
   offset = ftell(hmmfp->f);
-  nhmm = 0;
+  nhmm = nkeys = 0;
   while (HMMFileRead(hmmfp, &hmm)) 
     {	
       if (hmm == NULL) 
@@ -145,17 +146,32 @@ main(int argc, char **argv)
 
       if (strlen(hmm->name) >= GSI_KEYSIZE )
 	Warn("HMM %s name is too long to index in a GSI file; truncating it.", hmm->name);
+				/* record name of HMM as a retrieval key */
+      if (strlen(hmm->name) >= GSI_KEYSIZE) 
+	Warn("HMM name %s is too long to be indexed: must be < %d\n", GSI_KEYSIZE);
+      strncpy(keylist[nkeys].key, hmm->name, GSI_KEYSIZE-1);
+      keylist[nkeys].key[GSI_KEYSIZE-1] = '\0';
+      keylist[nkeys].filenum = 1;
+      keylist[nkeys].offset  = offset;
+      nkeys++;
+      if (nkeys % KEYBLOCK == 0)	
+	keylist = ReallocOrDie(keylist, sizeof(struct gsikey_s) * (nkeys + KEYBLOCK));
 
-      strncpy(keylist[nhmm].key, hmm->name, GSI_KEYSIZE-1);
-      keylist[nhmm].key[GSI_KEYSIZE-1] = '\0';
-      keylist[nhmm].filenum = 1;
-      keylist[nhmm].offset  = offset;
+				/* record accession of HMM as a retrieval key */
+      if (hmm->flags & PLAN7_ACC) {
+	if (strlen(hmm->acc) >= GSI_KEYSIZE) 
+	  Warn("HMM accession %s is too long to be indexed: must be < %d\n", GSI_KEYSIZE);
+	strncpy(keylist[nkeys].key, hmm->acc, GSI_KEYSIZE-1);
+	keylist[nkeys].key[GSI_KEYSIZE-1] = '\0';
+	keylist[nkeys].filenum = 1;
+	keylist[nkeys].offset  = offset;
+	nkeys++;
+	if (nkeys % KEYBLOCK == 0)	
+	  keylist = ReallocOrDie(keylist, sizeof(struct gsikey_s) * (nkeys + KEYBLOCK));
+      }
 
       offset = ftell(hmmfp->f);
       nhmm++;
-      if (nhmm % KEYBLOCK == 0)	
-	keylist = ReallocOrDie(keylist, sizeof(struct gsikey_s) * (nhmm + KEYBLOCK));
-
       FreePlan7(hmm);
     }
   HMMFileClose(hmmfp);
@@ -165,7 +181,7 @@ main(int argc, char **argv)
    ***********************************************/
 
   printf("Sorting keys... \n");
-  qsort((void *) keylist, nhmm, sizeof(struct gsikey_s), gsikey_compare);
+  qsort((void *) keylist, nkeys, sizeof(struct gsikey_s), gsikey_compare);
   SQD_DPRINTF1(("(OK, done with qsort)\n"));
 
   /***********************************************
@@ -175,18 +191,19 @@ main(int argc, char **argv)
   hmmtail = FileTail(hmmfile, FALSE);
   if (strlen(hmmtail) >= GSI_KEYSIZE)
     {
-      Warn("HMM file name length is >%d char. Truncating.", GSI_KEYSIZE);
+      Warn("HMM file name length is >= %d char. Truncating.", GSI_KEYSIZE);
       hmmtail[GSI_KEYSIZE-1] = '\0';
     }
   strcpy(fname, hmmtail);
 
-  GSIWriteHeader(outfp, 1, nhmm);
+  GSIWriteHeader(outfp, 1, nkeys);
   GSIWriteFileRecord(outfp, fname, 1, 0); /* this line is unused, so doesn't matter */
-  for (idx = 0; idx < nhmm; idx++)
+  for (idx = 0; idx < nkeys; idx++)
     GSIWriteKeyRecord(outfp, keylist[idx].key, keylist[idx].filenum, keylist[idx].offset);
 
   printf("Complete.\n");
-  printf("GSI %s indexes %d HMMs in %s.\n", gsifile, nhmm, hmmfile);
+  printf("GSI %s indexes %d keys (names+accessions) for %d HMMs in %s.\n", 
+	 gsifile, nkeys, nhmm, hmmfile);
 
   /***********************************************
    * Exit
