@@ -41,7 +41,7 @@
  *                       sqfrom, sqto, hmmfrom, hmmto, ali);
  *    }                   
  *      
- *   FastSortTophits(yourhits);      // Sort hits by evalue 
+ *   FullSortTophits(yourhits);      // Sort hits by evalue 
  *   for (i = 0; i < 100; i++)       // Recover hits out in ranked order
  *     {   
  *       GetRankedHit(yourhits, i, &evalue, &bitscore, &name, &desc,
@@ -68,6 +68,7 @@
 
 #include <string.h>
 #include <float.h>
+#include <limits.h>
 
 #include "structs.h"
 #include "funcs.h"
@@ -82,8 +83,8 @@ static void free_loser_alignments(struct tophit_s *h);
  *           a list of up to H top-scoring hits in a database search
  *           and up to A top-scoring hits with alignment info.
  *           
- * Args:     H - number of top hits to save          
- *           A - number of top hits to save with alignments
+ * Args:     H - max # top hits to save (-1: no limit. 0: none).
+ *           A - max # top hits to save with alignments (-1: no limit. 0: none)
  *           
  * Return:   An allocated struct hit_s. Caller must free.
  */
@@ -93,10 +94,15 @@ AllocTophits(int H, int A)
   int i;
   struct tophit_s *hitlist;
   
+  if (A > H)            Die("can't have A > H"); 
+  if (H > INT_MAX / 2)  Die("can't have H > INT_MAX / 2");
+
   hitlist = (struct tophit_s *) MallocOrDie (sizeof(struct tophit_s));
   hitlist->H     = H;
   hitlist->A     = A;
-  hitlist->alloc = H * 2;         /* overallocation; memory/speed tradeoff */
+
+  if (hitlist->H > 0) hitlist->alloc = H * 2;  /* overallocation; memory/speed tradeoff */
+  else                hitlist->alloc = 200;
   hitlist->sorts = 0;		  /* counter for # of sorts                */
   hitlist->pos   = 0;
   hitlist->best  = -DBL_MAX;	  /* current worst sort key */
@@ -200,19 +206,33 @@ RegisterHit(struct tophit_s *hitlist, double key, double evalue, float score,
 	    int domidx, int ndom,
 	    struct fancyali_s *ali)
 {
+  int i;
+
   /* Check if we have to add this hit to the current list.
    */
   if (key <= hitlist->best) { if (ali != NULL) FreeFancyAli(ali); return; }
+  if (hitlist->H == 0)      { if (ali != NULL) FreeFancyAli(ali); return; }
 
-  /* Check to see if list is full and we need to re-sort it.
+  /* Check to see if list is full.
+   * Two cases here: 1) if our hits are unlimited, realloc;
+   *                 2) if hits are limited to top H, sort top H, move "pos" index
    */
   if (hitlist->pos == hitlist->alloc)
     {
-      FastSortTophits(hitlist);
-			/* not a safe call yet; top A must be sorted */
-      /*      free_loser_alignments(hitlist); */
-      hitlist->best = hitlist->hit[hitlist->H-1]->sortkey;
-      hitlist->sorts++;
+      if (hitlist->H == -1)	/* case 1. unlimited hits; expand alloc */
+	{
+	  hitlist->alloc += 200;
+	  hitlist->hit = (struct hit_s **) 
+	    ReallocOrDie (hitlist->hit, sizeof(struct hit_s *)* (hitlist->alloc));
+	  for (i = hitlist->alloc-200; i < hitlist->alloc; i++)
+	    hitlist->hit[i] = NULL;
+	}
+      else			/* case 2. limited hits; sort in existing alloc */
+	{
+	  FastSortTophits(hitlist);
+	  hitlist->best = hitlist->hit[hitlist->H-1]->sortkey;
+	  hitlist->sorts++;
+	}
     }
 
   /* Add the current hit to the list.
@@ -291,13 +311,17 @@ GetRankedHit(struct tophit_s *h, int rank,
  * Purpose:  Returns the maximum name length in a top hits list.
  */
 int
-TophitsMaxName(struct tophit_s *h, int top_howmany)
+TophitsMaxName(struct tophit_s *h)
 {
   int i;
   int len, maxlen;
+  int top_howmany;
+
+  if (h->H == -1) top_howmany = h->pos;
+  else            top_howmany = MIN(h->pos, h->H); 
   
   maxlen = 0;
-  for (i = 0; i < top_howmany && i < h->pos; i++)
+  for (i = 0; i < top_howmany; i++)
     {
       len = strlen(h->hit[i]->name);
       if (len > maxlen) maxlen = len;
@@ -305,53 +329,6 @@ TophitsMaxName(struct tophit_s *h, int top_howmany)
   return maxlen;
 }
 
-
-
-#ifdef SRE_REMOVED
-/* Function: PrintTopHits()
- * 
- * Purpose:  Format and print top hits list to a file pointer.
- * 
- * Args:     fp     - where to print to
- *           h      - top hits list
- *           n      - number of hits to print
- *           evd    - TRUE if we have a valid EVD fit
- *           mu     - EVD mu parameter
- *           lambda - EVD lambda parameter
- *           dbseqs - number of seqs in database (for calculating E-value)
- */
-void
-PrintTopHits(FILE *fp, struct tophit_s *h, int n, int evd, float mu, float lambda, int dbseqs)
-{
-  int i;
-  int nmlen;			/* maximum name length */
-  int desclen;			/* maximum description length */
-
-  nmlen   = TophitsMaxName(h, n);
-  if (nmlen < 12) nmlen = 12;
-  if (nmlen > 61) nmlen = 61;
-  desclen = 79 - (nmlen + 18); 
-  printf("%-63.63s %6s %8s\n", "Sequence", "Score", "P-value");
-  printf("%-63.63s %6s %8s\n", "--------", "-----", "-------");
-
-  for (i = 0; i < n && i < h->pos; i++)
-    {
-      if (evd) 
-	fprintf(fp, "%-*.*s  %-*.*s %6.1f %8.1g\n",
-		nmlen, nmlen,     h->hit[i]->name,
-		desclen, desclen, h->hit[i]->desc,
-		h->hit[i]->score,
-		ExtremeValueP2(h->hit[i]->score, mu, lambda, dbseqs));
-      else
-	fprintf(fp, "%-*.*s  %-*.*s %6.1f %8s\n",
-		nmlen, nmlen,     h->hit[i]->name,
-		desclen, desclen, h->hit[i]->desc,
-		h->hit[i]->score,
-		"?");
-    }
-}
-#endif /*REMOVED*/
-	      
 
 /* Function: FastSortTophits()
  * 
