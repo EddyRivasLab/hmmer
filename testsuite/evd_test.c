@@ -1,6 +1,5 @@
 /* evd_test.c
  * SRE, Wed Nov 12 11:17:27 1997 [St. Louis]
- * cp evd_test.c ../src/testdriver.c; cd ../src; make testdriver
  * 
  * Test driver for EVD distribution support in histogram.c
  * Generates random EVD samples; fits them; checks fitted mu, lambda
@@ -37,6 +36,9 @@ Usage: testdriver [-options]\n\
   -n <n>          : set number of trials to <n>\n\
   -s <n>          : set random seed to <n>\n\
   -v              : be verbose (default is to simply exit with status 1 or 0)\n\
+";
+
+static char experts[] = "\
   --xmgr <file>   : save graphical data to <file>\n\
   --hist          : fit to histogram instead of raw samples\n\
   --loglog <file> : save log log regression line to <file>\n\
@@ -145,6 +147,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-h")       == 0) {
       Banner(stdout, banner);
       puts(usage);
+      puts(experts);
       exit(0);
     }
   }
