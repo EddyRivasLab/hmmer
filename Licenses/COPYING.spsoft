@@ -20,7 +20,7 @@ redistributable work of other authors, as follows:
 
 Portions of src/sqio.c are 
 Copyright (C) 1990 D.G. Gilbert 
-[Free in the public domain]
+[Freely redistributable from Don Gilbert's READSEQ package]
 
 install.sh and squid/install.sh are 
 Copyright (C) 1991 by the Massachusetts Institute of Technology
