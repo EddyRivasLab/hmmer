@@ -16,6 +16,7 @@
 #include "funcs.h"
 #include "structs.h"
 #include "squid.h"
+#include "sre_stack.h"
 
 /* Function: MakeStarHMM()
  * 
@@ -460,7 +461,7 @@ BlosumWeights(char **aseqs, AINFO *ainfo, float maxid, int *clust,int *ret_nc)
   struct phylo_s *tree;         /* UPGMA tree        */
   float           mindiff;	/* minimum distance between clusters */
   int             c;		/* counter for clusters */
-  struct intstack_s *stack;
+  Nstack_t       *stack;
   int             node;
   int             i;
 
@@ -482,10 +483,10 @@ BlosumWeights(char **aseqs, AINFO *ainfo, float maxid, int *clust,int *ret_nc)
       ainfo->sqinfo[i].flags |= SQINFO_WGT;
     }
 
-  stack = InitIntStack();
-  PushIntStack(stack, 0);	/* push root on stack to start */
+  stack = CreateNstack();
+  PushNstack(stack, 0);	/* push root on stack to start */
   c = 0;
-  while (PopIntStack(stack, &node))
+  while (PopNstack(stack, &node))
     {
       if ((node == 0 || tree[tree[node].parent-ainfo->nseq].diff > mindiff) &&
 	  tree[node].diff < mindiff)
@@ -501,7 +502,7 @@ BlosumWeights(char **aseqs, AINFO *ainfo, float maxid, int *clust,int *ret_nc)
       else			/* we're not a cluster, keep traversing */
 	{
 	  if (tree[node].right >= ainfo->nseq)
-	    PushIntStack(stack, tree[node].right - ainfo->nseq);
+	    PushNstack(stack, tree[node].right - ainfo->nseq);
 	  else 
 	    {
 	      c++;
@@ -509,7 +510,7 @@ BlosumWeights(char **aseqs, AINFO *ainfo, float maxid, int *clust,int *ret_nc)
 	    }
 
 	  if (tree[node].left >= ainfo->nseq)
-	    PushIntStack(stack, tree[node].left - ainfo->nseq);
+	    PushNstack(stack, tree[node].left - ainfo->nseq);
 	  else
 	    {
 	      c++;
@@ -517,7 +518,7 @@ BlosumWeights(char **aseqs, AINFO *ainfo, float maxid, int *clust,int *ret_nc)
 	    }
 	}
     }
-  FreeIntStack(stack);
+  FreeNstack(stack);
   FreePhylo(tree, ainfo->nseq);
   FMX2Free(dmx);
   if (ret_nc != NULL) *ret_nc = c;

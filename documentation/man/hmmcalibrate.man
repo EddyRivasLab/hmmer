@@ -83,7 +83,8 @@ Set the number of synthetic sequences to
 where 
 .I <n>
 is a positive integer. If
-.I <n> is less than about 1000, the fit to the EVD may fail.
+.I <n> 
+is less than about 1000, the fit to the EVD may fail.
 Higher numbers of
 .I <n> 
 will give better determined EVD parameters. The default

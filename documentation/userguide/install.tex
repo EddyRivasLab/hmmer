@@ -712,6 +712,153 @@ Not yet.
 \end{srefaq}
 
 
+\subsection{Contributing binary distros back to the HMMER web site}
+
+Ah, what a helpful net citizen you are! If you're compiling from
+source on a platform for which HMMER binaries are not yet available,
+here's how to contribute your binary distro back to us.
+
+First, choose an informative name for your platform, like
+\prog{intel-linux}, \prog{sgi-irix64}, or
+\prog{powerpc-apple-osx}. The name should reflect what platforms your
+binaries will run on, of course.  Your binary distro will have this
+string as part of its name.
+
+A safe bet is to use the output of GNU's \prog{config.guess} program, in
+HMMER's top level directory. On the platform I build \prog{intel-linux}
+binaries on, this gives:
+
+\user{sh config.guess}\\
+\response{i686-pc-linux-gnu}
+
+The \prog{config.guess} output is often overly specific. I generally
+shorten that in some reasonable way to arrive at my names.
+
+In the examples below, I'll use \prog{<platform>} to mean the string
+you choose. I'll use 2.3.2 for the HMMER version number; you need to
+substitute with the correct version number, if you're not building
+2.3.2.
+
+Now you can either build the binary distro manually, or by using the
+\prog{nodebuild} script, as follows:
+
+\subsubsection{Manual, step-by-step instructions}
+
+\begin{itemize}
+\item Get the HMMER source code, \prog{hmmer-2.3.2.tar.gz}.
+
+\item Unpack and rename the directory to \prog{hmmer-2.3.2.bin.<platform>}.
+
+\user{tar zxf hmmer-2.3.2.tar.gz}\\
+\user{mv hmmer-2.3.2 hmmer-2.3.2.bin.<platform>}
+
+\item Go into the \prog{hmmer-2.3.2} directory; follow the compilation
+   instructions. For instance, a default build would be:
+
+\user{./configure}\\
+\user{make}\\
+\user{make check}
+
+(You don't need to \prog{make install}, though it won't matter if you
+do.)
+
+The \prog{make check} should report no problems. If it does, you can
+report it as a bug.
+
+\item Package the binary distribution.
+
+\user{make bindist}\\
+\user{cd ..}\\
+\user{tar cf hmmer-2.3.2.bin.<platform>.tar hmmer-2.3.2.bin.<platform>}\\
+\user{gzip hmmer-2.3.2.bin.<platform>.tar}
+
+\item Cleanup. 
+
+\user{rm -rf hmmer-2.3.2.bin.<platform>}
+\end{itemize}
+
+
+Skip to ``Sending the files'', below.
+
+
+\subsubsection{Automatic, using the \prog{nodebuild} script}
+
+The \prog{nodebuild} script is part of the automation on our compile
+farm.  You can download a copy from
+\url{ftp://ftp.genetics.wustl.edu/pub/eddy/software/nodebuild}.
+
+The top of the \prog{nodebuild} file contains some documentation for
+using \prog{nodebuild} to build binary distros on a remote host
+(e.g. in our compile farm, we drive mass compilations from a single
+server).  To build on a local host is even simpler, where the command
+line is:
+
+\begin{sreoutput}
+   ./nodebuild <dir> <pkg> <platform> <configopts> <makeopts>
+   
+   <dir>         = where the HMMER tarball is
+   <pkg>         = e.g., hmmer-2.3.2
+   <platform>    = e.g., intel-linux
+   <configopts>  = options to ./configure; e.g. \"--enable-threads\"
+   <makeopts>    = options to make: e.g. CC=gcc
+\end{sreoutput}
+
+There's some silly business with double quotes here, to get arguments
+into the script properly without having your shell screw them up. Note
+that the configopts have to be wrapped in backslash-protected double
+quotes if there's more than one option. To include *no* configure
+options, use \verb+""+ to leave a blank field there.  The makeopts
+don't need to be protected with double quotes, but any multiword
+options in makeopts do.
+
+Example:
+
+\begin{sreoutput}
+     > ./nodebuild /tmp hmmer-2.3.2 intel-linux \"--enable-threads\
+          --enable-lfs\" CC=gcc CFLAGS=\"-O2 -Wall\" 
+\end{sreoutput}
+
+The \prog{nodebuild} script creates a log, \prog{hmmer-2.3.2.<platform>.log}.
+
+So, let's say you're in your home directory, \prog{/home/eddy}. You
+would do something like the following:
+   
+\begin{itemize}
+\item Get the source, \prog{hmmer-2.3.2.tar.gz}, and the \prog{nodebuild} script.
+
+\user{ls}\\
+\response{hmmer-2.3.2.tar.gz  nodebuild}\\
+\user{pwd}\\
+\response{/home/eddy}
+
+\item Run nodebuild.
+
+\begin{sreoutput}
+     > ./nodebuild /home/eddy hmmer-2.3.2 intel-linux\
+       \"--enable-threads --enable-lfs\" CC=gcc CFLAGS=\"-O2 -Wall\"
+\end{sreoutput}
+
+\item Voila.
+
+\user{ls}\\
+\response{hmmer-2.3.2.tar.gz}\\
+\response{hmmer-2.3.2.<platform>.log}\\
+\response{hmmer-2.3.2.bin.<platform>.tar.gz}\\
+\response{nodebuild}
+\end{itemize}
+
+\subsubsection{Sending the files}
+
+Send me the \prog{.tar.gz} file (and the \prog{.log} file, if you used
+\prog{nodebuild}), either by putting it on an FTP site or by sending as
+an email attachment.
+
+If you had to make any changes in the source code, please let me
+know. If you send me a patch file too, that's great; but I can also
+extract my own patches from your binary distro.
+
+
+
 
 
 

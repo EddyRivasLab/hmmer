@@ -83,13 +83,17 @@ Checklist for a HMMER distribution.
          ./buildall hmmer-2.3.2 >& build.log &
          tail -f build.log
 
-    darwin (dual800) is done manually:
+    darwin (g4it-1) is done manually:
+   	note that xlc does not appear to support Altivec. Use OS/X cc.
     ssh into dual800 in Warren's lab.
-      scp eddy@genetics.wustl.edu:src/hmmer/hmmer-2.3.1.tar.gz .
+	ssh species.wustl.edu -l seddy
+	ssh g4it-1
+
+      scp eddy@genetics.wustl.edu:src/hmmer/hmmer-2.3.2.tar.gz .
       scp eddy@genetics.wustl.edu:src/hmmer/ssdk/nodebuild .
-      ./nodebuild /Users/seddy hmmer-2.3.1  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O" 
-      scp hmmer-2.3.1.bin.powerpc-apple-osx.tar.gz eddy@genetics.wustl.edu:
-      scp hmmer-2.3.1.powerpc-apple-osx.log eddy@genetics.wustl.edu:
+      ./nodebuild /home/seddy hmmer-2.3.2  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CC=cc CFLAGS="-O" 
+      scp hmmer-2.3.2.bin.powerpc-apple-osx.tar.gz eddy@genetics.wustl.edu:
+      scp hmmer-2.3.2.powerpc-apple-osx.log eddy@genetics.wustl.edu:
 
       tar zxf hmmer-2.3.1.bin.powerpc-apple-osx.tar.gz
       cd hmmer-2.3.1.bin.powerpc-apple-osx
@@ -97,6 +101,28 @@ Checklist for a HMMER distribution.
       [cpu0/pkinase/50000 =  177.360u 2:58.04   w/  altivec]
       [cpu2/pkinase/50000 =  206.610u 1:44.90   w/  altivec]
       
+    manual build of alpha-tru64.
+      	ssh waterbug
+  	cd /tmp
+	cp ~/src/hmmer/ssdk/nodebuild .
+	cp ~/src/hmmer/hmmer-2.3.2.tar.gz .
+	./nodebuild /tmp hmmer-2.3.2 alpha-tru64 "--enable-threads --enable-lfs" CC=cc CFLAGS=-O
+	cp hmmer-2.3.2.alpha-tru64.log hmmer-2.3.2.bin.alpha-tru64.tar.gz ~/notebook/1003-hmmer-2.3.2-release/
+ 	
+    manual build of ia64-hp-hpux on whelk05
+	ssh w001
+        cd hmmer-2.3.2
+        (test ssh to whelk05)
+       	./rootbuild whelk05   /tmp hmmer-2.3.2 ia64-hp-hpux "--enable-threads --enable-lfs"  CC=cc CFLAGS="-O"
+
+    manual build of sun-solaris.
+      	ssh whidder
+  	cd /tmp
+	cp ~/src/hmmer/ssdk/nodebuild .
+	cp ~/src/hmmer/hmmer-2.3.2.tar.gz .
+	./nodebuild /tmp hmmer-2.3.2 sun-solaris "--enable-threads --enable-lfs" CC=cc CFLAGS=-O2
+	cp hmmer-2.3.2.sun-solaris.log hmmer-2.3.2.bin.sun-solaris.tar.gz ~/notebook/1003-hmmer-2.3.2-release/
+
     whippet is also done manually. NFS is fucked up?
       ssh whippet
       cd /scratch/eddy
@@ -114,8 +140,8 @@ Checklist for a HMMER distribution.
 
     Copy all binary distros to the FTP site,
     /nfs/ftp/eddy/hmmer/(RELEASE)/
-           mkdir /nfs/ftp/eddy/hmmer/2.3.1
-           cp *.tar.gz /nfs/ftp/eddy/hmmer/2.3.1/
+           mkdir /nfs/ftp/eddy/hmmer/2.3.2
+           cp *.tar.gz /nfs/ftp/eddy/hmmer/2.3.2/
 
 9.  Install all the files on the FTP site; change CURRENT symlink.
     (Check that FTPDIR is correct in Makefile).

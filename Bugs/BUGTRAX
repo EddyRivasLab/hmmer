@@ -383,4 +383,17 @@ CLOSED_DATE     SRE, Fri Oct  3 12:48:50 2003
 DESCRIPTION     
   Calculation of mmx[M] should touch bsc[M], not bsc[M-1].
 //
+ID              h29
+TITLE           hmmsearch does not scale on SMP Xeons with hyperthreads
+STATUS          CLOSED
+XREF            notebook/0115-hmmer-bug-h29
+REPORTED_BY     Gordon Gremme <gremme@zbh.uni-hamburg.de>
+OPENED_DATE     SRE, Thu Jan 15 13:30:00 2004
+CLOSED_DATE     SRE, Thu Jan 15 15:43:25 2004
+DESCRIPTION     
+  See the notes [xref] for details.
+
+  This appears to be a Linux 2.4 SMP scheduler problem.
+  No action taken.	
+//
 

@@ -54,12 +54,14 @@
 %   \prog{}     for a program or file name
 %   \emprog{}   for an emphasized program or file name
 %   \user{}     for a typed user command
+%   \response{} for an output line following a \user command
 %
 \newcommand{\software}[1]{\textsc{#1}}
 \newcommand{\database}[1]{\textsc{#1}}
 \newcommand{\prog}[1]{{\small\bfseries\texttt{#1}}}
 \newcommand{\emprog}[1]{{\small\bfseries\texttt{#1}}}
 \newcommand{\user}[1]{\indent\indent{\small\bfseries\texttt{> #1}}}
+\newcommand{\response}[1]{\indent\indent{\small\bfseries\texttt{#1}}}
 
 % The ``wideitem'' environment is mostly obsolete, but
 % it gets used in converted manpages.
