@@ -14,6 +14,7 @@
 #include "config.h"
 #include "structs.h"
 #include "squid.h"
+#include "msa.h"
 
 /* alphabet.c
  * Configuration of global alphabet information
@@ -23,7 +24,7 @@ extern void  SetAlphabet(int type);
 extern int   SymbolIndex(char sym);
 extern char *DigitizeSequence(char *seq, int L);
 extern char *DedigitizeSequence(char *dsq, int L);
-extern void  DigitizeAlignment(char **aseqs, AINFO *ainfo, char ***ret_dsqs);
+extern void  DigitizeAlignment(MSA *msa, char ***ret_dsqs);
 extern void  P7CountSymbol(float *counters, char sym, float wt);
 extern void  DefaultGeneticCode(int *aacode);
 extern void  DefaultCodonBias(float *codebias);
@@ -53,7 +54,7 @@ extern float P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm,
 			  struct p7trace_s **ret_tr);
 extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, 
 			     struct dpmatrix_s **ret_mx);
-extern struct p7trace_s *P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm);
+extern struct p7trace_s *P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm);
 extern struct p7trace_s *ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L);
 
 
@@ -67,6 +68,21 @@ extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr,
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
 extern int  TraceCompare(struct p7trace_s *t1, struct p7trace_s *t2);
 extern int  TraceVerify(struct p7trace_s *tr, int M, int N);
+
+/* 
+ * from display.c
+ * Ian Holmes' functions for displaying HMMER2 data structures, especially
+ * for posterior probabilities in alignments.
+ */
+extern void DisplayPlan7Matrix(char *dsq, int L, struct plan7_s *hmm,
+			       struct dpmatrix_s *mx);
+extern void DisplayPlan7Posteriors(int L, struct plan7_s *hmm,
+				   struct dpmatrix_s *forward, struct dpmatrix_s *backward,
+				   struct p7trace_s *viterbi, struct p7trace_s *optacc);
+extern void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
+				  struct dpmatrix_s *forward, struct dpmatrix_s *backward,
+				  struct p7trace_s **alignment, int A);
+
 
 /* from emit.c
  * Generation of sequences/traces from an HMM
@@ -154,7 +170,6 @@ extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
 /* from misc.c
  * Miscellaneous functions with no home
  */
-extern void  Banner(FILE *fp, char *banner);
 extern char *Getword(FILE *fp, int type); 
 extern char *Getline(char *s, int n, FILE *fp);
 
@@ -162,13 +177,12 @@ extern char *Getline(char *s, int n, FILE *fp);
 /* from modelmakers.c
  * Model construction algorithms
  */
-extern void P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
-			     struct plan7_s **ret_hmm,
+extern void P7Handmodelmaker(MSA *msa, char **dsq, struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Fastmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
+extern void P7Fastmodelmaker(MSA *msa, char **dsq, 
 			     float maxgap, struct plan7_s **ret_hmm, 
 			     struct p7trace_s ***ret_tr);
-extern void P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo,
+extern void P7Maxmodelmaker(MSA *msa, char **dsq, 
 			    float maxgap, struct p7prior_s *prior, 
 			    float *null, float null_p1, float mpri, 
 			    struct plan7_s **ret_hmm,
@@ -211,6 +225,20 @@ extern int  P9FreeHMM(struct plan9_s *hmm);
 extern void P9Renormalize(struct plan9_s *hmm);
 extern void P9DefaultNullModel(float *null);
 
+/* 
+ * from postprob.c
+ * Functions for working with posterior probabilities within alignments
+ */
+extern float P7OptimalAccuracy(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr);
+extern float P7Backward(char *dsq, int L, struct plan7_s *hmm, 	struct dpmatrix_s **ret_mx);
+extern void  P7EmitterPosterior(int L, struct plan7_s *hmm, struct dpmatrix_s *forward,
+				struct dpmatrix_s *backward, struct dpmatrix_s *mx);
+extern float P7FillOptimalAccuracy(int L, int M, struct dpmatrix_s *posterior,
+				   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+extern void  P7OptimalAccuracyTrace(int L, int M, struct dpmatrix_s *posterior,
+				    struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+extern char *PostalCode(int L, struct dpmatrix_s *mx, struct p7trace_s *tr);
+
 /* from prior.c
  * Dirichlet priors
  */
@@ -223,7 +251,8 @@ extern void PAMPrior(char *pamfile, struct p7prior_s *pri, float pamwgt);
 extern void P7DefaultNullModel(float *null, float *ret_p1);
 extern void P7ReadNullModel(char *rndfile, float *null, float *ret_p1);
 extern void P7PriorifyHMM(struct plan7_s *hmm, struct p7prior_s *pri);
-extern void P7PriorifyTransitionVector(float *t, struct p7prior_s *prior);
+extern void P7PriorifyTransitionVector(float *t, struct p7prior_s *prior, 
+				       float tq[MAXDCHLET]);
 extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri, 
 				     int num, float eq[MAXDCHLET], 
 				     float e[MAXDCHLET][MAXABET],
@@ -294,9 +323,9 @@ extern void  P7ReverseTrace(struct p7trace_s *tr);
 extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
 			  struct p7trace_s *tr);
 extern float P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr);
-extern void  P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int M, 
-				struct p7trace_s **tr, int matchonly, 
-				char ***ret_aseqs, AINFO *ainfo);
+extern MSA  *P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, 
+				int nseq, int M, 
+				struct p7trace_s **tr, int matchonly);
 extern int  TransitionScoreLookup(struct plan7_s *hmm, char st1, 
 				  int k1, char st2, int k2);
 extern struct fancyali_s *CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
