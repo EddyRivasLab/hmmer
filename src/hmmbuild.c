@@ -452,12 +452,11 @@ main(int argc, char **argv)
    */
   printf("%-40s ... ", "Setting model name, etc.");
   fflush(stdout);
-  if      (name       != NULL) Plan7SetName(hmm, name);
-  else if (ainfo.name != NULL) Plan7SetName(hmm, ainfo.name);
-  else {
-    name = FileTail(seqfile, TRUE);
-    Plan7SetName(hmm, name);
+  if (name == NULL) {
+    if (ainfo.name != NULL) name = Strdup(ainfo.name);
+    else                    name = FileTail(seqfile, TRUE);
   }
+  Plan7SetName(hmm, name);
 
   /* Transfer other information from the alignment to
    * the HMM. This typically only works for SELEX format
@@ -466,9 +465,9 @@ main(int argc, char **argv)
   if (ainfo.acc  != NULL) Plan7SetAccession(hmm, ainfo.acc);
   if (ainfo.desc != NULL) Plan7SetDescription(hmm, ainfo.desc);
 
-  if (ainfo.flags & AINFO_GA) { hmm->ga1 = ainfo.ga1; hmm->ga2 = ainfo.ga2; }
-  if (ainfo.flags & AINFO_TC) { hmm->tc1 = ainfo.tc1; hmm->tc2 = ainfo.tc2; }
-  if (ainfo.flags & AINFO_NC) { hmm->nc1 = ainfo.nc1; hmm->nc2 = ainfo.nc2; }
+  if (ainfo.flags & AINFO_GA) { hmm->flags |= PLAN7_GA; hmm->ga1 = ainfo.ga1; hmm->ga2 = ainfo.ga2; }
+  if (ainfo.flags & AINFO_TC) { hmm->flags |= PLAN7_TC; hmm->tc1 = ainfo.tc1; hmm->tc2 = ainfo.tc2; }
+  if (ainfo.flags & AINFO_NC) { hmm->flags |= PLAN7_NC; hmm->nc1 = ainfo.nc1; hmm->nc2 = ainfo.nc2; }
 
   /* Record some other miscellaneous information in the HMM,
    * like how/when we built it.
