@@ -222,7 +222,6 @@ dist:
 	  co RCS/$$file,v build/hmmer-$(RELEASE)/$$file;\
 	  licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/$$file;\
         done
-	chmod +w build/hmmer-$(RELEASE)/Makefile
 	#
 	# RCS extraction of src/ source code subdirectory
 	#
