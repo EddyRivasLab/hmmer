@@ -36,14 +36,6 @@
 #define LOGSUM_TBL  20000       /* controls precision of Logsum()             */
 #define ALILENGTH   50		/* length of displayed alignment lines        */
 
-/* The following configuration constants are specific
- * to the experimental HMMBLAST implementation
- */
-#undef  BLAMM                   /* define to activate experimental BLAST/HMM code */
-#define BLAST_MAXWORD    10     /* maximum W (neighborhood word length)           */
-#define BLAST_HEAPALLOC  1000   /* malloc block size for heap nodes in use        */
-#define BLAST_POOLALLOC  1000	/* malloc block size for words in use             */
-
 /* Debugging levels in HMMER are controlled by conditional preprocessing
  */
 #ifndef DEBUGLEVEL
