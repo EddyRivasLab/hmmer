@@ -120,6 +120,12 @@ main(int argc, char **argv)
  /*********************************************** 
   * Open HMM file (might be in HMMERDB or current directory).
   * Read a single HMM from it.
+  * 
+  * Currently hmmalign disallows the J state and
+  * only allows one domain per sequence. To preserve
+  * the S/W entry information, the J state is explicitly
+  * disallowed, rather than calling a Plan7*Config() function.
+  * this is a workaround in 2.1 for the 2.0.x "yo!" bug.
   ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, "HMMERDB")) == NULL)
@@ -129,8 +135,9 @@ main(int argc, char **argv)
   HMMFileClose(hmmfp);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
+  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
+  hmm->xt[XTE][LOOP] = 0.;
   P7Logoddsify(hmm, TRUE);
-  
 				/* do we have the map we might need? */
   if (mapali != NULL && ! (hmm->flags & PLAN7_MAP))
     Die("HMMER: HMM file %s has no map; you can't use --mapali.", hmmfile);
