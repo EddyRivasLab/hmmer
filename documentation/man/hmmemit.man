@@ -14,9 +14,15 @@ hmmemit - generate sequences from a profile HMM
 .B hmmemit
 reads an HMM file from
 .I hmmfile
-and generates a number of sequences from it.
+and generates a number of sequences from it; 
+or, if the
+.B -c
+option is selected, generate a single majority-rule consensus.
 This can be useful for various applications in which one needs a simulation
-of sequences consistent with a sequence family consensus. By default,
+of sequences consistent with a sequence family consensus. 
+
+.pp
+By default,
 .B hmmemit
 generates 10 sequences and outputs them in FASTA (unaligned) format.
 
@@ -26,6 +32,16 @@ generates 10 sequences and outputs them in FASTA (unaligned) format.
 .B -a
 Write the generated sequences in an aligned format (SELEX) rather than
 FASTA.
+
+.TP
+.B -c
+Predict a single majority-rule consensus sequence instead of sampling
+sequences from the HMM's probability distribution.  Highly conserved
+residues (p >= 0.9 for DNA, p >= 0.5 for protein) are shown in upper
+case; others are shown in lower case.  Some insert states may become
+part of the majority rule consensus, because they are used in >= 50%
+of generated sequences; when this happens, insert-generated residues
+are simply shown as "x".
 
 .TP
 .B -h
