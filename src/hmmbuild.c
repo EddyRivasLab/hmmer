@@ -21,6 +21,7 @@
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
 #include "msa.h"                /* squid's multiple alignment i/o       */
+#include "lsjfuncs.h"		/* Steve Johnson's additions            */
 
 static char banner[] = "hmmbuild - build a hidden Markov model from an alignment";
 
@@ -33,44 +34,49 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    -A     : append; append this HMM to <hmmfile>\n\
    -F     : force; allow overwriting of <hmmfile>\n\
 \n\
-  Alternative search algorithm styles: (default: hmmls domain alignment)\n\
-   -f     : multi-hit local (hmmfs style)\n\
-   -g     : global alignment (hmms style, Needleman/Wunsch)\n\
-   -s     : local alignment (hmmsw style, Smith/Waterman)\n\
+  Alternative alignment types: (default: multihit full domain alignment; hmmls)\n\
+   -f     : multihit local (hmmfs style)\n\
+   -g     : single global alignment (hmms style, Needleman/Wunsch)\n\
+   -s     : single local alignment (hmmsw style, Smith/Waterman)\n\
 ";
 
 static char experts[] = "\
+  Forcing an alphabet: (normally autodetected)\n\
+   --amino   : override autodetection, assert that seqs are protein\n\
+   --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
+\n\
   Alternative model construction strategies: (default: MAP)\n\
    --fast        : Krogh/Haussler fast heuristic construction (see --gapmax)\n\
    --hand        : manual construction (requires annotated alignment)\n\
+   --archpri <x> : for MAP: set architecture size prior to <x> {0.85} [0..1]\n\
+   --gapmax <x>  : for --fast: max fraction of gaps in mat column {0.50} [0..1]\n\
 \n\
-  Expert customization of parameters and priors:\n\
+  Customization of null model and priors:\n\
    --null  <f>   : read null (random sequence) model from <f>\n\
    --pam   <f>   : heuristic PAM-based prior, using BLAST PAM matrix in <f>\n\
    --prior <f>   : read Dirichlet prior parameters from <f>\n\
+   --pamwgt <x>  : for --pam: set weight on PAM-based prior to <x> {20.}[>=0]\n\
 \n\
-  Alternative sequence weighting strategies: (default: GSC weights)\n\
+  Effective sequence number strategies: (default: target entropy weighting)\n\
+   --seteff <n>  : set effective sequence number to <n>\n\
+   --noeff       : don't use effective sequence number; just use nseq\n\
+   --oldeff      : use old strategy, neff= # of clusters by single linkage\n\
+   --idlevel <x> : set frac. id level used by eff nseq and --wblosum {0.62}\n\
+   --etarget     : target entropy loss [defaults: fs=0.5; ls=1.3]\n\
+\n\
+  Relative sequence weighting strategies: (default: GSC weights)\n\
    --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
    --wgsc        : Gerstein/Sonnhammer/Chothia tree weights (default)\n\
    --wme         : maximum entropy (ME)\n\
    --wpb         : Henikoff position-based weights\n\
    --wvoronoi    : Sibbald/Argos Voronoi weights\n\
-   --wnone       : don't do any weighting\n\
-   --noeff       : don't use effective sequence number; just use nseq\n\
    --pbswitch <n>: set switch from GSC to position-based wgts at > n seqs\n\
-\n\
-  Forcing an alphabet: (normally autodetected)\n\
-   --amino   : override autodetection, assert that seqs are protein\n\
-   --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
+   --wnone       : don't do any relative weighting\n\
 \n\
   Other expert options:\n\
-   --archpri <x> : set architecture size prior to <x> {0.85} [0..1]\n\
    --binary      : save the model in binary format, not ASCII text\n\
    --cfile <f>   : save count vectors to <f>\n\
-   --gapmax <x>  : max fraction of gaps in mat column {0.50} [0..1]\n\
-   --idlevel <x> : set frac. id level used by eff. nseq and --wblosum {0.62}\n\
    --informat <s>: input alignment is in format <s>, not Stockholm\n\
-   --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
    --swentry <x> : set S/W aggregate entry prob. to <x> {0.5}\n\
    --swexit <x>  : set S/W aggregate exit prob. to <x>  {0.5}\n\
    --verbose     : print boring information\n\
