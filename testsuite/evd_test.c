@@ -228,8 +228,7 @@ main(int argc, char **argv)
 			     (nevd+ngauss)-idx, censorlevel,
 			     &mlmu, &mllambda); 
 	      ExtremeValueSetHistogram(h, (float) mlmu, (float) mllambda, 
-				       censorlevel, h->highscore, 
-				       (float)(nevd+ngauss)/(float)nevd, 1); 
+				       censorlevel, h->highscore, 1); 
 	    }
 	  else
 	    {
@@ -241,8 +240,7 @@ main(int argc, char **argv)
 		{
 		  EVDMaxLikelyFit(val, NULL, idx, &mlmu, &mllambda); 
 		  ExtremeValueSetHistogram(h, (float) mlmu, (float) mllambda, 
-					   h->lowscore, h->highscore, 
-					   (float)(nevd+ngauss)/(float)nevd, 2); 
+					   h->lowscore, h->highscore, 2); 
 		}
 	    }
 	}
@@ -265,8 +263,7 @@ main(int argc, char **argv)
       /* Generate the expected lines: sets 5,7 of xmgrfile (manually delete 4,6)
        *                              set 3 of loglogfile  (manually delete 2)
        */
-      ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 
-			       (float)(nevd+ngauss)/(float)nevd, 0);
+      ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 0);
       if (xmgrfp != NULL) PrintXMGRHistogram(xmgrfp, h);
       /*      if (xmgrfp != NULL) PrintXMGRDistribution(xmgrfp, h); */
       if (logfp  != NULL) PrintXMGRRegressionLine(logfp, h);
