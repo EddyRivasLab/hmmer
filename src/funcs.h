@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the 
  *   GNU General Public License. See the files COPYING and 
@@ -8,12 +8,10 @@
  *    
  ************************************************************/
 
-/* 
- * funcs.h 
+/* funcs.h 
+ * RCS $Id$
  *
  * Declarations of external functions in HMMER.
- * 
- * RCS $Id$
  */            
 
 #ifndef FUNCSH_INCLUDED
@@ -41,8 +39,7 @@ extern void  P7CountSymbol(float *counters, char sym, float wt);
 extern void  DefaultGeneticCode(int *aacode);
 extern void  DefaultCodonBias(float *codebias);
 
-/* 
- * from blast.c
+/* from blast.c
  * BLAMM: Experimental BLAST/HMM hybrid code.
  */
 #ifdef BLAMM
@@ -56,8 +53,7 @@ extern int  ForwardExtension(struct shmm_s *shmm, char *seq1, int L,
 			     float *ret_sc, int *ret_j);
 #endif /*BLAMM*/
 
-/* 
- * from camJul97.c
+/* from camJul97.c
  * Island HMM experimental code
  */
 extern void MakeStarHMM(struct plan7_s *hmm, float **mx, float *pq,
@@ -68,24 +64,30 @@ extern struct plan7_s *MakeIslandHMM(char **aseqs, AINFO *ainfo, int idx,
 				     float null[MAXABET], float ***mx,
 				     float **bprior, float *qprior, int nmx);
 
-/* 
- * from core_algorithms.c
+/* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
  */
 extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, int ***xmx, 
 					   int ***mmx, int ***imx, int ***dmx);
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
-extern float Plan7Forward(char *dsq, int L, struct plan7_s *hmm, 
+extern int   P7ViterbiSize(int L, int M);
+extern int   P7SmallViterbiSize(int L, int M);
+extern int   P7WeeViterbiSize(int L, int M);
+extern float P7Forward(char *dsq, int L, struct plan7_s *hmm, 
 			  struct dpmatrix_s **ret_mx);
-extern float Plan7Viterbi(char *dsq, int L, struct plan7_s *hmm, 
-			  struct dpmatrix_s **ret_mx);
+extern float P7Viterbi(char *dsq, int L, struct plan7_s *hmm, 
+			  struct p7trace_s **ret_tr);
 extern void  P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int L,
 			   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+extern float P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr);
+extern float P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, 
+			      struct p7trace_s **ret_tr);
+extern float P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, 
+			  struct p7trace_s **ret_tr);
 extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, 
 			     struct dpmatrix_s **ret_mx);
 
-/* 
- * from debug.c
+/* from debug.c
  * Debugging output of various sorts.
  */
 extern void VerboseWorry(int level, char *file, int line, char *fmt, ...);
@@ -94,7 +96,14 @@ extern char *Statetype(enum p7stype st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
+extern int  TraceCompare(struct p7trace_s *t1, struct p7trace_s *t2);
 extern int  TraceVerify(struct p7trace_s *tr, int M, int N);
+
+/* from emit.c
+ * Generation of sequences/traces from an HMM
+ */
+extern void EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr);
+
 
 /* from emulation.c
  * Interfaces between HMMER and other software packages
@@ -168,18 +177,15 @@ extern float SampleGamma(float alpha);
 extern void  SampleCountvector(float *p, int n, int c, float *cvec);
 extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
 
-/* 
- * from misc.c
+/* from misc.c
  * Miscellaneous functions with no home
  */
 extern void  Banner(FILE *fp, char *banner);
-extern int   AlignmentTooBig(int L, int M);
 extern char *Getword(FILE *fp, int type); 
 extern char *Getline(char *s, int n, FILE *fp);
 
 
-/* 
- * from modelmakers.c
+/* from modelmakers.c
  * Model construction algorithms
  */
 extern void P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
@@ -195,7 +201,7 @@ extern void P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo,
 			    struct p7trace_s  ***ret_tr);
 
 /* from plan7.c
- * Experimental: Plan7 HMM structure support
+ * Plan7 HMM structure support
  */
 extern struct plan7_s *AllocPlan7(int M);
 extern struct plan7_s *AllocPlan7Shell(void);
@@ -207,8 +213,9 @@ extern void Plan7SetDescription(struct plan7_s *hmm, char *desc);
 extern void Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv);
 extern void Plan7SetCtime(struct plan7_s *hmm);
 extern void Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1);
-extern void Plan7Logoddsify(struct plan7_s *hmm);
+extern void P7Logoddsify(struct plan7_s *hmm, int viterbi_mode);
 extern void Plan7Renormalize(struct plan7_s *hmm);
+extern void Plan7NakedConfig(struct plan7_s *hmm);
 extern void Plan7GlobalConfig(struct plan7_s *hmm);
 extern void Plan7LSConfig(struct plan7_s *hmm);
 extern void Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit);
@@ -239,7 +246,7 @@ extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
 
 /* 
  * from states.c
- * Support for the basic data structures
+ * Obsolete support for the Plan 9 data structures
  */
 extern struct hmm_struc *AllocHMM(int M);
 extern void ZeroHMM(struct hmm_struc *hmm);
@@ -289,6 +296,7 @@ extern void   TophitsReport(struct tophit_s *h, double E, int nseq);
 extern void  P7AllocTrace(int tlen, struct p7trace_s **ret_tr);
 extern void  P7ReallocTrace(struct p7trace_s *tr, int tlen);
 extern void  P7FreeTrace(struct p7trace_s *tr);
+extern void  TraceSet(struct p7trace_s *tr, int tpos, enum p7stype type, int idx, int pos);
 extern void  P7ReverseTrace(struct p7trace_s *tr);
 extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
 			  struct p7trace_s *tr);
