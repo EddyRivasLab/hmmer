@@ -321,7 +321,8 @@ P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr)
  *           are split in half and the halves are justified in
  *           each direction (the objective being to increase
  *           the chances of getting insertions aligned well enough
- *           for them to become a match).
+ *           for them to become a match). SAM gap char conventions
+ *           are used: - in match columns, . in insert columns
  * 
  * NOTE:     Does not recognize J state.
  *
@@ -429,6 +430,8 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 				/* blank an aseq */
     for (apos = 0; apos < alen; apos++)
       aseqs[idx][apos] = '.';
+    for (k = 1; k <= mlen; k++)
+      aseqs[idx][matmap[k]] = '-';
     aseqs[idx][alen] = '\0';
 				/* align the sequence */
     apos = 0;
