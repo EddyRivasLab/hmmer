@@ -26,8 +26,8 @@ number of ugly hacks increased to a critical mass.
 HMMER 2 is a nearly complete rewrite, based on a new model
 architecture dubbed ``Plan 7''. Implementation was begun in November
 1996 at Washington University in St. Louis. I thank the Washington
-University Dept. of Genetics and the NIH National Human Genome
-Research Insititute for their support during this (extremely
+University Dept. of Genetics, the NIH National Human Genome Research
+Institute, and Monsanto for their support during this (extremely
 stressful) time. There is nothing like throwing four years of work
 away and starting fresh to make you question your sanity. Working on a
 book \cite{Durbin98} and starting up a lab at the same time made it
@@ -37,10 +37,10 @@ when I wrote various parts, making up a sort of disjointed diary of
 this period; amongst other places, parts of HMMER 2 were written in
 airport lounges, on TWA flights 720 and 721 to and from London, in
 Graeme Mitchison's kitchen in Cambridge, and on vacations while my
-wife wasn't watching. I therefore owe special thanks to the
-Biochemistry Academic Contacts Committee at Eli Lilly \& Co. for a
-gift that paid for the trusty Linux laptop ``wanderoo'' on which much
-of HMMER 2 was written.
+(ex-)wife wasn't watching. I therefore owe special thanks (I think) to
+the Biochemistry Academic Contacts Committee at Eli Lilly \& Co. for a
+gift that paid for the trusty Linux laptop on which much of HMMER 2
+was written.
 
 The MRC-LMB computational molecular biology discussion group has
 contributed many ideas to HMMER. In particular, I thank Richard
@@ -52,15 +52,12 @@ course.
 Sequence format parsing ({\tt sqio.c}) in HMMER is derived from an
 early release of the {\tt READSEQ} package by Don Gilbert, Indiana
 University. Thanks to Don for an excellent piece of software; and
-apologies for the mangling I've put it through since. 
-
-The file {\tt gnuregex.c} is the GNU regular expression library;
-thanks to the GNU folks. Several miscellaneous functions in {\tt
+apologies for the mangling I've put it through since.  The file {\tt
+hsregex.c} is a derivative of Henry Spencer's regular expression
+library; thanks, Henry. Several miscellaneous functions in {\tt
 sre\_math.c} are taken from public domain sources and are credited in
-the code's comments.
-
-{\tt masks.c} includes a modified copy of the XNU source code from
-David States and Jean-Michel Claverie.
+the code's comments. {\tt masks.c} includes a modified copy of the XNU
+source code from David States and Jean-Michel Claverie.
 
 In many other places, I've reimplemented algorithms described in the
 literature. These are too numerous to credit and thank here; the
@@ -73,15 +70,15 @@ Sjolander.
 
 HMMER is developed on Silicon Graphics and Linux machines.  I thank
 Silicon Graphics, especially Juli Nash and Wade McLain, for their
-continued support and assistance. I am proud to acknowledge a
-tremendous debt to the development tools that I use from the free
-software community: an incomplete list includes GNU's gcc compiler and
-gdb debugger, Cygnus' and others' egcs compiler, Conor Cahill's
-dbmalloc library, Bruce Perens' ElectricFence, Richard Stallman's
-emacs, Walter Tichy's RCS, Larry Wall's perl, LaTeX and TeX from
-Leslie Lamport and Don Knuth, Nikos Drakos' latex2html, Thomas Phelps'
-PolyglotMan, Linus Torvalds' Linux operating system, and the folks at
-Red Hat Linux.
+continued support and assistance. Dave Cortesi at SGI contributed much
+useful advice on the POSIX threads implementation. I am proud to
+acknowledge a tremendous debt to the development tools that I use from
+the free software community: an incomplete list includes GNU gcc, gdb,
+emacs, and autoconf; Cygnus' and others' egcs compiler; Conor Cahill's
+dbmalloc library; Bruce Perens' ElectricFence; Walter Tichy's RCS;
+Larry Wall's perl; LaTeX and TeX from Leslie Lamport and Don Knuth;
+Nikos Drakos' latex2html; Thomas Phelps' PolyglotMan; Linus Torvalds'
+Linux operating system; and the folks at Red Hat Linux.
 
 Finally, I'd like to cryptically thank Dave ``Mr. Frog'' Pare and Tom
 ``Chainsaw'' Ruschak for a totally unrelated free software product
