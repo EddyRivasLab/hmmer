@@ -89,11 +89,21 @@ esac],
 ])
 
 dnl Checks for system libraries
-AC_CHECK_LIB(m, sqrt, LIBS="${LIBS} -lm")
+AC_CHECK_LIB(m, sqrt)
 
 dnl Check for functions
 AC_CHECK_FUNCS(pthread_setconcurrency)
 AC_CHECK_FUNCS(pthread_attr_setscope)
+
+dnl Although we configure our fixed-size integers in squid,
+dnl we do need some of that configuration code here, because
+dnl we might (on Solaris, for instance) need to include
+dnl -lsocket to the linker to get ntohs() and friends.
+dnl
+AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
+AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
+AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
+AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 
 dnl Configure the squid library
 dnl

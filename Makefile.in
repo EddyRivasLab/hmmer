@@ -248,6 +248,7 @@ dist:
 	-rm -rf ${BASENAME}-${RELEASE}/Release-Notes
 	-rm -rf ${BASENAME}-${RELEASE}/configure.in
 	-rm -rf ${BASENAME}-${RELEASE}/checkoptions.pl
+	-rm -rf ${BASENAME}-${RELEASE}/licenseadd.pl
 	-rm -rf ${BASENAME}-${RELEASE}/lib/squid/Licenses
 	-rm -rf ${BASENAME}-${RELEASE}/lib/squid/LOG
 	-rm -rf ${BASENAME}-${RELEASE}/lib/squid/configure.in
