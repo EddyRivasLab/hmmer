@@ -353,6 +353,21 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
       sc = mmx[i][k] - hmm->msc[(int) dsq[i]][k];
       if (sc == xmx[i-1][XMB] + hmm->bsc[k])
 	{
+				/* Check for wing unfolding */
+	  if (Prob2Score(hmm->begin[k], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k])
+	    while (k > 1)
+	      {
+		tr->statetype[tpos] = STD;
+		tr->nodeidx[tpos]   = --k;
+		tr->pos[tpos]       = 0;
+		tpos++;
+		if (tpos == curralloc) 
+		  {				/* grow trace if necessary  */
+		    curralloc += N;
+		    P7ReallocTrace(tr, curralloc);
+		  }
+	      }
+
 	  tr->statetype[tpos] = STB;
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
@@ -450,6 +465,24 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
       for (k = hmm->M; k >= 1; k--)
 	if (xmx[i][XME] == mmx[i][k] + hmm->esc[k])
 	  {
+				/* check for wing unfolding */
+	    if (Prob2Score(hmm->end[k], 1.) + 1*INTSCALE <=  hmm->esc[k])
+	      {
+		int dk;		/* need a tmp k while moving thru delete wing */
+		for (dk = hmm->M; dk > k; dk--)
+		  {
+		    tr->statetype[tpos] = STD;
+		    tr->nodeidx[tpos]   = dk;
+		    tr->pos[tpos]       = 0;
+		    tpos++;
+		    if (tpos == curralloc) 
+		      {				/* grow trace if necessary  */
+			curralloc += N;
+			P7ReallocTrace(tr, curralloc);
+		      }
+		  }
+	      }
+
 	    tr->statetype[tpos] = STM;
 	    tr->nodeidx[tpos]   = k;
 	    tr->pos[tpos]       = i;
