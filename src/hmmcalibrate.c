@@ -112,6 +112,7 @@ main(int argc, char **argv)
 
 #ifdef HMMER_THREADS
   struct vpool_s *vpool;        /* pool of worker threads  */
+  char           *odsq;         /* digitized seq returned by thread to be free'd */
 #endif
   int   num_threads;            /* number of worker threads */   
 
@@ -253,32 +254,47 @@ main(int argc, char **argv)
       max = -FLT_MAX;
 				/* deliberately generating one too many,
 				   because of how we handle the threads */
-      for (idx = 0; idx <= nsample; idx++)
+      idx = 0;
+      for (;;)
 	{
-				/* choose length of random sequence */
 	  if (idx < nsample) {
+				/* choose length of random sequence */
 	    if (fixedlen) sqlen = fixedlen;
 	    else do sqlen = (int) Gaussrandom(lenmean, lensd); while (sqlen < 1);
-
+				/* generate it */
 	    seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
 	    dsq = DigitizeSequence(seq, sqlen);
 	  }
 
 #ifdef HMMER_THREADS
+	  /* If we're done preloading num_threads worth of input, 
+	   * then block while waiting for output
+	   */
+	  if (vpool->shutdown || idx >= num_threads)
+	    {
+	      SQD_DPRINTF2(("Boss has %d in hand; looking for output\n", idx));
+	      if (!VpoolGetResults(vpool, NULL, &odsq, NULL, NULL, &score, NULL))
+		break;		/* no more output */
+	    }
 				/* add work, or shut down when finished */
-	  if (idx < nsample) VpoolAddWork(vpool, hmm, dsq, NULL, sqlen);
-	  else 	             VpoolShutdown(vpool);
+	  if (idx < nsample) 
+	    {
+	      SQD_DPRINTF2(("Boss adding sequence %d as work\n", idx));
+	      VpoolAddWork(vpool, hmm, dsq, NULL, sqlen);
+	      free(seq);
+	    }
+	  else if (idx == nsample) VpoolShutdown(vpool);
 
-				/* get results */
-	  while (VpoolGetResults(vpool, NULL, &dsq, NULL, NULL, &score, NULL)) {
-	    AddToHistogram(hist, score);
-	    if (score > max) max = score;
-	    free(dsq); 
-	  }
-	  if (idx < nsample) free(seq);
+				/* process  results */
+	  if (vpool->shutdown || idx >= num_threads)
+	    {
+	      AddToHistogram(hist, score);
+	      if (score > max) max = score;
+	      free(odsq); 
+	    }
 #else /* unthreaded version */
 
-	  if (idx == nsample) break;
+	  if (idx == nsample) break; /* terminate serial version */
 
 	  if (P7ViterbiSize(sqlen, hmm->M) <= RAMLIMIT)
 	    score = P7Viterbi(dsq, sqlen, hmm, NULL);
@@ -290,6 +306,8 @@ main(int argc, char **argv)
 	  free(dsq); 
 	  free(seq);
 #endif
+
+	  idx++;
 	}
 
 
