@@ -86,7 +86,7 @@ shiva:   $(SHIVA)
 	@echo Running scripted Shiva exercises:
 	@echo Warning: This also may take several minutes.
 	perl ./Optiontests.pl
-	./Exercises.sh
+	sh ./Exercises.sh
 
 #######
 ## Miscellaneous
