@@ -29,6 +29,7 @@ static char usage[] = "\
 Usage: hmmfetch [-options] <hmmfile> <HMM name>\n\
 Available options are:\n\
   -h             : print short usage and version info, then exit\n\
+  -n             : interpret <HMM name> instead as an HMM number\n\
 ";
 
 static char experts[] = "\
@@ -36,6 +37,7 @@ static char experts[] = "\
 
 static struct opt_s OPTIONS[] = {
    { "-h", TRUE, sqdARG_NONE  },
+   { "-n", TRUE, sqdARG_NONE  },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -52,14 +54,20 @@ main(int argc, char **argv)
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
 
+  int   by_number;		/* fetch by number, not name        */
+  int   nhmm;			/* hmm number */
+
   /***********************************************
    * Parse the command line
    ***********************************************/
+  
+  by_number = FALSE;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
-      if (strcmp(optname, "-h") == 0)
+      if      (strcmp(optname, "-n") == 0) by_number = TRUE;
+      else if (strcmp(optname, "-h") == 0)
 	{
 	  Banner(stdout, banner);
 	  puts(usage);
@@ -85,9 +93,18 @@ main(int argc, char **argv)
    * find key in hmmfile; get HMM; show as ASCII
    ***********************************************/
 
-  if (! HMMFilePositionByName(hmmfp, key))
-    Die("No such hmm %s in HMM file %s\n", key, hmmfile);
-  HMMFileRead(hmmfp, &hmm); 
+  if (by_number) {
+    if (! IsInt(key)) Die("%s does not appear to be a number.", key);
+    nhmm = atoi(key);
+    if (! HMMFilePositionByIndex(hmmfp, nhmm)) 
+      Die("failed to position %s to HMM #%d", hmmfile, nhmm);
+  } else {
+    if (! HMMFilePositionByName(hmmfp, key))
+      Die("No such hmm %s in HMM file %s\n", key, hmmfile);
+  }
+
+  if (! HMMFileRead(hmmfp, &hmm))
+    Die("Unexpected end of HMM file");
   if (hmm == NULL) 
     Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
 

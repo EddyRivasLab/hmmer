@@ -1,11 +1,5 @@
 /************************************************************
- * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1998 Washington University School of Medicine
- *
- *   This source code is distributed under the terms of the
- *   GNU General Public License. See the files COPYING and
- *   GNULICENSE for details.
- *
+ * @LICENSE@
  ************************************************************/
 
 /* pvm.c
@@ -13,7 +7,7 @@
  * 
  * PVM code shared amongst pvm masters and slaves.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 #ifdef HMMER_PVM
 
@@ -28,10 +22,6 @@
 #include "funcs.h"
 #include "squid.h"
 #include "sqfuncs.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 /* Function: PVMSpawnSlaves()
  * Date:     SRE, Wed Aug 19 14:01:39 1998 [St. Louis]
@@ -59,6 +49,7 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
   int nodes;			/* total number of nodes in the VM       */
   int nslaves;			/* RETURN: total number of slaves        */
   int ntasks;			/* number of tasks to start on this node */
+  int code;			/* a code returned from a PVM call */
   int *tid;                     /* array of slave task tids */
   int *dtid;                    /* array of host PVMD tids; for pvm_notify() */
   int i;
@@ -75,10 +66,30 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
 
       if (nslaves == 0) tid = MallocOrDie(sizeof(int) * ntasks);
       else              tid = ReallocOrDie(tid, sizeof(int) * (ntasks+nslaves));
-
-      if (pvm_spawn(slave, NULL, PvmTaskHost, hostp[i].hi_name, ntasks, tid + nslaves) < ntasks)
-	{ pvm_exit(); Die("Spawned too few slaves on node %s; expected %d\n", 
-			  hostp[i].hi_name, ntasks); }
+      code = pvm_spawn(slave, NULL, PvmTaskHost, hostp[i].hi_name, ntasks, tid + nslaves);
+      if (code < ntasks) {	/* Careful error diagnostics. Important! */
+	pvm_exit(); 
+	switch (*(tid+nslaves)) {
+	case PvmBadParam:
+	  Die("pvm_spawn claims PvmBadParam - code error?");
+	case PvmNoHost:
+	  Die("pvm_spawn: host %d (%s): not in virtual machine", 
+	      i, hostp[i].hi_name);
+	case PvmNoFile:
+	  Die("pvm_spawn: host %d (%s): %s not in path",
+	      i+1, hostp[i].hi_name, slave);
+	case PvmNoMem:
+	  Die("pvm_spawn claims that host %s has insufficient memory",
+	      hostp[i].hi_name);
+	case PvmSysErr:
+	  Die("pvm_spawn: host %d (%s): pvmd not responding",
+	      i+1, hostp[i].hi_name);
+	case PvmOutOfRes:
+	  Die("pvm_spawn claims it is out of resources.");
+	default:
+	  Die("Spawned too few slaves on node %s; expected %d got %d\n", hostp[i].hi_name, ntasks, code); 
+	}
+      }
       nslaves += ntasks;
       SQD_DPRINTF1(("Spawned %d slaves on host %s...\n", ntasks, hostp[i].hi_name));
     }
@@ -121,6 +132,8 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
 void
 PVMConfirmSlaves(int *slave_tid, int nslaves)
 {
+  struct pvmhostinfo *hostp;
+  int nodes;
   int i;
   struct timeval tmout;
   int code;			/* code returned by slave */
@@ -130,6 +143,9 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
   tmout.tv_sec  = 5;		/* wait 5 sec before giving up on a slave. */
   tmout.tv_usec = 0;
 
+  SQD_DPRINTF1(("requesting PVM configuration...\n"));
+  if (pvm_config(&nodes, NULL, &hostp) != 0) Die("PVM not responding");
+  if (nodes != nslaves) Die("pvm_config thinks there's %d slaves but I think there's %d", nodes, nslaves);
   SQD_DPRINTF1(("Slaves, count off!\n"));
   for (i = 0; i < nslaves; i++)
     {
@@ -138,13 +154,13 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
        */
       if ((bufid = pvm_trecv(-1, HMMPVM_RESULTS, &tmout)) <= 0) 
 	{ 
-	  SQD_DPRINTF1(("Slave %d gives bufid %d.\n", i, bufid));
+	  SQD_DPRINTF1(("Slave %d (%s) gives bufid %d.\n", i, hostp[i].hi_name, bufid));
 	  PVMKillSlaves(slave_tid, nslaves); 
 	  pvm_exit(); 
 	  Die("One or more slaves started but died before initializing.");
 	}
 	
-      SQD_DPRINTF1(("Slave %d: present, sir!\n", i));
+      SQD_DPRINTF1(("Slave %d (%s): present, sir!\n", i, hostp[i].hi_name));
       pvm_upkint(&code, 1, 1);
       slaverelease = PVMUnpackString();
 

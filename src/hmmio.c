@@ -171,6 +171,9 @@ HMMFileOpen(char *hmmfile, char *env)
     {
       ssifile = MallocOrDie(sizeof(char) * (strlen(hmmfile) + 5));
       sprintf(ssifile, "%s.ssi", hmmfile);
+
+      if ((hmmfp->mode = SSIRecommendMode(hmmfile)) == -1)
+	Die("SSIRecommendMode() failed");
     }
   else if ((hmmfp->f = EnvFileOpen(hmmfile, env, &dir)) != NULL)
     {
@@ -179,6 +182,9 @@ HMMFileOpen(char *hmmfile, char *env)
 
       ssifile = MallocOrDie(sizeof(char) * (strlen(full) + strlen(hmmfile) + 5));
       sprintf(ssifile, "%s.ssi", full);
+
+      if ((hmmfp->mode = SSIRecommendMode(full)) == -1)
+	Die("SSIRecommendMode() failed");
 
       free(full);
       free(dir);
@@ -194,7 +200,6 @@ HMMFileOpen(char *hmmfile, char *env)
 
   /* Initialize the disk offset stuff.
    */
-  hmmfp->mode = SSIRecommendMode(hmmfile);
   status = SSIGetFilePosition(hmmfp->f, hmmfp->mode, &(hmmfp->offset));
   if (status != 0) Die("SSIGetFilePosition() failed");
 
@@ -778,6 +783,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
     */
    if (feof(hmmfp->f))                                      return 0;
    if (! fread((char *) &magic, sizeof(unsigned int), 1, hmmfp->f)) return 0;
+
    if (hmmfp->byteswap) byteswap((char *)&magic, sizeof(unsigned int));
    if (magic != v20magic) goto FAILURE;
 				/* allocate HMM shell for header info */
@@ -787,6 +793,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    if (hmmfp->byteswap) byteswap((char *)&(hmm->flags), sizeof(int)); 
 				/* name */
    if (! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->name))) goto FAILURE;
+
 				/* optional accession */
    if ((hmm->flags & PLAN7_ACC) &&
        ! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->acc))) goto FAILURE;

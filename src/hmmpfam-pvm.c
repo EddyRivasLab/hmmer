@@ -49,6 +49,8 @@ main(void)
   int      code;		/* return code after initialization         */
 
   
+  SQD_DPRINTF1(("a slave reporting for duty!\n"));
+
   /* Register leave_pvm() cleanup function so any exit() call
    * first calls pvm_exit().
    */
@@ -73,6 +75,7 @@ main(void)
    ******************************************************************/
 
   master_tid = pvm_parent();	/* who's our master? */
+  SQD_DPRINTF1(("I know my master is %d\n", master_tid));
 
   pvm_recv(master_tid, HMMPVM_INIT);
   pvm_upkint(&len, 1, 1);
@@ -89,6 +92,7 @@ main(void)
   pvm_upkint(&do_forward, 1, 1);
   pvm_upkint(&do_null2, 1, 1);
   pvm_upkint(&alphatype, 1, 1);
+  SQD_DPRINTF1(("My master has told me how to initialize, and I am happy.\n"));
 
   SetAlphabet(alphatype);
 				/* Open HMM file (maybe in HMMERDB) */
@@ -104,6 +108,7 @@ main(void)
   pvm_pkint(&code, 1, 1);	
   PVMPackString(RELEASE);	/* proofing against bug#1 */
   pvm_send(master_tid, HMMPVM_RESULTS);
+  SQD_DPRINTF1(("I have told my master my initialization status and I await his command.\n"));
 
   dsq = DigitizeSequence(seq, len);
   if (do_xnu) XNU(dsq, len);
@@ -120,13 +125,17 @@ main(void)
       pvm_upkint(&nhmm, 1, 1);
       if (my_idx < 0) my_idx = nhmm; /* first time thru, remember what index we are. */
 
-      if (nhmm == -1) break;	/* shutdown signal */
+      if (nhmm == -1) { /* shutdown signal */
+	SQD_DPRINTF1(("I've been told to shut down."));
+	break;	
+      }
 
       /* move to our assigned HMM in the HMM file, and read it
        */
-      HMMFilePositionByIndex(hmmfp, nhmm);
-      if (! HMMFileRead(hmmfp, &hmm)) Die("unexpected end of HMM file"); 
-      if (hmm == NULL)                Die("unexpected failure to parse HMM file"); 
+      SQD_DPRINTF1(("The master says to do HMM #%d - I hear and obey\n", nhmm));
+      if (! HMMFilePositionByIndex(hmmfp, nhmm)) Die("didn't position the HMM file");
+      if (! HMMFileRead(hmmfp, &hmm))            Die("unexpected end of HMM file"); 
+      if (hmm == NULL)                           Die("unexpected failure to parse HMM file"); 
       P7Logoddsify(hmm, TRUE);
 
 			/* set Pfam specific score thresholds if needed */
