@@ -125,6 +125,7 @@ main(int argc, char **argv)
   if (strcmp(answer1, result) != 0)
     Die("XNU test failed.");
   free(result);
+  free(dsq);
 
   /* On demand XNU test.
    */

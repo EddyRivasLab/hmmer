@@ -179,6 +179,10 @@ main(int argc, char **argv)
       free(dsq);
     }
 
+  FreePlan7(hmm);
+  HMMFileClose(hmmfp);
+  SeqfileClose(sqfp);
+
 #ifdef MEMDEBUG
   current_size = malloc_inuse(&histid2);
   if (current_size != orig_size) Die("evd_test failed memory test");
