@@ -31,10 +31,6 @@
 #include "globals.h"		/* alphabet global variables            */
 #include "version.h"		/* version info                         */
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static char banner[] = "hmmpfam - search a single seq against HMM database";
 
 static char usage[]  = "\
@@ -49,6 +45,8 @@ Usage: hmmpfam [-options] <hmm database> <sequence file>\n\
 ";
 
 static char experts[] = "\
+   --acc     : use HMM accession numbers instead of names in output\n\
+   --compat  : make best effort to use last version's output style\n\
    --cpu <n> : run <n> threads in parallel (if threaded)\n\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
@@ -65,8 +63,10 @@ static struct opt_s OPTIONS[] = {
   { "-A",        TRUE,  sqdARG_INT  },  
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
-  { "-Z",        TRUE,  sqdARG_INT },
-  { "--cpu",     FALSE, sqdARG_INT },
+  { "-Z",        TRUE,  sqdARG_INT  },
+  { "--acc",     FALSE, sqdARG_NONE },
+  { "--compat",  FALSE, sqdARG_NONE },
+  { "--cpu",     FALSE, sqdARG_INT  },
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
   { "--forward", FALSE, sqdARG_NONE },
@@ -158,7 +158,7 @@ main(int argc, char **argv)
   float   mothersc;		/* score of a whole seq parent of domain   */
   int     sqfrom, sqto;		/* coordinates in sequence                 */
   int     hmmfrom, hmmto;	/* coordinate in HMM                       */
-  char   *name, *desc;          /* hit HMM name and description            */
+  char   *name, *acc, *desc;    /* hit HMM name, accession, description            */
   int     hmmlen;		/* length of HMM hit                       */
   int     nhmm;			/* number of HMMs searched                 */
   int     domidx;		/* number of this domain                   */
@@ -179,16 +179,12 @@ main(int argc, char **argv)
   int   do_null2;		/* TRUE to adjust scores with null model #2 */
   int   do_pvm;			/* TRUE to run on PVM                       */
   int   do_xnu;			/* TRUE to do XNU filtering                 */
+  int   be_backwards;		/* TRUE to be backwards-compatible in output*/
+  int   show_acc;		/* TRUE to sub HMM accessions for names     */
   int   Z;			/* nseq to base E value calculation on      */
   int   i;
 
   int   num_threads;            /* number of worker threads */   
-
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
 
   /*********************************************** 
    * Parse command line
@@ -200,6 +196,8 @@ main(int argc, char **argv)
   do_pvm      = FALSE;
   do_xnu      = FALSE;
   Z           = 59021;		/* default: nseq in Swissprot34     */
+  be_backwards= FALSE; 
+  show_acc    = FALSE;
   
   Alimit      = INT_MAX;	/* no limit on alignment output     */
   globE       = 10.0;		/* use a reasonable Eval threshold; */
@@ -219,6 +217,8 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-E")        == 0) globE      = atof(optarg);
     else if (strcmp(optname, "-T")        == 0) globT      = atof(optarg);
     else if (strcmp(optname, "-Z")        == 0) Z          = atoi(optarg);
+    else if (strcmp(optname, "--acc")     == 0) show_acc   = TRUE;
+    else if (strcmp(optname, "--compat")  == 0) be_backwards = TRUE;
     else if (strcmp(optname, "--cpu")     == 0) num_threads= atoi(optarg);
     else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
     else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
@@ -314,8 +314,17 @@ main(int argc, char **argv)
       /* 2. (Done searching all HMMs for this query seq; start output)
        *    Report the overall sequence hits, sorted by significance.
        */
-      printf("Query:  %s  %s\n", sqinfo.name, 
-	     sqinfo.flags & SQINFO_DESC ? sqinfo.desc : "");
+      if (be_backwards)
+	{
+	  printf("Query:  %s  %s\n", sqinfo.name, 
+		 sqinfo.flags & SQINFO_DESC ? sqinfo.desc : "");
+	}
+      else
+	{
+	  printf("\nQuery sequence: %s\n", sqinfo.name);
+	  printf("Accession:      %s\n", sqinfo.flags &SQINFO_ACC ? sqinfo.acc  : "");
+	  printf("Description:    %s\n", sqinfo.flags &SQINFO_DESC? sqinfo.desc : "");
+	}
       FullSortTophits(ghit);
       namewidth =  MAX(8, TophitsMaxName(ghit));
 
@@ -327,7 +336,7 @@ main(int argc, char **argv)
 	  char *safedesc;
 	  GetRankedHit(ghit, i, 
 		       &pvalue, &sc, NULL, NULL,
-		       &name, &desc,
+		       &name, &acc, &desc,
 		       NULL, NULL, NULL,           /* seq positions */
 		       NULL, NULL, NULL,           /* HMM positions */
 		       NULL, &ndom,                /* domain info   */
@@ -349,7 +358,8 @@ main(int argc, char **argv)
 
 	  if (evalue < globE && sc >= globT) 
 	    printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
-		   namewidth, name, 
+		   namewidth, 
+		   (show_acc && acc != NULL) ?  acc : name,
 		   52-namewidth, 52-namewidth, safedesc != NULL ? safedesc : "",
 		   sc, evalue, ndom);
 	  else if (evalue >= globE)
@@ -381,7 +391,7 @@ main(int argc, char **argv)
 	{
 	  GetRankedHit(dhit, i, 
 		       &pvalue, &sc, &motherp, &mothersc,
-		       &name, NULL,
+		       &name, &acc, NULL,
 		       &sqfrom, &sqto, NULL, 
 		       &hmmfrom, &hmmto, &hmmlen, 
 		       &domidx, &ndom,
@@ -392,7 +402,8 @@ main(int argc, char **argv)
 	    continue;
 	  else if (evalue < domE && sc > domT)
 	    printf("%-*s %3d/%-3d %5d %5d %c%c %5d %5d %c%c %7.1f %8.2g\n",
-		   namewidth, name, 
+		   namewidth, 
+		   (show_acc && acc != NULL) ?  acc : name,
 		   domidx, ndom,
 		   sqfrom, sqto, 
 		   sqfrom == 1 ? '[' : '.', sqto == sqinfo.len ? ']' : '.',
@@ -424,7 +435,7 @@ main(int argc, char **argv)
 	      if (i == Alimit) break; /* limit to Alimit output alignments */
 	      GetRankedHit(dhit, i, 
 			   &pvalue, &sc, &motherp, &mothersc,
-			   &name, NULL,
+			   &name, &acc, NULL,
 			   &sqfrom, &sqto, NULL,              /* seq position info  */
 			   &hmmfrom, &hmmto, &hmmlen,         /* HMM position info  */
 			   &domidx, &ndom,                    /* domain info        */
@@ -436,7 +447,8 @@ main(int argc, char **argv)
 	      else if (evalue < domE && sc > domT) 
 		{
 		  printf("%s: domain %d of %d, from %d to %d: score %.1f, E = %.2g\n", 
-			 name, domidx, ndom, sqfrom, sqto, sc, evalue);
+			 (show_acc && acc != NULL) ?  acc : name,
+			 domidx, ndom, sqfrom, sqto, sc, evalue);
 		  PrintFancyAli(stdout, ali);
 		}
 	      else if (evalue >= domE) {
@@ -468,11 +480,6 @@ main(int argc, char **argv)
   HMMFileClose(hmmfp);
   SqdClean();
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) malloc_list(2, histid1, histid2);
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   return 0;
 }
 
@@ -560,7 +567,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
       { 
 	RegisterHit(ghit, sc, pvalue, sc,
 		    0., 0.,	                  /* no mother seq */
-		    hmm->name, hmm->desc, 
+		    hmm->name, hmm->acc, hmm->desc, 
 		    0,0,0,                	  /* seq positions  */
 		    0,0,0,	                  /* HMM positions  */
 		    0, TraceDomainNumber(tr), /* domain info    */
@@ -624,7 +631,7 @@ record_domains(struct tophit_s *h,
       ali = CreateFancyAli(tarr[idx], hmm, dsq, seqname);
       RegisterHit(h, -1.*(double)i2,           /* sortkey= -(start) (so 1 comes first) */
 		  pvalue, score, whole_pval, whole_sc,
-		  hmm->name, hmm->desc, 
+		  hmm->name, hmm->acc, hmm->desc, 
 		  i1,i2, L, 
 		  k1,k2, hmm->M, 
 		  idx+1,ntr,
@@ -780,7 +787,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	
 	  RegisterHit(ghit, sc, pvalue, sc,
 		      0., 0.,	                  /* no mother seq */
-		      hmm->name, hmm->desc, 
+		      hmm->name, hmm->acc, hmm->desc, 
 		      0,0,0,                	  /* seq positions  */
 		      0,0,0,	                  /* HMM positions  */
 		      0, TraceDomainNumber(tr), /* domain info    */
@@ -822,7 +829,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	  
 	  RegisterHit(ghit, sc, pvalue, sc,
 		      0., 0.,	                  /* no mother seq */
-		      hmm->name, hmm->desc, 
+		      hmm->name, hmm->acc, hmm->desc, 
 		      0,0,0,                	  /* seq positions  */
 		      0,0,0,	                  /* HMM positions  */
 		      0, TraceDomainNumber(tr), /* domain info    */
@@ -1052,7 +1059,7 @@ worker_thread(void *ptr)
       { 
 	RegisterHit(wpool->ghit, sc, pvalue, sc,
 		    0., 0.,	                  /* no mother seq */
-		    hmm->name, hmm->desc, 
+		    hmm->name, hmm->acc, hmm->desc, 
 		    0,0,0,                	  /* seq positions  */
 		    0,0,0,	                  /* HMM positions  */
 		    0, TraceDomainNumber(tr), /* domain info    */
