@@ -1095,7 +1095,6 @@ worker_thread(void *ptr)
 				/* acquire a lock */
     if ((rtn = pthread_mutex_lock(&(wpool->input_lock))) != 0)
       Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
-    wpool->nhmm++;
     
     if (! HMMFileRead(wpool->hmmfp, &hmm)) 
       {	/* we're done. release lock, exit thread */
@@ -1104,6 +1103,7 @@ worker_thread(void *ptr)
 	FreePlan7Matrix(mx);
 	pthread_exit(NULL);
       }
+    wpool->nhmm++;
     SQD_DPRINTF1(("a thread is working on %s\n", hmm->name));
 				/* release the lock */
     if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)

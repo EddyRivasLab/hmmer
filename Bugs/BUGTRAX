@@ -233,3 +233,26 @@ DESCRIPTION
  calling sreEXP2() on the score; the Alpha crashes on this.
  No test case built for bugs.sqc.
 //
+ID              h20
+TITLE           hmmpfam E-values dependent on # of threads.
+STATUS          CLOSED
+XREF            STL7 p.70
+REPORTED_BY     Robert A. Wilson <robwilso@us.ibm.com>
+CLOSED_DATE     SRE, Fri Jun  6 18:56:43 2003
+DESCRIPTION     
+ Original report cited difference in E-values between 
+ IBM 2.2g binaries and 2.3 binaries. Investigation shows
+ problem is really in both: # of threads is added to
+ nhmms, and counted as Z, so E-values end up depending
+ on thread #. (IBM 2.2g binaries weren't compiled w/ threads,
+ hence the difference seen by IBM.) In hmmpfam.c:worker_thread(), 
+ we were bumping nhmm++ before successfully reading the HMM,
+ so on normal exit, each thread bumps nhmm one extra time after
+ the HMM file is emptied.
+
+ To reproduce:   hmmpfam --cpu 0 <any hmm> <any seq> vs.
+                 hmmpfam --cpu <n> <any hmm> <any seq> 
+ should give identical E-values.
+ Fixed; verified on Intel/Linux.
+ No test case built for bugs.sqc. 
+//
