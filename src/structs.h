@@ -112,6 +112,7 @@ struct plan7_s {
    * desc is only valid if PLAN7_DESC is set.
    *   rf is only valid if PLAN7_RF is set.
    *   cs is only valid if PLAN7_CS is set.
+   *  map is only valid if PLAN7_MAP is set.
    */
   char  *name;                  /* name of the model                    +*/
   char  *desc;                  /* brief description of model           +*/ 
@@ -120,6 +121,8 @@ struct plan7_s {
   char  *comlog;		/* command line(s) that built model     +*/
   int    nseq;			/* number of training sequences         +*/
   char  *ctime;			/* creation date                        +*/
+  int   *map;			/* map of alignment cols onto model 1..M */
+  int    checksum;              /* checksum of training sequences        */
 
   /* The main model in probability form: data-dependent probabilities.
    * This is the core Krogh/Haussler model.
@@ -183,7 +186,6 @@ struct plan7_s {
    */
   float  mu;			/* EVD mu       +*/
   float  lambda;		/* EVD lambda   +*/
-  float  wonka;			/* EVD fit display fudge factor +*/
 
   int flags;                    /* bit flags indicating state of HMM    +*/
 };
@@ -205,6 +207,7 @@ struct plan7_s {
 #define PLAN7_HASPROB (1<<5)    /* raised if model has probabilities        */
 #define PLAN7_HASDNA  (1<<6)	/* raised if protein HMM->DNA seq params set*/
 #define PLAN7_STATS   (1<<7)	/* raised if EVD parameters are available   */
+#define PLAN7_MAP     (1<<8)	/* raised if alignment map is available     */
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB
