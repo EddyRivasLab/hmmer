@@ -31,7 +31,7 @@ SHIVA = alignalign_test\
 
 all: 	$(SHIVA)
 
-$(SHIVA): @STD_EXEC_DEPENDENCY@
+$(SHIVA): @HMMER_EXEC_DEPENDENCY@
 	$(CC) $(CFLAGS) $(MDEFS) -o $@ -L${ARENA} $@.o $(LIBS)
 
 #######

@@ -32,16 +32,26 @@ dnl We need this because GNU make and SYSV make use different systems
 dnl specifying variables for dependencies: $$@ in sysv, %: %.o in GNU.
 dnl Would love to hear a better way of doing this.
 dnl 
+dnl I use different conventions in my Makefiles. Sometimes 
+dnl executable "foo" has a file "foo.c" - this is the HMMER convention.
+dnl Sometimes executable "foo" has a file "foo_main.c" - this is
+dnl the SQUID convention. The configure script can deal with
+dnl either; Makefile.in contains one of HMMER_EXEC_DEPENDENCY or
+dnl SQUID_EXEC_DEPENDENCY.
+dnl
 AC_DEFUN(CHECK_GNU_MAKE,[ 
   AC_MSG_CHECKING(whether your make is GNU make)
-  foundGNUmake='nope.' ;
-  STD_EXEC_DEPENDENCY=[\$\$\@.o] ;
+  foundGNUmake='nope, assuming sysv make.' ;
+  HMMER_EXEC_DEPENDENCY=[\$\$\@.o] ;
+  SQUID_EXEC_DEPENDENCY=[\$\$\@_main.o] ;
   if ( make --version nothing 2> /dev/null | grep GNU > /dev/null ) ;  then
      foundGNUmake='yes, it is.' ;
-     STD_EXEC_DEPENDENCY='%: %.o' ;
+     HMMER_EXEC_DEPENDENCY='%: %.o' ;
+     SQUID_EXEC_DEPENDENCY='%: %_main.o' ;
   fi
   AC_MSG_RESULT($foundGNUmake)
-  AC_SUBST(STD_EXEC_DEPENDENCY)
+  AC_SUBST(HMMER_EXEC_DEPENDENCY)
+  AC_SUBST(SQUID_EXEC_DEPENDENCY)
 ])
 CHECK_GNU_MAKE
 

@@ -6,7 +6,6 @@
  * RCS $Id$
  */
 
-
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
@@ -15,10 +14,6 @@
 #include "funcs.h"
 #include "globals.h"
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static char banner[] = "\
 weeviterbi_test : testing of Plan7 Myers/Miller/Hirschberg Viterbi traceback code";
@@ -50,7 +45,6 @@ main(int argc, char **argv)
   HMMFILE *hmmfp;               /* opened hmmfile for reading              */
   char    *seqfile;             /* file to read target sequence(s) from    */ 
   SQFILE   *sqfp;               /* opened seqfile for reading              */
-  int       format;	        /* format of seqfile                       */
   char     *seq;		/* target sequence                         */
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
@@ -66,12 +60,6 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-  
   /*********************************************** 
    * Parse command line
    ***********************************************/
@@ -99,15 +87,7 @@ main(int argc, char **argv)
    * Open test sequence file
    ***********************************************/
 
-  if (! SeqfileFormat(seqfile, &format, NULL))
-    switch (squid_errno) {
-    case SQERR_NOFILE: 
-      Die("Sequence file %s could not be opened for reading", seqfile); break;
-    case SQERR_FORMAT: 
-    default:           
-      Die("Failed to determine format of sequence file %s", seqfile);
-    }
-  if ((sqfp = SeqfileOpen(seqfile, format, "BLASTDB")) == NULL)
+  if ((sqfp = SeqfileOpen(seqfile, SQFILE_UNKNOWN, "BLASTDB")) == NULL)
     Die("Failed to open sequence database file %s\n%s\n", seqfile, usage);
 
   /*********************************************** 
@@ -128,7 +108,7 @@ main(int argc, char **argv)
    ***********************************************/
 
   nseq = 0;
-  while (ReadSeq(sqfp, format, &seq, &sqinfo)) 
+  while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
     {
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
@@ -166,11 +146,5 @@ main(int argc, char **argv)
   SeqfileClose(sqfp);
   HMMFileClose(hmmfp);
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("evd_test failed memory test");
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
-  
   return EXIT_SUCCESS;
 }

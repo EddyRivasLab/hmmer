@@ -19,11 +19,6 @@
 #include "structs.h"
 #include "squid.h"
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
-
 /* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
  * 
  * Purpose:   Allocate or free a Plan7 HMM structure.

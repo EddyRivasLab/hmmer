@@ -559,11 +559,6 @@ main(int argc, char **argv)
   FreePlan7(hmm);
   SqdClean();
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) malloc_list(2, histid1, histid2);
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   return 0;
 }
 

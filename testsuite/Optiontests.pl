@@ -1,8 +1,8 @@
 #! /usr/local/bin/perl
 
 @tests = (
-	  "hmmbuild -F Optiontests.hmm  Optiontests.slx",   # Make a protein HMM
-	  "hmmbuild -F Optiontests.nhmm Optiontests.nslx",  # Make a DNA HMM
+	  "hmmbuild --informat selex -F Optiontests.hmm  Optiontests.slx",   # Make a protein HMM
+	  "hmmbuild --informat selex -F Optiontests.nhmm Optiontests.nslx",  # Make a DNA HMM
 	  "hmmalign -h", 
 	  "hmmalign Optiontests.hmm Optiontests.fa",
 	  "hmmalign -m Optiontests.hmm Optiontests.fa",
@@ -11,36 +11,36 @@
 	  "hmmalign --withali Optiontests.slx Optiontests.hmm Optiontests.fa",
 	  "hmmalign --mapali Optiontests.slx Optiontests.hmm Optiontests.fa",
 	  "hmmbuild -h",
-	  "hmmbuild tmp.hmm Optiontests.slx",
-	  "hmmbuild -F tmp.hmm Optiontests.slx",            # Need -F to force 
-	  "hmmbuild -n foo -F tmp.hmm Optiontests.slx",
-	  "hmmbuild -o tmp -F tmp.hmm Optiontests.slx",
-	  "hmmbuild -A tmp.hmm Optiontests.slx",
-	  "hmmbuild -f -F tmp.hmm Optiontests.slx",
-	  "hmmbuild -g -F tmp.hmm Optiontests.slx",
-	  "hmmbuild -s -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --fast -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --hand -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --null ../Demos/amino.null -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --pam   Optiontests.pam -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --prior ../Demos/amino.pri -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --wblosum -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --wgsc -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --wme -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --wvoronoi -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --wnone -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --noeff -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --amino -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --nucleic -F tmp.hmm Optiontests.nslx",
-	  "hmmbuild --archpri 0.9 -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --binary -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --cfile tmp -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --gapmax 0.6 --fast -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --idlevel 0.5 -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --pamwgt 10 --pam Optiontests.pam -F tmp.hmm Optiontests.slx",
-	  "hmmbuild --swentry 0.3 -F -s tmp.hmm Optiontests.slx",
-	  "hmmbuild --swexit 0.3 -F -s tmp.hmm Optiontests.slx",
-	  "hmmbuild --verbose -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex -F tmp.hmm Optiontests.slx",            # Need -F to force 
+	  "hmmbuild --informat selex -n foo -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex -o tmp -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex -A tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex -f -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex -g -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex -s -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --fast -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --hand -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --null ../tutorial/amino.null -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --pam   Optiontests.pam -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --prior ../tutorial/amino.pri -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --wblosum -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --wgsc -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --wme -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --wvoronoi -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --wnone -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --noeff -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --amino -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --nucleic -F tmp.hmm Optiontests.nslx",
+	  "hmmbuild --informat selex --archpri 0.9 -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --binary -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --cfile tmp -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --gapmax 0.6 --fast -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --idlevel 0.5 -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --pamwgt 10 --pam Optiontests.pam -F tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --swentry 0.3 -F -s tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --swexit 0.3 -F -s tmp.hmm Optiontests.slx",
+	  "hmmbuild --informat selex --verbose -F tmp.hmm Optiontests.slx",
 	  "hmmcalibrate -h",
 	  "hmmcalibrate Optiontests.hmm",
 	  "hmmcalibrate --fixed 15 Optiontests.hmm",
@@ -112,3 +112,4 @@ unlink "tmp2.hmm";
 unlink "Optiontests.hmm";
 unlink "Optiontests.nhmm";
 unlink "Optiontests.hmm.gsi";
+unlink "Optiontests.hmm.sgsi";

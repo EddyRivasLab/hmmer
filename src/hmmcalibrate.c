@@ -348,9 +348,7 @@ main(int argc, char **argv)
    * Write a temporary HMM file with new mu, lambda values in it
    *****************************************************************/
 
-  if (hfp != NULL) fclose(hfp);
   HMMFileRewind(hmmfp);
-
   if (FileExists(tmpfile))
     Die("Ouch. Temporary file %s appeared during the run.", tmpfile);
   if ((outfp = fopen(tmpfile, mode)) == NULL)

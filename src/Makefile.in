@@ -72,7 +72,6 @@ OBJS =  alphabet.o\
 	postprob.o\
 	prior.o\
 	pvm.o\
-	stopwatch.o\
 	threads.o\
 	tophits.o\
 	trace.o 
@@ -81,7 +80,6 @@ HDRS =  config.h\
 	funcs.h\
 	globals.h\
 	postprob.h\
-	stopwatch.h\
 	structs.h
 
 .c.o:
@@ -92,7 +90,7 @@ HDRS =  config.h\
 ##
 all: 	$(PROGS) 
 
-$(PROGS): @STD_EXEC_DEPENDENCY@ $(OBJS) 
+$(PROGS): @HMMER_EXEC_DEPENDENCY@ $(OBJS) 
 	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
 
 

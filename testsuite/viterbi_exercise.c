@@ -17,10 +17,6 @@
 #include "globals.h"
 #include "squid.h"
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static char banner[] = "\
 viterbi_exercise : testing of Plan7 Viterbi code";
 
@@ -65,11 +61,6 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
   
   /*********************************************** 
    * Parse command line
@@ -143,7 +134,7 @@ main(int argc, char **argv)
 	      P7PrintTrace(stdout, tr2, hmm, dsq);
 	      
 	      seq = DedigitizeSequence(dsq, L);
-	      WriteSeq(stdout, kPearson, seq, &sqinfo);
+	      WriteSeq(stdout, SQFILE_FASTA, seq, &sqinfo);
 	      free(seq);
 	    }
 
@@ -171,11 +162,5 @@ main(int argc, char **argv)
 	}
     }
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("viterbi_exercise failed memory test");
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
-  
   return EXIT_SUCCESS;
 }

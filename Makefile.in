@@ -218,7 +218,7 @@ dist:
 	# Include the appropriate license files and release notes
 	#
 	cp  Licenses/LICENSE.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/LICENSE
-	cp  Licenses/COPYING.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/COPYING
+	cp  Licenses/COPYING.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/COPYRIGHT
 	-cp ReleaseNotes/RELEASE-$(RELEASE) ${BASENAME}-$(RELEASE)/NOTES
 	#
 	# Attach license stamps on files that need 'em (replace LICENSE keyword)
@@ -235,6 +235,17 @@ dist:
 	#cp -f Userguide/Userguide.ps      build/hmmer-$(RELEASE)/Userguide/
 	#cp -f Userguide/Userguide.pdf     build/hmmer-$(RELEASE)/Userguide/
 	#cp -f Userguide/hmmer-html.tar.Z  build/hmmer-$(RELEASE)/Userguide/
+	#
+	# Remove CVS-controlled files/directories that don't belong in the distro
+	#
+	-rm -rf ${BASENAME}-${RELEASE}/Bugs
+	-rm -rf ${BASENAME}-${RELEASE}/CHECKLIST
+	-rm -rf ${BASENAME}-${RELEASE}/Internal-Notes
+	-rm -rf ${BASENAME}-${RELEASE}/Licenses
+	-rm -rf ${BASENAME}-${RELEASE}/MAILING_LIST
+	-rm -rf ${BASENAME}-${RELEASE}/Release-Notes
+	-rm -rf ${BASENAME}-${RELEASE}/configure.in
+	-rm -rf ${BASENAME}-${RELEASE}/checkoptions.pl
 	#
 	# Packaging commands
 	#

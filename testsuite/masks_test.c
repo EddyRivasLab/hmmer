@@ -13,10 +13,6 @@
 #include "globals.h"
 #include "squid.h"
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static char banner[] = "\
 masks_test : testing of repeat masking code in masks.c";
 
@@ -67,12 +63,6 @@ main(int argc, char **argv)
   int   be_verbose;
   char *xnufile;		/* NULL, or file to run xnu on     */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-  
 
   /*********************************************** 
    * Parse command line
@@ -136,18 +126,9 @@ main(int argc, char **argv)
       SQINFO  sqinfo;
       int     xnum;
       
-      if (! SeqfileFormat(xnufile, &format, NULL))
-	switch (squid_errno) {
-	case SQERR_NOFILE: 
-	  Die("Sequence file %s could not be opened for reading", xnufile); break;
-	case SQERR_FORMAT: 
-	default:           
-	  Die("Failed to determine format of sequence file %s", xnufile);
-	}
-      if ((sqfp = SeqfileOpen(xnufile, format, NULL)) == NULL)
+      if ((sqfp = SeqfileOpen(xnufile, SQFILE_UNKNOWN, NULL)) == NULL)
 	Die("Failed to open sequence database file %s\n%s\n", xnufile, usage);
-
-      while (ReadSeq(sqfp, format, &seq, &sqinfo)) 
+      while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
 	{
 	  dsq = DigitizeSequence(seq, sqinfo.len);
 	  xnum = XNU(dsq, sqinfo.len);
@@ -155,20 +136,14 @@ main(int argc, char **argv)
 
 	  printf("%-20s\t%5d\n", sqinfo.name, xnum);
 	  if (be_verbose)
-	    WriteSeq(stdout, kPearson, result, &sqinfo);
+	    WriteSeq(stdout, SQFILE_FASTA, result, &sqinfo);
 
 	  free(dsq);
-	  free(seq);
+	  FreeSequence(seq, &sqinfo);
 	  free(result);
 	}
       SeqfileClose(sqfp);
     }
 
-
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("masks_test failed memory test");
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   return EXIT_SUCCESS;
 }

@@ -15,10 +15,6 @@
 #include "globals.h"
 #include "squid.h"
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static char banner[] = "\
 tophits_test : internal verification of tophits.c";
 
@@ -57,12 +53,6 @@ main(int argc, char **argv)
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
-
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
 
   /*********************************************** 
    * Parse command line
@@ -129,7 +119,7 @@ main(int argc, char **argv)
   hit = AllocTophits(100);
   for (i = 0; i < nsamples; i++)
     RegisterHit(hit, list[i], 0., (float) list[i], 0., 0., 
-		NULL, NULL, 
+		NULL, NULL, NULL, /* name, acc, desc */
 		0,0,0,
 		0,0,0,
 		0,0,
@@ -141,7 +131,7 @@ main(int argc, char **argv)
       for (i = 0; i < hit->num; i++)
 	{
 	  GetRankedHit(hit, i,  NULL, &score, NULL, NULL, 
-		       NULL, NULL,
+		       NULL, NULL, NULL, /* name, acc, desc */
 		       NULL, NULL, NULL, 
 		       NULL, NULL, NULL, 
 		       NULL, NULL,
@@ -153,13 +143,13 @@ main(int argc, char **argv)
   for (i = 0; i < hit->num-1; i++)
     {
       GetRankedHit(hit, i,  NULL, &score, NULL, NULL, 
-		   NULL, NULL,
+		   NULL, NULL, NULL, /* name, acc, desc */
 		   NULL, NULL, NULL, 
 		   NULL, NULL, NULL,
 		   NULL, NULL,
 		   NULL);
       GetRankedHit(hit, i+1,NULL, &score2,NULL, NULL, 
-		   NULL, NULL,
+		   NULL, NULL, NULL, /* name, acc, desc */
 		   NULL, NULL, NULL, 
 		   NULL, NULL, NULL, 
 		   NULL, NULL,
@@ -175,11 +165,6 @@ main(int argc, char **argv)
   FreeTophits(hit);
   free(list);
   
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("tophits_test failed memory test");
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   if (be_verbose) printf("tophits_test is OK\n");
   return 0;
 }

@@ -621,6 +621,7 @@ main(int argc, char **argv)
 
 	  printf("%-40s ... ", "Saving annotated alignment");
 	  fflush(stdout);
+	  sqinfo  = MSAToSqinfo(msa);
 	  new_msa = P7Traces2Alignment(dsq, sqinfo, msa->wgt, msa->nseq, 
 				       hmm->M, tr, FALSE);
 
@@ -631,6 +632,11 @@ main(int argc, char **argv)
 	  free(sqinfo);
 	  printf("done.\n");
 	}
+
+      /* Verbose output; show scores for each sequence
+       */
+      if (verbose)
+	print_all_scores(stdout, hmm, dsq, msa, tr);
 
       /* Clean up before moving on to next alignment
        */
@@ -647,10 +653,7 @@ main(int argc, char **argv)
       nali++;
     }
 
-  /* Verbose output; show scores for each sequence
-   */
-  if (verbose)
-    print_all_scores(stdout, hmm, dsq, msa, tr);
+
 
   /* Clean up and exit
    */
