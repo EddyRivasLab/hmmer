@@ -568,7 +568,7 @@ P7PriorifyTransitionVector(float *t, struct p7prior_s *prior,
  * 
  * Purpose:  Set the default protein prior.
  */
-struct p7prior_s *
+static struct p7prior_s *
 default_amino_prior(void)
 {
   struct p7prior_s *pri;
@@ -682,7 +682,7 @@ default_amino_prior(void)
  * 
  * Purpose:  Set the default DNA prior. (for now, almost a Laplace)
  */
-struct p7prior_s *
+static struct p7prior_s *
 default_nucleic_prior(void)
 {
   struct p7prior_s *pri;

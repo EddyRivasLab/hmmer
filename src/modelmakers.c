@@ -497,7 +497,7 @@ estimate_model_length(MSA *msa)
  *           ret_hmm and ret_tr alloc'ed here for the calling
  *           modelmaker function.
  */
-void
+static void
 matassign2hmm(MSA *msa, char **dsq, int *matassign, 
 	      struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {

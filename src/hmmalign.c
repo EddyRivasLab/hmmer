@@ -251,7 +251,7 @@ main(int argc, char **argv)
  * Returns:  new, realloc'ed arrays for rsq, dsq, sqinfo, tr; nseq is
  *           increased to nseq+ainfo.nseq.
  */
-void
+static void
 include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
 		  char ***rsq, char ***dsq, SQINFO **sqinfo, 
 		  struct p7trace_s ***tr, int *nseq)
