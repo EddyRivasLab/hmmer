@@ -92,6 +92,7 @@
 	  );
 
 
+unlink "tmp.hmm";
 while ($testline = shift(@tests))
 {
     $status = system("../binaries/$testline 2>&1 > tmp.out");

@@ -697,7 +697,8 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
       fprintf(fp, "%7.2f %-12s %s\n", 
 	      P7TraceScore(hmm, dsq[idx], tr[idx]),
 	      msa->sqname[idx],
-	      (msa->sqdesc[idx] != NULL) ? msa->sqdesc[idx] : "");
+	      (MSAGetSeqDescription(msa,idx) != NULL) ? 
+	       MSAGetSeqDescription(msa,idx) : "");
       P7PrintTrace(fp, tr[idx], hmm, dsq[idx]);
     }
   fputs("\n", fp);

@@ -2,5 +2,5 @@
 #define PACKAGE     "HMMER"
 #define RELEASE     "2.1.4"
 #define RELEASEDATE "in progress"
-#define COPYRIGHT   "Copyright (C) 1992-2000 Washington University School of Medicine"
+#define COPYRIGHT   "Copyright (C) 1992-2000 HHMI/Washington University School of Medicine"
 #define LICENSE     "Freely distributed under the GNU General Public License (GPL)"
