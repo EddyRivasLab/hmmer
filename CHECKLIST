@@ -46,7 +46,7 @@ Checklist for a HMMER distribution.
         % diff foo.normal foo.pthread
 	% rm foo.*
 	
-     [2.4dev1 wall times: pvm = 48.95s; pthread=4:21.22; 
+     [2.4dev1 wall times: pvm = 48.95s; pthread=4:21.22; normal=13:47.05
 
      [TODO: Add tests for swissprot searches, w/ and w/o ccmalloc instrumentation;
       test for bug #h25]
