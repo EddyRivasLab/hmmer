@@ -582,6 +582,9 @@ To use --effent on DNA models (or other alphabets), you must set\n\
       if (eff_nseq_set) {
 	FNorm(msa->wgt,  msa->nseq);
 	FScale(msa->wgt, msa->nseq, eff_nseq);
+      } else {
+	FNorm(msa->wgt,  msa->nseq);
+	FScale(msa->wgt, msa->nseq, msa->nseq);
       }
 
 
