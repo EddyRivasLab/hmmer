@@ -47,7 +47,7 @@ Option        : Default : Description\n\
   -h          :       - : print short usage and version info, then exit\n\
   -l <n>      :       - : fix random sequence length at <n>\n\
   -m <x>      :     350 : set random seq length mean at <x>\n\
-  -n <n>      :   10000 : set number of sampled seqs to <n>\n\
+  -n <n>      :    5000 : set number of sampled seqs to <n>\n\
   -s <x>      :     350 : set random seq length std. dev to <x>\n\
 \n\
   --histfile <f> :    - : save histograms to file <f>\n\
@@ -82,6 +82,7 @@ main(int argc, char **argv)
   float   max;			/* maximum score                   */
   int     sqlen;		/* length of sampled sequences     */
   sigset_t blocksigs;		/* list of signals to protect from */
+  int     fitok;		/* TRUE if the EVD fit went ok     */
 
   int     nsample;		/* number of random seqs to sample */
   int     seed;			/* random number seed              */
@@ -105,7 +106,7 @@ main(int argc, char **argv)
    * Parse the command line
    ***********************************************/
 
-  nsample  = 10000;
+  nsample  = 5000;
   fixedlen = 0;
   lenmean  = 325.;
   lensd    = 200.;
@@ -222,18 +223,18 @@ main(int argc, char **argv)
        * The 9999. is an arbitrary high number that means we won't trim outliers
        * on the right.
        */
-      if (! ExtremeValueFitHistogram(hist, TRUE, 9999.))
-	{ 
-	  fclose(outfp); 
-	  remove(tmpfile);
-	  Die("Failed to fit the histogram; maybe you set -n too small?");
-	}
+      fitok = ExtremeValueFitHistogram(hist, TRUE, 9999.);
 
       /* Set HMM EVD parameters 
        */
-      hmm->mu      = hist->param[EVD_MU];
-      hmm->lambda  = hist->param[EVD_LAMBDA];
-      hmm->flags  |= PLAN7_STATS;
+      if (fitok)
+	{
+	  hmm->mu      = hist->param[EVD_MU];
+	  hmm->lambda  = hist->param[EVD_LAMBDA];
+	  hmm->flags  |= PLAN7_STATS;
+	}
+      else
+	printf(" -- fit failed; -n may be set too small?\n");
 
       /* Save HMM to tmpfile
        */
@@ -243,8 +244,16 @@ main(int argc, char **argv)
       /* Output results
        */
       printf("HMM    : %s\n", hmm->name);
-      printf("mu     : %12f\n", hmm->mu);
-      printf("lambda : %12f\n", hmm->lambda);
+      if (fitok)
+	{
+	  printf("mu     : %12f\n", hmm->mu);
+	  printf("lambda : %12f\n", hmm->lambda);
+	}
+      else
+	{
+	  printf("mu     : [undetermined]\n", hmm->mu);
+	  printf("lambda : [undetermined]\n", hmm->lambda);
+	}
       printf("max    : %12f\n", max);
       printf("//\n");
 
