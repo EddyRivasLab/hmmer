@@ -274,8 +274,7 @@ main(int argc, char **argv)
    */
   if (hmm->flags & PLAN7_STATS)
     ExtremeValueSetHistogram(histogram, hmm->mu, hmm->lambda, 
-			     histogram->lowscore, histogram->highscore, 
-			     1.0, 0);
+			     histogram->lowscore, histogram->highscore, 0);
   if (!Z) Z = nseq;		/* set Z for good now that we're done. */
 
   /* Now format and report our output 
