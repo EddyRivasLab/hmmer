@@ -527,7 +527,8 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
     switch (tr->statetype[tpos-1]) {
     case STM:			/* M connects from i-1,k-1, or B */
       sc = mmx[i+1][k+1] - hmm->msc[(int) dsq[i+1]][k+1];
-      if (sc == xmx[i][XMB] + hmm->bsc[k+1])
+      if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else if (sc == xmx[i][XMB] + hmm->bsc[k+1])
 	{
 				/* Check for wing unfolding */
 	  if (Prob2Score(hmm->begin[k+1], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k+1])
@@ -566,13 +567,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = 0;
 	}
-      else if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else
 	Die("traceback failed");
       break;
 
     case STD:			/* D connects from M,D */
-      if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[k][TMD])
+      if (dmx[i][k+1] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[k][TMD])
 	{
 	  tr->statetype[tpos] = STM;
 	  tr->nodeidx[tpos]   = k--;
@@ -584,13 +585,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = 0;
 	}
-      else if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("traceback failed");
       break;
 
     case STI:			/* I connects from M,I */
       sc = imx[i+1][k] - hmm->isc[(int) dsq[i+1]][k];
-      if (sc == mmx[i][k] + hmm->tsc[k][TMI])
+      if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else if (sc == mmx[i][k] + hmm->tsc[k][TMI])
 	{
 	  tr->statetype[tpos] = STM;
 	  tr->nodeidx[tpos]   = k--;
@@ -602,7 +603,6 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = k;
 	  tr->pos[tpos]       = i--;
 	}
-      else if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("traceback failed");
       break;
 
@@ -624,7 +624,8 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
       break;
 
     case STB:			/* B connects from N, J */
-      if (xmx[i][XMB] == xmx[i][XMN] + hmm->xsc[XTN][MOVE])
+      if (xmx[i][XMB] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else if (xmx[i][XMB] == xmx[i][XMN] + hmm->xsc[XTN][MOVE])
 	{
 	  tr->statetype[tpos] = STN;
 	  tr->nodeidx[tpos]   = 0;
@@ -636,7 +637,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
 	}
-      else if (xmx[i][XMB] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+
       else Die("traceback failed");
       break;
 
@@ -672,7 +673,8 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
       break;
 
     case STC:			/* C comes from C, E */
-      if (xmx[i][XMC] == xmx[i-1][XMC] + hmm->xsc[XTC][LOOP])
+      if (xmx[i][XMC] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else if (xmx[i][XMC] == xmx[i-1][XMC] + hmm->xsc[XTC][LOOP])
 	{
 	  tr->statetype[tpos] = STC;
 	  tr->nodeidx[tpos]   = 0;
@@ -685,12 +687,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0; /* E is a nonemitter */
 	}
-      else if (xmx[i][XMC] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      
       else Die("Traceback failed.");
       break;
 
     case STJ:			/* J connects from E, J */
-      if (xmx[i][XMJ] == xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP])
+      if (xmx[i][XMJ] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else if (xmx[i][XMJ] == xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP])
 	{
 	  tr->statetype[tpos] = STJ;
 	  tr->nodeidx[tpos]   = 0;
@@ -703,7 +706,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0; /* E is a nonemitter */
 	}
-      else if (xmx[i][XMJ] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+
       else Die("Traceback failed.");
       break;
 
