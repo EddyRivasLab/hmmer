@@ -89,35 +89,35 @@ if test "$DO_PTHREADS" = yes; then
 	     [#if defined(__FreeBSD_cc_version) && __FreeBSD_cc_version <= 500001
                yes
               #endif
-             ], AC_MSG_RESULT(yes)
+             ], [AC_MSG_RESULT(yes)
              LIBS = "-D_THREAD_SAFE -pthread ${LIBS}"
              MDEFS="${MDEFS} -DHMMER_THREADS"
-             FOUND_PTHREADS=ok,
+             FOUND_PTHREADS=ok],
              AC_MSG_RESULT(no))
   if test "$FOUND_PTHREADS" = notyet; then
     AC_CHECK_LIB(pthread, pthread_attr_init, 
-               FOUND_PTHREADS=ok
-	       LIBS="${LIBS} -lpthread"
-	       MDEFS="${MDEFS} -DHMMER_THREADS")
+               [FOUND_PTHREADS=ok
+	        LIBS="${LIBS} -lpthread"
+	        MDEFS="${MDEFS} -DHMMER_THREADS"])
   fi
   if test "$FOUND_PTHREADS" = notyet; then
     AC_CHECK_LIB(pthreads, pthread_attr_init, 
-               FOUND_PTHREADS=ok
-	       LIBS="${LIBS} -lpthreads"
-	       MDEFS="${MDEFS} -DHMMER_THREADS")
+               [FOUND_PTHREADS=ok
+	        LIBS="${LIBS} -lpthreads"
+	        MDEFS="${MDEFS} -DHMMER_THREADS"])
   fi
   if test "$FOUND_PTHREADS" = notyet; then
     AC_CHECK_LIB(c_r, pthread_attr_init, 
-               FOUND_PTHREADS=ok
-	       LIBS="${LIBS} -lc_r"
-	       MDEFS="${MDEFS} -DHMMER_THREADS")
+               [FOUND_PTHREADS=ok
+	        LIBS="${LIBS} -lc_r"
+	        MDEFS="${MDEFS} -DHMMER_THREADS"])
   fi
   dnl The following test is a bit too desperate.
   if test "$FOUND_PTHREADS" = notyet; then
   AC_CHECK_HEADER(pthread.h,
-               FOUND_PTHREADS=ok
-	       LIBS="${LIBS} -lpthread"
-	       MDEFS="${MDEFS} -DHMMER_THREADS")
+               [FOUND_PTHREADS=ok
+	        LIBS="${LIBS} -lpthread"
+	        MDEFS="${MDEFS} -DHMMER_THREADS"])
   fi  
 fi
 
