@@ -94,8 +94,7 @@ all:
 # check: compiles and runs test suite in testsuite/
 #       These are public tests, distributed with the package.
 #
-check:	squid/libsquid.a src/libhmmer.a
-	(cd testsuite; make)
+check:	
 	(cd testsuite; make check)
 
 squid/libsquid.a:
@@ -161,7 +160,7 @@ clean:
 #
 distclean:
 	-rm -rf binaries
-	-rm config.cache config.log config.status
+	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm Makefile
@@ -178,7 +177,7 @@ binclean:
 	(cd squid;     make binclean)
 	(cd testsuite; make binclean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	-rm config.cache config.log config.status
+	-rm config.log config.status
 	-rm -rf autom4te.cache
 
 # doc:  build the Userguide and on-line manual

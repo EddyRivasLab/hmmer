@@ -17,7 +17,7 @@ DEFS   = @DEFS@
 #  only used for building the testsuite anyway... e.g. we
 #  make a "libhmmer.a" library for building the testsuite.
 #
-AR     = ar rcv 
+AR     = @AR@ rcv 
 RANLIB = @RANLIB@
 
 # Configuration for optional pthreads multiprocessor support

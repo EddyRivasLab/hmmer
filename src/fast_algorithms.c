@@ -463,7 +463,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
   int  *lmmxi,*lxmxi,*limxi,*ldmxi;
   int  *p_tmm,*p_tim,*p_tdm,*p_bsc,*p_msc,*p_tmd,*p_tdd,*p_tmi,*p_tii,*p_isc,*p_esc;
   int   i,n,k;
-  int   sc,tmp;
+  int   sc;
   /* gcc and motorola use different syntax for initializing vectors,
    * so we use a dummy variable instead to get an adress to load from...
    */   
@@ -539,11 +539,19 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
     vec_st(v_lowscore, n*4, dmxi);
   }
 
-  /* Fill the end of hmm->esc with -INFTY, so we can take the maximum including
-   * the elements with k>M.
+  /* Fill data beyound M with -INFTY, so we can take the maximum including
+   * elements with k>M.
    */
-  for(k=1+hmm->M;k<=(3+hmm->M);k++)
+  for(k=1+hmm->M;k<=(3+hmm->M);k++) {
       hmm->esc[k]=-INFTY;
+      hmm->bsc[k]=-INFTY;
+      for(i=0;i<7;i++)
+	hmm->tsc[i][k]=-INFTY;
+      for(i=0;i<MAXCODE;i++) {
+	hmm->msc[i][k]=-INFTY;
+	hmm->isc[i][k]=-INFTY;
+      }
+  }
   
   /* Recursion. Done as a pull
    * Note some slightly wasteful boundary conditions:  

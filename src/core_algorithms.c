@@ -2460,7 +2460,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   /* Special case: rarely, the alignment was totally impossible
    * and tr is NULL.
    */
-  if (tr == NULL) return whole_sc;
+  if (tr == NULL) return sc_override;
 
   /* Break the trace into one or more individual domains.
    */

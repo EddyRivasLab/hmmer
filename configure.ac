@@ -62,10 +62,11 @@ AC_MSG_NOTICE([This is a full source distribution - using full config])
 
 # Checks for programs.
 # Sets output variables CC, CFLAGS, and RANLIB.
+# AR might be hidden away on Solaris; provide some hints in the PATH.
 #
 AC_PROG_CC
 AC_PROG_RANLIB
-
+AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 
 
 # Figure out what host we're compiling on.
