@@ -227,7 +227,7 @@ dist:
 	#
 	cp Licenses/LICENSE.$(LICENSE)     build/hmmer-$(RELEASE)/LICENSE
 	cp Licenses/COPYING.$(LICENSE)     build/hmmer-$(RELEASE)/COPYING
-	cp ReleaseNotes/RELEASE.$(RELEASE) build/hmmer-$(RELEASE)/NOTES
+	cp ReleaseNotes/RELEASE-$(RELEASE) build/hmmer-$(RELEASE)/NOTES
 	#
 	# RCS extraction of top level README-type documentation and Makefile
 	#
