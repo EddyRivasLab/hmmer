@@ -382,6 +382,142 @@ written is \prog{WriteAscHMM()}. The relevant function to see how it's
 being parsed is \prog{read\_asc20hmm()}.
 
 
+\section{HMMER null model files}
+
+A ``null model'' is used to calculate HMMER log odds scores. The null
+model states the expected background occurrence frequencies of the 20
+amino acids or the 4 nucleotide bases. The null model also contains a
+parameter called p1, which is the $G \rightarrow G$ transition
+probability in the Plan7 null model (see the figure in the
+Introduction).
+
+For protein models, by default, the 20 residue frequencies are set to
+the amino acid composition of SWISS-PROT 34, and p1 is set to 350/351
+(which, because the Plan7 null model implies a geometric length
+distribution, states that the mean length of a protein is about 350
+residues). For DNA/RNA models, by default, the 4 residue frequencies
+are set to 0.25 each, and p1 is set to 1000/1001.  [In the code, see
+\prog{prior.c:P7DefaultNullModel()}, and the amino acid frequencies are
+set in \prog{iupac.c:aafq}.]
+
+Each HMM carries its own null model (see above, HMM file format).  The
+null model is determined when the model is built using
+\prog{hmmbuild}. The default null model can be overridden using
+the \prog{--null <f>} option to \prog{hmmbuild}, where \prog{<f>} is
+the name of a null model file.  
+
+Two example null model files,
+\prog{amino.null} and \prog{nucleic.null}, are provided
+in the \prog{Demos} subdirectory of the HMMER distribution. (They 
+are copies of the internal default HMMER null model settings.)
+\prog{nucleic.null} looks like this:
+
+{\small\begin{verbatim}
+# nucleic.null
+#
+# Example of a null model file for DNA/RNA sequences.
+# The values in this file are the HMMER 2 default
+# settings.
+
+Nucleic
+0.25     # A
+0.25     # C
+0.25     # G
+0.25     # T
+0.999001 # p1
+\end{verbatim}}
+
+Anything on a line following a \prog{\#} is a comment, and is ignored
+by the software. Blank lines are also ignored. Valid fields are
+separated by blanks or new lines. Only the order that the fields occur
+in the file is important, not how they're put on lines; for example,
+20 required fields can all occur on one line separated by blanks, or
+on 20 separate lines. 
+
+There must be 6 or 22 non-comment fields in a null model file,
+occurring in the following order:
+
+\begin{wideitem}
+\item [\textbf{Alphabet type}] The first (non-comment) word in the
+file must be Nucleic or Amino, specifying what kind of sequence the
+null model is for.
+
+\item [\textbf{Emission probabilities}] 4 or 20 background
+frequencies for the amino acids or nucleotides. These \textit{must}
+come in alphabetical order (the A, C, G, T comments in the example
+above are only for easier human viewing, and aren't parsed by the
+software).
+
+\item [\textbf{p1 probability}] The $G \rightarrow G$ transition
+probability in the null model. Basically, if the expected mean length
+of target sequences is $x$, p1 should be $\frac{x}{x+1}$.
+\end{wideitem}
+
+Null model files are parsed in \prog{prior.c:P7ReadNullModel()}.
+
+\section {HMMER prior files}
+
+Observed counts of emissions (residues) and transitions (insertions
+and deletions) in a multiple alignment are combined with
+\textit{Dirichlet priors} to convert them to probabilities
+in an HMM. 
+
+For protein models, by default, HMMER uses a nine-component mixture
+Dirichlet prior for match emissions, and single component Dirichlet
+priors for insert emissions and transitions. The nine-component match
+emission mixture Dirichlet comes from the work of Kimmen Sj\"{o}lander
+\cite{Sjolander96}.
+
+For DNA/RNA models, by default, HMMER uses single component
+Dirichlets.
+
+Two example null model files,
+\prog{amino.pri} and \prog{nucleic.pri}, are provided
+in the \prog{Demos} subdirectory of the HMMER distribution. (They are
+copies of the internal default HMMER prior settings.)
+
+The way the format of these files is parsed is identical to null
+models: everything after a \prog{\#} on a line is a comment, the order
+of occurrence of the fields is important, and fields must be separated
+by either blanks or newlines.
+
+A prior file consists of the following fields:
+
+\begin{wideitem}
+\item [\textbf{Strategy}] Must be the keyword \prog{Dirichlet}. Currently 
+this is the only available prior strategy in the public HMMER release.
+
+\item [\textbf{Alphabet type}] Must be either \prog{Amino} or
+\prog{Nucleic}.
+
+\item [\textbf{Transition priors}] 1 + 8a fields, where a
+is the number of transition mixture components. The first field is the
+number of transition prior components, a (often just 1). Then, for each
+component, eight fields follow: the prior probability of that mixture
+component (1.0 if there is only one component), then the Dirichlet
+alpha parameters for the seven transitions, in order of $M \rightarrow
+M$, $M \rightarrow I$, $M \rightarrow D$, $I \rightarrow M$, $I
+\rightarrow I$, $D \rightarrow M$, $D \rightarrow I$.
+
+\item [\textbf{Match emission priors}] 1 + (5 or 21)b fields,
+where b is the number of match emission mixture components.  The first
+field is the number of match emission mixture components, b. Then, for
+each component, 5 or 21 fields follows: the prior probability of that
+mixture component (1.0 if there is only one component), then the
+Dirichlet alpha parameters for the 4 or 20 residue types, in
+alphabetical order.
+
+\item [\textbf{Insert emission priors}] 1 + (5 or 21)c fields,
+where c is the number of insert emission mixture components.  The
+first field is the number of insert emission mixture components,
+c. Then, for each component, 5 or 21 fields follows: the prior
+probability of that mixture component (1.0 if there is only one
+component), then the Dirichlet alpha parameters for the 4 or 20
+residue types, in alphabetical order.
+\end{wideitem}
+
+In the code, prior files are parsed by \prog{prior.c:P7ReadPrior()}.
+
 \section {Sequence files}
 
 \subsection{Supported file formats}
