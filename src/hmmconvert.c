@@ -135,7 +135,8 @@ main(int argc, char **argv)
       if (FileExists(outfile)) { 
 	test = HMMFileOpen(outfile, NULL);
 	if (test == NULL) 
-	  Die("%s not an HMM file; I refuse to append to it; using stdout instead\n");
+	  Die("%s not an HMM file; I refuse to append to it; using stdout instead",
+	      outfile);
 	HMMFileClose(test);
       }
       switch (outfmt) {

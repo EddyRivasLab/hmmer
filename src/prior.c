@@ -306,7 +306,7 @@ P7ReadNullModel(char *rndfile, float *null, float *ret_p1)
 
 FAILURE:
   fclose(fp);
-  Die("%s is not in HMMER null model file format\n");
+  Die("%s is not in HMMER null model file format", rndfile);
 }
 
 

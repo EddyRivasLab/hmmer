@@ -497,7 +497,8 @@ main(int argc, char **argv)
     P7Traces2Alignment(dsq, ainfo.sqinfo, ainfo.wgt, ainfo.nseq, hmm->M, tr, FALSE,
 		       &new_aseq, &new_ainfo);
     if ((fp = fopen(align_ofile, "w")) == NULL) {
-      Warn("Failed to open alignment resave file %s; using stdout instead");
+      Warn("Failed to open alignment resave file %s; using stdout instead", 
+	   align_ofile);
       fp = stdout;
     }
     WriteSELEX(fp, new_aseq, &new_ainfo, 50);
@@ -560,9 +561,10 @@ save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do_binary)
 	  HMMFILE *hmmfp;
 	  hmmfp = HMMFileOpen(hmmfile, NULL);
 	  if (hmmfp == NULL) {
-	    Warn("%s not an HMM file; I refuse to append to it; using stdout instead\n",
+	    Warn("%s not an HMM file; can't append to it; using stdout instead",
 		 hmmfile);
 	    fp = stdout;
+	    puts("");		/* do a newline before stdout HMM starts */
 	  } else {
 	    HMMFileClose(hmmfp);
 	  }
@@ -570,15 +572,17 @@ save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do_binary)
 #endif
 
       if ((fp = fopen(hmmfile, "a")) == NULL) {
-	Warn("hey, where'd your HMM file go?");
+	Warn("hey, where'd your HMM file go? Using stdout instead.");
 	fp = stdout;
+	puts("");		/* do a newline before stdout HMM starts */
       } 
     } 
   else 
     {
       if ((fp = fopen(hmmfile, "w")) == NULL) {
-	Warn("Failed to open HMM save file %s; using stdout instead");
+	Warn("Failed to open HMM save file %s; using stdout instead", hmmfile);
 	fp = stdout;
+	puts("");		/* do a newline before stdout HMM starts */
       }
     }
 
