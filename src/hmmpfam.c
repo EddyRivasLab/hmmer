@@ -1,7 +1,19 @@
+/************************************************************
+ * HMMER - Biological sequence analysis with profile-HMMs
+ * Copyright (C) 1992-1998,
+ * Sean R. Eddy and Washington University School of Medicine
+ *
+ *   This source code is distributed under the terms of the
+ *   GNU General Public License. See the files COPYING and
+ *   GNULICENSE for details.
+ *
+ ************************************************************/
+
 /* hmmpfam.c
  * SRE, Mon Aug 25 17:03:14 1997: Denver 
  *
- * main() for production Pfam searching.
+ * Search a single sequence against an HMM database.
+ * RCS $Id$
  */
 
 #include <stdio.h>
@@ -28,13 +40,16 @@ static void record_domains(struct tophit_s *h,
 static char banner[] = "hmmpfam - search a single seq against HMM database";
 
 static char usage[]  = "\
-Usage: hmms [-options] <hmm database> <sequence file>\n\
+Usage: hmmpfam [-options] <hmm database> <sequence file>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -n        : nucleic acid models/sequence (default protein)\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
    -E <x>    : sets E value cutoff (globE) to <x>\n\
    -T <x>    : sets T bit threshold (globT) to <x>\n\
+";
+
+static char experts[] = "\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
@@ -142,6 +157,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-h")      == 0) {
       Banner(stdout, banner);
       puts(usage);
+      puts(experts);
       exit(0);
     }
   }

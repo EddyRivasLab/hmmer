@@ -1,7 +1,18 @@
+/************************************************************
+ * HMMER - Biological sequence analysis with profile-HMMs
+ * Copyright (C) 1992-1998,
+ * Sean R. Eddy and Washington University School of Medicine
+ *
+ *   This source code is distributed under the terms of the
+ *   GNU General Public License. See the files COPYING and
+ *   GNULICENSE for details.
+ *
+ ************************************************************/
+
 /* hmmsearch.c
  * SRE, Tue Jan  7 17:19:20 1997
  *
- * main() for HMM global alignment searching.
+ * Search a sequence database with a profile HMM.
  * RCS $Id$
  */
 
@@ -30,12 +41,15 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
    -E <x>    : sets E value cutoff (globE) to <x>\n\
    -T <x>    : sets T bit threshold (globT) to <x>\n\
+";
+
+static char experts[] = "\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
    --null2   : turn OFF the post hoc second null model\n\
    --xnu     : turn ON XNU filtering of target protein sequences\n\
-\n";
+";
 
 static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
@@ -135,6 +149,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
+      puts(experts);
       exit(0);
     }
   }
