@@ -283,15 +283,21 @@ FullSortTophits(struct tophit_s *h)
 {
   int i;
 
+  /* If we don't have /any/ hits, then don't
+   * bother.
+   */
+  if (h->num == 0) return;
+
   /* Assign the ptrs in h->hit.
    */
   h->hit = MallocOrDie(h->num * sizeof(struct hit_s *));
   for (i = 0; i < h->num; i++)
     h->hit[i] = &(h->unsrt[i]);
 
-  /* Sort the pointers.
+  /* Sort the pointers. Don't bother if we've only got one.
    */
-  qsort(h->hit, h->num, sizeof(struct hit_s *), hit_comparison);
+  if (h->num > 1)
+    qsort(h->hit, h->num, sizeof(struct hit_s *), hit_comparison);
 }
 
 
