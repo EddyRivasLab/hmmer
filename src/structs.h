@@ -19,8 +19,13 @@
 #ifndef STRUCTSH_INCLUDED
 #define STRUCTSH_INCLUDED
 
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif /*HMMER_THREADS*/
+
 #include "squid.h"
 #include "config.h"
+
 
 /* Miscellaneous math macros used in the package
  */
@@ -420,10 +425,59 @@ struct tophit_s {
   int            lump;       	/* allocation lumpsize                      */
 };
 
+/**********************************************************
+ * Threads-specific structures. 
+ * See threads.c
+ **********************************************************/
+
+#ifdef HMMER_THREADS
+/* vpool: Pool of threads for aligning seqs.
+ * Double-buffered: has a queue for input sequences,
+ * and a queue for output traces/scores. Boss thread
+ * is reponsible for feeding seqs into the input queue
+ * and taking traces off the output queue.
+ */
+struct vpool_s {
+				/* Data common to all workers: */
+  int             do_forward;        /* TRUE to use Forward() to score       */
+  int             do_null;           /* TRUE to postprocess score with null2 */
+  int             num_threads;	     /* number of vworker's in the pool      */
+  int             max_input_queue;   /* usually same as num_threads          */
+  int             max_output_queue;  /* usually num_threads + max_input_queue*/
+
+  pthread_t      *thread;            /* array of threads in the pool         */ 
+
+				/* The input queue: */
+  struct plan7_s **hmm;              /* 0..max-1 ptrs to HMMs                */   
+  char          **dsq;               /* 0..max-1 ptrs to digitized sequences */
+  SQINFO        **sqinfo;            /* 0..max-1 ptrs to sqinfo structures   */
+  int            *len;               /* 0..max-1 sequence lengths            */
+  int             nin;		     /* number of seqs in the queue          */
+  
+				/* The output queue: */
+  struct plan7_s **ohmm;             /* 0..max-1 ptr to HMMs           */ 
+  char          **odsq;              /* 0..max-1 ptr to dsq            */
+  SQINFO        **osqinfo;           /* 0..max-1 ptr to sqinfo         */
+  int            *olen;              /* o..max-1 sequence lengths      */
+  float          *score;             /* 0..max-1 bit scores            */
+  struct p7trace_s **tr;             /* 0..max-1 trace pointers        */
+  int             nout;		     /* number of answers in the queue */
+
+				/* our mutex locks: */
+  pthread_mutex_t input_lock;	    
+  pthread_mutex_t output_lock;      
+				/* our condition flags: */
+  pthread_cond_t  input_queue_not_empty;  
+  pthread_cond_t  input_queue_not_full;
+  pthread_cond_t  output_queue_not_full;
+  int             shutdown;	/* TRUE to shut down worker threads */
+};
+  
+#endif /*HMMER_THREADS*/
 
 /**********************************************************
  * Plan 9: obsolete HMMER1.x code. We still need these structures
- * for reading old HMM files (e.g. reverse compatibility)
+ * for reading old HMM files (e.g. backwards compatibility)
  **********************************************************/
 
 /* We define a "basic" state, which covers the basic match, insert, and
