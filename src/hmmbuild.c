@@ -487,12 +487,22 @@ see --effnone, --effset, or --effclust\n");
 	   * default numbers are in config.h; they come from LSJ's optimizations
            * on the ASTRAL benchmark.
 	   */
-	  if (eff_strategy == EFF_ENTROPY && etarget_set == FALSE) {
+	  if (eff_strategy == EFF_ENTROPY) {
 	    if (Alphabet_type == hmmAMINO) {
-	      if   (cfg_strategy == P7_FS_CONFIG || cfg_strategy == P7_SW_CONFIG)
-		etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
-	      else 
+	      if   (cfg_strategy == P7_FS_CONFIG || cfg_strategy == P7_SW_CONFIG){
+		if (etarget_set == FALSE){
+		  etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
+		}
+		else{
+		  etarget = FEntropy(randomseq, Alphabet_size) - etarget;
+		}
+	      }
+	      else if (etarget_set == FALSE){
 		etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_LS_AMINO_DEFAULT;
+	      }
+	      else{
+		etarget = FEntropy(randomseq, Alphabet_size) - etarget;
+	      }		
 	    } else {
 	      Die("\
 --effent: entropy loss targeting:\n\
