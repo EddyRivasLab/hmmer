@@ -231,6 +231,26 @@ extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
 				     float *ret_mix);
 
 
+#ifdef HMMER_THREADS
+/* from threads.c
+ * POSIX threads implementation
+ */
+extern int   ThreadNumber(void);
+extern struct vpool_s *VpoolInit(int do_forward, int do_null, int num_threads, int max_queue);
+extern void  VpoolShutdown(struct vpool_s *vpool);
+extern void  VpoolDestroy(struct vpool_s *vpool);
+extern void *VpoolThread(void *ptr);
+extern void  VpoolAddWork(struct vpool_s *vpool, struct plan7_s *hmm, char *dsq, 
+			 SQINFO *sqinfo, int len);
+extern int VpoolGetResults(struct vpool_s *vpool, struct plan7_s **ret_hmm,
+			   char **ret_dsq, SQINFO **ret_sqinfo, int *ret_len,
+			   float *ret_score, struct p7trace_s **ret_tr);
+extern void VpoolPrintInputQueue(struct vpool_s *vpool);
+extern void VpoolPrintOutputQueue(struct vpool_s *vpool);
+
+#endif /*HMMER_THREADS*/
+
+
 /* from tophits.c
  * Support for keeping/sorting top scoring hit/alignment lists
  */
