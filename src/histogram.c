@@ -13,6 +13,8 @@
  * 
  * Accumulation, printing, and fitting of score histograms
  * from database searches.
+ *
+ * RCS $Id$
  ************************************************************
  * Basic API:
  * 
@@ -178,6 +180,7 @@ AddToHistogram(struct histogram_s *h, float sc)
 #endif
   return;
 }
+
 
 
 /* Function: PrintASCIIHistogram()
@@ -357,23 +360,213 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
 }
   
 
+
+/* Function: PrintXMGRHistogram()
+ * Date:     SRE, Wed Nov 12 11:02:00 1997 [St. Louis]
+ * 
+ * Purpose:  Print an XMGR data file that contains two data sets:
+ *               - xy data for the observed histogram
+ *               - xy data for the theoretical histogram
+ */
+void
+PrintXMGRHistogram(FILE *fp, struct histogram_s *h)
+{
+  int sc;			/* integer score in histogram structure */
+  double val;
+
+  /* First data set is the observed histogram
+   */
+  for (sc = h->lowscore; sc <= h->highscore; sc++)
+    if (h->histogram[sc - h->min] > 0)
+      fprintf(fp, "%-6d %f\n", sc, 
+	      (float) h->histogram[sc - h->min]/ (float) h->total);
+  fprintf(fp, "&\n");
+
+  /* Second data set is the theoretical histogram
+   */
+  if (h->fit_type != HISTFIT_NONE)
+    {
+        for (sc = h->lowscore; sc <= h->highscore; sc++)
+	  {
+	    val = 
+	      (1. - ExtremeValueP((float)sc+1, h->param[EVD_MU], h->param[EVD_LAMBDA]))-
+	      (1. - ExtremeValueP((float)sc, h->param[EVD_MU], h->param[EVD_LAMBDA]));
+	    fprintf(fp, "%-6d %f\n", sc, val);
+	  }
+	fprintf(fp, "&\n");
+    }
+}
+
+/* Function: PrintXMGRDistribution()
+ * Date:     SRE, Wed Nov 12 11:02:09 1997 [St. Louis]
+ * 
+ * Purpose:  Print an XMGR data file that contains two data sets:
+ *               - xy data for the observed distribution P(S<x)
+ *               - xy data for the theoretical distribution P(S<x)
+ */
+void
+PrintXMGRDistribution(FILE *fp, struct histogram_s *h)
+{
+  int sc;			/* integer score in histogram structure */
+  int cum;			/* cumulative count */
+  double val;
+
+  /* First data set is the observed distribution;
+   * histogram bin x contains # of scores between x and x+1,
+   * hence the sc+1 offset. 
+   */
+  for (cum = 0, sc = h->lowscore; sc <= h->highscore; sc++)
+    {
+      cum += h->histogram[sc - h->min];
+      fprintf(fp, "%-6d %f\n", sc + 1, (float) cum / (float) h->total);
+    }
+  fprintf(fp, "&\n");
+
+  /* Second data set is the theoretical histogram
+   */
+  if (h->fit_type != HISTFIT_NONE)
+    {
+      for (sc = h->lowscore; sc <= h->highscore; sc++)
+	{
+	  val = (1. - ExtremeValueP((float) sc, h->param[EVD_MU], 
+				    h->param[EVD_LAMBDA]));
+	  fprintf(fp, "%-6d %f\n", sc, val);
+	}
+      fprintf(fp, "&\n");
+    }
+}
+
+/* Function: PrintXMGRRegressionLine()
+ * Date:     SRE, Wed Nov 12 11:02:19 1997 [St. Louis]
+ * 
+ * Purpose:  Print an XMGR data file that contains two data sets:
+ *               - xy data for log log transform of observed distribution P(S<x)
+ *               - xy data for log log transform of theoretical distribution P(S<x)
+ */
+void
+PrintXMGRRegressionLine(FILE *fp, struct histogram_s *h)
+{
+  int sc;			/* integer score in histogram structure */
+  int cum;
+  double val;			/* log log transform */
+
+  /* First data set is the observed distribution;
+   * histogram bin x contains # of scores between x and x+1,
+   * hence the sc+1 offset. 
+   */
+  for (cum = 0, sc = h->lowscore; sc <= h->highscore; sc++)
+    {
+      cum += h->histogram[sc - h->min];
+      val = log (-1. * log((double) cum /  (double) h->total));
+      if (cum < h->total)
+	fprintf(fp, "%-6d %f\n", sc + 1, val);
+    }
+  fprintf(fp, "&\n");
+
+  /* Second data set is the theoretical histogram
+   */
+  if (h->fit_type != HISTFIT_NONE)
+    {
+      for (sc = h->lowscore; sc <= h->highscore; sc++)
+	{
+	  val = log(-1. * log(1. - ExtremeValueP((float) sc, h->param[EVD_MU], 
+						       h->param[EVD_LAMBDA])));
+	  fprintf(fp, "%-6d %f\n", sc, val);
+	}
+      fprintf(fp, "&\n");
+    }
+}
+
+/* Function: EVDBasicFit()
+ * Date:     SRE, Wed Nov 12 11:02:27 1997 [St. Louis]
+ * 
+ * Purpose:  Fit a score histogram to the extreme value 
+ *           distribution. Set the parameters lambda
+ *           and mu in the histogram structure. Fill in the
+ *           expected values in the histogram. Calculate
+ *           a chi-square test as a measure of goodness of fit. 
+ *           
+ *           This is the basic version of ExtremeValueFitHistogram(),
+ *           in a nonrobust form: simple linear regression with no
+ *           outlier pruning.
+ *           
+ * Methods:  Uses a linear regression fitting method [Collins88,Lawless82]
+ *
+ * Args:     h         - histogram to fit
+ *           
+ * Return:   (void)
+ */
+void
+EVDBasicFit(struct histogram_s *h)
+{
+  float *d;            /* distribution P(S < x)          */
+  float *x;            /* x-axis of P(S<x) for Linefit() */
+  int    hsize;
+  int    sum;
+  int    sc, idx;		/* loop indices for score or score-h->min   */
+  float  slope, intercept;	/* m,b fit from Linefit()                   */
+  float  corr;			/* correlation coeff of line fit, not used  */
+  float  lambda, mu;		/* slope, intercept converted to EVD params */
+
+  /* Allocations for x, y axes
+   * distribution d runs from min..max with indices 0..max-min
+   *     i.e. score - min = index into d, x, histogram, and expect
+   */
+  hsize = h->highscore - h->lowscore + 1;
+  d         = (float *) MallocOrDie(sizeof(float) * hsize);
+  x         = (float *) MallocOrDie(sizeof(float) * hsize);
+  for (idx = 0; idx < hsize; idx++)
+    d[idx] = x[idx] = 0.;
+
+  /* Calculate P(S < x) distribution from histogram.
+   * note off-by-one of sc, because histogram bin contains scores between
+   * x and x+1. 
+   */ 
+  sum = 0;
+  for (sc = h->lowscore; sc <= h->highscore; sc++)
+    {
+      sum += h->histogram[sc - h->min];
+      d[sc - h->lowscore] = (float) sum / (float) h->total;
+      x[sc - h->lowscore] = (float) (sc + 1);
+    }
+
+  /* Do a linear regression fit to the log[-log(P(S<x))] "line".
+   * we have log[-log(1-P(S>x))]  = -lambda * x + lambda * mu
+   * so lambda = -m  and mu = b/lambda
+   */
+				/* convert y axis to log[-log(P(S<x))]  */
+  for (sc = h->lowscore; sc < h->highscore; sc++)
+    d[sc - h->lowscore] = log(-1. * log(d[sc - h->lowscore]));
+
+				/* do the linear regression */
+  Linefit(x, d, hsize-1, &intercept, &slope, &corr);
+				/* calc mu, lambda */
+  lambda = -1. * slope;
+  mu     = intercept / lambda;
+
+  /* Set the EVD parameters in the histogram;
+   * pass 2 for additional lost degrees of freedom because we fit mu, lambda.
+   */
+  ExtremeValueSetHistogram(h, mu, lambda, 2);
+
+  free(x);
+  free(d);
+  return;
+}
+
+
 /* Function: ExtremeValueFitHistogram()
+ * Date:     SRE, Sat Nov 15 17:16:15 1997 [St. Louis]
  * 
  * Purpose:  Fit a score histogram to the extreme value 
  *           distribution. Set the parameters lambda
  *           and mu in the histogram structure. Calculate
  *           a chi-square test as a measure of goodness of fit. 
  *           
- * Methods:  Uses a linear regression fitting method [Collins88].
- *           Fits only the upper side of the distribution, starting
- *           from the noise peak, since the lower outliers are difficult
- *           to remove and screw up the EVD fit.
- *           Upper outliers are removed using method described by [Mott92].
+ * Methods:  Uses a maximum likelihood method [Lawless82].
+ *           Upper outliers are removed iteratively using method 
+ *           described by [Mott92].
  *           
- *           A Bayesian fit would be more consistent, religiously
- *           speaking. Likewise, we might consider a Kullback log-ratio
- *           test instead of the traditional chi-square test.
- *
  * Args:     h         - histogram to fit
  *           high_hint - score cutoff; above this are `real' hits that aren't fit
  *           
@@ -383,172 +576,33 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
 int
 ExtremeValueFitHistogram(struct histogram_s *h, float high_hint) 
 {
-  float *d;            /* distribution P(S < x)          */
-  float *x;            /* x-axis of P(S<x) for Linefit() */
-  float *v;            /* made-up variances              */
-  int    hsize;
-  int    sum;
-  int    max;
+  double *x;                     /* array of EVD samples to fit */
+  int    n;			/* number of EVD samples in x  */
+  double lambda, mu;		/* new estimates of lambda, mu */
   int    sc, idx;		/* loop indices for score or score-h->min*/
-  int    lowbound, highbound;
-  int    new_highbound;
-  float  slope, intercept;	/* m,b fit from WeightedLinefit()        */
-  int    nbins;			/* number of bins counted towards chi-sq */
-  float  delta;			/* obs - exp difference                  */
-  int    offset;
-  int    max_iterations = 100;
-
-  /* Clear any previous fitting from the histogram.
-   */
-  UnfitHistogram(h);
 
   /* Determine if we have enough hits to fit the histogram;
    * arbitrarily require 1000.
    */
   if (h->total < 1000) { h->fit_type = HISTFIT_NONE; return 0; }
 
-  /* Calculate P(S < x) distribution from histogram.
-   * distribution d runs from min..max with indices 0..max-min
-   *     i.e. score - min = index into d, x, v, histogram, and expect
+  /* Construct x vector.
    */
-  hsize = h->max - h->min + 1;
-  d         = (float *) MallocOrDie(sizeof(float) * hsize);
-  x         = (float *) MallocOrDie(sizeof(float) * hsize);
-  v         = (float *) MallocOrDie(sizeof(float) * hsize);
-  h->expect = (float *) MallocOrDie(sizeof(float) * hsize);
-  for (idx = 0; idx < hsize; idx++)
-    d[idx] = x[idx] = v[idx] = h->expect[idx] = 0.;
-
-  sum = 0;
+  x = MallocOrDie(sizeof(double) * h->total);
+  n = 0;
   for (sc = h->lowscore; sc <= h->highscore; sc++)
     {
-      d[sc - h->min] = (float) sum / (float) h->total;
-      x[sc - h->min] = (float) sc;
-      v[sc - h->min] = 1. / (float) (1.+h->histogram[sc-h->min]); /* WAG */
-      sum  += h->histogram[sc - h->min];
+      for (idx = 0; idx < h->histogram[sc-h->min]; idx++)
+	x[n++] = (double) sc + 0.5;
     }
 
-  /* Do a linear regression fit to the log[-log(P(S<x))] "line".
-   * Leave off the first point, which is P(S<x)=0, log of which is undefined.
-   * Linefit() does y = mx + b
-   * we have log[-log(1-P(S>x))]  = -lambda * x + lambda * mu
-   * so lambda = -m  and mu = b/lambda
-   * 
-   * Only part of the line (between lowbound and highbound) is
-   * fitted.
+  /* Do an ML fit
    */
-#if DEBUGLEVEL >= DEBUG_AGGRESSIVE
-  fprintf(stderr, "## Here is the distribution P(S<x) observed\n");
-  for (sc = h->lowscore; sc <= h->highscore; sc++)
-    fprintf(stderr, "%f %f\n", x[sc-h->min], d[sc-h->min]);
-#endif
+  EVDMaxLikelyFit(x, n, &mu, &lambda);
 
-				/* convert y axis to log[-log(P(S<x))]  */
-  for (sc = h->lowscore + 1; sc <= h->highscore; sc++)
-    d[sc - h->min] = log(-1. * log(d[sc - h->min]));
-#if DEBUGLEVEL >= DEBUG_AGGRESSIVE
-  fprintf(stderr, "## Here is the line y = log[-log P(S<x)], observed\n");
-  for (sc = h->lowscore; sc <= h->highscore; sc++)
-    fprintf(stderr, "%f %f\n", x[sc-h->min], d[sc-h->min]);
-#endif
-
-  /* find lowbound as peak of distribution 
-   */
-  lowbound  = 0;
-  max       = 0;
-  for (sc = h->lowscore + 1; sc <= h->highscore; sc++)
-    if (h->histogram[sc - h->min] > max) 
-      { 
-	max      = h->histogram[sc - h->min];
-	lowbound = sc;
-      }
-
-  /* initial highbound is the lower of high_hint or right edge 
-   */
-  if ((int) floor(high_hint) < h->highscore) 
-    highbound = (int) floor(high_hint);
-  else
-    highbound = h->highscore;
-
-  while (max_iterations--)	/* while (1) might risk an infinite loop */
-    {
-      offset = lowbound - h->min;
-      hsize  = highbound - lowbound + 1;
-
-		/* Check that we have enough sequences within bounds */
-      sum = 0;
-      for (sc = lowbound; sc <= highbound; sc++)
-	sum += h->histogram[sc - h->min];
-      if (sum < 1000) { h->fit_type = HISTFIT_NONE; return 0; }
-
-		/* call the line fit and solve for lambda, mu */
-      WeightedLinefit(x+offset,d+offset,v+offset, hsize, &slope, &intercept);
-      h->param[EVD_LAMBDA] = slope * -1.;
-      h->param[EVD_MU]     = intercept / h->param[EVD_LAMBDA];
-
-				/* calculate new high bound [Mott92] */
-      new_highbound = (int) ceil(h->param[EVD_MU] - (log(-1.*log((float)h->total/((float)h->total+1.))))/(h->param[EVD_LAMBDA]));
-      if (new_highbound > h->highscore) new_highbound = h->highscore;
-
-				/* check for convergence */
-      if (new_highbound == highbound) break;
-      highbound = new_highbound;
-    }
-
-#if DEBUGLEVEL >= DEBUG_AGGRESSIVE
-  fprintf(stderr, "## Here is the line y = -lambda*x + lambda*mu, fitted\n");
-  for (sc = h->lowscore; sc <= h->highscore; sc++)
-    fprintf(stderr, "%f %f\n", x[sc-h->min], 
-	    -1 *h->param[EVD_LAMBDA]*((float)sc - h->param[EVD_MU]));
-  evd_goodness(h, lowbound, highbound, h->param[EVD_MU], h->param[EVD_LAMBDA]);
-  printf("Before the amoeba: %f %f %f\n", 
-	 h->param[EVD_MU], h->param[EVD_LAMBDA], h->chisq);
-
-#endif
-
-  /* Optimize the fit by a brute force grid search.
-   * This code is commented out in production code;
-   * only used during EVD fit testing to produce highly
-   * optimized fits. Since it doesn't appear in production
-   * code, there's no reason to use fancier optimization algorithms.
-   */
-  /* evd_bruteforce(h, lowbound, highbound);  */
+  ExtremeValueSetHistogram(h, mu, lambda, 2);
   
-  /* Calculate the expected values for the histogram.
-   */
-  h->fit_type = HISTFIT_EVD;
-  for (sc = h->min; sc <= h->max; sc++)
-    h->expect[sc - h->min] =
-      ExtremeValueE((float)(sc), h->param[EVD_MU], h->param[EVD_LAMBDA], 
-		    h->total) -
-      ExtremeValueE((float)(sc+1), h->param[EVD_MU], h->param[EVD_LAMBDA],
-		    h->total);
-
-  /* Calculate the goodness-of-fit (within region that was fitted)
-   */
-  h->chisq = 0.;
-  nbins    = 0;
-  for (sc = lowbound; sc <= highbound; sc++)
-    if (h->expect[sc-h->min] >= 5. && h->histogram[sc-h->min] >= 5)
-      {
-	delta = (float) h->histogram[sc-h->min] - h->expect[sc-h->min];
-	h->chisq += delta * delta / h->expect[sc-h->min];
-	nbins++;
-      }
-  /* Note on degrees of freedom: there are only *two* constraints,
-   * mu and lambda. Because we fit only between the peak and the
-   * right edge, instead of to the whole histogram, the normalization
-   * of the histogram does not count as a constraint.
-   */
-  if (nbins > 2)
-    h->chip = (float) IncompleteGamma((double)(nbins-2)/2., 
-				      (double) h->chisq/2.);
-  else
-    h->chip = 0.;		
-
   free(x);
-  free(d);
-  free(v);
   return 1;
 }
 
@@ -557,9 +611,16 @@ ExtremeValueFitHistogram(struct histogram_s *h, float high_hint)
  * 
  * Purpose:  Instead of fitting the histogram to an EVD,
  *           simply set the EVD parameters from an external source.
+ *           
+ * Args:     h        - the histogram to set
+ *           mu       - mu location parameter                
+ *           lambda   - lambda scale parameter
+ *           ndegrees - extra degrees of freedom to subtract in X^2 test:
+ *                        typically 0 if mu, lambda are parametric,
+ *                        else 2 if mu, lambda are estimated from data
  */
 void
-ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda)
+ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, int ndegrees)
 {
   int   sc;
   int   hsize, idx;
@@ -596,11 +657,12 @@ ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda)
 	h->chisq += delta * delta / h->expect[sc-h->min];
 	nbins++;
       }
-  /* Since we fit the whole histogram, there is one constraint on chi-square:
-   * the normalization to h->total.
+
+  /* Since we fit the whole histogram, there is at least 
+   * one constraint on chi-square: the normalization to h->total.
    */
-  if (nbins > 1)
-    h->chip = (float) IncompleteGamma((double)(nbins-1)/2., 
+  if (nbins > 1 + ndegrees)
+    h->chip = (float) IncompleteGamma((double)(nbins-1-ndegrees)/2., 
 				      (double) h->chisq/2.);
   else
     h->chip = 0.;		
@@ -836,6 +898,111 @@ EVDrandom(float mu, float lambda)
   return mu - log(-1. * log(p)) / lambda;
 } 
  
+
+/* Function: Lawless416()
+ * Date:     SRE, Thu Nov 13 11:48:50 1997 [St. Louis]
+ * 
+ * Purpose:  Equation 4.1.6 from [Lawless82], pg. 143:
+ *           for finding the ML fit to EVD lambda parameter.
+ *           This equation gives a result of zero for the maximum
+ *           likelihood lambda.
+ *           
+ *           Warning: beware overflow/underflow issues! not bulletproof.
+ *           
+ * Args:     x      - array of EVD-distributed samples
+ *           n      - number of samples
+ *           lambda - a lambda to test
+ *           ret_f  - RETURN: 4.1.6 evaluated at lambda
+ *           ret_df - RETURN: first derivative of 4.1.6 evaluated at lambda
+ *           
+ * Return:   (void)
+ */ 
+void
+Lawless416(double *x, int n, double lambda, double *ret_f, double *ret_df)
+{
+
+  double esum;			/* \sum e^(-lambda xi)      */
+  double xesum;			/* \sum xi e^(-lambda xi)   */
+  double xxesum;		/* \sum xi^2 e^(-lambda xi) */
+  double xsum;			/* \sum xi                  */
+  int i;
+
+  esum = xesum = xsum  = xxesum = 0.;
+  for (i = 0; i < n; i++)
+    {
+      xsum   += x[i];
+      xesum  += x[i] * exp(-1. * lambda * x[i]);
+      xxesum += x[i] * x[i] * exp(-1. * lambda * x[i]);
+      esum   += exp(-1. * lambda * x[i]);
+    }
+  *ret_f  = 1./lambda - xsum / (double) n + xesum / esum;
+  *ret_df = ((xesum / esum) * (xesum / esum))
+             - (xxesum / esum)
+             - (1. / (lambda * lambda));
+  return;
+}
+
+
+
+/* Function: EVDMaxLikelyFit()
+ * Date:     SRE, Fri Nov 14 07:56:29 1997 [St. Louis]
+ * 
+ * Purpose:  Given a list of EVD-distributed samples x,
+ *           find maximum likelihood parameters lambda and
+ *           mu.  
+ *           
+ * Algorithm: Uses approach described in [Lawless82]. Solves
+ *           for lambda using Newton/Raphson iterations;
+ *           then substitutes lambda into Lawless' equation 4.1.5
+ *           to get mu. 
+ *           
+ *           Newton/Raphson algorithm developed from description in
+ *           Numerical Recipes in C [Press88]. 
+ *           
+ * Args:     x          - list of EVD distributed samples
+ *           n          - number of samples
+ *           ret_mu     : RETURN: ML estimate of mu
+ *           ret_lambda : RETURN: ML estimate of lambda
+ *           
+ * Return:   (void)
+ */
+void
+EVDMaxLikelyFit(double *x, int n, double *ret_mu, double *ret_lambda)
+{
+  double lambda, mu;
+  double fx;			/* f(x)  */
+  double dfx;			/* f'(x) */
+  double esum;                  /* \sum e^(-lambda xi) */ 
+  double tol = 1e-6;
+  int    i;
+  
+
+  /* 1. Find an initial guess at lambda: linear regression here?
+   */
+  lambda = 0.2;
+
+  /* 2. Use Newton/Raphson to solve Lawless 4.1.6 and find ML lambda
+   */
+  for (i = 0; i < 100; i++)
+    {
+      Lawless416(x, n, lambda, &fx, &dfx);
+      if (fabs(fx) < tol) break;             /* success */
+      lambda = lambda - fx / dfx;	     /* Newton/Raphson is simple! */
+    }
+  if (i == 100) Die("too many Newton/Raphson iterations");
+  /* printf("I did %d iterations of Newton/Raphson\n", i);*/
+
+  /* 3. Substitute into Lawless 4.1.5 to find mu
+   */
+  esum = 0.;
+  for (i = 0; i < n; i++)
+    esum += exp(-1 * lambda * x[i]);
+  mu = -1. * log(esum / (double) n) / lambda;
+
+  *ret_lambda = lambda;
+  *ret_mu     = mu;   
+  return;
+}
 
 
 
