@@ -2040,7 +2040,7 @@ ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
   int tpos;			/* position in trace */
   int i;			/* position in seq (1..N) */
   int k;			/* position in model (1..M) */
-  int nxtstate;			/* next state to assign in traceback */
+  enum p7stype nxtstate;	/* next state to assign in traceback */
 
   /* Overallocate for the trace.
    * S-N-B- ... - E-C-T  : 6 states + L is minimum trace;
