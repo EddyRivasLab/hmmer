@@ -5,7 +5,7 @@
 # @LICENSE@
 ###########
 
-# On must Unices, you can build the package without modifying anything 
+# On most Unices, you can build the package without modifying anything 
 #   by just typing "./configure; make".
 #
 # You may want to modify the following make variables:
@@ -44,9 +44,9 @@ CFLAGS = @CFLAGS@
 #######
 SHELL       = /bin/sh
 PACKAGE     = "HMMER"
-RELEASE     = "2.1.3"
-RELCODE     = "rel2_1_3"
-RELEASEDATE = "December 1999"
+RELEASE     = "2.1.4"
+RELCODE     = "rel2_1_4"
+RELEASEDATE = "in progress"
 COPYRIGHT   = "Copyright \(C\) 1992-2000 Washington University School of Medicine"
 LICENSE     = "Freely distributed under the GNU General Public License \(GPL\)"
 LICENSETAG  = gnu
@@ -150,6 +150,7 @@ clean:
 	(cd src;       make clean)
 	(cd lib;       make clean)
 	(cd lib/squid; make clean)
+	(cd testsuite; make clean)
 
 # "make distclean" leaves a pristine distribution.... and
 #                  doesn't touch the binaries directory
@@ -161,6 +162,7 @@ distclean:
 	(cd src;       make distclean)
 	(cd lib;       make distclean)
 	(cd lib/squid; make distclean)
+	(cd testsuite; make distclean)
 	-rm Makefile
 
 # "make srcclean" is the most aggressive. It is distclean,

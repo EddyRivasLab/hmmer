@@ -39,9 +39,6 @@ PVMPROGS  = @PVMPROGS@
 #
 ARENA = @top_srcdir@/@ARENA@
 
-#######
-## Neither you nor configure should need to modify below this line
-#######
 SHELL    = /bin/sh
 MYLIBS   = -lsquid
 MYLIBDIR = -L${ARENA}
@@ -55,7 +52,8 @@ PROGS = hmmalign\
 	hmmfetch\
 	hmmindex\
 	hmmpfam\
-	hmmsearch
+	hmmsearch\
+	${PVMPROGS}
 
 OBJS =  alphabet.o\
 	core_algorithms.o\
@@ -73,6 +71,7 @@ OBJS =  alphabet.o\
 	plan9.o\
 	postprob.o\
 	prior.o\
+	pvm.o\
 	stopwatch.o\
 	threads.o\
 	tophits.o\
@@ -85,66 +84,42 @@ HDRS =  config.h\
 	stopwatch.h\
 	structs.h
 
-PVMOBJS = pvm.o
-
 .c.o:
 	$(CC) $(CFLAGS) $(MDEFS) $(PTHREADFLAG) $(PVMFLAG) $(MYINCDIR) $(PVMINCDIR) -c $<
 
-#######
+#################################################################
 ## Targets defining how to make HMMER executables.
-#######
-
-all: 	$(PROGS) $(PVMPROGS) 
-
-hmmalign: $(OBJS) hmmalign.o
-	$(CC) $(CFLAGS) $(MDEFS)$(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmbuild: $(OBJS) hmmbuild.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmcalibrate: $(OBJS) $(PVMOBJS) hmmcalibrate.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmconvert: $(OBJS) hmmconvert.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmemit: $(OBJS) hmmemit.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmfetch: $(OBJS) hmmfetch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmindex: $(OBJS) hmmindex.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS) 
-hmmpfam: $(OBJS) $(PVMOBJS) hmmpfam.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmsearch: $(OBJS) $(PVMOBJS) hmmsearch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmcalibrate-pvm: $(OBJS) $(PVMOBJS) hmmcalibrate-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmpfam-pvm: $(OBJS) $(PVMOBJS) hmmpfam-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-hmmsearch-pvm: $(OBJS) $(PVMOBJS) hmmsearch-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
-
-####################################################################
-## Targets used in making HMMER module for testsuite compilation
 ##
+all: 	$(PROGS) 
+
+$(PROGS): @STD_EXEC_DEPENDENCY@ $(OBJS) 
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+
+
+#################################################################
+## Targets used in making HMMER module for testsuite compilation.
+##
+module: libhmmer.a
+
 module-install: libhmmer.a
 	mv libhmmer.a ${ARENA}/
 	cp $(HDRS)    ${ARENA}/
 
-module: libhmmer.a
-
-libhmmer.a: $(OBJS) $(PVMOBJS)
-	$(AR) libhmmer.a $(OBJS) $(PVMOBJS)
+libhmmer.a: $(OBJS) 
+	$(AR) libhmmer.a $(OBJS) 
 	$(RANLIB) libhmmer.a
 	chmod 644 libhmmer.a
 
-#######
-## Miscellaneous
-#######
 
+#################################################################
+## Miscellaneous targets.
+##
 distclean:
 	make clean
 	-rm -f Makefile version.h
 
 clean:
-	-rm -f *.o *~ Makefile.bak core $(PROGS) $(PVMPROGS) TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a
 
 TAGS:
 	etags -t *.c *.h Makefile.in

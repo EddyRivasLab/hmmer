@@ -16,7 +16,7 @@
  *    7) If an excessive number of individual traces differ from
  *          those imposed by master, fail.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -25,10 +25,6 @@
 #include "funcs.h"
 #include "globals.h"
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static char banner[] = "\
 alignalign_test : testing of P7ViterbiAlignAlignment() code";
@@ -63,6 +59,9 @@ main(int argc, char **argv)
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
   char    *afile;               /* file to read alignment from             */
   int      format;              /* format determined for afile             */
+  MSAFILE *afp;                 /* afile, open for reading                 */
+  MSA     *msa;			/* multiple sequence alignment from afile  */
+
   char   **aseq;                /* aligned sequences                       */
   char   **rseq;                /* raw, dealigned aseq                     */
   AINFO    ainfo;               /* alignment information                   */
@@ -90,12 +89,6 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-  
   /*********************************************** 
    * Parse command line
    ***********************************************/
@@ -103,6 +96,7 @@ main(int argc, char **argv)
   be_verbose = FALSE;
   hmmfile    = "fn3.hmm";
   afile      = "fn3.seed";
+  format     = MSAFILE_STOCKHOLM;
   ofile      = NULL;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
@@ -122,20 +116,15 @@ main(int argc, char **argv)
     Die("Incorrect number of arguments.\n%s\n", usage);
 
   /*********************************************** 
-   * Open test alignment file
+   * Get one alignment from test file: must be Stockholm format.
    ***********************************************/
 
-  if (! SeqfileFormat(afile, &format, NULL))
-    switch (squid_errno) {
-    case SQERR_NOFILE: 
-      Die("Alignment file %s could not be opened for reading", afile); break;
-    case SQERR_FORMAT: 
-    default:           
-      Die("Failed to determine format of alignment file %s", afile);
-    }
+  if ((afp = MSAFileOpen(afile, format, NULL)) == NULL)
+    Die("Alignment file %s could not be opened for reading", afile);
+  if ((msa = MSAFileRead(afp)) == NULL)
+    Die("Didn't read an alignment from %s", afile);
+  MSAFileClose(afp);
 
-  if (! ReadAlignment(afile, format, &aseq, &ainfo))
-    Die("Failed to read aligned sequence file %s", afile);
   for (idx = 0; idx < ainfo.nseq; idx++)
     s2upper(aseq[idx]);
   DealignAseqs(aseq, ainfo.nseq, &rseq);
