@@ -1,73 +1,49 @@
-HMMER 1.8
+HMMER 2.0 
 Installation instructions 
-Sean Eddy, 16 April 1995
+SRE, Mon Jan 19 07:09:37 1998
 ------------------------------------------
 
 1) Edit the top of the Makefile. 
    Set the paths and other make variables to suit your system.
+   If you are installing in a directory called bin/ in your
+   home directory, you don't need to change anything.
 
    The default Makefile is configured for cc (your vendor's compiler) 
    and -O optimization. The package builds "out of the box" on
-   SGI IRIX, Solaris, or DEC Alpha OSF/1 platforms, without 
-   any special modifications to cc's command line (MDEFS, CFLAGS). 
+   SGI IRIX, Sun Solaris, GNU/Linux/Intel, or DEC Alpha/Digital Unix
+   platforms without any special modifications.
 
    On SunOS 4.1.x systems, you will have to use GNU's gcc,
    because SunOS cc is not ANSI-compliant.
 
-   Myself, I compile with "gcc -O2". gcc gives me executables
-   that run ~10% faster than the IRIX 5.3 C compiler produces.  
+   You can play with the compiler options in CFLAGS to
+   try to get more speed, if you're compiler-fluent.
 
 2) type 'make' to build the programs.
 
-3) type 'make test' to run a battery of exercises on the
-   programs. You need Perl to do this. If Perl is not in
-   /usr/local/bin/perl you will have to change the path in 
-   the first line of the script Testsuite/Run_Tests. Running 
-   the tests is optional, but you may find it comforting
-   to see that the programs run and pass some rudimentary
-   checks. (I do.)
-
-4) type 'make install' to install the programs and man pages. 
+3) type 'make install' to install the programs and man pages. 
    
    You may have to become root, depending on where you're installing.
 
-   Note on man pages: If you can install unformatted man pages,
-   set INSTMAN to be "cp" in the Makefile. If you can't -- for
-   instance, many SGIs don't have nroff installed -- I've
-   provided my Perl script "instman.pl" that uses the same
-   command-line syntax as cp, but uses groff to format the
-   .man file before installing it.
- 
 4) type 'make clean' to clean up.
-
-   And if you haven't already, print out the User's Guide, Userguide.ps,
-   using "lpr" or whatever you do to print PostScript documents:
-
-5) lpr Userguide.ps
 
 
 Note on environment variables:
 
-   HMMER reads two environment variables:
+   HMMER reads three environment variables:
+      HMMERDB  - directory location of HMM databases (e.g. PFAM)
       BLASTDB  - directory location of FASTA-formatted sequence databases
       BLASTMAT - directory location of PAM scoring matrices
+
    If you have installed BLAST, you probably already have these 
    environment variables set in system-wide or user-specific
    .cshrc files. They are optional. If they are set up, you
    can simplify command lines to:
-      > hmmls my.hmm swiss31
+      > hmmpfam pfam my.query
+      > hmmsearch my.hmm swiss35
    instead of
-      > hmmls my.hmm /some/long/path/to/databases/swiss31
-
-This package has been built and tested on the following systems:
-  SGI 340/VGX and SGI Indigo R4000 running IRIX 4.0.x and IRIX 5.x
-  DEC 5000 running Ultrix 4.2	
-  DEC Alpha running OSF/1	
-  Sun SPARCstations running SunOS 4.1.x and Solaris 2.x
-  Alliant FX/2800 running Concentrix 2.2	
-  Micron 120 Mhz Pentium running Solaris 2.4
-
-It is currently maintained under IRIX on an Indigo2 R4400.
+      > hmmpfam   /some/long/path/to/databases/pfam my.query
+      > hmmsearch my.hmm /some/long/path/to/databases/swiss35
 
 - Sean Eddy
   eddy@genetics.wustl.edu
