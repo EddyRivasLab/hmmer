@@ -1,6 +1,6 @@
 HMMER - profile hidden Markov models for biological sequence analysis
-Version 2.2 (January 2003)
-Copyright (C) 1992-2003 Washington University School of Medicine
+Version @RELEASE@ (@RELEASEDATE@)
+@COPYRIGHT@
 ------------------------------------------------------------------
 
 o About this software...

@@ -193,9 +193,13 @@ dist:
 	#
 	find ${BASENAME}-${RELEASE} -type f -exec ssdk/sedition-pp LICENSE Licenses/$(LICENSETAG) {} \;
 	#
-	# All other automated keyword replacements are in the documentation.
+	# All other automated keyword replacements are in the documentation
+	# or README type files.
 	# 
 	find ${BASENAME}-${RELEASE}/documentation -type f -exec ssdk/sedition RELEASE ${RELEASE} RELEASEDATE ${RELEASEDATE} PACKAGE ${PACKAGE} COPYRIGHT ${COPYRIGHT} LICENSELINE ${LICENSELINE} {} \;
+	ssdk/sedition RELEASE ${RELEASE} RELEASEDATE ${RELEASEDATE} COPYRIGHT ${COPYRIGHT} ${BASENAME}-${RELEASE}/00README
+	ssdk/sedition RELEASE ${RELEASE} ${BASENAME}-${RELEASE}/INSTALL
+	ssdk/sedition COPYRIGHT ${COPYRIGHT} ${BASENAME}-${RELEASE}/COPYING
 	#
 	# Compilation of the documentation.
 	# Documentation is not provided in source form.
@@ -205,8 +209,8 @@ dist:
 	cp -f ${BASENAME}-${RELEASE}/documentation/userguide/Userguide.pdf $(BASENAME)-$(RELEASE)/
 	# 
 	# Finish the man pages off, adding necessary boilerplate.
-	# This must be done *after* the user guide is created, since the user guide
-	# steals and uses the pre-boilerplate man pages.
+	# This must be done *after* the user guide is created, since the
+	# user guide steals and uses the pre-boilerplate man pages.
 	#
 	for prog in $(PROGS); do\
 	   cat ${BASENAME}-${RELEASE}/documentation/man/boilerplate >> ${BASENAME}-${RELEASE}/documentation/manpages/$$prog.man;\

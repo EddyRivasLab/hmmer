@@ -25,11 +25,11 @@
 # The output variables are used in Makefiles.
 #
 AC_PREREQ(2.57)
-AC_INIT(HMMER, 2.2i, eddy@genetics.wustl.edu, hmmer)
+AC_INIT(HMMER, 2.3, eddy@genetics.wustl.edu, hmmer)
 AC_MSG_NOTICE([configuring HMMER for your system.])
 
-PACKAGE_RELCODE="hmmer2_2i"
-PACKAGE_DATE="January 2003"
+PACKAGE_RELCODE="hmmer2_3"
+PACKAGE_DATE="April 2003"
 PACKAGE_COPYRIGHT="Copyright (C) 1992-2003 HHMI/Washington University School of Medicine"
 PACKAGE_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 PACKAGE_LICENSETAG=gnu
