@@ -202,63 +202,46 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
   int  pos;			/* position in output line buffer */
   int  lowbound, lowcount;	/* cutoffs on the low side  */
   int  highbound, highcount;	/* cutoffs on the high side */
-  int  delay;			/* delay for evaluation of cutoffs */
+  int  emptybins = 3;
 
   /* Find out how we'll scale the histogram.
    * We have 59 characters to play with on a
    * standard 80-column terminal display:
    * leading "%5d %6d %6d|" occupies 20 chars.
+   * Save the peak position, we'll use it later.
    */
   maxbar = 0;
   for (i = h->lowscore - h->min; i <= h->highscore - h->min; i++)
-    if (h->histogram[i] > maxbar) maxbar = h->histogram[i];
+    if (h->histogram[i] > maxbar) 
+      {
+	maxbar   = h->histogram[i];     /* max height    */
+	lowbound = i + h->min;     	/* peak position */
+      }
   units = ((maxbar-1)/ 59) + 1;
 
-  /* Truncate histogram on the low side. (ad hoc)
-   * Set "lowbound" and "lowcount"
+  /* Truncate histogram display on both sides, ad hoc fashion.
+   * Start from the peak; then move out until we see <emptybins> empty bins,
+   * and stop.
    */
-  lowbound = h->lowscore;
-  lowcount = 0;
-  num      = 0;
-  delay    = 10;
-  for (i = h->lowscore - h->min; i <= h->highscore - h->min; i++)
+  highbound = lowbound;		/* start at peak position */
+  for (num = 0; lowbound > h->lowscore; lowbound--)
     {
-      num++;
-      /* don't exceed maxbar, and include all of the expected curve */
-      if (lowcount + h->histogram[i] > maxbar) break; 
-      if (h->fit_type != HISTFIT_NONE && (int) h->expect[i] > 0) break; 
-
-      if (h->histogram[i] > 0)  lowcount += h->histogram[i];
-      else if (delay <= 0) {
-	if (lowcount / num < 1) lowbound = i + h->min;
-	else                    break;
-      }
-      delay--; 
+      i = lowbound - h->min;
+      if (h->histogram[i] > 0) { num = 0;               continue; } /* reset */
+      if (++num == emptybins)  { lowbound += emptybins; break;    } /* stop  */
     }
-  if (lowbound - h->lowscore <= 10) { lowbound = h->lowscore; }
-
-  /* Truncate histogram on the high side. (ad hoc)
-   * Set highbound and highcount
-   */
-  highbound = h->highscore;
-  highcount = 0;
-  num       = 0;
-  delay     = 10;
-  for (i = h->highscore - h->min; i >= h->lowscore - h->min; i--)
+  for (num = 0; highbound < h->highscore; highbound++)
     {
-      num++;
-      /* don't exceed maxbar, and include all of the expected curve */
-      if (highcount + h->histogram[i] > maxbar) break; 
-      if (h->fit_type != HISTFIT_NONE && (int) h->expect[i] > 0) break; 
-
-      if (h->histogram[i] > 0)  highcount += h->histogram[i];
-      else if (delay <= 0) {
-	if (highcount / num < 1) highbound = i + h->min;
-	else                     break;
-      }
-      delay--;
+      i = highbound - h->min;
+      if (h->histogram[i] > 0) { num = 0;                continue; } /* reset */
+      if (++num == emptybins)  { highbound -= emptybins; break;    } /* stop  */
     }
-  if (h->highscore - highbound <= 5) { highbound = h->highscore; }
+				/* collect counts outside of bounds */
+  for (lowcount = 0, i = h->lowscore - h->min; i <= lowbound - h->min; i++)
+    lowcount += h->histogram[i];
+  for (highcount = 0, i = h->highscore - h->min; i >= highbound - h->min; i--)
+    highcount += h->histogram[i];
+
 
   /* Print the histogram
    */
@@ -278,7 +261,7 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
       else if (i > highbound) continue;
       else if (i == lowbound && i != h->lowscore) 
 	{
-	  sprintf(buffer, "<%4d %6d %6s|", i, lowcount, "-");
+	  sprintf(buffer, "<%4d %6d %6s|", i+1, lowcount, "-");
 	  if (lowcount > 0) {
 	    num = 1+(lowcount-1) / units;
 	    for (pos = 20; num > 0; num--)  buffer[pos++] = '=';
@@ -309,12 +292,7 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
       /* Mark the histogram bar for observed hits
        */ 
       if (h->histogram[idx] > 0) {
-	if (i == lowbound && i != h->lowscore)
-	  num = 1+(lowcount-1) / units;
-	else if (i == highbound && i != h->highscore)
-	  num = 1+(highcount-1) / units;
-	else
-	  num = 1 + (h->histogram[idx]-1) / units;
+	num = 1 + (h->histogram[idx]-1) / units;
 	for (pos = 20; num > 0; num--)  buffer[pos++] = '=';
       }
 	  
