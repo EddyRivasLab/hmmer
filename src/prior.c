@@ -203,6 +203,7 @@ void
 PAMPrior(char *pamfile, struct p7prior_s *pri, float wt)
 {
   FILE  *fp;
+  char  *blastpamfile;            /* BLAST looks in aa/ subdirectory of BLASTMAT */
   int  **pam;
   float  scale;
   int    xi, xj;
@@ -216,12 +217,17 @@ PAMPrior(char *pamfile, struct p7prior_s *pri, float wt)
     Die("PAM prior requires that the insert emissions be a single Dirichlet");
   if (MAXDCHLET < 20)
     Die("Whoa, code is misconfigured; MAXDCHLET must be >= 20 for PAM prior");
+
+  blastpamfile = FileConcat("aa", pamfile);
+
   if ((fp = fopen(pamfile, "r")) == NULL &&
-      (fp = EnvFileOpen(pamfile, "BLASTMAT")) == NULL)
+      (fp = EnvFileOpen(pamfile, "BLASTMAT")) == NULL &&
+      (fp = EnvFileOpen(blastpamfile, "BLASTMAT")) == NULL)
     Die("Failed to open PAM scoring matrix file %s", pamfile);
   if (! ParsePAMFile(fp, &pam, &scale))
     Die("Failed to parse PAM scoring matrix file %s", pamfile);
   fclose(fp);
+  free(blastpamfile);
 
   pri->strategy = PRI_PAM;
   pri->mnum     = 20;
