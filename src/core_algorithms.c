@@ -4,7 +4,7 @@
 
 /* core_algorithms.c
  * SRE, Mon Nov 11 15:58:52 1996
- * RCS $Id$
+ * CVS $Id$
  * 
  * Simple and robust "research" implementations of Forward, Backward,
  * and Viterbi for Plan7.
@@ -17,10 +17,6 @@
 
 #include <string.h>
 #include <assert.h>
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static float get_wee_midpt(struct plan7_s *hmm, char *dsq, int L, 
 			   int k1, char t1, int s1,
@@ -165,8 +161,13 @@ FreeShadowMatrix(struct dpshadow_s *tb)
  * Date:     SRE, Fri Mar  6 15:13:20 1998 [St. Louis]
  *
  * Purpose:  Returns the ballpark predicted memory requirement for a 
- *           P7Viterbi() alignment, in MB.
- *
+ *           P7Viterbi() alignment, in MB. 
+ *           
+ *           Currently L must fit in an int (< 2 GB), but we have
+ *           to deal with LM > 2 GB - e.g. watch out for overflow, do
+ *           the whole calculation in floating point. Bug here detected
+ *           in 2.1.1 by David Harper, Sanger Centre.
+ *                                    
  * Args:     L  - length of sequence
  *           M  - length of HMM       
  *
@@ -175,11 +176,21 @@ FreeShadowMatrix(struct dpshadow_s *tb)
 int
 P7ViterbiSize(int L, int M)
 {
-  return ((sizeof(struct dpmatrix_s)       + /* matrix structure     */
-	   3 * (L+1) * (M+2) * sizeof(int) + /* main matrix is O(NM) */ 
-	   4 * (L+1) * sizeof(int *)       + /* ptrs into rows of matrix */
-	   5 * (L+1) * sizeof(int))          /* 5 special states     */
-	  / 1000000);
+  float Mbytes;
+
+  /* We're excessively precise here, but it doesn't cost
+   * us anything to be pedantic. The four terms are:
+   *   1. the matrix structure itself;
+   *   2. the O(NM) main matrix (this dominates!)
+   *   3. ptrs into the rows of the matrix
+   *   4. storage for 5 special states. (xmx)
+   */
+  Mbytes =  (float) sizeof(struct dpmatrix_s); 
+  Mbytes += 3. * (float) (L+1) * (float) (M+2) * (float) sizeof(int); 
+  Mbytes += 4. * (float) (L+1) * (float) sizeof(int *); 
+  Mbytes += 5. * (float) (L+1) * (float) sizeof(int);
+  Mbytes /= 1048576.;
+  return (int) Mbytes;
 }
 
 /* Function: P7SmallViterbiSize()
@@ -192,6 +203,10 @@ P7ViterbiSize(int L, int M)
  *           and P7WeeViterbi(). P7ParsingViterbi() typically dominates
  *           the memory requirement, so the value returned
  *           is the P7ParsingViterbi() number.
+ *     
+ *           We don't (yet) worry about overflow issues like we did with
+ *           P7ViterbiSize(). We'll have many other 32-bit int issues in the
+ *           code if we overflow here.
  *
  * Args:     L - length of sequence
  *           M - length of HMM   
