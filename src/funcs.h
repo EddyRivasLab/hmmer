@@ -35,6 +35,7 @@ extern void  DetermineAlphabet(char **rseqs, int  nseq);
 extern void  SetAlphabet(int type);
 extern int   SymbolIndex(char sym);
 extern char *DigitizeSequence(char *seq, int L);
+extern char *DedigitizeSequence(char *dsq, int L);
 extern void  DigitizeAlignment(char **aseqs, AINFO *ainfo, char ***ret_dsqs);
 extern void  P7CountSymbol(float *counters, char sym, float wt);
 extern void  DefaultGeneticCode(int *aacode);
@@ -140,7 +141,8 @@ extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
 /* masks.c
  * Repetitive sequence masking.
  */
-extern void XNU(char *dsq, int len);
+extern int  XNU(char *dsq, int len);
+extern int  MiniSEG(char *dsq, int len, float *ret_max);
 
 /* mathsupport.c
  * Much of this code deals with Dirichlet prior mathematics. 
