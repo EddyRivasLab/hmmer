@@ -1054,13 +1054,13 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
   endlist   = MallocOrDie (sizeof(int) * (L+2));
   startlist = MallocOrDie (sizeof(int) * (L+2));
 
+  lpos            = 0; 
   startlist[lpos] = 0;
   endlist[lpos]   = L+1;
   kassign[0]      = 0;
   kassign[L+1]    = hmm->M+1;
   tassign[0]      = STN;		/* artificial; should be STS */
   tassign[L+1]    = STC;		/* artificial; should be STT */
-  lpos            = 0; 
 
   /* Recursive divide-and-conquer alignment.
    */
