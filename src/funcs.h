@@ -140,7 +140,6 @@ extern int      HMMFileRead(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 extern void     HMMFileClose(HMMFILE *hmmfp);
 extern int      HMMFileFormat(HMMFILE *hmmfp);
 extern void     HMMFileRewind(HMMFILE *hmmfp);
-extern void     HMMFilePositionByOffset(HMMFILE *hmmfp, long offset);
 extern int      HMMFilePositionByName(HMMFILE *hmmfp, char *name);
 extern int      HMMFilePositionByIndex(HMMFILE *hmmfp, int idx);
 extern void     WriteAscHMM(FILE *fp, struct plan7_s *hmm);

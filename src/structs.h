@@ -15,6 +15,7 @@
 
 #include "squid.h"
 #include "config.h"
+#include "ssi.h"
 
 /* Miscellaneous math macros used in the package
  */
@@ -291,8 +292,7 @@ struct dpshadow_s {
  */
 struct hmmfile_s {
   FILE    *f;			/* pointer to file opened for reading           */
-  GSIFILE *gsi;			/* pointer to open primary GSI index, or NULL   */
-  GSIFILE *sgsi;		/* pointer to open secondary GSI index, or NULL */
+  SSIFILE *ssi;			/* pointer to open SSI index, or NULL           */
   int (*parser)(struct hmmfile_s *, struct plan7_s **);  /* parsing function    */
   int   is_binary;		/* TRUE if format is a binary one               */
   int   byteswap;               /* TRUE if binary and byteswapped               */

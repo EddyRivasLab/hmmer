@@ -95,7 +95,7 @@ main(void)
   code = HMMPVM_OK;
   if ((hmmfp = HMMFileOpen(hmmfile, "HMMERDB")) == NULL)
     code = HMMPVM_NO_HMMFILE;
-  else if (hmmfp->gsi == NULL)
+  else if (hmmfp->ssi == NULL)
     code = HMMPVM_NO_INDEX;
   
   /* report our status.

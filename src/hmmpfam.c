@@ -449,7 +449,7 @@ main(int argc, char **argv)
 	  printf("\nAlignments of top-scoring domains:\n");
 	  for (i = 0, nreported = 0; i < dhit->num; i++)
 	    {
-	      if (i == Alimit) break; /* limit to Alimit output alignments */
+	      if (nreported == Alimit) break; /* limit to Alimit output alignments */
 	      GetRankedHit(dhit, i, 
 			   &pvalue, &sc, &motherp, &mothersc,
 			   &name, &acc, NULL,
@@ -470,8 +470,8 @@ main(int argc, char **argv)
 		  nreported++;
 		}
 	    }
-	  if (nreported == 0) printf("\t[no hits above thresholds]\n");
-	  if (i == Alimit)    printf("\t[output cut off at A = %d top alignments]\n", Alimit);
+	  if (nreported == 0)      printf("\t[no hits above thresholds]\n");
+	  if (nreported == Alimit) printf("\t[output cut off at A = %d top alignments]\n", Alimit);
 	}
 
 
@@ -684,8 +684,8 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 
   /* Sanity checks.
    */
-  if (hmmfp->gsi == NULL)
-    Die("HMM file %s needs a GSI index to use PVM. See: hmmindex.", hmmfile);
+  if (hmmfp->ssi == NULL)
+    Die("HMM file %s needs an SSI index to use PVM. See: hmmindex.", hmmfile);
 
   /* Prepare sequence.
    */
@@ -730,7 +730,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
    * For efficiency reasons, we don't want the master to
    * load HMMs from disk until she absolutely needs them.
    */
-  for (nhmm = 0; nhmm < nslaves && nhmm < hmmfp->gsi->recnum; nhmm++) {
+  for (nhmm = 0; nhmm < nslaves && nhmm < hmmfp->ssi->nprimary; nhmm++) {
     pvm_initsend(PvmDataDefault);
     pvm_pkint(&nhmm, 1, 1);	/* side effect: also tells him what number he is. */
     pvm_send(slave_tid[nhmm], HMMPVM_WORK);
@@ -741,7 +741,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   
   /* Receive/send loop
    */
-  for (; nhmm < hmmfp->gsi->recnum; nhmm++)
+  for (; nhmm < hmmfp->ssi->nprimary; nhmm++)
     {
 				/* check slaves before blocking */
       PVMCheckSlaves(slave_tid, nslaves);

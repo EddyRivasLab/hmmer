@@ -26,12 +26,12 @@ SHIVA = alignalign_test\
 #######
 
 .c.o:
-	$(CC) $(CFLAGS) $(MDEFS) -I../lib -c $<		
+	$(CC) $(CFLAGS) $(MDEFS) -I../squid -I../src -c $<		
 
 all: 	$(SHIVA)
 
-$(SHIVA): @HMMER_EXEC_DEPENDENCY@
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ -L../lib $@.o $(LIBS)
+$(SHIVA): @EXEC_DEPENDENCY@
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ -L../squid -L../src $@.o $(LIBS)
 
 #######
 ## `make check` actually runs the tests.

@@ -27,26 +27,21 @@ dnl
 dnl I use different conventions in my Makefiles. Sometimes 
 dnl executable "foo" has a file "foo.c" - this is the HMMER convention.
 dnl Sometimes executable "foo" has a file "foo_main.c" - this is
-dnl the SQUID convention. The configure script can deal with
-dnl either; Makefile.in contains one of HMMER_EXEC_DEPENDENCY or
-dnl SQUID_EXEC_DEPENDENCY.
+dnl the SQUID convention. The configure script must set the
+dnl EXEC_DEPENDENCY appropriately.
 dnl
 AC_DEFUN(CHECK_GNU_MAKE,[ 
   AC_MSG_CHECKING(whether your make is GNU make)
   foundGNUmake='nope, assuming sysv make.' ;
-  HMMER_EXEC_DEPENDENCY=[\$\$\@.o] ;
-  SQUID_EXEC_DEPENDENCY=[\$\$\@_main.o] ;
+  EXEC_DEPENDENCY=[\$\$\@.o] ;
   if ( make --version nothing 2> /dev/null | grep GNU > /dev/null ) ;  then
      foundGNUmake='yes, it is.' ;
-     HMMER_EXEC_DEPENDENCY='%: %.o' ;
-     SQUID_EXEC_DEPENDENCY='%: %_main.o' ;
+     EXEC_DEPENDENCY='%: %.o' ;
   fi
   AC_MSG_RESULT($foundGNUmake)
-  AC_SUBST(HMMER_EXEC_DEPENDENCY)
-  AC_SUBST(SQUID_EXEC_DEPENDENCY)
+  AC_SUBST(EXEC_DEPENDENCY)
 ])
 CHECK_GNU_MAKE
-
 
 dnl Configure PVM
 dnl
@@ -107,13 +102,11 @@ AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 
 dnl Configure the squid library
 dnl
-AC_CONFIG_SUBDIRS(lib/squid)
+AC_CONFIG_SUBDIRS(squid)
 
 dnl Write out Makefiles
 dnl
 echo "   Configuration complete. Writing Makefiles and such..."
-AC_OUTPUT(Makefile src/Makefile\
-          lib/Makefile\
-          testsuite/Makefile)
+AC_OUTPUT(Makefile src/Makefile testsuite/Makefile)
 
 

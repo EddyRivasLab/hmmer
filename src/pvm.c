@@ -106,7 +106,7 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
  *           codes are in structs.h and include:
  *              HMMPVM_OK          everything's fine
  *              HMMPVM_NO_HMMFILE  file not found (hmmpfam)
- *              HMMPVM_NO_INDEX    no GSI file found (hmmpfam)
+ *              HMMPVM_NO_INDEX    no SSI file found (hmmpfam)
  *              HMMPVM_BAD_INIT    miscellaneous error
  *           They also send back the RELEASE code, which
  *           must match the master. This was added as an
@@ -156,7 +156,7 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
 	  case HMMPVM_NO_HMMFILE: 
 	    Die("One or more PVM slaves couldn't open hmm file. Check installation.");
 	  case HMMPVM_NO_INDEX:
-	    Die("One or more PVM slaves couldn't open GSI index for hmm file. Check installation.");
+	    Die("One or more PVM slaves couldn't open SSI index for hmm file. Check installation.");
 	  case HMMPVM_BAD_INIT:
 	    Die("One or more PVM slaves reports a failure to initialize.");
 	  default:

@@ -37,8 +37,8 @@ PVMPROGS  = @PVMPROGS@
 
 SHELL    = /bin/sh
 MYLIBS   = -lsquid
-MYLIBDIR = -L../lib
-MYINCDIR = -I../lib
+MYLIBDIR = -L../squid
+MYINCDIR = -I../squid
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -86,7 +86,7 @@ HDRS =  config.h\
 ##
 all: 	$(PROGS) 
 
-$(PROGS): @HMMER_EXEC_DEPENDENCY@ $(OBJS) 
+$(PROGS): @EXEC_DEPENDENCY@ $(OBJS) 
 	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
 
 
@@ -94,10 +94,6 @@ $(PROGS): @HMMER_EXEC_DEPENDENCY@ $(OBJS)
 ## Targets used in making HMMER module for testsuite compilation.
 ##
 module: libhmmer.a
-
-module-install: libhmmer.a
-	mv libhmmer.a ../lib/
-	cp $(HDRS)    ../lib/
 
 libhmmer.a: $(OBJS) 
 	$(AR) libhmmer.a $(OBJS) 

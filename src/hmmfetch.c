@@ -6,7 +6,7 @@
  * SRE, Wed Aug  5 14:26:51 1998 [St. Louis]
  * 
  * Recover a specific HMM file from an HMM database, using
- * a GSI index (created with hmmindex).
+ * an SSI index (created with hmmindex).
  * 
  * CVS $Id$
  */
@@ -73,13 +73,13 @@ main(int argc, char **argv)
   key     = argv[optind++];
 
   /***********************************************
-   * Open HMM file, make sure GSI index exists
+   * Open HMM file, make sure SSI index exists
    ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, "HMMERDB")) == NULL)
     Die("failed to open HMM file %s for reading.", hmmfile);
-  if (hmmfp->gsi == NULL)
-    Die("There is no GSI index for %s; you need to use hmmindex on it.", hmmfile);
+  if (hmmfp->ssi == NULL)
+    Die("There is no SSI index for %s; you need to use hmmindex on it.", hmmfile);
 
   /***********************************************
    * find key in hmmfile; get HMM; show as ASCII
