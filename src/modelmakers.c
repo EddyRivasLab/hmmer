@@ -29,15 +29,13 @@
 #include <limits.h>
 #include <math.h>
 #include <float.h>
+#include <ctype.h>
 
 #include "structs.h"
 #include "config.h"
 #include "funcs.h"
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
+#include "msa.h"
 
 /* flags used for matassign[] arrays -- 
  *   assignment of aligned columns to match/insert states
@@ -51,15 +49,15 @@
 
 static int build_cij(char **aseqs, int nseq, int *insopt, int i, int j,
 		     float *wgt, float *cij);
-static int estimate_model_length(AINFO *ainfo, float *wgt, int nseq);
-static void matassign2hmm(char **aseq, char **dsq, AINFO *ainfo,
+static int estimate_model_length(MSA *msa);
+static void matassign2hmm(MSA *msa, char **dsq,
 			  int *matassign, struct plan7_s **ret_hmm,
 			  struct p7trace_s ***ret_tr);
 static void fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
 			    struct p7trace_s ***ret_tr);
 static void trace_doctor(struct p7trace_s *tr, int M, int *ret_ndi, 
 			 int *ret_nid);
-static void annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo);
+static void annotate_model(struct plan7_s *hmm, int *matassign, MSA *msa);
 static void print_matassign(int *matassign, int alen);
 
 
@@ -79,9 +77,8 @@ static void print_matassign(int *matassign, int alen);
  *           Dirichlet priors as the next step), and fake tracebacks
  *           for each aligned sequence.
  *           
- * Args:     aseq - multiple sequence alignment          
+ * Args:     msa  - multiple sequence alignment          
  *           dsq  - digitized unaligned aseq's
- *           ainfo - optional info with aseq
  *           ret_hmm - RETURN: counts-form HMM
  *           ret_tr  - RETURN: array of tracebacks for aseq's
  *           
@@ -90,25 +87,26 @@ static void print_matassign(int *matassign, int alen);
  *           FreeHMM(hmm).
  */            
 void
-P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo, 
+P7Handmodelmaker(MSA *msa, char **dsq,
 		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
   int      apos;                /* counter for aligned columns         */
 
   /* Make sure we have all the info about the alignment that we need */
-  if (ainfo->rf == NULL)
-    Die("Alignment must have #=RF annotation to hand-build an HMM");
+  if (msa->rf == NULL)
+    Die("Alignment must have RF annotation to hand-build an HMM");
+
 				/* Allocation */
-  matassign = (int *) MallocOrDie (sizeof(int) * (ainfo->alen+1));
+  matassign = (int *) MallocOrDie (sizeof(int) * (msa->alen+1));
   
   /* Determine match assignment from optional annotation
    */
   matassign[0] = 0;
-  for (apos = 0; apos < ainfo->alen; apos++)
+  for (apos = 0; apos < msa->alen; apos++)
     {
       matassign[apos+1] = 0;
-      if (!isgap(ainfo->rf[apos])) 
+      if (!isgap(msa->rf[apos])) 
 	matassign[apos+1] |= ASSIGN_MATCH;
       else 
 	matassign[apos+1] |= ASSIGN_INSERT;
@@ -116,8 +114,8 @@ P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
 
   /* Hand matassign off for remainder of model construction
    */
-  /*   print_matassign(matassign, ainfo->alen); */
-  matassign2hmm(aseq, dsq, ainfo, matassign, ret_hmm, ret_tr);
+  /*   print_matassign(matassign, msa->alen); */
+  matassign2hmm(msa, dsq, matassign, ret_hmm, ret_tr);
 
   free(matassign);
   return;
@@ -140,9 +138,8 @@ P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
  *           priors as the next step). Also returns fake traceback
  *           for each training sequence.
  *           
- * Args:     aseq    - multiple sequence alignment to model
+ * Args:     msa     - multiple sequence alignment
  *           dsq     - digitized unaligned aseq's
- *           ainfo   - optional info with aseq
  *           maxgap  - if more gaps than this, column becomes insert.
  *           ret_hmm - RETURN: counts-form HMM
  *           ret_tr  - RETURN: array of tracebacks for aseq's
@@ -152,8 +149,7 @@ P7Handmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
  *           FreeHMM(hmm).       
  */
 void
-P7Fastmodelmaker(char **aseq, char **dsq, AINFO *ainfo, 
-		 float maxgap,
+P7Fastmodelmaker(MSA *msa, char **dsq, float maxgap,
 		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
@@ -163,20 +159,20 @@ P7Fastmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
 
   /* Allocations: matassign is 1..alen array of bit flags
    */
-  matassign = (int *) MallocOrDie (sizeof(int) * (ainfo->alen+1));
+  matassign = (int *) MallocOrDie (sizeof(int) * (msa->alen+1));
   
   /* Determine match assignment by counting symbols in columns
    */
   matassign[0] = 0;
-  for (apos = 0; apos < ainfo->alen; apos++) {
+  for (apos = 0; apos < msa->alen; apos++) {
       matassign[apos+1] = 0;
 
       ngap = 0;
-      for (idx = 0; idx < ainfo->nseq; idx++) 
-	if (isgap(aseq[idx][apos])) 
+      for (idx = 0; idx < msa->nseq; idx++) 
+	if (isgap(msa->aseq[idx][apos])) 
 	  ngap++;
       
-      if ((float) ngap / (float) ainfo->nseq > maxgap)
+      if ((float) ngap / (float) msa->nseq > maxgap)
 	matassign[apos+1] |= ASSIGN_INSERT;
       else
 	matassign[apos+1] |= ASSIGN_MATCH;
@@ -186,7 +182,7 @@ P7Fastmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
    * the same; matassign2hmm() does this stuff (traceback construction,
    * trace counting) and sets up ret_hmm and ret_tr.
    */
-  matassign2hmm(aseq, dsq, ainfo, matassign, ret_hmm, ret_tr);
+  matassign2hmm(msa, dsq, matassign, ret_hmm, ret_tr);
 
   free(matassign);
   return;
@@ -204,9 +200,8 @@ P7Fastmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
  *           Given a multiple alignment, construct an optimal (MAP) model
  *           architecture. Return a counts-based HMM.
  *           
- * Args:     aseqs   - multiple sequence alignment (flush)
+ * Args:     msa     - multiple sequence alignment 
  *           dsq     - digitized, unaligned seqs
- *           ainfo   - optional info about alignment
  *           maxgap  - above this, trailing columns are assigned to C           
  *           prior   - priors on parameters to use for model construction
  *           null    - random sequence model emissions
@@ -219,7 +214,7 @@ P7Fastmodelmaker(char **aseq, char **dsq, AINFO *ainfo,
  *           ret_hmm and ret_tr (if !NULL) must be free'd by the caller.
  */          
 void
-P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
+P7Maxmodelmaker(MSA *msa, char **dsq, float maxgap,
 		struct p7prior_s *prior, 
 		float *null, float null_p1, float mpri, 
 		struct plan7_s **ret_hmm, struct p7trace_s  ***ret_tr)
@@ -247,33 +242,33 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
 
   /* Allocations
    */
-  matc      = (float **) MallocOrDie (sizeof(float *) * (ainfo->alen+1));
-  sc        = (float *)  MallocOrDie (sizeof(float)   * (ainfo->alen+2));
-  tbck      = (int *)    MallocOrDie (sizeof(int)     * (ainfo->alen+2));
-  matassign = (int *)    MallocOrDie (sizeof(int)     * (ainfo->alen+1));
-  insopt    = (int *)    MallocOrDie (sizeof(int)     * ainfo->nseq);    
-  for (i = 0; i < ainfo->alen; i++) {
+  matc      = (float **) MallocOrDie (sizeof(float *) * (msa->alen+1));
+  sc        = (float *)  MallocOrDie (sizeof(float)   * (msa->alen+2));
+  tbck      = (int *)    MallocOrDie (sizeof(int)     * (msa->alen+2));
+  matassign = (int *)    MallocOrDie (sizeof(int)     * (msa->alen+1));
+  insopt    = (int *)    MallocOrDie (sizeof(int)     * msa->nseq);    
+  for (i = 0; i < msa->alen; i++) {
     matc[i+1] = (float *) MallocOrDie (Alphabet_size * sizeof(float));
     FSet(matc[i+1], Alphabet_size, 0.);
   }
 
   /* Precalculations
    */
-  for (i = 0; i < ainfo->alen; i++) 
-    for (idx = 0; idx < ainfo->nseq; idx++) 
-      if (!isgap(aseqs[idx][i])) 
-	P7CountSymbol(matc[i+1], SymbolIndex(aseqs[idx][i]), ainfo->wgt[idx]);
+  for (i = 0; i < msa->alen; i++) 
+    for (idx = 0; idx < msa->nseq; idx++) 
+      if (!isgap(msa->aseq[idx][i])) 
+	P7CountSymbol(matc[i+1], SymbolIndex(msa->aseq[idx][i]), msa->wgt[idx]);
   mpri = sreLOG2(mpri);
   
   FCopy(insp, prior->i[0], Alphabet_size);
   FNorm(insp, Alphabet_size);
-  wgtsum = FSum(ainfo->wgt, ainfo->nseq);
+  wgtsum = FSum(msa->wgt, msa->nseq);
   for (x = 0; x < Alphabet_size; x++)
     insp[x] = sreLOG2(insp[x] / null[x]);
   
   /* Estimate the relevant special transitions.
    */
-  est_M = estimate_model_length(ainfo, ainfo->wgt, ainfo->nseq);
+  est_M = estimate_model_length(msa);
   t_me  = 0.5 / (float) (est_M-1);
   bm1   = 0.5;
   bm2   = 0.5 / (float) (est_M-1);
@@ -284,11 +279,11 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
    * by counting gap frequencies.
    */ 
   maxgap = 0.5;
-  for (last = ainfo->alen; last >= 1; last--) {
+  for (last = msa->alen; last >= 1; last--) {
     ngap = 0;
-    for (idx = 0; idx < ainfo->nseq; idx++)
-      if (isgap(aseqs[idx][last-1])) ngap++;
-    if ((float) ngap / (float) ainfo->nseq <= maxgap)
+    for (idx = 0; idx < msa->nseq; idx++)
+      if (isgap(msa->aseq[idx][last-1])) ngap++;
+    if ((float) ngap / (float) msa->nseq <= maxgap)
       break;
   }
 
@@ -299,9 +294,9 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
 
   /* Set ME gaps to '_'
    */
-  for (idx = 0; idx < ainfo->nseq; idx++) 
-    for (i = last; i > 0 && isgap(aseqs[idx][i-1]); i--)
-      aseqs[idx][i-1] = '_';
+  for (idx = 0; idx < msa->nseq; idx++) 
+    for (i = last; i > 0 && isgap(msa->aseq[idx][i-1]); i--)
+      msa->aseq[idx][i-1] = '_';
 
   /* Main recursion moves from right to left.
    */
@@ -314,16 +309,16 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
 
 				/* Initialize insert counters to zero */
     FSet(insc, Alphabet_size, 0.);
-    for (idx = 0; idx < ainfo->nseq; idx++) insopt[idx] = 0;
+    for (idx = 0; idx < msa->nseq; idx++) insopt[idx] = 0;
 
     sc[i] = -FLT_MAX; 
     for (j = i+1; j <= last; j++) {
 			/* build transition matrix for column pair i,j */
-      code = build_cij(aseqs, ainfo->nseq, insopt, i, j, ainfo->wgt, cij);
+      code = build_cij(msa->aseq, msa->nseq, insopt, i, j, msa->wgt, cij);
       if (code == -1) break;	/* no j to our right can work for us */
       if (code == 1) {
 	FCopy(tij, cij, 7);
-	P7PriorifyTransitionVector(tij, prior); 
+	P7PriorifyTransitionVector(tij, prior, prior->tq); 
 	FNorm(tij, 3);
 	tij[TMM] = sreLOG2(tij[TMM] / null_p1); 
 	tij[TMI] = sreLOG2(tij[TMI] / null_p1); 
@@ -347,8 +342,8 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
       }
 				/* bump insc, insopt insert symbol counters */
       FAdd(insc, matc[j], Alphabet_size);
-      for (idx = 0; idx < ainfo->nseq; idx++)
-	if (!isgap(aseqs[idx][j-1])) insopt[idx]++;
+      for (idx = 0; idx < msa->nseq; idx++)
+	if (!isgap(msa->aseq[idx][j-1])) insopt[idx]++;
     }
 				/* add in constant contributions for col i */
 				/* note ad hoc scaling of mpri by wgtsum (us. nseq)*/
@@ -362,8 +357,8 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
   bestsc = -FLT_MAX;
   for (i = 1; i <= last; i++) {
     new = sc[i]; 
-    for (idx = 0; idx < ainfo->nseq; idx++) {
-      if (isgap(aseqs[idx][j-1])) 
+    for (idx = 0; idx < msa->nseq; idx++) {
+      if (isgap(msa->aseq[idx][j-1])) 
 	new += bm2;		/* internal B->M transition */
       else
 	new += bm1;		/* B->M1 transition         */
@@ -377,7 +372,7 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
   /* Traceback
    */
   matassign[0] = 0;
-  for (i = 1; i <= ainfo->alen; i++) matassign[i] = ASSIGN_INSERT; 
+  for (i = 1; i <= msa->alen; i++) matassign[i] = ASSIGN_INSERT; 
   for (i = first; i != 0; i = tbck[i]) {
     matassign[i] &= ~ASSIGN_INSERT;
     matassign[i] |= ASSIGN_MATCH;
@@ -386,11 +381,11 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
   /* Hand matassign off for remainder of model construction
    */
   /*  print_matassign(matassign, ainfo->alen); */
-  matassign2hmm(aseqs, dsq, ainfo, matassign, ret_hmm, ret_tr);
+  matassign2hmm(msa, dsq, matassign, ret_hmm, ret_tr);
 
   /* Clean up.
    */
-  for (i = 1; i <= ainfo->alen; i++) free(matc[i]);
+  for (i = 1; i <= msa->alen; i++) free(matc[i]);
   free(matc);
   free(sc);
   free(tbck);
@@ -469,16 +464,16 @@ build_cij(char **aseqs, int nseq, int *insopt, int i, int j,
  *           Don't assume that weights sum to nseq!
  */
 static int
-estimate_model_length(AINFO *ainfo, float *wgt, int nseq)
+estimate_model_length(MSA *msa)
 {
   int   idx;
   float total = 0.;
   float wgtsum = 0.;
 
-  for (idx = 0; idx < nseq; idx++)
+  for (idx = 0; idx < msa->nseq; idx++)
     {
-      total  += wgt[idx] * (float) ainfo->sqinfo[idx].len;
-      wgtsum += wgt[idx];
+      total  += msa->wgt[idx] * DealignedLength(msa->aseq[idx]);
+      wgtsum += msa->wgt[idx];
     }
     
   return (int) (total / wgtsum);
@@ -492,9 +487,8 @@ estimate_model_length(AINFO *ainfo, float *wgt, int nseq)
  *           calculation that is constant between model construction
  *           algorithms.
  *           
- * Args:     aseq      - multiple sequence alignment to model
+ * Args:     msa       - multiple sequence alignment
  *           dsq       - digitized unaligned aseq's
- *           ainfo     - optional info with aseq
  *           matassign - 1..alen bit flags for column assignments
  *           ret_hmm   - RETURN: counts-form HMM
  *           ret_tr    - RETURN: array of tracebacks for aseq's
@@ -504,8 +498,7 @@ estimate_model_length(AINFO *ainfo, float *wgt, int nseq)
  *           modelmaker function.
  */
 void
-matassign2hmm(char **aseq, char **dsq, AINFO *ainfo, 
-	      int *matassign, 
+matassign2hmm(MSA *msa, char **dsq, int *matassign, 
 	      struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   struct plan7_s    *hmm;       /* RETURN: new hmm                     */
@@ -516,48 +509,47 @@ matassign2hmm(char **aseq, char **dsq, AINFO *ainfo,
 
 				/* how many match states in the HMM? */
   M = 0;
-  for (apos = 1; apos <= ainfo->alen; apos++) {
+  for (apos = 1; apos <= msa->alen; apos++) {
     if (matassign[apos] & ASSIGN_MATCH) 
       M++;
   }
 				/* delimit N-terminal tail */
-  for (apos=1; matassign[apos] & ASSIGN_INSERT && apos <= ainfo->alen; apos++)
+  for (apos=1; matassign[apos] & ASSIGN_INSERT && apos <= msa->alen; apos++)
     matassign[apos] |= EXTERNAL_INSERT_N;
-  if (apos <= ainfo->alen) matassign[apos] |= FIRST_MATCH;
+  if (apos <= msa->alen) matassign[apos] |= FIRST_MATCH;
 
 				/* delimit C-terminal tail */
-  for (apos=ainfo->alen; matassign[apos] & ASSIGN_INSERT && apos > 0; apos--)
+  for (apos=msa->alen; matassign[apos] & ASSIGN_INSERT && apos > 0; apos--)
     matassign[apos] |= EXTERNAL_INSERT_C;
   if (apos > 0) matassign[apos] |= LAST_MATCH;
 
-  /* print_matassign(matassign, ainfo->alen);  */
+  /* print_matassign(matassign, msa->alen);  */
 
 				/* make fake tracebacks for each seq */
-  fake_tracebacks(aseq, ainfo->nseq, ainfo->alen, matassign, &tr);
+  fake_tracebacks(msa->aseq, msa->nseq, msa->alen, matassign, &tr);
 				/* build model from tracebacks */
   hmm = AllocPlan7(M);
   ZeroPlan7(hmm);
-  for (idx = 0; idx < ainfo->nseq; idx++) {
+  for (idx = 0; idx < msa->nseq; idx++) {
     /* P7PrintTrace(stdout, tr[idx], NULL, NULL);   */
-    P7TraceCount(hmm, dsq[idx], ainfo->wgt[idx], tr[idx]);
+    P7TraceCount(hmm, dsq[idx], msa->wgt[idx], tr[idx]);
   }
 				/* annotate new model */
-  annotate_model(hmm, matassign, ainfo);
-  hmm->checksum = GCGMultchecksum(aseq, ainfo->nseq);
+  annotate_model(hmm, matassign, msa);
 
   /* Set #=RF line of alignment to reflect our assignment
    * of match, delete. matassign is valid from 1..alen and is off
-   * by one from ainfo->rf.
+   * by one from msa->rf.
    */
-  if (ainfo->rf != NULL) free(ainfo->rf);
-  ainfo->rf = (char *) MallocOrDie (sizeof(char) * (ainfo->alen + 1));
-  for (apos = 0; apos < ainfo->alen; apos++)
-    ainfo->rf[apos] = matassign[apos+1] & ASSIGN_MATCH ? 'x' : '.';
-  ainfo->rf[ainfo->alen] = '\0';
+  if (msa->rf != NULL) free(msa->rf);
+  msa->rf = (char *) MallocOrDie (sizeof(char) * (msa->alen + 1));
+  for (apos = 0; apos < msa->alen; apos++)
+    msa->rf[apos] = matassign[apos+1] & ASSIGN_MATCH ? 'x' : '.';
+  msa->rf[msa->alen] = '\0';
 
 				/* Cleanup and return. */
   if (ret_tr != NULL) *ret_tr = tr;
-  else   { for (idx = 0; idx < ainfo->nseq; idx++) P7FreeTrace(tr[idx]); free(tr); }
+  else   { for (idx = 0; idx < msa->nseq; idx++) P7FreeTrace(tr[idx]); free(tr); }
   if (ret_hmm != NULL) *ret_hmm = hmm; else FreePlan7(hmm);
   return;
 }
@@ -820,24 +812,25 @@ trace_doctor(struct p7trace_s *tr, int mlen, int *ret_ndi, int *ret_nid)
  * 
  * Args:     hmm       - new model
  *           matassign - which alignment columns are MAT; [1..alen]
- *           ainfo     - optional alignment annotation 
+ *           msa       - alignment, including annotation to transfer
  *           
  * Return:   (void)
  */
 static void
-annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
+annotate_model(struct plan7_s *hmm, int *matassign, MSA *msa)
 {                      
-  int apos;			/* position in matassign, 1.alen */
-  int k;			/* position in model, 1.M        */
+  int   apos;			/* position in matassign, 1.alen  */
+  int   k;			/* position in model, 1.M         */
+  char *pri;			/* X-PRM, X-PRI, X-PRT annotation */
 
   /* Transfer reference coord annotation from alignment,
    * if available
    */
-  if (ainfo->rf != NULL) {
+  if (msa->rf != NULL) {
     hmm->rf[0] = ' ';
-    for (apos = k = 1; apos <= ainfo->alen; apos++)
+    for (apos = k = 1; apos <= msa->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH) /* ainfo is off by one from HMM */
-	hmm->rf[k++] = (ainfo->rf[apos-1] == ' ') ? '.' : ainfo->rf[apos-1];
+	hmm->rf[k++] = (msa->rf[apos-1] == ' ') ? '.' : msa->rf[apos-1];
     hmm->rf[k] = '\0';
     hmm->flags |= PLAN7_RF;
   }
@@ -845,21 +838,84 @@ annotate_model(struct plan7_s *hmm, int *matassign, AINFO *ainfo)
   /* Transfer consensus structure annotation from alignment, 
    * if available
    */
-  if (ainfo->cs != NULL) {
+  if (msa->ss_cons != NULL) {
     hmm->cs[0] = ' ';
-    for (apos = k = 1; apos <= ainfo->alen; apos++)
+    for (apos = k = 1; apos <= msa->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH)
-	hmm->cs[k++] = (ainfo->cs[apos-1] == ' ') ? '.' : ainfo->cs[apos-1];
+	hmm->cs[k++] = (msa->ss_cons[apos-1] == ' ') ? '.' : msa->ss_cons[apos-1];
     hmm->cs[k] = '\0';
     hmm->flags |= PLAN7_CS;
   }
 
+  /* Transfer surface accessibility annotation from alignment,
+   * if available
+   */
+  if (msa->sa_cons != NULL) {
+    hmm->ca[0] = ' ';
+    for (apos = k = 1; apos <= msa->alen; apos++)
+      if (matassign[apos] & ASSIGN_MATCH)
+	hmm->ca[k++] = (msa->sa_cons[apos-1] == ' ') ? '.' : msa->sa_cons[apos-1];
+    hmm->ca[k] = '\0';
+    hmm->flags |= PLAN7_CA;
+  }
+
   /* Store the alignment map
    */
-  for (apos = k = 1; apos <= ainfo->alen; apos++)
+  for (apos = k = 1; apos <= msa->alen; apos++)
     if (matassign[apos] & ASSIGN_MATCH)
       hmm->map[k++] = apos;
   hmm->flags |= PLAN7_MAP;
+
+  /* Translate and transfer X-PRM annotation. 
+   * 0-9,[a-zA-Z] are legal; translate as 0-9,10-35 into hmm->mpri.
+   * Any other char is translated as -1, and this will be interpreted
+   * as a flag that means "unknown", e.g. use the normal mixture Dirichlet
+   * procedure for this column.
+   */
+  if ((pri = MSAGetGC(msa, "X-PRM")) != NULL)
+    {
+      hmm->mpri = MallocOrDie(sizeof(int) * (hmm->M+1));
+      for (apos = k = 1; apos <= msa->alen; apos++)
+	if (matassign[apos] & ASSIGN_MATCH)
+	  {
+	    if      (isdigit((int) pri[apos-1])) hmm->mpri[k] = pri[apos-1] - '0';
+	    else if (islower((int) pri[apos-1])) hmm->mpri[k] = pri[apos-1] - 'a' + 10;
+	    else if (isupper((int) pri[apos-1])) hmm->mpri[k] = pri[apos-1] - 'A' + 10;
+	    else hmm->mpri[k] = -1;
+	    k++;
+	  }
+    }
+  /* And again for X-PRI annotation on insert priors:
+   */
+  if ((pri = MSAGetGC(msa, "X-PRI")) != NULL)
+    {
+      hmm->ipri = MallocOrDie(sizeof(int) * (hmm->M+1));
+      for (apos = k = 1; apos <= msa->alen; apos++)
+	if (matassign[apos] & ASSIGN_MATCH)
+	  {
+	    if      (isdigit((int) pri[apos-1])) hmm->ipri[k] = pri[apos-1] - '0';
+	    else if (islower((int) pri[apos-1])) hmm->ipri[k] = pri[apos-1] - 'a' + 10;
+	    else if (isupper((int) pri[apos-1])) hmm->ipri[k] = pri[apos-1] - 'A' + 10;
+	    else hmm->ipri[k] = -1;
+	    k++;
+	  }
+    }
+  /* And one last time for X-PRT annotation on transition priors:
+   */
+  if ((pri = MSAGetGC(msa, "X-PRT")) != NULL)
+    {
+      hmm->tpri = MallocOrDie(sizeof(int) * (hmm->M+1));
+      for (apos = k = 1; apos <= msa->alen; apos++)
+	if (matassign[apos] & ASSIGN_MATCH)
+	  {
+	    if      (isdigit((int) pri[apos-1])) hmm->tpri[k] = pri[apos-1] - '0';
+	    else if (islower((int) pri[apos-1])) hmm->tpri[k] = pri[apos-1] - 'a' + 10;
+	    else if (isupper((int) pri[apos-1])) hmm->tpri[k] = pri[apos-1] - 'A' + 10;
+	    else hmm->tpri[k] = -1;
+	    k++;
+	  }
+    }
+
 }
 
 static void
