@@ -3,9 +3,13 @@
  * 
  * Printing out or naming various useful things from HMMER
  * innards.
+ * 
+ * RCS $Id$
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
 #include <ctype.h>
 
 #include "structs.h"
@@ -16,6 +20,39 @@
 #ifdef MEMDEBUG
 #include "dbmalloc.h"
 #endif
+
+
+/* Function: VerboseWorry()
+ * 
+ * Purpose:  A warning from inside the package, conditional
+ *           on the compile-time setting of the debug level.
+ *           Print an error message and return. The arguments
+ *           are formatted exactly like arguments to printf().
+ *
+ *           This is usually called by the macro Worry() which
+ *           adds the __FILE__ and __LINE__ information. See
+ *           structs.h.
+ *           
+ * Return:   (void)
+ */          
+/* VARARGS0 */
+void
+VerboseWorry(int level, char *file, int line, char *format, ...)
+{
+  va_list  argp;
+                                /* format the error mesg */
+  if (DEBUGLEVEL >= level)
+    {
+      fprintf(stderr, "WORRY: (%s line %d): ", file, line);
+      va_start(argp, format);
+      vfprintf(stderr, format, argp);
+      va_end(argp);
+      fprintf(stderr, "\n");
+      fflush(stderr);
+    }
+}
+
+
 
 /* Function: Statetype()
  * 
