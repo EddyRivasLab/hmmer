@@ -1037,13 +1037,13 @@ worker_thread(void *ptr)
 	pthread_exit(NULL);
       }
     SQD_DPRINTF1(("a thread is working on %s\n", sqinfo.name));
+    wpool->nseq++;
 				/* release the lock */
     if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
       Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
 
     if (sqinfo.len == 0) continue; /* silent skip of len=0 seqs (wormpep!?!) */
 
-    wpool->nseq++;
     dsq = DigitizeSequence(seq, sqinfo.len);
     if (wpool->do_xnu) XNU(dsq, sqinfo.len);
       

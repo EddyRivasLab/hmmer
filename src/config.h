@@ -39,7 +39,7 @@
 #define NINPUTS     4	        /* number of inputs into structural prior          */
 #define INFTY       987654321   /* infinity for purposes of integer DP cells       */
 #define NXRAY       4           /* number of structural inputs                */
-#define LOGSUM_TBL  20000       /* controls precision of Logsum()             */
+#define LOGSUM_TBL  20000       /* controls precision of ILogsum()            */
 #define ALILENGTH   50		/* length of displayed alignment lines        */
 
 #endif /*CONFIGH_INCLUDED*/

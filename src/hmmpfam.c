@@ -186,6 +186,7 @@ main(int argc, char **argv)
   int   be_backwards;		/* TRUE to be backwards-compatible in output*/
   int   show_acc;		/* TRUE to sub HMM accessions for names     */
   int   i;
+  int   nreported;
 
   int   num_threads;            /* number of worker threads */   
 
@@ -347,7 +348,7 @@ main(int argc, char **argv)
       printf("\nScores for sequence family classification (score includes all domains):\n");
       printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Model", descwidth, "Description", "Score", "E-value", " N ");
       printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", descwidth, "-----------", "-----", "-------", "---");
-      for (i = 0; i < ghit->num; i++)
+      for (i = 0, nreported = 0; i < ghit->num; i++)
 	{
 	  char *safedesc;
 	  GetRankedHit(ghit, i, 
@@ -385,14 +386,17 @@ main(int argc, char **argv)
 	  }
 
 	  if (evalue <= thresh.globE && sc >= thresh.globT) 
-	    printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
-		   namewidth, 
-		   (show_acc && acc != NULL) ?  acc : name,
-		   descwidth, descwidth, safedesc != NULL ? safedesc : "",
-		   sc, evalue, ndom);
+	    {
+	      printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
+		     namewidth, 
+		     (show_acc && acc != NULL) ?  acc : name,
+		     descwidth, descwidth, safedesc != NULL ? safedesc : "",
+		     sc, evalue, ndom);
+	      nreported++;
+	    }
 	  free(safedesc);
 	}
-      if (i == 0) printf("\t[no hits above thresholds]\n");
+      if (nreported == 0) printf("\t[no hits above thresholds]\n");
 
       /* 3. Report domain hits (sorted on sqto coordinate)
        */
@@ -405,7 +409,7 @@ main(int argc, char **argv)
       printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
 	     namewidth, "--------", "-------", "-----", "-----", "-----", "-----", "-----", "-------");
       
-      for (i = 0; i < dhit->num; i++)
+      for (i = 0, nreported = 0; i < dhit->num; i++)
 	{
 	  GetRankedHit(dhit, i, 
 		       &pvalue, &sc, &motherp, &mothersc,
@@ -419,7 +423,7 @@ main(int argc, char **argv)
 				/* Does the "mother" (complete) sequence satisfy global thresholds? */
 	  if (motherp * (double)thresh. Z > thresh.globE || mothersc < thresh.globT) 
 	    continue;
-	  else if (evalue <= thresh.domE && sc >= thresh.domT)
+	  else if (evalue <= thresh.domE && sc >= thresh.domT) {
 	    printf("%-*s %3d/%-3d %5d %5d %c%c %5d %5d %c%c %7.1f %8.2g\n",
 		   namewidth, 
 		   (show_acc && acc != NULL) ?  acc : name,
@@ -429,8 +433,10 @@ main(int argc, char **argv)
 		   hmmfrom, hmmto,
 		   hmmfrom == 1 ? '[':'.',  hmmto == hmmlen ? ']' : '.',
 		   sc, evalue);
+	    nreported++;
+	  }
 	}
-      if (i == 0) printf("\t[no hits above thresholds]\n");      
+      if (nreported == 0) printf("\t[no hits above thresholds]\n");      
 
 
       /* 3. Alignment output, also by domain.
@@ -441,7 +447,7 @@ main(int argc, char **argv)
       if (Alimit != 0)
 	{
 	  printf("\nAlignments of top-scoring domains:\n");
-	  for (i = 0; i < dhit->num; i++)
+	  for (i = 0, nreported = 0; i < dhit->num; i++)
 	    {
 	      if (i == Alimit) break; /* limit to Alimit output alignments */
 	      GetRankedHit(dhit, i, 
@@ -461,18 +467,11 @@ main(int argc, char **argv)
 			 (show_acc && acc != NULL) ?  acc : name,
 			 domidx, ndom, sqfrom, sqto, sc, evalue);
 		  PrintFancyAli(stdout, ali);
+		  nreported++;
 		}
-	      else if (evalue > thresh.domE) {
-		if (i > 0) printf("\t[no more alignments below E threshold]\n");
-		break;
-	      }
-	      else if (sc < thresh.domT) {
-		if (i > 0) printf("\t[no more alignments above T threshold]\n");
-		break;
-	      }
 	    }
-	  if (i == 0)      printf("\t[no hits above thresholds]\n");
-	  if (i == Alimit) printf("\t[output cut off at A = %d top alignments]\n", Alimit);
+	  if (nreported == 0) printf("\t[no hits above thresholds]\n");
+	  if (i == Alimit)    printf("\t[output cut off at A = %d top alignments]\n", Alimit);
 	}
 
 
