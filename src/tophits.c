@@ -21,7 +21,6 @@
  * FreeTophits()        - free'ing
  * RegisterHit()        - put information about a hit in the list
  * GetRankedHit()       - recovers information about a hit
- * FastSortTophits()    - puts top H hits in unsorted order in top H slots
  * FullSortTophits()    - sorts the top H hits.
  * 
  ***************************************************************************** 
@@ -29,34 +28,24 @@
  *
  *   struct tophit_s   *yourhits;   // list of hits
  *   struct fancyali_s *ali;        // (optional structure) alignment of a hit 
- *   int H = 1000;                  // max number of hits saved as scores
- *   int A = 100;                   // max number of alignments saved   
  *   
- *   yourhits = AllocTophits(H, A);
+ *   yourhits = AllocTophits(200);
  *   (for every hit in a search) {
  *        if (do_alignments) 
  *           ali = Trace2FancyAli();  // You provide a function/structure here
  *        if (score > threshold)
- *           RegisterHit(yourhits, evalue, bitscore, name, desc, 
- *                       sqfrom, sqto, hmmfrom, hmmto, ali);
- *    }                   
+ *           RegisterHit(yourhits, ...)
+ *     }
  *      
  *   FullSortTophits(yourhits);      // Sort hits by evalue 
  *   for (i = 0; i < 100; i++)       // Recover hits out in ranked order
  *     {   
- *       GetRankedHit(yourhits, i, &evalue, &bitscore, &name, &desc,
- *                    &sqfrom, &sqto, &qfrom, &qto, &ali);
+ *       GetRankedHit(yourhits, i, ...);
  *                                   // Presumably you'd print here...
  *     } 
  *   FreeTophits(yourhits);
  ***************************************************************************   
  * 
- * Output is controlled by the following parameters:
- *     T = threshold score (>=, bits)
- *     E = threshold score (<=, E-value)
- *     H = maximum number of hits kept as score and coords
- *     A = maximum number of hits kept as score, coords, and alignments
- *     
  * Estimated storage per hit: 
  *        coords:   16 bytes
  *        scores:    8 bytes
@@ -73,65 +62,47 @@
 #include "structs.h"
 #include "funcs.h"
 
-
-static void free_loser_alignments(struct tophit_s *h);
-
-
 /* Function: AllocTophits()
  * 
  * Purpose:  Allocate a struct tophit_s, for maintaining
- *           a list of up to H top-scoring hits in a database search
- *           and up to A top-scoring hits with alignment info.
+ *           a list of top-scoring hits in a database search.
  *           
- * Args:     H - max # top hits to save (-1: no limit. 0: none).
- *           A - max # top hits to save with alignments (-1: no limit. 0: none)
+ * Args:     lumpsize - allocation lumpsize
  *           
  * Return:   An allocated struct hit_s. Caller must free.
  */
 struct tophit_s *
-AllocTophits(int H, int A)
+AllocTophits(int lumpsize)
 {
-  int i;
   struct tophit_s *hitlist;
   
-  if (A > H)            Die("can't have A > H"); 
-  if (H > INT_MAX / 2)  Die("can't have H > INT_MAX / 2");
-
-  hitlist = (struct tophit_s *) MallocOrDie (sizeof(struct tophit_s));
-  hitlist->H     = H;
-  hitlist->A     = A;
-
-  if (hitlist->H > 0) hitlist->alloc = H * 2;  /* overallocation; memory/speed tradeoff */
-  else                hitlist->alloc = 200;
-  hitlist->sorts = 0;		  /* counter for # of sorts                */
-  hitlist->pos   = 0;
-  hitlist->best  = -DBL_MAX;	  /* current worst sort key */
-
-  hitlist->hit = (struct hit_s **) MallocOrDie (sizeof(struct hit_s *)*
-						(hitlist->alloc));
-  for (i = 0; i < hitlist->alloc; i++)
-    hitlist->hit[i] = NULL;
-
+  hitlist        = MallocOrDie (sizeof(struct tophit_s));
+  hitlist->hit   = NULL;
+  hitlist->unsrt = MallocOrDie (lumpsize * sizeof(struct hit_s));
+  hitlist->alloc = lumpsize;
+  hitlist->num   = 0;
+  hitlist->lump  = lumpsize; 
   return hitlist;
 }
 void
-FreeTophits(struct tophit_s *hitlist)
+GrowTophits(struct tophit_s *h)
+{
+  h->unsrt = ReallocOrDie(h->unsrt,(h->alloc + h->lump) * sizeof(struct hit_s));
+  h->alloc += h->lump;
+}
+void
+FreeTophits(struct tophit_s *h)
 {
   int pos;
-
-  for (pos = 0; pos < hitlist->alloc; pos++)
-    if (hitlist->hit[pos] != NULL)
-      {
-	if (hitlist->hit[pos]->ali != NULL)
-	  FreeFancyAli(hitlist->hit[pos]->ali);
-	if (hitlist->hit[pos]->name != NULL)
-	  free(hitlist->hit[pos]->name);
-	if (hitlist->hit[pos]->desc != NULL)
-	  free(hitlist->hit[pos]->desc);
-	free(hitlist->hit[pos]);
-      }
-  free(hitlist->hit);
-  free(hitlist);
+  for (pos = 0; pos < h->num; pos++)
+    {
+      if (h->unsrt[pos].ali  != NULL) FreeFancyAli(h->unsrt[pos].ali);
+      if (h->unsrt[pos].name != NULL) free(h->unsrt[pos].name);
+      if (h->unsrt[pos].desc != NULL) free(h->unsrt[pos].desc);
+    }
+  free(h->unsrt);
+  if (h->hit != NULL) free(h->hit);
+  free(h);
 }
 
 struct fancyali_s *
@@ -160,13 +131,9 @@ FreeFancyAli(struct fancyali_s *ali)
   }
 }
     
-
-
-
 /* Function: RegisterHit()
  * 
- * Purpose:  Examine a new hit and possibly add it to the
- *           list of top hits.
+ * Purpose:  Add a new hit to a list of top hits.
  *
  *           "ali", if provided, is a pointer to allocated memory
  *           for an alignment output structure.
@@ -174,16 +141,17 @@ FreeFancyAli(struct fancyali_s *ali)
  *           Caller should not free them; they will be free'd by
  *           the FreeTophits() call. 
  *
- *           In contrast, "name" and "desc" are copied, so the caller
+ *           In contrast, "name" and "desc" are copied, so caller
  *           is still responsible for these.
  *           
- *           Number of args is highly unwieldy; consider abstracting
- *           into some sort of object?
+ *           Number of args is unwieldy.
  *           
- * Args:     hitlist  - active top hit list
+ * Args:     h        - active top hit list
  *           key      - value to sort by: bigger is better
- *           evalue   - evalue (or pvalue) of this hit 
+ *           pvalue   - P-value of this hit 
  *           score    - score of this hit
+ *           motherp  - P-value of parent whole sequence
+ *           mothersc - score of parent whole sequence 
  *           name     - name of target sequence 
  *           desc     - description of target sequence 
  *           sqfrom   - 1..L pos in target seq  of start
@@ -197,78 +165,38 @@ FreeFancyAli(struct fancyali_s *ali)
  *           ali      - optional printable alignment info
  *           
  * Return:   (void)
- *           hitlist may be modified, and may be resorted.          
+ *           hitlist is modified and possibly reallocated internally.
  */
 void
-RegisterHit(struct tophit_s *hitlist, double key, double evalue, float score,
-	    char *name, char *desc, int sqfrom, int sqto, int sqlen,
+RegisterHit(struct tophit_s *h, double key, 
+	    double pvalue, float score, double motherp, float mothersc,
+	    char *name, char *desc, 
+	    int sqfrom, int sqto, int sqlen,
 	    int hmmfrom, int hmmto, int hmmlen, 
 	    int domidx, int ndom,
 	    struct fancyali_s *ali)
 {
-  int i;
-
-  /* Check if we have to add this hit to the current list.
+  /* Check to see if list is full and we must realloc.
    */
-  if (key <= hitlist->best) { if (ali != NULL) FreeFancyAli(ali); return; }
-  if (hitlist->H == 0)      { if (ali != NULL) FreeFancyAli(ali); return; }
+  if (h->num == h->alloc) GrowTophits(h);
 
-  /* Check to see if list is full.
-   * Two cases here: 1) if our hits are unlimited, realloc;
-   *                 2) if hits are limited to top H, sort top H, move "pos" index
-   */
-  if (hitlist->pos == hitlist->alloc)
-    {
-      if (hitlist->H == -1)	/* case 1. unlimited hits; expand alloc */
-	{
-	  hitlist->alloc += 200;
-	  hitlist->hit = (struct hit_s **) 
-	    ReallocOrDie (hitlist->hit, sizeof(struct hit_s *)* (hitlist->alloc));
-	  for (i = hitlist->alloc-200; i < hitlist->alloc; i++)
-	    hitlist->hit[i] = NULL;
-	}
-      else			/* case 2. limited hits; sort in existing alloc */
-	{
-	  FastSortTophits(hitlist);
-	  hitlist->best = hitlist->hit[hitlist->H-1]->sortkey;
-	  hitlist->sorts++;
-	}
-    }
-
-  /* Add the current hit to the list.
-   * For efficiency, we reuse old hit_s structures in the
-   * list. If we're reusing an existing structure, we
-   * first must free its trace
-   */
-  if (hitlist->hit[hitlist->pos] == NULL)
-    hitlist->hit[hitlist->pos] =
-      (struct hit_s *) MallocOrDie (sizeof(struct hit_s));
-  else 
-    {
-      if (hitlist->hit[hitlist->pos]->ali != NULL)
-	FreeFancyAli(hitlist->hit[hitlist->pos]->ali);
-      if (hitlist->hit[hitlist->pos]->name != NULL)
-	free(hitlist->hit[hitlist->pos]->name);
-      if (hitlist->hit[hitlist->pos]->desc != NULL)
-	free(hitlist->hit[hitlist->pos]->desc);
-    }
-
-  hitlist->hit[hitlist->pos]->name    = Strdup(name);
-  hitlist->hit[hitlist->pos]->desc    = Strdup(desc);
-  hitlist->hit[hitlist->pos]->sortkey = key;
-  hitlist->hit[hitlist->pos]->evalue  = evalue;
-  hitlist->hit[hitlist->pos]->score   = score;
-  hitlist->hit[hitlist->pos]->sqfrom  = sqfrom;
-  hitlist->hit[hitlist->pos]->sqto    = sqto;
-  hitlist->hit[hitlist->pos]->sqlen   = sqlen;
-  hitlist->hit[hitlist->pos]->hmmfrom = hmmfrom;
-  hitlist->hit[hitlist->pos]->hmmto   = hmmto;
-  hitlist->hit[hitlist->pos]->hmmlen  = hmmlen;
-  hitlist->hit[hitlist->pos]->domidx  = domidx;
-  hitlist->hit[hitlist->pos]->ndom    = ndom;
-  hitlist->hit[hitlist->pos]->ali     = ali;
-
-  hitlist->pos++; 
+  h->unsrt[h->num].name    = Strdup(name);
+  h->unsrt[h->num].desc    = Strdup(desc);
+  h->unsrt[h->num].sortkey = key;
+  h->unsrt[h->num].pvalue  = pvalue;
+  h->unsrt[h->num].score   = score;
+  h->unsrt[h->num].motherp = motherp;
+  h->unsrt[h->num].mothersc= mothersc;
+  h->unsrt[h->num].sqfrom  = sqfrom;
+  h->unsrt[h->num].sqto    = sqto;
+  h->unsrt[h->num].sqlen   = sqlen;
+  h->unsrt[h->num].hmmfrom = hmmfrom;
+  h->unsrt[h->num].hmmto   = hmmto;
+  h->unsrt[h->num].hmmlen  = hmmlen;
+  h->unsrt[h->num].domidx  = domidx;
+  h->unsrt[h->num].ndom    = ndom;
+  h->unsrt[h->num].ali     = ali;
+  h->num++; 
   return;
 }
 
@@ -277,21 +205,25 @@ RegisterHit(struct tophit_s *hitlist, double key, double evalue, float score,
  * 
  * Purpose:  Recover the data from the i'th ranked hit.
  *           Any of the data ptrs may be passed as NULL for fields
- *           you don't want.
+ *           you don't want. hitlist must have been sorted first.
  *           
  *           name, desc, and ali are returned as pointers, not copies;
- *           don't free them.
+ *           don't free them!
  */ 
 void
 GetRankedHit(struct tophit_s *h, int rank, 
-	     double *r_evalue, float *r_score, char **r_name, char **r_desc,
+	     double *r_pvalue, float *r_score, 
+	     double *r_motherp, float *r_mothersc,
+	     char **r_name, char **r_desc,
 	     int *r_sqfrom, int *r_sqto, int *r_sqlen,
 	     int *r_hmmfrom, int *r_hmmto, int *r_hmmlen,
 	     int *r_domidx, int *r_ndom,
 	     struct fancyali_s **r_ali)
 {
-  if (r_evalue  != NULL) *r_evalue  = h->hit[rank]->evalue;
+  if (r_pvalue  != NULL) *r_pvalue  = h->hit[rank]->pvalue;
   if (r_score   != NULL) *r_score   = h->hit[rank]->score;
+  if (r_motherp != NULL) *r_motherp = h->hit[rank]->motherp;
+  if (r_mothersc!= NULL) *r_mothersc= h->hit[rank]->mothersc;
   if (r_name    != NULL) *r_name    = h->hit[rank]->name;
   if (r_desc    != NULL) *r_desc    = h->hit[rank]->desc;
   if (r_sqfrom  != NULL) *r_sqfrom  = h->hit[rank]->sqfrom;
@@ -305,107 +237,24 @@ GetRankedHit(struct tophit_s *h, int rank,
   if (r_ali     != NULL) *r_ali     = h->hit[rank]->ali;
 }
 
-
 /* Function: TophitsMaxName()
  * 
- * Purpose:  Returns the maximum name length in a top hits list.
+ * Purpose:  Returns the maximum name length in a top hits list; 
+ *           doesn't need to be sorted yet.
  */
 int
 TophitsMaxName(struct tophit_s *h)
 {
   int i;
   int len, maxlen;
-  int top_howmany;
 
-  if (h->H == -1) top_howmany = h->pos;
-  else            top_howmany = MIN(h->pos, h->H); 
-  
   maxlen = 0;
-  for (i = 0; i < top_howmany; i++)
+  for (i = 0; i < h->num; i++)
     {
-      len = strlen(h->hit[i]->name);
+      len = strlen(h->unsrt[i].name);
       if (len > maxlen) maxlen = len;
     }
   return maxlen;
-}
-
-
-/* Function: FastSortTophits()
- * 
- * Purpose:  Re-sort top hits list so that the top H are 
- *           in positions 0..H-1 and position H-1 has the H'th
- *           ranking hit. NOTE THAT THIS IS *NOT* A COMPLETE
- *           SORT! The top H are unsorted!
- *           
- *           Sorts by largest "sortkey" element in tophits list.
- * 
- *           This is an independent (i.e. my own, GPL'ed) implementation
- *           based on the select() function of Numerical
- *           Recipes in C (p. 342 of 2nd Edition, 1992, Cambridge
- *           University Press).
- *           
- * Args:     h  - hit list to sort.
- *                
- * Return:   sorted hit list.
- */                         
-void
-FastSortTophits(struct tophit_s *h)
-{
-  int left, right;
-  int i, j;
-  struct hit_s *swapfoo;	/* must declare this to use SWAP() */
-
-  /* if we have <= H elements in the list, we're
-   * already done.
-   */
-  if (h->pos <= h->H) return;
-
-  left   = 0;
-  right  = h->pos-1;
-  if (h->H < h->pos) h->pos = h->H;
-  /*CONSTCOND*/ while (1)
-    {
-      if (right - left <= 0) return;   /* case of single elem */
-      else if (right - left == 1)      /* case of two elem */
-	{
-	  if (h->hit[left]->sortkey < h->hit[right]->sortkey)
-	    SWAP(h->hit[left], h->hit[right]);
-	  return;
-	}
-      else			/* general case */
-	{
-	  /* The purpose of the first three swaps is to set up
-	   * guard positions. We use the leftmost guy as our
-	   * partitioner. Right is guaranteed to be bigger (worse) than
-	   * the partitioner. Left+1 is guaranteed to be smaller (better) than
-	   * the partitioner. This way i can't pass right, and
-	   * j can't pass left. This also means that left+1
-           * and right are sorted, so we can start our next swaps
-           * on left+2,right-1.
-	   */
-	  if (h->hit[right]->sortkey > h->hit[left]->sortkey)
-	    SWAP(h->hit[left], h->hit[right]);
-	  if (h->hit[right]->sortkey > h->hit[left+1]->sortkey)
-	    SWAP(h->hit[left+1], h->hit[right]);
-	  if (h->hit[left]->sortkey > h->hit[left+1]->sortkey)
-	    SWAP(h->hit[left+1], h->hit[left]);
-
-	  i = left+1;
-	  j = right;
-	  /*CONSTCOND*/ while (1)
-	    {			/* i finds a worse score; j finds a better one */
-	      i++; while (h->hit[left]->sortkey < h->hit[i]->sortkey) i++;
-	      j--; while (h->hit[left]->sortkey > h->hit[j]->sortkey) j--;
-	      if (j <= i) break;
-	      SWAP(h->hit[i], h->hit[j]);
-	    }
-	  SWAP(h->hit[left], h->hit[j]);
-	  if (h->H-1 >= j) left  = j;
-	  if (h->H-1 <= j) right = j-1;
-	}
-    }
-  /*NOTREACHED*/
-  return;
 }
 
 /* Function: FullSortTophits()
@@ -419,42 +268,98 @@ FastSortTophits(struct tophit_s *h)
 int
 hit_comparison(const void *vh1, const void *vh2)
 {
-				/* don't ask. */
+           /* don't ask. don't change. and, Don't Panic. */
   struct hit_s *h1 = *((struct hit_s **) vh1);
   struct hit_s *h2 = *((struct hit_s **) vh2);
-  
+
   if      (h1->sortkey < h2->sortkey)  return  1;
   else if (h1->sortkey > h2->sortkey)  return -1;
   else if (h1->sortkey == h2->sortkey) return  0;
-
   /*NOTREACHED*/
   return 0;
 }
 void
 FullSortTophits(struct tophit_s *h)
 {
-  /* Note: sort only top h->pos hits, not full allocation;
-   * else we might try to sort nonexistent hits
+  int i;
+
+  /* Assign the ptrs in h->hit.
    */
-  qsort(h->hit, h->pos, sizeof(struct hit_s *), hit_comparison);
+  h->hit = MallocOrDie(h->num * sizeof(struct hit_s *));
+  for (i = 0; i < h->num; i++)
+    h->hit[i] = &(h->unsrt[i]);
+
+  /* Sort the pointers.
+   */
+  qsort(h->hit, h->num, sizeof(struct hit_s *), hit_comparison);
 }
 
 
-/* Function: free_loser_alignments()
+
+/* Function: TophitsReport()
+ * Date:     Thu Dec 18 13:19:18 1997
  * 
- * Purpose:  Frees all the alignments below the A limit.
- *           Called only after a sort by FastSortTophits()
- *           or FullSortTophits().
+ * Purpose:  Generate a printout summarizing how much
+ *           memory is used by a tophits structure,
+ *           how many hits are stored, and how much
+ *           waste there is from not knowing nseqs.
+ *           
+ * Args:     h    - the sorted tophits list
+ *           E    - the cutoff in Evalue      
+ *           nseq - the final number of seqs used for Eval 
+ *           
+ * Return:   (void)
+ *           Prints information on stdout
  */           
-static void
-free_loser_alignments(struct tophit_s *h)
+void
+TophitsReport(struct tophit_s *h, double E, int nseq)
 {
   int i;
+  int memused;
+  int x;
+  int n;
 
-  for (i = h->A+1; i < h->alloc && i < h->pos; i++)
-    if (h->hit[i]->ali != NULL)
-      {
-	FreeFancyAli(h->hit[i]->ali);
-	h->hit[i]->ali = NULL;
-      } 
+  /* Count up how much memory is used
+   * in the whole list.
+   */
+  memused = sizeof(struct hit_s) * h->alloc + sizeof(struct tophit_s);
+  for (i = 0; i < h->num; i++)
+    {
+      if (h->unsrt[i].name != NULL)
+	memused += strlen(h->unsrt[i].name) + 1;
+      if (h->unsrt[i].desc != NULL)
+	memused += strlen(h->unsrt[i].desc) + 1;
+      if (h->unsrt[i].ali != NULL)
+	{
+	  memused += sizeof(struct fancyali_s);
+	  x = 0;
+	  if (h->unsrt[i].ali->rfline != NULL) x++;
+	  if (h->unsrt[i].ali->csline != NULL) x++;
+  	  if (h->unsrt[i].ali->model  != NULL) x++;
+	  if (h->unsrt[i].ali->mline  != NULL) x++;
+	  if (h->unsrt[i].ali->aseq   != NULL) x++;
+	  memused += x * (h->unsrt[i].ali->len + 1);
+	  
+	  if (h->unsrt[i].ali->query  != NULL) 
+	    memused += strlen(h->unsrt[i].ali->query) + 1;
+	  if (h->unsrt[i].ali->target != NULL) 
+	    memused += strlen(h->unsrt[i].ali->target) + 1;
+	}
+    }
+
+  /* Count how many hits actually satisfy the E cutoff.
+   */
+  n = 0;
+  for (i = 0; i < h->num; i++)
+    {
+      if (h->hit[i]->pvalue * (double) nseq >= E) break;
+      n++;
+    }
+
+  /* Format and print a summary
+   */
+  printf("tophits_s report:\n");
+  printf("     Total hits:           %d\n", h->num);
+  printf("     Satisfying E cutoff:  %d\n", n);
+  printf("     Total memory:         %dK\n", memused / 1000);
 }
