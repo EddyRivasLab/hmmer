@@ -18,26 +18,6 @@
 #include "structs.h"
 #include "version.h"
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
-/* Function: Banner()
- * 
- * Purpose:  Print the HMMER version and copyright banner.
- *           Used by all the main()'s.
- */
-void
-Banner(FILE *fp, char *banner)
-{
-  fputs(banner, fp);
-  fprintf(fp, "\nHMMER %s (%s)\n", RELEASE, RELEASEDATE);
-  fprintf(fp, "Copyright (C) 1992-1999 Washington University School of Medicine\n"); 
-  fprintf(fp, "HMMER is freely distributed under the GNU General Public License (GPL).\n");
-  fprintf(fp, "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
-}
-
-
 /* Function: Getword()
  * 
  * Purpose:  little function used by ReadPrior() and ReadHMM() to parse
