@@ -17,11 +17,6 @@
 #ifndef FUNCSH_INCLUDED
 #define FUNCSH_INCLUDED
 
-#ifdef BLAMM
-#include <ncbi.h>
-#include <dfa.h>
-#endif /* BLAMM */
-
 #include "config.h"
 #include "structs.h"
 #include "squid.h"
@@ -38,31 +33,6 @@ extern void  DigitizeAlignment(char **aseqs, AINFO *ainfo, char ***ret_dsqs);
 extern void  P7CountSymbol(float *counters, char sym, float wt);
 extern void  DefaultGeneticCode(int *aacode);
 extern void  DefaultCodonBias(float *codebias);
-
-/* from blast.c
- * BLAMM: Experimental BLAST/HMM hybrid code.
- */
-#ifdef BLAMM
-extern void NeighborhoodWords(struct hmm_struc *phmm, DFAPtr dfa, 
-			      struct wordpool_s *pool, int target_len, float T,
-			      FILE *ofp, int *ret_nwords);
-extern struct wordpool_s *Init_HMMWordPool(void);
-extern void               Free_HMMWordPool(struct wordpool_s *pool);
-extern int  ForwardExtension(struct shmm_s *shmm, char *seq1, int L, 
-			     int starti, int startk, int startsc, int blast_X,
-			     float *ret_sc, int *ret_j);
-#endif /*BLAMM*/
-
-/* from camJul97.c
- * Island HMM experimental code
- */
-extern void MakeStarHMM(struct plan7_s *hmm, float **mx, float *pq,
-			int nq, struct p7prior_s *pri);
-extern void ReadGJMMatrices(FILE *fp, float ***ret_mx, float **ret_pq, int *ret_nq);
-extern void Joint2SubstitutionMatrix(float **jmx, float **smx, int N);
-extern struct plan7_s *MakeIslandHMM(char **aseqs, AINFO *ainfo, int idx, 
-				     float null[MAXABET], float ***mx,
-				     float **bprior, float *qprior, int nmx);
 
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
