@@ -191,7 +191,7 @@ doc:
 #       Exports from the CVS repository.
 #       tags RCS files with $(RELCODE) for later reconstruction
 #       squid RCS files are tagged with hmmer$(RELCODE).
-#       Adds a license statement to each file that has a @LICENSE@ line.
+#       Adds a license statement to each file that has a @ LICENSE @ line.
 #       Virtually identical to squid's make dist -- keep them in sync!
 dist:
 	# Delete old versions of the same release
