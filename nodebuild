@@ -44,6 +44,17 @@ print "chdir...       \t";
 chdir $arena ||  die "chdir failed";
 print "[done]\n";
 
+print "Cleaning arena...\t";
+if (-e $binpkg) {
+   system "rm -rf $binpkg";
+   if ($? != 0) { die "rm -rf failed"; }
+}
+if (-e $binpkg.tar.gz) {
+    system "rm -f $binpkg.tar.gz";
+    if ($? != 0) { die "rm -f failed"; 
+}
+print "[done]\n";
+
 print "Uncompressing...\t";
 system "gunzip -c $pkg.tar.gz | tar xf -";
 if ($? != 0) { die "gunzip | tar xf of $1.tar.gz failed";}

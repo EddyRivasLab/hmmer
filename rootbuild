@@ -34,9 +34,9 @@ if ($? != 0) { die "scp failed" };
 print "[done]\n";
 
 print "Cleaning up...              \t";
-system "ssh $node rm $arena/nodebuild";
+system "ssh $node rm -f $arena/nodebuild";
 if ($? != 0) { die "rm failed" };
-system "ssh $node rm $arena/$pkg.bin.$platform.tar.gz";
+system "ssh $node rm -f $arena/$pkg.bin.$platform.tar.gz";
 if ($? != 0) { die "rm failed" };
 print "[done]\n";
 
