@@ -160,6 +160,8 @@ HMMFileOpen(char *hmmfile, char *env)
   HMMFILE     *hmmfp;
   unsigned int magic;
   char         buf[512];
+  char        *gsifile;
+  char        *dir;        /* dir name in which HMM file was found */
 
   hmmfp = (HMMFILE *) MallocOrDie (sizeof(HMMFILE));
   hmmfp->f          = NULL; 
@@ -170,12 +172,33 @@ HMMFileOpen(char *hmmfile, char *env)
   /* Open the file. Look in current directory.
    * If that doesn't work, check environment var for
    * a second possible directory (usually the location
-   * of a system-wide HMM library)
+   * of a system-wide HMM library).
+   * Using dir name if necessary, construct correct GSI file name.
    */
-  if ((hmmfp->f = fopen(hmmfile, "r"))       == NULL &&
-      (hmmfp->f = EnvFileOpen(hmmfile, env)) == NULL)
-    return NULL;
+  hmmfp->f   = NULL;
+  hmmfp->gsi = NULL;
+  if ((hmmfp->f = fopen(hmmfile, "r")) != NULL)
+    {
+      gsifile = MallocOrDie(sizeof(char) * (strlen(hmmfile) + 5));
+      sprintf(gsifile, "%s.gsi", hmmfile);
+    }
+  else if ((hmmfp->f = EnvFileOpen(hmmfile, env, &dir)) != NULL)
+    {
+      char *full;
+      full    = FileConcat(dir, hmmfile);
+      gsifile = MallocOrDie(sizeof(char) * (strlen(full) + strlen(hmmfile) + 5));
+      sprintf(gsifile, "%s.gsi", full);
+      free(full);
+    }
+  else return NULL;
   
+  /* Open the GSI index file. If it doesn't exist,
+   * hmmfp->gsi stays NULL.
+   */
+  SQD_DPRINTF1(("Opening gsifile %s...\n", gsifile));
+  hmmfp->gsi = GSIOpen(gsifile);
+  free(gsifile);
+
   /* Check for binary or byteswapped binary format
    * by peeking at first 4 bytes.
    */ 
@@ -191,6 +214,7 @@ HMMFileOpen(char *hmmfile, char *env)
     return hmmfp;
   } 
   else if (magic == v20swap) { 
+    SQD_DPRINTF1(("Opened a HMMER 2.0 binary file [byteswapped]\n"));
     hmmfp->parser    = read_bin20hmm;
     hmmfp->is_binary = TRUE;
     hmmfp->byteswap  = TRUE;
@@ -291,7 +315,8 @@ HMMFileRead(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 void
 HMMFileClose(HMMFILE *hmmfp)
 {
-  if (hmmfp->f   != NULL) fclose(hmmfp->f);
+  if (hmmfp->f   != NULL) fclose(hmmfp->f);      
+  if (hmmfp->gsi != NULL) GSIClose(hmmfp->gsi);
   free(hmmfp);
 }
 void 
@@ -299,7 +324,38 @@ HMMFileRewind(HMMFILE *hmmfp)
 {
   rewind(hmmfp->f);
 }
-			       
+void
+HMMFilePositionByOffset(HMMFILE *hmmfp, long offset)
+{
+  if (fseek(hmmfp->f, offset, SEEK_SET) != 0) PANIC;
+}
+int
+HMMFilePositionByName(HMMFILE *hmmfp, char *name)
+{				/* limitation: name < 32 char  */
+  char       hmmfile[32];	/* ignored.                    */
+  long       offset;		/* offset in hmmfile, from GSI */
+  int        fmt;		/* ignored.                    */
+
+  if (hmmfp->gsi == NULL) return 0; /* can only position if we have GSI index   */
+  if (strlen(name) >= 32) return 0; /* GSI files can only handle keys < 32 char */
+  if (! GSIGetOffset(hmmfp->gsi, name, hmmfile, &fmt, &offset)) return 0; 
+  HMMFilePositionByOffset(hmmfp, offset);
+  return 1;
+}
+int 
+HMMFilePositionByIndex(HMMFILE *hmmfp, int idx)
+{				/* idx runs from 0..nhmm-1 */
+  char       hmmname[32];	/* ignored */
+  sqd_uint32 offset;
+  sqd_uint16 filenum;
+
+  if (idx >= hmmfp->gsi->recnum) return 0; /* idx out of bounds */
+  if (idx <  0)                  return 0; /* idx out of bounds */
+  if (fseek(hmmfp->gsi->gsifp, (1 + hmmfp->gsi->nfiles + idx) * GSI_RECSIZE, SEEK_SET) != 0) PANIC;
+  GSIGetRecord(hmmfp->gsi, hmmname, &filenum, &offset);
+  HMMFilePositionByOffset(hmmfp, (long) offset);
+  return 1;
+}
 
 /*****************************************************************
  * HMM output API:
@@ -421,14 +477,13 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   if (hmm->flags & PLAN7_DESC) write_bin_string(fp, hmm->desc);
   fwrite((char *) &(hmm->M),        sizeof(int),  1,   fp);
   fwrite((char *) &(Alphabet_type), sizeof(int),  1,   fp);
-  if (hmm->flags & PLAN7_RF)   fwrite((char *) hmm->rf, sizeof(char), hmm->M+1, fp);
-  if (hmm->flags & PLAN7_CS)   fwrite((char *) hmm->cs, sizeof(char), hmm->M+1, fp);
+  if (hmm->flags & PLAN7_RF)   fwrite((char *) hmm->rf,  sizeof(char), hmm->M+1, fp);
+  if (hmm->flags & PLAN7_CS)   fwrite((char *) hmm->cs,  sizeof(char), hmm->M+1, fp);
   if (hmm->flags & PLAN7_MAP)  fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp);
   write_bin_string(fp, hmm->comlog);
   fwrite((char *) &(hmm->nseq),     sizeof(int),  1,   fp);
   write_bin_string(fp, hmm->ctime);
   fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp);
-  
 
   /* Specials */
   for (k = 0; k < 4; k++)
@@ -771,8 +826,9 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 	    byteswap((char *)&(hmm->ins[k][x]), sizeof(float));
 	byteswap((char *)&(hmm->begin[k]),  sizeof(float));
 	byteswap((char *)&(hmm->end[k]),    sizeof(float));
-	for (x = 0; x < 7; x++) 
-	  byteswap((char *)&(hmm->t[k][x]), sizeof(float));
+	if (k < hmm->M)
+	  for (x = 0; x < 7; x++) 
+	    byteswap((char *)&(hmm->t[k][x]), sizeof(float));
       }
   }
 
