@@ -20,11 +20,25 @@
  * full dynamic programming to slow, linear-memory divide and conquer
  * dynamic programming algorithms. It is the minimum amount of available
  * RAM on the systems the package will run on. It can be overridden
- * from the Makefile. By default, we assume we have 32 Mb RAM available.
+ * from the Makefile.
+ * By default, we assume we have 32 Mb RAM available (per thread).
  */
 #ifndef RAMLIMIT
 #define RAMLIMIT 32
 #endif
+
+/* HMMER_NCPU determines the number of threads/processors that
+ * a threads version will parallelize across. This can be overridden
+ * by -DHMMER_NCPU=x in the Makefile, and by a setenv HMMER_NCPU x
+ * in the environment, and usually by a command line option.
+ * By default, we configure for up to a quad-processor system;
+ * if the system has fewer processors than that, it's ok, there
+ * will just be some negligible overhead costs.
+ */
+#ifndef HMMER_NCPU
+#define HMMER_NCPU 4
+#endif
+
 
 #define INTSCALE    1000.0      /* scaling constant for floats to integer scores   */
 #define MAXABET     20	        /* maximum size of alphabet (4 or 20)              */
