@@ -1852,7 +1852,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
  *           statetype[] contains metastates M*, etc. as STM, etc.
  */
 struct p7trace_s *
-P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
+P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 {
   struct dpmatrix_s *mx;        /* Viterbi calculation lattice (two rows) */
   struct dpshadow_s *tb;        /* shadow matrix of traceback pointers */
@@ -1874,9 +1874,9 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
    * less total weight because they have fewer counts.
    */
 				/* allocation */
-  con  = MallocOrDie(sizeof(float *) * (ainfo->alen+1));
-  mocc = MallocOrDie(sizeof(float)   * (ainfo->alen+1));
-  for (i = 1; i <= ainfo->alen; i++) {
+  con  = MallocOrDie(sizeof(float *) * (msa->alen+1));
+  mocc = MallocOrDie(sizeof(float)   * (msa->alen+1));
+  for (i = 1; i <= msa->alen; i++) {
     con[i] = MallocOrDie(sizeof(float) * Alphabet_size);
     FSet(con[i], Alphabet_size, 0.0);
   }
@@ -1884,12 +1884,12 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
 				/* initialization */
 				/* note: aseq is off by one, 0..alen-1 */
 				/* "normalized" to have a max total count of 1 per col */
-  denom = FSum(ainfo->wgt, ainfo->nseq);
-  for (i = 1; i <= ainfo->alen; i++)
+  denom = FSum(msa->wgt, msa->nseq);
+  for (i = 1; i <= msa->alen; i++)
     {
-      for (idx = 0; idx < ainfo->nseq; idx++)
-	if (! isgap(aseq[idx][i-1]))
-	  P7CountSymbol(con[i], SYMIDX(aseq[idx][i-1]), ainfo->wgt[idx]);
+      for (idx = 0; idx < msa->nseq; idx++)
+	if (! isgap(msa->aseq[idx][i-1]))
+	  P7CountSymbol(con[i], SYMIDX(msa->aseq[idx][i-1]), msa->wgt[idx]);
       FScale(con[i], Alphabet_size, 1./denom);
       mocc[i] = FSum(con[i], Alphabet_size);
     }
@@ -1898,7 +1898,7 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
    * and a shadow matrix with 0,1..alen rows, 0..M columns.
    */ 
   mx = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
-  tb = AllocShadowMatrix(ainfo->alen+1, hmm->M, &xtb, &mtb, &itb, &dtb);
+  tb = AllocShadowMatrix(msa->alen+1, hmm->M, &xtb, &mtb, &itb, &dtb);
 
   /* Initialization of the zero row.
    */
@@ -1919,7 +1919,7 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
    *    tsc[0] = -INFTY for all eight transitions (no node 0)
    *    D_M and I_M are wastefully calculated (they don't exist)
    */
-  for (i = 1; i <= ainfo->alen; i++) {
+  for (i = 1; i <= msa->alen; i++) {
     cur = i % 2;
     prv = ! cur;
 
@@ -2013,14 +2013,14 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
       { xmx[cur][XMC] = sc; xtb[i][XMC] = STE; }
   }
 				/* T state (not stored in mx) */
-  sc = xmx[ainfo->alen%2][XMC] + hmm->xsc[XTC][MOVE];
+  sc = xmx[msa->alen%2][XMC] + hmm->xsc[XTC][MOVE];
 
 				/* do the traceback */
-  tr = ShadowTrace(tb, hmm, ainfo->alen);
+  tr = ShadowTrace(tb, hmm, msa->alen);
 				/* cleanup and return */
   FreePlan7Matrix(mx);
   FreeShadowMatrix(tb);
-  for (i = 1; i <= ainfo->alen; i++)
+  for (i = 1; i <= msa->alen; i++)
     free(con[i]);
   free(con);
   free(mocc);
