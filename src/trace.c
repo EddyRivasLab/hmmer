@@ -554,169 +554,6 @@ TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, int k1,
   return 0;
 }
 
-/* Function: PrintFancyTrace()
- * Date:     SRE, Fri Aug 29 10:30:41 1997 (Denver CO)
- * 
- * Purpose:  Output of an HMM/sequence alignment, using a
- *           traceback structure. Deliberately similar to 
- *           the output of BLAST, to make it easier for
- *           people to adapt their Perl parsers (or what have
- *           you) from BLAST to HMMER.
- *           
- * Args:     fp  - where to print it (stdout or open FILE)
- *           tr  - traceback structure that gives the alignment      
- *           hmm - the model 
- *           dsq - the sequence (digitized form)       
- *           name- name of the sequence  
- *                 
- * Return:   (void)                
- */
-#define CPL 50
-void
-P7PrintFancyTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm,
-		  char *dsq, char *name)
-{
-  char *rfline;                 /* line 1: hmm's reference annotation */
-  char *csline;                 /* line 2: hmm's consensus annotation */
-  char *model;                  /* line 3: HMM sequence consensus     */
-  char *mline;                  /* line 4: match/mismatch display     */
-  char *aseq;                   /* line 5: aligned sequence           */
-  int   tpos;			/* position in trace and alignment    */
-  int   bestsym;		/* index of best symbol at this pos   */
-  float mthresh;		/* above this P(x), display uppercase */
-  int   apos;			/* position in aseq                   */
-  int   starti;			/* coord of 1st seq char in aseq line */
-  int   endi;			/* coord of last seq char in aseq line*/
-  char  buffer[CPL+1];		/* output line buffer                 */
-
-  /* Allocate and initialize the five lines of display
-   */
-  rfline = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  csline = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  model  = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  mline  = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  aseq   = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  
-  memset(rfline, ' ', tr->tlen);
-  memset(csline, ' ', tr->tlen);  
-  memset(model,  ' ', tr->tlen);
-  memset(mline,  ' ', tr->tlen);
-  memset(aseq,   ' ', tr->tlen);
-
-  if (Alphabet_type == hmmAMINO) mthresh = 0.5;
-  else                           mthresh = 0.9;
-
-  /* Fill in the five lines of display
-   */
-  endi = 0;
-  for (tpos = 0; tpos < tr->tlen; tpos++) {
-    switch (tr->statetype[tpos]) {
-    case STS: 
-    case STT:
-      model[tpos] = '*';
-      break;
-
-    case STN:
-    case STJ:
-    case STC:
-      model[tpos] = '-';
-      if (tr->pos[tpos] > 0) { 
-	if (endi == 0) endi = tr->pos[tpos]; /* finding first seq position */
-	aseq[tpos] = tolower(Alphabet[(int) dsq[tr->pos[tpos]]]);
-      }
-      break;
-
-    case STB: 
-      model[tpos] = '>';
-      break;
-
-    case STE:
-      model[tpos] = '<';
-      break;
-
-    case STM:
-      if (hmm->flags & PLAN7_RF) rfline[tpos] = hmm->rf[tr->nodeidx[tpos]];
-      if (hmm->flags & PLAN7_CS) csline[tpos] = hmm->cs[tr->nodeidx[tpos]];
-      bestsym = FMax(hmm->mat[tr->nodeidx[tpos]], Alphabet_size);
-      model[tpos] = Alphabet[bestsym];
-      if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
-	model[tpos] = tolower(model[tpos]);
-      if (dsq[tr->pos[tpos]] == bestsym)
-	mline[tpos] = Alphabet[(int) dsq[tr->pos[tpos]]];
-      else if (hmm->msc[(int) dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
-	mline[tpos] = '+';
-      aseq[tpos]  = Alphabet[(int) dsq[tr->pos[tpos]]];
-      if (endi == 0) endi = tr->pos[tpos]; /* finding first seq position */
-      break;
-
-    case STD:
-      if (hmm->flags & PLAN7_RF) rfline[tpos] = hmm->rf[tr->nodeidx[tpos]];
-      if (hmm->flags & PLAN7_CS) csline[tpos] = hmm->cs[tr->nodeidx[tpos]];
-      bestsym = FMax(hmm->mat[tr->nodeidx[tpos]], Alphabet_size);
-      model[tpos] = Alphabet[bestsym];
-      if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
-	model[tpos] = tolower(model[tpos]);
-      aseq[tpos]  = '-';
-      break;
-
-    case STI:
-      model[tpos] = '.';
-      if (hmm->isc[(int) dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
-	mline[tpos] = '+';
-      aseq[tpos]  = tolower(Alphabet[(int) dsq[tr->pos[tpos]]]);
-      if (endi == 0) endi = tr->pos[tpos]; /* finding first seq position */
-      break;
-
-    default:
-      Die("bogus statetype");
-    } /* end switch over statetypes */
-  }  /* end loop over tpos */
-  rfline[tpos] = csline[tpos] = model[tpos] = mline[tpos] = aseq[tpos] = '\0';
-
-
-  /* Print out the display
-   */
-  fprintf(fp, "  Alignment to %s HMM consensus:\n", hmm->name);
-  buffer[CPL] = '\0';
-  endi--;
-  for (tpos = 0; tpos < tr->tlen; tpos += CPL)
-    {
-      starti = endi + 1;
-      for (apos = tpos; aseq[apos] != '\0' && apos < tpos + CPL; apos++)
-	if (!isgap(aseq[apos])) endi++;
-	    
-      if (hmm->flags & PLAN7_RF) {
-	strncpy(buffer, rfline+tpos, CPL);
-	fprintf(fp, "  %16s %s\n", "RF", buffer);
-      }
-      if (hmm->flags & PLAN7_CS) {
-	strncpy(buffer, csline+tpos, CPL);
-	fprintf(fp, "  %16s %s\n", "CS", buffer);
-      }
-
-      strncpy(buffer, model+tpos, CPL);
-      fprintf(fp, "  %16s %s\n", " ", buffer);
-
-      strncpy(buffer, mline+tpos, CPL);
-      fprintf(fp, "  %16s %s\n", " ", buffer);
-
-      strncpy(buffer, aseq+tpos, CPL);
-      if (endi >= starti)
-	fprintf(fp, "  %10.10s %5d %s %-5d\n\n", name, starti, buffer, endi);
-      else
-	fprintf(fp, "  %10.10s %5s %s %-5s\n\n", name, "-", buffer, "-"); 
-    }
-
-  /* Cleanup and return
-   */
-  fflush(fp);
-  free(rfline);
-  free(csline);
-  free(model);
-  free(mline);
-  free(aseq);
-} 
-
 
 /* Function: CreateFancyAli()
  * Date:     SRE, Mon Oct 27 06:49:44 1997 [Sanger Centre UK]
@@ -746,17 +583,26 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
   /* Allocate and initialize the five lines of display
    */
   ali         = AllocFancyAli();
-  ali->rfline = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  ali->csline = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
+  ali->rfline = NULL;
+  ali->csline = NULL;
   ali->model  = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
   ali->mline  = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
   ali->aseq   = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  
-  memset(ali->rfline, ' ', tr->tlen);
-  memset(ali->csline, ' ', tr->tlen);  
+
   memset(ali->model,  ' ', tr->tlen);
   memset(ali->mline,  ' ', tr->tlen);
   memset(ali->aseq,   ' ', tr->tlen);
+
+  if (hmm->flags & PLAN7_RF)
+    {
+      ali->rfline = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
+      memset(ali->rfline, ' ', tr->tlen);
+    }
+  if (hmm->flags & PLAN7_CS)
+    {
+      ali->csline = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
+      memset(ali->csline, ' ', tr->tlen);  
+    }
 
   ali->query  = Strdup(hmm->name);
   ali->target = Strdup(name);
@@ -842,8 +688,8 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
   }  /* end loop over tpos */
 
   ali->len          = tpos;
-  ali->rfline[tpos] = '\0';
-  ali->csline[tpos] = '\0';
+  if (hmm->flags & PLAN7_RF) ali->rfline[tpos] = '\0';
+  if (hmm->flags & PLAN7_CS) ali->csline[tpos] = '\0';
   ali->model[tpos]  = '\0';
   ali->mline[tpos]  = '\0';
   ali->aseq[tpos]   = '\0';
@@ -880,13 +726,13 @@ PrintFancyAli(FILE *fp, struct fancyali_s *ali)
       for (i = pos; ali->aseq[i] != '\0' && i < pos + ALILENGTH; i++)
 	if (!isgap(ali->aseq[i])) endi++;
 	    
-      if (ali->rfline != NULL) {
-	strncpy(buffer, ali->rfline+pos, ALILENGTH);
-	fprintf(fp, "  %16s %s\n", "RF", buffer);
-      }
       if (ali->csline != NULL) {
 	strncpy(buffer, ali->csline+pos, ALILENGTH);
 	fprintf(fp, "  %16s %s\n", "CS", buffer);
+      }
+      if (ali->rfline != NULL) {
+	strncpy(buffer, ali->rfline+pos, ALILENGTH);
+	fprintf(fp, "  %16s %s\n", "RF", buffer);
       }
       if (ali->model  != NULL) {
 	strncpy(buffer, ali->model+pos, ALILENGTH);
