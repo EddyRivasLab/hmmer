@@ -52,10 +52,10 @@ CFLAGS = @CFLAGS@
 ## and building the release (indeed, several commands will only work in 
 ## St. Louis)
 #######
-RELEASE     = "2.1"
+RELEASE     = 2.1
 RELEASEDATE = "Oct 1998"
 RELCODE     = "rel2_1"
-LICENSE     = "gnu"
+LICENSE     = gnu
 
 SHELL       = /bin/sh
 SQUIDSRCDIR = $(HOME)/src/squid
@@ -64,7 +64,7 @@ FTPDIR      = /nfs/newftp/eddy/hmmer/
 
 PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmfetch hmmindex hmmpfam hmmsearch 
 
-READMES = 00README INSTALL configure
+READMES = 00README INSTALL 
 
 MANS =  hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmer hmmfetch hmmindex hmmpfam hmmsearch 
 
@@ -140,19 +140,21 @@ install:
 #
 clean:
 	-rm -rf binaries
-	-rm -f *.o *~ Makefile src/Makefile Makefile.bak core TAGS gmon.out
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm config.cache config.log config.status
 	(cd Shiva; make clean)
 	(cd src; make clean)
+	-rm Makefile src/Makefile
 
 # "make almostclean" leaves the binaries, for instance,
 #    if we want to make a binary distribution
 #
 almostclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	-rm config.cache config.log config.status
 	(cd Shiva; make clean)
 	(cd src; make clean)
-
+	-rm Makefile src/Makefile
 
 # verify: consistency checks on the package
 #         These are private tests, not distributed with HMMER
@@ -215,7 +217,7 @@ dist:
 	#
 	# RCS extraction of top level README-type documentation and Makefile
 	#
-	for file in $(READMES) Makefile; do\
+	for file in $(READMES) Makefile.in; do\
 	  rcs -N$(RELCODE): RCS/$$file,v;\
 	  co RCS/$$file,v build/hmmer-$(RELEASE)/$$file;\
 	  licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/$$file;\
@@ -224,7 +226,7 @@ dist:
 	#
 	# RCS extraction of src/ source code subdirectory
 	#
-	for file in $(SRC) $(HDRS) Makefile; do\
+	for file in $(SRC) $(HDRS) Makefile.in; do\
            rcs -N$(RELCODE): src/RCS/$$file,v;\
 	   co src/RCS/$$file,v build/hmmer-$(RELEASE)/src/$$file;\
 	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/src/$$file;\
@@ -253,7 +255,7 @@ dist:
 	#
 	# RCS extraction of Shiva/ testsuite
 	#
-	for file in $(SHIVADIST) Makefile; do\
+	for file in $(SHIVADIST) Makefile.in; do\
 	   rcs -N$(RELCODE): Shiva/RCS/$$file,v;\
 	   co Shiva/RCS/$$file,v build/hmmer-$(RELEASE)/Shiva/$$file;\
 	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Shiva/$$file;\
