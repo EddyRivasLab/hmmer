@@ -23,6 +23,7 @@
 #include <string.h>
 #include <pvm3.h>
 
+#include "version.h"
 #include "structs.h"
 #include "funcs.h"
 #include "squid.h"
@@ -107,6 +108,9 @@ PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves)
  *              HMMPVM_NO_HMMFILE  file not found (hmmpfam)
  *              HMMPVM_NO_INDEX    no GSI file found (hmmpfam)
  *              HMMPVM_BAD_INIT    miscellaneous error
+ *           They also send back the RELEASE code, which
+ *           must match the master. This was added as an
+ *           integrity check for bug#1.
  *              
  * Args:     slave_tid     array of nslaves TIDs
  *           nslaves       number of slaves
@@ -121,6 +125,7 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
   struct timeval tmout;
   int code;			/* code returned by slave */
   int bufid;
+  char *slaverelease;
 
   tmout.tv_sec  = 5;		/* wait 5 sec before giving up on a slave. */
   tmout.tv_usec = 0;
@@ -141,6 +146,8 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
 	
       SQD_DPRINTF1(("Slave %d: present, sir!\n", i));
       pvm_upkint(&code, 1, 1);
+      slaverelease = PVMUnpackString();
+
       if (code != HMMPVM_OK)
 	{
 	  PVMKillSlaves(slave_tid, nslaves);
@@ -155,6 +162,13 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
 	  default:
 	    Die("Unknown error code. A slave is confused.");
 	  }
+	}
+
+      if (strcmp(slaverelease, RELEASE) != 0)
+	{
+	  PVMKillSlaves(slave_tid, nslaves);
+	  pvm_exit();
+	  Die("Slave %d reports that it's running release %s, which doesn't match the master (%s)", i, slaverelease, RELEASE);
 	}
     }
 }
