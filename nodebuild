@@ -8,7 +8,7 @@
 # Looks for source code in <node>:<remote dir>/<pkg>.tar.gz
 # Creates binary dist in <node>:<remote dir>/<pkg>.bin.<platform>.tar.gz
 #
-# configure options and make options are separated by ';' not whitespace.
+# configure options and make options are separated by ',' not whitespace.
 #
 # Example: 
 # building a package "hmmer-2.2g" for platform "intel-linux" on host "wrasse"
@@ -41,8 +41,8 @@ print "makeopts   = $makeopts\n";
 if ($configopts eq "none") { $configopts = ""; }
 if ($makeopts   eq "none") { $makeopts =   ""; }
 
-$configopts =~ s/;/ /g;
-$makeopts   =~ s/;/ /g;
+$configopts =~ s/,/ /g;
+$makeopts   =~ s/,/ /g;
 
 print "chdir...       \t";
 chdir $arena ||  die "chdir failed";
