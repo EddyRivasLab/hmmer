@@ -34,6 +34,7 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
    --null2   : turn on the auxiliary null model\n\
+   --null3   : turn on the model-dependent auxiliary null model\n\
    --xnu     : turn on XNU filtering of sequences\n\
 \n";
 
@@ -47,6 +48,7 @@ static struct opt_s OPTIONS[] = {
   { "--forward", FALSE, sqdARG_NONE },
   { "--xnu",     FALSE, sqdARG_NONE },
   { "--null2",   FALSE, sqdARG_NONE },
+  { "--null3",   FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -97,7 +99,8 @@ main(int argc, char **argv)
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
-  int   do_adjust;		/* TRUE to adjust scores with null model #2 */
+  int   do_null2;		/* TRUE to adjust scores with null model #2 */
+  int   do_null3;		/* TRUE to adjust scores will null model #3 */
   int   do_forward;		/* TRUE to use Forward() not Viterbi()      */
   int   do_xnu;			/* TRUE to filter sequences thru XNU        */
 
@@ -111,7 +114,8 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  do_adjust   = FALSE;
+  do_null2    = FALSE;
+  do_null3    = FALSE;
   do_forward  = FALSE;
   do_xnu      = FALSE;
 
@@ -129,7 +133,8 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
     else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
-    else if (strcmp(optname, "--null2")   == 0) do_adjust  = TRUE;
+    else if (strcmp(optname, "--null2")   == 0) do_null2   = TRUE;
+    else if (strcmp(optname, "--null3")   == 0) do_null3   = TRUE;
     else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
@@ -206,7 +211,8 @@ main(int argc, char **argv)
       if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
       P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
 
-      if (do_adjust)  sc -= TraceScoreCorrection(tr, dsq);
+      if (do_null3)  sc -= NewTraceScoreCorrection(hmm, tr, dsq);
+      if (do_null2)  sc -= TraceScoreCorrection(tr, dsq);
       /* P7PrintTrace(stdout, tr, hmm, dsq); */
 
       /* 2. Store score/pvalue for global alignment; will sort on score. 
