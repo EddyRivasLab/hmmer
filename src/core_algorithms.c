@@ -20,7 +20,7 @@
 #include <string.h>
 #include <assert.h>
 
-static float get_wee_midpt(struct plan7_s *hmm, char *dsq, int L, 
+static float get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L, 
 			   int k1, char t1, int s1,
 			   int k3, char t3, int s3,
 			   int *ret_k2, char *ret_t2, int *ret_s2);
@@ -40,8 +40,7 @@ static float get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
  *           matrix for every new target. The ResizePlan7Matrix()
  *           call does this reallocation, if needed. Here, in the
  *           creation step, we set up some pads - to inform the resizing
- *           call how much to overallocate when it realloc's. If a pad
- *           is zero, we will not resize in that dimension.
+ *           call how much to overallocate when it realloc's. 
  *           
  * Args:     N     - N+1 rows are allocated, for sequence.  
  *           M     - size of model in nodes
@@ -83,7 +82,6 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
       mx->dmx[i] = mx->dmx[0] + (i*(M+2));
     }
 
-  if (padM > 0 && padN > 0)  Die("there's trouble with RAMLIMIT if you grow in both M and N.");
   mx->maxN = N;
   mx->maxM = M;
   mx->padN = padN;
@@ -294,6 +292,52 @@ FreeShadowMatrix(struct dpshadow_s *tb)
   free (tb);
 }
 
+
+/* Function:  P7ViterbiSpaceOK()
+ * Incept:    SRE, Wed Oct  1 12:53:13 2003 [St. Louis]
+ *
+ * Purpose:   Returns TRUE if the existing matrix allocation
+ *            is already sufficient to hold the requested MxN, or if
+ *            the matrix can be expanded in M and/or N without
+ *            exceeding RAMLIMIT megabytes. 
+ *            
+ *            This gets called anytime we're about to do P7Viterbi().
+ *            If it returns FALSE, we switch into the appropriate
+ *            small-memory alternative: P7SmallViterbi() or
+ *            P7WeeViterbi().
+ *            
+ *            Checking the DP problem size against P7ViterbiSize()
+ *            is not enough, because the DP matrix may be already
+ *            allocated in MxN. For example, if we're already
+ *            allocated to maxM,maxN of 1447x979, and we try to
+ *            do a problem of MxN=12x125000, P7ViterbiSize() may
+ *            think that's fine - but when we resize, we can only
+ *            grow, so we'll expand to 1447x125000, which is 
+ *            likely over the RAMLIMIT. [bug#h26; xref SLT7 p.122]
+ *
+ * Args:      
+ *
+ * Returns:   TRUE if we can run P7Viterbi(); FALSE if we need
+ *            to use a small memory variant.
+ *
+ * Xref:      STL7 p.122.
+ */
+int
+P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx)
+{
+  int newM;
+  int newN;
+
+  if (M > mx->maxM) newM = M + mx->padM; else newM = mx->maxM;
+  if (L > mx->maxN) newN = L + mx->padN; else newN = mx->maxN;
+
+  if (P7ViterbiSize(newN, newM) <= RAMLIMIT)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+
 /* Function: P7ViterbiSize()
  * Date:     SRE, Fri Mar  6 15:13:20 1998 [St. Louis]
  *
@@ -401,7 +445,7 @@ P7WeeViterbiSize(int L, int M)
  * Return:   log P(S|M)/P(S|R), as a bit score.
  */
 float
-P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
+P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 {
   struct dpmatrix_s *mx;
   int **xmx;
@@ -440,19 +484,19 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 				     imx[i-1][k-1] + hmm->tsc[TIM][k-1]),
 			      ILogsum(xmx[i-1][XMB] + hmm->bsc[k],
 				     dmx[i-1][k-1] + hmm->tsc[TDM][k-1]));
-	  mmx[i][k] += hmm->msc[(int) dsq[i]][k];
+	  mmx[i][k] += hmm->msc[dsq[i]][k];
 
 	  dmx[i][k]  = ILogsum(mmx[i][k-1] + hmm->tsc[TMD][k-1],
 			      dmx[i][k-1] + hmm->tsc[TDD][k-1]);
 	  imx[i][k]  = ILogsum(mmx[i-1][k] + hmm->tsc[TMI][k],
 			      imx[i-1][k] + hmm->tsc[TII][k]);
-	  imx[i][k] += hmm->isc[(int) dsq[i]][k];
+	  imx[i][k] += hmm->isc[dsq[i]][k];
 	}
       mmx[i][hmm->M] = ILogsum(ILogsum(mmx[i-1][hmm->M-1] + hmm->tsc[TMM][hmm->M-1],
 				   imx[i-1][hmm->M-1] + hmm->tsc[TIM][hmm->M-1]),
 			       ILogsum(xmx[i-1][XMB] + hmm->bsc[hmm->M-1],
 				   dmx[i-1][hmm->M-1] + hmm->tsc[TDM][hmm->M-1]));
-      mmx[i][hmm->M] += hmm->msc[(int) dsq[i]][hmm->M];
+      mmx[i][hmm->M] += hmm->msc[dsq[i]][hmm->M];
 
       /* Now the special states.
        * remember, C and J emissions are zero score by definition
@@ -507,7 +551,7 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 float
-P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
+P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s  *tr;
   int **xmx;
@@ -548,7 +592,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
 	mmx[i][k] = sc;
       if ((sc = dmx[i-1][k-1] + hmm->tsc[TDM][k-1]) > mmx[i][k])
 	mmx[i][k] = sc;
-      if (hmm->msc[(int) dsq[i]][k] != -INFTY) mmx[i][k] += hmm->msc[(int) dsq[i]][k];
+      if (hmm->msc[dsq[i]][k] != -INFTY) mmx[i][k] += hmm->msc[dsq[i]][k];
       else                                     mmx[i][k] = -INFTY;
 
 				/* delete state */
@@ -565,7 +609,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
 	  imx[i][k] = sc;
 	if ((sc = imx[i-1][k] + hmm->tsc[TII][k]) > imx[i][k])
 	  imx[i][k] = sc;
-	if (hmm->isc[(int)dsq[i]][k] != -INFTY) imx[i][k] += hmm->isc[(int) dsq[i]][k];
+	if (hmm->isc[dsq[i]][k] != -INFTY) imx[i][k] += hmm->isc[dsq[i]][k];
 	else                                    imx[i][k] = -INFTY;   
       }
     }
@@ -632,7 +676,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
  *           ret_tr is allocated here. Free using P7FreeTrace().
  */
 void
-P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
+P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
 	       struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;
@@ -672,7 +716,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
   while (tr->statetype[tpos-1] != STS) {
     switch (tr->statetype[tpos-1]) {
     case STM:			/* M connects from i-1,k-1, or B */
-      sc = mmx[i+1][k+1] - hmm->msc[(int) dsq[i+1]][k+1];
+      sc = mmx[i+1][k+1] - hmm->msc[dsq[i+1]][k+1];
       if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else if (sc == xmx[i][XMB] + hmm->bsc[k+1])
 	{
@@ -735,7 +779,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
       break;
 
     case STI:			/* I connects from M,I */
-      sc = imx[i+1][k] - hmm->isc[(int) dsq[i+1]][k];
+      sc = imx[i+1][k] - hmm->isc[dsq[i+1]][k];
       if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else if (sc == mmx[i][k] + hmm->tsc[TMI][k])
 	{
@@ -900,7 +944,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
  * Returns:  Score of optimal alignment in bits.
  */
 float
-P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
+P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *ctr;        /* collapsed trace of optimal parse */
   struct p7trace_s *tr;         /* full trace of optimal alignment */
@@ -940,10 +984,18 @@ P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, str
     {
       sqlen = ctr->pos[i*2+2] - ctr->pos[i*2+1];   /* length of subseq */
 
-      if (P7ViterbiSize(sqlen, hmm->M) > RAMLIMIT)
-	P7WeeViterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, &(tarr[i]));
+      if (P7ViterbiSpaceOK(sqlen, hmm->M, mx))
+	{
+	  SQD_DPRINTF1(("      -- using P7Viterbi on an %dx%d subproblem\n",
+			hmm->M, sqlen));
+	  P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
+	}
       else
-	P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
+	{
+	  SQD_DPRINTF1(("      -- using P7WeeViterbi on an %dx%d subproblem\n",
+			hmm->M, sqlen));
+	  P7WeeViterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, &(tarr[i]));
+	}
 
       tlen  += tarr[i]->tlen - 4; /* not counting S->N,...,C->T */
       totlen += sqlen;
@@ -1068,7 +1120,7 @@ P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, str
  * Returns:  Score of the optimal Viterbi alignment, in bits.
  */
 float
-P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
+P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
   struct dpmatrix_s *mx;        /* two rows of score matrix */
   struct dpmatrix_s *tmx;       /* two rows of misused score matrix: traceback ptrs */
@@ -1132,8 +1184,8 @@ P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_t
 	{ mmx[cur][k] = sc; mtr[cur][k] = i-1; }
       if ((sc = dmx[prv][k-1] + hmm->tsc[TDM][k-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtr[cur][k] = dtr[prv][k-1]; }
-      if (hmm->msc[(int) dsq[i]][k] != -INFTY)
-	mmx[cur][k] += hmm->msc[(int) dsq[i]][k];
+      if (hmm->msc[dsq[i]][k] != -INFTY)
+	mmx[cur][k] += hmm->msc[dsq[i]][k];
       else
 	mmx[cur][k] = -INFTY;
 
@@ -1151,8 +1203,8 @@ P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_t
 	  { imx[cur][k] = sc; itr[cur][k] = mtr[prv][k]; }
 	if ((sc = imx[prv][k] + hmm->tsc[TII][k]) > imx[cur][k])
 	  { imx[cur][k] = sc; itr[cur][k] = itr[prv][k]; }
-	if (hmm->isc[(int) dsq[i]][k] != -INFTY)
-	  imx[cur][k] += hmm->isc[(int) dsq[i]][k];
+	if (hmm->isc[dsq[i]][k] != -INFTY)
+	  imx[cur][k] += hmm->isc[dsq[i]][k];
 	else
 	  imx[cur][k] = -INFTY;
       }
@@ -1267,7 +1319,7 @@ P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_t
  * Returns:  Score of the optimal Viterbi alignment.
  */
 float
-P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
+P7WeeViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;         /* RETURN: traceback */
   int          *kassign;        /* 0..L+1, alignment of seq positions to model nodes */
@@ -1487,7 +1539,7 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
  * 
  */
 float
-Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
+Plan7ESTViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 {
   struct dpmatrix_s *mx;
   int **xmx;
@@ -1657,7 +1709,7 @@ Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_m
  * Returns: score of optimal alignment, in bits. 
  */
 static float
-get_wee_midpt(struct plan7_s *hmm, char *dsq, int L, 
+get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L, 
 	      int k1, char t1, int s1,
 	      int k3, char t3, int s3,
 	      int *ret_k2, char *ret_t2, int *ret_s2)
@@ -1767,15 +1819,15 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 	imx[cur][k1] = sc;
       if ((sc = imx[prv][k1] + hmm->tsc[TII][k1]) > imx[cur][k1])
 	imx[cur][k1] = sc;
-      if (hmm->isc[(int) dsq[i]][k1] != -INFTY)
-	imx[cur][k1] += hmm->isc[(int) dsq[i]][k1];
+      if (hmm->isc[dsq[i]][k1] != -INFTY)
+	imx[cur][k1] += hmm->isc[dsq[i]][k1];
       else
 	imx[cur][k1] = -INFTY;
     }
     if ((sc = xmx[prv][XMB] + hmm->bsc[k1]) > -INFTY)
       mmx[cur][k1] = sc;
-    if (hmm->msc[(int) dsq[i]][k1] != -INFTY)
-      mmx[cur][k1] += hmm->msc[(int) dsq[i]][k1];
+    if (hmm->msc[dsq[i]][k1] != -INFTY)
+      mmx[cur][k1] += hmm->msc[dsq[i]][k1];
     else
       mmx[cur][k1] = -INFTY;
 
@@ -1792,8 +1844,8 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 	mmx[cur][k] = sc;
       if ((sc = dmx[prv][k-1] + hmm->tsc[TDM][k-1]) > mmx[cur][k])
 	mmx[cur][k] = sc;
-      if (hmm->msc[(int) dsq[i]][k] != -INFTY)
-	mmx[cur][k] += hmm->msc[(int) dsq[i]][k];
+      if (hmm->msc[dsq[i]][k] != -INFTY)
+	mmx[cur][k] += hmm->msc[dsq[i]][k];
       else
 	mmx[cur][k] = -INFTY;
 
@@ -1813,8 +1865,8 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 	  imx[cur][k] = sc;
 	if ((sc = imx[prv][k] + hmm->tsc[TII][k]) > imx[cur][k])
 	  imx[cur][k] = sc;
-	if (hmm->isc[(int) dsq[i]][k] != -INFTY)
-	  imx[cur][k] += hmm->isc[(int) dsq[i]][k];
+	if (hmm->isc[dsq[i]][k] != -INFTY)
+	  imx[cur][k] += hmm->isc[dsq[i]][k];
 	else
 	  imx[cur][k] = -INFTY;
       }
@@ -1882,7 +1934,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       for (k = k3; k >= k1; k--) {
 	mmx[nxt][k] = xmx[nxt][XME] + hmm->esc[k];
 	if (s3 != s2)
-	  mmx[nxt][k] += hmm->msc[(int)dsq[s3]][k];
+	  mmx[nxt][k] += hmm->msc[dsq[s3]][k];
       }
     }
 
@@ -1923,7 +1975,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 	dmx[cur][k] = -INFTY;	/* doesn't exist */
 	imx[cur][k] = -INFTY;	/* doesn't exist */
 	if (i != s2)
-	  mmx[cur][k] += hmm->msc[(int)dsq[i]][k];
+	  mmx[cur][k] += hmm->msc[dsq[i]][k];
 	continue;		
       }    	/* below this k < M, so k+1 is a legal index */
 
@@ -1938,7 +1990,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       if ((sc = dmx[cur][k+1] + hmm->tsc[TMD][k]) > mmx[cur][k])
 	mmx[cur][k] = sc;
       if (i != s2) 
-	mmx[cur][k] += hmm->msc[(int)dsq[i]][k];
+	mmx[cur][k] += hmm->msc[dsq[i]][k];
 
 				/* pull into delete state */
       dmx[cur][k] = -INFTY;
@@ -1953,7 +2005,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       if ((sc = imx[nxt][k] + hmm->tsc[TII][k]) > imx[cur][k])
 	imx[cur][k] = sc;
       if (i != s2)
-	imx[cur][k] += hmm->isc[(int)dsq[i]][k];
+	imx[cur][k] += hmm->isc[dsq[i]][k];
       
     }
   }
@@ -2444,7 +2496,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
 			  struct tophit_s    *dhit,
 			  struct p7trace_s   *tr,
 			  struct plan7_s     *hmm,
-			  char               *dsq,
+			  unsigned char      *dsq,
 			  int                 L,
 			  char               *seqname,
 			  char               *seqacc,

@@ -51,7 +51,7 @@ static struct opt_s OPTIONS[] = {
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 static void include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
-			      char ***rseq, char ***dsq, SQINFO **sqinfo, 
+			      char ***rseq, unsigned char ***dsq, SQINFO **sqinfo, 
 			      struct p7trace_s ***tr, int *nseq);
 
 int
@@ -64,7 +64,7 @@ main(int argc, char **argv)
   int              format;	/* format of seqfile                       */
   char           **rseq;        /* raw, unaligned sequences                */ 
   SQINFO          *sqinfo;      /* info associated with sequences          */
-  char           **dsq;         /* digitized raw sequences                 */
+  unsigned char  **dsq;         /* digitized raw sequences                 */
   int              nseq;        /* number of sequences                     */  
   float           *wgt;		/* weights to assign to alignment          */
   MSA             *msa;         /* alignment that's created                */    
@@ -177,7 +177,7 @@ main(int argc, char **argv)
 
   /* Allocations and initializations.
    */
-  dsq = MallocOrDie(sizeof(char *) * nseq);
+  dsq = MallocOrDie(sizeof(unsigned char *)    * nseq);
   tr  = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
   mx  = CreatePlan7Matrix(1, hmm->M, 25, 0);
 
@@ -187,7 +187,7 @@ main(int argc, char **argv)
     {
       dsq[i] = DigitizeSequence(rseq[i], sqinfo[i].len);
 
-      if (P7ViterbiSize(sqinfo[i].len, hmm->M) <= RAMLIMIT)
+      if (P7ViterbiSpaceOK(sqinfo[i].len, hmm->M, mx))
 	(void) P7Viterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
       else
 	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
@@ -266,14 +266,14 @@ main(int argc, char **argv)
  */
 static void
 include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
-		  char ***rsq, char ***dsq, SQINFO **sqinfo, 
+		  char ***rsq, unsigned char ***dsq, SQINFO **sqinfo, 
 		  struct p7trace_s ***tr, int *nseq)
 {
   int format;			/* format of alignment file */
   MSA   *msa;			/* alignment to align to    */
   MSAFILE *afp;
   SQINFO  *newinfo;		/* sqinfo array from msa */
-  char **newdsq;
+  unsigned char **newdsq;
   char **newrseq;
   int   idx;			/* counter over aseqs       */
   struct p7trace_s *master;     /* master trace             */
@@ -309,7 +309,7 @@ include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
     (*rsq)[idx] = newrseq[idx - (*nseq)];
   free(newrseq);
 
-  *dsq = ReallocOrDie((*dsq), sizeof(char *) * (*nseq + msa->nseq));
+  *dsq = ReallocOrDie((*dsq), sizeof(unsigned char *) * (*nseq + msa->nseq));
   DigitizeAlignment(msa, &newdsq);
   for (idx = *nseq; idx < *nseq + msa->nseq; idx++)
     (*dsq)[idx] = newdsq[idx - (*nseq)];

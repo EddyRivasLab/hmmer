@@ -178,7 +178,7 @@ P7ReverseTrace(struct p7trace_s *tr)
  * Return:   (void)
  */
 void
-P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, struct p7trace_s *tr)
+P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s *tr)
 {
   int tpos;                     /* position in tr */
   int i;			/* symbol position in seq */
@@ -304,17 +304,17 @@ P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, struct p7trace_s *tr)
  * Return:   (void)
  */
 float
-P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr)
+P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr)
 {
   int score;			/* total score as a scaled integer */
   int tpos;                     /* position in tr */
-  int sym;			/* digitized symbol in dsq */
+  unsigned char sym;		/* digitized symbol in dsq */
   
   /*  P7PrintTrace(stdout, tr, hmm, dsq); */
   score = 0;
   for (tpos = 0; tpos < tr->tlen-1; tpos++)
     {
-      sym = (int) dsq[tr->pos[tpos]];
+      sym = dsq[tr->pos[tpos]];
 
       /* Emissions.
        * Don't bother counting null states N,J,C.
@@ -370,7 +370,7 @@ P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr)
  *           Caller responsible for freeing msa with MSAFree(msa);
  */          
 MSA *
-P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen, 
+P7Traces2Alignment(unsigned char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen, 
 		   struct p7trace_s **tr, int matchonly) 
 {
   MSA   *msa;                   /* RETURN: new alignment */
@@ -470,7 +470,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 
       if (statetype == STM) {
 	apos = matmap[k];
-	msa->aseq[idx][apos] = Alphabet[(int) dsq[idx][rpos]];
+	msa->aseq[idx][apos] = Alphabet[dsq[idx][rpos]];
 	apos++;
       }
       else if (statetype == STD) {
@@ -480,7 +480,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 	if (matchonly) 
 	  msa->aseq[idx][apos] = '*'; /* insert compression option */
 	else {
-	  msa->aseq[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
+	  msa->aseq[idx][apos] = (char) tolower((int) Alphabet[dsq[idx][rpos]]);
 	  apos++;
 	}
       }
@@ -488,7 +488,7 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
 	if (matchonly)
 	  msa->aseq[idx][apos] = '*'; /* insert compression option */
 	else {
-	  msa->aseq[idx][apos] = (char) tolower((int) Alphabet[(int) dsq[idx][rpos]]);
+	  msa->aseq[idx][apos] = (char) tolower((int) Alphabet[dsq[idx][rpos]]);
 	  apos++;
 	}
       }
@@ -659,7 +659,7 @@ TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1,
  */
 struct fancyali_s *
 CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
-	       char *dsq, char *name)
+	       unsigned char *dsq, char *name)
 {
   struct fancyali_s *ali;       /* alignment to create                */
   int   tpos;			/* position in trace and alignment    */
@@ -725,7 +725,7 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
     case STC:
       ali->model[tpos] = '-';
       if (tr->pos[tpos] > 0) { 
-	ali->aseq[tpos] = tolower(Alphabet[(int) dsq[tr->pos[tpos]]]);
+	ali->aseq[tpos] = tolower(Alphabet[dsq[tr->pos[tpos]]]);
       }
       break;
 
@@ -746,13 +746,13 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
 	ali->model[tpos] = tolower(ali->model[tpos]);
       if (dsq[tr->pos[tpos]] == bestsym)
 	{
-	  ali->mline[tpos] = Alphabet[(int) dsq[tr->pos[tpos]]];
+	  ali->mline[tpos] = Alphabet[dsq[tr->pos[tpos]]];
 	  if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
 	    ali->mline[tpos] = tolower(ali->mline[tpos]);
 	}
-      else if (hmm->msc[(int) dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
+      else if (hmm->msc[dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
 	ali->mline[tpos] = '+';
-      ali->aseq[tpos]  = Alphabet[(int) dsq[tr->pos[tpos]]];
+      ali->aseq[tpos]  = Alphabet[dsq[tr->pos[tpos]]];
       break;
 
     case STD:
@@ -767,9 +767,9 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
 
     case STI:
       ali->model[tpos] = '.';
-      if (hmm->isc[(int) dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
+      if (hmm->isc[dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
 	ali->mline[tpos] = '+';
-      ali->aseq[tpos]  = (char) tolower((int) Alphabet[(int) dsq[tr->pos[tpos]]]);
+      ali->aseq[tpos]  = (char) tolower((int) Alphabet[dsq[tr->pos[tpos]]]);
       break;
 
     default:

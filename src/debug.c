@@ -80,11 +80,11 @@ AlphabetType2String(int type)
  *           dsq - NULL or digitized sequence trace refers to.                
  */
 void
-P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, char *dsq)
+P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char *dsq)
 {
-  int tpos;			/* counter for trace position */
-  int sym;
-  int sc; 
+  int          tpos;		/* counter for trace position */
+  unsigned int sym;
+  int          sc; 
 
   if (tr == NULL) {
     fprintf(fp, " [ trace is NULL ]\n");
@@ -108,7 +108,7 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, char *dsq)
     fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->tlen);
     fprintf(fp, "--  ---- ------  ------- --------\n");
     for (tpos = 0; tpos < tr->tlen; tpos++) {
-      if (dsq != NULL) sym = (int) dsq[tr->pos[tpos]];
+      if (dsq != NULL) sym = dsq[tr->pos[tpos]];
 
       fprintf(fp, "%1s  %4d %6d  %7d", 
 	      Statetype(tr->statetype[tpos]),

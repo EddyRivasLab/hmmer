@@ -814,6 +814,7 @@ Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
 
 
 
+#ifdef SRE_REMOVED
 /* Function: Plan7ESTConfig()
  * 
  * Purpose:  Configure a Plan7 model for EST Smith/Waterman
@@ -867,6 +868,7 @@ Plan7ESTConfig(struct plan7_s *hmm, int *aacode, float **estmodel,
       hmm->dna4 = Prob2Score(dna4, 1.);
     }
 }
+#endif /*SRE_REMOVED*/
 	  
 /* Function: PrintPlan7Stats()
  * 

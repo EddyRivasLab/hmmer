@@ -54,7 +54,7 @@
 static int build_cij(char **aseqs, int nseq, int *insopt, int i, int j,
 		     float *wgt, float *cij);
 static int estimate_model_length(MSA *msa);
-static void matassign2hmm(MSA *msa, char **dsq,
+static void matassign2hmm(MSA *msa, unsigned char **dsq,
 			  int *matassign, struct plan7_s **ret_hmm,
 			  struct p7trace_s ***ret_tr);
 static void fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
@@ -91,7 +91,7 @@ static void print_matassign(int *matassign, int alen);
  *           FreeHMM(hmm).
  */            
 void
-P7Handmodelmaker(MSA *msa, char **dsq,
+P7Handmodelmaker(MSA *msa, unsigned char **dsq,
 		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
@@ -153,7 +153,7 @@ P7Handmodelmaker(MSA *msa, char **dsq,
  *           FreeHMM(hmm).       
  */
 void
-P7Fastmodelmaker(MSA *msa, char **dsq, float maxgap,
+P7Fastmodelmaker(MSA *msa, unsigned char **dsq, float maxgap,
 		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
@@ -218,7 +218,7 @@ P7Fastmodelmaker(MSA *msa, char **dsq, float maxgap,
  *           ret_hmm and ret_tr (if !NULL) must be free'd by the caller.
  */          
 void
-P7Maxmodelmaker(MSA *msa, char **dsq, float maxgap,
+P7Maxmodelmaker(MSA *msa, unsigned char **dsq, float maxgap,
 		struct p7prior_s *prior, 
 		float *null, float null_p1, float mpri, 
 		struct plan7_s **ret_hmm, struct p7trace_s  ***ret_tr)
@@ -503,7 +503,7 @@ estimate_model_length(MSA *msa)
  *           modelmaker function.
  */
 static void
-matassign2hmm(MSA *msa, char **dsq, int *matassign, 
+matassign2hmm(MSA *msa, unsigned char **dsq, int *matassign, 
 	      struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   struct plan7_s    *hmm;       /* RETURN: new hmm                     */

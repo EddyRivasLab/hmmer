@@ -30,12 +30,12 @@ main(void)
 {
   struct p7trace_s *tr;         /* traceback of an alignment               */
   int      master_tid;		/* PVM TID of our master */
-  char    *hmmfile;	        /* file to read HMM(s) from                */
-  HMMFILE *hmmfp;               /* opened hmmfile for reading              */
-  struct plan7_s *hmm;
+  char              *hmmfile;   /* file to read HMM(s) from                */
+  HMMFILE           *hmmfp;     /* opened hmmfile for reading              */
+  struct plan7_s    *hmm;
   struct dpmatrix_s *mx;        /* growable DP matrix                      */
-  char    *seq;
-  char    *dsq;
+  char              *seq;
+  unsigned char     *dsq;
   int      len;
   int      nhmm;		/* number of HMM to work on                */
   float    sc;
@@ -104,7 +104,17 @@ main(void)
   else if (hmmfp->ssi == NULL)
     code = HMMPVM_NO_INDEX;
 
-  mx = CreatePlan7Matrix(1, 1, 0, 25);
+  /* 
+   * We'll create for at least N=300xM=300, and thus consume at least 1 MB,
+   * regardless of RAMLIMIT -- this helps us avoid reallocating some weird
+   * asymmetric matrices.
+   * 
+   * We're growable in both M and N, because inside of P7SmallViterbi,
+   * we're going to be calling P7Viterbi on subpieces that vary in size,
+   * and for different models.
+   */
+  mx = CreatePlan7Matrix(300, 300, 25, 25);
+
   dsq = DigitizeSequence(seq, len);
   if (do_xnu) XNU(dsq, len);
   
@@ -150,7 +160,7 @@ main(void)
 
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
+      if (P7ViterbiSpaceOK(len, hmm->M, mx))
 	{
 	  SQD_DPRINTF1(("P7Viterbi(): Estimated size %d Mb\n", P7ViterbiSize(len, hmm->M)));
 	  sc = P7Viterbi(dsq, len, hmm, mx, &tr);

@@ -183,12 +183,12 @@ main(int argc, char **argv)
     else if (do_alignment)
       {
 	struct p7trace_s **tr;        /* traces for aligned sequences            */
-	char           **dsq;         /* digitized sequences                     */
-	SQINFO          *sqinfo;      /* info about sequences (name/desc)        */
-	MSA             *msa;         /* alignment */
-	float           *wgt;
+	unsigned char    **dsq;       /* digitized sequences                     */
+	SQINFO            *sqinfo;    /* info about sequences (name/desc)        */
+	MSA               *msa;       /* alignment */
+	float             *wgt;
 
-	dsq    = MallocOrDie(sizeof(char *)             * nseq);
+	dsq    = MallocOrDie(sizeof(unsigned char *)    * nseq);
 	tr     = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
 	sqinfo = MallocOrDie(sizeof(SQINFO)             * nseq);
 	wgt    = MallocOrDie(sizeof(float)              * nseq);
@@ -225,7 +225,7 @@ main(int argc, char **argv)
     else				/* unaligned sequence output */
       {
 	struct p7trace_s *tr;         /* generated trace                        */
-	char             *dsq;        /* digitized sequence                     */
+	unsigned char    *dsq;        /* digitized sequence                     */
 	char             *seq;        /* alphabetic sequence                    */
 	SQINFO            sqinfo;     /* info about sequence (name/len)         */
 

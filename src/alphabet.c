@@ -172,7 +172,7 @@ SetAlphabet(int type)
  *           More robust than the SYMIDX() macro but
  *           presumably slower.
  */ 
-int
+unsigned char
 SymbolIndex(char sym)
 {
   char *s;
@@ -198,14 +198,14 @@ SymbolIndex(char sym)
  * Return:   digitized sequence, dsq.
  *           dsq is allocated here and must be free'd by caller.
  */
-char *
+unsigned char *
 DigitizeSequence(char *seq, int L)
 {
-  char *dsq;
+  unsigned char *dsq;
   int i;
 
-  dsq = MallocOrDie (sizeof(char) * (L+2));
-  dsq[0] = dsq[L+1] = (char) Alphabet_iupac;
+  dsq = MallocOrDie (sizeof(unsigned char) * (L+2));
+  dsq[0] = dsq[L+1] = (unsigned char) Alphabet_iupac;
   for (i = 1; i <= L; i++) 
     dsq[i] = SymbolIndex(seq[i-1]);
   return dsq;
@@ -219,14 +219,14 @@ DigitizeSequence(char *seq, int L)
  *           dsq back to the real alphabet.
  */
 char *
-DedigitizeSequence(char *dsq, int L)
+DedigitizeSequence(unsigned char *dsq, int L)
 {
   char *seq;
   int i;
 
   seq = MallocOrDie(sizeof(char) * (L+1));
   for (i = 0; i < L; i++)
-    seq[i] = Alphabet[(int) dsq[i+1]];
+    seq[i] = Alphabet[dsq[i+1]];
   seq[L] = '\0';
   return seq;
 }
@@ -246,24 +246,24 @@ DedigitizeSequence(char *dsq, int L)
  *           dsqs is alloced here. Free2DArray(dseqs, nseq).
  */ 
 void
-DigitizeAlignment(MSA *msa, char ***ret_dsqs)
+DigitizeAlignment(MSA *msa, unsigned char ***ret_dsqs)
 {
-  char **dsq;
+  unsigned char **dsq;
   int    idx;			/* counter for sequences     */
   int    dpos;			/* position in digitized seq */
   int    apos;			/* position in aligned seq   */
 
-  dsq = (char **) MallocOrDie (sizeof(char *) * msa->nseq);
+  dsq = MallocOrDie (sizeof(unsigned char *) * msa->nseq);
   for (idx = 0; idx < msa->nseq; idx++) {
-    dsq[idx] = (char *) MallocOrDie (sizeof(char) * (msa->alen+2));
+    dsq[idx] = MallocOrDie (sizeof(unsigned char) * (msa->alen+2));
 
-    dsq[idx][0] = (char) Alphabet_iupac; /* sentinel byte at start */
+    dsq[idx][0] = (unsigned char) Alphabet_iupac; /* sentinel byte at start */
 
     for (apos = 0, dpos = 1; apos < msa->alen; apos++) {
       if (! isgap(msa->aseq[idx][apos]))  /* skip gaps */
 	dsq[idx][dpos++] = SymbolIndex(msa->aseq[idx][apos]);
     }
-    dsq[idx][dpos] = (char) Alphabet_iupac; /* sentinel byte at end */
+    dsq[idx][dpos] = (unsigned char) Alphabet_iupac; /* sentinel byte at end */
   }
   *ret_dsqs = dsq;
 }
@@ -282,16 +282,16 @@ DigitizeAlignment(MSA *msa, char ***ret_dsqs)
  * Return:   (void)                
  */
 void
-P7CountSymbol(float *counters, char symidx, float wt)
+P7CountSymbol(float *counters, unsigned char symidx, float wt)
 {
   int x;
 
   if (symidx < Alphabet_size) 
-    counters[(int) symidx] += wt;
+    counters[symidx] += wt;
   else
     for (x = 0; x < Alphabet_size; x++) {
-      if (Degenerate[(int) symidx][x])
-	counters[x] += wt / (float) DegenCount[(int) symidx];
+      if (Degenerate[symidx][x])
+	counters[x] += wt / (float) DegenCount[symidx];
     }
 }
 

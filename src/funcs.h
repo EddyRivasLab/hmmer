@@ -19,15 +19,15 @@
 /* alphabet.c
  * Configuration of global alphabet information
  */
-extern void  DetermineAlphabet(char **rseqs, int  nseq);
-extern void  SetAlphabet(int type);
-extern int   SymbolIndex(char sym);
-extern char *DigitizeSequence(char *seq, int L);
-extern char *DedigitizeSequence(char *dsq, int L);
-extern void  DigitizeAlignment(MSA *msa, char ***ret_dsqs);
-extern void  P7CountSymbol(float *counters, char sym, float wt);
-extern void  DefaultGeneticCode(int *aacode);
-extern void  DefaultCodonBias(float *codebias);
+extern void           DetermineAlphabet(char **rseqs, int  nseq);
+extern void           SetAlphabet(int type);
+extern unsigned char  SymbolIndex(char sym);
+extern unsigned char *DigitizeSequence(char *seq, int L);
+extern char          *DedigitizeSequence(unsigned char *dsq, int L);
+extern void           DigitizeAlignment(MSA *msa, unsigned char ***ret_dsqs);
+extern void           P7CountSymbol(float *counters, unsigned char sym, float wt);
+extern void           DefaultGeneticCode(int *aacode);
+extern void           DefaultCodonBias(float *codebias);
 
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
@@ -41,25 +41,31 @@ extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb,
 					    char ***mtb, char ***itb, char ***dtb);
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
 extern void  FreeShadowMatrix(struct dpshadow_s *tb);
+extern int   P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx);
 extern int   P7ViterbiSize(int L, int M);
 extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
-extern float P7Forward(char *dsq, int L, struct plan7_s *hmm, 
+extern float P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			  struct dpmatrix_s **ret_mx);
-extern float P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
+extern float P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
 			  struct p7trace_s **ret_tr);
-extern void  P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int L,
+extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int L,
 			   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
-extern float P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
-extern float P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, 
+extern float P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
+			    struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+extern float P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			      struct p7trace_s **ret_tr);
-extern float P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, 
+extern float P7WeeViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			  struct p7trace_s **ret_tr);
-extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, 
+extern float Plan7ESTViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			     struct dpmatrix_s **ret_mx);
 extern struct p7trace_s *P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm);
 extern struct p7trace_s *ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L);
-extern float  PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *dhit, struct p7trace_s   *tr, struct plan7_s *hmm, char *dsq, int L, char *seqname, char *seqacc, char *seqdesc, int do_forward, float sc_override, int do_null2, struct threshold_s *thresh, int hmmpfam_mode);
+extern float  PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *dhit,
+					struct p7trace_s   *tr, struct plan7_s *hmm, unsigned char *dsq, 
+					int L, char *seqname, char *seqacc, char *seqdesc, 
+					int do_forward, float sc_override, int do_null2,
+					struct threshold_s *thresh, int hmmpfam_mode);
 
 
 /* from debug.c
@@ -68,7 +74,7 @@ extern float  PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *
 extern char *Statetype(char st);
 extern char *AlphabetType2String(int type);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
-			 struct plan7_s *hmm, char *dsq);
+			 struct plan7_s *hmm, unsigned char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
 extern int  TraceCompare(struct p7trace_s *t1, struct p7trace_s *t2);
 extern int  TraceVerify(struct p7trace_s *tr, int M, int N);
@@ -78,7 +84,7 @@ extern int  TraceVerify(struct p7trace_s *tr, int M, int N);
  * Ian Holmes' functions for displaying HMMER2 data structures, especially
  * for posterior probabilities in alignments.
  */
-extern void DisplayPlan7Matrix(char *dsq, int L, struct plan7_s *hmm,
+extern void DisplayPlan7Matrix(unsigned char *dsq, int L, struct plan7_s *hmm,
 			       struct dpmatrix_s *mx);
 extern void DisplayPlan7Posteriors(int L, struct plan7_s *hmm,
 				   struct dpmatrix_s *forward, struct dpmatrix_s *backward,
@@ -91,8 +97,10 @@ extern void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 /* from emit.c
  * Generation of sequences/traces from an HMM
  */
-extern void EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr);
-extern void EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr);
+extern void EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, 
+			 struct p7trace_s **ret_tr);
+extern void EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, unsigned char **ret_dsq,
+				  int *ret_L, struct p7trace_s **ret_tr);
 extern void StateOccupancy(struct plan7_s *hmm, float **ret_mp, float **ret_ip, float **ret_dp);
 
 
@@ -151,8 +159,8 @@ extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
 /* masks.c
  * Repetitive sequence masking.
  */
-extern int   XNU(char *dsq, int len);
-extern float TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq);
+extern int   XNU(unsigned char *dsq, int len);
+extern float TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *dsq);
 
 /* mathsupport.c
  * Much of this code deals with Dirichlet prior mathematics. 
@@ -181,12 +189,12 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
 /* from modelmakers.c
  * Model construction algorithms
  */
-extern void P7Handmodelmaker(MSA *msa, char **dsq, struct plan7_s **ret_hmm,
+extern void P7Handmodelmaker(MSA *msa, unsigned char **dsq, struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Fastmodelmaker(MSA *msa, char **dsq, 
+extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, 
 			     float maxgap, struct plan7_s **ret_hmm, 
 			     struct p7trace_s ***ret_tr);
-extern void P7Maxmodelmaker(MSA *msa, char **dsq, 
+extern void P7Maxmodelmaker(MSA *msa, unsigned char **dsq, 
 			    float maxgap, struct p7prior_s *prior, 
 			    float *null, float null_p1, float mpri, 
 			    struct plan7_s **ret_hmm,
@@ -214,7 +222,7 @@ extern void Plan7GlobalConfig(struct plan7_s *hmm);
 extern void Plan7LSConfig(struct plan7_s *hmm);
 extern void Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit);
 extern void Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit); 
-extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, 
+extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, 
 			    int nseq, struct p7trace_s **tr);
 extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
 extern void Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7);
@@ -233,8 +241,8 @@ extern void P9DefaultNullModel(float *null);
  * from postprob.c
  * Functions for working with posterior probabilities within alignments
  */
-extern float P7OptimalAccuracy(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr);
-extern float P7Backward(char *dsq, int L, struct plan7_s *hmm, 	struct dpmatrix_s **ret_mx);
+extern float P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr);
+extern float P7Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	struct dpmatrix_s **ret_mx);
 extern void  P7EmitterPosterior(int L, struct plan7_s *hmm, struct dpmatrix_s *forward,
 				struct dpmatrix_s *backward, struct dpmatrix_s *mx);
 extern float P7FillOptimalAccuracy(int L, int M, struct dpmatrix_s *posterior,
@@ -324,16 +332,16 @@ extern void  P7FreeTrace(struct p7trace_s *tr);
 extern void  TraceSet(struct p7trace_s *tr, int tpos, char type, int idx, int pos);
 extern struct p7trace_s **MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2);
 extern void  P7ReverseTrace(struct p7trace_s *tr);
-extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
+extern void  P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, 
 			  struct p7trace_s *tr);
-extern float P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr);
-extern MSA  *P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, 
+extern float P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr);
+extern MSA  *P7Traces2Alignment(unsigned char **dsq, SQINFO *sqinfo, float *wgt, 
 				int nseq, int M, 
 				struct p7trace_s **tr, int matchonly);
 extern int  TransitionScoreLookup(struct plan7_s *hmm, char st1, 
 				  int k1, char st2, int k2);
 extern struct fancyali_s *CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
-					 char *dsq, char *name);
+					 unsigned char *dsq, char *name);
 extern void PrintFancyAli(FILE *fp, struct fancyali_s *ali);
 extern void TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr,
 			   int *ret_ntr);

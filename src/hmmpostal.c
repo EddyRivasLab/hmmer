@@ -118,15 +118,15 @@ static struct opt_s OPTIONS[] = {
 
 static void save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do_binary);
 static void print_all_scores(FILE *fp, struct plan7_s *hmm, 
-			     AINFO *ainfo, char **dsq, int nseq, 
+			     AINFO *ainfo, unsigned char **dsq, int nseq, 
 			     struct p7trace_s **tr);
 static void save_countvectors(char *cfile, struct plan7_s *hmm);
 static void position_average_score(struct plan7_s *hmm, char **seq, float *wgt,
 				   int nseq, struct p7trace_s **tr, float *pernode,
 				   float *ret_avg);
-static float frag_trace_score(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr, 
+static float frag_trace_score(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr, 
 			      float *pernode, float expected);
-static void maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, 
+static void maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, AINFO *ainfo, 
 			    int nseq, float eff_nseq, 
 			    struct p7prior_s *prior, struct p7trace_s **tr);
 
@@ -139,7 +139,7 @@ main(int argc, char **argv)
   int              format;	/* format of seqfile                       */
   MSAFILE         *afp;         /* open alignment file                     */
   MSA             *msa;         /* a multiple sequence alignment           */
-  char           **dsq;         /* digitized unaligned aseq's              */ 
+  unsigned char  **dsq;         /* digitized unaligned aseq's              */ 
   struct plan7_s  *hmm;         /* constructed HMM; written to hmmfile     */
   struct p7prior_s *pri;        /* Dirichlet priors to use                 */
   struct p7trace_s **tr;        /* fake tracebacks for aseq's              */ 
@@ -656,7 +656,7 @@ save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do_binary)
  */
 static void
 print_all_scores(FILE *fp, struct plan7_s *hmm,
-		 AINFO *ainfo, char **dsq, int nseq, struct p7trace_s **tr)
+		 AINFO *ainfo, unsigned char **dsq, int nseq, struct p7trace_s **tr)
 {
   int idx;			/* counter for sequences */
 
@@ -759,7 +759,7 @@ save_countvectors(char *cfile, struct plan7_s *hmm)
  */
 static void
 position_average_score(struct plan7_s    *hmm, 
-		       char             **dsq, 
+		       unsigned char    **dsq, 
 		       float             *wgt,
 		       int                nseq,
 		       struct p7trace_s **tr,
@@ -767,7 +767,7 @@ position_average_score(struct plan7_s    *hmm,
 		       float             *ret_avg)
 {
   int    pos;                   /* position in seq */
-  int    sym;
+  unsigned char sym;
   int    tpos;                  /* position in trace/state sequence */
   float *counts;                /* counts at each position */
   float  avg;                   /* RETURN: average overall */
@@ -786,7 +786,7 @@ position_average_score(struct plan7_s    *hmm,
     for (tpos = 0; tpos < tr[idx]->tlen; tpos++)
       {
 	pos = tr[idx]->pos[tpos];
-	sym = (int) dsq[idx][tr[idx]->pos[tpos]];
+	sym = dsq[idx][tr[idx]->pos[tpos]];
 	k   = tr[idx]->nodeidx[tpos];
 
 	/* Counts: how many times did we use this model position 1..M?
@@ -839,7 +839,7 @@ position_average_score(struct plan7_s    *hmm,
  * Return:   "corrected" score.
  */
 static float
-frag_trace_score(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr, 
+frag_trace_score(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr, 
                  float *pernode, float expected)
 {
   float sc;			/* corrected score  */
@@ -894,7 +894,7 @@ frag_trace_score(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr,
  *           ainfo changed, contains ME weights          
  */
 static void
-maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
+maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, AINFO *ainfo, int nseq,
 		float eff_nseq, struct p7prior_s *prior, struct p7trace_s **tr)
 {
   float *wgt;                  /* current best set of ME weights   */

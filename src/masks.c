@@ -75,7 +75,7 @@ static int xpam120[23][23] = {
  * Return:   number of characters x'ed out.
  */            
 int
-XNU(char *dsq, int len)
+XNU(unsigned char *dsq, int len)
 {
   int    i,k,off,sum,beg,end,top;
   int    topcut,fallcut;
@@ -110,7 +110,7 @@ XNU(char *dsq, int len)
     end=0;
 
     for (i=off+1; i<=len; i++) {
-      sum += xpam120[(int) dsq[i]][(int) dsq[i-off]];
+      sum += xpam120[dsq[i]][dsq[i-off]];
       if (sum>top) {
 	top=sum;
 	end=i;
@@ -159,7 +159,7 @@ XNU(char *dsq, int len)
  * Return:   the log_2-odds score correction.          
  */
 float
-TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
+TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *dsq)
 {
   float p[MAXABET];		/* null model distribution */
   int   sc[MAXCODE];		/* null model scores       */
@@ -195,7 +195,7 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
    score = 0;
    for (tpos = 0; tpos < tr->tlen; tpos++)
      if (tr->statetype[tpos] == STM || tr->statetype[tpos] == STI)
-       score += sc[(int) dsq[tr->pos[tpos]]];
+       score += sc[dsq[tr->pos[tpos]]];
 
    /* Apply an ad hoc 8 bit fudge factor penalty;
     * interpreted as a prior, saying that the second null model is 
@@ -254,7 +254,7 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
  * Return:   the log_2-odds score correction.          
  */
 float
-NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
+NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *dsq)
 {
   float ct[MAXABET];		/* counts of observed residues            */
   float p[MAXABET];		/* null2 model distribution (also counts) */
@@ -270,7 +270,7 @@ NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
   float totscore;		/* overall score for trace */
   float maxscore;		/* best score so far for single domain */
   int   in_domain;		/* flag for whether we're counting this domain */
-  int   sym;			/* digitized symbol in dsq */
+  unsigned char sym;		/* digitized symbol in dsq */
   int   ndom;			/* number of domains counted towards score */
 
   int   nsym;			/* number of symbols in this alignment */
@@ -292,7 +292,7 @@ NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 	}
 		/* Count stuff in domain starting with N->B or J->B transition */
       if (in_domain) {
-	sym = (int) dsq[tr->pos[tpos]];
+	sym = dsq[tr->pos[tpos]];
 
 				/* count emitted symbols in domain */
 	if (tr->statetype[tpos] == STM || tr->statetype[tpos] == STI)
@@ -357,7 +357,7 @@ NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 
 
 float
-SantaCruzCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
+SantaCruzCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *dsq)
 {
   return 0.0;			/* UNFINISHED CODE */
 }

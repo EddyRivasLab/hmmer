@@ -455,7 +455,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
   float  p1;
   float  max;
   char  *seq;
-  char  *dsq;
+  unsigned char  *dsq;
   float  score;
   int    sqlen;
   int    idx;
@@ -480,7 +480,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
       seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
       dsq = DigitizeSequence(seq, sqlen);
 
-      if (P7ViterbiSize(sqlen, hmm->M) <= RAMLIMIT)
+      if (P7ViterbiSpaceOK(sqlen, hmm->M, mx))
 	score = P7Viterbi(dsq, sqlen, hmm, mx, NULL);
       else
 	score = P7SmallViterbi(dsq, sqlen, hmm, mx, NULL);
@@ -703,8 +703,8 @@ worker_thread(void *ptr)
   struct plan7_s    *hmm;
   struct dpmatrix_s *mx;
   struct workpool_s *wpool;
-  char       *seq;
-  char       *dsq;
+  char              *seq;
+  unsigned char     *dsq;
   int         len;
   float       sc;
   int         rtn;
@@ -744,7 +744,7 @@ worker_thread(void *ptr)
        */
       dsq = DigitizeSequence(seq, len);
       
-      if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
+      if (P7ViterbiSpaceOK(len, hmm->M, mx))
 	sc = P7Viterbi(dsq, len, hmm, mx, NULL);
       else
 	sc = P7SmallViterbi(dsq, len, hmm, mx, NULL);

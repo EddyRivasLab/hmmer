@@ -28,7 +28,7 @@ main(int argc, char **argv)
 {
   char   *file;
   char   *seq;
-  char   *dsq;
+  unsigned char   *dsq;
   int     format;
   SQFILE *sqfp;
   SQINFO  sqinfo;

@@ -301,13 +301,78 @@ DESCRIPTION
 //
 ID              h25
 TITLE           Memory-related hmmsearch crash on Swissprot.
-STATUS          OPEN
+STATUS          CLOSED
 XREF            STL7 p.121
 REPORTED_BY     Niklaus Fankhauser <niklaus.fankhauser@izb.unibe.ch> 26 Sept 2003;
 		Kaivalya Dixit <dixit@austin.ibm.com>, 24 Sept 2003.
 OPENED_DATE	SRE, Tue Sep 30 14:53:19 2003
-CLOSED_DATE     
+CLOSED_DATE     SRE, Wed Oct  1 08:07:18 2003
 DESCRIPTION     
   hmmsearch crashes unpredictably on Swissprot searches (EMBL
-  format). 
+  format).
+
+  AMD contributes an Insure++ report showing three problems:
+  1. Alphabet[] is not a string but is being passed to strchr();
+  2. readEMBL is looking for a \0 in a growing seq, but a growing
+     seq has no \0 until ReadSeq() polishes it off;
+  3. xmx[] is shown as a dangling/wild ptr in core_algorithms.c 
+     and fast_algorithms.c.
+  AMD and/or Intel also indicate, via Kaivalya, that the problem
+  is in sqio.c: they explicitly nul-terminate after every reallocation
+  of the seq, and the problem disappears.
+  Fixed problems 1 and 2. Can't find the problem that Insure++ is
+  bitching about for 3; worrying. Bug goes away: it was clearly the result
+  of problem 2. Bugs in #1 should only appear for databases with
+  nonstandard residues.
 //
+ID              h26
+TITLE           Memory crash in hmmpfam.
+STATUS          CLOSED
+XREF            STL7 p.122.
+REPORTED_BY     Gary Montry <montry@spsoft.com>, 15 Aug 2003.
+OPENED_DATE	SRE, Wed Oct  1 12:29:25 2003
+CLOSED_DATE     SRE, Thu Oct  2 11:20:00 2003
+DESCRIPTION     
+  hmmpfam search with 125,000aa sequence eventually crashes 
+  because of lack of RAM, instead of successfully using small
+  memory routines.
+
+  Problem is that the code assumed that M,N can't both grow in
+  allocating a matrix, but that's not true in hmmpfam; after P7SmallViterbi(),
+  we may hand various sized bits of sequence off for subalignment,
+  with different sized models.
+
+  Wrote P7ViterbiSpaceOK(); used it instead of P7ViterbiSize() to switch
+  between normal and small variants; allow creation routine to grow in M
+  and N (padM and padN can both be positive); make initial allocs for 
+  hmmpfam matrices to be 300x300, to avoid pathologically asymmetric
+  matrices.
+//
+ID              h27
+TITLE           Negative element in dsq; char vs. unsigned char.
+STATUS          CLOSED
+XREF            STL7 p.123
+REPORTED_BY     Kaivalya Dixit <dixit@austin.ibm.com>, Sept 2003.
+OPENED_DATE     SRE, Thu Oct  2 2003
+CLOSED_DATE     SRE, Thu Oct  2 11:25:57 2003
+DESCRIPTION     
+  Turned up in SPEC certification process. Alan L. MacKay
+  <amackay@us.ibm.com>, of IBM AIX Compilers/Performance group, sends
+  an Insure++ report that shows a case where dsq[] was a negative
+  number. Kaivalya reports that they "fixed" this by forcing compilers
+  to use unsigned chars by default. A confusing discussion ensues;
+  MacKay thinks the problem is the use of char dsq[] as an array index,
+  whereas I think the code "guarantees" nonnegative dsq[] and that
+  there isn't a problem here; I think the crash IBM saw was coming
+  from memory corruption due to bug #h25.
+
+  Nonetheless, he has a point: if I'm going to use dsq[] as an array
+  index, it would be better coding practice to declare it as 
+  unsigned char.
+
+  Changed dsq from char to unsigned char throughout (and some
+  instances of sym, symidx). Removed (int) casts whereever dsq[],
+  symidx were being used as array indices.
+//
+
+

@@ -36,7 +36,7 @@ main(void)
   int code;			/* status code for whether we're ok */
   int my_idx;			/* my slave index: 0..nslaves-1, master assigns */
   int L;			/* length of sequence */
-  char *dsq;                    /* digitized sequence 1..L */
+  unsigned char *dsq;           /* digitized sequence 1..L */
   float  sc;			/* log odds score for seq + HMM */
   double pvalue;		/* P-value of sc */
   double evalue;		/* bounded E-value of sc (we don't know nseq yet) */
@@ -102,13 +102,13 @@ main(void)
       if (my_idx == -1) my_idx = nseq;
       pvm_upkint(&L,    1, 1);
       SQD_DPRINTF1(("Slave received nseq=%d L=%d my_idx=%d\n", nseq, L, my_idx));
-      dsq = MallocOrDie(sizeof(char) * (L + 2));
+      dsq = MallocOrDie(sizeof(unsigned char) * (L + 2));
       pvm_upkbyte(dsq, L+2, 1);
       SQD_DPRINTF1(("Slave unpacked a seq of %d bytes; beginning processing\n", L+2));
       
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      if (P7ViterbiSize(L, hmm->M) <= RAMLIMIT)
+      if (P7ViterbiSpaceOK(L, hmm->M, mx))
 	{
 	  SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
 	  sc = P7Viterbi(dsq, L, hmm, mx, &tr);

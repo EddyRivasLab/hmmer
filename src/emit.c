@@ -33,29 +33,29 @@
  * Returns:  void
  */
 void
-EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
+EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;
+  unsigned char    *dsq;        /* generated sequence, digitized */
   char  type;               	/* current state type */
   int   k;			/* current node index */
-  char *dsq;                    /* generated sequence, digitized */
   int   L;			/* length of sequence */
   int   alloc_tlen;		/* allocated space for traceback */
   int   alloc_L;		/* allocated space for sequence  */
   int   tpos;			/* position in traceback */
-  int   sym;			/* a generated symbol index */
+  unsigned char sym;		/* a generated symbol index */
   float t[4];			/* little array for choosing M transition from */
   
   /* Initialize; allocations
    */
   P7AllocTrace(64, &tr);
   alloc_tlen = 64;
-  dsq = MallocOrDie(sizeof(char) * 64);
+  dsq = MallocOrDie(sizeof(unsigned char) * 64);
   alloc_L = 64;
 
   TraceSet(tr, 0, STS, 0, 0);
   TraceSet(tr, 1, STN, 0, 0);
-  dsq[0] = (char) Alphabet_iupac;
+  dsq[0] = Alphabet_iupac;
   L      = 1;
   k      = 0;
   type   = STN;
@@ -113,7 +113,7 @@ EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s *
   
       /* Choose a symbol emission, if necessary
        */
-      sym = -1;
+      sym = Alphabet_iupac;	/* use sentinel byte to mean "not set yet" */
       if      (type == STM) sym = FChoose(hmm->mat[k], Alphabet_size);
       else if (type == STI) sym = FChoose(hmm->ins[k], Alphabet_size); 
       else if ((type == STN && tr->statetype[tpos-1] == STN) ||
@@ -123,7 +123,7 @@ EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s *
 	
       /* Add to the traceback; deal with realloc if necessary
        */
-      TraceSet(tr, tpos, type, k, (sym != -1) ? L : 0);
+      TraceSet(tr, tpos, type, k, (sym != Alphabet_iupac) ? L : 0);
       tpos++;
       if (tpos == alloc_tlen) {
 	alloc_tlen += 64; 
@@ -132,12 +132,12 @@ EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s *
 
       /* Add to the digitized seq; deal with realloc, if necessary
        */
-      if (sym != -1) {
-	dsq[L] = (char) sym;
+      if (sym != Alphabet_iupac) {
+	dsq[L] = sym;
 	L++;
-	if (L+1 == alloc_L) {	/* L+1 leaves room for sentinel byte + \0 */
+	if (L == alloc_L) {	
 	  alloc_L += 64;
-	  dsq = ReallocOrDie(dsq, sizeof(char) * alloc_L);
+	  dsq = ReallocOrDie(dsq, sizeof(unsigned char) * alloc_L);
 	}
       }
     }
@@ -147,10 +147,11 @@ EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s *
   tr->tlen = tpos;
 
   /* Finish off the dsq with sentinel byte and null terminator.
-   * Emitted Sequence length is L-1.
+   * Emitted sequence length is L-1. No, this isn't a bug - L is
+   * the index of the next position, and since we're ending, the
+   * sequence is L-1 and the sentinel goes in position L.
    */
-  dsq[L]   = (char) Alphabet_iupac;
-  dsq[L+1] = '\0';
+  dsq[L]   = Alphabet_iupac;
   L--;
 
   /* Return
@@ -161,100 +162,6 @@ EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s *
   return;
 }
 
-#ifdef SRE_REMOVED
-/* Function: EmitBestSequence()
- * Date:     SRE, Tue Nov 10 16:21:59 1998 [St. Louis]
- *
- * Purpose:  Given a model, emit the maximum probability sequence
- *           from it: argmax_{seq} P(seq | model).
- *           This is a sensible HMM equivalent to a "consensus"
- *           sequence.
- *           The model should be Plan7NakedConfig()'ed; 
- *           in particular, if we allowed B->M and M->E,
- *           the highest probability sequence would be
- *           artifactually short. (We could do the highest
- *           scoring sequence instead, to get around this problem,
- *           but the highest scoring sequence is prone to
- *           other artifacts -- any looping state N,C,J, or I
- *           with a positively scoring residue leads to
- *           an infinitely long "best scoring" sequence.)
- *
- * Args:     hmm     - the model
- *           ret_seq - RETURN: best sequence
- *           ret_L   - RETURN: length of sequence
- *           ret_tr  - RETURN: traceback of the model/seq alignment; or NULL.
- *
- * Returns:  void
- */
-void
-EmitBestSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
-{
-  char              *seq;                  /* RETURN: best seq */
-  struct p7trace_s  *tr;                   /* RETURN: traceback */
-  float             *mmx, *imx, *dmx;      /* log P forward scores for M,D,I */
-  char              *mtb, *itb, *dtb;      /* traceback ptrs for M,D,I */
-  int  x;		        /* counter for symbols */
-  int  k;			/* counter for nodes   */
-  float sc;			/* tmp var for a log P */
-  int  bestsym;
-  int  rpos;			/* position in a sequence */
-  int  tpos;			/* position in a trace */
-  int  tlen;			/* length of the traceback */
-
-  /* Initial allocations. We only need a 1D matrix and its shadow;
-   * it's overkill to use the Plan7Matrix structures, so don't.
-   */
-  mmx = MallocOrDie(sizeof(float) * (hmm->M+1));
-  imx = MallocOrDie(sizeof(float) * (hmm->M));
-  dmx = MallocOrDie(sizeof(float) * (hmm->M));
-  mtb = MallocOrDie(sizeof(char)  * (hmm->M+1));
-  itb = MallocOrDie(sizeof(char)  * (hmm->M));
-  dtb = MallocOrDie(sizeof(char)  * (hmm->M));
-
-  /* Initialization. 
-   * We can safely assume a max probability path of S->N->B->(M1 or D1),
-   * so just init M1 and D1.
-   */
-  mmx[1] = log(hmm->xt[XTN][MOVE]) + log(1.F - hmm->tbd1);
-  dmx[1] = 
-
-
-  /* Main recursion, done as a push.
-   * The model is used in probability form; no wing folding needed.
-   */
-  for (k = 1; k < hmm->M; k++)
-    {
-      /* Transits out of match state (init with these)
-       */
-      mmx[k+1] = mmx[k] + log(hmm->t[k][TMM]); mtb[k+1] = STM;
-      dmx[k+1] = mmx[k] + log(hmm->t[k][TMD]); dtb[k+1] = STM;
-      if (k < hmm->M-1) 
-	imx[k]   = mmx[k] + log(hmm->t[k][TMI]); itb[k]   = STM;
-      
-      /* Transits out of delete state
-       */
-      if ((sc = dmx[k] + log(hmm->t[k][TDM])) > mmx[k+1]) 
-	{ mmx[k+1] = sc; mtb[k+1] = STD; }
-      if ((sc = dmx[k] + log(hmm->t[k][TDD])) > dmx[k+1])
-	{ dmx[k+1] = sc; dtb[k+1] = STD; }
-
-      /* Transits out of insert state (self-loops are never good)
-       */
-      if ((sc = imx[k] + log(hmm->t[k][TIM])) > mmx[k+1])
-	{ mmx[k+1] = sc; mtb[k+1] = STI; }
-      
-      /* Best emissions
-       */
-      x = FArgMax(hmm->mat[k+1], Alphabet_size);
-      mmx[k+1] += log(hmm->mat[k+1][x]);
-
-      if (k < hmm->M-1) {
-	x = FArgMax(hmm->ins[k+1], Alphabet_size);
-	imx[k+1] += log(hmm->ins[k+1][x]);
-      }
-    }
-}
-#endif /* SRE_REMOVED */
 
 
 /* Function: EmitConsensusSequence()
@@ -287,10 +194,11 @@ EmitBestSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace
  * Returns:  void        
  */
 void
-EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
+EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, unsigned char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;         /* RETURN: traceback */
-  char *dsq, *seq;              /* sequence in digitized and undigitized form */
+  unsigned char    *dsq;        /* RETURN: sequence in digitized form */
+  unsigned char    *seq;        /* RETURN: sequence in undigitized form */
   float *mp, *ip, *dp;          /* state occupancies from StateOccupancy() */
   int    nmat, ndel, nins;	/* number of matches, deletes, inserts used */
   int    k;			/* counter for nodes */
@@ -318,7 +226,7 @@ EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, char **ret_dsq, int *
   /* Allocations
    */
   P7AllocTrace(6 + nmat + ndel + nins, &tr);
-  dsq = MallocOrDie(sizeof(char) * (nmat+nins+3));
+  dsq = MallocOrDie(sizeof(unsigned char) * (nmat+nins+3));
   seq = MallocOrDie(sizeof(char) * (nmat+nins+1));
 
   /* Main pass.

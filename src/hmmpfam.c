@@ -105,8 +105,8 @@ static void main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO 
 struct workpool_s {
   /* Shared configuration resources that don't change:
    */
-  char  *hmmfile;               /* name of HMM file                */
-  char  *dsq;                   /* digitized query sequence        */
+  char          *hmmfile;       /* name of HMM file                */
+  unsigned char *dsq;           /* digitized query sequence        */
   char  *seqname;               /* sequence name                   */
   int    L;			/* length of dsq                   */
   int    do_forward;		/* TRUE to score using Forward     */
@@ -132,7 +132,7 @@ struct workpool_s {
 };
 
 static struct workpool_s *workpool_start(char *hmmfile, HMMFILE *hmmfp, 
-					 char *dsq, char *seqname, int L,
+					 unsigned char *dsq, char *seqname, int L,
 					 int do_forward, int do_null2, 
 					 struct threshold_s *thresh,
 					 struct tophit_s *ghit, struct tophit_s *dhit, 
@@ -549,8 +549,8 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 		 struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
 		 struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm) 
 {
-  char              *dsq;       /* digitized sequence                      */
-  int     nhmm;			/* number of HMMs searched                 */
+  unsigned char     *dsq;       /* digitized sequence                      */
+  int                nhmm;	/* number of HMMs searched                 */
   struct plan7_s    *hmm;       /* current HMM to search with              */ 
   struct p7trace_s  *tr;	/* traceback of alignment                  */
   struct dpmatrix_s *mx;        /* growable DP matrix                      */
@@ -560,15 +560,29 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 
   /* Prepare sequence.
    */
+  SQD_DPRINTF1(("main_loop_serial:\n"));
+
   dsq = DigitizeSequence(seq, sqinfo->len);
   if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo->len);
-  mx = CreatePlan7Matrix(1, 1, 0, 25);
+
+  /* 
+   * We'll create for at least N=300xM=300, and thus consume at least 1 MB,
+   * regardless of RAMLIMIT -- this helps us avoid reallocating some weird
+   * asymmetric matrices.
+   * 
+   * We're growable in both M and N, because inside of P7SmallViterbi,
+   * we're going to be calling P7Viterbi on subpieces that vary in size,
+   * and for different models.
+   */
+  mx = CreatePlan7Matrix(300, 300, 25, 25);
 
   nhmm = 0;
   while (HMMFileRead(hmmfp, &hmm)) {
     if (hmm == NULL) 
       Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
     P7Logoddsify(hmm, !(do_forward));
+    SQD_DPRINTF1(("   ... working on HMM %s\n", hmm->name));
+    SQD_DPRINTF1(("   ... mx is now M=%d by N=%d\n", mx->maxM, mx->maxN));
 
     if (! SetAutocuts(thresh, hmm)) 
       Die("HMM %s did not contain the GA, TC, or NC cutoffs you needed",
@@ -576,10 +590,18 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 
     /* Score sequence, do alignment (Viterbi), recover trace
      */
-    if (P7ViterbiSize(sqinfo->len, hmm->M) <= RAMLIMIT)
-      sc = P7Viterbi(dsq, sqinfo->len, hmm, mx, &tr);
+    if (P7ViterbiSpaceOK(sqinfo->len, hmm->M, mx))
+      {
+	SQD_DPRINTF1(("   ... using normal P7Viterbi(); size ~%d MB\n", 
+		      P7ViterbiSize(sqinfo->len, hmm->M)));
+	sc = P7Viterbi(dsq, sqinfo->len, hmm, mx, &tr);
+      }
     else
-      sc = P7SmallViterbi(dsq, sqinfo->len, hmm, mx, &tr);
+      {
+	SQD_DPRINTF1(("   ... using P7SmallViterbi(); size ~%d MB\n",
+		      P7ViterbiSize(sqinfo->len, hmm->M)));
+	sc = P7SmallViterbi(dsq, sqinfo->len, hmm, mx, &tr);
+      }
 
     /* Implement do_forward; we'll override the whole_sc with a P7Forward()
      * calculation.
@@ -664,7 +686,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 {
   struct plan7_s   *hmm;        /* HMM that was searched with */
   struct p7trace_s *tr;         /* a traceback structure */
-  char  *dsq;                   /* digitized sequence */ 
+  unsigned char    *dsq;        /* digitized sequence */ 
   float  sc;			/* score of an HMM match */
   int    master_tid;		/* master's ID */
   int   *slave_tid;             /* array of slave IDs */
@@ -917,7 +939,7 @@ main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 		   int num_threads,
 		   struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nhmm) 
 {
-  char              *dsq;       /* digitized sequence      */
+  unsigned char     *dsq;       /* digitized sequence      */
   int                nhmm;	/* number of HMMs searched */
   struct workpool_s *wpool;     /* pool of worker threads  */
 
@@ -959,7 +981,7 @@ main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
  *           then free the structure with workpool_free().
  */
 static struct workpool_s *
-workpool_start(char *hmmfile, HMMFILE *hmmfp, char *dsq, char *seqname, int L,
+workpool_start(char *hmmfile, HMMFILE *hmmfp, unsigned char *dsq, char *seqname, int L,
 	       int do_forward, int do_null2, struct threshold_s *thresh,
 	       struct tophit_s *ghit, struct tophit_s *dhit, 
 	       int num_threads)
@@ -1086,7 +1108,17 @@ worker_thread(void *ptr)
   thresh.autocut = wpool->thresh->autocut;
   thresh.Z       = wpool->thresh->Z;
   
-  mx = CreatePlan7Matrix(1, 1, 0, 25);
+  /* 
+   * We'll create for at least N=300xM=300, and thus consume at least 1 MB,
+   * regardless of RAMLIMIT -- this helps us avoid reallocating some weird
+   * asymmetric matrices.
+   * 
+   * We're growable in both M and N, because inside of P7SmallViterbi,
+   * we're going to be calling P7Viterbi on subpieces that vary in size,
+   * and for different models.
+   */
+  mx = CreatePlan7Matrix(300, 300, 25, 25);
+
   for (;;) {
 
     /* 1. acquire lock on HMM input, and get
@@ -1119,10 +1151,11 @@ worker_thread(void *ptr)
     /* 2. We have an HMM in score form.
      *    Score the sequence.
      */
-    if (P7ViterbiSize(wpool->L, hmm->M) <= RAMLIMIT)
+    if (P7ViterbiSpaceOK(wpool->L, hmm->M, mx))
       sc = P7Viterbi(wpool->dsq, wpool->L, hmm, mx, &tr);
     else
       sc = P7SmallViterbi(wpool->dsq, wpool->L, hmm, mx, &tr);
+
     
     /* The Forward score override (see comments in serial vers)
      */

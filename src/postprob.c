@@ -88,7 +88,7 @@
  *           (i.e. log of expected accuracy)
  */
 float
-P7OptimalAccuracy(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
+P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
   double sc;
   struct dpmatrix_s *forward;
@@ -123,7 +123,7 @@ P7OptimalAccuracy(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_
  * Return:   log P(S|M)/P(S|R), as a bit score.
  */
 float
-P7Backward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
+P7Backward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 {
   struct dpmatrix_s *mx;
   int **xmx;
@@ -146,7 +146,7 @@ P7Backward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
   xmx[L][XMJ] = xmx[L][XMB] = xmx[L][XMN] = -INFTY;  /* need seq to get out from here */
   for (k = hmm->M; k >= 1; k--) {
     mmx[L][k] = xmx[L][XME] + hmm->esc[k];           /* M<-E ...                      */
-    mmx[L][k] += hmm->msc[(int) dsq[L]][k];          /* ... + emitted match symbol    */
+    mmx[L][k] += hmm->msc[dsq[L]][k];                /* ... + emitted match symbol    */
     imx[L][k] = dmx[L][k] = -INFTY;                  /* need seq to get out from here */
   }
 
@@ -190,7 +190,7 @@ P7Backward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
        */
 
       if (i>0) {
-	mmx[i][hmm->M] = xmx[i][XME] + hmm->esc[hmm->M] + hmm->msc[(int) dsq[i]][hmm->M];
+	mmx[i][hmm->M] = xmx[i][XME] + hmm->esc[hmm->M] + hmm->msc[dsq[i]][hmm->M];
 	dmx[i][hmm->M] = -INFTY;
 	for (k = hmm->M-1; k >= 1; k--)
 	  {
@@ -198,11 +198,11 @@ P7Backward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 					 mmx[i+1][k+1] + hmm->tsc[TMM][k]),
 				 ILogsum(imx[i+1][k] + hmm->tsc[TMI][k],
 					 dmx[i][k+1] + hmm->tsc[TMD][k]));
-	    mmx[i][k] += hmm->msc[(int) dsq[i]][k];
+	    mmx[i][k] += hmm->msc[dsq[i]][k];
 	    
 	    imx[i][k]  = ILogsum(imx[i+1][k] + hmm->tsc[TII][k],
 				 mmx[i+1][k+1] + hmm->tsc[TIM][k]);
-	    imx[i][k] += hmm->isc[(int) dsq[i]][k];
+	    imx[i][k] += hmm->isc[dsq[i]][k];
 	    
 	    dmx[i][k]  = ILogsum(dmx[i][k+1] + hmm->tsc[TDD][k],
 				 mmx[i+1][k+1] + hmm->tsc[TDM][k]);

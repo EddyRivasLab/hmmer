@@ -23,10 +23,10 @@
 /* Extra algorithms to work with posterior probabilities.
  */
 
-extern float P7OptimalAccuracy(char *dsq, int L, struct plan7_s *hmm, 
+extern float P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			       struct p7trace_s **ret_tr);
 
-extern float P7Backward(char *dsq, int L, struct plan7_s *hmm, 
+extern float P7Backward(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			struct dpmatrix_s **ret_mx);
 
 extern void  P7EmitterPosterior(int L, struct plan7_s *hmm,

@@ -562,7 +562,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
   struct dpmatrix_s *mx;        /* DP matrix, growable                     */
   struct p7trace_s *tr;         /* traceback                               */
   char   *seq;                  /* target sequence                         */
-  char   *dsq;		        /* digitized target sequence               */
+  unsigned char   *dsq;	        /* digitized target sequence               */
   SQINFO sqinfo;		/* optional info for seq                   */
   float  sc;	        	/* score of an HMM search                  */
   double pvalue;		/* pvalue of an HMM score                  */
@@ -595,7 +595,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    necessarily <= -INFTY, because we're not terribly careful
        *    about underflow issues), and tr will be returned as NULL.
        */
-      if (P7ViterbiSize(sqinfo.len, hmm->M) <= RAMLIMIT)
+      if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
 	sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
       else
 	sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
@@ -682,7 +682,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
 	      struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
 {
   char *seq;                    /* target sequence */
-  char *dsq;                    /* digitized target seq */
+  unsigned char *dsq;           /* digitized target seq */
   SQINFO sqinfo;                /* optional info about target seq */
   int   master_tid;		/* master's (my) PVM TID */
   int  *slave_tid;              /* array of slave TID's  */
@@ -690,7 +690,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
   int   code;			/* status code rec'd from a slave */
   int   nseq;			/* number of sequences searched */
   int   sent_trace;		/* TRUE if slave gave us a trace */
-  char **dsqlist;               /* remember what seqs slaves are doing */
+  unsigned char **dsqlist;      /* remember what seqs slaves are doing */
   char **namelist;              /* remember what seq names slaves are doing */
   char **acclist ;              /* remember what seq accessions slaves are doing */
   char **desclist;              /* remember what seq desc's slaves are doing */
@@ -737,7 +737,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
   namelist = MallocOrDie(sizeof(char *) * nslaves);
   acclist  = MallocOrDie(sizeof(char *) * nslaves);
   desclist = MallocOrDie(sizeof(char *) * nslaves);
-  dsqlist  = MallocOrDie(sizeof(char *) * nslaves);
+  dsqlist  = MallocOrDie(sizeof(unsigned char *) * nslaves);
   lenlist  = MallocOrDie(sizeof(int) * nslaves);
 
   /* Load the slaves.
@@ -1078,7 +1078,7 @@ worker_thread(void *ptr)
   struct workpool_s *wpool;     /* our working threads structure   */
   char  *seq;                   /* target sequence                 */
   SQINFO sqinfo;		/* information assoc w/ seq        */
-  char  *dsq;                   /* digitized sequence              */
+  unsigned char     *dsq;       /* digitized sequence              */
   struct dpmatrix_s *mx;        /* growable DP matrix              */
   struct p7trace_s  *tr;        /* traceback from an alignment     */
   float  sc;			/* score of an alignment           */
@@ -1120,7 +1120,7 @@ worker_thread(void *ptr)
       
     /* 1. Recover a trace by Viterbi.
      */
-    if (P7ViterbiSize(sqinfo.len, wpool->hmm->M) <= RAMLIMIT)
+    if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
       sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
     else
       sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);

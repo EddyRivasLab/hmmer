@@ -47,8 +47,8 @@ main(void)
   int      slaveidx;		/* my slave index (0..nslaves-1) */
   struct plan7_s *hmm;		/* HMM to calibrate, sent from master */
   struct dpmatrix_s *mx;        /* growable DP matrix */
-  char    *seq;			/* synthetic random sequence */
-  char    *dsq;			/* digitized seq */
+  char              *seq;	/* synthetic random sequence */
+  unsigned char     *dsq;	/* digitized seq */
   int      len;			/* length of seq */
   float   *sc;			/* scores of seqs */
   int      seed;		/* random number seed */
@@ -137,7 +137,7 @@ main(void)
 	  dsq = DigitizeSequence(seq, len);
 	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, len, seq));
 
-	  if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
+	  if (P7ViterbiSpaceOK(len, hmm->M, mx))
 	    sc[idx] = P7Viterbi(dsq, len, hmm, mx, NULL);
 	  else
 	    sc[idx] = P7SmallViterbi(dsq, len, hmm, mx, NULL);

@@ -57,7 +57,7 @@
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 float
-P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
+P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s  *tr;
   int **xmx;
@@ -115,8 +115,8 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
     dpp   = dmx[i-1];
     ip    = imx[i-1];
     xmb   = xmx[i-1][XMB];
-    ms    = hmm->msc[(int) dsq[i]];
-    is    = hmm->isc[(int) dsq[i]];
+    ms    = hmm->msc[dsq[i]];
+    is    = hmm->isc[dsq[i]];
     mc[0] = -INFTY;
     dc[0] = -INFTY;
     ic[0] = -INFTY;
@@ -341,7 +341,6 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
       mx->dmx[i] = mx->dmx[0] + i*(M+2+n);
     }
  
-  if (padM > 0 && padN > 0)  Die("there's trouble with RAMLIMIT if you grow in both M and N.");
   mx->maxN = N;
   mx->maxM = M;
   mx->padN = padN;
@@ -457,7 +456,7 @@ void printivec(vector signed int z)
     printf("%d  %d  %d  %d\n",q.i[0],q.i[1],q.i[2],q.i[3]);
 }
 float
-P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr) 
+P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr) 
 {
   struct p7trace_s  *tr;
   int **xmx;
@@ -588,7 +587,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
     p_tim = hmm->tsc[TIM];
     p_tdm = hmm->tsc[TDM];
     p_bsc = hmm->bsc;
-    k = (int) dsq[i];
+    k = dsq[i];
     p_msc = hmm->msc[k];
     p_isc = hmm->isc[k];
     p_tmd = hmm->tsc[TMD];
