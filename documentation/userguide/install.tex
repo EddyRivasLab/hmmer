@@ -1,258 +1,490 @@
-\chapter{Installation}
+\section{Installation}
 
-\section{System requirements and portability}
+\subsection{Quick installation instructions}
+
+\subsubsection{configuring, compiling, and installing a source code distribution}
+
+Download the source tarball (\prog{hmmer.tar.gz}) from 
+\htmladdnormallink{ftp.genetics.wustl.edu/pub/eddy/hmmer/}
+                  {ftp://ftp.genetics.wustl.edu/pub/eddy/hmmer/}
+or 
+\htmladdnormallink{hmmer.wustl.edu/}
+                  {http://hmmer.wustl.edu/}.
+
+Unpack the software:
+
+\user{tar xvf hmmer.tar.gz}
+
+Go into the newly created top-level directory (named \prog{hmmer-xx},
+where \prog{xx} is a release number):
+
+\user{cd hmmer-@RELEASE@}
+
+Configure for your system, and build the programs:
+
+\user{./configure}\\
+\user{make}
+
+Run the automated testsuite. This is optional.  All these tests should
+pass:
+
+\user{make check}
+
+The programs are now in the \prog{src/} subdirectory. The man pages
+are in the \prog{documentation/man} subdirectory. You can manually
+move or copy all of these to appropriate locations if you want. You
+will want the programs to be in your \$PATH.
+
+Optionally, you can install the man pages and programs in system-wide
+directories. If you are happy with the default (programs in
+\prog{/usr/local/bin/} and man pages in \prog{/usr/local/man/man1}),
+do:
+
+\user{make install}
+
+(You might need to be root when you install, depending on the
+permissions on your /usr/local directories.)
+
+That's all.  Each of these steps is documented in more detail below,
+including how to change the default installation directories for
+\prog{make install}.
+
+\subsubsection{installing a precompiled binary distribution}
+
+Alternatively, you can obtain a precompiled binary distribution of
+HMMER from \htmladdnormallink{hmmer.wustl.edu/}
+{http://hmmer.wustl.edu/}. Binary distributions are available for most
+common UNIX and UNIX-like OS's. For example, the distribution for
+Intel x86/GNU Linux machines is \prog{hmmer.bin.intel-linux.tar.gz}.
+
+After you download a binary distribution, unpack it:
+
+\user{tar xvf hmmer.bin.intel-linux.tar.gz}
+
+HMMER is now in the newly created top-level directory (named
+\prog{hmmer-xx}, where \prog{xx} is a release number). Go into
+it:
+
+\user{cd hmmer-@RELEASE@}
+
+You don't really need to do anything else. The programs are in the
+\prog{binaries/} subdirectory. The man pages are in the
+\prog{documentation/man} subdirectory.  The PDF copy of the Userguide
+is in the top level HMMER directory (Userguide.pdf).  You can manually
+move or copy all of these to appropriate locations if you want. You
+will want the programs to be in your \$PATH.
+
+However, you'll often want to install in a more permanent place.  To
+configure with the default locations (programs in
+\prog{/usr/local/bin/} and man pages in \prog{/usr/local/man/man1})
+and install everything, do:
+
+\user{./configure}\\
+\user{make install}
+
+If you want to install in different places than the defaults, keep
+reading; see the beginning of the section on running the
+\prog{configure} script.
+
+\subsection{System requirements and portability}
 
 HMMER is designed to run on UNIX platforms. The code is
-POSIX-compliant ANSI C.  You need a UNIX machine and an ANSI C
-compiler to build and use it.
+POSIX-compliant ANSI C.  You need a UNIX operating system to run it.
+You need an ANSI C compiler if you want to build it from source. 
 
-Some optional tests and utilities use Perl. \prog{make check} will only
-work if you have Perl installed. However, Perl isn't necessary to make
-HMMER work.
+Linux and Apple Macintosh OS/X both count as UNIX. Microsoft operating
+systems do not. HMMER is known to be easy to port to MS Windows and
+other non-UNIX operating systems, provided that they support ANSI C
+and some reasonable level of POSIX compliance.
 
-HMMER includes support for two kinds of parallelization: POSIX threads
-and PVM (Parallel Virtual Machine). Most modern UNIX OS's support
-POSIX threads. HMMER's configure script attempts to automatically
-detect your threads library, if you have one, and will build in
-multithreading by default -- so you don't need to do anything special
-to get multithreading. PVM, in contrast, is a separate, third-party
-software application, and you will have to install and configure it
-before building HMMER with PVM support. For this reason, PVM support
-in HMMER is not enabled by default. See the PVM section of this
-chapter for more details.
-
-HMMER 2 should be easy to port to non-UNIX operating systems, provided
-they support ANSI C and some reasonable level of POSIX compliance.  A
-WinNT distribution is available by anonymous FTP from Time Logic,
-Inc. HMMER 1 was ported by other people to Digital VAX/VMS, Apple
-MacOS, Win95, and WinNT with relatively little difficulty, and I've
-made efforts to improve the portability of the HMMER 2 code since
-then. I would greatly appreciate receiving diffs for any ports of
-HMMER to any platform.
-
-\section{Installing a precompiled distribution}
-
-Thanks to generous hardware support from Compaq, Hewlett-Packard, IBM,
-Intel, Silicon Graphics, and Sun Microsystems, precompiled binary
-distributions of HMMER are available for at least the following
-platforms:
+Specifically, thanks to generous support from manufacturers, HMMER
+distributions are tested and created on the following hardware and
+operating systems:
 \begin{itemize}
-\item Intel PC/Linux
-\item Intel PC/FreeBSD
-\item Intel PC/OpenBSD
-\item Intel PC/Sun Solaris 
+\item Intel x86/GNU Linux
+\item Intel x86/FreeBSD
+\item Intel x86/OpenBSD
+\item Intel x86/Sun Solaris 
+\item Intel Itanium2/GNU Linux
+\item Intel Itanium2/HP-UX
+\item Apple Macintosh OS/X
 \item Silicon Graphics/IRIX
 \item Sun Sparc/Solaris 
 \item Compaq Alpha/Tru64
-\item Hewlett Packard P/HP-UX
+\item Compaq Alpha/GNU Linux
+\item Hewlett Packard HP-UX
 \item IBM/AIX
 \end{itemize}
 
-To install a precompiled distribution, do the following:
+Additional community-contributed ports to other systems are made
+available from
+\htmladdnormallink{hmmer.wustl.edu/}{http://hmmer.wustl.edu/}, if they
+are sent to me.
 
-\begin{enumerate}
-\item Download the distribution from \prog{http://hmmer.wustl.edu/}.
+Running the testsuite (\prog{make check}) requires that you have
+Perl. However, Perl isn't necessary to make HMMER work.
 
-\item Uncompress and un-tar it; for example, \\
-	\user{uncompress hmmer.bin.intel-linux.tar.gz}
-	\user{tar xf hmmer.bin.intel-linux.tar}
-	A new directory \prog{hmmer-xx} is created, where ``xx'' is
-	the current HMMER version number.
-\item Go to the top level directory and run the
-      configure script.\\
-\user{cd hmmer-xx}
+HMMER has support for two kinds of parallelization: POSIX
+multithreading and PVM (Parallel Virtual Machine) clustering.  Both
+are optional, not compiled by default; they are enabled by passing the
+\prog{--enable-threads} or \prog{--enable-pvm} options to the
+\prog{./configure} script before compilation. The precompiled binary
+distributions generally support multithreading but not PVM.
+
+\subsection{Running the \prog{configure} script}
+
+The GNU \prog{configure} script that comes with HMMER has a number of
+options. You can see them all by doing:
+
+\user{./configure --help}
+
+Most customizations of HMMER are done at the \prog{./configure}
+command line.
+
+\subsubsection{setting installation targets}
+
+The most important \prog{configure} options set the installation
+directories for \prog{make install} to be appropriate to your system.
+What you need to know is that HMMER installs only two types of files:
+the programs, and man pages. It installs the programs in
+\prog{--bindir} (which defaults to \prog{/usr/local/bin}), and the man
+pages in the \prog{man1} subdirectory of \prog{--mandir} (default
+\prog{/usr/local/man}). So, say you want \prog{make install} to
+instead install programs in \prog{/usr/bioprogs/bin/} and man pages in
+\prog{/usr/share/man/man1}; you could configure with:
+
+\user{./configure --mandir=/usr/share/man --bindir=/usr/bioprogs/bin}
+
+That's really all you need to know, since HMMER installs so few
+different types of files. But just so you know; a GNU \prog{configure}
+script is very flexible, and it has shortcuts that accomodates several
+standard conventions for where programs get installed. 
+
+One common strategy is to install all files under one directory, like
+the default \prog{/usr/local}. To change this prefix to something
+else, say \prog{/usr/mylocal/} (so that programs go in
+\prog{/usr/mylocal/bin} and man pages in \prog{/usr/mylocal/man/man1},
+you can use the \prog{--prefix} option:
+
+\user{./configure --prefix=/usr/mylocal}
+
+Another common strategy (especially in multiplatform environments) is
+to put programs in an architecture-specific directory like
+\prog{/usr/share/Linux/bin} while keeping man pages in a shared,
+architecture-independent directory like \prog{/usr/share/man/man1}.
+GNU configure uses \prog{--exec-prefix} to set the path to
+architecture dependent files. This normally defaults to being the same
+as \prog{--prefix}, but you could change it, for example, by:
+
+\user{./configure --prefix=/usr/share --exec-prefix=/usr/share/Linux/}\\
+
+In summary, a complete list of the \prog{./configure} installation
+options that affect HMMER:
+
+\begin{tabular}{lll}
+Option                       &   Meaning                       & Default\\ \hline
+\prog{--prefix=PREFIX}       & architecture independent files  & \prog{/usr/local/} \\
+\prog{--exec-prefix=EPREFIX} & architecture dependent files    & PREFIX\\
+\prog{--bindir=DIR}          & programs                        & EPREFIX/bin/\\
+\prog{--mandir=DIR}          & man pages                       & PREFIX/man/\\
+\end{tabular}
+
+These are the only \prog{configure} options that work for both the
+full source distribution of HMMER, and for the binary
+distributions. The remaining options only affect the configuration of
+the source distribution; they have no effect on a precompiled
+binary-only distribution.
+
+
+\subsubsection{setting compiler and compiler flags}
+
+By default, \prog{configure} searches first for the GNU C compiler
+\prog{gcc}, and if that is not found, for a compiler called \prog{cc}. 
+This can be overridden by specifying your compiler with the \prog{CC}
+environment variable.
+
+By default, the compiler's optimization flags are set to
+\prog{-g -O2} for \prog{gcc}, or \prog{-g} for other compilers.
+This can be overridden by specifying optimization flags with the
+\prog{CFLAGS} environment variable. 
+
+For example, to use an Intel C compiler in
+\prog{/usr/intel/ia32/bin/icc} with 
+optimization flags \prog{-O3 -ip}, you could do:
+
+\user{env CC=/usr/intel/ia32/bin/icc CFLAGS="-O3 -ip" ./configure}
+
+which is a one-line shorthand that does the same thing as the C-shell
+commands:
+
+\user{setenv CC     /usr/intel/ia32/bin/icc}\\
+\user{setenv CFLAGS "-O3 -ip"}\\
 \user{./configure}
-\item Edit the Makefile in the top level directory, if you want.
 
-The executables are in the \prog{binaries} directory. The man pages
-are in the \prog{documentation/man} directory.  The PDF copy of the
-Userguide is in the top level HMMER directory (Userguide.pdf).
+If you are using a non-GNU compiler, you almost certainly want to set
+\prog{CFLAGS} to some sensible optimization flags for your platform
+and compiler. The \prog{-g} default generated unoptimized
+code. \emph{At a minimum, turn on your compiler's default
+optimizations with \prog{CFLAGS=-O}.} Otherwise, HMMER will run much
+slower than it should. If speed is crucial to you, it is often worth a
+little playing around with different compiler optimization options.
 
-To run HMMER in the distribution directory, you don't need
-to edit the Makefile at all. But to permanently install HMMER on your
-system, set the make variables BINDIR and MANDIR to be the directories
-where you want HMMER executables and man pages to be installed. If you
-are installing in directories \prog{/usr/local/bin/} and
-\prog{/usr/local/man/man1/},
-you don't need to change anything.
+\subsubsection{turning on POSIX thread support for multiprocessors}
 
-\item Type \prog{make install} to install the programs and man pages. 
-You may have to become root, depending on where you're installing.
+HMMER can run in parallel on multiple processors. To enable
+this, use the \prog{--enable-threads} option:
 
-\item Type \prog{make clean} to clean up.
-\end{enumerate}
+\user{./configure --enable-threads}
 
-\section{Compiling from a source-only distribution}
+You probably should turn this on. If you're going to run HMMER on a
+multiprocessor machine, you want this option. Even if you aren't, it
+doesn't hurt. (Some platforms don't support POSIX threads, so
+mulltithreading is not configured by default.)
 
-\begin{enumerate}
-\item Download the distribution from \prog{http://hmmer.wustl.edu/}.
+If you turn on threads support, by default, HMMER programs will use
+\emph{all} available CPUs. Especially on a shared machine, you may
+want to rein it in, and leave some CPU for everyone else. There are
+three ways to do this.
 
-\item Uncompress and un-tar it:\\
-	\user{uncompress hmmer.tar.gz}
-	\user{tar xf hmmer.tar}
-A new directory \prog{hmmer-xx} is created, where ``xx'' is
-the current HMMER version number.
+**STOPPED HERE**.
 
-\item Go to the top level directory and run the
-      configure script.\\
-\user{cd hmmer-xx}
-\user{./configure}
-If you want to include the optional PVM support, do:\\
+\subsubsection{turning on PVM support for clusters}
+
+HMMER can also run in parallel on distributed clusters, using the
+Parallel Virtual Machine (PVM) message passing library.  To enable
+the optional PVM support, use the \prog{--enable-pvm} flag:
+
 \user{./configure --enable-pvm}
-If you include PVM, the system that you're compiling on must already
-be set up for PVM; specifically, the environment variables PVM\_ROOT
-and PVM\_ARCH must be set, so HMMER can find the PVM headers and
-library.
 
-If you want to disable POSIX threads support, do:\\
-\user{./configure --disable-threads}
-Sometimes this is necessary, if your system has a screwy 
-Pthreads installation. HMMER can run fine without threads,
-it just won't utilize multiple processors.
+You need to have PVM installed first, and the environment variables
+\prog{PVM\_ROOT} and \prog{PVM\_ARCH} must be set appropriately, so
+HMMER can find the PVM headers and library.  You can obtain the free
+PVM library from Oak Ridge National Laboratory, at
+\htmladdnormallink{www.csm.ornl.gov/pvm/}{http://www.csm.ornl.gov/pvm/}.
 
-If you want to specify a different default installation directory,
-such as \prog{/usr/share}, do:\\
-\user{./configure -prefix=/usr/share}
-In a multiplatform environment, you might have your binaries
-in one platform-specific hierarchy (say, \prog{/usr/share/Linux/bin}
-and your man pages and other platform independent stuff somewhere
-else (say \prog{/usr/share/man}. You can install in 
-separate binary and data directories:\\
-\user{./configure -prefix=/usr/share -exec\_prefix=/usr/share/Linux}
+\subsubsection{turning on LFS support for files $>$2 GB}
 
-If you want to change the choice of compilation flags (CFLAGS) or the
-compiler (CC), set these as environment variables:\\
-\user{env CC=gcc CFLAGS="-O6" ./configure}
-For other generic configuration options, see the documentation for GNU
-autoconf 2.12. -- but it may be easier to just edit the
-Makefile (see below).
+HMMER can access large files ($>$ 2 GB) even on normal 32-bit
+operating systems, using Large File Summit (LFS).  Most modern UNIX
+systems have LFS extensions. To enable this optional code, use
+the \prog{--enable-lfs} flag:
 
-\item Edit the top of the Makefile, if needed. 
+\user{./configure --enable-lfs}
 
-To build and test HMMER in its source directory, you don't need to
-edit the Makefile at all. If the configure script did a good job with
-the installation directories, you also don't need to edit the
-Makefile, but you might check to be sure.
+\subsubsection{turning on Altivec optimization for Macintosh PowerPC}
 
-To permanently install HMMER on your system, be sure that the make
-variables BINDIR and MANDIR are set to be the directories where you
-want HMMER executables and man pages to be installed. If you are
-installing the programs in \prog{/usr/local/bin} and the man pages in
-\prog{/usr/local/man/man1}, you don't need to change anything.
+HMMER contains code specifically optimized for the Macintosh PowerPC,
+contributed by Erik Lindahl at Stanford University. This code is about
+four times faster than the normal code. To enable this optional code,
+use the \prog{--enable-altivec} flag:
 
-The default Makefile gets configured into a reliable but not
-necessarily optimal choice of compiler and compilation flags. The
-package is known to build "out of the box" on SGI IRIX, Sun Solaris,
-Intel/Linux, Intel/FreeBSD, Intel/OpenBSD, HP/HP-UX, IBM/AIX, or
-Compaq Tru64 Unix platforms without any special
-modifications. However, you may want to change the CC or CFLAGS
-variables to suit your system.  In particular, you can play with the
-compiler options in CFLAGS to try to get more speed, if you're
-compiler-fluent. The Makefile may include some hints for various
-platforms.
+\user{./configure --enable-altivec}
 
-On SunOS 4.1.x systems (God help you), you will have to use the GNU
-gcc compiler, because ancient SunOS cc is not ANSI-compliant.
+The \prog{configure} script will automatically detect whether you're
+on a machine that supports Altivec instructions or not, so it doesn't
+hurt to try to turn this on if you're not sure.
 
-\item Type \prog{make} to build the programs.
+\subsubsection{other options, used in development code}
 
-\item (Optional) Type \prog{make check} to compile and run a test suite.
-Some of the tests require that you have Perl installed. None of these
-tests should fail. Ever.
+The remaining two features selectable with the \prog{configure} script
+will only be useful to you if you're a developer.
 
-\item Type \prog{make install} to install the programs and man pages. 
-You may have to become root, depending on where you're installing.
+The \prog{--enable-ccmalloc} option configures HMMER to be
+instrumented by the \prog{ccmalloc} memory checking library.  You have
+to have \prog{ccmalloc} installed.  \prog{ccmalloc} can be obtained
+from Armin Biere at ETH Zurich, at
+\htmladdnormallink{www.inf.ethz.ch/personal/biere/projects/ccmalloc/}
+{http://www.inf.ethz.ch/personal/biere/projects/ccmalloc/}.
 
-\item Type \prog{make clean} to clean up. 
-\end{enumerate}
+The \prog{--enable-debugging} option is the same as passing
+\prog{CFLAGS=-g} in the environment. \prog{--enable-debugging} can
+also take a numeric argument from 1-3, which sets the verbosity of
+additional debugging output from all the
+programs. \prog{--enable-debugging=1} is the least, and
+\prog{--enable-debugging=3} is the most verbose. There is no telling
+what will spew out of the programs if you set these, because I tend to
+change the debugging output on a whim.
 
-\section{Environment variable configuration}
+\subsubsection{example configuration}
 
-These steps are optional, and will only apply (I think) to
-sufficiently POSIX-compliant operating systems like UNIX, Linux, or
-WinNT.
+The Intel GNU/Linux version installed in St. Louis is configured as
+follows:
 
-HMMER reads four environment variables, and is designed to coexist
-peacefully with an installation of WUBLAST or NCBI BLAST:
+\user{env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-pvm --enable-lfs --prefix=/usr/seshare/ --exec-prefix=/usr/seshare/`uname`}
+
+\subsection{The \prog{config.h} header file}
+
+The \prog{configure} script generates a \prog{src/config.h} file that
+contains most of the configuration information that the source code
+uses. You don't have to edit this file.  There are two things that are
+worth knowing about, though.
+
+\subsubsection{controlling memory footprint with \prog{RAMLIMIT}}
+
+HMMER has two different implementations of its alignment algorithms.
+One implementation is fast, but consumes memory proportional to the
+product of the query and target sequence lengths. The other
+implementation is about two-fold slower, but consumes memory
+proportional to the \emph{sum} of the query and target lengths, which
+can be orders of magnitude less memory than the normal algorithm.
+Having both algorithms allows HMMER to efficiently deal with almost
+any size of query model and target sequence.
+
+HMMER switches to the small memory variant algorithm when the normal
+algorithm would take more than a certain number of megabytes of
+memory. This threshold is set by the definition of RAMLIMIT in
+\prog{config.h}. By default, RAMLIMIT is 32. 
+
+On a multiprocessor, this means 32 MB per thread, e.g. per CPU. On a
+64-processor machine, for example, HMMER expects by default to have 2
+GB of memory (64 $\times$ 32 MB).
+
+This number only affects the switchover point from the normal
+algorithm to the small memory variants, so it is not a perfect
+estimate of the actual total memory consumed by HMMER. But since the
+alignment algorithms dominate HMMER's memory usage, the correspondence
+is pretty good.
+
+Therefore, if you know you will be running HMMER on a machine with
+less than 32 MB of memory per CPU, you might want to reduce RAMLIMIT
+before compiling. (Even 0 will work -- it will force the small memory
+variant algorithms to be used for all target sequences.) Or, if you
+know you will always have a lot of memory available, you can increase
+RAMLIMIT and the programs will run faster, depending on how many more
+target sequences get processed by the faster algorithms.
+
+\subsubsection{limiting the default number of processors with \prog{HMMER\_NCPU}}
+
+By default, the multithreaded version of HMMER (e.g. what you get with
+passing \prog{--enable-threads} to \prog{configure}) will use
+\emph{all} available CPUs. This might not be socially acceptable
+behavior, especially on a shared resource. 
+
+You can compile in a different default limit by defining the
+\prog{HMMER\_NCPU} variable in \prog{config.h}.
+
+If you're compiling HMMER for a large multiprocessor system that's
+shared by a number of people, and you want most HMMER jobs to access
+only a small number of processors by default, setting
+\prog{HMMER\_NCPU} is a good idea.
+
+This ``limit'' is only a default. It can still be overridden in the
+shell environment by setting an environment variable
+\prog{HMMER\_NCPU}, or by the user on the command line using a
+\prog{--cpu <x>} option.
+
+\subsubsection{the other stuff in \prog{config.h}}
+
+The other stuff in \prog{config.h} is dangerous to change, unless you
+know what you're doing, or are willing to learn. One example of when
+you might change it is if you're warping HMMER code to work on
+non-biological alphabets. HMMER can be configured for arbitrary symbol
+alphabets by changing key constants in \prog{config.h}, plus code in
+\prog{globals.h} where the alphabet is declared, and \prog{alphabet.c}
+where the alphabet gets set up. I haven't done this myself but it is
+apparently fairly straightforward. HMMER has reportedly been adapted
+to speech recognition, recorded music reconstruction, and automobile
+engine telemetry applications, and possibly others that I haven't
+heard about.
+
+\subsection{Running \prog{make}}
+
+When you run \prog{configure}, it also creates the Makefiles that will
+actually compile and install the code.  There are a variety of make
+targets in the toplevel Makefile. Typing
+
+\user{make}
+
+is equivalent to \prog{make all} - it compiles all the source code,
+and leaves the executables in the \prog{src/} subdirectory.  The other
+make targets that you might use, in the order you're likely to use
+them, are:
+
+\begin{wideitem}
+\item[\textbf{check}] Runs the testsuite; verifies that HMMER has
+compiled correctly.
+
+\item[\textbf{install}] Installs the programs in BINDIR and
+the man pages in MANDIR.
+
+\item[\textbf{clean}] Cleans up the directory, removing files
+generated in the compilation process, while leaving the original
+distribution files, plus the Makefiles and the programs.
+
+\item[\textbf{uninstall}] Remove a previously installed HMMER,
+reversing a previous \prog{make install}. This assumes you left the
+toplevel Makefile untouched since you did the \prog{make install}.
+
+\item[\textbf{distclean}] Like 'make clean', but removes everything
+that isn't part of a pristine source distribution. Use this only if
+you're going to start configuring and compiling HMMER all over again.
+\end{wideitem}
+
+\subsection{Shell environment variables understood by HMMER}
+
+HMMER optionally reads four environment variables:
 
 \begin{wideitem}
 \item[\emprog{BLASTDB}] - directory location of FASTA-formatted sequence databases
-\item[\emprog{BLASTMAT}] - directory location of BLAST substitution matrices
+\item[\emprog{BLASTMAT}] - directory location of BLAST scoring matrices
 \item[\emprog{HMMERDB}] - directory location of HMM databases (e.g. PFAM)
-\item[\emprog{HMMER\_NCPU}] - maximum number of CPUs to utilize in a multiprocessor
+\item[\emprog{HMMER\_NCPU}] - default number of CPUs to utilize in a multiprocessor
 \end{wideitem}
 
 If you have installed BLAST, you probably already have the two BLAST
 environment variables set in system-wide or user-specific .cshrc
-files. 
+files.
 
-All four variables are optional. If they are set up, you can simplify
-command lines to:\\
-\user{hmmpfam pfam my.query}
+All four variables are optional. HMMER looks for any sequence file
+first in \prog{BLASTDB}, then in the current working directory. It
+looks for any HMM file first in \prog{HMMERDB}, then in the current
+working directory. Thus if these are set up, you can simplify command
+lines to:
+
+\user{hmmpfam Pfam my.query}\\
 \user{hmmsearch my.hmm swiss35}
-instead of\\
-\user{hmmpfam   /some/long/path/to/databases/pfam my.query}
+
+instead of:
+
+\user{hmmpfam   /some/long/path/to/databases/Pfam my.query}\\
 \user{hmmsearch my.hmm /some/long/path/to/databases/swiss35}
 
-\section{Parallelization using threads}
+HMMER only uses BLAST scoring matrices with the \prog{hmmbuild
+--pamprior} option. If you use this, the matrix is looked for in the
+BLASTMAT directory first, then in the current directory.
 
-HMMER includes support for two kinds of parallelization: POSIX threads
-and PVM (Parallel Virtual Machine). Threads support is built in by
-default; PVM is not.
-
-If you have a multi-processor UNIX machine, odds are that you have a
-POSIX threads library. This kind of parallelization is easy from the
-standpoint of a HMMER user. HMMER will happily use all your processors
-(fewer, if you wish). The binary distributions of HMMER all come with
-multithreading capability built in.
-
-To {\em disable} threads support, add \prog{--disable-threads} to the
-command line for \prog{./configure} before you compile a source
-distribution. Multithreading is completely optional, and the software
-will work fine without it.
-
-Like multithreaded BLAST, a multithreaded HMMER search will use all
-the available CPUs. Sometimes this is not desired; you may want HMMER
-searches to leave some spare processing power for other work.  The
-environment variable HMMER\_NCPU sets the maximum number of CPUs that
-any HMMER job will use. You can also set a limit on an individual
-process using the \prog{--cpu <n>} option.
-
-\section{Parallelization using PVM}
-
-Parallelization across multiple machines (as opposed to multithreading
-on a single multiprocessor machine) can be done with PVM, the Parallel
-Virtual Machine software from Oak Ridge National Labs.
-
-PVM is freely available. You can obtain it from
-\prog{http://www.epm.ornl.gov/}. You must install and configure PVM before
-compiling PVM support into HMMER. During compilation, HMMER needs to
-see the environment variables PVM\_ROOT and PVM\_ARCH, and the PVM
-header files and libraries must be found in the appropriate place
-under \$PVM\_ROOT.
-
-To enable PVM support in HMMER, add \prog{--enable-pvm} to the command line
-for \prog{./configure} before you compile a source distribution.  PVM is
-completely optional, and the software will work fine without it.
-
-Whereas multithreading requires no special configuration once support
-is compiled into HMMER, configuring a PVM cluster and using HMMER on
-it is a little more involved. 
+The \prog{HMMER\_NCPU} environment variable takes precedence over any
+\prog{HMMER\_NCPU} processor number limit defined in \prog{config.h}
+-- see the discussion of this in the previous section.
 
 \subsection{Configuring a PVM cluster for HMMER}
 
-Here, I will assume you're already familiar with PVM.
+The following only applies to people installing HMMER on a distributed
+cluster using PVM. I assume you're already reasonably familiar with
+PVM applications (at least, as familiar as I am -- I'm only familiar
+enough with it to make it work), and that you have PVM installed.
 
 Designate one machine as the ``master'', and the other machines as
 ``slaves''. You will start your HMMER process on the master, and the
-master will spawn jobs on the slaves using PVM.
+master will spawn jobs on the slaves using PVM.\footnote{HMMER will
+not parallelize on PVM capable systems that cannot run a strict
+master-slave model, that is, where the master is running a different
+program than its slaves. For example, Cray T3E systems are in
+principle PVM-capable, but only when all processors instantiate the
+same program, and that program figures out for itself whether it's the
+master calling the shots, or a slave communicating back to the
+master. This style of message passing parallelization is more MPI
+like, and becoming more standard -- but is not supported by HMMER.}
 
 Install PVM on the master and all the slaves. On the master, make sure
-the environment variables PVM\_ROOT and PVM\_ARCH are set properly
-(ideally, in a system-wide .cshrc file).
+the environment variables \prog{PVM\_ROOT} and \prog{PVM\_ARCH} are
+set properly (ideally, in a system-wide .cshrc file).
 
 Add the master's name to your .rhosts or /etc/hosts.equiv file on the
-slaves, so the slaves accept rsh connections from the master.
+slaves, so the slaves accept passwordless rsh connections from the
+master. (Or, if you're using ssh, do the equivalent with .shosts or
+some such.) Test this by rsh'ing or ssh'ing into the slaves from the
+master's command line, independent of PVM and HMMER.
 
 Put copies of HMMER executables in a directory on the master and all
 the slaves. For each PVM-capable program (\prog{hmmcalibrate},
@@ -286,26 +518,22 @@ to tell HMMER how many processors each node has (and hence, how many
 independent PVM processes it should start); sp=1000 means 1 CPU,
 sp=2000 means 2 CPUs, sp=4000 means 4 CPUS, etc.
 
-Start the PVM by typing\\
-\user{pvm hostfile} 
-(where ``hostfile'' is the
-name of your hostfile) on the master. Make sure all the nodes started
-properly by typing 
-\user{conf} 
-at the PVM console prompt.
-Type 
-\user{quit} to exit from the PVM console,
-which leaves the PVM running in the background.
-You should only need to start PVM once. (We have a
-PVM running continuously on our network right now, waiting
-for HMMER jobs.)
+Start the PVM by typing\\ \user{pvm hostfile} (where ``hostfile'' is
+the name of your hostfile) on the master. Make sure all the nodes
+started properly by typing \user{conf} at the PVM console prompt.
+Type \user{quit} to exit from the PVM console, which leaves the PVM
+running in the background.  You should only need to start PVM
+once. (We have a PVM running continuously on our network right now,
+waiting for HMMER jobs.)
 
 Once PVM is running, at any time you can run HMMER programs on the
 master and exploit your PVM, just by adding the option \prog{--pvm};
-for instance,\\
+for instance,
+
 \user{hmmpfam --pvm Pfam my.query} 
-parallelizes a search of
-a query sequence in the file my.query against the Pfam database.
+
+parallelizes a search of a query sequence in the file my.query against
+the Pfam database.
 
 Once PVM is properly configured and your slave nodes have the required
 slave programs (and databases, in the case of \prog{hmmpfam}), the
@@ -314,40 +542,39 @@ is a (potentially massive) increase in search speed. Aside from the
 addition of the \prog{--pvm} option on the command line, all other
 options and input/output formats remain identical.
 
-\subsection{Example of a PVM cluster}
+\subsubsection{Example of a PVM cluster}
 
 The St. Louis Pfam server runs its searches using HMMER on a PVM
 cluster called Wulfpack. I'll use it as a specific example of
 configuring a PVM cluster. It's a little more intricate than you'd
 usually need for personal use, just because of the details of running
 PVM jobs in a standalone way from CGI scripts on a Web server.
+\footnote{These instructions were made for an older version of
+Wulfpack; machine names and numbers have changed since then.}
 
-The master node is the Web server, \prog{fisher}. The slave nodes are
-eight rack-mounted dual processor Intel/Linux boxes called
-\prog{wulf01} through \prog{wulf08}. Collectively, we refer to
-this cluster as Wulfpack; it is a Beowulf-class Linux computing
-cluster.
+The master node is the Web server itself, \prog{fisher}. The slave
+nodes are eight dual processor Intel/Linux boxes called \prog{wulf01}
+through \prog{wulf08}. 
 
-PVM 3.3.11 is installed in \prog{/usr/local/pvm3} on the master and the
-slaves. 
+PVM 3.3.11 is installed in \prog{/usr/local/pvm3} on the master and
+all the slaves.
 
 On fisher, all HMMER executables are installed in
 \prog{/usr/local/bin}.  On the wulf slave nodes, the three PVM slave
-executables are installed in
-\prog{/usr/local/wulfpack}.
+executables are installed in \prog{/usr/local/wulfpack}.
 
 Pfam and PfamFrag, two Pfam databases, are installed on the wulf slave
 nodes in \prog{/usr/local/wulfpack.} They are converted to binary
 format using \prog{hmmconvert -b}, then indexed using \prog{hmmindex}.
-(Using binary format databases is a big performance win for
-\prog{hmmpfam} searches, because \prog{hmmpfam} is I/O bound and  
-binary HMM databases are smaller.)
+(Using binary format databases is a performance win for \prog{hmmpfam}
+searches, because \prog{hmmpfam} is I/O bound and binary HMM databases
+are smaller.)
 
 An \prog{ls} of \prog{/usr/local/wulfpack} on any wulf node looks like:
 \begin{verbatim}
 [eddy@wulf01 /home]$ ls /usr/local/wulfpack/
 Pfam             PfamFrag         hmmcalibrate-pvm   hmmsearch-pvm
-Pfam.gsi         PfamFrag.gsi     hmmpfam-pvm
+Pfam.ssi         PfamFrag.ssi     hmmpfam-pvm
 \end{verbatim}
 
 The PVM hostfile for the cluster looks like:
@@ -367,19 +594,19 @@ wulf07
 wulf08
 \end{verbatim}
 
-Note one wrinkle specific to configuring Web servers: the web server
-is running HMMER as user ``nobody'' because it's calling HMMER from a
-CGI script. We can't configure a shell for ``nobody'' on the slaves,
-so we create a dummy user called ``pfam'' on each wulf node.  The lo=
-directive in the PVM hostfile tells the master to connect to the
+A wrinkle specific to configuring Web servers: the web server is
+running HMMER as user ``nobody'' because it's calling HMMER from a CGI
+script. We can't configure a shell for ``nobody'' on the slaves, so we
+create a dummy user called ``pfam'' on each wulf node.  The lo=
+directive in the PVM hostfile is telling the master to connect to the
 slaves as user ``pfam''. On each slave, there is a user ``pfam'' with
 a .rhosts that looks like:
 \begin{verbatim}
    fisher nobody
    fisher.wustl.edu nobody
 \end{verbatim}
-which tells the wulf node to accept rsh connections from
-fisher's user ``nobody''.
+which tells the wulf node to allow fisher's user ``nobody'' 
+to connect to the wulf node as user ``pfam''.
 
 Also note how we use the sp= directive to tell HMMER (via PVM) that
 the wulf nodes are dual processors. fisher is actually a dual
@@ -387,16 +614,18 @@ processor too, but by setting sp=1000, HMMER will only start one PVM
 process on it (leaving the other CPU free to do all the things that
 keep Web servers happy).
 
-The trickiest thing is making sure PVM\_ROOT and PVM\_ARCH get set
-properly.  For my own private PVM use, my \prog{.cshrc} contains the lines:
+The trickiest thing is making sure \prog{PVM\_ROOT} and
+\prog{PVM\_ARCH} get set properly.  For my own private PVM use, my
+\prog{.cshrc} contains the lines:
 \begin{verbatim}
 	setenv PVM_ROOT    /usr/local/pvm3
 	setenv PVM_ARCH    `$PVM_ROOT/lib/pvmgetarch`
 \end{verbatim}
-But for the web server PVM, it's a little trickier. We start the Web
-server PVM as user ``nobody'' on fisher using a local init script,
-\prog{/etc/rc.d/init.d/pvm\_init}. With its error checking deleted for
-clarity, this script basically looks like:
+
+But for the web server PVM, it's a little trickier. At boot time, we
+start the Web server's pvmd as user ``nobody'' on fisher using a local
+init script, \prog{/etc/rc.d/init.d/pvm\_init}. With its error
+checking deleted for clarity, this script basically looks like:
 
 \begin{verbatim}
 #!/bin/sh
@@ -405,10 +634,10 @@ wulfpack_conf=/home/www/pfam/pfam-3.1/wulfpack.conf
 $PVM_ROOT/lib/pvmd $wulfpack_conf >/dev/null &
 \end{verbatim}
 
-We call this at boot time by adding the line
-\prog{su nobody -c "sh /etc/rc.d/init.d/pvm\_init} 
-to our \prog{rc.local} file. .pvmprofile is a little PVM-supplied
-script that properly sets PVM\_ROOT and PVM\_ARCH, and wulfpack.conf
+We call this at boot time by adding the line \prog{su nobody -c "sh
+/etc/rc.d/init.d/pvm\_init"} to our \prog{rc.local}
+file. \prog{.pvmprofile} is a little PVM-supplied script that properly
+sets \prog{PVM\_ROOT} and \prog{PVM\_ARCH}, and \prog{wulfpack.conf}
 is our PVM hostfile.
 
 The relevant lines of the CGI Perl script that runs HMMER jobs from
@@ -425,65 +654,21 @@ The trick here is that we export the HMMERDB environment variable via
 PVM, so the PVM processes on wulf nodes will know where to find their
 copy of Pfam.
 
-PVM is relatively complex, but with luck, this and the PVM
-documentation give you enough information to get HMMER running on a
-cluster. It's well worth it.  Wulfpack was simple to assemble; besides
-the eight rack-mounted machines, there's a terminal switch, a single
-console, a 10baseT Ethernet switch, and a UPS. Each machine runs stock
-Red Hat Linux (we don't need no steenking Extreme Linux hype). The
-whole thing cost us \$20K, but it runs HMMER searches as fast as a
-16-processor SGI Origin -- and it's bigger and has more blinking
-lights than an Origin, so it's more impressive to look at.
+\subsubsection{stability and support of the PVM code}
 
-\section{Recommended systems}
+The PVM port may not be as good as it should be. It happens to work
+well in St. Louis. It is used 24/7 on the servers backing the
+St. Louis Pfam search server at
+\htmladdnormallink{pfam.wustl.edu}{http://pfam.wustl.edu/}.  However,
+I have received occasional reports of problems at other sites.  John
+Blanchard at Incyte has contributed a number of improvements to the
+PVM code, but scattered problems persist. Unfortunately, PVM is
+painful to debug, and I have been unable to reproduce any of these
+problems in St. Louis. Since it works for me, I can't reproduce the
+issues, and nobody has sent me a small, detailed, and reproducible bug
+report, I'm not trying to track these phantoms down. But it seems only
+fair to warn you that this is an area of the code where bugs may lurk.
 
-HMMER is currently developed and maintained on Intel/GNU/Linux
-systems. Since these are the development systems, similar systems are
-the least likely to show portability problems.
-
-At each release, HMMER is also tested on a compile farm that includes
-most major commercial and open source UNIX platforms (see start of the
-chapter for a list).  These systems are also unlikely to show
-portability problems.
-
-\section{Make targets}
-
-There are a variety of make targets in the toplevel Makefile.  For
-completeness, they are summarized here. \textit{You shouldn't need to
-know this stuff.} Targets marked (Private) are targets which are not
-supported in the public HMMER release. They only run in my local
-development environment.
-
-\begin{wideitem}
-\item[\textbf{all}]  Compiles the source code; puts the compiled
-programs in the binaries/ subdirectory.
- 
-\item[\textbf{check}]  Compiles and runs the testsuite.
-
-\item[\textbf{install}] Installs the programs in BINDIR and
-the man pages in MANDIR.
-
-\item[\textbf{clean}] Cleans up the directory, leaving the
-distribution files and binaries.
-
-\item[\textbf{distclean}] Like 'make clean', but removes everything
-that isn't part of a pristine source distribution.
-
-\item[\textbf{optcheck}] Tests that all options are documented in man
-pages and tested in sqc scripts.
-(Private)
-
-\item[\textbf{doc}] Builds the Userguide from \latex source. (Private)
-
-\item[\textbf{dist}] Checks out a complete distribution from RCS
-and assembles the .tar.Z file. (Private)
-
-\item[\textbf{ftpdist}] Installs a new release on the FTP
-site. (Private)
-
-\item[\textbf{stable}] Symlinks a new FTP release to hmmer.tar.Z. (Private)
-
-\end{wideitem}
 
 
 

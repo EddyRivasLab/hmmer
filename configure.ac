@@ -188,7 +188,8 @@ esac])
 #
 AC_ARG_ENABLE(debugging,
 [  --enable-debugging      set CFLAGS for debugging
-  --enable-debugging=x    also set diagnostics level to <x> (1-3) (3 = most verbose)],
+  --enable-debugging=x    also set diagnostics level to <x> (1-3) 
+                          (where 3 = most verbose)],
 [ case $enable_debugging in
    yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
          CFLAGS="-g -Wall"

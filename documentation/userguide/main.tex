@@ -1,7 +1,8 @@
 % Organizing document for the HMMER User's Guide
 %
+% CVS $Id$
 
-\documentclass[11pt]{report}
+\documentclass[11pt]{article}
 \newif\ifpdf
 \ifx\pdfoutput\undefined
   \pdffalse
@@ -19,6 +20,7 @@
 \usepackage{apalike}
 \usepackage{fullpage}
 \usepackage{times}
+\usepackage{fancyvrb}
 
 \setcounter{secnumdepth}{1}
 
@@ -28,20 +30,29 @@
 \bibliographystyle{apalike}
 
 \input{titlepage}
-
 \input{copyright}
-
+\newpage
 \tableofcontents
 
-\input{tutorial}
+\newpage
 \input{introduction}
-\input{topics}
-\input{manpages}
-\input{formats}
+\newpage
 \input{install}
+\newpage
+\input{tutorial}
+\newpage
+\input{topics}
+\newpage
+\input{formats}
+\newpage
+\input{manpages}
+
+\newpage
 \input{license}
+\newpage
 \input{ack}
 
-\bibliography{lab,master,new}
+\newpage
+\bibliography{master,lab,new}
 
 \end{document}

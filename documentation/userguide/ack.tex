@@ -1,14 +1,4 @@
-\chapter {Acknowledgements and history}
-
-\begin{quote}
-\textit{
-It must be remembered that there is nothing more difficult to plan, more
-doubtful of success, nor more dangerous to manage, than the creation of
-a new system.  For the initiator has the emnity of all who would profit
-by the preservation of the old institutions and merely lukewarm defenders
-in those who would gain by the new ones.\\}
-\hspace*{\fill} -- Niccolo Machiavelli
-\end{quote}
+\section{Acknowledgements and history}
 
 HMMER 1 was developed at the MRC Laboratory of Molecular Biology,
 Cambridge UK, while I was a postdoc with Dr. Richard Durbin. I thank
@@ -20,43 +10,29 @@ of HMMER in April 1995. A number of modifications and improvements
 went into HMMER 1.9 code, but 1.9 was never released. Some versions of
 HMMER 1.9 did inadvertently escape St. Louis and make it to other
 sites, but it was never documented or supported. HMMER 1.9 collapsed
-under its own weight in 1996, when the number of ugly hacks increased
-to a critical mass.
+under its own weight in 1996.
 
 HMMER 2 is a nearly complete rewrite, based on a new model
 architecture dubbed ``Plan 7''. Implementation was begun in November
 1996 at Washington University in St. Louis. I thank the Washington
 University Dept. of Genetics, the NIH National Human Genome Research
-Institute, and Monsanto for their support during this (extremely
-stressful) time. There is nothing like throwing four years of work
-away and starting fresh to make you question your sanity. Working on a
-book \cite{Durbin98} and starting up a lab at the same time made it
-all doubly ``exciting''. If you are so bored as to actually read the
-code, you will run across inexplicable comments that note where I was
-when I wrote various parts, making up a sort of disjointed diary of
-this period; amongst other places, parts of HMMER 2 were written in
-airport lounges, on TWA flights 720 and 721 to and from London, in
-Graeme Mitchison's kitchen in Cambridge, and on vacations while my
-(ex-)wife wasn't watching (which probably explains the divorce, come
-to think of it).  I therefore owe special thanks (I think) to the
+Institute, and Monsanto for their support during this time, and to the
 Biochemistry Academic Contacts Committee at Eli Lilly \& Co. for a
 gift that paid for the trusty Linux laptop on which much of HMMER 2
-was written.
+was written... much of it in coffee bars, airport lounges, and
+transoceanic flights in various parts of the world.
 
-HMMER 2.1.1 was the stable release for three years, from 1998-2001.
-After a long developmental gestation period, during which my research
-lab had mostly switched to RNA work, and I'd mostly switched to being
-a PI instead of a researcher, HMMER 2.2 was finally released in summer
-2001. HMMER has now settled into a comfortable middle age, like its
-author - still actively maintained, but no dramatic new changes are
-planned.
+HMMER has now settled into a comfortable middle age, like its author -
+still actively maintained, but no dramatic new changes planned.  HMMER
+2.1.1 was the stable release for three years, from 1998-2001.  HMMER
+2.2g was the stable release for two more years, 2001-2003. The latest
+release, 2.3, was assembled in spring 2003.
 
-The MRC-LMB computational molecular biology discussion group has
+The MRC-LMB computational molecular biology discussion group
 contributed many ideas to HMMER. In particular, I thank Richard
 Durbin, Graeme Mitchison, Erik Sonnhammer, Alex Bateman, Ewan Birney,
 Gos Micklem, Tim Hubbard, Roger Sewall, David MacKay, and Cyrus
-Chothia. Any errors in the code, though, are my fault alone, of
-course.
+Chothia. 
 
 Sequence format parsing ({\tt sqio.c}) in HMMER is derived from an
 early release of the {\tt READSEQ} package by Don Gilbert, Indiana
@@ -66,32 +42,33 @@ hsregex.c} is a derivative of Henry Spencer's regular expression
 library; thanks, Henry. Several miscellaneous functions in {\tt
 sre\_math.c} are taken from public domain sources and are credited in
 the code's comments. {\tt masks.c} includes a modified copy of the XNU
-source code from David States and Jean-Michel Claverie.
+source code from David States and Jean-Michel Claverie. The Altivec
+port to Macintosh PowerPC was contributed by Erik Lindahl at Stanford.
 
 In many other places, I've reimplemented algorithms described in the
 literature. These are too numerous to credit and thank here. The
 original references are given in the comments of the code. However,
-I've borrowed (stolen?) more than once from the following folks that
-I'd like to be sure to thank: Steve Altschul, Pierre Baldi, Phillip
-Bucher, Warren Gish, David Haussler, Steve and Jorja Henikoff, Richard
-Hughey, Kevin Karplus, Anders Krogh, Bill Pearson, and Kimmen
-Sj\"{o}lander.
+I've borrowed more than once from the following folks that I'd like to
+be sure to thank: Steve Altschul, Pierre Baldi, Phillip Bucher, Warren
+Gish, David Haussler, Steve and Jorja Henikoff, Richard Hughey, Kevin
+Karplus, Anders Krogh, Bill Pearson, and Kimmen Sj\"{o}lander.
 
-HMMER is developed on Silicon Graphics and Linux machines in my lab.
-I thank Compaq, IBM, Intel, Sun Microsystems, Silicon Graphics,
-Hewlett-Packard, and Paracel for generous hardware support. Dave
-Cortesi at SGI contributed much useful advice on the POSIX threads
-implementation. I am proud to acknowledge a tremendous debt to the
-development tools that I use from the free software community: an
-incomplete list includes GNU gcc, gdb, emacs, and autoconf; Cygnus'
-and others' egcs compiler; Conor Cahill's dbmalloc library; Bruce
-Perens' ElectricFence; the cast of thousands that develops CVS, the
-Concurrent Versioning System; Larry Wall's perl; LaTeX and TeX from
-Leslie Lamport and Don Knuth; Nikos Drakos' latex2html; Thomas Phelps'
-PolyglotMan; Linus Torvalds' Linux operating system; and the folks at
-Red Hat Linux and Mandrake Linux.
+HMMER is primarily developed on GNU/Linux machines, but is tested on a
+variety of hardware. I thank Compaq, IBM, Intel, Sun Microsystems,
+Silicon Graphics, Hewlett-Packard, and Paracel for generous hardware
+support. Dave Cortesi at SGI contributed much useful advice on the
+POSIX threads implementation. I owe a tremendous debt to the free
+software community for the development tools I use: an incomplete list
+includes GNU gcc, gdb, emacs, and autoconf; Cygnus' and others' egcs
+compiler; Conor Cahill's dbmalloc library; Bruce Perens'
+ElectricFence; Armin Biere's ccmalloc; the cast of thousands that
+develops CVS, the Concurrent Versioning System; Larry Wall's perl;
+LaTeX and TeX from Leslie Lamport and Don Knuth; Nikos Drakos'
+latex2html; Thomas Phelps' PolyglotMan; Linus Torvalds' Linux
+operating system; and the folks at Red Hat Linux and Mandrake Linux.
 
-Finally, I'd like to cryptically thank Dave ``Mr. Frog'' Pare and Tom
+Finally, I will cryptically thank Dave ``Mr. Frog'' Pare and Tom
 ``Chainsaw'' Ruschak for a totally unrelated free software product
-that was historically instrumental in HMMER's development, for reasons
-that are best not discussed while sober.
+called Empire that was historically instrumental in HMMER's
+development -- for reasons that are best not discussed while sober.
+

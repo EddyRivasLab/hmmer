@@ -1,4 +1,9 @@
-\chapter{Overview}
+\section{Introduction}
+
+If you just want to get started fast, skip this section and go
+straight to the installation instructions, then to the tutorial.
+
+\subsection{What does HMMER do?}
 
 You discover a new protein sequence family, and carefully construct a
 multiple sequence alignment. Your family, like most protein families,
@@ -30,9 +35,11 @@ sequence that also happens to have a protein kinase catalytic domain,
 fibronectin type III domain, or immunoglobulin superfamily domain?
 
 These (and other problems in sequence analysis) are the kinds of
-problems that HMMER tries to address. 
+problems that HMMER tries to address. HMMER works with consensus
+statistical models of multiple sequence alignments, called
+\emph{profile hidden Markov models} (profile HMMs).
 
-\section {Profile HMMs}
+\subsection {Profile HMMs}
 
 Profile hidden Markov models (profile HMMs) are statistical models of
 the primary structure consensus of a sequence family. Anders Krogh,
@@ -109,7 +116,7 @@ computational biology, see \cite{Durbin98}
 {http://www.genetics.wustl.edu/eddy/publications/cupbook.html}
 \end{htmlonly}.
 
-\section{Primary changes from HMMER 1.x}
+\subsection{Primary changes from HMMER 1.x}
 
 HMMER 2 is an almost complete rewrite of the original 1992-1996 HMMER
 code. A list of the major changes follows.
@@ -163,9 +170,9 @@ software yet.)
 
 \end{wideitem}
 
-\section{Plan 7}
+\subsection{Plan 7}
 
-\subsection{The Plan 7 architecture}
+\subsubsection{The Plan 7 architecture}
 
 The Plan 7 architecture is substantially different from the original
 HMMER model architecture. 
@@ -219,7 +226,7 @@ local or multihit alignments. The algorithm dependent parameters are
 typically not learned from data, but rather set externally by choosing
 a desired alignment style.
 
-\subsection{Local alignments in Plan 7}
+\subsubsection{Local alignments in Plan 7}
 
 The Plan 7 architecture models a complete sequence, regardless of how
 much of that sequence matches the main model. \textit{All alignments
@@ -310,7 +317,7 @@ model should be recalibrated with \prog{hmmcalibrate} -- and
 \prog{hmmcalibrate} is relatively slow.
 
 
-\subsection{The Plan 7 null model}
+\subsubsection{The Plan 7 null model}
 
 When HMM alignments are scored, they are scored by a log-odds score
 relative to a ``null model'' of random sequence composition
@@ -330,7 +337,7 @@ transition probability is so close to 1 that it has very little
 effect. The F state is just a dummy end state like the T state in the
 Plan 7 architecture.
 
-\subsection{Wing retraction in Plan 7 dynamic programming}
+\subsubsection{Wing retraction in Plan 7 dynamic programming}
 
 In the figure of the Plan 7 architecture, you may have noticed that
 the first and last delete states are greyed out. Internally in HMMER,
@@ -364,7 +371,7 @@ these probabilities together, is a design decision, preserving a
 distinction between the ``algorithm dependent'' and ``data dependent''
 parts of the model.
 
-\section{Sequence file formats}
+\subsection{Sequence file formats}
 
 For all the programs, unaligned sequence files can be in FASTA,
 Genbank, EMBL, or SWISS-PROT format, as well as a few other common
@@ -392,7 +399,7 @@ forewarned. If you're lucky, the software will issue a snide warning
 to you if you try to do something nonsensical, but usually it will
 assume you know what you're doing.
 
-\section{Command line options}
+\subsection{Command line options}
 
 If you forget the command-line syntax or available options of any of
 the programs, you can type the name of the program with no other
@@ -410,7 +417,7 @@ helpful if you report bugs or other problems to me) and a complete
 summary of all the available options, including rarely used and
 expert/experimental ones.
 
-\section {Environment variables}
+\subsection{Environment variables}
 
 HMMER is built to coexist peacefully with the BLAST suite of database
 search programs \cite{Altschul91}. HMMER reads the following
@@ -454,7 +461,7 @@ environment variables (the examples given use UNIX csh syntax):
 	\user{setenv HMMER\_NCPU 16}
 \end{wideitem}
 
-\section{Other profile HMM implementations}
+\subsection{Other profile HMM implementations}
 
 Several implementations of profile HMM methods and related PSSM
 methods are available.  Some are listed in the table below.

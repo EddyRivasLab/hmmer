@@ -39,7 +39,7 @@
  * By default, we detect the number of processors dynamically, and use
  * them all. 
  *
- * However, on some systems (FreeBSD and Linux, notably), we
+ * However, on some systems (FreeBSD and older Linuxen, notably), we
  * can't autodetect the available # of cpus. On these systems we
  * assume 2 processors by default - dual processor Intel servers
  * are common. That assumption can be overridden
