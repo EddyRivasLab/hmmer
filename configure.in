@@ -11,11 +11,18 @@ AC_SUBST(PVMINCDIR)
 AC_SUBST(PVMFLAG)
 AC_SUBST(PVMPROGS)
 AC_SUBST(PVMLIBS)
+AC_SUBST(ARENA)
 
 dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_LN_S
 AC_PROG_RANLIB
+
+dnl Sets the build arena: where we're looking for
+dnl module .a and .h files during the build, relative
+dnl to top_srcdir: a Makefile.in will set the path
+dnl to be top_srcdir/ARENA.
+ARENA="lib"
 
 dnl Configure PVM
 AC_ARG_WITH(pvm, 
@@ -65,17 +72,16 @@ AC_CHECK_FUNCS(pthread_attr_setscope)
 
 dnl Doublecheck important sizeof's for binary files
 dnl
-AC_CHECK_SIZEOF(unsigned int)
+AC_CHECK_SIZEOF(unsigned int, 4)
 if test "$ac_cv_sizeof_unsigned_int" != "4"; then
   AC_MSG_WARN "sizeof(unsigned int) isn't 4. you will have problems with binary files."
 fi
 
-AC_CHECK_SIZEOF(unsigned short)
+AC_CHECK_SIZEOF(unsigned short, 2)
 if test "$ac_cv_sizeof_unsigned_short" != "2"; then
   AC_MSG_WARN "sizeof(unsigned short) isn't 2. you will have problems with binary files."
 fi
 
 dnl Write out Makefiles
 echo "   Configuration complete. Writing Makefiles and such..."
-AC_OUTPUT(Makefile Shiva/Makefile src/Makefile)
-
+AC_OUTPUT(Makefile lib/Makefile lib/squid/Makefile src/Makefile)

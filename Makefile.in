@@ -1,9 +1,9 @@
-##########
+################################################################# 
+# Makefile for HMMER: Main project directory: installation, documentation
+# CVS $Id$
+###########
 # @LICENSE@
 ###########
-# 
-# Makefile for HMMER: Main project directory: installation, documentation
-# RCS $Id$
 
 # On must Unices, you can build the package without modifying anything 
 #   by just typing "./configure; make".
@@ -36,243 +36,153 @@ MANSUFFIX = 1
 CC     = @CC@
 CFLAGS = @CFLAGS@
 
-# If you want more speed, here's the current recommendations
-# for CFLAGS.
-#
-# IRIX 6.x, MIPSpro 7.2.1 compilers, where ipxx is your CPU type 
-# CFLAGS = -Ofast=ipxx 
-#
-# Linux/Intel PentiumII, egcs 1.0.3 C compiler:
-# CFLAGS = -O6 -fomit-frame-pointer -funroll-all-loops
-#
-
 #######
-## HMMER installers should not need to modify below this line
+## You should not need to modify below this line.
 ## Much of it is concerned with maintenance of the development version
 ## and building the release (indeed, several commands will only work in 
 ## St. Louis)
 #######
-RELEASE     = 2.1.3
-RELEASEDATE = "December 1999"
-RELCODE     = "rel2_1_3"
-LICENSE     = gnu
-
 SHELL       = /bin/sh
-SQUIDSRCDIR = $(HOME)/src/squid
-COMPRESS    = compress
-FTPDIR      = /nfs/ftp/eddy/hmmer/
+PACKAGE     = "HMMER"
+RELEASE     = "2.1.3"
+RELCODE     = "rel2_1_3"
+RELEASEDATE = "December 1999"
+COPYRIGHT   = "Copyright \(C\) 1992-2000 Washington University School of Medicine"
+LICENSE     = "Freely distributed under the GNU General Public License \(GPL\)"
+LICENSETAG  = gnu
+COMPRESS    = gzip
 
-PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit\
-	hmmfetch hmmindex hmmpfam hmmsearch
-
-SQUIDPROGS = alistat sfetch seqstat sreformat shuffle
+# The program lists below for HMMER and SQUID are not necessarily
+# a complete manifest. They are the list of stable programs that the
+# package will install. There must be a man page for each one of them
+# in the appropriate places (documentation/man for HMMER, lib/squid/Man
+# for the SQUID library). 
+#
+PROGS = hmmalign\
+	hmmbuild\
+	hmmcalibrate\
+	hmmconvert\
+	hmmemit\
+	hmmfetch\
+	hmmindex\
+	hmmpfam\
+	hmmsearch
 
 PVMPROGS = @PVMPROGS@
 
-READMES = 00README INSTALL 
+SQUIDPROGS = alistat\
+	 seqstat\
+	 sfetch\
+	 shuffle\
+	 sreformat
 
-HDRS =   config.h\
-	 funcs.h\
-	 globals.h\
-	 postprob.h\
-	 stopwatch.h\
-	 structs.h\
-	 version.h
-
-SRC =   hmmalign.c\
-	hmmbuild.c\
-	hmmcalibrate.c\
-	hmmconvert.c\
-	hmmemit.c\
-	hmmfetch.c\
-        hmmindex.c\
-	hmmpfam.c\
-	hmmsearch.c\
-	hmmcalibrate-pvm.c\
-	hmmpfam-pvm.c\
-	hmmsearch-pvm.c\
-	alphabet.c\
-	core_algorithms.c\
-	debug.c\
-	display.c\
-	emit.c\
-	emulation.c\
-	histogram.c\
-	hmmio.c\
-	mathsupport.c\
-        masks.c\
-	misc.c\
-	modelmakers.c\
-	plan7.c\
-	plan9.c\
-	postprob.c\
-	prior.c\
-	pvm.c\
-	stopwatch.c\
-	threads.c\
-	tophits.c\
-	trace.c 
-
-SQUIDSRC = afetch_main.c\
-	alistat_main.c\
-	sfetch_main.c\
-	seqstat_main.c\
-	shuffle_main.c\
-	sreformat_main.c\
-	a2m.c\
-	aligneval.c\
-	alignio.c\
-	clustal.c\
-	cluster.c\
-	dayhoff.c\
-	file.c\
-	getopt.c\
-	gki.c\
-	gsi.c\
-        hsregex.c\
-	iupac.c\
-	msa.c\
-	msf.c\
-	phylip.c\
-        revcomp.c\
-	selex.c\
-	sqerror.c\
-	sqio.c\
-	squidcore.c\
-	sre_ctype.c\
-	sre_math.c\
-	sre_string.c\
-	stack.c\
-	stockholm.c\
-	translate.c\
-	types.c\
-        weight.c
-
-SQUIDHDRS = gki.h\
-	gsi.h\
-	msa.h\
-	squid.h\
-	sqfuncs.h 
-
-SHIVADIST = README\
-	    alignalign_test.c  evd_test.c   masks_test.c  parsingviterbi_test.c\
-	    tophits_test.c     trace_test.c viterbi_exercise.c\
-	    weeviterbi_test.c\
-	    Optiontests.pl   Optiontests.fa  Optiontests.nfa Optiontests.nslx\
-	    Optiontests.pam  Optiontests.slx\
-	    fn3.hmm fn3.seed titin.fa\
-	    trace_test.hmm trace_test.seq trace_test.slx \
-	    weeviterbi_test.hmm weeviterbi_test.seq\
-	    Exercises.sh fn3-bin fn3-bin-swap
-
-DEMOS = globins50.msf  globins630.fa Artemia.fa\
-	rrm.slx pkinase.slx fn3.slx\
-	rrm.hmm\
-	RU1A_HUMAN 7LES_DROME\
-	amino.null nucleic.null amino.pri nucleic.pri
-
-# all: compiles the src package, if we don't have precompiled binaries,
-#      and moves them into binaries/ subdirectory.
+# all: if we don't have precompiled binaries, compiles all packages, 
+#      and moves the supported executables into binaries/ subdirectory.
 #
-all:
+all: version.h
 	@if test -d binaries; then\
-	   echo "You have a precompiled HMMER distribution. No need to make.";\
+	   echo "You appear to already have a compiled HMMER distribution.";\
+           echo "You don't need to make.";\
+           echo "";\
+	   echo "If I'm wrong, it's because I'm only looking to see if you have";\
+           echo "a 'binaries' directory; do 'make srcclean' to revert HMMER";\
+           echo "to a pristine source distribution.";\
 	else\
-	   (cd src; make CC="$(CC)" CFLAGS="$(CFLAGS)");\
-	   mkdir binaries;\
-	   for prog in $(PROGS) $(SQUIDPROGS) $(PVMPROGS); do\
-	      mv src/$$prog binaries/;\
-	   done;\
+           (cd lib/squid; make CC="$(CC)" CFLAGS="$(CFLAGS)"; make module-install);\
+           (cd src; make CC="$(CC)" CFLAGS="$(CFLAGS)"; make module-install);\
+           mkdir binaries;\
+              for prog in $(PROGS) $(PVMPROGS); do\
+              mv src/$$prog binaries/;\
+           done;\
+           for prog in $(SQUIDPROGS); do\
+              mv lib/squid/$$prog binaries/;\
+           done;\
 	fi
 
-# check: compiles and runs test suite in Shiva/
+# version.h: 
+#   create the version.h file that will define stamps used by 
+#   squidcore.c's Banner(), which is called by all executables to
+#   print a standard package/copyright/license banner;
+#   then puts copies of version.h in all directories that are 
+#   going to need it -- HMMER src/ and any modules of mine that
+#   also produce installed executables (lib/squid)
+#
+version.h:
+	echo "/* version.h -- automatically generated by a Makefile. DO NOT EDIT. */" > version.h
+	echo "#define PACKAGE     \"$(PACKAGE)\""     >> version.h
+	echo "#define RELEASE     \"$(RELEASE)\""     >> version.h
+	echo "#define RELEASEDATE \"$(RELEASEDATE)\"" >> version.h
+	echo "#define COPYRIGHT   \"$(COPYRIGHT)\""   >> version.h
+	echo "#define LICENSE     \"$(LICENSE)\""     >> version.h
+	cp version.h lib/squid/
+	cp version.h src/
+
+lib/libhmmer.a: 
+	(cd src; make module CC="$(CC)" CFLAGS="$(CFLAGS)"; make module-install)
+
+lib/libsquid.a:
+	(cd lib/squid; make module CC="$(CC)" CFLAGS="$(CFLAGS)"; make module-install)
+
+# check: compiles and runs test suite in testsuite/
 #       These are public tests, distributed with the package.
 #
-check:	
-	(cd src; make CC="$(CC)" CFLAGS="$(CFLAGS)" libhmmer.a)
-	(cd Shiva; make CC="$(CC)" CFLAGS="$(CFLAGS)")
-	(cd Shiva; make shiva)
+check:	lib/libsquid.a lib/libhmmer.a
+	(cd testsuite; make CC="$(CC)" CFLAGS="$(CFLAGS)")
+	(cd testsuite; make check)
 
 # install: installs the binaries in BINDIR/
-#          installs man pages in MANDIR/man1/  (if MANSUFFIX is 1)
+#          installs man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 install: 
 	for file in $(PROGS) $(SQUIDPROGS) $(PVMPROGS); do\
 	   cp binaries/$$file $(BINDIR)/;\
 	done
 	for file in hmmer $(PROGS) $(SQUIDPROGS); do\
-	   $(INSTMAN) Man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+	   $(INSTMAN) documentation/man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+	done
+	for file in $(SQUIDPROGS); do\
+	   $(INSTMAN) lib/squid/Man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 
-# "make clean" removes everything but the distribution 
-#
+# "make clean" removes almost everything except configuration files
+#              and binaries.
 clean:
-	-rm -rf binaries
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	-rm config.cache config.log config.status
-	(cd Shiva; make clean)
-	(cd src; make clean)
-	-rm Makefile src/Makefile
+	(cd src;       make clean)
+	(cd lib;       make clean)
+	(cd lib/squid; make clean)
 
-# "make almostclean" leaves the binaries, for instance,
-#    if we want to make a binary distribution
+# "make distclean" leaves a pristine distribution.... and
+#                  doesn't touch the binaries directory
 #
-almostclean:
+distclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm config.cache config.log config.status
-	(cd Shiva; make clean)
-	(cd src; make clean)
-	-rm Makefile src/Makefile
+	-rm version.h
+	(cd src;       make distclean)
+	(cd lib;       make distclean)
+	(cd lib/squid; make distclean)
+	-rm Makefile
+
+# "make srcclean" is the most aggressive. It is distclean,
+#    plus removing the binaries directory -- leaving a
+#    pristine source-only distribution.
+#
+srcclean:
+	-rm -rf binaries
+	make distclean
 
 # verify: consistency checks on the package
 #         These are private tests, not distributed with HMMER
 verify:
-	@echo Checking that RCS checkins are complete...
-	@echo
-	@for file in $(READMES) Makefile.in; do\
-	   if test -w $$file; then echo "Toplevel $$file not checked in"; fi;\
-	done;
-	@for file in $(SRC) $(HDRS) Makefile.in; do\
-	   if test -w src/$$file; then echo "src/$$file not checked in"; fi;\
-	done;
-	@for file in $(SQUIDSRC) $(SQUIDHDRS); do\
-	   if test -w $(SQUIDSRCDIR)/$$file; then echo "SQUID $$file not checked in"; fi;\
-	done;
-	@for file in $(DEMOS); do\
-	   if test -w Demos/$$file; then echo "Demos/$$file not checked in"; fi;\
-	done;
-	@for file in $(PROGS); do\
-	   if test -w Man/$$file.man; then echo "Man/$$file not checked in"; fi;\
-	done;
-	@for file in $(SQUIDPROGS); do\
-	   if test -w $(SQUIDSRCDIR)/Man/$$file.man; then echo "SQUID Man/$$file not checked in"; fi;\
-	done;
-	@for file in $(SHIVADIST) Makefile.in; do\
-	   if test -w Shiva/$$file; then echo "Shiva/$$file not checked in"; fi;\
-	done;
-	@echo
 	@echo Checking options for consistency and documentation...
 	@for prog in $(PROGS) $(SQUIDPROGS); do\
 	   ./checkoptions.pl $$prog;\
 	done
 
-
 # doc:  build the Userguide and on-line manual
 #
 doc:
 	(cd Userguide; make)
-
-# squid: update files from squid library.
-#
-squid:
-	for file in $(SQUIDHDRS); do\
-	   co $(HOME)/src/squid/RCS/$$file,v src/$$file;\
-	done
-	for file in $(SQUIDSRC); do\
-	   co ${SQUIDSRCDIR}/RCS/$$file,v src/$$file;\
-	done
-	for file in $(SQUIDPROGS); do\
-	   co ${SQUIDSRCDIR}/Man/RCS/$$file.man,v Man/$$file.man;\
-	done
 
 # dist: build a new distribution directory in build/hmmer-$RELEASE
 #       checks out RCS files read-only
@@ -308,8 +218,8 @@ dist:
 	# 
 	# Attach the license and release notes
 	#
-	cp Licenses/LICENSE.$(LICENSE)     build/hmmer-$(RELEASE)/LICENSE
-	cp Licenses/COPYING.$(LICENSE)     build/hmmer-$(RELEASE)/COPYING
+	cp Licenses/LICENSE.$(LICENSETAG) build/hmmer-$(RELEASE)/LICENSE
+	cp Licenses/COPYING.$(LICENSETAG) build/hmmer-$(RELEASE)/COPYING
 	cp ReleaseNotes/RELEASE-$(RELEASE) build/hmmer-$(RELEASE)/NOTES
 	#
 	# RCS extraction of top level README-type documentation and Makefile
@@ -317,7 +227,7 @@ dist:
 	for file in $(READMES) Makefile.in; do\
 	  rcs -N$(RELCODE): RCS/$$file,v;\
 	  co RCS/$$file,v build/hmmer-$(RELEASE)/$$file;\
-	  licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/$$file;\
+	  licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/$$file;\
         done
 	#
 	# RCS extraction of src/ source code subdirectory
@@ -325,12 +235,12 @@ dist:
 	for file in $(SRC) $(HDRS) Makefile.in; do\
            rcs -N$(RELCODE): src/RCS/$$file,v;\
 	   co src/RCS/$$file,v build/hmmer-$(RELEASE)/src/$$file;\
-	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/src/$$file;\
+	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/src/$$file;\
 	done
 	for file in $(SQUIDSRC) $(SQUIDHDRS); do\
 	   rcs -Nhmmer_$(RELCODE): $(SQUIDSRCDIR)/RCS/$$file,v;\
 	   co $(SQUIDSRCDIR)/RCS/$$file,v build/hmmer-$(RELEASE)/src/$$file;\
-	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/src/$$file;\
+	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/src/$$file;\
 	done
 	#
 	# RCS extraction of Demos/ 
@@ -338,7 +248,7 @@ dist:
 	for file in $(DEMOS); do\
 	  rcs -N$(RELCODE): Demos/RCS/$$file,v;\
 	  co Demos/RCS/$$file,v build/hmmer-$(RELEASE)/Demos/$$file;\
-	  licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Demos/$$file;\
+	  licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Demos/$$file;\
         done
 	#
 	# RCS extraction of HMMER Man/ manual pages
@@ -349,7 +259,7 @@ dist:
                                             -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
 	                                    -e 's/@SEEALSO@/${PROGS}/g'\
                 > build/hmmer-$(RELEASE)/Man/$$file.man;\
-	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Man/$$file.man;\
+	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Man/$$file.man;\
 	done
 	#
 	# RCS extraction of SQUID Man/ manual pages
@@ -362,7 +272,7 @@ dist:
                    -e 's/@PACKAGE@/HMMER/g' \
 	           -e 's/@SEEALSO@/${SQUIDPROGS}/g'\
                 > build/hmmer-$(RELEASE)/Man/$$file.man;\
-	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Man/$$file.man;\
+	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Man/$$file.man;\
 	done
 	#
 	# RCS extraction of Shiva/ testsuite
@@ -370,7 +280,7 @@ dist:
 	for file in $(SHIVADIST) Makefile.in; do\
 	   rcs -N$(RELCODE): Shiva/RCS/$$file,v;\
 	   co Shiva/RCS/$$file,v build/hmmer-$(RELEASE)/Shiva/$$file;\
-	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Shiva/$$file;\
+	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Shiva/$$file;\
 	done
 	# 
 	# Compilation of documentation: includes hmmer-html.tar.Z and Userguide.ps
@@ -395,7 +305,7 @@ dist:
 ftpdist:
 	cp -f $(READMES)                     $(FTPDIR)
 	cp -f build/hmmer-$(RELEASE)/COPYING $(FTPDIR)
-	cp -f build/hmmer-$(RELEASE)/LICENSE $(FTPDIR)
+	cp -f build/hmmer-$(RELEASE)/LICENSETAG $(FTPDIR)
 	cp -f build/hmmer-$(RELEASE)/NOTES   $(FTPDIR)
 	cp -f build/hmmer-$(RELEASE).tar.Z   $(FTPDIR)
 	cp -f build/hmmer-$(RELEASE)-*.tar.Z $(FTPDIR)

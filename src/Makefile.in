@@ -1,6 +1,7 @@
-# Makefile for HMMER: Source directory
-# RCS $Id$
-##########
+############################################################
+# Makefile for HMMER src directory
+# CVS $Id$
+###########
 # @LICENSE@
 ###########
 
@@ -9,18 +10,24 @@
 CC     = @CC@
 CFLAGS = @CFLAGS@
 
-## machine specific definitions
+## other defined flags. 
+#  @DEFS@ contains stuff that autoconf 
+#  decides on. @MDEFS@ contains stuff that we added to
+#  the configure script tests. @LIBS@ contains system
+#  libraries that the configure script decides we need.
 #
 MDEFS = @MDEFS@ @DEFS@
+LIBS  = @LIBS@ 
 
 ## archiving command, and ranlib command if you need one.
 #  In general, you shouldn't need to change these, and they're
-#  only used for building the Shiva testsuite anyway.
+#  only used for building the testsuite anyway... e.g. we
+#  make a "libhmmer.a" library for building the testsuite.
 #
 AR     = ar rcv 
 RANLIB = @RANLIB@
 
-# Configuration for PVM functionality
+# Configuration for optional PVM functionality
 #
 PVMFLAG   = @PVMFLAG@
 PVMLIBDIR = @PVMLIBDIR@
@@ -28,61 +35,29 @@ PVMINCDIR = @PVMINCDIR@
 PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
+# Where the build arena is (module .h and .o files)
+#
+ARENA = @top_srcdir@/@ARENA@
+
 #######
-## Neither you nor configure should not need to modify below this line
+## Neither you nor configure should need to modify below this line
 #######
-SHELL  = /bin/sh
-LIBS   = @LIBS@
+SHELL    = /bin/sh
+MYLIBS   = -lsquid
+MYLIBDIR = -L${ARENA}
+MYINCDIR = -I${ARENA}
 
-PROGS = hmmalign hmmbuild hmmcalibrate \
-	hmmconvert hmmemit hmmfetch hmmindex\
-	hmmpfam hmmsearch
+PROGS = hmmalign\
+	hmmbuild\
+	hmmcalibrate\
+	hmmconvert\
+	hmmemit\
+	hmmfetch\
+	hmmindex\
+	hmmpfam\
+	hmmsearch
 
-SQUIDPROGS = alistat sfetch seqstat sreformat shuffle
-
-HDRS =   config.h\
-         funcs.h\
-         globals.h\
-         postprob.h\
-         stopwatch.h\
-         structs.h\
-         version.h
-
-SRC =   hmmalign.c\
-        hmmbuild.c\
-        hmmcalibrate.c\
-        hmmconvert.c\
-        hmmemit.c\
-	hmmfetch.c\
-        hmmindex.c\
-	hmmpfam.c\
-	hmmsearch.c\
-	hmmcalibrate-pvm.c\
-	hmmpfam-pvm.c\
-	hmmsearch-pvm.c\
-	alphabet.c\
-	core_algorithms.c\
-	debug.c\
-	display.c\
-	emit.c\
-	emulation.c\
-	histogram.c\
-	hmmio.c\
-	mathsupport.c\
-        masks.c\
-	misc.c\
-	modelmakers.c\
-	plan7.c\
-	plan9.c\
-	postprob.c\
-	prior.c\
-	pvm.c\
-	stopwatch.c\
-	threads.c\
-	tophits.c\
-	trace.c 
-
-OBJ =   alphabet.o\
+OBJS =  alphabet.o\
 	core_algorithms.o\
 	debug.o\
 	display.o\
@@ -103,129 +78,74 @@ OBJ =   alphabet.o\
 	tophits.o\
 	trace.o 
 
-SQUIDOBJ = \
-	a2m.o\
-	aligneval.o\
-	alignio.o\
-	clustal.o\
-	cluster.o\
-	dayhoff.o\
-	file.o\
-	getopt.o\
-	gki.o\
-	gsi.o\
-        hsregex.o\
-	iupac.o\
-	msa.o\
-	msf.o\
-	phylip.o\
-        revcomp.o\
-	selex.o\
-	shuffle.o\
-	sqerror.o\
-	sqio.o\
-	squidcore.o\
-	sre_ctype.o\
-	sre_math.o\
-	sre_string.o\
-	stack.o\
-	stockholm.o\
-	translate.o\
-	types.o\
-        weight.o
+HDRS =  config.h\
+	funcs.h\
+	globals.h\
+	postprob.h\
+	stopwatch.h\
+	structs.h
 
-PVMOBJ = pvm.o
+PVMOBJS = pvm.o
 
 .c.o:
-	$(CC) $(CFLAGS) $(MDEFS) $(PTHREADFLAG) $(PVMFLAG) $(PVMINCDIR) -c $<		
+	$(CC) $(CFLAGS) $(MDEFS) $(PTHREADFLAG) $(PVMFLAG) $(MYINCDIR) $(PVMINCDIR) -c $<
 
 #######
 ## Targets defining how to make HMMER executables.
 #######
 
-all: 	$(PROGS) $(SQUIDPROGS) $(PVMPROGS)
+all: 	$(PROGS) $(PVMPROGS) 
 
+hmmalign: $(OBJS) hmmalign.o
+	$(CC) $(CFLAGS) $(MDEFS)$(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmbuild: $(OBJS) hmmbuild.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmcalibrate: $(OBJS) $(PVMOBJS) hmmcalibrate.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmconvert: $(OBJS) hmmconvert.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmemit: $(OBJS) hmmemit.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmfetch: $(OBJS) hmmfetch.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmindex: $(OBJS) hmmindex.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS) 
+hmmpfam: $(OBJS) $(PVMOBJS) hmmpfam.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmsearch: $(OBJS) $(PVMOBJS) hmmsearch.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmcalibrate-pvm: $(OBJS) $(PVMOBJS) hmmcalibrate-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmpfam-pvm: $(OBJS) $(PVMOBJS) hmmpfam-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+hmmsearch-pvm: $(OBJS) $(PVMOBJS) hmmsearch-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMOBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
 
-hmmalign: $(OBJ) $(SQUIDOBJ) hmmalign.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmalign.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS)
-hmmbuild: $(OBJ) $(SQUIDOBJ) hmmbuild.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmbuild.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS)
-hmmcalibrate: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmcalibrate.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
-hmmconvert: $(OBJ) $(SQUIDOBJ) hmmconvert.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmconvert.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
-hmmemit: $(OBJ) $(SQUIDOBJ) hmmemit.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmemit.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
-hmmfetch: $(OBJ) $(SQUIDOBJ) hmmfetch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR)  -o $@ hmmfetch.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
-hmmindex: $(OBJ) $(SQUIDOBJ) hmmindex.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmindex.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
-hmmpfam: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmpfam.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
-hmmsearch: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+####################################################################
+## Targets used in making HMMER module for testsuite compilation
+##
+module-install: libhmmer.a
+	mv libhmmer.a ${ARENA}/
+	cp $(HDRS)    ${ARENA}/
 
-hmmcalibrate-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmcalibrate-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
-hmmpfam-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmpfam-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
-hmmsearch-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+module: libhmmer.a
 
-afetch:   $(SQUIDOBJ) afetch_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ afetch_main.o   $(SQUIDOBJ) $(LIBS)
-alistat:   $(SQUIDOBJ) alistat_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ alistat_main.o   $(SQUIDOBJ) $(LIBS)
-sfetch:    $(SQUIDOBJ) sfetch_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ sfetch_main.o    $(SQUIDOBJ) $(LIBS)
-seqstat:   $(SQUIDOBJ) seqstat_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ seqstat_main.o   $(SQUIDOBJ) $(LIBS)
-sreformat: $(SQUIDOBJ) sreformat_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ sreformat_main.o $(SQUIDOBJ) $(LIBS)
-shuffle:   $(SQUIDOBJ) shuffle_main.o
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ shuffle_main.o $(SQUIDOBJ) $(LIBS)
-
-
-#######
-## Target used in making Shiva test suite
-#######
-
-libhmmer.a: $(OBJ) $(SQUIDOBJ)
-	$(AR) libhmmer.a $(OBJ) $(SQUIDOBJ)
-	-if test -x /bin/ranlib; then /bin/ranlib libhmmer.a; else exit 0; fi
-	-if test -x /usr/bin/ranlib; then /usr/bin/ranlib libhmmer.a; else exit 0; fi
-	-if test -x $(RANLIB); then $(RANLIB) libhmmer.a; else exit 0; fi
+libhmmer.a: $(OBJS) $(PVMOBJS)
+	$(AR) libhmmer.a $(OBJS) $(PVMOBJS)
+	$(RANLIB) libhmmer.a
 	chmod 644 libhmmer.a
-
-
-#######
-## Targets defining different build styles;
-#######
-
-# Make a "production" copy on Linux
-prodv:
-	make CFLAGS="-O2 -static" MDEFS="" LIBS="-lm"
-
-# Make a debugging copy on Linux
-dbv:
-	make CFLAGS="-g -Wall -pedantic -static -DDEBUGLEVEL=1" MDEFS="" LIBS="-lm"
-
-# Make an Electric Fence version
-efencev:
-	make CFLAGS="-g -Wall" MDEFS="-DHMMER_THREADS -DDEBUGLEVEL=1" LIBS="-lm -lpthread -lefence"
-
-# Make a gprof version
-gprofv:
-	make CFLAGS="-pg" MDEFS="" LIBS="-lm" 
-
 
 #######
 ## Miscellaneous
 #######
 
-clean:
-	-rm -f *.o *~ Makefile.bak core $(PROGS) $(SQUIDPROGS) $(PVMPROGS) TAGS gmon.out libhmmer.a
+distclean:
+	make clean
+	-rm -f Makefile version.h
 
-tags:
-	etags -t $(SRC) $(HDRS) $(READMES) 
+clean:
+	-rm -f *.o *~ Makefile.bak core $(PROGS) $(PVMPROGS) TAGS gmon.out libhmmer.a
+
+TAGS:
+	etags -t *.c *.h Makefile.in
 
