@@ -75,13 +75,13 @@ AC_ARG_ENABLE(debugging,
 	 ;;
 esac])
 
-# Configure optional Altivec support from Eric Lindahl.
+# Configure optional Altivec support from Erik Lindahl.
 #    --enable-altivec turns it on.
 #
 AC_ARG_ENABLE(altivec,
-[  --enable-altivec     enable Altivec-specific code for Macintosh],
+[  --enable-altivec     enable Altivec-specific code for PowerPC],
 [case $enable_altivec in
-   yes)  echo 'Enabling optional Altivec optimization for Macintosh (Eric Lindahl, Stanford)'
+   yes)  echo "Enabling optional Altivec optimization for PowerPC (Erik Lindahl, Stanford)"
          MDEFS="$MDEFS -DALTIVEC"
          CFLAGS="$CFLAGS -faltivec"
          ;;
@@ -89,6 +89,31 @@ AC_ARG_ENABLE(altivec,
      *)  echo "Ignoring unknown argument to --enable-altivec: $enable_altivec"
 	 ;;
 esac])
+#
+# Now check whether the compiler supports altivec extensions, if enabled.
+# In theory we could do this in the source, but this way we can give
+# the user an explicit error message telling him/her to upgrade the compiler.
+# (M4 code from Erik Lindahl)
+#
+if test x"$enable_altivec" = xyes; then
+        AC_MSG_CHECKING([whether the compiler supports altivec extensions])
+        AC_TRY_COMPILE([],[
+#ifndef __VEC__
+choke_me
+#endif
+              ],[
+              AC_MSG_RESULT([yes])
+              AC_MSG_NOTICE([Altivec optimization successfully enabled.])
+              ],[
+              AC_MSG_RESULT([no])
+              AC_MSG_ERROR([]
+[Altivec support is entirely optional, but provides significantly]
+[better performance on recent PowerPC hardware like the G4 and PPC970.]
+[Rerun configure without the --enable-altivec flag, or update to a recent]
+[compiler like gcc-3.1 (included in the latest Apple developer tools).])]
+        )                       
+fi
+
 
 # Configure optional PVM (not default)
 #     --enable-pvm turns it on.
@@ -306,12 +331,12 @@ else
 fi
 
 ])
+# ACX_PTHREAD macro end.
+# ****************************************************************
+# ****************************************************************
 
-# ACX_PTHREAD
-# ****************************************************************
-# ****************************************************************
 #
-# Back to my code...
+# Back to my configure.in code ...
 #
 AC_ARG_ENABLE(threads, 
 [  --disable-threads  disable POSIX threads support],
@@ -332,6 +357,8 @@ esac],
    AC_CHECK_FUNCS(pthread_attr_setscope)
    ACX_PTHREAD([MDEFS="${MDEFS} -DHMMER_THREADS"])
 ])
+
+
 
 # Although we configure our fixed-size integers in squid,
 # we do need some of that configuration code here, because

@@ -625,8 +625,8 @@ default_amino_prior(void)
   pri->tnum     = 1;
   pri->tq[0]    = 1.0;
   pri->t[0][TMM]   = 0.7939;
-  pri->t[0][TMI]   = 0.0278;
-  pri->t[0][TMD]   = 0.0135;
+  pri->t[0][TMI]   = 0.0278;	/* Markus suggests: ~10x MD: ~0.036: test!  */
+  pri->t[0][TMD]   = 0.0135;	/* Markus suggests: ~0.1x MI: ~0.004 */
   pri->t[0][TIM]   = 0.1551;
   pri->t[0][TII]   = 0.1331;
   pri->t[0][TDM]   = 0.9002;
