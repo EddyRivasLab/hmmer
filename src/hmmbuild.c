@@ -45,7 +45,7 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    -d            : Eddy/Mitchison/Durbin maximum discrimination (MD)\n\
    -e            : Krogh/Mitchison maximum relative entropy (MRE)\n\
    --wgsc        : Gerstein/Sonnhammer/Chothia tree weights\n\
-   --wblosum <x> : Henikoff simple filter weights, at <x> frac id (e.g. 0.62)\n\
+   --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
    --wvoronoi    : Sibbald/Argos Voronoi weights\n\
    --weff        : guess an effective sequence number; else use nseq\n\
 \n\
@@ -72,6 +72,7 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    --archpri <x> : set architecture size prior to <x> {0.85} [0..1]\n\
    --cfile <file>: save count vectors to <file>\n\
    --gapmax <x>  : max fraction of gaps in mat column {0.50} [0..1]\n\
+   --idlevel     : set fractional identity level used by --weff and --wblosum [0.62]\n\
    --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
    --star <file> : Star model (experimental)\n\
    --verbose     : print a lot of boring information\n\
@@ -97,6 +98,7 @@ static struct opt_s OPTIONS[] = {
   { "--archpri", FALSE, sqdARG_FLOAT }, 
   { "--cfile",   FALSE, sqdARG_STRING},
   { "--gapmax",  FALSE, sqdARG_FLOAT },
+  { "--idlevel", FALSE, sqdARG_FLOAT },
   { "--nucleic", FALSE, sqdARG_NONE },
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--star"  ,  FALSE, sqdARG_STRING },
@@ -116,6 +118,14 @@ static void print_all_scores(FILE *fp, struct plan7_s *hmm,
 			     struct p7trace_s **tr);
 static void make_star_model(struct plan7_s *hmm, char *starfile, struct p7prior_s *pri); 
 static void save_countvectors(char *cfile, struct plan7_s *hmm);
+static void position_average_score(struct plan7_s *hmm, char **seq, float *wgt,
+				   int nseq, struct p7trace_s **tr, float *pernode,
+				   float *ret_avg);
+static float frag_trace_score(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr, 
+			      float *pernode, float expected);
+static void maximum_discrimination(struct plan7_s *hmm, char **dsq, AINFO *ainfo, 
+				   int nseq, float eff_nseq,
+				   struct p7prior_s *pri, struct p7trace_s **tr);
 
 
 int
@@ -140,9 +150,8 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()            */
   int   optind;                 /* index in argv[]                       */
   enum p7_construction c_strategy;/* construction strategy choice        */
-  enum p7_param p_strategy;	/* parameterization strategy choice      */
   enum p7_weight {		/* weighting strategy */
-    WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_VORONOI} w_strategy;
+    WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_VORONOI, WGT_MD, WGT_MRE} w_strategy;
   enum p7_config cfg_strategy;  /* algorithm configuration strategy      */
 
   float gapmax;			/* max frac gaps in mat col for -k       */
@@ -176,7 +185,6 @@ main(int argc, char **argv)
    ***********************************************/
   
   c_strategy        = P7_MAP_CONSTRUCTION;
-  p_strategy        = P7_MAP_PARAM;
   w_strategy        = WGT_NONE;
   blosumlevel       = 0.62;
   cfg_strategy      = P7_LS_CONFIG;
@@ -203,8 +211,8 @@ main(int argc, char **argv)
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-A") == 0) do_append         = TRUE; 
     else if (strcmp(optname, "-b") == 0) do_binary         = TRUE;
-    else if (strcmp(optname, "-d") == 0) p_strategy        = P7_MD_PARAM;
-    else if (strcmp(optname, "-e") == 0) p_strategy        = P7_MRE_PARAM;  
+    else if (strcmp(optname, "-d") == 0) w_strategy        = WGT_MD;
+    else if (strcmp(optname, "-e") == 0) w_strategy        = WGT_MRE;  
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
     else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
     else if (strcmp(optname, "-k") == 0) c_strategy        = P7_FAST_CONSTRUCTION;
@@ -219,6 +227,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
     else if (strcmp(optname, "--gapmax")  == 0) gapmax        = atof(optarg);
+    else if (strcmp(optname, "--idlevel") == 0) blosumlevel   = atof(optarg);
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--star")    == 0) starfile      = optarg; 
@@ -226,8 +235,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg); 
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
-    else if (strcmp(optname, "--wblosum") == 0) { w_strategy  = WGT_BLOSUM; 
-                                                  blosumlevel = atof(optarg);}
+    else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM; 
     else if (strcmp(optname, "--wvoronoi")== 0) w_strategy    = WGT_VORONOI;
     else if (strcmp(optname, "--weff")    == 0) do_eff        = TRUE;
     else if (strcmp(optname, "-h") == 0) {
@@ -324,26 +332,33 @@ main(int argc, char **argv)
 
   printf("Sequence weighting method:         ");
   if      (w_strategy == WGT_NONE)   puts("none");
-  else if (w_strategy == WGT_GSC)    puts("GSC tree weights");
+  else if (w_strategy == WGT_GSC)    puts("G/S/C tree weights");
   else if (w_strategy == WGT_BLOSUM) printf("BLOSUM filter at %.2f id\n", blosumlevel);
   else if (w_strategy == WGT_VORONOI)puts("Sibbald/Argos Voronoi");
-
+  else if (w_strategy == WGT_MD)     puts("Maximum discrimination");
+  else if (w_strategy == WGT_MRE)    puts("Maximum relative entropy");
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 
-  
   /*********************************************** 
    * Build an HMM
    ***********************************************/
 
   /* Determine the effective sequence number to use (optional)
-   * Must precede weighting, because of the way I do this using
-   * BlosumWeights... possibly temporary code.
    */
   eff_nseq = (float) ainfo.nseq;
   if (do_eff)
     {
+      float *wgt;
+				/* protect weights */
+      wgt = MallocOrDie(sizeof(float) * ainfo.nseq);
+      FCopy(wgt, ainfo.wgt, ainfo.nseq);
+				/* use BlosumWeights for now... */
       BlosumWeights(aseq, &ainfo, blosumlevel);
       eff_nseq = FSum(ainfo.wgt, ainfo.nseq);
+      printf("Effective sequence number:\t%.0f\n", eff_nseq);
+				/* re-install old weights */
+      FCopy(ainfo.wgt, wgt, ainfo.nseq);
+      free(wgt);
     }
 
   /* Weight the sequences (optional),
@@ -381,6 +396,12 @@ main(int argc, char **argv)
   Plan7SetNullModel(hmm, randomseq, p1);
   if (starfile != NULL) make_star_model(hmm, starfile, pri);
   else                  P7PriorifyHMM(hmm, pri);
+
+
+  /* Do model-dependent "weighting" strategies.
+   */
+  if (w_strategy == WGT_MD)
+    maximum_discrimination(hmm, dsq, &ainfo, ainfo.nseq, eff_nseq, pri, tr);
 
   /* Give the model a name; by default, the name of the alignment file
    * without any filename extension (i.e. "globins.slx" becomes "globins"
@@ -641,4 +662,333 @@ save_countvectors(char *cfile, struct plan7_s *hmm)
     }
 
   fclose(fp);
+}
+
+
+/* Function: position_average_score()
+ * Date:     Wed Dec 31 09:36:35 1997 [StL]
+ * 
+ * Purpose:  Calculate scores from tracebacks, keeping them
+ *           in a position specific array. The final array
+ *           is normalized position-specifically too, according
+ *           to how many sequences contributed data to this
+ *           position. Used for compensating for sequence 
+ *           fragments in MRE and MD score optimization. 
+ *           Very much ad hoc.
+ *           
+ *           Code related to (derived from) TraceScore().
+ *           
+ * Args:     hmm       - HMM structure, scores valid
+ *           dsq       - digitized unaligned sequences
+ *           wgt       - weights on the sequences
+ *           nseq      - number of sequences
+ *           tr        - array of nseq tracebacks that aligns each dsq to hmm
+ *           pernode   - RETURN: [0]1..M array of position-specific avg scores
+ *           ret_avg   - RETURN: overall average full-length, one-domain score
+ *           
+ * Return:   1 on success, 0 on failure.          
+ *           pernode is malloc'ed [0]1..M by CALLER and filled here.
+ */
+static void
+position_average_score(struct plan7_s    *hmm, 
+		       char             **dsq, 
+		       float             *wgt,
+		       int                nseq,
+		       struct p7trace_s **tr,
+		       float             *pernode,
+		       float             *ret_avg)
+{
+  int    pos;                   /* position in seq */
+  int    sym;
+  int    tpos;                  /* position in trace/state sequence */
+  float *counts;                /* counts at each position */
+  float  avg;                   /* RETURN: average overall */
+  int    k;                     /* counter for model position */
+  int    idx;                   /* counter for sequence number */
+
+  /* Allocations
+   */
+  counts = MallocOrDie ((hmm->M+1) * sizeof(float));
+  FSet(pernode, hmm->M+1, 0.);
+  FSet(counts,  hmm->M+1, 0.);
+
+  /* Loop over traces, accumulate weighted scores per position
+   */
+  for (idx = 0; idx < nseq; idx++)
+    for (tpos = 0; tpos < tr[idx]->tlen; tpos++)
+      {
+	pos = tr[idx]->pos[tpos];
+	sym = (int) dsq[idx][tr[idx]->pos[tpos]];
+	k   = tr[idx]->nodeidx[tpos];
+
+	/* Counts: how many times did we use this model position 1..M?
+         * (weighted)
+	 */
+	if (tr[idx]->statetype[tpos] == STM || tr[idx]->statetype[tpos] == STD)
+	  counts[k] += wgt[idx];
+
+	/* Emission scores.
+	 */
+	if (tr[idx]->statetype[tpos] == STM) 
+	  pernode[k] += wgt[idx] * Scorify(hmm->msc[sym][k]);
+	else if (tr[idx]->statetype[tpos] == STI) 
+	  pernode[k] += wgt[idx] * Scorify(hmm->isc[sym][k]);
+	
+	/* Transition scores.
+	 */
+	if (tr[idx]->statetype[tpos] == STM ||
+	    tr[idx]->statetype[tpos] == STD ||
+	    tr[idx]->statetype[tpos] == STI)
+	  pernode[k] += wgt[idx] * 
+	    Scorify(TransitionScoreLookup(hmm, tr[idx]->statetype[tpos], tr[idx]->nodeidx[tpos],
+					  tr[idx]->statetype[tpos+1],tr[idx]->nodeidx[tpos+1]));
+      }
+
+  /* Divide accumulated scores by accumulated weighted counts
+   */
+  avg = 0.;
+  for (k = 1; k <= hmm->M; k++)
+    {
+      pernode[k] /= counts[k];
+      avg += pernode[k];
+    }
+  
+  free(counts);
+  *ret_avg = avg;
+  return;
+}
+
+
+/* Function: frag_trace_score()
+ * Date:     SRE, Wed Dec 31 10:03:47 1997 [StL]
+ * 
+ * Purpose:  Allow MRE optimization to be used for alignments
+ *           that include fragments and multihits -- estimate a full-length
+ *           per-domain score.
+ *           
+ *
+ *           
+ * Return:   "corrected" score.
+ */
+static float
+frag_trace_score(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr, 
+                 float *pernode, float expected)
+{
+  float sc;			/* corrected score  */
+  float fragexp;		/* expected score for a trace like this */
+  int   tpos;			/* position in trace */
+
+                                /* get uncorrected score */
+  sc = P7TraceScore(hmm, dsq, tr);
+
+                               /* calc expected score for trace like this */
+  fragexp = 0.;
+  for (tpos = 0; tpos < tr->tlen; tpos++)
+    if (tr->statetype[tpos] == STM || tr->statetype[tpos] == STD)
+      fragexp += pernode[tr->nodeidx[tpos]];
+
+				/* correct for multihits */
+  fragexp /= (float) TraceDomainNumber(tr);
+
+                                /* extrapolate to full-length, one-hit score */
+  sc = sc * expected / fragexp;
+
+  return sc;
+}
+
+
+/* Function: maximum_discrimination()
+ * Date:     SRE, Wed Dec 31 08:37:31 1997 [StL]
+ *
+ * Purpose:  Optimizes a model according to maximum discrimination.
+ *           See Eddy, Mitchison, and Durbin (1995).
+ *           A "model-dependent" sequence weighting method, as
+ *           opposed to model-independent methods like Gerstein/Sonnhammer
+ *           or Voronoi.
+ *
+ *           Expects to be called shortly after a Maxmodelmaker()
+ *           or Handmodelmaker(), so that both a new model architecture
+ *           (with MAP parameters) and fake tracebacks are available.
+ *           
+ *           Prints a summary of optimization progress to stdout.
+ *           
+ * Args:     hmm     - model. allocated, set with initial MAP parameters.
+ *           dsq     - digitized unaligned aseqs [0..nseq-1]
+ *           ainfo   - extra info for aseqs
+ *           nseq    - number of aseqs
+ *           eff_nseq- effective sequence number (wgt's sum to this)
+ *           pri     - prior distributions for parameterizing model
+ *           tr      - array of fake traces for each sequence        
+ *           
+ * Return:   (void)
+ *           hmm changed to an MD HMM
+ *           ainfo changed, contains MD "weights"
+ */
+static void
+maximum_discrimination(struct plan7_s *hmm, 
+		       char **dsq, AINFO *ainfo, 
+		       int nseq, float eff_nseq,
+		       struct p7prior_s *pri, struct p7trace_s **tr)
+{
+  float *wgt;                  /* current weights                 */
+  float *estwgt;               /* re-estimated weights            */
+  float *trywgt;               /* new weights to try out          */
+  float  qscore;
+  float  new_qscore;
+  float *sc;                    /* log-odds score of each sequence */
+  int    idx;			/* counter over sequences          */
+  int    iteration;		/* counter for iterations          */
+  float  converge_criterion;
+  float  convergence_thresh;
+  float  minw, maxw;		/* min, max weight                 */
+  int    posw, highw;		/* number of positive weights      */
+  float  mins, maxs, avgs;	/* min, max, avg score             */
+  float *pernode;		/* expected score per node of HMM [1..M] */
+  float  expscore;		/* expected score of complete HMM  */
+  float  epsilon;
+  float  use_epsilon;
+
+  /* Initializations.
+   *   1. set convergence criteria. (hardcoded)
+   *   2. Allocations.
+   *   3. Distribute eff_nseq of weight evenly.
+   *   4. pre calculate expected score per model position
+   *       (this is used to compensate for fragments/multiple hits)
+   *   5. Calculate log-odds probabilities that each sequence matches the
+   *      current mode, including fragment/multihit correction.
+   *   6. Print starting information.  
+   */
+  convergence_thresh = 0.001;
+  epsilon            = 0.1;
+
+  wgt     = MallocOrDie (sizeof(float) * nseq);
+  estwgt  = MallocOrDie (sizeof(float) * nseq);
+  trywgt  = MallocOrDie (sizeof(float) * nseq);
+  sc      = MallocOrDie (sizeof(float) * nseq);
+  pernode = MallocOrDie (sizeof(float) * (hmm->M+1));
+
+  FSet(wgt, nseq, eff_nseq / (float) nseq);
+
+  Plan7Logoddsify(hmm);
+  position_average_score(hmm, dsq, wgt, nseq, tr, pernode, &expscore);
+  qscore = 0.;
+  for (idx = 0; idx < nseq; idx++)
+    {
+      sc[idx] = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
+      qscore +=  1.0 / (1.0 + sreEXP2(sc[idx]));
+    }
+
+  printf("iter avg-sc min-sc max-sc min-wgt max-wgt +wgt ++wgt qscore convergence\n");
+  printf("---- ------ ------ ------ ------- ------- ---- ----- ------ -----------\n");
+  mins = maxs = avgs = sc[0];
+  for (idx = 1; idx < nseq; idx++)
+    {
+      if (sc[idx] < mins) mins = sc[idx];
+      if (sc[idx] > maxs) maxs = sc[idx];
+      avgs += sc[idx];
+    }
+  avgs /= (float) nseq;
+  printf("%4d %6.1f %6.1f %6.1f %7.2f %7.2f %4d %5d %6.2f %8s\n",
+	 0, avgs, mins, maxs, 1.0, 1.0, nseq, 0, sreLOG2(qscore), "-");
+
+
+  /* Main loop of iterative MD estimation.
+   * Continue iterations until convergence criteria are met
+   */
+  iteration = 0;
+  while (++iteration)		/* infinite loop */
+    {
+      /* Reestimate weights based on previous scores.
+       * Be careful of div by zero; work around by stopping training.
+       */
+      if (qscore > 0.0) 
+	for (idx = 0; idx < nseq; idx++)
+	  estwgt[idx] = eff_nseq * (1.0 / (1.0 + sreEXP2(sc[idx]))) / qscore;
+      else
+	{ 
+	  Warn("All scores v. high. Early stop to avoid numerical difficulties.");
+	  FCopy(estwgt, wgt, nseq);
+	}
+
+      /* Inner loop of MD estimation.
+       * Use the difference between the old weights and the new
+       * estimates like a gradient... search that line for a point
+       * at which qscore improves (i.e. decreases)
+       */
+      use_epsilon = epsilon;
+      new_qscore  = qscore + 1.0; /* arbitrary; just making new_qscore > current qscore */
+      while (new_qscore > qscore)
+	{
+	  /* Pick a new point in weight space
+	   */
+	  for (idx = 0; idx < nseq; idx++)
+	    trywgt[idx] = wgt[idx] * (1.0-use_epsilon) + estwgt[idx] * use_epsilon;
+	  
+	  /* Recount the sequences into a counts-based model, using
+	   * new weights
+	   */
+	  ZeroPlan7(hmm);
+	  for (idx = 0; idx < nseq; idx++)
+	    P7TraceCount(hmm, dsq[idx], trywgt[idx], tr[idx]);
+	  P7PriorifyHMM(hmm, pri);
+
+	  Plan7Logoddsify(hmm);
+	  position_average_score(hmm, dsq, trywgt, nseq, tr, pernode, &expscore);
+
+	  /* Recalculate scores for each sequence/trace
+	   */
+	  new_qscore = 0.0;
+	  for (idx = 0; idx < nseq; idx++) 
+	    {
+	      sc[idx] = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
+	      new_qscore +=  1.0 / (1.0 + sreEXP2(sc[idx]));
+	    }
+	  
+	  use_epsilon /= 2.;	/* reduce epsilon in line search. */
+	} /* end innermost loop (line search) */
+
+      /* OK, we have a new point. Set weights.
+       */
+      converge_criterion = fabs((sreLOG2(qscore) - sreLOG2(new_qscore)) / sreLOG2(qscore));
+      qscore = new_qscore;
+      FCopy(wgt, trywgt, nseq);
+
+      /* Print some statistics about this iteration
+       */
+      mins = maxs = avgs = sc[0];
+      minw = maxw = wgt[0];
+      posw = (wgt[0] > 0.0) ? 1 : 0;
+      highw = (wgt[0] > 1.0) ? 1 : 0;
+      for (idx = 1; idx < nseq; idx++)
+	{
+	  if (sc[idx] < mins) mins = sc[idx];
+	  if (sc[idx] > maxs) maxs = sc[idx];
+	  if (wgt[idx] < minw) minw = wgt[idx];
+	  if (wgt[idx] > maxw) maxw = wgt[idx];
+	  if (wgt[idx] > 0.0)  posw++;
+	  if (wgt[idx] > eff_nseq / (float) nseq)  highw++;
+	  avgs += sc[idx];
+	}
+      avgs /= (float) nseq;
+      printf("%4d %6.1f %6.1f %6.1f %7.2f %7.2f %4d %5d %6.2f %8.5f\n",
+	     iteration, 
+	     avgs, mins, maxs, 
+	     minw, maxw, posw, highw,
+	     sreLOG2(qscore), converge_criterion);
+
+      if (converge_criterion < convergence_thresh) break;
+    }
+  
+  /* Save MD weights
+   */
+  FCopy(ainfo->wgt, wgt, nseq);
+
+  /* Cleanup, exit.
+   */
+  free(pernode);
+  free(estwgt);
+  free(trywgt);
+  free(wgt);
+  free(sc);
+  return;
 }
