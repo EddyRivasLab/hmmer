@@ -211,9 +211,10 @@ dist:
 	cvs rtag -F ${BASENAME}_${RELCODE} squid
 	(cd ${BASENAME}-${RELEASE}/lib; cvs export -r ${BASENAME}_${RELCODE} -d squid squid)
 	# 
-	# Make the configure script from configure.in
+	# Make the configure scripts from configure.in
 	#
 	(cd ${BASENAME}-${RELEASE}; autoconf)
+	(cd ${BASENAME}-${RELEASE}/lib/squid; autoconf)
 	# 
 	# Include the appropriate license files and release notes
 	#
@@ -236,7 +237,8 @@ dist:
 	#cp -f Userguide/Userguide.pdf     build/hmmer-$(RELEASE)/Userguide/
 	#cp -f Userguide/hmmer-html.tar.Z  build/hmmer-$(RELEASE)/Userguide/
 	#
-	# Remove CVS-controlled files/directories that don't belong in the distro
+	# Remove CVS-controlled files/directories that don't belong in 
+	# the distro
 	#
 	-rm -rf ${BASENAME}-${RELEASE}/Bugs
 	-rm -rf ${BASENAME}-${RELEASE}/CHECKLIST
@@ -246,6 +248,9 @@ dist:
 	-rm -rf ${BASENAME}-${RELEASE}/Release-Notes
 	-rm -rf ${BASENAME}-${RELEASE}/configure.in
 	-rm -rf ${BASENAME}-${RELEASE}/checkoptions.pl
+	-rm -rf ${BASENAME}-${RELEASE}/lib/squid/Licenses
+	-rm -rf ${BASENAME}-${RELEASE}/lib/squid/LOG
+	-rm -rf ${BASENAME}-${RELEASE}/lib/squid/configure.in
 	#
 	# Packaging commands
 	#
