@@ -377,8 +377,10 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   /* write header information
    */
   fprintf(fp, "NAME  %s\n", hmm->name);
-  fprintf(fp, "DESC  %s\n",
-	  (hmm->flags & PLAN7_DESC) ? hmm->desc : ""); 
+  if (hmm->flags & PLAN7_ACC)
+    fprintf(fp, "ACC   %s\n", hmm->acc);
+  if (hmm->flags & PLAN7_DESC) 
+    fprintf(fp, "DESC  %s\n", hmm->desc);
   fprintf(fp, "LENG  %d\n", hmm->M);
   fprintf(fp, "ALPH  %s\n",   
 	  (Alphabet_type == hmmAMINO) ? "Amino":"Nucleic");
@@ -389,6 +391,12 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   fprintf(fp, "NSEQ  %d\n", hmm->nseq);
   fprintf(fp, "DATE  %s\n", hmm->ctime); 
   fprintf(fp, "CKSUM %d\n", hmm->checksum);
+  if (hmm->flags & PLAN7_GA)
+    fprintf(fp, "GA    %.1f %.1f\n", hmm->ga1, hmm->ga2);
+  if (hmm->flags & PLAN7_TC)
+    fprintf(fp, "TC    %.1f %.1f\n", hmm->tc1, hmm->tc2);
+  if (hmm->flags & PLAN7_NC)
+    fprintf(fp, "NC    %.1f %.1f\n", hmm->nc1, hmm->nc2);
 
   /* Specials
    */
@@ -468,6 +476,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
    */
   fwrite((char *) &(hmm->flags),    sizeof(int),  1,   fp);
   write_bin_string(fp, hmm->name);
+  if (hmm->flags & PLAN7_ACC)  write_bin_string(fp, hmm->acc);
   if (hmm->flags & PLAN7_DESC) write_bin_string(fp, hmm->desc);
   fwrite((char *) &(hmm->M),        sizeof(int),  1,   fp);
   fwrite((char *) &(Alphabet_type), sizeof(int),  1,   fp);
@@ -478,6 +487,18 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   fwrite((char *) &(hmm->nseq),     sizeof(int),  1,   fp);
   write_bin_string(fp, hmm->ctime);
   fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp);
+  if (hmm->flags & PLAN7_GA) {
+    fwrite((char *) &(hmm->ga1), sizeof(float), 1, fp);
+    fwrite((char *) &(hmm->ga2), sizeof(float), 1, fp);
+  }
+  if (hmm->flags & PLAN7_TC) {
+    fwrite((char *) &(hmm->tc1), sizeof(float), 1, fp);
+    fwrite((char *) &(hmm->tc2), sizeof(float), 1, fp);
+  }
+  if (hmm->flags & PLAN7_NC) {
+    fwrite((char *) &(hmm->nc1), sizeof(float), 1, fp);
+    fwrite((char *) &(hmm->nc2), sizeof(float), 1, fp);
+  }
 
   /* Specials */
   for (k = 0; k < 4; k++)
@@ -548,6 +569,7 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   M = -1;
   while (fgets(buffer, 512, hmmfp->f) != NULL) {
     if      (strncmp(buffer, "NAME ", 5) == 0) Plan7SetName(hmm, buffer+6);
+    else if (strncmp(buffer, "ACC  ", 5) == 0) Plan7SetAccession(hmm, buffer+6);
     else if (strncmp(buffer, "DESC ", 5) == 0) Plan7SetDescription(hmm, buffer+6);
     else if (strncmp(buffer, "LENG ", 5) == 0) M = atoi(buffer+6);
     else if (strncmp(buffer, "NSEQ ", 5) == 0) hmm->nseq = atoi(buffer+6);
@@ -589,6 +611,30 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
       {				/* Date file created */
 	StringChop(buffer+6);
 	hmm->ctime= Strdup(buffer+6); 
+      }
+    else if (strncmp(buffer, "GA   ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->ga1 = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->ga2 = atof(s);
+	hmm->flags |= PLAN7_GA;
+      }
+    else if (strncmp(buffer, "TC   ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->tc1 = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->tc2 = atof(s);
+	hmm->flags |= PLAN7_TC;
+      }
+    else if (strncmp(buffer, "NC   ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->nc1 = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->nc2 = atof(s);
+	hmm->flags |= PLAN7_NC;
       }
     else if (strncmp(buffer, "XT   ", 5) == 0) 
       {				/* Special transition section */
@@ -733,6 +779,9 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    if (hmmfp->byteswap) byteswap((char *)&(hmm->flags), sizeof(int)); 
 				/* name */
    if (! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->name))) goto FAILURE;
+				/* optional accession */
+   if ((hmm->flags & PLAN7_ACC) &&
+       ! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->acc))) goto FAILURE;
 				/* optional description */
    if ((hmm->flags & PLAN7_DESC) &&
        ! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->desc))) goto FAILURE;
@@ -772,10 +821,44 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    if (!fread((char *) &(hmm->checksum),sizeof(int), 1, hmmfp->f))       goto FAILURE;
    if (hmmfp->byteswap) byteswap((char *)&(hmm->checksum), sizeof(int)); 
      
+				/* Pfam gathering thresholds */
+   if (hmm->flags & PLAN7_GA) {
+     if (! fread((char *) &(hmm->ga1), sizeof(float), 1, hmmfp->f)) goto FAILURE;
+     if (! fread((char *) &(hmm->ga2), sizeof(float), 1, hmmfp->f)) goto FAILURE;
+     if (hmmfp->byteswap) {
+       byteswap((char *) &(hmm->ga1), sizeof(float));
+       byteswap((char *) &(hmm->ga2), sizeof(float));
+     }
+   }
+				/* Pfam trusted cutoffs */
+   if (hmm->flags & PLAN7_TC) {
+     if (! fread((char *) &(hmm->tc1), sizeof(float), 1, hmmfp->f)) goto FAILURE;
+     if (! fread((char *) &(hmm->tc2), sizeof(float), 1, hmmfp->f)) goto FAILURE;
+     if (hmmfp->byteswap) {
+       byteswap((char *) &(hmm->tc1), sizeof(float));
+       byteswap((char *) &(hmm->tc2), sizeof(float));
+     }
+   }
+				/* Pfam noise cutoffs */
+   if (hmm->flags & PLAN7_NC) {
+     if (! fread((char *) &(hmm->nc1), sizeof(float), 1, hmmfp->f)) goto FAILURE;
+     if (! fread((char *) &(hmm->nc2), sizeof(float), 1, hmmfp->f)) goto FAILURE;
+     if (hmmfp->byteswap) {
+       byteswap((char *) &(hmm->nc1), sizeof(float));
+       byteswap((char *) &(hmm->nc2), sizeof(float));
+     }
+   }
+
    /* specials */
    for (k = 0; k < 4; k++)
-     if (! fread((char *) hmm->xt[k], sizeof(float), 2, hmmfp->f))    goto FAILURE;
-
+     {
+       if (! fread((char *) hmm->xt[k], sizeof(float), 2, hmmfp->f))    goto FAILURE;
+       if (hmmfp->byteswap) {
+	 for (x = 0; x < 2; x++)
+	   byteswap((char *)&(hmm->xt[k][x]), sizeof(float));
+       }
+     }
+   
    /* null model */
    if (!fread((char *) &(hmm->p1),sizeof(float), 1, hmmfp->f))        goto FAILURE;
    if (!fread((char *)hmm->null,sizeof(float),Alphabet_size,hmmfp->f))goto FAILURE;
