@@ -48,6 +48,8 @@ main(void)
   int    nseq;			/* actual nseq so far (master keeps updating this) */
   int    send_trace;		/* TRUE if sc looks significant and we return tr */
   
+  tr = NULL;
+  
   /* Register leave_pvm() cleanup function so any exit() call
    * first calls pvm_exit().
    */
@@ -108,25 +110,85 @@ main(void)
       
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      if (P7ViterbiSpaceOK(L, hmm->M, mx))
-	{
-	  SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-	  sc = P7Viterbi(dsq, L, hmm, mx, &tr);
-	}
-      else
-	{
-	  SQD_DPRINTF1(("Slave going small after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-	  sc = P7SmallViterbi(dsq, L, hmm, mx, &tr);
-	}
+      
+#ifdef ALTIVEC
+      /* By default we call an Altivec routine that doesn't save the full
+       * trace. This also means the memory usage is just proportional to the
+       * model (hmm->M), so we don't need to check if space is OK unless
+       * we need the trace.   
+       */   
 
-      if (do_forward) {
-	sc  = P7Forward(dsq, L, hmm, NULL);
-	if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
+      if(do_forward && do_null2)
+      {
+          /* Need the trace - first check space */
+          if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+          {
+              sc = P7Viterbi(dsq, L, hmm, mx, &tr);
+          }
+          else
+          {
+              /* Low-memory version */
+              sc = P7SmallViterbi(dsq, L, hmm, mx, &tr);
+          }
+      }
+      else
+      {
+          /* When using Altivec, the new dynamic programming process is so 
+          * effective that it is constrained by the memory bandwidth used
+          * for loading/storing values in the dynamic programming matrix.
+          *
+          * In 99% of all cases the score is anyway so low that we are not
+          * interested in the alignment, and thus don't NEED the trace.
+          * which is the only reason to store the full programming matrix.
+          *
+          * Do the programming without a trace first, and recalculate the
+          * trace further down if it turns out we need it.
+          */          
+          sc = P7ViterbiNoTrace(dsq, L, hmm, mx);
+          tr = NULL;
+      }
+      
+#else /* not altivec */
+      
+      if (P7ViterbiSpaceOK(L, hmm->M, mx))
+      {
+          SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
+          sc = P7Viterbi(dsq, L, hmm, mx, &tr);
+      }
+      else
+      {
+          SQD_DPRINTF1(("Slave going small after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
+          sc = P7SmallViterbi(dsq, L, hmm, mx, &tr);
+      }
+
+#endif
+      
+      if (do_forward) 
+      {
+          sc  = P7Forward(dsq, L, hmm, NULL);
+          if (do_null2) 
+          {
+              /* We need the trace - recalculate it if we didn't already do it */
+#ifdef ALTIVEC
+              if(tr == NULL)
+              {
+                  if (P7ViterbiSpaceOK(L, hmm->M, mx))
+                  {
+                      P7Viterbi(dsq, L, hmm, mx, &tr);
+                  }
+                  else
+                  {
+                      P7SmallViterbi(dsq, L, hmm, mx, &tr);
+                  }
+              }
+#endif
+              sc -= TraceScoreCorrection(hmm, tr, dsq);
+          }
       }
 	
       pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
-      send_trace = (tr != NULL && sc >= globT && evalue <= globE) ? 1 : 0;
+      send_trace = (sc >= globT && evalue <= globE) ? 1 : 0;
      
       /* return output
        */
@@ -136,13 +198,34 @@ main(void)
       pvm_pkfloat (&sc,      1, 1);
       pvm_pkdouble(&pvalue,  1, 1);
       pvm_pkint(&send_trace, 1, 1); /* flag for whether a trace structure is coming */
-      if (send_trace) PVMPackTrace(tr);
+      if (send_trace)
+      {
+          /* We need the trace - recalculate it if we didn't already do it */
+#ifdef ALTIVEC
+          if(tr == NULL)
+          {
+              if (P7ViterbiSpaceOK(L, hmm->M, mx))
+              {
+                  P7Viterbi(dsq, L, hmm, mx, &tr);
+              }
+              else
+              {
+                  P7SmallViterbi(dsq, L, hmm, mx, &tr);
+              }              
+          }
+#endif
+          PVMPackTrace(tr);
+      }
       pvm_send(master_tid, HMMPVM_RESULTS);
-
+      
       /* cleanup
-       */
+          */
       free(dsq);
-      P7FreeTrace(tr);
+      
+      if(tr != NULL)
+          P7FreeTrace(tr);
+      
+      tr = NULL;
     }
 
   /*********************************************** 

@@ -111,7 +111,7 @@ libhmmer.a: $(OBJS)
 ##
 distclean:
 	make clean
-	-rm -f Makefile 
+	-rm -f Makefile config.h
 
 clean:
 	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a

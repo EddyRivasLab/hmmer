@@ -50,6 +50,7 @@ main(void)
   int      alphatype;		/* alphabet type, hmmAMINO or hmmNUCLEIC    */
   int      code;		/* return code after initialization         */
 
+  tr = NULL;
   
   SQD_DPRINTF1(("a slave reporting for duty!\n"));
 
@@ -160,28 +161,80 @@ main(void)
 
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      if (P7ViterbiSpaceOK(len, hmm->M, mx))
-	{
-	  SQD_DPRINTF1(("P7Viterbi(): Estimated size %d Mb\n", P7ViterbiSize(len, hmm->M)));
-	  sc = P7Viterbi(dsq, len, hmm, mx, &tr);
-	}
-      else
-	{
-	  SQD_DPRINTF1(("P7SmallViterbi() called; %d Mb > %d\n", P7ViterbiSize(len, hmm->M), RAMLIMIT));
-	  sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
-	}
 
+#ifdef ALTIVEC 
+      
+      /* By default we call an Altivec routine that doesn't save the full
+       * trace. This also means the memory usage is just proportional to the
+       * model (hmm->M), so we don't need to check if space is OK unless
+       * we need the trace.   
+       */   
+      if(do_forward && do_null2)
+      {
+          /* Need the trace - first check space */
+          if (P7ViterbiSpaceOK(len, hmm->M, mx))
+          {
+              /* Slower altivec version */
+              sc = P7Viterbi(dsq, len, hmm, mx, &tr);
+          }
+          else
+          {
+              /* Low-memory C version */
+              sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
+          }
+      }
+      else
+      {
+          /* Fastest altivec version */
+          sc = P7ViterbiNoTrace(dsq, len, hmm, mx);
+          tr = NULL;
+      }
+      
+#else /* not altivec */
+      
+      if (P7ViterbiSpaceOK(len, hmm->M, mx))
+      {
+          SQD_DPRINTF1(("P7Viterbi(): Estimated size %d Mb\n", P7ViterbiSize(len, hmm->M)));
+          sc = P7Viterbi(dsq, len, hmm, mx, &tr);
+      }
+      else
+      {
+          SQD_DPRINTF1(("P7SmallViterbi() called; %d Mb > %d\n", P7ViterbiSize(len, hmm->M), RAMLIMIT));
+          sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
+      }
+
+#endif
+      
       /* The Forward score override. 
        * See comments in hmmpfam.c in serial version.
        */
-      if (do_forward) {
-	sc  = P7Forward(dsq, len, hmm, NULL);
-	if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
+      if (do_forward)
+      {
+          sc  = P7Forward(dsq, len, hmm, NULL);
+          if (do_null2) 
+          {
+              /* We need the trace - recalculate it if we didn't already do it */
+#ifdef ALTIVEC
+              if(tr == NULL)
+              {
+                  if (P7ViterbiSpaceOK(len, hmm->M, mx))
+                  {
+                      /* Slower altivec version */
+                      P7Viterbi(dsq, len, hmm, mx, &tr);
+                  }
+                  else
+                  {
+                      /* Low-memory C version */
+                      P7SmallViterbi(dsq, len, hmm, mx, &tr);
+                  }                  
+              }
+#endif
+              sc -= TraceScoreCorrection(hmm, tr, dsq);
+          }
       }
-
       pvalue = PValue(hmm, sc);
       evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
-      send_trace = (tr != NULL && sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
+      send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
 
       /* return output
        */
@@ -191,13 +244,37 @@ main(void)
       pvm_pkfloat(&sc, 1, 1);
       pvm_pkdouble(&pvalue, 1, 1);
       pvm_pkint(&send_trace, 1, 1); /* flag for whether a trace structure is coming */
-      if (send_trace) PVMPackTrace(tr);
+      if (send_trace) 
+      {
+          /* We need the trace - recalculate it if we didn't already do it */
+#ifdef ALTIVEC
+          if(tr == NULL)
+          {
+              if (P7ViterbiSpaceOK(len, hmm->M, mx))
+              {
+                  /* Slower altivec version */
+                  P7Viterbi(dsq, len, hmm, mx, &tr);
+              }
+              else
+              {
+                  /* Low-memory C version */
+                  P7SmallViterbi(dsq, len, hmm, mx, &tr);
+              }
+              
+          }
+#endif
+          PVMPackTrace(tr);
+      }
       pvm_send(master_tid, HMMPVM_RESULTS);
 
       /* cleanup
        */
       FreePlan7(hmm);
-      P7FreeTrace(tr);
+      
+      if(tr != NULL)
+          P7FreeTrace(tr);
+      
+      tr = NULL;
     }
 
   /*********************************************** 

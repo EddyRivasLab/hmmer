@@ -137,10 +137,19 @@ main(void)
 	  dsq = DigitizeSequence(seq, len);
 	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, len, seq));
 
+#ifdef ALTIVEC
+      /* We only need the score here (not the trace), so we can just
+       * call the fast Altivec routine directly. The memory needs in this
+       * routine is only proportional to the model length (hmm->M), and 
+       * preallocated, so we don't have to consider the low-memory alternative.   
+       */    
+      sc[idx] = P7ViterbiNoTrace(dsq, len, hmm, mx); 
+#else
 	  if (P7ViterbiSpaceOK(len, hmm->M, mx))
 	    sc[idx] = P7Viterbi(dsq, len, hmm, mx, NULL);
 	  else
 	    sc[idx] = P7SmallViterbi(dsq, len, hmm, mx, NULL);
+#endif
 	  
 	  free(seq);
 	  free(dsq);

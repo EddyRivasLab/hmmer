@@ -1,12 +1,11 @@
 Checklist for a HMMER distribution.
 
-1. Make sure we're up to date w/ CVS. (Worry about commits here, on
+1. Make sure we're up to date w/ Subversion. (Worry about commits here, on
    other machines and other dirs that may have squid modifications)
 	% ./configure
         % make distclean
-	% cvs update
-	% cvs commit
-   Clean up any stray files.
+	% svn status
+   Clean up any stray files; svn commit any modifications.
 
 2. Test dev code before making release.
    This works anywhere (e.g. wren; don't have to be on wrasse)

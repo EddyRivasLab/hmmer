@@ -474,18 +474,27 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
   max = -FLT_MAX;
 
   for (idx = 0; idx < nsample; idx++)
-    {
-				/* choose length of random sequence */
+  {
+      /* choose length of random sequence */
       if (fixedlen) sqlen = fixedlen;
       else do sqlen = (int) Gaussrandom(lenmean, lensd); while (sqlen < 1);
-				/* generate it */
+      /* generate it */
       seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
       dsq = DigitizeSequence(seq, sqlen);
-
+      
+#ifdef ALTIVEC
+      /* We only need the score here (not the trace), so we can just
+       * call the fast Altivec routine directly. The memory needs in this
+       * routine is only proportional to the model length (hmm->M), and 
+       * preallocated, so we don't have to consider the low-memory alternative.   
+       */    
+      score = P7ViterbiNoTrace(dsq, sqlen, hmm, mx); 
+#else      
       if (P7ViterbiSpaceOK(sqlen, hmm->M, mx))
-	score = P7Viterbi(dsq, sqlen, hmm, mx, NULL);
+          score = P7Viterbi(dsq, sqlen, hmm, mx, NULL);
       else
-	score = P7SmallViterbi(dsq, sqlen, hmm, mx, NULL);
+          score = P7SmallViterbi(dsq, sqlen, hmm, mx, NULL);
+#endif
 
       AddToHistogram(hist, score);
       if (score > max) max = score;
@@ -746,29 +755,39 @@ worker_thread(void *ptr)
        */
       dsq = DigitizeSequence(seq, len);
       
+#ifdef ALTIVEC
+      /* We only need the score here (not the trace), so we can just
+       * call the fast Altivec routine directly. The memory needs in this
+       * routine is only proportional to the modem length (hmm->M), and 
+       * preallocated, so we don't have to consider the low-memory alternative.   
+       */    
+      sc = P7ViterbiNoTrace(dsq, len, hmm, mx); 
+#else
       if (P7ViterbiSpaceOK(len, hmm->M, mx))
-	sc = P7Viterbi(dsq, len, hmm, mx, NULL);
+          sc = P7Viterbi(dsq, len, hmm, mx, NULL);
       else
-	sc = P7SmallViterbi(dsq, len, hmm, mx, NULL);
+          sc = P7SmallViterbi(dsq, len, hmm, mx, NULL);
+#endif
+      
       free(dsq); 
       free(seq);
       
       /* 3. Save the output; hist and max_score are shared,
        *    so protect this section with the output mutex.
        */
-				/* acquire lock on the output queue */
+      /* acquire lock on the output queue */
       if ((rtn = pthread_mutex_lock(&(wpool->output_lock))) != 0)
-	Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
-				/* save output */
+          Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
+      /* save output */
       AddToHistogram(wpool->hist, sc);
       if (sc > wpool->max_score) wpool->max_score = sc;
-    				/* release our lock */
+      /* release our lock */
       if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
-	Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+          Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
     }
 
   StopwatchStop(&thread_watch);
-				/* acquire lock on the output queue */
+  /* acquire lock on the output queue */
   if ((rtn = pthread_mutex_lock(&(wpool->output_lock))) != 0)
     Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
 				/* accumulate cpu time into main stopwatch */

@@ -563,12 +563,14 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
   struct p7trace_s *tr;         /* traceback                               */
   char   *seq;                  /* target sequence                         */
   unsigned char   *dsq;	        /* digitized target sequence               */
-  SQINFO sqinfo;		/* optional info for seq                   */
-  float  sc;	        	/* score of an HMM search                  */
-  double pvalue;		/* pvalue of an HMM score                  */
-  double evalue;		/* evalue of an HMM score                  */
-  int    nseq;			/* number of sequences searched            */
+  SQINFO sqinfo;	   	        /* optional info for seq                   */
+  float  sc;	          	    /* score of an HMM search                  */
+  double pvalue;		        /* pvalue of an HMM score                  */
+  double evalue;		        /* evalue of an HMM score                  */
+  int    nseq;			        /* number of sequences searched            */
  
+  tr = NULL;
+  
   /* Create a DP matrix; initially only two rows big, but growable;
    * we overalloc by 25 rows (L dimension) when we grow; not growable
    * in model dimension, since we know the hmm size
@@ -595,21 +597,87 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    necessarily <= -INFTY, because we're not terribly careful
        *    about underflow issues), and tr will be returned as NULL.
        */
-      if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
-	sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
-      else
-	sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+      
+#ifdef ALTIVEC 
+      
+      /* By default we call an Altivec routine that doesn't save the full
+       * trace. This also means the memory usage is just proportional to the
+       * model (hmm->M), so we don't need to check if space is OK unless
+       * we need the trace.   
+       */   
+      if(do_forward && do_null2)
+      {
+          /* Need the trace - first check space */
+          if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+          {    
+              /* Slower altivec */
+              sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+          }
+          else
+          {
+              /* C code */
+              sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+          }
 
+      }
+      else
+      {
+          /* When using Altivec, the new dynamic programming process is so 
+          * effective that it is constrained by the memory bandwidth used
+          * for loading/storing values in the dynamic programming matrix.
+          *
+          * In 99% of all cases the score is anyway so low that we are not
+          * interested in the alignment, and thus don't NEED the trace.
+          * which is the only reason to store the full programming matrix.
+          *
+          * Do the programming without a trace first, and recalculate the
+          * trace further down if it turns out we need it.
+          */
+          sc = P7ViterbiNoTrace(dsq, sqinfo.len, hmm, mx);
+          tr = NULL;
+      }
+      
+#else /* not altivec */
+
+      if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+      {
+          sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+      }
+      else
+      {
+          sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+      }
+      
+#endif
+      
       /* 2. If we're using Forward scores, calculate the
        *    whole sequence score; this overrides anything
        *    PostprocessSignificantHit() is going to do to the per-seq score.
        */
-      if (do_forward) {
-	sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
-	if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq); 
+      if (do_forward)
+      {
+          sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
+          if (do_null2) 
+          {
+              /* We need the trace - recalculate it if we didn't already do it */
+#ifdef ALTIVEC
+              if(tr == NULL)
+              {
+                  if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+                  {
+                      sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+                  }
+                  else
+                  {
+                      sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+                  }
+              }
+#endif
+              sc -= TraceScoreCorrection(hmm, tr, dsq); 
+          }
       }
 
-#if DEBUGLEVEL >= 2
+#if DEBUGLEVEL >= 2 && !(defined ALTIVEC)
       P7PrintTrace(stdout, tr, hmm, dsq); 
 #endif
 
@@ -624,24 +692,44 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       pvalue = PValue(hmm, sc);
       evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nseq * pvalue;
       if (sc >= thresh->globT && evalue <= thresh->globE) 
-	{
-	  sc = PostprocessSignificantHit(ghit, dhit, 
-					 tr, hmm, dsq, sqinfo.len,
-					 sqinfo.name, 
-					 sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
-					 sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
-					 do_forward, sc,
-					 do_null2,
-					 thresh,
-					 FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
-	}
+      {
+          /* Recalculate trace if we used altivec */
+#ifdef ALTIVEC
+          if(tr == NULL)
+          {
+              if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+              {
+                  sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+              }
+              else
+              {
+                  sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+              }
+          }
+#endif
+          sc = PostprocessSignificantHit(ghit, dhit, 
+                                         tr, hmm, dsq, sqinfo.len,
+                                         sqinfo.name, 
+                                         sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
+                                         sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
+                                         do_forward, sc,
+                                         do_null2,
+                                         thresh,
+                                         FALSE);
+          /* FALSE-> not hmmpfam mode, hmmsearch mode */
+      }
       SQD_DPRINTF2(("AddToHistogram: %s\t%f\n", sqinfo.name, sc));
       AddToHistogram(histogram, sc);
       FreeSequence(seq, &sqinfo); 
-      P7FreeTrace(tr);
+
+      if(tr != NULL)
+          P7FreeTrace(tr);
+      
+      tr = NULL;
+      
       free(dsq);
     }
-
+  
   FreePlan7Matrix(mx);
   *ret_nseq = nseq;
   return;
@@ -1085,9 +1173,11 @@ worker_thread(void *ptr)
   int    rtn;			/* a return code from pthreads lib */
   double pvalue;		/* P-value of score                */
   double evalue;		/* E-value of score                */
-
+  
   wpool = (struct workpool_s *) ptr;
-
+  
+  tr = NULL;
+  
   /* Init with a small DP matrix; we'll grow in the sequence dimension
    * overalloc'ing by 25 rows (residues).
    */
@@ -1120,50 +1210,134 @@ worker_thread(void *ptr)
       
     /* 1. Recover a trace by Viterbi.
      */
-    if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
-      sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
-    else
-      sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+    
+#ifdef ALTIVEC 
+    
+    /* By default we call an Altivec routine that doesn't save the full
+        * trace. This also means the memory usage is just proportional to the
+        * model (hmm->M), so we don't need to check if space is OK unless
+        * we need the trace.   
+        */   
 
+    if(wpool->do_forward && wpool->do_null2)
+    {
+        /* Need the trace, first check space */
+        if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+        {
+            sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+        }
+        else
+        {
+            /* Low-memory version */
+            sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+        }
+    }
+    else
+    {
+        /* When using Altivec, the new dynamic programming process is so 
+        * effective that it is constrained by the memory bandwidth used
+        * for loading/storing values in the dynamic programming matrix.
+        *
+        * In 99% of all cases the score is anyway so low that we are not
+        * interested in the alignment, and thus don't NEED the trace.
+        * which is the only reason to store the full programming matrix.
+        *
+        * Do the programming without a trace first, and recalculate the
+        * trace further down if it turns out we need it.
+        */
+        sc = P7ViterbiNoTrace(dsq, sqinfo.len, wpool->hmm, mx);
+        tr = NULL;
+    }
+    
+#else /* not altivec */
+
+    if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+    {
+        sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+    }
+    else
+    {
+        sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+    }
+    
+#endif
+    
     /* 2. If we're using Forward scores, do another DP
      *    to get it; else, we already have a Viterbi score
      *    in sc.
      */
-    if (wpool->do_forward) {
-      sc  = P7Forward(dsq, sqinfo.len, wpool->hmm, NULL);
-      if (wpool->do_null2) sc -= TraceScoreCorrection(wpool->hmm, tr, dsq);
+    if (wpool->do_forward)
+    {
+        sc  = P7Forward(dsq, sqinfo.len, wpool->hmm, NULL);
+        if (wpool->do_null2) 
+        {
+            /* We need the trace - calculate it if necessary */
+#ifdef ALTIVEC
+            if(tr == NULL)
+            {
+                if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+                {
+                    sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+                }
+                else
+                {
+                    sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+                }
+            }
+#endif
+            sc -= TraceScoreCorrection(wpool->hmm, tr, dsq);
+        }
     }
 
     /* 3. Save the output in tophits and histogram structures, after acquiring a lock
      */
     if ((rtn = pthread_mutex_lock(&(wpool->output_lock))) != 0)
-      Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
+        Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("seq %s scores %f\n", sqinfo.name, sc));
-
+    
     pvalue = PValue(wpool->hmm, sc);
     evalue = wpool->thresh->Z ? (double) wpool->thresh->Z * pvalue : (double) wpool->nseq * pvalue;
  
     if (sc >= wpool->thresh->globT && evalue <= wpool->thresh->globE) 
-      { 
-	sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
-				       tr, wpool->hmm, dsq, sqinfo.len,
-				       sqinfo.name, 
-				       sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
-				       sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
-				       wpool->do_forward, sc,
-				       wpool->do_null2,
-				       wpool->thresh,
-				       FALSE); /* FALSE-> not hmmpfam mode, hmmsearch mode */
-      }
+    { 
+        /* Recalculate trace if we used altivec */
+#ifdef ALTIVEC
+        if(tr == NULL)
+        {
+            if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+            {
+                sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+            }
+            else
+            {
+                sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+            }
+        }
+#endif        
+        sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
+                                       tr, wpool->hmm, dsq, sqinfo.len,
+                                       sqinfo.name, 
+                                       sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
+                                       sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
+                                       wpool->do_forward, sc,
+                                       wpool->do_null2,
+                                       wpool->thresh,
+                                       FALSE); 
+        /* FALSE-> not hmmpfam mode, hmmsearch mode */
+    }
     SQD_DPRINTF2(("AddToHistogram: %s\t%f\n", sqinfo.name, sc));
     AddToHistogram(wpool->hist, sc);
     if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
-      Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
-
-    P7FreeTrace(tr);
+        Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+    
+    if(tr != NULL)
+        P7FreeTrace(tr);
+    
+    tr = NULL;
     FreeSequence(seq, &sqinfo);
     free(dsq);
-  } /* end 'infinite' loop over seqs in this thread */
+  }
+/* end 'infinite' loop over seqs in this thread */
 }
 #else /*HMMER_THREADS off; no threads support; dummy stub: */
 static void

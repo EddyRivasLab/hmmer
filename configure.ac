@@ -1,4 +1,4 @@
-# Process this file with autoconf to produce a configure script.
+f# Process this file with autoconf to produce a configure script.
 # SRE, Mon Oct  5 14:55:45 1998
 # CVS $Id$
 # 
@@ -70,6 +70,9 @@ AC_MSG_NOTICE([This is a full source distribution - using full config])
 # AR might be hidden away on Solaris; provide some hints in the PATH.
 #
 AC_PROG_CC
+if test "$CC" = xlc ; then	# IBM's xlc?
+  CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
+fi
 AC_PROG_RANLIB
 AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 
@@ -135,7 +138,23 @@ AC_ARG_ENABLE(altivec,
 [case $enable_altivec in
    yes)  AC_MSG_NOTICE([enabled Altivec optimization for PowerPC (Erik Lindahl)])
          AC_DEFINE(ALTIVEC)
-         CFLAGS="$CFLAGS -faltivec"
+	# We support altivec both on Apple platforms (Lindahl's contribs)
+        # and on IBM PowerPC platforms (IBM/Yinhe Cheng's contribs).
+	# Three cases: 
+	#  1. we're using cc/gcc on an IBM PowerPC;
+        #  2. we're using OS/X's cc on an Apple;
+        #  3. we're using IBM's xlc on an IBM PowerPC.
+	 if test "$CC" != xlc; then 
+	   if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then 
+	     altivecOP="-maltivec -mabi=altivec"  # IBM gcc
+	   else
+	     altivecOP="-faltivec -mcpu=G5 -mtune=G5" # Apple cc
+	   fi
+	 else
+	   altivecOP="-qaltivec"  # IBM xlc
+	 fi
+
+         CFLAGS="$CFLAGS $altivecOP" 
          ;;
     no)  AC_MSG_NOTICE([Altivec/PowerPC optimization disabled])
          ;;
@@ -146,14 +165,46 @@ esac])
 # Now check whether the compiler supports altivec extensions, if enabled.
 # In theory we could do this in the source, but this way we can give
 # the user an explicit error message telling him/her to upgrade the compiler.
-# (M4 code from Erik Lindahl, Stanford University)
+# (M4 code from Erik Lindahl, Stanford University; modified to include
+# IBM PowerPC xlc tests by Yinhe Cheng, IBM).
 #
 if test x"$enable_altivec" = xyes; then
+	if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then
+	   cat >> confdefs.h << \_ACEOF
+#include "altivec.h"
+_ACEOF
+        fi
+
         AC_MSG_CHECKING([whether the compiler supports altivec extensions])
-        AC_TRY_COMPILE([],[
+############################################################################
+#### IBM PPC xlc altivec compile test: (Yinhe Cheng, IBM)
+############################################################################
+	if test "$CC" = "xlc"; then  
+		AC_TRY_COMPILE([],[
+#ifndef __IBM_VACPP_altivec_h
+choke_me
+#endif
+vector signed char X;
+	      ],[
+	      AC_MSG_RESULT([yes])
+	      AC_MSG_NOTICE([Altivec optimization successfully enabled.])
+	      ],[
+	      AC_MSG_RESULT([no])
+	      AC_MSG_ERROR([altivec not supported on this platform]
+[]
+[(xlc/altivec): Either you aren't on a platform that supports the Altivec]
+[instruction set, or your xlc compiler doesn't support Altivec. Rerun configure]
+[without --enable-altivec, or update your compiler.])]
+)
+############################################################################
+#### else, Apple OS/X altivec compile test: (Erik Lindahl, Stanford)
+############################################################################
+	else
+	      AC_TRY_COMPILE([],[
 #ifndef __VEC__
 choke_me
 #endif
+vector signed char X;
               ],[
               AC_MSG_RESULT([yes])
               AC_MSG_NOTICE([Altivec optimization successfully enabled.])
@@ -161,12 +212,14 @@ choke_me
               AC_MSG_RESULT([no])
               AC_MSG_ERROR([altivec not supported on this platform]
 []
-[Either you aren't on an Apple platform that supports Altivec instructions, or your]
+[Either you aren't on a PowerPC platform that supports Altivec instructions, or your]
 [compiler doesn't support Altivec. Rerun configure without the --enable-altivec]
 [flag, or update to a recent compiler like gcc-3.1 (included in the latest Apple]
 [developer tools).])]
         )                       
+        fi
 fi
+
 
 
 

@@ -281,6 +281,9 @@ struct dpmatrix_s {
    */
   void *xmx_mem, *mmx_mem, *imx_mem, *dmx_mem;
 
+  int *  workspace;      /* Workspace for altivec (aligned ptr)    */
+  int *  workspace_mem;  /* Actual allocated pointer for workspace */
+  
   /* The other trick brought in w/ the Lindahl Altivec port; dp matrix
    * is retained and grown, rather than reallocated for every HMM or sequence.
    * Keep track of current allocated-for size in rows (sequence length N)
