@@ -1122,8 +1122,8 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
   endlist[lpos]   = L;
   kassign[1]      = 1;
   kassign[L]      = hmm->M;
-  tassign[1]      = STS;
-  tassign[L]      = STT;
+  tassign[1]      = STS;	/* temporary boundary condition! will become N or M */
+  tassign[L]      = STT;	/* temporary boundary condition! will become M or C */
 
   /* Recursive divide-and-conquer alignment.
    */
@@ -1182,7 +1182,9 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
    * We also need nonemitting states as follows:
    * STS,STN,STB,STE,STC,STT = 6
    * STD: count k2-k1-1 in kassign M->M's
-   * Also, count N->M's and M->C's (potential wing unfoldings),
+   * Also, count N->M's and M->C's (potential wing unfoldings)...
+   *   ...and be careful to check wing unfoldings when there aren't
+   *      any emitting N or C flanks! (bugfix, 2.1.1b)
    *****************************************************************/ 
 
   tlen = L + 6;
@@ -1195,6 +1197,8 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
       if (tassign[i] == STM && tassign[i+1] == STC)
 	tlen += hmm->M - kassign[i];
     }
+  if (tassign[1] == STM) tlen += kassign[1] - 1; 
+  if (tassign[L] == STM) tlen += hmm->M - kassign[L];
   P7AllocTrace(tlen, &tr);
 
   tr->statetype[0] = STS;
