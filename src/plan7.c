@@ -475,9 +475,6 @@ Plan7Renormalize(struct plan7_s *hmm)
 }
   
 
-
-
-
 /* Function: Plan7GlobalConfig()
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
@@ -684,7 +681,6 @@ PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, int nseq,
   float total, best, worst;	/* for the avg. and range of the scores */
   float sqsum, stddev;		/* for the std. deviation of the scores */
 
-  Plan7SWConfig(hmm, 0.1, 0.1); /* configure for sw alignment       */
   Plan7Logoddsify(hmm);		/* make sure model scores are ready */
 
 				/* find individual trace scores */
