@@ -240,3 +240,43 @@ MiniSEG(char *dsq, int len, float *ret_max)
   *ret_max = Scorify(max);
   return xnum;
 }
+
+
+/* Function: SeqScoreCorrection()
+ * Date:     SRE, Wed Dec 17 10:09:24 1997 [StL]
+ * 
+ * Purpose:  Calculate a correction (in integer log_2 odds) to be
+ *           applied to a sequence, using a second null model.
+ *           
+ *           Null model currently hardcoded to default insert distribution. 
+ *           Unoptimized; in testing. 
+ *           Only applies to proteins, because of hardcoding.
+ *           Eventually the auxiliary null models should be in the plan7
+ *           structure with integer log-odds scores precomputed.
+ *           
+ * Return:   the log_2-odds score correction.          
+ */
+float
+SeqScoreCorrection(char *dsq, int L)
+{
+   float ip[20] = { 0.0681, 0.0120, 0.0623, 0.0651, 0.0313, 0.0902, 0.0241, 0.0371, 0.0687, 0.0676,
+		    0.0143, 0.0548, 0.0647, 0.0415, 0.0551, 0.0926, 0.0623, 0.0505, 0.0102, 0.0269};
+   int sc[23];
+   int i, x;
+   int score;
+
+   /* set up model. REPLACE THIS CODE eventually; should be in HMM, precomputed;
+    * instead of aafq, should be using null model; etc.
+    */
+   for (x = 0; x < 20; x++)  sc[x] = Prob2Score(ip[x], aafq[x]);
+   sc[20] = DegenerateSymbolScore(ip, aafq, 20);
+   sc[21] = DegenerateSymbolScore(ip, aafq, 21);
+   sc[22] = DegenerateSymbolScore(ip, aafq, 22);
+
+   score = 0;
+   for (i = 1; i <= L; i++) score += sc[(int) dsq[i]];
+
+   return Scorify(ILogsum(0, score));	/* correction to bit score */
+}
+
+
