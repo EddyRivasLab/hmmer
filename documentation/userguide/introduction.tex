@@ -1,43 +1,86 @@
 \section{Introduction}
 
-If you just want to get started fast, skip this section and go
-straight to the installation instructions, then to the tutorial.
+HMMER is an implementation of profile hidden Markov models (profile
+HMMs) for biological sequence analysis
+\cite{Krogh94,Eddy98,Durbin98}. 
 
-\subsection{What does HMMER do?}
+Profile HMMs are statistical models of multiple sequence alignments.
+They capture position-specific information about how conserved each
+column of the alignment is, and which residues are likely.
 
-You discover a new protein sequence family, and carefully construct a
-multiple sequence alignment. Your family, like most protein families,
-has a number of strongly (but not absolutely) conserved key residues,
-separated by characteristic spacing. You wonder if there are more
-members of your family in the sequence databases, but the family is so
-evolutionarily diverse, a BLAST search with any individual sequence
-doesn't even find the rest of the sequences you already know about;
-you're sure there are some distantly related sequences in the
-``noise''. You spend many pleasant evenings scanning weak BLAST
-alignments by eye to find ones with the right key residues are in the
-right places. You sure wish there was a computer program that did this
-better.
+One application of HMMER is when you are working on a protein sequence
+family, and you have carefully constructed a multiple sequence
+alignment. Your family, like most protein families, has a number of
+strongly (but not absolutely) conserved key residues, separated by
+characteristic spacing. You wonder if there are more members of your
+family in the sequence databases, but the family is so evolutionarily
+diverse, a BLAST search with any individual sequence doesn't even find
+the rest of the sequences you already know about. You're sure there
+are some distantly related sequences in the noise. You spend many
+pleasant evenings scanning weak BLAST alignments by eye to find ones
+with the right key residues are in the right places, but you wish
+there was a computer program that did this a little better.
 
-You get the sequence of another favorite protein and eagerly BLAST it
-against the NCBI server, and nothing significant shows up. It looks
-like you'll get no easy information from the sequence.
+Another application is the automated annotation of the domain
+structure of proteins. Large databases of curated alignments and HMMER
+models of known domains are available, including Pfam \cite{Bateman02}
+and SMART \cite{LetunicBork02} in the Interpro database consortium
+\cite{Mulder03}. (Many ``top ten protein domains'' lists, a standard
+table in genome analysis papers, rely heavily on HMMER annotation.)
+Say you have a new sequence that, according to a BLAST analysis, shows
+a slew of hits to receptor tyrosine kinases. Before you decide to call
+your sequence an RTK homologue, you suspiciously recall that RTK's
+are, like many proteins, composed of multiple functional domains, and
+these domains are often found promiscuously in proteins with a wide
+variety of functions. Is your sequence really an RTK? Or is it a novel
+sequence that just happens to have a protein kinase catalytic domain
+or fibronectin type III domain?
 
-You BLAST another favorite sequence against the NCBI server; a
-thousand hits come back, and the top hundred are hypothetical
-sequences from genome projects. It looks like you'll have to wade
-through a lot of BLAST output to find the informative hits.
+And another application is the automated construction and maintenance
+of large multiple alignment databases.  It is useful to organize
+sequences into evolutionarily related families. But there are
+thousands of protein sequence families, some of which comprise tens of
+thousands of sequences -- and the primary sequence databases continue
+to double every year or two. This is a hopeless task for manual
+curation; but on the other hand, manual curation is really necessary
+for high-quality, biologically relevant multiple alignments. Databases
+like Pfam \cite{Bateman02} are constructed by distinguishing between a
+stable curated ``seed'' alignment of a small number of representative
+sequences, and ``full'' alignments of all detectable homologs; HMMER
+is used to make a model of the seed, search the database for homologs,
+and automatically produce the full alignment by aligning every
+sequence to the seed consensus.
 
-Another sequence comes back a slew of hits to receptor tyrosine
-kinases, but before you decide to call your sequence an RTK homologue,
-you recall that RTK's are, like many proteins, composed of multiple
-functional domains. Is your sequence really an RTK? Or is it a novel
-sequence that also happens to have a protein kinase catalytic domain,
-fibronectin type III domain, or immunoglobulin superfamily domain?
+You may find other applications as well. Using hidden Markov models to
+make a linear consensus model of a bunch of related strings is a
+pretty generic problem, and not just in biological sequence analysis.
+HMMER has reportedly been used to model music, speech, and automobile
+engine telemetry. If you use it for something particularly strange,
+I'd be curious to hear about it (but I don't want to ever see my
+code's error messages showing up on the console of my Honda).
 
-These (and other problems in sequence analysis) are the kinds of
-problems that HMMER tries to address. HMMER works with consensus
-statistical models of multiple sequence alignments, called
-\emph{profile hidden Markov models} (profile HMMs).
+\subsection{How to avoid reading this manual}
+
+I hate reading documentation. If you're like me, you're sitting here
+thinking, \pageref{manualend} pages of documentation, you must be
+joking! I just want to know that the software compiles, runs, and
+gives apparently useful results, before I devote real time to it. So,
+for bitter cynics like me that have seen one too many software
+packages that don't work:
+
+\begin{itemize}
+\item Follow the quick installation instructions on page
+      \pageref{section:installation}. 
+\item Go to the tutorial, section \ref{section:tutorial},
+      which walks you through some examples of using HMMER
+      on real data.
+\end{itemize}
+
+
+
+
+
+
 
 \subsection {Profile HMMs}
 

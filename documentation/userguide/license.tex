@@ -1,17 +1,22 @@
 \section{License terms}
 
 If you're just going to use HMMER to analyze sequence, it's free to
-you; you can skip all the legalese that's about to appear. If you have
-a specially licensed (non-GPL) copy of HMMER from Washington
-University, you already have your own legalese, in the form of a
-separate written WashU licensing contract; this chapter does not apply
-to you either. If you have a public, GPL'ed copy of HMMER and you're
-interested in modifying or borrowing the source code or distributing
-the software yourself, keep reading.
+you, and you can skip all the legalese that follows. 
 
-HMMER is a copyrighted work. It is not public domain software.  It is
-distributed under an ``Open Source'' license, the GNU General Public
-License (GPL). In brief, what the license means is that:
+If you have a specially licensed (non-GPL) copy of HMMER from
+Washington University, you already have your own legalese, in the form
+of a separate written WashU licensing contract; this chapter does not
+apply to you either. 
+
+If you have a public, GPL'ed copy of HMMER and you're interested in
+modifying or borrowing the source code or distributing the software
+yourself, keep reading.
+
+\subsection{The gist of the license}
+
+HMMER is a copyrighted work. It is not in the public domain.  It is
+distributed under an ``open source'' license, the GNU General Public
+License (GPL). In brief, what the GPL means is that:
 
 \begin{itemize}
 \item If you're just going to use HMMER to analyze sequence, it's free.
@@ -27,15 +32,16 @@ University, nor HHMI.
 copy {\em internally} (in your company or department), you're free to
 do that to.
 
-\item If you want to modify HMMER or borrow any part of its source code
-for your software package, and you plan to redistribute your code
-(either freely or for profit), then the license terms kick in; you {\em must}:
+\item If you modify HMMER or borrow any part of it, and create
+a new, derivative work that you plan to distribute
+(either freely or for profit), then the license terms of the GPL kick
+in. In this case, you {\em must}:
 \begin{itemize}
-\item freely distribute your code under the GNU GPL, retaining
+\item freely distribute the derivative work under the GNU GPL, retaining
 my copyright on the parts I wrote; or
 \item if you're a free software developer but you prefer a
-different open source license, contact me. I'll ship 
-you small parts of the code under any open source license.
+different open source license, contact me -- I'll typically ship 
+snippets of the code under any open source license; or
 \item if you're a proprietary software developer, 
 contact Washington University to arrange for non-GPL licensing
 terms. For commercial licenses, we will typically ask for a fee
@@ -43,78 +49,71 @@ and/or royalties.
 \end{itemize}
 \end{itemize}
 
-\subsection{The HMMER license manifesto}
+\subsection{The intent of the license}
 
-I spend an inordinate amount of time explaining the choice of the GPL.
+Both you and I want the software to be downloadable from the Web. You
+don't want to hassle with signing any contract; I don't want to spend
+my time arranging licenses and sending out code on request. At the
+same time, my sense of fair play (not to mention my technology
+transfer office) doesn't want you to just take my software and sell
+it, unless you're sharing the revenue with us and helping to support
+our research.
 
-STOPPED WORK HERE
+These two points would seem to be in conflict. How can code be freely
+available, while still gently requiring that you play fair and share
+revenue from any commercialized versions? Certain open source
+licenses, including the GPL, have a widely unappreciated property:
+they enable an efficient dual licensing strategy. Most copies of HMMER
+are freely distributed under the GPL, but the GPL essentially inhibits
+commercialization. Other versions are provided under proprietary
+licenses and successfully commercialized. 
 
-Much of my funding comes from the National Human Genome Research
-Insitute at the National Institutes of Health (NIH). NIH grants policy
-states that the results of NIH-funded research must be made available
-to qualified scientists upon request. The free exchange of information
-is also a fundamental tenet of publicly funded science. The simplest
-means of disseminating information about how HMMER works is to
-distribute documented source code. I take this responsibility
-seriously. While I am in academia, my software will be freely
-available in source code form.
+If you get the free, GPL'ed version from the Web, you're choosing to
+play on a basic research playing field. You don't get any user
+support, and you're at the mercy of one academic's whims (mine), but
+you do get free, open access to complete HMMER source code.  You can
+use it, modify it, redistribute it... on the conditions that my
+copyright stays on my code, and that you freely distribute anything
+that's derived from my work under exactly the same rules that I gave
+my work to you -- e.g.\, under the GPL. This ``viral'' propagation of
+the GPL into derivative works means that you're generally going to
+have nonproprietary and noncommercial goals if you're willing to use
+the GPL'ed version. Freely redistributable source code with a virally
+propagating free license is generally anathema to commercial purposes
+-- while being no significant hindrance on basic research.
 
-At the same time, I'm not going to put HMMER in the public domain.  If
-I did, someone could incorporate HMMER into a proprietary software
-package without my permission or knowledge. I couldn't see the
-improvements they were making to my work.  They might sell the
-proprietary software and not contribute a fair share of the profits to
-Washington University or my research lab. So I need a distribution
-license that lets me distribute it freely, while at the same time
-trying to make sure that my university and I don't get taken advantage
-of.
+Alternatively, you can choose to play on another, proprietary playing
+field. Contact the Washington University tech transfer people and
+negotiate a satisfactory, nonexclusive, proprietary license, free of
+the GPL. Unsurprisingly, we'll then happily ask you for fair license
+fees for this, essentially proportional to the ratio of our work
+versus your work in the final product. You're supporting research, not
+lining my pockets. License revenue goes into research funds for
+Washington University, the MRC Laboratory of Molecular Biology, and my
+lab. To the fullest extent I can, I decline to take any licensing
+revenue as personal income.\footnote{A minor fraction wanders the
+planet and in the end, cannot be routed to lab funds; the MRC-LMB's
+ineffable accounting office writes me a check every year that has to
+be treated as personal income, and I end up paying \emph{both} UK and
+US taxes on the damn thing. From this faintly pathetic bureaucratic
+exercise, I net around a couple of thousand dollars a year.} Several
+commercial versions of HMMER are in use, giving users several options
+to choose from for proper, responsive user support -- and efficiently
+giving me only a couple of points of necessary contact to disseminate
+information, rather than me having to respond personally to an entire
+user community.
 
-Some developers license their software under restricted ``academic
-only'' licenses, such that ``commercial'' users have to pay license
-fees. Having worked in a biotech startup, I strongly oppose this sort
-of license. Most industry scientists contribute to basic research, and
-they consider themselves no different from their counterparts in
-academia. The line I want to draw is between open and proprietary, not
-academic and commercial. Commercial scientists can be open, and
-academic scientists can be proprietary. (And NIH's free resource
-distribution policy does not distinguish between academic and
-industrial peers.)
+Importantly, it doesn't particularly matter whether you are sitting in
+academia, industry, or a nonprofit institute. What matters is how
+you're planning to distribute any derivative works. Plenty of
+companies do basic research, publish papers, and release their
+published work freely, and can work quite happily with the GPL. Many
+academics develop and sell proprietary, closed products through their
+tech transfer offices, which GPL'ed source code will (quite
+intentionally!) block, until a separate proprietary license is
+negotiated with Washington University. 
 
-Open Source licenses (aka ``free'' software licenses) like the BSD
-license, the Perl Artistic License, the Netscape Public License, and
-the GNU Public License do what I need. The GNU Public License is the
-best known of these licenses. So long as you play the game -- that you
-are working in a nonproprietary manner, accepting that any of your
-modifications to my code must also be GPL'ed and made freely available
-as open source code -- you get free, open access to HMMER source code.
-But if you want to use HMMER in a proprietary way, the GPL does not
-grant you that right, so you must contact the Washington University
-tech transfer people to arrange a special proprietary license.  And,
-unsurprisingly, we'll happily charge you fair license fees. You can
-feel warm and fuzzy about this - I opt to take all licensing funds
-into a research fund for the lab, not into personal income.  I still
-quite contently drive a Civic; I'm too busy coding to own a Boxster.
-
-The GPL is often misinterpreted as a socialist license, and I
-sometimes field questions about why I'm so determined to oppose
-commercial development, or even undermine it (by distributing free
-software). This is a misunderstanding. American universities have a
-responsibility, under the 1980 Bayh/Dole act, to transfer technology
-to the private sector. I respect the economic goals of Bayh/Dole. In
-my view, there is a productive tension between Bayh/Dole and
-scientific ethics. The purpose of the HMMER licensing policy is not to
-impede commercial development, but rather to maintain this tension.
-As an academic, my primary responsibility is to make my work freely
-available. As an American research university, the job of Washington
-University and our technology transfer office is to make HMMER
-available for proprietary commercialization under appropriate
-terms. We can and do license HMMER for proprietary use. We're just not
-going to {\em give it away} for proprietary use, that's all. If you
-want to make a profit from HMMER, we want a fair share so we can put
-it towards the research that develops HMMER.
-
-Whew. You think that was long-winded? That's nothing; the full text of
-the GNU GPL follows:
+\subsection{Finally, the license!}
 
 \begin{center}
 {\bf GNU GENERAL PUBLIC LICENSE} \\

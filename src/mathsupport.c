@@ -107,9 +107,9 @@ float
 LogSum(float p1, float p2)
 {
   if (p1 > p2)
-    return (p1-p2 > 50.) ? p1 + log(1. + exp(p2-p1)) : p1;
+    return (p1-p2 > 50.) ? p1 : p1 + log(1. + exp(p2-p1));
   else
-    return (p2-p1 > 50.) ? p2 + log(1. + exp(p1-p2)) : p2;
+    return (p2-p1 > 50.) ? p2 : p2 + log(1. + exp(p1-p2));
 }
 
 

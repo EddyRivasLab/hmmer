@@ -1,14 +1,15 @@
 \section{Installation}
+\label{section:installation}
 
 \subsection{Quick installation instructions}
 
 \subsubsection{configuring, compiling, and installing a source code distribution}
 
 Download the source tarball (\prog{hmmer.tar.gz}) from 
-\htmladdnormallink{ftp.genetics.wustl.edu/pub/eddy/hmmer/}
+\htmladdnormallink{ftp://ftp.genetics.wustl.edu/pub/eddy/hmmer/}
                   {ftp://ftp.genetics.wustl.edu/pub/eddy/hmmer/}
 or 
-\htmladdnormallink{hmmer.wustl.edu/}
+\htmladdnormallink{http://hmmer.wustl.edu/}
                   {http://hmmer.wustl.edu/}.
 
 Unpack the software:
@@ -49,10 +50,10 @@ That's all.  Each of these steps is documented in more detail below,
 including how to change the default installation directories for
 \prog{make install}.
 
-\subsubsection{installing a precompiled binary distribution}
+\subsubsection{configuring and installing a precompiled binary distribution}
 
 Alternatively, you can obtain a precompiled binary distribution of
-HMMER from \htmladdnormallink{hmmer.wustl.edu/}
+HMMER from \htmladdnormallink{http://hmmer.wustl.edu/}
 {http://hmmer.wustl.edu/}. Binary distributions are available for most
 common UNIX and UNIX-like OS's. For example, the distribution for
 Intel x86/GNU Linux machines is \prog{hmmer.bin.intel-linux.tar.gz}.
@@ -100,25 +101,26 @@ and some reasonable level of POSIX compliance.
 Specifically, thanks to generous support from manufacturers, HMMER
 distributions are tested and created on the following hardware and
 operating systems:
-\begin{itemize}
-\item Intel x86/GNU Linux
-\item Intel x86/FreeBSD
-\item Intel x86/OpenBSD
-\item Intel x86/Sun Solaris 
-\item Intel Itanium2/GNU Linux
-\item Intel Itanium2/HP-UX
-\item Apple Macintosh OS/X
-\item Silicon Graphics/IRIX
-\item Sun Sparc/Solaris 
-\item Compaq Alpha/Tru64
-\item Compaq Alpha/GNU Linux
-\item Hewlett Packard HP-UX
-\item IBM/AIX
-\end{itemize}
+
+\begin{tabular}{l}
+Intel x86/GNU Linux\\
+Intel x86/FreeBSD\\
+Intel x86/OpenBSD\\
+Intel x86/Sun Solaris \\
+Intel Itanium2/GNU Linux\\
+Intel Itanium2/HP-UX\\
+Apple Macintosh OS/X\\
+Silicon Graphics/IRIX\\
+Sun Sparc/Solaris \\
+Compaq Alpha/Tru64\\
+Compaq Alpha/GNU Linux\\
+Hewlett Packard HP-UX\\
+IBM/AIX\\
+\end{tabular}
 
 Additional community-contributed ports to other systems are made
 available from
-\htmladdnormallink{hmmer.wustl.edu/}{http://hmmer.wustl.edu/}, if they
+\htmladdnormallink{http://hmmer.wustl.edu/}{http://hmmer.wustl.edu/}, if they
 are sent to me.
 
 Running the testsuite (\prog{make check}) requires that you have
@@ -131,7 +133,7 @@ are optional, not compiled by default; they are enabled by passing the
 \prog{./configure} script before compilation. The precompiled binary
 distributions generally support multithreading but not PVM.
 
-\subsection{Running the \prog{configure} script}
+\subsection{Running the configure script}
 
 The GNU \prog{configure} script that comes with HMMER has a number of
 options. You can see them all by doing:
@@ -241,12 +243,16 @@ multiprocessor machine, you want this option. Even if you aren't, it
 doesn't hurt. (Some platforms don't support POSIX threads, so
 mulltithreading is not configured by default.)
 
-If you turn on threads support, by default, HMMER programs will use
-\emph{all} available CPUs. Especially on a shared machine, you may
-want to rein it in, and leave some CPU for everyone else. There are
-three ways to do this.
-
-**STOPPED HERE**.
+If you turn on threads support, by default, the multithreaded HMMER
+programs \prog{hmmcalibrate}, \prog{hmmsearch}, and \prog{hmmpfam}
+will use \emph{all} available CPUs. You can alter this behavior in
+three ways: by defining \prog{HMMER\_NCPU} in the \prog{src/config.h}
+file that \prog{configure} generates (see ``The config.h header
+file'', below); by defining \prog{HMMER\_NCPU} as a shell environment
+variable where you run HMMER (see ``Shell environment variables
+understood by HMMER'', below), or using the \prog{--cpu <x>} option
+with the multithreaded programs (see the ``Manual pages'' section
+later in the guide).
 
 \subsubsection{turning on PVM support for clusters}
 
@@ -260,14 +266,14 @@ You need to have PVM installed first, and the environment variables
 \prog{PVM\_ROOT} and \prog{PVM\_ARCH} must be set appropriately, so
 HMMER can find the PVM headers and library.  You can obtain the free
 PVM library from Oak Ridge National Laboratory, at
-\htmladdnormallink{www.csm.ornl.gov/pvm/}{http://www.csm.ornl.gov/pvm/}.
+\htmladdnormallink{http://www.csm.ornl.gov/pvm/}{http://www.csm.ornl.gov/pvm/}.
 
 \subsubsection{turning on LFS support for files $>$2 GB}
 
-HMMER can access large files ($>$ 2 GB) even on normal 32-bit
-operating systems, using Large File Summit (LFS).  Most modern UNIX
-systems have LFS extensions. To enable this optional code, use
-the \prog{--enable-lfs} flag:
+HMMER can access large files ($>$ 2 GB) even on 32-bit operating
+systems, using Large File Summit (LFS) extensions.  Most modern UNIX
+systems have LFS extensions. To enable this optional code, use the
+\prog{--enable-lfs} flag:
 
 \user{./configure --enable-lfs}
 
@@ -280,8 +286,8 @@ use the \prog{--enable-altivec} flag:
 
 \user{./configure --enable-altivec}
 
-The \prog{configure} script will automatically detect whether you're
-on a machine that supports Altivec instructions or not, so it doesn't
+The \prog{configure} script will automatically check whether you're on
+a machine that supports Altivec instructions or not, so it doesn't
 hurt to try to turn this on if you're not sure.
 
 \subsubsection{other options, used in development code}
@@ -290,10 +296,10 @@ The remaining two features selectable with the \prog{configure} script
 will only be useful to you if you're a developer.
 
 The \prog{--enable-ccmalloc} option configures HMMER to be
-instrumented by the \prog{ccmalloc} memory checking library.  You have
-to have \prog{ccmalloc} installed.  \prog{ccmalloc} can be obtained
-from Armin Biere at ETH Zurich, at
-\htmladdnormallink{www.inf.ethz.ch/personal/biere/projects/ccmalloc/}
+instrumented by the \prog{ccmalloc} memory checking library, a free
+software library from Armin Biere at ETH Zurich.  You have to have
+\prog{ccmalloc} installed.  \prog{ccmalloc} can be obtained from
+\htmladdnormallink{http://www.inf.ethz.ch/personal/biere/projects/ccmalloc/}
 {http://www.inf.ethz.ch/personal/biere/projects/ccmalloc/}.
 
 The \prog{--enable-debugging} option is the same as passing
@@ -312,7 +318,7 @@ follows:
 
 \user{env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-pvm --enable-lfs --prefix=/usr/seshare/ --exec-prefix=/usr/seshare/`uname`}
 
-\subsection{The \prog{config.h} header file}
+\subsection{The config.h header file}
 
 The \prog{configure} script generates a \prog{src/config.h} file that
 contains most of the configuration information that the source code
@@ -387,7 +393,7 @@ to speech recognition, recorded music reconstruction, and automobile
 engine telemetry applications, and possibly others that I haven't
 heard about.
 
-\subsection{Running \prog{make}}
+\subsection{Running make}
 
 When you run \prog{configure}, it also creates the Makefiles that will
 actually compile and install the code.  There are a variety of make
@@ -451,7 +457,7 @@ instead of:
 
 HMMER only uses BLAST scoring matrices with the \prog{hmmbuild
 --pamprior} option. If you use this, the matrix is looked for in the
-BLASTMAT directory first, then in the current directory.
+\prog{BLASTMAT} directory first, then in the current directory.
 
 The \prog{HMMER\_NCPU} environment variable takes precedence over any
 \prog{HMMER\_NCPU} processor number limit defined in \prog{config.h}
@@ -518,13 +524,24 @@ to tell HMMER how many processors each node has (and hence, how many
 independent PVM processes it should start); sp=1000 means 1 CPU,
 sp=2000 means 2 CPUs, sp=4000 means 4 CPUS, etc.
 
-Start the PVM by typing\\ \user{pvm hostfile} (where ``hostfile'' is
-the name of your hostfile) on the master. Make sure all the nodes
-started properly by typing \user{conf} at the PVM console prompt.
-Type \user{quit} to exit from the PVM console, which leaves the PVM
-running in the background.  You should only need to start PVM
-once. (We have a PVM running continuously on our network right now,
-waiting for HMMER jobs.)
+Start the PVM by typing\\ 
+
+   \user{pvm hostfile} 
+
+(where ``hostfile'' is the name of your hostfile) on the master. Make
+sure all the nodes started properly by typing 
+
+   \user{conf}
+
+at the PVM
+console prompt.  Type 
+
+   \user{quit} 
+
+to exit from the PVM console, which leaves the PVM running in the
+background.  You should only need to start PVM once. (We have a PVM
+running continuously on our network right now, waiting for HMMER
+jobs.)
 
 Once PVM is running, at any time you can run HMMER programs on the
 master and exploit your PVM, just by adding the option \prog{--pvm};
@@ -542,7 +559,7 @@ is a (potentially massive) increase in search speed. Aside from the
 addition of the \prog{--pvm} option on the command line, all other
 options and input/output formats remain identical.
 
-\subsubsection{Example of a PVM cluster}
+\subsubsection{example of a PVM cluster}
 
 The St. Louis Pfam server runs its searches using HMMER on a PVM
 cluster called Wulfpack. I'll use it as a specific example of
@@ -659,7 +676,7 @@ copy of Pfam.
 The PVM port may not be as good as it should be. It happens to work
 well in St. Louis. It is used 24/7 on the servers backing the
 St. Louis Pfam search server at
-\htmladdnormallink{pfam.wustl.edu}{http://pfam.wustl.edu/}.  However,
+\htmladdnormallink{http://pfam.wustl.edu}{http://pfam.wustl.edu/}.  However,
 I have received occasional reports of problems at other sites.  John
 Blanchard at Incyte has contributed a number of improvements to the
 PVM code, but scattered problems persist. Unfortunately, PVM is
