@@ -98,14 +98,24 @@ extern void FreeHistogram(struct histogram_s *h);
 extern void UnfitHistogram(struct histogram_s *h);
 extern void AddToHistogram(struct histogram_s *h, float sc);
 extern void PrintASCIIHistogram(FILE *fp, struct histogram_s *h); 
+extern void PrintXMGRHistogram(FILE *fp, struct histogram_s *h);
+extern void PrintXMGRDistribution(FILE *fp, struct histogram_s *h);
+extern void PrintXMGRRegressionLine(FILE *fp, struct histogram_s *h);
+extern void EVDBasicFit(struct histogram_s *h);
 extern int  ExtremeValueFitHistogram(struct histogram_s *h, float high_hint);
-extern void ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda);
+extern void ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, 
+				     int ndegrees);
 extern int  GaussianFitHistogram(struct histogram_s *h, float high_hint);
 extern void GaussianSetHistogram(struct histogram_s *h, float mean, float sd);
 extern double ExtremeValueP (float x, float mu, float lambda);
 extern double ExtremeValueP2(float x, float mu, float lambda, int N);
 extern double ExtremeValueE (float x, float mu, float lambda, int N);
 extern float  EVDrandom(float mu, float lambda);
+extern void   EVDMaxLikelyFit(double *x, int n, 
+			      double *ret_mu, double *ret_lambda);
+extern void   Lawless416(double *x, int n, double lambda, 
+			 double *ret_f, double *ret_df);
+
 
 /* from hmmio.c
  * Input/output (saving/reading) of models
