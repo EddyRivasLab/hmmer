@@ -14,7 +14,7 @@
  * 
  * A comment on loss of accuracy. Storing a number as a scaled log
  * probability guarantees us an error of about 0.035% or
- * less in the retrieved probability. We also are relatively invulnerable
+ * less in the retrieved probability. We are relatively invulnerable
  * to the truncation errors which HMMER 1.8 was vulnerable to.  
  * 
  * Magic numbers (both for the ASCII and binary save formats) are used 
@@ -75,10 +75,7 @@
 #include "config.h"
 #include "structs.h"
 #include "funcs.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
+#include "version.h"
 
 /* Magic numbers identifying binary formats.
  * Do not change the old magics! Necessary for backwards compatibility.
@@ -372,7 +369,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   int x;                        /* counter for symbols           */
   int ts;			/* counter for state transitions */
 
-  fprintf(fp, "HMMER2.0\n");  /* magic header */
+  fprintf(fp, "HMMER2.0  [%s]\n", RELEASE);  /* magic header */
 
   /* write header information
    */
