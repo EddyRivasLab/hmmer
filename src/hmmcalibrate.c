@@ -530,6 +530,9 @@ main_loop_pvm(HMMFILE *hmmfp, FILE *hfp, int seed, int nsample, int fixedlen, fl
    */
   if ((master_tid = pvm_mytid()) < 0)
     Die("pvmd not responding -- do you have PVM running?");
+#if DEBUGLEVEL >= 1
+  pvm_catchout(stderr);		/* catch output for debugging */
+#endif
   PVMSpawnSlaves("hmmcalibrate-pvm", &slave_tid, &nslaves);
 
   /* Initialize the slaves
@@ -542,6 +545,11 @@ main_loop_pvm(HMMFILE *hmmfp, FILE *hfp, int seed, int nsample, int fixedlen, fl
   pvm_mcast(slave_tid, nslaves, HMMPVM_INIT);
   SQD_DPRINTF1(("Initialized %d slaves\n", nslaves));
 
+  /* Confirm slaves' OK status.
+   */
+  PVMConfirmSlaves(slave_tid, nslaves);
+  SQD_DPRINTF1(("Slaves confirm that they're ok...\n"));
+ 
   /* Load the slaves
    */
   done = 0;
