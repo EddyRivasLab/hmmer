@@ -741,11 +741,14 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    */
   while (fgets(buffer, 512, hmmfp->f) != NULL) 
     if (strncmp(buffer, "//", 2) == 0) break;
+  
+  Plan7Renormalize(hmm);	/* Paracel reported bug 6/11/99 */
 
   /* Set flags and return
    */
   hmm->flags |= PLAN7_HASPROB;	/* probabilities are valid */
   hmm->flags &= ~PLAN7_HASBITS;	/* scores are not valid    */
+
   *ret_hmm = hmm;
   return 1;
 
@@ -1130,6 +1133,7 @@ read_asc17hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   Plan7SetCtime(hmm);
 
   P9FreeHMM(p9hmm);
+  Plan7Renormalize(hmm);
  *ret_hmm = hmm;
   return 1;
 }
