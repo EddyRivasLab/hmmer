@@ -40,6 +40,7 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
+   --mapali <f>  : include alignment in file <f> using map in HMM\n\
    --withali <f> : include alignment to (fixed) alignment in file <f>\n\
 \n";
 
@@ -48,13 +49,14 @@ static struct opt_s OPTIONS[] = {
   { "-m", TRUE, sqdARG_NONE   } ,
   { "-o", TRUE, sqdARG_STRING },
   { "-q", TRUE, sqdARG_NONE   },
+  { "--mapali",  FALSE, sqdARG_STRING },
   { "--withali", FALSE, sqdARG_STRING },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
-static void include_aligned_alignment(char *seqfile, struct plan7_s *hmm, 
-				      char ***rseq, char ***dsq, SQINFO **sqinfo, 
-				      struct p7trace_s ***tr, int *nseq);
+static void include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
+			      char ***rseq, char ***dsq, SQINFO **sqinfo, 
+			      struct p7trace_s ***tr, int *nseq);
 
 int
 main(int argc, char **argv) 
@@ -82,6 +84,7 @@ main(int argc, char **argv)
   char *outfile;                /* optional alignment output file           */
   FILE *ofp;                    /* handle on alignment output file          */
   char *withali;                /* name of additional alignment file to align */
+  char *mapali;                 /* name of additional alignment file to map   */
   
 #ifdef MEMDEBUG
   unsigned long histid1, histid2, orig_size, current_size;
@@ -97,12 +100,14 @@ main(int argc, char **argv)
   outfile   = NULL;
   be_quiet  = FALSE;
   withali   = NULL;
+  mapali    = NULL;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-m")        == 0) matchonly= TRUE;
     else if (strcmp(optname, "-o")        == 0) outfile  = optarg;
     else if (strcmp(optname, "-q")        == 0) be_quiet = TRUE; 
+    else if (strcmp(optname, "--mapali")  == 0) mapali   = optarg;
     else if (strcmp(optname, "--withali") == 0) withali  = optarg;
     else if (strcmp(optname, "-h") == 0) 
       {
@@ -132,6 +137,10 @@ main(int argc, char **argv)
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   P7Logoddsify(hmm, TRUE);
   
+				/* do we have the map we might need? */
+  if (mapali != NULL && ! (hmm->flags & PLAN7_MAP))
+    Die("HMMER: HMM file %s has no map; you can't use --mapali.", hmmfile);
+
   /*********************************************** 
    * Open sequence file in current directory.
    * Read all seqs from it.
@@ -183,17 +192,15 @@ main(int argc, char **argv)
 
   /* Include an aligned alignment, if desired.
    */
+  if (mapali != NULL)
+    include_alignment(mapali, hmm, TRUE, &rseq, &dsq, &sqinfo, &tr, &nseq);
   if (withali != NULL) 
-    include_aligned_alignment(withali, hmm, &rseq, &dsq, &sqinfo, &tr, &nseq);
-
-  P7PrintTrace(stdout, tr[0], hmm, dsq[0]);
-  P7PrintTrace(stdout, tr[1], hmm, dsq[1]);
+    include_alignment(withali, hmm, FALSE, &rseq, &dsq, &sqinfo, &tr, &nseq);
 
   /* Turn traces into a multiple alignment
    */ 
   wgt = MallocOrDie(sizeof(float) * nseq);
   FSet(wgt, nseq, 1.0);
-
   P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, matchonly,
 		     &aseq, &ainfo);
 
@@ -239,25 +246,31 @@ main(int argc, char **argv)
 }
 
 
-/* Function: include_aligned_alignment()
+/* Function: include_alignment()
  * Date:     SRE, Sun Jul  5 15:25:13 1998 [St. Louis]
  *
  * Purpose:  Given the name of a multiple alignment file,
  *           align that alignment to the HMM, and add traces
- *           to an existing array of traces.
+ *           to an existing array of traces. If do_mapped
+ *           is TRUE, we use the HMM's map file. If not,
+ *           we use P7ViterbiAlignAlignment().
  *
  * Args:     seqfile  - name of alignment file
  *           hmm      - model to align to
- *           tr       - existing trace array to supplement
- *           ntr      - number of traces in tr
+ *           do_mapped- TRUE if we're to use the HMM's alignment map
+ *           rsq      - RETURN: array of rseqs to add to
+ *           dsq      - RETURN: array of dsq to add to
+ *           sqinfo   - RETURN: array of SQINFO to add to
+ *           tr       - RETURN: array of traces to add to
+ *           nseq     - RETURN: number of seqs           
  *
- * Returns:  new trace array. Caller is responsible for freeing it all,
- *           and for figuring out that it now contains ntr+ainfo.nseq traces.
- *           tr itself is freed here. 
+ * Returns:  new, realloc'ed arrays for rsq, dsq, sqinfo, tr; nseq is
+ *           increased to nseq+ainfo.nseq.
  */
 void
-include_aligned_alignment(char *seqfile, struct plan7_s *hmm, 
-			  char ***rsq, char ***dsq, SQINFO **sqinfo, struct p7trace_s ***tr, int *nseq)
+include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
+		  char ***rsq, char ***dsq, SQINFO **sqinfo, 
+		  struct p7trace_s ***tr, int *nseq)
 {
   int format;			/* format of alignment file */
   char **aseq;			/* aligned seqs             */
@@ -282,8 +295,14 @@ include_aligned_alignment(char *seqfile, struct plan7_s *hmm,
     Die("Failed to read aligned sequence file %s", seqfile);
   for (idx = 0; idx < ainfo.nseq; idx++)
     s2upper(aseq[idx]);
-				/* align to model; recover master trace */
-  master = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
+				/* Verify checksums before mapping */
+  if (do_mapped && GCGMultchecksum(aseq, ainfo.nseq) != hmm->checksum)
+    Die("The checksums for alignment file %s and the HMM alignment map don't match.", 
+	seqfile);
+				/* Get a master trace */
+  if (do_mapped) master = MasterTraceFromMap(hmm->map, hmm->M, ainfo.alen);
+  else           master = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
+
 				/* convert to individual traces */
   ImposeMasterTrace(aseq, ainfo.nseq, master, &addtr);
 				/* add those traces to existing ones */
@@ -314,3 +333,6 @@ include_aligned_alignment(char *seqfile, struct plan7_s *hmm,
 				/* Return */
   return;
 }
+
+
+
