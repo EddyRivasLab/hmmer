@@ -19,6 +19,8 @@ Checklist for a HMMER distribution.
         % make
 	% (cd testsuite; ../ssdk/sqc -m -p ../squid 2 exercises.sqc . ../src)
 	% (cd Bugs;      ../ssdk/sqc -m -p ../squid 2 bugs.sqc      . ../src)
+   Capture copies of the ccmalloc-instrumented binaries, if you want
+   to do manual testing with them.	
 	% make distclean
 	% ./configure --enable-threads --enable-lfs --enable-pvm
 	% make
@@ -40,6 +42,9 @@ Checklist for a HMMER distribution.
         % ../src/hmmpfam --cpu 0 Pfam_ls ../tutorial/7LES_DROME > foo.normal
      Make sure that foo.* all work (7LES_DROME is big enough to exercise bug #h22)
      Check that foo.* all give identical E-values (bug #h20).
+        % diff foo.normal foo.pvm
+        % diff foo.normal foo.pthread
+	% rm foo.*
 	
      [TODO: Add tests for swissprot searches, w/ and w/o ccmalloc instrumentation;
       test for bug #h25]
