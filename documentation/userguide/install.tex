@@ -12,22 +12,23 @@ HMMER work.
 
 HMMER includes support for two kinds of parallelization: POSIX threads
 and PVM (Parallel Virtual Machine). Most modern UNIX OS's support
-POSIX threads. HMMER's configure script automatically detects your
-threads library, if you have one, and will build in multithreading by
-default -- so you don't need to do anything special to get
-multithreading. PVM, in contrast, is a separate, third-party software
-application, and you will have to install and configure it before
-building HMMER with PVM support. For this reason, PVM support in HMMER
-is not enabled by default. See the PVM section of this chapter for
-more details.
+POSIX threads. HMMER's configure script attempts to automatically
+detect your threads library, if you have one, and will build in
+multithreading by default -- so you don't need to do anything special
+to get multithreading. PVM, in contrast, is a separate, third-party
+software application, and you will have to install and configure it
+before building HMMER with PVM support. For this reason, PVM support
+in HMMER is not enabled by default. See the PVM section of this
+chapter for more details.
 
-HMMER 2 has not yet been ported to non-UNIX operating systems.  HMMER
-1 was ported by other people to Digital VAX/VMS, Apple MacOS, Win95,
-and WinNT with relatively little difficulty, and I've made efforts to
-improve the portability of the HMMER 2 code. Therefore, I expect HMMER
-could be ported easily to other platforms, especially to OS's that
-make some attempt to be POSIX compliant. I would greatly appreciate
-receiving diffs for any ports of HMMER to any platform.
+HMMER 2 should be easy to port to non-UNIX operating systems, provided
+they support ANSI C and some reasonable level of POSIX compliance.  A
+WinNT distribution is available by anonymous FTP from Time Logic,
+Inc. HMMER 1 was ported by other people to Digital VAX/VMS, Apple
+MacOS, Win95, and WinNT with relatively little difficulty, and I've
+made efforts to improve the portability of the HMMER 2 code since
+then. I would greatly appreciate receiving diffs for any ports of
+HMMER to any platform.
 
 \section{Installing a precompiled distribution}
 
@@ -230,11 +231,13 @@ slaves, so the slaves accept rsh connections from the master.
 
 Put copies of HMMER executables in a directory on the master and all
 the slaves. For each PVM-capable program (\prog{hmmcalibrate},
-\prog{hmmpfam}, and \prog{hmmsearch}, there is a corresponding PVM program
-(\prog{hmmcalibrate-pvm}, \prog{hmmpfam-pvm}, and
-\prog{hmmsearch-pvm}). The master needs copies of all the HMMER
-programs, including the PVM programs.  The slaves only need copies of
-the three PVM programs.
+\prog{hmmpfam}, and \prog{hmmsearch}, there is a corresponding slave
+PVM program (\prog{hmmcalibrate-pvm}, \prog{hmmpfam-pvm}, and
+\prog{hmmsearch-pvm}). The master machine needs copies of all the HMMER
+programs, including the slave PVM programs.  The slaves only need
+copies of the three slave PVM programs. (You never need to start the
+slave programs yourself; PVM does that. You just need to make sure
+they're installed where PVM can see them.)
 
 The PVM implementation of \prog{hmmpfam} needs a copy of any HMM
 databases you may search to be installed on the master and every
@@ -265,12 +268,26 @@ name of your hostfile) on the master. Make sure all the nodes started
 properly by typing 
 \user{conf} 
 at the PVM console prompt.
+Type 
+\user{quit} to exit from the PVM console,
+which leaves the PVM running in the background.
+You should only need to start PVM once. (We have a
+PVM running continuously on our network right now, waiting
+for HMMER jobs.)
 
-Now you can run HMMER programs on the master and exploit your PVM,
-just by adding the option \prog{--pvm}; for instance,\\
+Once PVM is running, at any time you can run HMMER programs on the
+master and exploit your PVM, just by adding the option \prog{--pvm};
+for instance,\\
 \user{hmmpfam --pvm Pfam my.query} 
 parallelizes a search of
 a query sequence in the file my.query against the Pfam database.
+
+Once PVM is properly configured and your slave nodes have the required
+slave programs (and databases, in the case of \prog{hmmpfam}), the
+only difference you will notice between the serial and the PVM version
+is a (potentially massive) increase in search speed. Aside from the
+addition of the \prog{--pvm} option on the command line, all other
+options and input/output formats remain identical.
 
 \subsection{Example of a PVM cluster}
 
@@ -280,7 +297,7 @@ configuring a PVM cluster. It's a little more intricate than you'd
 usually need for personal use, just because of the details of running
 PVM jobs in a standalone way from CGI scripts on a Web server.
 
-The master node is the Web server, \prog{fisher}.  The slave nodes are
+The master node is the Web server, \prog{fisher}. The slave nodes are
 eight rack-mounted dual processor Intel/Linux boxes called
 \prog{wulf01} through \prog{wulf08}. Collectively, we refer to
 this cluster as Wulfpack; it is a Beowulf-class Linux computing
@@ -289,8 +306,9 @@ cluster.
 PVM 3.3.11 is installed in \prog{/usr/local/pvm3} on the master and the
 slaves. 
 
-On fisher, all HMMER executables are installed in \prog{/usr/local/bin}.  On
-the wulf slave nodes, the three PVM executables are installed in
+On fisher, all HMMER executables are installed in
+\prog{/usr/local/bin}.  On the wulf slave nodes, the three PVM slave
+executables are installed in
 \prog{/usr/local/wulfpack}.
 
 Pfam and PfamFrag, two Pfam databases, are installed on the wulf slave
@@ -303,8 +321,8 @@ binary HMM databases are smaller.)
 An \prog{ls} of \prog{/usr/local/wulfpack} on any wulf node looks like:
 \begin{verbatim}
 [eddy@wulf01 /home]$ ls /usr/local/wulfpack/
-Pfam             PfamFrag         hmmcalibrate-slave   hmmsearch-slave
-Pfam.gsi         PfamFrag.gsi     hmmpfam-slave
+Pfam             PfamFrag         hmmcalibrate-pvm   hmmsearch-pvm
+Pfam.gsi         PfamFrag.gsi     hmmpfam-pvm
 \end{verbatim}
 
 The PVM hostfile for the cluster looks like:

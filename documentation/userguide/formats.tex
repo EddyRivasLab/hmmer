@@ -9,7 +9,8 @@ made for clarity and space:
 {\small\begin{verbatim}
 HMMER2.0
 NAME  rrm
-DESC  
+ACC   PF00076
+DESC  RNA recognition motif. (aka RRM, RBD, or RNP domain)
 LENG  72
 ALPH  Amino
 RF    no
@@ -20,6 +21,9 @@ COM   ../src/hmmcalibrate rrm.hmm
 NSEQ  70
 DATE  Wed Jul  8 08:13:25 1998
 CKSUM 2768
+GA    13.3 0.0
+TC    13.40 0.60
+NC    13.20 13.20
 XT      -8455     -4  -1000  -1000  -8455     -4  -8455     -4 
 NULT      -4  -8455
 NULE     595  -1558     85    338   -294    453  -1158    (...)
@@ -115,25 +119,37 @@ require this.
 \begin{wideitem}
 
 \item [\emprog{HMMER2.0}]
-File format version; a unique identifier for this save file format. Used for backwards
-compatibility. {\em Not} necessarily the version number of the HMMER
-software that generated it; rather, the version number of the last
-HMMER that changed the format (i.e., HMMER 2.8 might still be writing
-save files that are headed \prog{HMMER2.0}).
+File format version; a unique identifier for this save file
+format. Used for backwards compatibility. {\em Not} necessarily the
+version number of the HMMER software that generated it; rather, the
+version number of the last HMMER that changed the format so much
+that a whole new function had to be introduced to do the parsing.
+(i.e., HMMER 2.8 might
+still be writing save files that are headed \prog{HMMER2.0}).
 \textbf{Mandatory.}
 
 \item [\emprog{NAME  <s>}] Model name; \prog{<s>} is a single word name for the HMM.
-No spaces or tabs may occur in the name. By default, \prog{hmmbuild}
-sets this using the name of the alignment file, after removing any
+No spaces or tabs may occur in the name. 
+\prog{hmmbuild} will use the \verb+#=ID+ line from a SELEX alignment
+file to set the name. If this is not present, or the alignment
+is not in SELEX format, 
+\prog{hmmbuild}
+sets the HMM name using the name of the alignment file, after removing any
 file type suffix. For example, an HMM built from the alignment file
 \prog{rrm.slx} would be named \prog{rrm} by default.
 \textbf{Mandatory.}
 
+\item [\emprog{ACC   <s>}] Accession number; \prog{<s>} is a one-word
+accession number for an HMM. Used in Pfam maintenance. Accessions are
+stable identifiers for Pfam models, whereas names may change from
+release to release. Added in v2.1.1.  \textbf{Optional.}
+
 \item [\emprog{DESC  <s>}] Description line; \prog{<s>} is a one-line description 
-of the HMM. Currently, there is no way to set this! A future extension
-to SELEX file format will allow us to pick up the description line
-from Pfam.
-\textbf{Mandatory.}
+of the HMM. \prog{hmmbuild} will use the \verb+#=DE+ line from a
+SELEX alignment file to set the description line. If this is not
+present, or the alignment is not in SELEX format, the description
+line is left blank; one can be added manually (or by Perl script)
+if you wish. \textbf{Optional.}
 
 \item [\emprog{LENG  <d>}] Model length; \prog{<d>}, a positive nonzero integer, 
 is the number of match states in the model.
@@ -193,6 +209,18 @@ alignment and stored when \prog{hmmbuild} is used. It is used in
 conjunction with the alignment map information to to verify that some
 alignment is indeed the alignment that the map is for.  Added in
 v2.0.1. \textbf{Optional.}
+
+\item [\emprog{GA    <f> <f>}] Pfam gathering thresholds GA1 and GA2.
+This is a feature in progress. See Pfam documentation of GA lines.
+Added in v2.1.1. \textbf{Optional.}
+
+\item [\emprog{TC    <f> <f>}] Pfam trusted cutoffs TC1 and TC2.
+This is a feature in progress. See Pfam documentation of TC lines.
+Added in v2.1.1. \textbf{Optional.}
+
+\item [\emprog{NC    <f> <f>}] Pfam noise cutoffs NC1 and NC2.
+This is a feature in progress. See Pfam documentation of NC lines.
+Added in v2.1.1. \textbf{Optional.}
 
 \item [\emprog{NSEQ  <d>}] Sequence number; \prog{<d>} is a nonzero
 positive integer, the number of sequences that the HMM was trained on.
@@ -525,30 +553,33 @@ In the code, prior files are parsed by \prog{prior.c:P7ReadPrior()}.
 HMMER can automatically recognize and parse a number of common file
 formats. The best supported of these formats are listed below. If you
 know your sequence database is in one of these formats, you can use
-the file.  If you are typing sequences in manually and want to know
-how to format them, see the section of FASTA format below for
-unaligned sequences, and the section on SELEX format for alignments.
+the file. If you are formatting sequences yourself, see the section of
+FASTA format below for unaligned sequences, and the section on SELEX
+format for alignments; these are the simplest formats to hand type
 
-\textbf{Unaligned sequence formats}
+
 \begin{tabular}{ll}
-FASTA     & Pearson FASTA format; BLAST databases \\
-SWISSPROT & SWISSPROT protein sequence database\\ 
-PIR       & PIR protein sequence database \\
-EMBL      & EMBL DNA sequence database \\
-GenBank   & GenBank DNA database flat files\\
-GCGdata   & Wisconsin GCG sequence database format \\
-GCG       & Wisconsin GCG single sequence format \\
+\multicolumn{2}{l}{\textbf{Unaligned sequence formats}} \\
+FASTA      & Pearson FASTA format; BLAST databases \\
+SWISS-PROT & SWISS-PROT protein sequence database\\ 
+PIR        & PIR protein sequence database \\
+EMBL       & EMBL DNA sequence database \\
+GenBank    & GenBank DNA database flat files\\
+GCGdata    & Wisconsin GCG sequence database format \\
+GCG        & Wisconsin GCG single sequence format \\
 \end{tabular}
 
-\textbf{Multiple sequence alignment formats}
 \begin{tabular}{ll}
+\multicolumn{2}{l}{\textbf{Multiple sequence alignment formats}}\\
+SELEX   &   The preferred format for HMMER/Pfam (see below)\\
 MSF     &   GCG alignment format \\
 CLUSTAL &   CLUSTALW and CLUSTALV format \\
-SELEX   &   My annotated format (see below)\\
+A2M     &   ``Aligned FASTA'' \\ 
 \end{tabular}
 
-Alignment formats are read as if they were multiple unaligned
-sequences by programs doing sequential, database-style access.
+For programs that do sequential, database-style access (i.e.  where
+you'd usually use an unaligned flat file), the alignment formats are
+read as if they were multiple unaligned sequences.
 
 There is no provision for enforcing that single unaligned sequence
 formats (i.e. GCG unaligned sequence format) are single sequence
@@ -592,6 +623,10 @@ non-amino or non-nucleic acid symbols in the sequence should produce
 an appropriately strident string of warnings on yur terminal screen
 when you try to use the file.
 
+HMMER currently has a limit of 4095 characters on lines in files.  You
+may see this limitation in NCBI NR databases, where some description
+lines will be truncated by HMMER. 
+
 \subsection{SELEX alignment format}
 
 An example of a simple SELEX alignment file:
@@ -629,11 +664,12 @@ their names must be the same in every block (even if a sequence has no
 residues in a given block!) Other blank lines are ignored. You can add
 comments to the file on lines starting with a \verb+#+.
 
-SELEX, by the way, stands for ``Systematic Evolution of Ligands by
-Exponential Enrichment'' -- it refers to the Tuerk and Gold technology
-for evolving families of small RNAs for particular functions
+SELEX stands for ``Systematic Evolution of Ligands by Exponential
+Enrichment'' -- it refers to the Tuerk and Gold technology for
+evolving families of small RNAs for particular functions
 \cite{Tuerk90b}. SELEX files were what we used to keep track of
-alignments of these small RNA families.
+alignments of these small RNA families. It's an interesting piece of
+historical baggage -- most of my lab works on RNA, not protein.
 
 As the format evolved, more features have been added. To maintain
 compatibility with past alignment files, the new features are added
@@ -653,10 +689,10 @@ extracted from a longer source sequence) See below for details.
 \item
 Any line beginning with a \verb+#=+ as the first two characters is a
 machine comment.  \verb+#=+ comments are reserved for parsed data
-about the alignment. Usually these features are maintained by software
-such as the {\tt koala} editor, not by hand. The format of \verb+#=+
-lines is usually quite specific, since they must be parsed by the
-file-reading software.
+about the alignment. Often these features are maintained by software
+such as the {\tt koala} editor or the HMMER software, not by hand. The
+format of \verb+#=+ lines is usually quite specific, since they must
+be parsed by the file-reading software.
 
 \item
 All other lines beginning with a \verb+%+ or \verb+#+ as the first
@@ -666,7 +702,7 @@ may be included in a SELEX file, and at any point.
 
 \item
 Lines of data consist of a name followed by a sequence. The total
-length of the line must be smaller than 1024 characters.
+length of the line must be smaller than 4096 characters.
 
 \item
 Names must be a single word. Any non-whitespace characters are
@@ -674,15 +710,14 @@ accepted.  No spaces are tolerated in names: names MUST be a
 single word. Names must be less than 32 characters long.
 
 \item In the sequence, any of the characters \verb+-_.+ or a space are
-recognized as gaps. Gaps will be converted to a '.'. Any other
-characters are interpreted as sequence.  Sequence is
-case-sensitive. There is a common assumption by my software that
-upper-case symbols are used for consensus (match) positions and
-lower-case symbols are used for inserts. This language of ``match''
-versus ``insert'' comes from the hidden Markov model formalism
-\cite{Krogh94}. To almost all of my software, this isn't important,
-and it immediately converts the sequence to all upper-case after it's
-read.
+recognized as gaps. Any other characters are interpreted as sequence.
+Sequence is case-sensitive. There is a common assumption by my
+software that upper-case symbols are used for consensus (match)
+positions and lower-case symbols are used for inserts. This language
+of ``match'' versus ``insert'' comes from the hidden Markov model
+formalism \cite{Krogh94}. To almost all of my software, this isn't
+important, and it immediately converts the sequence to all upper-case
+after it's read.
 
 \item
 Multiple different sequences are grouped in a block of data lines.
@@ -695,9 +730,94 @@ users may wish to use shorthand names in subsequent blocks after an
 initial block with full names -- but this isn't recommended.)
 \end{enumerate}
 
-\subsubsection {Optional annotation}
+\subsubsection {Optional SELEX file annotation}
 
-\subsubsection {Secondary structure}
+\subsubsection {Header}
+
+Several pieces of information can be added to the header of the file
+using the following machine comments:
+
+\begin{wideitem}
+
+\item [\emprog{\#=ID  <s>}]
+Name of the alignment; \prog{<s>} is one word, no spaces (example: ``rrm'').
+If present, HMMER's \prog{hmmbuild} picks this up and uses it as the
+name of an HMM.
+
+\item [\emprog{\#=AC  <s>}]
+Accession number of the alignment; \prog{<s>} is one word, no spaces
+(example: ``PF99999''). If present, HMMER's \prog{hmmbuild} picks this
+up and uses it as the accession number of an HMM. (This is fairly
+specific to the support of the Pfam HMM database.)
+
+\item [\emprog{\#=DE  <s>}]
+Description line; \prog{<s>} is a one-line description of the
+alignment. If present, HMMER's \prog{hmmbuild} picks this up and
+uses it as the description line of an HMM.
+
+\item [\emprog{\#=AU  <s>}]
+Author line;  \prog{<s>} is a one-line description of who made the
+alignment. HMMER doesn't use this line for anything.
+
+\item [\emprog{\#=GA  <f1> <f2>}]
+Gathering cutoffs; \prog{<f1>} is the per-sequence GA1 cutoff,
+\prog{<f2>} is the per-domain GA2 cutoff. 
+Both numbers are floating point numbers (HMMER bit scores).
+This is very specific to Pfam support. The GA cutoffs specify
+the HMMER score cutoffs used in automatically generating the
+Pfam full alignments.
+
+\item [\emprog{\#=TC  <f1> <f2>}]
+Trusted cutoffs; \prog{<f1>} is the per-sequence TC1 cutoff,
+\prog{<f2>} is the per-domain TC2 cutoff. 
+Both numbers are floating point numbers (HMMER bit scores).
+This is very specific to Pfam support. The TC cutoffs specify
+the HMMER scores of the lowest-scoring sequence/domain included
+in a Pfam full alignment.
+
+\item [\emprog{\#=NC  <f1> <f2>}]
+Noise cutoffs; \prog{<f1>} is the per-sequence NC1 cutoff,
+\prog{<f2>} is the per-domain NC2 cutoff. 
+Both numbers are floating point numbers (HMMER bit scores).
+This is very specific to Pfam support. The NC cutoffs specify
+the HMMER scores of the highest scoring sequence/domain that 
+were not included in a Pfam full alignment.
+
+\end{wideitem}
+
+\subsubsection {Sequence header}
+
+Additional per-sequence information can be placed after the main
+header lines and before any blocks appear. These lines, one per
+sequence and in exactly the same order as the sequences appear in the
+alignment, are formatted like
+
+{\small \begin{verbatim}
+#=SQ <name> <wgt> <source> <accession> <start..stop::orig length> <desc>
+\end{verbatim}}
+
+This information includes a sequence weight (for compensating for
+biased representation of subfamilies of sequences in the alignment);
+source information, if the sequence came from a database, consisting
+of identifier, accession number, and source coordinates; and a
+description of the sequence.
+
+If a \verb+#=SQ+ line is present, all the fields must be present on
+each line and one \verb+#=SQ+ line must be present for each sequence.
+If no information is available for a field, use '-' for all the fields
+except the source coordinates, which would be given as '0'.
+
+\subsubsection {Secondary structure annotation}
+
+Lines beginning with \verb+#=SS+ or \verb+#=CS+ are individual or
+consensus secondary structure data, respectively.  \verb+#=SS+
+individual secondary structure lines must immediately follow the
+sequence they are associated with.  There can only be one \verb+#=SS+
+per sequence. All, some, or none of the sequences may have \verb+#=SS+
+annotation.
+
+\verb+#=CS+ consensus secondary structure predictions precede all the
+sequences in each block. There can only be one \verb+#=CS+ per file.
 
 I use one-letter codes to indicate secondary structures. Secondary
 structure strings are aligned to sequence blocks just like additional
@@ -717,16 +837,6 @@ case letters representing the 5' side of the helix and lower case
 letters representing the 3' side. Note that this restricts the
 annotation to a maximum of 26 pseudoknots per sequence.
 
-Lines beginning with \verb+#=SS+ or \verb+#=CS+ are individual or
-consensus secondary structure data, respectively.  \verb+#=SS+
-individual secondary structure lines must immediately follow the
-sequence they are associated with.  There can only be one \verb+#=SS+
-per sequence. All, some, or none of the sequences may have \verb+#=SS+
-annotation.
-
-\verb+#=CS+ consensus secondary structure predictions precede all the
-sequences in each block. There can only be one \verb+#=CS+ per file.
-
 \subsubsection {Reference coordinate system}
 
 Alignments are usually numbered by some reference coordinate system,
@@ -741,47 +851,26 @@ would have 76 non-gap symbols for the canonical numbered columns; they
 might be the aligned tRNA-Phe sequence itself, or they might be just
 X's.
 
-\subsubsection {Sequence header}
+The \verb+#=RF+ line also provides a good way to mark conserved key
+residues in a protein alignment. HMMER picks up both the \verb+#=RF+
+and \verb+#=CS+ lines when it builds an HMM, if they're there, and
+will display them in the context of any alignments to target
+sequences.
 
-Additional per-sequence information can be placed in a header before
-any blocks appear. These lines, one per sequence and in exactly the
-same order as the sequences appear in the alignment, are formatted
-like 
-
-{\small \begin{verbatim}
-#=SQ <name> <wgt> <source> <accession> <start..stop::orig length> <desc>
-\end{verbatim}}
-
-This information includes a sequence weight (for compensating for
-biased representation of subfamilies of sequences in the alignment);
-source information, if the sequence came from a database, consisting
-of identifier, accession number, and source coordinates; and a
-description of the sequence.
-
-If a \verb+#=SQ+ line is present, all the fields must be present on
-each line and one \verb+#=SQ+ line must be present for each sequence.
-If no information is available for a field, use '-' for all the fields
-except the source coordinates, which would be given as '0'.
-
-\subsubsection {Author}
-
-The first non-comment, non-blank line of the file may be a \verb+#=AU+
-``author'' line. There is a programmatic interface for
-alignment-generating programs to record a short comment like \\
-\verb+11 November 1993, by Feng-Doolittle v. 2.1.1+, \\
-and this comment will be
-recorded on the \verb+#=AU+ line by \verb+WriteSELEX()+.
-
-
-\subsubsection{An example SELEX file with annotation}
+\subsection{An example SELEX file with annotation}
 
 Here's an example SELEX file with examples of all the optional fields.
 The sequences are evolved RNA ligands for the phage R17 coat protein
 \cite{Schneider92}.
 
 \begin{verbatim}
-
-#=AU COVE 2.2.3
+#=ID r17
+#=AC RNA00001
+#=DE RNA ligands evolved to bind phage R17 coat protein 
+#=GA 0.0 0.0
+#=TC 0.0 0.0
+#=NC 0.0 0.0
+#=AU COVE 2.2.3 Wed Dec  2 08:39:58 1998
 
 #=SQ lig28 1.0 - - 1..29:29 R17 coat protein ligand 28
 #=SQ lig1  1.0 - - 1..17:17 R17 coat protein ligand 1
@@ -796,4 +885,93 @@ lig1        GUUCACC AUCA GGGGAC
 lig2  AUGGAUGCGCACC AUCA GGGCGUAUCUAU
 #=SS  >>>>>>>>>>+>> ++++ <<<<<<<<<<<<
 \end{verbatim}
+
+
+\section{Count vector files}
+
+\prog{hmmbuild} saves a ``count vector file'' when the \prog{--cfile}
+option is invoked. The count vector file contains observed weighted
+counts for match emissions, insert emissions, and state transitions.
+The intended use of the count vector file is for training mixture
+Dirichlet priors (something we do locally), but since it may be useful
+for other purposes, the format is documented here.
+
+Each line of the file is an annotated count vector. The format of this
+line is:
+
+\begin{wideitem}
+\item[\textbf{Vector type}] The first field is a single letter M,
+I, or T, specifying whether the line is for a match emission, insert
+emission, or transition vector.
+
+\item[\textbf{Counts}] The next several fields are the counts
+themselves. 
+
+For match and insert emission vectors, there are either 4 or 20 real
+numbers, depending on whether the alignment was DNA/RNA or protein,
+respectively; and the counts are in alphabetical order by residue
+(``ACGT'' for DNA/RNA, ``AC..WY'' for protein).
+
+For state transition vectors, there are 7 real numbers, in order MM,
+MI, MD, IM, II, DM, DD.
+
+The counts are real numbers, not integers, because they're
+weighted. Both relative weights (default: tree weights) and absolute
+weights (effective sequence number) affect the observed counts. (They
+are exactly the numbers used by HMMER before addition of Dirichlet
+prior pseudocounts and renormalization.) Options affecting either
+relative or absolute weighting will therefore affect the count
+vectors. To see unweighted raw count vectors, add \prog{--wnone
+--idlevel 1.0} to the \prog{hmmbuild} command line.
+
+\item[\textbf{Alignment name}] If the alignment was in Stockholm
+format (for example, a Pfam distribution), the name of the alignment
+is recorded in this field. (A count vector file may contain vectors
+from a large number of alignments.) If this information is
+unavailable, ``-'' appears instead.
+
+\item[\textbf{Alignment column}] An integer indicating which alignment
+column this count vector corresponds to. In combination with the
+alignment name, this allows you to retrieve other annotation from the
+vicinity of this count vector in the original alignment file if you
+need to.
+
+\item[\textbf{HMM node}] An integer indicating which HMM node this
+vector corresponds to. This number is always $\leq$ the alignment
+column index, because some alignment columns are skipped in
+constructing an HMM. 
+
+Note that count vectors are only recorded for the alignment columns
+that became HMM match states. If you want to collect a count vector
+from \emph{every} alignment column, you need to make \prog{hmmbuild}
+assign every column to a match state. You can do this by invoking the
+\prog{--fast --gapmax 1.0} options to \prog{hmmbuild}.
+
+\item[\textbf{Structure annotation}] The next 2
+fields are single characters representing structural annotation
+for this column in the alignment, if available. If not,
+``-'' characters appear.
+
+The first field is Stockholm format's \verb+#=GC SS_cons+ secondary
+structure consensus annotation for the column. This is a single letter
+DSSP code.
+
+The second field is Stockholm format's \verb+#=GC SA_cons+ surface
+accessibility annotation for the column. This is a single character
+0-9 (representing $<$10\% to $<$100\% accessibility), or X for
+unknown, or - or . for columns that are gaps in all the known
+structures in the alignment.
+
+\item[\textbf{More structure annotation}] Transition vectors
+(only) have another two fields of structure annotation for the 
+\emph{next} (k+1'th) HMM node. Transition vectors are thought of as
+being between the k'th and the k+1'th HMM node, so most applications
+would probably want to see the annotation for both.  Note that this
+does not necessarily correspond to the annotation on the next
+alignment column, because that column is not necessarily assigned to
+an HMM node.
+
+\end{wideitem}
+
+
 
