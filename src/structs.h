@@ -406,8 +406,9 @@ struct hit_s {
   double pvalue;		/* P-value of the hit               */
   float  mothersc;		/* score of whole sequence          */
   double motherp;		/* P-value of whole sequence        */
-  char   *name;			/* name of the database seq         */
-  char   *desc;			/* description of database seq      */
+  char   *name;			/* name of the target               */
+  char   *acc;			/* accession of the target          */
+  char   *desc;			/* description of the target        */
   int    sqfrom;		/* start position in seq (1..N)     */
   int    sqto;			/* end position in seq (1..N)       */
   int    sqlen;			/* length of sequence (N)           */
