@@ -32,11 +32,17 @@ Usage: testdriver [-options]\n\
 ";
 
 static char experts[] = "\
+  --hmm <f>       : use HMM in file <f>\n\
+  --seq <f>       : use seq(s) in file <f>\n\
+  --small         : run P7SmallViterbi()\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
   { "-h",       TRUE,  sqdARG_NONE },
   { "-v",       TRUE,  sqdARG_NONE },
+  { "--hmm",    FALSE, sqdARG_STRING },
+  { "--seq",    FALSE, sqdARG_STRING },
+  { "--small",  FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -52,12 +58,12 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
-  struct dpmatrix_s *mx;	/* DP matrix after alignment               */
   struct p7trace_s  *tr;	/* traceback                               */
   int       nseq;
   float     sc;
 
   int be_verbose;
+  int do_small;			/* TRUE to invoke P7SmallViterbi */
 
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
@@ -74,10 +80,16 @@ main(int argc, char **argv)
    ***********************************************/
 
   be_verbose = FALSE;
+  hmmfile    = "trace_test.hmm";
+  seqfile    = "trace_test.seq";
+  do_small   = FALSE;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-v")       == 0) be_verbose = TRUE;
+    else if (strcmp(optname, "--hmm")    == 0) hmmfile    = optarg;
+    else if (strcmp(optname, "--seq")    == 0) seqfile    = optarg;
+    else if (strcmp(optname, "--small")  == 0) do_small   = TRUE;
     else if (strcmp(optname, "-h")       == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -87,9 +99,6 @@ main(int argc, char **argv)
   }
   if (argc - optind != 0)
     Die("Incorrect number of arguments.\n%s\n", usage);
-
-  hmmfile = "trace_test.hmm";
-  seqfile = "trace_test.seq";
 
   /*********************************************** 
    * Open test sequence file
@@ -117,7 +126,7 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  Plan7Logoddsify(hmm);
+  P7Logoddsify(hmm, TRUE);
 
   /*********************************************** 
    * Search HMM against each sequence
@@ -129,8 +138,8 @@ main(int argc, char **argv)
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
 
-      sc  = Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
-      P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
+      if (do_small) sc = P7SmallViterbi(dsq, sqinfo.len, hmm, &tr);
+      else          sc = P7Viterbi(dsq, sqinfo.len, hmm, &tr);
 
       if (be_verbose)
 	{
@@ -144,14 +153,13 @@ main(int argc, char **argv)
 	Die("Trace verify failed on seq #%d, %s\n", nseq, sqinfo.name);
 
       FreeSequence(seq, &sqinfo); 
-      FreePlan7Matrix(mx);
       P7FreeTrace(tr);
       free(dsq);
     }
 
 #ifdef MEMDEBUG
   current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("evd_test failed memory test");
+  if (current_size != orig_size) Die("trace_test failed memory test");
   else fprintf(stderr, "[No memory leaks.]\n");
 #endif
   
