@@ -265,9 +265,7 @@ extern void GetRankedHit(struct tophit_s *h, int rank,
 			 int *r_hmmfrom, int *r_hmmto, int *r_hmmlen,
 			 int *r_domidx, int *r_ndom,
 			 struct fancyali_s **r_ali);
-extern int    TophitsMaxName(struct tophit_s *h, int top_howmany);
-extern void   PrintTopHits(FILE *fp, struct tophit_s *h, int n, int evd, 
-			   float mu, float lambda, int dbseqs);
+extern int    TophitsMaxName(struct tophit_s *h);
 extern void   FastSortTophits(struct tophit_s *h);
 extern void   FullSortTophits(struct tophit_s *h);
 
@@ -294,12 +292,6 @@ extern void TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr,
 extern int  TraceDomainNumber(struct p7trace_s *tr);
 extern void TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2, 
 			      int *ret_k1,  int *ret_k2);
-
-
-/* OBSOLETE FUNCS: */
-extern void P7PrintFancyTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm,
-			      char *dsq, char *name);
-
 
 
 #endif /*FUNCSH_INCLUDED*/
