@@ -186,7 +186,11 @@ main(int argc, char **argv)
 	if (pvalue < globE && score >= globT) 
 	  { 
 	    RegisterHit(ghit, -1.*pvalue, pvalue, score,
-			hmm->name, hmm->desc, 0,0,0,0,0,0,NULL);
+			hmm->name, hmm->desc, 
+			0,0,0,
+			0,0,0,
+			0,0,
+			NULL);
 	  }
 
 	/* 1c. Store scores/evalue/position/alignment for each HMM
@@ -213,7 +217,10 @@ main(int argc, char **argv)
 	{
 	  GetRankedHit(ghit, i, 
 		       &pvalue, &score, &name, &desc,
-		       NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+		       NULL, NULL, NULL, 
+		       NULL, NULL, NULL, 
+		       NULL, NULL,
+		       NULL);
 	  evalue = pvalue * (double) nhmm;
 	  if (evalue <= globE && score >= globT) 
 	    printf("  %-12s %-40s %7.1f %10.2g\n", 
@@ -234,7 +241,10 @@ main(int argc, char **argv)
 	{
 	  GetRankedHit(dhit, i, 
 		       &pvalue, &score, &name, NULL,
-		       &sqfrom, &sqto, NULL, &hmmfrom, &hmmto, &hmmlen, NULL);
+		       &sqfrom, &sqto, NULL, 
+		       &hmmfrom, &hmmto, &hmmlen, 
+		       NULL, NULL,
+		       NULL);
 	  evalue = pvalue * (double) nhmm;
 	  if (evalue <= domE && score >= domT) 
 	  printf("  %-12s %6d %6d [%5d] %6d %6d [%5d] %7.1f %10.2g\n",
@@ -294,24 +304,8 @@ display_by_domain(struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
        */
       sc = P7TraceScore(hmm, dsq, tarr[idx]);
       /*P7PrintTrace(stdout, tarr[idx], hmm, dsq); */
+      TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
 
-      /* The following code gets the bounds of a hit in 
-       * the model and sequence. It makes assumptions about
-       * the structure of the decomposed traces: specifically,
-       * exactly one hit per trace;
-       * S-N-B-M(k1)...M(k2)-E-C-T.
-       * so the fourth and tlen-3'th position in the trace
-       * are the bounding match states.
-       */
-      if (tarr[idx]->statetype[3] != STM) 
-	Die("sanity check failed: 4th position in trace is not a match");
-      if (tarr[idx]->statetype[tarr[idx]->tlen-4] != STM)
-	Die("sanity check failed: n-3'th position in trace not a match");
-      k1 = tarr[idx]->nodeidx[3];
-      i1 = tarr[idx]->pos[3];
-      k2 = tarr[idx]->nodeidx[tarr[idx]->tlen - 4];
-      i2 = tarr[idx]->pos[tarr[idx]->tlen - 4];
-      
       /* Here's where we'd evaluate the P-value of the score,
        * but NOT FINISHED
        */
@@ -359,27 +353,11 @@ record_by_domain(struct tophit_s *h,
 
   for (idx = 0; idx < ntr; idx++)
     {
-      /* Get the score of the match.
+      /* Get the score and bounds of the match.
        */
       score  = P7TraceScore(hmm, dsq, tarr[idx]);
       pvalue = PValue(hmm, score); 
-
-      /* The following code gets the bounds of a hit in 
-       * the model and sequence. It makes assumptions about
-       * the structure of the decomposed traces: specifically,
-       * exactly one hit per trace;
-       * S-N-B-M(k1)...M(k2)-E-C-T.
-       * so the fourth and tlen-3'th position in the trace
-       * are the bounding match states.
-       */
-      if (tarr[idx]->statetype[3] != STM) 
-	Die("sanity check failed: 4th position in trace is not a match");
-      if (tarr[idx]->statetype[tarr[idx]->tlen-4] != STM)
-	Die("sanity check failed: n-3'th position in trace not a match");
-      k1 = tarr[idx]->nodeidx[3];
-      i1 = tarr[idx]->pos[3];
-      k2 = tarr[idx]->nodeidx[tarr[idx]->tlen - 4];
-      i2 = tarr[idx]->pos[tarr[idx]->tlen - 4];
+      TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
       
       /* Record the match
        */
@@ -387,7 +365,11 @@ record_by_domain(struct tophit_s *h,
 	{
 	  ali = CreateFancyAli(tarr[idx], hmm, dsq, sqinfo->name);
 	  RegisterHit(h, -1.*(double)i2, pvalue, score,
-		      hmm->name, hmm->desc, i1,i2, sqinfo->len, k1,k2, hmm->M, ali);
+		      hmm->name, hmm->desc, 
+		      i1,i2, sqinfo->len, 
+		      k1,k2, hmm->M, 
+		      0,0,
+		      ali);
 	}
     }
 
