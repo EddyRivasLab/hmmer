@@ -127,9 +127,9 @@ struct plan7_s {
   char  *desc;                  /* brief description of model           +*/ 
   char  *rf;                    /* reference line from alignment 0..M   +*/
   char  *cs;                    /* consensus structure line      0..M   +*/ 
-  char  *comline;		/* command line that built model         */
-  int    nseq;			/* number of training sequences          */
-  char  *ctime;			/* creation date                         */
+  char  *comline;		/* command line that built model        +*/
+  int    nseq;			/* number of training sequences         +*/
+  char  *ctime;			/* creation date                        +*/
 
   /* The main model in probability form: data-dependent probabilities.
    * This is the core Krogh/Haussler model.
@@ -193,9 +193,10 @@ struct plan7_s {
    */
   float  mu;			/* EVD mu       +*/
   float  lambda;		/* EVD lambda   +*/
+  float  wonka;			/* EVD fit display fudge factor +*/
 
   enum p7_config config;	/* search configuration                  */
-  int flags;                    /* bit flags indicating state of HMM     */
+  int flags;                    /* bit flags indicating state of HMM    +*/
 };
 
 /* Flags for plan7->flags.
@@ -340,7 +341,7 @@ struct histogram_s {
 
   float *expect;		/* expected counts of hits            */
   int    fit_type;		/* flag indicating distribution type  */
-  float  param[2];		/* parameters used for fits           */
+  float  param[3];		/* parameters used for fits           */
   float  chisq;			/* chi-squared val for goodness of fit*/
   float  chip;			/* P value for chisquared             */
 };
@@ -349,6 +350,7 @@ struct histogram_s {
 #define HISTFIT_GAUSSIAN 2	/* fit type = Gaussian           */
 #define EVD_MU		 0	/* EVD fit parameter mu          */
 #define EVD_LAMBDA       1	/* EVD fit parameter lambda      */
+#define EVD_WONKA        2      /* EVD fit fudge factor          */
 #define GAUSS_MEAN       0	/* Gaussian parameter mean       */
 #define GAUSS_SD         1	/* Gaussian parameter std. dev.  */
 
