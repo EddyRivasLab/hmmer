@@ -187,10 +187,6 @@ doc:
 #       Adds a license statement to each file that has a @ LICENSE @ line.
 #       Virtually identical to squid's make dist -- keep them in sync!
 dist:	
-	# Make sure the configure script and Makefile are up to date
-	autoconf
-	./configure
-	#
 	# Delete old versions of the same release
 	#
 	@if test -d ${BASENAME}-$(RELEASE);        then rm -rf ${BASENAME}-$(RELEASE);        fi

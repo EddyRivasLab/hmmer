@@ -9,13 +9,14 @@
 # Creates binary dist in <node>:<remote dir>/<pkg>.bin.<platform>.tar.gz
 #
 # configure options and make options are separated by ',' not whitespace.
+# double quotes in make options can be forced by a + sign.
 #
 # Example: 
 # building a package "hmmer-2.2g" for platform "intel-linux" on host "wrasse"
 # in remote directory "/tmp":
 #    scp nodebuild wrasse:/tmp/
 #    scp hmmer-2.2g.tar.gz wrasse:/tmp/
-#    ssh wrasse /tmp/nodebuild /tmp hmmer-2.2g intel-linux --with-pvm CC=gcc;CFLAGS=-O2
+#    ssh wrasse /tmp/nodebuild /tmp hmmer-2.2g intel-linux --with-pvm CC=gcc;CFLAGS=+-O2 -Wall+
 #    ssh wrasse rm /tmp/nodebuild
 #    scp wrasse:/tmp/hmmer-2.2g.bin.intel-linux.tar.gz .
 #    ssh wrasse rm /tmp/hmmer-2.2g.bin.intel-linux.tar.gz
@@ -43,6 +44,7 @@ if ($makeopts   eq "none") { $makeopts =   ""; }
 
 $configopts =~ s/,/ /g;
 $makeopts   =~ s/,/ /g;
+$makeopts   =~ s/+/\\"/g;
 
 print "chdir...       \t";
 chdir $arena ||  die "chdir failed";
