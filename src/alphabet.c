@@ -38,9 +38,11 @@ DetermineAlphabet(char **rseqs, int  nseq)
 {
   int idx;
   int other, nucleic, amino;
+  int type;
   
   /* Autodetection of alphabet type.
    */
+  type = hmmNOTSETYET;
   other = nucleic = amino = 0;
   for (idx = 0; idx < nseq; idx++) {
     switch (Seqtype(rseqs[idx])) {
@@ -52,21 +54,21 @@ DetermineAlphabet(char **rseqs, int  nseq)
     }
   }
 
-  if      (nucleic == nseq) Alphabet_type = hmmNUCLEIC;
-  else if (amino   == nseq) Alphabet_type = hmmAMINO;
+  if      (nucleic == nseq) type = hmmNUCLEIC;
+  else if (amino   == nseq) type = hmmAMINO;
   else if (nucleic > amino && nucleic > other) {
     Warn("Looks like nucleic acid sequence, hope that's right");
-    Alphabet_type = hmmNUCLEIC;
+    type = hmmNUCLEIC;
   }
   else if (amino > nucleic && amino > other) {
     Warn("Looks like amino acid sequence, hope that's right");
-    Alphabet_type = hmmAMINO;
+    type = hmmAMINO;
   }
   else Die("Sorry, I can't tell if that's protein or DNA"); 
 
   /* Now set up the alphabet.
    */
-  SetAlphabet(Alphabet_type);
+  SetAlphabet(type);
 }
 
 
@@ -79,6 +81,19 @@ void
 SetAlphabet(int type)
 {
   int x;
+
+ /* Because the alphabet information is global, this
+  * is not a thread-safe function. Therefore, don't ever
+  * allow resetting the alphabet. If type is Alphabet_type,
+  * silently return; else die with an alphabet mismatch
+  * warning.
+  */
+  if (Alphabet_type != hmmNOTSETYET) 
+    {
+      if (type != Alphabet_type) 
+	Die("An alphabet type conflict occurred.\nYou probably mixed a DNA seq file with a protein model, or vice versa.");
+      return;
+    }
 
   switch(type) { /* Alphabet is not a string - careful! */
   case hmmAMINO: 
