@@ -96,6 +96,7 @@ struct plan7_s {
    *  acc is only valid if PLAN7_ACC is set in flags.
    *   rf is only valid if PLAN7_RF is set in flags.
    *   cs is only valid if PLAN7_CS is set in flags.
+   *   ca is only valid if PLAN7_CA is set in flags.
    *  map is only valid if PLAN7_MAP is set in flags.
    */
   char  *name;                  /* name of the model                    +*/
@@ -103,11 +104,25 @@ struct plan7_s {
   char  *desc;                  /* brief description of model           +*/ 
   char  *rf;                    /* reference line from alignment 0..M   +*/
   char  *cs;                    /* consensus structure line      0..M   +*/ 
+  char  *ca;			/* consensus accessibility line  0..M    */
   char  *comlog;		/* command line(s) that built model     +*/
   int    nseq;			/* number of training sequences         +*/
   char  *ctime;			/* creation date                        +*/
   int   *map;			/* map of alignment cols onto model 1..M+*/
   int    checksum;              /* checksum of training sequences       +*/
+
+  /* The following are annotations added to support work by Michael Asman, 
+   * CGR Stockholm. They are not stored in model files; they are only
+   * used in model construction.
+   * 
+   * #=GC X-PRM (PRT,PRI) annotation is picked up by hmmbuild and interpreted
+   * as specifying which mixture Dirichlet component to use. If these flags
+   * are non-NULL, the normal mixture Dirichlet code is bypassed, and a
+   * single specific Dirichlet is used at each position.
+   */
+  int   *tpri;                  /* which transition mixture prior to use */ 
+  int   *mpri;                  /* which match mixture prior to use */
+  int   *ipri;                  /* which insert mixture prior to use */
 
   /* Pfam-specific score cutoffs.
    * 
@@ -211,6 +226,7 @@ struct plan7_s {
 #define PLAN7_GA      (1<<10)	/* raised if gathering thresholds available */
 #define PLAN7_TC      (1<<11)	/* raised if trusted cutoffs available      */
 #define PLAN7_NC      (1<<12)	/* raised if noise cutoffs available        */
+#define PLAN7_CA      (1<<13)   /* raised if surface accessibility avail.   */
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB
@@ -274,11 +290,12 @@ struct dpshadow_s {
  * Purpose:   An open HMM file or HMM library. See hmmio.c.
  */
 struct hmmfile_s {
-  FILE    *f;			/* pointer to file opened for reading       */
-  GSIFILE *gsi;			/* pointer to open GSI index, or NULL       */
-  int (*parser)(struct hmmfile_s *, struct plan7_s **);  /* parsing function*/
-  int   is_binary;		/* TRUE if format is a binary one           */
-  int   byteswap;               /* TRUE if binary and byteswapped           */
+  FILE    *f;			/* pointer to file opened for reading           */
+  GSIFILE *gsi;			/* pointer to open primary GSI index, or NULL   */
+  GSIFILE *sgsi;		/* pointer to open secondary GSI index, or NULL */
+  int (*parser)(struct hmmfile_s *, struct plan7_s **);  /* parsing function    */
+  int   is_binary;		/* TRUE if format is a binary one               */
+  int   byteswap;               /* TRUE if binary and byteswapped               */
 };
 typedef struct hmmfile_s HMMFILE; 
 
@@ -305,10 +322,10 @@ typedef struct hmmfile_s HMMFILE;
  * Element 0 is always to STATE_S. Element tlen-1 is always to STATE_T. 
  */
 struct p7trace_s {
-  int   tlen;                   /* length of traceback                      */
-  char *statetype;              /* state type used for alignment            */
-  int  *nodeidx;                /* index of aligned node, 1..M (if M,D,I)   */
-  int  *pos;                    /* position in dsq, 1..L or -1              */ 
+  int   tlen;                   /* length of traceback                          */
+  char *statetype;              /* state type used for alignment                */
+  int  *nodeidx;                /* index of aligned node, 1..M (if M,D,I), or 0 */
+  int  *pos;                    /* position in dsq, 1..L, or 0 if none          */ 
 };
 
 /* Structure: p7prior_s
