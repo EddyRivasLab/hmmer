@@ -14,10 +14,12 @@ LENG  72
 ALPH  Amino
 RF    no
 CS    no
-COM   ../src/hmmbuild rrm.hmm rrm.slx
-COM   hmmcalibrate rrm.hmm
+MAP   yes
+COM   ../src/hmmbuild -F rrm.hmm rrm.slx
+COM   ../src/hmmcalibrate rrm.hmm
 NSEQ  70
-DATE  Mon Jan 19 08:11:49 1998
+DATE  Wed Jul  8 08:13:25 1998
+CKSUM 2768
 XT      -8455     -4  -1000  -1000  -8455     -4  -8455     -4 
 NULT      -4  -8455
 NULE     595  -1558     85    338   -294    453  -1158    (...)
@@ -25,22 +27,21 @@ EVD   -49.999123   0.271164
 HMM        A      C      D      E      F      G      H      I (...)
          m->m   m->i   m->d   i->m   i->i   d->m   d->d   b->m   m->e
           -21      *  -6129
-     1  -1234   -371  -8214  -7849  -5304  -8003  -7706   2384  (...)
+     1  -1234   -371  -8214  -7849  -5304  -8003  -7706   2384  (...) 1
      -   -149   -500    233     43   -381    399    106   -626  (...)
      -    -11 -11284 -12326   -894  -1115   -701  -1378    -21      * 
-     2  -3634  -3460  -5973  -5340   3521  -2129  -4036   -831  (...)
+     2  -3634  -3460  -5973  -5340   3521  -2129  -4036   -831  (...) 2
      -   -149   -500    233     43   -381    399    106   -626  (...)
      -    -11 -11284 -12326   -894  -1115   -701  -1378      *      * 
 (...)
-    71  -1165  -4790   -240   -275  -5105  -4306   1035  -2009  (...) 
+    71  -1165  -4790   -240   -275  -5105  -4306   1035  -2009  (...) 90
      -   -149   -500    233     43   -381    398    106   -626  (...)
      -    -43  -6001 -12336   -150  -3342   -701  -1378      *      * 
-    72  -1929   1218  -1535  -1647  -3990  -4677  -3410   1725  (...)
+    72  -1929   1218  -1535  -1647  -3990  -4677  -3410   1725  (...) 92
      -      *      *      *      *      *      *      *      *  (...) 
      -      *      *      *      *      *      *      *      *      0 
 //
 \end{verbatim}}
-
 
 HMMER2 profile HMM save files have a very different format compared to
 the previous HMMER1 ASCII formats. The HMMER2 format provides all the
@@ -51,8 +52,8 @@ evaluate the match on the basis of a previously fitted extreme value
 distribution.
 
 The format consists of one or more HMMs. Each HMM starts with the
-identifier HMMER2 on a line by itself and ends with // on a line by
-itself. The identifier allows backward compatibility as the HMMer
+identifier ``HMMER2.0'' on a line by itself and ends with // on a line
+by itself. The identifier allows backward compatibility as the HMMer
 software evolves. The closing // allows multiple HMMs to be
 concatenated into a single file to provide a database of HMMs.
 
@@ -90,17 +91,17 @@ allowed to be 0.
 
 This log-odds format has been chosen because it has a better dynamic
 range than storing probabilities as ASCII text, and because the
-numbers are interpretable to a certain extent: positive values means a
-better than expected probability, and negative values a worse than
-expected probability.  However, because of the conversion from
-probabilities, it should be noted that {\em you should not edit the
-numbers in a HMMER save file directly}. The HMM is a probabilistic
-model and expects state transition and symbol emission probability
-distributions to sum to one. If you want to edit the HMM, you must
-understand the underlying Plan7 probabilistic model, and ensure the
-correct summations yourself.
+numbers are more meaningful to a human reader to a certain extent:
+positive values means a better than expected probability, and negative
+values a worse than expected probability.  However, because of the
+conversion from probabilities, it should be noted that {\em you should
+not edit the numbers in a HMMER save file directly}. The HMM is a
+probabilistic model and expects state transition and symbol emission
+probability distributions to sum to one. If you want to edit the HMM,
+you must understand the underlying Plan7 probabilistic model, and
+ensure the correct summations yourself.
 
-A more detailed description of the format now follows.
+A more detailed description of the format follows.
 
 \subsection{Header section}
 
@@ -146,7 +147,6 @@ to ``ACDEFGHIKLMNPQRSTVWY'' (alphabetic order). If \prog{Nucleic}, the
 alphabet size is set to 4 and the symbol alphabet to ``ACGT''.  Case
 insensitive. \textbf{Mandatory.}
 
-
 \item [\emprog{RF    <s>}] Reference annotation flag; \prog{<s>} must
 be either \prog{no} or \prog{yes} (case insensitive). If set to
 \prog{yes}, a character of reference annotation is read for each match
@@ -170,11 +170,29 @@ annotation can only be picked up from SELEX format alignments.  See
 description of SELEX format for more details on consensus structure
 annotation lines. \textbf{Optional}; assumed to be no if not present.
 
+\item [\emprog{MAP   <s>}] Map annotation flag;
+\prog{<s>} must be either \prog{no} or \prog{yes} (case insensitive).
+If set to \prog{yes}, each line of data for the match state/consensus
+column in the main section of the file is followed by an extra number.
+This number gives the index of the alignment column that the match
+state was made from. This information provides a ``map'' of the match
+states ($1..M$) onto the columns of the alignment ($1..alen$).  It is
+used for quickly aligning the model back to the original alignment,
+e.g.\ when using \prog{hmmalign --mapali}. Added in v2.0.1.
+\textbf{Optional}; assumed to be no if not present.
+
 \item [\emprog{COM   <s>}] Command line log; \prog{<s>} is a one-line
 command. There may be more than one \prog{COM} line per save
 file. These lines record the command line for every HMMER command that
 modifies the save file. This helps us automatically log Pfam
 construction strategies, for example. \textbf{Optional.}
+
+\item [\emprog{CKSUM  <d>}] Training alignment checksum; \prog{<d>} is a nonzero
+positive integer. This number is calculated from the training
+alignment and stored when \prog{hmmbuild} is used. It is used in
+conjunction with the alignment map information to to verify that some
+alignment is indeed the alignment that the map is for.  Added in
+v2.0.1. \textbf{Optional.}
 
 \item [\emprog{NSEQ  <d>}] Sequence number; \prog{<d>} is a nonzero
 positive integer, the number of sequences that the HMM was trained on.
@@ -235,7 +253,8 @@ Both lines are \textbf{mandatory.}
 
 \subsection{Main model section}
 
-All the remaining fields are \textbf{mandatory}.
+All the remaining fields are \textbf{mandatory}, except for the
+alignment map.
 
 The first line in the main model section is atypical; it contains
 three fields, for transitions from the B state into the first node of
@@ -260,10 +279,16 @@ line). These three lines are:
 
 \item [\textbf{Match emission line}] The first field is the node number (1..M).
 The HMMER parser verifies this number as a consistency check (it
-expects the nodes to come in order). The remaining fields are $K$
-numbers for match emission scores, one per symbol. The null
-probability used to convert them to probabilities is the relevant null
-model emission probability calculated from the \prog{NULE} line.
+expects the nodes to come in order). The next $K$ numbers for match
+emission scores, one per symbol. The null probability used to convert
+them to probabilities is the relevant null model emission probability
+calculated from the \prog{NULE} line.
+
+If \prog{MAP} was \prog{yes}, then there is one more number on this
+line, representing the alignment column index for this match state.
+See \prog{MAP} above for more information about the alignment map, and
+also see the man pages for \prog{hmmalign --mapali}.  Added in
+v2.0.1. This field is optional, for backwards compatibility with 2.0.
 
 \item [\textbf{Insert emission line}] The first field is a character of
 reference annotation (RF), or ``-'' if there is no reference
