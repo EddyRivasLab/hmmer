@@ -994,6 +994,83 @@ TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2,
 }
 
 
+/* Function: MasterTraceFromMap()
+ * Date:     SRE, Tue Jul  7 18:51:11 1998 [St. Louis]
+ *
+ * Purpose:  Convert an alignment map (e.g. hmm->map) to
+ *           a master trace. Used for mapping an alignment
+ *           onto an HMM. Generally precedes a call to
+ *           ImposeMasterTrace(). Compare P7ViterbiAlignAlignment(),
+ *           which aligns an alignment to the model using a
+ *           Viterbi algorithm to get a master trace. 
+ *           MasterTraceFromMap() only works if the alignment
+ *           is exactly the one used to train the model.
+ *
+ * Args:     map  - the map (usually hmm->map is passed) 1..M
+ *           M    - length of map (model; usually hmm->M passed)
+ *           alen - length of alignment that map refers to
+ *
+ * Returns:  ptr to master trace
+ *           Caller must free: P7FreeTrace().
+ */
+struct p7trace_s *
+MasterTraceFromMap(int *map, int M, int alen)
+{
+  struct p7trace_s *tr;         /* RETURN: master trace */ 
+  int tpos;			/* position in trace */
+  int apos;			/* position in alignment, 1..alen */
+  int k;			/* position in model */
+
+  /* Allocate for the trace.
+   * S-N-B- ... - E-C-T  : 6 states + alen is maximum trace,
+   * because each of alen columns is an N*, M*, I*, or C* metastate.
+   * No D* metastates possible.
+   */
+  P7AllocTrace(alen+6, &tr);
+
+  /* Initialize the trace
+   */
+  tpos = 0;
+  TraceSet(tr, tpos, STS, 0, 0); tpos++;
+  TraceSet(tr, tpos, STN, 0, 0); tpos++;
+
+  /* Leading N's
+   */
+  for (apos = 1; apos < map[1]; apos++) {
+    TraceSet(tr, tpos, STN, 0, apos); tpos++;
+  } /* now apos == map[1] */
+  TraceSet(tr, tpos, STB, 0, 0); tpos++;
+
+  for (k = 1; k < M; k++)
+    {
+      TraceSet(tr, tpos, STM, k, apos); tpos++;
+      apos++;
+
+      for (; apos < map[k+1]; apos++) {
+	TraceSet(tr, tpos, STI, k, apos); tpos++;
+      }
+    } /* now apos == map[M] and k == M*/
+      
+  TraceSet(tr, tpos, STM, M, apos); tpos++;
+  apos++;
+
+  /* Trailing C's
+   */
+  TraceSet(tr, tpos, STE, 0, 0); tpos++;
+  TraceSet(tr, tpos, STC, 0, 0); tpos++;
+  for (; apos <= alen; apos++) {
+    TraceSet(tr, tpos, STC, 0, apos); tpos++;
+  }
+
+  /* Terminate and return
+   */
+  TraceSet(tr, tpos, STT, 0, 0); tpos++;
+  tr->tlen = tpos;
+  return tr;
+}
+
+
+
 /* Function: ImposeMasterTrace()
  * Date:     SRE, Sun Jul  5 14:27:16 1998 [St. Louis]
  *
