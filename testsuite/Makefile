@@ -2,7 +2,7 @@
 # RCS $Id$
 ##########
 # HMMER - Biological sequence analysis with HMMs
-# Copyright (C) 1992-1998 Sean R. Eddy
+# Copyright (C) 1992-1998 Washington University School of Medicine
 #
 #   This source code is distributed under the terms of the 
 #   GNU General Public License. See the files COPYING and 
@@ -29,11 +29,10 @@ RANLIB = ranlib
 SHELL  = /bin/sh
 LIBS   = -lhmmer -lm
 
-SHIVA = evd_test masks_test tophits_test trace_test
+SHIVA = evd_test        masks_test       parsingviterbi_test   tophits_test\
+	trace_test	viterbi_exercise weeviterbi_test
 
-SHIVASRC  = evd_test.c masks_test.c tophits_test.c trace_test.c
-
-SHIVADATA = trace_test.hmm trace_test.seq trace_test.slx 
+OBJ  = ../src/libhmmer.a
 
 .c.o:
 	$(CC) $(CFLAGS) -I../src/ -c $<		
@@ -50,21 +49,33 @@ evd_test: $(OBJ) evd_test.o
 masks_test: $(OBJ) masks_test.o
 	$(CC) $(CFLAGS) -o $@ -L../src/ masks_test.o $(LIBS)
 
+parsingviterbi_test: $(OBJ) parsingviterbi_test.o
+	$(CC) $(CFLAGS) -o $@ -L../src/ parsingviterbi_test.o $(LIBS)
+
 tophits_test: $(OBJ) tophits_test.o
 	$(CC) $(CFLAGS) -o $@ -L../src/ tophits_test.o $(LIBS)
 
 trace_test: $(OBJ) trace_test.o
 	$(CC) $(CFLAGS) -o $@ -L../src/ trace_test.o $(LIBS)
 
+viterbi_exercise: $(OBJ) viterbi_exercise.o
+	$(CC) $(CFLAGS) -o $@ -L../src/ viterbi_exercise.o $(LIBS)
+
+weeviterbi_test: $(OBJ) weeviterbi_test.o
+	$(CC) $(CFLAGS) -o $@ -L../src/ weeviterbi_test.o $(LIBS)
+
 #######
 ## `make shiva` runs the tests.
 #######
 
 shiva:   $(SHIVA)
+	@echo Compiled Shiva exercises:
 	@for shivatest in $(SHIVA); do\
 	   $$shivatest;\
 	   echo $$shivatest: ok;\
 	done
+	@echo Scripted Shiva tests:
+	./Optiontests.pl
 
 #######
 ## Miscellaneous
