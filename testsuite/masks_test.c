@@ -3,7 +3,7 @@
  * 
  * Test driver for sequence masking routines in masks.c
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -90,7 +90,7 @@ main(int argc, char **argv)
   /* XNU test
    */
   seq = test1;
-  len = strlen(seq);
+  len = (int) strlen(seq);
   dsq = DigitizeSequence(seq, len);
   XNU(dsq, len);
   result = MallocOrDie(sizeof(char) * (len+1));
