@@ -44,7 +44,7 @@ if ($makeopts   eq "none") { $makeopts =   ""; }
 
 $configopts =~ s/,/ /g;
 $makeopts   =~ s/,/ /g;
-$makeopts   =~ s/+/\\"/g;
+$makeopts   =~ s/\+/\"/g;
 
 print "chdir...       \t";
 chdir $arena ||  die "chdir failed";
@@ -79,7 +79,7 @@ system "./configure $configopts";
 if ($? != 0) { die "configure failed"; }
 print "[done]\n";
 
-print "make...        \t";
+print "make $makeopts...  \t";
 system "make $makeopts";
 if ($? != 0) { die "make failed"; }
 print "[done]\n";
