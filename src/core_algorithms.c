@@ -442,7 +442,6 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->statetype[tpos] = STJ;
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
-	  i--;
 	}
       else Die("traceback failed");
       break;
