@@ -1,0 +1,68 @@
+dnl Process this file with autoconf to produce a configure script.
+dnl SRE, Mon Oct  5 14:55:45 1998
+
+AC_INIT(src/hmmpfam.c)
+
+AC_MSG_RESULT("Welcome to HMMER... configuring for your system.")
+
+AC_SUBST(MDEFS)
+AC_SUBST(PVMLIBDIR)
+AC_SUBST(PVMINCDIR)
+AC_SUBST(PVMFLAG)
+AC_SUBST(PVMPROGS)
+AC_SUBST(PVMLIBS)
+
+dnl Checks for programs.
+AC_PROG_CC
+AC_PROG_LN_S
+AC_PROG_RANLIB
+
+dnl Configure PVM
+AC_ARG_WITH(pvm, 
+[  --with-pvm         enable PVM, Parallel Virtual Machine],
+[case $with_pvm in
+   yes)  echo 'Configuring for PVM'
+ 	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
+	 PVMINCDIR="-I${PVM_ROOT}/include"
+	 PVMFLAG="-DHMMER_PVM"
+	 PVMPROGS="hmmcalibrate-slave hmmpfam-slave hmmsearch-slave"
+	 PVMLIBS="-lpvm3"
+	 ;;
+   no)   ;;
+   *)    echo "Ignoring unknown argument to --with-pvm: $with_pvm"
+	 ;;
+esac])
+
+dnl Enable threads
+AC_ARG_ENABLE(threads, 
+[  --disable-threads  disable POSIX threads support],
+[case $enable_threads in 
+   yes) echo "Enabling POSIX threads support"
+	AC_CHECK_LIB(pthread, pthread_create, 
+	[ LIBS="${LIBS} -lpthread"
+	  MDEFS="${MDEFS} -DHMMER_THREADS"
+
+	])
+	;;
+   no)  echo "POSIX threads support disabled"
+        ;;
+   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
+	;;
+esac],
+[echo "Enabling POSIX threads support by default"
+ AC_CHECK_LIB(pthread, pthread_create, 
+	[ LIBS="${LIBS} -lpthread"
+	  MDEFS="${MDEFS} -DHMMER_THREADS"
+	])
+])
+
+dnl Checks for system libraries
+AC_CHECK_LIB(m, sqrt, LIBS="${LIBS} -lm")
+
+dnl Check for functions
+AC_CHECK_FUNCS(pthread_setconcurrency)
+
+dnl Write out Makefiles
+AC_MSG_RESULT("Configuration complete. Writing Makefiles and such...")
+AC_OUTPUT(Makefile Shiva/Makefile src/Makefile)
+
