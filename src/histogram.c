@@ -183,7 +183,8 @@ AddToHistogram(struct histogram_s *h, float sc)
 /* Function: PrintASCIIHistogram()
  * 
  * Purpose:  Print a "prettified" histogram to a file pointer.
- *           Deliberately a clone of Bill Pearson's excellent FASTA output.
+ *           Deliberately a look-and-feel clone of Bill Pearson's 
+ *           excellent FASTA output.
  * 
  * Args:     fp     - open file to print to (stdout works)
  *           h      - histogram to print
@@ -197,6 +198,9 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
   int i, idx;
   char buffer[81];		/* output line buffer */
   int  pos;			/* position in output line buffer */
+  int  lowbound, lowcount;	/* cutoffs on the low side  */
+  int  highbound, highcount;	/* cutoffs on the high side */
+  int  delay;			/* delay for evaluation of cutoffs */
 
   /* Find out how we'll scale the histogram.
    * We have 59 characters to play with on a
@@ -208,10 +212,57 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
     if (h->histogram[i] > maxbar) maxbar = h->histogram[i];
   units = ((maxbar-1)/ 59) + 1;
 
+  /* Truncate histogram on the low side. (ad hoc)
+   * Set "lowbound" and "lowcount"
+   */
+  lowbound = h->lowscore;
+  lowcount = 0;
+  num      = 0;
+  delay    = 10;
+  for (i = h->lowscore - h->min; i <= h->highscore - h->min; i++)
+    {
+      num++;
+      /* don't exceed maxbar, and include all of the expected curve */
+      if (lowcount + h->histogram[i] > maxbar) break; 
+      if (h->fit_type != HISTFIT_NONE && (int) h->expect[i] > 0) break; 
+
+      if (h->histogram[i] > 0)  lowcount += h->histogram[i];
+      else if (delay <= 0) {
+	if (lowcount / num < 1) lowbound = i + h->min;
+	else                    break;
+      }
+      delay--; 
+    }
+  if (lowbound - h->lowscore <= 10) { lowbound = h->lowscore; }
+
+  /* Truncate histogram on the high side. (ad hoc)
+   * Set highbound and highcount
+   */
+  highbound = h->highscore;
+  highcount = 0;
+  num       = 0;
+  delay     = 10;
+  for (i = h->highscore - h->min; i >= h->lowscore - h->min; i--)
+    {
+      num++;
+      /* don't exceed maxbar, and include all of the expected curve */
+      if (highcount + h->histogram[i] > maxbar) break; 
+      if (h->fit_type != HISTFIT_NONE && (int) h->expect[i] > 0) break; 
+
+      if (h->histogram[i] > 0)  highcount += h->histogram[i];
+      else if (delay <= 0) {
+	if (highcount / num < 1) highbound = i + h->min;
+	else                     break;
+      }
+      delay--;
+    }
+  if (h->highscore - highbound <= 5) { highbound = h->highscore; }
+
   /* Print the histogram
    */
   fprintf(fp, "%5s %6s %6s  (one = represents %d sequences)\n", 
 	  "score", "obs", "exp", units);
+  fprintf(fp, "%5s %6s %6s\n", "-----", "---", "---");
   buffer[80] = '\0';
   buffer[79] = '\n';
   for (i = h->lowscore; i <= h->highscore; i++)
@@ -219,24 +270,54 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
       memset(buffer, ' ', 79 * sizeof(char));
       idx = i - h->min;
 
+      /* Deal with special cases at edges
+       */
+      if      (i < lowbound)  continue;
+      else if (i > highbound) continue;
+      else if (i == lowbound && i != h->lowscore) 
+	{
+	  sprintf(buffer, "<%4d %6d %6s|", i, lowcount, "-");
+	  if (lowcount > 0) {
+	    num = 1+(lowcount-1) / units;
+	    for (pos = 20; num > 0; num--)  buffer[pos++] = '=';
+	  }
+	  fputs(buffer, fp);
+	  continue;
+	}
+      else if (i == highbound && i != h->highscore)
+	{
+	  sprintf(buffer, ">%4d %6d %6s|", i, highcount, "-");
+	  if (highcount > 0) {
+	    num = 1+(highcount-1) / units;
+	    for (pos = 20; num > 0; num--)  buffer[pos++] = '=';
+	  }
+	  fputs(buffer, fp);
+	  continue;
+	}
+
+      /* Deal with most cases
+       */
       if (h->fit_type != HISTFIT_NONE) 
 	sprintf(buffer, "%5d %6d %6d|", 
 		i, h->histogram[idx], (int) h->expect[idx]);
       else
-	sprintf(buffer, "%5d %6d %6s|", 
-		i, h->histogram[idx], "-");
+	sprintf(buffer, "%5d %6d %6s|", i, h->histogram[idx], "-");
       buffer[20] = ' ';		/* sprintf writes a null char */
 
       /* Mark the histogram bar for observed hits
        */ 
       if (h->histogram[idx] > 0) {
-	num = 1 + (h->histogram[idx]-1) / units;
+	if (i == lowbound && i != h->lowscore)
+	  num = 1+(lowcount-1) / units;
+	else if (i == highbound && i != h->highscore)
+	  num = 1+(highcount-1) / units;
+	else
+	  num = 1 + (h->histogram[idx]-1) / units;
 	for (pos = 20; num > 0; num--)  buffer[pos++] = '=';
       }
 	  
       /* Mark the theoretically expected value
        */
-
       if (h->fit_type != HISTFIT_NONE && (int) h->expect[idx] > 0)
 	{
 	  pos = 20 + (int)(h->expect[idx]-1) / units;
