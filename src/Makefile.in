@@ -38,32 +38,101 @@ PROGS = hmmalign hmmbuild hmmcalibrate \
 	hmmconvert hmmemit hmmfetch hmmindex\
 	hmmpfam hmmsearch
 
-SQUIDPROGS = alistat sfetch seqstat sreformat
+SQUIDPROGS = alistat sfetch seqstat sreformat shuffle
 
-HDRS =  config.h funcs.h globals.h structs.h version.h
+HDRS =   config.h\
+         funcs.h\
+         globals.h\
+         postprob.h\
+         stopwatch.h\
+         structs.h\
+         version.h
 
-SRC =   hmmalign.c      hmmbuild.c        hmmcalibrate.c    hmmcalibrate-pvm.c\
-	hmmconvert.c    hmmfetch.c        hmmindex.c        hmmpfam.c\
-	hmmpfam-pvm.c hmmsearch.c       hmmsearch-pvm.c\
-	alphabet.c    core_algorithms.c debug.c           emit.c\
-	emulation.c   histogram.c       hmmio.c           mathsupport.c\
-        masks.c       misc.c            modelmakers.c     plan7.c\
-	plan9.c	      prior.c           pvm.c             threads.c\
-	tophits.c     trace.c
+SRC =   hmmalign.c\
+        hmmbuild.c\
+        hmmcalibrate.c\
+        hmmconvert.c\
+        hmmemit.c\
+	hmmfetch.c\
+        hmmindex.c\
+	hmmpfam.c\
+	hmmsearch.c\
+	hmmcalibrate-pvm.c\
+	hmmpfam-pvm.c\
+	hmmsearch-pvm.c\
+	alphabet.c\
+	core_algorithms.c\
+	debug.c\
+	display.c\
+	emit.c\
+	emulation.c\
+	histogram.c\
+	hmmio.c\
+	mathsupport.c\
+        masks.c\
+	misc.c\
+	modelmakers.c\
+	plan7.c\
+	plan9.c\
+	postprob.c\
+	prior.c\
+	pvm.c\
+	stopwatch.c\
+	threads.c\
+	tophits.c\
+	trace.c 
 
-OBJ =  	alphabet.o    core_algorithms.o debug.o	          emit.o\
-	emulation.o   histogram.o       hmmio.o           mathsupport.o\
-        masks.o       misc.o            modelmakers.o     plan7.o\
-	plan9.o       prior.o           threads.o         tophits.o\
-	trace.o
+OBJ =   alphabet.o\
+	core_algorithms.o\
+	debug.o\
+	display.o\
+	emit.o\
+	emulation.o\
+	histogram.o\
+	hmmio.o\
+	mathsupport.o\
+        masks.o\
+	misc.o\
+	modelmakers.o\
+	plan7.o\
+	plan9.o\
+	postprob.o\
+	prior.o\
+	stopwatch.o\
+	threads.o\
+	tophits.o\
+	trace.o 
 
-SQUIDOBJ = aligneval.o   alignio.o         cluster.o         dayhoff.o\
-	   file.o        getopt.o          gsi.o             hsregex.o\
-	   interleaved.o\
-	   iupac.o       msf.o             revcomp.o         selex.o\
-	   sqerror.o     sqio.o            sre_ctype.o       sre_math.o\
-	   sre_string.o  stack.o           translate.o       types.o\
-	   weight.o
+SQUIDOBJ = \
+	a2m.o\
+	aligneval.o\
+	alignio.o\
+	clustal.o\
+	cluster.o\
+	dayhoff.o\
+	file.o\
+	getopt.o\
+	gki.o\
+	gsi.o\
+        hsregex.o\
+	iupac.o\
+	msa.o\
+	msf.o\
+	phylip.o\
+        revcomp.o\
+	selex.o\
+	shuffle.o\
+	sqerror.o\
+	sqio.o\
+	squidcore.o\
+	sre_ctype.o\
+	sre_math.o\
+	sre_string.o\
+	stack.o\
+	stockholm.o\
+	translate.o\
+	types.o\
+        weight.o
 
 PVMOBJ = pvm.o
 
@@ -78,19 +147,19 @@ all: 	$(PROGS) $(SQUIDPROGS) $(PVMPROGS)
 
 
 hmmalign: $(OBJ) $(SQUIDOBJ) hmmalign.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmalign.o $(OBJ) $(SQUIDOBJ) $(LIBS)
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmalign.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS)
 hmmbuild: $(OBJ) $(SQUIDOBJ) hmmbuild.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmbuild.o $(OBJ) $(SQUIDOBJ) $(LIBS)
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmbuild.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS)
 hmmcalibrate: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmcalibrate.o
 	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
 hmmconvert: $(OBJ) $(SQUIDOBJ) hmmconvert.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmconvert.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmconvert.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
 hmmemit: $(OBJ) $(SQUIDOBJ) hmmemit.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmemit.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmemit.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
 hmmfetch: $(OBJ) $(SQUIDOBJ) hmmfetch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR)  -o $@ hmmfetch.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR)  -o $@ hmmfetch.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
 hmmindex: $(OBJ) $(SQUIDOBJ) hmmindex.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmindex.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmindex.o $(OBJ) $(SQUIDOBJ) $(PVMLIBS) $(LIBS) 
 hmmpfam: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmpfam.o
 	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
 hmmsearch: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch.o
@@ -103,6 +172,8 @@ hmmpfam-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmpfam-pvm.o
 hmmsearch-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch-pvm.o
 	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
+afetch:   $(SQUIDOBJ) afetch_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ afetch_main.o   $(SQUIDOBJ) $(LIBS)
 alistat:   $(SQUIDOBJ) alistat_main.o
 	$(CC) $(CFLAGS) $(MDEFS) -o $@ alistat_main.o   $(SQUIDOBJ) $(LIBS)
 sfetch:    $(SQUIDOBJ) sfetch_main.o
@@ -111,6 +182,9 @@ seqstat:   $(SQUIDOBJ) seqstat_main.o
 	$(CC) $(CFLAGS) $(MDEFS) -o $@ seqstat_main.o   $(SQUIDOBJ) $(LIBS)
 sreformat: $(SQUIDOBJ) sreformat_main.o
 	$(CC) $(CFLAGS) $(MDEFS) -o $@ sreformat_main.o $(SQUIDOBJ) $(LIBS)
+shuffle:   $(SQUIDOBJ) shuffle_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ shuffle_main.o $(SQUIDOBJ) $(LIBS)
+
 
 #######
 ## Target used in making Shiva test suite
@@ -128,24 +202,20 @@ libhmmer.a: $(OBJ) $(SQUIDOBJ)
 ## Targets defining different build styles;
 #######
 
-# Make a "production" copy
+# Make a "production" copy on Linux
 prodv:
-	make clean
-	make CFLAGS="-O2" MDEFS="" LIBS="-lm"
+	make CFLAGS="-O2 -static" MDEFS="" LIBS="-lm"
 
-# Make a debugging copy
+# Make a debugging copy on Linux
 dbv:
-	make clean	
-	make CFLAGS="-g -Wall -pedantic" MDEFS="" LIBS="-lm"
+	make CFLAGS="-g -Wall -pedantic -static -DDEBUGLEVEL=1" MDEFS="" LIBS="-lm"
 
 # Make an Electric Fence version
 efencev:
-	make clean
 	make CFLAGS="-g -Wall" MDEFS="-DHMMER_THREADS -DDEBUGLEVEL=1" LIBS="-lm -lpthread -lefence"
 
 # Make a gprof version
 gprofv:
-	make clean
 	make CFLAGS="-pg" MDEFS="" LIBS="-lm" 
 
 
