@@ -1,4 +1,4 @@
-.TH "hmmalign" 1 "March 1998" "HMMER 2.0" "HMMER Manual"
+.TH "hmmalign" 1 @RELEASEDATE@ "HMMER @RELEASE@" "HMMER Manual"
 
 .SH NAME
 .TP 
@@ -96,8 +96,7 @@ option.
 .SH SEE ALSO
 
 .PP
-hmmer(1), hmmbuild(1), hmmcalibrate(1),
-hmmconvert(1), hmmemit(1), hmmpfam(1), hmmsearch(1)
+@SEEALSO@
 .PP
 User guide and tutorial: Userguide.ps
 .PP
