@@ -36,6 +36,7 @@ SQUIDMANS = afetch\
 	seqstat\
 	sfetch\
 	shuffle\
+	sindex\
 	sreformat	
 
 all:
