@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -48,26 +48,28 @@ AllocPlan7(int M)
   hmm    = (struct plan7_s *) MallocOrDie (sizeof(struct plan7_s));
   hmm->M = M;
 
-  hmm->name   = NULL;
-  hmm->desc   = NULL;
-  hmm->rf     = (char *) MallocOrDie ((M+2) * sizeof(char));
-  hmm->cs     = (char *) MallocOrDie ((M+2) * sizeof(char));
-  hmm->comlog= NULL; 
-  hmm->nseq   = 0;
-  hmm->ctime  = NULL;
+  hmm->name     = NULL;
+  hmm->desc     = NULL;
+  hmm->rf       = MallocOrDie ((M+2) * sizeof(char));
+  hmm->cs       = MallocOrDie ((M+2) * sizeof(char));
+  hmm->comlog   = NULL; 
+  hmm->nseq     = 0;
+  hmm->ctime    = NULL;
+  hmm->map      = MallocOrDie ((M+1) * sizeof(int));
+  hmm->checksum = 0;
 
-  hmm->t      = (float **) MallocOrDie (M     *           sizeof(float *));
-  hmm->tsc    = (int **)   MallocOrDie (M     *           sizeof(int *));
-  hmm->mat    = (float **) MallocOrDie ((M+1) *           sizeof(float *));
-  hmm->ins    = (float **) MallocOrDie (M     *           sizeof(float *));
-  hmm->msc    = (int **)   MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc    = (int **)   MallocOrDie (MAXCODE   *       sizeof(int *)); 
-  hmm->t[0]   = (float *)  MallocOrDie ((7*M)     *       sizeof(float));
-  hmm->tsc[0] = (int *)    MallocOrDie ((7*M)     *       sizeof(int));
-  hmm->mat[0] = (float *)  MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
-  hmm->ins[0] = (float *)  MallocOrDie ((MAXABET*M) *     sizeof(float));
-  hmm->msc[0] = (int *)    MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc[0] = (int *)    MallocOrDie ((MAXCODE*M) *     sizeof(int));
+  hmm->t      = MallocOrDie (M     *           sizeof(float *));
+  hmm->tsc    = MallocOrDie (M     *           sizeof(int *));
+  hmm->mat    = MallocOrDie ((M+1) *           sizeof(float *));
+  hmm->ins    = MallocOrDie (M     *           sizeof(float *));
+  hmm->msc    = MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc    = MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->t[0]   = MallocOrDie ((7*M)     *       sizeof(float));
+  hmm->tsc[0] = MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
+  hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
+  hmm->msc[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
 
   /* note allocation strategy for important 2D arrays -- trying
    * to keep locality as much as possible, cache efficiency etc.
@@ -90,10 +92,10 @@ AllocPlan7(int M)
   for (x = 0; x < 7; x++)
     hmm->tsc[0][x] = -INFTY;
 
-  hmm->begin  = (float *) MallocOrDie  ((M+1) * sizeof(float));
-  hmm->bsc    = (int *)   MallocOrDie  ((M+1) * sizeof(int));
-  hmm->end    = (float *) MallocOrDie  ((M+1) * sizeof(float));
-  hmm->esc    = (int *)   MallocOrDie  ((M+1) * sizeof(int));
+  hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
+  hmm->bsc    = MallocOrDie  ((M+1) * sizeof(int));
+  hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
+  hmm->esc    = MallocOrDie  ((M+1) * sizeof(int));
 
 				/* DNA translation is not enabled by default */
   hmm->dnam   = NULL;
@@ -115,13 +117,15 @@ AllocPlan7Shell(void)
   hmm    = (struct plan7_s *) MallocOrDie (sizeof(struct plan7_s));
   hmm->M = 0;
 
-  hmm->name   = NULL;
-  hmm->desc   = NULL;
-  hmm->rf     = NULL;
-  hmm->cs     = NULL;
-  hmm->comlog = NULL; 
-  hmm->nseq   = 0;
-  hmm->ctime  = NULL;
+  hmm->name     = NULL;
+  hmm->desc     = NULL;
+  hmm->rf       = NULL;
+  hmm->cs       = NULL;
+  hmm->comlog   = NULL; 
+  hmm->nseq     = 0;
+  hmm->ctime    = NULL;
+  hmm->map      = NULL;
+  hmm->checksum = 0;
 
   hmm->t      = NULL;
   hmm->tsc    = NULL;
@@ -153,21 +157,22 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
 
   hmm->M = M;
 
-  hmm->rf     = (char *)   MallocOrDie ((M+2) * sizeof(char));
-  hmm->cs     = (char *)   MallocOrDie ((M+2) * sizeof(char));
+  hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
+  hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
+  hmm->map    = MallocOrDie ((M+1) * sizeof(int));
 
-  hmm->t      = (float **) MallocOrDie (M     *           sizeof(float *));
-  hmm->tsc    = (int **)   MallocOrDie (M     *           sizeof(int *));
-  hmm->mat    = (float **) MallocOrDie ((M+1) *           sizeof(float *));
-  hmm->ins    = (float **) MallocOrDie (M     *           sizeof(float *));
-  hmm->msc    = (int **)   MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc    = (int **)   MallocOrDie (MAXCODE   *       sizeof(int *)); 
-  hmm->t[0]   = (float *)  MallocOrDie ((7*M)     *       sizeof(float));
-  hmm->tsc[0] = (int *)    MallocOrDie ((7*M)     *       sizeof(int));
-  hmm->mat[0] = (float *)  MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
-  hmm->ins[0] = (float *)  MallocOrDie ((MAXABET*M) *     sizeof(float));
-  hmm->msc[0] = (int *)    MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc[0] = (int *)    MallocOrDie ((MAXCODE*M) *     sizeof(int));
+  hmm->t      = MallocOrDie (M     *           sizeof(float *));
+  hmm->tsc    = MallocOrDie (M     *           sizeof(int *));
+  hmm->mat    = MallocOrDie ((M+1) *           sizeof(float *));
+  hmm->ins    = MallocOrDie (M     *           sizeof(float *));
+  hmm->msc    = MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc    = MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->t[0]   = MallocOrDie ((7*M)     *       sizeof(float));
+  hmm->tsc[0] = MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
+  hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
+  hmm->msc[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
 
   /* note allocation strategy for important 2D arrays -- trying
    * to keep locality as much as possible, cache efficiency etc.
@@ -190,10 +195,10 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   for (x = 0; x < 7; x++)
     hmm->tsc[0][x] = -INFTY;
 
-  hmm->begin  = (float *) MallocOrDie  ((M+1) * sizeof(float));
-  hmm->bsc    = (int *)   MallocOrDie  ((M+1) * sizeof(int));
-  hmm->end    = (float *) MallocOrDie  ((M+1) * sizeof(float));
-  hmm->esc    = (int *)   MallocOrDie  ((M+1) * sizeof(int));
+  hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
+  hmm->bsc    = MallocOrDie  ((M+1) * sizeof(int));
+  hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
+  hmm->esc    = MallocOrDie  ((M+1) * sizeof(int));
 
   return;
 }  
@@ -208,6 +213,7 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->cs      != NULL) free(hmm->cs);
   if (hmm->comlog  != NULL) free(hmm->comlog);
   if (hmm->ctime   != NULL) free(hmm->ctime);
+  if (hmm->map     != NULL) free(hmm->map);
   if (hmm->bsc     != NULL) free(hmm->bsc);
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->esc     != NULL) free(hmm->esc);
