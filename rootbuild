@@ -7,6 +7,13 @@ $platform   = shift;
 $configopts = shift;
 $makeopts   = shift;
 
+print "pkg        = $pkg\n";
+print "node       = $node\n";
+print "arena      = $arena\n";
+print "platform   = $platform\n";
+print "configopts = $configopts\n";
+print "makeopts   = $makeopts\n";
+
 print "Copying files...            \t";
 system "scp nodebuild $node:$arena/";
 if ($? != 0) { die "copy failed" };
@@ -15,7 +22,9 @@ if ($? != 0) { die "copy failed" };
 print "[done]\n";
 
 print "Running nodebuild...        \t";
-system "ssh $node $arena/nodebuild $arena $pkg $platform \"$configopts\" \"$makeopts\"";
+print "ssh $node $arena/nodebuild $arena $pkg $platform $configopts $makeopts\n";
+system "ssh $node $arena/nodebuild $arena $pkg $platform $configopts $makeopts";
+
 if ($? != 0) { die "nodebuild failed" };
 print "[done]\n";
 

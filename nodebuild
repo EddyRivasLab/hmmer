@@ -23,14 +23,22 @@
 # SRE, Sat Aug  4 11:29:53 2001, xref STL5 p.27
 # CVS $Id$
 
-
 $arena      = shift;
 $pkg        = shift;
-$binname    = shift;
+$platform   = shift;
 $configopts = shift;
 $makeopts   = shift;
 
-$binpkg  = "$pkg.bin.$binname";
+$binpkg  = "$pkg.bin.$platform";
+
+print "pkg        = $pkg\n";
+print "arena      = $arena\n";
+print "platform   = $platform\n";
+print "configopts = $configopts\n";
+print "makeopts   = $makeopts\n";
+
+if ($configopts eq "none") { $configopts = ""; }
+if ($makeopts   eq "none") { $makeopts =   ""; }
 
 print "chdir...       \t";
 chdir $arena ||  die "chdir failed";
