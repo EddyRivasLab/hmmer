@@ -41,7 +41,7 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    -n <s>    : name; name this HMM <s>\n\
    -o <file> : re-save annotated alignment to <file>\n\
 \n\
-  Alternative sequence weighting strategies: (default: ME)\n\
+  Alternative sequence weighting strategies: (default: GSC weights)\n\
    -e            : maximum entropy (ME)\n\
    --wgsc        : Gerstein/Sonnhammer/Chothia tree weights\n\
    --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
@@ -54,10 +54,9 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    -m        : manual construction (requires SELEX file, #=RF annotation)\n\
 \n\
   Alternative search algorithm styles: (default: hmmls domain alignment)\n\
-   -g            : global alignment (Needleman/Wunsch)\n\
-   -l            : local alignment (Smith/Waterman)\n\
-   --swentry <x> : set S/W aggregate entry prob. to <x> [0.5]\n\
-   --swexit <x>  : set S/W aggregate exit prob. to <x>  [0.5]\n\
+   -f        : multi-hit local (hmmfs style)\n\
+   -g        : global alignment (Needleman/Wunsch)\n\
+   -l        : local alignment (Smith/Waterman)\n\
 \n\
   Expert customization of parameters and priors:\n\
    -r <file> : read null (random sequence) model from <file>\n\
@@ -75,6 +74,8 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
    --idlevel     : set fractional identity level used by --weff and --wblosum [0.62]\n\
    --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
    --star <file> : Star model (experimental)\n\
+   --swentry <x> : set S/W aggregate entry prob. to <x> [0.5]\n\
+   --swexit <x>  : set S/W aggregate exit prob. to <x>  [0.5]\n\
    --verbose     : print a lot of boring information\n\
 \n";
 
@@ -82,6 +83,7 @@ static struct opt_s OPTIONS[] = {
   { "-A", TRUE, sqdARG_NONE },
   { "-b", TRUE, sqdARG_NONE },
   { "-e", TRUE, sqdARG_NONE },
+  { "-f", TRUE, sqdARG_NONE },
   { "-F", TRUE, sqdARG_NONE },
   { "-g", TRUE, sqdARG_NONE }, 
   { "-h", TRUE, sqdARG_NONE }, 
@@ -185,7 +187,7 @@ main(int argc, char **argv)
    ***********************************************/
   
   c_strategy        = P7_MAP_CONSTRUCTION;
-  w_strategy        = WGT_ME;
+  w_strategy        = WGT_GSC;
   blosumlevel       = 0.62;
   cfg_strategy      = P7_LS_CONFIG;
   gapmax            = 0.5;
@@ -213,6 +215,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-b") == 0) do_binary         = TRUE;
     else if (strcmp(optname, "-e") == 0) w_strategy        = WGT_ME;  
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
+    else if (strcmp(optname, "-f") == 0) cfg_strategy      = P7_FS_CONFIG;
     else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
     else if (strcmp(optname, "-k") == 0) c_strategy        = P7_FAST_CONSTRUCTION;
     else if (strcmp(optname, "-l") == 0) cfg_strategy      = P7_SW_CONFIG;
