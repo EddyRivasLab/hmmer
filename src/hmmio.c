@@ -290,10 +290,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
 
   fprintf(fp, "HMMER2.0\n");  /* magic header */
 
-  /* write M and alphabet_type.
-   * Because we  can't allocate for an HMM until we know 
-   * these numbers, these must be the first pieces of data in 
-   * the file. 
+  /* write header information
    */
   fprintf(fp, "NAME  %s\n", hmm->name);
   fprintf(fp, "DESC  %s\n",
@@ -371,60 +368,6 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   fputs("//\n", fp);
 }
 
-
-#ifdef OBSOLETE
-/* Function: HMMInfoStamp()
- * 
- * Purpose:  Add useful notes to an HMM file created by hmmb or hmmt.
- * 
- * Args:     hmmfp   - open HMM save file
- *           prog    - name of program that made the HMM
- *           seqfile - name of training sequence file
- *           nseq    - number of training sequences
- *           prifile - name of prior file used, or NULL for default
- *           rndfile - name of null model file used, or NULL for default
- *           arch    - P7_MAP_CONSTRUCTION, P7_HAND_CONSTRUCTION, or 
- *                     P7_FAST_CONSTRUCTION
- *           param   - P7_MAP_PARAM, P7_MD_PARAM, P7_MRE_PARAM, P7_WMAP_PARAM
- */
-void
-HMMInfoStamp(FILE *hmmfp, char *prog, char *seqfile, int nseq, char *prifile, 
-	     char *rndfile, 
-	     enum p7_construction arch, 
-	     enum p7_param param)
-{
-  time_t date = time(NULL);
-  
-  fprintf(hmmfp, "\n\n");
-  fprintf(hmmfp, "#CC Program:       %s\n", prog); 
-  fprintf(hmmfp, "#CC Date:          %s",   ctime(&date));
-  fprintf(hmmfp, "#CC Sequence file: %s\n", seqfile);
-  fprintf(hmmfp, "#CC # of seqs:     %d\n",  nseq);
-  fprintf(hmmfp, "#CC Prior file:    %s\n", 
-	  (prifile == NULL) ? "(default)" : prifile);
-  fprintf(hmmfp, "#CC Null model:    %s\n", 
-	  (rndfile == NULL) ? "(default)" : rndfile);
-  fprintf(hmmfp, "#CC Architecture:  ");
-  switch (arch) {
-  case P7_MAP_CONSTRUCTION:  fputs("MAP\n",    hmmfp); break;
-  case P7_HAND_CONSTRUCTION: fputs("manual\n", hmmfp); break;
-  case P7_FAST_CONSTRUCTION: fputs("fast\n",   hmmfp); break;
-  default: Die("bogus architecture strategy");
-  }
-  fprintf(hmmfp, "#CC Parameters:    ");
-  switch(param) {
-  case  P7_MAP_PARAM: fputs("MAP\n",          hmmfp); break;
-  case   P7_MD_PARAM: fputs("MD\n",           hmmfp); break;
-  case  P7_MRE_PARAM: fputs("MRE\n",          hmmfp); break;
-  case P7_WMAP_PARAM: fputs("weighted MAP\n", hmmfp); break;
-  default: Die("bogus parameterization strategy");
-  }
-
-  fputs("//\n", hmmfp);
-}
-#endif /*OBSOLETE*/
-
-
 /* Function: WriteBinHMM()
  * 
  * Purpose:  Write an HMM in binary format.
@@ -438,15 +381,12 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   fwrite((char *) &(v20magic), sizeof(long), 1, fp);
 
   /* header section
-   * M, Alphabet_type must be first so we'll be able
-   * to allocate for the HMM quickly when we read this file.
    */
-  fwrite((char *) &(hmm->M),        sizeof(int),  1,   fp);
-  fwrite((char *) &(Alphabet_type), sizeof(int),  1,   fp);
   fwrite((char *) &(hmm->flags),    sizeof(int),  1,   fp);
-
   write_bin_string(fp, hmm->name);
   if (hmm->flags & PLAN7_DESC) write_bin_string(fp, hmm->desc);
+  fwrite((char *) &(hmm->M),        sizeof(int),  1,   fp);
+  fwrite((char *) &(Alphabet_type), sizeof(int),  1,   fp);
   if (hmm->flags & PLAN7_RF)   fwrite((char *) hmm->rf, sizeof(char), hmm->M+1, fp);
   if (hmm->flags & PLAN7_CS)   fwrite((char *) hmm->cs, sizeof(char), hmm->M+1, fp);
   write_bin_string(fp, hmm->comlog);
@@ -678,7 +618,6 @@ static int
 read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 {
    struct plan7_s *hmm;
-   int    M;
    int    k,x;
    int    type;
    unsigned long magic;
@@ -691,37 +630,40 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    if (! fread((char *) &magic, sizeof(long), 1, hmmfp->f)) return 0;
    if (hmmfp->byteswap) byteswap((char *)&magic, sizeof(long));
    if (magic != v20magic) goto FAILURE;
-
-   if (! fread((char *) &M,    sizeof(int), 1, hmmfp->f)) goto FAILURE;
-   if (hmmfp->byteswap) byteswap((char *)&M, sizeof(int)); 
-   if (! fread((char *) &type, sizeof(int), 1, hmmfp->f)) goto FAILURE;
-   if (hmmfp->byteswap) byteswap((char *)&type, sizeof(int)); 
-   if (Alphabet_type == 0) SetAlphabet(type);
-   
-   /* create space for hmm */
-   if ((hmm = AllocPlan7(M)) == NULL)
-     Die("malloc failed for reading hmm in\n");
-				/* flags for optional features */
+				/* allocate HMM shell for header info */
+   hmm = AllocPlan7Shell();
+				/* flags */
    if (! fread((char *) &(hmm->flags), sizeof(int), 1, hmmfp->f)) goto FAILURE;
    if (hmmfp->byteswap) byteswap((char *)&(hmm->flags), sizeof(int)); 
-
-				/* HMM name */
+				/* name */
    if (! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->name))) goto FAILURE;
-
 				/* optional description */
    if ((hmm->flags & PLAN7_DESC) &&
        ! read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->desc))) goto FAILURE;
+				/* length of model */
+   if (! fread((char *) &hmm->M,  sizeof(int), 1, hmmfp->f)) goto FAILURE;
+   if (hmmfp->byteswap) byteswap((char *)&(hmm->M), sizeof(int)); 
+				/* alphabet type */
+   if (! fread((char *) &type, sizeof(int), 1, hmmfp->f)) goto FAILURE;
+   if (hmmfp->byteswap) byteswap((char *)&type, sizeof(int)); 
+   if (Alphabet_type == 0) SetAlphabet(type);
 
-				/* optional alignment annotation */
+				/* now allocate for rest of model */
+   AllocPlan7Body(hmm, hmm->M);
+
+				/* optional #=RF alignment annotation */
    if ((hmm->flags & PLAN7_RF) &&
        !fread((char *) hmm->rf, sizeof(char), hmm->M+1, hmmfp->f)) goto FAILURE;
    hmm->rf[hmm->M+1] = '\0';
+				/* optional #=CS alignment annotation */
    if ((hmm->flags & PLAN7_CS) &&
        !fread((char *) hmm->cs, sizeof(char), hmm->M+1, hmmfp->f)) goto FAILURE;
    hmm->cs[hmm->M+1]  = '\0';
-
+				/* command line log */
    if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->comlog)))  goto FAILURE;
+				/* nseq */
    if (!fread((char *) &(hmm->nseq),sizeof(int), 1, hmmfp->f))       goto FAILURE;
+				/* creation time */
    if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->ctime)))   goto FAILURE;
      
   /* specials */
@@ -765,7 +707,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
     byteswap((char *)&(hmm->p1),   sizeof(float));
     byteswap((char *)&(hmm->tbd1), sizeof(float));
 
-    for (k = 1; k <= M; k++) 
+    for (k = 1; k <= hmm->M; k++) 
       { 
 	for (x = 0; x < Alphabet_size; x++) 
 	  byteswap((char *)&(hmm->mat[k][x]), sizeof(float));
