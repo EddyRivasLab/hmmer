@@ -356,6 +356,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->statetype[tpos] = STB;
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
+	  i--;
 	}
       else if (sc == mmx[i-1][k-1] + hmm->tsc[k-1][TMM])
 	{
@@ -413,13 +414,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
       break;
 
     case STN:			/* N connects from S, N */
-      if (i == 1 && xmx[i][XMN] == 0)
+      if (i == 0 && xmx[i][XMN] == 0)
 	{
 	  tr->statetype[tpos] = STS;
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
 	}
-      else if (i > 1 && xmx[i][XMN] == xmx[i-1][XMN] + hmm->xsc[XTN][LOOP])
+      else if (i > 0 && xmx[i][XMN] == xmx[i-1][XMN] + hmm->xsc[XTN][LOOP])
 	{
 	  tr->statetype[tpos] = STN;
 	  tr->nodeidx[tpos]   = 0;
