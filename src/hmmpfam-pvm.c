@@ -22,10 +22,6 @@
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static void leave_pvm(void);
 
 int 
@@ -45,6 +41,7 @@ main(void)
   float    globT;		/* T parameter: keep only hits > globT bits */
   double   globE;		/* E parameter: keep hits < globE E-value   */
   double   pvalue;		/* Z*pvalue = Evalue                        */
+  double   evalue;		/* upper bound on evalue                    */
   int      Z;			/* nseq to base E value calculation on      */
   int      send_trace;		/* TRUE if score is significant             */
   int      do_xnu;		/* TRUE to do XNU filter on seq             */
@@ -149,7 +146,8 @@ main(void)
       if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
 	
       pvalue = PValue(hmm, sc);
-      send_trace = (sc > globT && pvalue * (float) Z < globE) ? 1 : 0;
+      evalue = Z ? (double) Z * pvalue : (double) nhmm * pvalue;
+      send_trace = (sc > globT && evalue < globE) ? 1 : 0;
 
       /* return output
        */
