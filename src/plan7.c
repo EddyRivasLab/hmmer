@@ -37,75 +37,9 @@ struct plan7_s *
 AllocPlan7(int M) 
 {
   struct plan7_s *hmm;
-  int k, x;
 
-  hmm    = (struct plan7_s *) MallocOrDie (sizeof(struct plan7_s));
-  hmm->M = M;
-
-  hmm->name     = NULL;
-  hmm->acc      = NULL;
-  hmm->desc     = NULL;
-  hmm->rf       = MallocOrDie ((M+2) * sizeof(char));
-  hmm->cs       = MallocOrDie ((M+2) * sizeof(char));
-  hmm->comlog   = NULL; 
-  hmm->nseq     = 0;
-  hmm->ctime    = NULL;
-  hmm->map      = MallocOrDie ((M+1) * sizeof(int));
-  hmm->checksum = 0;
-
-  hmm->ga1 = hmm->ga2 = 0.0;
-  hmm->tc1 = hmm->tc2 = 0.0;
-  hmm->nc1 = hmm->nc2 = 0.0;
-
-  hmm->t      = MallocOrDie (M     *           sizeof(float *));
-  hmm->tsc    = MallocOrDie (M     *           sizeof(int *));
-  hmm->mat    = MallocOrDie ((M+1) *           sizeof(float *));
-  hmm->ins    = MallocOrDie (M     *           sizeof(float *));
-  hmm->msc    = MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc    = MallocOrDie (MAXCODE   *       sizeof(int *)); 
-  hmm->t[0]   = MallocOrDie ((7*M)     *       sizeof(float));
-  hmm->tsc[0] = MallocOrDie ((7*M)     *       sizeof(int));
-  hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
-  hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
-  hmm->msc[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
-
-  /* note allocation strategy for important 2D arrays -- trying
-   * to keep locality as much as possible, cache efficiency etc.
-   */
-  for (k = 1; k <= M; k++) {
-    hmm->mat[k] = hmm->mat[0] + k * MAXABET;
-    if (k < M) {
-      hmm->ins[k] = hmm->ins[0] + k * MAXABET;
-      hmm->t[k]   = hmm->t[0]   + k * 7;
-      hmm->tsc[k] = hmm->tsc[0] + k * 7;
-    }
-  }
-  for (x = 1; x < MAXCODE; x++) {
-    hmm->msc[x] = hmm->msc[0] + x * (M+1);
-    hmm->isc[x] = hmm->isc[0] + x * M;
-  }
-  /* tsc[0] is used as a boundary condition sometimes [Viterbi()],
-   * so set to -inf always.
-   */
-  for (x = 0; x < 7; x++)
-    hmm->tsc[0][x] = -INFTY;
-
-  hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
-  hmm->bsc    = MallocOrDie  ((M+1) * sizeof(int));
-  hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
-  hmm->esc    = MallocOrDie  ((M+1) * sizeof(int));
-
-				/* DNA translation is not enabled by default */
-  hmm->dnam   = NULL;
-  hmm->dnai   = NULL;
-  hmm->dna2   = -INFTY;
-  hmm->dna4   = -INFTY;
-			/* statistical parameters set to innocuous empty values */
-  hmm->mu     = 0.; 
-  hmm->lambda = 0.;
-  
-  hmm->flags = 0;
+  hmm = AllocPlan7Shell();
+  AllocPlan7Body(hmm, M);
   return hmm;
 }  
 struct plan7_s *
@@ -121,11 +55,16 @@ AllocPlan7Shell(void)
   hmm->desc     = NULL;
   hmm->rf       = NULL;
   hmm->cs       = NULL;
+  hmm->ca       = NULL;
   hmm->comlog   = NULL; 
   hmm->nseq     = 0;
   hmm->ctime    = NULL;
   hmm->map      = NULL;
   hmm->checksum = 0;
+
+  hmm->tpri = NULL;
+  hmm->mpri = NULL;
+  hmm->ipri = NULL;
 
   hmm->ga1 = hmm->ga2 = 0.0;
   hmm->tc1 = hmm->tc2 = 0.0;
@@ -163,6 +102,7 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
 
   hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
   hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
+  hmm->ca     = MallocOrDie ((M+2) * sizeof(char));
   hmm->map    = MallocOrDie ((M+1) * sizeof(int));
 
   hmm->t      = MallocOrDie (M     *           sizeof(float *));
@@ -215,9 +155,13 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->desc    != NULL) free(hmm->desc);
   if (hmm->rf      != NULL) free(hmm->rf);
   if (hmm->cs      != NULL) free(hmm->cs);
+  if (hmm->ca      != NULL) free(hmm->ca);
   if (hmm->comlog  != NULL) free(hmm->comlog);
   if (hmm->ctime   != NULL) free(hmm->ctime);
   if (hmm->map     != NULL) free(hmm->map);
+  if (hmm->tpri    != NULL) free(hmm->tpri);
+  if (hmm->mpri    != NULL) free(hmm->mpri);
+  if (hmm->ipri    != NULL) free(hmm->ipri);
   if (hmm->bsc     != NULL) free(hmm->bsc);
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->esc     != NULL) free(hmm->esc);
