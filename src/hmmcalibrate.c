@@ -43,24 +43,26 @@ static char banner[] = "hmmcalibrate -- calibrate HMM search statistics";
 
 static char usage[] = "\
 Usage: hmmcalibrate [-options] <hmmfile>\n\
-Option        : Default : Description\n\
-  -h          :       - : print short usage and version info, then exit\n\
-  -l <n>      :       - : fix random sequence length at <n>\n\
-  -m <x>      :     350 : set random seq length mean at <x>\n\
-  -n <n>      :    5000 : set number of sampled seqs to <n>\n\
-  -s <x>      :     350 : set random seq length std. dev to <x>\n\
-\n\
-  --histfile <f> :    - : save histogram(s) to file <f>\n\
-  --seed <n>     :time(): set random seed to <n>\n\
+Available options are:\n\
+  -h             : print short usage and version info, then exit\n\
+";
+
+static char experts[] = "\
+  --fixed <n>    : fix random sequence length at <n>\n\
+  --histfile <f> : save histogram(s) to file <f>\n\
+  --mean <x>     : set random seq length mean at <x> [350]\n\
+  --num <n>      : set number of sampled seqs to <n> [5000]\n\
+  --sd <x>       : set random seq length std. dev to <x> [350]\n\
+  --seed <n>     : set random seed to <n> [time()]\n\
 ";
 
 static struct opt_s OPTIONS[] = {
    { "-h", TRUE, sqdARG_NONE  },
-   { "-l", TRUE, sqdARG_INT   },
-   { "-m", TRUE, sqdARG_FLOAT },
-   { "-n", TRUE, sqdARG_INT   },
-   { "-s", TRUE, sqdARG_FLOAT },   
+   { "--fixed",    FALSE, sqdARG_INT   },
    { "--histfile", FALSE, sqdARG_STRING },
+   { "--mean",     FALSE, sqdARG_FLOAT },
+   { "--num",      FALSE, sqdARG_INT   },
+   { "--sd",       FALSE, sqdARG_FLOAT },   
    { "--seed",     FALSE, sqdARG_INT}, 
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
@@ -118,16 +120,17 @@ main(int argc, char **argv)
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
-      if      (strcmp(optname, "-l") == 0) fixedlen = atoi(optarg);
-      else if (strcmp(optname, "-m") == 0) lenmean  = atof(optarg); 
-      else if (strcmp(optname, "-n") == 0) nsample  = atoi(optarg); 
-      else if (strcmp(optname, "-s") == 0) lensd    = atof(optarg); 
+      if      (strcmp(optname, "--fixed")    == 0) fixedlen = atoi(optarg);
       else if (strcmp(optname, "--histfile") == 0) histfile = optarg;
+      else if (strcmp(optname, "--mean")     == 0) lenmean  = atof(optarg); 
+      else if (strcmp(optname, "--num")      == 0) nsample  = atoi(optarg); 
+      else if (strcmp(optname, "--sd")       == 0) lensd    = atof(optarg); 
       else if (strcmp(optname, "--seed")     == 0) seed     = atoi(optarg);
       else if (strcmp(optname, "-h") == 0)
 	{
 	  Banner(stdout, banner);
 	  puts(usage);
+	  puts(experts);
 	  exit(0);
 	}
     }
