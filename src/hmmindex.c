@@ -19,11 +19,6 @@
 #include "structs.h"
 #include "funcs.h"
 #include "version.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 #include "globals.h"
 
 static char banner[] = "hmmindex -- create GSI index for an HMM database";
@@ -35,12 +30,10 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
-  --one2one      : only index names, nothing else: hmmpfam --pvm 1:1 mapping\n\
 ";
 
 static struct opt_s OPTIONS[] = {
    { "-h", TRUE, sqdARG_NONE  },
-   { "--one2one", FALSE, sqdARG_NONE  },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -68,37 +61,32 @@ main(int argc, char **argv)
 {
   char    *hmmfile;             /* HMM file to open                */
   char    *hmmtail;             /* HMMfile without directory path  */
-  char    *gsifile;             /* GSI file to write               */
+  char    *pgsifile;            /* primary key GSI file to write   */
+  char    *sgsifile;		/* secondary key GSI file to write */
   HMMFILE *hmmfp;               /* opened hmm file pointer         */
-  FILE    *outfp;               /* open gsifile for writing        */
+  FILE    *pfp;                 /* open gsifile for writing primary keys   */
+  FILE    *sfp;                 /* open gsifile for writing secondary keys */
   struct plan7_s     *hmm;      /* a hidden Markov model           */
   int     idx, nhmm;		/* counter over HMMs               */
-  int     nkeys;		/* number of keys                  */
+  int     npri;			/* number of primary keys          */
+  int     nsec;			/* number of secondary keys        */
   long    offset;		/* offset in HMM file              */
-  struct gsikey_s *keylist;     /* list of keys                    */
+  struct gsikey_s *pkeylist;    /* list of primary keys            */
+  struct gsikey_s *skeylist;    /* list of primary keys            */
   char    fname[GSI_KEYSIZE];
 
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
-  int   do_namesonly;		/* TRUE if --one2one option selected*/
-
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
 
   /***********************************************
    * Parse the command line
    ***********************************************/
 
-  do_namesonly = FALSE;
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
-      if      (strcmp(optname, "--one2one") == 0) do_namesonly = TRUE;
-      else if (strcmp(optname, "-h")        == 0)
+      if (strcmp(optname, "-h")        == 0)
 	{
 	  Banner(stdout, banner);
 	  puts(usage);
@@ -117,17 +105,28 @@ main(int argc, char **argv)
   if ((hmmfp = HMMFileOpen(hmmfile, NULL)) == NULL)
     Die("failed to open HMM file %s for reading.", hmmfile);
   if (hmmfp->gsi != NULL)
-    Die("GSI index already exists for %s. Please delete it first.", hmmfile);
+    Die("Primary GSI index already exists for %s. Please delete it first.", hmmfile);
+  if (hmmfp->sgsi != NULL)
+    Die("Secondary GSI index already exists for %s. Please delete it first.", hmmfile);
   
-  gsifile = MallocOrDie(strlen(hmmfile) + 5);
-  strcpy(gsifile, hmmfile);
-  strcat(gsifile, ".gsi");
-  if (FileExists(gsifile))
-    Die("GSI file %s already exists; please delete it first", gsifile);	/* shouldn't happen */
-  if ((outfp = fopen(gsifile, "wb")) == NULL)
-    Die("GSI file %s couldn't be opened for writing", gsifile); 
+  pgsifile = MallocOrDie(strlen(hmmfile) + 5);
+  strcpy(pgsifile, hmmfile);
+  strcat(pgsifile, ".gsi");
+  if (FileExists(pgsifile))
+    Die("Primary GSI file %s already exists; please delete it first", pgsifile);  /* shouldn't happen */
+  if ((pfp = fopen(pgsifile, "wb")) == NULL)
+    Die("Primary GSI file %s couldn't be opened for writing", pgsifile); 
 
-  keylist = MallocOrDie(sizeof(struct gsikey_s) * KEYBLOCK);
+  sgsifile = MallocOrDie(strlen(hmmfile) + 6);
+  strcpy(sgsifile, hmmfile);
+  strcat(sgsifile, ".sgsi");
+  if (FileExists(sgsifile))
+    Die("Secondary GSI file %s already exists; please delete it first", sgsifile); /* shouldn't happen */
+  if ((sfp = fopen(sgsifile, "wb")) == NULL)
+    Die("Secondary GSI file %s couldn't be opened for writing", sgsifile); 
+
+  pkeylist = MallocOrDie(sizeof(struct gsikey_s) * KEYBLOCK);
+  skeylist = MallocOrDie(sizeof(struct gsikey_s) * KEYBLOCK);
 
   /*********************************************** 
    * Show the banner
@@ -143,36 +142,34 @@ main(int argc, char **argv)
 
   printf("Determining offsets for %s, please be patient...\n", hmmfile);
   offset = ftell(hmmfp->f);
-  nhmm = nkeys = 0;
+  nhmm = npri = nsec = 0;
   while (HMMFileRead(hmmfp, &hmm)) 
     {	
       if (hmm == NULL) 
 	Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
 
+				/* record name of HMM as the primary retrieval key */
       if (strlen(hmm->name) >= GSI_KEYSIZE )
-	Warn("HMM %s name is too long to index in a GSI file; truncating it.", hmm->name);
-				/* record name of HMM as a retrieval key */
-      if (strlen(hmm->name) >= GSI_KEYSIZE) 
-	Warn("HMM name %s is too long to be indexed: must be < %d\n", GSI_KEYSIZE);
-      strncpy(keylist[nkeys].key, hmm->name, GSI_KEYSIZE-1);
-      keylist[nkeys].key[GSI_KEYSIZE-1] = '\0';
-      keylist[nkeys].filenum = 1;
-      keylist[nkeys].offset  = offset;
-      nkeys++;
-      if (nkeys % KEYBLOCK == 0)	
-	keylist = ReallocOrDie(keylist, sizeof(struct gsikey_s) * (nkeys + KEYBLOCK));
+	Warn("HMM name %s is too long to be GSI indexed; truncating it.", hmm->name);
+      strncpy(pkeylist[npri].key, hmm->name, GSI_KEYSIZE-1);
+      pkeylist[npri].key[GSI_KEYSIZE-1] = '\0';
+      pkeylist[npri].filenum = 1;
+      pkeylist[npri].offset  = offset;
+      npri++;
+      if (npri % KEYBLOCK == 0)	
+	pkeylist = ReallocOrDie(pkeylist, sizeof(struct gsikey_s) * (npri + KEYBLOCK));
 
-				/* record accession of HMM as a retrieval key */
-      if (! do_namesonly && hmm->flags & PLAN7_ACC) {
+				/* record accession of HMM as a secondary retrieval key */
+      if (hmm->flags & PLAN7_ACC) {
 	if (strlen(hmm->acc) >= GSI_KEYSIZE) 
-	  Warn("HMM accession %s is too long to be indexed: must be < %d\n", GSI_KEYSIZE);
-	strncpy(keylist[nkeys].key, hmm->acc, GSI_KEYSIZE-1);
-	keylist[nkeys].key[GSI_KEYSIZE-1] = '\0';
-	keylist[nkeys].filenum = 1;
-	keylist[nkeys].offset  = offset;
-	nkeys++;
-	if (nkeys % KEYBLOCK == 0)	
-	  keylist = ReallocOrDie(keylist, sizeof(struct gsikey_s) * (nkeys + KEYBLOCK));
+	  Warn("HMM accession %s is too long to be GSI indexed; truncating it\n", hmm->acc);
+	strncpy(skeylist[nsec].key, hmm->acc, GSI_KEYSIZE-1);
+	skeylist[nsec].key[GSI_KEYSIZE-1] = '\0';
+	skeylist[nsec].filenum = 1;
+	skeylist[nsec].offset  = offset;
+	nsec++;
+	if (nsec % KEYBLOCK == 0)	
+	  skeylist = ReallocOrDie(skeylist, sizeof(struct gsikey_s) * (nsec + KEYBLOCK));
       }
 
       offset = ftell(hmmfp->f);
@@ -186,7 +183,8 @@ main(int argc, char **argv)
    ***********************************************/
 
   printf("Sorting keys... \n");
-  qsort((void *) keylist, nkeys, sizeof(struct gsikey_s), gsikey_compare);
+  qsort((void *) pkeylist, npri, sizeof(struct gsikey_s), gsikey_compare);
+  qsort((void *) skeylist, nsec, sizeof(struct gsikey_s), gsikey_compare);
   SQD_DPRINTF1(("(OK, done with qsort)\n"));
 
   /***********************************************
@@ -201,33 +199,32 @@ main(int argc, char **argv)
     }
   strcpy(fname, hmmtail);
 
-  GSIWriteHeader(outfp, 1, nkeys);
-  GSIWriteFileRecord(outfp, fname, 1, 0); /* this line is unused, so doesn't matter */
-  for (idx = 0; idx < nkeys; idx++)
-    GSIWriteKeyRecord(outfp, keylist[idx].key, keylist[idx].filenum, keylist[idx].offset);
+  GSIWriteHeader(pfp, 1, npri);
+  GSIWriteFileRecord(pfp, fname, 1, 0); /* this line is unused, so doesn't matter */
+  for (idx = 0; idx < npri; idx++)
+    GSIWriteKeyRecord(pfp, pkeylist[idx].key, pkeylist[idx].filenum, pkeylist[idx].offset);
+  if (fclose(pfp) != 0) PANIC;
+
+  GSIWriteHeader(sfp, 1, nsec);
+  GSIWriteFileRecord(sfp, fname, 1, 0); /* this line is unused, so doesn't matter */
+  for (idx = 0; idx < nsec; idx++)
+    GSIWriteKeyRecord(sfp, skeylist[idx].key, skeylist[idx].filenum, skeylist[idx].offset);
+  if (fclose(sfp) != 0) PANIC;
 
   printf("Complete.\n");
-  printf("GSI %s indexes %d keys (names+accessions) for %d HMMs in %s.\n", 
-	 gsifile, nkeys, nhmm, hmmfile);
+  printf("Created GSI indexes for %d names and %d accessions for %d HMMs in %s.\n", 
+	 npri, nsec, nhmm, hmmfile);
 
   /***********************************************
    * Exit
    ***********************************************/
 
   free(hmmtail);
-  free(gsifile);
-  free(keylist);
-  if (fclose(outfp) != 0) PANIC;
+  free(pgsifile);
+  free(sgsifile);
+  free(pkeylist);
+  free(skeylist);
   SqdClean();
-
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size)
-    malloc_list(2, histid1, histid2);
-  else
-    fprintf(stderr, "[No memory leaks]\n");
-#endif
-
   return 0;
 }
 
