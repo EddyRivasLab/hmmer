@@ -31,10 +31,6 @@
 #include "globals.h"		/* alphabet global variables            */
 #include "version.h"		/* version info                         */
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static char banner[] = "hmmsearch - search a sequence database with a profile HMM";
 
 static char usage[]  = "\
@@ -48,6 +44,7 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
 ";
 
 static char experts[] = "\
+   --compat  : make best effort to use last version's output style\n\
    --cpu <n> : run <n> threads in parallel (if threaded)\n\
    --cut_ga  : use Pfam GA gathering threshold cutoffs\n\
    --cut_nc  : use Pfam NC noise threshold cutoffs\n\
@@ -66,6 +63,7 @@ static struct opt_s OPTIONS[] = {
   { "-E",        TRUE,  sqdARG_FLOAT},  
   { "-T",        TRUE,  sqdARG_FLOAT},  
   { "-Z",        TRUE,  sqdARG_INT  },
+  { "--compat",  FALSE, sqdARG_NONE },
   { "--cpu",     FALSE, sqdARG_INT  },
   { "--cut_ga",  FALSE, sqdARG_NONE },
   { "--cut_nc",  FALSE, sqdARG_NONE },
@@ -127,7 +125,7 @@ static void *worker_thread(void *ptr);
 
 static void record_domains(struct tophit_s *h, 
 			   struct plan7_s *hmm, char *dsq, 
-			   char *sqname, char *sqdesc, int L,
+			   char *sqname, char *sqacc, char *sqdesc, int L,
 			   struct p7trace_s *tr, double whole_pval, float whole_sc,
 			   int do_null2);
 static void main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, 
@@ -165,7 +163,7 @@ main(int argc, char **argv)
   float   mothersc;		/* score of a whole seq parent of domain   */
   int     sqfrom, sqto;		/* coordinates in sequence                 */
   int     hmmfrom, hmmto;	/* coordinate in HMM                       */
-  char   *name, *desc;          /* hit sequence name and description       */
+  char   *name, *acc, *desc;    /* hit sequence name and description       */
   int     sqlen;		/* length of seq that was hit              */
   int     nseq;			/* number of sequences searched            */
   int     Z;			/* # of seqs for purposes of E-val calc    */
@@ -186,6 +184,7 @@ main(int argc, char **argv)
   int   do_forward;		/* TRUE to use Forward() not Viterbi()      */
   int   do_xnu;			/* TRUE to filter sequences thru XNU        */
   int   do_pvm;			/* TRUE to run on Parallel Virtual Machine  */
+  int   be_backwards;		/* TRUE to be backwards-compatible in output*/
   int   num_threads;		/* number of worker threads                 */
   int   do_ga, do_nc, do_tc;    /* TRUE to use GA, NC, or TC cutoffs        */
 
@@ -204,6 +203,7 @@ main(int argc, char **argv)
   do_xnu      = FALSE;
   do_pvm      = FALSE;  
   Z           = 0;
+  be_backwards= FALSE; 
 
   Alimit      = INT_MAX;	/* no limit on alignment output     */
   globE       = 10.0;		/* use a reasonable Eval threshold; */
@@ -225,6 +225,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-E") == 0)        globE      = atof(optarg);
     else if (strcmp(optname, "-T") == 0)        globT      = atof(optarg);
     else if (strcmp(optname, "-Z") == 0)        Z          = atoi(optarg);
+    else if (strcmp(optname, "--compat")  == 0) be_backwards = TRUE;
     else if (strcmp(optname, "--cpu")     == 0) num_threads= atoi(optarg);
     else if (strcmp(optname, "--cut_ga")  == 0) do_ga      = TRUE;
     else if (strcmp(optname, "--cut_nc")  == 0) do_nc      = TRUE;
@@ -377,10 +378,20 @@ main(int argc, char **argv)
   /* Format and report our output 
    */
   /* 1. Report overall sequence hits (sorted on E-value) */
-  printf("\nQuery HMM: %s|%s|%s\n", 
-	 hmm->name, 
-	 hmm->flags & PLAN7_ACC  ? hmm->acc  : "",
-	 hmm->flags & PLAN7_DESC ? hmm->desc : "");
+  if (be_backwards) 
+    {
+      printf("\nQuery HMM: %s|%s|%s\n", 
+	     hmm->name, 
+	     hmm->flags & PLAN7_ACC  ? hmm->acc  : "",
+	     hmm->flags & PLAN7_DESC ? hmm->desc : "");
+    }
+  else 
+    {
+      printf("\nQuery HMM:   %s\n", hmm->name);
+      printf("Accession:   %s\n", hmm->flags & PLAN7_ACC  ? hmm->acc  : "");
+      printf("Description: %s\n", hmm->flags & PLAN7_DESC ? hmm->desc : "");
+    }
+
   if (hmm->flags & PLAN7_STATS)
     printf("  [HMM has been calibrated; E-values are empirical estimates]\n");
   else
@@ -397,7 +408,7 @@ main(int argc, char **argv)
       char *safedesc;
       GetRankedHit(ghit, i, 
 		   &pvalue, &sc, NULL, NULL,
-		   &name, &desc,
+		   &name, NULL, &desc,
 		   NULL, NULL, NULL,               /* sequence positions */
 		   NULL, NULL, NULL,               /* HMM positions      */
 		   NULL, &ndom,	                   /* domain info        */
@@ -452,7 +463,7 @@ main(int argc, char **argv)
     {
       GetRankedHit(dhit, i, 
 		   &pvalue, &sc, &motherp, &mothersc,
-		   &name, NULL,
+		   &name, NULL, NULL,
 		   &sqfrom, &sqto, &sqlen,            /* seq position info  */
 		   &hmmfrom, &hmmto, NULL,            /* HMM position info  */
 		   &domidx, &ndom,                    /* domain info        */
@@ -496,7 +507,7 @@ main(int argc, char **argv)
 	  if (i == Alimit) break; /* limit to Alimit output alignments */
 	  GetRankedHit(dhit, i, 
 		       &pvalue, &sc, &motherp, &mothersc,
-		       &name, NULL,
+		       &name, NULL, NULL,
 		       &sqfrom, &sqto, &sqlen,            /* seq position info  */
 		       &hmmfrom, &hmmto, NULL,            /* HMM position info  */
 		       &domidx, &ndom,                    /* domain info        */
@@ -652,13 +663,16 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp,
 	  RegisterHit(ghit, sc, pvalue, sc, 
 		      0., 0.,	                /* no mother seq */
 		      sqinfo.name, 
+		      sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
 		      sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
 		      0,0,0,                	/* seq positions  */
 		      0,0,0,	                /* HMM positions  */
 		      0, TraceDomainNumber(tr), /* domain info    */
 		      NULL);	                /* alignment info */
 
-	  record_domains(dhit, hmm, dsq, sqinfo.name, sqinfo.desc, sqinfo.len, 
+	  record_domains(dhit, hmm, dsq, 
+			 sqinfo.name, sqinfo.acc, sqinfo.desc, 
+			 sqinfo.len, 
 			 tr, pvalue, sc, do_null2); 
 	}
       AddToHistogram(histogram, sc);
@@ -683,7 +697,8 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp,
  * Args:     hmm    - the HMM structure
  *           dsq    - digitized sequence 1..L
  *           sqname - name of sequence
- *           sqdesc - description of sequence
+ *           sqacc  - accession of sequence (can be NULL)  
+ *           sqdesc - description of sequence (can be NULL)
  *           L      - length of sequence         
  *           tr     - traceback of the whole sequence aligned to HMM
  *           whole_pval - P-value of complete alignment
@@ -695,7 +710,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp,
 static void
 record_domains(struct tophit_s *h, 
 	       struct plan7_s *hmm, char *dsq, 
-	       char *sqname, char *sqdesc, int L,
+	       char *sqname, char *sqacc, char *sqdesc, int L,
 	       struct p7trace_s *tr, double whole_pval, float whole_sc,
 	       int do_null2)
 {
@@ -729,8 +744,7 @@ record_domains(struct tophit_s *h,
        */
       ali = CreateFancyAli(tarr[idx], hmm, dsq, sqname);
       RegisterHit(h, score, pvalue, score, whole_pval, whole_sc,
-		  sqname, 
-		  sqdesc,
+		  sqname, sqacc, sqdesc,
 		  i1,i2, L, 
 		  k1,k2, hmm->M, 
 		  idx+1, ntr,
@@ -788,6 +802,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
   int   sent_trace;		/* TRUE if slave gave us a trace */
   char **dsqlist;               /* remember what seqs slaves are doing */
   char **namelist;              /* remember what seq names slaves are doing */
+  char **acclist ;              /* remember what seq accessions slaves are doing */
   char **desclist;              /* remember what seq desc's slaves are doing */
   int   *lenlist;               /* remember lengths of seqs slaves are doing */
   int    slaveidx;		/* counter for slaves */
@@ -830,6 +845,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
    * slave was working on.
    */
   namelist = MallocOrDie(sizeof(char *) * nslaves);
+  acclist  = MallocOrDie(sizeof(char *) * nslaves);
   desclist = MallocOrDie(sizeof(char *) * nslaves);
   dsqlist  = MallocOrDie(sizeof(char *) * nslaves);
   lenlist  = MallocOrDie(sizeof(int) * nslaves);
@@ -856,6 +872,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
       SQD_DPRINTF1(("sent a dsq : %d bytes\n", sqinfo.len+2));
 
       namelist[nseq] = Strdup(sqinfo.name);
+      acclist[nseq]  = (sqinfo.flags & SQINFO_ACC)  ? Strdup(sqinfo.acc)  : NULL;
       desclist[nseq] = (sqinfo.flags & SQINFO_DESC) ? Strdup(sqinfo.desc) : NULL;
       lenlist[nseq]  = sqinfo.len;
       dsqlist[nseq]  = dsq;
@@ -898,14 +915,14 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
 	{
 	  RegisterHit(ghit, sc, pvalue, sc, 
 		      0., 0.,	                /* no mother seq */
-		      namelist[slaveidx],
-		      desclist[slaveidx],
+		      namelist[slaveidx], acclist[slaveidx], desclist[slaveidx],
 		      0,0,0,                	/* seq positions  */
 		      0,0,0,	                /* HMM positions  */
 		      0, TraceDomainNumber(tr), /* domain info    */
 		      NULL);	                /* alignment info */
 	  record_domains(dhit, hmm, dsqlist[slaveidx], 
-			 namelist[slaveidx], desclist[slaveidx], lenlist[slaveidx],
+			 namelist[slaveidx], acclist[slaveidx], desclist[slaveidx], 
+			 lenlist[slaveidx],
 			 tr, pvalue, sc, do_null2); 
 	  P7FreeTrace(tr);
 	}
@@ -913,11 +930,13 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
 
 				/* record seq info for seq we just sent */
       free(namelist[slaveidx]);
+      if (acclist[slaveidx]  != NULL) free(acclist[slaveidx]);
       if (desclist[slaveidx] != NULL) free(desclist[slaveidx]);
       free(dsqlist[slaveidx]);
 
       dsqlist[slaveidx]  = dsq;
       namelist[slaveidx] = Strdup(sqinfo.name);
+      acclist[slaveidx]  = (sqinfo.flags & SQINFO_ACC)  ? Strdup(sqinfo.acc)  : NULL;
       desclist[slaveidx] = (sqinfo.flags & SQINFO_DESC) ? Strdup(sqinfo.desc) : NULL;
       lenlist[slaveidx]  = sqinfo.len;
 
@@ -945,14 +964,14 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
 	{
 	  RegisterHit(ghit, sc, pvalue, sc, 
 		      0., 0.,	                /* no mother seq */
-		      namelist[slaveidx],
-		      desclist[slaveidx],
+		      namelist[slaveidx], acclist[slaveidx], desclist[slaveidx],
 		      0,0,0,                	/* seq positions  */
 		      0,0,0,	                /* HMM positions  */
 		      0, TraceDomainNumber(tr), /* domain info    */
 		      NULL);	                /* alignment info */
 	  record_domains(dhit, hmm, dsqlist[slaveidx], 
-			 namelist[slaveidx], desclist[slaveidx], lenlist[slaveidx],
+			 namelist[slaveidx], acclist[slaveidx], desclist[slaveidx], 
+			 lenlist[slaveidx],
 			 tr, pvalue, sc, do_null2); 
 	  P7FreeTrace(tr);
 	}
@@ -960,6 +979,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
 
 				/* free seq info */
       free(namelist[slaveidx]);
+      if (acclist[slaveidx]  != NULL) free(acclist[slaveidx]);
       if (desclist[slaveidx] != NULL) free(desclist[slaveidx]);
       free(dsqlist[slaveidx]);
 
@@ -976,6 +996,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp,
   free(slave_tid);
   free(dsqlist);
   free(namelist);
+  free(acclist);
   free(desclist);
   free(lenlist);
   pvm_exit();
@@ -1191,13 +1212,14 @@ worker_thread(void *ptr)
 	RegisterHit(wpool->ghit, sc, pvalue, sc,
 		    0., 0.,	                  /* no mother seq */
 		    sqinfo.name, 
+		    sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 
 		    sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
 		    0,0,0,                	  /* seq positions  */
 		    0,0,0,	                  /* HMM positions  */
 		    0, TraceDomainNumber(tr), /* domain info    */
 		    NULL);	                  /* alignment info */
 	record_domains(wpool->dhit, wpool->hmm, dsq, 
-		       sqinfo.name, sqinfo.desc, sqinfo.len,
+		       sqinfo.name, sqinfo.acc, sqinfo.desc, sqinfo.len,
 		       tr, pvalue, sc, wpool->do_null2);
       }
     AddToHistogram(wpool->hist, sc);
