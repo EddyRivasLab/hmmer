@@ -331,9 +331,9 @@ P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo, float maxgap,
   				/* calculate the score of using this j. */
 	new = sc[j] +  FDot(tij, cij, 7) + FDot(insp, insc, Alphabet_size);
 
-	/*	printf("%3d %3d new=%6.2f m=%6.2f i=%6.2f t=%6.2f\n",
-	       i, j, new, FDot(matp, matc[i], Alphabet_size), 
-	       FDot(insp, insc, Alphabet_size), FDot(tij, cij, 7));  */
+	SQD_DPRINTF2(("%3d %3d new=%6.2f scj=%6.2f m=%6.2f i=%6.2f t=%6.2f\n",
+	       i, j, new, sc[j], FDot(matp, matc[i], Alphabet_size), 
+	       FDot(insp, insc, Alphabet_size), FDot(tij, cij, 7)));
 
 				/* keep it if it's better */
 	if (new > sc[i]) {
