@@ -171,6 +171,9 @@ FreeFancyAli(struct fancyali_s *ali)
  *           In contrast, "name" and "desc" are copied, so the caller
  *           is still responsible for these.
  *           
+ *           Number of args is highly unwieldy; consider abstracting
+ *           into some sort of object?
+ *           
  * Args:     hitlist  - active top hit list
  *           key      - value to sort by: bigger is better
  *           evalue   - evalue (or pvalue) of this hit 
@@ -179,8 +182,12 @@ FreeFancyAli(struct fancyali_s *ali)
  *           desc     - description of target sequence 
  *           sqfrom   - 1..L pos in target seq  of start
  *           sqto     - 1..L pos; sqfrom > sqto if rev comp
+ *           sqlen    - length of sequence, L
  *           hmmfrom  - 0..M+1 pos in HMM of start
  *           hmmto    - 0..M+1 pos in HMM of end
+ *           hmmlen   - length of HMM, M
+ *           domidx   - number of this domain 
+ *           ndom     - total # of domains in sequence
  *           ali      - optional printable alignment info
  *           
  * Return:   (void)
@@ -189,7 +196,9 @@ FreeFancyAli(struct fancyali_s *ali)
 void
 RegisterHit(struct tophit_s *hitlist, double key, double evalue, float score,
 	    char *name, char *desc, int sqfrom, int sqto, int sqlen,
-	    int hmmfrom, int hmmto, int hmmlen, struct fancyali_s *ali)
+	    int hmmfrom, int hmmto, int hmmlen, 
+	    int domidx, int ndom,
+	    struct fancyali_s *ali)
 {
   /* Check if we have to add this hit to the current list.
    */
@@ -235,6 +244,8 @@ RegisterHit(struct tophit_s *hitlist, double key, double evalue, float score,
   hitlist->hit[hitlist->pos]->hmmfrom = hmmfrom;
   hitlist->hit[hitlist->pos]->hmmto   = hmmto;
   hitlist->hit[hitlist->pos]->hmmlen  = hmmlen;
+  hitlist->hit[hitlist->pos]->domidx  = domidx;
+  hitlist->hit[hitlist->pos]->ndom    = ndom;
   hitlist->hit[hitlist->pos]->ali     = ali;
 
   hitlist->pos++; 
@@ -256,6 +267,7 @@ GetRankedHit(struct tophit_s *h, int rank,
 	     double *r_evalue, float *r_score, char **r_name, char **r_desc,
 	     int *r_sqfrom, int *r_sqto, int *r_sqlen,
 	     int *r_hmmfrom, int *r_hmmto, int *r_hmmlen,
+	     int *r_domidx, int *r_ndom,
 	     struct fancyali_s **r_ali)
 {
   if (r_evalue  != NULL) *r_evalue  = h->hit[rank]->evalue;
@@ -268,6 +280,8 @@ GetRankedHit(struct tophit_s *h, int rank,
   if (r_hmmfrom != NULL) *r_hmmfrom = h->hit[rank]->hmmfrom;
   if (r_hmmto   != NULL) *r_hmmto   = h->hit[rank]->hmmto;
   if (r_hmmlen  != NULL) *r_hmmlen  = h->hit[rank]->hmmlen;
+  if (r_domidx  != NULL) *r_domidx  = h->hit[rank]->domidx;
+  if (r_ndom    != NULL) *r_ndom    = h->hit[rank]->ndom;
   if (r_ali     != NULL) *r_ali     = h->hit[rank]->ali;
 }
 
