@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif /* HMMER_THREADS */
 
 #include "config.h"
 #include "structs.h"
@@ -81,9 +84,18 @@ void
 SetAlphabet(int type)
 {
   int x;
+#ifdef HMMER_THREADS
+  pthread_mutex_t  alphabet_lock; /* alphabet is global; must protect to be threadsafe */
+  int              ret;		  /* return code from pthreads */
 
- /* Because the alphabet information is global, this
-  * is not a thread-safe function. Therefore, don't ever
+  if ((rtn = pthread_mutex_lock(&alphabet_lock)) != 0)
+    Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
+#endif
+
+ /* Because the alphabet information is global, we must
+  * be careful to make this a thread-safe function. The mutex
+  * (above) takes care of that. But, indeed, it's also
+  * just good sense (and more efficient) to simply never
   * allow resetting the alphabet. If type is Alphabet_type,
   * silently return; else die with an alphabet mismatch
   * warning.
@@ -92,6 +104,11 @@ SetAlphabet(int type)
     {
       if (type != Alphabet_type) 
 	Die("An alphabet type conflict occurred.\nYou probably mixed a DNA seq file with a protein model, or vice versa.");
+      
+#ifdef HMMER_THREADS
+      if ((rtn = pthread_mutex_unlock(&alphabet_lock)) != 0)
+	Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+#endif
       return;
     }
 
@@ -140,6 +157,11 @@ SetAlphabet(int type)
     break;
   default: Die("No support for non-nucleic or protein alphabets");  
   }
+
+#ifdef HMMER_THREADS
+  if ((rtn = pthread_mutex_unlock(&alphabet_lock)) != 0)
+    Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+#endif
 }
 
 /* Function: SymbolIndex()
@@ -153,7 +175,7 @@ int
 SymbolIndex(char sym)
 {
   char *s;
-  return ((s = strchr(Alphabet, toupper(sym))) == NULL) ?
+  return ((s = strchr(Alphabet, (char) toupper((int) sym))) == NULL) ?
 	  Alphabet_iupac-1 : s - Alphabet;
 } 
 
