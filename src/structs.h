@@ -250,6 +250,19 @@ struct dpmatrix_s {
   int **dmx;			/* delete scores [0.1..N][0.1..M-1.M] */
 };
 
+/* Declaration of Plan7 shadow matrix structure.
+ * In general, allowed values are STM, STI, etc.
+ * However, E state has M possible sources, from 1..M match states;
+ * hence the esrc array.
+ */
+struct dpshadow_s {
+  char **xtb;			/* special state traces [0.1..N][BECJN]     */
+  char **mtb;			/* match state traces [0.1..N][0.1..M]      */
+  char **itb;			/* insert state traces [0.1..N][0.1..M-1.M] */
+  char **dtb;			/* delete state traces [0.1..N][0.1..M-1.M] */
+  int   *esrc;                  /* E trace is special; must store a M state number 1..M */
+};
+
 /* Structure: HMMFILE
  * 
  * Purpose:   An open HMM file or HMM library. See hmmio.c.
