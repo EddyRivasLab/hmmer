@@ -45,20 +45,11 @@ $(SHIVA): @EXEC_DEPENDENCY@
 
 check: $(SHIVA)
 	@echo 
-	@echo Running compiled Shiva exercises:
+	@echo Running test suite exercises.
 	@echo Warning: some tests may take several minutes to complete. 
-	@for shivatest in $(SHIVA); do\
-	   if ./$$shivatest; then\
-              echo $$shivatest: ok;\
-           else\
-              echo $$shivatest: FAILED;\
-           fi;\
-	done
-	@echo
-	@echo Running scripted Shiva exercises:
-	@echo Warning: This also may take several minutes.
-	perl ./Optiontests.pl
-	sh ./Exercises.sh
+	@echo 
+	./sqc 2 exercises.sqc . ../src
+
 
 #######
 ## Miscellaneous

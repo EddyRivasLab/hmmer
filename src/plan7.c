@@ -69,9 +69,8 @@ AllocPlan7Shell(void)
   hmm->mat    = NULL;
   hmm->ins    = NULL;
 
-  hmm->tsc = hmm->tsc_mem = NULL;
-  hmm->msc = hmm->msc_mem = NULL;
-  hmm->isc = hmm->isc_mem = NULL;
+  hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
+  hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
 
   hmm->begin  = NULL;
   hmm->end    = NULL;

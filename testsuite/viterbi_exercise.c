@@ -3,7 +3,7 @@
  * 
  * Exercise the various Viterbi algorithms, big and small.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 
@@ -48,6 +48,7 @@ main(int argc, char **argv)
   char    *seq;
   SQINFO   sqinfo;
   int      L;			/* length of dsq                           */
+  struct dpmatrix_s *mx;        /* growable, reusable DP matrix            */
   struct p7trace_s  *tr1;	/* traceback                               */
   struct p7trace_s  *tr2;	/* another traceback                       */
   int       nseq;
@@ -117,6 +118,8 @@ main(int argc, char **argv)
       }
       P7Logoddsify(hmm, TRUE);
 
+      
+      mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
       for (i = 0; i < nseq; i++)
 	{
 	  EmitSequence(hmm, &dsq, &L, NULL);
@@ -124,8 +127,8 @@ main(int argc, char **argv)
 	  sqinfo.len   = L;
 	  sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
 
-	  sc1 = P7Viterbi(dsq, L, hmm, &tr1);
-	  sc2 = P7SmallViterbi(dsq, L, hmm, &tr2);
+	  sc1 = P7Viterbi(dsq, L, hmm, mx, &tr1);
+	  sc2 = P7SmallViterbi(dsq, L, hmm, mx, &tr2);
 
 	  if (be_verbose)
 	    {
@@ -162,5 +165,6 @@ main(int argc, char **argv)
 	}
     }
 
+  FreePlan7Matrix(mx);
   return EXIT_SUCCESS;
 }

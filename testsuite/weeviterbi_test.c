@@ -3,10 +3,11 @@
  * 
  * Test driver for Myers/Miller/Hirschberg linear memory Viterbi tracebacks.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 
@@ -49,6 +50,7 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
+  struct dpmatrix_s *mx;        /* growable, reusable DP matrix            */
   struct p7trace_s  *t1;	/* standard Viterbi traceback              */
   struct p7trace_s  *t2;	/* WeeViterbi traceback                    */
   int       nseq;
@@ -108,12 +110,13 @@ main(int argc, char **argv)
    ***********************************************/
 
   nseq = 0;
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
     {
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
 
-      sc1 = P7Viterbi(dsq, sqinfo.len, hmm, &t1);
+      sc1 = P7Viterbi(dsq, sqinfo.len, hmm, mx, &t1);
       sc2 = P7WeeViterbi(dsq, sqinfo.len, hmm, &t2);
 
       if (be_verbose)
@@ -142,6 +145,7 @@ main(int argc, char **argv)
       free(dsq);
     }
 
+  FreePlan7Matrix(mx);
   FreePlan7(hmm);
   SeqfileClose(sqfp);
   HMMFileClose(hmmfp);

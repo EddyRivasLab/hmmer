@@ -1,7 +1,16 @@
-Shiva: HMMER testsuite
+HMMER testsuite
+CVS $Id$
+
+
+Some tests are compiled programs. To compile them:
+   % make
+
+Once they're compiled, to run the whole test suite, do:
+   % ./sqc 2 exercises.sqc . ../src
+
 
 #####################################################################
-I. Compiled test drivers.
+List of compiled test drivers.
 ---------------------------------------------------------------------
 
 - A test driver runs with no arguments, gives no output, 
@@ -61,20 +70,17 @@ weeviterbi_test
 	compares Viterbi trace to WeeViterbi trace.
 	
 #####################################################################
-II. Scripted test drivers.
+Other test scripts.
 ---------------------------------------------------------------------
 
-Optiontests.pl
-	Runs every documented option for every program, to be
-	sure they're really connected up.
+test1-conversion.pl
+	Makes sure that hmmconvert produces identical HMMs from
+ 	byteswapped (initially different) binary HMM files.
 
 
-#####################################################################
-Obsolete: kept in RCS archive only for reproducibility of old results
----------------------------------------------------------------------
+ 	
+	
 
-fitting_test.c	Tests of EVD and Gaussian histogram fitting code.
-		17 June 1997
 
 
 

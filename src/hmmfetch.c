@@ -28,8 +28,8 @@ static char banner[] = "hmmfetch -- retrieve specific HMM from an HMM database";
 static char usage[] = "\
 Usage: hmmfetch [-options] <hmmfile> <HMM name>\n\
 Available options are:\n\
-  -h             : print short usage and version info, then exit\n\
-  -n             : interpret <HMM name> instead as an HMM number\n\
+  -h   : print short usage and version info, then exit\n\
+  -n   : interpret <HMM name> instead as an HMM number (0..nhmm-1)\n\
 ";
 
 static char experts[] = "\

@@ -1,6 +1,5 @@
 /* parsingviterbi_test.c
  * Wed Mar  4 15:07:37 1998
- * cp trace_test.c ../src/testdriver.c; cd ../src; make testdriver
  * 
  * Test driver for P7ParsingViterbi(); alignment in linear memory.
  * 
@@ -8,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 
@@ -46,6 +46,7 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
+  struct dpmatrix_s *mx;        /* growable, reusable DP matrix            */
   struct p7trace_s  *tr1;	/* traceback from P7Viterbi()              */
   struct p7trace_s  *tr2;	/* traceback from P7ParsingViterbi()       */
   int       nseq;
@@ -110,12 +111,13 @@ main(int argc, char **argv)
    ***********************************************/
 
   nseq = 0;
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
     {
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
 
-      sc1  = P7Viterbi(dsq, sqinfo.len, hmm, &tr1);
+      sc1  = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr1);
       sc2  = P7ParsingViterbi(dsq, sqinfo.len, hmm, &tr2);
 
       if (be_verbose)
@@ -159,6 +161,7 @@ main(int argc, char **argv)
       free(dsq);
     }
 
+  FreePlan7Matrix(mx);
   FreePlan7(hmm);
   HMMFileClose(hmmfp);
   SeqfileClose(sqfp);

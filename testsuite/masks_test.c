@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "structs.h"
 #include "funcs.h"
@@ -121,7 +122,6 @@ main(int argc, char **argv)
    */
   if (xnufile != NULL)
     {
-      int     format;
       SQFILE *sqfp;
       SQINFO  sqinfo;
       int     xnum;

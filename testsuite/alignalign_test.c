@@ -20,6 +20,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "structs.h"
 #include "funcs.h"
@@ -61,6 +62,7 @@ main(int argc, char **argv)
   MSA     *msa;			/* multiple sequence alignment from afile  */
   char   **rseq;                /* raw, dealigned aseq                     */
   char     *dsq;		/* digitized target sequence               */
+  struct dpmatrix_s *mx;        /* reused DP alignment matrix              */
   struct p7trace_s  *mtr;	/* master traceback from alignment         */
   struct p7trace_s  *maptr;     /* master traceback from mapping           */
   struct p7trace_s **tr;        /* individual tracebacks imposed by mtr    */
@@ -158,18 +160,25 @@ main(int argc, char **argv)
   ImposeMasterTrace(msa->aseq, msa->nseq, mtr, &tr);
 
   itr = MallocOrDie(sizeof(struct p7trace_s *) * msa->nseq);
+
+  /* Create a DP matrix; initially only two rows big, but growable;
+   * we overalloc by 25 rows (L dimension) when we grow; not growable
+   * in model dimension, since we know the hmm size
+   */
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+
 				/* align individuals, compare traces */
   ndiff = 0;
   for (idx = 0; idx < msa->nseq; idx++)
     {
       rlen = strlen(rseq[idx]);
       dsq  = DigitizeSequence(rseq[idx], rlen);
-      P7Viterbi(dsq, rlen, hmm, &(itr[idx]));
-      
+      P7Viterbi(dsq, rlen, hmm, mx, &(itr[idx]));
       if (! TraceCompare(itr[idx], tr[idx]))
 	ndiff++;
       free(dsq);
     }
+  FreePlan7Matrix(mx);
 
   /* Determine success/failure.
    */

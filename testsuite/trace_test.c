@@ -1,14 +1,14 @@
 /* trace_test.c
  * Mon Feb  2 07:57:47 1998
- * cp trace_test.c ../src/testdriver.c; cd ../src; make testdriver
  * 
  * Test driver for Viterbi tracebacks.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 
@@ -21,7 +21,7 @@ static char banner[] = "\
 trace_test : testing of Plan7 Viterbi traceback code";
 
 static char usage[] = "\
-Usage: testdriver [-options]\n\
+Usage: trace_test [-options]\n\
   Available options are:\n\
   -h              : help; display this usage info\n\
   -v              : be verbose\n\
@@ -53,6 +53,7 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
+  struct dpmatrix_s *mx;        /* reusable, growable DP matrix            */
   struct p7trace_s  *tr;	/* traceback                               */
   int       nseq;
   float     sc;
@@ -114,13 +115,14 @@ main(int argc, char **argv)
    ***********************************************/
 
   nseq = 0;
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
     {
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
 
-      if (do_small) sc = P7SmallViterbi(dsq, sqinfo.len, hmm, &tr);
-      else          sc = P7Viterbi(dsq, sqinfo.len, hmm, &tr);
+      if (do_small) sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+      else          sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
 
       if (be_verbose)
 	{
@@ -138,6 +140,7 @@ main(int argc, char **argv)
       free(dsq);
     }
 
+  FreePlan7Matrix(mx);
   FreePlan7(hmm);
   HMMFileClose(hmmfp);
   SeqfileClose(sqfp);

@@ -190,7 +190,7 @@ struct plan7_s {
   int    xsc[4][2];             /* N,E,C,J transitions                      -*/
   int   *bsc;                   /* begin transitions     [1.M]              -*/
   int   *esc;			/* end transitions       [1.M]              -*/
-  int  **tsc_mem, **msc_mem, **isc_mem, *bsc_mem, *esc_mem;
+  int  *tsc_mem, *msc_mem, *isc_mem, *bsc_mem, *esc_mem;
 
   /* DNA translation scoring parameters
    * For aligning protein Plan7 models to DNA sequence.

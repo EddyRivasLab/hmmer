@@ -62,7 +62,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
   int **mmx;
   int **imx;
   int **dmx;
-  int   i,k,z;
+  int   i,k;
   int   sc;
   int  *mc, *dc, *ic;        /* pointers to rows of mmx, dmx, imx */
   int  *ms, *is;             /* pointers to msc[i], isc[i] */
@@ -71,10 +71,9 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p
   int  *ep;                  /* ptr into esc[] */
   int   xmb;		     /* value of xmx[i-1][XMB] */
   int   xme;                 /* max for xmx[i][XME] */
-  int  *dpp, *dpc;           /* ptr into dmx[i-1] (previous) and dmx[i] (current) */
+  int  *dpp;                 /* ptr into dmx[i-1] (previous row) */
   int  *tpmm, *tpmi, *tpmd, *tpim, *tpii, *tpdm, *tpdd; /* ptrs into tsc */
   int   M;
-  int   neginfty;
   
   /* Make sure we have space for a DP matrix with 0..L rows, 0..M-1 columns.
    */ 
