@@ -43,8 +43,12 @@ CFLAGS = @CFLAGS@
 ## St. Louis)
 #######
 SHELL       = /bin/sh
+PACKAGE     = @PACKAGE_NAME@
 BASENAME    = @PACKAGE_TARNAME@
 RELEASE     = @PACKAGE_VERSION@
+RELEASEDATE = @PACKAGE_DATE@
+COPYRIGHT   = @PACKAGE_COPYRIGHT@
+LICENSELINE = @PACKAGE_LICENSE@
 RELCODE     = @PACKAGE_RELCODE@
 LICENSETAG  = gnu
 COMPRESS    = gzip
@@ -151,8 +155,7 @@ dist:
 	@if test -e ${BASENAME}-$(RELEASE).tar.Z;  then rm -f  ${BASENAME}-$(RELEASE).tar.Z;  fi
 	@if test -e ${BASENAME}-$(RELEASE).tar.gz; then rm -f  ${BASENAME}-$(RELEASE).tar.gz; fi
 	# 
-	# CVS tag and extract. -c: make sure we committed;
-	#                      -F: allow more than one "make dist" per rel
+	# CVS tag and extract.  -F: allow more than one "make dist" per rel
 	# prep: must have done "cvs commit", and CVSROOT must be set
 	# We also need the squid library, so tag and export it too.
 	#
@@ -161,10 +164,24 @@ dist:
 	cvs rtag -F ${RELCODE} squid
 	(cd ${BASENAME}-${RELEASE}; cvs export -r ${RELCODE} -d squid squid)
 	# 
-	# Make the configure scripts from configure.in
+	# We won't include the ssdk in the distro, but we need a 
+	# working copy of it temporarily, for rmanprocess.pl 
+	# (when making the user guide); we also need to put a copy of sqc 
+	# in testsuite. 
+	#
+	cp ssdk/sqc ${BASENAME}-${RELEASE}/testsuite/
+	mkdir ${BASENAME}-${RELEASE}/ssdk
+	cp ssdk/rmanprocess.pl ${BASENAME}-${RELEASE}/ssdk/
+	# 
+	# Make the configure scripts from configure.ac
 	#
 	(cd ${BASENAME}-${RELEASE};       autoconf)
 	(cd ${BASENAME}-${RELEASE}/squid; autoconf)
+	#
+	# We need a basic squid Makefile, so we can later do
+	# a "make implode" in squid. We'll delete it later.
+	#
+	(cd ${BASENAME}-${RELEASE}/squid; ./configure)
 	# 
 	# Include the appropriate license files and release notes
 	#
@@ -172,18 +189,29 @@ dist:
 	cp  Licenses/COPYING.$(LICENSETAG)   ${BASENAME}-$(RELEASE)/COPYRIGHT
 	-cp Release-Notes/RELEASE-$(RELEASE) ${BASENAME}-$(RELEASE)/NOTES
 	#
-	# Attach license stamps on files that need 'em (replace LICENSE keyword)
-	# licenseadd.pl is basically harmless, so we can overannotate here by
-	# trying to licenseadd everything.
+	# Attach license stamps on files that need 'em (replace LICENSE keyword everywhere)
 	#
-	find ${BASENAME}-${RELEASE} -type f -exec licenseadd.pl Licenses/$(LICENSETAG) {} \;
+	find ${BASENAME}-${RELEASE} -type f -exec ssdk/sedition-pp LICENSE Licenses/$(LICENSETAG) {} \;
+	#
+	# All other automated keyword replacements are in the documentation.
 	# 
+	find ${BASENAME}-${RELEASE}/documentation -type f -exec ssdk/sedition RELEASE ${RELEASE} RELEASEDATE ${RELEASEDATE} PACKAGE ${PACKAGE} COPYRIGHT ${COPYRIGHT} LICENSELINE ${LICENSELINE} {} \;
+	#
 	# Compilation of the documentation.
 	# Documentation is not provided in source form.
 	#
-	(cd documentation/userguide; make clean)
-	(cd documentation/userguide; make pdf)
-	cp -f documentation/userguide/Userguide.pdf $(BASENAME)-$(RELEASE)/
+	(cd ${BASENAME}-${RELEASE}/documentation/userguide; make clean)
+	(cd ${BASENAME}-${RELEASE}/documentation/userguide; make pdf)
+	cp -f ${BASENAME}-${RELEASE}/documentation/userguide/Userguide.pdf $(BASENAME)-$(RELEASE)/
+	# 
+	# Finish the man pages off, adding necessary boilerplate.
+	# This must be done *after* the user guide is created, since the user guide
+	# steals and uses the pre-boilerplate man pages.
+	#
+	for prog in $(PROGS); do\
+	   cat ${BASENAME}-${RELEASE}/documentation/man/boilerplate >> ${BASENAME}-${RELEASE}/documentation/manpages/$$prog.man;\
+	done
+	-rm -f ${BASENAME}-${RELEASE}/documentation/man/boilerplate
 	#
 	# Remove CVS-controlled files/directories that don't belong in 
 	# the distro
@@ -204,6 +232,11 @@ dist:
 	-rm -rf ${BASENAME}-${RELEASE}/squid/Licenses
 	-rm -rf ${BASENAME}-${RELEASE}/squid/LOG
 	-rm -rf ${BASENAME}-${RELEASE}/squid/configure.in
+	# 
+	# Set file permissions
+	#
+	find ${BASENAME}-${RELEASE} -type f -exec chmod +r {} \;
+	chmod +x ${BASENAME}-${RELEASE}/testsuite/sqc
 	#
 	# Packaging commands
 	#

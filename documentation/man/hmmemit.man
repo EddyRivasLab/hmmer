@@ -1,4 +1,4 @@
-.TH "hmmemit" 1 @RELEASEDATE@ "HMMER @RELEASE@" "HMMER Manual"
+.TH "hmmemit" 1 "@RELEASEDATE@" "@PACKAGE@ @RELEASE@" "@PACKAGE@ Manual"
 
 .SH NAME
 .TP 
@@ -82,43 +82,5 @@ means that two different runs of
 on the same HMM will give slightly different
 results.  You can use
 this option to generate reproducible results.
-
-
-
-.SH SEE ALSO
-
-.PP
-Master man page, with full list of and guide to the individual man
-pages: see 
-.B hmmer(1).
-.PP
-A User guide and tutorial came with the distribution:
-.B Userguide.ps
-[Postscript] and/or
-.B Userguide.pdf
-[PDF].
-.PP
-Finally, all documentation is also available online via WWW: 
-.B http://hmmer.wustl.edu/
-
-.SH AUTHOR
-
-This software and documentation is: 
-.nf
-@COPYRIGHT@
-@LICENSE@
-.fi
-See the file COPYING in your distribution for complete details.
-
-.nf
-Sean Eddy
-HHMI/Dept. of Genetics
-Washington Univ. School of Medicine
-4566 Scott Ave.
-St Louis, MO 63110 USA
-Phone: 1-314-362-7666
-FAX  : 1-314-362-7855
-Email: eddy@genetics.wustl.edu
-.fi
 
 
