@@ -40,15 +40,10 @@
  */
 #define SYMIDX(x)   (strchr(Alphabet, (x)) - Alphabet)
 
-/* Worry() is a conditional warning macro, used for debugging;
- * it inserts file name and line number information and
- * calls VerboseWorry(). See debug.c. 
- * 
- * PANIC is called for failures of Std C/POSIX functions,
+/* PANIC is called for failures of Std C/POSIX functions,
  * instead of my own functions. It calls perror() and exits
  * abnormally.
  */
-#define Worry(x,s)  VerboseWorry(x, __FILE__, __LINE__, s)
 #define PANIC       (Panic(__FILE__, __LINE__))
 
 /* The symbol alphabet.
@@ -287,7 +282,17 @@ typedef struct hmmfile_s HMMFILE;
 /* Plan 7 model state types
  * used in traceback structure
  */
-enum p7stype { STM, STD, STI, STS, STN, STB, STE, STC, STT, STJ, STBOGUS };
+#define STBOGUS 0
+#define STM     1
+#define STD     2
+#define STI     3
+#define STS     4
+#define STN     5
+#define STB     6
+#define STE     7
+#define STC     8
+#define STT     9
+#define STJ     10     
 
 /* Structure: p7trace_s
  * 
@@ -297,7 +302,7 @@ enum p7stype { STM, STD, STI, STS, STN, STB, STE, STC, STT, STJ, STBOGUS };
  */
 struct p7trace_s {
   int   tlen;                   /* length of traceback                      */
-  enum p7stype *statetype;      /* state type used for alignment            */
+  char *statetype;              /* state type used for alignment            */
   int  *nodeidx;                /* index of aligned node, 1..M (if M,D,I)   */
   int  *pos;                    /* position in dsq, 1..L or -1              */ 
 };
@@ -467,9 +472,8 @@ struct vpool_s {
   pthread_mutex_t input_lock;	    
   pthread_mutex_t output_lock;      
 				/* our condition flags: */
-  pthread_cond_t  input_queue_not_empty;  
-  pthread_cond_t  input_queue_not_full;
-  pthread_cond_t  output_queue_not_full;
+  pthread_cond_t  input_ready;
+  pthread_cond_t  output_ready;
   int             shutdown;	/* TRUE to shut down worker threads */
 };
   

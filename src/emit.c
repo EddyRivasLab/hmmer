@@ -40,7 +40,7 @@ void
 EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;
-  enum   p7stype    type;	/* current state type */
+  char  type;               	/* current state type */
   int   k;			/* current node index */
   char *dsq;                    /* generated sequence, digitized */
   int   L;			/* length of sequence */

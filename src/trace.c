@@ -40,18 +40,18 @@ P7AllocTrace(int tlen, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;
   
-  tr = (struct p7trace_s *) MallocOrDie (sizeof(struct p7trace_s));
-  tr->statetype = (enum p7stype *)  MallocOrDie (sizeof(enum p7stype) * tlen);
-  tr->nodeidx   = (int *)   MallocOrDie (sizeof(int)  * tlen);
-  tr->pos       = (int *)   MallocOrDie (sizeof(int)  * tlen);
+  tr =            MallocOrDie (sizeof(struct p7trace_s));
+  tr->statetype = MallocOrDie (sizeof(char) * tlen);
+  tr->nodeidx   = MallocOrDie (sizeof(int)  * tlen);
+  tr->pos       = MallocOrDie (sizeof(int)  * tlen);
   *ret_tr = tr;
 }
 void
 P7ReallocTrace(struct p7trace_s *tr, int tlen)
 {
-  tr->statetype = (enum p7stype *) ReallocOrDie (tr->statetype, tlen * sizeof(enum p7stype));
-  tr->nodeidx   = (int *)  ReallocOrDie (tr->nodeidx,   tlen * sizeof(int));
-  tr->pos       = (int *)  ReallocOrDie (tr->pos,       tlen * sizeof(int));
+  tr->statetype = ReallocOrDie (tr->statetype, tlen * sizeof(char));
+  tr->nodeidx   = ReallocOrDie (tr->nodeidx,   tlen * sizeof(int));
+  tr->pos       = ReallocOrDie (tr->pos,       tlen * sizeof(int));
 }
 void 
 P7FreeTrace(struct p7trace_s *tr)
@@ -78,7 +78,7 @@ P7FreeTrace(struct p7trace_s *tr)
  * Returns:  void
  */
 void
-TraceSet(struct p7trace_s *tr, int tpos, enum p7stype type, int idx, int pos)
+TraceSet(struct p7trace_s *tr, int tpos, char type, int idx, int pos)
 {
   tr->statetype[tpos] = type;
   tr->nodeidx[tpos]   = idx;
@@ -141,16 +141,16 @@ MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2)
 void
 P7ReverseTrace(struct p7trace_s *tr)
 {
-  enum p7stype *statetype;
-  int          *nodeidx;
-  int          *pos;
-  int           opos, npos;
+  char  *statetype;
+  int   *nodeidx;
+  int   *pos;
+  int    opos, npos;
 
   /* Allocate
    */
-  statetype = (enum p7stype *) MallocOrDie (sizeof(enum p7stype) * tr->tlen);
-  nodeidx   = (int *) MallocOrDie (sizeof(int) * tr->tlen);
-  pos       = (int *) MallocOrDie (sizeof(int) * tr->tlen);
+  statetype = MallocOrDie (sizeof(char)* tr->tlen);
+  nodeidx   = MallocOrDie (sizeof(int) * tr->tlen);
+  pos       = MallocOrDie (sizeof(int) * tr->tlen);
   
   /* Reverse the trace.
    */
@@ -556,8 +556,8 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
  *           return the integer score for that transition. 
  */
 int
-TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, int k1, 
-		      enum p7stype st2, int k2)
+TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1, 
+		      char st2, int k2)
 {
   switch (st1) {
   case STS: return 0;	/* S never pays */
@@ -658,9 +658,9 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
   ali         = AllocFancyAli();
   ali->rfline = NULL;
   ali->csline = NULL;
-  ali->model  = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  ali->mline  = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
-  ali->aseq   = (char *) MallocOrDie (sizeof(char) * (tr->tlen+1));
+  ali->model  = MallocOrDie (sizeof(char) * (tr->tlen+1));
+  ali->mline  = MallocOrDie (sizeof(char) * (tr->tlen+1));
+  ali->aseq   = MallocOrDie (sizeof(char) * (tr->tlen+1));
 
   memset(ali->model,  ' ', tr->tlen);
   memset(ali->mline,  ' ', tr->tlen);

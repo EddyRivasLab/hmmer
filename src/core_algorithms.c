@@ -29,9 +29,9 @@
 #endif
 
 static float get_wee_midpt(struct plan7_s *hmm, char *dsq, int L, 
-			   int k1, enum p7stype t1, int s1,
-			   int k3, enum p7stype t3, int s3,
-			   int *ret_k2, enum p7stype *ret_t2, int *ret_s2);
+			   int k1, char t1, int s1,
+			   int k3, char t3, int s3,
+			   int *ret_k2, char *ret_t2, int *ret_s2);
 
 
 /* Function: AllocPlan7Matrix()
@@ -236,7 +236,7 @@ P7WeeViterbiSize(int L, int M)
 	   20 * sizeof(int)              + /* 5 special states      */
 	   2  * (L+2) * sizeof(int) +      /* stacks for starts/ends (overkill) */      
 	   (L+2) * sizeof(int) +           /* k assignments to seq positions */
-	   (L+2) * sizeof(enum p7stype))   /* state assignments to seq positions */
+	   (L+2) * sizeof(char))           /* state assignments to seq pos */
 	  / 1000000);
 }
 
@@ -1103,12 +1103,12 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;         /* RETURN: traceback */
   int          *kassign;        /* 0..L+1, alignment of seq positions to model nodes */
-  enum p7stype *tassign;        /* 0..L+1, alignment of seq positions to state types */
+  char         *tassign;        /* 0..L+1, alignment of seq positions to state types */
   int          *endlist;        /* stack of end points on sequence to work on */
   int          *startlist;      /* stack of start points on sequence to work on */
   int          lpos;            /* position in endlist, startlist */
   int          k1, k2, k3;	/* start, mid, end in model      */
-  enum p7stype t1, t2, t3;	/* start, mid, end in state type */
+  char         t1, t2, t3;	/* start, mid, end in state type */
   int          s1, s2, s3;	/* start, mid, end in sequence   */
   float        sc;		/* score of segment optimal alignment */
   float        ret_sc;		/* optimal score over complete seq */
@@ -1119,7 +1119,7 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
   /* Initialize.
    */
   kassign   = MallocOrDie (sizeof(int) * (L+1));
-  tassign   = MallocOrDie (sizeof(enum p7stype) * (L+1));
+  tassign   = MallocOrDie (sizeof(char)* (L+1));
   endlist   = MallocOrDie (sizeof(int) * (L+1));
   startlist = MallocOrDie (sizeof(int) * (L+1));
 
@@ -1486,9 +1486,9 @@ Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_m
  */
 static float
 get_wee_midpt(struct plan7_s *hmm, char *dsq, int L, 
-	      int k1, enum p7stype t1, int s1,
-	      int k3, enum p7stype t3, int s3,
-	      int *ret_k2, enum p7stype *ret_t2, int *ret_s2)
+	      int k1, char t1, int s1,
+	      int k3, char t3, int s3,
+	      int *ret_k2, char *ret_t2, int *ret_s2)
 {
   struct dpmatrix_s *fwd;
   struct dpmatrix_s *bck;
@@ -1497,7 +1497,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
   int        **imx;             /* convenience ptr into insert states  */
   int        **dmx;             /* convenience ptr into delete states  */
   int          k2;
-  enum p7stype t2;
+  char         t2;
   int          s2;
   int          cur, prv, nxt;	/* current, previous, next row index (0 or 1)*/
   int          i,k;		/* indices for seq, model */
@@ -2040,7 +2040,7 @@ ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
   int tpos;			/* position in trace */
   int i;			/* position in seq (1..N) */
   int k;			/* position in model (1..M) */
-  enum p7stype nxtstate;	/* next state to assign in traceback */
+  char nxtstate;        	/* next state to assign in traceback */
 
   /* Overallocate for the trace.
    * S-N-B- ... - E-C-T  : 6 states + L is minimum trace;
