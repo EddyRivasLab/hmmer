@@ -316,7 +316,7 @@ main(int argc, char **argv)
        * outliers on the right.
        */
       if (! ExtremeValueFitHistogram(hist, TRUE, 9999.))
-	Die("fit failed; -n may be set too small?\n");
+	Die("fit failed; --num may be set too small?\n");
       
       mu[nhmm]     = hist->param[EVD_MU];
       lambda[nhmm] = hist->param[EVD_LAMBDA];
