@@ -63,8 +63,9 @@ COMPRESS    = compress
 FTPDIR      = /nfs/newftp/eddy/hmmer/
 
 PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit\
-	hmmfetch hmmindex hmmpfam hmmsearch\
-	@PVMPROGS@
+	hmmfetch hmmindex hmmpfam hmmsearch
+
+PVMPROGS = @PVMPROGS@
 
 READMES = 00README INSTALL 
 
@@ -115,7 +116,7 @@ all:
 	else\
 	   (cd src; make CC="$(CC)" CFLAGS="$(CFLAGS)");\
 	   mkdir binaries;\
-	   for prog in $(PROGS); do\
+	   for prog in $(PROGS) $(PVMPROGS); do\
 	      mv src/$$prog binaries/;\
 	   done;\
 	fi
@@ -131,7 +132,7 @@ check:
 # install: installs the binaries in BINDIR/
 #          installs man pages in MANDIR/man1/  (if MANSUFFIX is 1)
 install: 
-	for file in $(PROGS); do\
+	for file in $(PROGS) $(PVMPROGS); do\
 	   cp binaries/$$file $(BINDIR)/;\
 	done
 	for file in $(MANS); do\
