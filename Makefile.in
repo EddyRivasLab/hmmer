@@ -99,7 +99,8 @@ SHIVADIST = README\
 	    Optiontests.pam  Optiontests.slx\
 	    fn3.hmm fn3.seed titin.fa\
 	    trace_test.hmm trace_test.seq trace_test.slx \
-	    weeviterbi_test.hmm weeviterbi_test.seq
+	    weeviterbi_test.hmm weeviterbi_test.seq\
+	    Exercises.sh fn3-bin fn3-bin-swap
 
 DEMOS = globins50.msf  globins630.fa Artemia.fa\
 	rrm.slx pkinase.slx fn3.slx\
