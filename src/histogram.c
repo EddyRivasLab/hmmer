@@ -303,12 +303,14 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
       if (h->fit_type != HISTFIT_NONE && (int) h->expect[idx] > 0)
 	{
 				/* "corrected" line */
+#ifdef SRE_REMOVED
 	  if (h->fit_type == HISTFIT_EVD)
 	    {
 	      pos = 20 + (int)(h->param[EVD_WONKA] * h->expect[idx] - 1) / units;
 	      if (pos >= 78) pos = 78; /* be careful of buffer bounds */
 	      buffer[pos] = 'o';
 	    }
+#endif
 				/* true (uncorrected) line */
 	  pos = 20 + (int)(h->expect[idx]-1) / units;
 	  if (pos >= 78) pos = 78; /* be careful of buffer bounds */
@@ -331,7 +333,9 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
     fprintf(fp, "\n\n%% Statistical details of theoretical EVD fit:\n");
     fprintf(fp, "              mu = %10.4f\n", h->param[EVD_MU]);
     fprintf(fp, "          lambda = %10.4f\n", h->param[EVD_LAMBDA]);
+#ifdef SRE_REMOVED
     fprintf(fp, "    fraction fit = %10.4f\n", h->param[EVD_WONKA]);
+#endif
     fprintf(fp, "chi-sq statistic = %10.4f\n", h->chisq);
     fprintf(fp, "  P(chi-square)  = %10.4g\n", h->chip);
     break;
@@ -666,9 +670,10 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
    * - we fit from lowbound to highbound; thus we lose 2 degrees of freedom
    *   for fitting mu, lambda, but we get 1 back because we're unnormalized
    *   in this interval, hence we pass 2-1 = 1 as ndegrees.
+   *   
+   *   Mon Jan 19 06:18:14 1998: wonka = 1.0, temporarily disabled.
    */    
-  ExtremeValueSetHistogram(h, mu, lambda, lowbound, highbound, 
-			   (float)(n+z)/(float)h->total, 1);
+  ExtremeValueSetHistogram(h, mu, lambda, lowbound, highbound, 1.0, 1); 
   return 1;
 
 FITFAILED:
