@@ -29,7 +29,8 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
    -h        : help; print brief help on version and usage\n\
    -E <x>    : sets E value cutoff to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
-   --noxnu   : turn off xnu filtering of sequences\n\
+   --xnu     : turn on xnu filtering of sequences\n\
+   --null2   : turn on the auxiliary null model\n\
 \n";
 
 
@@ -37,7 +38,8 @@ static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-E",        TRUE,  sqdARG_FLOAT },  
   { "--forward", FALSE, sqdARG_NONE},
-  { "--noxnu",   FALSE, sqdARG_NONE},
+  { "--xnu",     FALSE, sqdARG_NONE},
+  { "--null2",   FALSE, sqdARG_NONE},
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -147,6 +149,7 @@ main(int argc, char **argv)
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
+  int   do_adjust;		/* TRUE to adjust scores with null model #2 */
   int   do_forward;		/* TRUE to use Forward() not Viterbi()      */
   int   do_xnu;			/* TRUE to filter sequences thru XNU        */
 
@@ -160,8 +163,9 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
+  do_adjust   = FALSE;
   do_forward  = FALSE;
-  do_xnu      = TRUE;
+  do_xnu      = FALSE;
   globT       = -999999.;
   globE       = 10.0;
   globH       = -1;		/* unlimited */
@@ -176,7 +180,8 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-E") == 0)        { globE      = atof(optarg);
                                                   domE       = atof(optarg); }
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
-    else if (strcmp(optname, "--noxnu")   == 0) do_xnu     = FALSE;
+    else if (strcmp(optname, "--null2")   == 0) do_adjust  = TRUE;
+    else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -243,8 +248,10 @@ main(int argc, char **argv)
       if (do_xnu) XNU(dsq, sqinfo.len);
       
       /* 1. Score the sequence. */
-      if (do_forward) sc = Plan7Forward(dsq, sqinfo.len, hmm, NULL);
-      else            sc = Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
+      if (do_forward) sc  = Plan7Forward(dsq, sqinfo.len, hmm, NULL);
+      else            sc  = Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
+
+      if (do_adjust)  sc -= SeqScoreCorrection(dsq, sqinfo.len);
 
       /* 2. Recover a trace.    */
       if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
