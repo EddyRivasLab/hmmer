@@ -430,14 +430,15 @@ P7Logoddsify(struct plan7_s *hmm, int viterbi_mode)
    * These two delete states are folded out of search form models
    * in order to prevent null cycles in the dynamic programming
    * algorithms (see code below). However, we use their log transitions
-   * when we save the model! So the following six log transition probs
+   * when we save the model! So the following log transition probs
    * are used *only* in save files, *never* in search algorithms:
    *    log (tbd1), D1 -> M1, D1 -> D2
-   *    Im-1 -> Dm, Mm-1 -> Dm, Dm-1 -> Dm
+   *    Mm-1 -> Dm, Dm-1 -> Dm
    *    
-   * In a search algorithm, these six have to be interpreted as -INFTY    
+   * In a search algorithm, these have to be interpreted as -INFTY    
    * because their contributions are folded into bsc[] and esc[]
-   * entry/exit scores.
+   * entry/exit scores. They can't be set to -INFTY here because
+   * we need them in save files.
    */
   for (k = 1; k < hmm->M; k++)
     {
