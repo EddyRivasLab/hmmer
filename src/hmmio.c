@@ -553,10 +553,12 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
     else if (strncmp(buffer, "NSEQ ", 5) == 0) hmm->nseq = atoi(buffer+6);
     else if (strncmp(buffer, "ALPH ", 5) == 0) 
       {				/* Alphabet type */
-	s2upper(buffer+6);
-	if      (strncmp(buffer+6, "AMINO",   5) == 0) SetAlphabet(hmmAMINO);
-	else if (strncmp(buffer+6, "NUCLEIC", 7) == 0) SetAlphabet(hmmNUCLEIC);
-	else goto FAILURE;
+	if (Alphabet_type == hmmNOTSETYET) {
+	  s2upper(buffer+6);
+	  if      (strncmp(buffer+6, "AMINO",   5) == 0) SetAlphabet(hmmAMINO);
+	  else if (strncmp(buffer+6, "NUCLEIC", 7) == 0) SetAlphabet(hmmNUCLEIC);
+	  else goto FAILURE;
+	}
       }
     else if (strncmp(buffer, "RF   ", 5) == 0) 
       {				/* Reference annotation present? */
@@ -740,7 +742,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 				/* alphabet type */
    if (! fread((char *) &type, sizeof(int), 1, hmmfp->f)) goto FAILURE;
    if (hmmfp->byteswap) byteswap((char *)&type, sizeof(int)); 
-   if (Alphabet_type == 0) SetAlphabet(type);
+   if (Alphabet_type == hmmNOTSETYET) SetAlphabet(type);
 
 				/* now allocate for rest of model */
    AllocPlan7Body(hmm, hmm->M);
@@ -875,9 +877,11 @@ read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   if ((s = Getword(fp, sqdARG_INT))    == NULL) goto FAILURE;                        /* ignore alphabet size */
   if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;  Plan7SetName(hmm, s); /* name */
   if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;  s2upper(s);           /* alphabet type */ 
-  if      (strcmp(s, "AMINO") == 0)   SetAlphabet(hmmAMINO);
-  else if (strcmp(s, "NUCLEIC") == 0) SetAlphabet(hmmNUCLEIC);
-  else goto FAILURE;
+  if (Alphabet_type == hmmNOTSETYET) {
+    if      (strcmp(s, "AMINO") == 0)   SetAlphabet(hmmAMINO);
+    else if (strcmp(s, "NUCLEIC") == 0) SetAlphabet(hmmNUCLEIC);
+    else goto FAILURE;
+  }
 				/* read alphabet, make sure it's Plan7-compatible... */
   if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
   if (strncmp(s, Alphabet, Alphabet_size) != 0) goto FAILURE;
