@@ -1339,8 +1339,8 @@ Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_m
   for (k = 0; k <= hmm->M; k++)
     mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /* need seq to get here */
 
-  /* Initialization of the first row (DNA sequence of length 1)
-   * only N can make this nucleotide.
+  /* Initialization of the first row (DNA sequence of length 1);
+   * only N state can make this nucleotide.
    */
   xmx[1][XMN] = xmx[0][XMN] + hmm->xsc[XTN][LOOP];
   xmx[1][XMB] = xmx[1][XMN] + hmm->xsc[XTN][MOVE]; 
