@@ -568,6 +568,8 @@ struct hit_s {
   int    hmmfrom;		/* start position in HMM (1..M)     */
   int    hmmto;			/* end position in HMM (1..M)       */
   int    hmmlen;		/* length of HMM (M)                */
+  int    domidx;		/* index of this domain             */
+  int    ndom;			/* total # of domains in this seq   */
   struct fancyali_s  *ali;	/* ptr to optional alignment info   */
 };
 
