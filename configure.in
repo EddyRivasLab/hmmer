@@ -65,7 +65,7 @@ AC_ARG_ENABLE(threads,
 [  --disable-threads  disable POSIX threads support],
 [case $enable_threads in 
    yes) echo "Enabling POSIX threads support"
-	AC_CHECK_LIB(pthread, pthread_create, 
+	AC_CHECK_HEADER(pthread.h,
 	[ LIBS="${LIBS} -lpthread"
 	  MDEFS="${MDEFS} -DHMMER_THREADS"
 
@@ -76,7 +76,7 @@ AC_ARG_ENABLE(threads,
    *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
 	;;
 esac],
-[AC_CHECK_LIB(pthread, pthread_create, 
+[AC_CHECK_HEADER(pthread.h,
 	[ echo "   Enabling POSIX threads support by default"
 	  LIBS="${LIBS} -lpthread"
 	  MDEFS="${MDEFS} -DHMMER_THREADS"

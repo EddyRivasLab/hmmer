@@ -211,9 +211,9 @@ dist:
 	# 
 	# Include the appropriate license files and release notes
 	#
-	cp  Licenses/LICENSE.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/LICENSE
-	cp  Licenses/COPYING.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/COPYRIGHT
-	-cp ReleaseNotes/RELEASE-$(RELEASE) ${BASENAME}-$(RELEASE)/NOTES
+	cp  Licenses/LICENSE.$(LICENSETAG)   ${BASENAME}-$(RELEASE)/LICENSE
+	cp  Licenses/COPYING.$(LICENSETAG)   ${BASENAME}-$(RELEASE)/COPYRIGHT
+	-cp Release-Notes/RELEASE-$(RELEASE) ${BASENAME}-$(RELEASE)/NOTES
 	#
 	# Attach license stamps on files that need 'em (replace LICENSE keyword)
 	# licenseadd.pl is basically harmless, so we can overannotate here by
