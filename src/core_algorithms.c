@@ -2193,3 +2193,215 @@ ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L)
   return tr;
 }
 
+
+
+/* Function: PostprocessSignificantHit()
+ * Date:     SRE, Wed Dec 20 12:11:01 2000 [StL]
+ * 
+ * Purpose:  Add a significant hit to per-seq and per-domain hit
+ *           lists, after postprocessing the scores appropriately,
+ *           and making sure per-domain scores add up to the per-seq 
+ *           score.
+ *  
+ *          [doesn't really belong in core_algorithms.c, because
+ *           it's more of a hack than an algorithm.]
+ *
+ *           Given: active hit lists for per-seq and per-domain
+ *           scores (e.g. hmmpfam and hmmsearch, collating their
+ *           results), and a new hit that's significant enough
+ *           that it may need to be reported in final output.
+ *           
+ *           Breaks the traceback into individual domain traces;
+ *           scores each one of them, then applies null2 correction
+ *           for biased composition. Recalculates the per-seq score
+ *           as the sum of the per-domain scores. Stores the hits
+ *           in the lists, for eventual sorting and output by the
+ *           caller.
+ * 
+ * Notes:    In principle we've got the score, and a pvalue, and a traceback
+ *           by doing the Viterbi algorithm, right? What else is left
+ *           to do? Well, in practice, life is more complicated, because
+ *           of the trace-dependent null2 score correction.
+ *           
+ *           After a null2 score correction is carried out on
+ *           each domain (the default) the number of detected domains
+ *           with scores > 0 may have decreased. We want the
+ *           global (per-seq) hit list to have the recalculated number of 
+ *           domains, not necessarily what Viterbi gave us. 
+ *           
+ *           Also, since we want the global score to be the sum of
+ *           the individual domains, but the null2 correction is
+ *           applied to each domain individually, we have to calculate
+ *           an adjusted global score. (To do otherwise invites
+ *           subtle inconsistencies; xref bug 2.)
+ *
+ *           We don't have final evalues, so we may put a few
+ *           more hits into the hit lists than we end up reporting.
+ *           The main output routine is responsible for final
+ *           enforcement of the thresholds.
+ *          
+ *           This routine is NOT THREADSAFE. When multithreaded,
+ *           with using shared ghit/dhit output buffers, calls to
+ *           PostprocessSignificantHit() need to be protected.
+ *           
+ * Args:     ghit     - an active list of per-seq (global) hits
+ *           dhit     - an active list of per-domain hits
+ *           tr       - the significant HMM/seq traceback we'll report on
+ *           hmm      - ptr to the HMM
+ *           dsq      - digitized sequence (1..L)
+ *           L        - length of dsq
+ *           seqname  - name of sequence (same as targname, in hmmsearch)
+ *           seqacc   - seq's accession (or NULL)
+ *           seqdesc  - seq's description (or NULL)
+ *           do_forward  - TRUE if we've already calculated final per-seq score
+ *           sc_override - per-seq score to use if do_forward is TRUE
+ *           do_null2    - TRUE to apply the null2 scoring correction
+ *           thresh      - contains the threshold/cutoff information.
+ *           hmmpfam_mode - TRUE if called by hmmpfam, else assumes hmmsearch;
+ *                          affects how the lists' sort keys are set.
+ *
+ * Returns:  (void)
+ */
+void
+PostprocessSignificantHit(struct tophit_s    *ghit, 
+			  struct tophit_s    *dhit,
+			  struct p7trace_s   *tr,
+			  struct plan7_s     *hmm,
+			  char               *dsq,
+			  int                 L,
+			  char               *seqname,
+			  char               *seqacc,
+			  char               *seqdesc,
+			  int                 do_forward,
+			  float               sc_override,
+			  int                 do_null2,
+			  struct threshold_s *thresh,
+			  int                 hmmpfam_mode)
+{
+  struct p7trace_s **tarr;      /* array of per-domain traces */
+  struct fancyali_s *ali;       /* alignment of a domain      */ 
+  int ntr;			/* number of domain traces from Viterbi */
+  int tidx;			/* index for traces (0..ntr-1) */
+  int ndom;			/* # of domains accepted in sequence */
+  int didx;			/* index for domains (1..ndom) */
+  int k1, k2;			/* start, stop coord in model */
+  int i1, i2;			/* start, stop in sequence    */
+  float   whole_sc;		/* whole sequence score = \sum domain scores */
+  float  *score;                /* array of raw scores for each domain */
+  int    *usedomain;            /* TRUE if this domain is accepted */ 
+  double  whole_pval;
+  double  pvalue;
+  double  sortkey;
+
+  /* Break the trace into one or more individual domains.
+   */
+  TraceDecompose(tr, &tarr, &ntr);
+  if (ntr == 0) Die("TraceDecompose() screwup"); /* "can't happen" (!) */
+
+  /* Rescore each domain, apply null2 correction if asked.
+   * Mark positive-scoring ones (we'll definitely report those),
+   * and include their score in the whole sequence score.
+   */
+  score     = MallocOrDie(sizeof(float) * ntr);
+  usedomain = MallocOrDie(sizeof(int)   * ntr);
+  ndom      = 0;
+  whole_sc  = 0.;
+  for (tidx = 0; tidx < ntr; tidx++)
+    {
+      score[tidx]  = P7TraceScore(hmm, dsq, tarr[tidx]);
+      if (do_null2) score[tidx] -= TraceScoreCorrection(hmm, tarr[tidx], dsq);
+      if (score[tidx] > 0.0) {
+	usedomain[tidx] = TRUE;
+	ndom++;
+	whole_sc += score[tidx];
+      } else 
+	usedomain[tidx] = FALSE;
+    }
+
+  /* Make sure at least one positive scoring domain is in
+   * the trace. If not, invoke "weak single domain" rules:
+   * we will always report at least one domain per sequence, even
+   * if it has a negative score. (HMMER's Plan7 architecture can report
+   * one negative scoring domain but not more.)
+   */
+  if (ndom == 0) {
+    tidx            = FMax(score, ntr);
+    usedomain[tidx] = TRUE;
+    whole_sc        = score[tidx];
+  }
+
+  /* Implement --do_forward: override the trace-dependent sum-of-domain
+   * whole score, use the P7Forward() score that the called passed
+   * us instead. This is a hack; null2 is trace-dependent and
+   * thus undefined for P7Forward() scoring; see commentary in hmmpfam.c. 
+   */
+  if (do_forward) whole_sc = sc_override;
+
+  /* Go through and put all the accepted domains into the hit list.
+   */
+  whole_pval = PValue(hmm, whole_sc);
+  for (tidx = 0, didx = 1; tidx < ntr; tidx++) {
+    if (! usedomain[tidx]) continue;
+
+    TraceSimpleBounds(tarr[tidx], &i1, &i2, &k1, &k2);
+    pvalue = PValue(hmm, score[tidx]); 
+
+    if (pvalue <= thresh->domE && score[tidx] >= thresh->domT) {
+      ali     = CreateFancyAli(tarr[tidx], hmm, dsq, seqname);
+
+      if (hmmpfam_mode) 
+	sortkey = -1.*(double)i1; /* hmmpfam: sort on position in seq    */
+      else
+	sortkey = score[tidx];	  /* hmmsearch: sort on E (monotonic w/ sc) */
+
+      RegisterHit(dhit, sortkey,
+		  pvalue,     score[tidx], 
+		  whole_pval, whole_sc,
+		  hmmpfam_mode ? hmm->name : seqname,
+		  hmmpfam_mode ? hmm->acc  : seqacc,
+		  hmmpfam_mode ? hmm->desc : seqdesc,
+		  i1,i2, L, 
+		  k1,k2, hmm->M, 
+		  didx,ndom,ali);
+    }
+    didx++;
+  }
+
+  /* Now register the global hit, with the domain-derived score.
+   */
+
+  /* sorting: 
+   * hmmpfam has to worry that score and E-value are not monotonic
+   * when multiple HMMs (with different EVD parameters) are potential
+   * targets. Therefore in hmmpfam_mode we apply a weird hack
+   * to sort primarily on E-value, but on score
+   * for really good hits with E=0.0... works because we can
+   * assume 100000. > -log(DBL_MIN).
+   * hmmsearch simply sorts on score (which for a single HMM, we
+   * know is monotonic with E-value).
+   */  
+  if (hmmpfam_mode)
+    sortkey = (whole_pval > 0.0) ? -1.*log(whole_pval) : 100000. + whole_sc;
+  else
+    sortkey = whole_sc;
+
+  RegisterHit(ghit, sortkey,
+	      whole_pval, whole_sc,
+	      0., 0.,	                  /* no mother seq */
+	      hmmpfam_mode ? hmm->name : seqname,
+	      hmmpfam_mode ? hmm->acc  : seqacc,
+	      hmmpfam_mode ? hmm->desc : seqdesc,
+	      0,0,0,                	  /* seq positions  */
+	      0,0,0,	                  /* HMM positions  */
+	      0, ndom,	                  /* # domains info    */
+	      NULL);	                  /* alignment info */
+
+  /* Clean up and return.
+   */
+  for (tidx = 0; tidx < ntr; tidx++)
+    P7FreeTrace(tarr[tidx]);
+  free(tarr);
+  free(score);
+  free(usedomain);
+  return;
+}

@@ -144,10 +144,6 @@ static void main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *s
 			     struct threshold_s *thresh, int do_xnu, int do_forward, int do_null2,
 			     int num_threads,
 			     struct tophit_s *ghit, struct tophit_s *dhit, int *nhmm);
-static void record_domains(struct tophit_s *h, 
-			   struct plan7_s *hmm, char *dsq, int L, char *seqname,
-			   struct p7trace_s *tr, double whole_pval, float whole_sc,
-			   int do_null2, struct threshold_s *thresh);
 
 int
 main(int argc, char **argv) 
@@ -339,7 +335,11 @@ main(int argc, char **argv)
 	  printf("Accession:      %s\n", sqinfo.flags &SQINFO_ACC ? sqinfo.acc  : "");
 	  printf("Description:    %s\n", sqinfo.flags &SQINFO_DESC? sqinfo.desc : "");
 	}
-      FullSortTophits(ghit);
+      /* We'll now sort the global hit list by evalue... 
+       * (not score! that was bug #12. in hmmpfam, score and evalue are not 
+       *  monotonic.)
+       */
+      FullSortTophits(ghit);	
       namewidth =  MAX(8, TophitsMaxName(ghit));
 
       printf("\nScores for sequence family classification (score includes all domains):\n");
@@ -388,16 +388,6 @@ main(int argc, char **argv)
 		   (show_acc && acc != NULL) ?  acc : name,
 		   52-namewidth, 52-namewidth, safedesc != NULL ? safedesc : "",
 		   sc, evalue, ndom);
-	  else if (evalue > thresh.globE)
-	    {
-	      if (i > 0) printf("\t[no more scores below E threshold]\n");
-	      break;
-	    }
-	  else if (sc < thresh.globT)
-	    {
-	      if (i > 0) printf("\t[no more scores above T threshold]");
-	      break;
-	    }
 	  free(safedesc);
 	}
       if (i == 0) printf("\t[no hits above thresholds]\n");
@@ -424,6 +414,7 @@ main(int argc, char **argv)
 		       NULL);
 	  evalue = pvalue * (double) thresh.Z;
 	  
+				/* Does the "mother" (complete) sequence satisfy global thresholds? */
 	  if (motherp * (double)thresh. Z > thresh.globE || mothersc < thresh.globT) 
 	    continue;
 	  else if (evalue <= thresh.domE && sc >= thresh.domT)
@@ -436,14 +427,6 @@ main(int argc, char **argv)
 		   hmmfrom, hmmto,
 		   hmmfrom == 1 ? '[':'.',  hmmto == hmmlen ? ']' : '.',
 		   sc, evalue);
-	  else if (evalue > thresh.domE) {
-	    if (i > 0) printf("\t[no more scores below domE threshold]\n");
-	    break;
-	  }
-	  else if (sc <= thresh.domT) {
-	    if (i > 0) printf("\t[no more scores above domT threshold]\n");
-	    break;
-	  }
 	}
       if (i == 0) printf("\t[no hits above thresholds]\n");      
 
@@ -601,28 +584,46 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
       sc = P7Viterbi(dsq, sqinfo->len, hmm, &tr);
     else
       sc = P7SmallViterbi(dsq, sqinfo->len, hmm, &tr);
-	
-    if (do_forward) sc  = P7Forward(dsq, sqinfo->len, hmm, NULL);
-    if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
 
+    /* Implement do_forward; we'll override the whole_sc with a P7Forward()
+     * calculation.
+     * HMMER is so trace- (alignment-) dependent that this gets a bit hacky.
+     * Some important implications: 
+     *   1) if --do_forward is selected, the domain (Viterbi) scores do not
+     *      necessarily add up to the whole sequence (Forward) score.
+     *   2) The implementation of null2 for a Forward score is undefined,
+     *      since the null2 correction is trace-dependent. As a total hack, 
+     *      we use a null2 correction derived from the whole trace
+     *      (which was the behavior of HMMER 2.1.1 and earlier, anyway).
+     *      This could put the sum of domain scores and whole seq score even
+     *      further in disagreement. 
+     * 
+     * Note that you can't move the Forward calculation into 
+     * PostprocessSignificantHit(). The Forward score will exceed the
+     * Viterbi score, so you can't apply thresholds until you
+     * know the Forward score. Also, since PostprocessSignificantHit()
+     * is wrapped by a mutex in the threaded implementation,
+     * you'd destroy all useful parallelism if PostprocessSignificantHit()
+     * did anything compute intensive. 
+     */
+    if (do_forward) {
+      sc = P7Forward(dsq, sqinfo->len, hmm, NULL);
+      if (do_null2) sc -= TraceScoreCorrection(hmm, tr, dsq);
+    }
+	
     /* Store scores/pvalue for each HMM aligned to this sequence, overall
      */
     pvalue = PValue(hmm, sc);
     evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nhmm * pvalue;
-    if (sc >= thresh->globT && evalue <= thresh->globE) 
-      { 
-	RegisterHit(ghit, sc, pvalue, sc,
-		    0., 0.,	                  /* no mother seq */
-		    hmm->name, hmm->acc, hmm->desc, 
-		    0,0,0,                	  /* seq positions  */
-		    0,0,0,	                  /* HMM positions  */
-		    0, TraceDomainNumber(tr), /* domain info    */
-		    NULL);	                  /* alignment info */
-	/* 1c. Store scores/evalue/position/alignment for each HMM
-	 *    aligned to domains of this sequence
-	 */
-	record_domains(dhit, hmm, dsq, sqinfo->len, sqinfo->name, tr, pvalue, sc, do_null2, thresh);
-      }
+    if (sc >= thresh->globT && evalue <= thresh->globE) {
+      PostprocessSignificantHit(ghit, dhit, 
+				tr, hmm, dsq, sqinfo->len, 
+				sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
+				do_forward, sc,
+				do_null2,
+				thresh,
+				TRUE); /* TRUE -> hmmpfam mode */
+    }
     P7FreeTrace(tr);
     FreePlan7(hmm);
     nhmm++;
@@ -633,64 +634,6 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   return;
 }
 
-/* Function: record_domains()
- * Date:     SRE, Tue Oct 28 14:20:56 1997 [Cambridge UK]
- * 
- * Purpose:  Decompose a trace, and register scores, P-values, alignments,
- *           etc. for individual domains in a hitlist. Almost a duplicate
- *           of the eponymous function in hmmsearch, but we sort by
- *           start position of the domain. 
- *           
- * Return:   (void)          
- */
-static void
-record_domains(struct tophit_s *h, 
-	       struct plan7_s *hmm, char *dsq, int L, char *seqname,
-	       struct p7trace_s *tr, double whole_pval, float whole_sc,
-	       int do_null2, struct threshold_s *thresh)
-{
-  struct p7trace_s **tarr;      /* array of per-domain traces */
-  struct fancyali_s *ali;       /* alignment of a domain      */ 
-  int ntr;			/* number of domain traces    */
-  int idx;			/* index for traces           */
-  int ndom;			/* index for domains reported */
-  int k1, k2;			/* start, stop coord in model */
-  int i1, i2;			/* start, stop in sequence    */
-  float  score;
-  double pvalue;
-
-  TraceDecompose(tr, &tarr, &ntr);
-  if (ntr == 0) Die("TraceDecompose() screwup"); /* "can't happen" (!) */
-
-  for (idx = 0, ndom=1; idx < ntr; idx++)
-    {
-      /* Get the score and bounds of the match.
-       */
-      score  = P7TraceScore(hmm, dsq, tarr[idx]);
-      if (do_null2) 
-	score -= TraceScoreCorrection(hmm, tarr[idx], dsq);
-      pvalue = PValue(hmm, score); 
-      TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
-      
-      /* Record the match, if it satisfies the cutoffs.
-       */
-      if (pvalue <= thresh->domE && score >= thresh->domT) {
-	ali = CreateFancyAli(tarr[idx], hmm, dsq, seqname);
-	RegisterHit(h, -1.*(double)i2,           /* sortkey= -(start) (so 1 comes first) */
-		    pvalue, score, whole_pval, whole_sc,
-		    hmm->name, hmm->acc, hmm->desc, 
-		    i1,i2, L, 
-		    k1,k2, hmm->M, 
-		    ndom,ntr,ali);
-	ndom++;
-      }
-    }
-  
-  for (idx = 0; idx < ntr; idx++)
-    P7FreeTrace(tarr[idx]);
-  free(tarr);
-  return;
-}
 
 #ifdef HMMER_PVM
 /*****************************************************************
@@ -834,15 +777,16 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	  if (! SetAutocuts(thresh, hmm))
 	    Die("HMM %s did not contain your GA, NC, or TC cutoffs", hmm->name);
 	
-	  RegisterHit(ghit, sc, pvalue, sc,
-		      0., 0.,	                  /* no mother seq */
-		      hmm->name, hmm->acc, hmm->desc, 
-		      0,0,0,                	  /* seq positions  */
-		      0,0,0,	                  /* HMM positions  */
-		      0, TraceDomainNumber(tr), /* domain info    */
-		      NULL);	                  /* alignment info */
-	  record_domains(dhit, hmm, dsq, sqinfo->len, sqinfo->name,
-			 tr, pvalue, sc, do_null2, thresh);
+	  PostprocessSignificantHit(ghit, dhit, 
+				    tr, hmm, dsq, sqinfo->len, 
+				    sqinfo->name, 
+				    sqinfo->flags & SQINFO_ACC ? sqinfo->acc : NULL,
+				    sqinfo->flags & SQINFO_DESC ? sqinfo->desc : NULL,
+				    do_forward, sc,
+				    do_null2,
+				    thresh,
+				    TRUE); /* TRUE -> hmmpfam mode */
+
 	  FreePlan7(hmm);
 	  P7FreeTrace(tr);
 	}
@@ -878,15 +822,14 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	  if (! SetAutocuts(thresh, hmm))
 	    Die("HMM %s did not contain your GA, NC, or TC cutoffs", hmm->name);
 	  
-	  RegisterHit(ghit, sc, pvalue, sc,
-		      0., 0.,	                  /* no mother seq */
-		      hmm->name, hmm->acc, hmm->desc, 
-		      0,0,0,                	  /* seq positions  */
-		      0,0,0,	                  /* HMM positions  */
-		      0, TraceDomainNumber(tr), /* domain info    */
-		      NULL);	                  /* alignment info */
-	  record_domains(dhit, hmm, dsq, sqinfo->len, sqinfo->name, 
-			 tr, pvalue, sc, do_null2, thresh);
+	  PostprocessSignificantHit(ghit, dhit, 
+				    tr, hmm, dsq, sqinfo->len, 
+				    sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
+				    do_forward, sc,
+				    do_null2,
+				    thresh,
+				    TRUE); /* TRUE -> hmmpfam mode */
+
 	  FreePlan7(hmm);
 	  P7FreeTrace(tr);
 	}
@@ -1106,9 +1049,12 @@ worker_thread(void *ptr)
     else
       sc = P7SmallViterbi(wpool->dsq, wpool->L, hmm, &tr);
     
-    if (wpool->do_forward) sc  = P7Forward(wpool->dsq, wpool->L, hmm, NULL);
-    if (wpool->do_null2)   sc -= TraceScoreCorrection(hmm, tr, wpool->dsq);
-
+    /* The Forward score override (see comments in serial vers)
+     */
+    if (wpool->do_forward) {
+      sc  = P7Forward(wpool->dsq, wpool->L, hmm, NULL);
+      if (wpool->do_null2)   sc -= TraceScoreCorrection(hmm, tr, wpool->dsq);
+    }
     
     /* 3. Save the output in tophits structures, after acquiring a lock
      */
@@ -1120,15 +1066,14 @@ worker_thread(void *ptr)
     evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) wpool->nhmm * pvalue;
     if (sc >= thresh.globT && evalue <= thresh.globE) 
       { 
-	RegisterHit(wpool->ghit, sc, pvalue, sc,
-		    0., 0.,	                  /* no mother seq */
-		    hmm->name, hmm->acc, hmm->desc, 
-		    0,0,0,                	  /* seq positions  */
-		    0,0,0,	                  /* HMM positions  */
-		    0, TraceDomainNumber(tr), /* domain info    */
-		    NULL);	                  /* alignment info */
-	record_domains(wpool->dhit, hmm, wpool->dsq, wpool->L, wpool->seqname, 
-		       tr, pvalue, sc, wpool->do_null2, &thresh);
+	PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
+				  tr, hmm, wpool->dsq, wpool->L, 
+				  wpool->seqname, 
+				  NULL, NULL, /* won't need seq's acc or desc */
+				  wpool->do_forward, sc,
+				  wpool->do_null2,
+				  &thresh,
+				  TRUE); /* TRUE -> hmmpfam mode */
       }
     if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
       Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));

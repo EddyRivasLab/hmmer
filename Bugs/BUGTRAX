@@ -1,15 +1,144 @@
-Bug	Status	Noted		Closed		Reported by	Description
----- 	------	-----		------		-----------	--------------------------
-1	closed	1/16/98		1/16/98		David Kerk	BPA1_HUMAN crashes Pfam server
-2	OPEN	1/7/99				David Kerk	null2 consistency problem between per-seq and per-domain
-3	closed	1/15/99		1/19/99		SRE		(Solaris) hmmbuild segfaults on alignments labeled with #=ID
-4	closed	1/18/99		1/19/99		SRE		sreformat core dumps when reformatting single seq to SELEX
-5	closed	1/18/99		1/19/99		agb		hmmbuild core dumps when building model from single seqs FASTA file
-6	closed	1/18/99		1/19/99		SRE		getseq clashes with GCG program of same name
-7	closed	1/18/99		1/19/99		Bill Pearson	(Digital) 4.0d binaries do not run on 4.0b; pthread_setconcurrency() missing
-8	closed	1/19/99		1/19/99		James Holzwarth	hmmpfam segfaults on GCG-reformatted Swissprot file 
-9	OPEN	6/29/99				Bob Farrington	C->T transition doesn't seem to be parsed from save files
-10	closed  7/2/99		9/17/99		ju@harvard	Floating point exception in ExtremeValueP() on Digital 4.0b: range error. 
-11	OPEN	11/15/99			marcel@cs.berkeley.edu	hmmbuild, illegal B->E in traceback
-								to reproduce: hmmbuild -FB foo.hmm bug11.msf 
-
+ID              1
+STATUS          closed
+DESCRIPTION     BPA1_HUMAN crashes Pfam server
+NOTED_DATE      1/16/98
+NOTED_XREF      
+REPORTED_BY     David Kerk
+REPRODUCE_WITH  
+REPRODUCE_ON	ANY
+CLOSED_DATE     1/16/98
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              2
+STATUS          closed
+DESCRIPTION     null2 consistency problem between per-seq and per-domain
+NOTED_DATE      1/7/99
+NOTED_XREF      notebook STL1 p.117 
+REPORTED_BY     David Kerk
+REPRODUCE_WITH  bug2.pl
+REPRODUCE_ON	ANY
+CLOSED_DATE     SRE, Tue Dec 19 17:45:46 2000
+CLOSED_XREF     STL3 notebook, p.127
+CLOSED_ACTION   created postprocess_hit() in hmmpfam.c
+//
+ID              3
+STATUS          closed
+DESCRIPTION     hmmbuild segfaults on alignments labeled with #=ID
+NOTED_DATE      1/15/99
+NOTED_XREF      
+REPORTED_BY     SRE
+REPRODUCE_WITH  
+REPRODUCE_ON	Solaris
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              4
+STATUS          closed
+DESCRIPTION     sreformat core dumps when reformatting single seq to SELEX
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     sre
+REPRODUCE_WITH  
+REPRODUCE_ON    any
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              5
+STATUS          closed
+DESCRIPTION     hmmbuild core dumps when building model from single seqs FASTA file
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     agb
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              6
+STATUS          closed
+DESCRIPTION     getseq clashes with GCG program of same name
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     sre
+REPRODUCE_WITH  
+REPRODUCE_ON    n/a
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   renamed getseq to sfetch
+//
+ID              7
+STATUS          closed
+DESCRIPTION     Digital 4.0d binaries do not run on 4.0b; pthread_setconcurrency() missing
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     Bill Pearson
+REPRODUCE_WITH  
+REPRODUCE_ON    Digital UNIX
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              8
+STATUS          closed
+DESCRIPTION     hmmpfam segfaults on GCG-reformatted Swissprot file 
+NOTED_DATE      1/19/99
+NOTED_XREF      
+REPORTED_BY     James Holzwarth
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              9
+STATUS          OPEN
+DESCRIPTION     C->T transition doesn't seem to be parsed from save files
+NOTED_DATE      6/29/99
+NOTED_XREF      
+REPORTED_BY     Bob Farrington
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              10
+STATUS          closed
+DESCRIPTION     Floating point exception in ExtremeValueP() on Digital 4.0b: range error. 
+NOTED_DATE      7/2/99
+NOTED_XREF      
+REPORTED_BY     ju@harvard
+REPRODUCE_WITH  
+REPRODUCE_ON    Digital UNIX 4.0b
+CLOSED_DATE     9/17/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              11
+STATUS          OPEN
+DESCRIPTION     hmmbuild, illegal B->E in traceback
+NOTED_DATE      11/15/99
+NOTED_XREF      
+REPORTED_BY     marcel@cs.berkeley.edu
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              12
+STATUS          closed
+DESCRIPTION     --domE, --domT don't work correctly in hmmpfam; E-value is assumed to be monotonic w/ score.
+NOTED_DATE      11/29/00
+NOTED_XREF      STL3 p.127
+REPORTED_BY     vanschlun@gcg.com
+REPRODUCE_WITH  bug12.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Tue Dec 19 17:47:01 2000
+CLOSED_XREF     STL3 p.127
+CLOSED_ACTION   removed the break statements when looping over domain list.
+//

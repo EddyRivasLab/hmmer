@@ -146,9 +146,14 @@ main(void)
 	  sc = P7SmallViterbi(dsq, len, hmm, &tr);
 	}
 
-      if (do_forward) sc  = P7Forward(dsq, len, hmm, NULL);
-      if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
-	
+      /* The Forward score override. 
+       * See comments in hmmpfam.c in serial version.
+       */
+      if (do_forward) {
+	sc  = P7Forward(dsq, len, hmm, NULL);
+	if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
+      }
+
       pvalue = PValue(hmm, sc);
       evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
       send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
