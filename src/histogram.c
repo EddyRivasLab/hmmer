@@ -910,6 +910,10 @@ EVDDistribution(float x, float mu, float lambda)
  *           of the distribution (characteristic
  *           value mu, decay constant lambda).
  *           
+ *           This function is exquisitely prone to
+ *           floating point exceptions if it isn't coded
+ *           carefully.
+ *           
  * Args:     x      = score
  *           mu     = characteristic value of extreme value distribution
  *           lambda = decay constant of extreme value distribution
@@ -920,14 +924,15 @@ double
 ExtremeValueP(float x, float mu, float lambda)
 {
   double y;
-			/* avoid overflow fp exceptions */
-  if ((lambda * (x - mu)) < -1. * log(log(DBL_MAX))) return 1.0;
-			/* avoid underflow fp exceptions */
-  if ((lambda * (x - mu)) > log(log(DBL_MAX))) return 0.0;
+			/* avoid exceptions near P=1.0 */
+			/* typical 32-bit sys: if () < -3.6, return 1.0 */
+  if ((lambda * (x - mu)) <= -1. * log(-1. * log(DBL_EPSILON))) return 1.0;
+			/* avoid underflow fp exceptions near P=0.0*/
+  if ((lambda * (x - mu)) >= 2.3 * (double) DBL_MAX_10_EXP)     return 0.0;
 			/* a roundoff issue arises; use 1 - e^-x --> x for small x */
   y = exp(-1. * lambda * (x - mu));
-  if (y < 1e-7) return y;
-  else          return (1.0 - exp(-1. * y));
+  if       (y < 1e-7) return y;
+  else     return (1.0 - exp(-1. * y));
 }
 
 
