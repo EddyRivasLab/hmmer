@@ -500,6 +500,7 @@ TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, int k1,
   case STB:
     switch (st2) {
     case STM: return hmm->bsc[k2]; 
+    case STD: return Prob2Score(hmm->tbd1, 1.);
     default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
@@ -523,6 +524,7 @@ TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, int k1,
     switch (st2) {
     case STM: return hmm->tsc[k1][TDM]; 
     case STD: return hmm->tsc[k1][TDD];
+    case STE: return 0;	/* D_m->E has probability 1.0 by definition in Plan7 */
     default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
@@ -878,22 +880,42 @@ void
 TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2, 
 		  int *ret_k1,  int *ret_k2)
 {
-      /* The following code gets the bounds of a hit in 
-       * the model and sequence. It makes assumptions about
-       * the structure of the decomposed traces: specifically,
-       * exactly one hit per trace;
-       * S-N-B-M(k1)...M(k2)-E-C-T.
-       * so the fourth and tlen-3'th position in the trace
-       * are the bounding match states.
-       */
-  if (tr->statetype[3] != STM) 
-    Die("sanity check failed: 4th position in trace is not a match");
-  if (tr->statetype[tr->tlen-4] != STM)
-    Die("sanity check failed: n-3'th position in trace not a match");
-  *ret_k1 = tr->nodeidx[3];
-  *ret_i1 = tr->pos[3];
-  *ret_k2 = tr->nodeidx[tr->tlen - 4];
-  *ret_i2 = tr->pos[tr->tlen - 4];
+  int i1, i2, k1, k2, tpos;
+
+  i1 = k1 = i2 = k2 = -1;
+
+				/* Look forwards to find start of match */
+  for (tpos = 0; tpos < tr->tlen; tpos++)
+    {
+      if (k1 == -1 && (tr->statetype[tpos] == STM || tr->statetype[tpos] == STD))
+	k1 = tr->nodeidx[tpos];
+      if (tr->statetype[tpos] == STM)
+	{
+	  i1 = tr->pos[tpos];
+	  break;
+	}
+    }
+  if (tpos == tr->tlen || i1 == -1 || k1 == -1)
+    Die("sanity check failed: didn't find a match state in trace");
+
+				/* Look backwards to find end of match */
+  for (tpos = tr->tlen-1; tpos >= 0; tpos--)
+    {
+      if (k2 == -1 && (tr->statetype[tpos] == STM || tr->statetype[tpos] == STD))
+	k2 = tr->nodeidx[tpos];
+      if (tr->statetype[tpos] == STM)
+	{
+	  i2 = tr->pos[tpos];
+	  break;
+	}
+    }
+  if (tpos == tr->tlen || i2 == -1 || k2 == -1)
+    Die("sanity check failed: didn't find a match state in trace");
+
+  *ret_k1 = k1;
+  *ret_i1 = i1;
+  *ret_k2 = k2;
+  *ret_i2 = i2;
 }
 
 
