@@ -32,8 +32,8 @@ all:
 #    uses PolyglotMan 3.0.5 "rman", and rmanprocess.pl script
 manpages:
 				# write the manpages.tex "chapter" by conversion
-	echo "%% This chapter automatically generated. Do not edit." > manpages.tex
-	echo "\chapter{Manual pages}" >> manpages.tex 
+	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
+	@echo "\chapter{Manual pages}" >> manpages.tex 
 	for file in $(MANS); do\
 	   rman	-f LaTeX2e ../Man/$$file.man | ./rmanprocess.pl >> manpages.tex;\
 	done
@@ -58,7 +58,7 @@ postscript:
 #
 html:
 	latex2html -split 4 -local_icons -t "HMMER 2.0 User's Guide" -dir hmmer-html main
-	cp wulogo.gif hmmer-html/
+	-cp wulogo.gif hmmer-html/
 	tar cf hmmer-html.tar hmmer-html
 	compress hmmer-html.tar
 
