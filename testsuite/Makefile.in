@@ -10,7 +10,6 @@ CFLAGS    = @CFLAGS@
 MDEFS     = @MDEFS@ @DEFS@
 
 SHELL     = /bin/sh
-ARENA     = @top_srcdir@/@ARENA@
 LIBS      = -lhmmer -lsquid @LIBS@ 
 
 SHIVA = alignalign_test\
@@ -27,12 +26,12 @@ SHIVA = alignalign_test\
 #######
 
 .c.o:
-	$(CC) $(CFLAGS) $(MDEFS) -I${ARENA} -c $<		
+	$(CC) $(CFLAGS) $(MDEFS) -I../lib -c $<		
 
 all: 	$(SHIVA)
 
 $(SHIVA): @HMMER_EXEC_DEPENDENCY@
-	$(CC) $(CFLAGS) $(MDEFS) -o $@ -L${ARENA} $@.o $(LIBS)
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ -L../lib $@.o $(LIBS)
 
 #######
 ## `make check` actually runs the tests.

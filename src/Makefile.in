@@ -35,14 +35,10 @@ PVMINCDIR = @PVMINCDIR@
 PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
-# Where the build arena is (module .h and .o files)
-#
-ARENA = @top_srcdir@/@ARENA@
-
 SHELL    = /bin/sh
 MYLIBS   = -lsquid
-MYLIBDIR = -L${ARENA}
-MYINCDIR = -I${ARENA}
+MYLIBDIR = -L../lib
+MYINCDIR = -I../lib
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -100,8 +96,8 @@ $(PROGS): @HMMER_EXEC_DEPENDENCY@ $(OBJS)
 module: libhmmer.a
 
 module-install: libhmmer.a
-	mv libhmmer.a ${ARENA}/
-	cp $(HDRS)    ${ARENA}/
+	mv libhmmer.a ../lib/
+	cp $(HDRS)    ../lib/
 
 libhmmer.a: $(OBJS) 
 	$(AR) libhmmer.a $(OBJS) 

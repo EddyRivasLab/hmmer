@@ -12,18 +12,10 @@ AC_SUBST(PVMFLAG)
 AC_SUBST(PVMPROGS)
 AC_SUBST(PVMLIBS)
 
-
 dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_LN_S
 AC_PROG_RANLIB
-
-dnl Sets the build arena: where we're looking for
-dnl module .a and .h files during the build, relative
-dnl to top_srcdir: a Makefile.in will set the path
-dnl to be top_srcdir/ARENA.
-ARENA="lib"
-AC_SUBST(ARENA)
 
 dnl GNU make check; makefile dependency lines for executables.
 dnl original from John Darrington <j.darrington@elvis.murdoch.edu.au> 
@@ -103,20 +95,15 @@ dnl Check for functions
 AC_CHECK_FUNCS(pthread_setconcurrency)
 AC_CHECK_FUNCS(pthread_attr_setscope)
 
-dnl Doublecheck important sizeof's for binary files
+dnl Configure the squid library
 dnl
-AC_CHECK_SIZEOF(unsigned int, 4)
-if test "$ac_cv_sizeof_unsigned_int" != "4"; then
-  AC_MSG_WARN "sizeof(unsigned int) isn't 4. you will have problems with binary files."
-fi
-
-AC_CHECK_SIZEOF(unsigned short, 2)
-if test "$ac_cv_sizeof_unsigned_short" != "2"; then
-  AC_MSG_WARN "sizeof(unsigned short) isn't 2. you will have problems with binary files."
-fi
+AC_CONFIG_SUBDIRS(lib/squid)
 
 dnl Write out Makefiles
+dnl
 echo "   Configuration complete. Writing Makefiles and such..."
-AC_OUTPUT(Makefile src/Makefile lib/Makefile lib/squid/Makefile testsuite/Makefile)
+AC_OUTPUT(Makefile src/Makefile\
+          lib/Makefile\
+          testsuite/Makefile)
 
 

@@ -153,10 +153,17 @@ clean:
 	(cd lib/squid; make clean)
 	(cd testsuite; make clean)
 
-# "make distclean" leaves a pristine distribution.... and
-#                  doesn't touch the binaries directory
+# "make distclean" leaves a pristine source distribution.
 #
 distclean:
+	-rm -rf binaries
+	make binclean
+
+# "make binclean" is a special target that leaves
+#    the binaries directory - preparation for packaging
+#    a binary distribution.
+#
+binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm config.cache config.log config.status
 	-rm version.h
@@ -166,13 +173,6 @@ distclean:
 	(cd testsuite; make distclean)
 	-rm Makefile
 
-# "make srcclean" is the most aggressive. It is distclean,
-#    plus removing the binaries directory -- leaving a
-#    pristine source-only distribution.
-#
-srcclean:
-	-rm -rf binaries
-	make distclean
 
 # verify: consistency checks on the package
 #         These are private tests, not distributed with HMMER
