@@ -33,7 +33,6 @@ static char usage[] = "\
 Usage: alignalign_test [-options]\n\
   Available options are:\n\
   -h              : help; display this usage info\n\
-  -o <f>          : output alignment to <f> for comparing diffs\n\
   -v              : be verbose\n\
 ";
 
@@ -44,7 +43,6 @@ static char experts[] = "\
 
 static struct opt_s OPTIONS[] = {
   { "-h",       TRUE,  sqdARG_NONE },
-  { "-o",       TRUE,  sqdARG_NONE },
   { "-v",       TRUE,  sqdARG_NONE },
   { "--ali",    FALSE, sqdARG_STRING },
   { "--hmm",    FALSE, sqdARG_STRING },
@@ -61,10 +59,7 @@ main(int argc, char **argv)
   int      format;              /* format determined for afile             */
   MSAFILE *afp;                 /* afile, open for reading                 */
   MSA     *msa;			/* multiple sequence alignment from afile  */
-
-  char   **aseq;                /* aligned sequences                       */
   char   **rseq;                /* raw, dealigned aseq                     */
-  AINFO    ainfo;               /* alignment information                   */
   char     *dsq;		/* digitized target sequence               */
   struct p7trace_s  *mtr;	/* master traceback from alignment         */
   struct p7trace_s  *maptr;     /* master traceback from mapping           */
@@ -72,18 +67,10 @@ main(int argc, char **argv)
   struct p7trace_s **itr;       /* individual trace from P7Viterbi()       */
   int       idx;		/* counter for seqs                        */
   int       ndiff;		/* number of differing traces              */
-  
-  char *ofile;
-  FILE *ofp;
-  struct p7trace_s **otr;       /* traces for output alignment             */
-  char **odsq;                  /* digitized sequences for output          */
-  SQINFO *osqinfo;              /* sqinfo for output                       */
-  float  *owgt;                 /* wgt for output                          */
-  int     oi;			/* counter for seqs in output              */
-  char  **oaseq;
-  AINFO   oainfo;
+  int       rlen;		/* length of an unaligned sequence         */
 
   int be_verbose;
+  int be_standard;		/* TRUE when running standard test */
 
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
@@ -93,18 +80,17 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
 
-  be_verbose = FALSE;
-  hmmfile    = "fn3.hmm";
-  afile      = "fn3.seed";
-  format     = MSAFILE_STOCKHOLM;
-  ofile      = NULL;
+  hmmfile     = "fn3.hmm";
+  afile       = "fn3.seed";
+  format      = MSAFILE_STOCKHOLM;
+  be_verbose  = FALSE;
+  be_standard = TRUE;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-o")       == 0) ofile      = optarg; 
-    else if (strcmp(optname, "-v")       == 0) be_verbose = TRUE;
-    else if (strcmp(optname, "--ali")    == 0) afile      = optarg;
-    else if (strcmp(optname, "--hmm")    == 0) hmmfile    = optarg;
+    if      (strcmp(optname, "-v")       == 0) be_verbose = TRUE;
+    else if (strcmp(optname, "--ali")    == 0) { afile   = optarg; be_standard = FALSE; }
+    else if (strcmp(optname, "--hmm")    == 0) { hmmfile = optarg; be_standard = FALSE; }
     else if (strcmp(optname, "-h")       == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -125,14 +111,13 @@ main(int argc, char **argv)
     Die("Didn't read an alignment from %s", afile);
   MSAFileClose(afp);
 
-  for (idx = 0; idx < ainfo.nseq; idx++)
-    s2upper(aseq[idx]);
-  DealignAseqs(aseq, ainfo.nseq, &rseq);
-
+  for (idx = 0; idx < msa->nseq; idx++)
+    s2upper(msa->aseq[idx]);
+  DealignAseqs(msa->aseq, msa->nseq, &rseq);
 
   /*********************************************** 
    * Open HMM file 
-   * Read a single HMM from it. (Config HMM, if necessary).
+   * Read a single HMM from it. 
    ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, NULL)) == NULL)
@@ -145,116 +130,77 @@ main(int argc, char **argv)
 
   if (! (hmm->flags & PLAN7_MAP))
     Die("HMM in %s has no map", hmmfile);
-  if (GCGMultchecksum(aseq, ainfo.nseq) != hmm->checksum)
+  if (GCGMultchecksum(msa->aseq, msa->nseq) != hmm->checksum)
     Die("Checksum for alignment in %s does not match that in HMM (%d != %d)", 
-	afile, GCGMultchecksum(aseq, ainfo.nseq), hmm->checksum);
-
-  /* Allocations for output alignment
-   */
-  otr  = MallocOrDie(sizeof(struct p7trace_s *) * ainfo.nseq * 2);
-  odsq = MallocOrDie(sizeof(char *) * ainfo.nseq * 2);
-  osqinfo = MallocOrDie(sizeof(SQINFO) * ainfo.nseq * 2);
-  owgt = MallocOrDie(sizeof(float) * ainfo.nseq*2);
-  FSet(owgt, ainfo.nseq*2, 1.0);
+	afile, GCGMultchecksum(msa->aseq, msa->nseq), hmm->checksum);
 
   /*********************************************** 
-   * Align alignment to HMM, get master trace
+   * First test:
+   * mapped alignment should match re-aligned alignment:
+   * obtain and compare the two master traces
    ***********************************************/
 
-  mtr   = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
-  maptr = MasterTraceFromMap(hmm->map, hmm->M, ainfo.alen);
-  itr = MallocOrDie(sizeof(struct p7trace_s *) * ainfo.nseq);
-
-				/* verify master traces */
-  if (! TraceVerify(mtr, hmm->M, ainfo.alen))
+  mtr   = P7ViterbiAlignAlignment(msa, hmm);
+  maptr = MasterTraceFromMap(hmm->map, hmm->M, msa->alen);
+  if (! TraceVerify(mtr, hmm->M, msa->alen))
     Die("Trace verify on P7ViterbiAlignAlignment() result failed\n");
-  if (! TraceVerify(maptr, hmm->M, ainfo.alen))
+  if (! TraceVerify(maptr, hmm->M, msa->alen))
     Die("Trace verify on MasterTraceFromMap() result failed\n");
   if (! TraceCompare(mtr, maptr))
     Die("Master traces differ for alignment versus map\n");
 
-				/* impose master trace on individuals */
-  ImposeMasterTrace(aseq, ainfo.nseq, mtr, &tr);
+  /**************************************************
+   * Second test:
+   * seq traces implied by mapped alignment should generally match
+   * re-aligned individual sequences.
+   ***************************************************/
 
+  ImposeMasterTrace(msa->aseq, msa->nseq, mtr, &tr);
+
+  itr = MallocOrDie(sizeof(struct p7trace_s *) * msa->nseq);
 				/* align individuals, compare traces */
-  oi = 0;
   ndiff = 0;
-  for (idx = 0; idx < ainfo.nseq; idx++)
+  for (idx = 0; idx < msa->nseq; idx++)
     {
-      dsq = DigitizeSequence(rseq[idx], ainfo.sqinfo[idx].len);
-      P7Viterbi(dsq, ainfo.sqinfo[idx].len, hmm, &(itr[idx]));
+      rlen = strlen(rseq[idx]);
+      dsq  = DigitizeSequence(rseq[idx], rlen);
+      P7Viterbi(dsq, rlen, hmm, &(itr[idx]));
       
-      /* The trace given by the alignment automatically goes in
-       * the output alignment
-       */
-      odsq[oi] = DigitizeSequence(rseq[idx], ainfo.sqinfo[idx].len);
-      SeqinfoCopy(&(osqinfo[oi]), &(ainfo.sqinfo[idx]));
-      otr[oi] = tr[idx];
-      oi++;
-
       if (! TraceCompare(itr[idx], tr[idx]))
-	{
-				/* put indiv Viterbi trace in output for comparison */
-	  odsq[oi] = DigitizeSequence(rseq[idx], ainfo.sqinfo[idx].len);
-	  SeqinfoCopy(&(osqinfo[oi]), &(ainfo.sqinfo[idx]));
-	  otr[oi] = itr[idx];
-	  oi++;
-	  ndiff++;
-	}
-      
+	ndiff++;
       free(dsq);
     }
 
-  /* Output the alignment
+  /* Determine success/failure.
    */
-  P7Traces2Alignment(odsq, osqinfo, owgt, oi, hmm->M, otr, FALSE,
-		     &oaseq, &oainfo);
-  if (ofile != NULL) 
-    {
-      if ((ofp = fopen(ofile,"w")) == NULL)
-	Die("alignalign_test: failed to open output file %s", ofile);
-      WriteSELEX(stdout, oaseq, &oainfo, 50);
-      fclose(ofp);
-    }
+  if (ndiff > msa->nseq / 2) 
+    Die("alignalign: Test FAILED; %d/%d differ\n", ndiff, msa->nseq);
 
-  /* Determine success/failure. Leave as flag in ndiff.
-   */
-  if (ndiff > ainfo.nseq / 2) {
-    if (be_verbose) printf("alignalign: Test FAILED; %d/%d differ\n", ndiff, ainfo.nseq);
-    ndiff = EXIT_FAILURE;
-  } else {
-    if (be_verbose) printf("alignalign: Test passed; %d/%d differ\n", ndiff, ainfo.nseq);
-    ndiff = EXIT_SUCCESS;
+  if (be_standard) {
+    if (ndiff != 12) 
+      Die("alignalign: Test FAILED; %d traces differ, should be 12\n", ndiff); 
+    if (msa->nseq != 109) 
+      Die("alignalign: Test FAILED; %d seqs read, should be 109\n", msa->nseq);   
   }
+
+  if (be_verbose) printf("alignalign: Test passed; %d/%d differ, as expected\n", 
+			 ndiff, msa->nseq);
 
   /* Cleanup.
    */
   P7FreeTrace(mtr);
   P7FreeTrace(maptr);
-  for (idx = 0; idx < ainfo.nseq; idx++)
+  for (idx = 0; idx < msa->nseq; idx++)
     {
       P7FreeTrace(tr[idx]);
       P7FreeTrace(itr[idx]);
     }
-  for (idx = 0; idx < oi; idx++)
-    free(odsq[idx]);
   free(tr);
   free(itr);
-  free(otr);
-  free(odsq);
-  free(owgt);
-  free(osqinfo);
-  Free2DArray(rseq, ainfo.nseq);
-  FreeAlignment(aseq, &ainfo);
-  FreeAlignment(oaseq, &oainfo);
+  Free2DArray((void **) rseq, msa->nseq);
+  MSAFree(msa);
   FreePlan7(hmm);
   SqdClean();
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("trace_test failed memory test");
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
-  
-  return ndiff;
+  return EXIT_SUCCESS;
 }

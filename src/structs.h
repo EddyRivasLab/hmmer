@@ -452,6 +452,29 @@ struct tophit_s {
   int            lump;       	/* allocation lumpsize                      */
 };
 
+/* struct threshold_s 
+ * Contains score/evalue threshold settings.
+ *
+ * made first for hmmpfam:
+ * Since we're going to loop over all HMMs in a Pfam (or pfam-like)
+ * database in main_loop_{serial,pvm}, and we're going to
+ * allow autocutoffs using Pfam GA, NC, TC lines, we will need
+ * to reset those cutoffs with each HMM in turn. Therefore the
+ * main loops need to know whether they're supposed to be
+ * doing autocutoff. This amount of info was unwieldy enough
+ * to pass through the argument list that I put it
+ * in a structure.
+ */
+struct threshold_s {
+  float  globT;			/* T parameter: keep only hits > globT bits */
+  double globE;			/* E parameter: keep hits < globE E-value   */
+  float  domT;			/* T parameter for individual domains       */
+  double domE;			/* E parameter for individual domains       */
+				/* autosetting of cutoffs using Pfam annot: */
+  enum { CUT_NONE, CUT_GA, CUT_NC, CUT_TC } autocut;
+  int   Z;			/* nseq to base E value calculation on      */
+};
+
 /**********************************************************
  * PVM parallelization
  **********************************************************/

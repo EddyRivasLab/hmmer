@@ -39,8 +39,8 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
    -h        : help; print brief help on version and usage\n\
    -A <n>    : sets alignment output limit to <n> best domain alignments\n\
    -B        : Babelfish; autodetect sequence file format\n\
-   -E <x>    : sets E value cutoff (globE) to <x>\n\
-   -T <x>    : sets T bit threshold (globT) to <x>\n\
+   -E <x>    : sets E value cutoff (globE) to <= x\n\
+   -T <x>    : sets T bit threshold (globT) to >= x\n\
    -Z <n>    : sets Z (# seqs) for E-value calculation\n\
 ";
 
@@ -50,8 +50,8 @@ static char experts[] = "\
    --cut_ga  : use Pfam GA gathering threshold cutoffs\n\
    --cut_nc  : use Pfam NC noise threshold cutoffs\n\
    --cut_tc  : use Pfam TC trusted threshold cutoffs\n\
-   --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
-   --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
+   --domE <x>: sets domain Eval cutoff (2nd threshold) to <= x\n\
+   --domT <x>: sets domain T bit thresh (2nd threshold) to >= x\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
    --informat <s>: sequence file is in format <s>, not FASTA\n\
    --null2   : turn OFF the post hoc second null model\n\
@@ -288,21 +288,21 @@ main(int argc, char **argv)
    *****************************************************************/ 
 				/* assumes TRUE==1 */
   if (do_ga + do_nc + do_tc > 1) 
-    Die("Please use only one threshold choice option (--ga, --nc, --tc)");
+    Die("Please use only one threshold choice option (e.g. --cut_ga)");
   if (do_ga) {
-    if (! hmm->flags & PLAN7_GA)
+    if (! (hmm->flags & PLAN7_GA))
       Die("GA thresholds are not available for the HMM");
     globT = hmm->ga1;
     domT  = hmm->ga2;
     globE = domE = FLT_MAX;
   } else if (do_nc) {
-    if (! hmm->flags & PLAN7_NC)
+    if (! (hmm->flags & PLAN7_NC))
       Die("NC thresholds are not available for the HMM");
     globT = hmm->nc1;
     domT  = hmm->nc2;
     globE = domE = FLT_MAX;
   } else if (do_tc) {
-    if (! hmm->flags & PLAN7_TC)
+    if (! (hmm->flags & PLAN7_TC))
       Die("TC thresholds are not available for the HMM");
     globT = hmm->tc1;
     domT  = hmm->tc2;
@@ -321,7 +321,7 @@ main(int argc, char **argv)
   printf(   "per-sequence score cutoff:  ");
   if (globT == -FLT_MAX) printf("[none]\n");
   else  {
-    printf("%.1f", globT);
+    printf(">= %.1f", globT);
     if      (do_ga) printf(" [GA1]\n");
     else if (do_nc) printf(" [NC1]\n");
     else if (do_tc) printf(" [TC1]\n");
@@ -329,18 +329,18 @@ main(int argc, char **argv)
   printf(   "per-domain score cutoff:    ");
   if (domT == -FLT_MAX) printf("[none]\n");
   else  {
-    printf("%.1f", domT);
+    printf(">= %.1f", domT);
     if      (do_ga) printf(" [GA2]\n");
     else if (do_nc) printf(" [NC2]\n");
     else if (do_tc) printf(" [TC2]\n");
   }
   printf(   "per-sequence Eval cutoff:   ");
   if (globE == FLT_MAX) printf("[none]\n");
-  else                  printf("%-10.2g\n", globE);
+  else                  printf("<= %-10.2g\n", globE);
     
   printf(   "per-domain Eval cutoff:     ");
   if (domE == FLT_MAX) printf("[none]\n");
-  else                 printf("%10.2g\n", domE);
+  else                 printf("<= %10.2g\n", domE);
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 
   /*********************************************** 
@@ -427,17 +427,17 @@ main(int argc, char **argv)
 	}
       else safedesc = Strdup(desc);
 
-      if (evalue < globE && sc >= globT) 
+      if (evalue <= globE && sc >= globT) 
 	printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
 	       namewidth, name, 
 	       52-namewidth, 52-namewidth, safedesc != NULL ? safedesc : "",
 	       sc, evalue, ndom);
-      else if (evalue >= globE)
+      else if (evalue > globE)
 	{
 	  if (i > 0) printf("\t[no more scores below E threshold]\n");
 	  break;
 	}
-      else if (sc <= globT)
+      else if (sc < globT)
 	{
 	  if (i > 0) printf("\t[no more scores above T threshold]");
 	  break;
@@ -470,9 +470,9 @@ main(int argc, char **argv)
 		   NULL);	                      /* alignment info     */
       evalue = pvalue * (double) Z;
 
-      if (motherp * (double) Z >= globE || mothersc <= globT) 
+      if (motherp * (double) Z > globE || mothersc < globT) 
 	continue;
-      else if (evalue < domE && sc > domT)
+      else if (evalue <= domE && sc >= domT)
 	printf("%-*s %3d/%-3d %5d %5d %c%c %5d %5d %c%c %7.1f %8.2g\n",
 	       namewidth, name, 
 	       domidx, ndom,
@@ -481,11 +481,11 @@ main(int argc, char **argv)
 	       hmmfrom, hmmto,
 	       hmmfrom == 1 ? '[':'.', hmmto == hmm->M ? ']' : '.',
 	       sc, evalue);
-      else if (evalue >= domE) {
+      else if (evalue > domE) {
 	if (i > 0) printf("\t[no more scores below domE threshold]\n");
 	break;
       }
-      else if (sc <= domT) {
+      else if (sc < domT) {
 	if (i > 0) printf("\t[no more scores above domT threshold]\n");
 	break;
       }
@@ -514,19 +514,19 @@ main(int argc, char **argv)
 		       &ali);	                      /* alignment info     */
 	  evalue = pvalue * (double) Z;
 
-	  if (motherp * (double) Z >= globE || mothersc <= globT) 
+	  if (motherp * (double) Z > globE || mothersc < globT) 
 	    continue;
-	  else if (evalue < domE && sc > domT) 
+	  else if (evalue <= domE && sc >= domT) 
 	    {
 	      printf("%s: domain %d of %d, from %d to %d: score %.1f, E = %.2g\n", 
 		     name, domidx, ndom, sqfrom, sqto, sc, evalue);
 	      PrintFancyAli(stdout, ali);
 	    }
-	  else if (evalue >= domE) {
+	  else if (evalue > domE) {
 	    if (i > 0) printf("\t[no more alignments below domE threshold\n");
 	    break;
 	  }
-	  else if (sc <= domT) {
+	  else if (sc < domT) {
 	    if (i > 0) printf("\t[no more alignments above domT threshold\n");
 	    break;
 	  }
@@ -658,7 +658,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp,
        */
       pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
-      if (sc > globT && evalue < globE) 
+      if (sc >= globT && evalue <= globE) 
 	{
 	  RegisterHit(ghit, sc, pvalue, sc, 
 		      0., 0.,	                /* no mother seq */
@@ -1207,7 +1207,7 @@ worker_thread(void *ptr)
     pvalue = PValue(wpool->hmm, sc);
     evalue = wpool->Z ? (double) wpool->Z * pvalue : (double) wpool->nseq * pvalue;
  
-    if (sc > wpool->globT && evalue < wpool->globE) 
+    if (sc >= wpool->globT && evalue <= wpool->globE) 
       { 
 	RegisterHit(wpool->ghit, sc, pvalue, sc,
 		    0., 0.,	                  /* no mother seq */

@@ -172,7 +172,7 @@ extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
  */
 extern char *Getword(FILE *fp, int type); 
 extern char *Getline(char *s, int n, FILE *fp);
-
+extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
 
 /* from modelmakers.c
  * Model construction algorithms

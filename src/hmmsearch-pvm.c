@@ -23,10 +23,6 @@
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 static void leave_pvm(void);
 
 int 
@@ -125,7 +121,7 @@ main(void)
 	
       pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
-      send_trace = (sc > globT && evalue < globE) ? 1 : 0;
+      send_trace = (sc >= globT && evalue <= globE) ? 1 : 0;
      
       /* return output
        */

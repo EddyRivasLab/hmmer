@@ -91,3 +91,42 @@ Getline(char *s, int n, FILE *fp)
   } while (*first == '#' || *first == '\0');
   return s;
 }
+
+
+/* Function: SetAutocuts()
+ * Date:     SRE, Thu Jun  8 08:19:46 2000 [TW721 over Ireland]
+ *
+ * Purpose:  Set score thresholds using the GA, TC, or NC information
+ *           in an HMM.
+ *
+ * Args:     thresh - score threshold structure. autocut must be set
+ *                    properly (CUT_GA, CUT_NC, or CUT_TC).
+ *           hmm    - HMM containing appropriate score cutoff info
+ *
+ * Returns:  1 on success.
+ *           0 if HMM does not have the score cutoffs available -- caller
+ *             will have to decide on a fallback plan.
+ *           Has no effect (and returns success) if autocut is
+ *           CUT_NONE.
+ */
+int
+SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm)
+{
+  if (thresh->autocut == CUT_GA) {
+    if (! (hmm->flags & PLAN7_GA)) return 0;
+    thresh->globT = hmm->ga1;
+    thresh->domT  = hmm->ga2;
+    thresh->globE = thresh->domE = FLT_MAX;
+  } else if (thresh->autocut == CUT_NC) {
+    if (! (hmm->flags & PLAN7_NC)) return 0;
+    thresh->globT = hmm->nc1;
+    thresh->domT  = hmm->nc2;
+    thresh->globE = thresh->domE = FLT_MAX;
+  } else if (thresh->autocut == CUT_TC) {
+    if (! (hmm->flags & PLAN7_TC)) return 0;
+    thresh->globT = hmm->tc1;
+    thresh->domT  = hmm->tc2;
+    thresh->globE = thresh->domE = FLT_MAX;
+  }
+  return 1;
+}

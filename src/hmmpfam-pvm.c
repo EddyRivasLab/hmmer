@@ -38,11 +38,9 @@ main(void)
   int      nhmm;		/* number of HMM to work on                */
   float    sc;
   int      my_idx = -1;		/* my index, 0..nslaves-1 */
-  float    globT;		/* T parameter: keep only hits > globT bits */
-  double   globE;		/* E parameter: keep hits < globE E-value   */
   double   pvalue;		/* Z*pvalue = Evalue                        */
   double   evalue;		/* upper bound on evalue                    */
-  int      Z;			/* nseq to base E value calculation on      */
+  struct threshold_s thresh;    /* threshold settings                       */
   int      send_trace;		/* TRUE if score is significant             */
   int      do_xnu;		/* TRUE to do XNU filter on seq             */
   int      do_forward;		/* TRUE to use Forward() scores not Viterbi */
@@ -66,10 +64,11 @@ main(void)
    *     5) globT threshold
    *     6) globE threshold
    *     7) Z 
-   *     8) do_xnu flag
-   *     9) do_forward flag
-   *    10) do_null2 flag
-   *    11) alphabet type
+   *     8) autocut setting 
+   *     9) do_xnu flag
+   *    10) do_forward flag
+   *    11) do_null2 flag
+   *    12) alphabet type
    * We receive the broadcast and open the files.    
    ******************************************************************/
 
@@ -82,9 +81,10 @@ main(void)
   pvm_upkint(&len, 1, 1);
   seq = MallocOrDie(sizeof(char *) * (len+1));
   pvm_upkstr(seq);
-  pvm_upkfloat(&globT, 1, 1);
-  pvm_upkdouble(&globE, 1, 1);
-  pvm_upkint(&Z, 1, 1);
+  pvm_upkfloat(&(thresh.globT), 1, 1);
+  pvm_upkdouble(&(thresh.globE), 1, 1);
+  pvm_upkint(&(thresh.Z), 1, 1);
+  pvm_upkint(&(thresh.autocut), 1, 1);
   pvm_upkint(&do_xnu, 1, 1);
   pvm_upkint(&do_forward, 1, 1);
   pvm_upkint(&do_null2, 1, 1);
@@ -128,7 +128,11 @@ main(void)
       if (! HMMFileRead(hmmfp, &hmm)) Die("unexpected end of HMM file"); 
       if (hmm == NULL)                Die("unexpected failure to parse HMM file"); 
       P7Logoddsify(hmm, TRUE);
-      
+
+			/* set Pfam specific score thresholds if needed */
+      if (! SetAutocuts(&thresh, hmm))
+	Die("HMM %s doesn't have the score cutoffs you wanted", hmm->name); 
+
       /* Score sequence, do alignment (Viterbi), recover trace
        */
       if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
@@ -146,8 +150,8 @@ main(void)
       if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
 	
       pvalue = PValue(hmm, sc);
-      evalue = Z ? (double) Z * pvalue : (double) nhmm * pvalue;
-      send_trace = (sc > globT && evalue < globE) ? 1 : 0;
+      evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
+      send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
 
       /* return output
        */
