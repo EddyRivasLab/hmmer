@@ -1,4 +1,4 @@
-.TH "hmmbuild" 1 "January 1998" "HMMER 2.0" "HMMER Manual"
+.TH "hmmbuild" 1 "March 1998" "HMMER 2.0" "HMMER Manual"
 
 .SH NAME
 .TP 
@@ -277,10 +277,6 @@ and an example is given in the Demos directory of the HMMER
 distribution.
 
 .TP
-.B --star
-Experimental and secret. Computer may explode if you use this.
-
-.TP
 .BI --swentry " <x>"
 Controls the total probability that is distributed to local entries
 into the model, versus starting at the beginning of the model
@@ -380,8 +376,8 @@ in place of the default GSC weighting.
 .SH SEE ALSO
 
 .PP
-Individual man pages: hmmalign(1), hmmbuild(1), hmmcalibrate(1),
-hmmconvert(1), hmmpfam(1), hmmsearch(1)
+hmmalign(1), hmmcalibrate(1),
+hmmconvert(1), hmmer(1), hmmemit(1), hmmpfam(1), hmmsearch(1)
 .PP
 User guide and tutorial: Userguide.ps
 .PP
@@ -390,10 +386,10 @@ WWW:
 
 .SH AUTHOR
 
-This software and documentation is Copyright (C) 1992-1998, Sean
-R. Eddy.  It is freely distributable under terms of the GNU General
-Public License. See COPYING in the source code distribution for more
-details, or contact me.
+This software and documentation is Copyright (C) 1992-1998 Washington
+University School of Medicine.  It is freely distributable under terms
+of the GNU General Public License. See COPYING in the source code
+distribution for more details, or contact me.
 
 .nf
 Sean Eddy
