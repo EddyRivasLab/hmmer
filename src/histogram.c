@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <float.h>
 #include <math.h>
 
 #include "squid.h"
@@ -39,7 +40,9 @@
 #include "structs.h"
 #include "funcs.h"
 
-#include <assert.h>
+#ifdef MEMDEBUG
+#include "dbmalloc.h"
+#endif
 
 /* Function: AllocHistogram()
  * 
@@ -923,6 +926,10 @@ double
 ExtremeValueP(float x, float mu, float lambda)
 {
   double y;
+			/* avoid overflow fp exceptions */
+  if ((lambda * (x - mu)) < -1. * log(log(DBL_MAX))) return 1.0;
+			/* avoid underflow fp exceptions */
+  if ((lambda * (x - mu)) > log(DBL_MAX)) return 0.0;
 			/* a roundoff issue arises; use 1 - e^-x --> x for small x */
   y = exp(-1. * lambda * (x - mu));
   if (y < 1e-7) return y;
@@ -1215,6 +1222,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
   /* 3. Substitute into Lawless 4.1.5 to find mu
    */
   esum = 0.;
+  total = 0.;
   for (i = 0; i < n; i++)
     {
       mult   = (c == NULL) ? 1. : (double) c[i];
