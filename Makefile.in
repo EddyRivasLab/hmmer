@@ -222,6 +222,12 @@ dist:
 	#
 	autoconf
 	cp configure build/hmmer-$(RELEASE)/
+	# 
+	# Attach the license and release notes
+	#
+	cp Licenses/LICENSE.$(LICENSE)     build/hmmer-$(RELEASE)/LICENSE
+	cp Licenses/COPYING.$(LICENSE)     build/hmmer-$(RELEASE)/COPYING
+	cp ReleaseNotes/RELEASE.$(RELEASE) build/hmmer-$(RELEASE)/NOTES
 	#
 	# RCS extraction of top level README-type documentation and Makefile
 	#
@@ -288,11 +294,15 @@ dist:
 #               doesn't install the on-line manual for the Web site.
 #
 ftpdist:
-	cp $(READMES)                   $(FTPDIR)
-	cp build/hmmer-$(RELEASE).tar.Z $(FTPDIR)
-	cp Userguide/Userguide.ps       $(FTPDIR)
-	cp Userguide/Userguide.pdf      $(FTPDIR)
-	cp Userguide/hmmer-html.tar.Z   $(FTPDIR)
+	cp $(READMES)                     $(FTPDIR)
+	cp build/hmmer-$(RELEASE)/COPYING $(FTPDIR)
+	cp build/hmmer-$(RELEASE)/LICENSE $(FTPDIR)
+	cp build/hmmer-$(RELEASE)/NOTES   $(FTPDIR)
+	cp build/hmmer-$(RELEASE).tar.Z   $(FTPDIR)
+	cp build/hmmer-$(RELEASE)-*.tar.Z $(FTPDIR)
+	cp Userguide/Userguide.ps         $(FTPDIR)
+	cp Userguide/Userguide.pdf        $(FTPDIR)
+	cp Userguide/hmmer-html.tar.Z     $(FTPDIR)
 
 
 # make stable: Set up the FTP site symlink to the current stable HMMER release.
