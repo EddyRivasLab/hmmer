@@ -17,10 +17,7 @@
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
+#include "msa.h"		/* squid's multiple alignment i/o       */
 
 static char banner[] = "hmmalign - align sequences to an HMM profile";
 
@@ -31,9 +28,11 @@ Available options are:\n\
    -m     : only print symbols aligned to match states\n\
    -o <f> : save alignment in file <f> in SELEX format\n\
    -q     : quiet - suppress verbose banner\n\
+   -B     : Babelfish; autodetect sequence file format\n\
 ";
 
 static char experts[] = "\
+   --informat <s>: sequence file is in format <s>, not FASTA\n\
    --mapali <f>  : include alignment in file <f> using map in HMM\n\
    --withali <f> : include alignment to (fixed) alignment in file <f>\n\
 \n";
@@ -43,6 +42,8 @@ static struct opt_s OPTIONS[] = {
   { "-m", TRUE, sqdARG_NONE   } ,
   { "-o", TRUE, sqdARG_STRING },
   { "-q", TRUE, sqdARG_NONE   },
+  { "-B", TRUE, sqdARG_NONE   },
+  { "--informat",FALSE, sqdARG_STRING },
   { "--mapali",  FALSE, sqdARG_STRING },
   { "--withali", FALSE, sqdARG_STRING },
 };
@@ -57,17 +58,16 @@ main(int argc, char **argv)
 {
   char            *hmmfile;	/* file to read HMMs from                  */
   HMMFILE         *hmmfp;       /* opened hmmfile for reading              */
+  struct plan7_s  *hmm;         /* HMM to align to                         */ 
   char            *seqfile;     /* file to read target sequence from       */ 
   int              format;	/* format of seqfile                       */
   char           **rseq;        /* raw, unaligned sequences                */ 
   SQINFO          *sqinfo;      /* info associated with sequences          */
   char           **dsq;         /* digitized raw sequences                 */
   int              nseq;        /* number of sequences                     */  
-  char           **aseq;        /* aligned sequences                       */
-  AINFO            ainfo;       /* alignment information                   */
-  float           *wgt;         /* per-sequence weights                    */
+  float           *wgt;		/* weights to assign to alignment          */
+  MSA             *msa;         /* alignment that's created                */    
   int              i;
-  struct plan7_s    *hmm;       /* HMM to align to                         */ 
   struct p7trace_s **tr;        /* traces for aligned sequences            */
 
   char *optname;                /* name of option found by Getopt()         */
@@ -80,16 +80,11 @@ main(int argc, char **argv)
   char *withali;                /* name of additional alignment file to align */
   char *mapali;                 /* name of additional alignment file to map   */
   
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
-
   /*********************************************** 
    * Parse command line
    ***********************************************/
   
+  format    = SQFILE_FASTA;	/* default: expect FASTA */
   matchonly = FALSE;
   outfile   = NULL;
   be_quiet  = FALSE;
@@ -101,14 +96,20 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-m")        == 0) matchonly= TRUE;
     else if (strcmp(optname, "-o")        == 0) outfile  = optarg;
     else if (strcmp(optname, "-q")        == 0) be_quiet = TRUE; 
+    else if (strcmp(optname, "-B")        == 0) format   = SQFILE_UNKNOWN; 
     else if (strcmp(optname, "--mapali")  == 0) mapali   = optarg;
     else if (strcmp(optname, "--withali") == 0) withali  = optarg;
+    else if (strcmp(optname, "--informat") == 0) {
+	format = String2SeqfileFormat(optarg);
+	if (format == SQFILE_UNKNOWN) 
+	  Die("unrecognized sequence file format \"%s\"", optarg);
+      }
     else if (strcmp(optname, "-h") == 0) 
       {
 	Banner(stdout, banner);
 	puts(usage);
 	puts(experts);
-	exit(0);
+	exit(EXIT_SUCCESS);
       }
   }
   if (argc - optind != 2)
@@ -147,14 +148,6 @@ main(int argc, char **argv)
    * Read all seqs from it.
    ***********************************************/
 
-  if (! SeqfileFormat(seqfile, &format, NULL))
-    switch (squid_errno) {
-    case SQERR_NOFILE: 
-      Die("Sequence file %s could not be opened for reading", seqfile); /*FALLTHRU*/
-    case SQERR_FORMAT: 
-    default:           
-      Die("Failed to determine format of sequence file %s", seqfile);
-    }
   if (! ReadMultipleRseqs(seqfile, format, &rseq, &sqinfo, &nseq))
     Die("Failed to read any sequences from file %s", seqfile);
 
@@ -202,8 +195,7 @@ main(int argc, char **argv)
    */ 
   wgt = MallocOrDie(sizeof(float) * nseq);
   FSet(wgt, nseq, 1.0);
-  P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, matchonly,
-		     &aseq, &ainfo);
+  msa = P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, matchonly);
 
   /*********************************************** 
    * Output the alignment
@@ -211,12 +203,12 @@ main(int argc, char **argv)
   
   if (outfile != NULL && (ofp = fopen(outfile, "w")) != NULL)
     {
-      WriteSELEX(ofp, aseq, &ainfo, 50);
+      WriteStockholm(ofp, msa);
       printf("Alignment saved in file %s\n", outfile);
       fclose(ofp);
     }
   else
-    WriteSELEX(stdout, aseq, &ainfo, 50);
+    WriteStockholm(stdout, msa);
 
   /*********************************************** 
    * Cleanup and exit
@@ -228,7 +220,7 @@ main(int argc, char **argv)
       FreeSequence(rseq[i], &(sqinfo[i]));
       free(dsq[i]);
     }
-  FreeAlignment(aseq, &ainfo);
+  MSAFree(msa);
   FreePlan7(hmm);
   free(sqinfo);
   free(rseq);
@@ -237,12 +229,6 @@ main(int argc, char **argv)
   free(tr);
 
   SqdClean();
-
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) malloc_list(2, histid1, histid2);
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
   return 0;
 }
 
@@ -274,63 +260,60 @@ include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
 		  struct p7trace_s ***tr, int *nseq)
 {
   int format;			/* format of alignment file */
-  char **aseq;			/* aligned seqs             */
+  MSA   *msa;			/* alignment to align to    */
+  MSAFILE *afp;
+  SQINFO  *newinfo;		/* sqinfo array from msa */
   char **newdsq;
   char **newrseq;
-  AINFO ainfo;			/* info that goes with aseq */
   int   idx;			/* counter over aseqs       */
   struct p7trace_s *master;     /* master trace             */
   struct p7trace_s **addtr;     /* individual traces for aseq */
 
-  if (! SeqfileFormat(seqfile, &format, NULL))
-    switch (squid_errno) {
-    case SQERR_NOFILE: 
-      Die("Alignment file %s could not be opened for reading", seqfile);
-      /*FALLTHRU*/ /* a white lie to shut lint up */
-    case SQERR_FORMAT: 
-    default:           
-      Die("Failed to determine format of alignment file %s", seqfile);
-    }
-				/* read the alignment from file */
-  if (! ReadAlignment(seqfile, format, &aseq, &ainfo))
-    Die("Failed to read aligned sequence file %s", seqfile);
-  for (idx = 0; idx < ainfo.nseq; idx++)
-    s2upper(aseq[idx]);
+  format = MSAFILE_UNKNOWN;	/* invoke Babelfish */
+  if ((afp = MSAFileOpen(seqfile, format, NULL)) == NULL)
+    Die("Alignment file %s could not be opened for reading", seqfile);
+  if ((msa = MSAFileRead(afp)) == NULL)
+    Die("Failed to read an alignment from %s\n", seqfile);
+  MSAFileClose(afp);
+  for (idx = 0; idx < msa->nseq; idx++)
+    s2upper(msa->aseq[idx]);
+  newinfo = MSAToSqinfo(msa);
+
 				/* Verify checksums before mapping */
-  if (do_mapped && GCGMultchecksum(aseq, ainfo.nseq) != hmm->checksum)
+  if (do_mapped && GCGMultchecksum(msa->aseq, msa->nseq) != hmm->checksum)
     Die("The checksums for alignment file %s and the HMM alignment map don't match.", 
 	seqfile);
 				/* Get a master trace */
-  if (do_mapped) master = MasterTraceFromMap(hmm->map, hmm->M, ainfo.alen);
-  else           master = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
+  if (do_mapped) master = MasterTraceFromMap(hmm->map, hmm->M, msa->alen);
+  else           master = P7ViterbiAlignAlignment(msa, hmm);
 
 				/* convert to individual traces */
-  ImposeMasterTrace(aseq, ainfo.nseq, master, &addtr);
+  ImposeMasterTrace(msa->aseq, msa->nseq, master, &addtr);
 				/* add those traces to existing ones */
-  *tr = MergeTraceArrays(*tr, *nseq, addtr, ainfo.nseq);
+  *tr = MergeTraceArrays(*tr, *nseq, addtr, msa->nseq);
   
 				/* additional bookkeeping: add to dsq, sqinfo */
-  *rsq = ReallocOrDie((*rsq), sizeof(char *) * (*nseq + ainfo.nseq));
-  DealignAseqs(aseq, ainfo.nseq, &newrseq);
-  for (idx = *nseq; idx < *nseq + ainfo.nseq; idx++)
+  *rsq = ReallocOrDie((*rsq), sizeof(char *) * (*nseq + msa->nseq));
+  DealignAseqs(msa->aseq, msa->nseq, &newrseq);
+  for (idx = *nseq; idx < *nseq + msa->nseq; idx++)
     (*rsq)[idx] = newrseq[idx - (*nseq)];
   free(newrseq);
 
-  *dsq = ReallocOrDie((*dsq), sizeof(char *) * (*nseq + ainfo.nseq));
-  DigitizeAlignment(aseq, &ainfo, &newdsq);
-  for (idx = *nseq; idx < *nseq + ainfo.nseq; idx++)
+  *dsq = ReallocOrDie((*dsq), sizeof(char *) * (*nseq + msa->nseq));
+  DigitizeAlignment(msa, &newdsq);
+  for (idx = *nseq; idx < *nseq + msa->nseq; idx++)
     (*dsq)[idx] = newdsq[idx - (*nseq)];
   free(newdsq);
 				/* unnecessarily complex, but I can't be bothered... */
-  *sqinfo = ReallocOrDie((*sqinfo), sizeof(SQINFO) * (*nseq + ainfo.nseq));
-  for (idx = *nseq; idx < *nseq + ainfo.nseq; idx++)
-    SeqinfoCopy(&((*sqinfo)[idx]), &(ainfo.sqinfo[idx - (*nseq)]));
+  *sqinfo = ReallocOrDie((*sqinfo), sizeof(SQINFO) * (*nseq + msa->nseq));
+  for (idx = *nseq; idx < *nseq + msa->nseq; idx++)
+    SeqinfoCopy(&((*sqinfo)[idx]), &(newinfo[idx - (*nseq)]));
   
-  *nseq = *nseq + ainfo.nseq;
+  *nseq = *nseq + msa->nseq;
 
 				/* Cleanup */
   P7FreeTrace(master);
-  FreeAlignment(aseq, &ainfo);
+  MSAFree(msa);
 				/* Return */
   return;
 }
