@@ -133,7 +133,7 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, char *dsq)
     fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->tlen);
     fprintf(fp, "--  ---- ------  ------- --------\n");
     for (tpos = 0; tpos < tr->tlen; tpos++) {
-      sym = (int) dsq[tr->pos[tpos]];
+      if (dsq != NULL) sym = (int) dsq[tr->pos[tpos]];
 
       fprintf(fp, "%1s  %4d %6d  %7d", 
 	      Statetype(tr->statetype[tpos]),
@@ -147,24 +147,29 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, char *dsq)
 	sc += TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
 				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
 
-      if (tr->statetype[tpos] == STM)  
-	{
-	  fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
-		  Alphabet[sym]);
-	  sc += hmm->msc[sym][tr->nodeidx[tpos]];
-	}
-      else if (tr->statetype[tpos] == STI) 
-	{
-	  fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
-		  tolower(Alphabet[sym]));
-	  sc += hmm->isc[sym][tr->nodeidx[tpos]];
-	}
-      else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
-	       (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
-	       (tr->statetype[tpos] == STJ && tr->statetype[tpos-1] == STJ))
-	{
-	  fprintf(fp, " %8d %c", 0, tolower(Alphabet[sym]));
-	}
+      if (dsq != NULL) {
+	if (tr->statetype[tpos] == STM)  
+	  {
+	    fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
+		    Alphabet[sym]);
+	    sc += hmm->msc[sym][tr->nodeidx[tpos]];
+	  }
+	else if (tr->statetype[tpos] == STI) 
+	  {
+	    fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
+		    tolower(Alphabet[sym]));
+	    sc += hmm->isc[sym][tr->nodeidx[tpos]];
+	  }
+	else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
+		 (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
+		 (tr->statetype[tpos] == STJ && tr->statetype[tpos-1] == STJ))
+	  {
+	    fprintf(fp, " %8d %c", 0, tolower(Alphabet[sym]));
+	  }
+      } else {
+	fprintf(fp, " %8s %c", "-", '-');
+      }
+
 
       fputs("\n", fp);
     }
