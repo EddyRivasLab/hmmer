@@ -132,6 +132,9 @@ HMM database. HMMs have names; the HMM file format allows libraries of
 multiple HMMs per file; and there is a search program
 \prog{hmmpfam}
 for searching a single query sequence against an HMM library.
+HMM databases like Pfam can be indexed for rapid access using
+\prog{hmmindex}, and single HMMs can be retrieved from an HMM
+database using \prog{hmmfetch}.
 
 \item [\textbf{E-values}] HMMER now reports both log-odds scores and
 a E-value. E-values can detect significant matches even when the
@@ -152,9 +155,11 @@ default behavior. For example, mixture Dirichlet priors are now the
 default for protein model building. In HMMER 1.x, you had to invoke a
 number of ``experimental'' options to get better performance -- this
 led to a bunch of really frustrating benchmarking in the literature,
-in which people compared program X to the default behavior of HMMER
-1.x, which was the 1994 basic Krogh/Haussler behavior rather than its
-actual power.
+in which people compared fully optimized program X to the default
+behavior of HMMER 1, which was the 1994 basic Krogh/Haussler behavior
+rather than its actual power. (However, there's still a lot of bad
+benchmarking, because people don't understand how to benchmark profile
+software yet.)
 
 \end{wideitem}
 
@@ -435,6 +440,18 @@ environment variables (the examples given use UNIX csh syntax):
 	Examples:\\
 	\user{setenv HMMERDB /usr/local/lib/hmmer/}
 	\user{setenv HMMERDB /usr/local/lib/hmmer/:/nfs/databases/pfam/}
+
+\item [\emprog{HMMER\_NCPU}] On multiprocessors that support POSIX
+	threads (this includes almost all modern UNIX multiprocessors;
+	for example, SGI Origin servers), the programs
+	\prog{hmmcalibrate}, \prog{hmmpfam}, and \prog{hmmsearch}
+	run as parallelized, multithreaded applications.
+	Normally they will take over all available CPUs in the machine.
+	HMMER\_NCPU sets a maximum number of CPUs to utilize,
+	so HMMER searches are ``good citizens'', leaving some
+ 	CPU power for other jobs. An example of configuring
+	HMMER to use only 16 processors on a 32-processor Origin:\\
+	\user{setenv HMMER\_NCPU 16}
 \end{wideitem}
 
 \section{Other profile HMM implementations}
