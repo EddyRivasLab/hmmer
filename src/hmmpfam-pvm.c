@@ -112,7 +112,7 @@ main(void)
    */
   pvm_initsend(PvmDataDefault);
   pvm_pkint(&code, 1, 1);	
-  PVMPackString(RELEASE);	/* proofing against bug#1 */
+  PVMPackString(PACKAGE_VERSION);	/* proofing against bug#1 */
   pvm_send(master_tid, HMMPVM_RESULTS);
   SQD_DPRINTF1(("I have told my master my initialization status and I await his command.\n"));
 

@@ -101,11 +101,14 @@ src/libhmmer.a:
 
 # install: installs the binaries in BINDIR/
 #          installs man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
+#          Creates these directories if they don't exist.
 install: 
+	mkdir -p ${BINDIR}
+	-mkdir -p ${MANDIR}/man${MANSUFFIX}
 	for file in $(PROGS) $(PVMPROGS); do\
 	   cp src/$$file $(BINDIR)/;\
 	done
-	for file in hmmer $(PROGS); do\
+	-for file in hmmer $(PROGS); do\
 	   $(INSTMAN) documentation/man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 

@@ -7,10 +7,12 @@
 
 ## your compiler and compiler flags
 #
-CC     = @CC@
-CFLAGS = @CFLAGS@
-LIBS   = @LIBS@ -lm
-DEFS   = @DEFS@
+CC       = @CC@
+CFLAGS   = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+LDFLAGS  = @LDFLAGS@
+DEFS     = @DEFS@
+LIBS     = @LIBS@ -lm
 
 ## archiving command, and ranlib command if you need one.
 #  In general, you shouldn't need to change these, and they're
@@ -78,15 +80,15 @@ HDRS =  config.h\
 	structs.h
 
 .c.o:
-	$(CC) $(CFLAGS) $(DEFS) $(PTHREAD_CFLAGS) $(MYINCDIR) $(PVMINCDIR) -c $<
+	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
 
 #################################################################
 ## Targets defining how to make HMMER executables.
 ##
 all: 	$(PROGS) 
 
-$(PROGS): @EXEC_DEPENDENCY@ $(OBJS) 
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(DEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
+${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} 
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
 
 
 #################################################################

@@ -101,6 +101,19 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
  *           (N=1 for small memory score-only variants; we allocate
  *           N+1 rows in the DP matrix.) 
  *           
+ *           We know (because of the way hmmsearch and hmmpfam are coded)
+ *           that only one of the two dimensions is going to change
+ *           in size after the first call to ResizePlan7Matrix();
+ *           that is, for hmmpfam, we have one HMM of fixed size M
+ *           and our target sequences may grow in N; for hmmsearch,
+ *           we have one sequence of fixed size N and our target models
+ *           may grow in M. What we have to watch out for is P7SmallViterbi()
+ *           working on a divide and conquer problem and passing us N < maxN,
+ *           M > maxM; we should definitely *not* reallocate a smaller N.
+ *           Since we know that only one dimension is going to grow,
+ *           we aren't scared of reallocating to maxN,maxM. (If both
+ *           M and N could grow, we would be more worried.)
+ *
  *           Returns individual ptrs to the four matrix components
  *           as a convenience.
  *           
@@ -124,10 +137,10 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
   if (N > mx->maxN) {
     N          += mx->padN; 
     mx->maxN    = N; 
-    mx->xmx     = (int **) ReallocOrDie (mx->xmx, sizeof(int *) * (N+1));
-    mx->mmx     = (int **) ReallocOrDie (mx->mmx, sizeof(int *) * (N+1));
-    mx->imx     = (int **) ReallocOrDie (mx->imx, sizeof(int *) * (N+1));
-    mx->dmx     = (int **) ReallocOrDie (mx->dmx, sizeof(int *) * (N+1));
+    mx->xmx     = (int **) ReallocOrDie (mx->xmx, sizeof(int *) * (mx->maxN+1));
+    mx->mmx     = (int **) ReallocOrDie (mx->mmx, sizeof(int *) * (mx->maxN+1));
+    mx->imx     = (int **) ReallocOrDie (mx->imx, sizeof(int *) * (mx->maxN+1));
+    mx->dmx     = (int **) ReallocOrDie (mx->dmx, sizeof(int *) * (mx->maxN+1));
   }
 
   if (M > mx->maxM) {
@@ -135,22 +148,22 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
     mx->maxM = M; 
   }
 
-  mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((N+1)*5));
-  mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((N+1)*(M+2)));
-  mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((N+1)*(M+2)));
-  mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((N+1)*(M+2)));
+  mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((mx->maxN+1)*5));
+  mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
 
   mx->xmx[0] = (int *) mx->xmx_mem;
   mx->mmx[0] = (int *) mx->mmx_mem;
   mx->imx[0] = (int *) mx->imx_mem;
   mx->dmx[0] = (int *) mx->dmx_mem;
 
-  for (i = 1; i <= N; i++)
+  for (i = 1; i <= mx->maxN; i++)
     {
       mx->xmx[i] = mx->xmx[0] + (i*5); 
-      mx->mmx[i] = mx->mmx[0] + (i*(M+2));
-      mx->imx[i] = mx->imx[0] + (i*(M+2));
-      mx->dmx[i] = mx->dmx[0] + (i*(M+2));
+      mx->mmx[i] = mx->mmx[0] + (i*(mx->maxM+2));
+      mx->imx[i] = mx->imx[0] + (i*(mx->maxM+2));
+      mx->dmx[i] = mx->dmx[0] + (i*(mx->maxM+2));
     }
 
  DONE:

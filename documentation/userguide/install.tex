@@ -391,7 +391,8 @@ them, are:
 compiled correctly.
 
 \item[\textbf{install}] Installs the programs in BINDIR and
-the man pages in MANDIR.
+the man pages in MANDIR. Creates the target directories if
+they don't already exist.
 
 \item[\textbf{clean}] Cleans up the directory, removing files
 generated in the compilation process, while leaving the original
@@ -499,13 +500,16 @@ like, and becoming more standard -- but is not supported by HMMER.}
 
 Install PVM on the master and all the slaves. On the master, make sure
 the environment variables \prog{PVM\_ROOT} and \prog{PVM\_ARCH} are
-set properly (ideally, in a system-wide .cshrc file).
+set properly (ideally, in a system-wide .cshrc file). You may also
+want to have \prog{PVM\_RSH} set to \prog{ssh} (we do).
 
-Add the master's name to your .rhosts or /etc/hosts.equiv file on the
-slaves, so the slaves accept passwordless rsh connections from the
-master. (Or, if you're using ssh, do the equivalent with .shosts or
-some such.) Test this by rsh'ing or ssh'ing into the slaves from the
-master's command line, independent of PVM and HMMER.
+If you're using rsh to connect to the slaces, Add the master's name to
+your .rhosts or /etc/hosts.equiv file on the slaves, so the slaves
+accept passwordless rsh connections from the master. Or, if you're
+using ssh, do the equivalent with ssh authentication (and make sure
+you have \prog{PVM\_RSH} set to \prog{ssh} in the environment). Test
+this by rsh'ing or ssh'ing into the slaves from the master's command
+line, independent of PVM and HMMER.
 
 Put copies of HMMER executables in a directory on the master and all
 the slaves. For each PVM-capable program (\prog{hmmcalibrate},
@@ -531,13 +535,13 @@ and/or sequence files.
 Write a PVM hostfile for the cluster. Specify the location of the
 HMMER executables using the ep= directive. Specify the location of
 \prog{pvmd} on the slaves using the dx= directive (alternatively, you
-can make sure PVM\_ROOT and PVM\_ARCH get set properly on the
-slaves). For the slaves, use the wd= directive to specify the location
-of the HMM databases for \prog{hmmpfam} (alternatively, you can make
-sure HMMERDB gets set properly on the slaves). Use the sp= directive
-to tell HMMER how many processors each node has (and hence, how many
-independent PVM processes it should start); sp=1000 means 1 CPU,
-sp=2000 means 2 CPUs, sp=4000 means 4 CPUS, etc.
+can make sure \prog{PVM\_ROOT} and \prog{PVM\_ARCH} get set properly
+on the slaves). For the slaves, use the wd= directive to specify the
+location of the HMM databases for \prog{hmmpfam} (alternatively, you
+can make sure HMMERDB gets set properly on the slaves). Use the sp=
+directive to tell HMMER how many processors each node has (and hence,
+how many independent PVM processes it should start); sp=1000 means 1
+CPU, sp=2000 means 2 CPUs, sp=4000 means 4 CPUS, etc.
 
 Start the PVM by typing
 

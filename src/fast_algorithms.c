@@ -356,6 +356,11 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
  *           for a problem of NxM: sequence length N, model size M.
  *           (N=1 for small memory score-only variants; we allocate
  *           N+1 rows in the DP matrix.) 
+ * 
+ *           See additional comments in 
+ *           core_algorithms.c:ResizePlan7Matrix(), the normal version
+ *           of this function. This version is only used in the
+ *           Altivec (--enable-altivec) port.
  *           
  *           Returns individual ptrs to the four matrix components
  *           as a convenience.
@@ -387,10 +392,10 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
   if (N > mx->maxN) {
     N          += mx->padN; 
     mx->maxN    = N; 
-    mx->xmx     = (int **) ReallocOrDie (mx->xmx, sizeof(int *) * (N+1));
-    mx->mmx     = (int **) ReallocOrDie (mx->mmx, sizeof(int *) * (N+1));
-    mx->imx     = (int **) ReallocOrDie (mx->imx, sizeof(int *) * (N+1));
-    mx->dmx     = (int **) ReallocOrDie (mx->dmx, sizeof(int *) * (N+1));
+    mx->xmx     = (int **) ReallocOrDie (mx->xmx, sizeof(int *) * (mx->maxN+1));
+    mx->mmx     = (int **) ReallocOrDie (mx->mmx, sizeof(int *) * (mx->maxN+1));
+    mx->imx     = (int **) ReallocOrDie (mx->imx, sizeof(int *) * (mx->maxN+1));
+    mx->dmx     = (int **) ReallocOrDie (mx->dmx, sizeof(int *) * (mx->maxN+1));
   }
 
   if (M > mx->maxM) {
@@ -398,10 +403,10 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
     mx->maxM = M; 
   }
 
-  mx->xmx_mem = ReallocOrDie (mx->xmx_mem, sizeof(int) * (N+1)*(5 + 16));
-  mx->mmx_mem = ReallocOrDie (mx->mmx_mem, sizeof(int) * (N+1)*(M+2+16));
-  mx->imx_mem = ReallocOrDie (mx->imx_mem, sizeof(int) * (N+1)*(M+2+16));
-  mx->dmx_mem = ReallocOrDie (mx->dmx_mem, sizeof(int) * (N+1)*(M+2+16));
+  mx->xmx_mem = ReallocOrDie (mx->xmx_mem, sizeof(int) * (mx->maxN+1)*(5 + 16));
+  mx->mmx_mem = ReallocOrDie (mx->mmx_mem, sizeof(int) * (mx->maxN+1)*(mx->maxM+2+16));
+  mx->imx_mem = ReallocOrDie (mx->imx_mem, sizeof(int) * (mx->maxN+1)*(mx->maxM+2+16));
+  mx->dmx_mem = ReallocOrDie (mx->dmx_mem, sizeof(int) * (mx->maxN+1)*(mx->maxM+2+16));
   
   mx->xmx[0] = (int *) (((((unsigned long int) mx->xmx_mem) + 15) & (~0xf)) + 12);
   mx->mmx[0] = (int *) (((((unsigned long int) mx->mmx_mem) + 15) & (~0xf)) + 12);
@@ -409,13 +414,13 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
   mx->dmx[0] = (int *) (((((unsigned long int) mx->dmx_mem) + 15) & (~0xf)) + 12);
   
   /* And make sure the beginning of each row is aligned the same way */
-  for (i = 1; i <= N; i++)
+  for (i = 1; i <= mx->maxN; i++)
     {
       mx->xmx[i] = mx->xmx[0] + i*(5+11) ; /* add 11 bytes per row, making it divisible by 4 */
-      n = 12 - (M+2)%4;
-      mx->mmx[i] = mx->mmx[0] + i*(M+2+n);
-      mx->imx[i] = mx->imx[0] + i*(M+2+n);
-      mx->dmx[i] = mx->dmx[0] + i*(M+2+n);
+      n = 12 - (mx->maxM+2)%4;
+      mx->mmx[i] = mx->mmx[0] + i*(mx->maxM+2+n);
+      mx->imx[i] = mx->imx[0] + i*(mx->maxM+2+n);
+      mx->dmx[i] = mx->dmx[0] + i*(mx->maxM+2+n);
     }
  
   if (xmx != NULL) *xmx = mx->xmx;

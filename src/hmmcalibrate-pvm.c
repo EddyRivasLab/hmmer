@@ -76,7 +76,7 @@ main(void)
    *    an HMM;
    *    parameters of the HMM calibration.
    * We send back:
-   *    an OK flag, and our RELEASE, for some sanity checking.  
+   *    an OK flag, and our version number, for some sanity checking.  
    ******************************************************************/
   
   StopwatchStart(&stopwatch);
@@ -102,7 +102,7 @@ main(void)
   code = HMMPVM_OK;
   pvm_initsend(PvmDataDefault);
   pvm_pkint(&code, 1, 1);	
-  PVMPackString(RELEASE);
+  PVMPackString(PACKAGE_VERSION);
   pvm_send(master_tid, HMMPVM_RESULTS);
 
   /*****************************************************************

@@ -168,12 +168,13 @@ fi
 # --enable-ccmalloc      - configure for compiling in ccmalloc memory checks
 #
 # The CC output variable is modified.
+# Requires ccmalloc version >= 0.4.0 because of the --no-wrapper option.
 #
 AC_ARG_ENABLE(ccmalloc,
 [  --enable-ccmalloc       turn ccmalloc memory debugging on ],
 [case $enable_ccmalloc in
    yes)  AC_MSG_NOTICE([enabled ccmalloc memory debugging])
-         CC="ccmalloc $CC" 
+         CC="ccmalloc --no-wrapper $CC" 
          ;;
     no)  AC_MSG_NOTICE([ccmalloc memory debug/tracing disabled])
          ;;

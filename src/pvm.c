@@ -175,11 +175,11 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
 	  }
 	}
 
-      if (strcmp(slaverelease, RELEASE) != 0)
+      if (strcmp(slaverelease, PACKAGE_VERSION) != 0)
 	{
 	  PVMKillSlaves(slave_tid, nslaves);
 	  pvm_exit();
-	  Die("Slave %d reports that it's running release %s, which doesn't match the master (%s)", i, slaverelease, RELEASE);
+	  Die("Slave %d reports that it's running release %s, which doesn't match the master (%s)", i, slaverelease, PACKAGE_VERSION);
 	}
     }
 }

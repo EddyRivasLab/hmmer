@@ -256,3 +256,46 @@ DESCRIPTION
  Fixed; verified on Intel/Linux.
  No test case built for bugs.sqc. 
 //
+ID              h21
+TITLE           "make install" doesn't create target directories
+STATUS          CLOSED
+XREF            STL7 p.70
+REPORTED_BY     Gisle SÅÅÊlensminde <gisle@ii.uib.no> [10 Jun 2003]
+CLOSED_DATE     SRE, Thu Jun 12 12:37:54 2003
+DESCRIPTION     
+  "make install" doesn't create target directories if they 
+  don't exist, and fails w/ poor error message. Added and documented
+  mkdir -p steps in Makefile.in
+//
+ID              h22
+TITLE           hmmpfam crash related to resizing DP matrix
+STATUS          CLOSED
+XREF            STL7 p.70
+REPORTED_BY     James Cuff <james@sanger.ac.uk> 12 June 2003
+CLOSED_DATE     SRE, Fri Jun 13 14:56:42 2003
+DESCRIPTION     
+  hmmpfam crashes on Pfam_ls.
+  Problem is with reallocation in ResizePlan7Matrix(), when it
+  is called with N < maxN - it didn't reinitialize ptrs up to 
+  maxN, it only did it up to N. 
+//
+ID              h23
+TITLE           Does not compile w/ --enable-pvm
+STATUS          CLOSED
+XREF            STL7 p.71
+REPORTED_BY     Goran Ceric <goran@genetics.wustl.edu> 12 June 2003
+CLOSED_DATE     SRE, Fri Jun 13 14:57:58 2003
+DESCRIPTION     
+  Didn't compile w/ PVM support, because of #define name changes
+  in 2.3.
+//
+ID              h24
+TITLE           Does not use CPPFLAGS, LDFLAGS in environment
+STATUS          CLOSED
+XREF            STL7 p.71
+REPORTED_BY     Ajay Khanna <askhanna@genetics.wustl.edu> 13 June 2003
+CLOSED_DATE     SRE, Fri Jun 13 14:59:13 2003
+DESCRIPTION     
+  ./configure claims to use CPPFLAGS, LDFLAGS from environment,
+  but doesn't.
+//
