@@ -1,5 +1,5 @@
 /************************************************************
- * HMMER - Biological sequence analysis with profile-HMMs
+ * HMMER - Biological sequence analysis with profile HMMs
  * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the 
@@ -14,8 +14,8 @@
  */
 
 
-#define RELEASE     "2.0e"
-#define RELEASEDATE "March 1998"
+#define RELEASE     "2.0"
+#define RELEASEDATE "June 1998"
 
 #ifndef LINTING			/* compiled-in stamp for all binaries  */
 static char *copyright = "\
