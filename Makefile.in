@@ -52,9 +52,9 @@ CFLAGS = @CFLAGS@
 ## and building the release (indeed, several commands will only work in 
 ## St. Louis)
 #######
-RELEASE     = 2.1.2
-RELEASEDATE = "May 1999"
-RELCODE     = "rel2_1_2"
+RELEASE     = 2.1.3
+RELEASEDATE = "December 1999"
+RELCODE     = "rel2_1_3"
 LICENSE     = gnu
 
 SHELL       = /bin/sh
@@ -65,33 +65,94 @@ FTPDIR      = /nfs/ftp/eddy/hmmer/
 PROGS = hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit\
 	hmmfetch hmmindex hmmpfam hmmsearch
 
-SQUIDPROGS = alistat sfetch seqstat sreformat
+SQUIDPROGS = alistat sfetch seqstat sreformat shuffle
 
 PVMPROGS = @PVMPROGS@
 
 READMES = 00README INSTALL 
 
-HDRS =  config.h funcs.h globals.h structs.h version.h
+HDRS =   config.h\
+	 funcs.h\
+	 globals.h\
+	 postprob.h\
+	 stopwatch.h\
+	 structs.h\
+	 version.h
 
-SRC =   hmmalign.c    hmmbuild.c        hmmcalibrate.c    hmmconvert.c\
-	hmmemit.c     hmmfetch.c        hmmindex.c        hmmpfam.c\
+SRC =   hmmalign.c\
+	hmmbuild.c\
+	hmmcalibrate.c\
+	hmmconvert.c\
+	hmmemit.c\
+	hmmfetch.c\
+        hmmindex.c\
+	hmmpfam.c\
 	hmmsearch.c\
-	hmmcalibrate-pvm.c hmmpfam-pvm.c hmmsearch-pvm.c\
-	alphabet.c    core_algorithms.c debug.c           emit.c\
-	emulation.c   histogram.c       hmmio.c           mathsupport.c\
-        masks.c       misc.c            modelmakers.c     plan7.c\
-	plan9.c       prior.c           pvm.c		  threads.c\
-	tophits.c     trace.c 
+	hmmcalibrate-pvm.c\
+	hmmpfam-pvm.c\
+	hmmsearch-pvm.c\
+	alphabet.c\
+	core_algorithms.c\
+	debug.c\
+	display.c\
+	emit.c\
+	emulation.c\
+	histogram.c\
+	hmmio.c\
+	mathsupport.c\
+        masks.c\
+	misc.c\
+	modelmakers.c\
+	plan7.c\
+	plan9.c\
+	postprob.c\
+	prior.c\
+	pvm.c\
+	stopwatch.c\
+	threads.c\
+	tophits.c\
+	trace.c 
 
-SQUIDSRC = alistat_main.c sfetch_main.c seqstat_main.c sreformat_main.c\
-	   aligneval.c  alignio.c   cluster.c   dayhoff.c\
-	   file.c       getopt.c    gsi.c       hsregex.c   interleaved.c\
-	   iupac.c      msf.c       revcomp.c   selex.c\
-	   sqerror.c    sqio.c      sre_ctype.c sre_math.c\
-	   sre_string.c stack.c     translate.c types.c\
-           weight.c
+SQUIDSRC = afetch_main.c\
+	alistat_main.c\
+	sfetch_main.c\
+	seqstat_main.c\
+	shuffle_main.c\
+	sreformat_main.c\
+	a2m.c\
+	aligneval.c\
+	alignio.c\
+	clustal.c\
+	cluster.c\
+	dayhoff.c\
+	file.c\
+	getopt.c\
+	gki.c\
+	gsi.c\
+        hsregex.c\
+	iupac.c\
+	msa.c\
+	msf.c\
+	phylip.c\
+        revcomp.c\
+	selex.c\
+	sqerror.c\
+	sqio.c\
+	squidcore.c\
+	sre_ctype.c\
+	sre_math.c\
+	sre_string.c\
+	stack.c\
+	stockholm.c\
+	translate.c\
+	types.c\
+        weight.c
 
-SQUIDHDRS = gnuregex.h squid.h sqfuncs.h 
+SQUIDHDRS = gki.h\
+	gsi.h\
+	msa.h\
+	squid.h\
+	sqfuncs.h 
 
 SHIVADIST = README\
 	    alignalign_test.c  evd_test.c   masks_test.c  parsingviterbi_test.c\
