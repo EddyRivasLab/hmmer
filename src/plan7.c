@@ -43,6 +43,7 @@ AllocPlan7(int M)
   hmm->M = M;
 
   hmm->name     = NULL;
+  hmm->acc      = NULL;
   hmm->desc     = NULL;
   hmm->rf       = MallocOrDie ((M+2) * sizeof(char));
   hmm->cs       = MallocOrDie ((M+2) * sizeof(char));
@@ -51,6 +52,10 @@ AllocPlan7(int M)
   hmm->ctime    = NULL;
   hmm->map      = MallocOrDie ((M+1) * sizeof(int));
   hmm->checksum = 0;
+
+  hmm->ga1 = hmm->ga2 = 0.0;
+  hmm->tc1 = hmm->tc2 = 0.0;
+  hmm->nc1 = hmm->nc2 = 0.0;
 
   hmm->t      = MallocOrDie (M     *           sizeof(float *));
   hmm->tsc    = MallocOrDie (M     *           sizeof(int *));
@@ -112,6 +117,7 @@ AllocPlan7Shell(void)
   hmm->M = 0;
 
   hmm->name     = NULL;
+  hmm->acc      = NULL;
   hmm->desc     = NULL;
   hmm->rf       = NULL;
   hmm->cs       = NULL;
@@ -120,6 +126,10 @@ AllocPlan7Shell(void)
   hmm->ctime    = NULL;
   hmm->map      = NULL;
   hmm->checksum = 0;
+
+  hmm->ga1 = hmm->ga2 = 0.0;
+  hmm->tc1 = hmm->tc2 = 0.0;
+  hmm->nc1 = hmm->nc2 = 0.0;
 
   hmm->t      = NULL;
   hmm->tsc    = NULL;
@@ -268,6 +278,21 @@ Plan7SetName(struct plan7_s *hmm, char *name)
   hmm->name = Strdup(name);
   StringChop(hmm->name);
 }
+/* Function: Plan7SetAccession()
+ * 
+ * Purpose:  Change the accession number of a Plan7 HMM. Convenience function.
+ *      
+ * Note:     Trailing whitespace and \n's are chopped.     
+ */
+void
+Plan7SetAccession(struct plan7_s *hmm, char *acc)
+{
+  if (hmm->acc != NULL) free(hmm->acc);
+  hmm->acc = Strdup(acc);
+  StringChop(hmm->acc);
+  hmm->flags |= PLAN7_ACC;
+}
+
 /* Function: Plan7SetDescription()
  * 
  * Purpose:  Change the description line of a Plan7 HMM. Convenience function.
@@ -456,33 +481,58 @@ P7Logoddsify(struct plan7_s *hmm, int viterbi_mode)
    * M1 is just B->M1
    * M2 is sum (or max) of B->M2 and B->D1->M2
    * M_k is sum (or max) of B->M_k and B->D1...D_k-1->M_k
+   * These have to be done in log space, else you'll get
+   * underflow errors; and we also have to watch for log(0).
+   * A little sloppier than it probably has to be; historically,
+   * doing in this in log space was in response to a bug report.
    */
-  accum = hmm->tbd1;
+  accum = hmm->tbd1 > 0.0 ? log(hmm->tbd1) : -9999.;
   for (k = 1; k <= hmm->M; k++)
     {
-      tbm = hmm->begin[k];	/* B->M_k part */
-      if (k > 1) {		/* B->D1...D_k-1->M_k part we get from accum*/
-	if (viterbi_mode) tbm =  MAX(tbm, accum * hmm->t[k-1][TDM]);
-	else              tbm += accum * hmm->t[k-1][TDM];
-	accum *= hmm->t[k-1][TDD];
-      }
-      hmm->bsc[k] = Prob2Score(tbm, hmm->p1); /* entries are to emitters */
+      tbm = hmm->begin[k] > 0. ? log(hmm->begin[k]) : -9999.;	/* B->M_k part */
+
+      /* B->D1...D_k-1->M_k part we get from accum*/
+      if (k > 1 && accum > -9999.) 
+	{	
+	  if (hmm->t[k-1][TDM] > 0.0)
+	    {
+	      if (viterbi_mode) tbm =  MAX(tbm, accum + log(hmm->t[k-1][TDM]));
+	      else              tbm =  LogSum(tbm, accum + log(hmm->t[k-1][TDM]));
+	    }
+
+	  accum = (hmm->t[k-1][TDD] > 0.0) ? accum + log(hmm->t[k-1][TDD]) : -9999.;
+	}
+				/* Convert from log_e to scaled integer log_2 odds. */
+      if (tbm > -9999.) 
+	hmm->bsc[k] = (int) floor(0.5 + INTSCALE * 1.44269504 * (tbm - log(hmm->p1)));
+      else
+	hmm->bsc[k] = -INFTY;
     }
 
   /* M->E exit transitions. Note how D_M is folded out.
    * M_M is 1 by definition
    * M_M-1 is sum of M_M-1->E and M_M-1->D_M->E, where D_M->E is 1 by definition
    * M_k is sum of M_k->E and M_k->D_k+1...D_M->E
+   * Must be done in log space to avoid underflow errors.
+   * A little sloppier than it probably has to be; historically,
+   * doing in this in log space was in response to a bug report.
    */
   hmm->esc[hmm->M] = 0;
-  accum = 1.;
+  accum = 0.;
   for (k = hmm->M-1; k >= 1; k--)
     {
-      if (viterbi_mode) tme = MAX(hmm->end[k], accum * hmm->t[k][TMD]);
-      else              tme = hmm->end[k] + accum * hmm->t[k][TMD];
-
-      accum      *= hmm->t[k][TDD];
-      hmm->esc[k] = Prob2Score(tme, 1.); /* exits are to non-emitter */
+      tme = hmm->end[k] > 0. ? log(hmm->end[k]) : -9999.;
+      if (accum > -9999.)
+	{
+	  if (hmm->t[k][TMD] > 0.0)
+	    {	
+	      if (viterbi_mode) tme = MAX(tme, accum + log(hmm->t[k][TMD]));
+	      else              tme = LogSum(tme, accum + log(hmm->t[k][TMD]));
+	    }
+	  accum = (hmm->t[k][TDD] > 0.0) ? accum + log(hmm->t[k][TDD]) : -9999.;
+	}
+				/* convert from log_e to scaled integer log odds. */
+      hmm->esc[k] = (tme > -9999.) ? (int) floor(0.5 + INTSCALE * 1.44269504 * tme) : -INFTY;
     }
 
 				/* special transitions */
