@@ -171,11 +171,31 @@ DigitizeSequence(char *seq, int L)
   char *dsq;
   int i;
 
-  dsq = (char *) MallocOrDie (sizeof(char) * (L+2));
+  dsq = MallocOrDie (sizeof(char) * (L+2));
   dsq[0] = dsq[L+1] = (char) Alphabet_iupac;
   for (i = 1; i <= L; i++) 
     dsq[i] = SymbolIndex(seq[i-1]);
   return dsq;
+}
+
+
+/* Function: DedigitizeSequence()
+ * Date:     SRE, Tue Dec 16 10:39:19 1997 [StL]
+ * 
+ * Purpose:  Returns a 0..L-1 character string, converting the
+ *           dsq back to the real alphabet.
+ */
+char *
+DedigitizeSequence(char *dsq, int L)
+{
+  char *seq;
+  int i;
+
+  seq = MallocOrDie(sizeof(char) * (L+1));
+  for (i = 0; i < L; i++)
+    seq[i] = Alphabet[(int) dsq[i+1]];
+  seq[L] = '\0';
+  return seq;
 }
 
 
