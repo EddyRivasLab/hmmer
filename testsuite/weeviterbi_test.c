@@ -31,11 +31,15 @@ Usage: testdriver [-options]\n\
 ";
 
 static char experts[] = "\
+  --hmm <f>       : use HMM in file <f>\n\
+  --seq <f>       : use seq(s) in file <f>\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
   { "-h",       TRUE,  sqdARG_NONE },
   { "-v",       TRUE,  sqdARG_NONE },
+  { "--hmm",    FALSE, sqdARG_STRING },
+  { "--seq",    FALSE, sqdARG_STRING },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -79,6 +83,8 @@ main(int argc, char **argv)
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-v")       == 0) be_verbose = TRUE;
+    else if (strcmp(optname, "--hmm")    == 0) hmmfile    = optarg;
+    else if (strcmp(optname, "--seq")    == 0) seqfile    = optarg;
     else if (strcmp(optname, "-h")       == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -135,6 +141,9 @@ main(int argc, char **argv)
 	  printf("test sequence %d: %s %s\n",
 		 nseq, sqinfo.name, 
 		 sqinfo.flags & SQINFO_DESC ? sqinfo.desc : "");
+	  printf("** P7Viterbi trace:\n");
+	  P7PrintTrace(stdout, t1, hmm, dsq); 
+	  printf("** P7WeeViterbi trace:\n");
 	  P7PrintTrace(stdout, t2, hmm, dsq); 
 	}
 
@@ -143,7 +152,7 @@ main(int argc, char **argv)
       if (! TraceVerify(t2, hmm->M, sqinfo.len))
 	Die("Trace verify failed on WeeViterbi for seq #%d, %s\n", nseq, sqinfo.name);
       if (sc1 != sc2)
-	Die("Scores for the two Viterbi implementations are unequal (%d,%d)", sc1, sc2);
+	Die("Scores for the two Viterbi implementations are unequal (%.1f,%.1f)", sc1, sc2);
       if (! TraceCompare(t1, t2))
 	Die("WeeViterbi() trace is not identical to Viterbi() trace");
 
