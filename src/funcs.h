@@ -109,8 +109,8 @@ extern void PrintXMGRRegressionLine(FILE *fp, struct histogram_s *h);
 extern void EVDBasicFit(struct histogram_s *h);
 extern int  ExtremeValueFitHistogram(struct histogram_s *h, int censor,
 				     float high_hint);
-extern void ExtremeValueSetHistogram(struct histogram_s *h, float mu, 
-				     float lambda, int ndegrees);
+extern void ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, 
+				     float low, float high, float wonka, int ndegrees);
 extern int  GaussianFitHistogram(struct histogram_s *h, float high_hint);
 extern void GaussianSetHistogram(struct histogram_s *h, float mean, float sd);
 extern double EVDDensity(float x, float mu, float lambda);
