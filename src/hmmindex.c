@@ -35,10 +35,12 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
+  --one2one      : only index names, nothing else: hmmpfam --pvm 1:1 mapping\n\
 ";
 
 static struct opt_s OPTIONS[] = {
    { "-h", TRUE, sqdARG_NONE  },
+   { "--one2one", FALSE, sqdARG_NONE  },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -79,6 +81,7 @@ main(int argc, char **argv)
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
+  int   do_namesonly;		/* TRUE if --one2one option selected*/
 
 #ifdef MEMDEBUG
   unsigned long histid1, histid2, orig_size, current_size;
@@ -90,10 +93,12 @@ main(int argc, char **argv)
    * Parse the command line
    ***********************************************/
 
+  do_namesonly = FALSE;
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
-      if (strcmp(optname, "-h") == 0)
+      if      (strcmp(optname, "--one2one") == 0) do_namesonly = TRUE;
+      else if (strcmp(optname, "-h")        == 0)
 	{
 	  Banner(stdout, banner);
 	  puts(usage);
@@ -158,7 +163,7 @@ main(int argc, char **argv)
 	keylist = ReallocOrDie(keylist, sizeof(struct gsikey_s) * (nkeys + KEYBLOCK));
 
 				/* record accession of HMM as a retrieval key */
-      if (hmm->flags & PLAN7_ACC) {
+      if (! do_namesonly && hmm->flags & PLAN7_ACC) {
 	if (strlen(hmm->acc) >= GSI_KEYSIZE) 
 	  Warn("HMM accession %s is too long to be indexed: must be < %d\n", GSI_KEYSIZE);
 	strncpy(keylist[nkeys].key, hmm->acc, GSI_KEYSIZE-1);
