@@ -331,7 +331,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   /* EVD statistics
    */
   if (hmm->flags & PLAN7_STATS) 
-    fprintf(fp, "EVD   %10f %10f\n", hmm->mu, hmm->lambda);
+    fprintf(fp, "EVD   %10f %10f %10f\n", hmm->mu, hmm->lambda, hmm->wonka);
   
   /* Print header
    */
@@ -464,6 +464,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   if (hmm->flags & PLAN7_STATS) {
     fwrite((char *) &(hmm->mu),      sizeof(float),  1,   fp); 
     fwrite((char *) &(hmm->lambda),  sizeof(float),  1,   fp); 
+    fwrite((char *) &(hmm->wonka),   sizeof(float),  1,   fp); 
   }
 
   /* entry/exit probabilities
@@ -610,6 +611,8 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
     hmm->mu = atof(s);
     if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
     hmm->lambda = atof(s);
+    if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
+    hmm->wonka  = atof(s);
     free(evd); evd = NULL;
   }
 
@@ -748,12 +751,14 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 
   /* EVD stats */
   if (hmm->flags & PLAN7_STATS) {
-    if (! fread((char *) &(hmm->mu), sizeof(float), 1, hmmfp->f))    goto FAILURE;
+    if (! fread((char *) &(hmm->mu),     sizeof(float), 1, hmmfp->f))goto FAILURE;
     if (! fread((char *) &(hmm->lambda), sizeof(float), 1, hmmfp->f))goto FAILURE;
+    if (! fread((char *) &(hmm->wonka),  sizeof(float), 1, hmmfp->f))goto FAILURE;
 
     if (hmmfp->byteswap) {
-      byteswap((char *)&(hmm->mu), sizeof(float));
+      byteswap((char *)&(hmm->mu),     sizeof(float));
       byteswap((char *)&(hmm->lambda), sizeof(float));
+      byteswap((char *)&(hmm->wonka),  sizeof(float));
     }
   }
 
