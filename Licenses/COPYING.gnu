@@ -1,5 +1,5 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
-Copyright (C) 1992-2001 Washington University School of Medicine
+Copyright (C) 1992-2003 Washington University School of Medicine
 
 This suite of programs is free software. You can redistribute it
 and/or modify it under the terms of the GNU General Public License as
