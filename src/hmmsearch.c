@@ -202,12 +202,11 @@ main(int argc, char **argv)
       if (do_forward) sc  = Plan7Forward(dsq, sqinfo.len, hmm, NULL);
       else            sc  = Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
 
-      if (do_adjust)  sc -= SeqScoreCorrection(dsq, sqinfo.len);
-
       /* 2. Recover a trace.    */
       if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
       P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
 
+      if (do_adjust)  sc -= TraceScoreCorrection(tr, dsq);
       /* P7PrintTrace(stdout, tr, hmm, dsq); */
 
       /* 2. Store score/pvalue for global alignment; will sort on score. 
