@@ -26,6 +26,10 @@
 #include <limits.h>
 #include <float.h>
 
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif
+
 #include "squid.h"
 #include "config.h"
 #include "structs.h"
@@ -48,6 +52,7 @@ Available options are:\n\
 
 static char experts[] = "\
   --benchmark    : run hmmcalibrate in benchmarking mode\n\
+  --cpu <n>      : run <n> threads in parallel (if threaded)\n\
   --fixed <n>    : fix random sequence length at <n>\n\
   --histfile <f> : save histogram(s) to file <f>\n\
   --mean <x>     : set random seq length mean at <x> [350]\n\
@@ -59,6 +64,7 @@ static char experts[] = "\
 static struct opt_s OPTIONS[] = {
    { "-h", TRUE, sqdARG_NONE  },
    { "--benchmark",FALSE, sqdARG_NONE }, 
+   { "--cpu",      FALSE, sqdARG_INT },
    { "--fixed",    FALSE, sqdARG_INT   },
    { "--histfile", FALSE, sqdARG_STRING },
    { "--mean",     FALSE, sqdARG_FLOAT },
@@ -104,6 +110,11 @@ main(int argc, char **argv)
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
 
+#ifdef HMMER_THREADS
+  struct vpool_s *vpool;        /* pool of worker threads  */
+#endif
+  int   num_threads;            /* number of worker threads */   
+
 #ifdef MEMDEBUG
   unsigned long histid1, histid2, orig_size, current_size;
   orig_size = malloc_inuse(&histid1);
@@ -121,11 +132,13 @@ main(int argc, char **argv)
   seed         = (int) time ((time_t *) NULL);
   do_benchmark = FALSE;
   histfile     = NULL;
+  num_threads  = ThreadNumber(); /* only matters if we're threaded */
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
       if      (strcmp(optname, "--benchmark")== 0) do_benchmark = TRUE;
+      else if (strcmp(optname, "--cpu")      == 0) num_threads  = atoi(optarg);
       else if (strcmp(optname, "--fixed")    == 0) fixedlen = atoi(optarg);
       else if (strcmp(optname, "--histfile") == 0) histfile = optarg;
       else if (strcmp(optname, "--mean")     == 0) lenmean  = atof(optarg); 
@@ -218,6 +231,10 @@ main(int argc, char **argv)
       printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
     }
 
+#ifdef HMMER_THREADS
+  vpool = VpoolInit(FALSE, FALSE, num_threads, num_threads*2);
+#endif
+
   /***********************************************
    * Calibrate each model in turn
    ***********************************************/
@@ -231,16 +248,35 @@ main(int argc, char **argv)
       P7DefaultNullModel(randomseq, &p1);
       
       hist = AllocHistogram(-200, 200, 100);
-
       max = -FLT_MAX;
-      for (idx = 0; idx < nsample; idx++)
+				/* deliberately generating one too many,
+				   because of how we handle the threads */
+      for (idx = 0; idx <= nsample; idx++)
 	{
 				/* choose length of random sequence */
-	  if (fixedlen) sqlen = fixedlen;
-	  else do sqlen = (int) Gaussrandom(lenmean, lensd); while (sqlen < 1);
+	  if (idx < nsample) {
+	    if (fixedlen) sqlen = fixedlen;
+	    else do sqlen = (int) Gaussrandom(lenmean, lensd); while (sqlen < 1);
 
-	  seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
-	  dsq = DigitizeSequence(seq, sqlen);
+	    seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
+	    dsq = DigitizeSequence(seq, sqlen);
+	  }
+
+#ifdef HMMER_THREADS
+				/* add work, or shut down when finished */
+	  if (idx < nsample) VpoolAddWork(vpool, hmm, dsq, NULL, sqlen);
+	  else 	             VpoolShutdown(vpool);
+
+				/* get results */
+	  while (VpoolGetResults(vpool, NULL, &dsq, NULL, NULL, &score, NULL)) {
+	    AddToHistogram(hist, score);
+	    if (score > max) max = score;
+	    free(dsq); 
+	  }
+	  if (idx < nsample) free(seq);
+#else /* unthreaded version */
+
+	  if (idx == nsample) break;
 
 	  if (P7ViterbiSize(sqlen, hmm->M) <= RAMLIMIT)
 	    score = P7Viterbi(dsq, sqlen, hmm, NULL);
@@ -249,10 +285,11 @@ main(int argc, char **argv)
 
 	  AddToHistogram(hist, score);
 	  if (score > max) max = score;
-
-	  free(dsq);
+	  free(dsq); 
 	  free(seq);
+#endif
 	}
+
 
       /* Fit an EVD to the observed histogram.
        * The TRUE left-censors and fits only the right slope of the histogram.
