@@ -118,7 +118,6 @@ static void save_model(struct plan7_s *hmm, char *hmmfile, int do_append, int do
 static void print_all_scores(FILE *fp, struct plan7_s *hmm, 
 			     AINFO *ainfo, char **dsq, int nseq, 
 			     struct p7trace_s **tr);
-static void make_star_model(struct plan7_s *hmm, char *starfile, struct p7prior_s *pri); 
 static void save_countvectors(char *cfile, struct plan7_s *hmm);
 static void position_average_score(struct plan7_s *hmm, char **seq, float *wgt,
 				   int nseq, struct p7trace_s **tr, float *pernode,
@@ -163,7 +162,6 @@ main(int argc, char **argv)
   char *rndfile;		/* random sequence model file to read    */
   char *prifile;		/* Dirichlet prior file to read          */
   char *pamfile;		/* PAM matrix file for heuristic prior   */
-  char *starfile;               /* Star matrix file (GJM format, experimental */
   char *cfile;			/* output file for count vectors         */
   float archpri;		/* "architecture" prior on model size    */
   float pamwgt;			/* weight on PAM for heuristic prior     */
@@ -197,7 +195,6 @@ main(int argc, char **argv)
   rndfile           = NULL;
   prifile           = NULL;
   pamfile           = NULL;
-  starfile          = NULL; 
   cfile             = NULL;
   archpri           = 0.85;
   pamwgt            = 20.;
@@ -427,8 +424,7 @@ main(int argc, char **argv)
   printf("%-40s ... ", "Converting counts to probabilities");
   fflush(stdout);
   Plan7SetNullModel(hmm, randomseq, p1);
-  if (starfile != NULL) make_star_model(hmm, starfile, pri);
-  else                  P7PriorifyHMM(hmm, pri);
+  P7PriorifyHMM(hmm, pri);
   printf("done.\n");
 
 
@@ -640,38 +636,11 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
 
 
 
-/* Function: make_star_model()
- * 
- * Purpose:  Take an HMM in counts form, and the name of one
- *           of GJM's star matrix files, and produce a star model
- *           in probability form.
- */
-static void
-make_star_model(struct plan7_s *hmm, char *starfile, struct p7prior_s *pri) 
-{
-  FILE   *fp;
-  float  **mx;
-  float   *pq;
-  int      nq;
-
-  if ((fp = fopen(starfile, "r")) == NULL)
-    Die("Failed to open GJM's star matrix file %s", starfile);
-  ReadGJMMatrices(fp, &mx, &pq, &nq); 
-  fclose(fp);
-
-  MakeStarHMM(hmm, mx, pq, nq, pri);
-
-  FMX2Free(mx);
-  free(pq);
-  return;
-}
-  
-
 /* Function: save_countvectors()
  * 
  * Purpose:  Save emission/transition count vectors to a file.
  *           Used for gathering the data on which to train a
- *           prior (e.g. mixture Dirichlet, star, etc.)
+ *           prior (e.g. mixture Dirichlet, etc.)
  *           
  *           The format of the file is one vector per line:
  *           M <f> <f> ...: 20 match emission counts in order AC..WY.
