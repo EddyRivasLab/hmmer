@@ -306,6 +306,9 @@ VpoolThread(void *ptr)
     len    = vpool->len[vpool->nin];
     sqinfo = vpool->sqinfo[vpool->nin];
 
+    /*  printf("thread %x acquires a sequence to work on\n", (unsigned int) pthread_self()); */
+
+
 				/* notify boss in case he's blocked */
     if (vpool->nin == vpool->max_input_queue-1)
       if ((rtn = pthread_cond_signal(&(vpool->input_queue_not_full))) != 0)
@@ -333,6 +336,8 @@ VpoolThread(void *ptr)
     if (vpool->do_null)
       sc -= TraceScoreCorrection(hmm, tr, dsq);
     
+    /* printf("thread %x finishes sequence, puts on output\n", (unsigned int) pthread_self()); */
+
     /*****************************************************************
      * Put the results on the output queue
      * In theory, output queue cannot overflow: in the boss, each
@@ -396,8 +401,10 @@ VpoolAddWork(struct vpool_s *vpool, struct plan7_s *hmm, char *dsq, SQINFO *sqin
   vpool->len[vpool->nin]    = len;
   vpool->nin++;
 
+  /* printf("Added some work. Input queue now has %d seqs\n", vpool->nin); */
+
 				/* flag that data are now available */
-  if (vpool->nin == 1)
+  if (vpool->nin > 0)
     if (pthread_cond_signal(&(vpool->input_queue_not_empty)) != 0)
       Die("pthread_cond_signal failed");
 				/* release lock on the input queue */
