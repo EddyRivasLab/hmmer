@@ -20,8 +20,8 @@ license, or the Netscape Public License), please contact me
 
 Incorporation into commercial software under non-GPL terms is possible
 by obtaining a specially licensed version from Washington University
-School of Medicine. Contact Jack Pincus (jhpincus@cris.com) to arrange
-licensing terms.
+School of Medicine. Contact Tom Hagerty (HagertyT@otm.wustl.edu) at
+our Office for Technology Management to arrange licensing terms.
 
 This software is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of
