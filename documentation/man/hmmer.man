@@ -65,8 +65,8 @@ There is also a user's guide that came
 with the software distribution, which includes a tutorial introduction
 and more detailed descriptions of the programs.
 
-See http://www.genetics.wustl.edu/eddy/hmmer.html for on-line
-documentation.
+See http://hmmer.wustl.edu/ for on-line documentation and
+the current HMMER release.
 
 .PP
 In general, no command line options should be needed by beginning users.
