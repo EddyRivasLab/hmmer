@@ -91,8 +91,8 @@ all: version.h
 	   echo "a 'binaries' directory; do 'make distclean' to revert HMMER";\
 	   echo "to a pristine source distribution.";\
 	else\
-	   (cd squid; make CC="$(CC)" CFLAGS="$(CFLAGS)"; make module);\
-	   (cd src;   make CC="$(CC)" CFLAGS="$(CFLAGS)"; make module);\
+	   (cd squid; make; make module);\
+	   (cd src;   make; make module);\
 	   mkdir binaries;\
 	      for prog in $(PROGS) $(PVMPROGS); do\
 	      mv src/$$prog binaries/;\
@@ -124,14 +124,14 @@ version.h:
 #       These are public tests, distributed with the package.
 #
 check:	squid/libsquid.a src/libhmmer.a
-	(cd testsuite; make CC="$(CC)" CFLAGS="$(CFLAGS)")
+	(cd testsuite; make)
 	(cd testsuite; make check)
 
 squid/libsquid.a: version.h
-	(cd squid; make CC="$(CC)" CFLAGS="$(CFLAGS)"; make module)
+	(cd squid; make; make module)
 
 src/libhmmer.a: version.h
-	(cd src;   make CC="$(CC)" CFLAGS="$(CFLAGS)"; make module)
+	(cd src;   make; make module)
 
 
 # install: installs the binaries in BINDIR/
