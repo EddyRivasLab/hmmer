@@ -262,7 +262,10 @@ dist:
 	#
 	for file in $(MANS); do\
 	   rcs -N$(RELCODE): Man/RCS/$$file.man,v;\
-	   co Man/RCS/$$file.man,v build/hmmer-$(RELEASE)/Man/$$file.man;\
+	   co -p Man/RCS/$$file.man,v | sed -e 's/@RELEASE@/${RELEASE}/g' \
+                                            -e 's/@RELEASEDATE@/${RELEASEDATE}/g' \
+	                                    -e 's/@SEEALSO@/${MANS}/g'\
+                > build/hmmer-$(RELEASE)/Man/$$file.man;\
 	   licenseadd.pl Licenses/$(LICENSE) build/hmmer-$(RELEASE)/Man/$$file.man;\
 	done
 	#
