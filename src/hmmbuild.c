@@ -28,16 +28,16 @@ static char banner[] = "hmmbuild - build a hidden Markov model from an alignment
 static char usage[]  = "\
 Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
   Available options are:\n\
-   -h        : help; print brief help on version and usage\n\
-   -n <s>    : name; name this HMM <s>\n\
-   -o <file> : re-save annotated alignment to <file>\n\
-   -A        : append; append this HMM to <hmmfile>\n\
-   -F        : force; allow overwriting of <hmmfile>\n\
+   -h     : help; print brief help on version and usage\n\
+   -n <s> : name; name this HMM <s>\n\
+   -o <f> : re-save annotated alignment to <f>\n\
+   -A     : append; append this HMM to <hmmfile>\n\
+   -F     : force; allow overwriting of <hmmfile>\n\
 \n\
   Alternative search algorithm styles: (default: hmmls domain alignment)\n\
-   -f        : multi-hit local (hmmfs style)\n\
-   -g        : global alignment (hmms style, Needleman/Wunsch)\n\
-   -s        : local alignment (hmmsw style, Smith/Waterman)\n\
+   -f     : multi-hit local (hmmfs style)\n\
+   -g     : global alignment (hmms style, Needleman/Wunsch)\n\
+   -s     : local alignment (hmmsw style, Smith/Waterman)\n\
 ";
 
 static char experts[] = "\
@@ -46,9 +46,9 @@ static char experts[] = "\
    --hand    : manual construction (requires SELEX file, #=RF annotation)\n\
 \n\
   Expert customization of parameters and priors:\n\
-   --null  <file> : read null (random sequence) model from <file>\n\
-   --pam <file>   : heuristic PAM-based prior, using BLAST PAM matrix in <file>\n\
-   --prior <file> : read Dirichlet prior parameters from <file>\n\
+   --null  <f> : read null (random sequence) model from <f>\n\
+   --pam   <f> : heuristic PAM-based prior, using BLAST PAM matrix in <f>\n\
+   --prior <f> : read Dirichlet prior parameters from <f>\n\
 \n\
   Alternative sequence weighting strategies: (default: GSC weights)\n\
    --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
@@ -65,7 +65,7 @@ static char experts[] = "\
   Other expert options:\n\
    --archpri <x> : set architecture size prior to <x> {0.85} [0..1]\n\
    --binary      : save the model in binary format, not ASCII text\n\
-   --cfile <file>: save count vectors to <file>\n\
+   --cfile <f>   : save count vectors to <f>\n\
    --gapmax <x>  : max fraction of gaps in mat column {0.50} [0..1]\n\
    --idlevel <x> : set frac. id level used by eff. nseq and --wblosum {0.62}\n\
    --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
@@ -206,7 +206,6 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
     else if (strcmp(optname, "-n") == 0) name              = Strdup(optarg); 
     else if (strcmp(optname, "-o") == 0) align_ofile       = optarg;
-    else if (strcmp(optname, "-r") == 0) rndfile           = optarg;
     else if (strcmp(optname, "-s") == 0) cfg_strategy      = P7_SW_CONFIG;
     if      (strcmp(optname, "-A") == 0) do_append         = TRUE; 
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
@@ -215,11 +214,12 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--binary")  == 0) do_binary     = TRUE;
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
     else if (strcmp(optname, "--fast")    == 0) c_strategy    = P7_FAST_CONSTRUCTION;
-    else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
     else if (strcmp(optname, "--gapmax")  == 0) gapmax        = atof(optarg);
+    else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
     else if (strcmp(optname, "--idlevel") == 0) blosumlevel   = atof(optarg);
     else if (strcmp(optname, "--noeff")   == 0) do_eff        = FALSE;
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
+    else if (strcmp(optname, "--null")    == 0) rndfile       = optarg;
     else if (strcmp(optname, "--pam")     == 0) pamfile       = optarg;
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--prior")   == 0) prifile       = optarg;
@@ -273,7 +273,7 @@ main(int argc, char **argv)
   for (idx = 0; idx < ainfo.nseq; idx++)
     s2upper(aseq[idx]);
 				/* Set up the alphabet globals */
-  if (Alphabet_type == 0) DetermineAlphabet(aseq, ainfo.nseq);
+  if (Alphabet_type == hmmNOTSETYET) DetermineAlphabet(aseq, ainfo.nseq);
 
 				/* Set up Dirichlet priors */
   if (prifile == NULL)  pri = P7DefaultPrior();
@@ -320,6 +320,9 @@ main(int argc, char **argv)
   if (c_strategy == P7_HAND_CONSTRUCTION)    puts("Manual, from #=RF annotation");
   else if (c_strategy==P7_FAST_CONSTRUCTION) printf("Fast/ad hoc (gapmax %.2f)\n", gapmax);
   else                                       printf("MAP (gapmax hint: %.2f)\n", gapmax);
+
+  printf("Null model used:                   %s\n",
+	 (rndfile == NULL) ? "(default)" : rndfile);
 
   printf("Prior used:                        %s\n",
 	 (prifile == NULL) ? "(default)" : prifile);
