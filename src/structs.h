@@ -12,6 +12,8 @@
  * 
  * Data structures used in HMMER.
  * Also, a few miscellaneous macros and global variable declarations.
+ * 
+ * RCS $Id$
  */
 
 #ifndef STRUCTSH_INCLUDED
@@ -32,6 +34,12 @@
  * valid in the alphabet!
  */
 #define SYMIDX(x)   (strchr(Alphabet, (x)) - Alphabet)
+
+/* Worry() is a conditional warning macro, used for debugging;
+ * it inserts file name and line number information and
+ * calls VerboseWorry(). See debug.c. 
+ */
+#define Worry(x,s)  VerboseWorry(x, __FILE__, __LINE__, s);
 
 /* The symbol alphabet.
  * Must deal with IUPAC degeneracies. Nondegenerate symbols 
