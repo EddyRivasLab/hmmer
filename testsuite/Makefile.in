@@ -15,7 +15,7 @@ PTHREAD_LIBS   = @PTHREAD_LIBS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 
 SHELL     = /bin/sh
-LIBS      = -lhmmer -lsquid @LIBS@ 
+LIBS      = -lhmmer -lsquid @LIBS@ -lm
 
 SHIVA = alignalign_test\
 	evd_test\

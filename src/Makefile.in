@@ -17,7 +17,7 @@ CFLAGS = @CFLAGS@
 #  libraries that the configure script decides we need.
 #
 MDEFS = @MDEFS@ @DEFS@
-LIBS  = @LIBS@ 
+LIBS  = @LIBS@ -lm
 
 ## archiving command, and ranlib command if you need one.
 #  In general, you shouldn't need to change these, and they're

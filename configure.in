@@ -283,11 +283,6 @@ esac],
 ])
 
 
-dnl Add the math library
-dnl Note that AC_CHECK_LIB should work but doesn't, on AIX and FreeBSD.
-dnl
-LIBS="${LIBS} -lm"
-
 dnl Check for functions
 AC_CHECK_FUNCS(pthread_setconcurrency)
 AC_CHECK_FUNCS(pthread_attr_setscope)
