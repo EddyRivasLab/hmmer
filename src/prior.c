@@ -607,7 +607,7 @@ default_amino_prior(void)
 
 /* Function: default_nucleic_prior()
  * 
- * Purpose:  Set the default DNA prior. (for now, a Laplace)
+ * Purpose:  Set the default DNA prior. (for now, almost a Laplace)
  */
 struct p7prior_s *
 default_nucleic_prior(void)
@@ -617,9 +617,21 @@ default_nucleic_prior(void)
   pri = P7AllocPrior();
   pri->strategy = PRI_DCHLET;
 
-  pri->tnum     = 1;
-  pri->tq[0]    = 1.;
-  FSet(pri->t[0], 7, 1.); 
+  /* The use of the Pfam-trained amino acid transition priors
+   * here is TOTALLY bogus. But it works better than a straight
+   * Laplace, esp. for Maxmodelmaker(). For example, a Laplace 
+   * prior builds M=1 models for a single sequence GAATTC (at
+   * one time an open "bug").
+   */
+  pri->tnum        = 1;
+  pri->tq[0]       = 1.;
+  pri->t[0][TMM]   = 0.7939;
+  pri->t[0][TMI]   = 0.0278;
+  pri->t[0][TMD]   = 0.0135;
+  pri->t[0][TIM]   = 0.1551;
+  pri->t[0][TII]   = 0.1331;
+  pri->t[0][TDM]   = 0.9002;
+  pri->t[0][TDD]   = 0.5630;
   
   pri->mnum  = 1;
   pri->mq[0] = 1.;
