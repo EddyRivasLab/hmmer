@@ -72,6 +72,8 @@ extern int  TraceVerify(struct p7trace_s *tr, int M, int N);
  * Generation of sequences/traces from an HMM
  */
 extern void EmitSequence(struct plan7_s *hmm, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr);
+extern void EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr);
+extern void StateOccupancy(struct plan7_s *hmm, float **ret_mp, float **ret_ip, float **ret_dp);
 
 
 /* from emulation.c
@@ -181,6 +183,7 @@ extern void AllocPlan7Body(struct plan7_s *hmm, int M);
 extern void FreePlan7(struct plan7_s *hmm);
 extern void ZeroPlan7(struct plan7_s *hmm);
 extern void Plan7SetName(struct plan7_s *hmm, char *name);
+extern void Plan7SetAccession(struct plan7_s *hmm, char *acc);
 extern void Plan7SetDescription(struct plan7_s *hmm, char *desc);
 extern void Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv);
 extern void Plan7SetCtime(struct plan7_s *hmm);
@@ -232,6 +235,7 @@ extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
  * PVM Parallel Virtual Machine implementation
  */
 extern void              PVMSpawnSlaves(char *slave, int **ret_tid, int *ret_nslaves);
+extern void              PVMConfirmSlaves(int *slave_tid, int nslaves);
 extern void              PVMCheckSlaves(int *slave_tid, int nslaves);
 extern void              PVMKillSlaves(int *slave_tid, int nslaves);
 extern int               PVMPackString(char *s);
