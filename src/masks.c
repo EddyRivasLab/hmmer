@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
 #include "squid.h"
 #include "config.h"
@@ -146,7 +147,6 @@ XNU(char *dsq, int len)
 }
 
 
-#if 0
 /* Function: TraceScoreCorrection()
  * Date:     Sun Dec 21 12:05:47 1997 [StL]
  * 
@@ -205,9 +205,13 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
     */
    return Scorify(ILogsum(0, score));	
 }
-#endif
 
 
+/* THE FOLLOWING CODE IS IN DEVELOPMENT.
+ * it is commented out of the current release deliberately.
+ * If you activate it, I'm not responsible for the consequences.
+ */
+#if MICHAEL_JORDAN_BUYS_THE_PACERS
 /* Function: NewTraceScoreCorrection()
  * Date:     Wed Feb 17 14:32:45 1999 [StL]
  * 
@@ -248,7 +252,7 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
  * Return:   the log_2-odds score correction.          
  */
 float
-TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
+NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 {
   float ct[MAXABET];		/* counts of observed residues            */
   float p[MAXABET];		/* null2 model distribution (also counts) */
@@ -256,18 +260,56 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 
   int   x;
   int   tpos;
-  int   score;
+  int   score;			/* tmp score for real HMM, integer logodds */
+  float hmmscore;		/* score for real HMM for this domain */
+  float null2score;		/* score for null2 model for this domain */
 
-  score = 0;
+
+  float totscore;		/* overall score for trace */
+  float maxscore;		/* best score so far for single domain */
+  int   in_domain;		/* flag for whether we're counting this domain */
+  int   sym;			/* digitized symbol in dsq */
+  int   ndom;			/* number of domains counted towards score */
+
+  int   nsym;			/* number of symbols in this alignment */
+
+  totscore  = 0.;
+  maxscore  = -FLT_MAX;
+  in_domain = FALSE;
+  ndom      = 0;
   for (tpos = 0; tpos < tr->tlen; tpos++)
     {
+				/* detect start of domain; start at N or J */
+      if (tpos < tr->tlen-1 && tr->statetype[tpos+1] == STB)
+	{
+	  FCopy(ct, hmm->null, Alphabet_size);  /* simple Dirichlet prior */
+	  score      = 0;
+	  null2score = 0.;
+	  nsym       = 0;
+	  in_domain  = TRUE;
+	}
+		/* Count stuff in domain starting with N->B or J->B transition */
+      if (in_domain) {
+	sym = (int) dsq[tr->pos[tpos]];
 
-      if (tr->statetype[tpos] == STB)         /* clear the counts       */
-	FCopy(ct, hmm->null, Alphabet_size);  /* simple Dirichlet prior */
+				/* count emitted symbols in domain */
+	if (tr->statetype[tpos] == STM || tr->statetype[tpos] == STI)
+	  {
+	    P7CountSymbol(ct, sym, 1.0);
+	    nsym++;
+	  }
 
-				      /* count emitted symbols in domain */
-      if (tr->statetype[tpos] == STM || tr->statetype[tpos] == STI)
-	P7CountSymbol(ct, dsq[tr->pos[tpos]], 1.0);
+				/* score emitted symbols in domain towards HMM */
+	if (tr->statetype[tpos] == STM) 
+	  score += hmm->msc[sym][tr->nodeidx[tpos]];
+	else if (tr->statetype[tpos] == STI) 
+	  score += hmm->isc[sym][tr->nodeidx[tpos]];
+				/* score transitions in domain towards HMM */
+	score += TransitionScoreLookup(hmm, 
+				       tr->statetype[tpos], tr->nodeidx[tpos],
+				       tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
+      }
+
       
       if (tr->statetype[tpos] == STE) /* done w/ a domain; calc its score */
 	{
@@ -278,18 +320,36 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
 				      /* p can't be zero, because of prior  */
 	  for (x = 0; x < Alphabet_size; x++)
 	    sc[x] = log(p[x] / hmm->null[x]);
-				      /* score = counts \dot scores */
-	  score += FDot(ct, sc, Alphabet_size);
+				      /* null2 score = counts \dot scores */
+	  null2score = FDot(ct, sc, Alphabet_size);
 	  
+	  printf("NSYM = %d   NULL2 = %.1f\n", nsym, null2score);
+
 	  /* Apply an ad hoc 8 bit fudge factor penalty, per domain.
 	   * Interpreted probabilistically, saying that there's about
            * a 1/256 probability to transition into the second null model.
 	   */
-	  score -= 5.5452;	/* our scores are in nats right now, not bits */
+	  /* null2score -= 5.5452;	/* our scores are in nats right now, not bits */
+	  null2score  -= 12.;
+	  
+	  /* Now correct score1 using the null2 score.
+	   * If it's still > 0, add it to accumulated score.
+	   */
+	  hmmscore  = Scorify(score);
+	  hmmscore -= 1.44269504 * LogSum(0, null2score);
+	  if (hmmscore > 0.) { totscore += hmmscore; ndom++; }
+	  if (hmmscore > maxscore) maxscore = hmmscore;
+
+	  in_domain = FALSE;
 	}
     }
 
-   /* Return the correction to the bit score, in bits (hence the 1.44 conversion)
+  /* Single domain special case.
+   */
+  if (ndom == 0) totscore = maxscore;
+
+   /* Return the correction to the bit score
     */
-   return (1.44269504 * LogSum(0, score));
+   return (P7TraceScore(hmm, dsq, tr) - totscore);
 }
+#endif /*0*/
