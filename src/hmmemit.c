@@ -29,6 +29,7 @@ static char usage[]  = "\
 Usage: hmmemit [-options] <hmm file>\n\
 Available options are:\n\
    -a     : write generated sequences as an alignment, not FASTA\n\
+   -c     : generate a single \"consensus\" sequence\n\
    -h     : help; print brief help on version and usage\n\
    -n <n> : emit <n> sequences (default 10)\n\
    -o <f> : save sequences in file <f>\n\
@@ -41,6 +42,7 @@ static char experts[] = "\
 
 static struct opt_s OPTIONS[] = {
   { "-a",        TRUE,  sqdARG_NONE },  
+  { "-c",        TRUE,  sqdARG_NONE },  
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-n",        TRUE,  sqdARG_INT},  
   { "-o",        TRUE,  sqdARG_STRING},
@@ -64,6 +66,7 @@ main(int argc, char **argv)
   int              seed;	/* random number generator seed            */
   int              be_quiet;	/* TRUE to silence header/footer           */
   int              do_alignment;/* TRUE to output in aligned format        */ 
+  int              do_consensus;/* TRUE to do a single consensus seq       */
 
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
@@ -83,11 +86,13 @@ main(int argc, char **argv)
   seed         = time ((time_t *) NULL);
   be_quiet     = FALSE;
   do_alignment = FALSE;  
+  do_consensus = FALSE;
   ofile        = NULL;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-a")     == 0) do_alignment = TRUE;
+    else if (strcmp(optname, "-c")     == 0) do_consensus = TRUE;
     else if (strcmp(optname, "-n")     == 0) nseq         = atoi(optarg); 
     else if (strcmp(optname, "-o")     == 0) ofile        = optarg;
     else if (strcmp(optname, "-q")     == 0) be_quiet     = TRUE;
@@ -106,6 +111,11 @@ main(int argc, char **argv)
   hmmfile = argv[optind++];
 
   sre_srandom(seed);
+
+  if (do_alignment && do_consensus)
+    Die("Sorry, -a and -c are incompatible.\nUsage:\n%s", usage); 
+  if (nseq != 10 && do_consensus)
+    Warn("-c (consensus) overrides -n (# of sampled seqs)");
 
   /*********************************************** 
    * Open HMM file (might be in HMMERDB or current directory).
@@ -144,7 +154,10 @@ main(int argc, char **argv)
     {
       Banner(stdout, banner);
       printf("HMM file:             %s\n", hmmfile);
-      printf("Random seed:          %d\n", seed);
+      if (! do_consensus) {
+	printf("Number of seqs:       %d\n", nseq);
+	printf("Random seed:          %d\n", seed);
+      }
       printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
     }
 
@@ -155,7 +168,20 @@ main(int argc, char **argv)
    * sequences, we can emit one at a time.
    ***********************************************/
 
-  if (do_alignment)
+  if (do_consensus) 
+    {
+      char    *seq;
+      SQINFO   sqinfo;      /* info about sequence (name/desc)        */
+
+      EmitConsensusSequence(hmm, &seq, NULL, &L, NULL);
+      strcpy(sqinfo.name, "consensus");
+      sqinfo.len = L;
+      sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
+
+      WriteSeq(fp, kPearson, seq, &sqinfo);
+      free(seq);
+    }
+  else if (do_alignment)
     {
       struct p7trace_s **tr;        /* traces for aligned sequences            */
       char           **dsq;         /* digitized sequences                     */
