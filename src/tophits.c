@@ -62,6 +62,10 @@
 #include "structs.h"
 #include "funcs.h"
 
+#ifdef MEMDEBUG
+#include "dbmalloc.h"
+#endif
+
 /* Function: AllocTophits()
  * 
  * Purpose:  Allocate a struct tophit_s, for maintaining

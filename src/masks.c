@@ -24,7 +24,9 @@
 #include "structs.h"
 #include "funcs.h"
 
-
+#ifdef MEMDEBUG
+#include "dbmalloc.h"
+#endif
 
 /* The PAM120 score matrix, in HMMER's AMINO_ALPHABET alphabetic order 
  */
