@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Sean R. Eddy
  *
  *   This source code is distributed under the terms of the 
  *   GNU General Public License. See the files COPYING and 
@@ -14,7 +14,7 @@
  */
 
 
-#define RELEASE     "2.0"
+#define RELEASE     "2.0a"
 #define RELEASEDATE "Jan 1998"
 
 #ifndef LINTING			/* compiled-in stamp for all binaries  */
