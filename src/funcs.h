@@ -193,11 +193,13 @@ extern void P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo,
  * Experimental: Plan7 HMM structure support
  */
 extern struct plan7_s *AllocPlan7(int M);
+extern struct plan7_s *AllocPlan7Shell(void);
+extern void AllocPlan7Body(struct plan7_s *hmm, int M);
 extern void FreePlan7(struct plan7_s *hmm);
 extern void ZeroPlan7(struct plan7_s *hmm);
 extern void Plan7SetName(struct plan7_s *hmm, char *name);
 extern void Plan7SetDescription(struct plan7_s *hmm, char *desc);
-extern void Plan7SetComline(struct plan7_s *hmm, int argc, char **argv);
+extern void Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv);
 extern void Plan7SetCtime(struct plan7_s *hmm);
 extern void Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1);
 extern void Plan7Logoddsify(struct plan7_s *hmm);
