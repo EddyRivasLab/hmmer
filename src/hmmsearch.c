@@ -49,6 +49,9 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
 
 static char experts[] = "\
    --cpu <n> : run <n> threads in parallel (if threaded)\n\
+   --cut_ga  : use Pfam GA gathering threshold cutoffs\n\
+   --cut_nc  : use Pfam NC noise threshold cutoffs\n\
+   --cut_tc  : use Pfam TC trusted threshold cutoffs\n\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
@@ -64,12 +67,16 @@ static struct opt_s OPTIONS[] = {
   { "-T",        TRUE,  sqdARG_FLOAT},  
   { "-Z",        TRUE,  sqdARG_INT  },
   { "--cpu",     FALSE, sqdARG_INT  },
+  { "--cut_ga",  FALSE, sqdARG_NONE },
+  { "--cut_nc",  FALSE, sqdARG_NONE },
+  { "--cut_tc",  FALSE, sqdARG_NONE },
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
   { "--forward", FALSE, sqdARG_NONE },
   { "--null2",   FALSE, sqdARG_NONE },
   { "--pvm",     FALSE, sqdARG_NONE },
   { "--xnu",     FALSE, sqdARG_NONE },
+
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -180,6 +187,7 @@ main(int argc, char **argv)
   int   do_xnu;			/* TRUE to filter sequences thru XNU        */
   int   do_pvm;			/* TRUE to run on Parallel Virtual Machine  */
   int   num_threads;		/* number of worker threads                 */
+  int   do_ga, do_nc, do_tc;    /* TRUE to use GA, NC, or TC cutoffs        */
 
 #ifdef MEMDEBUG
   unsigned long histid1, histid2, orig_size, current_size;
@@ -202,6 +210,9 @@ main(int argc, char **argv)
   globT       = -FLT_MAX;	/*   but no bit threshold,          */
   domT        = -FLT_MAX;	/*   no domain bit threshold,       */
   domE        = FLT_MAX;        /*   and no domain Eval threshold.  */
+  do_ga       = FALSE;
+  do_nc       = FALSE;
+  do_tc       = FALSE;
 #ifdef HMMER_THREADS
   num_threads = ThreadNumber(); /* only matters if we're threaded */
 #else
@@ -215,6 +226,9 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-T") == 0)        globT      = atof(optarg);
     else if (strcmp(optname, "-Z") == 0)        Z          = atoi(optarg);
     else if (strcmp(optname, "--cpu")     == 0) num_threads= atoi(optarg);
+    else if (strcmp(optname, "--cut_ga")  == 0) do_ga      = TRUE;
+    else if (strcmp(optname, "--cut_nc")  == 0) do_nc      = TRUE;
+    else if (strcmp(optname, "--cut_tc")  == 0) do_tc      = TRUE;
     else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
     else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
@@ -240,6 +254,7 @@ main(int argc, char **argv)
 #ifndef HMMER_THREADS
   if (num_threads) Die("Posix threads support is not compiled into HMMER; --cpu doesn't have any effect");
 #endif
+
 
   /*********************************************** 
    * Open sequence database (might be in BLASTDB or current directory)
@@ -269,15 +284,62 @@ main(int argc, char **argv)
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   P7Logoddsify(hmm, !do_forward);
 
+
+  /*****************************************************************
+   * Set up optional Pfam score thresholds
+   *****************************************************************/ 
+				/* assumes TRUE==1 */
+  if (do_ga + do_nc + do_tc > 1) 
+    Die("Please use only one threshold choice option (--ga, --nc, --tc)");
+  if (do_ga) {
+    if (! hmm->flags & PLAN7_GA)
+      Die("GA thresholds are not available for the HMM");
+    globT = hmm->ga1;
+    domT  = hmm->ga2;
+  } else if (do_nc) {
+    if (! hmm->flags & PLAN7_NC)
+      Die("NC thresholds are not available for the HMM");
+    globT = hmm->nc1;
+    domT  = hmm->nc2;
+  } else if (do_tc) {
+    if (! hmm->flags & PLAN7_TC)
+      Die("TC thresholds are not available for the HMM");
+    globT = hmm->tc1;
+    domT  = hmm->tc2;
+  }
+
   /*********************************************** 
    * Show the banner
    ***********************************************/
 
   Banner(stdout, banner);
-  printf(   "HMM file:                 %s [%s]\n", hmmfile, hmm->name);
-  printf(   "Sequence database:        %s\n", seqfile); 
+  printf(   "HMM file:                   %s [%s]\n", hmmfile, hmm->name);
+  printf(   "Sequence database:          %s\n", seqfile); 
   if (do_pvm)
-    printf( "PVM:                      ACTIVE\n");
+    printf( "PVM:                        ACTIVE\n");
+  printf(   "per-sequence score cutoff:  ");
+  if (globT == -FLT_MAX) printf("[none]\n");
+  else  {
+    printf("%.1f", globT);
+    if      (do_ga) printf(" [GA1]\n");
+    else if (do_nc) printf(" [NC1]\n");
+    else if (do_tc) printf(" [TC1]\n");
+  }
+  printf(   "per-domain score cutoff:    ");
+  if (domT == -FLT_MAX) printf("[none]\n");
+  else  {
+    printf("%.1f", domT);
+    if      (do_ga) printf(" [GA2]\n");
+    else if (do_nc) printf(" [NC2]\n");
+    else if (do_tc) printf(" [TC2]\n");
+  }
+  printf(   "per-sequence Eval cutoff:   ");
+  if (globE == FLT_MAX) printf("[none]\n");
+  else                  printf("%-10.2g\n", globE);
+    
+  printf(   "per-domain Eval cutoff:     ");
+  if (domE == FLT_MAX) printf("[none]\n");
+  else                 printf("%10.2g\n", domE);
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 
   /*********************************************** 
@@ -572,7 +634,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp,
        *    in sc.
        */
       if (do_forward) sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
-      if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq);
+      if (do_null2)   sc -= TraceScoreCorrection(hmm, tr, dsq); 
 
 #if DEBUGLEVEL >= 2
       P7PrintTrace(stdout, tr, hmm, dsq); 
@@ -655,7 +717,7 @@ record_domains(struct tophit_s *h,
        */
       score  = P7TraceScore(hmm, dsq, tarr[idx]);
       if (do_null2) 
-	score -= TraceScoreCorrection(hmm, tarr[idx], dsq);
+	score -= TraceScoreCorrection(hmm, tarr[idx], dsq); 
       pvalue = PValue(hmm, score); 
       TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
       
