@@ -1,5 +1,16 @@
+/************************************************************
+ * HMMER - Biological sequence analysis with profile-HMMs
+ * Copyright (C) 1992-1998 Washington University School of Medicine
+ *
+ *   This source code is distributed under the terms of the
+ *   GNU General Public License. See the files COPYING and
+ *   GNULICENSE for details.
+ *
+ ************************************************************/
+
 /* trace.c
  * SRE, Sat Nov 16 12:34:57 1996
+ * RCS $Id$
  * 
  * Support for Plan 7 traceback data structure, p7trace_s.
  */
@@ -50,6 +61,30 @@ P7FreeTrace(struct p7trace_s *tr)
   free(tr->statetype);
   free(tr);
 }
+
+/* Function: TraceSet()
+ * Date:     SRE, Sun Mar  8 12:39:00 1998 [St. Louis]
+ *
+ * Purpose:  Convenience function; set values at position tpos
+ *           in a trace. 
+ *           
+ *
+ * Args:     tr   - trace object to write to
+ *           tpos - ptr to position in trace to set
+ *           type - statetype e.g. STS, etc.
+ *           idx  - nodeidx 1..M or 0
+ *           pos  - seq position 1..L or 0
+ *
+ * Returns:  void
+ */
+void
+TraceSet(struct p7trace_s *tr, int tpos, enum p7stype type, int idx, int pos)
+{
+  tr->statetype[tpos] = type;
+  tr->nodeidx[tpos]   = idx;
+  tr->pos[tpos]       = pos;
+}
+
 
 /* Function: P7ReverseTrace()
  * Date:     SRE, Mon Aug 25 12:57:29 1997; Denver CO. 
