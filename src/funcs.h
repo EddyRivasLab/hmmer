@@ -26,14 +26,6 @@
 #include "structs.h"
 #include "squid.h"
 
-/* 
- * from align.c
- * Make multiple alignments from individual tracebacks
- */
-extern int Traces2Alignment(char **rseqs, SQINFO *sqinfo, int nseq, int M, 
-			    struct trace_s **tr, int matchonly, 
-			    char ***ret_aseqs, AINFO *ret_ainfo);
-
 /* alphabet.c
  * Configuration of global alphabet information
  */
@@ -90,66 +82,13 @@ extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm,
 			     struct dpmatrix_s **ret_mx);
 
 /* 
- * from p7debug.c
+ * from debug.c
  * Debugging output of various sorts.
  */
 extern char *Statetype(enum p7stype st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
-
-/* 
- * from emit.c
- * Emit sequences from a model.
- */
-extern int EmitSequence(struct hmm_struc *hmm, char **ret_seq, 
-			struct trace_s **ret_tr);
-extern int EmitBestSequence(struct hmm_struc *hmm, char **ret_seq, 
-			    struct trace_s **ret_tr);
-extern int RD_EmitBestSequence(struct hmm_struc *hmm, char **ret_seq, 
-			       struct trace_s **ret_tr);
-extern float  HMMExpectedScore(struct hmm_struc *hmm, float **ret_pernode);
-extern float  HMMExpectRandomScore(struct hmm_struc *hmm);
-extern float  HMMSimpleExpectRandom(struct hmm_struc *hmm);
-
-
-/* from emulation.c
- * Emulation of GCG PROFILE package by Michael Gribskov
- * Emulation of classical pairwise non-probabilistic alignment
- */
-extern int WriteProfile(FILE *fp, struct hmm_struc *hmm, struct shmm_s *shmm); 
-extern struct shmm_s *PairwiseEmulation(char *seqfile, char *pamfile, 
-					float gop, float gex);
-extern struct hmm_struc *PairHMMEmulation(char *seqfile, char *pamfile, 
-					  float gop, float gex);
-extern float **PAM2SubstitutionMatrix(int **pam, float scale, float *pri);
-extern float **PAM2Joint(int **pam, float scale, float *pri);
-
-/* from forback.c
- * Forward-backward algorithm
- */
-extern void  Forward(struct hmm_struc *hmm, char *s, struct forback_s ***ret_fwd, float **ret_scl);
-extern void  Backward(struct hmm_struc *hmm, char *s, float *scl, struct forback_s ***ret_bck);
-extern void  AlignmentConfidence(struct hmm_struc *hmm, int L, 
-				 struct forback_s **fwd, struct forback_s **bck, float *scl,
-				 struct forback_s ***ret_conf);
-extern void  TraceConfidence(struct forback_s **cmx, int L, struct trace_s *tr, float **ret_conf);
-extern void  ForbackCount(struct hmm_struc *hmm, char *seq, int L, float weight,
-			  struct forback_s **fwd, struct forback_s **bck,
-			  float *scl, struct hmm_struc *count);
-extern float ForwardScore(struct forback_s **fwd, int L, int M, float *scl);
-extern float BackwardScore(struct forback_s **bck, int L, float *scl);
-extern float RandomScore(float *randomseq, char *seq);
-extern float ForbackSymscore(char x, float *scores, int hyperbayes);
-extern void  DumpForbackMatrix(struct forback_s **mx, int L, int M, float *scalefactors);
-
-
-/* from fragviterbi.c
- * alignment algorithm: multiple-hit Smith/Waterman scanning version (hmmfs)
- */
-extern float FragViterbi(struct shmm_s *shmm, char *seq, int L, int singlehit, int hmmls,
-			 float P1, float P2, float P3, float thresh,
-			 int (*gotone_f)(struct shmm_s *, char *, int,int,int,float));
 
 /* from histogram.c
  * accumulation of scores
@@ -196,17 +135,6 @@ extern void  SampleCountvector(float *p, int n, int c, float *cvec);
 extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
 
 /* 
- * from maxmodelmaker.c
- * Construction of models from multiple alignments
- */
-extern void Maxmodelmaker(char **aseqs, AINFO *ainfo, int nseq,
-			  struct prior_s *prior, float *randomseq, float mpri, 
-			  struct hmm_struc **ret_hmm, struct trace_s ***tr);
-extern void Handmodelmaker(char **aseqs, AINFO *ainfo, int nseq,
-			   struct prior_s *prior, struct hmm_struc **ret_hmm, 
-			   struct trace_s ***tr);
-
-/* 
  * from misc.c
  * Miscellaneous functions with no home
  */
@@ -234,13 +162,6 @@ extern void P7Maxmodelmaker(char **aseqs, char **dsq, AINFO *ainfo,
 			    struct plan7_s **ret_hmm,
 			    struct p7trace_s  ***ret_tr);
 
-/* from output.c
- * "User-friendly" output
- */
-extern void PrintFancyTrace(FILE *ofp, struct shmm_s *shmm, 
-			    struct trace_s *tr,
-			    char *seq, char *seqname, int from_pos);
-
 /* from plan7.c
  * Experimental: Plan7 HMM structure support
  */
@@ -264,7 +185,7 @@ extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
 extern void Plan9toPlan7(struct hmm_struc *hmm, struct plan7_s **ret_plan7);
 extern void Plan7toPlan9Search(struct plan7_s *hmm, struct shmm_s **ret_shmm);
 
-/* from p7prior.c
+/* from prior.c
  * Dirichlet priors
  */
 extern struct p7prior_s *P7AllocPrior(void);
@@ -281,71 +202,6 @@ extern void P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
 				     int num, float eq[MAXDCHLET], 
 				     float e[MAXDCHLET][MAXABET],
 				     float *ret_mix);
-/* from p7trace.c
- * Support for traceback (state path) structure
- */
-extern void  P7AllocTrace(int tlen, struct p7trace_s **ret_tr);
-extern void  P7ReallocTrace(struct p7trace_s *tr, int tlen);
-extern void  P7FreeTrace(struct p7trace_s *tr);
-extern void  P7ReverseTrace(struct p7trace_s *tr);
-extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
-			  struct p7trace_s *tr);
-extern float P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr);
-extern void  P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int M, 
-				struct p7trace_s **tr, int matchonly, 
-				char ***ret_aseqs, AINFO *ainfo);
-extern int  TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, 
-				  int k1, enum p7stype st2, int k2);
-extern struct fancyali_s *CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
-					 char *dsq, char *name);
-extern void PrintFancyAli(FILE *fp, struct fancyali_s *ali);
-extern void TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr,
-			   int *ret_ntr);
-
-/* OBSOLETE FUNCS: */
-extern void P7PrintFancyTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm,
-			      char *dsq, char *name);
-
-
-/* 
- * from prior.c
- * Dirichlet priors
- */
-extern void DefaultSimplePrior(struct prior_s **ret_prior);
-extern void ReadPrior(char *pfile, struct prior_s **ret_prior);
-extern void ToPAMPrior(int **pam, float scale, float wt, struct prior_s *prior);
-extern void PrintPAMPrior(struct prior_s *pri);
-extern struct prior_s *AllocPrior(void);
-extern void FreePrior(struct prior_s *prior);
-extern void DefaultNullModel(float *null);
-extern void ReadNullModel(char *fname, float *null);
-extern void PriorifyMatchVector(float *vec, struct prior_s *prior,
-				float *ret_mix);
-extern void PriorifyInsertVector(float *vec, struct prior_s *prior);
-extern void PriorifyTransitionVectors(float *tm, float *ti, float *td, 
-				      struct prior_s *prior);
-extern void PriorifyHMM(struct hmm_struc *hmm, struct prior_s *prior);
-extern void SpecialPriorifyHMM(struct hmm_struc *hmm, struct prior_s *prior);
-extern void StructurePerceptron(struct prior_s *prior, float *xray);
-extern void AnnotateAlignment(char **aseq, int nseq, AINFO *ainfo, 
-			      float **ret_inputs);
-extern float P_ModelGivenDirichlet(struct hmm_struc *hmm,struct prior_s *pri);
-
-
-
-/* 
- * from saviterbi.c
- * Alignment algorithm: simulated annealing version
- */
-extern int    SaFill(struct sa_hmm_s *sahmm, char *s, struct sa_s ***ret_mx);
-extern int    SaTrace(struct sa_s **mx, int L, struct sa_hmm_s *sahmm, 
-		      struct trace_s **ret_tr);
-extern void   DumpSaMatrix(struct sa_s **mx, int L, int M, 
-			   double *scalefactors);
-extern struct sa_hmm_s *CreateSahmm(struct hmm_struc *hmm, float kT);
-extern void   DestroySahmm(struct sa_hmm_s *sahmm);
-extern double SaSymscore(char x, double *scores, int hyperbayes);
-
 
 /* 
  * from states.c
@@ -365,16 +221,6 @@ extern int  CountSymbol(char sym, float wt, float *counters);
 extern float HMMDistance(struct hmm_struc *newhmm, struct hmm_struc *oldhmm);
 extern void Renormalize(struct hmm_struc *hmm);
 
-/* 
- * from swviterbi.c
- * Alignment algorithm: single-hit Smith/Waterman version
- */
-extern void SWViterbi(struct shmm_s *shmm, char *seq, int L, 
-		      float P1, float P2, float P3, int fullseq,
-		      int *ret_i, int *ret_j, int *ret_kstart, int *ret_kend, 
-		      float *ret_score, struct trace_s **ret_tr);
-
-
 /* from tophits.c
  * Support for keeping/sorting top scoring hit/alignment lists
  */
@@ -385,12 +231,15 @@ extern void   FreeFancyAli(struct fancyali_s *ali);
 extern void   RegisterHit(struct tophit_s *hitlist, 
 			  double sortkey, double evalue, float score, 
 			  char *name, char *desc, int sqfrom, int sqto, int sqlen, 
-			  int hmmfrom, int hmmto, int hmmlen, struct fancyali_s *ali);
+			  int hmmfrom, int hmmto, int hmmlen, 
+			  int domidx, int ndom, 
+			  struct fancyali_s *ali);
 extern void GetRankedHit(struct tophit_s *h, int rank, 
 			 double *r_evalue, float *r_score, 
 			 char **r_name, char **r_desc,
 			 int *r_sqfrom, int *r_sqto, int *r_sqlen,
 			 int *r_hmmfrom, int *r_hmmto, int *r_hmmlen,
+			 int *r_domidx, int *r_ndom,
 			 struct fancyali_s **r_ali);
 extern int    TophitsMaxName(struct tophit_s *h, int top_howmany);
 extern void   PrintTopHits(FILE *fp, struct tophit_s *h, int n, int evd, 
@@ -398,51 +247,34 @@ extern void   PrintTopHits(FILE *fp, struct tophit_s *h, int n, int evd,
 extern void   FastSortTophits(struct tophit_s *h);
 extern void   FullSortTophits(struct tophit_s *h);
 
-
 /* from trace.c
- * Support for the alignment traceback data structure
+ * Support for traceback (state path) structure
  */
-extern void AllocTrace(int tlen, struct trace_s **ret_tr);
-extern void ReallocTrace(struct trace_s *tr, int tlen);
-extern void FreeTrace(struct trace_s *tr);
-extern void ReverseTrace(struct trace_s *tr, int tlen);
-extern void PrintTrace(struct trace_s *tr);
-extern void TraceCount(struct hmm_struc *hmm, char *seq, float wt, struct trace_s *tr);
-extern int  TraceScore(struct shmm_s *shmm, char *seq, struct trace_s *tr,
-		       float *ret_score);
-extern void DealignTrace(struct trace_s *tr, char *aseq, int alen);
-extern void PositionAverageScore(struct shmm_s *shmm, char **seq, float *wgt,
-				 int nseq, struct trace_s **tr, 
-				 float **ret_scarr, float *ret_avg);
-
-/* from viterbi.c
- * Alignment algorithm: global alignment (hmms, hmma, hmmt)
- */
-extern int   Symscore(char x, float *scores, float *priors);
-extern void  MakeSearchHMM(struct hmm_struc *hmm, struct shmm_s *shmm);
-extern struct shmm_s *MakePAMSearchHMM(char *seq, SQINFO *sqinfo, int **pam, 
-				       float scale, float gop, float gex);
-extern void  PrintSearchHMM(FILE *fp, struct shmm_s *shmm);
-extern void  PrepareSequence(char *s, char **ret_seq, int *ret_L);
-extern int   ViterbiFill(struct shmm_s *shmm, char *seq, int L, 
-			 struct vit_s ***ret_mx, float *ret_score);
-extern int   ViterbiTrace(struct vit_s **mx, struct shmm_s *shmm, char *seq, int window,
-			  int end_i, int end_k, 
-			  struct trace_s **ret_tr, int *ret_i, int *ret_k);
-extern void  FreeViterbiMatrix(struct vit_s **mx, int L);	
-extern void  PrintViterbiMatrix(struct vit_s **mx, char *seq1, int L, int M);
-extern void  ViterbiAlignAlignment(struct shmm_s *shmm, char **aseqs, int alen, int nseq,
-				   struct trace_s ***ret_tr, float *ret_sc);
-extern void PrintFragViterbiMatrix(struct fvit_s **mx, int L, int M);
+extern void  P7AllocTrace(int tlen, struct p7trace_s **ret_tr);
+extern void  P7ReallocTrace(struct p7trace_s *tr, int tlen);
+extern void  P7FreeTrace(struct p7trace_s *tr);
+extern void  P7ReverseTrace(struct p7trace_s *tr);
+extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
+			  struct p7trace_s *tr);
+extern float P7TraceScore(struct plan7_s *hmm, char *dsq, struct p7trace_s *tr);
+extern void  P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int M, 
+				struct p7trace_s **tr, int matchonly, 
+				char ***ret_aseqs, AINFO *ainfo);
+extern int  TransitionScoreLookup(struct plan7_s *hmm, enum p7stype st1, 
+				  int k1, enum p7stype st2, int k2);
+extern struct fancyali_s *CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
+					 char *dsq, char *name);
+extern void PrintFancyAli(FILE *fp, struct fancyali_s *ali);
+extern void TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr,
+			   int *ret_ntr);
+extern int  TraceDomainNumber(struct p7trace_s *tr);
+extern void TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2, 
+			      int *ret_k1,  int *ret_k2);
 
 
-
-/* from weeviterbi.c
- * Linear memory alignment for Needleman/Wunsch and full seq Smith Waterman
- */
-extern void WeeViterbi(struct shmm_s *shmm, char *seq, int L, 
-		       int smithwaterman, float P2, float P3,
-		       struct trace_s **ret_tr, float *ret_sc);
+/* OBSOLETE FUNCS: */
+extern void P7PrintFancyTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm,
+			      char *dsq, char *name);
 
 
 
