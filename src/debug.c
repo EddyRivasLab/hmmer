@@ -290,23 +290,20 @@ TraceVerify(struct p7trace_s *tr, int M, int N)
 
       case STM:			/* can enter anywhere on first M */
 	if (tr->pos[tpos] != i+1) return 0;
+	if (tr->nodeidx[tpos] < 1 || tr->nodeidx[tpos] > M) return 0;
 	i++;
-	if (nm == 0)
-	  {
-	    if (tr->nodeidx[tpos] < 1 || tr->nodeidx[tpos] > M) return 0;
-	    k = tr->nodeidx[tpos];
-	  }
-	else
-	  {
-	    if (tr->nodeidx[tpos] != k+1) return 0;
-	    k++;
-	  }
+	if (nm == 0)  k = tr->nodeidx[tpos];
+	else {
+	  if (tr->nodeidx[tpos] != k+1) return 0;
+	  k++;
+	}
 	nm++;
 	break;
 
       case STI:
 	if (tr->pos[tpos] != i+1)   return 0;
 	if (tr->nodeidx[tpos] != k) return 0;
+	if (tr->nodeidx[tpos] < 1 || tr->nodeidx[tpos] > M-1) return 0;
 	if (k >= M)                 return 0;
 	i++;
 	break;
@@ -314,6 +311,7 @@ TraceVerify(struct p7trace_s *tr, int M, int N)
       case STD:
 	if (tr->pos[tpos] != 0)       return 0;
 	if (tr->nodeidx[tpos] != k+1) return 0;
+	if (tr->nodeidx[tpos] < 1 || tr->nodeidx[tpos] > M) return 0;
 	k++;
 	break;
 
@@ -361,4 +359,31 @@ TraceVerify(struct p7trace_s *tr, int M, int N)
   return 1;
 }
 
+
+/* Function: TraceCompare()
+ * Date:     SRE, Wed Mar  4 17:26:49 1998 [St. Louis]
+ *
+ * Purpose:  Compare two tracebacks; return 1 if they're
+ *           identical, else 0. Written for Shiva testsuite.
+ *
+ * Args:     t1 - first trace
+ *           t2 - second trace     
+ *
+ * Returns:  1 if identical; 0 elsewise
+ */
+int
+TraceCompare(struct p7trace_s *t1, struct p7trace_s *t2)
+{
+  int tpos;
+
+  if (t1->tlen != t2->tlen) return 0;
+
+  for (tpos = 0; tpos < t1->tlen; tpos++)
+    {
+      if (t1->statetype[tpos] != t2->statetype[tpos]) return 0;
+      if (t1->nodeidx[tpos]   != t2->nodeidx[tpos])   return 0;
+      if (t1->pos[tpos]       != t2->pos[tpos])       return 0;
+    }
+  return 1;
+}
 
