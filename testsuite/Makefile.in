@@ -83,9 +83,10 @@ shiva:   $(SHIVA)
            fi;\
 	done
 	@echo
-	@echo Running scripted Shiva tests:
+	@echo Running scripted Shiva exercises:
 	@echo Warning: This also may take several minutes.
 	perl ./Optiontests.pl
+	./Exercises.sh
 
 #######
 ## Miscellaneous
