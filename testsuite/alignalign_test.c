@@ -3,12 +3,18 @@
  * 
  * Test driver for P7ViterbiAlignAlignment().
  * 
- * The test is to take an alignment and a corresponding
- * HMM; align the alignment to the HMM and get imposed traces
- * for each sequence; then Viterbi align individual seqs
- * to the model, and compare the imposed trace with the
- * Viterbi trace. If an excessive number of traces differ,
- * squawk.
+ * The test is to 
+ *    1) read an alignment and a corresponding HMM
+ *    2) align the alignment to the HMM to get a master trace
+ *    3) map the alignment to the HMM to get another master trace
+ *    4) Test that the two master traces are identical; if not, fail.
+ *         This doesn't have to be true always, but it's true for the
+ *         fn3 test example.
+ *    5) Get imposed traces for each sequence
+ *    6) Viterbi align individual seqs to the model;
+ *           compare the imposed trace with the Viterbi trace;
+ *    7) If an excessive number of individual traces differ from
+ *          those imposed by master, fail.
  * 
  * RCS $Id$
  */
@@ -61,7 +67,8 @@ main(int argc, char **argv)
   char   **rseq;                /* raw, dealigned aseq                     */
   AINFO    ainfo;               /* alignment information                   */
   char     *dsq;		/* digitized target sequence               */
-  struct p7trace_s  *mtr;	/* master traceback                        */
+  struct p7trace_s  *mtr;	/* master traceback from alignment         */
+  struct p7trace_s  *maptr;     /* master traceback from mapping           */
   struct p7trace_s **tr;        /* individual tracebacks imposed by mtr    */
   struct p7trace_s **itr;       /* individual trace from P7Viterbi()       */
   int       idx;		/* counter for seqs                        */
@@ -112,7 +119,7 @@ main(int argc, char **argv)
     }
   }
   if (argc - optind != 0)
-    Die("%s : Incorrect number of arguments.\n", argv[0]);
+    Die("Incorrect number of arguments.\n%s\n", usage);
 
   /*********************************************** 
    * Open test alignment file
@@ -121,14 +128,14 @@ main(int argc, char **argv)
   if (! SeqfileFormat(afile, &format, NULL))
     switch (squid_errno) {
     case SQERR_NOFILE: 
-      Die("%s : Alignment file %s could not be opened for reading", argv[0], afile); break;
+      Die("Alignment file %s could not be opened for reading", afile); break;
     case SQERR_FORMAT: 
     default:           
-      Die("%s : Failed to determine format of alignment file %s", argv[0], afile);
+      Die("Failed to determine format of alignment file %s", afile);
     }
 
   if (! ReadAlignment(afile, format, &aseq, &ainfo))
-    Die("%s: Failed to read aligned sequence file %s", argv[0], afile);
+    Die("Failed to read aligned sequence file %s", afile);
   for (idx = 0; idx < ainfo.nseq; idx++)
     s2upper(aseq[idx]);
   DealignAseqs(aseq, ainfo.nseq, &rseq);
@@ -140,12 +147,18 @@ main(int argc, char **argv)
    ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, NULL)) == NULL)
-    Die("%s : Failed to open HMM file %s\n%s", argv[0], hmmfile);
+    Die("Failed to open HMM file %s\n", hmmfile);
   if (!HMMFileRead(hmmfp, &hmm)) 
-    Die("%s : Failed to read any HMMs from %s\n", argv[0], hmmfile);
+    Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
-    Die("%s : HMM file %s corrupt or in incorrect format? Parse failed", argv[0], hmmfile);
+    Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   P7Logoddsify(hmm, TRUE);
+
+  if (! (hmm->flags & PLAN7_MAP))
+    Die("HMM in %s has no map", hmmfile);
+  if (GCGMultchecksum(aseq, ainfo.nseq) != hmm->checksum)
+    Die("Checksum for alignment in %s does not match that in HMM (%d != %d)", 
+	afile, GCGMultchecksum(aseq, ainfo.nseq), hmm->checksum);
 
   /* Allocations for output alignment
    */
@@ -159,12 +172,17 @@ main(int argc, char **argv)
    * Align alignment to HMM, get master trace
    ***********************************************/
 
-  mtr = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
+  mtr   = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
+  maptr = MasterTraceFromMap(hmm->map, hmm->M, ainfo.alen);
   itr = MallocOrDie(sizeof(struct p7trace_s *) * ainfo.nseq);
 
-				/* verify master trace */
+				/* verify master traces */
   if (! TraceVerify(mtr, hmm->M, ainfo.alen))
-    Die("%s : Trace verify failed\n", argv[0]);
+    Die("Trace verify on P7ViterbiAlignAlignment() result failed\n");
+  if (! TraceVerify(maptr, hmm->M, ainfo.alen))
+    Die("Trace verify on MasterTraceFromMap() result failed\n");
+  if (! TraceCompare(mtr, maptr))
+    Die("Master traces differ for alignment versus map\n");
 
 				/* impose master trace on individuals */
   ImposeMasterTrace(aseq, ainfo.nseq, mtr, &tr);
@@ -223,6 +241,7 @@ main(int argc, char **argv)
   /* Cleanup.
    */
   P7FreeTrace(mtr);
+  P7FreeTrace(maptr);
   for (idx = 0; idx < ainfo.nseq; idx++)
     {
       P7FreeTrace(tr[idx]);
