@@ -135,6 +135,7 @@ FreePlan7(struct plan7_s *hmm)
 /* Function: ZeroPlan7()
  * 
  * Purpose:  Zeros the counts/probabilities fields in a model.  
+ *           Leaves null model untouched. 
  */
 void
 ZeroPlan7(struct plan7_s *hmm)
@@ -152,9 +153,9 @@ ZeroPlan7(struct plan7_s *hmm)
   FSet(hmm->end+1, hmm->M, 0.);
   for (k = 0; k < 4; k++)
     FSet(hmm->xt[k], 2, 0.);
-  FSet(hmm->null, Alphabet_size, 0.);
+  hmm->flags &= ~PLAN7_HASBITS;	/* invalidates scores */
+  hmm->flags &= ~PLAN7_HASPROB;	/* invalidates probabilities */
 }
-
 
 
 /* Function: Plan7SetName()
