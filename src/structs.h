@@ -127,7 +127,7 @@ struct plan7_s {
   char  *desc;                  /* brief description of model           +*/ 
   char  *rf;                    /* reference line from alignment 0..M   +*/
   char  *cs;                    /* consensus structure line      0..M   +*/ 
-  char  *comline;		/* command line that built model        +*/
+  char  *comlog;		/* command line(s) that built model     +*/
   int    nseq;			/* number of training sequences         +*/
   char  *ctime;			/* creation date                        +*/
 
