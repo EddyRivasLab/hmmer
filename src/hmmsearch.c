@@ -245,7 +245,9 @@ main(int argc, char **argv)
    * calibration in the HMM, if available. 
    */
   if (hmm->flags & PLAN7_STATS)
-    ExtremeValueSetHistogram(histogram, hmm->mu, hmm->lambda, 0);
+    ExtremeValueSetHistogram(histogram, hmm->mu, hmm->lambda, 
+			     histogram->lowscore, histogram->highscore, 
+			     hmm->wonka, 0);
 
   /* Now format and report our output 
    */
