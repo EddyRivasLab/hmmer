@@ -345,7 +345,7 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
 }
 
       
-#if ! defined SPEEDY && ! defined ALTIVEC
+#if ! defined SPEEDY && ! defined ALTIVEC && ! defined INTEL_VECTORIZED
 /* Function: P7Viterbi()
  * 
  * Purpose:  The Viterbi dynamic programming algorithm. 
