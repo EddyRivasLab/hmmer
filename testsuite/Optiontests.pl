@@ -14,7 +14,7 @@
 	  "hmmbuild tmp.hmm Optiontests.slx",
 	  "hmmbuild -F tmp.hmm Optiontests.slx",            # Need -F to force 
 	  "hmmbuild -n foo -F tmp.hmm Optiontests.slx",
-	  "hmmbuild -o foo -F tmp.hmm Optiontests.slx",
+	  "hmmbuild -o tmp -F tmp.hmm Optiontests.slx",
 	  "hmmbuild -A tmp.hmm Optiontests.slx",
 	  "hmmbuild -f -F tmp.hmm Optiontests.slx",
 	  "hmmbuild -g -F tmp.hmm Optiontests.slx",
