@@ -121,7 +121,7 @@ main(void)
 	
       pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
-      send_trace = (sc >= globT && evalue <= globE) ? 1 : 0;
+      send_trace = (tr != NULL && sc >= globT && evalue <= globE) ? 1 : 0;
      
       /* return output
        */

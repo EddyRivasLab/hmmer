@@ -84,6 +84,11 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, char *dsq)
   int sym;
   int sc; 
 
+  if (tr == NULL) {
+    fprintf(fp, " [ trace is NULL ]\n");
+    return;
+  }
+
   if (hmm == NULL) {
     fprintf(fp, "st  node   rpos  - traceback len %d\n", tr->tlen);
     fprintf(fp, "--  ---- ------\n");

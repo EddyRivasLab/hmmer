@@ -226,7 +226,7 @@ dist:
 	#
 	(cd documentation/userguide; make clean)
 	(cd documentation/userguide; make pdf)
-	cp -f documentation/userguide/Userguide.pdf build/hmmer-$(RELEASE)/
+	cp -f documentation/userguide/Userguide.pdf $(BASENAME)-$(RELEASE)/
 	#
 	# Remove CVS-controlled files/directories that don't belong in 
 	# the distro

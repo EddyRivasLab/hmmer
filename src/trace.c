@@ -50,6 +50,7 @@ P7ReallocTrace(struct p7trace_s *tr, int tlen)
 void 
 P7FreeTrace(struct p7trace_s *tr)
 {
+  if (tr == NULL) return;
   free(tr->pos);
   free(tr->nodeidx);
   free(tr->statetype);

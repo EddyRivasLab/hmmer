@@ -579,6 +579,10 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo.len);
       
       /* 1. Recover a trace by Viterbi.
+       *    In extreme cases, the alignment may be literally impossible;
+       *    in which case, the score comes out ridiculously small (but not
+       *    necessarily <= -INFTY, because we're not terribly careful
+       *    about underflow issues), and tr will be returned as NULL.
        */
       if (P7ViterbiSize(sqinfo.len, hmm->M) <= RAMLIMIT)
 	sc = P7Viterbi(dsq, sqinfo.len, hmm, &tr);

@@ -566,7 +566,9 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = 0;
 	}
-      else Die("traceback failed");
+      else if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
+      else
+	Die("traceback failed");
       break;
 
     case STD:			/* D connects from M,D */
@@ -582,6 +584,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = k--;
 	  tr->pos[tpos]       = 0;
 	}
+      else if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("traceback failed");
       break;
 
@@ -599,6 +602,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = k;
 	  tr->pos[tpos]       = i--;
 	}
+      else if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("traceback failed");
       break;
 
@@ -632,10 +636,12 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0;
 	}
+      else if (xmx[i][XMB] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("traceback failed");
       break;
 
     case STE:			/* E connects from any M state. k set here */
+      if (xmx[i][XME] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       for (k = hmm->M; k >= 1; k--)
 	if (xmx[i][XME] == mmx[i][k] + hmm->esc[k])
 	  {
@@ -679,6 +685,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0; /* E is a nonemitter */
 	}
+      else if (xmx[i][XMC] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("Traceback failed.");
       break;
 
@@ -696,6 +703,7 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
 	  tr->nodeidx[tpos]   = 0;
 	  tr->pos[tpos]       = 0; /* E is a nonemitter */
 	}
+      else if (xmx[i][XMJ] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
       else Die("Traceback failed.");
       break;
 
@@ -763,8 +771,9 @@ P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
    */
   sc = P7ParsingViterbi(dsq, L, hmm, &ctr);
 
-  /* If we don't want full trace, we're done */
-  if (ret_tr == NULL)
+  /* If we don't want full trace, we're done;
+   * also, if parsing viterbi returned a NULL trace we're done. */
+  if (ctr == NULL || ret_tr == NULL)
     {
       P7FreeTrace(ctr);
       return sc;
@@ -2309,6 +2318,11 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   double  whole_pval;
   double  pvalue;
   double  sortkey;
+
+  /* Special case: rarely, the alignment was totally impossible
+   * and tr is NULL.
+   */
+  if (tr == NULL) return;
 
   /* Break the trace into one or more individual domains.
    */

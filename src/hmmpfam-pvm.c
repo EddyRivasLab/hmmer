@@ -165,7 +165,7 @@ main(void)
 
       pvalue = PValue(hmm, sc);
       evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
-      send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
+      send_trace = (tr != NULL && sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
 
       /* return output
        */

@@ -169,6 +169,10 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
   int   tpos;
   int   score;
 
+  /* Rarely, the alignment was totally impossible, and tr is NULL.
+   */
+  if (tr == NULL) return 0.0;
+
   /* Set up model: average over the emission distributions of
    * all M, I states that appear in the trace. Ad hoc? Sure, you betcha. 
    */
