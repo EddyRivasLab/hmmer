@@ -141,8 +141,9 @@ extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
 /* masks.c
  * Repetitive sequence masking.
  */
-extern int  XNU(char *dsq, int len);
-extern int  MiniSEG(char *dsq, int len, float *ret_max);
+extern int   XNU(char *dsq, int len);
+extern int   MiniSEG(char *dsq, int len, float *ret_max);
+extern float SeqScoreCorrection(char *dsq, int L);
 
 /* mathsupport.c
  * Much of this code deals with Dirichlet prior mathematics. 
