@@ -39,7 +39,10 @@ extern void  DefaultCodonBias(float *codebias);
  */
 extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, int ***xmx, 
 					   int ***mmx, int ***imx, int ***dmx);
+extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb, 
+					    char ***mtb, char ***itb, char ***dtb);
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
+extern void  FreeShadowMatrix(struct dpshadow_s *tb);
 extern int   P7ViterbiSize(int L, int M);
 extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
@@ -56,6 +59,10 @@ extern float P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm,
 			  struct p7trace_s **ret_tr);
 extern float Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, 
 			     struct dpmatrix_s **ret_mx);
+extern struct p7trace_s *P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm);
+extern struct p7trace_s *ShadowTrace(struct dpshadow_s *tb, struct plan7_s *hmm, int L);
+
+
 
 /* from debug.c
  * Debugging output of various sorts.
@@ -259,6 +266,7 @@ extern void  P7AllocTrace(int tlen, struct p7trace_s **ret_tr);
 extern void  P7ReallocTrace(struct p7trace_s *tr, int tlen);
 extern void  P7FreeTrace(struct p7trace_s *tr);
 extern void  TraceSet(struct p7trace_s *tr, int tpos, enum p7stype type, int idx, int pos);
+extern struct p7trace_s **MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2);
 extern void  P7ReverseTrace(struct p7trace_s *tr);
 extern void  P7TraceCount(struct plan7_s *hmm, char *dsq, float wt, 
 			  struct p7trace_s *tr);
@@ -276,6 +284,7 @@ extern void TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr,
 extern int  TraceDomainNumber(struct p7trace_s *tr);
 extern void TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2, 
 			      int *ret_k1,  int *ret_k2);
+extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, struct p7trace_s ***ret_tr);
 
 
 #endif /*FUNCSH_INCLUDED*/
