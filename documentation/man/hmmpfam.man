@@ -1,4 +1,4 @@
-.TH "hmmpfam" 1 "March 1998" "HMMER 2.0" "HMMER Manual"
+.TH "hmmpfam" 1 @RELEASEDATE@ "HMMER @RELEASE@" "HMMER Manual"
 
 .SH NAME
 .TP 
@@ -107,6 +107,14 @@ Swissprot 34.
 .SH EXPERT OPTIONS
 
 .TP
+.BI --cpu " <n>"
+Sets the maximum number of CPUs that the program
+will run on. The default is to use all CPUs
+in the machine. Overrides the HMMER_NCPU
+environment variable. Only affects threaded
+versions of HMMER (the default on most systems).
+
+.TP
 .BI --domE " <x>"
 Set the E-value cutoff for the per-domain ranked hit list to
 .I <x>,
@@ -164,6 +172,29 @@ may improve sensitivity at the expense of reducing
 specificity by letting biased composition hits through.
 
 .TP
+.B --pvm
+Run on a Parallel Virtual Machine (PVM). The PVM must
+already be running. The client program 
+.B hmmpfam-pvm
+must be installed on all the PVM nodes.
+The HMM database
+.I hmmfile
+and an associated GSI index file
+.IR hmmfile. gsi
+must also be installed on all the PVM nodes.
+(The GSI index is produced by the program
+.BR hmmindex .)
+Because the PVM implementation is I/O bound,
+it is highly recommended that each node have a
+local copy of 
+.I hmmfile
+rather than NFS mounting a shared copy.
+Optional PVM support must have been compiled into 
+HMMER for
+.B --pvm
+to function.
+
+.TP
 .B --xnu
 Turn on XNU filtering of target protein sequences. Has no effect
 on nucleic acid sequences. In trial experiments, 
@@ -174,8 +205,7 @@ post hoc null2 model.
 .SH SEE ALSO
 
 .PP
-hmmalign(1), hmmbuild(1), hmmcalibrate(1),
-hmmconvert(1), hmmemit(1), hmmer(1), hmmsearch(1)
+@SEEALSO@
 .PP
 User guide and tutorial: Userguide.ps
 .PP
