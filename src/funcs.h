@@ -156,6 +156,18 @@ extern int      HMMFilePositionByIndex(HMMFILE *hmmfp, int idx);
 extern void     WriteAscHMM(FILE *fp, struct plan7_s *hmm);
 extern void     WriteBinHMM(FILE *fp, struct plan7_s *hmm);
 
+/* from infocontent.c
+ * Evolving to specified information content
+ */
+extern void  AdjustAveInfoContent (struct plan7_s *hmm, float desired,
+		char *matrixfile);
+extern void  EvolveEmits (double *temp_emits, double *P, int L);
+extern float CalculateBackgroundEntropy ();
+extern float CalculateEmitsEntropy (double *emits, int L);
+extern void  NormalizeEmits (double *temp_emits, int L);
+extern void  PrintAveInfoContent (struct plan7_s *hmm);
+
+
 /* masks.c
  * Repetitive sequence masking.
  */
@@ -163,7 +175,7 @@ extern int   XNU(unsigned char *dsq, int len);
 extern float TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *dsq);
 
 /* mathsupport.c
- * Much of this code deals with Dirichlet prior mathematics. 
+ * Much of this code deals with Dirichlet prior mathematics.
  */
 extern int   Prob2Score(float p, float null);
 extern float Score2Prob(int sc, float null);
@@ -175,11 +187,35 @@ extern void  LogNorm(float *vec, int n);
 extern float Logp_cvec(float *cvec, int n, float *alpha);
 extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
 
+/* from matrices.c
+ * for matrix manipulation
+ */
+extern void 	ReadAAMatrices(double **ret_Sij, double **ret_pi,
+		char *matrixfile, int environ, int L);
+extern void	AssignWagMatrix(double **Sij, double **pi);
+extern void 	ReadMatrices (double **ret_Sij, double **ret_pi,
+		char *matrixfile, int environ, int L);
+extern void 	PrintMatrices(double *prob, int L, int environ);
+extern void 	UnlogAndPrintMatrices(double *prob, int L, int environ);
+extern void 	SymToRateMatrices(double *Qij, double *Sij, double *pi, int L,
+		int environ);
+extern void 	NormRateMatrices(double *Qij, double *pi, int L, int environ);
+extern void  	AssignMatrixNotLog (double *Qij, int matrix_n, double time,
+		double *Pij);
+extern double 	*Cal_Id(int L);
+extern double  *Cal_M_Exp(double *M, int L, double power);
+extern void    Comp_M_Exp(double *M, int L, double power);
+extern void    Comp_M_N_Prod(double *M, double *N, int L);
+extern void    CheckSingleProb(double *psingle, int size);
+extern void    CopyMatrix (double *copyQ, double *Q, int N);
+extern int     Check_Accuracy(double *vec, int L);
+extern void	LogifyMatrix(double *M, int L);
+
 /* from misc.c
  * Miscellaneous functions with no home
  */
 extern void  HMMERBanner(FILE *fp, char *banner);
-extern char *Getword(FILE *fp, int type); 
+extern char *Getword(FILE *fp, int type);
 extern char *Getline(char *s, int n, FILE *fp);
 extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
 
@@ -188,12 +224,12 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
  */
 extern void P7Handmodelmaker(MSA *msa, unsigned char **dsq, struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, 
-			     float maxgap, struct plan7_s **ret_hmm, 
+extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq,
+			     float maxgap, struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Maxmodelmaker(MSA *msa, unsigned char **dsq, 
-			    float maxgap, struct p7prior_s *prior, 
-			    float *null, float null_p1, float mpri, 
+extern void P7Maxmodelmaker(MSA *msa, unsigned char **dsq,
+			    float maxgap, struct p7prior_s *prior,
+			    float *null, float null_p1, float mpri,
 			    struct plan7_s **ret_hmm,
 			    struct p7trace_s  ***ret_tr);
 

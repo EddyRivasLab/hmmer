@@ -60,9 +60,11 @@ OBJS =  alphabet.o\
 	fast_algorithms.o\
 	histogram.o\
 	hmmio.o\
+	infocontent.o\
 	lsj_eweight.o\
 	mathsupport.o\
         masks.o\
+	matrices.o\
 	misc.o\
 	modelmakers.o\
 	plan7.o\
