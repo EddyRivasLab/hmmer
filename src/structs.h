@@ -19,13 +19,8 @@
 #ifndef STRUCTSH_INCLUDED
 #define STRUCTSH_INCLUDED
 
-#ifdef HMMER_THREADS
-#include <pthread.h>
-#endif /*HMMER_THREADS*/
-
 #include "squid.h"
 #include "config.h"
-
 
 /* Miscellaneous math macros used in the package
  */
@@ -39,12 +34,6 @@
  * valid in the alphabet!
  */
 #define SYMIDX(x)   (strchr(Alphabet, (x)) - Alphabet)
-
-/* PANIC is called for failures of Std C/POSIX functions,
- * instead of my own functions. It calls perror() and exits
- * abnormally.
- */
-#define PANIC       (Panic(__FILE__, __LINE__))
 
 /* The symbol alphabet.
  * Must deal with IUPAC degeneracies. Nondegenerate symbols 
@@ -271,10 +260,11 @@ struct dpshadow_s {
  * Purpose:   An open HMM file or HMM library. See hmmio.c.
  */
 struct hmmfile_s {
-  FILE *f;			/* pointer to file opened for reading     */
+  FILE    *f;			/* pointer to file opened for reading       */
+  GSIFILE *gsi;			/* pointer to open GSI index, or NULL       */
   int (*parser)(struct hmmfile_s *, struct plan7_s **);  /* parsing function*/
-  int   is_binary;		/* TRUE if format is a binary one         */
-  int   byteswap;               /* TRUE if binary and byteswapped         */
+  int   is_binary;		/* TRUE if format is a binary one           */
+  int   byteswap;               /* TRUE if binary and byteswapped           */
 };
 typedef struct hmmfile_s HMMFILE; 
 
@@ -431,53 +421,27 @@ struct tophit_s {
 };
 
 /**********************************************************
- * Threads-specific structures. 
- * See threads.c
+ * PVM parallelization
  **********************************************************/
+#ifdef  HMMER_PVM
 
-#ifdef HMMER_THREADS
-/* vpool: Pool of threads for aligning seqs.
- * Double-buffered: has a queue for input sequences,
- * and a queue for output traces/scores. Boss thread
- * is reponsible for feeding seqs into the input queue
- * and taking traces off the output queue.
+/* Message tags 
  */
-struct vpool_s {
-				/* Data common to all workers: */
-  int             do_forward;        /* TRUE to use Forward() to score       */
-  int             do_null;           /* TRUE to postprocess score with null2 */
-  int             num_threads;	     /* number of vworker's in the pool      */
-  int             max_input_queue;   /* usually same as num_threads          */
-  int             max_output_queue;  /* usually num_threads + max_input_queue*/
+#define HMMPVM_INIT         0	/* an initialization packet to all slaves */
+#define HMMPVM_WORK         1	/* a work packet sent to a slave */
+#define HMMPVM_RESULTS      2	/* a results packet sent back to master */
+#define HMMPVM_TASK_TROUBLE 3	/* a notification of bad things in a slave task */
+#define HMMPVM_HOST_TROUBLE 4	/* a notification of bad things in a PVM host */
 
-  pthread_t      *thread;            /* array of threads in the pool         */ 
+/* error codes
+ */
+#define HMMPVM_OK         0
+#define HMMPVM_NO_HMMFILE 1
+#define HMMPVM_NO_INDEX   2	
+#define HMMPVM_BAD_INIT   3	/* failed to initialize a slave somehow */
 
-				/* The input queue: */
-  struct plan7_s **hmm;              /* 0..max-1 ptrs to HMMs                */   
-  char          **dsq;               /* 0..max-1 ptrs to digitized sequences */
-  SQINFO        **sqinfo;            /* 0..max-1 ptrs to sqinfo structures   */
-  int            *len;               /* 0..max-1 sequence lengths            */
-  int             nin;		     /* number of seqs in the queue          */
-  
-				/* The output queue: */
-  struct plan7_s **ohmm;             /* 0..max-1 ptr to HMMs           */ 
-  char          **odsq;              /* 0..max-1 ptr to dsq            */
-  SQINFO        **osqinfo;           /* 0..max-1 ptr to sqinfo         */
-  int            *olen;              /* o..max-1 sequence lengths      */
-  float          *score;             /* 0..max-1 bit scores            */
-  struct p7trace_s **tr;             /* 0..max-1 trace pointers        */
-  int             nout;		     /* number of answers in the queue */
+#endif
 
-				/* our mutex locks: */
-  pthread_mutex_t input_lock;	    
-  pthread_mutex_t output_lock;      
-				/* our condition flags: */
-  pthread_cond_t  input_ready;
-  pthread_cond_t  output_ready;
-  int             shutdown;	/* TRUE to shut down worker threads */
-};
-  
-#endif /*HMMER_THREADS*/
 
 /**********************************************************
  * Plan 9: obsolete HMMER1.x code. We still need these structures
