@@ -112,6 +112,43 @@ environment variable. Only affects threaded
 versions of HMMER (the default on most systems).
 
 .TP
+.B --cut_ga
+Use Pfam GA (gathering threshold) score cutoffs. 
+Equivalent
+to --globT <GA1> --domT <GA2>, but the GA1 and GA2 cutoffs
+are read from the HMM file. hmmbuild puts these cutoffs there
+if the alignment file was annotated in a Pfam-friendly
+alignment format (extended SELEX or Stockholm format) and 
+the optional GA annotation line was present. If these
+cutoffs are not set in the HMM file, 
+.B --cut_ga 
+doesn't work.
+
+.TP
+.B --cut_tc
+Use Pfam TC (trusted cutoff) score cutoffs. Equivalent
+to --globT <TC1> --domT <TC2>, but the TC1 and TC2 cutoffs
+are read from the HMM file. hmmbuild puts these cutoffs there
+if the alignment file was annotated in a Pfam-friendly
+alignment format (extended SELEX or Stockholm format) and 
+the optional TC annotation line was present. If these
+cutoffs are not set in the HMM file, 
+.B --cut_tc
+doesn't work.
+
+.TP
+.B --cut_nc
+Use Pfam NC (noise cutoff) score cutoffs. Equivalent
+to --globT <NC1> --domT <NC2>, but the NC1 and NC2 cutoffs
+are read from the HMM file. hmmbuild puts these cutoffs there
+if the alignment file was annotated in a Pfam-friendly
+alignment format (extended SELEX or Stockholm format) and 
+the optional NC annotation line was present. If these
+cutoffs are not set in the HMM file, 
+.B --cut_nc
+doesn't work.
+
+.TP
 .BI --domE " <x>"
 Set the E-value cutoff for the per-domain ranked hit list to
 .I <x>,
