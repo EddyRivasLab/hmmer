@@ -14,8 +14,8 @@
  */
 
 
-#define RELEASE     "2.0.1"
-#define RELEASEDATE "July 1998"
+#define RELEASE     "2.1"
+#define RELEASEDATE "Oct 1998"
 
 #ifndef LINTING			/* compiled-in stamp for all binaries  */
 static char *copyright = "\
@@ -23,5 +23,6 @@ static char *copyright = "\
    Copyright (C) 1992-1998 Washington University School of Medicine.\n\
 \n\
    HMMER is distributed under the terms of the GNU General Public\n\
-   License. See the files COPYING and GNULICENSE for details.";
+   License, unless otherwise stated; see the files COPYING and LICENSE\n\
+   for details.";
 #endif /* LINTING */
