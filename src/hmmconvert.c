@@ -1,7 +1,18 @@
+/************************************************************
+ * HMMER - Biological sequence analysis with profile-HMMs
+ * Copyright (C) 1992-1998 Sean R. Eddy
+ *
+ *   This source code is distributed under the terms of the
+ *   GNU General Public License. See the files COPYING and
+ *   GNULICENSE for details.
+ *
+ ************************************************************/
+
 /* hmmconvert.c
  * SRE, Thu Oct 30 08:56:22 1997; St. Louis
  * 
- * main() for converting between HMM file formats.
+ * main() for converting between HMM file formats, and
+ * for converting HMMs to other software formats like GCG profiles.
  * 
  */
 
@@ -25,8 +36,9 @@ Usage: hmmconvert [-options] <old hmm file> <new hmm file>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
 \n\
-   -a        : convert old file to HMMER2.0 ASCII file (the default)\n\
-   -b        : convert old file to HMMER2.0 binary file\n\
+   -a        : convert to HMMER ASCII file (the default)\n\
+   -b        : convert to HMMER binary file\n\
+   -p        : convert to GCG Profile .prf format\n\
 \n\
    -A        : append mode; append to <new hmm file>\n\
    -F        : force mode; allow overwriting of existing files\n\
@@ -37,6 +49,7 @@ static struct opt_s OPTIONS[] = {
   { "-a",        TRUE,  sqdARG_NONE },
   { "-b",        TRUE,  sqdARG_NONE },
   { "-h",        TRUE,  sqdARG_NONE }, 
+  { "-p",        TRUE,  sqdARG_NONE },
   { "-A",        TRUE,  sqdARG_NONE },
   { "-F",        TRUE,  sqdARG_NONE },
 };
@@ -59,7 +72,7 @@ main(int argc, char **argv)
 
   int   do_append;		/* TRUE to append to existing outfile       */
   int   do_force;		/* TRUE to allow overwriting */
-  enum hmmfmt_e { P7ASCII, P7BINARY } 
+  enum hmmfmt_e { P7ASCII, P7BINARY, GCGPROFILE } 
       outfmt;			/* output format */
       
 
@@ -80,10 +93,11 @@ main(int argc, char **argv)
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-a") == 0) { outfmt    = P7ASCII;  }
-    else if (strcmp(optname, "-b") == 0) { outfmt    = P7BINARY; } 
-    else if (strcmp(optname, "-A") == 0) { do_append = TRUE;     } 
-    else if (strcmp(optname, "-F") == 0) { do_force  = TRUE;     } 
+    if      (strcmp(optname, "-a") == 0) { outfmt    = P7ASCII;    }
+    else if (strcmp(optname, "-b") == 0) { outfmt    = P7BINARY;   } 
+    else if (strcmp(optname, "-p") == 0) { outfmt    = GCGPROFILE; } 
+    else if (strcmp(optname, "-A") == 0) { do_append = TRUE;       } 
+    else if (strcmp(optname, "-F") == 0) { do_force  = TRUE;       } 
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -118,9 +132,10 @@ main(int argc, char **argv)
 	HMMFileClose(test);
       }
       switch (outfmt) {
-      case P7ASCII:  mode = "a";  break;
-      case P7BINARY: mode = "ab"; break;
-      default:       Die("unexpected format");
+      case P7ASCII:    mode = "a";  break;
+      case P7BINARY:   mode = "ab"; break;
+      case GCGPROFILE: Die("You cannot append GCG profiles");
+      default:         Die("unexpected format");
       }
     }
   else
@@ -128,14 +143,14 @@ main(int argc, char **argv)
       if (! do_force && FileExists(outfile))
 	Die("Output HMM file %s already exists. Please rename or delete it.", outfile); 
       switch (outfmt) {
-      case P7ASCII:  mode = "w";  break;
-      case P7BINARY: mode = "wb"; break;
-      default:       Die("unexpected format");
+      case P7ASCII:    mode = "w";  break;
+      case P7BINARY:   mode = "wb"; break;
+      case GCGPROFILE: mode = "w";  break;
+      default:         Die("unexpected format");
       }
     }
   if ((outfp = fopen(outfile, mode)) == NULL) 
     Die("Failed to open output file %s for writing", outfile);
-
 
   /*********************************************** 
    * Show the banner
@@ -146,9 +161,10 @@ main(int argc, char **argv)
   printf(   "Output HMM file:          %s\n", outfile);
   printf(   "Converting to:            ");
   switch (outfmt) {
-  case P7ASCII:  puts("HMMER Plan7 ASCII");  break;
-  case P7BINARY: puts("HMMER Plan7 binary"); break;
-  default:       Die("unexpected fault");
+  case P7ASCII:    puts("HMMER Plan7 ASCII");  break;
+  case P7BINARY:   puts("HMMER Plan7 binary"); break;
+  case GCGPROFILE: puts("GCG Profile .prf");   break;
+  default:         Die("unexpected fault");
   }
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
@@ -162,9 +178,10 @@ main(int argc, char **argv)
       Die("HMM file %s may be corrupt or in incorrect format; parse failed", infile);
 
     switch(outfmt) {
-    case P7ASCII:   WriteAscHMM(outfp, hmm); break;
-    case P7BINARY:  WriteBinHMM(outfp, hmm); break;
-    default:        Die("unexpected format");
+    case P7ASCII:    WriteAscHMM(outfp, hmm);  break;
+    case P7BINARY:   WriteBinHMM(outfp, hmm);  break;
+    case GCGPROFILE: WriteProfile(outfp, hmm); break;
+    default:         Die("unexpected format");
     }
 
     printf(" - converted %s\n", hmm->name);
