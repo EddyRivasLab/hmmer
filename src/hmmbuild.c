@@ -80,7 +80,7 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
 static struct opt_s OPTIONS[] = {
   { "-A", TRUE, sqdARG_NONE },
   { "-b", TRUE, sqdARG_NONE },
-  { "-d", TRUE, sqdARG_NONE },
+  { "-e", TRUE, sqdARG_NONE },
   { "-F", TRUE, sqdARG_NONE },
   { "-g", TRUE, sqdARG_NONE }, 
   { "-h", TRUE, sqdARG_NONE }, 
