@@ -24,6 +24,7 @@
 #endif
 
 #include "squid.h"
+#include "dirichlet.h"		/* Gammln() is in dirichlet module */
 #include "funcs.h"
 #include "structs.h"
 
@@ -171,6 +172,7 @@ ILogsum(int p1, int p2)
  * Purpose:  Normalize a vector of log likelihoods, changing it
  *           to a probability vector. Be careful of overflowing exp().
  *           Implementation adapted from Graeme Mitchison.
+ *           [deprecated: use vectorops.c::FLogNorm(), DLogNorm().]
  *
  * Args:     vec - vector destined to become log probabilities
  *           n   - length of vec 
@@ -229,107 +231,6 @@ Logp_cvec(float *cvec, int n, float *alpha)
   lnp += Gammln(sum3 + 1.);
   return lnp;
 }
-
-/* Function: SampleDirichlet()
- * 
- * Purpose:  Given a Dirichlet distribution defined by
- *           a vector of n alpha terms, sample of probability
- *           distribution of dimension n.
- *           
- *           This code was derived from source provided 
- *           by Betty Lazareva, from Gary Churchill's group.
- *           
- * Args:     alpha - vector of Dirichlet alphas components
- *           n     - number of components   
- *           ret_p - RETURN: sampled probability vector.
- *           
- * Return:   (void)
- *           ret_p, an n-dimensional array alloced by the caller,
- *           is filled.
- */
-void
-SampleDirichlet(float *alpha, int n, float *p)
-{
-  int    x;
-  
-  for (x = 0; x < n; x++)
-    p[x] = SampleGamma(alpha[x]);
-  FNorm(p, n);
-}
-  
-
-/* Function: SampleGamma()
- * 
- * Purpose:  Return a random deviate distributed as Gamma(alpha, 1.0).
- *           Uses two different accept/reject algorithms, one
- *           for 0<alpha<1, the other for 1<=alpha. 
- *           
- *           Code modified from source provided by Betty Lazareva
- *           and Gary Churchill.
- *            
- * Args:     alpha - order of gamma function
- *           
- * Return:   the gamma-distributed deviate.
- */                       
-float
-SampleGamma(float alpha)
-{
-  float U,V,X,W,lambda;
-
-  if (alpha >= 1.0) 
-    {
-      /*CONSTCOND*/ while (1)
-	{
-	  lambda = sqrt(2.0*alpha -1.0);
-	  U = sre_random();
-	  V = U/(1-U);
-	  X = alpha * pow(V, 1/lambda);
-	  W = .25*exp(-X+alpha)*pow(V,1.0+alpha/lambda)*pow(1.0+1.0/V, 2.0);
-	  if (sre_random() <= W)
-	    return X;
-	}
-    }
-  else if (alpha > 0.0)
-    {
-      /*CONSTCOND*/ while (1) 
-	{
-	  U = sre_random();
-	  V = U*(1+ alpha/exp(1.0));
-	  if (V > 1.0)
-	    {
-	      X = -log( (1-V+alpha/exp(1.0))/alpha);
-	      if (sre_random() <= pow(X, alpha-1.0))
-		return X;
-	    }
-	  else
-	    {
-	      X = pow(V,1.0/alpha);
-	      if (sre_random() <= exp(-X))
-		return X;
-	    }
-	}
-    }
-  Die("Invalid argument alpha < 0.0 to SampleGamma()");
-  /*NOTREACHED*/
-  return 0.0;
-}
-
-/* Function: SampleCountvector()
- * 
- * Purpose:  Given a probability vector p of dimensionality
- *           n, sample c counts and store them in cvec.
- *           cvec is n-dimensional and is alloced by the caller.
- */
-void
-SampleCountvector(float *p, int n, int c, float *cvec)
-{
-  int i;
-
-  FSet(cvec, n, 0.0);
-  for (i = 0; i < c; i++)
-    cvec[FChoose(p,n)] += 1.0;
-}
-
 
 
 /* Function: P_PvecGivenDirichlet()

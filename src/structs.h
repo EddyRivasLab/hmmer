@@ -68,14 +68,6 @@ extern int   DegenCount[MAXCODE];
  *
  **********************************************************************/
 
-/* Plan 7 construction strategies.
- */
-enum p7_construction {
-  P7_MAP_CONSTRUCTION,		/* maximum a posteriori architecture */
-  P7_HAND_CONSTRUCTION,		/* hand specified architecture       */
-  P7_FAST_CONSTRUCTION		/* fast ad hoc architecture          */
-};
-
 /* Plan 7 parameter optimization strategies
  */
 enum p7_param {

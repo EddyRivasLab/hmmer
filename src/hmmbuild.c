@@ -45,24 +45,26 @@ static char experts[] = "\
    --amino   : override autodetection, assert that seqs are protein\n\
    --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
 \n\
-  Alternative model construction strategies: (default: MAP)\n\
-   --fast        : Krogh/Haussler fast heuristic construction (see --gapmax)\n\
+  Alternative model construction strategies: (default: --fast)\n\
+   --fast        : assign columns w/ < gapmax gaps to be MAT; else INS {default}\n\
    --hand        : manual construction (requires annotated alignment)\n\
-   --archpri <x> : for MAP: set architecture size prior to <x> {0.85} [0..1]\n\
-   --gapmax <x>  : for --fast: max fraction of gaps in mat column {0.50} [0..1]\n\
+   --map         : maximum a posteriori architecture [deprecated]\n\
+   --gapmax <x>  : for --fast: max fraction of gaps in MAT column {0.50} [0..1]\n\
+   --archpri <x> : for --map: set architecture size prior to <x>  {0.85} [0..1]\n\
 \n\
   Customization of null model and priors:\n\
-   --null  <f>   : read null (random sequence) model from <f>\n\
+   --null  <f>   : read null (random sequence) model from file <f>\n\
+   --prior <f>   : read Dirichlet prior parameters from file <f>\n\
    --pam   <f>   : heuristic PAM-based prior, using BLAST PAM matrix in <f>\n\
-   --prior <f>   : read Dirichlet prior parameters from <f>\n\
    --pamwgt <x>  : for --pam: set weight on PAM-based prior to <x> {20.}[>=0]\n\
 \n\
-  Effective sequence number strategies: (default: target entropy weighting)\n\
-   --seteff <n>  : set effective sequence number to <n>\n\
-   --noeff       : don't use effective sequence number; just use nseq\n\
-   --oldeff      : use old strategy, neff= # of clusters by single linkage\n\
-   --idlevel <x> : set frac. id level used by eff nseq and --wblosum {0.62}\n\
-   --etarget     : target entropy loss [defaults: fs=0.5; ls=1.3]\n\
+  Alternative effective sequence number strategies:\n\
+   --effent      : entropy loss target [protein default]\n\
+   --effnone     : effective sequence number is just # of seqs [DNA default]\n\
+   --effset <x>  : set effective sequence number to <x>\n\
+   --effclust    : eff seq # is = # of clusters by single linkage\n\
+   --etarget <x> : for --effent: set target loss [defaults: fs=0.59; ls=1.30]\n\
+   --eidlevel <x>: for --effclust: set identity cutoff to <x> {0.62}\n\
 \n\
   Relative sequence weighting strategies: (default: GSC weights)\n\
    --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
@@ -70,8 +72,9 @@ static char experts[] = "\
    --wme         : maximum entropy (ME)\n\
    --wpb         : Henikoff position-based weights\n\
    --wvoronoi    : Sibbald/Argos Voronoi weights\n\
-   --pbswitch <n>: set switch from GSC to position-based wgts at > n seqs\n\
    --wnone       : don't do any relative weighting\n\
+   --pbswitch <n>: set switch from GSC to position-based wgts at > n seqs\n\
+   --widlevel <x>: for --wblosum: set identity cutoff {0.62}\n\
 \n\
   Other expert options:\n\
    --binary      : save the model in binary format, not ASCII text\n\
@@ -95,12 +98,17 @@ static struct opt_s OPTIONS[] = {
   { "--archpri", FALSE, sqdARG_FLOAT }, 
   { "--binary",  FALSE, sqdARG_NONE  }, 
   { "--cfile",   FALSE, sqdARG_STRING},
-  { "--fast",    FALSE, sqdARG_NONE},
+  { "--effnone", FALSE, sqdARG_NONE },
+  { "--effclust",FALSE, sqdARG_NONE },
+  { "--effent",  FALSE, sqdARG_NONE },
+  { "--effset",  FALSE, sqdARG_FLOAT },
+  { "--eidlevel",FALSE, sqdARG_FLOAT },
+  { "--etarget", FALSE, sqdARG_FLOAT },
+  { "--fast",    FALSE, sqdARG_NONE },
   { "--gapmax",  FALSE, sqdARG_FLOAT },
   { "--hand",    FALSE, sqdARG_NONE},
-  { "--idlevel", FALSE, sqdARG_FLOAT },
   { "--informat",FALSE, sqdARG_STRING },
-  { "--noeff",   FALSE, sqdARG_NONE },
+  { "--map",     FALSE, sqdARG_NONE },
   { "--nucleic", FALSE, sqdARG_NONE },
   { "--null",    FALSE, sqdARG_STRING },
   { "--pam",     FALSE, sqdARG_STRING },
@@ -112,6 +120,7 @@ static struct opt_s OPTIONS[] = {
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_NONE },
+  { "--widlevel",FALSE, sqdARG_FLOAT },
   { "--wme",     FALSE, sqdARG_NONE },
   { "--wnone",   FALSE, sqdARG_NONE },
   { "--wpb",     FALSE, sqdARG_NONE },
@@ -157,12 +166,24 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()            */
   int   optind;                 /* index in argv[]                       */
 
-  enum p7_construction c_strategy; /* construction strategy choice        */
-  enum p7_weight {		/* weighting strategy */
+  enum {	                /* Model architecture strategy:           */
+    P7_FAST_CONSTRUCTION,       /* --fast: default: ad hoc architecture   */
+    P7_HAND_CONSTRUCTION,	/* --hand: manually specified             */
+    P7_MAP_CONSTRUCTION   	/* --map: maximum a posteriori            */
+  } c_strategy;
+  enum {			/* Effective sequence number strategy:        */
+    EFF_NOTSETYET, 		/* (can't set default 'til alphabet known)    */
+    EFF_NONE, 			/* --effnone: DNA default: eff_nseq is nseq   */
+    EFF_USERSET, 		/* --effset:  eff_nseq set explicitly         */
+    EFF_NCLUSTERS,              /* --effclust: # of blosumclusters            */
+    EFF_ENTROPY                 /* --effent:  AA default: entropy loss target */
+  } eff_strategy;
+  enum p7_weight {		/* relative sequence weighting strategy  */
     WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_PB, WGT_VORONOI, WGT_ME} w_strategy;
   enum p7_config {              /* algorithm configuration strategy      */
     P7_BASE_CONFIG, P7_LS_CONFIG, P7_FS_CONFIG, P7_SW_CONFIG } cfg_strategy;
   float gapmax;			/* max frac gaps in mat col for -k       */
+  int   gapmax_set;		/* TRUE if gapmax was set on commandline */
   int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
   int   verbose;		/* TRUE to show a lot of output          */
   char *rndfile;		/* random sequence model file to read    */
@@ -176,25 +197,31 @@ main(int argc, char **argv)
   float pamwgt;			/* weight on PAM for heuristic prior     */
   int   do_append;		/* TRUE to append to hmmfile             */
   int   do_binary;		/* TRUE to write in binary format        */
-  float blosumlevel;		/* BLOSUM frac id filtering level [0.62] */
+  float eidlevel;		/* --effclust frac id filtering level [0.62] */
+  float widlevel;		/* --wblosum frac id filtering level [0.62]  */
   float swentry;		/* S/W aggregate entry probability       */
   float swexit;			/* S/W aggregate exit probability        */
-  int   do_eff;			/* TRUE to set an effective seq number   */
   float eff_nseq;		/* effective sequence number             */
+  int   eff_nseq_set;		/* TRUE if eff_nseq has been calculated  */
   int   pbswitch;		/* nseq >= this, switchover to PB weights*/
   char *setname;                /* NULL, or ptr to HMM name to set       */
-  int   gapmax_set;		/* TRUE if gapmax was set on commandline */
+  float etarget;		/* target entropy loss, entropy-weights  */
+  int   etarget_set;		/* TRUE if etarget was set on commandline*/
+  int   wgt_set;		/* TRUE if relative weights are calculated */
 
   /*********************************************** 
    * Parse command line
    ***********************************************/
   
   format            = MSAFILE_UNKNOWN;        /* autodetect format by default. */
-  c_strategy        = P7_MAP_CONSTRUCTION;
-  w_strategy        = WGT_GSC;
-  blosumlevel       = 0.62;
+  c_strategy        = P7_FAST_CONSTRUCTION;   /* Krogh/Haussler strategy       */
+  eff_strategy      = EFF_NOTSETYET;          /* default depends on alphabet   */
+  w_strategy        = WGT_GSC;	              /* Gerstein/Sonnhammer/Chothia   */
+  eidlevel          = 0.62;
+  widlevel          = 0.62;
   cfg_strategy      = P7_LS_CONFIG;
   gapmax            = 0.5;
+  gapmax_set        = FALSE;
   overwrite_protect = TRUE;
   verbose           = FALSE;
   rndfile           = NULL;
@@ -211,11 +238,10 @@ main(int argc, char **argv)
   do_append         = FALSE; 
   swentry           = 0.5;
   swexit            = 0.5;
-  do_eff            = TRUE;
   do_binary         = FALSE;
   pbswitch          = 1000;
   setname           = NULL;
-  gapmax_set        = FALSE;
+  etarget_set       = FALSE;           
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -230,11 +256,15 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);
     else if (strcmp(optname, "--binary")  == 0) do_binary     = TRUE;
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
-    else if (strcmp(optname, "--fast")    == 0) c_strategy    = P7_FAST_CONSTRUCTION;
+    else if (strcmp(optname, "--effclust")== 0) eff_strategy  = EFF_NCLUSTERS;
+    else if (strcmp(optname, "--effent")  == 0) eff_strategy  = EFF_ENTROPY;
+    else if (strcmp(optname, "--effnone") == 0) eff_strategy  = EFF_NONE;
+    else if (strcmp(optname, "--effset")  == 0) { eff_strategy= EFF_USERSET; eff_nseq = atof(optarg); }
+    else if (strcmp(optname, "--eidlevel")== 0) eidlevel      = atof(optarg);
+    else if (strcmp(optname, "--etarget") == 0) { etarget     = atof(optarg); etarget_set = TRUE; }
     else if (strcmp(optname, "--gapmax")  == 0) { gapmax      = atof(optarg); gapmax_set = TRUE; }
     else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
-    else if (strcmp(optname, "--idlevel") == 0) blosumlevel   = atof(optarg);
-    else if (strcmp(optname, "--noeff")   == 0) do_eff        = FALSE;
+    else if (strcmp(optname, "--map")     == 0) c_strategy    = P7_MAP_CONSTRUCTION;
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
     else if (strcmp(optname, "--null")    == 0) rndfile       = optarg;
     else if (strcmp(optname, "--pam")     == 0) pamfile       = optarg;
@@ -246,6 +276,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
     else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM; 
+    else if (strcmp(optname, "--widlevel")== 0) widlevel      = atof(optarg);
     else if (strcmp(optname, "--wme")     == 0) w_strategy    = WGT_ME;  
     else if (strcmp(optname, "--wpb")     == 0) w_strategy    = WGT_PB;  
     else if (strcmp(optname, "--wnone")   == 0) w_strategy    = WGT_NONE; 
@@ -279,13 +310,15 @@ main(int argc, char **argv)
   if (overwrite_protect && align_ofile != NULL && FileExists(align_ofile))
     Die("Alignment resave file %s exists. Rename or delete it.", align_ofile); 
   if (gapmax_set && c_strategy  != P7_FAST_CONSTRUCTION)
-    Die("using --gapmax only makes sense if you use --fast");
+    Die("using --gapmax only makes sense for default construction strategy");
+  if (c_strategy == P7_MAP_CONSTRUCTION && w_strategy == WGT_ME)
+    Die("Can't use --wme weighting and --map construction together.");
 
   /*********************************************** 
    * Preliminaries: open our files for i/o
    ***********************************************/
 
-				/* Open the alignment */
+				/* Open the alignment file */
   if ((afp = MSAFileOpen(seqfile, format, NULL)) == NULL)
     Die("Alignment file %s could not be opened for reading", seqfile);
 
@@ -297,17 +330,19 @@ main(int argc, char **argv)
     Die("Failed to open HMM file %s for %s\n", hmmfile, 
 	do_append ? "appending" : "writing");
 
-				/* Open the count vector save file */
+				/* Open optional count vector save file */
   cfp = NULL;
   if (cfile != NULL)
     if ((cfp = fopen(cfile, "w")) == NULL)
       Die("Failed to open count vector file %s for writing\n", cfile);
 
-				/* Open the alignment resave file */
+				/* Open optional alignment resave file */
   alignfp = NULL;
   if (align_ofile != NULL)
     if ((alignfp = fopen(align_ofile, "w")) == NULL)
       Die("Failed to open alignment resave file %s for writing\n", align_ofile);
+
+
 
   /*********************************************** 
    * Show the banner
@@ -344,10 +379,26 @@ main(int argc, char **argv)
   printf("Prior used:                        %s\n",
 	 (prifile == NULL) ? "(default)" : prifile);
 
-  printf("Sequence weighting method:         ");
+  printf("Effective sequence # calculation:  ");
+  if      (eff_strategy == EFF_NOTSETYET) puts("(default)");
+  else if (eff_strategy == EFF_NONE)      puts("none; use actual seq #");
+  else if (eff_strategy == EFF_USERSET)   printf("set to %.2f\n", eff_nseq);
+  else if (eff_strategy == EFF_NCLUSTERS) {
+    puts("# single-linkage clusters");
+    printf("  by single-linkage clustering at: %.2f identity\n", eidlevel);
+  }
+  else if (eff_strategy == EFF_ENTROPY) {
+    puts("entropy targeting");
+    if (etarget_set)
+      printf("  mean target entropy loss:        %.2f bits\n", etarget);
+    else
+      printf("  mean target entropy loss:        (default)\n");
+  }
+
+  printf("Relative sequence weighting:       ");
   if      (w_strategy == WGT_NONE)   puts("none");
   else if (w_strategy == WGT_GSC)    puts("G/S/C tree weights");
-  else if (w_strategy == WGT_BLOSUM) printf("BLOSUM filter at %.2f id\n", blosumlevel);
+  else if (w_strategy == WGT_BLOSUM) printf("BLOSUM filter at %.2f id\n", widlevel);
   else if (w_strategy == WGT_PB)     puts("Henikoff position-based");
   else if (w_strategy == WGT_VORONOI)puts("Sibbald/Argos Voronoi");
   else if (w_strategy == WGT_ME)     puts("Maximum entropy");
@@ -383,19 +434,26 @@ main(int argc, char **argv)
       for (idx = 0; idx < msa->nseq; idx++)
 	s2upper(msa->aseq[idx]);
 
-      /* Set up the alphabet globals:
-       * either already set by --amino or --nucleic, or
-       * we guess based on the first alignment we see
-       */
-      if (Alphabet_type == hmmNOTSETYET) 
-	DetermineAlphabet(msa->aseq, msa->nseq);
-
-      /* Do some initialization the first time through.
-       * This code must be delayed until after we've seen the
-       * first alignment, because we have to see the alphabet type first
+      /* --- Post-alphabet initialization section ---
+       * (This code must be delayed until after we've seen the
+       * first alignment, because we have to see the alphabet type first.)
        */
       if (nali == 0) 
 	{
+	  /* Set up the alphabet globals:
+	   * either already set by --amino or --nucleic, or
+	   * we guess based on the first alignment we see
+	   */
+	  if (Alphabet_type == hmmNOTSETYET) 
+	    {
+	      printf("%-40s ... ", "Determining alphabet");
+	      fflush(stdout);
+	      DetermineAlphabet(msa->aseq, msa->nseq);
+	      if      (Alphabet_type == hmmNUCLEIC) puts("done. [DNA]");
+	      else if (Alphabet_type == hmmAMINO)   puts("done. [protein]");
+	      else                                  puts("done.");
+	    }
+
 				/* Set up Dirichlet priors */
 	  if (prifile == NULL)  pri = P7DefaultPrior();
 	  else                  pri = P7ReadPrior(prifile);
@@ -405,41 +463,87 @@ main(int argc, char **argv)
 				/* Set up the null/random seq model */
 	  if (rndfile == NULL)  P7DefaultNullModel(randomseq, &p1);
 	  else                  P7ReadNullModel(rndfile, randomseq, &p1);
-	}
+
+	  /* Effective sequence number calculation defaults to entropy
+           * targeting for protein, but we haven't tested DNA yet.
+           */		
+	  if (eff_strategy == EFF_NOTSETYET) {
+	    if      (Alphabet_type == hmmNUCLEIC)  eff_strategy = EFF_NONE;
+	    else if (Alphabet_type == hmmAMINO) {
+	      eff_strategy = EFF_ENTROPY;
+	      if (c_strategy == P7_MAP_CONSTRUCTION)
+		Die("\n\
+To use --map on a protein model, you need to use an effective\n\
+sequence number calculation other than the default entropy targeting;\n\
+see --effnone, --effset, or --effclust\n");
+	    }
+	  }
+	      
+	  /* If we're using the entropy-target strategy for effective
+	   * sequence number calculation, and we haven't manually set the
+	   * default target entropy loss, do it now. We have only tested default
+	   * entropy targets for fs and ls mode, the usual modes. We assume
+	   * that -s behaves like fs mode, and -g behaves like -s mode.  The
+	   * default numbers are in config.h; they come from LSJ's optimizations
+           * on the ASTRAL benchmark.
+	   */
+	  if (eff_strategy == EFF_ENTROPY && etarget_set == FALSE) {
+	    if (Alphabet_type == hmmAMINO) {
+	      if   (cfg_strategy == P7_FS_CONFIG || cfg_strategy == P7_SW_CONFIG)
+		etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
+	      else 
+		etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_LS_AMINO_DEFAULT;
+	    } else {
+	      Die("\
+--effent: entropy loss targeting:\n\
+Default entropy loss targets are only available for protein models.\n\
+To use --effent on DNA models (or other alphabets), you must set\n\
+--etarget <x> explicitly, in addition to selecting --effent.\n");
+	    }
+	  }
+	} /* -- this ends the post-alphabet initialization section -- */
+
 
       /* Prepare unaligned digitized sequences for internal use 
        */
       DigitizeAlignment(msa, &dsq);
   
-      /* In some respects we treat DNA more crudely for now;
-       * for example, we can't do eff seq #, because it's
-       * calibrated for protein.
-       */
-      if (Alphabet_type == hmmNUCLEIC) 
-	do_eff = FALSE;	
 
-      /* Determine "effective sequence number".
-       * The BlosumWeights() routine is now an efficient O(N)
-       * memory clustering algorithm that doesn't blow up on,
-       * say, Pfam's GP120 alignment (13000+ sequences)
+      /* Determine "effective sequence number", according to the selected
+       * strategy, if we can. (We can't do EFF_ENTROPY strategy until after
+       * we have a model architecture.) 
        */
-      eff_nseq = (float) msa->nseq;
-      if (do_eff)
+      if (eff_strategy == EFF_NONE) 
 	{
-	  float *wgt;
-	  printf("%-40s ... ", "Determining effective sequence number");
-	  fflush(stdout);
-				/* dummy weights array to feed BlosumWeights*/
-	  wgt = MallocOrDie(sizeof(float) * msa->nseq);
-	  BlosumWeights(msa->aseq, msa->nseq, msa->alen, blosumlevel, wgt);
-	  eff_nseq = FSum(wgt, msa->nseq);
-
-	  free(wgt);
-	  printf("done. [%.0f]\n", eff_nseq);
+	  eff_nseq = (float) msa->nseq;
+	  eff_nseq_set = TRUE;
 	}
+      else if (eff_strategy == EFF_USERSET)
+	{
+	  if (nali > 0) 
+	    Warn("[WARNING: same eff_nseq of %f is being applied to all models]\n",
+		 eff_nseq);
+	  eff_nseq_set = TRUE;
+	}
+      else if (eff_strategy == EFF_NCLUSTERS)
+	{
+	  float *wgt;		/* dummy weights array to feed BlosumWeights*/
+	  wgt = MallocOrDie(sizeof(float) * msa->nseq);
+	  printf("%-40s ... ", "Determining eff seq # by clustering");
+	  fflush(stdout);
+	  BlosumWeights(msa->aseq, msa->nseq, msa->alen, eidlevel, wgt);
+	  eff_nseq = FSum(wgt, msa->nseq);
+	  free(wgt);
+	  printf("done. [%.1f]\n", eff_nseq);
+	  eff_nseq_set = TRUE;
+	}
+      else
+	eff_nseq_set = FALSE;
 
 
-      /* Weight the sequences (optional),
+      /* Determine relative sequence weights 
+       * (maximum entropy code appears later; it's dependent on 
+       *  counts and architecture).
        */
       if (w_strategy == WGT_GSC     || 
 	  w_strategy == WGT_BLOSUM  || 
@@ -457,20 +561,29 @@ main(int argc, char **argv)
 	  else if (w_strategy == WGT_GSC) 
 	    GSCWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
 	  else if (w_strategy == WGT_BLOSUM)
-	    BlosumWeights(msa->aseq, msa->nseq, msa->alen, blosumlevel, msa->wgt);
+	    BlosumWeights(msa->aseq, msa->nseq, msa->alen, widlevel, msa->wgt);
 	  else if (w_strategy == WGT_PB)
 	    PositionBasedWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
 	  else if (w_strategy ==  WGT_VORONOI)
 	    VoronoiWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt); 
 
+	  wgt_set = TRUE;
 	  printf("done.\n");
 	}
+      else if (w_strategy == WGT_NONE)
+	wgt_set = TRUE;
+      else
+	wgt_set = FALSE;
 
-      /* Set the effective sequence number (if do_eff is FALSE, eff_nseq 
-       * was set to nseq).
+
+      /* Rescale weights to sum to eff_nseq -- if we have it.
+       * Else, they stay where they are, w/ sum of nseq.
        */
-      FNorm(msa->wgt,  msa->nseq);
-      FScale(msa->wgt, msa->nseq, eff_nseq);
+      if (eff_nseq_set) {
+	FNorm(msa->wgt,  msa->nseq);
+	FScale(msa->wgt, msa->nseq, eff_nseq);
+      }
+
 
       /* Build a model architecture.
        * If we're not doing MD or ME, that's all we need to do.
@@ -479,6 +592,14 @@ main(int argc, char **argv)
        * Because the architecture algorithms are allowed to change
        * gap characters in the alignment, we have to calculate the
        * alignment checksum before we enter the algorithms.
+       * 
+       * MAP construction is deprecated. To be correct, it needs
+       * effective sequence number to be set *before* construction.
+       * But entropy loss targeting (the default eff_nseq calculation)
+       * depends on the architecture, so we have a chicken and egg.
+       * LSJ ASTRAL benchmarks show strong benefit of entropy targeting,
+       * and a slight disadvantage of MAP compared to the simple heuristic
+       * --fast: so, we throw --map to the fires.
        */
       printf("%-40s ... ", "Constructing model architecture");
       fflush(stdout);
@@ -487,12 +608,31 @@ main(int argc, char **argv)
 	P7Fastmodelmaker(msa, dsq, gapmax, &hmm, &tr);
       else if (c_strategy == P7_HAND_CONSTRUCTION)
 	P7Handmodelmaker(msa, dsq, &hmm, &tr);
-      else
+      else if (c_strategy == P7_MAP_CONSTRUCTION) {
+	if (! eff_nseq_set) Die("can't do --map without knowing eff seq #");
+	if (! wgt_set)      Die("can't do --map without knowing weights");
 	P7Maxmodelmaker(msa, dsq, gapmax, 
 			pri, randomseq, p1, archpri, &hmm, &tr);
+      } else Die("no such construction strategy");
       hmm->checksum = checksum;
       printf("done.\n");
 
+
+      /* Effective sequence number calculation: post-architecture strategies.
+       * (if we don't have eff_nseq yet, calculate it now).
+       */
+      if (! eff_nseq_set) {
+	if (eff_strategy == EFF_ENTROPY) {
+	  printf("%-40s ... ", "Determining eff seq # by entropy target");
+	  fflush(stdout);
+	  eff_nseq = Eweight(hmm, pri, (float) msa->nseq, etarget);
+	} else Die("no effective seq #: shouldn't happen");
+
+	Plan7Rescale(hmm, eff_nseq / (float) msa->nseq);
+	eff_nseq_set = TRUE;
+	printf("done. [%.1f]\n", eff_nseq);
+      }	
+	
       /* Save the count vectors if asked. Used primarily for
        * making the data files for training priors.
        */
@@ -525,14 +665,22 @@ main(int argc, char **argv)
        */
       Plan7SWConfig(hmm, 0.5, 0.5);
 
-      /* Do model-dependent "weighting" strategies.
+
+      /* Relative weighting:  architecture-dependent strategies.
+       * (if we don't have relative weights yet, calculate them now)
+       * Depends on having a model configuration: must follow Plan7SWConfig()
+       * call above.
        */
-      if (w_strategy == WGT_ME)
-	{
+      if (! wgt_set) {
+	if (w_strategy == WGT_ME) {
 	  printf("\n%-40s ...\n", "Maximum entropy weighting, iterative");
 	  maximum_entropy(hmm, dsq, msa, eff_nseq, pri, tr);
 	  printf("----------------------------------------------\n\n");
-	}
+	  /* note: ME code actually rescales counts itself. */
+	} else Die("no relative weighting strategy: shouldn't happen");
+	wgt_set = TRUE;
+      }
+
 
       /* Give the model a name.
        * We deal with this differently depending on whether
@@ -989,7 +1137,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
   Plan7SWConfig(hmm, 0.5, 0.5);
   P7Logoddsify(hmm, TRUE);
 
-  FSet(wgt, msa->nseq, 1.0);
+  FSet(wgt, msa->nseq, eff_nseq / (float) msa->nseq);
   position_average_score(hmm, dsq, wgt, msa->nseq, tr, pernode,&expscore);
   for (idx = 0; idx < msa->nseq; idx++) 
     sc[idx] = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
@@ -1041,7 +1189,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
               if (new_wgt[idx] < 0.) new_wgt[idx] = 0.0;
             }
           FNorm(new_wgt, msa->nseq);
-          FScale(new_wgt, msa->nseq, (float) msa->nseq);
+          FScale(new_wgt, msa->nseq, eff_nseq);
 
                                 /* Make new HMM using these weights */
           ZeroPlan7(hmm);

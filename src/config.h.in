@@ -17,8 +17,9 @@
 #define CONFIGH_INCLUDED
 
 /*****************************************************************
- * This first section can be edited and configured manually
- * before compilation.
+ * 1. This first section consists of compile-time constants that control 
+ *    HMMER's computational behavior (memory and processor use).
+ *    It can be edited and configured manually before compilation.
  *****************************************************************/
 
 /* RAMLIMIT determines the point at which we switch from fast,
@@ -48,12 +49,33 @@
 /* #define HMMER_NCPU 4 */ 
 
 
+#define ALILENGTH   50		/* length of displayed alignment lines        */
+
+
 /*****************************************************************
- * The following section probably shouldn't be edited, unless
- * you really know what you're doing. It controls some fundamental
- * parameters in HMMER that occasionally get reconfigured in
- * experimental versions, or for variants of HMMER that work on
- * non-biological alphabets.
+ * 2. The next section consists of compile-time constants that control 
+ *    empirically tuned HMMER default parameters.
+ *    You can edit it, but you ought not to, unless you're trying to
+ *    improve on our empirical data.
+ *****************************************************************/
+
+/* ENTROPYLOSS_ defaults:
+ * For proteins, hmmbuild's effective sequence number calculation
+ * aims to achieve a certain entropy loss relative to background null model.
+ * (= average score, per match emission).
+ * These are empirically tuned constants, from the work of Steve Johnson.
+ */
+#define ENTROPYLOSS_LS_AMINO_DEFAULT  1.30 /* bits */
+#define ENTROPYLOSS_FS_AMINO_DEFAULT  0.59 /* bits */
+
+
+
+/*****************************************************************
+ * 3. The next section probably shouldn't be edited at all, unless
+ *    you really know what you're doing. It controls some fundamental
+ *    parameters in HMMER that occasionally get reconfigured in
+ *    experimental versions, or for variants of HMMER that work on
+ *    non-biological alphabets.
  *****************************************************************/
 
 #define INTSCALE    1000.0      /* scaling constant for floats to integer scores   */
@@ -64,12 +86,12 @@
 #define INFTY       987654321   /* infinity for purposes of integer DP cells       */
 #define NXRAY       4           /* number of structural inputs                */
 #define LOGSUM_TBL  20000       /* controls precision of ILogsum()            */
-#define ALILENGTH   50		/* length of displayed alignment lines        */
 
 
 /*****************************************************************
- * The following section is configured automatically 
- * by the ./configure script. DO NOT EDIT.
+ * 4. The final section isn't human editable at all.
+ *    It is configured automatically by the ./configure script. 
+ *    DO NOT EDIT BELOW THIS LINE.
  *****************************************************************/
 
 /* Version info - set once for whole package in configure.ac
@@ -80,10 +102,6 @@
 #undef PACKAGE_COPYRIGHT
 #undef PACKAGE_LICENSE
 
-/*****************************************************************
- * The following section is configured automatically by options 
- * enabled in the ./configure script. DO NOT EDIT.
- *****************************************************************/
 /* --enable-altivec      Altivec vectorizations for PowerPCs
  */
 #undef ALTIVEC

@@ -173,9 +173,6 @@ extern float LogSum(float p1, float p2);
 extern int   ILogsum(int p1, int p2);
 extern void  LogNorm(float *vec, int n);
 extern float Logp_cvec(float *cvec, int n, float *alpha);
-extern void  SampleDirichlet(float *alpha, int n, float *p);
-extern float SampleGamma(float alpha);
-extern void  SampleCountvector(float *p, int n, int c, float *cvec);
 extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
 
 /* from misc.c
@@ -215,6 +212,7 @@ extern void Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv);
 extern void Plan7SetCtime(struct plan7_s *hmm);
 extern void Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1);
 extern void P7Logoddsify(struct plan7_s *hmm, int viterbi_mode);
+extern void Plan7Rescale(struct plan7_s *hmm, float scale);
 extern void Plan7Renormalize(struct plan7_s *hmm);
 extern void Plan7RenormalizeExits(struct plan7_s *hmm);
 extern void Plan7NakedConfig(struct plan7_s *hmm);

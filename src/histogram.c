@@ -33,6 +33,7 @@
 #include <math.h>
 
 #include "squid.h"
+#include "dirichlet.h"		/* IncompleteGamma() is in dirichlet module */
 #include "structs.h"
 #include "funcs.h"
 

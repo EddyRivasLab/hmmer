@@ -507,6 +507,52 @@ P7Logoddsify(struct plan7_s *hmm, int viterbi_mode)
 
 
 
+/* Function:  Plan7Rescale()
+ * Incept:    Steve Johnson, 3 May 2004
+ *            eweights code incorp: SRE, Thu May 20 10:34:03 2004 [St. Louis]
+ *
+ * Purpose:   Scale a counts-based HMM by some factor, for
+ *            adjusting counts to a new effective sequence number.
+ *
+ * Args:      hmm        - counts based HMM.
+ *            scale      - scaling factor (e.g. eff_nseq/nseq); 1.0= no scaling.
+ *
+ * Returns:   (void)
+ */
+void 
+Plan7Rescale(struct plan7_s *hmm, float scale)
+{
+  int k;
+  int st;
+
+  /* emissions and transitions in the main model.
+   * Note that match states are 1..M, insert states are 1..M-1,
+   * and only nodes 1..M-1 have a valid array of transitions.
+   */
+  for(k = 1; k <= hmm->M; k++) 
+    FScale(hmm->mat[k], Alphabet_size, scale);
+  for(k = 1; k <  hmm->M; k++) 
+    FScale(hmm->mat[k], Alphabet_size, scale);
+  for(k = 1; k <  hmm->M; k++) 
+    FScale(hmm->t[k],   7,             scale);
+
+  /* begin, end transitions; only valid [1..M] */
+  FScale(hmm->begin+1, hmm->M, scale);
+  FScale(hmm->end+1,   hmm->M, scale);
+  
+  /* B->D1 transition */
+  hmm->tbd1 *= scale;
+
+  /* special transitions */
+  for (st = 0; st < 4; st++)
+    FScale(hmm->xt[st], 2, scale);
+
+  return;
+}
+
+
+
+
 /* Function: Plan7Renormalize()
  * 
  * Purpose:  Take an HMM in counts form, and renormalize

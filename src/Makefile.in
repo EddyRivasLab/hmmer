@@ -60,6 +60,7 @@ OBJS =  alphabet.o\
 	fast_algorithms.o\
 	histogram.o\
 	hmmio.o\
+	lsj_eweight.o\
 	mathsupport.o\
         masks.o\
 	misc.o\
@@ -76,6 +77,7 @@ OBJS =  alphabet.o\
 HDRS =  config.h\
 	funcs.h\
 	globals.h\
+	lsjfuncs.h\
 	postprob.h\
 	structs.h
 
