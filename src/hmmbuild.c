@@ -104,7 +104,7 @@ static struct opt_s OPTIONS[] = {
   { "--swexit",  FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
-  { "--wblosum", FALSE, sqdARG_FLOAT },
+  { "--wblosum", FALSE, sqdARG_NONE },
   { "--weff",    FALSE, sqdARG_NONE },
   { "--wvoronoi",FALSE, sqdARG_NONE },
 };
@@ -197,7 +197,7 @@ main(int argc, char **argv)
   cfile             = NULL;
   archpri           = 0.85;
   pamwgt            = 20.;
-  Alphabet_type     = 0;	/* initially unknown */
+  Alphabet_type     = hmmNOTSETYET;	/* initially unknown */
   name              = NULL;
   do_append         = FALSE; 
   do_binary         = FALSE;
@@ -446,7 +446,7 @@ main(int argc, char **argv)
   fflush(stdout);
   if (name == NULL) name = FileTail(seqfile, TRUE);
   Plan7SetName(hmm, name);
-  Plan7SetComline(hmm, argc, argv);
+  Plan7ComlogAppend(hmm, argc, argv);
   Plan7SetCtime(hmm);
   hmm->nseq = ainfo.nseq;
   printf("done. [%s]\n", name); 
@@ -909,7 +909,6 @@ maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
   position_average_score(hmm, dsq, wgt, nseq, tr, pernode, &expscore);
   for (idx = 0; idx < nseq; idx++) 
     sc[idx] = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
-
   relative_entropy = FSum(sc, nseq) / (float) nseq;
   for (idx = 0; idx < nseq; idx++)
     grad[idx] = relative_entropy - sc[idx];
@@ -976,11 +975,16 @@ maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
 	  new_entropy = FDot(sc, new_wgt, nseq) / nseq;
 
           use_epsilon /= 2.0;
+	  /* Failsafe: we're not converging. Set epsilon to zero,
+	   * do one more round.
+	   */
+	  if (use_epsilon < 1e-6) use_epsilon = 0.0; 
+	  if (use_epsilon == 0.0) break;
           
-                /* Failsafe: avoid infinite loops. Sometimes the
-                   new entropy converges without ever being better 
-                   than the previous point, probably as a result
-                   of minor roundoff error. */
+          /* Failsafe: avoid infinite loops. Sometimes the
+             new entropy converges without ever being better 
+             than the previous point, probably as a result
+             of minor roundoff error. */
           if (last_new_entropy == new_entropy) break;
         }
       if (i2 == max_iter) printf("   -- exceeded maximum iterations; giving up --\n");
@@ -1024,9 +1028,14 @@ maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
   /* Renormalize weights to sum to eff_nseq, and save.
    */
   FNorm(wgt, nseq);
-  FScale(wgt, nseq, eff_nseq);
+  FScale(wgt, nseq, (float) eff_nseq);
   FCopy(ainfo->wgt, wgt, nseq);
-
+			/* Make final HMM using these adjusted weights */
+  ZeroPlan7(hmm);
+  for (idx = 0; idx < nseq; idx++)
+    P7TraceCount(hmm, dsq[idx], wgt[idx], tr[idx]);
+  P7PriorifyHMM(hmm, prior);
+                                
   /* Cleanup and return
    */
   free(pernode);
