@@ -406,10 +406,12 @@ main(int argc, char **argv)
    ***********************************************/
 
   StopwatchStop(&stopwatch);
+#ifdef HMMER_PVM
   if (do_pvm > 0) {
     printf("PVM processors used: %d\n", pvm_nslaves);
     StopwatchInclude(&stopwatch, &extrawatch);
   }
+#endif
 #ifdef PTHREAD_TIMES_HACK
   else if (num_threads > 0) StopwatchInclude(&stopwatch, &extrawatch);
 #endif

@@ -41,12 +41,19 @@ Checklist for a HMMER distribution.
    yes, you have to autoconf and make a new configure script; you
    just updated the info in configure.ac, remember?
 	% make distclean
-	% autoconf; (cd squid; autoconf)
-	% ./configure
+	% autoconf; (cd squid; autoconf); ./configure
 	% make dist
 	
 
-7. 
+7. Create the binary distributions, on w001, the compile farm master node.
+   ssh -x w001.
+   Make a directory somewhere, go there.
+         ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/nodebuild .
+         ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/rootbuild .
+         ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/buildall .
+         ln -s /nfs/wol2/people/eddy/src/hmmer/hmmer-2.3.tar.gz .
+         ./buildall hmmer-2.3 >& build.log &
+         tail -f build.log
 
 whelk01 
   env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-lfs

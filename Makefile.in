@@ -82,7 +82,7 @@ SQUIDPROGS = afetch\
 # all: Compile everything.
 #
 all: 
-	@ if ! test -d src && test -d binaries; then\
+	@ if test ! -d src && test -d binaries; then\
 	  echo "This appears to be a binary distribution; nothing needs to be compiled." ; \
           echo "Use make install to install the precompiled binaries." ; \
 	else\
