@@ -940,7 +940,8 @@ DegenerateSymbolScore(float *p, float *null, int ambig)
 
 /* Function: Plan9toPlan7()
  * 
- * Purpose:  Convert an old HMM into Plan7.
+ * Purpose:  Convert an old HMM into Plan7. Configures it in
+ *           ls mode.
  *           
  * Args:     hmm       - old ugly plan9 style HMM
  *           ret_plan7 - new wonderful Plan7 HMM
@@ -949,7 +950,7 @@ DegenerateSymbolScore(float *p, float *null, int ambig)
  *           Plan7 HMM is allocated here. Free w/ FreePlan7().
  */               
 void
-Plan9toPlan7(struct hmm_struc *hmm, struct plan7_s **ret_plan7)
+Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7)
 {
   struct plan7_s *plan7;
   int k, x;
@@ -968,16 +969,17 @@ Plan9toPlan7(struct hmm_struc *hmm, struct plan7_s **ret_plan7)
     }
 
   for (k = 1; k <= hmm->M; k++)
-    {
-      for (x = 0; x < Alphabet_size; x++)
-	{
-	  plan7->mat[k][x] = hmm->mat[k].p[x];
-	  plan7->ins[k][x] = hmm->ins[k].p[x];
-	}
-    }
+    for (x = 0; x < Alphabet_size; x++)
+      plan7->mat[k][x] = hmm->mat[k].p[x];
 
-  plan7->tbd1 = hmm->mat[0].t[DELETE];
+  for (k = 1; k < hmm->M; k++)
+    for (x = 0; x < Alphabet_size; x++)
+      plan7->ins[k][x] = hmm->ins[k].p[x];
+
+  plan7->tbd1 = hmm->mat[0].t[DELETE] / (hmm->mat[0].t[DELETE] + hmm->mat[0].t[MATCH]);
   
+		/* We have to make up the null transition p1; use default */
+  P7DefaultNullModel(plan7->null, &(plan7->p1));
   for (x = 0; x < Alphabet_size; x++)
     plan7->null[x] = hmm->null[x];
       
@@ -992,113 +994,11 @@ Plan9toPlan7(struct hmm_struc *hmm, struct plan7_s **ret_plan7)
     plan7->flags |= PLAN7_CS;
   }
 
-  Plan7GlobalConfig(plan7);	/* configure specials for global alignment */
+  Plan7LSConfig(plan7);		/* configure specials for ls-style alignment */
   Plan7Renormalize(plan7);	/* mainly to correct for missing ID and DI */
-  
-  plan7->flags |= PLAN7_HASPROB;
+  plan7->flags |= PLAN7_HASPROB;	/* probabilities are valid */
+  plan7->flags &= ~PLAN7_HASBITS;	/* scores are not valid    */
   *ret_plan7 = plan7;
 }
 
-
-/* Function: Plan7toPlan9Search()
- * 
- * Purpose:  Convert a Plan7 model to old integer log odds
- *           search format (struct shmm_s).
- *
- *           The Plan7 model must not be configured for any
- *           algorithm -- terminal deletes not folded.
- *
- * Args:     plan7    - Plan7 HMM, with either HASBITS or HASPROB valid.
- *           ret_shmm - RETURN: search form Plan9 HMM.
- *
- * Return:   (void)
- *           ret_shmm is alloc'ed here. 
- */
-void
-Plan7toPlan9Search(struct plan7_s *hmm, struct shmm_s **ret_shmm)
-{
-  struct shmm_s *shmm;
-  int k;			/* counter for model position */
-  int x;			/* counter for symbols */
-
-  /* Make sure we have the log-odds scores in the Plan7 HMM 
-   */ 
-  if (! hmm->flags & PLAN7_HASBITS) {
-    if (! hmm->flags & PLAN7_HASPROB)
-      Die("yo, that plan7 HMM is empty");
-    else
-      P7Logoddsify(hmm, TRUE);
-				/* note: should unfold terminal deletes */
-  }
-      
-				/* allocate for the search model */
-  shmm = AllocSearchHMM(hmm->M);
-				/* match emission scores */
-  for (k = 1; k <= hmm->M; k++)
-    for (x = 0; x < Alphabet_iupac; x++)
-      shmm->m_emit[Alphabet[x]-'A'][k] = hmm->msc[x][k];
-
-				/* insert emission scores */
-  for (k = 0; k <= hmm->M; k++)
-    {
-      if (k == 0 || k == hmm->M) /* Plan7 has no I_0 or I_M */
-	for (x = 0; x < Alphabet_iupac; x++)
-	  shmm->i_emit[Alphabet[x]-'A'][k] = 0; 
-      else
-	for (x = 0; x < Alphabet_size; x++)
-	  shmm->i_emit[Alphabet[x]-'A'][k] = hmm->isc[x][k];
-    }
-
-				/* state transition scores */
-  for (k = 0; k <= hmm->M; k++)
-    {
-      if (k == 0) {
-	shmm->t[k*9 * Tdd] = -INFTY;    /* D_0 doesn't exist   */
-	shmm->t[k*9 * Tdi] = -INFTY;    /* D_0 doesn't exist   */ 
-	shmm->t[k*9 * Tdm] = -INFTY;    /* D_0 doesn't exist   */
-	shmm->t[k*9 * Tid] = -INFTY;    /* disallow it         */
-	shmm->t[k*9 * Tii] = hmm->xsc[XTN][LOOP];  /* almost OK */
-	shmm->t[k*9 * Tim] = hmm->xsc[XTN][MOVE];  /* no Plan7 equivalent */
-	shmm->t[k*9 * Tmd] = Prob2Score(hmm->tbd1, 1.0); 
-	shmm->t[k*9 * Tmi] = hmm->xsc[XTN][LOOP]; /* almost OK */
-	shmm->t[k*9 * Tmm] = Prob2Score(1.-hmm->tbd1, 1.0);
-      } else if (k == hmm->M) { 
-	shmm->t[k*9 * Tdd] = -INFTY;
-	shmm->t[k*9 * Tdi] = hmm->xsc[XTC][LOOP];
-	shmm->t[k*9 * Tdm] = 0;	/* by definition */
-	shmm->t[k*9 * Tid] = -INFTY;
-	shmm->t[k*9 * Tii] = hmm->xsc[XTC][LOOP];
-	shmm->t[k*9 * Tim] = hmm->xsc[XTC][MOVE];
-	shmm->t[k*9 * Tmd] = -INFTY;
-	shmm->t[k*9 * Tmi] = hmm->xsc[XTC][LOOP];
-	shmm->t[k*9 * Tmm] = 0;	/* by definition */
-      } else {
-	shmm->t[k*9 * Tdd] = hmm->tsc[k][TDD];
-	shmm->t[k*9 * Tdi] = -INFTY;
-	shmm->t[k*9 * Tdm] = hmm->tsc[k][TDM];
-	shmm->t[k*9 * Tid] = -INFTY;
-	shmm->t[k*9 * Tii] = hmm->tsc[k][TII];
-	shmm->t[k*9 * Tim] = hmm->tsc[k][TIM];
-	shmm->t[k*9 * Tmd] = hmm->tsc[k][TMD];
-	shmm->t[k*9 * Tmi] = hmm->tsc[k][TMI];
-	shmm->t[k*9 * Tmm] = hmm->tsc[k][TMM];
-      }
-    }
-
-  /* flags and optional annotation
-   */
-  shmm->flags = 0;
-  if (hmm->flags & PLAN7_RF) {
-    strcpy(shmm->ref, hmm->rf);
-    shmm->flags |= HMM_REF;
-  }
-  if (hmm->flags & PLAN7_CS) {
-    strcpy(shmm->cs,  hmm->cs);
-    shmm->flags |= HMM_CS;
-  }
-  free(shmm->name);
-  shmm->name = Strdup(hmm->name);
-  *ret_shmm = shmm;
-  return;
-}
 
