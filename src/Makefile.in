@@ -11,9 +11,9 @@ CC     = @CC@
 CFLAGS = @CFLAGS@
 
 ## other defined flags. 
-#  @DEFS@ contains stuff that autoconf 
-#  decides on. @MDEFS@ contains stuff that we added to
-#  the configure script tests. @LIBS@ contains system
+#  DEFS contains stuff that autoconf 
+#  decides on. MDEFS contains stuff that we added to
+#  the configure script tests. LIBS contains system
 #  libraries that the configure script decides we need.
 #
 MDEFS = @MDEFS@ @DEFS@
@@ -26,6 +26,12 @@ LIBS  = @LIBS@
 #
 AR     = ar rcv 
 RANLIB = @RANLIB@
+
+# Configuration for optional pthreads multiprocessor support
+#
+PTHREAD_LIBS   = @PTHREAD_LIBS@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+
 
 # Configuration for optional PVM functionality
 #
@@ -79,7 +85,7 @@ HDRS =  config.h\
 	structs.h
 
 .c.o:
-	$(CC) $(CFLAGS) $(MDEFS) $(PTHREADFLAG) $(PVMFLAG) $(MYINCDIR) $(PVMINCDIR) -c $<
+	$(CC) $(CFLAGS) $(MDEFS) $(PTHREAD_CFLAGS) $(PVMFLAG) $(MYINCDIR) $(PVMINCDIR) -c $<
 
 #################################################################
 ## Targets defining how to make HMMER executables.
@@ -87,7 +93,7 @@ HDRS =  config.h\
 all: 	$(PROGS) 
 
 $(PROGS): @EXEC_DEPENDENCY@ $(OBJS) 
-	$(CC) $(CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(LIBS)
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(PTHREAD_LIBS) $(MYLIBS) $(LIBS)
 
 
 #################################################################
