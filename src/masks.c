@@ -353,3 +353,10 @@ NewTraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
    return (P7TraceScore(hmm, dsq, tr) - totscore);
 }
 #endif /*0*/
+
+
+float
+SantaCruzCorrection(struct plan7_s *hmm, struct p7trace_s *tr, char *dsq)
+{
+
+}
