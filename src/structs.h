@@ -281,6 +281,25 @@ struct dpmatrix_s {
   int **mmx;			/* match scores [0.1..N][0.1..M]      */
   int **imx;			/* insert scores [0.1..N][0.1..M-1.M] */
   int **dmx;			/* delete scores [0.1..N][0.1..M-1.M] */
+
+  /* Hidden ptrs where the real memory is kept; this trick was
+   * introduced by Eric Lindahl with the Altivec port; it's used to
+   * align xmx, etc. on 16-byte boundaries for cache optimization.
+   */
+  void *xmx_mem, *mmx_mem, *imx_mem, *dmx_mem;
+
+  /* The other trick brought in w/ the Lindahl Altivec port; dp matrix
+   * is retained and grown, rather than reallocated for every HMM or sequence.
+   * Keep track of current allocated-for size in rows (sequence length N)
+   * and columns (HMM length M). Also keep track of pad sizes: how much
+   * we should overallocate rows or columns when we reallocate. If pad = 0,
+   * then we're not growable in this dimension.
+   */
+  int maxN;			/* alloc'ed for seq of length N; N+1 rows */
+  int maxM;			/* alloc'ed for HMM of length M; M+1 cols */
+
+  int padN;			/* extra pad in sequence length/rows */
+  int padM;			/* extra pad in HMM length/columns   */
 };
 
 /* Declaration of Plan7 shadow matrix structure.

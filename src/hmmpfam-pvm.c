@@ -32,6 +32,7 @@ main(void)
   char    *hmmfile;	        /* file to read HMM(s) from                */
   HMMFILE *hmmfp;               /* opened hmmfile for reading              */
   struct plan7_s *hmm;
+  struct dpmatrix_s *mx;        /* growable DP matrix                      */
   char    *seq;
   char    *dsq;
   int      len;
@@ -101,6 +102,10 @@ main(void)
     code = HMMPVM_NO_HMMFILE;
   else if (hmmfp->ssi == NULL)
     code = HMMPVM_NO_INDEX;
+
+  mx = CreatePlan7Matrix(1, 1, 0, 25);
+  dsq = DigitizeSequence(seq, len);
+  if (do_xnu) XNU(dsq, len);
   
   /* report our status.
    */
@@ -110,8 +115,8 @@ main(void)
   pvm_send(master_tid, HMMPVM_RESULTS);
   SQD_DPRINTF1(("I have told my master my initialization status and I await his command.\n"));
 
-  dsq = DigitizeSequence(seq, len);
-  if (do_xnu) XNU(dsq, len);
+
+
 
   /*****************************************************************
    * Main loop.
@@ -147,12 +152,12 @@ main(void)
       if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
 	{
 	  SQD_DPRINTF1(("P7Viterbi(): Estimated size %d Mb\n", P7ViterbiSize(len, hmm->M)));
-	  sc = P7Viterbi(dsq, len, hmm, &tr);
+	  sc = P7Viterbi(dsq, len, hmm, mx, &tr);
 	}
       else
 	{
 	  SQD_DPRINTF1(("P7SmallViterbi() called; %d Mb > %d\n", P7ViterbiSize(len, hmm->M), RAMLIMIT));
-	  sc = P7SmallViterbi(dsq, len, hmm, &tr);
+	  sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
 	}
 
       /* The Forward score override. 
@@ -189,6 +194,7 @@ main(void)
    ***********************************************/
 
   HMMFileClose(hmmfp);
+  FreePlan7Matrix(mx);
   free(seq);
   free(dsq);
   free(hmmfile);

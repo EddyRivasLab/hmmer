@@ -445,6 +445,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
 		 struct histogram_s **ret_hist, float *ret_max)
 {
   struct histogram_s *hist;
+  struct dpmatrix_s  *mx;
   float  randomseq[MAXABET];
   float  p1;
   float  max;
@@ -462,6 +463,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
   P7Logoddsify(hmm, TRUE);
   P7DefaultNullModel(randomseq, &p1);
   hist = AllocHistogram(-200, 200, 100);
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
   max = -FLT_MAX;
 
   for (idx = 0; idx < nsample; idx++)
@@ -474,9 +476,9 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
       dsq = DigitizeSequence(seq, sqlen);
 
       if (P7ViterbiSize(sqlen, hmm->M) <= RAMLIMIT)
-	score = P7Viterbi(dsq, sqlen, hmm, NULL);
+	score = P7Viterbi(dsq, sqlen, hmm, mx, NULL);
       else
-	score = P7SmallViterbi(dsq, sqlen, hmm, NULL);
+	score = P7SmallViterbi(dsq, sqlen, hmm, mx, NULL);
 
       AddToHistogram(hist, score);
       if (score > max) max = score;
@@ -485,6 +487,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
       free(seq);
     }
 
+  FreePlan7Matrix(mx);
   *ret_hist   = hist;
   *ret_max    = max;
   return;
@@ -693,6 +696,7 @@ void *
 worker_thread(void *ptr)
 {
   struct plan7_s    *hmm;
+  struct dpmatrix_s *mx;
   struct workpool_s *wpool;
   char       *seq;
   char       *dsq;
@@ -704,6 +708,7 @@ worker_thread(void *ptr)
   StopwatchStart(&thread_watch);
   wpool = (struct workpool_s *) ptr;
   hmm   = wpool->hmm;
+  mx    = CreatePlan7Matrix(1, hmm->M, 25, 0);
   for (;;)
     {
       /* 1. Synthesize a random sequence. 
@@ -735,9 +740,9 @@ worker_thread(void *ptr)
       dsq = DigitizeSequence(seq, len);
       
       if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
-	sc = P7Viterbi(dsq, len, hmm, NULL);
+	sc = P7Viterbi(dsq, len, hmm, mx, NULL);
       else
-	sc = P7SmallViterbi(dsq, len, hmm, NULL);
+	sc = P7SmallViterbi(dsq, len, hmm, mx, NULL);
       free(dsq); 
       free(seq);
       
@@ -765,6 +770,7 @@ worker_thread(void *ptr)
   if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
     Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
 
+  FreePlan7Matrix(mx);
   pthread_exit(NULL);
   return NULL; /* solely to silence compiler warnings */
 }

@@ -32,8 +32,11 @@ extern void  DefaultCodonBias(float *codebias);
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
  */
-extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, int ***xmx, 
-					   int ***mmx, int ***imx, int ***dmx);
+extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, int padN, int padM);
+extern void   ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
+				int ***xmx, int ***mmx, int ***imx, int ***dmx);
+struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, 
+				    int ***xmx, int ***mmx, int ***imx, int ***dmx);
 extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb, 
 					    char ***mtb, char ***itb, char ***dtb);
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
@@ -43,11 +46,11 @@ extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
 extern float P7Forward(char *dsq, int L, struct plan7_s *hmm, 
 			  struct dpmatrix_s **ret_mx);
-extern float P7Viterbi(char *dsq, int L, struct plan7_s *hmm, 
+extern float P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
 			  struct p7trace_s **ret_tr);
 extern void  P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int L,
 			   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
-extern float P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr);
+extern float P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern float P7ParsingViterbi(char *dsq, int L, struct plan7_s *hmm, 
 			      struct p7trace_s **ret_tr);
 extern float P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, 

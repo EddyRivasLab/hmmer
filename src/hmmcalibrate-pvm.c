@@ -46,6 +46,7 @@ main(void)
   int      master_tid;		/* PVM TID of our master */
   int      slaveidx;		/* my slave index (0..nslaves-1) */
   struct plan7_s *hmm;		/* HMM to calibrate, sent from master */
+  struct dpmatrix_s *mx;        /* growable DP matrix */
   char    *seq;			/* synthetic random sequence */
   char    *dsq;			/* digitized seq */
   int      len;			/* length of seq */
@@ -94,6 +95,7 @@ main(void)
 
   P7DefaultNullModel(randomseq, &p1);
   P7Logoddsify(hmm, TRUE);
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
 
   /* tell the master we're OK and ready to go (or not)
    */
@@ -136,9 +138,9 @@ main(void)
 	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, len, seq));
 
 	  if (P7ViterbiSize(len, hmm->M) <= RAMLIMIT)
-	    sc[idx] = P7Viterbi(dsq, len, hmm, NULL);
+	    sc[idx] = P7Viterbi(dsq, len, hmm, mx, NULL);
 	  else
-	    sc[idx] = P7SmallViterbi(dsq, len, hmm, NULL);
+	    sc[idx] = P7SmallViterbi(dsq, len, hmm, mx, NULL);
 	  
 	  free(seq);
 	  free(dsq);
@@ -166,6 +168,7 @@ main(void)
    ***********************************************/
   
   FreePlan7(hmm);
+  FreePlan7Matrix(mx);
   StopwatchStop(&stopwatch);
 
   /* tell the master we heard his shutdown signal, and

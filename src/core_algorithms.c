@@ -7,9 +7,9 @@
  * CVS $Id$
  * 
  * Simple and robust "research" implementations of Forward, Backward,
- * and Viterbi for Plan7.
+ * and Viterbi for Plan7. For optimized replacements for some of these functions,
+ * see fast_algorithms.c.
  */
-
 #include "structs.h"
 #include "config.h"
 #include "funcs.h"
@@ -24,39 +24,56 @@ static float get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 			   int *ret_k2, char *ret_t2, int *ret_s2);
 
 
-/* Function: AllocPlan7Matrix()
+#ifndef ALTIVEC
+/* Function: CreatePlan7Matrix()
  * 
- * Purpose:  Allocate a dynamic programming matrix for standard Forward,
+ * Purpose:  Create a dynamic programming matrix for standard Forward,
  *           Backward, or Viterbi, with scores kept as scaled log-odds
  *           integers. Keeps 2D arrays compact in RAM in an attempt 
- *           to maximize cache hits. Sets up individual ptrs to the
- *           four matrix components as a convenience.
+ *           to maximize cache hits. 
  *           
- * Args:     rows  - number of rows to allocate; typically L+1
- *           M     - size of model
- *           xmx, mmx, imx, dmx 
- *                 - RETURN: ptrs to four mx components as a convenience
+ *           The mx structure can be dynamically grown, if a new
+ *           HMM or seq exceeds the currently allocated size. Dynamic
+ *           growing is more efficient than an alloc/free of a whole
+ *           matrix for every new target. The ResizePlan7Matrix()
+ *           call does this reallocation, if needed. Here, in the
+ *           creation step, we set up some pads - to inform the resizing
+ *           call how much to overallocate when it realloc's. If a pad
+ *           is zero, we will not resize in that dimension.
+ *           
+ * Args:     N     - N+1 rows are allocated, for sequence.  
+ *           M     - size of model in nodes
+ *           padN  - over-realloc in seq/row dimension, or 0
+ *           padM  - over-realloc in HMM/column dimension, or 0
  *                 
  * Return:   mx
- *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
+ *           mx is allocated here. Caller frees with FreePlan7Matrix(mx).
  */
-
 struct dpmatrix_s *
-AllocPlan7Matrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
+CreatePlan7Matrix(int N, int M, int padN, int padM)
 {
   struct dpmatrix_s *mx;
   int i;
 
-  mx         = (struct dpmatrix_s *) MallocOrDie (sizeof(struct dpmatrix_s));
-  mx->xmx    = (int **) MallocOrDie (sizeof(int *) * rows);
-  mx->mmx    = (int **) MallocOrDie (sizeof(int *) * rows);
-  mx->imx    = (int **) MallocOrDie (sizeof(int *) * rows);
-  mx->dmx    = (int **) MallocOrDie (sizeof(int *) * rows);
-  mx->xmx[0] = (int *)  MallocOrDie (sizeof(int) * (rows*5));
-  mx->mmx[0] = (int *)  MallocOrDie (sizeof(int) * (rows*(M+2)));
-  mx->imx[0] = (int *)  MallocOrDie (sizeof(int) * (rows*(M+2)));
-  mx->dmx[0] = (int *)  MallocOrDie (sizeof(int) * (rows*(M+2)));
-  for (i = 1; i < rows; i++)
+  mx          = (struct dpmatrix_s *) MallocOrDie (sizeof(struct dpmatrix_s));
+  mx->xmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->mmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->imx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->dmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->xmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
+  mx->mmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  mx->imx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  mx->dmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+
+  /* The indirect assignment below looks wasteful; it's actually
+   * used for aligning data on 16-byte boundaries as a cache 
+   * optimization in the fast altivec implementation
+   */
+  mx->xmx[0] = (int *) mx->xmx_mem;
+  mx->mmx[0] = (int *) mx->mmx_mem;
+  mx->imx[0] = (int *) mx->imx_mem;
+  mx->dmx[0] = (int *) mx->dmx_mem;
+  for (i = 1; i <= N; i++)
     {
       mx->xmx[i] = mx->xmx[0] + (i*5); 
       mx->mmx[i] = mx->mmx[0] + (i*(M+2));
@@ -64,26 +81,130 @@ AllocPlan7Matrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx
       mx->dmx[i] = mx->dmx[0] + (i*(M+2));
     }
 
+  if (padM > 0 && padN > 0)  Die("there's trouble with RAMLIMIT if you grow in both M and N.");
+  mx->maxN = N;
+  mx->maxM = M;
+  mx->padN = padN;
+  mx->padM = padM;
+  
+  return mx;
+}
+#endif /*ALTIVEC*/
+
+#ifndef ALTIVEC
+/* Function: ResizePlan7Matrix()
+ * 
+ * Purpose:  Reallocate a dynamic programming matrix, if necessary,
+ *           for a problem of NxM: sequence length N, model size M.
+ *           (N=1 for small memory score-only variants; we allocate
+ *           N+1 rows in the DP matrix.) 
+ *           
+ *           Returns individual ptrs to the four matrix components
+ *           as a convenience.
+ *           
+ * Args:     mx    - an already allocated model to grow.
+ *           N     - seq length to allocate for; N+1 rows
+ *           M     - size of model
+ *           xmx, mmx, imx, dmx 
+ *                 - RETURN: ptrs to four mx components as a convenience
+ *                   
+ * Return:   (void)
+ *           mx is (re)allocated here.
+ */
+void
+ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
+		  int ***xmx, int ***mmx, int ***imx, int ***dmx)
+{
+  int i;
+
+  if (N <= mx->maxN && M <= mx->maxM) goto DONE;
+  
+  if (N > mx->maxN) {
+    N          += mx->padN; 
+    mx->maxN    = N; 
+    mx->xmx     = (int **) ReallocOrDie (mx->xmx, sizeof(int *) * (N+1));
+    mx->mmx     = (int **) ReallocOrDie (mx->mmx, sizeof(int *) * (N+1));
+    mx->imx     = (int **) ReallocOrDie (mx->imx, sizeof(int *) * (N+1));
+    mx->dmx     = (int **) ReallocOrDie (mx->dmx, sizeof(int *) * (N+1));
+  }
+
+  if (M > mx->maxM) {
+    M += mx->padM; 
+    mx->maxM = M; 
+  }
+
+  mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((N+1)*5));
+  mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((N+1)*(M+2)));
+  mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((N+1)*(M+2)));
+  mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((N+1)*(M+2)));
+
+  mx->xmx[0] = (int *) mx->xmx_mem;
+  mx->mmx[0] = (int *) mx->mmx_mem;
+  mx->imx[0] = (int *) mx->imx_mem;
+  mx->dmx[0] = (int *) mx->dmx_mem;
+
+  for (i = 1; i <= N; i++)
+    {
+      mx->xmx[i] = mx->xmx[0] + (i*5); 
+      mx->mmx[i] = mx->mmx[0] + (i*(M+2));
+      mx->imx[i] = mx->imx[0] + (i*(M+2));
+      mx->dmx[i] = mx->dmx[0] + (i*(M+2));
+    }
+
+ DONE:
   if (xmx != NULL) *xmx = mx->xmx;
   if (mmx != NULL) *mmx = mx->mmx;
   if (imx != NULL) *imx = mx->imx;
   if (dmx != NULL) *dmx = mx->dmx;
-  return mx;
 }
+#endif /*ALTIVEC*/
+
+/* Function: AllocPlan7Matrix()
+ * Date:     SRE, Tue Nov 19 07:14:47 2002 [St. Louis]
+ *
+ * Purpose:  Used to be the main allocator for dp matrices; we used to
+ *           allocate, calculate, free. But this spent a lot of time
+ *           in malloc(). Replaced with Create..() and Resize..() to
+ *           allow matrix reuse in P7Viterbi(), the main alignment 
+ *           engine. But matrices are alloc'ed by other alignment engines
+ *           too, ones that are less frequently called and less 
+ *           important to optimization of cpu performance. Instead of
+ *           tracking changes through them, for now, provide
+ *           an Alloc...() call with the same API that's just a wrapper.
+ *
+ * Args:     rows  - generally L+1, or 2; # of DP rows in seq dimension to alloc
+ *           M     - size of model, in nodes
+ *           xmx, mmx, imx, dmx 
+ *                 - RETURN: ptrs to four mx components as a convenience
+ *
+ * Returns:  mx
+ *           Caller free's w/ FreePlan7Matrix()
+ */
+struct dpmatrix_s *
+AllocPlan7Matrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
+{
+  struct dpmatrix_s *mx;
+  mx = CreatePlan7Matrix(rows-1, M, 0, 0);
+  if (xmx != NULL) *xmx = mx->xmx;
+  if (mmx != NULL) *mmx = mx->mmx;
+  if (imx != NULL) *imx = mx->imx;
+  if (dmx != NULL) *dmx = mx->dmx;
+}
+
 
 /* Function: FreePlan7Matrix()
  * 
- * Purpose:  Free a dynamic programming matrix allocated by AllocPlan7Matrix().
+ * Purpose:  Free a dynamic programming matrix allocated by CreatePlan7Matrix().
  * 
  * Return:   (void)
  */
 void
 FreePlan7Matrix(struct dpmatrix_s *mx)
 {
-  free (mx->xmx[0]);
-  free (mx->mmx[0]);
-  free (mx->imx[0]);
-  free (mx->dmx[0]);
+  free (mx->xmx_mem);
+  free (mx->mmx_mem);
+  free (mx->imx_mem);
+  free (mx->dmx_mem);
   free (mx->xmx);
   free (mx->mmx);
   free (mx->imx);
@@ -360,14 +481,14 @@ P7Forward(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
  * Args:     dsq    - sequence in digitized form
  *           L      - length of dsq
  *           hmm    - the model
+ *           mx     - reused DP matrix
  *           ret_tr - RETURN: traceback; pass NULL if it's not wanted
  *           
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 float
-P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
+P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
-  struct dpmatrix_s *mx;
   struct p7trace_s  *tr;
   int **xmx;
   int **mmx;
@@ -378,7 +499,7 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 
   /* Allocate a DP matrix with 0..L rows, 0..M-1 columns.
    */ 
-  mx = AllocPlan7Matrix(L+1, hmm->M, &xmx, &mmx, &imx, &dmx);
+  ResizePlan7Matrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
 
   /* Initialization of the zero row.
    */
@@ -471,7 +592,6 @@ P7Viterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
     *ret_tr = tr;
   }
 
-  FreePlan7Matrix(mx);
   return Scorify(sc);		/* the total Viterbi score. */
 }
 #endif /*! SPEEDY && ! ALTIVEC*/
@@ -754,12 +874,13 @@ P7ViterbiTrace(struct plan7_s *hmm, char *dsq, int N,
  * Args:     dsq    - sequence in digitized form
  *           L      - length of dsq
  *           hmm    - the model
+ *           mx     - DP matrix, growable
  *           ret_tr - RETURN: traceback; pass NULL if it's not wanted
  *
  * Returns:  Score of optimal alignment in bits.
  */
 float
-P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
+P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *ctr;        /* collapsed trace of optimal parse */
   struct p7trace_s *tr;         /* full trace of optimal alignment */
@@ -802,7 +923,7 @@ P7SmallViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
       if (P7ViterbiSize(sqlen, hmm->M) > RAMLIMIT)
 	P7WeeViterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, &(tarr[i]));
       else
-	P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, &(tarr[i]));
+	P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
 
       tlen  += tarr[i]->tlen - 4; /* not counting S->N,...,C->T */
       totlen += sqlen;

@@ -552,6 +552,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   int     nhmm;			/* number of HMMs searched                 */
   struct plan7_s    *hmm;       /* current HMM to search with              */ 
   struct p7trace_s  *tr;	/* traceback of alignment                  */
+  struct dpmatrix_s *mx;        /* growable DP matrix                      */
   float   sc;                   /* an alignment score                      */ 
   double  pvalue;		/* pvalue of an HMM score                  */
   double  evalue;		/* evalue of an HMM score                  */
@@ -560,6 +561,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
    */
   dsq = DigitizeSequence(seq, sqinfo->len);
   if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo->len);
+  mx = CreatePlan7Matrix(1, 1, 0, 25);
 
   nhmm = 0;
   while (HMMFileRead(hmmfp, &hmm)) {
@@ -574,9 +576,9 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
     /* Score sequence, do alignment (Viterbi), recover trace
      */
     if (P7ViterbiSize(sqinfo->len, hmm->M) <= RAMLIMIT)
-      sc = P7Viterbi(dsq, sqinfo->len, hmm, &tr);
+      sc = P7Viterbi(dsq, sqinfo->len, hmm, mx, &tr);
     else
-      sc = P7SmallViterbi(dsq, sqinfo->len, hmm, &tr);
+      sc = P7SmallViterbi(dsq, sqinfo->len, hmm, mx, &tr);
 
     /* Implement do_forward; we'll override the whole_sc with a P7Forward()
      * calculation.
@@ -622,6 +624,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
     nhmm++;
   }
 
+  FreePlan7Matrix(mx);
   free(dsq);
   *ret_nhmm = nhmm;
   return;
@@ -1068,6 +1071,7 @@ worker_thread(void *ptr)
   double pvalue;		/* P-value of score                */
   double evalue;		/* E-value of a score              */
   struct threshold_s thresh;	/* a local copy of thresholds      */
+  struct dpmatrix_s *mx;        /* growable DP matrix              */
 
   wpool = (struct workpool_s *) ptr;
   /* Because we might dynamically change the thresholds using
@@ -1080,6 +1084,8 @@ worker_thread(void *ptr)
   thresh.domE    = wpool->thresh->domE;
   thresh.autocut = wpool->thresh->autocut;
   thresh.Z       = wpool->thresh->Z;
+  
+  mx = CreatePlan7Matrix(1, 1, 0, 25);
   for (;;) {
 
     /* 1. acquire lock on HMM input, and get
@@ -1094,6 +1100,7 @@ worker_thread(void *ptr)
       {	/* we're done. release lock, exit thread */
 	if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
 	  Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+	FreePlan7Matrix(mx);
 	pthread_exit(NULL);
       }
     SQD_DPRINTF1(("a thread is working on %s\n", hmm->name));
@@ -1112,9 +1119,9 @@ worker_thread(void *ptr)
      *    Score the sequence.
      */
     if (P7ViterbiSize(wpool->L, hmm->M) <= RAMLIMIT)
-      sc = P7Viterbi(wpool->dsq, wpool->L, hmm, &tr);
+      sc = P7Viterbi(wpool->dsq, wpool->L, hmm, mx, &tr);
     else
-      sc = P7SmallViterbi(wpool->dsq, wpool->L, hmm, &tr);
+      sc = P7SmallViterbi(wpool->dsq, wpool->L, hmm, mx, &tr);
     
     /* The Forward score override (see comments in serial vers)
      */

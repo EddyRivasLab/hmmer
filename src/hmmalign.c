@@ -67,6 +67,7 @@ main(int argc, char **argv)
   float           *wgt;		/* weights to assign to alignment          */
   MSA             *msa;         /* alignment that's created                */    
   int              i;
+  struct dpmatrix_s *mx;        /* growable DP matrix                      */
   struct p7trace_s **tr;        /* traces for aligned sequences            */
 
   char *optname;                /* name of option found by Getopt()         */
@@ -176,6 +177,7 @@ main(int argc, char **argv)
    */
   dsq = MallocOrDie(sizeof(char *) * nseq);
   tr  = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
+  mx  = CreatePlan7Matrix(1, hmm->M, 25, 0);
 
   /* Align each sequence to the model, collect traces
    */
@@ -184,10 +186,11 @@ main(int argc, char **argv)
       dsq[i] = DigitizeSequence(rseq[i], sqinfo[i].len);
 
       if (P7ViterbiSize(sqinfo[i].len, hmm->M) <= RAMLIMIT)
-	(void) P7Viterbi(dsq[i], sqinfo[i].len, hmm, &(tr[i]));
+	(void) P7Viterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
       else
-	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, &(tr[i]));
+	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
     }
+  FreePlan7Matrix(mx);
 
   /* Include an aligned alignment, if desired.
    */

@@ -29,6 +29,7 @@ int
 main(void)
 {
   struct plan7_s *hmm;          /* HMM to search with */
+  struct dpmatrix_s *mx;        /* growable DP matrix */
   struct p7trace_s *tr;         /* trace structure for a Viterbi alignment */
   int master_tid;		/* PVM TID of our master */
   int alphatype;		/* alphabet type */
@@ -74,6 +75,7 @@ main(void)
   SetAlphabet(alphatype);
   hmm = PVMUnpackHMM();
 
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
   P7Logoddsify(hmm, TRUE);
 
   /* tell the master we're OK and ready to go (or not)
@@ -90,6 +92,7 @@ main(void)
    * Receive a digitized sequence to search against.
    *****************************************************************/ 
  
+
   for (;;)
     {
       SQD_DPRINTF1(("Slave about to do a blocking receive, waiting for input.\n"));
@@ -108,12 +111,12 @@ main(void)
       if (P7ViterbiSize(L, hmm->M) <= RAMLIMIT)
 	{
 	  SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-	  sc = P7Viterbi(dsq, L, hmm, &tr);
+	  sc = P7Viterbi(dsq, L, hmm, mx, &tr);
 	}
       else
 	{
 	  SQD_DPRINTF1(("Slave going small after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-	  sc = P7SmallViterbi(dsq, L, hmm, &tr);
+	  sc = P7SmallViterbi(dsq, L, hmm, mx, &tr);
 	}
 
       if (do_forward) {
@@ -147,6 +150,7 @@ main(void)
    ***********************************************/
 
   SQD_DPRINTF1(("Slave is done; performing a normal exit.\n"));
+  FreePlan7Matrix(mx);
   FreePlan7(hmm);
   exit(0);			/* pvm_exit() gets called by atexit() registration. */
 }

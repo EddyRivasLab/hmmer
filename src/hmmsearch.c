@@ -558,6 +558,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 		 struct histogram_s *histogram, 
 		 struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
 {
+  struct dpmatrix_s *mx;        /* DP matrix, growable                     */
   struct p7trace_s *tr;         /* traceback                               */
   char   *seq;                  /* target sequence                         */
   char   *dsq;		        /* digitized target sequence               */
@@ -567,6 +568,12 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
   double evalue;		/* evalue of an HMM score                  */
   int    nseq;			/* number of sequences searched            */
  
+  /* Create a DP matrix; initially only two rows big, but growable;
+   * we overalloc by 25 rows (L dimension) when we grow; not growable
+   * in model dimension, since we know the hmm size
+   */
+  mx = CreatePlan7Matrix(1, hmm->M, 25, 0); 
+
   nseq = 0;
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo))
     {
@@ -588,9 +595,9 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    about underflow issues), and tr will be returned as NULL.
        */
       if (P7ViterbiSize(sqinfo.len, hmm->M) <= RAMLIMIT)
-	sc = P7Viterbi(dsq, sqinfo.len, hmm, &tr);
+	sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
       else
-	sc = P7SmallViterbi(dsq, sqinfo.len, hmm, &tr);
+	sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
 
       /* 2. If we're using Forward scores, calculate the
        *    whole sequence score; this overrides anything
@@ -634,6 +641,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       free(dsq);
     }
 
+  FreePlan7Matrix(mx);
   *ret_nseq = nseq;
   return;
 }
@@ -1070,6 +1078,7 @@ worker_thread(void *ptr)
   char  *seq;                   /* target sequence                 */
   SQINFO sqinfo;		/* information assoc w/ seq        */
   char  *dsq;                   /* digitized sequence              */
+  struct dpmatrix_s *mx;        /* growable DP matrix              */
   struct p7trace_s  *tr;        /* traceback from an alignment     */
   float  sc;			/* score of an alignment           */
   int    rtn;			/* a return code from pthreads lib */
@@ -1077,6 +1086,11 @@ worker_thread(void *ptr)
   double evalue;		/* E-value of score                */
 
   wpool = (struct workpool_s *) ptr;
+
+  /* Init with a small DP matrix; we'll grow in the sequence dimension
+   * overalloc'ing by 25 rows (residues).
+   */
+  mx = CreatePlan7Matrix(1, wpool->hmm->M, 25, 0);
   for (;;) {
 
     /* 1. acquire lock on sequence input, and get
@@ -1089,6 +1103,7 @@ worker_thread(void *ptr)
       {	/* we're done. release lock, exit thread */
 	if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
 	  Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+	FreePlan7Matrix(mx);
 	pthread_exit(NULL);
       }
     SQD_DPRINTF1(("a thread is working on %s\n", sqinfo.name));
@@ -1105,9 +1120,9 @@ worker_thread(void *ptr)
     /* 1. Recover a trace by Viterbi.
      */
     if (P7ViterbiSize(sqinfo.len, wpool->hmm->M) <= RAMLIMIT)
-      sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, &tr);
+      sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
     else
-      sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, &tr);
+      sc = P7SmallViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
 
     /* 2. If we're using Forward scores, do another DP
      *    to get it; else, we already have a Viterbi score
