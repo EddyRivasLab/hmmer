@@ -9,8 +9,8 @@ SRE, Mon Jan 19 07:09:37 1998
    The only variables you should need to set are BINDIR
    and MANDIR.
 
-   If you are installing in directories called bin/ and man/ in your
-   home directory, you don't need to change anything.
+   If you are installing the programs in /usr/local/bin/ and
+   the man pages in /usr/local/man/man1, you don't need to change anything.
 
    If you have a source-only distribution, check the compiler (CC)
    and compiler flags (CFLAGS).
