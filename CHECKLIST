@@ -55,6 +55,25 @@ Checklist for a HMMER distribution.
          ./buildall hmmer-2.3 >& build.log &
          tail -f build.log
 
+    darwin (dual800) is done manually:
+    ssh into dual800 in Warren's lab.
+      scp eddy@wrasse.wustl.edu:src/hmmer/hmmer-2.3.tar.gz .
+      scp eddy@wrasse.wustl.edu:src/hmmer/ssdk/nodebuild .
+      ./nodebuild /Users/seddy hmmer-2.3  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O2" 
+      scp hmmer-2.3.bin.powerpc-apple-osx.tar.gz eddy@wrasse.wustl.edu:
+      scp hmmer-2.3.powerpc-apple-osx.log eddy@wrasse.wustl.edu:
+
+      [cpu0/pkinase/50000 =  513.270u  w/o altivec]
+      [cpu0/pkinase/50000 =  177.360u 2:58.04   w/  altivec]
+      [cpu2/pkinase/50000 =  206.610u 1:44.90   w/  altivec]
+      
+    whippet is also manual:
+      ssh -x -vv whippet
+      cd /scratch/eddy
+      cp ~/src/hmmer/hmmer-2.3.tar.gz .
+      cp ~/src/hmmer/ssdk/nodebuild .
+      ./nodebuild /scratch/eddy hmmer-2.3  hp-hpux "--enable-threads --enable-lfs" CFLAGS="-O"
+
 whelk01 
   env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-lfs
   make
@@ -72,37 +91,3 @@ whelk01
 
   574.810u
 
-polly.sgi.com  user:eddy pass:z    SGI Altix 3000, 16xItanium 2   sgi-linux-ia64
- tcsh
- scp wrasse.wustl.edu:hmmer-2.3.tar.gz .
- tar zxf hmmer-2.3.tar.gz
- cd hmmer-2.3
- source /opt/modules/init/tcsh
- module load intel-compilers-latest
- env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-lfs
-
- make >& sgi-linux-ia64.log
- make bindist
- make check >>& sgi-linux-ia64.log 
-
- binaries/hmmbuild foo6 tutorial/pkinase.sto
- time binaries/hmmcalibrate --cpu 0 --num 50000 foo6 >>& sgi-linux-ia64.log
- time binaries/hmmcalibrate --cpu 4 --num 50000 foo6 >>& sgi-linux-ia64.log
- time binaries/hmmcalibrate --cpu 8 --num 50000 foo6 >>& sgi-linux-ia64.log
- time binaries/hmmcalibrate --cpu 16 --num 50000 foo6 >>& sgi-linux-ia64.log
-
- 0:  243.309u 0.007s 4:03.29 100.0%  0+0k 0+0io 76pf+0w
- 4:  252.647u 0.201s 1:03.40 398.8%  0+0k 0+0io 78pf+0w
- 8:  262.813u 0.447s 0:33.20 792.9%  0+0k 0+0io 78pf+0w
-16:  307.490u 2.232s 0:36.52 848.0%  0+0k 0+0io 78pf+0
-
- scp sgi-linux-ia64.log wrasse.wustl.edu:
- \rm sgi-linux-ia64.log foo6 
- cd ..
- mv hmmer-2.3 hmmer-2.3.bin.sgi-linux-ia64
- tar cf hmmer-2.3.bin.sgi-linux-ia64.tar hmmer-2.3.bin.sgi-linux-ia64
- gzip hmmer-2.3.bin.sgi-linux-ia64.tar 
- scp hmmer-2.3.bin.sgi-linux-ia64.tar.gz wrasse.wustl.edu:
- rm -rf hmmer-2.3.bin.sgi-linux-ia64.tar.gz
- rm -rf hmmer-2.3.bin.sgi-linux-ia64
- rm -rf hmmer-2.3.tar.gz
