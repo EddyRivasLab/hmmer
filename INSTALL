@@ -21,11 +21,13 @@ SRE, Mon Jan 19 07:09:37 1998
 
 2) type 'make' to build the programs.
 
-3) type 'make install' to install the programs and man pages. 
-   
+3) Optional; type 'make test' to compile and run a test suite.
+   Some of the tests require that you have Perl installed.
+
+4) type 'make install' to install the programs and man pages. 
    You may have to become root, depending on where you're installing.
 
-4) type 'make clean' to clean up.
+5) type 'make clean' to clean up.
 
 
 Note on environment variables:
