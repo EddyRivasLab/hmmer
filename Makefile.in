@@ -76,8 +76,8 @@ SRC =   hmmalign.c    hmmbuild.c        hmmcalibrate.c    hmmconvert.c\
 	alphabet.c    core_algorithms.c debug.c           emit.c\
 	emulation.c   histogram.c       hmmio.c           mathsupport.c\
         masks.c       misc.c            modelmakers.c     plan7.c\
-	plan9.c       prior.c           threads.c         tophits.c\
-	trace.c 
+	plan9.c       prior.c           pvm.c		  threads.c\
+	tophits.c     trace.c 
 
 SQUIDSRC = aligneval.c  alignio.c   cluster.c   dayhoff.c\
 	   file.c       getopt.c    gsi.c       hsregex.c   interleaved.c\
@@ -214,6 +214,11 @@ dist:
 	mkdir build/hmmer-$(RELEASE)/Man
 	mkdir build/hmmer-$(RELEASE)/Shiva
 	mkdir build/hmmer-$(RELEASE)/Userguide
+	# 
+	# Make the configure script
+	#
+	autoconf
+	cp configure build/hmmer-$(RELEASE)/
 	#
 	# RCS extraction of top level README-type documentation and Makefile
 	#
