@@ -887,7 +887,7 @@ Plan7ESTConfig(struct plan7_s *hmm, int *aacode, float **estmodel,
  * Return:   (void)
  */
 void
-PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, char **dsq, int nseq,
+PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, int nseq,
 		struct p7trace_s **tr)
 {
   int   idx;			/* counter for sequences                */

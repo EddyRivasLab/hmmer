@@ -15,7 +15,7 @@ Checklist for a HMMER distribution.
    Note: ccmalloc not threadsafe, so this doesn't test threads implementation.
    Note: glibc qsort() has a 6-byte "leak": tophits test will leak 6 bytes and fail.
     	% autoconf; (cd squid; autoconf)
-     	% ./configure --enable-ccmalloc
+     	% ./configure --enable-ccmalloc --enable-debugging
         % make
 	% (cd testsuite; ../ssdk/sqc -m -p ../squid 2 exercises.sqc . ../src)
 	% (cd Bugs;      ../ssdk/sqc -m -p ../squid 2 bugs.sqc      . ../src)
@@ -28,13 +28,16 @@ Checklist for a HMMER distribution.
 
 3. More manual testing.
      Test the pvm (wrasse):
+        % ssh-add
         % cd testsuite
-	% echo quit| pvm pvm.conf
-	% ../src/hmmpfam --pvm Pfam_ls8.0 ../tutorial/7LES_DROME > foo.pvm
+	% pvm pvm.conf
+             conf
+             quit
+	% ../src/hmmpfam --pvm Pfam_ls ../tutorial/7LES_DROME > foo.pvm
 	% echo halt| pvm 
      Test threads and nonthreads (whelk01): 
-        % ../src/hmmpfam Pfam_ls8.0 ../tutorial/7LES_DROME > foo.pthread
-        % ../src/hmmpfam --cpu 0 Pfam_ls8.0 ../tutorial/7LES_DROME > foo.normal
+        % ../src/hmmpfam Pfam_ls ../tutorial/7LES_DROME > foo.pthread
+        % ../src/hmmpfam --cpu 0 Pfam_ls ../tutorial/7LES_DROME > foo.normal
      Make sure that foo.* all work (7LES_DROME is big enough to exercise bug #h22)
      Check that foo.* all give identical E-values (bug #h20).
 	

@@ -96,7 +96,7 @@ interleaving the sequence alignment blocks. Only affects Stockholm
 format output.
 
 .TP
-.BI --outfmt " <s>"
+.BI --outformat " <s>"
 Output the alignment in format
 .I <s>.
 The default is Stockholm format. Valid formats

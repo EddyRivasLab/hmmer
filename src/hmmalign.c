@@ -119,7 +119,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--outformat") == 0) 
       {
 	outfmt = String2SeqfileFormat(optarg);
-	if (outfmt == MSAFILE_UNKKNOWN) 
+	if (outfmt == MSAFILE_UNKNOWN) 
 	  Die("unrecognized output alignment file format \"%s\"", optarg);
 	if (! IsAlignmentFormat(outfmt))
 	  Die("\"%s\" is not a multiple alignment format", optarg);

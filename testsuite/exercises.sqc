@@ -11,6 +11,12 @@
 2 exercise    hmmalign/o           @hmmalign@ -o %OPT.OUT% %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/q           @hmmalign@ -q %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/informat    @hmmalign@ --informat fasta %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/selex       @hmmalign@ --outformat selex %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/a2m         @hmmalign@ --outformat a2m %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/clustal     @hmmalign@ --outformat clustal %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/msf         @hmmalign@ --outformat msf %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/phylip      @hmmalign@ --outformat phylip %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/oneline     @hmmalign@ --oneline %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/withali     @hmmalign@ --withali Optiontests.slx %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/mapali      @hmmalign@ --mapali Optiontests.slx %OPT.HMM% Optiontests.fa
 
