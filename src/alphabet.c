@@ -88,8 +88,10 @@ SetAlphabet(int type)
   pthread_mutex_t  alphabet_lock; /* alphabet is global; must protect to be threadsafe */
   int              rtn;		  /* return code from pthreads */
 
+  if ((rtn = pthread_mutex_init(&alphabet_lock, NULL)) != 0)
+    Die("pthread_mutex_init FAILED; %s\n", strerror(rtn));
   if ((rtn = pthread_mutex_lock(&alphabet_lock)) != 0)
-    Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
+    Die("pthread_mutex_lock FAILED: %s\n", strerror(rtn));
 #endif
 
  /* Because the alphabet information is global, we must
