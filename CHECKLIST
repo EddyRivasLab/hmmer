@@ -59,7 +59,7 @@ Checklist for a HMMER distribution.
     ssh into dual800 in Warren's lab.
       scp eddy@wrasse.wustl.edu:src/hmmer/hmmer-2.3.tar.gz .
       scp eddy@wrasse.wustl.edu:src/hmmer/ssdk/nodebuild .
-      ./nodebuild /Users/seddy hmmer-2.3  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O2" 
+      ./nodebuild /Users/seddy hmmer-2.3  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O" 
       scp hmmer-2.3.bin.powerpc-apple-osx.tar.gz eddy@wrasse.wustl.edu:
       scp hmmer-2.3.powerpc-apple-osx.log eddy@wrasse.wustl.edu:
 
@@ -67,27 +67,27 @@ Checklist for a HMMER distribution.
       [cpu0/pkinase/50000 =  177.360u 2:58.04   w/  altivec]
       [cpu2/pkinase/50000 =  206.610u 1:44.90   w/  altivec]
       
-    whippet is also manual:
+    whippet is also done manually:
       ssh -x -vv whippet
       cd /scratch/eddy
       cp ~/src/hmmer/hmmer-2.3.tar.gz .
       cp ~/src/hmmer/ssdk/nodebuild .
-      ./nodebuild /scratch/eddy hmmer-2.3  hp-hpux "--enable-threads --enable-lfs" CFLAGS="-O"
+      ./nodebuild /scratch/eddy hmmer-2.3  hp-hpux "--enable-threads" CFLAGS="-O"
+      cp hmmer-2.3.bin.hp-hpux.tar.gz ~/
+      cp hmmer-2.3.hp-hpux.log ~/
 
-whelk01 
-  env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-lfs
-  make
-  make bindist
-  make check
+    Move all binary distros to the FTP site,
+    /nfs/ftp/eddy/hmmer/(RELEASE)/
 
-  binaries/hmmsearch tutorial/rrm.hmm nr > foo1 &
-  binaries/hmmpfam /nfs/db01/databases/Pfam/Pfam_ls tutorial/Artemia.fa > foo2 &
-  binaries/hmmbuild foo3 /nfs/db01/databases/Pfam/Pfam-A.seed > foo4 &
-  binaries/hmmcalibrate foo3 >& foo5 &
+8.  Install all the files on the FTP site; change CURRENT symlink.
+    (Check that FTPDIR is correct in Makefile).
 
-  binaries/hmmbuild foo6 tutorial/pkinase.sto
-  time binaries/hmmcalibrate --cpu 0 --num 50000 foo6
-  time binaries/hmmcalibrate --cpu 4 --num 50000 foo6
+      % make ftpdist
+      % make stable
 
-  574.810u
+9. Update and install the web page, which is in ~/web/hmmer.
+
+      % make install
+
+10. Email hmmer@genetics.wustl.edu and make the announcement.
 

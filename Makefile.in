@@ -52,6 +52,7 @@ LICENSELINE = "@PACKAGE_LICENSE@"
 RELCODE     = @PACKAGE_RELCODE@
 LICENSETAG  = gnu
 COMPRESS    = gzip
+FTPDIR      = /nfs/ftp/eddy/hmmer/${RELEASE}/
 
 # The program lists below for HMMER are not necessarily
 # a complete manifest. They are the list of stable programs that the
@@ -278,27 +279,24 @@ dist:
 	$(COMPRESS) ${BASENAME}-$(RELEASE).tar
 
 
-# make ftpdist: install FTP distribution. Assumes a "make dist"
-#               has already succeeded. Doesn't do the symlink;
-#               doesn't install the on-line manual for the Web site.
+# make ftpdist: install FTP source distribution. Assumes a "make dist"
+#               has already succeeded and left the uncompressed
+#               directory.
 #
 ftpdist:
-	cp -f $(READMES)                     $(FTPDIR)
-	cp -f build/hmmer-$(RELEASE)/COPYING $(FTPDIR)
-	cp -f build/hmmer-$(RELEASE)/LICENSETAG $(FTPDIR)
-	cp -f build/hmmer-$(RELEASE)/NOTES   $(FTPDIR)
-	cp -f build/hmmer-$(RELEASE).tar.Z   $(FTPDIR)
-	cp -f build/hmmer-$(RELEASE)-*.tar.Z $(FTPDIR)
-	cp -f Userguide/Userguide.ps         $(FTPDIR)
-	cp -f Userguide/Userguide.pdf        $(FTPDIR)
-	cp -f Userguide/hmmer-html.tar.Z     $(FTPDIR)
-
+	mkdir -p ${FTPDIR}
+	cp -f hmmer-$(RELEASE)/00README         ${FTPDIR}
+	cp -f hmmer-$(RELEASE)/COPYRIGHT        ${FTPDIR}
+	cp -f hmmer-$(RELEASE)/INSTALL          ${FTPDIR}
+	cp -f hmmer-$(RELEASE)/LICENSE          ${FTPDIR}
+	cp -f hmmer-$(RELEASE)/NOTES            ${FTPDIR}
+	cp -f hmmer-$(RELEASE)/Userguide.pdf    ${FTPDIR}
+	cp -f hmmer-$(RELEASE).tar.gz           ${FTPDIR}
 
 # make stable: Set up the FTP site symlink to the current stable HMMER release.
 #
 stable:
-	(cd ${FTPDIR}; ln -sf hmmer-$(RELEASE).tar.Z hmmer.tar.Z)
-
+	(cd ${FTPDIR}; rm -f CURRENT; ln -s ${RELEASE} CURRENT)
 
 # make optcheck:
 #    Check that all program options are documented in man pages,
