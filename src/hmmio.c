@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -432,9 +432,11 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
  *
  * Upon return, *ret_hmm is an allocated Plan7 HMM.
  * Return 0 if no more HMMs in the file (normal).
+ * Return 1 and *ret_hmm = something if we got an HMM (normal) 
  * Return 1 if an error occurs (meaning "I tried to
  *   read something...") and *ret_hmm == NULL (meaning
- *   "...but it wasn't an HMM").
+ *   "...but it wasn't an HMM"). I know, this is a funny
+ *   way to handle errors.
  * 
  *****************************************************************/
 
@@ -610,7 +612,7 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 FAILURE:
   if (hmm  != NULL) FreePlan7(hmm);
   *ret_hmm = NULL;
-  return 0;
+  return 1;
 }
 
 
@@ -732,7 +734,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 FAILURE:
   if (hmm != NULL) FreePlan7(hmm);
   *ret_hmm = NULL;
-  return 0;
+  return 1;
 }
 
 
