@@ -29,14 +29,17 @@ Usage: hmmalign [-options] <hmm file> <sequence file>\n\
 Available options are:\n\
    -h     : help; print brief help on version and usage\n\
    -m     : only print symbols aligned to match states\n\
-   -o <f> : save alignment in file <f> in SELEX format\n\
+   -o <f> : save alignment in file <f>\n\
    -q     : quiet - suppress verbose banner\n\
 ";
 
 static char experts[] = "\
-   --informat <s>: sequence file is in format <s>\n\
-   --mapali <f>  : include alignment in file <f> using map in HMM\n\
-   --withali <f> : include alignment to (fixed) alignment in file <f>\n\
+   --informat <s>  : sequence file is in format <s>\n\
+   --mapali <f>    : include alignment in file <f> using map in HMM\n\
+   --oneline       : output Stockholm fmt with 1 line/seq, not interleaved\n\
+   --outformat <s> : output alignment in format <s> [default: Stockholm]\n\
+                       formats include: MSF, Clustal, Phylip, SELEX\n\
+   --withali <f>   : include alignment to (fixed) alignment in file <f>\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
@@ -44,9 +47,11 @@ static struct opt_s OPTIONS[] = {
   { "-m", TRUE, sqdARG_NONE   } ,
   { "-o", TRUE, sqdARG_STRING },
   { "-q", TRUE, sqdARG_NONE   },
-  { "--informat",FALSE, sqdARG_STRING },
-  { "--mapali",  FALSE, sqdARG_STRING },
-  { "--withali", FALSE, sqdARG_STRING },
+  { "--informat",  FALSE, sqdARG_STRING },
+  { "--mapali",    FALSE, sqdARG_STRING },
+  { "--oneline",   FALSE, sqdARG_NONE },
+  { "--outformat", FALSE, sqdARG_STRING },
+  { "--withali",   FALSE, sqdARG_STRING },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -78,6 +83,8 @@ main(int argc, char **argv)
   int   be_quiet;		/* TRUE to suppress verbose banner          */
   int   matchonly;		/* TRUE to show only match state syms       */
   char *outfile;                /* optional alignment output file           */
+  int   outfmt;			/* code for output alignment format         */
+  int   do_oneline;             /* TRUE to do one line/seq, no interleaving */
   FILE *ofp;                    /* handle on alignment output file          */
   char *withali;                /* name of additional alignment file to align */
   char *mapali;                 /* name of additional alignment file to map   */
@@ -86,24 +93,36 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  format    = SQFILE_UNKNOWN;	/* default: autodetect format */
-  matchonly = FALSE;
-  outfile   = NULL;
-  be_quiet  = FALSE;
-  withali   = NULL;
-  mapali    = NULL;
+  format     = SQFILE_UNKNOWN;	  /* default: autodetect input format     */
+  outfmt     = MSAFILE_STOCKHOLM; /* default: output in Stockholm format  */
+  do_oneline = FALSE;		  /* default: interleaved format          */
+  matchonly  = FALSE;
+  outfile    = NULL;		  /* default: output alignment to stdout  */
+  be_quiet   = FALSE;
+  withali    = NULL;
+  mapali     = NULL;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-m")        == 0) matchonly= TRUE;
-    else if (strcmp(optname, "-o")        == 0) outfile  = optarg;
-    else if (strcmp(optname, "-q")        == 0) be_quiet = TRUE; 
-    else if (strcmp(optname, "--mapali")  == 0) mapali   = optarg;
-    else if (strcmp(optname, "--withali") == 0) withali  = optarg;
-    else if (strcmp(optname, "--informat") == 0) {
+    if      (strcmp(optname, "-m")        == 0) matchonly  = TRUE;
+    else if (strcmp(optname, "-o")        == 0) outfile    = optarg;
+    else if (strcmp(optname, "-q")        == 0) be_quiet   = TRUE; 
+    else if (strcmp(optname, "--mapali")  == 0) mapali     = optarg;
+    else if (strcmp(optname, "--oneline") == 0) do_oneline = TRUE;
+    else if (strcmp(optname, "--withali") == 0) withali    = optarg;
+    else if (strcmp(optname, "--informat") == 0) 
+      {
 	format = String2SeqfileFormat(optarg);
 	if (format == SQFILE_UNKNOWN) 
 	  Die("unrecognized sequence file format \"%s\"", optarg);
+      }
+    else if (strcmp(optname, "--outformat") == 0) 
+      {
+	outfmt = String2SeqfileFormat(optarg);
+	if (outfmt == MSAFILE_UNKKNOWN) 
+	  Die("unrecognized output alignment file format \"%s\"", optarg);
+	if (! IsAlignmentFormat(outfmt))
+	  Die("\"%s\" is not a multiple alignment format", optarg);
       }
     else if (strcmp(optname, "-h") == 0) 
       {
@@ -213,12 +232,13 @@ main(int argc, char **argv)
   
   if (outfile != NULL && (ofp = fopen(outfile, "w")) != NULL)
     {
-      WriteStockholm(ofp, msa);
+      MSAFileWrite(ofp, msa, outfmt, do_oneline);
       printf("Alignment saved in file %s\n", outfile);
       fclose(ofp);
     }
   else
-    WriteStockholm(stdout, msa);
+    MSAFileWrite(stdout, msa, outfmt, do_oneline);
+
 
   /*********************************************** 
    * Cleanup and exit

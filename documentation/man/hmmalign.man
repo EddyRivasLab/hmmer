@@ -89,6 +89,19 @@ Compare the
 .B --withali 
 option.
 
+.TP
+.B --oneline
+Output the alignment with one line per sequence, rather than
+interleaving the sequence alignment blocks. Only affects Stockholm
+format output.
+
+.TP
+.BI --outfmt " <s>"
+Output the alignment in format
+.I <s>.
+The default is Stockholm format. Valid formats
+include Stockholm, SELEX, MSF, Clustal, Phylip, and A2M.
+
 .TP 
 .BI --withali " <f>"
 Reads an alignment from file 

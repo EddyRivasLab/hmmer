@@ -473,7 +473,6 @@ P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **re
   /* Recursion. Done as a pull.
    * Note some slightly wasteful boundary conditions:  
    *    tsc[0] = -INFTY for all eight transitions (no node 0)
-   *    D_M and I_M are wastefully calculated (they don't exist)
    */
   for (i = 1; i <= L; i++)
     {
@@ -494,7 +493,7 @@ P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **re
 	}
       mmx[i][hmm->M] = ILogsum(ILogsum(mmx[i-1][hmm->M-1] + hmm->tsc[TMM][hmm->M-1],
 				   imx[i-1][hmm->M-1] + hmm->tsc[TIM][hmm->M-1]),
-			       ILogsum(xmx[i-1][XMB] + hmm->bsc[hmm->M-1],
+			       ILogsum(xmx[i-1][XMB] + hmm->bsc[hmm->M],
 				   dmx[i-1][hmm->M-1] + hmm->tsc[TDM][hmm->M-1]));
       mmx[i][hmm->M] += hmm->msc[dsq[i]][hmm->M];
 

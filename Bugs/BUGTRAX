@@ -374,5 +374,13 @@ DESCRIPTION
   instances of sym, symidx). Removed (int) casts whereever dsq[],
   symidx were being used as array indices.
 //
-
+ID              h28
+TITLE           P7Forward typo: bsc[M-1] should be bsc[M]
+STATUS          CLOSED
+XREF            STL7 p.123
+REPORTED_BY     Robel Kahsay <kahsay@mail.capsl.udel.edu>
+CLOSED_DATE     SRE, Fri Oct  3 12:48:50 2003
+DESCRIPTION     
+  Calculation of mmx[M] should touch bsc[M], not bsc[M-1].
+//
 
