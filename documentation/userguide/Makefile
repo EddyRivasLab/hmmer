@@ -15,18 +15,20 @@
 #   - latex2html.config is customized for HMMER User Guide (beware)
 #   - Install PolyglotMan (version 3.0.5)
 #   - need a copy of wulogo.gif for putting in HTML directory.
-
+#   - Install ps2pdf and Ghostscript to generate PDF copy of Userguide
 
 
 SHELL       = /bin/sh
 
-MANS = hmmer hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmpfam hmmsearch 
+MANS = hmmer hmmalign hmmbuild hmmcalibrate hmmconvert hmmemit hmmfetch hmmindex hmmpfam hmmsearch\
+	alistat sfetch seqstat sreformat	
 
 all:
 	make manpages
 	make dvi
 	make postscript
 	make html
+	make pdf
 
 # manpages: convert man pages to LaTeX chapter in User Guide.
 #    uses PolyglotMan 3.0.5 "rman", and rmanprocess.pl script
@@ -49,23 +51,39 @@ dvi:
 # postscript: make the PostScript copy, Userguide.ps
 #             "make manpages" and "make dvi" first
 #
-postscript:
+postscript: 
 	dvips -o Userguide.ps main
 
+# pdf: convert Postscript copy to PDF
+#
+pdf: 	
+	ps2pdf Userguide.ps Userguide.pdf
 
 # html: invoke the LaTeX2html converter to create the hmmer-html/ HTML directory.
 #       Do "make manpages" and "make dvi" first.
 #
+# There appears to be a bug in latex2html with \input{} statements
+# and multifile LaTeX documents. My workaround is to swallow the \input's
+# into a single large temporary LaTeX file using the latex-swallow-inputs
+# script.
+# 
 html:
-	latex2html -split 4 -local_icons -t "HMMER 2.0 User's Guide" -dir hmmer-html main
-	-cp wulogo.gif hmmer-html/
+	latex-swallow-inputs main > main-expanded.tex
+	latex main-expanded
+	bibtex main-expanded
+	latex main-expanded
+	latex main-expanded
+	latex2html -debug -split 4 -local_icons -t "HMMER 2.1 User's Guide" -dir hmmer-html main-expanded
+	-cp -f wulogo.gif hmmer-html/
+	-rm -f hmmer-html.tar.Z
 	tar cf hmmer-html.tar hmmer-html
-	compress hmmer-html.tar
+	compress -f hmmer-html.tar
+	-rm -f main-expanded.tex
 
 # clean: clean up after yourself
 #
 clean:
 	-rm -f *.dvi *.aux *.toc *.bbl *.blg *.log *~
-	-rm Userguide.ps
+	-rm Userguide.ps Userguide.pdf
 	-rm hmmer-html.tar.Z
 	-rm -rf hmmer-html
