@@ -8,8 +8,8 @@
  */
 
 
-#define RELEASE     "2.1"
-#define RELEASEDATE "Oct 1998"
+#define RELEASE     "2.1.1"
+#define RELEASEDATE "Dec 1998"
 
 #ifndef LINTING			/* compiled-in stamp for all binaries  */
 static char *copyright = "\
