@@ -76,8 +76,11 @@ shiva:   $(SHIVA)
 	@echo Running compiled Shiva exercises:
 	@echo Warning: some tests may take several minutes to complete. 
 	@for shivatest in $(SHIVA); do\
-	   ./$$shivatest;\
-	   echo $$shivatest: ok;\
+	   if ./$$shivatest; then\
+              echo $$shivatest: ok;\
+           else\
+              echo $$shivatest: FAILED;\
+           fi\
 	done
 	@echo
 	@echo Running scripted Shiva tests:
