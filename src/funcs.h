@@ -3,7 +3,7 @@
  ************************************************************/
 
 /* funcs.h 
- * RCS $Id$
+ * CVS $Id$
  *
  * Declarations of external functions in HMMER.
  */            
@@ -108,6 +108,13 @@ extern void StateOccupancy(struct plan7_s *hmm, float **ret_mp, float **ret_ip, 
  * Interfaces between HMMER and other software packages
  */
 extern void WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw);
+
+
+/* from evolution.c
+ * Phylogenetic extrapolation of profile HMMs.
+ */
+extern int EvolveOneTransitionVector(float *qs, float ts, int n, float *q0, float *qz, 
+				     float t, float *q);
 
 
 /* from histogram.c

@@ -920,8 +920,8 @@ Plan7ESTConfig(struct plan7_s *hmm, int *aacode, float **estmodel,
  * 
  * Purpose:  Given a newly constructed HMM and the tracebacks
  *           of the sequences it was trained on, print out all
- *           the interesting information at the end of hmmb 
- *           and hmmt runs that convinces the user we actually
+ *           the interesting information at the end of hmmbuild
+ *           runs that convinces the user we actually
  *           did something.
  *           
  * Args:     fp   - where to send the output (stdout, usually)

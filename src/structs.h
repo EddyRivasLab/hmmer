@@ -7,7 +7,7 @@
  * Data structures used in HMMER.
  * Also, a few miscellaneous macros and global variable declarations.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #ifndef STRUCTSH_INCLUDED

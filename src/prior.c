@@ -521,7 +521,7 @@ P7PriorifyTransitionVector(float *t, struct p7prior_s *prior,
   float xi;                     /* Sjolander's X_i term */
 
   mix[0] = 1.0;			/* default is simple one component */
-  if ((prior->strategy == PRI_DCHLET || prior->strategy == PRI_PAM) && prior->mnum > 1)
+  if ((prior->strategy == PRI_DCHLET || prior->strategy == PRI_PAM) && prior->tnum > 1)
     {
       for (q = 0; q < prior->tnum; q++)
         {

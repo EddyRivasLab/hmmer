@@ -1,15 +1,11 @@
 /*****************************************************************
- * HMMER - Biological sequence analysis with profile HMMs
- * Copyright (C) 1992-1999 Washington University School of Medicine
- * All Rights Reserved
- *
- *     This source code is distributed under the terms of the
- *     GNU General Public License. See the files COPYING and LICENSE
- *     for details.
+ * @LICENSE@
  *****************************************************************/
 
 /* infocontent.c
  * for evolving models to a specified information content
+ * CVS $Id$
+ * Original author: Dawn J. Brooks (dbrooks@genetics.wustl.edu); 2004.
  */
 
 #include <stdio.h>
@@ -26,7 +22,7 @@
 #include "msa.h"
 
 
-/* Function:  AdjustAveInfoContent
+/* Function: AdjustAveInfoContent()
  *
  * Purpose:  evolve match emissions to specified average info content
  *           over the length of the sequence
@@ -161,7 +157,7 @@ AdjustAveInfoContent (struct plan7_s *hmm, float desired, char *matrixfile)
   return;
 }
 
-/* Function: PrintAveInfoContent
+/* Function: PrintAveInfoContent()
  *
  * Purpose: print out average information content of the match positions of an
  *	    hmm
@@ -170,7 +166,6 @@ AdjustAveInfoContent (struct plan7_s *hmm, float desired, char *matrixfile)
  *
  * Return: (void)
  */
-
 void
 PrintAveInfoContent (struct plan7_s *hmm)
 {
@@ -196,16 +191,15 @@ PrintAveInfoContent (struct plan7_s *hmm)
   return;
 }
 
-/* Function: CalculateBackgroundEntropy
+/* Function: CalculateBackgroundEntropy()
  *
  * Purpose: determine the background entropy of an alignment based on some
- 		expected amino acid frequency
+ *          expected amino acid frequency
  *
  * Args:  none
  *
  * Return: (entropy)
  */
-
 float
 CalculateBackgroundEntropy ()
 {
@@ -242,7 +236,7 @@ CalculateBackgroundEntropy ()
 }
 
 
-/* Function: CalculateEmitsEntropy
+/* Function: CalculateEmitsEntropy()
  *
  * Purpose: determine entropy of match emits
  *
@@ -252,9 +246,8 @@ CalculateBackgroundEntropy ()
  *
  * Return: (entropy)
  */
-
 float
-CalculateEmitsEntropy (double *emits, int L)
+CalculateEmitsEntropy(double *emits, int L)
 {
   float entropy = 0.;   /* entropy 					    */
   int k; 		/* counter for model nodes 			    */
@@ -271,7 +264,7 @@ CalculateEmitsEntropy (double *emits, int L)
 }
 
 
-/* Function: NormalizeEmits
+/* Function: NormalizeEmits()
  *
  * Purpose: normalize emission probabilities of an hmm
  *
@@ -280,7 +273,6 @@ CalculateEmitsEntropy (double *emits, int L)
  *
  * Return: (void)
  */
-
 void
 NormalizeEmits (double *emits, int L)
 {
@@ -298,7 +290,7 @@ NormalizeEmits (double *emits, int L)
 }
 
 
-/* Function: EvolvEmits
+/* Function: EvolveEmits()
  *
  * Purpose: evolve emission probabilities of an hmm
  *

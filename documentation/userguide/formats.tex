@@ -332,11 +332,14 @@ probability calculated from the \prog{NULE} line.
 of consensus structure annotation (CS), or ``-'' if there is no
 consensus structure annotation. The remaining 9 fields are state
 transition scores. The null probability used to convert them back from
-log odds scores to probabilities is 1.0. The order of these scores is
-given by the annotation line at the top of the main section: it is M
-$\rightarrow$ M, M $\rightarrow$ I, M $\rightarrow$ D; I $\rightarrow$
-M, I $\rightarrow$ I; D $\rightarrow$ M, D $\rightarrow$ D; B
-$\rightarrow$ M; M $\rightarrow$ E.
+log odds scores to probabilities is 1.0. (That is, to convert a
+transition score $x$ back to a probability, the calculation is $p =
+\exp^{x \log 2 / 1000}$, for the default integer scale factor of 1000;
+for example, a score of -894 means a probability of .5381.)  The order
+of these scores is given by the annotation line at the top of the main
+section: it is M $\rightarrow$ M, M $\rightarrow$ I, M $\rightarrow$
+D; I $\rightarrow$ M, I $\rightarrow$ I; D $\rightarrow$ M, D
+$\rightarrow$ D; B $\rightarrow$ M; M $\rightarrow$ E.
 
 \end{wideitem}
 
