@@ -31,28 +31,36 @@ static char usage[] = "\
 Usage: testdriver [-options]\n\
   Available options are:\n\
   -h              : help; display this usage info\n\
+  -c <x>          : censor data below <x>\n\
   -e <n>          : sample <n> times from EVD\n\
   -g <n>          : add <n> Gaussian samples of \"noise\"\n\
   -n <n>          : set number of trials to <n>\n\
   -s <n>          : set random seed to <n>\n\
   -v              : be verbose (default is to simply exit with status 1 or 0)\n\
   --xmgr <file>   : save graphical data to <file>\n\
+  --hist          : fit to histogram instead of raw samples\n\
   --loglog <file> : save log log regression line to <file>\n\
   --regress       : do old-style linear regression fit, not ML\n\
+  --mu <x>        : set EVD mu to <x>\n\
+  --lambda <x>    : set EVD lambda to <x>\n\
   --mean <x>      : set Gaussian mean to <x>\n\
   --sd   <x>      : set Gaussian std. dev. to <x>\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
   { "-h",       TRUE,  sqdARG_NONE  },
+  { "-c",       TRUE,  sqdARG_FLOAT },
   { "-e",       TRUE,  sqdARG_INT },
   { "-g",       TRUE,  sqdARG_INT },
   { "-n",       TRUE,  sqdARG_INT },
   { "-s",       TRUE,  sqdARG_INT   }, 
   { "-v",       TRUE,  sqdARG_NONE  },
   { "--xmgr",   FALSE, sqdARG_STRING},
+  { "--hist",   FALSE, sqdARG_NONE},
   { "--loglog", FALSE, sqdARG_STRING},
   { "--regress",FALSE, sqdARG_NONE},
+  { "--mu",     FALSE, sqdARG_FLOAT},
+  { "--lambda", FALSE, sqdARG_FLOAT},
   { "--mean",   FALSE, sqdARG_FLOAT},
   { "--sd",     FALSE, sqdARG_FLOAT},
 };
@@ -72,16 +80,19 @@ main(int argc, char **argv)
   float mean;			/* Gaussian "noise" mean        */
   float sd;			/* Gaussian "noise" std. dev.   */
   float x;			/* a random sample              */
-  int   i;
-  double *val;			/* array of samples             */
-  double mlmu;			/* estimate of mu               */
-  double mllambda;		/* estimate of lambda           */
+  int   i, idx;
+  float *val;			/* array of samples             */
+  float mlmu;			/* estimate of mu               */
+  float mllambda;		/* estimate of lambda           */
 
   char *xmgrfile;               /* output file for XMGR graph data */
   char *logfile;                /* output file for regression line */
   FILE *xmgrfp;                 /* open output file                */
   FILE *logfp;                  /* open log log file               */
   int   do_ml;			/* TRUE to do a max likelihood fit */
+  int   fit_hist;		/* TRUE to fit histogram instead of samples */
+  int   censoring;		/* TRUE to left-censor the data    */
+  float censorlevel;		/* value to censor at              */
 
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
@@ -110,17 +121,25 @@ main(int argc, char **argv)
   xmgrfp     = NULL;
   logfp      = NULL;
   do_ml      = TRUE;
+  censoring  = FALSE;
+  censorlevel= 0.;
+  fit_hist   = FALSE;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "-e")       == 0) { nevd       = atoi(optarg); } 
+    else if (strcmp(optname, "-c")       == 0) { censoring  = TRUE;
+                                                 censorlevel= atof(optarg); } 
     else if (strcmp(optname, "-g")       == 0) { ngauss     = atoi(optarg); } 
     else if (strcmp(optname, "-n")       == 0) { ntrials    = atoi(optarg); }
     else if (strcmp(optname, "-s")       == 0) { seed       = atoi(optarg); }
     else if (strcmp(optname, "-v")       == 0) { be_verbose = TRUE;         }
     else if (strcmp(optname, "--xmgr")   == 0) { xmgrfile   = optarg; }
+    else if (strcmp(optname, "--hist")   == 0) { fit_hist   = TRUE; }
     else if (strcmp(optname, "--loglog") == 0) { logfile    = optarg; }
     else if (strcmp(optname, "--regress")== 0) { do_ml      = FALSE; }
+    else if (strcmp(optname, "--mu")     == 0) { mu         = atof(optarg); } 
+    else if (strcmp(optname, "--lambda") == 0) { lambda     = atof(optarg); } 
     else if (strcmp(optname, "--mean")   == 0) { mean       = atof(optarg); } 
     else if (strcmp(optname, "--sd")     == 0) { sd         = atof(optarg); } 
     else if (strcmp(optname, "-h")       == 0) {
@@ -133,7 +152,27 @@ main(int argc, char **argv)
     Die("Incorrect number of arguments.\n%s\n", usage);
 
   sre_srandom(seed);
-  if (be_verbose)  printf("%d\tSEED\n", seed);
+
+  /****************************************************************
+   * Print options
+   ****************************************************************/
+
+  if (be_verbose)  
+    {
+      puts("--------------------------------------------------------");
+      printf("EVD samples    = %d\n", nevd);
+      printf("mu, lambda     = %f, %f\n", mu, lambda);
+      if (ngauss > 0) {
+	printf("Gaussian noise = %d\n", ngauss);
+	printf("mean, sd       = %f, %f\n", mean, sd); 
+      }
+      if (censoring) printf("pre-censoring  = ON, at %f\n", censorlevel);
+      printf("total trials   = %d\n", ntrials);
+      printf("random seed    = %d\n", seed);
+      printf("fit method     = %s\n", do_ml ? "ML" : "linear regression");
+      printf("fit is to      = %s\n", fit_hist ? "histogram" : "list");
+      puts("--------------------------------------------------------");
+    }
   
   if (xmgrfile != NULL) 
     if ((xmgrfp = fopen(xmgrfile, "w")) == NULL)
@@ -151,25 +190,54 @@ main(int argc, char **argv)
       h   = AllocHistogram(-20, 20, 10);
 
 				/* EVD signal */
+      idx = 0;
       for (i = 0; i < nevd; i++)
 	{
 	  x = EVDrandom(mu, lambda);
-	  AddToHistogram(h, x);
-	  val[i] = x;
+	  if (! censoring || x > censorlevel)
+	    {
+	      AddToHistogram(h, x);
+	      val[idx] = x;
+	      idx++;
+	    }
 	}
 				/* Gaussian noise */
       for (; i < nevd + ngauss; i++)
 	{
 	  x = Gaussrandom(mean, sd);
-	  AddToHistogram(h, x);
-	  val[i] = x;
+	  if (! censoring || x > censorlevel)
+	    {
+	      AddToHistogram(h, x);
+	      val[idx] = x;
+	      idx++;
+	    }
 	}
 
       if (do_ml)
 	{
-	  /* ExtremeValueFitHistogram(h, 999.);*/
-	  EVDMaxLikelyFit(val, nevd+ngauss, &mlmu, &mllambda); 
-	  ExtremeValueSetHistogram(h, (float) mlmu, (float) mllambda, 2); 
+
+	  if (censoring)
+	    {
+	      if (be_verbose)
+		printf("I have censored the data at %f: %d observed, %d censored\n", censorlevel, idx, (nevd+ngauss)-idx);
+
+	      EVDCensoredFit(val, NULL, idx, 
+			     (nevd+ngauss)-idx, censorlevel,
+			     &mlmu, &mllambda); 
+	      ExtremeValueSetHistogram(h, (float) mlmu, (float) mllambda, 2); 
+	    }
+	  else
+	    {
+	      if (fit_hist)
+		{
+		  ExtremeValueFitHistogram(h, TRUE, 20.);  
+		}
+	      else
+		{
+		  EVDMaxLikelyFit(val, NULL, idx, &mlmu, &mllambda); 
+		  ExtremeValueSetHistogram(h, (float) mlmu, (float) mllambda, 2); 
+		}
+	    }
 	}
       else
 	EVDBasicFit(h);
