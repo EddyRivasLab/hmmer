@@ -236,6 +236,10 @@ main(int argc, char **argv)
       else
 	printf(" -- fit failed; -n may be set too small?\n");
 
+      /* Record command line in comlog
+       */
+      Plan7ComlogAppend(hmm, argc, argv);
+
       /* Save HMM to tmpfile
        */
       if (hmmfp->is_binary) WriteBinHMM(outfp, hmm);
