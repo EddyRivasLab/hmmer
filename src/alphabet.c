@@ -1,6 +1,6 @@
 /************************************************************
  * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
+ * Copyright (C) 1992-1998 Washington University School of Medicine
  *
  *   This source code is distributed under the terms of the
  *   GNU General Public License. See the files COPYING and
@@ -10,6 +10,7 @@
 
 /* alphabet.c
  * Configuration of the global symbol alphabet information.
+ * RCS $Id$
  */
 
 #include <stdlib.h>
@@ -100,7 +101,7 @@ SetAlphabet(int type)
     }
     set_degenerate('B', "ND");
     set_degenerate('Z', "QE");
-    set_degenerate('X', Alphabet);
+    set_degenerate('X', "ACDEFGHIKLMNPQRSTVWY");
     break;
   case hmmNUCLEIC:
     Alphabet_type     = type;
@@ -115,8 +116,8 @@ SetAlphabet(int type)
       DegenCount[x] = 1;
     }
     set_degenerate('U', "T");
-    set_degenerate('N', Alphabet);
-    set_degenerate('X', Alphabet);
+    set_degenerate('N', "ACGT");
+    set_degenerate('X', "ACGT");
     set_degenerate('R', "AG");
     set_degenerate('Y', "CT");
     set_degenerate('M', "AC");
