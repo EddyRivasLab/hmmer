@@ -332,13 +332,13 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   fprintf(fp, "LENG  %d\n", hmm->M);
   fprintf(fp, "ALPH  %s\n",   
 	  (Alphabet_type == hmmAMINO) ? "Amino":"Nucleic");
-  fprintf(fp, "RF    %s\n",
-          (hmm->flags & PLAN7_RF) ? "yes" : "no");
-  fprintf(fp, "CS    %s\n",
-          (hmm->flags & PLAN7_CS) ? "yes" : "no");
+  fprintf(fp, "RF    %s\n", (hmm->flags & PLAN7_RF)  ? "yes" : "no");
+  fprintf(fp, "CS    %s\n", (hmm->flags & PLAN7_CS)  ? "yes" : "no");
+  fprintf(fp, "MAP   %s\n", (hmm->flags & PLAN7_MAP) ? "yes" : "no");
   multiline(fp, "COM   ", hmm->comlog);
   fprintf(fp, "NSEQ  %d\n", hmm->nseq);
   fprintf(fp, "DATE  %s\n", hmm->ctime); 
+  fprintf(fp, "CKSUM %d\n", hmm->checksum);
 
   /* Specials
    */
@@ -379,12 +379,12 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   fprintf(fp, "%6s\n", prob2ascii(hmm->tbd1, 1.0));
   for (k = 1; k <= hmm->M; k++)
     {
-				/* Line 1: k and match emissions */
+				/* Line 1: k, match emissions, map */
       fprintf(fp, " %5d ", k);
       for (x = 0; x < Alphabet_size; x++) 
         fprintf(fp, "%6s ", prob2ascii(hmm->mat[k][x], hmm->null[x]));
+      if (hmm->flags & PLAN7_MAP) fprintf(fp, "%5d", hmm->map[k]);
       fputs("\n", fp);
-
 				/* Line 2: RF and insert emissions */
       fprintf(fp, " %5c ", hmm->flags & PLAN7_RF ? hmm->rf[k] : '-');
       for (x = 0; x < Alphabet_size; x++) 
@@ -423,9 +423,12 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   fwrite((char *) &(Alphabet_type), sizeof(int),  1,   fp);
   if (hmm->flags & PLAN7_RF)   fwrite((char *) hmm->rf, sizeof(char), hmm->M+1, fp);
   if (hmm->flags & PLAN7_CS)   fwrite((char *) hmm->cs, sizeof(char), hmm->M+1, fp);
+  if (hmm->flags & PLAN7_MAP)  fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp);
   write_bin_string(fp, hmm->comlog);
   fwrite((char *) &(hmm->nseq),     sizeof(int),  1,   fp);
   write_bin_string(fp, hmm->ctime);
+  fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp);
+  
 
   /* Specials */
   for (k = 0; k < 4; k++)
@@ -514,6 +517,10 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
       {				/* Consensus annotation present? */
 	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_CS;
       }
+    else if (strncmp(buffer, "MAP  ", 5) == 0) 
+      {				/* Map annotation present? */
+	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_MAP;
+      }
     else if (strncmp(buffer, "COM  ", 5) == 0) 
       {				/* Command line log */
 	StringChop(buffer+6);
@@ -564,11 +571,12 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
     else if (strncmp(buffer, "EVD  ", 5) == 0) 
       {				/* EVD parameters */
 	hmm->flags |= PLAN7_STATS;
-	if ((s = strtok(buffer+6, " \t\n")) == NULL)    goto FAILURE;
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
 	hmm->mu = atof(s);
-	if ((s = strtok(NULL, " \t\n")) == NULL)   goto FAILURE;
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
 	hmm->lambda = atof(s);
       }
+    else if (strncmp(buffer, "CKSUM", 5) == 0) hmm->checksum = atoi(buffer+6);
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;
   }
 
@@ -595,13 +603,17 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 
 				/* main model */
   for (k = 1; k <= hmm->M; k++) {
-                                /* Line 1: k and match emissions */
+                                /* Line 1: k, match emissions, map */
     if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
     if ((s = strtok(buffer, " \t\n")) == NULL) goto FAILURE;
     if (atoi(s) != k)                          goto FAILURE;
     for (x = 0; x < Alphabet_size; x++) {
       if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
       hmm->mat[k][x] = ascii2prob(s, hmm->null[x]);
+    }
+    if (hmm->flags & PLAN7_MAP) {
+      if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+      hmm->map[k] = atoi(s);
     }
 				/* Line 2:  RF and insert emissions */
     if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
@@ -692,14 +704,24 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    if ((hmm->flags & PLAN7_CS) &&
        !fread((char *) hmm->cs, sizeof(char), hmm->M+1, hmmfp->f)) goto FAILURE;
    hmm->cs[hmm->M+1]  = '\0';
+				/* optional alignment map annotation */
+   if ((hmm->flags & PLAN7_MAP) &&
+       !fread((char *) hmm->map, sizeof(int), hmm->M+1, hmmfp->f)) goto FAILURE;
+   if (hmmfp->byteswap)
+     for (k = 1; k <= hmm->M; k++)
+       byteswap((char*)&(hmm->map[k]), sizeof(int));
 				/* command line log */
    if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->comlog)))  goto FAILURE;
 				/* nseq */
    if (!fread((char *) &(hmm->nseq),sizeof(int), 1, hmmfp->f))       goto FAILURE;
+   if (hmmfp->byteswap) byteswap((char *)&(hmm->nseq), sizeof(int)); 
 				/* creation time */
    if (!read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->ctime)))   goto FAILURE;
+				/* checksum */
+   if (!fread((char *) &(hmm->checksum),sizeof(int), 1, hmmfp->f))       goto FAILURE;
+   if (hmmfp->byteswap) byteswap((char *)&(hmm->checksum), sizeof(int)); 
      
-  /* specials */
+   /* specials */
    for (k = 0; k < 4; k++)
      if (! fread((char *) hmm->xt[k], sizeof(float), 2, hmmfp->f))    goto FAILURE;
 
