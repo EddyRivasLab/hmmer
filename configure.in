@@ -83,8 +83,10 @@ esac],
 	])
 ])
 
-dnl Checks for system libraries
-AC_CHECK_LIB(m, sqrt)
+dnl Add the math library
+dnl Note that AC_CHECK_LIB should work but doesn't, on AIX and FreeBSD.
+dnl
+LIBS="${LIBS} -lm"
 
 dnl Check for functions
 AC_CHECK_FUNCS(pthread_setconcurrency)
