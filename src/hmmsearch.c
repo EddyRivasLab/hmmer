@@ -2,7 +2,7 @@
  * SRE, Tue Jan  7 17:19:20 1997
  *
  * main() for HMM global alignment searching.
- * RCS $Header$
+ * RCS $Id$
  */
 
 #include <stdio.h>
@@ -26,12 +26,14 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
+   --noxnu   : turn off xnu filtering of sequences\n\
 \n";
 
 
 static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "--forward", FALSE, sqdARG_NONE},
+  { "--noxnu",   FALSE, sqdARG_NONE},
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -73,12 +75,12 @@ record_by_domain(struct tophit_s *h,
        * since we don't yet necessarily know our EVD statistics, we can't
        * screen by E-value.
        * Note that we store the name, desc of the /sequence/.
-       * Also, we record the negative pvalue as a sort key.
+       * Also, we record the score as the sort key.
        */
       if (score > domT)
 	{
 	  ali = CreateFancyAli(tarr[idx], hmm, dsq, sqinfo->name);
-	  RegisterHit(h, -1.*pvalue, pvalue, score,
+	  RegisterHit(h, score, pvalue, score,
 		      sqinfo->name, 
 		      sqinfo->flags & SQINFO_DESC ? sqinfo->desc : NULL, 
 		      i1,i2, sqinfo->len, 
@@ -141,6 +143,7 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
   int   do_forward;		/* TRUE to use Forward() not Viterbi()      */
+  int   do_xnu;			/* TRUE to filter sequences thru XNU        */
 
 #ifdef MEMDEBUG
   unsigned long histid1, histid2, orig_size, current_size;
@@ -153,6 +156,7 @@ main(int argc, char **argv)
    ***********************************************/
   
   do_forward  = FALSE;
+  do_xnu      = TRUE;
   globT       = -999999;
   globE       = 10.0;
   globH       = 10000;
@@ -165,6 +169,7 @@ main(int argc, char **argv)
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
     if      (strcmp(optname, "--forward") == 0) do_forward = TRUE;
+    if      (strcmp(optname, "--noxnu")   == 0) do_xnu     = FALSE;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
@@ -229,6 +234,7 @@ main(int argc, char **argv)
   while (ReadSeq(sqfp, format, &seq, &sqinfo)) 
     {
       dsq = DigitizeSequence(seq, sqinfo.len);
+      if (do_xnu) XNU(dsq, sqinfo.len);
       
       /* 1. Score the sequence. */
       if (do_forward) sc = Plan7Forward(dsq, sqinfo.len, hmm, NULL);
@@ -238,11 +244,11 @@ main(int argc, char **argv)
       if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
       P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
 
-      /* 2. Store score/pvalue for global alignment. */
+      /* 2. Store score/pvalue for global alignment. Sort on score. */
       if (sc > globT) 
 	{
 	  pvalue = PValue(hmm, sc);
-	  RegisterHit(ghit, -1.*pvalue, pvalue, sc,
+	  RegisterHit(ghit, sc, pvalue, sc,
 		      sqinfo.name, 
 		      sqinfo.flags & SQINFO_DESC ? sqinfo.desc : NULL, 
 		      0,0,0,                	/* seq positions  */
@@ -266,11 +272,12 @@ main(int argc, char **argv)
     }
 
   /* We're done searching an HMM over the whole sequence database.
-     * Fit the histogram now if we use it for E-values. The "20"
-     * is a hint to the fitting program that we expect scores over
-     * 20 to be true positives.
-     */
-  validfit = ExtremeValueFitHistogram(histogram, 20.);
+   * Fit the histogram now if we use it for E-values. The "TRUE"
+   * left-censors the histogram and fits only the right slope. The "20"
+   * is a hint to the fitting program that we expect scores over
+   * 20 to be true positives.
+   */
+  validfit = ExtremeValueFitHistogram(histogram, TRUE, 20.);
 
   /* Now format and report our output 
    */

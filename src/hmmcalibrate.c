@@ -13,6 +13,8 @@
  * 
  * Score an HMM against random sequence data sets;
  * set histogram fitting parameters.
+ * 
+ * RCS $Id$
  */
 
 #include <stdio.h>
@@ -188,7 +190,12 @@ main(int argc, char **argv)
 	  free(seq);
 	}
 
-      ExtremeValueFitHistogram(hist, 200.);
+      /* Fit an EVD to the observed histogram.
+       * The TRUE left-censors and fits only the right slope of the histogram.
+       * The 200. is an arbitrary high number that means we won't trim outliers
+       * on the right.
+       */
+      ExtremeValueFitHistogram(hist, TRUE, 200.);
 
       /* Set HMM EVD parameters 
        */

@@ -31,12 +31,14 @@ Usage: hmms [-options] <hmm database> <sequence file>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
    -n        : nucleic acid models/sequence (default protein)\n\
+   --noxnu   : Turn off XNU filtering\n\
 \n";
 
 
 static struct opt_s OPTIONS[] = {
   { "-h",        TRUE,  sqdARG_NONE }, 
   { "-n",        TRUE,  sqdARG_NONE },
+  { "--noxnu",   FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -82,6 +84,7 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
   int   do_nucleic;		/* TRUE to do DNA/RNA instead of protein    */
+  int   do_xnu;			/* TRUE to do XNU filtering                 */
   
   int   i;
 
@@ -96,6 +99,7 @@ main(int argc, char **argv)
    ***********************************************/
   
   do_nucleic  = FALSE;
+  do_xnu      = TRUE;
   globT       = -999999;
   globE       = 10.0;
   globH       = 10000;
@@ -107,8 +111,9 @@ main(int argc, char **argv)
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-n") == 0) { do_nucleic = TRUE; }
-    else if (strcmp(optname, "-h") == 0) {
+    if      (strcmp(optname, "-n")      == 0) { do_nucleic = TRUE; }
+    else if (strcmp(optname, "--noxnu") == 0) { do_xnu     = FALSE;}
+    else if (strcmp(optname, "-h")      == 0) {
       Banner(stdout, banner);
       puts(usage);
       exit(0);
@@ -168,6 +173,8 @@ main(int argc, char **argv)
       /* 1. Search sequence against every HMM.
        */
       dsq = DigitizeSequence(seq, sqinfo.len);
+      if (do_xnu) XNU(dsq, sqinfo.len);
+      
       nhmm = 0;
       while (HMMFileRead(hmmfp, &hmm)) {
 	if (hmm == NULL) 
@@ -185,7 +192,7 @@ main(int argc, char **argv)
 	pvalue = PValue(hmm, score);
 	if (pvalue < globE && score >= globT) 
 	  { 
-	    RegisterHit(ghit, -1.*pvalue, pvalue, score,
+	    RegisterHit(ghit, score, pvalue, score,
 			hmm->name, hmm->desc, 
 			0,0,0,
 			0,0,0,
