@@ -152,6 +152,7 @@ HMMFileOpen(char *hmmfile, char *env)
   unsigned int magic;
   char         buf[512];
   char        *gsifile;
+  char        *sgsifile;
   char        *dir;        /* dir name in which HMM file was found */
 
   hmmfp = (HMMFILE *) MallocOrDie (sizeof(HMMFILE));
@@ -168,27 +169,40 @@ HMMFileOpen(char *hmmfile, char *env)
    */
   hmmfp->f   = NULL;
   hmmfp->gsi = NULL;
+  hmmfp->sgsi = NULL;
   if ((hmmfp->f = fopen(hmmfile, "r")) != NULL)
     {
       gsifile = MallocOrDie(sizeof(char) * (strlen(hmmfile) + 5));
       sprintf(gsifile, "%s.gsi", hmmfile);
+
+      sgsifile = MallocOrDie(sizeof(char) * (strlen(hmmfile) + 6));
+      sprintf(sgsifile, "%s.sgsi", hmmfile);
     }
   else if ((hmmfp->f = EnvFileOpen(hmmfile, env, &dir)) != NULL)
     {
       char *full;
       full    = FileConcat(dir, hmmfile);
+
       gsifile = MallocOrDie(sizeof(char) * (strlen(full) + strlen(hmmfile) + 5));
       sprintf(gsifile, "%s.gsi", full);
+
+      sgsifile = MallocOrDie(sizeof(char) * (strlen(full) + strlen(hmmfile) + 6));
+      sprintf(sgsifile, "%s.sgsi", full);
+
       free(full);
     }
   else return NULL;
   
-  /* Open the GSI index file. If it doesn't exist,
-   * hmmfp->gsi stays NULL.
+  /* Open the GSI index files. If it doesn't exist,
+   * hmmfp->gsi stays NULL. (and analogously for hmmfp->sgsi).
    */
   SQD_DPRINTF1(("Opening gsifile %s...\n", gsifile));
   hmmfp->gsi = GSIOpen(gsifile);
   free(gsifile);
+
+  SQD_DPRINTF1(("Opening gsifile %s...\n", sgsifile));
+  hmmfp->sgsi = GSIOpen(sgsifile);
+  free(sgsifile);
 
   /* Check for binary or byteswapped binary format
    * by peeking at first 4 bytes.
@@ -306,8 +320,9 @@ HMMFileRead(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 void
 HMMFileClose(HMMFILE *hmmfp)
 {
-  if (hmmfp->f   != NULL) fclose(hmmfp->f);      
-  if (hmmfp->gsi != NULL) GSIClose(hmmfp->gsi);
+  if (hmmfp->f   != NULL)  fclose(hmmfp->f);      
+  if (hmmfp->gsi != NULL)  GSIClose(hmmfp->gsi);
+  if (hmmfp->sgsi != NULL) GSIClose(hmmfp->sgsi);
   free(hmmfp);
 }
 void 
@@ -327,11 +342,19 @@ HMMFilePositionByName(HMMFILE *hmmfp, char *name)
   long       offset;		/* offset in hmmfile, from GSI */
   int        fmt;		/* ignored.                    */
 
-  if (hmmfp->gsi == NULL) return 0; /* can only position if we have GSI index   */
-  if (strlen(name) >= 32) return 0; /* GSI files can only handle keys < 32 char */
-  if (! GSIGetOffset(hmmfp->gsi, name, hmmfile, &fmt, &offset)) return 0; 
-  HMMFilePositionByOffset(hmmfp, offset);
-  return 1;
+  if (strlen(name) >= GSI_KEYSIZE) return 0; /* GSI files can only handle keys < 32 char */
+
+				/* start by looking in primary keys... */
+  if (hmmfp->gsi != NULL && GSIGetOffset(hmmfp->gsi, name, hmmfile, &fmt, &offset)) {
+    HMMFilePositionByOffset(hmmfp, offset);
+    return 1;
+  }
+				/* else look in secondary keys... */
+  if (hmmfp->sgsi != NULL && GSIGetOffset(hmmfp->sgsi, name, hmmfile, &fmt, &offset)) {
+    HMMFilePositionByOffset(hmmfp, offset);
+    return 1;
+  }
+  return 0;			/* else found nothing, sorry. */
 }
 int 
 HMMFilePositionByIndex(HMMFILE *hmmfp, int idx)
@@ -340,6 +363,10 @@ HMMFilePositionByIndex(HMMFILE *hmmfp, int idx)
   sqd_uint32 offset;
   sqd_uint16 filenum;
 
+  /* This function acts only on the primary key index, which has a one-to-one 
+   * relationship between keys and HMMs.
+   */
+  if (hmmfp->gsi == NULL)        return 0; /* no primary index  */
   if (idx >= hmmfp->gsi->recnum) return 0; /* idx out of bounds */
   if (idx <  0)                  return 0; /* idx out of bounds */
   if (fseek(hmmfp->gsi->gsifp, (1 + hmmfp->gsi->nfiles + idx) * GSI_RECSIZE, SEEK_SET) != 0) PANIC;
