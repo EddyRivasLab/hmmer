@@ -13,8 +13,10 @@
  * RCS $Id$
  */
 
-#ifdef HMMER_THREADS		/* conditional inclusion of the entire file */
+#include "config.h"
+#include "squidconf.h"
 
+#ifdef HMMER_THREADS		/* conditional inclusion of the entire file */
 #include <stdlib.h>
 #include <string.h>
 #include <float.h>
@@ -24,6 +26,7 @@
 #include "funcs.h"
 #include "squid.h"
 #include "sqfuncs.h"
+
 
 
 /* Function: ThreadNumber()

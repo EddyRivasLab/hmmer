@@ -4,8 +4,11 @@
 
 /* alphabet.c
  * Configuration of the global symbol alphabet information.
- * RCS $Id$
+ * CVS $Id$
  */
+
+#include "config.h"
+#include "squidconf.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -14,14 +17,9 @@
 #include <pthread.h>
 #endif /* HMMER_THREADS */
 
-#include "config.h"
 #include "structs.h"
 #include "funcs.h"
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static void set_degenerate(char iupac, char *syms);
 

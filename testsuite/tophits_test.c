@@ -7,6 +7,8 @@
  *    -v   Verbose; print stuff.
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -69,7 +71,7 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-s") == 0) { seed       = atoi(optarg); }
     else if (strcmp(optname, "-v") == 0) { be_verbose = TRUE;         }
     else if (strcmp(optname, "-h") == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);
@@ -165,6 +167,7 @@ main(int argc, char **argv)
 
   FreeTophits(hit);
   free(list);
+  SqdClean();
   
   if (be_verbose) printf("tophits_test is OK\n");
   return 0;

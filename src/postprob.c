@@ -66,11 +66,12 @@
  * right now.
  */
 
-#include "structs.h"
 #include "config.h"
-#include "funcs.h"
-#include "squid.h"
+#include "squidconf.h"
 
+#include "squid.h"
+#include "structs.h"
+#include "funcs.h"
 
 /* Function: P7OptimalAccuracy()
  * 

@@ -9,13 +9,15 @@
  * CVS $Id$
  */
 
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "structs.h"		/* data structures, macros, #define's   */
-#include "config.h"		/* compile-time configuration constants */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
@@ -92,7 +94,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--seed") == 0) seed         = atoi(optarg);
     else if (strcmp(optname, "-h") == 0) 
       {
-	Banner(stdout, banner);
+	HMMERBanner(stdout, banner);
 	puts(usage);
 	puts(experts);
 	exit(0);
@@ -130,7 +132,7 @@ main(int argc, char **argv)
 
   if (! be_quiet) 
     {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       printf("HMM file:             %s\n", hmmfile);
       if (! do_consensus) {
 	printf("Number of seqs:       %d\n", nseq);

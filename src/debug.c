@@ -11,13 +11,15 @@
  * CVS $Id$
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <ctype.h>
 
 #include "structs.h"
-#include "config.h"
 #include "funcs.h" 
 #include "squid.h"
 

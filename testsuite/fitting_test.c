@@ -2,6 +2,8 @@
  * 17 June 1997 (see notebook)
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

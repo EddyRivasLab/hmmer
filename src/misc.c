@@ -8,6 +8,9 @@
  * Functions that I don't know quite where to put yet.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,9 +19,43 @@
 #include <limits.h>
 
 #include "squid.h"
-#include "config.h"
 #include "structs.h"
-#include "version.h"
+
+
+/* Function: HMMERBanner()
+ * Date:     SRE, Sun Jun 20 17:19:41 1999 [Graeme's kitchen]
+ *
+ * Purpose:  Print a package version and copyright banner.
+ *           Used by all the main()'s.
+ *           
+ *    Expects to be able to pick up defined preprocessor variables:
+ *    variable          example
+ *    --------           --------------  
+ *    PACKAGE_NAME      "HMMER"
+ *    PACKAGE_VERSION   "2.0.42"
+ *    PACKAGE_DATE      "April 1999"
+ *    PACKAGE_COPYRIGHT "Copyright (C) 1992-1999 Washington University School of Medicine"
+ *    PACKAGE_LICENSE   "Freely distributed under the GNU General Public License (GPL)."
+ *           
+ *    This gives us a general mechanism to update release information
+ *    without changing multiple points in the code.
+ * 
+ * Args:     fp     - where to print it
+ *           banner - one-line program description, e.g.:
+ *                    "foobar - make bars from foo with elan" 
+ * Returns:  (void)
+ */
+void
+HMMERBanner(FILE *fp, char *banner)
+{
+  fprintf(fp, "%s\n", banner);
+  fprintf(fp, "%s %s (%s)\n", PACKAGE_NAME, PACKAGE_VERSION, PACKAGE_DATE);
+  fprintf(fp, "%s\n", PACKAGE_COPYRIGHT);
+  fprintf(fp, "%s\n", PACKAGE_LICENSE);
+  fprintf(fp, "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
+}
+
+
 
 /* Function: Getword()
  * 

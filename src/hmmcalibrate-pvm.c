@@ -2,8 +2,6 @@
  * @LICENSE@
  ************************************************************/
 
-#ifdef HMMER_PVM
-
 /* hmmcalibrate-pvm.c
  * SRE, Tue Aug 18 15:19:28 1998
  * Redesigned for better parallelization: SRE, Wed Dec  1 09:48:58 1999
@@ -25,18 +23,20 @@
  * RCS $Id$
  */
 
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
+
+#ifdef HMMER_PVM
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
 #include <pvm3.h>
 
-#include "version.h"
-#include "structs.h"		/* data structures, macros, #define's   */
-#include "config.h"		/* compile-time configuration constants */
-#include "funcs.h"		/* function declarations                */
-#include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
 #include "stopwatch.h"		/* CPU timing routines                  */
+#include "structs.h"		/* data structures, macros, #define's   */
+#include "funcs.h"		/* function declarations                */
+#include "globals.h"		/* alphabet global variables            */
 
 static void leave_pvm(void);
 

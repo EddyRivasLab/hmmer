@@ -10,11 +10,13 @@
  * 
  * Functions for displaying HMMer2.0 structures.
  *
- * RCS $Id$
+ * CVS $Id$
  */
 
-#include "structs.h"
 #include "config.h"
+#include "squidconf.h"
+
+#include "structs.h"
 #include "funcs.h"
 #include "squid.h"
 

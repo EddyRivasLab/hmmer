@@ -10,8 +10,10 @@
  * and Viterbi for Plan7. For optimized replacements for some of these functions,
  * see fast_algorithms.c.
  */
-#include "structs.h"
 #include "config.h"
+#include "squidconf.h"
+
+#include "structs.h"
 #include "funcs.h"
 #include "squid.h"
 

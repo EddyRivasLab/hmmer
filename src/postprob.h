@@ -15,9 +15,8 @@
 
 #ifndef POSTPROB_INCLUDED
 #define POSTPROB_INCLUDED
-
-#include "structs.h"
 #include "config.h"
+#include "structs.h"
 #include "funcs.h"
 #include "squid.h"
 

@@ -13,8 +13,9 @@
 #ifndef STRUCTSH_INCLUDED
 #define STRUCTSH_INCLUDED
 
-#include "squid.h"
 #include "config.h"
+
+#include "squid.h"
 #include "ssi.h"
 
 /* Miscellaneous math macros used in the package

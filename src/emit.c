@@ -4,21 +4,21 @@
 
 /* emit.c
  * SRE, Sun Mar  8 12:26:58 1998
- * RCS $Id$
+ * CVS $Id$
  * 
  * Generation of sequences/traces from an HMM.
  */
 
-#include "structs.h"
 #include "config.h"
-#include "funcs.h"
-#include "squid.h"
+#include "squidconf.h"
 
 #include <ctype.h>
 
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
+#include "structs.h"
+#include "funcs.h"
+#include "squid.h"
+
+
 
 /* Function: EmitSequence()
  * Date:     SRE, Sun Mar  8 12:28:03 1998 [St. Louis]

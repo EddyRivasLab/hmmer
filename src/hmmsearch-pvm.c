@@ -2,26 +2,26 @@
  * @LICENSE@
  ************************************************************/
 
-#ifdef HMMER_PVM
-
 /* hmmsearch-pvm.c
  * SRE, Wed Sep 23 09:30:53 1998
  * 
  * PVM slave for hmmsearch.
- * RCS $Id$
+ * CVS $Id$
  */
 
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
+
+#ifdef HMMER_PVM
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
 #include <pvm3.h>
 
-#include "version.h"
+#include "squid.h"		/* general sequence analysis library    */
 #include "structs.h"		/* data structures, macros, #define's   */
-#include "config.h"		/* compile-time configuration constants */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
 
 static void leave_pvm(void);
 

@@ -64,6 +64,9 @@
  * V2.0: Plan7. Essentially complete rewrite.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,11 +75,10 @@
 #include <unistd.h> /* to get SEEK_CUR definition on silly Suns */
 
 #include "squid.h"
-#include "config.h"
+#include "ssi.h"
 #include "structs.h"
 #include "funcs.h"
-#include "version.h"
-#include "ssi.h"
+
 
 /* Magic numbers identifying binary formats.
  * Do not change the old magics! Necessary for backwards compatibility.
@@ -379,7 +381,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   int x;                        /* counter for symbols           */
   int ts;			/* counter for state transitions */
 
-  fprintf(fp, "HMMER2.0  [%s]\n", RELEASE);  /* magic header */
+  fprintf(fp, "HMMER2.0  [%s]\n", PACKAGE_VERSION);  /* magic header */
 
   /* write header information
    */

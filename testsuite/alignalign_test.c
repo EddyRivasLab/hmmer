@@ -19,6 +19,8 @@
  * CVS $Id$
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -94,7 +96,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--ali")    == 0) { afile   = optarg; be_standard = FALSE; }
     else if (strcmp(optname, "--hmm")    == 0) { hmmfile = optarg; be_standard = FALSE; }
     else if (strcmp(optname, "-h")       == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);
@@ -128,6 +130,7 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
+  HMMFileClose(hmmfp);
   P7Logoddsify(hmm, TRUE);
 
   if (! (hmm->flags & PLAN7_MAP))

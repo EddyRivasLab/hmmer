@@ -8,12 +8,15 @@
  * Support for Dirichlet prior data structure, p7prior_s.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <string.h>
 
-#include "config.h"
+#include "squid.h"
 #include "structs.h"
 #include "funcs.h" 
-#include "squid.h"
+
 
 static struct p7prior_s *default_amino_prior(void);
 static struct p7prior_s *default_nucleic_prior(void);

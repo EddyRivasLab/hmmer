@@ -7,17 +7,18 @@
  * 
  * Interfaces between HMMER and other software packages.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
+
+#include "config.h"
+#include "squidconf.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #include "squid.h"
-#include "config.h"
 #include "structs.h"
 #include "funcs.h"
-#include "version.h"
 
 
 /* Function: WriteProfile()
@@ -112,7 +113,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   if (Alphabet_type == hmmAMINO)        fprintf(fp, "(Peptide) ");
   else if (Alphabet_type == hmmNUCLEIC) fprintf(fp, "(Nucleotide) ");
   fprintf(fp, "HMMCONVERT v%s Length: %d %s|%s|%s\n",
-	  RELEASE, hmm->M, hmm->name,
+	  PACKAGE_VERSION, hmm->M, hmm->name,
 	  hmm->flags & PLAN7_ACC ? hmm->acc : "",
 	  hmm->flags & PLAN7_DESC ? hmm->desc : "");
   
@@ -120,7 +121,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
    */
   if (do_xsw)
     {
-      fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", RELEASE);
+      fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", PACKAGE_VERSION);
       fprintf(fp, "   Compugen XSW extended profile format.\n");
       fprintf(fp, "   Use -model=xsw.model -nonor -noave -gapop=10 -gapext=1 -qgapop=10 -qgapext=1\n");
       fprintf(fp, "      with om on the Compugen BIC to get the closest approximation to HMMER bit scores.\n");
@@ -131,7 +132,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
     }
   else
     {
-      fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", RELEASE);
+      fprintf(fp, "   Profile converted from a profile HMM using HMMER v%s emulation.\n", PACKAGE_VERSION);
       fprintf(fp, "   Use -nonor -noave -gap=10 -len=1 with profilesearch and friends\n");
       fprintf(fp, "      to get the closest approximation to HMMER bit scores.\n");
       fprintf(fp, "   WARNING: There is a loss of information in this conversion.\n");

@@ -3,6 +3,9 @@
  * Position-specific matrices.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,13 +14,8 @@
 #include <math.h>		
 
 #include "funcs.h"
-#include "config.h"
 #include "structs.h"
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 /* Function: MakeStarHMM()
  * 

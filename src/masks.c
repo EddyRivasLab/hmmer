@@ -18,21 +18,19 @@
  * 
  * The TraceScoreCorrection() code is the default.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
+
+#include "config.h"
+#include "squidconf.h"
 
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
 
 #include "squid.h"
-#include "config.h"
 #include "structs.h"
 #include "funcs.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 /* The PAM120 score matrix, in HMMER's AMINO_ALPHABET alphabetic order 
  */

@@ -9,15 +9,16 @@
  * Support for Plan 7 traceback data structure, p7trace_s.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
-#include "structs.h"
-#include "config.h"
 #include "squid.h"
+#include "structs.h"
 #include "funcs.h"
-#include "version.h"
 
 static void rightjustify(char *s, int n);
 
@@ -519,8 +520,8 @@ P7Traces2Alignment(char **dsq, SQINFO *sqinfo, float *wgt, int nseq, int mlen,
         
   msa->nseq = nseq;
   msa->alen = alen;
-  msa->au   = MallocOrDie(sizeof(char) * (strlen(RELEASE)+7));
-  sprintf(msa->au, "HMMER %s", RELEASE);
+  msa->au   = MallocOrDie(sizeof(char) * (strlen(PACKAGE_VERSION)+7));
+  sprintf(msa->au, "HMMER %s", PACKAGE_VERSION);
 				/* copy sqinfo array and weights */
   for (idx = 0; idx < nseq; idx++)
     {

@@ -9,19 +9,17 @@
  * Rescued from the wreckage of HMMER 1.9m code.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
 #include "squid.h"
-#include "config.h"
 #include "structs.h"
 #include "funcs.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 
 struct plan9_s *
 P9AllocHMM(int M)               		/* length of model to make */

@@ -13,19 +13,17 @@
  * alloc, free, and initialization of state structures
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
 #include "squid.h"
-#include "config.h"
 #include "structs.h"
 #include "funcs.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
 
 struct hmm_struc *
 AllocHMM(int M)               		/* length of model to make */

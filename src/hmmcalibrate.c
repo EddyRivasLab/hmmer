@@ -11,6 +11,9 @@
  * CVS $Id$
  */
 
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,12 +30,11 @@
 #endif
 
 #include "squid.h"		/* general sequence analysis library    */
-#include "config.h"		/* compile-time configuration constants */
+#include "stopwatch.h"		/* process timings                      */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "version.h"		/* release version info                 */
-#include "stopwatch.h"		/* process timings                      */
+
 
 static char banner[] = "hmmcalibrate -- calibrate HMM search statistics";
 
@@ -202,7 +204,7 @@ main(int argc, char **argv)
       else if (strcmp(optname, "--seed")     == 0) seed     = atoi(optarg);
       else if (strcmp(optname, "-h") == 0)
 	{
-	  Banner(stdout, banner);
+	  HMMERBanner(stdout, banner);
 	  puts(usage);
 	  puts(experts);
 	  exit(0);
@@ -255,7 +257,7 @@ main(int argc, char **argv)
    * Show the banner
    ***********************************************/
 
-  Banner(stdout, banner);
+  HMMERBanner(stdout, banner);
   printf("HMM file:                 %s\n", hmmfile);
   if (fixedlen) 
     printf("Length fixed to:          %d\n", fixedlen);
@@ -342,6 +344,7 @@ main(int argc, char **argv)
 	}
 
       FreeHistogram(hist);
+      FreePlan7(hmm);
     }
   SQD_DPRINTF1(("Main body believes it has calibrations for %d HMMs\n", nhmm));
 
@@ -396,6 +399,7 @@ main(int argc, char **argv)
   if (remove(hmmfile) != 0)                            PANIC;
   if (rename(tmpfile, hmmfile) != 0)                   PANIC;
   if (sigprocmask(SIG_UNBLOCK, &blocksigs, NULL) != 0) PANIC;
+  free(tmpfile);
 
   /***********************************************
    * Exit
@@ -414,7 +418,6 @@ main(int argc, char **argv)
 
   free(mu);
   free(lambda);
-  free(tmpfile);
   if (hfp != NULL) fclose(hfp);
   SqdClean();
   return 0;

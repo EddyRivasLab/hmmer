@@ -6,6 +6,8 @@
  * CVS $Id$
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -77,7 +79,7 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-v")       == 0) { be_verbose = TRUE;   }
     else if (strcmp(optname, "--xnu")    == 0) { xnufile    = optarg; }
     else if (strcmp(optname, "-h")       == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);

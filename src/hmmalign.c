@@ -6,15 +6,17 @@
  * SRE, Thu Dec 18 16:05:29 1997 [St. Louis]
  * 
  * main() for aligning a set of sequences to an HMM.
- * RCS $Id$
+ * CVS $Id$
  */ 
+
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "structs.h"		/* data structures, macros, #define's   */
-#include "config.h"		/* compile-time configuration constants */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
@@ -105,7 +107,7 @@ main(int argc, char **argv)
       }
     else if (strcmp(optname, "-h") == 0) 
       {
-	Banner(stdout, banner);
+	HMMERBanner(stdout, banner);
 	puts(usage);
 	puts(experts);
 	exit(EXIT_SUCCESS);
@@ -163,7 +165,7 @@ main(int argc, char **argv)
 
   if (! be_quiet) 
     {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       printf(   "HMM file:             %s\n", hmmfile);
       printf(   "Sequence file:        %s\n", seqfile);
       printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
@@ -312,10 +314,11 @@ include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
   for (idx = *nseq; idx < *nseq + msa->nseq; idx++)
     (*dsq)[idx] = newdsq[idx - (*nseq)];
   free(newdsq);
-				/* unnecessarily complex, but I can't be bothered... */
+			/* unnecessarily complex, but I can't be bothered... */
   *sqinfo = ReallocOrDie((*sqinfo), sizeof(SQINFO) * (*nseq + msa->nseq));
   for (idx = *nseq; idx < *nseq + msa->nseq; idx++)
     SeqinfoCopy(&((*sqinfo)[idx]), &(newinfo[idx - (*nseq)]));
+  free(newinfo);
   
   *nseq = *nseq + msa->nseq;
 

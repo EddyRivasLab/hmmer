@@ -14,15 +14,19 @@
  */
 
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <math.h>
 #include <float.h>
 #ifdef HMMER_THREADS
 #include <pthread.h>
 #endif
-#include "funcs.h"
-#include "config.h"
-#include "structs.h"
+
 #include "squid.h"
+#include "funcs.h"
+#include "structs.h"
+
 
 /* Function: Prob2Score()
  * 

@@ -6,6 +6,7 @@
  * CVS $Id$
  */
 
+#include "config.h"
 
 #include <stdio.h>
 #include <time.h>
@@ -76,7 +77,7 @@ main(int argc, char **argv)
     if      (strcmp(optname, "-v")       == 0) be_verbose = TRUE;
     else if (strcmp(optname, "--hmm")    == 0) hmmfile    = optarg;
     else if (strcmp(optname, "-h")       == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);
@@ -96,6 +97,7 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
+  HMMFileClose(hmmfp);
   Plan7Renormalize(hmm);
 
   /*********************************************** 
@@ -163,8 +165,9 @@ main(int argc, char **argv)
 	  P7FreeTrace(tr2);
 	  free(dsq);
 	}
+      FreePlan7Matrix(mx);
     }
 
-  FreePlan7Matrix(mx);
+  FreePlan7(hmm);
   return EXIT_SUCCESS;
 }

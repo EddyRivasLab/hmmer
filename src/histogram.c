@@ -8,7 +8,7 @@
  * Accumulation, printing, and fitting of score histograms
  * from database searches.
  *
- * RCS $Id$
+ * CVS $Id$
  ************************************************************
  * Basic API:
  * 
@@ -23,6 +23,9 @@
  * FreeHistogram(h);
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
@@ -30,13 +33,8 @@
 #include <math.h>
 
 #include "squid.h"
-#include "config.h"
 #include "structs.h"
 #include "funcs.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 /* Function: AllocHistogram()
  * 

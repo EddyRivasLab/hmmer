@@ -6,6 +6,8 @@
  * CVS $Id$
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -76,7 +78,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--hmm")    == 0) hmmfile    = optarg;
     else if (strcmp(optname, "--seq")    == 0) seqfile    = optarg;
     else if (strcmp(optname, "-h")       == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);

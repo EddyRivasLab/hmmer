@@ -9,19 +9,19 @@
  * 
  * CVS $Id$
  */
-#ifdef HMMER_PVM
+#include "config.h"
+#include "squidconf.h"
 
+#ifdef HMMER_PVM
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <pvm3.h>
 
-#include "version.h"
+#include "squid.h"
 #include "structs.h"
 #include "funcs.h"
-#include "squid.h"
-#include "sqfuncs.h"
 
 /* Function: PVMSpawnSlaves()
  * Date:     SRE, Wed Aug 19 14:01:39 1998 [St. Louis]

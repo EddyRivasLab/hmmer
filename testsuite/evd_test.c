@@ -6,9 +6,10 @@
  * against parametric mu, lambda. If they differ badly, calls Die(). 
  * If OK, returns EXIT_SUCCESS.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
+#include "config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -19,10 +20,6 @@
 #include "funcs.h"
 #include "globals.h"
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
 
 static char banner[] = "\
 evd_test : testing of EVD code in histogram.c";
@@ -101,11 +98,6 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
 
-#ifdef MEMDEBUG
-  unsigned long histid1, histid2, orig_size, current_size;
-  orig_size = malloc_inuse(&histid1);
-  fprintf(stderr, "[... memory debugging is ON ...]\n");
-#endif
   
   /*********************************************** 
    * Parse command line
@@ -146,7 +138,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--mean")   == 0) { mean       = atof(optarg); } 
     else if (strcmp(optname, "--sd")     == 0) { sd         = atof(optarg); } 
     else if (strcmp(optname, "-h")       == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);
@@ -284,12 +276,6 @@ main(int argc, char **argv)
       free(val);
     }
 
-#ifdef MEMDEBUG
-  current_size = malloc_inuse(&histid2);
-  if (current_size != orig_size) Die("evd_test failed memory test");
-  else fprintf(stderr, "[No memory leaks.]\n");
-#endif
-  
   if (xmgrfp != NULL) fclose(xmgrfp);
   if (logfp != NULL)  fclose(logfp);
   return EXIT_SUCCESS;

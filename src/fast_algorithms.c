@@ -32,8 +32,10 @@
  *   enable Erik Lindahl's Altivec code for Macintosh OSX
  */
 
-#include "structs.h"
 #include "config.h"
+#include "squidconf.h"
+
+#include "structs.h"
 #include "funcs.h"
 #include "squid.h"
 

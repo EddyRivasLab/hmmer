@@ -24,6 +24,9 @@
  *    are removed.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
@@ -31,11 +34,12 @@
 #include <float.h>
 #include <ctype.h>
 
-#include "structs.h"
-#include "config.h"
-#include "funcs.h"
 #include "squid.h"
 #include "msa.h"
+#include "structs.h"
+#include "funcs.h"
+
+
 
 /* flags used for matassign[] arrays -- 
  *   assignment of aligned columns to match/insert states

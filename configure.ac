@@ -5,37 +5,88 @@
 # Hint: See autoconf macro archive at 
 #     http://www.gnu.org/software/ac-archive/
 
-AC_INIT(src/hmmpfam.c)
+# Initialize w/ AC_INIT(<package> <version> <bug-report> <tarname>)
+# 
+# The four AC_INIT args set the following output variables and preprocessor symbols:
+#     PACKAGE_NAME      <package>     e.g. "HMMER"
+#     PACKAGE_VERSION   <version>     e.g. "2.2h"
+#     PACKAGE_BUGREPORT <bug-report>  e.g. "eddy@genetics.wustl.edu"
+#     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
+# From them, it derives one more:
+#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 2.2h"
+# We also define additional variables:
+#     PACKAGE_RELCODE     unique CVS tag without .'s: e.g. "hmmer2_2i"
+#     PACKAGE_DATE        release date: e.g. "January 2003"
+#     PACKAGE_COPYRIGHT   one-line copyright string
+#     PACKAGE_LICENSE     one-line license string
+#     PACKAGE_LICENSETAG  which license to bundle from Licenses/ subdirectory.
+#
+# The preprocessor symbols get picked up in config.h.
+# The output variables are used in Makefiles.
+#
+AC_PREREQ(2.57)
+AC_INIT(HMMER, 2.2i, eddy@genetics.wustl.edu, hmmer)
+AC_MSG_NOTICE([configuring HMMER for your system.])
 
-echo "   Welcome to HMMER... configuring for your system."
+PACKAGE_RELCODE="hmmer2_2i"
+PACKAGE_DATE="January 2003"
+PACKAGE_COPYRIGHT="Copyright (C) 1992-2003 HHMI/Washington University School of Medicine"
+PACKAGE_LICENSE="Freely distributed under the GNU General Public License (GPL)"
+PACKAGE_LICENSETAG=gnu
 
-AC_SUBST(MDEFS)
-AC_SUBST(PVMLIBDIR)
-AC_SUBST(PVMINCDIR)
-AC_SUBST(PVMFLAG)
-AC_SUBST(PVMPROGS)
-AC_SUBST(PVMLIBS)
+AC_SUBST(PACKAGE_RELCODE)
+AC_SUBST(PACKAGE_DATE)
+AC_SUBST(PACKAGE_COPYRIGHT)
+AC_SUBST(PACKAGE_LICENSE)
+AC_SUBST(PACKAGE_LICENSETAG)
+
+AC_DEFINE_UNQUOTED(PACKAGE_DATE, "$PACKAGE_DATE")
+AC_DEFINE_UNQUOTED(PACKAGE_COPYRIGHT, "$PACKAGE_COPYRIGHT")
+AC_DEFINE_UNQUOTED(PACKAGE_LICENSE, "$PACKAGE_LICENSE")
+
+
 
 # Checks for programs.
+# Sets output variables CC, CFLAGS, and RANLIB.
+#
 AC_PROG_CC
-AC_PROG_LN_S
 AC_PROG_RANLIB
 
+
+
 # Figure out what host we're compiling on.
+# Three GNU scripts must be included in the distro: 
+#       install.sh, config.guess, config.sub
+# This sets four shell variables:
+#       host            example: i686-pc-linux-gnu      
+#       host_cpu        example: i686
+#       host_vendor     example: pc
+#       host_os         example: linux-gnu
+#
+# These are used later in the configure by the ACX_PTHREAD macro to determine
+# system-specific details of threads libraries.
+#
 AC_CANONICAL_HOST
 
-# GNU make check; makefile dependency lines for executables.
+
+
+# GNU make check; format of makefile dependency lines for executables.
 # original from John Darrington <j.darrington@elvis.murdoch.edu.au> 
-# w/ heavy modifications from me.
+# w/ heavy modifications.
+#
 # We need this because GNU make and SYSV make use different systems
 # specifying variables for dependencies: $$@ in sysv, %: %.o in GNU.
 # Would love to hear a better way of doing this.
 # 
-# I use different conventions in my Makefiles. Sometimes 
+# I use two different conventions in my Makefiles. Sometimes 
 # executable "foo" has a file "foo.c" - this is the HMMER convention.
 # Sometimes executable "foo" has a file "foo_main.c" - this is
-# the SQUID convention. The configure script must set the
-# EXEC_DEPENDENCY appropriately.
+# the SQUID convention. The configure script sets the
+# EXEC_DEPENDENCY appropriately: here, HMMER style.
+#
+# This creates a function CHECK_GNU_MAKE, which we immediately call.
+# It sets an output variable EXEC_DEPENDENCY. 
+# This is used in the src/Makefile.in.
 #
 AC_DEFUN(CHECK_GNU_MAKE,[ 
   AC_MSG_CHECKING(whether your make is GNU make)
@@ -50,42 +101,24 @@ AC_DEFUN(CHECK_GNU_MAKE,[
 ])
 CHECK_GNU_MAKE
 
-# Configure debugging
-#
-AC_ARG_ENABLE(debugging,
-[  --enable-debugging=x set debugging level to <x> (1-3) ],
-[ case $enable_debugging in
-   yes)  echo 'Setting debugging level 0, CFLAGS only, no debug output'
-         CFLAGS="-g -Wall"
-         ;;
-     1)  echo 'Setting debug level 1'
-         CFLAGS="-g -Wall"
-         MDEFS="$MDEFS -DDEBUGLEVEL=1"
-         ;;
-     2)  echo 'Setting debug level 2'
-         CFLAGS="-g -Wall"
-         MDEFS="$MDEFS -DDEBUGLEVEL=2"
-         ;;
-     3)  echo 'Setting debug level 3'
-         CFLAGS="-g -Wall"
-         MDEFS="$MDEFS -DDEBUGLEVEL=3"
-         ;;
-    no)  ;;
-     *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
-	 ;;
-esac])
+#################################################################################
+# Now we're into our "optional features"
+#################################################################################
 
-# Configure optional Altivec support from Erik Lindahl.
-#    --enable-altivec turns it on.
+
+# --enable-altivec         - enable Erik Lindahl's Altivec code for PowerPC
+#
+# Sets the ALTIVEC preprocessor variable; adds -faltivec to the CFLAGS.
 #
 AC_ARG_ENABLE(altivec,
-[  --enable-altivec     enable Altivec-specific code for PowerPC],
+[  --enable-altivec        enable Altivec-specific code for PowerPC],
 [case $enable_altivec in
-   yes)  echo "Enabling optional Altivec optimization for PowerPC (Erik Lindahl, Stanford)"
-         MDEFS="$MDEFS -DALTIVEC"
+   yes)  AC_MSG_NOTICE([enabled Altivec optimization for PowerPC (Erik Lindahl)])
+         AC_DEFINE(ALTIVEC)
          CFLAGS="$CFLAGS -faltivec"
          ;;
-    no)  ;;
+    no)  AC_MSG_NOTICE([Altivec/PowerPC optimization disabled])
+         ;;
      *)  echo "Ignoring unknown argument to --enable-altivec: $enable_altivec"
 	 ;;
 esac])
@@ -93,7 +126,7 @@ esac])
 # Now check whether the compiler supports altivec extensions, if enabled.
 # In theory we could do this in the source, but this way we can give
 # the user an explicit error message telling him/her to upgrade the compiler.
-# (M4 code from Erik Lindahl)
+# (M4 code from Erik Lindahl, Stanford University)
 #
 if test x"$enable_altivec" = xyes; then
         AC_MSG_CHECKING([whether the compiler supports altivec extensions])
@@ -106,36 +139,113 @@ choke_me
               AC_MSG_NOTICE([Altivec optimization successfully enabled.])
               ],[
               AC_MSG_RESULT([no])
-              AC_MSG_ERROR([]
-[Altivec support is entirely optional, but provides significantly]
-[better performance on recent PowerPC hardware like the G4 and PPC970.]
-[Rerun configure without the --enable-altivec flag, or update to a recent]
-[compiler like gcc-3.1 (included in the latest Apple developer tools).])]
+              AC_MSG_ERROR([altivec not supported on this platform]
+[]
+[Either you aren't on an Apple platform that supports Altivec instructions, or your]
+[compiler doesn't support Altivec. Rerun configure without the --enable-altivec]
+[flag, or update to a recent compiler like gcc-3.1 (included in the latest Apple]
+[developer tools).])]
         )                       
 fi
 
 
-# Configure optional PVM (not default)
-#     --enable-pvm turns it on.
+
+# --enable-ccmalloc      - configure for compiling in ccmalloc memory checks
 #
-AC_ARG_ENABLE(pvm, 
-[  --enable-pvm         enable PVM, Parallel Virtual Machine],
-[case $enable_pvm in
-   yes)  echo 'Configuring optional PVM (Parallel Virtual Machine) support'
- 	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
-	 PVMINCDIR="-I${PVM_ROOT}/include"
-	 PVMFLAG="-DHMMER_PVM"
-	 PVMPROGS="hmmcalibrate-pvm hmmpfam-pvm hmmsearch-pvm"
-	 PVMLIBS="-lpvm3"
-	 ;;
-   no)   ;;
-   *)    echo "Ignoring unknown argument to --enable-pvm: $enable_pvm"
+# The CC output variable is modified.
+#
+AC_ARG_ENABLE(ccmalloc,
+[  --enable-ccmalloc       turn ccmalloc memory debugging on ],
+[case $enable_ccmalloc in
+   yes)  AC_MSG_NOTICE([enabled ccmalloc memory debugging])
+         CC="ccmalloc $CC" 
+         ;;
+    no)  AC_MSG_NOTICE([ccmalloc memory debug/tracing disabled])
+         ;;
+     *)  echo "Ignoring unknown argument to --enable-ccmalloc: $enable_ccmalloc"
 	 ;;
 esac])
 
 
-# Enable optional threads by default.
-# Uses ACX_PTHREAD macro from GNU macro archive.
+# --enable-debugging=x    - set debugging level to <x> (1-3)
+# 
+# At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
+# Sets the DEBUGLEVEL preprocessor symbol to <x>
+#
+AC_ARG_ENABLE(debugging,
+[  --enable-debugging      set CFLAGS for debugging
+  --enable-debugging=x    also set diagnostics level to <x> (1-3) (3 = most verbose)],
+[ case $enable_debugging in
+   yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
+         CFLAGS="-g -Wall"
+         AC_DEFINE(DEBUGLEVEL, 0)
+         ;;
+     1)  AC_MSG_NOTICE([enabled debugging diagnostics level 1 (low verbosity)])
+         CFLAGS="-g -Wall"
+         AC_DEFINE(DEBUGLEVEL, 1)
+         ;;
+     2)  AC_MSG_NOTICE([enabled debugging diagnostics level 2 (moderate verbosity)])
+         CFLAGS="-g -Wall"
+	 AC_DEFINE(DEBUGLEVEL, 2)
+         ;;
+     3)  AC_MSG_NOTICE([enabled debugging diagnostics level 3 (high verbosity)])
+         CFLAGS="-g -Wall"
+	 AC_DEFINE(DEBUGLEVEL, 3)
+         ;;
+    no)  AC_MSG_NOTICE([debugging diagnostics disabled])
+         ;;
+     *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
+	 ;;
+esac])
+
+
+# --enable-lfs           Large File Summit (LFS) support for >2GB files
+# See: http://ftp.sas.com/standards/large.file/x_open.20Mar96.html
+#
+AC_ARG_ENABLE(lfs, 
+[  --enable-lfs            enable LFS, Large File Support],
+[case $enable_lfs in
+   yes) AC_MSG_NOTICE([configured for optional LFS, large file support])
+	AC_DEFINE(_LARGEFILE_SOURCE)
+	AC_DEFINE(_LARGEFILE64_SOURCE)
+	AC_DEFINE(_FILE_OFFSET_BITS, 64)
+        ;;
+   no)  ;;
+    *)  echo "Ignoring unknown argument to --enable-lfs: $enable_lfs"
+        ;;
+esac])
+
+
+
+# --enable-pvm       Enable Parallel Virtual Machine (PVM) support
+# 
+# Sets PVMLIBDIR, PVMINCDIR, PCMPROGS, PVMLIBS output variables
+# Sets HMMER_PVM preprocessor variable.
+#
+AC_ARG_ENABLE(pvm, 
+[  --enable-pvm            enable PVM, Parallel Virtual Machine],
+[case $enable_pvm in
+   yes)  AC_MSG_NOTICE([enabled optional PVM (Parallel Virtual Machine) support])
+ 	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
+	 PVMINCDIR="-I${PVM_ROOT}/include"
+	 PVMPROGS="hmmcalibrate-pvm hmmpfam-pvm hmmsearch-pvm"
+	 PVMLIBS="-lpvm3"
+	 AC_DEFINE(HMMER_PVM)
+	 ;;
+   no)   AC_MSG_NOTICE([PVM (Parallel Virtual machine) support disabled])
+         ;;
+   *)    echo "Ignoring unknown argument to --enable-pvm: $enable_pvm"
+	 ;;
+esac])
+AC_SUBST(PVMLIBDIR)
+AC_SUBST(PVMINCDIR)
+AC_SUBST(PVMPROGS)
+AC_SUBST(PVMLIBS)
+
+
+# --enable-threads      Enable POSIX multithreading
+#
+# Uses ACX_PTHREAD macro from the GNU macro archive.
 # ****************************************************************
 # ****************************************************************
 # 
@@ -336,34 +446,42 @@ fi
 # ****************************************************************
 
 #
-# Back to my configure.in code ...
+# Back to my code to finish enabling pthreads...
+# Define these preprocessor variables:
+#     HMMER_THREADS
+#     HAVE_PTHREAD_SETCONCURRENCY
+#     HAVE_PTHREAD_ATTR_SETSCOPE
 #
 AC_ARG_ENABLE(threads, 
-[  --disable-threads  disable POSIX threads support],
+[  --enable-threads        enable POSIX multithreading support],
 [case $enable_threads in 
-   yes) echo "Enabling POSIX threads support"
+   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
         AC_CHECK_FUNCS(pthread_setconcurrency)
         AC_CHECK_FUNCS(pthread_attr_setscope)
-	ACX_PTHREAD([MDEFS="${MDEFS} -DHMMER_THREADS"])
+	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
 	;;
-   no)  echo "POSIX threads support disabled"
+   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
         ;;
    *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
 	;;
-esac],
-[
-   echo "   Trying to enable default POSIX threads support"
-   AC_CHECK_FUNCS(pthread_setconcurrency)
-   AC_CHECK_FUNCS(pthread_attr_setscope)
-   ACX_PTHREAD([MDEFS="${MDEFS} -DHMMER_THREADS"])
-])
+esac])
 
+
+# Check for incompatible optional features
+#
+if test x"$enable_threads" = xyes; then
+  if test x"$enable_ccmalloc" = xyes; then
+    AC_MSG_ERROR([ccmalloc probably not threadsafe; do not enable both ccmalloc and threads])
+  fi
+fi
 
 
 # Although we configure our fixed-size integers in squid,
 # we do need some of that configuration code here, because
 # we might (on Solaris, for instance) need to include
-# -lsocket to the linker to get ntohs() and friends.
+# -lsocket to the linker to get ntohs() and friends. These
+# define preprocessor variables HAVE_NTOHS, HAVE_NTOHL,
+# HAVE_HTONS, and HAVE_HTONL.
 #
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
@@ -374,8 +492,16 @@ AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 #
 AC_CONFIG_SUBDIRS(squid)
 
+# Write the config.h header
+#
+AC_CONFIG_HEADERS(src/config.h)
+
 # Write out Makefiles
 #
-echo "   Configuration complete. Writing Makefiles and such..."
-AC_OUTPUT(Makefile src/Makefile testsuite/Makefile)
+AC_CONFIG_FILES(Makefile)
+AC_CONFIG_FILES(src/Makefile)
+AC_CONFIG_FILES(testsuite/Makefile)
+AC_OUTPUT
+
+
 

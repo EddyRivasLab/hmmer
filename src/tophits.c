@@ -49,9 +49,13 @@
  *     Designed for: 10^5 hits (20 MB) or 10^4 alignments (10 MB)  
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <string.h>
 #include <float.h>
 #include <limits.h>
+
 #include "structs.h"
 #include "funcs.h"
 
@@ -265,7 +269,7 @@ TophitsMaxName(struct tophit_s *h)
 int
 hit_comparison(const void *vh1, const void *vh2)
 {
-           /* don't ask. don't change. and, Don't Panic. */
+           /* don't ask. don't change. Don't Panic. */
   struct hit_s *h1 = *((struct hit_s **) vh1);
   struct hit_s *h2 = *((struct hit_s **) vh2);
 

@@ -9,15 +9,8 @@
 #
 CC     = @CC@
 CFLAGS = @CFLAGS@
-
-## other defined flags. 
-#  DEFS contains stuff that autoconf 
-#  decides on. MDEFS contains stuff that we added to
-#  the configure script tests. LIBS contains system
-#  libraries that the configure script decides we need.
-#
-MDEFS = @MDEFS@ @DEFS@
-LIBS  = @LIBS@ -lm
+LIBS   = @LIBS@ -lm
+DEFS   = @DEFS@
 
 ## archiving command, and ranlib command if you need one.
 #  In general, you shouldn't need to change these, and they're
@@ -35,7 +28,6 @@ PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 
 # Configuration for optional PVM functionality
 #
-PVMFLAG   = @PVMFLAG@
 PVMLIBDIR = @PVMLIBDIR@
 PVMINCDIR = @PVMINCDIR@
 PVMLIBS   = @PVMLIBS@
@@ -86,7 +78,7 @@ HDRS =  config.h\
 	structs.h
 
 .c.o:
-	$(CC) $(CFLAGS) $(MDEFS) $(PTHREAD_CFLAGS) $(PVMFLAG) $(MYINCDIR) $(PVMINCDIR) -c $<
+	$(CC) $(CFLAGS) $(DEFS) $(PTHREAD_CFLAGS) $(MYINCDIR) $(PVMINCDIR) -c $<
 
 #################################################################
 ## Targets defining how to make HMMER executables.
@@ -94,7 +86,7 @@ HDRS =  config.h\
 all: 	$(PROGS) 
 
 $(PROGS): @EXEC_DEPENDENCY@ $(OBJS) 
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(DEFS) $(MYLIBDIR) $(PVMLIBDIR) -o $@ $@.o $(OBJS) $(PVMLIBS) $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
 
 
 #################################################################
@@ -113,7 +105,7 @@ libhmmer.a: $(OBJS)
 ##
 distclean:
 	make clean
-	-rm -f Makefile version.h
+	-rm -f Makefile 
 
 clean:
 	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a

@@ -9,12 +9,14 @@
  * CVS $Id$
  */
 
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "structs.h"		/* data structures, macros, #define's   */
-#include "config.h"		/* compile-time configuration constants */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
 #include "squid.h"		/* general sequence analysis library    */
@@ -250,7 +252,7 @@ main(int argc, char **argv)
 	Die("%s is an unaligned format, can't read as an alignment", optarg);
     }
     else if (strcmp(optname, "-h") == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(EXIT_SUCCESS);
@@ -305,7 +307,7 @@ main(int argc, char **argv)
    * Show the banner
    ***********************************************/
 
-  Banner(stdout, banner);
+  HMMERBanner(stdout, banner);
   printf("Alignment file:                    %s\n", 
 	 seqfile);
   printf("File format:                       %s\n", 
@@ -644,8 +646,8 @@ main(int argc, char **argv)
       for (idx = 0; idx < msa->nseq; idx++) P7FreeTrace(tr[idx]);
       free(tr);
       FreePlan7(hmm);
-      MSAFree(msa);
       Free2DArray((void **) dsq, msa->nseq); 
+      MSAFree(msa);
       fflush(hmmfp);
       if (cfp != NULL)     fflush(cfp);
       if (alignfp != NULL) fflush(alignfp);

@@ -12,6 +12,9 @@
  * CVS $Id$
  */
 
+#include "config.h"		/* compile-time configuration constants */
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,11 +28,9 @@
 #endif
 
 #include "squid.h"		/* general sequence analysis library    */
-#include "config.h"		/* compile-time configuration constants */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "version.h"		/* version info                         */
 
 static char banner[] = "hmmpfam - search one or more sequences against HMM database";
 
@@ -250,7 +251,7 @@ main(int argc, char **argv)
 	Die("unrecognized sequence file format \"%s\"", optarg);
     }
     else if (strcmp(optname, "-h")      == 0) {
-      Banner(stdout, banner);
+      HMMERBanner(stdout, banner);
       puts(usage);
       puts(experts);
       exit(0);
@@ -299,7 +300,7 @@ main(int argc, char **argv)
    * Show the banner
    ***********************************************/
 
-  Banner(stdout, banner);
+  HMMERBanner(stdout, banner);
   printf(   "HMM file:                 %s\n", hmmfile);
   printf(   "Sequence file:            %s\n", seqfile);
   if (do_pvm)

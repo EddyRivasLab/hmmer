@@ -9,15 +9,18 @@
  * Support for Plan 7 HMM data structure, plan7_s.
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
 
-#include "funcs.h"
-#include "config.h"
-#include "structs.h"
 #include "squid.h"
+#include "funcs.h"
+#include "structs.h"
+
 
 /* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
  * 
@@ -138,11 +141,11 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   for (x = 0; x < 7; x++)
     hmm->tsc[x] = hmm->tsc[0] + x * M;
 
-  /* tsc[0] is used as a boundary condition sometimes [Viterbi()],
+  /* tsc[x][0] is used as a boundary condition sometimes [Viterbi()],
    * so set to -inf always.
    */
   for (x = 0; x < 7; x++)
-    hmm->tsc[0][x] = -INFTY;
+    hmm->tsc[x][0] = -INFTY;
 
   hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
   hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
@@ -161,6 +164,7 @@ void
 FreePlan7(struct plan7_s *hmm)
 {
   if (hmm->name    != NULL) free(hmm->name);
+  if (hmm->acc     != NULL) free(hmm->acc);
   if (hmm->desc    != NULL) free(hmm->desc);
   if (hmm->rf      != NULL) free(hmm->rf);
   if (hmm->cs      != NULL) free(hmm->cs);

@@ -10,17 +10,19 @@
  * CVS $Id$
  */
 
+#include "config.h"
+#include "squidconf.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "squid.h"
-#include "config.h"
+#include "ssi.h"
 #include "structs.h"
 #include "funcs.h"
-#include "version.h"
 #include "globals.h"
-#include "ssi.h"
+
 
 static char banner[] = "hmmindex -- create SSI index for an HMM database";
 
@@ -64,7 +66,7 @@ main(int argc, char **argv)
     {
       if (strcmp(optname, "-h")        == 0)
 	{
-	  Banner(stdout, banner);
+	  HMMERBanner(stdout, banner);
 	  puts(usage);
 	  puts(experts);
 	  exit(0);
@@ -97,7 +99,7 @@ main(int argc, char **argv)
    * Show the banner
    ***********************************************/
 
-  Banner(stdout, banner);
+  HMMERBanner(stdout, banner);
   printf("HMM file:                 %s\n", hmmfile);
   if (hmmfp->mode == SSI_OFFSET_I64) 
     printf("Index file mode:          64-bit (large HMM file)\n");

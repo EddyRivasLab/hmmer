@@ -7,7 +7,9 @@
 
 CC        = @CC@
 CFLAGS    = @CFLAGS@
-MDEFS     = @MDEFS@ @DEFS@
+LIBS      = @LIBS@ -lm
+MYLIBS    = -lhmmer -lsquid
+DEFS      = @DEFS@
 
 # Configuration for optional pthreads multiprocessor support
 #
@@ -15,8 +17,6 @@ PTHREAD_LIBS   = @PTHREAD_LIBS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 
 SHELL     = /bin/sh
-MYLIBS    = -lhmmer -lsquid
-LIBS      = @LIBS@ -lm
 
 SHIVA = alignalign_test\
 	evd_test\
@@ -32,12 +32,12 @@ SHIVA = alignalign_test\
 #######
 
 .c.o:
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) -I../squid -I../src -c $<		
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(DEFS) -I../squid -I../src -c $<		
 
 all: 	$(SHIVA)
 
 $(SHIVA): @EXEC_DEPENDENCY@
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(MDEFS) -o $@ -L../squid -L../src $@.o $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) $(DEFS) -o $@ -L../squid -L../src $@.o $(MYLIBS) $(PTHREAD_LIBS) $(LIBS)
 
 #######
 ## `make check` actually runs the tests.

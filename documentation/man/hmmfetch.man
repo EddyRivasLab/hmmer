@@ -38,7 +38,16 @@ To index an HMM database, use the program
 Print brief help; includes version number and summary of
 all options, including expert options.
 
-
+.TP
+.B -n
+Interpret
+.I name
+as an HMM number instead of a name. Numbering starts at 0.
+For example, to fetch the first HMM from an HMM database
+called
+.B foo,
+you would do 
+.B hmmfetch -n 0 foo.
 
 .SH SEE ALSO
 

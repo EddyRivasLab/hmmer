@@ -10,6 +10,7 @@
 2 exercise    hmmalign/m           @hmmalign@ -m %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/o           @hmmalign@ -o %OPT.OUT% %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/q           @hmmalign@ -q %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/informat    @hmmalign@ --informat fasta %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/withali     @hmmalign@ --withali Optiontests.slx %OPT.HMM% Optiontests.fa
 2 exercise    hmmalign/mapali      @hmmalign@ --mapali Optiontests.slx %OPT.HMM% Optiontests.fa
 
