@@ -1,0 +1,156 @@
+# HMMER option exercises, in sqc command format
+# SRE, Thu Apr  3 08:23:27 2003
+# CVS $Id$
+
+# Option tests for hmmalign
+#
+1 prep        hmm                  @hmmbuild@ -F %OPT.HMM% Optiontests.slx
+1 exercise    hmmalign             @hmmalign@ %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/h           @hmmalign@ -h
+2 exercise    hmmalign/m           @hmmalign@ -m %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/o           @hmmalign@ -o %OPT.OUT% %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/q           @hmmalign@ -q %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/withali     @hmmalign@ --withali Optiontests.slx %OPT.HMM% Optiontests.fa
+2 exercise    hmmalign/mapali      @hmmalign@ --mapali Optiontests.slx %OPT.HMM% Optiontests.fa
+
+# Option tests for hmmbuild.
+#
+1 exercise    hmmbuild             @hmmbuild@ %FN3.HMM% fn3.seed
+2 exercise    hmmbuild/h           @hmmbuild@ -h
+2 exercise    hmmbuild/F           @hmmbuild@ -F %FN3.HMM% Optiontests.nslx
+2 exercise    hmmbuild/n           @hmmbuild@ -F -n foo %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/o           @hmmbuild@ -F -o %OPT.OUT% %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/A           @hmmbuild@ -F -A %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/f           @hmmbuild@ -F -f %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/g           @hmmbuild@ -F -g %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/s           @hmmbuild@ -F -s %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/fast        @hmmbuild@ -F --fast %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/hand        @hmmbuild@ -F --hand %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/null        @hmmbuild@ -F --null ../tutorial/nucleic.null %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/pam         @hmmbuild@ -F --amino --pam Optiontests.pam %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/prior       @hmmbuild@ -F --prior ../tutorial/nucleic.pri %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/wblosum     @hmmbuild@ -F --wblosum %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/wgsc        @hmmbuild@ -F --wgsc %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/wme         @hmmbuild@ -F --wme %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/wpb         @hmmbuild@ -F --wpb %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/wvoronoi    @hmmbuild@ -F --wvoronoi %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/wnone       @hmmbuild@ -F --wnone %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/noeff       @hmmbuild@ -F --noeff %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/pbswitch    @hmmbuild@ -F --pbswitch 4 %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/amino       @hmmbuild@ -F --amino %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/nucleic     @hmmbuild@ -F --nucleic %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/archpri     @hmmbuild@ -F --archpri 0.5 %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/binary      @hmmbuild@ -F --binary %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/cfile       @hmmbuild@ -F --cfile %OPT.OUT% %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/gapmax      @hmmbuild@ -F --gapmax 0.3 --fast %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/idlevel     @hmmbuild@ -F --idlevel 0.8 %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/informat    @hmmbuild@ -F --informat selex %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/pamwgt      @hmmbuild@ -F --amino --pamwgt 50 --pam Optiontests.pam %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/swentry     @hmmbuild@ -F --swentry 0.4 %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/swexit      @hmmbuild@ -F --swexit 0.4 %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/verbose     @hmmbuild@ -F --verbose %OPT.HMM% Optiontests.nslx
+
+# Option tests for hmmcalibrate
+#
+1 prep        hmm                  @hmmbuild@ -F %OPT.HMM% Optiontests.nslx
+1 exercise    hmmcalibrate         @hmmcalibrate@ %OPT.HMM%
+2 exercise    hmmcalibrate/h       @hmmcalibrate@ -h
+2 exercise    hmmcalibrate/fixed   @hmmcalibrate@ --fixed 15 %OPT.HMM%
+2 exercise    hmmcalibrate/mean    @hmmcalibrate@ --mean  25 %OPT.HMM%
+2 exercise    hmmcalibrate/hist    @hmmcalibrate@ --histfile %OPT.OUT% --fixed 15 %OPT.HMM%
+2 exercise    hmmcalibrate/num     @hmmcalibrate@ --num 4500 --fixed 15 %OPT.HMM%
+2 exercise    hmmcalibrate/sd      @hmmcalibrate@ --sd 50 --mean 25 %OPT.HMM%
+2 exercise    hmmcalibrate/seed    @hmmcalibrate@ --seed 666 --fixed 15 %OPT.HMM%
+  
+
+# Option tests for hmmconvert
+#
+1 prep        hmm                  @hmmbuild@ -F --wnone --fast %OPT.HMM% fn3.seed
+1 exercise    hmmconvert           @hmmconvert@ %OPT.HMM% %OPT.TMP%
+2 exercise    hmmconvert/h         @hmmconvert@ -h
+2 exercise    hmmconvert/F         @hmmconvert@ -F %OPT.HMM% %OPT.TMP%
+2 exercise    hmmconvert/a         @hmmconvert@ -a -F %OPT.HMM% %OPT.TMP%
+2 exercise    hmmconvert/A         @hmmconvert@ -A %OPT.HMM% %OPT.TMP%
+2 exercise    hmmconvert/b         @hmmconvert@ -b -F %OPT.HMM% %OPT.TMP%
+2 exercise    hmmconvert/p         @hmmconvert@ -p -F %OPT.HMM% %OPT.TMP%
+2 exercise    hmmconvert/P         @hmmconvert@ -P -F %OPT.HMM% %OPT.TMP%
+
+# Option tests for hmmemit
+#
+1 prep        hmm                  @hmmbuild@ -F --wnone --fast %OPT.HMM% fn3.seed
+1 exercise    hmmemit              @hmmemit@ %OPT.HMM%
+2 exercise    hmmemit/a            @hmmemit@ -a %OPT.HMM%
+2 exercise    hmmemit/c            @hmmemit@ -c %OPT.HMM%
+2 exercise    hmmemit/h            @hmmemit@ -h
+2 exercise    hmmemit/n            @hmmemit@ -n 6 %OPT.HMM%
+2 exercise    hmmemit/o            @hmmemit@ -o %OPT.OUT% %OPT.HMM%
+2 exercise    hmmemit/q            @hmmemit@ -q %OPT.HMM%
+2 exercise    hmmemit/seed         @hmmemit@ --seed 666 %OPT.HMM%
+
+# Option tests for hmmindex, hmmfetch
+#
+1 prep        hmm                  @hmmbuild@ -n fn3 --wnone --fast -F %OPT.HMM% fn3.seed
+1 prep        hmm                  @hmmbuild@ -n foo -A %OPT.HMM% Optiontests.slx
+1 exercise    hmmindex             @hmmindex@ %OPT.HMM%
+2 exercise    hmmindex/h           @hmmindex@ -h
+1 exercise    hmmfetch             @hmmfetch@ %OPT.HMM% fn3
+2 exercise    hmmfetch/h           @hmmfetch@ -h
+2 exercise    hmmfetch/n           @hmmfetch@ -n %OPT.HMM% 1
+
+# Option tests for hmmpfam
+#
+1 prep        hmm                  @hmmbuild@ -F --nucleic %OPT.NHMM% Optiontests.nslx
+1 prep        hmm                  @hmmbuild@ -F --amino %OPT.HMM% Optiontests.sto
+1 exercise    hmmpfam              @hmmpfam@ %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/h            @hmmpfam@ -h
+2 exercise    hmmpfam/n            @hmmpfam@ -n %OPT.NHMM% Optiontests.nfa
+2 exercise    hmmpfam/A            @hmmpfam@ -A 0 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/E            @hmmpfam@ -E 1 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/T            @hmmpfam@ -T 1 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/Z            @hmmpfam@ -Z 10 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/acc          @hmmpfam@ --acc %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/compat       @hmmpfam@ --compat %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/cut_ga       @hmmpfam@ --cut_ga %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/cut_nc       @hmmpfam@ --cut_nc %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/cut_tc       @hmmpfam@ --cut_tc %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/domE         @hmmpfam@ --domE 1 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/domT         @hmmpfam@ --domT 1 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/forward      @hmmpfam@ --forward %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/informat     @hmmpfam@ --informat fasta %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/null2        @hmmpfam@ --null2 %OPT.HMM% Optiontests.fa
+2 exercise    hmmpfam/xnu          @hmmpfam@ --xnu %OPT.HMM% Optiontests.fa
+
+# Option tests for hmmsearch
+#
+1 prep        hmm                  @hmmbuild@ -F --amino %OPT.HMM% Optiontests.sto
+1 exercise    hmmsearch            @hmmsearch@ %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/h          @hmmsearch@ -h
+2 exercise    hmmsearch/A          @hmmsearch@ -A 0 %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/E          @hmmsearch@ -E 1 %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/T          @hmmsearch@ -T 2 %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/Z          @hmmsearch@ -Z 10 %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/compat     @hmmsearch@ --compat %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/cut_ga     @hmmsearch@ --cut_ga %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/cut_nc     @hmmsearch@ --cut_nc %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/cut_tc     @hmmsearch@ --cut_tc %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/domE       @hmmsearch@ --domE 1.0 %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/domT       @hmmsearch@ --domT 1.0 %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/forward    @hmmsearch@ --forward  %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/informat   @hmmsearch@ --informat fasta %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/null2      @hmmsearch@ --null2  %OPT.HMM% Optiontests.fa
+2 exercise    hmmsearch/xnu        @hmmsearch@ --xnu  %OPT.HMM% Optiontests.fa
+
+# Compiled exercises
+#
+1 exercise    align_align         @alignalign_test@
+1 exercise    evd                 @evd_test@
+1 exercise    masks               @masks_test@
+1 exercise    parsingv            @parsingviterbi_test@
+1 exercise    tophits             @tophits_test@
+1 exercise    trace               @trace_test@
+1 exercise    viterbi             @viterbi_exercise@
+1 exercise    weeviterbi          @weeviterbi_test@
+
+# Test scripts
+1 exercise    test1/conversion    ./test1-conversion.pl @hmmconvert@
+
