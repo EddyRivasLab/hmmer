@@ -1926,13 +1926,16 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
 				/* match state */
       mmx[cur][k]  = -INFTY;
       mtb[i][k]    = STBOGUS;
-      if ((sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > mmx[cur][k])
+      if (mmx[prv][k-1] > -INFTY && hmm->tsc[k-1][TMM] > -INFTY &&
+	  (sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STM; }
-      if ((sc = imx[prv][k-1] + hmm->tsc[k-1][TIM] * mocc[i-1]) > mmx[cur][k])
+      if (imx[prv][k-1] > -INFTY && hmm->tsc[k-1][TIM] > -INFTY &&
+	  (sc = imx[prv][k-1] + hmm->tsc[k-1][TIM] * mocc[i-1]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STI; }
       if ((sc = xmx[prv][XMB] + hmm->bsc[k]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STB; }
-      if ((sc = dmx[prv][k-1] + hmm->tsc[k-1][TDM]) > mmx[cur][k])
+      if (dmx[prv][k-1] > -INFTY && hmm->tsc[k-1][TDM] > -INFTY &&
+	  (sc = dmx[prv][k-1] + hmm->tsc[k-1][TDM]) > mmx[cur][k])
 	{ mmx[cur][k] = sc; mtb[i][k] = STD; }
 				/* average over "consensus" sequence */
       for (sym = 0; sym < Alphabet_size; sym++)
@@ -1944,18 +1947,22 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
 				/* delete state */
       dmx[cur][k] = -INFTY;
       dtb[i][k]   = STBOGUS;
-      if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > dmx[cur][k])
+      if (mmx[cur][k-1] > -INFTY && hmm->tsc[k-1][TMD] > -INFTY &&
+	  (sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > dmx[cur][k])
 	{ dmx[cur][k] = sc; dtb[i][k] = STM; }
-      if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+      if (dmx[cur][k-1] > -INFTY && hmm->tsc[k-1][TDD] > -INFTY &&
+	  (sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
 	{ dmx[cur][k] = sc; dtb[i][k] = STD; }
 
 				/* insert state */
       if (k < hmm->M) {
 	imx[cur][k] = -INFTY;
 	itb[i][k]   = STBOGUS;
-	if ((sc = mmx[prv][k] + hmm->tsc[k][TMI] * mocc[i]) > imx[cur][k])
+	if (mmx[prv][k] > -INFTY && hmm->tsc[k][TMI] > -INFTY &&
+	    (sc = mmx[prv][k] + hmm->tsc[k][TMI] * mocc[i]) > imx[cur][k])
 	  { imx[cur][k] = sc; itb[i][k] = STM; }
-	if ((sc = imx[prv][k] + hmm->tsc[k][TII] * mocc[i-1] * mocc[i]) > imx[cur][k])
+	if (imx[prv][k] > -INFTY && hmm->tsc[k][TII] > -INFTY &&
+	    (sc = imx[prv][k] + hmm->tsc[k][TII] * mocc[i-1] * mocc[i]) > imx[cur][k])
 	  { imx[cur][k] = sc; itb[i][k] = STI; }
 				/* average over "consensus" sequence */
 	for (sym = 0; sym < Alphabet_size; sym++)
@@ -1972,28 +1979,33 @@ P7ViterbiAlignAlignment(char **aseq, AINFO *ainfo, struct plan7_s *hmm)
 				/* N state */
     xmx[cur][XMN] = -INFTY;
     xtb[i][XMN]   = STBOGUS;
-    if ((sc = xmx[prv][XMN] + hmm->xsc[XTN][LOOP] * mocc[i]) > -INFTY)
+    if (xmx[prv][XMN] > -INFTY && hmm->xsc[XTN][LOOP] > -INFTY &&
+	(sc = xmx[prv][XMN] + hmm->xsc[XTN][LOOP] * mocc[i]) > -INFTY)
       { xmx[cur][XMN] = sc; xtb[i][XMN] = STN; }
 				/* E state */
     xmx[cur][XME] = -INFTY;
     xtb[i][XME]   = STBOGUS;
     for (k = 1; k <= hmm->M; k++)
-      if ((sc =  mmx[cur][k] + hmm->esc[k]) > xmx[cur][XME])
+      if (mmx[cur][k] > -INFTY && hmm->esc[k] > -INFTY &&
+	  (sc =  mmx[cur][k] + hmm->esc[k]) > xmx[cur][XME])
 	{ xmx[cur][XME] = sc; tb->esrc[i] = k; }
 
 				/* we don't check J state */
 				/* B state; don't connect from J */
     xmx[cur][XMB] = -INFTY;
     xtb[i][XMB]   = STBOGUS;
-    if ((sc = xmx[cur][XMN] + hmm->xsc[XTN][MOVE]) > xmx[cur][XMB])
+    if (xmx[cur][XMN] > -INFTY && hmm->xsc[XTN][MOVE] > -INFTY &&
+	(sc = xmx[cur][XMN] + hmm->xsc[XTN][MOVE]) > xmx[cur][XMB])
       { xmx[cur][XMB] = sc; xtb[i][XMB] = STN; }
 
 				/* C state */
     xmx[cur][XMC] = -INFTY;
     xtb[i][XMC]   = STBOGUS;
-    if ((sc = xmx[prv][XMC] + hmm->xsc[XTC][LOOP] * mocc[i]) > -INFTY)
+    if (xmx[prv][XMC] > -INFTY && hmm->xsc[XTC][LOOP] > -INFTY &&
+	(sc = xmx[prv][XMC] + hmm->xsc[XTC][LOOP] * mocc[i]) > -INFTY)
       { xmx[cur][XMC] = sc; xtb[i][XMC] = STC; }
-    if ((sc = xmx[cur][XME] + hmm->xsc[XTE][MOVE]) > xmx[cur][XMC])
+    if (xmx[cur][XME] > -INFTY && hmm->xsc[XTE][MOVE] > -INFTY &&
+	(sc = xmx[cur][XME] + hmm->xsc[XTE][MOVE]) > xmx[cur][XMC])
       { xmx[cur][XMC] = sc; xtb[i][XMC] = STE; }
   }
 				/* T state (not stored in mx) */
