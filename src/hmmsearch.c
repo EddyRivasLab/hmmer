@@ -33,9 +33,8 @@ Usage: hmmsearch [-options] <hmmfile> <sequence file or database>\n\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <x>\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to <x>\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
-   --null2   : turn on the auxiliary null model\n\
-   --null3   : turn on the model-dependent auxiliary null model\n\
-   --xnu     : turn on XNU filtering of sequences\n\
+   --null2   : turn OFF the post hoc second null model\n\
+   --xnu     : turn ON XNU filtering of target protein sequences\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
@@ -46,15 +45,15 @@ static struct opt_s OPTIONS[] = {
   { "--domE",    FALSE, sqdARG_FLOAT},
   { "--domT",    FALSE, sqdARG_FLOAT},
   { "--forward", FALSE, sqdARG_NONE },
-  { "--xnu",     FALSE, sqdARG_NONE },
   { "--null2",   FALSE, sqdARG_NONE },
-  { "--null3",   FALSE, sqdARG_NONE },
+  { "--xnu",     FALSE, sqdARG_NONE },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 static void record_domains(struct tophit_s *h, 
 			   struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
-			   struct p7trace_s *tr, double whole_pval, float whole_sc);
+			   struct p7trace_s *tr, double whole_pval, float whole_sc,
+			   int do_null2);
 
 int
 main(int argc, char **argv) 
@@ -67,7 +66,6 @@ main(int argc, char **argv)
   char     *seq;		/* target sequence                         */
   SQINFO    sqinfo;	        /* optional info for seq                   */
   char     *dsq;		/* digitized target sequence               */
-  float     sc;	        	/* score of an HMM search                  */
   int       i; 
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
   struct histogram_s *histogram;/* histogram of all scores                 */
@@ -77,6 +75,7 @@ main(int argc, char **argv)
   struct tophit_s   *ghit;      /* list of top hits for whole sequences    */
   struct tophit_s   *dhit;	/* list of top hits for domains            */
 
+  float     sc;	        	/* score of an HMM search                  */
   double  pvalue;		/* pvalue of an HMM score                  */
   double  evalue;		/* evalue of an HMM score                  */
   double  motherp;		/* pvalue of a whole seq HMM score         */
@@ -100,7 +99,6 @@ main(int argc, char **argv)
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
   int   do_null2;		/* TRUE to adjust scores with null model #2 */
-  int   do_null3;		/* TRUE to adjust scores will null model #3 */
   int   do_forward;		/* TRUE to use Forward() not Viterbi()      */
   int   do_xnu;			/* TRUE to filter sequences thru XNU        */
 
@@ -114,9 +112,8 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   
-  do_null2    = FALSE;
-  do_null3    = FALSE;
   do_forward  = FALSE;
+  do_null2    = TRUE;
   do_xnu      = FALSE;
 
   Alimit      = INT_MAX;	/* no limit on alignment output     */
@@ -133,8 +130,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--domE")    == 0) domE       = atof(optarg);
     else if (strcmp(optname, "--domT")    == 0) domT       = atof(optarg);
     else if (strcmp(optname, "--forward") == 0) do_forward = TRUE;
-    else if (strcmp(optname, "--null2")   == 0) do_null2   = TRUE;
-    else if (strcmp(optname, "--null3")   == 0) do_null3   = TRUE;
+    else if (strcmp(optname, "--null2")   == 0) do_null2   = FALSE;
     else if (strcmp(optname, "--xnu")     == 0) do_xnu     = TRUE;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
@@ -211,9 +207,11 @@ main(int argc, char **argv)
       if (do_forward) Plan7Viterbi(dsq, sqinfo.len, hmm, &mx);
       P7ViterbiTrace(hmm, dsq, sqinfo.len, mx, &tr);
 
-      if (do_null3)  sc -= NewTraceScoreCorrection(hmm, tr, dsq);
-      if (do_null2)  sc -= TraceScoreCorrection(tr, dsq);
-      /* P7PrintTrace(stdout, tr, hmm, dsq); */
+      if (do_null2)  sc -= TraceScoreCorrection(hmm, tr, dsq);
+
+#if DEBUGLEVEL >= DEBUG_LOTS
+      P7PrintTrace(stdout, tr, hmm, dsq); 
+#endif
 
       /* 2. Store score/pvalue for global alignment; will sort on score. 
        *    Keep all domains in a significant sequence hit.
@@ -232,7 +230,7 @@ main(int argc, char **argv)
 		      0, TraceDomainNumber(tr), /* domain info    */
 		      NULL);	                /* alignment info */
 
-	  record_domains(dhit, hmm, dsq, &sqinfo, tr, pvalue, sc); 
+	  record_domains(dhit, hmm, dsq, &sqinfo, tr, pvalue, sc, do_null2); 
 	}
       AddToHistogram(histogram, sc);
 
@@ -371,11 +369,11 @@ main(int argc, char **argv)
 	      PrintFancyAli(stdout, ali);
 	    }
 	  else if (evalue >= domE) {
-	    if (i > 0) printf("\t[no more alignments below E threshold\n");
+	    if (i > 0) printf("\t[no more alignments below domE threshold\n");
 	    break;
 	  }
 	  else if (sc <= domT) {
-	    if (i > 0) printf("\t[no more alignments above T threshold\n");
+	    if (i > 0) printf("\t[no more alignments above domT threshold\n");
 	    break;
 	  }
 	}
@@ -398,12 +396,12 @@ main(int argc, char **argv)
    * Clean-up and exit.
    ***********************************************/
 
-  FreePlan7(hmm);
-  FreeTophits(ghit);
-  FreeTophits(dhit);
   FreeHistogram(histogram);
   HMMFileClose(hmmfp);
   SeqfileClose(sqfp);
+  FreeTophits(ghit);
+  FreeTophits(dhit);
+  FreePlan7(hmm);
   SqdClean();
 
 #ifdef MEMDEBUG
@@ -421,12 +419,21 @@ main(int argc, char **argv)
  * Purpose:  Decompose a trace, and register scores, P-values, alignments,
  *           etc. for individual domains in a hitlist. 
  *           
+ * Args:     hmm    - the HMM structure
+ *           dsq    - digitized sequence 1..L
+ *           sqinfo - contains name of sequence, etc.
+ *           tr     - traceback of the whole sequence aligned to HMM
+ *           whole_pval - P-value of complete alignment
+ *           whole_sc   - score of complete alignment (bits)
+ *           do_null2   - TRUE to use post hoc null model correction 
+ *           
  * Return:   (void)          
  */
 static void
 record_domains(struct tophit_s *h, 
 	       struct plan7_s *hmm, char *dsq, SQINFO *sqinfo,
-	       struct p7trace_s *tr, double whole_pval, float whole_sc)
+	       struct p7trace_s *tr, double whole_pval, float whole_sc,
+	       int do_null2)
 {
   struct p7trace_s **tarr;      /* array of per-domain traces */
   struct fancyali_s *ali;       /* alignment of a domain      */ 
@@ -445,10 +452,15 @@ record_domains(struct tophit_s *h,
       /* Get the score and bounds of the match.
        */
       score  = P7TraceScore(hmm, dsq, tarr[idx]);
-				/* score correction here?? */
+      if (do_null2) 
+	score -= TraceScoreCorrection(hmm, tarr[idx], dsq);
       pvalue = PValue(hmm, score); 
       TraceSimpleBounds(tarr[idx], &i1, &i2, &k1, &k2);
       
+#if DEBUGLEVEL >= DEBUG_LOTS
+      P7PrintTrace(stdout, tarr[idx], hmm, dsq); 
+#endif
+
       /* Record the match. Use score as the sort key.
        */
       ali = CreateFancyAli(tarr[idx], hmm, dsq, sqinfo->name);
