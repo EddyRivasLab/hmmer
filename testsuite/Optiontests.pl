@@ -8,6 +8,8 @@
 	  "hmmalign -m Optiontests.hmm Optiontests.fa",
 	  "hmmalign -o tmp Optiontests.hmm Optiontests.fa",
 	  "hmmalign -q Optiontests.hmm Optiontests.fa",
+	  "hmmalign --withali Optiontests.slx Optiontests.hmm Optiontests.fa",
+	  "hmmalign --mapali Optiontests.slx Optiontests.hmm Optiontests.fa",
 	  "hmmbuild -h",
 	  "hmmbuild tmp.hmm Optiontests.slx",
 	  "hmmbuild -F tmp.hmm Optiontests.slx",            # Need -F to force 
@@ -62,6 +64,10 @@
 	  "hmmemit -o tmp Optiontests.hmm",
 	  "hmmemit -q Optiontests.hmm",
 	  "hmmemit --seed 666 Optiontests.hmm",
+	  "hmmindex -h",
+	  "hmmindex Optiontests.hmm",
+	  "hmmfetch -h",
+	  "hmmfetch Optiontests.hmm Optiontests",
 	  "hmmpfam -h",
 	  "hmmpfam -n Optiontests.nhmm Optiontests.nfa",
 	  "hmmpfam -A 0 Optiontests.hmm Optiontests.fa",
@@ -105,4 +111,4 @@ unlink "tmp.hmm";
 unlink "tmp2.hmm";
 unlink "Optiontests.hmm";
 unlink "Optiontests.nhmm";
-
+unlink "Optiontests.hmm.gsi";
