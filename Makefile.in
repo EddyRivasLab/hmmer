@@ -43,11 +43,12 @@ CFLAGS = @CFLAGS@
 ## St. Louis)
 #######
 SHELL       = /bin/sh
+BASENAME    = "hmmer"
 PACKAGE     = "HMMER"
 RELEASE     = "2.1.4"
 RELCODE     = "rel2_1_4"
 RELEASEDATE = "in progress"
-COPYRIGHT   = "Copyright \(C\) 1992-2000 Washington University School of Medicine"
+COPYRIGHT   = "Copyright \(C\) 1992-2000 HHMI/Washington University School of Medicine"
 LICENSE     = "Freely distributed under the GNU General Public License \(GPL\)"
 LICENSETAG  = gnu
 COMPRESS    = gzip
@@ -186,72 +187,53 @@ verify:
 doc:
 	(cd Userguide; make)
 
-# dist: build a new distribution directory in build/hmmer-$RELEASE
-#       checks out RCS files read-only
+# dist: build a new distribution directory in hmmer-$RELEASE
+#       Exports from the CVS repository.
 #       tags RCS files with $(RELCODE) for later reconstruction
 #       squid RCS files are tagged with hmmer$(RELCODE).
 #       Adds a license statement to each file that has a @LICENSE@ line.
-#       
-#       Thou mayest not use files other than RCS files for a build.
-#       (Else reconstruction may not work).
-#
+#       Virtually identical to squid's make dist -- keep them in sync!
 dist:
+	# Delete old versions of the same release
 	#
-	# Create directory structure for build
-	#
-	@if test -d build/hmmer-$(RELEASE); then rm -rf build/hmmer-$(RELEASE); fi
-	@if test -d build/hmmer-$(RELEASE).tar; then rm -f build/hmmer-$(RELEASE).tar; fi
-	@if test -d build/hmmer-$(RELEASE).tar.Z; then rm -f build/hmmer-$(RELEASE).tar.Z; fi
-	@if test -d build/hmmer-$(RELEASE).tar.gz; then rm -f build/hmmer-$(RELEASE).tar.gz; fi
-	mkdir build/hmmer-$(RELEASE)
-	mkdir build/hmmer-$(RELEASE)/src
-	mkdir build/hmmer-$(RELEASE)/Demos
-	mkdir build/hmmer-$(RELEASE)/Man
-	mkdir build/hmmer-$(RELEASE)/Shiva
-	mkdir build/hmmer-$(RELEASE)/Userguide
+	@if test -d ${BASENAME}-$(RELEASE);        then rm -rf ${BASENAME}-$(RELEASE);        fi
+	@if test -e ${BASENAME}-$(RELEASE).tar;    then rm -f  ${BASENAME}-$(RELEASE).tar;    fi
+	@if test -e ${BASENAME}-$(RELEASE).tar.Z;  then rm -f  ${BASENAME}-$(RELEASE).tar.Z;  fi
+	@if test -e ${BASENAME}-$(RELEASE).tar.gz; then rm -f  ${BASENAME}-$(RELEASE).tar.gz; fi
 	# 
-	# Make the configure script; copy it and other GNU config material to distribution
+	# CVS tag and extract. -c: make sure we committed;
+	#                      -F: allow more than one "make dist" per rel
+	# prep: must have done "cvs commit", and CVSROOT must be set
+	# We also need the squid library, so tag and export it too.
 	#
-	autoconf
-	cp configure    build/hmmer-$(RELEASE)/
-	cp config.guess build/hmmer-$(RELEASE)/
-	cp config.sub   build/hmmer-$(RELEASE)/
-	cp install-sh   build/hmmer-$(RELEASE)/
+	cvs tag -c -F $(RELCODE)
+	cvs export -r $(RELCODE) -d ${BASENAME}-${RELEASE} ${BASENAME}
+	cvs rtag -F ${BASENAME}_${RELCODE} squid
+	(cd lib; cvs export -r ${BASENAME}_${RELCODE} -d squid squid)
 	# 
-	# Attach the license and release notes
+	# Make the configure script from configure.in
 	#
-	cp Licenses/LICENSE.$(LICENSETAG) build/hmmer-$(RELEASE)/LICENSE
-	cp Licenses/COPYING.$(LICENSETAG) build/hmmer-$(RELEASE)/COPYING
-	cp ReleaseNotes/RELEASE-$(RELEASE) build/hmmer-$(RELEASE)/NOTES
+	(cd ${BASENAME}-${RELEASE}; autoconf)
+	# 
+	# Include the appropriate license files and release notes
 	#
-	# RCS extraction of top level README-type documentation and Makefile
+	cp  Licenses/LICENSE.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/LICENSE
+	cp  Licenses/COPYING.$(LICENSETAG)  ${BASENAME}-$(RELEASE)/COPYING
+	-cp ReleaseNotes/RELEASE-$(RELEASE) ${BASENAME}-$(RELEASE)/NOTES
 	#
-	for file in $(READMES) Makefile.in; do\
-	  rcs -N$(RELCODE): RCS/$$file,v;\
-	  co RCS/$$file,v build/hmmer-$(RELEASE)/$$file;\
-	  licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/$$file;\
+	# Attach license stamps on files that need 'em (replace LICENSE keyword)
+	# licenseadd.pl is basically harmless, so we can overannotate here by
+	# trying to licenseadd everything.
+	#
+	find ${BASENAME}-${RELEASE}
+	  licenseadd.pl Licenses/$(LICENSETAG) ${BASENAME}-${RELEASE}/$$file;\
         done
-	#
-	# RCS extraction of src/ source code subdirectory
-	#
-	for file in $(SRC) $(HDRS) Makefile.in; do\
-           rcs -N$(RELCODE): src/RCS/$$file,v;\
-	   co src/RCS/$$file,v build/hmmer-$(RELEASE)/src/$$file;\
-	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/src/$$file;\
+	for file in src/*.c src/*.h src/Makefile.in; do \
+	   licenseadd.pl Licenses/$(LICENSETAG) ${BASENAME}-${RELEASE}/$$file;\
+	done	
+	for file in lib/squid/*.c lib/squid/*.h lib/squid/Makefile.in; do \
+	   licenseadd.pl Licenses/$(LICENSETAG) ${BASENAME}-${RELEASE}/$$file;\
 	done
-	for file in $(SQUIDSRC) $(SQUIDHDRS); do\
-	   rcs -Nhmmer_$(RELCODE): $(SQUIDSRCDIR)/RCS/$$file,v;\
-	   co $(SQUIDSRCDIR)/RCS/$$file,v build/hmmer-$(RELEASE)/src/$$file;\
-	   licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/src/$$file;\
-	done
-	#
-	# RCS extraction of Demos/ 
-	#
-	for file in $(DEMOS); do\
-	  rcs -N$(RELCODE): Demos/RCS/$$file,v;\
-	  co Demos/RCS/$$file,v build/hmmer-$(RELEASE)/Demos/$$file;\
-	  licenseadd.pl Licenses/$(LICENSETAG) build/hmmer-$(RELEASE)/Demos/$$file;\
-        done
 	#
 	# RCS extraction of HMMER Man/ manual pages
 	#
