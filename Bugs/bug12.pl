@@ -9,7 +9,13 @@
 # SRE, Fri Dec 15 10:04:41 2000
 #
 
-$hmmpfam = "../binaries/hmmpfam";
+$usage = "Usage: ./bug12.pl [BINARYPATH]\n";
+
+$binpath = "";
+if    ($#ARGV > 0)  { print $usage; exit 1; }
+elsif ($#ARGV == 0) { $binpath = shift;     }
+
+$hmmpfam = "$binpath/hmmpfam";
 print "Bug 12 ...\t";
 
 $output = `$hmmpfam bug12-minipfam bug12-ELAV_DROME`;

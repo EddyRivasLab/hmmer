@@ -120,6 +120,13 @@ main(int argc, char **argv)
 	if (test == NULL) 
 	  Die("%s not an HMM file; I refuse to append to it; using stdout instead",
 	      outfile);
+
+	/* bug #14 fix. 12/24/00, xref STL3 p.133. */
+	if (test->is_binary && outfmt == P7ASCII) 
+	  Die("File %s is in binary format. Can't append ASCII format to it.", outfile);
+	else if (! test->is_binary && outfmt == P7BINARY) 
+	  Die("File %s is in ASCII format. Can't append binary format to it.", outfile);
+	      
 	HMMFileClose(test);
       }
       switch (outfmt) {

@@ -169,7 +169,8 @@ main(int argc, char **argv)
   int     nhmm;			/* number of HMMs searched                 */
   int     domidx;		/* number of this domain                   */
   int     ndom;			/* total # of domains in this seq          */
-  int     namewidth;		/* max width of sequence name              */
+  int     namewidth;		/* max width of printed HMM name           */
+  int     descwidth;		/* max width of printed description        */
 
   int    Alimit;		/* A parameter limiting output alignments   */
   struct threshold_s thresh;    /* contains all threshold (cutoff) info     */
@@ -267,6 +268,9 @@ main(int argc, char **argv)
   if (do_nucleic) SetAlphabet(hmmNUCLEIC);
   else            SetAlphabet(hmmAMINO);
 
+  if (do_nucleic && do_xnu) 
+    Die("You can't use -n and --xnu together: I can't xnu DNA data.");
+
   if ((sqfp = SeqfileOpen(seqfile, format, NULL)) == NULL)
     Die("Failed to open sequence file %s\n%s\n", seqfile, usage);
 
@@ -329,19 +333,20 @@ main(int argc, char **argv)
       else
 	{
 	  printf("\nQuery sequence: %s\n", sqinfo.name);
-	  printf("Accession:      %s\n", sqinfo.flags &SQINFO_ACC ? sqinfo.acc  : "");
-	  printf("Description:    %s\n", sqinfo.flags &SQINFO_DESC? sqinfo.desc : "");
+	  printf("Accession:      %s\n", sqinfo.flags &SQINFO_ACC ? sqinfo.acc  : "[none]");
+	  printf("Description:    %s\n", sqinfo.flags &SQINFO_DESC? sqinfo.desc : "[none]");
 	}
       /* We'll now sort the global hit list by evalue... 
        * (not score! that was bug #12. in hmmpfam, score and evalue are not 
        *  monotonic.)
        */
       FullSortTophits(ghit);	
-      namewidth =  MAX(8, TophitsMaxName(ghit));
+      namewidth = MAX(8, TophitsMaxName(ghit)); /* must print whole name, no truncation  */
+      descwidth = MAX(52-namewidth, 11);        /* may truncate desc, but avoid neg len! */
 
       printf("\nScores for sequence family classification (score includes all domains):\n");
-      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Model", 52-namewidth, "Description", "Score", "E-value", " N ");
-      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", 52-namewidth, "-----------", "-----", "-------", "---");
+      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Model", descwidth, "Description", "Score", "E-value", " N ");
+      printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", descwidth, "-----------", "-----", "-------", "---");
       for (i = 0; i < ghit->num; i++)
 	{
 	  char *safedesc;
@@ -383,7 +388,7 @@ main(int argc, char **argv)
 	    printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
 		   namewidth, 
 		   (show_acc && acc != NULL) ?  acc : name,
-		   52-namewidth, 52-namewidth, safedesc != NULL ? safedesc : "",
+		   descwidth, descwidth, safedesc != NULL ? safedesc : "",
 		   sc, evalue, ndom);
 	  free(safedesc);
 	}
@@ -392,7 +397,7 @@ main(int argc, char **argv)
       /* 3. Report domain hits (sorted on sqto coordinate)
        */
       FullSortTophits(dhit);
-      namewidth = MAX(8, TophitsMaxName(dhit));
+      namewidth = MAX(8, TophitsMaxName(dhit)); /* must print whole name, no truncation  */
 
       printf("\nParsed for domains:\n");
       printf("%-*s %7s %5s %5s    %5s %5s    %7s %8s\n",
@@ -548,7 +553,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   /* Prepare sequence.
    */
   dsq = DigitizeSequence(seq, sqinfo->len);
-  if (do_xnu) XNU(dsq, sqinfo->len);
+  if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo->len);
 
 #ifdef HMMER_THREADS
   if (num_threads > 0) {
@@ -686,7 +691,7 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   /* Prepare sequence.
    */
   dsq = DigitizeSequence(seq, sqinfo->len);
-  if (do_xnu) XNU(dsq, sqinfo->len);
+  if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo->len);
 
   /* Initialize PVM
    */

@@ -63,6 +63,7 @@ extern void   PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *
  * Debugging output of various sorts.
  */
 extern char *Statetype(char st);
+extern char *AlphabetType2String(int type);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);

@@ -20,24 +20,25 @@ reads a multiple sequence alignment file
 
 .PP
 .I alignfile
-may be in ClustalW, GCG MSF, or SELEX alignment format.
+may be in ClustalW, GCG MSF, SELEX, Stockholm, or aligned FASTA alignment format.
 
 .PP
 By default, the model is configured to find one or more
 nonoverlapping alignments to the complete model. This
 is analogous to the behavior of the 
 .B hmmls 
-program of HMMER 1. To configure the model for a single
-global alignment, use the 
-.B -g
-option;
-to configure the model for multiple local alignments
+program of HMMER 1. 
+To configure the model for multiple local alignments
 a la the old program
 .B hmmfs,
 use the
 .B -f 
+option. More rarely, you may want to 
+configure the model for a single
+global alignment, using the 
+.B -g
 option;
-and to configure the model for a single local alignment
+or to configure the model for a single local alignment
 (a la standard Smith/Waterman, or the old
 .B hmmsw
 program), use the
@@ -57,8 +58,8 @@ program of HMMER 1.
 .TP
 .B -g
 Configure the model for finding a single global alignment to
-a target sequence, analogous to the standard Needleman/Wunsch
-algorithm or the old
+a target sequence, analogous to
+the old
 .B hmms
 program of HMMER 1.
 
@@ -80,7 +81,7 @@ your shell will complain about command line lengths first).
 .BI -o " <f>"
 Re-save the starting alignment to 
 .I <f>,
-in SELEX format.
+in Stockholm format.
 The columns which were assigned to match states will be
 marked with x's in an #=RF annotation line. 
 If either the
@@ -194,7 +195,8 @@ smaller.
 .TP
 .B --hand
 Specify the architecture of the model by hand: the alignment file must
-be in SELEX format, and the #=RF annotation line is used to specify
+be in SELEX or Stockholm format, and the reference annotation
+line (#=RF in SELEX, #=GC RF in Stockholm) is used to specify
 the architecture. Any column marked with a non-gap symbol (such
 as an 'x', for instance) is assigned as a consensus (match) column in
 the model.
@@ -245,12 +247,22 @@ of how the null model is used, see the User's Guide.
 
 .TP
 .BI --pam " <f>"
-Apply a heuristic PAM- (substitution matrix-) based prior instead of
+Apply a heuristic PAM- (substitution matrix-) based prior on match
+emission probabilities instead of
 the default mixture Dirichlet. The substitution matrix is read
 from 
 .I <f>. 
 See 
-.B --pamwgt.
+.B --pamwgt. 
+
+The default Dirichlet state transition prior and insert emission prior
+are unaffected. Therefore in principle you could combine 
+.B --prior
+with
+.B --pam
+but this isn't recommended, as it hasn't been tested. (
+.B --pam
+itself hasn't been tested much!)
 
 .TP 
 .BI --pamwgt " <x>"

@@ -446,9 +446,15 @@ P7PriorifyEmissionVector(float *vec, struct p7prior_s *pri,
 
   /* Calculate mix[], which is the posterior probability
    * P(q | n) of mixture component q given the count vector n
+   *
    * (side effect note: note that an insert vector in a PAM prior
    * is passed with num = 1, bypassing pam prior code; this means
    * that inserts cannot be mixture Dirichlets...)
+   * [SRE, 12/24/00: the above comment is cryptic! what the hell does that
+   *  mean, inserts can't be mixtures? doesn't seem to be true. it 
+   *  may mean that in a PAM prior, you can't have a mixture for inserts,
+   *  but I don't even understand that. The insert vectors aren't passed
+   *  with num=1!!]
    */
   mix[0] = 1.0;
   if (pri->strategy == PRI_DCHLET && num > 1) 

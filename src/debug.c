@@ -8,7 +8,7 @@
  * Printing out or naming various useful things from HMMER
  * innards.
  * 
- * RCS $Id$
+ * CVS $Id$
  */
 
 #include <stdio.h>
@@ -20,12 +20,6 @@
 #include "config.h"
 #include "funcs.h" 
 #include "squid.h"
-
-#ifdef MEMDEBUG
-#include "dbmalloc.h"
-#endif
-
-
 
 /* Function: Statetype()
  * 
@@ -49,6 +43,29 @@ Statetype(char st)
   default: return "BOGUS";
   }
 }
+
+/* Function: AlphabetType2String()
+ * Date:     SRE, Sun Dec 24 11:33:40 2000 [St. Louis]
+ *
+ * Purpose:  Returns a string "protein" for hmmAMINO,
+ *           "nucleic acid" for hmmNUCLEIC, etc... used 
+ *           for formatting diagnostics.
+ *
+ * Args:     type - Alphabet type, e.g. hmmAMINO
+ *
+ * Returns:  char *
+ */
+char *
+AlphabetType2String(int type)
+{
+  switch (type) {
+  case hmmAMINO:     return "protein";
+  case hmmNUCLEIC:   return "nucleic acid";
+  case hmmNOTSETYET: return "unknown";
+  default:           return "BOGUS";
+  }
+}
+
 
 /* Function: P7PrintTrace()
  * 

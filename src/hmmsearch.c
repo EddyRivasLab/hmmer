@@ -165,6 +165,7 @@ main(int argc, char **argv)
   int     domidx;		/* number of this domain                   */
   int     ndom;			/* total # of domains in this seq          */
   int     namewidth;		/* max width of sequence name              */
+  int     descwidth;		/* max width of description */
   int     nreported;		/* # of hits reported in a list            */
 
   int    Alimit;		/* A parameter limiting output alignments   */
@@ -259,6 +260,7 @@ main(int argc, char **argv)
   /*********************************************** 
    * Open HMM file (might be in HMMERDB or current directory).
    * Read a single HMM from it. (Config HMM, if necessary).
+   * Alphabet globals are set by reading the HMM.
    ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, "HMMERDB")) == NULL)
@@ -268,6 +270,9 @@ main(int argc, char **argv)
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   P7Logoddsify(hmm, !do_forward);
+
+  if (do_xnu && Alphabet_type == hmmNUCLEIC) 
+    Die("The HMM is a DNA model, and you can't use the --xnu filter on DNA data");
 
   /*****************************************************************
    * Set up optional Pfam score thresholds. 
@@ -357,8 +362,8 @@ main(int argc, char **argv)
   else 
     {
       printf("\nQuery HMM:   %s\n", hmm->name);
-      printf("Accession:   %s\n", hmm->flags & PLAN7_ACC  ? hmm->acc  : "");
-      printf("Description: %s\n", hmm->flags & PLAN7_DESC ? hmm->desc : "");
+      printf("Accession:   %s\n", hmm->flags & PLAN7_ACC  ? hmm->acc  : "[none]");
+      printf("Description: %s\n", hmm->flags & PLAN7_DESC ? hmm->desc : "[none]");
     }
 
   if (hmm->flags & PLAN7_STATS)
@@ -367,11 +372,12 @@ main(int argc, char **argv)
     printf("  [No calibration for HMM; E-values are upper bounds]\n");
 
   FullSortTophits(ghit);
-  namewidth = MAX(8, TophitsMaxName(ghit));
+  namewidth = MAX(8, TophitsMaxName(ghit)); /* cannot truncate name. */
+  descwidth = MAX(52-namewidth, 11);/* may truncate desc, but need strlen("Description") */
 
   printf("\nScores for complete sequences (score includes all domains):\n");
-  printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Sequence", 52-namewidth, "Description", "Score", "E-value", " N ");
-  printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", 52-namewidth, "-----------", "-----", "-------", "---");
+  printf("%-*s %-*s %7s %10s %3s\n", namewidth, "Sequence", descwidth, "Description", "Score", "E-value", " N ");
+  printf("%-*s %-*s %7s %10s %3s\n", namewidth, "--------", descwidth, "-----------", "-----", "-------", "---");
   for (i = 0, nreported = 0; i < ghit->num; i++)
     {
       char *safedesc;
@@ -399,7 +405,7 @@ main(int argc, char **argv)
       if (evalue <= thresh.globE && sc >= thresh.globT) {
 	printf("%-*s %-*.*s %7.1f %10.2g %3d\n", 
 	       namewidth, name, 
-	       52-namewidth, 52-namewidth, safedesc != NULL ? safedesc : "",
+	       descwidth, descwidth, safedesc != NULL ? safedesc : "",
 	       sc, evalue, ndom);
 	nreported++;
       }
@@ -571,7 +577,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
       
-      if (do_xnu) XNU(dsq, sqinfo.len);
+      if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo.len);
       
       /* 1. Recover a trace by Viterbi.
        */
@@ -731,7 +737,7 @@ main_loop_pvm(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, int
       if (sqinfo.len == 0) { nseq--; continue; }
 
       dsq = DigitizeSequence(seq, sqinfo.len);
-      if (do_xnu) XNU(dsq, sqinfo.len);
+      if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo.len);
 
       pvm_initsend(PvmDataDefault);
       pvm_pkint(&nseq, 1, 1);

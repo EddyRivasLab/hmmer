@@ -580,6 +580,7 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   int   M;
   float p;
   int   k, x;
+  int   atype;			/* alphabet type, hmmAMINO or hmmNUCLEIC */
 
   hmm = NULL;
   if (feof(hmmfp->f) || fgets(buffer, 512, hmmfp->f) == NULL) return 0;
@@ -599,12 +600,14 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
     else if (strncmp(buffer, "NSEQ ", 5) == 0) hmm->nseq = atoi(buffer+6);
     else if (strncmp(buffer, "ALPH ", 5) == 0) 
       {				/* Alphabet type */
-	if (Alphabet_type == hmmNOTSETYET) {
-	  s2upper(buffer+6);
-	  if      (strncmp(buffer+6, "AMINO",   5) == 0) SetAlphabet(hmmAMINO);
-	  else if (strncmp(buffer+6, "NUCLEIC", 7) == 0) SetAlphabet(hmmNUCLEIC);
-	  else goto FAILURE;
-	}
+	s2upper(buffer+6);
+	if      (strncmp(buffer+6, "AMINO",   5) == 0) atype = hmmAMINO;
+	else if (strncmp(buffer+6, "NUCLEIC", 7) == 0) atype = hmmNUCLEIC;
+	else goto FAILURE;
+
+	if      (Alphabet_type == hmmNOTSETYET) SetAlphabet(atype);
+	else if (atype != Alphabet_type) 
+	  Die("Alphabet mismatch error.\nI thought we were working with %s, but tried to read a %s HMM.\n", AlphabetType2String(Alphabet_type), AlphabetType2String(atype));
       }
     else if (strncmp(buffer, "RF   ", 5) == 0) 
       {				/* Reference annotation present? */
@@ -819,6 +822,8 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    if (! fread((char *) &type, sizeof(int), 1, hmmfp->f)) goto FAILURE;
    if (hmmfp->byteswap) byteswap((char *)&type, sizeof(int)); 
    if (Alphabet_type == hmmNOTSETYET) SetAlphabet(type);
+   else if (type != Alphabet_type) 
+     Die("Alphabet mismatch error.\nI thought we were working with %s, but tried to read a %s HMM.\n", AlphabetType2String(Alphabet_type), AlphabetType2String(type));
 
 				/* now allocate for rest of model */
    AllocPlan7Body(hmm, hmm->M);
@@ -975,6 +980,7 @@ read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   int   M;			/* length of model  */
   int   k;			/* state number  */
   int   x;			/* symbol number */
+  int   atype;			/* Alphabet type */
 
   hmm = NULL;
   fp  = hmmfp->f;
@@ -986,12 +992,16 @@ read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
   if ((s = Getword(fp, sqdARG_INT))    == NULL) goto FAILURE;  M = atoi(s);          /* model length */
   if ((s = Getword(fp, sqdARG_INT))    == NULL) goto FAILURE;                        /* ignore alphabet size */
   if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;  Plan7SetName(hmm, s); /* name */
-  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;  s2upper(s);           /* alphabet type */ 
-  if (Alphabet_type == hmmNOTSETYET) {
-    if      (strcmp(s, "AMINO") == 0)   SetAlphabet(hmmAMINO);
-    else if (strcmp(s, "NUCLEIC") == 0) SetAlphabet(hmmNUCLEIC);
-    else goto FAILURE;
-  }
+  if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE; /* alphabet type */ 
+  s2upper(s);           
+  if      (strcmp(s, "AMINO") == 0)   atype = hmmAMINO;
+  else if (strcmp(s, "NUCLEIC") == 0) atype = hmmNUCLEIC;
+  else goto FAILURE;
+
+  if (Alphabet_type == hmmNOTSETYET) SetAlphabet(atype);
+  else if (atype != Alphabet_type) 
+    Die("Alphabet mismatch error.\nI thought we were working with %s, but tried to read a %s HMM.\n", AlphabetType2String(Alphabet_type), AlphabetType2String(atype));
+
 				/* read alphabet, make sure it's Plan7-compatible... */
   if ((s = Getword(fp, sqdARG_STRING)) == NULL) goto FAILURE;
   if (strncmp(s, Alphabet, Alphabet_size) != 0) goto FAILURE;
@@ -1453,18 +1463,12 @@ read_plan9_binhmm(FILE *fp, int version, int swapped)
   
   /* Set global alphabet information
    */
-  if (Alphabet_type == hmmNOTSETYET)
-    {
-      if      (asize == 4)  SetAlphabet(hmmNUCLEIC);
-      else if (asize == 20) SetAlphabet(hmmAMINO);
-      else    
-	Die("A nonbiological alphabet size of %d; so I can't convert plan9 to plan7", asize);
-    }
-  else
-    {
-      if (asize != Alphabet_size)
-	Die("Plan9 model's alphabet size (%d) doesn't match previous setting (%d)", asize, Alphabet_size);
-    }
+  if      (asize == 4)  atype = hmmNUCLEIC;
+  else if (asize == 20) atype = hmmAMINO;
+  else Die("A nonbiological alphabet size of %d; so I can't convert plan9 to plan7", asize);
+  if (Alphabet_type == hmmNOTSETYET) SetAlphabet(atype);
+  else if (atype != Alphabet_type) 
+    Die("Alphabet mismatch error.\nI thought we were working with %s, but tried to read a %s HMM.\n", AlphabetType2String(Alphabet_type), AlphabetType2String(atype));
 
   /* now, create space for hmm */
   if ((hmm = P9AllocHMM(M)) == NULL)
@@ -1593,7 +1597,9 @@ read_plan9_aschmm(FILE *fp, int version)
   char *s;
   int   k;			/* state number  */
   int   i;			/* symbol number */
-  int   asize;
+  int   asize;			/* Alphabet size */
+  int   atype;			/* Alphabet type */
+
 				/* read M from first line */
   if (fgets(buffer, 512, fp) == NULL) return NULL;
   if ((s = strtok(buffer, " \t\n")) == NULL) return NULL;
@@ -1607,18 +1613,13 @@ read_plan9_aschmm(FILE *fp, int version)
 
   /* Set global alphabet information
    */
-  if (Alphabet_type == hmmNOTSETYET)
-    {
-      if      (asize == 4)  SetAlphabet(hmmNUCLEIC);
-      else if (asize == 20) SetAlphabet(hmmAMINO);
-      else    
-	Die("A nonbiological alphabet size of %d; so I can't convert plan9 to plan7", asize);
-    }
-  else
-    {
-      if (asize != Alphabet_size)
-	Die("Plan9 model's alphabet size (%d) doesn't match previous setting (%d)", asize, Alphabet_size);
-    }
+  if      (asize == 4)  atype = hmmNUCLEIC;
+  else if (asize == 20) atype = hmmAMINO;
+  else Die("A nonbiological alphabet size of %d; so I can't convert plan9 to plan7", asize);
+  if      (Alphabet_type == hmmNOTSETYET) SetAlphabet(atype);
+  else if (atype != Alphabet_type) 
+    Die("Alphabet mismatch error.\nI thought we were working with %s, but tried to read a %s HMM.\n", AlphabetType2String(Alphabet_type), AlphabetType2String(atype));
+
 				/* now, create space for hmm */
   if ((hmm = P9AllocHMM(M)) == NULL)
     Die("malloc failed for reading hmm in\n");

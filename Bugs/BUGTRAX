@@ -48,7 +48,8 @@ CLOSED_ACTION
 //
 ID              5
 STATUS          closed
-DESCRIPTION     hmmbuild core dumps when building model from single seqs FASTA file
+DESCRIPTION     hmmbuild core dumps when building model from single 
+	        seqs FASTA file
 NOTED_DATE      1/18/99
 NOTED_XREF      
 REPORTED_BY     agb
@@ -72,7 +73,8 @@ CLOSED_ACTION   renamed getseq to sfetch
 //
 ID              7
 STATUS          closed
-DESCRIPTION     Digital 4.0d binaries do not run on 4.0b; pthread_setconcurrency() missing
+DESCRIPTION     Digital 4.0d binaries do not run on 4.0b; 
+                pthread_setconcurrency() missing
 NOTED_DATE      1/18/99
 NOTED_XREF      
 REPORTED_BY     Bill Pearson
@@ -108,7 +110,8 @@ CLOSED_ACTION
 //
 ID              10
 STATUS          closed
-DESCRIPTION     Floating point exception in ExtremeValueP() on Digital 4.0b: range error. 
+DESCRIPTION     Floating point exception in ExtremeValueP() on Digital 4.0b: 
+                range error. 
 NOTED_DATE      7/2/99
 NOTED_XREF      
 REPORTED_BY     ju@harvard
@@ -132,7 +135,8 @@ CLOSED_ACTION
 //
 ID              12
 STATUS          closed
-DESCRIPTION     --domE, --domT don't work correctly in hmmpfam; E-value is assumed to be monotonic w/ score.
+DESCRIPTION     --domE, --domT don't work correctly in hmmpfam; E-value
+                is assumed to be monotonic w/ score.
 NOTED_DATE      11/29/00
 NOTED_XREF      STL3 p.127
 REPORTED_BY     vanschlun@gcg.com
@@ -141,4 +145,30 @@ REPRODUCE_ON    any
 CLOSED_DATE     SRE, Tue Dec 19 17:47:01 2000
 CLOSED_XREF     STL3 p.127
 CLOSED_ACTION   removed the break statements when looping over domain list.
+//
+ID              13
+STATUS          closed
+DESCRIPTION     hmmconvert happily converts a bogus HMM database w/ 
+                both DNA and protein
+NOTED_DATE      12/24/00
+NOTED_XREF      STL3 p.133
+REPORTED_BY     vanschlun@gcg.com, email 12/14/00
+REPRODUCE_WITH  bug13.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Sun Dec 24 11:58:28 2000
+CLOSED_XREF     STL3 p.133
+CLOSED_ACTION   hmmio.c now checks for changes in Alphabet_type while reading HMMs.
+//
+ID              14
+STATUS          closed
+DESCRIPTION     hmmconvert doesn't complain about appending binary to 
+	        ASCII HMMs, or vice versa
+NOTED_DATE      12/24/00
+NOTED_XREF      STL3 p.133
+REPORTED_BY     vanschlun@gcg.com, email 12/14/00
+REPRODUCE_WITH  bug13.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Sun Dec 24 15:33:11 2000
+CLOSED_XREF     STL3 p. 133
+CLOSED_ACTION   hmmconvert.c now tests for this case
 //

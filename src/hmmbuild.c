@@ -175,6 +175,7 @@ main(int argc, char **argv)
   float eff_nseq;		/* effective sequence number             */
   int   pbswitch;		/* nseq >= this, switchover to PB weights*/
   char *setname;                /* NULL, or ptr to HMM name to set       */
+  int   gapmax_set;		/* TRUE if gapmax was set on commandline */
 
   /*********************************************** 
    * Parse command line
@@ -206,6 +207,7 @@ main(int argc, char **argv)
   do_binary         = FALSE;
   pbswitch          = 1000;
   setname           = NULL;
+  gapmax_set        = FALSE;
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -221,7 +223,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--binary")  == 0) do_binary     = TRUE;
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
     else if (strcmp(optname, "--fast")    == 0) c_strategy    = P7_FAST_CONSTRUCTION;
-    else if (strcmp(optname, "--gapmax")  == 0) gapmax        = atof(optarg);
+    else if (strcmp(optname, "--gapmax")  == 0) { gapmax      = atof(optarg); gapmax_set = TRUE; }
     else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
     else if (strcmp(optname, "--idlevel") == 0) blosumlevel   = atof(optarg);
     else if (strcmp(optname, "--noeff")   == 0) do_eff        = FALSE;
@@ -268,6 +270,8 @@ main(int argc, char **argv)
     Die("HMM file %s already exists. Rename or delete it.", hmmfile); 
   if (overwrite_protect && align_ofile != NULL && FileExists(align_ofile))
     Die("Alignment resave file %s exists. Rename or delete it.", align_ofile); 
+  if (gapmax_set && c_strategy  != P7_FAST_CONSTRUCTION)
+    Die("using --gapmax only makes sense if you use --fast");
 
   /*********************************************** 
    * Preliminaries: open our files for i/o

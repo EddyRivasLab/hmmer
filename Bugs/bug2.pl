@@ -11,8 +11,14 @@
 
 use hmmer;
 
-$hmmpfam   = "../binaries/hmmpfam";
-$hmmsearch = "../binaries/hmmsearch";
+$usage = "Usage: ./bug2.pl [BINARYPATH]\n";
+
+$binpath = "";
+if    ($#ARGV > 0)  { print $usage; exit 1; }
+elsif ($#ARGV == 0) { $binpath = shift;     }
+
+$hmmpfam   = "$binpath/hmmpfam";
+$hmmsearch = "$binpath/hmmsearch";
 print "Bug 2 ...\t";
 
 $output = `$hmmpfam -E100 bug2-spectrin.hmm bug2-S30431.fa`;
