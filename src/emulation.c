@@ -98,11 +98,12 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   P7Logoddsify(hmm, TRUE);
 
   /* GCG can't deal with long profiles. Their limit is 1000
-   * positions.
+   * positions. However, Compugen can. Therefore we warn,
+   * but don't die.
    */
-  if (hmm->M > 1000)
-    Die("Can't convert HMM %s; M=%d, and GCG imposes a max limit of 1000 consensus positions", 
-	hmm->name, hmm->M);
+  if (hmm->M > 1000 && !do_xsw)
+    Warn("Profile %s will have more than 1000 positions. GCG won't read it; Compugen will.",
+	 hmm->name);
 
   /* Header information.
    * GCG will look for sequence type and length of model.
