@@ -991,6 +991,66 @@ TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr, int *ret_ntr)
 }
 
 
+/* Function: TraceDomainNumber()
+ * 
+ * Purpose:  Count how many times we traverse the
+ *           model in a single Plan7 trace -- equivalent
+ *           to counting the number of domains.
+ *           
+ *           (A weakness is that we might discard some of
+ *           those domains because they have low scores
+ *           below E or T threshold.)
+ */
+int
+TraceDomainNumber(struct p7trace_s *tr)
+{
+  int i;
+  int ndom = 0;
+  
+  for (i = 0; i < tr->tlen; i++)
+    if (tr->statetype[i] == STB) ndom++;
+  return ndom;
+}
+
+
+/* Function: TraceSimpleBounds()
+ * 
+ * Purpose:  For a trace that contains only a single
+ *           traverse of the model (i.e. something that's
+ *           come from TraceDecompose(), or a global
+ *           alignment), determine the bounds of
+ *           the match on both the sequence [1..L] and the
+ *           model [1..M].
+ *           
+ * Args:     tr   - trace to look at
+ *           i1   - RETURN: start point in sequence [1..L]
+ *           i2   - RETURN: end point in sequence [1..L]
+ *           k1   - RETURN: start point in model [1..M]
+ *           k2   - RETURN: end point in model [1..M]
+ */
+void
+TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2, 
+		  int *ret_k1,  int *ret_k2)
+{
+      /* The following code gets the bounds of a hit in 
+       * the model and sequence. It makes assumptions about
+       * the structure of the decomposed traces: specifically,
+       * exactly one hit per trace;
+       * S-N-B-M(k1)...M(k2)-E-C-T.
+       * so the fourth and tlen-3'th position in the trace
+       * are the bounding match states.
+       */
+  if (tr->statetype[3] != STM) 
+    Die("sanity check failed: 4th position in trace is not a match");
+  if (tr->statetype[tr->tlen-4] != STM)
+    Die("sanity check failed: n-3'th position in trace not a match");
+  *ret_k1 = tr->nodeidx[3];
+  *ret_i1 = tr->pos[3];
+  *ret_k2 = tr->nodeidx[tr->tlen - 4];
+  *ret_i2 = tr->pos[tr->tlen - 4];
+}
+
+
 /* Function: rightjustify()
  * 
  * Purpose:  Given a gap-containing string of length n,
