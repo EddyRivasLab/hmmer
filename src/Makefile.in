@@ -1,13 +1,7 @@
 # Makefile for HMMER: Source directory
 # RCS $Id$
 ##########
-# HMMER - Biological sequence analysis with HMMs
-# Copyright (C) 1992-1998 Sean R. Eddy
-#
-#   This source code is distributed under the terms of the 
-#   GNU General Public License. See the files COPYING and 
-#   LICENSE for details.
-#    
+# @LICENSE@
 ###########
 
 ## your compiler and compiler flags
@@ -186,7 +180,7 @@ squid:
 #######
 
 clean:
-	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core $(PROGS) $(PVMPROGS) TAGS gmon.out libhmmer.a
 
 tags:
 	etags -t $(SRC) $(HDRS) $(READMES) 

@@ -1,11 +1,5 @@
 /************************************************************
- * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
- *
- *   This source code is distributed under the terms of the
- *   GNU General Public License. See the files COPYING and
- *   GNULICENSE for details.
- *
+ * @LICENSE@
  ************************************************************/
 
 /* globals.h
