@@ -21,9 +21,55 @@ improve the portability of the HMMER 2 code.
 I would greatly appreciate receiving diffs for any ports of HMMER to
 any platform.
 
-\section{Compiling from source}
+\section{Installing a precompiled distribution}
+
+Precompiled binary distributions of HMMER are available for at least
+Intel/Linux, Silicon Graphics IRIX 5.x and 6.x, and Sun Sparc Solaris
+2.x platforms.
+
+To install a precompiled distribution, do the following:
 
 \begin{enumerate}
+\item Download the distribution from http://hmmer.wustl.edu/.
+
+\item Uncompress and un-tar it; for example, \\
+	\user{uncompress hmmer-intel-linux.tar.Z}
+	\user{tar xf hmmer-intel-linux.tar}
+
+	A new directory \prog{hmmer-xx} is created, where ``xx'' is
+	the HMMER version number.
+
+\item Edit the top of the Makefile. 
+
+To build and test HMMER in the distribution directory, you don't need
+to edit the Makefile at all. But to permanently install HMMER on your
+system, set the make variables BINDIR and MANDIR to be the directories
+where you want HMMER executables and man pages to be installed. If you
+are installing in directories called bin/ and man/ in your home
+directory, you don't need to change anything.
+
+\item (Optional) Type 'make test' to compile and run a test suite.
+Some of the tests require that you have Perl installed. None of these
+tests should fail.
+
+\item Type 'make install' to install the programs and man pages. 
+You may have to become root, depending on where you're installing.
+
+\item Type 'make clean' to clean up.
+\end{enumerate}
+
+\section{Compiling from a source-only distribution}
+
+\begin{enumerate}
+\item Download the distribution from http://hmmer.wustl.edu/.
+
+\item Uncompress and un-tar it:\\
+	\user{uncompress hmmer.tar.Z}
+	\user{tar xf hmmer.tar}
+
+	A new directory \prog{hmmer-xx} is created, where ``xx'' is
+	the HMMER version number.
+
 \item Edit the top of the Makefile. 
 
 To build and test HMMER in its source directory, you don't need to
