@@ -1,13 +1,7 @@
 # Makefile for producing the HMMER documentation
-# RCS $Id$
+# CVS $Id$
 ##########
-# HMMER - Biological sequence analysis with profile HMMs
-# Copyright (C) 1992-2001 Washington University School of Medicine
-#
-#   This source code is distributed under the terms of the 
-#   GNU General Public License. See the files COPYING and 
-#   LICENSE for details.
-#    
+# @LICENSE@   
 ###########
 
 # Preparation notes.
@@ -53,10 +47,10 @@ manpages:
 	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
 	@echo "\chapter{Manual pages}" >> manpages.tex 
 	for file in $(HMMERMANS); do\
-	   rman	-f LaTeX2e ../man/$$file.man | ./rmanprocess.pl >> manpages.tex;\
+	   rman	-f LaTeX2e ../man/$$file.man | ../../ssdk/rmanprocess.pl >> manpages.tex;\
 	done
 	for file in $(SQUIDMANS); do\
-	   rman -f LaTeX2e ../../squid/Man/$$file.man | ./rmanprocess.pl >> manpages.tex;\
+	   rman -f LaTeX2e ../../squid/Man/$$file.man | ../../ssdk/rmanprocess.pl >> manpages.tex;\
 	done
 
 # dvi: make the dvi file

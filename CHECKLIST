@@ -37,5 +37,7 @@ Checklist for a HMMER distribution.
 5. Commit to CVS. Include package and release # in the log message.
 	% cvs commit
 
-
+6. Make a distro.
+	% make dist
+	
 
