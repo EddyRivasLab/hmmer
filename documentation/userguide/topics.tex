@@ -1,4 +1,4 @@
-\chapter{Stray topics}
+\section{Stray topics}
 
 Ah, you thought this was organized documentation? No, it's generally
 written on a laptop, late at night, with a good bottle of wine beside
@@ -7,7 +7,7 @@ the hands of the amazing Wine Merchant, or in the less capable hands
 of the local supermarket), and nothing better to do. Here's where you
 can find topics that rank as frequently asked questions about HMMER.
 
-\section{Evaluating the significance of profile HMM hit}
+\subsection{Evaluating the significance of profile HMM hit}
 
 \prog{hmmsearch} gives you a ranked list of hits in a sequence
 database.  Which ones are likely to be true homologous and which ones
@@ -20,7 +20,7 @@ raw score, and an E-value. Additionally, Pfam models carry a third set
 of criteria: six expert-calibrated raw score cutoffs that the Pfam
 database maintainers set.
 
-\subsection{Executive summary}
+\subsubsection{Executive summary}
 
 \begin{itemize}
 
@@ -68,7 +68,7 @@ it is significantly related to the actin family (also correct).
 
 
 
-\subsection{In more detail: What HMMER raw scores mean}
+\subsubsection{In more detail: What HMMER raw scores mean}
 
 The raw score is a log-odds score in log base two (thus, in units of
 {\em bits}. Specifically, it is:
@@ -149,7 +149,7 @@ current null2 approach, and the code is also now known to be
 incompatible with the design of certain hardware accelerators, so
 developers should expect the relevant code to change without notice.
 
-\subsection{In more detail: What HMMER E-values mean}
+\subsubsection{In more detail: What HMMER E-values mean}
 
 The E-value is the expected number of false positives with scores at
 least as high as your hit.
@@ -235,7 +235,7 @@ more or less well fitted. The bulk of the distribution, particularly
 at lower scores, is usually poorly fitted, but this is not the area of
 interest.
 
-\subsection{In more detail: What Pfam TC/NC/GA cutoffs mean}
+\subsubsection{In more detail: What Pfam TC/NC/GA cutoffs mean}
 
 When a Pfam model is built, the Pfam team keeps track of per-sequence
 and per-domain scores of every sequence in a large nonredundant
@@ -301,28 +301,4 @@ Stockholm markup to your collection of alignments. When these numbers
 are available in the HMM, HMMER search programs provide options
 (\prog{--cut\_ga}, etc.) for setting search cutoffs to GA, TC, or NC
 automatically.
-
-\section{How do I cite HMMER?}
-
-There is still no single peer-reviewed reference to the HMMER
-package. Depending on the standards of your journal, here are
-some possibilities.
-
-If the journal will accept WWW references, I recommend:
-
-\begin{quote}
-Eddy, S.R. (2001) HMMER: Profile hidden Markov models for
-biological sequence analysis (http://hmmer.wustl.edu/)
-\end{quote}
-
-If the journal doesn't accept WWW references but will allow
-unpublished references or personal communications, I recommend:
-
-\begin{quote}
-Eddy, S.R. (2001) HMMER: Profile hidden Markov models for
-biological sequence analysis. Unpublished.
-\end{quote}
-
-And if the journal won't accept unpublished references at all, I
-recommend citing my last profile HMM review paper \cite{Eddy98}.
 

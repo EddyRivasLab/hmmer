@@ -220,3 +220,16 @@ CLOSED_DATE     3/29/02
 CLOSED_XREF     STL6 p.12
 CLOSED_ACTION   Not a bug. 
 //
+ID              h19
+TITLE           floating point exception on Alpha/Linux
+STATUS          CLOSED
+XREF            none
+REPORTED_BY     "Yungok S. Ihm" <youngok@iastate.edu>
+CLOSED_DATE     SRE, Fri May  9 15:31:23 2003
+DESCRIPTION     
+ hmmpfam crashes on extremely low scoring hits (<-1000),
+ on Alpha/Linux. Appears in both 2.2g and 2.3dev. 
+ mathsupport.c:PValue() doesn't check for underflow before
+ calling sreEXP2() on the score; the Alpha crashes on this.
+ No test case built for bugs.sqc.
+//

@@ -115,9 +115,9 @@ SetAlphabet(int type)
   switch(type) { /* Alphabet is not a string - careful! */
   case hmmAMINO: 
     Alphabet_type     = type;
-    strncpy(Alphabet, "ACDEFGHIKLMNPQRSTVWYBZX", 23);
+    strncpy(Alphabet, "ACDEFGHIKLMNPQRSTVWYUBZX", 24);
     Alphabet_size     = 20; 
-    Alphabet_iupac    = 23;
+    Alphabet_iupac    = 24;
     for (x = 0; x < Alphabet_iupac; x++) {
       memset(Degenerate[x], 0, Alphabet_size);
     }
@@ -125,6 +125,7 @@ SetAlphabet(int type)
       Degenerate[x][x] = 1;
       DegenCount[x] = 1;
     }
+    set_degenerate('U', "S");	/* selenocysteine is treated as serine */
     set_degenerate('B', "ND");
     set_degenerate('Z', "QE");
     set_degenerate('X', "ACDEFGHIKLMNPQRSTVWY");

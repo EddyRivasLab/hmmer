@@ -84,8 +84,10 @@ PValue(struct plan7_s *hmm, float sc)
 {
   double pval;
   double pval2;
+
 				/* the bound from Bayes */
-  if (sc >= sreLOG2(DBL_MAX)) pval = 0.0;
+  if      (sc >= sreLOG2(DBL_MAX))       pval = 0.0;
+  else if (sc <= -1. * sreLOG2(DBL_MAX)) pval = 1.0;
   else                        pval = 1. / (1.+sreEXP2(sc));
 
 				/* try for a better estimate from EVD fit */

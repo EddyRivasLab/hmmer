@@ -380,6 +380,7 @@ shell environment by setting an environment variable
 \prog{--cpu <x>} option.
 
 \subsubsection{the other stuff in \prog{config.h}}
+\label{section:alphabet-config}
 
 The other stuff in \prog{config.h} is dangerous to change, unless you
 know what you're doing, or are willing to learn. One example of when
@@ -427,14 +428,49 @@ you're going to start configuring and compiling HMMER all over again.
 \end{wideitem}
 
 \subsection{Shell environment variables understood by HMMER}
+\label{section:environment}
 
-HMMER optionally reads four environment variables:
+HMMER is built to coexist peacefully with the BLAST suite of database
+search programs \cite{Altschul91,Altschul97}. HMMER reads the
+following environment variables (the examples given use UNIX csh
+syntax):
 
 \begin{wideitem}
-\item[\emprog{BLASTDB}] - directory location of FASTA-formatted sequence databases
-\item[\emprog{BLASTMAT}] - directory location of BLAST scoring matrices
-\item[\emprog{HMMERDB}] - directory location of HMM databases (e.g. PFAM)
-\item[\emprog{HMMER\_NCPU}] - default number of CPUs to utilize in a multiprocessor
+\item [\emprog{BLASTDB}] Location of sequence databases that
+	\prog{hmmsearch} will look in, in addition to the current
+	working directory.
+	Multiple directories are allowed, separated by colons. A
+	trailing slash on each path is important to BLAST, but not to HMMER.\\
+	Examples: \\
+	\user{setenv BLASTDB /nfs/databases/}\\
+        \user{setenv BLASTDB /nfs/databases/:/nfs/moredatabases/}
+
+\item [\emprog{BLASTMAT}] Location of substitution matrices that
+	\prog{hmmbuild --pam} (the PAM prior option) can read.
+	Although HMMER can parse a colon-separated list, BLAST must
+	have a single directory path here.
+	Example:\\
+	\user{setenv BLASTMAT /nfs/databases/matrix/}
+
+\item [\emprog{HMMERDB}] Location of HMMs, PFAM, or other HMMER
+	specific data files. Any program that reads an HMM file
+	looks in both HMMERDB and the current working directory.
+	Multiple directories are allowed, colon-separated.
+	Examples:\\
+	\user{setenv HMMERDB /usr/local/lib/hmmer/}\\
+	\user{setenv HMMERDB /usr/local/lib/hmmer/:/nfs/databases/pfam/}
+
+\item [\emprog{HMMER\_NCPU}] On multiprocessors that support POSIX
+	threads (this includes almost all modern UNIX multiprocessors;
+	for example, SGI Origin servers), the programs
+	\prog{hmmcalibrate}, \prog{hmmpfam}, and \prog{hmmsearch}
+	run as parallelized, multithreaded applications.
+	Normally they will take over all available CPUs in the machine.
+	HMMER\_NCPU sets a maximum number of CPUs to utilize,
+	so HMMER searches are ``good citizens'', leaving some
+ 	CPU power for other jobs. An example of configuring
+	HMMER to use only 16 processors on a 32-processor Origin:\\
+	\user{setenv HMMER\_NCPU 16}
 \end{wideitem}
 
 If you have installed BLAST, you probably already have the two BLAST
@@ -524,7 +560,7 @@ to tell HMMER how many processors each node has (and hence, how many
 independent PVM processes it should start); sp=1000 means 1 CPU,
 sp=2000 means 2 CPUs, sp=4000 means 4 CPUS, etc.
 
-Start the PVM by typing\\ 
+Start the PVM by typing
 
    \user{pvm hostfile} 
 
@@ -588,14 +624,15 @@ searches, because \prog{hmmpfam} is I/O bound and binary HMM databases
 are smaller.)
 
 An \prog{ls} of \prog{/usr/local/wulfpack} on any wulf node looks like:
-\begin{verbatim}
+
+\begin{sreoutput}
 [eddy@wulf01 /home]$ ls /usr/local/wulfpack/
 Pfam             PfamFrag         hmmcalibrate-pvm   hmmsearch-pvm
 Pfam.ssi         PfamFrag.ssi     hmmpfam-pvm
-\end{verbatim}
+\end{sreoutput}
 
 The PVM hostfile for the cluster looks like:
-\begin{verbatim}
+\begin{sreoutput}
 # Config file for Pfam Web server PVM
 #
 * ep=/usr/local/bin sp=1000
@@ -609,7 +646,7 @@ wulf05
 wulf06
 wulf07
 wulf08
-\end{verbatim}
+\end{sreoutput}
 
 A wrinkle specific to configuring Web servers: the web server is
 running HMMER as user ``nobody'' because it's calling HMMER from a CGI
@@ -618,10 +655,10 @@ create a dummy user called ``pfam'' on each wulf node.  The lo=
 directive in the PVM hostfile is telling the master to connect to the
 slaves as user ``pfam''. On each slave, there is a user ``pfam'' with
 a .rhosts that looks like:
-\begin{verbatim}
+\begin{sreoutput}
    fisher nobody
    fisher.wustl.edu nobody
-\end{verbatim}
+\end{sreoutput}
 which tells the wulf node to allow fisher's user ``nobody'' 
 to connect to the wulf node as user ``pfam''.
 
@@ -634,22 +671,22 @@ keep Web servers happy).
 The trickiest thing is making sure \prog{PVM\_ROOT} and
 \prog{PVM\_ARCH} get set properly.  For my own private PVM use, my
 \prog{.cshrc} contains the lines:
-\begin{verbatim}
+\begin{sreoutput}
 	setenv PVM_ROOT    /usr/local/pvm3
 	setenv PVM_ARCH    `$PVM_ROOT/lib/pvmgetarch`
-\end{verbatim}
+\end{sreoutput}
 
 But for the web server PVM, it's a little trickier. At boot time, we
 start the Web server's pvmd as user ``nobody'' on fisher using a local
 init script, \prog{/etc/rc.d/init.d/pvm\_init}. With its error
 checking deleted for clarity, this script basically looks like:
 
-\begin{verbatim}
+\begin{sreoutput}
 #!/bin/sh
 wulfpack_conf=/home/www/pfam/pfam-3.1/wulfpack.conf
 . /usr/local/pvm3/.pvmprofile
 $PVM_ROOT/lib/pvmd $wulfpack_conf >/dev/null &
-\end{verbatim}
+\end{sreoutput}
 
 We call this at boot time by adding the line \prog{su nobody -c "sh
 /etc/rc.d/init.d/pvm\_init"} to our \prog{rc.local}
@@ -660,31 +697,36 @@ is our PVM hostfile.
 The relevant lines of the CGI Perl script that runs HMMER jobs from
 the Web server (again, heavily edited for clarity) are:
 
-\begin{verbatim}
+\begin{sreoutput}
 # Configure environment for PVM
 $ENV{'HMMERDB'}    = "/usr/local/wulfpack:/home/www/pfam/data/"
 $ENV{'PVM_EXPORT'} = "HMMERDB";
 $output = `/usr/local/bin/hmmpfam --pvm Pfam /tmp/query`;
-\end{verbatim}
+\end{sreoutput}
 
 The trick here is that we export the HMMERDB environment variable via
 PVM, so the PVM processes on wulf nodes will know where to find their
 copy of Pfam.
 
-\subsubsection{stability and support of the PVM code}
+\begin{srefaq}{Why is HMMER crashing when I try to use it under PVM?}
+It appears that the PVM port may not be as good as it should be. It
+happens to work well in St. Louis. It is used 24/7 on the servers
+backing the St. Louis Pfam search server at
+\htmladdnormallink{http://pfam.wustl.edu}{http://pfam.wustl.edu/}.
+However, I receive occasional reports of problems at other
+sites. John Blanchard at Incyte has contributed a number of
+improvements to the PVM code, but despite his generous hard work, scattered problems
+persist. Unfortunately, PVM is painful for me to debug, and I have been
+unable to reproduce any of these latest problems in St. Louis. Since it works
+fine for me, I can't reproduce the issues, and nobody has sent me a small,
+detailed, and reproducible bug report, I'm not able to track these
+phantoms down. But it seems only fair to warn you that this is an area
+of the code where bugs may lurk.
+\end{srefaq}
 
-The PVM port may not be as good as it should be. It happens to work
-well in St. Louis. It is used 24/7 on the servers backing the
-St. Louis Pfam search server at
-\htmladdnormallink{http://pfam.wustl.edu}{http://pfam.wustl.edu/}.  However,
-I have received occasional reports of problems at other sites.  John
-Blanchard at Incyte has contributed a number of improvements to the
-PVM code, but scattered problems persist. Unfortunately, PVM is
-painful to debug, and I have been unable to reproduce any of these
-problems in St. Louis. Since it works for me, I can't reproduce the
-issues, and nobody has sent me a small, detailed, and reproducible bug
-report, I'm not trying to track these phantoms down. But it seems only
-fair to warn you that this is an area of the code where bugs may lurk.
+\begin{srefaq}{Does HMMER support MPI?}
+Not yet.
+\end{srefaq}
 
 
 

@@ -1,11 +1,9 @@
 \section{Tutorial}
 \label{section:tutorial}
 
-I hate reading documentation. I just want examples of how stuff works,
-just enough to get me started and doing something productive. So,
-here's a tutorial walk-through of some small projects with HMMER. The
-tutorial should be sufficient to get you started on work of your
-own. You can read the rest of the guide later.
+Here's a tutorial walk-through of some small projects with HMMER.
+This section should be sufficient to get you started on work of your
+own, and you can (at least temporarily) skip the rest of the Guide.
 
 \subsection {The programs in HMMER}
 
@@ -366,8 +364,9 @@ model} -- not the usual definition of conservative changes in general.
 
 The third line shows the sequence itself, of course.
 
-\begin{srefaq}{Why does my alignment output include some strange almost-blank
-lines with -'s and *'s?}  The consensus line includes leading and
+\begin{srefaq}{Why does alignment output from hmmsearch or
+hmmpfam include some strange almost-blank lines with -'s and *'s?}  
+The consensus line includes leading and
 trailing symbols \prog{*->} and \prog{<-*}, representing the
 nonemitting profile HMM state paths $S \rightarrow N \rightarrow B$
 and $E \rightarrow C \rightarrow T$. This little flourish makes some
@@ -570,7 +569,7 @@ Model    Description                                    Score    E-value  N
 pkinase  Protein kinase domain                          314.6    1.4e-94   1
 fn3      Fibronectin type III domain                    176.6    4.7e-53   6
 rrm      RNA recognition motif. (a.k.a. RRM, RBD, or    -40.4        1.6   1
-\end{verbatim}}
+\end{sreoutput}
 
 The E-values for pkinase and fn3 are excellent (much less than 1), so
 this sequence has domains that belong to the protein kinase and the
@@ -691,4 +690,159 @@ alignment is a good idea. Else, the alignment will be displayed on the
 screen as output -- and an alignment of several hundred sequences will
 give a fairly voluminous output.
 
+
+\subsection{General notes on using the programs in HMMER}
+
+\subsubsection{getting quick help on the command line}
+
+If you forget the command-line syntax or available options of any of
+the programs, you can type the name of the program with no other
+arguments and get a short help message, including summaries of the
+most common options, e.g.
+
+\user{hmmbuild}
+ 
+If you call any program with an option \prog{-h}, you get an augmented
+help message, including version info (the software version number is
+helpful if you report bugs or other problems to me) and a complete
+summary of all the available options, including the
+expert/experimental ones, e.g.
+
+\user{hmmbuild -h}
+
+Commonly used options are generally small letters, like \prog{-a}.
+More infrequently used options are generally large letters, like
+\prog{-A}. Expert or experimental options are generally in the GNU
+long form, like \prog{--null2}.
+
+\subsubsection{sequence file formats}
+
+Unaligned sequence files are usually in FASTA format, but HMMER can
+read many common file formats including Genbank, EMBL, and SWISS-PROT
+format.
+
+Aligned sequence files are expected to be in Stockholm format (HMMER's
+native format, used by the Pfam and Rfam databases), but HMMER can
+read many common alignment formats including Clustal, GCG MSF, aligned
+FASTA, and Phylip format. It can also read a simple format (SELEX
+format) of one line per sequence, containing the name first, followed
+by the aligned sequence. Alignment files can also be used where
+unaligned format files are required; the sequences will be read in one
+at a time and their gaps removed.
+
+HMMER autodetects what format its input sequence files are in. You
+don't have to worry about reformatting sequences or setting options.
+
+The autodetector is robust - so long as your file really is in one of
+the formats HMMER expects. If you pass HMMER a file that is not a
+sequence file, or is in an unexpected format, the autodetector may
+screw up. (SELEX format, for instance, is so permissive that many
+non-sequence files look like SELEX to the autodetector.) You can turn
+off the autodetector and manually specify an input sequence file
+format using the \prog{--informat} option to many of the programs.
+This is particularly useful when driving HMMER with unattended scripts
+- you can increase the robustness of your annotation pipeline by
+specifying \prog{--informat fasta}, for instance, so HMMER will be
+able to check that your files really are in FASTA format.
+
+\subsubsection{using compressed files}
+
+HMMER will automatically read sequence files compressed with gzip, but
+you have to tell it what format the file is in: format autodetection
+doesn't work on compressed files. For instance, if I have a compressed
+FASTA file of the nonredundant NCBI database as \prog{nr.gz}, I can
+search it with:
+
+\user{hmmsearch --informat fasta my.hmm nr.gz}
+
+HMMER simply reacts to the \prog{.gz} suffix to detect a gzip'ed file.
+You must have \prog{gzip} installed and in your \prog{\$PATH} for this
+to work; HMMER simply invokes \prog{gzip -dc} on the file, and starts
+reading the data from the resulting pipe.
+
+\subsubsection{reading from pipes}
+
+HMMER can also read sequence data from standard input, through a pipe.
+Again (as with gzip'ed files) format autodetection doesn't work, so
+you must specify the file format manually. To read from \prog{stdin},
+pass a \prog{-} as the file name; for example, if I have a script that
+retrieves a bunch of FASTA records, and I want to search each
+retrieved sequence against a model, I could do:
+
+\user{cool\_sequence\_fetching\_script.pl \Verb+|+ hmmsearch --informat fasta my.hmm -}
+
+\begin{srefaq}{Why can't HMMER autodetect sequence file formats from
+gzip'ed files or pipes?}
+Format autodetection looks at the file once; then it rewinds to the
+beginning of the file; then it reads the data, in a second pass across
+the file. When the input is from a pipe rather than a file, a UNIX
+program can't assume that it can rewind a pipe. Therefore HMMER skips the
+autodetection pass when reading from a pipe.  HMMER could be recoded to store the file as it
+reads it in for autodetection, so it only makes a single pass over the
+data -- but that's not the way it's coded now.
+\end{srefaq}
+
+\subsubsection{protein analysis versus nucleic acid analysis}
+
+HMMER2 is only recommended for protein sequence analysis.
+
+Nonetheless, HMMER can work with either nucleic acid models and
+sequences using a nucleotide alphabet, or with protein models and
+sequences using an amino acid alphabet.  HMMER will autodetect whether
+your files contain RNA, DNA, or protein sequence. (An exception is
+hmmpfam, which for technical reasons does not do sequence type
+autodetection; to run hmmpfam on a nucleic acid query sequence, you
+must specify the \prog{-n} option.)
+
+\begin{srefaq}{Why is HMMER recommended only for protein sequence
+analysis, if it can build and search with DNA models too?}  The
+problem is just that I haven't systematically tested HMMER2 on DNA
+sequences yet, so I don't want to recommend it. I'm a little wary
+because unlike HMMER1, HMMER2 has been tuned in various ways for
+Pfam-style protein alignments. \prog{hmmbuild}, for instance, by
+default uses a model construction algorithm that is tuned to the
+expected information content of protein alignments. The search
+programs also do not expect to have to deal with chromosome-scale
+target sequences, though they use memory-efficient algorithms that can
+deal with large proteins.  Feel free to explore it (warily) yourself,
+or you can download HMMER1 (which was used extensively for DNA
+analysis) from the web site.
+\end{srefaq}
+
+Since HMMER2 is aimed at protein analysis, there isn't even any option
+for searching both strands of a DNA database. If you do use HMMER2 for
+DNA analysis, be forewarned that the search programs will only search
+the top strand!
+
+HMMER cannot search protein model queries against nucleic acid
+sequence databases; you must translate your target database in all six
+frames externally and search the resulting peptide database, if this
+is what you want to do. (Alternatively, use Ewan Birney's GENEWISE
+program, which can -- slowly -- search a HMMER protein model against a
+nucleic acid database.)
+
+\subsubsection{environment variables}
+
+You can control some aspects of HMMER's behavior, particularly the
+directories in which it will automatically look for sequence and HMM
+databases, using shell environment variables. These are documented on
+page~\pageref{section:environment}, in the section ``Shell environment
+variables understood by HMMER''. The person who installed HMMER may
+have set these environment variables system-wide; as a user, you can
+override them in your own shell environment, for instance by adding
+lines to your \prog{.cshrc}.
+
+\subsubsection{exit status from the programs}
+
+HMMER programs always return a normal (zero) POSIX exit status to the
+shell when everything goes right. Upon any type of failure, HMMER
+programs will return a nonzero exit status. (The exact nonzero number
+returned upon a failure is usually uninformative -- for errors caught
+cleanly by HMMER, it will simply exit with status 1. Serious crashes
+and other faults caught by the operating system may return some other
+nonzero code.)
+
+If you are wrapping any kind of script (Perl, shell, whatever) around
+HMMER, you can check this exit status to be sure that your calls are
+succeeding.
 

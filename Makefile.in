@@ -226,9 +226,10 @@ dist:
 	#
 	# Compilation of the documentation.
 	# Documentation is not provided in source form.
+	# We make it from the distro version, because we've done the proper 
+	# keyword substitutions there.
 	#
-	(cd ${BASENAME}-${RELEASE}/documentation/userguide; make clean)
-	(cd ${BASENAME}-${RELEASE}/documentation/userguide; make pdf)
+	(cd ${BASENAME}-${RELEASE}/documentation/userguide; make)
 	cp -f ${BASENAME}-${RELEASE}/documentation/userguide/Userguide.pdf $(BASENAME)-$(RELEASE)/
 	# 
 	# Finish the man pages off, adding necessary boilerplate.

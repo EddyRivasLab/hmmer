@@ -57,7 +57,7 @@ AC_DEFINE_UNQUOTED(PACKAGE_LICENSE, "$PACKAGE_LICENSE")
 # Watch out: this is implemented as a sneaky if statement that wraps the
 # majority of the configure.ac M4 code.
 #
-if (! (test -d binaries && ! test -d src)); then 
+if ((! test -d binaries) && test -d src); then 
 AC_MSG_NOTICE([This is a full source distribution - using full config])
 
 # Checks for programs.
