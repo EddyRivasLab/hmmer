@@ -38,7 +38,11 @@ static struct opt_s OPTIONS[] = {
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 
-struct gsikey_s {
+/* NOTE: this structure has been superseded. See gsi.c.
+ * hmmindex needs to be updated to use the new GSI writing API
+ * SRE, Sat Dec  4 17:40:35 1999
+ */
+struct gsikey_tmp_s {
   char        key[GSI_KEYSIZE];
   int         filenum;
   long        offset;
@@ -48,10 +52,10 @@ struct gsikey_s {
 static int
 gsikey_compare(const void *el1, const void *el2)
 {
-  struct gsikey_s *key1;
-  struct gsikey_s *key2;
-  key1 = (struct gsikey_s *) el1;
-  key2 = (struct gsikey_s *) el2;
+  struct gsikey_tmp_s *key1;
+  struct gsikey_tmp_s *key2;
+  key1 = (struct gsikey_tmp_s *) el1;
+  key2 = (struct gsikey_tmp_s *) el2;
 
   return strcmp(key1->key, key2->key);
 }
@@ -71,8 +75,8 @@ main(int argc, char **argv)
   int     npri;			/* number of primary keys          */
   int     nsec;			/* number of secondary keys        */
   long    offset;		/* offset in HMM file              */
-  struct gsikey_s *pkeylist;    /* list of primary keys            */
-  struct gsikey_s *skeylist;    /* list of primary keys            */
+  struct gsikey_tmp_s *pkeylist;    /* list of primary keys            */
+  struct gsikey_tmp_s *skeylist;    /* list of primary keys            */
   char    fname[GSI_KEYSIZE];
 
   char *optname;		/* name of option found by Getopt() */
@@ -125,8 +129,8 @@ main(int argc, char **argv)
   if ((sfp = fopen(sgsifile, "wb")) == NULL)
     Die("Secondary GSI file %s couldn't be opened for writing", sgsifile); 
 
-  pkeylist = MallocOrDie(sizeof(struct gsikey_s) * KEYBLOCK);
-  skeylist = MallocOrDie(sizeof(struct gsikey_s) * KEYBLOCK);
+  pkeylist = MallocOrDie(sizeof(struct gsikey_tmp_s) * KEYBLOCK);
+  skeylist = MallocOrDie(sizeof(struct gsikey_tmp_s) * KEYBLOCK);
 
   /*********************************************** 
    * Show the banner
@@ -157,7 +161,7 @@ main(int argc, char **argv)
       pkeylist[npri].offset  = offset;
       npri++;
       if (npri % KEYBLOCK == 0)	
-	pkeylist = ReallocOrDie(pkeylist, sizeof(struct gsikey_s) * (npri + KEYBLOCK));
+	pkeylist = ReallocOrDie(pkeylist, sizeof(struct gsikey_tmp_s) * (npri + KEYBLOCK));
 
 				/* record accession of HMM as a secondary retrieval key */
       if (hmm->flags & PLAN7_ACC) {
@@ -169,7 +173,7 @@ main(int argc, char **argv)
 	skeylist[nsec].offset  = offset;
 	nsec++;
 	if (nsec % KEYBLOCK == 0)	
-	  skeylist = ReallocOrDie(skeylist, sizeof(struct gsikey_s) * (nsec + KEYBLOCK));
+	  skeylist = ReallocOrDie(skeylist, sizeof(struct gsikey_tmp_s) * (nsec + KEYBLOCK));
       }
 
       offset = ftell(hmmfp->f);
@@ -183,8 +187,8 @@ main(int argc, char **argv)
    ***********************************************/
 
   printf("Sorting keys... \n");
-  qsort((void *) pkeylist, npri, sizeof(struct gsikey_s), gsikey_compare);
-  qsort((void *) skeylist, nsec, sizeof(struct gsikey_s), gsikey_compare);
+  qsort((void *) pkeylist, npri, sizeof(struct gsikey_tmp_s), gsikey_compare);
+  qsort((void *) skeylist, nsec, sizeof(struct gsikey_tmp_s), gsikey_compare);
   SQD_DPRINTF1(("(OK, done with qsort)\n"));
 
   /***********************************************
