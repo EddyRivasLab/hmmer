@@ -1002,13 +1002,16 @@ workpool_start(struct plan7_s *hmm, SQFILE *sqfp, int do_xnu,
 
   wpool->num_threads= num_threads;
 
-  /* Create slave threads
-   * IRIX note: IRIX pthreads isn't so great at determining the
-   * right number of "execution vehicles". Recommended fix
-   * is to provide a hint using pthread_setconcurrency(), but
-   * this call is not portable, hence the ifdef.
+  /* Create slave threads. See comments in hmmcalibrate.c at this
+   * step, regarding concurrency, system scope, and portability
+   * amongst various UNIX implementations of pthreads.
    */
   pthread_attr_init(&attr);
+#ifndef __sgi
+#ifdef HAVE_PTHREAD_ATTR_SETSCOPE
+  pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+#endif
+#endif
 #ifdef HAVE_PTHREAD_SETCONCURRENCY
   pthread_setconcurrency(num_threads+1);
 #endif

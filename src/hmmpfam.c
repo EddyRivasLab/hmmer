@@ -978,9 +978,15 @@ workpool_start(char *hmmfile, HMMFILE *hmmfp, char *dsq, char *seqname, int L,
 
   wpool->num_threads= num_threads;
 
-  /* Create slave threads
+  /* Create slave threads. See comments in hmmcalibrate.c at 
+   * this step regarding concurrency and system scope.
    */
   pthread_attr_init(&attr);
+#ifndef __sgi
+#ifdef HAVE_PTHREAD_ATTR_SETSCOPE
+  pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+#endif
+#endif
 #ifdef HAVE_PTHREAD_SETCONCURRENCY
   pthread_setconcurrency(num_threads+1);
 #endif
