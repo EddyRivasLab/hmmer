@@ -86,6 +86,39 @@ TraceSet(struct p7trace_s *tr, int tpos, enum p7stype type, int idx, int pos)
 }
 
 
+/* Function: MergeTraceArrays()
+ * Date:     SRE, Sun Jul  5 15:09:10 1998 [St. Louis]
+ *
+ * Purpose:  Combine two arrays of traces into a single array.
+ *           Used in hmmalign to merge traces from a fixed alignment
+ *           with traces from individual unaligned seqs.
+ * 
+ *           t1 traces always precede t2 traces in the resulting array.
+ *
+ * Args:     t1 - first set of traces
+ *           n1 - number of traces in t1
+ *           t2 - second set of traces
+ *           n2 - number of traces in t2
+ *
+ * Returns:  pointer to new array of traces.
+ *           Both t1 and t2 are free'd here! Do not reuse.
+ */
+struct p7trace_s **
+MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2)
+{
+  struct p7trace_s **tr;
+  int i;			/* index in traces */
+
+  tr = MallocOrDie(sizeof(struct p7trace_s *) * (n1+n2));
+  for (i = 0; i < n1; i++) tr[i]    = t1[i];
+  for (i = 0; i < n2; i++) tr[n1+i] = t2[i];
+  free(t1);
+  free(t2);
+  return tr;
+}
+
+
+
 /* Function: P7ReverseTrace()
  * Date:     SRE, Mon Aug 25 12:57:29 1997; Denver CO. 
  * 
@@ -961,6 +994,101 @@ TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2,
 }
 
 
+/* Function: ImposeMasterTrace()
+ * Date:     SRE, Sun Jul  5 14:27:16 1998 [St. Louis]
+ *
+ * Purpose:  Goes with P7ViterbiAlignAlignment(), which gives us
+ *           a "master trace" for a whole alignment. Now, given
+ *           the alignment and the master trace, construct individual
+ *           tracebacks for each sequence. Later we'll hand these
+ *           (and presumably other traces) to P7Traces2Alignment().
+ *           
+ *           It is possible to generate individual traces that
+ *           are not consistent with Plan7 (e.g. D->I and I->D 
+ *           transitions may be present). P7Traces2Alignment()
+ *           can handle such traces; other functions may not.
+ *           See modelmaker.c:trace_doctor() if this is a problem.
+ * 
+ *           Akin to modelmaker.c:fake_tracebacks().
+ *
+ * Args:     aseq  - aligned seqs
+ *           nseq  - number of aligned seqs 
+ *           mtr   - master traceback
+ *           ret_tr- RETURN: array of individual tracebacks, one for each aseq
+ *
+ * Returns:  (void)
+ */
+void
+ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, struct p7trace_s ***ret_tr)
+{
+  struct p7trace_s **tr;
+  int  idx;			/* counter over sequences */
+  int  i;                       /* position in raw sequence (1..L) */
+  int  tpos;			/* position in traceback           */
+  int  mpos;			/* position in master trace        */
+
+  tr = (struct p7trace_s **) MallocOrDie (sizeof(struct p7trace_s *) * nseq);
+  
+  for (idx = 0; idx < nseq; idx++)
+    {
+      P7AllocTrace(mtr->tlen, &tr[idx]); /* we're guaranteed that individuals len < master len */
+      
+      tpos = 0;
+      i    = 1;
+      for (mpos = 0; mpos < mtr->tlen; mpos++)
+	{
+	  switch (mtr->statetype[mpos]) 
+	    {
+	    case STS:		/* straight copies w/ no emission: S, B, D, E, T*/
+	    case STB:
+	    case STD:
+	    case STE:
+	    case STT:
+	      TraceSet(tr[idx], tpos, mtr->statetype[mpos], mtr->nodeidx[mpos], 0);
+	      tpos++;
+	      break;
+
+	    case STM:		/* M* implies M or D */
+	      if (isgap(aseq[idx][mtr->pos[mpos]-1])) 
+		TraceSet(tr[idx], tpos, STD, mtr->nodeidx[mpos], 0);
+	      else {
+		TraceSet(tr[idx], tpos, STM, mtr->nodeidx[mpos], i);
+		i++;
+	      }
+	      tpos++;
+	      break;
+
+	    case STI:		/* I* implies I or nothing */
+	      if (!isgap(aseq[idx][mtr->pos[mpos]-1])) {
+		TraceSet(tr[idx], tpos, STI, mtr->nodeidx[mpos], i);
+		i++;
+		tpos++;
+	      }
+	      break;
+
+	    case STJ:		/* N,J,C: first N* -> N. After that, N* -> N or nothing. */
+	    case STN:
+	    case STC:
+	      if (mtr->pos[mpos] == 0) { 
+		TraceSet(tr[idx], tpos, mtr->statetype[mpos], 0, 0);
+		tpos++;
+	      } else if (!isgap(aseq[idx][mtr->pos[mpos]-1])) {
+		TraceSet(tr[idx], tpos, mtr->statetype[mpos], 0, i);
+		i++;
+		tpos++; 
+	      }
+	      break;
+
+	    case STBOGUS:
+	      Die("never happens. Trust me.");
+	    }
+	}
+      tr[idx]->tlen = tpos;
+    }	  
+  *ret_tr = tr;
+}
+
+
 /* Function: rightjustify()
  * 
  * Purpose:  Given a gap-containing string of length n,
@@ -984,3 +1112,5 @@ rightjustify(char *s, int n)
   while (npos >= 0) 
     s[npos--] = '.';
 }
+
+
