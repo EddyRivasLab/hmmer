@@ -217,7 +217,6 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
 	maxbar   = h->histogram[i];     /* max height    */
 	lowbound = i + h->min;     	/* peak position */
       }
-  units = ((maxbar-1)/ 59) + 1;
 
   /* Truncate histogram display on both sides, ad hoc fashion.
    * Start from the peak; then move out until we see <emptybins> empty bins,
@@ -242,6 +241,11 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
   for (highcount = 0, i = h->highscore - h->min; i >= highbound - h->min; i--)
     highcount += h->histogram[i];
 
+				/* maxbar might need raised now; then set our units  */
+  if (lowcount  > maxbar) maxbar = lowcount;
+  if (highcount > maxbar) maxbar = highcount;
+  units = ((maxbar-1)/ 59) + 1;
+
 
   /* Print the histogram
    */
@@ -264,6 +268,7 @@ PrintASCIIHistogram(FILE *fp, struct histogram_s *h)
 	  sprintf(buffer, "<%4d %6d %6s|", i+1, lowcount, "-");
 	  if (lowcount > 0) {
 	    num = 1+(lowcount-1) / units;
+	    if (num > 60) Die("oops");
 	    for (pos = 20; num > 0; num--)  buffer[pos++] = '=';
 	  }
 	  fputs(buffer, fp);
@@ -593,7 +598,10 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
     {
       /* Construct x, y vectors.
        */
+      x = y = NULL;
       hsize = highbound - lowbound + 1;
+      if (hsize < 5) goto FITFAILED; /* require at least 5 bins or we don't fit */
+
       x = MallocOrDie(sizeof(float) * hsize);
       y = MallocOrDie(sizeof(int)   * hsize);
       n = 0;
@@ -604,7 +612,7 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
 	  n             += h->histogram[sc - h->min];
 	}
 
-      if (n < 1000) goto FITFAILED; /* requires fitting to at least 1000 points */
+      if (n < 1000) goto FITFAILED;  /* require fitting to at least 1000 points */
 
       /* If we're censoring, estimate z, the number of censored guys
        * left of the bound. Our initial estimate is crudely that we're
@@ -650,8 +658,8 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
 
 FITFAILED:
   UnfitHistogram(h);
-  free(x);
-  free(y);
+  if (x != NULL) free(x);
+  if (y != NULL) free(y);
   return 0;
 }
 
