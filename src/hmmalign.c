@@ -40,6 +40,7 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
+   --withali <f> : include alignment to (fixed) alignment in file <f>\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
@@ -47,8 +48,13 @@ static struct opt_s OPTIONS[] = {
   { "-m", TRUE, sqdARG_NONE   } ,
   { "-o", TRUE, sqdARG_STRING },
   { "-q", TRUE, sqdARG_NONE   },
+  { "--withali", FALSE, sqdARG_STRING },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
+
+static void include_aligned_alignment(char *seqfile, struct plan7_s *hmm, 
+				      char ***rseq, char ***dsq, SQINFO **sqinfo, 
+				      struct p7trace_s ***tr, int *nseq);
 
 int
 main(int argc, char **argv) 
@@ -75,7 +81,7 @@ main(int argc, char **argv)
   int   matchonly;		/* TRUE to show only match state syms       */
   char *outfile;                /* optional alignment output file           */
   FILE *ofp;                    /* handle on alignment output file          */
-
+  char *withali;                /* name of additional alignment file to align */
   
 #ifdef MEMDEBUG
   unsigned long histid1, histid2, orig_size, current_size;
@@ -90,12 +96,14 @@ main(int argc, char **argv)
   matchonly = FALSE;
   outfile   = NULL;
   be_quiet  = FALSE;
+  withali   = NULL;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-m") == 0) matchonly= TRUE;
-    else if (strcmp(optname, "-o") == 0) outfile  = optarg;
-    else if (strcmp(optname, "-q") == 0) be_quiet = TRUE; 
+    if      (strcmp(optname, "-m")        == 0) matchonly= TRUE;
+    else if (strcmp(optname, "-o")        == 0) outfile  = optarg;
+    else if (strcmp(optname, "-q")        == 0) be_quiet = TRUE; 
+    else if (strcmp(optname, "--withali") == 0) withali  = optarg;
     else if (strcmp(optname, "-h") == 0) 
       {
 	Banner(stdout, banner);
@@ -160,8 +168,6 @@ main(int argc, char **argv)
    */
   dsq = MallocOrDie(sizeof(char *) * nseq);
   tr  = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
-  wgt = MallocOrDie(sizeof(float) * nseq);
-  FSet(wgt, nseq, 1.0);
 
   /* Align each sequence to the model, collect traces
    */
@@ -175,8 +181,19 @@ main(int argc, char **argv)
 	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, &(tr[i]));
     }
 
+  /* Include an aligned alignment, if desired.
+   */
+  if (withali != NULL) 
+    include_aligned_alignment(withali, hmm, &rseq, &dsq, &sqinfo, &tr, &nseq);
+
+  P7PrintTrace(stdout, tr[0], hmm, dsq[0]);
+  P7PrintTrace(stdout, tr[1], hmm, dsq[1]);
+
   /* Turn traces into a multiple alignment
    */ 
+  wgt = MallocOrDie(sizeof(float) * nseq);
+  FSet(wgt, nseq, 1.0);
+
   P7Traces2Alignment(dsq, sqinfo, wgt, nseq, hmm->M, tr, matchonly,
 		     &aseq, &ainfo);
 
@@ -206,6 +223,7 @@ main(int argc, char **argv)
   FreeAlignment(aseq, &ainfo);
   FreePlan7(hmm);
   free(sqinfo);
+  free(rseq);
   free(dsq);
   free(wgt);
   free(tr);
@@ -218,4 +236,81 @@ main(int argc, char **argv)
   else fprintf(stderr, "[No memory leaks.]\n");
 #endif
   return 0;
+}
+
+
+/* Function: include_aligned_alignment()
+ * Date:     SRE, Sun Jul  5 15:25:13 1998 [St. Louis]
+ *
+ * Purpose:  Given the name of a multiple alignment file,
+ *           align that alignment to the HMM, and add traces
+ *           to an existing array of traces.
+ *
+ * Args:     seqfile  - name of alignment file
+ *           hmm      - model to align to
+ *           tr       - existing trace array to supplement
+ *           ntr      - number of traces in tr
+ *
+ * Returns:  new trace array. Caller is responsible for freeing it all,
+ *           and for figuring out that it now contains ntr+ainfo.nseq traces.
+ *           tr itself is freed here. 
+ */
+void
+include_aligned_alignment(char *seqfile, struct plan7_s *hmm, 
+			  char ***rsq, char ***dsq, SQINFO **sqinfo, struct p7trace_s ***tr, int *nseq)
+{
+  int format;			/* format of alignment file */
+  char **aseq;			/* aligned seqs             */
+  char **newdsq;
+  char **newrseq;
+  AINFO ainfo;			/* info that goes with aseq */
+  int   idx;			/* counter over aseqs       */
+  struct p7trace_s *master;     /* master trace             */
+  struct p7trace_s **addtr;     /* individual traces for aseq */
+
+  if (! SeqfileFormat(seqfile, &format, NULL))
+    switch (squid_errno) {
+    case SQERR_NOFILE: 
+      Die("Alignment file %s could not be opened for reading", seqfile);
+      /*FALLTHRU*/ /* a white lie to shut lint up */
+    case SQERR_FORMAT: 
+    default:           
+      Die("Failed to determine format of alignment file %s", seqfile);
+    }
+				/* read the alignment from file */
+  if (! ReadAlignment(seqfile, format, &aseq, &ainfo))
+    Die("Failed to read aligned sequence file %s", seqfile);
+  for (idx = 0; idx < ainfo.nseq; idx++)
+    s2upper(aseq[idx]);
+				/* align to model; recover master trace */
+  master = P7ViterbiAlignAlignment(aseq, &ainfo, hmm);
+				/* convert to individual traces */
+  ImposeMasterTrace(aseq, ainfo.nseq, master, &addtr);
+				/* add those traces to existing ones */
+  *tr = MergeTraceArrays(*tr, *nseq, addtr, ainfo.nseq);
+  
+				/* additional bookkeeping: add to dsq, sqinfo */
+  *rsq = ReallocOrDie((*rsq), sizeof(char *) * (*nseq + ainfo.nseq));
+  DealignAseqs(aseq, ainfo.nseq, &newrseq);
+  for (idx = *nseq; idx < *nseq + ainfo.nseq; idx++)
+    (*rsq)[idx] = newrseq[idx - (*nseq)];
+  free(newrseq);
+
+  *dsq = ReallocOrDie((*dsq), sizeof(char *) * (*nseq + ainfo.nseq));
+  DigitizeAlignment(aseq, &ainfo, &newdsq);
+  for (idx = *nseq; idx < *nseq + ainfo.nseq; idx++)
+    (*dsq)[idx] = newdsq[idx - (*nseq)];
+  free(newdsq);
+				/* unnecessarily complex, but I can't be bothered... */
+  *sqinfo = ReallocOrDie((*sqinfo), sizeof(SQINFO) * (*nseq + ainfo.nseq));
+  for (idx = *nseq; idx < *nseq + ainfo.nseq; idx++)
+    SeqinfoCopy(&((*sqinfo)[idx]), &(ainfo.sqinfo[idx - (*nseq)]));
+  
+  *nseq = *nseq + ainfo.nseq;
+
+				/* Cleanup */
+  P7FreeTrace(master);
+  FreeAlignment(aseq, &ainfo);
+				/* Return */
+  return;
 }
