@@ -35,33 +35,34 @@ static char usage[]  = "\
 Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
   Available options are:\n\
    -h        : help; print brief help on version and usage\n\
-   -A        : append; append this HMM to <hmmfile>\n\
-   -b        : binary; write the HMM in binary format\n\
-   -F        : force; allow overwriting of <hmmfile>\n\
    -n <s>    : name; name this HMM <s>\n\
    -o <file> : re-save annotated alignment to <file>\n\
-\n\
-  Alternative sequence weighting strategies: (default: GSC weights)\n\
-   -e            : maximum entropy (ME)\n\
-   --wgsc        : Gerstein/Sonnhammer/Chothia tree weights\n\
-   --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
-   --wvoronoi    : Sibbald/Argos Voronoi weights\n\
-   --wnone       : don't do any weighting\n\
-   --noeff       : don't use effective sequence number; just use nseq\n\
-\n\
-  Alternative model construction strategies: (default: MAP)\n\
-   -k        : Krogh/Haussler fast heuristic construction (see --gapmax)\n\
-   -m        : manual construction (requires SELEX file, #=RF annotation)\n\
+   -A        : append; append this HMM to <hmmfile>\n\
+   -F        : force; allow overwriting of <hmmfile>\n\
 \n\
   Alternative search algorithm styles: (default: hmmls domain alignment)\n\
    -f        : multi-hit local (hmmfs style)\n\
-   -g        : global alignment (Needleman/Wunsch)\n\
-   -l        : local alignment (Smith/Waterman)\n\
+   -g        : global alignment (hmms style, Needleman/Wunsch)\n\
+   -s        : local alignment (hmmsw style, Smith/Waterman)\n\
+";
+
+static char experts[] = "\
+  Alternative model construction strategies: (default: MAP)\n\
+   --fast    : Krogh/Haussler fast heuristic construction (see --gapmax)\n\
+   --hand    : manual construction (requires SELEX file, #=RF annotation)\n\
 \n\
   Expert customization of parameters and priors:\n\
-   -r <file> : read null (random sequence) model from <file>\n\
-   -p <file> : read Dirichlet prior parameters from <file>\n\
-   -P <file> : heuristic PAM-based prior, using BLAST PAM matrix in <file>\n\
+   --null  <file> : read null (random sequence) model from <file>\n\
+   --pam <file>   : heuristic PAM-based prior, using BLAST PAM matrix in <file>\n\
+   --prior <file> : read Dirichlet prior parameters from <file>\n\
+\n\
+  Alternative sequence weighting strategies: (default: GSC weights)\n\
+   --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
+   --wgsc        : Gerstein/Sonnhammer/Chothia tree weights (default)\n\
+   --wme         : maximum entropy (ME)\n\
+   --wvoronoi    : Sibbald/Argos Voronoi weights\n\
+   --wnone       : don't do any weighting\n\
+   --noeff       : don't use effective sequence number; just use nseq\n\
 \n\
   Forcing an alphabet: (normally autodetected)\n\
    --amino   : override autodetection, assert that seqs are protein\n\
@@ -69,46 +70,47 @@ Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
 \n\
   Other expert options:\n\
    --archpri <x> : set architecture size prior to <x> {0.85} [0..1]\n\
+   --binary      : save the model in binary format, not ASCII text\n\
    --cfile <file>: save count vectors to <file>\n\
    --gapmax <x>  : max fraction of gaps in mat column {0.50} [0..1]\n\
-   --idlevel     : set fractional identity level used by --weff and --wblosum [0.62]\n\
+   --idlevel     : set frac. id level used by eff. nseq and --wblosum {0.62}\n\
    --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
    --star <file> : Star model (experimental)\n\
-   --swentry <x> : set S/W aggregate entry prob. to <x> [0.5]\n\
-   --swexit <x>  : set S/W aggregate exit prob. to <x>  [0.5]\n\
+   --swentry <x> : set S/W aggregate entry prob. to <x> {0.5}\n\
+   --swexit <x>  : set S/W aggregate exit prob. to <x>  {0.5}\n\
    --verbose     : print a lot of boring information\n\
 \n";
 
 static struct opt_s OPTIONS[] = {
-  { "-A", TRUE, sqdARG_NONE },
-  { "-b", TRUE, sqdARG_NONE },
-  { "-e", TRUE, sqdARG_NONE },
   { "-f", TRUE, sqdARG_NONE },
-  { "-F", TRUE, sqdARG_NONE },
   { "-g", TRUE, sqdARG_NONE }, 
   { "-h", TRUE, sqdARG_NONE }, 
-  { "-l", TRUE, sqdARG_NONE }, 
   { "-n", TRUE, sqdARG_STRING},  
-  { "-k", TRUE, sqdARG_NONE },
-  { "-m", TRUE, sqdARG_NONE },
   { "-o", TRUE, sqdARG_STRING},
-  { "-p", TRUE, sqdARG_STRING},
-  { "-r", TRUE, sqdARG_STRING},
-  { "-P", TRUE, sqdARG_STRING}, 
+  { "-s", TRUE, sqdARG_NONE }, 
+  { "-A", TRUE, sqdARG_NONE },
+  { "-F", TRUE, sqdARG_NONE },
   { "--amino",   FALSE, sqdARG_NONE  },
   { "--archpri", FALSE, sqdARG_FLOAT }, 
+  { "--binary",  FALSE, sqdARG_NONE  }, 
   { "--cfile",   FALSE, sqdARG_STRING},
+  { "--fast",    FALSE, sqdARG_NONE},
   { "--gapmax",  FALSE, sqdARG_FLOAT },
+  { "--hand",    FALSE, sqdARG_NONE},
   { "--idlevel", FALSE, sqdARG_FLOAT },
   { "--noeff",   FALSE, sqdARG_NONE },
   { "--nucleic", FALSE, sqdARG_NONE },
+  { "--null",    FALSE, sqdARG_STRING },
+  { "--pam",     FALSE, sqdARG_STRING },
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
+  { "--prior",   FALSE, sqdARG_STRING },
   { "--star"  ,  FALSE, sqdARG_STRING },
   { "--swentry", FALSE, sqdARG_FLOAT },
   { "--swexit",  FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_NONE },
+  { "--wme",     FALSE, sqdARG_NONE },
   { "--wnone",   FALSE, sqdARG_NONE },
   { "--wvoronoi",FALSE, sqdARG_NONE },
 };
@@ -204,46 +206,47 @@ main(int argc, char **argv)
   Alphabet_type     = hmmNOTSETYET;	/* initially unknown */
   name              = NULL;
   do_append         = FALSE; 
-  do_binary         = FALSE;
   swentry           = 0.5;
   swexit            = 0.5;
   do_eff            = TRUE;
+  do_binary         = FALSE;
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-A") == 0) do_append         = TRUE; 
-    else if (strcmp(optname, "-b") == 0) do_binary         = TRUE;
-    else if (strcmp(optname, "-e") == 0) w_strategy        = WGT_ME;  
-    else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
-    else if (strcmp(optname, "-f") == 0) cfg_strategy      = P7_FS_CONFIG;
+    if      (strcmp(optname, "-f") == 0) cfg_strategy      = P7_FS_CONFIG;
     else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
-    else if (strcmp(optname, "-k") == 0) c_strategy        = P7_FAST_CONSTRUCTION;
-    else if (strcmp(optname, "-l") == 0) cfg_strategy      = P7_SW_CONFIG;
-    else if (strcmp(optname, "-m") == 0) c_strategy        = P7_HAND_CONSTRUCTION;
     else if (strcmp(optname, "-n") == 0) name              = Strdup(optarg); 
     else if (strcmp(optname, "-o") == 0) align_ofile       = optarg;
-    else if (strcmp(optname, "-p") == 0) prifile           = optarg;
     else if (strcmp(optname, "-r") == 0) rndfile           = optarg;
-    else if (strcmp(optname, "-P") == 0) pamfile           = optarg;
+    else if (strcmp(optname, "-s") == 0) cfg_strategy      = P7_SW_CONFIG;
+    if      (strcmp(optname, "-A") == 0) do_append         = TRUE; 
+    else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
     else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
     else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);
+    else if (strcmp(optname, "--binary")  == 0) do_binary     = TRUE;
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
+    else if (strcmp(optname, "--fast")    == 0) c_strategy    = P7_FAST_CONSTRUCTION;
+    else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
     else if (strcmp(optname, "--gapmax")  == 0) gapmax        = atof(optarg);
     else if (strcmp(optname, "--idlevel") == 0) blosumlevel   = atof(optarg);
     else if (strcmp(optname, "--noeff")   == 0) do_eff        = FALSE;
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
+    else if (strcmp(optname, "--pam")     == 0) pamfile       = optarg;
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
+    else if (strcmp(optname, "--prior")   == 0) prifile       = optarg;
     else if (strcmp(optname, "--star")    == 0) starfile      = optarg; 
     else if (strcmp(optname, "--swentry") == 0) swentry       = atof(optarg); 
     else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg); 
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
     else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM; 
+    else if (strcmp(optname, "--wme")     == 0) w_strategy    = WGT_ME;  
     else if (strcmp(optname, "--wnone")   == 0) w_strategy    = WGT_NONE; 
     else if (strcmp(optname, "--wvoronoi")== 0) w_strategy    = WGT_VORONOI;
     else if (strcmp(optname, "-h") == 0) {
       Banner(stdout, banner);
       puts(usage);
+      puts(experts);
       exit(0);
     }
   }
