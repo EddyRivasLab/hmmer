@@ -1,0 +1,35 @@
+#! /usr/local/bin/perl
+
+$node       = shift;
+$arena      = shift;
+$pkg        = shift;
+$platform   = shift;
+$configopts = shift;
+$makeopts   = shift;
+
+print "Copying files...            \t";
+system "scp nodebuild $node:$arena/";
+if ($? != 0) { die "copy failed" };
+system "scp $pkg.tar.gz $node:$arena/";
+if ($? != 0) { die "copy failed" };
+print "[done]\n";
+
+print "Running nodebuild...        \t";
+system "ssh $node $arena/nodebuild $arena $pkg $platform \"$configopts\" \"$makeopts\"";
+if ($? != 0) { die "nodebuild failed" };
+print "[done]\n";
+
+print "Getting the tarball back... \t";
+system "scp $node:$arena/$pkg.bin.$platform.tar.gz .";
+if ($? != 0) { die "scp failed" };
+print "[done]\n";
+
+print "Cleaning up...              \t";
+system "ssh $node rm $arena/nodebuild";
+if ($? != 0) { die "rm failed" };
+system "ssh $node rm $arena/$pkg.bin.$platform.tar.gz";
+if ($? != 0) { die "rm failed" };
+print "[done]\n";
+
+exit 0;
+	
