@@ -32,7 +32,7 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
-   --informat <s>: sequence file is in format <s>, not FASTA\n\
+   --informat <s>: sequence file is in format <s>\n\
    --mapali <f>  : include alignment in file <f> using map in HMM\n\
    --withali <f> : include alignment to (fixed) alignment in file <f>\n\
 \n";
@@ -115,6 +115,13 @@ main(int argc, char **argv)
 
   hmmfile = argv[optind++];
   seqfile = argv[optind++]; 
+
+  /* Try to work around inability to autodetect from a pipe or .gz:
+   * assume FASTA format
+   */
+  if (format == SQFILE_UNKNOWN &&
+      (Strparse("^.*\\.gz$", seqfile, 0) || strcmp(seqfile, "-") == 0))
+    format = SQFILE_FASTA;
 
  /*********************************************** 
   * Open HMM file (might be in HMMERDB or current directory).

@@ -52,7 +52,7 @@ static char experts[] = "\
    --domE <x>: sets domain Eval cutoff (2nd threshold) to <= x\n\
    --domT <x>: sets domain T bit thresh (2nd threshold) to >= x\n\
    --forward : use the full Forward() algorithm instead of Viterbi\n\
-   --informat <s>: sequence file is in format <s>, not FASTA\n\
+   --informat <s>: sequence file is in format <s>\n\
    --null2   : turn OFF the post hoc second null model\n\
    --pvm     : run on a Parallel Virtual Machine (PVM)\n\
    --xnu     : turn ON XNU filtering of target protein sequences\n\
@@ -256,6 +256,13 @@ main(int argc, char **argv)
     Die("PVM support is not compiled into your HMMER software; --pvm doesn't work.");
   if (num_threads && ! threads_support)
     Die("POSIX threads support is not compiled into HMMER; --cpu doesn't have any effect");
+
+  /* Try to work around inability to autodetect from a pipe or .gz:
+   * assume FASTA format
+   */
+  if (format == SQFILE_UNKNOWN &&
+      (Strparse("^.*\\.gz$", seqfile, 0) || strcmp(seqfile, "-") == 0))
+    format = SQFILE_FASTA;
 
   /*********************************************** 
    * Open sequence database (might be in BLASTDB or current directory)
