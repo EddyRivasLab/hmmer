@@ -627,6 +627,8 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
 	  n             += h->histogram[sc - h->min];
 	}
 
+      if (n < 1000) goto FITFAILED; /* requires fitting to at least 1000 points */
+
       /* If we're censoring, estimate z, the number of censored guys
        * left of the bound. Our initial estimate is crudely that we're
        * missing e^-1 of the total distribution (which would be exact
@@ -647,8 +649,12 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
 
       /* Do an ML fit
        */
-      if (censor) EVDCensoredFit(x, y, hsize, z, (float) lowbound, &mu, &lambda);
-      else        EVDMaxLikelyFit(x, y, hsize, &mu, &lambda);
+      if (censor) {
+	if (! EVDCensoredFit(x, y, hsize, z, (float) lowbound, &mu, &lambda))
+	  goto FITFAILED;
+      } else  
+	if (! EVDMaxLikelyFit(x, y, hsize, &mu, &lambda))
+	  goto FITFAILED;
 
       /* Find the Eval = 1 point as a new highbound;
        * the total number of samples estimated to "belong" to the EVD is n+z  
@@ -663,8 +669,13 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
     }
 
   ExtremeValueSetHistogram(h, mu, lambda, 2);
-  
   return 1;
+
+FITFAILED:
+  UnfitHistogram(h);
+  free(x);
+  free(y);
+  return 0;
 }
 
     
@@ -1126,9 +1137,9 @@ Lawless422(float *x, int *y, int n, int z, float c,
  *           ret_mu     : RETURN: ML estimate of mu
  *           ret_lambda : RETURN: ML estimate of lambda
  *           
- * Return:   (void)
+ * Return:   1 on success; 0 on any failure
  */
-void
+int
 EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 {
   float  lambda, mu;
@@ -1164,6 +1175,8 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
   if (i == 100)
     {
       float left, right, mid;
+      Worry(DEBUG_LIGHT, "Newton/Raphson failed; switchover to bisection");
+
 				/* First we need to bracket the root */
       lambda = right = left = 0.2;
       Lawless416(x, c, n, lambda, &fx, &dfx);
@@ -1171,7 +1184,10 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 	{			/* fix right; search left. */
 	  do {
 	    left -= 0.1;
-	    if (left < 0.) { Die("failed to bracket root"); }
+	    if (left < 0.) { 
+	      Worry(DEBUG_LIGHT, "failed to bracket root"); 
+	      return 0; 
+	    }
 	    Lawless416(x, c, n, left, &fx, &dfx);
 	  } while (fx < 0.);
 	}
@@ -1180,7 +1196,10 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 	  do {
 	    right += 0.1;
 	    Lawless416(x, c, n, right, &fx, &dfx);
-	    if (right > 100.) Die("failed to bracket root");
+	    if (right > 100.) {
+	      Worry(DEBUG_LIGHT, "failed to bracket root"); 
+	      return 0; 
+	    }
 	  } while (fx > 0.);
 	}
 			/* now we bisection search in left/right interval */
@@ -1192,7 +1211,10 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 	  if (fx > 0.)	left = mid;
 	  else          right = mid;
 	}
-      if (i == 100) Die("even the bisection search failed");
+      if (i == 100) { 
+	Worry(DEBUG_LIGHT, "even the bisection search failed"); 
+	return 0; 
+      }
       lambda = mid;
     }
 
@@ -1209,7 +1231,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
 
   *ret_lambda = lambda;
   *ret_mu     = mu;   
-  return;
+  return 1;
 }
 
 
@@ -1240,7 +1262,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
  *           
  * Return:   (void)
  */
-void
+int
 EVDCensoredFit(float *x, int *y, int n, int z, float c, 
 	       float *ret_mu, float *ret_lambda)
 {
@@ -1278,13 +1300,17 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
     {
       float left, right, mid;
 				/* First we need to bracket the root */
+      Worry(DEBUG_LIGHT, "Newton/Raphson failed; switched to bisection");
       lambda = right = left = 0.2;
       Lawless422(x, y, n, z, c, lambda, &fx, &dfx);
       if (fx < 0.) 
 	{			/* fix right; search left. */
 	  do {
 	    left -= 0.03;
-	    if (left < 0.) { Die("failed to bracket root"); }
+	    if (left < 0.) { 
+	      Worry(DEBUG_LIGHT, "failed to bracket root"); 
+	      return 0;
+	    }
 	    Lawless422(x, y, n, z, c, left, &fx, &dfx);
 	  } while (fx < 0.);
 	}
@@ -1293,7 +1319,10 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 	  do {
 	    right += 0.1;
 	    Lawless422(x, y, n, z, c, left, &fx, &dfx);
-	    if (right > 100.) Die("failed to bracket root");
+	    if (right > 100.) {
+	      Worry(DEBUG_LIGHT, "failed to bracket root");
+	      return 0;
+	    }
 	  } while (fx > 0.);
 	}
 			/* now we bisection search in left/right interval */
@@ -1305,7 +1334,10 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 	  if (fx > 0.)	left = mid;
 	  else          right = mid;
 	}
-      if (i == 100) Die("even the bisection search failed");
+      if (i == 100) {
+	Worry(DEBUG_LIGHT, "even the bisection search failed");
+	return 0;
+      }
       lambda = mid;
     }
 
@@ -1323,7 +1355,7 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
 
   *ret_lambda = lambda;
   *ret_mu     = mu;   
-  return;
+  return 1;
 }
 
 
