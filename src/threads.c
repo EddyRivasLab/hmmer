@@ -55,6 +55,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sched.h>		/* apparently SGI IRIX pthread.h is not complete */
+#include <assert.h>
 
 #include "structs.h"
 #include "funcs.h"
@@ -65,21 +67,34 @@
 /* Function: ThreadNumber()
  * Date:     SRE, Sat Jul 11 11:03:50 1998 [St. Louis]
  *
- * Purpose:  Recommend how many threads to use. Ideally,
- *           we'd like to know how many CPUs are on this
- *           system, but I don't know of any way to 
- *           portably access that information.
- *           
- *             - if env variable HMMER_NCPU is defined,
- *               use that many processors.
- *             - else, use HMMER_NCPU as defined in config.h.
+ * Purpose:  Recommend how many threads to use. 
+ *
+ *             - if we can determine the number of processors
+ *               on the machine by SQD_NPROC, use that. This
+ *               should succeed for SGI IRIX, Digital UNIX, and 
+ *               Sun Solaris platforms.
+ *             - if not, assume two processors. We're probably
+ *               on a FreeBSD or Linux box, and odds are that its
+ *               a dualprocessor.
+ *             - if HMMER_NCPU is defined in config.h, use that
+ *               number instead; allows Linux or FreeBSD machines
+ *               to compile code for a quadprocessor, for instance.
  *               That define can be overridden at compile
  *               time by a -DHMMER_NCPU=x, where x is the
- *               number of processors.
- *               
+ *               number of threads..
+ *             - if HMMER_NCPU is defined in the environment,
+ *               use that number, overriding all others.
+ *
  *           Typically, we'll set the default number of
  *           threads with ThreadNumber() but allow it
  *           to be overridden at the command line with --cpu.    
+ *           
+ *           Summarizing priority:
+ *                  --ncpu <x> option
+ *                  environment variable, setenv HMMER_NCPU x
+ *                  compile-time, MDEFS=HMMER_NCPU=x
+ *                  compile-time, config.h definition of HMMER_NCPU
+ *                  SQD_NPROC, or 2 if SQD_NPROC doesn't work.
  *
  * Args:     void
  *
@@ -90,11 +105,17 @@ ThreadNumber(void)
 {
   int   num;
   char *env;
-  
-  num = HMMER_NCPU;
+
+  num = SQD_NPROC;		/* SGI, Sun, Digital: get # of available CPUs */
+  if (num == -1) num = 2;	/* Linux, FreeBSD: assume dualprocessor       */
+#ifdef HMMER_NCPU	
+  num = HMMER_NCPU;		/* allow config.h to override; usually we don't */
+#endif
+				/* allow environment variable to override */
   if ((env = getenv("HMMER_NCPU")) != NULL)
-    num = atoi(env);
+    num = atoi(env);		
   if (num <= 0) num = 1;	/* silent sanity check */
+  SQD_DPRINTF1(("ThreadNumber(): setting number of threads to %d\n", num));
   return num;
 }
 
@@ -147,15 +168,15 @@ VpoolInit(int do_forward, int do_null, int num_threads, int max_queue)
     Die("pthread_mutex_init FAILED; %s\n", strerror(rtn));
   if ((rtn = pthread_mutex_init(&(vpool->output_lock), NULL)) != 0)
     Die("pthread_mutex_init FAILED; %s\n", strerror(rtn));
-  if ((rtn = pthread_cond_init(&(vpool->input_queue_not_empty), NULL)) != 0)
+  if ((rtn = pthread_cond_init(&(vpool->input_ready), NULL)) != 0)
     Die("pthread_cond_init FAILED; %s\n", strerror(rtn));
-  if ((rtn = pthread_cond_init(&(vpool->input_queue_not_full), NULL)) != 0)
-    Die("pthread_cond_init FAILED; %s\n", strerror(rtn));
-  if ((rtn = pthread_cond_init(&(vpool->output_queue_not_full), NULL)) != 0)
+  if ((rtn = pthread_cond_init(&(vpool->output_ready), NULL)) != 0)
     Die("pthread_cond_init FAILED; %s\n", strerror(rtn));
 
+  /* Create slave threads
+   */
   for (i = 0; i < num_threads; i++)
-    if ((rtn = pthread_create(&(vpool->thread[i]), NULL, 
+    if ((rtn = pthread_create(&(vpool->thread[i]), NULL,
 			      VpoolThread , (void *) vpool)) != 0)
       Die("Failed to create thread %d; return code %d\n", i, rtn);
 
@@ -190,18 +211,18 @@ VpoolShutdown(struct vpool_s *vpool)
 			/* young Zaphod plays it safe, and acquires a lock */
   if (pthread_mutex_lock(&(vpool->input_lock)) != 0)
     Die("pthread_mutex_lock failed");
-				/* toggle the shutdown flag */
+			/* toggle the shutdown flag */
+  SQD_DPRINTF2(("VpoolShutdown() says, time to die\n"));
   vpool->shutdown = 1;
-
 			/* poke sleeping workers to make them look at shutdown */
-  if (pthread_cond_broadcast(&(vpool->input_queue_not_empty)) != 0) 
+  SQD_DPRINTF2(("VpoolShutdown() says, this means you, slave\n"));
+  if (pthread_cond_broadcast(&(vpool->input_ready)) != 0) 
     Die("pthread_cond_broadcast failed");
-
-				/* release our lock so workers can get remaining input */
+			/* release our lock so workers can get remaining input */
   if (pthread_mutex_unlock(&(vpool->input_lock)) != 0)
     Die("pthread_mutex_unlock failed");
-
-				/* wait for our workers to finish */
+			/* wait for our workers to finish */
+  SQD_DPRINTF2(("VpoolShutdown() says everybody out of the pool!\n"));
   for (i = 0; i < vpool->num_threads; i++)
     if (pthread_join(vpool->thread[i],NULL) != 0)
       Die("pthread_join failed");
@@ -222,10 +243,8 @@ VpoolShutdown(struct vpool_s *vpool)
 void
 VpoolDestroy(struct vpool_s *vpool)
 {
-  if (vpool->nin != 0)
-    Die("Input queue not empty -- destroying vpool would be bad");
-  if (vpool->nout != 0)
-    Die("Output queue not empty -- destroying vpool would be bad");
+  SQD_DASSERT1((vpool->nin != 0));  /* sanity: don't die before input is consumed */
+  SQD_DASSERT1((vpool->nout != 0)); /* sanity: don't die before output is consumed */
 
   free(vpool->thread);
   free(vpool->hmm);
@@ -272,7 +291,7 @@ VpoolThread(void *ptr)
   /* The only way that the worker thread terminates is when it
    * sees a shutdown flag from the boss (which tells it that
    * the boss has no more data for it), and the data in the
-   * input queue has run out.
+   * input queue have run out.
    */
   vpool = (struct vpool_s *) ptr;
   for (;;) {
@@ -280,21 +299,33 @@ VpoolThread(void *ptr)
     /*****************************************************************
      * Get the next sequence to work on.
      * If none are available, wait for one to appear from the boss.
-     *    (boss signals a condition input_queue_not_empty)
-     * When we take one, notify the boss if he might be blocked at
-     *     a full queue.   
+     *    (boss signals a condition input_ready)
      *****************************************************************/
                                  /* acquire lock on the input queue. */
+    SQD_DPRINTF2(("VpoolThread(): thread %x wants the input lock!\n",  
+		      (unsigned int) pthread_self()));
     if ((rtn = pthread_mutex_lock(&(vpool->input_lock))) != 0)
       Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
+    SQD_DPRINTF2(("VpoolThread(): thread %x gets the input lock.\n", 
+		      (unsigned int) pthread_self()));
 
 				/* wait for input seqs to be available */
     while ((vpool->nin == 0) && (! vpool->shutdown)) 
-      if ((rtn = pthread_cond_wait(&(vpool->input_queue_not_empty), &(vpool->input_lock))) != 0)
-	Die("pthread_cond_wait failure: %s\n", strerror(rtn));
+      {
+	SQD_DPRINTF2(("VpoolThread(): thread %x blocking, waiting for input\n", 
+		      (unsigned int) pthread_self()));
+	if ((rtn = pthread_cond_wait(&(vpool->input_ready), &(vpool->input_lock))) != 0)
+	  Die("pthread_cond_wait failure: %s\n", strerror(rtn));
+	SQD_DPRINTF2(("VpoolThread(): thread %x sees a signal, and gets the input lock.\n", 
+		      (unsigned int) pthread_self()));
+      }
+    SQD_DPRINTF2(("VpoolThread(): thread %x taking input from the queue, going to work\n", 
+		  (unsigned int) pthread_self()));
 
 				/* check for shutdown request, and lack of input data */
     if (vpool->nin == 0 && vpool->shutdown) {
+      SQD_DPRINTF2(("VPoolThread(): thread %x shutting down normally\n", 
+		      (unsigned int) pthread_self()));
       if ((rtn = pthread_mutex_unlock(&(vpool->input_lock))) != 0)
 	Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
       pthread_exit(NULL);
@@ -305,14 +336,6 @@ VpoolThread(void *ptr)
     dsq    = vpool->dsq[vpool->nin];
     len    = vpool->len[vpool->nin];
     sqinfo = vpool->sqinfo[vpool->nin];
-
-    /*  printf("thread %x acquires a sequence to work on\n", (unsigned int) pthread_self()); */
-
-
-				/* notify boss in case he's blocked */
-    if (vpool->nin == vpool->max_input_queue-1)
-      if ((rtn = pthread_cond_signal(&(vpool->input_queue_not_full))) != 0)
-	Die("pthread_cond_signal failure: %s\n", strerror(rtn));
 
 				/* release our lock on the input queue */
     if ((rtn = pthread_mutex_unlock(&(vpool->input_lock))) != 0)
@@ -336,22 +359,21 @@ VpoolThread(void *ptr)
     if (vpool->do_null)
       sc -= TraceScoreCorrection(hmm, tr, dsq);
     
-    /* printf("thread %x finishes sequence, puts on output\n", (unsigned int) pthread_self()); */
-
     /*****************************************************************
      * Put the results on the output queue
      * In theory, output queue cannot overflow: in the boss, each
      *   time we add a sequence to the input queue, we check the
      *   whole output queue.
      *****************************************************************/
+
 				/* acquire lock on the output queue */
     if ((rtn = pthread_mutex_lock(&(vpool->output_lock))) != 0)
       Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
 
-				/* block if we're out of room in output queue */
-    while (vpool->nout == vpool->max_output_queue)
-      if ((rtn = pthread_cond_wait(&(vpool->output_queue_not_full), &(vpool->output_lock))) != 0)
-	Die("pthread_cond_wait failure: %s\n", strerror(rtn));
+				/* sanity check on the output queue */
+    SQD_DASSERT1((vpool->nout < vpool->max_output_queue));
+    SQD_DPRINTF2(("VpoolThread(): thread %x is done, putting output on the queue\n", 
+		  (unsigned int) pthread_self()));
 
     				/* put results on the output queue */
     vpool->ohmm[vpool->nout]    = hmm;
@@ -361,6 +383,9 @@ VpoolThread(void *ptr)
     vpool->tr[vpool->nout]      = tr;
     vpool->score[vpool->nout]   = sc;
     vpool->nout++;
+				/* tell the boss we're done */
+    if (pthread_cond_signal(&(vpool->output_ready)) != 0)
+      Die("pthread_cond_signal failed");
 				/* release our lock */
     if ((rtn = pthread_mutex_unlock(&(vpool->output_lock))) != 0)
       Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
@@ -386,13 +411,14 @@ void
 VpoolAddWork(struct vpool_s *vpool, struct plan7_s *hmm, char *dsq, SQINFO *sqinfo, int len)
 {
 				/* acquire lock on input queue */
+  SQD_DPRINTF2(("VpoolAddWork(): give me the input lock!\n"));
   if (pthread_mutex_lock(&(vpool->input_lock)) != 0)
     Die("pthread_mutex_lock failed");
+  SQD_DPRINTF2(("VpoolAddWork(): thanks, I've got the input lock.\n"));
 
-				/* block and wait if queue is full */
-  while (vpool->nin == vpool->max_input_queue)
-    if (pthread_cond_wait(&(vpool->input_queue_not_full), &(vpool->input_lock)) != 0)
-      Die("pthread_cond_wait failed");
+				/* sanity check: queue is never full */
+  SQD_DASSERT1((vpool->nin < vpool->max_input_queue));
+  SQD_DPRINTF2(("VpoolAddWork(): putting work on the input queue\n"));
 
 				/* add work to input queue */
   vpool->hmm[vpool->nin]    = hmm;
@@ -400,13 +426,10 @@ VpoolAddWork(struct vpool_s *vpool, struct plan7_s *hmm, char *dsq, SQINFO *sqin
   vpool->sqinfo[vpool->nin] = sqinfo;
   vpool->len[vpool->nin]    = len;
   vpool->nin++;
-
-  /* printf("Added some work. Input queue now has %d seqs\n", vpool->nin); */
-
-				/* flag that data are now available */
-  if (vpool->nin > 0)
-    if (pthread_cond_signal(&(vpool->input_queue_not_empty)) != 0)
-      Die("pthread_cond_signal failed");
+				/* wake up slaves */
+  SQD_DPRINTF2(("VpoolAddWork(): wake up, slaves!\n"));
+  if (pthread_cond_signal(&(vpool->input_ready)) != 0)
+    Die("pthread_cond_signal failed");
 				/* release lock on the input queue */
   if (pthread_mutex_unlock(&(vpool->input_lock)) != 0)
     Die("pthread_mutex_unlock failed");
@@ -432,7 +455,7 @@ VpoolAddWork(struct vpool_s *vpool, struct plan7_s *hmm, char *dsq, SQINFO *sqin
  *           ret_score  - log-odds score of sequence, in bits
  *           ret_tr     - traceback for sequence
  *
- * Returns:  1 if results are returned. 0 if output queue is empty.
+ * Returns:  1 if results are returned. 0 if we're shutting down and output queue is empty.
  */
 int
 VpoolGetResults(struct vpool_s *vpool, struct plan7_s **ret_hmm,
@@ -443,11 +466,14 @@ VpoolGetResults(struct vpool_s *vpool, struct plan7_s **ret_hmm,
   if (pthread_mutex_lock(&(vpool->output_lock)) != 0)
     Die("pthread_mutex_lock failed");
 
-  if (vpool->nout == 0) 
-    {				/* no results; return 0 */
-      if (pthread_mutex_unlock(&(vpool->output_lock)) != 0)
-	Die("pthread_mutex_unlock failed");
-      return 0;
+  if (vpool->shutdown && vpool->nout == 0) return 0;
+
+				/* block and wait until output is in queue */
+  while (vpool->nout == 0) 
+    {	
+      SQD_DPRINTF2(("VpoolGetResults(): no output ready; twiddling my thumbs\n"));
+      if (pthread_cond_wait(&(vpool->output_ready), &(vpool->output_lock)) != 0)
+	Die("pthread_cond_wait failed");
     }
 				/* pop results off the queue */
   vpool->nout--;
@@ -459,10 +485,7 @@ VpoolGetResults(struct vpool_s *vpool, struct plan7_s **ret_hmm,
   if (ret_tr     != NULL) *ret_tr     = vpool->tr[vpool->nout];
   else                    P7FreeTrace(vpool->tr[vpool->nout]);
 
-				/* flag that space on output queue is now available */
-  if (vpool->nout < vpool->max_output_queue)
-    if (pthread_cond_broadcast(&(vpool->output_queue_not_full)) != 0)
-	Die("pthread_cond_broadcast failed");
+  SQD_DPRINTF2(("VpoolGetResults(): took some output off the queue\n"));
 
 				/* release lock on the output queue */
   if (pthread_mutex_unlock(&(vpool->output_lock)) != 0)
