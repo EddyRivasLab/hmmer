@@ -95,7 +95,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   float nx;			/* expected # of symbol x */
   int gap, len, qgap, qlen;	/* penalties to charge    */
   
-  Plan7Logoddsify(hmm);
+  P7Logoddsify(hmm, TRUE);
 
   /* GCG can't deal with long profiles. Their limit is 1000
    * positions.
