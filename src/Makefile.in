@@ -36,8 +36,9 @@ LIBS   = @LIBS@
 
 PROGS = hmmalign hmmbuild hmmcalibrate \
 	hmmconvert hmmemit hmmfetch hmmindex\
-	hmmpfam hmmsearch \
-	$(PVMPROGS)
+	hmmpfam hmmsearch
+
+SQUIDPROGS = alistat getseq seqstat sreformat
 
 HDRS =  config.h funcs.h globals.h structs.h version.h
 
@@ -63,13 +64,15 @@ OBJ =  	alphabet.o    core_algorithms.o debug.o	          emit.o\
 	emulation.o   histogram.o       hmmio.o           mathsupport.o\
         masks.o       misc.o            modelmakers.o     plan7.o\
 	plan9.o       prior.o           threads.o         tophits.o\
-	trace.o\
-        aligneval.o   alignio.o         cluster.o         dayhoff.o\
-	file.o        getopt.o          gsi.o             hsregex.o  interleaved.o\
-	iupac.o       msf.o             revcomp.o         selex.o\
-	sqerror.o     sqio.o            sre_ctype.o       sre_math.o\
-	sre_string.o  stack.o           translate.o       types.o\
-	weight.o
+	trace.o
+
+SQUIDOBJ = aligneval.o   alignio.o         cluster.o         dayhoff.o\
+	   file.o        getopt.o          gsi.o             hsregex.o\
+	   interleaved.o\
+	   iupac.o       msf.o             revcomp.o         selex.o\
+	   sqerror.o     sqio.o            sre_ctype.o       sre_math.o\
+	   sre_string.o  stack.o           translate.o       types.o\
+	   weight.o
 
 PVMOBJ = pvm.o
 
@@ -80,51 +83,50 @@ PVMOBJ = pvm.o
 ## Targets defining how to make HMMER executables.
 #######
 
-all: 	$(PROGS)
+all: 	$(PROGS) $(SQUIDPROGS) $(PVMPROGS)
 
-hmmalign: $(OBJ) hmmalign.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmalign.o $(OBJ) $(LIBS)
 
-hmmbuild: $(OBJ) hmmbuild.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmbuild.o $(OBJ) $(LIBS)
+hmmalign: $(OBJ) $(SQUIDOBJ) hmmalign.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmalign.o $(OBJ) $(SQUIDOBJ) $(LIBS)
+hmmbuild: $(OBJ) $(SQUIDOBJ) hmmbuild.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmbuild.o $(OBJ) $(SQUIDOBJ) $(LIBS)
+hmmcalibrate: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmcalibrate.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
+hmmconvert: $(OBJ) $(SQUIDOBJ) hmmconvert.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmconvert.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+hmmemit: $(OBJ) $(SQUIDOBJ) hmmemit.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmemit.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+hmmfetch: $(OBJ) $(SQUIDOBJ) hmmfetch.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR)  -o $@ hmmfetch.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+hmmindex: $(OBJ) $(SQUIDOBJ) hmmindex.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmindex.o $(OBJ) $(SQUIDOBJ) $(LIBS) 
+hmmpfam: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmpfam.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
+hmmsearch: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
-hmmcalibrate: $(OBJ) $(PVMOBJ) hmmcalibrate.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
+hmmcalibrate-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmcalibrate-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+hmmpfam-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmpfam-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
+hmmsearch-pvm: $(OBJ) $(SQUIDOBJ) $(PVMOBJ) hmmsearch-pvm.o
+	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch-pvm.o $(OBJ) $(SQUIDOBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
 
-hmmconvert: $(OBJ) hmmconvert.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmconvert.o $(OBJ) $(LIBS) 
-
-hmmemit: $(OBJ) hmmemit.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmemit.o $(OBJ) $(LIBS) 
-
-hmmfetch: $(OBJ) hmmfetch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR)  -o $@ hmmfetch.o $(OBJ) $(LIBS) 
-
-hmmindex: $(OBJ) hmmindex.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmindex.o $(OBJ) $(LIBS) 
-
-hmmpfam: $(OBJ) $(PVMOBJ) hmmpfam.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS) 
-
-hmmsearch: $(OBJ) hmmsearch.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
-
-hmmcalibrate-pvm: $(OBJ) $(PVMOBJ) hmmcalibrate-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmcalibrate-pvm.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
-
-hmmpfam-pvm: $(OBJ) $(PVMOBJ) hmmpfam-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmpfam-pvm.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
-
-hmmsearch-pvm: $(OBJ) $(PVMOBJ) hmmsearch-pvm.o
-	$(CC) $(CFLAGS) $(MDEFS) $(PVMLIBDIR) -o $@ hmmsearch-pvm.o $(OBJ) $(PVMOBJ) $(PVMLIBS) $(LIBS)
-
+alistat:   $(SQUIDOBJ) alistat_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ alistat_main.o   $(SQUIDOBJ) $(LIBS)
+getseq:    $(SQUIDOBJ) getseq_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ getseq_main.o    $(SQUIDOBJ) $(LIBS)
+seqstat:   $(SQUIDOBJ) seqstat_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ seqstat_main.o   $(SQUIDOBJ) $(LIBS)
+sreformat: $(SQUIDOBJ) sreformat_main.o
+	$(CC) $(CFLAGS) $(MDEFS) -o $@ sreformat_main.o $(SQUIDOBJ) $(LIBS)
 
 #######
 ## Target used in making Shiva test suite
 #######
 
-libhmmer.a: $(OBJ)
-	$(AR) libhmmer.a $(OBJ)
+libhmmer.a: $(OBJ) $(SQUIDOBJ)
+	$(AR) libhmmer.a $(OBJ) $(SQUIDOBJ)
 	-if test -x /bin/ranlib; then /bin/ranlib libhmmer.a; else exit 0; fi
 	-if test -x /usr/bin/ranlib; then /usr/bin/ranlib libhmmer.a; else exit 0; fi
 	-if test -x $(RANLIB); then $(RANLIB) libhmmer.a; else exit 0; fi
@@ -163,24 +165,11 @@ gprofv:
 
 
 #######
-## Targets only used in development, irrelevant to distribution copy
-#######
-
-# Extract squid files from RCS.
-squid:  
-	for file in $(SQUIDHDRS); do\
-	   co $(HOME)/src/squid/RCS/$$file,v $$file;\
-	done
-	for file in $(SQUIDSRC); do\
-	   co $(HOME)/src/squid/RCS/$$file,v $$file;\
-	done
-
-#######
 ## Miscellaneous
 #######
 
 clean:
-	-rm -f *.o *~ Makefile.bak core $(PROGS) $(PVMPROGS) TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core $(PROGS) $(SQUIDPROGS) $(PVMPROGS) TAGS gmon.out libhmmer.a
 
 tags:
 	etags -t $(SRC) $(HDRS) $(READMES) 
