@@ -1,6 +1,6 @@
-# ID   rrm
-# AC   PF00076
-# DE   RNA recognition motif. (aka RRM, RBD, or RNP domain)
+#=ID rrm
+#=AC PF00076
+#=DE RNA recognition motif. (aka RRM, RBD, or RNP domain)
 # AU   Sean Eddy
 # GA   HMM_iterative_training
 # GA   Bic_raw 25 hmmls 10
