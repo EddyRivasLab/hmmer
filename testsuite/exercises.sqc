@@ -50,7 +50,7 @@
 2 exercise    hmmbuild/effnone     @hmmbuild@ -F --effnone %OPT.HMM% Optiontests.slx
 2 exercise    hmmbuild/effset      @hmmbuild@ -F --effset 1.0 %OPT.HMM% Optiontests.slx
 2 exercise    hmmbuild/effclust    @hmmbuild@ -F --effclust %OPT.HMM% Optiontests.slx
-2 exercise    hmmbuild/etarget     @hmmbuild@ -F --effent --etarget 0.8 %OPT.HMM% Optiontests.slx
+2 exercise    hmmbuild/eloss       @hmmbuild@ -F --effent --eloss 0.8 %OPT.HMM% Optiontests.slx
 2 exercise    hmmbuild/eidlevel    @hmmbuild@ -F --effclust --eidlevel 0.70 %OPT.HMM% Optiontests.slx
 
 2 exercise    hmmbuild/wblosum     @hmmbuild@ -F --wblosum %OPT.HMM% Optiontests.nslx

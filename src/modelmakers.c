@@ -62,7 +62,9 @@ static void fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
 static void trace_doctor(struct p7trace_s *tr, int M, int *ret_ndi, 
 			 int *ret_nid);
 static void annotate_model(struct plan7_s *hmm, int *matassign, MSA *msa);
+#if 0
 static void print_matassign(int *matassign, int alen);
+#endif
 
 
 
@@ -931,6 +933,7 @@ annotate_model(struct plan7_s *hmm, int *matassign, MSA *msa)
 
 }
 
+#if 0
 static void
 print_matassign(int *matassign, int alen)
 {
@@ -945,3 +948,4 @@ print_matassign(int *matassign, int alen)
 	    matassign[apos] & EXTERNAL_INSERT_C) ? '|':' ');
   }
 }
+#endif

@@ -95,11 +95,14 @@ Eweight(struct plan7_s *hmm,  struct p7prior_s *pri, float numb_seqs,
   /****************************************
   * Initialize binary search bracket values
   *****************************************/
-  /* The reason the values seem backwards is because I'm trying to bracket my target mean entropy 
-     with model count scaling factors. A higher scaling factor generally produces a 
-     lower entropy and a lower scaling factor produces a higer entropy. Thus, the leftscale produces
-     the lowest mean entropy bracket and rightscale produces the highest mean entropy bracket */
 
+  /* The reason the values seem backwards is because I'm trying to
+     bracket my target mean entropy with model count scaling
+     factors. A higher scaling factor generally produces a lower
+     entropy and a lower scaling factor produces a higher
+     entropy. Thus, the leftscale produces the lowest mean entropy
+     bracket and rightscale produces the highest mean entropy
+     bracket */
   if(current < targetent){
     leftscale  = 1; 
     rightscale = 0; 

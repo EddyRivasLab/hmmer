@@ -63,7 +63,7 @@ static char experts[] = "\
    --effnone     : effective sequence number is just # of seqs [DNA default]\n\
    --effset <x>  : set effective sequence number to <x>\n\
    --effclust    : eff seq # is = # of clusters by single linkage\n\
-   --etarget <x> : for --effent: set target loss [defaults: fs=0.59; ls=1.30]\n\
+   --eloss <x>   : for --effent: set target loss [defaults: fs=0.59; ls=1.30]\n\
    --eidlevel <x>: for --effclust: set identity cutoff to <x> {0.62}\n\
 \n\
   Relative sequence weighting strategies: (default: GSC weights)\n\
@@ -103,7 +103,7 @@ static struct opt_s OPTIONS[] = {
   { "--effent",  FALSE, sqdARG_NONE },
   { "--effset",  FALSE, sqdARG_FLOAT },
   { "--eidlevel",FALSE, sqdARG_FLOAT },
-  { "--etarget", FALSE, sqdARG_FLOAT },
+  { "--eloss",   FALSE, sqdARG_FLOAT },
   { "--fast",    FALSE, sqdARG_NONE },
   { "--gapmax",  FALSE, sqdARG_FLOAT },
   { "--hand",    FALSE, sqdARG_NONE},
@@ -205,8 +205,9 @@ main(int argc, char **argv)
   int   eff_nseq_set;		/* TRUE if eff_nseq has been calculated  */
   int   pbswitch;		/* nseq >= this, switchover to PB weights*/
   char *setname;                /* NULL, or ptr to HMM name to set       */
-  float etarget;		/* target entropy loss, entropy-weights  */
-  int   etarget_set;		/* TRUE if etarget was set on commandline*/
+  float eloss;		        /* target entropy loss, entropy-weights  */
+  int   eloss_set;		/* TRUE if eloss was set on commandline  */
+  float etarget;		/* target entropy (background - eloss)   */
   int   wgt_set;		/* TRUE if relative weights are calculated */
 
   /*********************************************** 
@@ -241,7 +242,7 @@ main(int argc, char **argv)
   do_binary         = FALSE;
   pbswitch          = 1000;
   setname           = NULL;
-  etarget_set       = FALSE;           
+  eloss_set         = FALSE;           
   
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -261,7 +262,7 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--effnone") == 0) eff_strategy  = EFF_NONE;
     else if (strcmp(optname, "--effset")  == 0) { eff_strategy= EFF_USERSET; eff_nseq = atof(optarg); }
     else if (strcmp(optname, "--eidlevel")== 0) eidlevel      = atof(optarg);
-    else if (strcmp(optname, "--etarget") == 0) { etarget     = atof(optarg); etarget_set = TRUE; }
+    else if (strcmp(optname, "--eloss")   == 0) { eloss       = atof(optarg); eloss_set  = TRUE; }
     else if (strcmp(optname, "--gapmax")  == 0) { gapmax      = atof(optarg); gapmax_set = TRUE; }
     else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
     else if (strcmp(optname, "--map")     == 0) c_strategy    = P7_MAP_CONSTRUCTION;
@@ -389,8 +390,8 @@ main(int argc, char **argv)
   }
   else if (eff_strategy == EFF_ENTROPY) {
     puts("entropy targeting");
-    if (etarget_set)
-      printf("  mean target entropy loss:        %.2f bits\n", etarget);
+    if (eloss_set)
+      printf("  mean target entropy loss:        %.2f bits\n", eloss);
     else
       printf("  mean target entropy loss:        (default)\n");
   }
@@ -490,25 +491,25 @@ see --effnone, --effset, or --effclust\n");
 	  if (eff_strategy == EFF_ENTROPY) {
 	    if (Alphabet_type == hmmAMINO) {
 	      if   (cfg_strategy == P7_FS_CONFIG || cfg_strategy == P7_SW_CONFIG){
-		if (etarget_set == FALSE){
+		if (eloss_set == FALSE){
 		  etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
 		}
 		else{
-		  etarget = FEntropy(randomseq, Alphabet_size) - etarget;
+		  etarget = FEntropy(randomseq, Alphabet_size) - eloss;
 		}
 	      }
-	      else if (etarget_set == FALSE){
+	      else if (eloss_set == FALSE){
 		etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_LS_AMINO_DEFAULT;
 	      }
 	      else{
-		etarget = FEntropy(randomseq, Alphabet_size) - etarget;
+		etarget = FEntropy(randomseq, Alphabet_size) - eloss;
 	      }		
 	    } else {
 	      Die("\
 --effent: entropy loss targeting:\n\
 Default entropy loss targets are only available for protein models.\n\
 To use --effent on DNA models (or other alphabets), you must set\n\
---etarget <x> explicitly, in addition to selecting --effent.\n");
+--eloss <x> explicitly, in addition to selecting --effent.\n");
 	    }
 	  }
 	} /* -- this ends the post-alphabet initialization section -- */

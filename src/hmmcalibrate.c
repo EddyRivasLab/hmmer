@@ -160,7 +160,9 @@ main(int argc, char **argv)
   float   lensd;		/* std dev of length distribution  */
   int     do_pvm;		/* TRUE to use PVM                 */
   int     pvm_lumpsize;		/* # of seqs to do per PVM slave exchange */
+#ifdef HMMER_PVM
   int     pvm_nslaves;		/* number of slaves used in the PVM */
+#endif
 
 
   char *optname;		/* name of option found by Getopt() */
