@@ -50,7 +50,7 @@ Option        : Default : Description\n\
   -n <n>      :    5000 : set number of sampled seqs to <n>\n\
   -s <x>      :     350 : set random seq length std. dev to <x>\n\
 \n\
-  --histfile <f> :    - : save histograms to file <f>\n\
+  --histfile <f> :    - : save histogram(s) to file <f>\n\
 ";
 
 static struct opt_s OPTIONS[] = {
@@ -251,8 +251,8 @@ main(int argc, char **argv)
 	}
       else
 	{
-	  printf("mu     : [undetermined]\n", hmm->mu);
-	  printf("lambda : [undetermined]\n", hmm->lambda);
+	  printf("mu     : [undetermined]\n");
+	  printf("lambda : [undetermined]\n");
 	}
       printf("max    : %12f\n", max);
       printf("//\n");
