@@ -121,7 +121,7 @@ install:
 	   $(INSTMAN) squid/Man/$$file.man $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 	done
 
-# uninstall: remove the binaries. Reverses the steps of "make install".
+# uninstall: Reverses the steps of "make install".
 #
 uninstall: 
 	for file in $(PROGS) $(PVMPROGS); do\
@@ -138,8 +138,19 @@ uninstall:
 	done
 
 
-# "make clean" removes almost everything except configuration files
-#              and binaries.
+# bindist: after building, prep the whole directory for a binary
+#          distribution: symlink supported binaries in binaries/
+#          subdir, remove everything but binaries and Makefiles.
+#
+bindist:
+	mkdir binaries
+	for prog in $(PROGS); do\
+	   (cd binaries; ln -s ../src/$$prog .);\
+	done
+	make binclean
+
+# "make clean" removes almost everything except configuration files.
+#
 clean:
 	(cd src;       make clean)
 	(cd squid;     make clean)
@@ -159,10 +170,21 @@ distclean:
 	(cd testsuite; make distclean)
 
 
+# "make binclean" is special: it cleans up and leaves only a binary
+#       distribution behind, including configured Makefiles.
+#
+binclean:
+	(cd src;       make binclean)
+	(cd squid;     make binclean)
+	(cd testsuite; make binclean)
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	-rm config.cache config.log config.status
+	-rm -rf autom4te.cache
+
 # doc:  build the Userguide and on-line manual
 #
 doc:
-	(cd Userguide; make)
+	(cd documentation/userguide; make)
 
 # dist: build a new distribution directory in hmmer-$RELEASE
 #       Exports from the CVS repository.

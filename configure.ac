@@ -29,7 +29,7 @@ AC_INIT(HMMER, 2.3, eddy@genetics.wustl.edu, hmmer)
 AC_MSG_NOTICE([configuring HMMER for your system.])
 
 PACKAGE_RELCODE="hmmer2_3"
-PACKAGE_DATE="April 2003"
+PACKAGE_DATE="May 2003"
 PACKAGE_COPYRIGHT="Copyright (C) 1992-2003 HHMI/Washington University School of Medicine"
 PACKAGE_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 PACKAGE_LICENSETAG=gnu

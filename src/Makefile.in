@@ -110,6 +110,9 @@ distclean:
 clean:
 	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a
 
+binclean:
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
+
 TAGS:
 	etags -t *.c *.h Makefile.in
 

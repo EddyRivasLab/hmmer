@@ -62,6 +62,9 @@ distclean:
 	make clean
 	-rm -f Makefile
 
+binclean:
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+
 TAGS:
 	etags -t *.c *.h Makefile.in
 
