@@ -50,7 +50,7 @@ extern int   Alphabet_iupac;    /* total size of alphabet + IUPAC degen. */
 extern char  Degenerate[MAXCODE][MAXABET];
 extern int   DegenCount[MAXCODE];
 #define hmmNOTSETYET 0
-#define hmmNUCLEIC   2		/* compatibility with squid's kDNA   */
+#define hmmNUCLEIC   2		/* compatibility with squid's kRNA   */
 #define hmmAMINO     3		/* compatibility with squid's kAmino */
 
 /**********************************************************************
@@ -92,20 +92,32 @@ struct plan7_s {
    * Other fields are optional; whether they are present is
    * flagged in the stateflags bit array.
    * 
-   * desc is only valid if PLAN7_DESC is set.
-   *   rf is only valid if PLAN7_RF is set.
-   *   cs is only valid if PLAN7_CS is set.
-   *  map is only valid if PLAN7_MAP is set.
+   * desc is only valid if PLAN7_DESC is set in flags.
+   *  acc is only valid if PLAN7_ACC is set in flags.
+   *   rf is only valid if PLAN7_RF is set in flags.
+   *   cs is only valid if PLAN7_CS is set in flags.
+   *  map is only valid if PLAN7_MAP is set in flags.
    */
   char  *name;                  /* name of the model                    +*/
+  char  *acc;			/* accession number of model (Pfam)     +*/
   char  *desc;                  /* brief description of model           +*/ 
   char  *rf;                    /* reference line from alignment 0..M   +*/
   char  *cs;                    /* consensus structure line      0..M   +*/ 
   char  *comlog;		/* command line(s) that built model     +*/
   int    nseq;			/* number of training sequences         +*/
   char  *ctime;			/* creation date                        +*/
-  int   *map;			/* map of alignment cols onto model 1..M */
-  int    checksum;              /* checksum of training sequences        */
+  int   *map;			/* map of alignment cols onto model 1..M+*/
+  int    checksum;              /* checksum of training sequences       +*/
+
+  /* Pfam-specific score cutoffs.
+   * 
+   * ga1, ga2 are valid if PLAN7_GA is set in flags.
+   * tc1, tc2 are valid if PLAN7_TC is set in flags.
+   * nc1, nc2 are valid if PLAN7_NC is set in flags.
+   */
+  float  ga1, ga2;		/* per-seq/per-domain gathering thresholds (bits) +*/
+  float  tc1, tc2;		/* per-seq/per-domain trusted cutoff (bits)       +*/
+  float  nc1, nc2;		/* per-seq/per-domain noise cutoff (bits)         +*/
 
   /* The main model in probability form: data-dependent probabilities.
    * This is the core Krogh/Haussler model.
@@ -122,6 +134,10 @@ struct plan7_s {
 
   /* The unique states of Plan 7 in probability form.
    * These are the algorithm-dependent, data-independent probabilities.
+   * Some parts of the code may briefly use a trick of copying tbd1
+   * into begin[0]; this makes it easy to call FChoose() or FNorm()
+   * on the resulting vector. However, in general begin[0] is not
+   * a valid number.
    */
   float  xt[4][2];              /* N,E,C,J extra states: 2 transitions      +*/
   float *begin;                 /* 1..M B->M state transitions              +*/
@@ -170,7 +186,7 @@ struct plan7_s {
   float  mu;			/* EVD mu       +*/
   float  lambda;		/* EVD lambda   +*/
 
-  int flags;                    /* bit flags indicating state of HMM    +*/
+  int flags;                    /* bit flags indicating state of HMM, valid data +*/
 };
 
 /* Flags for plan7->flags.
@@ -191,6 +207,10 @@ struct plan7_s {
 #define PLAN7_HASDNA  (1<<6)	/* raised if protein HMM->DNA seq params set*/
 #define PLAN7_STATS   (1<<7)	/* raised if EVD parameters are available   */
 #define PLAN7_MAP     (1<<8)	/* raised if alignment map is available     */
+#define PLAN7_ACC     (1<<9)	/* raised if accession number is available  */
+#define PLAN7_GA      (1<<10)	/* raised if gathering thresholds available */
+#define PLAN7_TC      (1<<11)	/* raised if trusted cutoffs available      */
+#define PLAN7_NC      (1<<12)	/* raised if noise cutoffs available        */
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB
