@@ -21,6 +21,8 @@
 #include "funcs.h"
 #include "squid.h"
 
+#include <assert.h>
+
 #ifdef MEMDEBUG
 #include "dbmalloc.h"
 #endif
@@ -1049,18 +1051,18 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 
   /* Initialize.
    */
-  kassign   = MallocOrDie (sizeof(int) * (L+2));
-  tassign   = MallocOrDie (sizeof(enum p7stype) * (L+2));
-  endlist   = MallocOrDie (sizeof(int) * (L+2));
-  startlist = MallocOrDie (sizeof(int) * (L+2));
+  kassign   = MallocOrDie (sizeof(int) * (L+1));
+  tassign   = MallocOrDie (sizeof(enum p7stype) * (L+1));
+  endlist   = MallocOrDie (sizeof(int) * (L+1));
+  startlist = MallocOrDie (sizeof(int) * (L+1));
 
-  lpos            = 0; 
-  startlist[lpos] = 0;
-  endlist[lpos]   = L+1;
-  kassign[0]      = 0;
-  kassign[L+1]    = hmm->M+1;
-  tassign[0]      = STN;		/* artificial; should be STS */
-  tassign[L+1]    = STC;		/* artificial; should be STT */
+  lpos = 0;
+  startlist[lpos] = 1;
+  endlist[lpos]   = L;
+  kassign[1]      = 1;
+  kassign[L]      = hmm->M;
+  tassign[1]      = STS;
+  tassign[L]      = STT;
 
   /* Recursive divide-and-conquer alignment.
    */
@@ -1079,17 +1081,17 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
       kassign[s2] = k2;
       tassign[s2] = t2;
                                /* score is valid on first pass */
-      if (s1 == 0 && s3 == L+1) ret_sc = sc;
+      if (t1 == STS && t3 == STT) ret_sc = sc;
 
 				/* push N-terminal segment on stack */
-      if (s2 - s1 > 1 && t2 != STN)
+      if (t2 != STN && (s2 - s1 > 1 || (s2 - s1 == 1 && t1 == STS)))
 	{
 	  lpos++;
 	  startlist[lpos] = s1;
 	  endlist[lpos]   = s2;
 	}
 				/* push C-terminal segment on stack */
-      if (s3 - s2 > 1 && t2 != STC)
+      if (t2 != STC && (s3 - s2 > 1 || (s3 - s2 == 1 && t3 == STT)))
 	{
           lpos++;
           startlist[lpos] = s2;
@@ -1099,14 +1101,14 @@ P7WeeViterbi(char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
       if (t2 == STN)
 	{			/* if we see STN midpoint, we know the whole N-term is STN */
 	  for (; s2 >= s1; s2--) {
-	    kassign[s2] = 0;
+	    kassign[s2] = 1;
 	    tassign[s2] = STN;
 	  }
 	}
       if (t2 == STC)
 	{			/* if we see STC midpoint, we know whole C-term is STC */
 	  for (; s2 <= s3; s2++) {
-	    kassign[s2] = hmm->M+1;
+	    kassign[s2] = hmm->M;
 	    tassign[s2] = STC;
 	  }
 	}
@@ -1403,12 +1405,12 @@ Plan7ESTViterbi(char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_m
  * Args:     hmm   - the model, set up for integer scores
  *           dsq   - the sequence, digitized
  *           L     - length of the sequence
- *           k1    - model node to start with, 0,1..M,M+1
- *           t1    - state type to start with, STM | STI | STN | STC | STJ
- *           s1    - sequence position to start with, 0,1..L,L+1
- *           k3    - model node to end with
- *           t3    - state type to end with
- *           s3    - sequence position to end with
+ *           k1    - model node to start with, 1..M
+ *           t1    - state type to start with, STM | STI | STN | STC; STS to start
+ *           s1    - sequence position to start with, 1..L; 1 to start
+ *           k3    - model node to end with, 1..M
+ *           t3    - state type to end with, STM | STI | STN | STC; STT to start
+ *           s3    - sequence position to end with, 1..L; L to start
  *          ret_k2 - RETURN: optimal midpoint, node position in model
  *          ret_t2 - RETURN: optimal midpoint, state type 
  *          ret_s2 - RETURN: optimal midpoint, sequence position
@@ -1434,17 +1436,29 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
   int          i,k;		/* indices for seq, model */
   int          sc;		/* integer score */
   int          max;		/* maximum integer score */
+  int          start;		/* s1 to start at (need, for STS special case) */
 
  
   /* Choose our midpoint.
+   * Special cases: s1, s3 adjacent and t1 == STS: s2 = s1
+   *                s1, s3 adjacent and t3 == STT: s2 = s3
+   *                (where we must replace STS, STT eventually)
    */
   s2 = s1 + (s3-s1) / 2;
+  if (s3-s1 == 1 && t1 == STS) s2 = s1;
+  if (s3-s1 == 1 && t3 == STT) s2 = s3;
+
+  /* STS is a special case. STS aligns to row zero by convention,
+   * but we'll be passed s1=1, t1=STS. We have to init on row
+   * zero then start DP on row 1.
+   */
+  start = (t1 == STS) ? 0 : s1;
 
   /* Allocate our forward two rows.
    * Initialize row zero.
    */
   fwd = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
-  cur = s1%2;
+  cur = start%2;
   xmx[cur][XMN] = xmx[cur][XMB] = -INFTY;
   xmx[cur][XME] = xmx[cur][XMC] = -INFTY;  
   for (k = k1; k <= k3; k++)
@@ -1458,16 +1472,24 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
   case STI: imx[cur][k1]  = 0; break;
   case STN: xmx[cur][XMN] = 0; break;
   case STC: xmx[cur][XMC] = 0; break;
+  case STS: xmx[cur][XMN] = 0; break;
   default:  Die("you can't init get_wee_midpt with a %s\n", Statetype(t1));
   }
 
   /* Still initializing.
-   * Deal with pulling horizontal matrix moves in row zero.
-   * Some of this we know we only have to do if we started on an STM.
+   * Deal with pulling horizontal matrix moves in initial row.
+   * These are any transitions to nonemitters:
+   *    STM-> E, D
+   *    STI-> none
+   *    STN-> B
+   *    STC-> (T, but we never observe this in the forward pass of a d&c)
+   *    STE-> C
+   *    STS-> (N, already implied by setting xmx[cur][XMN] = 0)
+   *    STB-> M
    */ 
   if (t1 == STM)
     {
-      for (k = k1+1; k <= k3 && k <= hmm->M; k++)
+      for (k = k1+1; k <= k3; k++)
 	{				/* transits into STD */
 	  dmx[cur][k] = -INFTY;
 	  if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > -INFTY)
@@ -1492,15 +1514,15 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
   /* Done initializing.
    * Start recursive DP; sweep forward to chosen s2 midpoint. Done as a pull.
    */
-  for (i = s1+1; i <= s2; i++) {
+  for (i = start+1; i <= s2; i++) {
     cur = i % 2;
     prv = !cur;
 
     mmx[cur][k1] = imx[cur][k1] = dmx[cur][k1] = -INFTY;
 
-    /* Insert state in column k1
+    /* Insert state in column k1, and B->M transition in k1.
      */
-    if (k1 > 0 && k1 < hmm->M) {
+    if (k1 < hmm->M) {
       imx[cur][k1] = -INFTY;
       if ((sc = mmx[prv][k1] + hmm->tsc[k1][TMI]) > -INFTY)
 	imx[cur][k1] = sc;
@@ -1511,10 +1533,16 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       else
 	imx[cur][k1] = -INFTY;
     }
+    if ((sc = xmx[prv][XMB] + hmm->bsc[k1]) > -INFTY)
+      mmx[cur][k1] = sc;
+    if (hmm->msc[(int) dsq[i]][k1] != -INFTY)
+      mmx[cur][k1] += hmm->msc[(int) dsq[i]][k1];
+    else
+      mmx[cur][k1] = -INFTY;
 
     /* Main chunk of recursion across model positions
      */
-    for (k = k1+1; k <= k3 && k <= hmm->M; k++) {
+    for (k = k1+1; k <= k3; k++) {
 				/* match state */
       mmx[cur][k]  = -INFTY;
       if ((sc = mmx[prv][k-1] + hmm->tsc[k-1][TMM]) > -INFTY)
@@ -1532,14 +1560,16 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 
 				/* delete state */
       dmx[cur][k] = -INFTY;
-      if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > -INFTY)
-	dmx[cur][k] = sc;
-      if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
-	dmx[cur][k] = sc;
+      if (k < hmm->M) {
+	if ((sc = mmx[cur][k-1] + hmm->tsc[k-1][TMD]) > -INFTY)
+	  dmx[cur][k] = sc;
+	if ((sc = dmx[cur][k-1] + hmm->tsc[k-1][TDD]) > dmx[cur][k])
+	  dmx[cur][k] = sc;
+      }
 
 				/* insert state */
+      imx[cur][k] = -INFTY;
       if (k < hmm->M) {
-	imx[cur][k] = -INFTY;
 	if ((sc = mmx[prv][k] + hmm->tsc[k][TMI]) > -INFTY)
 	  imx[cur][k] = sc;
 	if ((sc = imx[prv][k] + hmm->tsc[k][TII]) > imx[cur][k])
@@ -1571,7 +1601,7 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       xmx[cur][XMC] = sc;
   }
 
-  /* Row s2%2 in fwd matrix now contains valid scores from s1 to s2,
+  /* Row s2%2 in fwd matrix now contains valid scores from s1 (start) to s2,
    * with J transitions disallowed (no cycles through model). 
    */
 
@@ -1585,39 +1615,55 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
   nxt = s3%2;
   xmx[nxt][XMN] = xmx[nxt][XMB] = -INFTY;
   xmx[nxt][XME] = xmx[nxt][XMC] = -INFTY;  
-  for (k = k1; k <= k3 && k <= hmm->M; k++)
+  for (k = k1; k <= k3 + 1; k++)
     mmx[nxt][k] = imx[nxt][k] = dmx[nxt][k] = -INFTY;      
+  cur = !nxt;
+  mmx[cur][k3+1] = imx[cur][k3+1] = dmx[cur][k3+1] = -INFTY;      
 
-  /* Where to put the zero for our end point...
+  /* Where to put the zero for our end point on last row.
    */
   switch (t3) {
   case STM: mmx[nxt][k3]  = 0; break;
   case STI: imx[nxt][k3]  = 0; break;
   case STN: xmx[nxt][XMN] = 0; break;
-  case STC: xmx[nxt][XMC] = (s3 == L+1) ? hmm->xsc[XTC][MOVE] : 0; break;
+  case STC: xmx[nxt][XMC] = 0; break;   /* must be an emitting C */
+  case STT: xmx[nxt][XMC] = hmm->xsc[XTC][MOVE];  break; /* C->T implied */
   default:  Die("you can't init get_wee_midpt with a %s\n", Statetype(t3));
   }
 
+  /* Still initializing.
+   * In the case t3==STT, there are a few horizontal moves possible 
+   * on row s3, because STT isn't an emitter. All other states are 
+   * emitters, so their connections have to be to the previous row s3-1.
+   */
+  if (t3 == STT) 
+    {				/* E->C */
+      xmx[nxt][XME] = xmx[nxt][XMC] + hmm->xsc[XTE][MOVE];
+				/* M->E */
+      for (k = k3; k >= k1; k--) {
+	mmx[nxt][k] = xmx[nxt][XME] + hmm->esc[k];
+	if (s3 != s2)
+	  mmx[nxt][k] += hmm->msc[(int)dsq[s3]][k];
+      }
+    }
+
   /* Start recursive DP; sweep backwards to chosen s2 midpoint.
    * Done as a pull. M, I scores at current row do /not/ include
-   * emission scores.
+   * emission scores. Be careful of integer underflow.
    */
   for (i = s3-1; i >= s2; i--) {
+				/* note i < L, so i+1 is always a legal index */
     cur = i%2;
     nxt = !cur;
-
-    mmx[cur][k3] = dmx[cur][k3] = imx[cur][k3] = -INFTY;
-
 				/* C pulls from C (T is special cased) */
     xmx[cur][XMC] = -INFTY;
     if ((sc = xmx[nxt][XMC] + hmm->xsc[XTC][LOOP]) > -INFTY)
       xmx[cur][XMC] = sc;
 				/* B pulls from M's */
     xmx[cur][XMB] = -INFTY;
-    if (i < L)
-      for (k = k1; k <= k3 && k <= hmm->M; k++)
-	if ((sc = mmx[nxt][k] + hmm->msc[(int)dsq[i+1]][k] + hmm->bsc[k]) > xmx[cur][XMB])
-	  xmx[cur][XMB] = sc;
+    for (k = k1; k <= k3; k++)
+      if ((sc = mmx[nxt][k] + hmm->bsc[k]) > xmx[cur][XMB])
+	xmx[cur][XMB] = sc;
 				/* E pulls from C (J disallowed) */
     xmx[cur][XME] = -INFTY;
     if ((sc = xmx[cur][XMC] + hmm->xsc[XTE][MOVE]) > -INFTY)
@@ -1628,58 +1674,48 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
       xmx[cur][XMN] = sc;
     if ((sc = xmx[nxt][XMN] + hmm->xsc[XTN][LOOP]) > xmx[cur][XMN])
       xmx[cur][XMN] = sc;
-				/* Special case k=M */
-    if (k3-1 == hmm->M) {
-      mmx[cur][hmm->M] = xmx[cur][XME];     /* p=1 transit to E, by definition */
-      dmx[cur][hmm->M] = -INFTY;            /* by definition; no D state there */
-      imx[cur][hmm->M] = -INFTY;	          /* by definition; no I state there */
-    }
-
-    /* Deal with right boundary
-     */
-    if (i < L && k3 < hmm->M) {
-      imx[cur][k3] = -INFTY;
-      if ((sc = imx[nxt][k3] + hmm->isc[(int)dsq[i+1]][k3] + hmm->tsc[k3][TII]) > -INFTY)
-	imx[cur][k3] = sc;
-      mmx[cur][k3] = -INFTY;
-      if ((sc = imx[nxt][k3] + hmm->isc[(int)dsq[i+1]][k3] + hmm->tsc[k3][TMI]) > -INFTY)
-	mmx[cur][k3] = sc;
-    }
 
     /* Main recursion across model
      */
-    for (k = (k3 >= hmm->M) ? hmm->M-1 : k3-1; k >= k1 && k >= 1; k--)  {
+    for (k = k3; k >= k1; k--)  {
+				/* special case k == M */
+      if (k == hmm->M) {
+	mmx[cur][k] = xmx[cur][XME]; /* p=1 transition to E by definition */
+	dmx[cur][k] = -INFTY;	/* doesn't exist */
+	imx[cur][k] = -INFTY;	/* doesn't exist */
+	if (i != s2)
+	  mmx[cur][k] += hmm->msc[(int)dsq[i]][k];
+	continue;		
+      }    	/* below this k < M, so k+1 is a legal index */
+
 				/* pull into match state */
       mmx[cur][k] = -INFTY;
       if ((sc = xmx[cur][XME] + hmm->esc[k]) > -INFTY)
-	mmx[cur][k] = sc;
-      if (i < L && 
-	  (sc = mmx[nxt][k+1] + hmm->msc[(int)dsq[i+1]][k+1] + hmm->tsc[k][TMM]) > mmx[cur][k])
-	mmx[cur][k] = sc;
-      if (i < L && 
-	  (sc = imx[nxt][k] + hmm->isc[(int)dsq[i+1]][k] + hmm->tsc[k][TMI]) > mmx[cur][k])
-	mmx[cur][k] = sc;
+	mmx[cur][k] = sc; 
+      if ((sc = mmx[nxt][k+1] + hmm->tsc[k][TMM]) > mmx[cur][k])
+	mmx[cur][k] = sc; 
+      if ((sc = imx[nxt][k] + hmm->tsc[k][TMI]) > mmx[cur][k])
+	mmx[cur][k] = sc; 
       if ((sc = dmx[cur][k+1] + hmm->tsc[k][TMD]) > mmx[cur][k])
 	mmx[cur][k] = sc;
+      if (i != s2) 
+	mmx[cur][k] += hmm->msc[(int)dsq[i]][k];
+
 				/* pull into delete state */
       dmx[cur][k] = -INFTY;
       if ((sc = mmx[nxt][k+1] + hmm->tsc[k][TDM]) > -INFTY)
 	dmx[cur][k] = sc;
-      if (i < L && hmm->msc[(int)dsq[i+1]][k+1] != -INFTY) 
-	dmx[cur][k] += hmm->msc[(int)dsq[i+1]][k+1]; 
-      else
-	dmx[cur][k] = -INFTY;
       if ((sc = dmx[cur][k+1] + hmm->tsc[k][TDD]) > dmx[cur][k])
 	dmx[cur][k] = sc;
 				/* pull into insert state */
-      if (i < L)
-	{
-	  imx[cur][k] = -INFTY;
-	  if ((sc = mmx[nxt][k+1] + hmm->msc[(int)dsq[i+1]][k+1] + hmm->tsc[k][TIM]) > -INFTY)
-	    imx[cur][k] = sc;
-	  if ((sc = imx[nxt][k] + hmm->isc[(int)dsq[i+1]][k] + hmm->tsc[k][TII]) > imx[cur][k])
-	    imx[cur][k] = sc;
-	}
+      imx[cur][k] = -INFTY;
+      if ((sc = mmx[nxt][k+1] + hmm->tsc[k][TIM]) > -INFTY)
+	imx[cur][k] = sc;
+      if ((sc = imx[nxt][k] + hmm->tsc[k][TII]) > imx[cur][k])
+	imx[cur][k] = sc;
+      if (i != s2)
+	imx[cur][k] += hmm->isc[(int)dsq[i]][k];
+      
     }
   }
    
@@ -1698,9 +1734,9 @@ get_wee_midpt(struct plan7_s *hmm, char *dsq, int L,
 	{ k2 = k; t2 = STI; max = sc; }
     }
   if ((sc = fwd->xmx[cur][XMN] + bck->xmx[cur][XMN]) > max)
-    { k2 = 0;        t2 = STN; max = sc; }
+    { k2 = 1;        t2 = STN; max = sc; }
   if ((sc = fwd->xmx[cur][XMC] + bck->xmx[cur][XMC]) > max)
-    { k2 = hmm->M+1; t2 = STC; max = sc; }
+    { k2 = hmm->M;   t2 = STC; max = sc; }
 
   /*****************************************************************
    * Garbage collection, return.
