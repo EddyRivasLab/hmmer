@@ -733,9 +733,27 @@ workpool_start(struct plan7_s *hmm, int fixedlen, float lenmean, float lensd,
   if ((rtn = pthread_mutex_init(&(wpool->output_lock), NULL)) != 0)
     Die("pthread_mutex_init FAILED; %s\n", strerror(rtn));
 
-  /* Create slave threads
+  /* Create slave threads.
+   * Note the crazy machinations we have to go through to achieve concurrency.
+   * You'd think that POSIX threads were portable... ha.
+   * On IRIX 6.5, system scope threads are only available to root, or if
+   *   /etc/capability has been configured specially, so to avoid strange
+   *   permissions errors we can't set PTHREAD_SCOPE_SYSTEM for IRIX.
+   * On IRIX pre-6.5, we can't get good concurrency, period. As of 6.5,
+   *   SGI provides the nonportable pthread_setconcurrency() call.
+   * On FreeBSD (3.0 snapshots), the pthread_attr_setscope() call isn't
+   *   even provided, apparently on grounds of "if it doesn't do anything,
+   *   why provide it?" Hello? POSIX compliance, perhaps?
+   * On Sun Solaris, we need to set system scope to achieve concurrency.
+   * Linux and DEC Digital UNIX seem to work fine in either process scope
+   *   or system scope, without a pthread_setconcurrency call.
    */
   pthread_attr_init(&attr);
+#ifndef __sgi
+#ifdef HAVE_PTHREAD_ATTR_SETSCOPE
+  pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+#endif
+#endif
 #ifdef HAVE_PTHREAD_SETCONCURRENCY
   pthread_setconcurrency(num_threads+1);
 #endif
