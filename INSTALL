@@ -5,8 +5,15 @@ SRE, Mon Jan 19 07:09:37 1998
 
 1) Edit the top of the Makefile. 
    Set the paths and other make variables to suit your system.
-   If you are installing in a directory called bin/ in your
+
+   The only variables you should need to set are BINDIR
+   and MANDIR.
+
+   If you are installing in directories called bin/ and man/ in your
    home directory, you don't need to change anything.
+
+   If you have a source-only distribution, check the compiler (CC)
+   and compiler flags (CFLAGS).
 
    The default Makefile is configured for cc (your vendor's compiler) 
    and -O optimization. The package builds "out of the box" on
@@ -19,7 +26,8 @@ SRE, Mon Jan 19 07:09:37 1998
    You can play with the compiler options in CFLAGS to
    try to get more speed, if you're compiler-fluent.
 
-2) type 'make' to build the programs.
+2) If you have a source-only distribution, type 'make' to build the programs.
+   If you have a binary distribution, skip this step.
 
 3) Optional; type 'make test' to compile and run a test suite.
    Some of the tests require that you have Perl installed.
