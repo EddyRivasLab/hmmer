@@ -23,6 +23,10 @@ for a profile HMM prior to doing database searches.
 Convert HMMER profile HMMs to other formats, such as GCG profiles.
 
 .TP
+.B hmmemit
+Generate sequences probabilistically from a profile HMM.
+
+.TP
 .B hmmpfam
 Search a profile HMM database with a sequence (i.e., annotate various
 kinds of domains in the query sequence).
@@ -60,8 +64,9 @@ program has its own man page briefly summarizing command line usage.
 There is also a user's guide that came
 with the software distribution, which includes a tutorial introduction
 and more detailed descriptions of the programs.
-All documentation is also available on line from 
-http://genome.wustl.edu/eddy/hmmer.html.
+
+See http://www.genetics.wustl.edu/eddy/hmmer.html for on-line
+documentation.
 
 .PP
 In general, no command line options should be needed by beginning users.
