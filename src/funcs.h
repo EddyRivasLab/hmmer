@@ -94,11 +94,12 @@ extern char *Statetype(enum p7stype st);
 extern void P7PrintTrace(FILE *fp, struct p7trace_s *tr, 
 			 struct plan7_s *hmm, char *dsq);
 extern void P7PrintPrior(FILE *fp, struct p7prior_s *pri);
+extern int  TraceVerify(struct p7trace_s *tr, int M, int N);
 
 /* from emulation.c
  * Interfaces between HMMER and other software packages
  */
-extern void WriteProfile(FILE *fp, struct plan7_s *hmm);
+extern void WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw);
 
 
 /* from histogram.c
@@ -172,9 +173,7 @@ extern float P_PvecGivenDirichlet(float *p, int n, float *alpha);
  * Miscellaneous functions with no home
  */
 extern void  Banner(FILE *fp, char *banner);
-extern void  BlockRaggedEdgedAlignment(char **aseqs, int nseq, int alen);
 extern int   AlignmentTooBig(int L, int M);
-extern void  SuppressChatter(struct hmm_struc *hmm);
 extern char *Getword(FILE *fp, int type); 
 extern char *Getline(char *s, int n, FILE *fp);
 
