@@ -71,7 +71,7 @@ weeviterbi_test: $(OBJ) weeviterbi_test.o
 shiva:   $(SHIVA)
 	@echo Compiled Shiva exercises:
 	@for shivatest in $(SHIVA); do\
-	   $$shivatest;\
+	   ./$$shivatest;\
 	   echo $$shivatest: ok;\
 	done
 	@echo Scripted Shiva tests:
