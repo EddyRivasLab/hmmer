@@ -201,8 +201,8 @@ dist:
 	#
 	cvs tag -F $(RELCODE)
 	cvs export -r $(RELCODE) -d ${BASENAME}-${RELEASE} ${BASENAME}
-	cvs rtag -F ${BASENAME}_${RELCODE} squid
-	(cd ${BASENAME}-${RELEASE}; cvs export -r ${BASENAME}_${RELCODE} -d squid squid)
+	cvs rtag -F ${RELCODE} squid
+	(cd ${BASENAME}-${RELEASE}; cvs export -r ${RELCODE} -d squid squid)
 	# 
 	# Make the configure scripts from configure.in
 	#

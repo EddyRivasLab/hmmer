@@ -145,7 +145,6 @@ PVMConfirmSlaves(int *slave_tid, int nslaves)
 
   SQD_DPRINTF1(("requesting PVM configuration...\n"));
   if (pvm_config(&nodes, NULL, &hostp) != 0) Die("PVM not responding");
-  if (nodes != nslaves) Die("pvm_config thinks there's %d slaves but I think there's %d", nodes, nslaves);
   SQD_DPRINTF1(("Slaves, count off!\n"));
   for (i = 0; i < nslaves; i++)
     {
