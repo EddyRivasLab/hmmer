@@ -5,8 +5,10 @@
 # - Runs binaries/<program> -h to extract a list of options.
 # - Checks Shiva/Optiontests.pl to be sure each one is run at least
 #   once in an option test.
+#     Special case: don't check --pvm or --cpu, because we don't know
+#     whether support was compiled in.
 # - Checks Man/<program>.man to check that each option is documented.
-
+#
 $program = shift;
 
 die("no program binaries/$program") unless -e "binaries/$program";
@@ -64,6 +66,7 @@ close MAN;
 # Check that all prog options are tested, and no others
 #
 foreach $opt (keys(%progoption)) {
+    next if ($opt == "--cpu" || $opt == "--pvm"); 
     if (! $testedoption{$opt}) { print("$program $opt is not tested in Shiva\n"); }
 }
 foreach $opt (keys(%testedoption)) {
