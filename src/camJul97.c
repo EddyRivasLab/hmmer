@@ -225,7 +225,6 @@ MakeIslandHMM(char **aseqs, AINFO *ainfo, int idx,
     }
   
   hmm->flags |= PLAN7_HASPROB | PLAN7_RF | PLAN7_CS;
-  hmm->config = P7_NO_CONFIG;
 
   FMX2Free(pxaq);
   FMX2Free(probq);

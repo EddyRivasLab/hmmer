@@ -73,9 +73,8 @@ static char experts[] = "\
    --binary      : save the model in binary format, not ASCII text\n\
    --cfile <file>: save count vectors to <file>\n\
    --gapmax <x>  : max fraction of gaps in mat column {0.50} [0..1]\n\
-   --idlevel     : set frac. id level used by eff. nseq and --wblosum {0.62}\n\
+   --idlevel <x> : set frac. id level used by eff. nseq and --wblosum {0.62}\n\
    --pamwgt <x>  : set weight on PAM-based prior to <x> {20.}[>=0]\n\
-   --star <file> : Star model (experimental)\n\
    --swentry <x> : set S/W aggregate entry prob. to <x> {0.5}\n\
    --swexit <x>  : set S/W aggregate exit prob. to <x>  {0.5}\n\
    --verbose     : print a lot of boring information\n\
@@ -104,7 +103,6 @@ static struct opt_s OPTIONS[] = {
   { "--pam",     FALSE, sqdARG_STRING },
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--prior",   FALSE, sqdARG_STRING },
-  { "--star"  ,  FALSE, sqdARG_STRING },
   { "--swentry", FALSE, sqdARG_FLOAT },
   { "--swexit",  FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
@@ -153,11 +151,11 @@ main(int argc, char **argv)
   char *optname;                /* name of option found by Getopt()      */
   char *optarg;                 /* argument found by Getopt()            */
   int   optind;                 /* index in argv[]                       */
-  enum p7_construction c_strategy;/* construction strategy choice        */
+  enum p7_construction c_strategy; /* construction strategy choice        */
   enum p7_weight {		/* weighting strategy */
     WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_VORONOI, WGT_ME} w_strategy;
-  enum p7_config cfg_strategy;  /* algorithm configuration strategy      */
-
+  enum p7_config {              /* algorithm configuration strategy      */
+    P7_BASE_CONFIG, P7_LS_CONFIG, P7_FS_CONFIG, P7_SW_CONFIG } cfg_strategy;
   float gapmax;			/* max frac gaps in mat col for -k       */
   int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
   int   verbose;		/* TRUE to show a lot of output          */
@@ -234,7 +232,6 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--pam")     == 0) pamfile       = optarg;
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--prior")   == 0) prifile       = optarg;
-    else if (strcmp(optname, "--star")    == 0) starfile      = optarg; 
     else if (strcmp(optname, "--swentry") == 0) swentry       = atof(optarg); 
     else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg); 
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
@@ -300,6 +297,12 @@ main(int argc, char **argv)
 				/* Prepare sequences for internal use */
   DigitizeAlignment(aseq, &ainfo, &dsq);
   
+				/* In some respects we treat DNA more crudely... */
+  if (Alphabet_type == hmmNUCLEIC)
+    {
+      do_eff     = FALSE;	/* don't do effective seq #; it's calibrated for protein */
+    }
+
   /*********************************************** 
    * Show the banner
    ***********************************************/
@@ -618,7 +621,7 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
   int idx;			/* counter for sequences */
 
 				/* make sure model scores are ready */
-  Plan7Logoddsify(hmm);
+  P7Logoddsify(hmm, TRUE);
 				/* header */
   fputs("**\n", fp);
   fputs("Individual training sequence scores:\n", fp);
@@ -916,7 +919,7 @@ maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
    * Find relative entropy and gradient.
    */
   Plan7SWConfig(hmm, 0.5, 0.5);
-  Plan7Logoddsify(hmm);
+  P7Logoddsify(hmm, TRUE);
 
   FSet(wgt, nseq, 1.0);
   position_average_score(hmm, dsq, wgt, nseq, tr, pernode, &expscore);
@@ -981,7 +984,7 @@ maximum_entropy(struct plan7_s *hmm, char **dsq, AINFO *ainfo, int nseq,
   
                                 /* Evaluate new point */
 	  Plan7SWConfig(hmm, 0.5, 0.5);
-	  Plan7Logoddsify(hmm);
+	  P7Logoddsify(hmm, TRUE);
 	  position_average_score(hmm, dsq, new_wgt, nseq, tr, pernode, &expscore);
           for (idx = 0; idx < nseq; idx++) 
 	    sc[idx]      = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
