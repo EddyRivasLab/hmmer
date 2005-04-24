@@ -329,9 +329,9 @@ struct hmmfile_s {
    * opaque offset type in the SSI API - the call you need 
    * is SSISetFilePosition().
    */
-  int       is_seekable;	/* TRUE if we use offsets in this HMM file      */
-  int       mode;		/* type of offset                               */
-  SSIOFFSET offset;		/* Disk offset for beginning of the current HMM */
+  int       is_seekable;	/* TRUE if we use offsets in this HMM file  */
+  int       mode;		/* type of offset                           */
+  SSIOFFSET offset;		/* Disk offset for beginning of current HMM */
 };
 typedef struct hmmfile_s HMMFILE; 
 
@@ -358,10 +358,10 @@ typedef struct hmmfile_s HMMFILE;
  * Element 0 is always to STATE_S. Element tlen-1 is always to STATE_T. 
  */
 struct p7trace_s {
-  int   tlen;                   /* length of traceback                          */
-  char *statetype;              /* state type used for alignment                */
-  int  *nodeidx;                /* index of aligned node, 1..M (if M,D,I), or 0 */
-  int  *pos;                    /* position in dsq, 1..L, or 0 if none          */ 
+  int   tlen;                   /* length of traceback                      */
+  char *statetype;              /* state type used for alignment            */
+  int  *nodeidx;                /* idx of aligned node, 1..M if M,D,I; or 0 */
+  int  *pos;                    /* position in dsq, 1..L, or 0 if none      */ 
 };
 
 /* Structure: p7prior_s

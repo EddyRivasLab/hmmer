@@ -1,14 +1,10 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* core_algorithms.c
  * SRE, Mon Nov 11 15:58:52 1996
- * CVS $Id$
+ * SVN $Id$
  * 
  * Simple and robust "research" implementations of Forward, Backward,
- * and Viterbi for Plan7. For optimized replacements for some of these functions,
- * see fast_algorithms.c.
+ * and Viterbi for Plan7. For optimized replacements for some of these 
+ * functions, see fast_algorithms.c.
  */
 #include "config.h"
 #include "squidconf.h"
@@ -2675,3 +2671,8 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   free(usedomain);
   return whole_sc;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

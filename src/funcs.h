@@ -177,6 +177,12 @@ extern float CalculateEmitsEntropy (double *emits, int L);
 extern void  NormalizeEmits (double *temp_emits, int L);
 extern void  PrintAveInfoContent (struct plan7_s *hmm);
 
+/* island.c
+ * Hwa's island method for fitting EVD.
+ */
+extern float IslandViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
+			   int **ret_isle_sc, int **ret_isle_len, int *ret_inum);
+
 
 /* masks.c
  * Repetitive sequence masking.

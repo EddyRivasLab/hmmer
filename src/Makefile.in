@@ -61,6 +61,7 @@ OBJS =  alphabet.o\
 	histogram.o\
 	hmmio.o\
 	infocontent.o\
+	island.o\
 	lsj_eweight.o\
 	mathsupport.o\
         masks.o\
