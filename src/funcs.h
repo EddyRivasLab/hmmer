@@ -251,6 +251,7 @@ extern void P7Maxmodelmaker(MSA *msa, unsigned char **dsq,
 
 /* from plan7.c
  * Plan7 HMM structure support
+
  */
 extern struct plan7_s *AllocPlan7(int M);
 extern struct plan7_s *AllocPlan7Shell(void);

@@ -625,7 +625,8 @@ Plan7RenormalizeExits(struct plan7_s *hmm)
   for (k = 1; k < hmm->M; k++)
     {
       d = FSum(hmm->t[k], 3);
-      FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k]));
+      /* FScale(hmm->t[k], 3, 1./(d + d*hmm->end[k])); */
+      FScale(hmm->t[k], 3, (1.-hmm->end[k])/d);
     }
 }
 

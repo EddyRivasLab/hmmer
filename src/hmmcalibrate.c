@@ -1,14 +1,10 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmcalibrate.c
  * SRE, Fri Oct 31 09:25:21 1997 [St. Louis]
  * 
  * Score an HMM against random sequence data sets;
  * set histogram fitting parameters.
  * 
- * CVS $Id$
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -980,4 +976,9 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
 #endif /* HMMER_PVM */
 
 
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

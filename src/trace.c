@@ -1,10 +1,6 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* trace.c
  * SRE, Sat Nov 16 12:34:57 1996
- * RCS $Id$
+ * SVN $Id$
  * 
  * Support for Plan 7 traceback data structure, p7trace_s.
  */
@@ -53,6 +49,7 @@ P7FreeTrace(struct p7trace_s *tr)
   free(tr->statetype);
   free(tr);
 }
+
 
 /* Function: TraceSet()
  * Date:     SRE, Sun Mar  8 12:39:00 1998 [St. Louis]
@@ -1203,4 +1200,9 @@ rightjustify(char *s, int n)
     s[npos--] = '.';
 }
 
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 
