@@ -42,6 +42,26 @@ Prob2Score(float p, float null)
   else            return (int) floor(0.5 + INTSCALE * sreLOG2(p/null));
 }
 
+/* Function:  LL2Score()
+ * Incept:    SRE, Mon May  2 08:19:36 2005 [St. Louis]
+ *
+ * Purpose:   Convert a log likelihood to a scaled integer log_2 odds score,
+ *            rounded to nearest integer, given a <null> probability; 
+ *            return the score. 
+ *            
+ *            Note that <ll> is a log(prob), but <null> is a probability.
+ * 
+ */
+int
+LL2Score(float ll, float null)
+{
+  int sc;
+  sc = (int) floor(0.5 + INTSCALE * 1.44269504 * (ll - log(null)));
+  if (sc < -INFTY) sc = -INFTY;
+  return sc;
+}
+
+
 /* Function: Score2Prob()
  * 
  * Purpose:  Convert an integer log_2 odds score back to a probability;

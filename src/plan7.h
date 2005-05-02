@@ -129,7 +129,6 @@ struct plan7_s {
    * PLAN7_HASALG flag is up when these probs are all valid.
    */
   float   xt[4][2];             /* N,E,C,J extra states: 2 transitions        +*/
-  float **t2;			/* configured transition p's. t[1..M-1][0..6] +*/
   float  *begin;                /* 1..M B->M state transitions                +*/
   float  *end;                  /* 1..M M->E state transitions (!= a dist!)   +*/
 

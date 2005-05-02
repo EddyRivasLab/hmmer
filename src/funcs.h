@@ -194,6 +194,7 @@ extern float TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, uns
  * Much of this code deals with Dirichlet prior mathematics.
  */
 extern int   Prob2Score(float p, float null);
+extern int   LL2Score(float ll, float null);
 extern float Score2Prob(int sc, float null);
 extern float Scorify(int sc);
 extern double PValue(struct plan7_s *hmm, float sc);

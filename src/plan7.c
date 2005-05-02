@@ -333,22 +333,236 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
   hmm->p1 = p1;
 }
 
-
+/* left_wing_retraction_imposed()
+ * 
+ * Wing retraction, when the B->M_k entry distribution is imposed by
+ * the algorithm (sw, fs modes). No calculation is needed in this
+ * case. The D_1 state is simply removed from the model.
+ * 
+ * bsc[1..M] scores are set. 
+ * 
+ * xref STL8/91.
+ */
 static void
-entry_wing_retract(struct plan7_s *hmm)
+left_wing_retraction_imposed(struct plan7_s *hmm)
 {
   int k;
 
-  if (hmm->flags & PLAN7_BIMPOSE) return; /* begin[] already valid; just ignore tbd1 */
+  for (k = 1; k <= hmm->M; k++)
+    hmm->bsc[k] = Prob2Score(hmm->begin[k], hmm->p1);
 
-  hmm->begin[1] = (1. - hmm->tbd1);
-
-  for (k = 2; k <= M; k++)
-    {
-      hmm->begin[k] = accum
-
-
+  /* Virtual removal of D_1 state. */
+  hmm->tsc[TDM][1] = -INFTY;
+  hmm->tsc[TDD][1] = -INFTY;
+  return;
 }
+
+/* left_wing_retraction_added()
+ * 
+ * Wing retraction, where B->M_k entry distribution comes entirely
+ * from retracted paths for k>1 (begin[1] = 1.0 from algorithm; ls
+ * mode, for example).
+ * 
+ * Sets bsc[1..M] (the entry/begin scores), using the core
+ * model and the algorithmic begin[] distribution.
+ * 
+ * xref STL9/81.
+ */
+static void
+left_wing_retraction_added(struct plan7_s *hmm)
+{
+  int    k;
+  float  cumul;
+  float *bmk;		/* log B->D...D->M_k path probabilities, BMk */
+  float  x;
+
+  bmk = MallocOrDie(sizeof(float) * (hmm->M+1));
+
+  /* Calculate the log B->M_k path probabilities; xref STL9/81
+   */
+  bmk[1] = log((1. - hmm->tbd1), 1.0);
+  cumul = log(hmm->tbd1);
+  for (k = 2; k <= hmm->M; k++)
+    {
+      bmk[k] = cumul + log(hmm->t[k-1][TDM]);
+      cumul  += log(hmm->t[k-1][TDD]);
+    }
+
+  /* Renormalization (has little if any effect)
+   * 
+   * <cumul> now contains the log P of the B->D_1...D_M->E mute path
+   * that we're removing. If (1-BE) is significantly different than
+   * 1.0, renormalize the B distribution by dividing by (1-BE).  
+   * Because log(1-x) = -x for x << 1, we know that subtracting
+   * log(1-BE) from a log prob is only significant if logBE > log epsilon.
+   */
+  if (cumul > log(FLT_EPSILON))
+    { 
+      x = log(1. - exp(cumul));
+      for (k = 1; k <= M; k++)
+	bmk -= x;
+    }
+
+  /* Conversion to scores. 
+   * At this step, we're assuming that hmm->begin[k] = 0.0 for
+   * k>1: the algorithm has no internal entries of its own, and
+   * internal entry comes exclusively from paths through D states.
+   */
+  for (k = 1; k <= hmm->M; k++)
+     hmm->bsc[k] = LL2Score(bmk[k], hmm->p1);
+  
+  /* Virtual removal of D_1 state.
+   */
+  hmm->tsc[TDM][1] = -INFTY;
+  hmm->tsc[TDD][1] = -INFTY;
+
+  free(bmk);
+  return;
+}
+
+
+/* right_wing_retraction_imposed()
+ * 
+ * Wing retraction for exits, for algorithms where M_k->E exit
+ * probabilities are imposed by the algorithm (sw, fs modes). 
+ * 
+ * Sets esc[1..M] (the exit scores); also sets tsc[TM*][1..M-1], which
+ * are affected by the presence of the new M_k->E probabilities.
+ * 
+ * xref STL9/81.
+ */
+static void
+right_wing_retraction_imposed(struct plan7_s *hmm)
+{
+  int    k;
+  float *mke;
+  float  cumul;
+  float  x;			/* temporary log prob */
+
+  mke = MallocOrDie(sizeof(float) * (hmm->M+1));  
+
+  /* The log prob of the wing-retracted M_k -> D...D -> E paths,
+   * for k < M. (undefined for k == M).
+   */
+  cumul = 0.;
+  for (k = hmm->M-1; k >= 1; k--)
+    {
+      mke[k] = cumul + log(hmm->t[k][TMD]);
+      cumul += log(hmm->t[k][TDD]);
+    }
+
+  /* Set the esc[] and tsc[][TM*] scores.
+   * 
+   * The MkE path probability is subtracted from t[k][TMD] transition;
+   * the match transitions are renormalized to account for the new
+   * end[k] probability; and the match transitions are also renormalized
+   * to account for the newly missing MkE path probability from TMD.
+   * (xref STL9/91 for details).
+   */
+  for (k = 1; k < hmm->M; k++)
+    {
+      hmm->esc[k] = Prob2Score(hmm->end[k], 1.0); /* end[k] is imposed. */
+
+      x = log(hmm->t[k][TMM]);
+      if (hmm->end[k] > FLOAT_EPSILON) x += log(1. - hmm->end[k]);
+      if (mke[k] > log(FLOAT_EPSILON)) x -= log(1. - exp(mke[k]));
+      hmm->tsc[TMM][k] = LL2Score(x, hmm->p1);
+
+      x = log(hmm->t[k][TMI]);
+      if (hmm->end[k] > FLOAT_EPSILON) x += log(1. - hmm->end[k]);
+      if (mke[k] > log(FLOAT_EPSILON)) x -= log(1. - exp(mke[k]));
+      hmm->tsc[TMI][k] = LL2Score(x, hmm->p1);
+
+      x = log(hmm->t[k][TMD]);
+      if (mke[k] - x > log(FLOAT_EPSILON)) x += log(1. - exp(mke[k] - x));
+      if (hmm->end[k] > FLOAT_EPSILON)     x += log(1. - hmm->end[k]);         
+      if (mke[k] > log(FLOAT_EPSILON))     x -= log(1. - exp(mke[k]));
+      hmm->tsc[TMD][k] = LL2Score(x, 1.0);
+    }
+  hmm->esc[hmm->M] = 0.0;	/* by definition */
+
+  /* Note that node M isn't even explicitly represented in the
+   * configured HMM scores -- tsc[][] only contains values for
+   * 1..M-1. So there's no need to set any M_M or D_M transition
+   * scores to 0 and -INFTY as we virtually remove D_M state;
+   * the only other affected score is tsc[TDM][hmm->M-1], which
+   * is going to be set in Logoddsify(), as it's probability 1.0
+   * by definition. So, we're done.
+   */
+  free(mke);
+  return;
+}
+
+
+/* right_wing_retraction_added()
+ * 
+ * Retract the right wing (remove the D_M state, and all paths through
+ * it), for algorithms which have no M_k->E end[k] internal exit
+ * probability. The Mk->Dk+1...DM->E path probabilities are therefore
+ * subtracted from t[k][TMD] and added to end[k].
+ *
+ * Sets esc[1..M] (the exit scores); also sets tsc[TM*][1..M-1], which
+ * are affected by the presence of the new M_k->E probabilities.
+ * 
+ * xref STL9/81.
+ */
+static void
+right_wing_retraction_added(struct plan7_s *hmm)
+{
+  int    k;
+  float *mke;
+  float  cumul;
+  float  x;			/* temporary log prob */
+
+  mke = MallocOrDie(sizeof(float) * (hmm->M+1));  
+
+  /* The log prob of the wing-retracted M_k -> D...D -> E paths,
+   * for k < M. (undefined for k == M).
+   */
+  cumul = 0.;
+  for (k = hmm->M-1; k >= 1; k--)
+    {
+      mke[k] = cumul + log(hmm->t[k][TMD]);
+      cumul += log(hmm->t[k][TDD]);
+    }
+
+  /* Set the esc[] and tsc[TM*][] scores.
+   * 
+   * The end probability is assumed to be exclusively the MkE
+   * path probability; algorithm has no internal exit prob of its own.
+   * 
+   * The MkE path probability is moved from the t[k][TMD] transition
+   * to the end[k] probability. No renormalization is needed, because
+   * prob is conserved: we assume that the algorithm added no
+   * internal exit probability end[k] of its own.
+   * (xref STL9/91 for details).
+   */
+  for (k = 1; k < hmm->M; k++)
+    {
+      hmm->esc[k] = LL2Score(mke[k], 1.0); /* M->E comes only thru terminal deletes */
+
+      hmm->tsc[TMM][k] = Prob2Score(hmm->t[k][TMM], hmm->p1);
+      hmm->tsc[TMI][k] = Prob2Score(hmm->t[k][TMI], hmm->p1);
+      
+      x = log(hmm->t[k][TMD]);
+      if ((mke[k] - x) > log(FLOAT_EPSILON)) x += log(1. - exp(mke[k] - x));
+      hmm->tsc[TMD][k] = LL2Score(x, 1.0);
+    }
+  hmm->esc[hmm->M] = 0.0;	/* by definition */
+
+  /* Note that node M isn't even explicitly represented in the
+   * configured HMM scores -- tsc[][] only contains values for
+   * 1..M-1. So there's no need to set any M_M or D_M transition
+   * scores to 0 and -INFTY as we virtually remove D_M state;
+   * the only other affected score is tsc[TDM][hmm->M-1], which
+   * is going to be set in Logoddsify(), as it's probability 1.0
+   * by definition. So, we're done.
+   */
+  free(mke);
+  return;
+}
+
+
 
 
 
@@ -649,235 +863,6 @@ Plan7RenormalizeExits(struct plan7_s *hmm)
       FScale(hmm->t[k], 3, (1.-hmm->end[k])/d);
     }
 }
-
-
-/*****************************************************************
- * Plan7 configuration functions
- * The following few functions are the Plan7 equivalent of choosing
- * different alignment styles (fully local, fully global, global/local,
- * multihit, etc.)
- * 
- * There is (at least) one constraint worth noting.
- * If you want per-domain scores to sum up to per-sequence scores,
- * then one of the following two sets of conditions must be met:
- *   
- *   1) t(E->J) = 0    
- *      e.g. no multidomain hits
- *      
- *   2) t(N->N) = t(C->C) = t(J->J) = hmm->p1 
- *      e.g. unmatching sequence scores zero, and 
- *      N->B first-model score is equal to J->B another-model score.
- *      
- * These constraints are obeyed in the default Config() functions below,
- * but in the future (when HMM editing may be allowed) we'll have
- * to remember this. Non-equality of the summed domain scores and
- * the total sequence score is a really easy "red flag" for people to
- * notice and report as a bug, even if it may make probabilistic
- * sense not to meet either constraint for certain modeling problems.
- *****************************************************************
- */
-
-/* Function: Plan7NakedConfig()
- * 
- * Purpose:  Set the alignment-independent, algorithm-dependent parameters
- *           of a Plan7 model so that no special states (N,C,J) emit anything:
- *           one simple, full global pass through the model.
- * 
- * Args:     hmm - the plan7 model
- *                 
- * Return:   (void)
- *           The HMM is modified; algorithm dependent parameters are set.
- *           Previous scores are invalidated if they existed.
- */
-void
-Plan7NakedConfig(struct plan7_s *hmm)                           
-{
-  hmm->xt[XTN][MOVE] = 1.;	      /* disallow N-terminal tail */
-  hmm->xt[XTN][LOOP] = 0.;
-  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
-  hmm->xt[XTE][LOOP] = 0.;
-  hmm->xt[XTC][MOVE] = 1.;	      /* disallow C-terminal tail */
-  hmm->xt[XTC][LOOP] = 0.;
-  hmm->xt[XTJ][MOVE] = 0.;	      /* J state unused */
-  hmm->xt[XTJ][LOOP] = 1.;
-  FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
-  hmm->begin[1]    = 1. - hmm->tbd1;
-  FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
-  hmm->end[hmm->M] = 1.;
-  Plan7RenormalizeExits(hmm);
-  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
-}
-   
-/* Function: Plan7GlobalConfig()
- * 
- * Purpose:  Set the alignment-independent, algorithm-dependent parameters
- *           of a Plan7 model to global (Needleman/Wunsch) configuration.
- * 
- *           Like a non-looping hmmls, since we actually allow flanking
- *           N and C terminal sequence. 
- *           
- * Args:     hmm - the plan7 model
- *                 
- * Return:   (void)
- *           The HMM is modified; algorithm dependent parameters are set.
- *           Previous scores are invalidated if they existed.
- */
-void
-Plan7GlobalConfig(struct plan7_s *hmm)                           
-{
-  hmm->xt[XTN][MOVE] = 1. - hmm->p1;  /* allow N-terminal tail */
-  hmm->xt[XTN][LOOP] = hmm->p1;
-  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
-  hmm->xt[XTE][LOOP] = 0.;
-  hmm->xt[XTC][MOVE] = 1. - hmm->p1;  /* allow C-terminal tail */
-  hmm->xt[XTC][LOOP] = hmm->p1;
-  hmm->xt[XTJ][MOVE] = 0.;	      /* J state unused */
-  hmm->xt[XTJ][LOOP] = 1.;
-  FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
-  hmm->begin[1]    = 1. - hmm->tbd1;
-  FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
-  hmm->end[hmm->M] = 1.;
-  Plan7RenormalizeExits(hmm);
-  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
-}
-   
-/* Function: Plan7LSConfig()
- * 
- * Purpose:  Set the alignment independent parameters of a Plan7 model
- *           to hmmls (global in HMM, local in sequence) configuration.
- *           
- * Args:     hmm  - the plan7 model
- *                 
- * Return:   (void);
- *           the HMM probabilities are modified.
- */
-void
-Plan7LSConfig(struct plan7_s *hmm)
-{
-  hmm->xt[XTN][MOVE] = 1.-hmm->p1;    /* allow N-terminal tail */
-  hmm->xt[XTN][LOOP] = hmm->p1;
-  hmm->xt[XTE][MOVE] = 0.5;	     /* expectation 2 domains/seq */
-  hmm->xt[XTE][LOOP] = 0.5;
-  hmm->xt[XTC][MOVE] = 1.-hmm->p1;    /* allow C-terminal tail */
-  hmm->xt[XTC][LOOP] = hmm->p1;
-  hmm->xt[XTJ][MOVE] = 1.-hmm->p1;   /* allow J junction state */
-  hmm->xt[XTJ][LOOP] = hmm->p1;
-  FSet(hmm->begin+2, hmm->M-1, 0.);  /* start at M1/D1 */
-  hmm->begin[1]    = 1. - hmm->tbd1;
-  FSet(hmm->end+1,   hmm->M-1, 0.);  /* end at M_m/D_m */
-  hmm->end[hmm->M] = 1.;
-  Plan7RenormalizeExits(hmm);
-  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
-}  
-                             
-
-/* Function: Plan7SWConfig()
- * 
- * Purpose:  Set the alignment independent parameters of
- *           a Plan7 model to hmmsw (Smith/Waterman) configuration.
- *           
- * Notes:    entry/exit is asymmetric because of the left/right
- *           nature of the HMM/profile. Entry probability is distributed
- *           simply by assigning p_x = pentry / (M-1) to M-1 
- *           internal match states. However, the same approach doesn't
- *           lead to a flat distribution over exit points. Exit p's
- *           must be corrected for the probability of a previous exit
- *           from the model. Requiring a flat distribution over exit
- *           points leads to an easily solved piece of algebra, giving:
- *                      p_1 = pexit / (M-1)
- *                      p_x = p_1 / (1 - (x-1) p_1)
- *           
- * Args:     hmm    - the Plan7 model w/ data-dep prob's valid
- *           pentry - probability of an internal entry somewhere;
- *                    will be evenly distributed over M-1 match states
- *           pexit  - probability of an internal exit somewhere; 
- *                    will be distributed over M-1 match states.
- *                    
- * Return:   (void)
- *           HMM probabilities are modified.
- */
-void
-Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit)
-{
-  float basep;			/* p1 for exits: the base p */
-  int   k;			/* counter over states      */
-
-  /* Configure special states.
-   */
-  hmm->xt[XTN][MOVE] = 1-hmm->p1;    /* allow N-terminal tail */
-  hmm->xt[XTN][LOOP] = hmm->p1;
-  hmm->xt[XTE][MOVE] = 1.;	     /* disallow jump state   */
-  hmm->xt[XTE][LOOP] = 0.;
-  hmm->xt[XTC][MOVE] = 1-hmm->p1;    /* allow C-terminal tail */
-  hmm->xt[XTC][LOOP] = hmm->p1;
-  hmm->xt[XTJ][MOVE] = 1.;           /* J is unused */
-  hmm->xt[XTJ][LOOP] = 0.;
-
-  /* Configure entry.
-   */
-  hmm->begin[1] = (1. - pentry) * (1. - hmm->tbd1);
-  FSet(hmm->begin+2, hmm->M-1, (pentry * (1.- hmm->tbd1)) / (float)(hmm->M-1));
-  
-  /* Configure exit.
-   */
-  hmm->end[hmm->M] = 1.0;
-  basep = pexit / (float) (hmm->M-1);
-  for (k = 1; k < hmm->M; k++)
-    hmm->end[k] = basep / (1. - basep * (float) (k-1));
-  Plan7RenormalizeExits(hmm);
-  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
-}
-
-/* Function: Plan7FSConfig()
- * Date:     SRE, Fri Jan  2 15:34:40 1998 [StL]
- * 
- * Purpose:  Set the alignment independent parameters of
- *           a Plan7 model to hmmfs (multihit Smith/Waterman) configuration.
- *           
- *           See comments on Plan7SWConfig() for explanation of
- *           how pentry and pexit are used.
- *           
- * Args:     hmm    - the Plan7 model w/ data-dep prob's valid
- *           pentry - probability of an internal entry somewhere;
- *                    will be evenly distributed over M-1 match states
- *           pexit  - probability of an internal exit somewhere; 
- *                    will be distributed over M-1 match states.
- *                    
- * Return:   (void)
- *           HMM probabilities are modified.
- */
-void
-Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit)
-{
-  float basep;			/* p1 for exits: the base p */
-  int   k;			/* counter over states      */
-
-  /* Configure special states.
-   */
-  hmm->xt[XTN][MOVE] = 1-hmm->p1;    /* allow N-terminal tail     */
-  hmm->xt[XTN][LOOP] = hmm->p1;
-  hmm->xt[XTE][MOVE] = 0.5;	     /* allow loops / multihits   */
-  hmm->xt[XTE][LOOP] = 0.5;
-  hmm->xt[XTC][MOVE] = 1-hmm->p1;    /* allow C-terminal tail     */
-  hmm->xt[XTC][LOOP] = hmm->p1;
-  hmm->xt[XTJ][MOVE] = 1.-hmm->p1;   /* allow J junction between domains */
-  hmm->xt[XTJ][LOOP] = hmm->p1;
-
-  /* Configure entry.
-   */
-  hmm->begin[1] = (1. - pentry) * (1. - hmm->tbd1);
-  FSet(hmm->begin+2, hmm->M-1, (pentry * (1.-hmm->tbd1)) / (float)(hmm->M-1));
-  
-  /* Configure exit.
-   */
-  hmm->end[hmm->M] = 1.0;
-  basep = pexit / (float) (hmm->M-1);
-  for (k = 1; k < hmm->M; k++)
-    hmm->end[k] = basep / (1. - basep * (float) (k-1));
-  Plan7RenormalizeExits(hmm);
-  hmm->flags       &= ~PLAN7_HASBITS; /* reconfig invalidates log-odds scores */
-}
-
 
 
 
