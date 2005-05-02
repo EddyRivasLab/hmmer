@@ -1,10 +1,6 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* fast_algorithms.c
  * SRE, Sun Nov 10 08:54:48 2002 [AA 3080, Denver to StL]
- * CVS $Id$
+ * SVN $Id$
  * 
  * Optimized routines to replace slower implementations in core_algorithms.c.
  * 
@@ -214,10 +210,10 @@ AltivecMessage()
  * Erik Lindahl, Stanford University, 2002.
  * 
  * Replaces the following functions:
- *    AllocPlan7Body()      plan7.c                (data alignment on 16-byte boundaries)
- *    CreatePlan7Matrix()   core_algorithms.c      (data alignment on 16-byte boundaries)
- *    ResizePlan7Matrix()   core_algorithms.c      (data alignment on 16-byte boundaries)
- *    P7Viterbi()           core_algorithms.c      (total recode, w/ Altivec instructions)
+ *   AllocPlan7Body()      plan7.c               (data alignment on 16-byte boundaries)
+ *   CreatePlan7Matrix()   core_algorithms.c     (data alignment on 16-byte boundaries)
+ *   ResizePlan7Matrix()   core_algorithms.c     (data alignment on 16-byte boundaries)
+ *   P7Viterbi()           core_algorithms.c     (total recode, w/ Altivec instructions)
  ################################################################*/    
 void
 AllocPlan7Body(struct plan7_s *hmm, int M) 
@@ -1794,4 +1790,9 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
 }
 
 #endif /*the ALTIVEC port*/
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

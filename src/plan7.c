@@ -1,15 +1,11 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
-
 /* plan7.c
- * SRE, Sat Nov 16 14:19:56 1996
- * 
  * Support for Plan 7 HMM data structure, plan7_s.
+ * 
+ * SVN $Id$
+ * SRE, Sat Nov 16 14:19:56 1996
  */
 
-#include "config.h"
+#include "config.h"		/* must be included first */
 #include "squidconf.h"
 
 #include <stdio.h>
@@ -20,6 +16,8 @@
 #include "squid.h"
 #include "funcs.h"
 #include "structs.h"
+#include "plan7.h"		/* the model structure */
+
 
 
 /* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
@@ -46,7 +44,20 @@ AllocPlan7Shell(void)
   struct plan7_s *hmm;
 
   hmm    = (struct plan7_s *) MallocOrDie (sizeof(struct plan7_s));
-  hmm->M = 0;
+
+  hmm->M    = 0;
+  hmm->t    = NULL;
+  hmm->mat  = NULL;
+  hmm->ins  = NULL;
+
+  hmm->t2     = NULL;
+  hmm->begin  = NULL;
+  hmm->end    = NULL;
+
+  hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
+  hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
+  hmm->bsc = hmm->bsc_mem = NULL;
+  hmm->esc = hmm->esc_mem = NULL;
 
   hmm->name     = NULL;
   hmm->acc      = NULL;
@@ -67,20 +78,6 @@ AllocPlan7Shell(void)
   hmm->ga1 = hmm->ga2 = 0.0;
   hmm->tc1 = hmm->tc2 = 0.0;
   hmm->nc1 = hmm->nc2 = 0.0;
-
-  hmm->t      = NULL;
-  hmm->mat    = NULL;
-  hmm->ins    = NULL;
-
-  hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
-  hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
-
-  hmm->begin  = NULL;
-  hmm->end    = NULL;
-
-  hmm->bsc = hmm->bsc_mem = NULL;
-  hmm->esc = hmm->esc_mem = NULL;
-
 				/* DNA translation is not enabled by default */
   hmm->dnam   = NULL;
   hmm->dnai   = NULL;
@@ -93,37 +90,19 @@ AllocPlan7Shell(void)
   hmm->flags = 0;
   return hmm;
 }  
-#ifndef ALTIVEC  /* in Altivec port, replaced in fast_algorithms.c */
+#ifndef ALTIVEC  /* in Altivec port, this func is replaced in fast_algorithms.c */
 void
 AllocPlan7Body(struct plan7_s *hmm, int M) 
 {
   int k, x;
 
   hmm->M = M;
-
-  hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
-  hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
-  hmm->ca     = MallocOrDie ((M+2) * sizeof(char));
-  hmm->map    = MallocOrDie ((M+1) * sizeof(int));
-
   hmm->t      = MallocOrDie (M     *           sizeof(float *));
   hmm->mat    = MallocOrDie ((M+1) *           sizeof(float *));
   hmm->ins    = MallocOrDie (M     *           sizeof(float *));
   hmm->t[0]   = MallocOrDie ((7*M)     *       sizeof(float));
   hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
   hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
-
-  hmm->tsc     = MallocOrDie (7     *           sizeof(int *));
-  hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
-  hmm->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
-  hmm->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
-
-  hmm->tsc[0] = hmm->tsc_mem;
-  hmm->msc[0] = hmm->msc_mem;
-  hmm->isc[0] = hmm->isc_mem;
-
   /* note allocation strategy for important 2D arrays -- trying
    * to keep locality as much as possible, cache efficiency etc.
    */
@@ -134,6 +113,23 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
       hmm->t[k]   = hmm->t[0]   + k * 7;
     }
   }
+
+  hmm->t2     = MallocOrDie  (M     * sizeof(float *));
+  hmm->t2[0]  = MallocOrDie  ((7*M) * sizeof(float));
+  for (k = 1; k < M; k++) hmm->t2[k] = hmm->t2[0] + k * 7;
+  hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
+  hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
+
+  hmm->tsc     = MallocOrDie (7     *           sizeof(int *));
+  hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
+  hmm->tsc[0]  = hmm->tsc_mem;
+  hmm->msc[0]  = hmm->msc_mem;
+  hmm->isc[0]  = hmm->isc_mem;
+
   for (x = 1; x < MAXCODE; x++) {
     hmm->msc[x] = hmm->msc[0] + x * (M+1);
     hmm->isc[x] = hmm->isc[0] + x * M;
@@ -142,27 +138,46 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
     hmm->tsc[x] = hmm->tsc[0] + x * M;
 
   /* tsc[x][0] is used as a boundary condition sometimes [Viterbi()],
-   * so set to -inf always.
+   * so init (and keep) at -inf always.
    */
   for (x = 0; x < 7; x++)
     hmm->tsc[x][0] = -INFTY;
 
-  hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
-  hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
-
   hmm->bsc_mem  = MallocOrDie  ((M+1) * sizeof(int));
   hmm->esc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-
   hmm->bsc = hmm->bsc_mem;
   hmm->esc = hmm->esc_mem;
 
+  hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
+  hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
+  hmm->ca     = MallocOrDie ((M+2) * sizeof(char));
+  hmm->map    = MallocOrDie ((M+1) * sizeof(int));
+
   return;
 }  
-#endif /* ALTIVEC */
+#endif /* not the ALTIVEC version */
 
 void
 FreePlan7(struct plan7_s *hmm)
 {
+  if (hmm->mat     != NULL) free(hmm->mat[0]);
+  if (hmm->ins     != NULL) free(hmm->ins[0]);
+  if (hmm->t       != NULL) free(hmm->t[0]);
+  if (hmm->mat     != NULL) free(hmm->mat);
+  if (hmm->ins     != NULL) free(hmm->ins);
+  if (hmm->t       != NULL) free(hmm->t);
+  if (hmm->t2      != NULL) free(hmm->t2[0]);
+  if (hmm->t2      != NULL) free(hmm->t2);
+  if (hmm->begin   != NULL) free(hmm->begin);
+  if (hmm->end     != NULL) free(hmm->end);
+  if (hmm->bsc_mem != NULL) free(hmm->bsc_mem);
+  if (hmm->esc_mem != NULL) free(hmm->esc_mem);
+  if (hmm->msc_mem != NULL) free(hmm->msc_mem);
+  if (hmm->isc_mem != NULL) free(hmm->isc_mem);
+  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
+  if (hmm->msc     != NULL) free(hmm->msc);
+  if (hmm->isc     != NULL) free(hmm->isc);
+  if (hmm->tsc     != NULL) free(hmm->tsc);
   if (hmm->name    != NULL) free(hmm->name);
   if (hmm->acc     != NULL) free(hmm->acc);
   if (hmm->desc    != NULL) free(hmm->desc);
@@ -175,22 +190,6 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->tpri    != NULL) free(hmm->tpri);
   if (hmm->mpri    != NULL) free(hmm->mpri);
   if (hmm->ipri    != NULL) free(hmm->ipri);
-  if (hmm->bsc_mem != NULL) free(hmm->bsc_mem);
-  if (hmm->begin   != NULL) free(hmm->begin);
-  if (hmm->esc_mem != NULL) free(hmm->esc_mem);
-  if (hmm->end     != NULL) free(hmm->end);
-  if (hmm->msc_mem != NULL) free(hmm->msc_mem);
-  if (hmm->isc_mem != NULL) free(hmm->isc_mem);
-  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
-  if (hmm->mat     != NULL) free(hmm->mat[0]);
-  if (hmm->ins     != NULL) free(hmm->ins[0]);
-  if (hmm->t       != NULL) free(hmm->t[0]);
-  if (hmm->msc     != NULL) free(hmm->msc);
-  if (hmm->isc     != NULL) free(hmm->isc);
-  if (hmm->tsc     != NULL) free(hmm->tsc);
-  if (hmm->mat     != NULL) free(hmm->mat);
-  if (hmm->ins     != NULL) free(hmm->ins);
-  if (hmm->t       != NULL) free(hmm->t);
   if (hmm->dnam    != NULL) free(hmm->dnam);
   if (hmm->dnai    != NULL) free(hmm->dnai);
   free(hmm);
@@ -198,7 +197,8 @@ FreePlan7(struct plan7_s *hmm)
 
 /* Function: ZeroPlan7()
  * 
- * Purpose:  Zeros the counts/probabilities fields in a model.  
+ * Purpose:  Zeros the counts/probabilities fields in a model (both
+ *           core and configured form).  
  *           Leaves null model untouched. 
  */
 void
@@ -218,6 +218,7 @@ ZeroPlan7(struct plan7_s *hmm)
   for (k = 0; k < 4; k++)
     FSet(hmm->xt[k], 2, 0.);
   hmm->flags &= ~PLAN7_HASBITS;	/* invalidates scores */
+  hmm->flags &= ~PLAN7_HASALG;	/* invalidates configuration */
   hmm->flags &= ~PLAN7_HASPROB;	/* invalidates probabilities */
 }
 
@@ -331,6 +332,25 @@ Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
     hmm->null[x] = null[x];
   hmm->p1 = p1;
 }
+
+
+static void
+entry_wing_retract(struct plan7_s *hmm)
+{
+  int k;
+
+  if (hmm->flags & PLAN7_BIMPOSE) return; /* begin[] already valid; just ignore tbd1 */
+
+  hmm->begin[1] = (1. - hmm->tbd1);
+
+  for (k = 2; k <= M; k++)
+    {
+      hmm->begin[k] = accum
+
+
+}
+
+
 
 
 /* Function: P7Logoddsify()
@@ -1093,5 +1113,11 @@ Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7)
   plan7->flags &= ~PLAN7_HASBITS;	/* scores are not valid    */
   *ret_plan7 = plan7;
 }
+
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 
 
