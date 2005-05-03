@@ -10,7 +10,7 @@
  * (for example, LFS support), it must be included before any other
  * header file.
  * 
- * CVS $Id$
+ * SVN $Id$
  */
 
 #ifndef CONFIGH_INCLUDED

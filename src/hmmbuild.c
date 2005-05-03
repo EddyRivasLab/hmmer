@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmbuild.c
- * SRE, Mon Nov 18 12:41:29 1996
- *
  * main() for HMM construction from an alignment.
- * CVS $Id$
+ *
+ * SRE, Mon Nov 18 12:41:29 1996
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -16,11 +12,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "squid.h"		/* general sequence analysis library    */
+#include "msa.h"                /* squid's multiple alignment i/o       */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
-#include "msa.h"                /* squid's multiple alignment i/o       */
 #include "lsjfuncs.h"		/* Steve Johnson's additions            */
 
 static char banner[] = "hmmbuild - build a hidden Markov model from an alignment";
@@ -85,8 +83,6 @@ static char experts[] = "\
    --binary      : save the model in binary format, not ASCII text\n\
    --cfile <f>   : save count vectors to <f>\n\
    --informat <s>: input alignment is in format <s>, not Stockholm\n\
-   --swentry <x> : set S/W aggregate entry prob. to <x> {0.5}\n\
-   --swexit <x>  : set S/W aggregate exit prob. to <x>  {0.5}\n\
    --verbose     : print boring information\n\
 \n";
 
@@ -123,8 +119,6 @@ static struct opt_s OPTIONS[] = {
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--pbswitch",FALSE, sqdARG_INT },
   { "--prior",   FALSE, sqdARG_STRING },
-  { "--swentry", FALSE, sqdARG_FLOAT },
-  { "--swexit",  FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_NONE },
@@ -188,8 +182,7 @@ main(int argc, char **argv)
   } eff_strategy;
   enum p7_weight {		/* relative sequence weighting strategy  */
     WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_PB, WGT_VORONOI, WGT_ME} w_strategy;
-  enum p7_config {              /* algorithm configuration strategy      */
-    P7_BASE_CONFIG, P7_LS_CONFIG, P7_FS_CONFIG, P7_SW_CONFIG } cfg_strategy;
+  enum  p7_algmode  mode;	/* desired algorithm mode                */
   float gapmax;			/* max frac gaps in mat col for -k       */
   int   gapmax_set;		/* TRUE if gapmax was set on commandline */
   int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
@@ -207,8 +200,6 @@ main(int argc, char **argv)
   int   do_binary;		/* TRUE to write in binary format        */
   float eidlevel;		/* --effclust frac id filtering level [0.62] */
   float widlevel;		/* --wblosum frac id filtering level [0.62]  */
-  float swentry;		/* S/W aggregate entry probability       */
-  float swexit;			/* S/W aggregate exit probability        */
   float eff_nseq;		/* effective sequence number             */
   int   eff_nseq_set;		/* TRUE if eff_nseq has been calculated  */
   int   pbswitch;		/* nseq >= this, switchover to PB weights*/
@@ -231,7 +222,7 @@ main(int argc, char **argv)
   w_strategy        = WGT_GSC;	              /* Gerstein/Sonnhammer/Chothia   */
   eidlevel          = 0.62;
   widlevel          = 0.62;
-  cfg_strategy      = P7_LS_CONFIG;
+  mode              = P7_LS_MODE; /* default: ls glocal, multihit mode */
   gapmax            = 0.5;
   gapmax_set        = FALSE;
   overwrite_protect = TRUE;
@@ -248,8 +239,6 @@ main(int argc, char **argv)
   Alphabet_type     = hmmNOTSETYET;	/* initially unknown */
   name              = NULL;
   do_append         = FALSE;
-  swentry           = 0.5;
-  swexit            = 0.5;
   do_binary         = FALSE;
   pbswitch          = 1000;
   setname           = NULL;
@@ -260,11 +249,11 @@ main(int argc, char **argv)
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-f") == 0) cfg_strategy      = P7_FS_CONFIG;
-    else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
+    if      (strcmp(optname, "-f") == 0) mode              = P7_FS_MODE;
+    else if (strcmp(optname, "-g") == 0) mode              = P7_S_MODE;
     else if (strcmp(optname, "-n") == 0) setname           = optarg;
     else if (strcmp(optname, "-o") == 0) align_ofile       = optarg;
-    else if (strcmp(optname, "-s") == 0) cfg_strategy      = P7_SW_CONFIG;
+    else if (strcmp(optname, "-s") == 0) mode              = P7_SW_MODE;
     else if (strcmp(optname, "-A") == 0) do_append         = TRUE;
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
     else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
@@ -286,8 +275,6 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--pbswitch")== 0) pbswitch      = atoi(optarg);
     else if (strcmp(optname, "--prior")   == 0) prifile       = optarg;
-    else if (strcmp(optname, "--swentry") == 0) swentry       = atof(optarg);
-    else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg);
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
     else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM;
@@ -373,18 +360,11 @@ main(int argc, char **argv)
 	 SeqfileFormat2String(afp->format));
 
   printf("Search algorithm configuration:    ");
-  if      (cfg_strategy == P7_BASE_CONFIG)   puts("Global alignment (hmms)");
-  else if (cfg_strategy == P7_SW_CONFIG)     {
-    puts("Local  (hmmsw)");
-    printf("S/W aggregate entry probability:   %.2f\n", swentry);
-    printf("S/W aggregate exit probability:    %.2f\n", swexit);
-  }
-  else if (cfg_strategy == P7_LS_CONFIG)     puts("Multiple domain (hmmls)");
-  else if (cfg_strategy == P7_FS_CONFIG)     {
-    puts("Multiple local (hmmfs)");
-    printf("S/W aggregate entry probability:   %.2f\n", swentry);
-    printf("S/W aggregate exit probability:    %.2f\n", swexit);
-  }
+  if      (mode == P7_S_MODE)   puts("Global alignment (hmms)");
+  else if (mode == P7_SW_MODE)  puts("local Smith/Waterman (hmmsw)");
+  else if (mode == P7_LS_MODE)  puts("glocal, multihit (hmmls)");
+  else if (mode == P7_FS_MODE)  puts("local, multihit (hmmfs)");
+  else Die("whoops. can't build in mode %d\n", mode);
 
   printf("Model construction strategy:       ");
   if (c_strategy == P7_HAND_CONSTRUCTION)    puts("Manual, from #=RF annotation");
@@ -507,7 +487,7 @@ see --effnone, --effset, or --effclust\n");
 	   */
 	  if (eff_strategy == EFF_ENTROPY) {
 	    if (Alphabet_type == hmmAMINO) {
-	      if   (cfg_strategy == P7_FS_CONFIG || cfg_strategy == P7_SW_CONFIG){
+	      if   (mode == P7_FS_MODE || mode == P7_SW_MODE){
 		if (eloss_set == FALSE){
 		  etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
 		}
@@ -689,9 +669,10 @@ To use --effent on DNA models (or other alphabets), you must set\n\
       if (evolve_ic)
       {
         /* if info wasn't defined by user, use default settings for gl or ll */
-        if (info < -99.)
-	  if (cfg_strategy == P7_FS_CONFIG) info = 0.65; /* ll default */
-	  else info = 1.4; /* gl default */
+        if (info < -99.) {
+	  if (mode == P7_FS_MODE) { info = 0.65; } /* ll default */
+	  else { info = 1.4; } /* gl default */
+	}
         AdjustAveInfoContent(hmm, info, matrixfile);  /* DJB */
      }
       printf("done.\n");
@@ -704,7 +685,7 @@ To use --effent on DNA models (or other alphabets), you must set\n\
        * configure the model according to how the user wants to
        * use it.
        */
-      Plan7SWConfig(hmm, 0.5, 0.5);
+      Plan7SWConfig(hmm);
 
 
       /* Relative weighting:  architecture-dependent strategies.
@@ -794,11 +775,11 @@ To use --effent on DNA models (or other alphabets), you must set\n\
        */
       printf("%-40s ... ", "Finalizing model configuration");
       fflush(stdout);
-      switch (cfg_strategy) {
-      case P7_BASE_CONFIG:  Plan7GlobalConfig(hmm);              break;
-      case P7_SW_CONFIG:    Plan7SWConfig(hmm, swentry, swexit); break;
-      case P7_LS_CONFIG:    Plan7LSConfig(hmm);                  break;
-      case P7_FS_CONFIG:    Plan7FSConfig(hmm, swentry, swexit); break;
+      switch (mode) {
+      case P7_S_MODE:   Plan7GlobalConfig(hmm);  break;
+      case P7_SW_MODE:  Plan7SWConfig(hmm);      break;
+      case P7_LS_MODE:  Plan7LSConfig(hmm);      break;
+      case P7_FS_MODE:  Plan7FSConfig(hmm);      break;
       default:              Die("bogus configuration choice");
       }
       printf("done.\n");
@@ -884,8 +865,6 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
 {
   int idx;			/* counter for sequences */
 
-				/* make sure model scores are ready */
-  P7Logoddsify(hmm, TRUE);
 				/* header */
   fputs("**\n", fp);
   fputs("Individual training sequence scores:\n", fp);
@@ -1175,8 +1154,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
   /* Initialization. Start with all weights == 1.0.
    * Find relative entropy and gradient.
    */
-  Plan7SWConfig(hmm, 0.5, 0.5);
-  P7Logoddsify(hmm, TRUE);
+  Plan7SWConfig(hmm);
 
   FSet(wgt, msa->nseq, eff_nseq / (float) msa->nseq);
   position_average_score(hmm, dsq, wgt, msa->nseq, tr, pernode,&expscore);
@@ -1240,8 +1218,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
 
   
                                 /* Evaluate new point */
-	  Plan7SWConfig(hmm, 0.5, 0.5);
-	  P7Logoddsify(hmm, TRUE);
+	  Plan7SWConfig(hmm);
 	  position_average_score(hmm, dsq, new_wgt, msa->nseq, tr, pernode, &expscore);
           for (idx = 0; idx < msa->nseq; idx++) 
 	    sc[idx]      = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
@@ -1318,3 +1295,8 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
   free(sc);
   return;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

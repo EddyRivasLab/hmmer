@@ -1,9 +1,5 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmcalibrate-pvm.c
- * SRE, Tue Aug 18 15:19:28 1998
+ * PVM slave for hmmcalibrate.
  * Redesigned for better parallelization: SRE, Wed Dec  1 09:48:58 1999
  *
  * Design:
@@ -19,8 +15,8 @@
  *   Termination: 
  *       master sends a shutdown signal instead of a work packet.
  * 
- * PVM slave for hmmcalibrate.
- * RCS $Id$
+ * SRE, Tue Aug 18 15:19:28 1998
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -34,6 +30,8 @@
 
 #include "squid.h"		/* general sequence analysis library    */
 #include "stopwatch.h"		/* CPU timing routines                  */
+
+#include "plan7.h"		/* plan7 profile HMM structure          */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
@@ -92,9 +90,8 @@ main(void)
   SetAlphabet(alphatype);	 /* must set alphabet before reading HMM! */
   hmm = PVMUnpackHMM();
   if (hmm == NULL) Die("oh no, the HMM never arrived");
-
+  if (! (hmm->flags & PLAN7_HASBITS)) Die("Oops, that model isn't configured");
   P7DefaultNullModel(randomseq, &p1);
-  P7Logoddsify(hmm, TRUE);
   mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
 
   /* tell the master we're OK and ready to go (or not)
@@ -213,3 +210,8 @@ int main(void)
 } 
 
 #endif
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

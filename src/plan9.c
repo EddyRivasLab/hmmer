@@ -1,12 +1,10 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* plan9.c
- * SRE, Wed Apr  8 07:35:30 1998
  *
  * alloc, free, and initialization of old Plan9 (HMMER 1.x) functions.
  * Rescued from the wreckage of HMMER 1.9m code.
+ *
+ * SRE, Wed Apr  8 07:35:30 1998
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -18,8 +16,11 @@
 #include <math.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
+
 
 struct plan9_s *
 P9AllocHMM(int M)               		/* length of model to make */
@@ -131,3 +132,82 @@ P9DefaultNullModel(float *null)
   else
     Die("No support for non-protein, non-nucleic acid alphabets.");
 }
+
+
+/*****************************************************************
+ * 
+ * Plan9/Plan7 interface
+ * 
+ * Very important code during the evolutionary takeover by Plan7 --
+ * convert between Krogh/Haussler and Plan7 models.
+ *****************************************************************/
+
+/* Function: Plan9toPlan7()
+ * 
+ * Purpose:  Convert an old HMM into Plan7. Configures it in
+ *           ls mode.
+ *           
+ * Args:     hmm       - old ugly plan9 style HMM
+ *           ret_plan7 - new wonderful Plan7 HMM
+ *           
+ * Return:   (void)    
+ *           Plan7 HMM is allocated here. Free w/ FreePlan7().
+ */               
+void
+Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7)
+{
+  struct plan7_s *plan7;
+  int k, x;
+
+  plan7 = AllocPlan7(hmm->M);
+  
+  for (k = 1; k < hmm->M; k++)
+    {
+      plan7->t[k][TMM] = hmm->mat[k].t[MATCH];
+      plan7->t[k][TMD] = hmm->mat[k].t[DELETE];
+      plan7->t[k][TMI] = hmm->mat[k].t[INSERT];
+      plan7->t[k][TDM] = hmm->del[k].t[MATCH];
+      plan7->t[k][TDD] = hmm->del[k].t[DELETE];
+      plan7->t[k][TIM] = hmm->ins[k].t[MATCH];
+      plan7->t[k][TII] = hmm->ins[k].t[INSERT];
+    }
+
+  for (k = 1; k <= hmm->M; k++)
+    for (x = 0; x < Alphabet_size; x++)
+      plan7->mat[k][x] = hmm->mat[k].p[x];
+
+  for (k = 1; k < hmm->M; k++)
+    for (x = 0; x < Alphabet_size; x++)
+      plan7->ins[k][x] = hmm->ins[k].p[x];
+
+  plan7->tbd1 = hmm->mat[0].t[DELETE] / (hmm->mat[0].t[DELETE] + hmm->mat[0].t[MATCH]);
+  
+		/* We have to make up the null transition p1; use default */
+  P7DefaultNullModel(plan7->null, &(plan7->p1));
+  for (x = 0; x < Alphabet_size; x++)
+    plan7->null[x] = hmm->null[x];
+      
+  if (hmm->name != NULL) 
+    Plan7SetName(plan7, hmm->name);
+  if (hmm->flags & HMM_REF) {
+    strcpy(plan7->rf, hmm->ref);
+    plan7->flags |= PLAN7_RF;
+  }
+  if (hmm->flags & HMM_CS) {
+    strcpy(plan7->cs, hmm->cs);
+    plan7->flags |= PLAN7_CS;
+  }
+
+  Plan7LSConfig(plan7);		/* configure specials for ls-style alignment */
+  Plan7Renormalize(plan7);	/* mainly to correct for missing ID and DI */
+  plan7->flags |= PLAN7_HASPROB;	/* probabilities are valid */
+  plan7->flags &= ~PLAN7_HASBITS;	/* scores are not valid    */
+  *ret_plan7 = plan7;
+}
+
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

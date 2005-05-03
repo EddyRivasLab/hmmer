@@ -1,14 +1,9 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmconvert.c
- * SRE, Thu Oct 30 08:56:22 1997; St. Louis
- * 
  * main() for converting between HMM file formats, and
  * for converting HMMs to other software formats like GCG profiles.
  * 
- * CVS $Id$
+ * SRE, Thu Oct 30 08:56:22 1997; St. Louis
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -18,10 +13,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "squid.h"		/* general sequence analysis library    */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
+
 
 static char banner[] = "hmmconvert - convert between profile HMM file formats";
 
@@ -204,3 +202,8 @@ main(int argc, char **argv)
   SqdClean();
   return EXIT_SUCCESS;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

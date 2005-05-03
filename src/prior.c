@@ -1,11 +1,8 @@
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
-
 /* prior.c
- * SRE, Mon Nov 18 15:44:08 1996
- * 
  * Support for Dirichlet prior data structure, p7prior_s.
+ *
+ * SRE, Mon Nov 18 15:44:08 1996
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -14,6 +11,8 @@
 #include <string.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h" 
 
@@ -717,4 +716,9 @@ default_nucleic_prior(void)
 
   return pri;
 }
+
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
 

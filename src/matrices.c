@@ -1,16 +1,8 @@
-/*****************************************************************
- * HMMER - Biological sequence analysis with profile HMMs
- * Copyright (C) 1992-1999 Washington University School of Medicine
- * All Rights Reserved
- *
- *     This source code is distributed under the terms of the
- *     GNU General Public License. See the files COPYING and LICENSE
- *     for details.
- *****************************************************************/
-
 /* matrices.c
  * for matrix manipulation
  * many functions borrowed from Elena Rivas matrix package (as noted)
+ *
+ * SVN $Id$
  */
 
 #include <stdio.h>
@@ -177,7 +169,6 @@ ReadAAMatrices (double **ret_Sij, double **ret_pi, char *matrixfile, int environ
   int i, j;  		/* count through elements in Sij and pi 	    */
   int n; 		/* count through environ 			    */
   char TempString[20]; 	/* temp holder for read in string 		    */
-  float read_element; 	/* temp holder for matrix element 		    */
   FILE *fp;		/* file pointer 				    */
   double *Sij; 		/* symmetric matrix 				    */
   double *pi; 		/* amino acid frequencies 			    */
@@ -258,7 +249,6 @@ ReadMatrices (double **ret_Sij, double **ret_pi, char *matrixfile, int environ, 
   int i, j;  		/* count through elements in Sij and pi 	    */
   int n; 		/* count through environ  			    */
   char TempString[10]; 	/* temp holder for read in string 		    */
-  float read_element; 	/* temp holder for matrix element 		    */
   FILE *fp;		/* file pointer 				    */
   double *Sij; 		/* symmetric matrix 				    */
   double *pi; 		/* amino acid frequencies 			    */
@@ -688,4 +678,9 @@ AssignWagMatrix (double **ret_Sij, double **ret_pi)
   *ret_pi = pi;
   return;
 }
+
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
 

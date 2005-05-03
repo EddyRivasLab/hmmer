@@ -1,14 +1,9 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmfetch.c
- * SRE, Wed Aug  5 14:26:51 1998 [St. Louis]
- * 
  * Recover a specific HMM file from an HMM database, using
  * an SSI index (created with hmmindex).
  * 
- * CVS $Id$
+ * SRE, Wed Aug  5 14:26:51 1998 [St. Louis]
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -19,6 +14,8 @@
 #include <string.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 #include "globals.h"
@@ -121,4 +118,8 @@ main(int argc, char **argv)
   return 0;
 }
 
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

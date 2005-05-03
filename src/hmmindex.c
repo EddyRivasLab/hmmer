@@ -1,13 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmindex.c
- * SRE, Wed Aug  5 11:05:03 1998 [St. Louis]
- * 
  * Create an SSI index file for an HMM database.
  * 
- * CVS $Id$
+ * SRE, Wed Aug  5 11:05:03 1998 [St. Louis]
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -19,6 +14,8 @@
 
 #include "squid.h"
 #include "ssi.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 #include "globals.h"
@@ -159,4 +156,8 @@ main(int argc, char **argv)
   return 0;
 }
 
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

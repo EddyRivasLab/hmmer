@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmpfam-pvm.c
- * SRE, Sun Jul 12 17:15:36 1998
- * 
  * PVM slave for hmmpfam-pvm and hmmsearch-pvm.
- * CVS $Id$
+ *
+ * SRE, Sun Jul 12 17:15:36 1998
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -18,6 +14,8 @@
 #include <pvm3.h>
 
 #include "squid.h"		/* general sequence analysis library    */
+
+#include "plan7.h"		/* plan7 profile HMM structure          */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
@@ -153,7 +151,6 @@ main(void)
       if (! HMMFilePositionByIndex(hmmfp, nhmm)) Die("didn't position the HMM file");
       if (! HMMFileRead(hmmfp, &hmm))            Die("unexpected end of HMM file"); 
       if (hmm == NULL)                           Die("unexpected failure to parse HMM file"); 
-      P7Logoddsify(hmm, TRUE);
 
 			/* set Pfam specific score thresholds if needed */
       if (! SetAutocuts(&thresh, hmm))
@@ -314,4 +311,9 @@ int main(void)
 } 
 
 #endif
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

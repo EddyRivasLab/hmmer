@@ -1,8 +1,8 @@
 /* trace.c
+ * Support for Plan 7 traceback data structure, p7trace_s.
+ * 
  * SRE, Sat Nov 16 12:34:57 1996
  * SVN $Id$
- * 
- * Support for Plan 7 traceback data structure, p7trace_s.
  */
 
 #include "config.h"
@@ -13,6 +13,8 @@
 #include <ctype.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 

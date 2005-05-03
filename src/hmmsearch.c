@@ -1,15 +1,10 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmsearch.c
- * SRE, Tue Jan  7 17:19:20 1997 [St. Louis]
- *
  * Search a sequence database with a profile HMM.
  * Conditionally includes PVM parallelization when HMMER_PVM is defined
  *    at compile time; hmmsearch --pvm runs the PVM version.
  *
- * CVS $Id$
+ * SRE, Tue Jan  7 17:19:20 1997 [St. Louis]
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -28,6 +23,8 @@
 #endif
 
 #include "squid.h"		/* general sequence analysis library    */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
@@ -284,7 +281,6 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  P7Logoddsify(hmm, !do_forward);
 
   if (do_xnu && Alphabet_type == hmmNUCLEIC) 
     Die("The HMM is a DNA model, and you can't use the --xnu filter on DNA data");
@@ -1349,4 +1345,9 @@ main_loop_threaded(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh
   Die("No threads support");
 }
 #endif /* HMMER_THREADS */
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

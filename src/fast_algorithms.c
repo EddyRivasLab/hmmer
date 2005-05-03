@@ -1,7 +1,4 @@
 /* fast_algorithms.c
- * SRE, Sun Nov 10 08:54:48 2002 [AA 3080, Denver to StL]
- * SVN $Id$
- * 
  * Optimized routines to replace slower implementations in core_algorithms.c.
  * 
  * The routines in core_algorithms.c are designed for clarity
@@ -26,14 +23,19 @@
  *   to understand the DP code.
  * -DALTIVEC
  *   enable Erik Lindahl's Altivec code for Macintosh OSX
+ *
+ * SRE, Sun Nov 10 08:54:48 2002 [AA 3080, Denver to StL]
+ * SVN $Id$
  */
 
 #include "config.h"
 #include "squidconf.h"
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
-#include "squid.h"
 
 #if (defined __GNUC__) && (defined __APPLE__)
 #include <ppc_intrinsics.h>

@@ -1,14 +1,9 @@
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
-
 /* debug.c
- * Thu Nov 21 09:58:05 1996
- * 
  * Printing out or naming various useful things from HMMER
  * innards.
  * 
- * CVS $Id$
+ * Thu Nov 21 09:58:05 1996
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -19,9 +14,12 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h" 
-#include "squid.h"
+
 
 /* Function: Statetype()
  * 
@@ -366,4 +364,9 @@ TraceCompare(struct p7trace_s *t1, struct p7trace_s *t2)
     }
   return 1;
 }
+
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
 

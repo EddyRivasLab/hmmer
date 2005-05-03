@@ -1,15 +1,10 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmpfam.c
- * SRE, Mon Aug 25 17:03:14 1997 [Denver] 
- *
  * Search a single sequence against an HMM database.
  * Conditionally includes PVM parallelization when HMMER_PVM is defined
  *    at compile time; hmmpfam --pvm runs the PVM version.
  *    
- * CVS $Id$
+ * SRE, Mon Aug 25 17:03:14 1997 [Denver] 
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -28,6 +23,8 @@
 #endif
 
 #include "squid.h"		/* general sequence analysis library    */
+
+#include "plan7.h"              /* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
@@ -582,7 +579,6 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   while (HMMFileRead(hmmfp, &hmm)) {
     if (hmm == NULL) 
       Die("HMM file %s may be corrupt or in incorrect format; parse failed", hmmfile);
-    P7Logoddsify(hmm, !(do_forward));
     SQD_DPRINTF1(("   ... working on HMM %s\n", hmm->name));
     SQD_DPRINTF1(("   ... mx is now M=%d by N=%d\n", mx->maxM, mx->maxN));
 
@@ -869,7 +865,6 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	    { pvm_exit(); Die("Unexpected failure to read HMM file %s", hmmfile); }
 	  if (hmm == NULL) 
 	    { pvm_exit(); Die("HMM file %s may be corrupt; parse failed", hmmfile); }
-	  P7Logoddsify(hmm, TRUE);
 	  if (! SetAutocuts(thresh, hmm))
 	    Die("HMM %s did not contain your GA, NC, or TC cutoffs", hmm->name);
 	
@@ -914,7 +909,6 @@ main_loop_pvm(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	    { pvm_exit(); Die("Unexpected failure to read HMM file %s", hmmfile);}
 	  if (hmm == NULL) 
 	    { pvm_exit(); Die("HMM file %s may be corrupt; parse failed", hmmfile); }
-	  P7Logoddsify(hmm, TRUE);
 	  if (! SetAutocuts(thresh, hmm))
 	    Die("HMM %s did not contain your GA, NC, or TC cutoffs", hmm->name);
 	  
@@ -1222,7 +1216,6 @@ worker_thread(void *ptr)
 
     if (hmm == NULL)
       Die("HMM file %s may be corrupt or in incorrect format; parse failed", wpool->hmmfile);
-    P7Logoddsify(hmm, !(wpool->do_forward));
 
     if (!SetAutocuts(&thresh, hmm)) 
       Die("HMM %s did not have the right GA, NC, or TC cutoffs", hmm->name);
@@ -1355,3 +1348,8 @@ main_loop_threaded(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   Die("no threads support");
 }
 #endif /* HMMER_THREADS */
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

@@ -1,7 +1,3 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* tophits.c
  * 
  * Routines for storing, sorting, displaying high scoring hits
@@ -372,3 +368,8 @@ TophitsReport(struct tophit_s *h, double E, int nseq)
   printf("     Satisfying E cutoff:  %d\n", n);
   printf("     Total memory:         %dK\n", memused / 1000);
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

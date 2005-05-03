@@ -1,20 +1,19 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* funcs.h 
- * CVS $Id$
- *
  * Declarations of external functions in HMMER.
+ *
+ * SVN $Id$
  */            
 
 #ifndef FUNCSH_INCLUDED
 #define FUNCSH_INCLUDED
 
 #include "config.h"
-#include "structs.h"
 #include "squid.h"
 #include "msa.h"
+
+#include "plan7.h"
+#include "structs.h"
+
 
 /* alphabet.c
  * Configuration of global alphabet information
@@ -236,6 +235,17 @@ extern char *Getword(FILE *fp, int type);
 extern char *Getline(char *s, int n, FILE *fp);
 extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
 
+/* from modelconfig.c
+ * Model configuration, from core model probabilities
+ * to the full Plan7 score model
+ */
+extern void Plan7NakedConfig(struct plan7_s *hmm);
+extern void Plan7GlobalConfig(struct plan7_s *hmm);
+extern void Plan7LSConfig(struct plan7_s *hmm);
+extern void Plan7SWConfig(struct plan7_s *hmm);
+extern void Plan7FSConfig(struct plan7_s *hmm);
+
+
 /* from modelmakers.c
  * Model construction algorithms
  */
@@ -265,19 +275,11 @@ extern void Plan7SetDescription(struct plan7_s *hmm, char *desc);
 extern void Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv);
 extern void Plan7SetCtime(struct plan7_s *hmm);
 extern void Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1);
-extern void P7Logoddsify(struct plan7_s *hmm, int viterbi_mode);
 extern void Plan7Rescale(struct plan7_s *hmm, float scale);
 extern void Plan7Renormalize(struct plan7_s *hmm);
-extern void Plan7RenormalizeExits(struct plan7_s *hmm);
-extern void Plan7NakedConfig(struct plan7_s *hmm);
-extern void Plan7GlobalConfig(struct plan7_s *hmm);
-extern void Plan7LSConfig(struct plan7_s *hmm);
-extern void Plan7SWConfig(struct plan7_s *hmm, float pentry, float pexit);
-extern void Plan7FSConfig(struct plan7_s *hmm, float pentry, float pexit); 
 extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, 
 			    int nseq, struct p7trace_s **tr);
 extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
-extern void Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7);
 
 /* 
  * from plan9.c
@@ -288,6 +290,7 @@ extern void P9ZeroHMM(struct plan9_s *hmm);
 extern int  P9FreeHMM(struct plan9_s *hmm);
 extern void P9Renormalize(struct plan9_s *hmm);
 extern void P9DefaultNullModel(float *null);
+extern void Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7);
 
 /* 
  * from postprob.c
@@ -406,3 +409,8 @@ extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr,
 
 
 #endif /*FUNCSH_INCLUDED*/
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

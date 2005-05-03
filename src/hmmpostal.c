@@ -1,7 +1,3 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* Derived from code developed by Ian Holmes (Sanger Centre and UC Berkeley)
  * Copyright (C) 1998 Ian Holmes
  * Distributed under the GNU General Public License
@@ -14,10 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "squid.h"		/* general sequence analysis library    */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
+
 
 static char banner[] = "hmmbuild - build a hidden Markov model from an alignment";
 
@@ -436,7 +435,7 @@ main(int argc, char **argv)
      * configure the model according to how the user wants to
      * use it.
      */
-    Plan7SWConfig(hmm, 0.5, 0.5);
+    Plan7SWConfig(hmm);
     
     /* Do model-dependent "weighting" strategies.
      */
@@ -460,10 +459,10 @@ main(int argc, char **argv)
     /* Configure the model for chosen algorithm
      */
     switch (cfg_strategy) {
-    case P7_BASE_CONFIG:  Plan7GlobalConfig(hmm);              break;
-    case P7_SW_CONFIG:    Plan7SWConfig(hmm, swentry, swexit); break;
-    case P7_LS_CONFIG:    Plan7LSConfig(hmm);                  break;
-    case P7_FS_CONFIG:    Plan7FSConfig(hmm, swentry, swexit); break;
+    case P7_BASE_CONFIG:  Plan7GlobalConfig(hmm);  break;
+    case P7_SW_CONFIG:    Plan7SWConfig(hmm);      break;
+    case P7_LS_CONFIG:    Plan7LSConfig(hmm);      break;
+    case P7_FS_CONFIG:    Plan7FSConfig(hmm);      break;
     default:              Die("bogus configuration choice");
     }
     
@@ -471,7 +470,6 @@ main(int argc, char **argv)
 
   /* Optionally save new HMM to disk: open a file for appending or writing.
    */
-  P7Logoddsify(hmm, TRUE);
   if (hmmfile)
     save_model(hmm, hmmfile, do_append, do_binary);
   
@@ -660,8 +658,8 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
 {
   int idx;			/* counter for sequences */
 
-				/* make sure model scores are ready */
-  P7Logoddsify(hmm, TRUE);
+  if (! (hmm->flags & PLAN7_HASBITS)) Die("no scores in that model");
+
 				/* header */
   fputs("**\n", fp);
   fputs("Individual training sequence scores:\n", fp);
@@ -931,8 +929,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, AINFO *ainfo, int nseq
   /* Initialization. Start with all weights == 1.0.
    * Find relative entropy and gradient.
    */
-  Plan7SWConfig(hmm, 0.5, 0.5);
-  P7Logoddsify(hmm, TRUE);
+  Plan7SWConfig(hmm);
 
   FSet(wgt, nseq, 1.0);
   position_average_score(hmm, dsq, wgt, nseq, tr, pernode, &expscore);
@@ -1007,8 +1004,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, AINFO *ainfo, int nseq
 
   
                                 /* Evaluate new point */
-	  Plan7SWConfig(hmm, 0.5, 0.5);
-	  P7Logoddsify(hmm, TRUE);
+	  Plan7SWConfig(hmm);
 	  position_average_score(hmm, dsq, new_wgt, nseq, tr, pernode, &expscore);
           for (idx = 0; idx < nseq; idx++) 
 	    sc[idx]      = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
@@ -1102,3 +1098,8 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, AINFO *ainfo, int nseq
   free(sc);
   return;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

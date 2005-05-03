@@ -1,7 +1,4 @@
 /* island.c
- * SRE, Thu Apr 21 09:57:21 2005
- * SVN $Id$
- * 
  * Implementation of the "island method" for estimating extreme value
  * distribution parameters. 
  * 
@@ -23,14 +20,19 @@
  *               statistics for gapped local alignment. Proc Int Conf
  *               Intell Syst Mol Biol 1999; 211-222.            
  *               
+ * SRE, Thu Apr 21 09:57:21 2005
+ * SVN $Id$
  */
 
 #include "config.h"
 #include "squidconf.h"
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
-#include "squid.h"
+
 
 /* Function: IslandViterbi()
  * Date:     SRE, Thu Apr 21 11:23:36 2005 [St. Louis]
@@ -96,9 +98,8 @@ IslandViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   int    inum;		/* current # of islands, in isc[0..inum-1] */
   
   int    sc;			/* integer score of optimal alignment  */
-  int    i,k,tpos;		/* index for seq, model, trace position */
+  int    i,k;		        /* index for seq, model position */
   int    cur, prv;		/* indices for rolling dp matrix */
-  int    curralloc;		/* size of allocation for tr */
 
   /* Alloc a DP matrix, two rows, linear memory O(M).
    * Alloc the same to hold propagated island lengths, and

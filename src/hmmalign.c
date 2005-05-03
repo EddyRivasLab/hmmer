@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmalign.c
+ * main() for aligning a set of sequences to an HMM
+ *
  * SRE, Thu Dec 18 16:05:29 1997 [St. Louis]
- * 
- * main() for aligning a set of sequences to an HMM.
- * CVS $Id$
+ * SVN $Id$
  */ 
 
 #include "config.h"		/* compile-time configuration constants */
@@ -16,11 +12,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "squid.h"		/* general sequence analysis library    */
+#include "msa.h"		/* squid's multiple alignment i/o       */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
-#include "msa.h"		/* squid's multiple alignment i/o       */
+
 
 static char banner[] = "hmmalign - align sequences to an HMM profile";
 
@@ -163,9 +162,11 @@ main(int argc, char **argv)
   HMMFileClose(hmmfp);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
-  hmm->xt[XTE][LOOP] = 0.;
-  P7Logoddsify(hmm, TRUE);
+  hmm->xt[XTE][MOVE]  = 1.;	/* only 1 domain/sequence ("global" alignment) */
+  hmm->xt[XTE][LOOP]  = 0.;
+  hmm->xsc[XTE][MOVE] = 0;	/* unwarranted chumminess with log-odds score calculation */
+  hmm->xsc[XTE][LOOP] = -INFTY;	
+  
 				/* do we have the map we might need? */
   if (mapali != NULL && ! (hmm->flags & PLAN7_MAP))
     Die("HMMER: HMM file %s has no map; you can't use --mapali.", hmmfile);
@@ -350,4 +351,9 @@ include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
 }
 
 
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

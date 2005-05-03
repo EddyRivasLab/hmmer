@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmsearch-pvm.c
- * SRE, Wed Sep 23 09:30:53 1998
- * 
  * PVM slave for hmmsearch.
- * CVS $Id$
+ * 
+ * SRE, Wed Sep 23 09:30:53 1998
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -19,6 +15,8 @@
 #include <pvm3.h>
 
 #include "squid.h"		/* general sequence analysis library    */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
@@ -78,7 +76,7 @@ main(void)
   hmm = PVMUnpackHMM();
 
   mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
-  P7Logoddsify(hmm, TRUE);
+  if (! (hmm->flags & PLAN7_HASBITS)) Die("no scores in the model");
 
   /* tell the master we're OK and ready to go (or not)
    */
@@ -261,3 +259,8 @@ int main(void)
 } 
 
 #endif
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

@@ -1,10 +1,4 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* masks.c
- * SRE, Tue Nov 18 10:12:28 1997
- * 
  * Sequence masking routines; corrections for biased composition
  * target sequences. 
  * 
@@ -18,7 +12,8 @@
  * 
  * The TraceScoreCorrection() code is the default.
  * 
- * CVS $Id$
+ * SRE, Tue Nov 18 10:12:28 1997
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -29,6 +24,8 @@
 #include <float.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 
@@ -361,3 +358,8 @@ SantaCruzCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *ds
 {
   return 0.0;			/* UNFINISHED CODE */
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

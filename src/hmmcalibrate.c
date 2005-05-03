@@ -1,9 +1,8 @@
 /* hmmcalibrate.c
- * SRE, Fri Oct 31 09:25:21 1997 [St. Louis]
- * 
  * Score an HMM against random sequence data sets;
  * set histogram fitting parameters.
  * 
+ * SRE, Fri Oct 31 09:25:21 1997 [St. Louis]
  * SVN $Id$
  */
 
@@ -27,6 +26,8 @@
 
 #include "squid.h"		/* general sequence analysis library    */
 #include "stopwatch.h"		/* process timings                      */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
@@ -463,7 +464,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
    * HMM input sets the alphabet).
    */
   sre_srandom(seed);
-  P7Logoddsify(hmm, TRUE);
+  if (! (hmm->flags & PLAN7_HASBITS)) Die("oops: that model isn't configured");
   P7DefaultNullModel(randomseq, &p1);
   hist = AllocHistogram(-200, 200, 100);
   mx = CreatePlan7Matrix(1, hmm->M, 25, 0);

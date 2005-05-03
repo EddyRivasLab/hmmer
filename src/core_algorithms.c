@@ -1,20 +1,24 @@
 /* core_algorithms.c
- * SRE, Mon Nov 11 15:58:52 1996
- * SVN $Id$
- * 
  * Simple and robust "research" implementations of Forward, Backward,
  * and Viterbi for Plan7. For optimized replacements for some of these 
  * functions, see fast_algorithms.c.
+ *
+ * SRE, Mon Nov 11 15:58:52 1996
+ * SVN $Id$
  */
 #include "config.h"
 #include "squidconf.h"
 
-#include "structs.h"
-#include "funcs.h"
-#include "squid.h"
-
 #include <string.h>
 #include <assert.h>
+
+#include "squid.h"
+
+#include "structs.h"
+#include "funcs.h"
+#include "plan7.h"
+
+
 
 static float get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L, 
 			   int k1, char t1, int s1,

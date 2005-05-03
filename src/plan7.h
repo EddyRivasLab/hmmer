@@ -1,19 +1,40 @@
 /* plan7.h
- * 
  * The Plan7 HMM structure used by HMMER.
  * 
- * SVN $Id$
  * SRE, Sat Apr 30 13:05:35 2005
+ * SVN $Id$
  */
 #ifndef PLAN7_INCLUDED
 #define PLAN7_INCLUDED
+
+/* Plan 7 algorithm modes
+ */
+enum p7_algmode {
+  P7_NO_MODE    = 0,
+  P7_LS_MODE    = 1,
+  P7_FS_MODE    = 2,
+  P7_SW_MODE    = 3,
+  P7_S_MODE     = 4,
+  P7_G_MODE     = 5
+};
+
+/* Plan 7 parameter optimization strategies, used in hmmbuild.
+ */
+enum p7_param {
+  P7_MAP_PARAM,			/* standard maximum a posteriori    */
+  P7_MD_PARAM,			/* maximum discrimination           */
+  P7_MRE_PARAM,			/* maximum relative entropy         */
+  P7_WMAP_PARAM			/* ad hoc weighted MAP              */
+};
+
 
 /* Structure: plan7_s
  * 
  * Declaration of a Plan 7 profile-HMM structure.
  * 
- * The model has three forms:
- * 1. The "core" model has 1..M nodes, and one additional <tbd1> parameter.
+ * The model has two forms:
+ * 1. The "core" model is the probability form.
+ *    It has 1..M nodes, and one additional <tbd1> parameter.
  *    Nodes 1..M-1 have M,D,I states; node M has M,D states. 
  *    
  *    t[1..M-1] are the state transition probs. (t[M] are special,
@@ -30,11 +51,12 @@
  *    profile HMM.
  *    
  *    
- * 2. The "configured" model adds the S,N,B; J; E,C,T special states
- *    of the Plan7 "algorithm-dependent" probability architecture. 
+ * 2. The "configured" model is the scoring form.
+ *    It adds the S,N,B; J; E,C,T special states of the Plan7
+ *    "algorithm-dependent" probability architecture.
  *    
- *    The S and T states are not explicitly represented anywhere,
- *    including DP algorithms. S->N is implicitly 1.0. 
+ *    The S and T states are not explicitly represented anywhere.
+ *    S->N is implicitly 1.0. 
  *    
  *    N,E,C,J transitions are set in xt[]. N,C,J emissions are implicitly
  *    equal to the null model emission probabilities, and these states emit
@@ -49,11 +71,7 @@
  *    "wing retraction" is applied by the configuration functions, to
  *    eliminate the mute all-delete B->D_1...D_M->E path. Wing
  *    retraction requires altering the transition probabilities in the
- *    nodes. In order to keep the core t[]'s unmodified, another state
- *    transition array t2[] is used to hold the configured state
- *    transition prob's for the model.  See documentation in plan7.c
- *    for the configuration functions for more detail on wing
- *    retraction (also, xref STL9/78-79).
+ *    nodes. See modelconfig.c.
  *    
  *    Only two combinations of wing retraction and internal entry/exit
  *    are allowed. In sw/fs mode models, algorithm-dependent entry and
@@ -74,40 +92,27 @@
  *    from the sum.) When the configuration is using
  *    algorithm-dependent entry, the PLAN7_BIMPOSED flag is raised;
  *    when it is using algorithm-dependent exit, the PLAN7_EIMPOSED
- *    flag is raised.  (xref STL9/79).
+ *    flag is raised.  (xref STL9/79, and modelconfig.c).
  *    
- *    After configuration, the core model is unchanged, and xt, t2, begin, end
- *    are set. In a configured model, tbd1 is not used (all entry into the model
- *    is controlled by B->M_k begins); D_1 and D_M don't exist and aren't used;
- *    D_M-1->M_M = 1.0 and M_M-1->D_M = 0.0 (because D_M doesn't exist); and
- *    all exits from the model are controlled by M_k->E ends.
+ *    After configuration, the core model is unchanged; xt, begin, end
+ *    are set to probabilities; and bsc, esc, tsc, msc, isc, and & xsc
+ *    are set to scores. In a configured model, tbd1 is not used (all
+ *    entry into the model is controlled by B->M_k begins); D_1 and
+ *    D_M don't exist and aren't used; D_M-1->M_M = 1.0 and M_M-1->D_M
+ *    = 0.0 (because D_M doesn't exist); and all exits from the model
+ *    are controlled by M_k->E ends.
  *    
- *    The PLAN7_HASALG flag is up when all of these (xt, t2, begin, end -- as
- *    well as mat and ins, which are unchanged from the core model) correspond
- *    to a fully normalized profile HMM.
+ *    The PLAN7_HASBITS flag is up when the model is configured into
+ *    score form.
  *    
- * 3. The "logoddsified" model is the configured model, converted to
- *    integer score form and ready for alignment algorithms. 
- *    tsc, bsc, esc, xsc scores correspond to t2, begin, end, and xt
- *    probabilities.
- *    
- *    The PLAN7_HASBITS flag is up when all of these are ready for
- *    alignment.
- *    
- *    
- * hmmbuild creates a core model, then configures it, then logoddsifies it,
- * then saves it. Both the core model and the logoddsified model are saved.
+ * hmmbuild creates a core model, then configures it, then saves
+ * it. Both the core model and the configured model are saved.
  * 
- * hmmemit reads a core model and a logoddsified model from a save file,
- * backcalculates a configured model from the logodds model, and can emit
- * from either the core or the configured model, both of which are fully
- * normalized profile HMMs. 
- * 
- * Search programs like hmmpfam and hmmsearch read only the
- * logoddsified model, ignoring the core model (which they don't need).
+ * Search programs like hmmpfam and hmmsearch read only the configured
+ * score model, usually ignoring the core probability model.
  */
 struct plan7_s {
-  /* The main model in probability form: data-dependent probabilities.
+  /* The core model in probability form: data-dependent probabilities.
    * Transition probabilities are usually accessed as a
    *   two-D array: hmm->t[k][TMM], for instance. They are allocated
    *   such that they can also be stepped through in 1D by pointer
@@ -120,38 +125,37 @@ struct plan7_s {
   float **ins;                  /* insert emissions. ins[1..M-1][0..19] +*/
   float   tbd1;			/* B->D1 prob (data dependent)          +*/
 
+  /* The null model probabilities.
+   */
+  float  null[MAXABET];         /* "random sequence" emission prob's     +*/
+  float  p1;                    /* null model loop probability           +*/
+
   /* The unique states of Plan 7 in probability form.
    * These are the algorithm-dependent, data-independent probabilities.
-   * Some parts of the code may briefly use a trick of copying tbd1
-   *   into begin[0]; this makes it easy to call FChoose() or FNorm()
-   *   on the resulting vector. However, in general begin[0] is not
-   *   a valid number.
-   * PLAN7_HASALG flag is up when these probs are all valid.
    */
   float   xt[4][2];             /* N,E,C,J extra states: 2 transitions        +*/
   float  *begin;                /* 1..M B->M state transitions                +*/
   float  *end;                  /* 1..M M->E state transitions (!= a dist!)   +*/
 
-  /* The model's log-odds score form.
-   * These are created from the probabilities by LogoddsifyHMM().
-   * By definition, null[] emission scores are all zero.
-   * Note that emission distributions are over possible alphabet symbols,
-   * not just the unambiguous protein or DNA alphabet: we
-   * precalculate the scores for all IUPAC degenerate symbols we
-   * may see. 
+  /* The model's log-odds score form: xref modelconfig.c
    *
-   * Note the reversed indexing on msc, isc, tsc -- for efficiency reasons.
-   * They're not probability vectors any more so we can reorder them
-   * without wildly complicating our life.
+   * Note that emission distributions are over possible alphabet
+   * symbols, not just the unambiguous protein or DNA alphabet: we
+   * precalculate the scores for all IUPAC degenerate symbols we may
+   * see.
+   *
+   * Note the reversed indexing on msc, isc, tsc -- for efficiency
+   * reasons. They're not probability vectors, so we can reorder them.
    * 
    * The _mem ptrs are where the real memory is alloc'ed and free'd,
-   * as opposed to where it is accessed.
-   * This came in with Erik Lindahl's altivec port; it allows alignment on
-   * 16-byte boundaries. In the non-altivec code, this is just a little
+   * as opposed to where it is accessed.  This came in with Erik
+   * Lindahl's altivec port; it allows alignment on 16-byte
+   * boundaries. In the non-altivec code, this is just a little
    * redundancy; tsc and tsc_mem point to the same thing, for example.
    * 
    * PLAN7_HASBITS flag is up when these scores are valid.
    */
+  enum p7_algmode mode;		/* configured algorithm mode  */
   int  **tsc;                   /* transition scores     [0.6][1.M-1]       +*/
   int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] +*/
   int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] +*/
@@ -206,12 +210,6 @@ struct plan7_s {
   float  tc1, tc2;		/* per-seq/per-domain trusted cutoff (bits)       +*/
   float  nc1, nc2;		/* per-seq/per-domain noise cutoff (bits)         +*/
 
-
-  /* The null model probabilities.
-   */
-  float  null[MAXABET];         /* "random sequence" emission prob's     +*/
-  float  p1;                    /* null model loop probability           +*/
-
   /* DNA translation scoring parameters
    * For aligning protein Plan7 models to DNA sequence.
    * Lookup value for a codon is calculated by pos1 * 16 + pos2 * 4 + pos3,
@@ -251,9 +249,8 @@ struct plan7_s {
 #define PLAN7_TC      (1<<11)	/* raised if trusted cutoffs available      */
 #define PLAN7_NC      (1<<12)	/* raised if noise cutoffs available        */
 #define PLAN7_CA      (1<<13)   /* raised if surface accessibility avail.   */
-#define PLAN7_HASALG  (1<<14)   /* raised if model is algorithm-configured  */
-#define PLAN7_BIMPOSED (1<<15)  /* raised if all entries are B->M_k (not D) */
-#define PLAN7_EIMPOSED (1<<16)  /* raised if all ends are M_k->E (not D)    */
+#define PLAN7_BIMPOSED (1<<14)  /* raised if all entries are B->M_k (not D) */
+#define PLAN7_EIMPOSED (1<<15)  /* raised if all ends are M_k->E (not D)    */
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB
@@ -289,15 +286,6 @@ struct plan7_s {
  */
 #define MOVE 0          /* trNB, trEC, trCT, trJB */
 #define LOOP 1          /* trNN, trEJ, trCC, trJJ */
-
-/* Plan 7 parameter optimization strategies, used in hmmbuild.
- */
-enum p7_param {
-  P7_MAP_PARAM,			/* standard maximum a posteriori    */
-  P7_MD_PARAM,			/* maximum discrimination           */
-  P7_MRE_PARAM,			/* maximum relative entropy         */
-  P7_WMAP_PARAM			/* ad hoc weighted MAP              */
-};
 
 
 #endif /* PLAN7_INCLUDED */

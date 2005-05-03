@@ -1,12 +1,12 @@
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
-
 /* infocontent.c
  * for evolving models to a specified information content
- * CVS $Id$
+ *
+ * SVN $Id$
  * Original author: Dawn J. Brooks (dbrooks@genetics.wustl.edu); 2004.
  */
+
+#include "squidconf.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -15,11 +15,12 @@
 #include <float.h>
 #include <ctype.h>
 
-#include "structs.h"
-#include "config.h"
-#include "funcs.h"
 #include "squid.h"
 #include "msa.h"
+
+#include "plan7.h"
+#include "structs.h"
+#include "funcs.h"
 
 
 /* Function: AdjustAveInfoContent()
@@ -324,3 +325,8 @@ EvolveEmits (double *emits, double *P, int L)
   }
   free (evolved_emit);
 }
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
+

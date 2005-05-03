@@ -67,6 +67,7 @@ OBJS =  alphabet.o\
         masks.o\
 	matrices.o\
 	misc.o\
+	modelconfig.o\
 	modelmakers.o\
 	plan7.o\
 	plan9.o\
@@ -81,6 +82,7 @@ HDRS =  config.h\
 	funcs.h\
 	globals.h\
 	lsjfuncs.h\
+	plan7.h\
 	postprob.h\
 	structs.h
 

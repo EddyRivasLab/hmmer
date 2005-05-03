@@ -1,16 +1,11 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* threads.c
- * SRE, Fri Jul 10 10:05:44 1998
- * 
  * Pthreads code shared by hmmsearch, hmmcalibrate, and hmmpfam
  * to coarse-grain parallelize on platforms capable of POSIX
  * threads. Most of the threads code, however, is in the respective
  * main's, i.e. hmmsearch.c, hmmpfam.c, hmmcalibrate.c
  * 
- * RCS $Id$
+ * SRE, Fri Jul 10 10:05:44 1998
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -85,3 +80,8 @@ ThreadNumber(void)
 }
 
 #endif /*HMMER_THREADS*/
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

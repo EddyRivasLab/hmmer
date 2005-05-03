@@ -1,11 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* misc.c
- * SRE, Thu Jul 15 18:49:19 1993
- * 
  * Functions that I don't know quite where to put yet.
+ *
+ * SRE, Thu Jul 15 18:49:19 1993
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -19,6 +16,8 @@
 #include <limits.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 
 
@@ -169,3 +168,8 @@ SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm)
   }
   return 1;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

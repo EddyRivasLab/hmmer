@@ -1,5 +1,4 @@
 /* structs.h
- * 
  * Data structures used in HMMER.
  * Also, a few miscellaneous macros and global variable declarations.
  * 
@@ -13,6 +12,9 @@
 
 #include "squid.h"
 #include "ssi.h"
+
+#include "plan7.h"
+
 
 /* Miscellaneous math macros used in the package
  */

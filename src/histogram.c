@@ -1,9 +1,8 @@
 /* histogram.c
- * SRE, Sat Jan 20 16:16:17 1996
- * 
  * Accumulation, printing, and fitting of score histograms
  * from database searches.
  *
+ * SRE, Sat Jan 20 16:16:17 1996
  * SVN $Id$
  ************************************************************
  * Basic API:

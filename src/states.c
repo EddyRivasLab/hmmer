@@ -1,16 +1,7 @@
-/************************************************************
- * HMMER - Biological sequence analysis with profile-HMMs
- * Copyright (C) 1992-1997 Sean R. Eddy
- *
- *   This source code is distributed under the terms of the
- *   GNU General Public License. See the files COPYING and
- *   GNULICENSE for details.
- *
- ************************************************************/
-
 /* states.c
- * 
- * alloc, free, and initialization of state structures
+ * alloc, free, and initialization of obsolete Plan 9 HMM structures
+ *
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -439,4 +430,9 @@ Renormalize(struct hmm_struc *hmm)
       FNorm(hmm->ins[k].p, Alphabet_size);
     }
 }
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

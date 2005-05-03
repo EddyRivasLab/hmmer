@@ -1,30 +1,20 @@
 % Organizing document for the HMMER User's Guide
 %
-% CVS $Id$
+% SVN $Id$
 
 \documentclass[11pt]{article}
-\newif\ifpdf
-\ifx\pdfoutput\undefined
-  \pdffalse
-  \typeout{Configured for dvips (PS not PDF)}
-\else
-  \pdftrue
-  \typeout{Configured for PDF output.}
-\fi
-\ifpdf
-  \usepackage[pdftex]{graphicx}     % comment out if not using graphicx
-\else  
-  \usepackage[dvips]{graphicx}      % comment out if not using graphicx
-\fi
-\usepackage{html}		% From the LaTeX2html translator
-\usepackage{apalike}
+\usepackage{newcent}
 \usepackage{fullpage}
-\usepackage{times}
 \usepackage{fancyvrb}
-\usepackage{url}
+\usepackage[pdftex]{graphicx}
+\usepackage[backref,colorlinks]{hyperref}
+\usepackage[authoryear]{natbib}
+
+%\usepackage{html}		% From the LaTeX2html translator
+%\usepackage{apalike}
+%\usepackage{url}
 
 \setcounter{secnumdepth}{1}
-
 \input{macros}
 
 \begin{document}

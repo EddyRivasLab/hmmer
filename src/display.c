@@ -1,24 +1,20 @@
-/************************************************************
- * Copyright (C) 1998 Ian Holmes
- * @LICENSE@
- ************************************************************/
-
 /* display.c
+ * Functions for displaying HMMer2.0 structures.
+ *
  * Author: Ian Holmes (ihh@sanger.ac.uk, Jun 5 1998)
  * Derived from core_algorithms.c (SRE, Nov 11 1996)
  * Incorporated SRE, Sat Nov  6 10:09:41 1999
- * 
- * Functions for displaying HMMer2.0 structures.
- *
- * CVS $Id$
+ * SVN $Id$
  */
 
 #include "config.h"
 #include "squidconf.h"
 
+#include "squid.h"
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
-#include "squid.h"
+
 
 void PrintIscore(int sc);
 
@@ -440,4 +436,10 @@ void PrintTransition(char src,
   printf ("\n");
 
 }
+
+
+/************************************************************
+ * Copyright (C) 1998 Ian Holmes
+ * @LICENSE@
+ ************************************************************/
 

@@ -1,13 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* emulation.c
- * SRE, Wed Jan 21 07:50:01 1998
- * 
  * Interfaces between HMMER and other software packages.
  * 
- * CVS $Id$
+ * SRE, Wed Jan 21 07:50:01 1998
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -17,6 +12,8 @@
 #include <string.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 
@@ -90,7 +87,8 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   float nx;			/* expected # of symbol x */
   int gap, len, qgap, qlen;	/* penalties to charge    */
   
-  P7Logoddsify(hmm, TRUE);
+  if (! (hmm->flags & PLAN7_HASBITS)) 
+    Die("Can't write a profile HMM as a GCG profile unless it's configured w/ scores.");
 
   /* GCG can't deal with long profiles. Their limit is 1000
    * positions. However, Compugen can. Therefore we warn,
@@ -235,3 +233,8 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   return;
 }
       
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

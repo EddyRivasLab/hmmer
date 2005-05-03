@@ -1,6 +1,7 @@
 /* Source code from Cambridge visit July 1997
  *
  * Position-specific matrices.
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -13,10 +14,14 @@
 #include <float.h>
 #include <math.h>		
 
-#include "funcs.h"
-#include "structs.h"
 #include "squid.h"
 #include "sre_stack.h"
+
+#include "funcs.h"
+#include "structs.h"
+#include "plan7.h"
+
+
 
 /* Function: MakeStarHMM()
  * 

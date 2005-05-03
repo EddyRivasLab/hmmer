@@ -1,10 +1,4 @@
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
-
 /* modelmakers.c
- * SRE, Fri Nov 15 10:00:04 1996
- * 
  * Construction of models from multiple alignments. Three versions:
  *    Handmodelmaker() -- use #=RF annotation to indicate match columns
  *    Fastmodelmaker() -- Krogh/Haussler heuristic
@@ -22,6 +16,9 @@
  * 2) Plan7 disallows DI and ID transitions, but an alignment may
  *    imply these. Look in trace_doctor() for how DI and ID transitions
  *    are removed.
+ *
+ * SRE, Fri Nov 15 10:00:04 1996
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -949,3 +946,8 @@ print_matassign(int *matassign, int alen)
   }
 }
 #endif
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
+

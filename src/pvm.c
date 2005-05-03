@@ -1,13 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* pvm.c
- * SRE, Wed Aug  5 15:40:09 1998 [St. Louis]
- * 
  * PVM code shared amongst pvm masters and slaves.
  * 
- * CVS $Id$
+ * SRE, Wed Aug  5 15:40:09 1998 [St. Louis]
+ * SVN $Id$
  */
 #include "config.h"
 #include "squidconf.h"
@@ -20,6 +15,8 @@
 #include <pvm3.h>
 
 #include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 
@@ -441,3 +438,8 @@ PVMUnpackHMM(void)
 
 
 #endif /* HMMER_PVM */
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

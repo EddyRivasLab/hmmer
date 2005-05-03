@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmemit.c
- * SRE, Sun Mar  8 14:11:24 1998 [St. Louis]
- * 
  * main() for generating sequences from an HMM
- * CVS $Id$
+ *
+ * SRE, Sun Mar  8 14:11:24 1998 [St. Louis]
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -17,11 +13,14 @@
 #include <string.h>
 #include <time.h>
 
+#include "squid.h"		/* general sequence analysis library    */
+#include "msa.h"		/* squid's multiple sequence i/o        */
+
+#include "plan7.h"		/* plan 7 profile HMM structure         */
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
-#include "msa.h"		/* squid's multiple sequence i/o        */
+
 
 static char banner[] = "hmmemit - generate sequences from a profile HMM";
 
@@ -261,4 +260,9 @@ main(int argc, char **argv)
   SqdClean();
   return 0;
 }
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

@@ -1,16 +1,11 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
-
 /* mathsupport.c
- * SRE, Mon Nov 11 15:07:33 1996
- * 
  * Miscellaneous mathematical functions.
  * General functions are in the SQUID library sre_math.c.
  * These functions are too HMM-specific to warrant being in the
  * SQUID library.
  * 
+ * SRE, Mon Nov 11 15:07:33 1996
+ * SVN $Id$
  */
 
 
@@ -25,6 +20,8 @@
 
 #include "squid.h"
 #include "dirichlet.h"		/* Gammln() is in dirichlet module */
+
+#include "plan7.h"
 #include "funcs.h"
 #include "structs.h"
 
@@ -279,5 +276,11 @@ P_PvecGivenDirichlet(float *p, int n, float *alpha)
   logp += Gammln(sum);
   return logp;
 }
+
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 
 

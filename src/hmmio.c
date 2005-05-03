@@ -1,11 +1,12 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmio.c
- * 
  * Input/output of HMMs.
  *
+ * SVN $Id$
+ */
+
+
+
+/*
  * As of HMMER 2.0, HMMs are saved by default in a tabular ASCII format
  * as log-odds or log probabilities scaled to an integer. A binary save
  * file format is also available which is faster to access (a
@@ -72,10 +73,12 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-#include <unistd.h> /* to get SEEK_CUR definition on silly Suns */
+#include <unistd.h> /* to get SEEK_CUR definition on Solaris */
 
 #include "squid.h"
 #include "ssi.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 
@@ -93,6 +96,8 @@ static unsigned int  v19magic = 0xe8ededb4; /* V1.9 binary: "hmm4" + 0x80808080 
 static unsigned int  v19swap  = 0xb4edede8; /* V1.9 binary, byteswapped         */ 
 static unsigned int  v20magic = 0xe8ededb5; /* V2.0 binary: "hmm5" + 0x80808080 */
 static unsigned int  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
+static unsigned int  v24magic = 0xe8ededb6; /* V2.4 binary: "hmm6" + 0x80808080 */
+static unsigned int  v24swap  = 0xb6edede8; /* V2.4 binary, byteswapped         */
 
 /* Old HMMER 1.x file formats.
  */
@@ -104,6 +109,8 @@ static unsigned int  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         
 #define HMMER1_7F  6            /* flat ascii HMMER 1.7 */
 #define HMMER1_9B  7            /* HMMER 1.9 binary     */
 #define HMMER1_9F  8            /* HMMER 1.9 flat ascii */
+
+static int  read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 
 static int  read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
@@ -291,7 +298,10 @@ or may be a different kind of binary altogether.\n", hmmfile);
   }
   rewind(hmmfp->f);
   
-  if        (strncmp("HMMER2.0", buf, 8) == 0) {
+  if        (strncmp("HMMER2.4", buf, 8) == 0) {
+    hmmfp->parser = read_asc24hmm;
+    return hmmfp;
+  } else if (strncmp("HMMER2.0", buf, 8) == 0) {
     hmmfp->parser = read_asc20hmm;
     return hmmfp;
   } else if (strncmp("HMMER v1.9", buf, 10) == 0) {
@@ -381,7 +391,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   int x;                        /* counter for symbols           */
   int ts;			/* counter for state transitions */
 
-  fprintf(fp, "HMMER2.0  [%s]\n", PACKAGE_VERSION);  /* magic header */
+  fprintf(fp, "HMMER2.4  [%s]\n", PACKAGE_VERSION);  /* magic header */
 
   /* write header information
    */
@@ -407,13 +417,17 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   if (hmm->flags & PLAN7_NC)
     fprintf(fp, "NC    %.1f %.1f\n", hmm->nc1, hmm->nc2);
 
-  /* Specials
+  /* The algorithm mode.
    */
-  fputs("XT     ", fp);
-  for (k = 0; k < 4; k++)
-    for (x = 0; x < 2; x++)
-      fprintf(fp, "%6s ", prob2ascii(hmm->xt[k][x], 1.0));
-  fputs("\n", fp);
+  switch (hmm->mode) {
+  case P7_NO_MODE:     fprintf(fp, "MODE  NONE\n");                         break;
+  case P7_LS_MODE:     fprintf(fp, "MODE  LS (glocal, multihit))\n");       break;
+  case P7_FS_MODE:     fprintf(fp, "MODE  FS (local, multihit)\n");         break;
+  case P7_SW_MODE:     fprintf(fp, "MODE  SW (local, single best hit)\n");  break;
+  case P7_S_MODE:      fprintf(fp, "MODE  S  (glocal, single best hit)\n"); break;
+  case P7_G_MODE:      fprintf(fp, "MODE  G  (global)\n");                  break;
+  default: Die("no such mode %s\n", hmm->mode);
+  }
 
   /* Save the null model first, so HMM readers can decode
    * log odds scores on the fly. Save as log odds probabilities
@@ -461,9 +475,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
       fprintf(fp, " %5c ", hmm->flags & PLAN7_CS ? hmm->cs[k] : '-');
       for (ts = 0; ts < 7; ts++)
 	fprintf(fp, "%6s ", (k < hmm->M) ? prob2ascii(hmm->t[k][ts], 1.0) : "*"); 
-      fprintf(fp, "%6s ", prob2ascii(hmm->begin[k], 1.0));
-      fprintf(fp, "%6s ", prob2ascii(hmm->end[k], 1.0));
-      
+
       fputs("\n", fp);
     }
   fputs("//\n", fp);
@@ -555,6 +567,226 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
  *   way to handle errors.
  * 
  *****************************************************************/
+
+static int
+read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm) 
+{
+  struct plan7_s *hmm;
+  char  buffer[512];
+  char *s;
+  int   M;
+  float p;
+  int   k, x;
+  int   atype;			/* alphabet type, hmmAMINO or hmmNUCLEIC */
+
+  hmm = NULL;
+  if (feof(hmmfp->f) || fgets(buffer, 512, hmmfp->f) == NULL) return 0;
+  if (strncmp(buffer, "HMMER2.4", 8) != 0)             goto FAILURE;
+
+  /* Get the header information: tag/value pairs in any order,
+   * ignore unknown tags, stop when "HMM" is reached (signaling
+   * start of main model)
+   */
+  hmm = AllocPlan7Shell();
+  M = -1;
+  while (fgets(buffer, 512, hmmfp->f) != NULL) {
+    if      (strncmp(buffer, "NAME ", 5) == 0) Plan7SetName(hmm, buffer+6);
+    else if (strncmp(buffer, "ACC  ", 5) == 0) Plan7SetAccession(hmm, buffer+6);
+    else if (strncmp(buffer, "DESC ", 5) == 0) Plan7SetDescription(hmm, buffer+6);
+    else if (strncmp(buffer, "LENG ", 5) == 0) M = atoi(buffer+6);
+    else if (strncmp(buffer, "NSEQ ", 5) == 0) hmm->nseq = atoi(buffer+6);
+    else if (strncmp(buffer, "ALPH ", 5) == 0) 
+      {				/* Alphabet type */
+	s2upper(buffer+6);
+	if      (strncmp(buffer+6, "AMINO",   5) == 0) atype = hmmAMINO;
+	else if (strncmp(buffer+6, "NUCLEIC", 7) == 0) atype = hmmNUCLEIC;
+	else goto FAILURE;
+
+	if      (Alphabet_type == hmmNOTSETYET) SetAlphabet(atype);
+	else if (atype != Alphabet_type) 
+	  Die("Alphabet mismatch error.\nI thought we were working with %s, but tried to read a %s HMM.\n", AlphabetType2String(Alphabet_type), AlphabetType2String(atype));
+      }
+    else if (strncmp(buffer, "RF   ", 5) == 0) 
+      {				/* Reference annotation present? */
+	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_RF;
+      }
+    else if (strncmp(buffer, "CS   ", 5) == 0) 
+      {				/* Consensus annotation present? */
+	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_CS;
+      }
+    else if (strncmp(buffer, "MAP  ", 5) == 0) 
+      {				/* Map annotation present? */
+	if (sre_toupper(*(buffer+6)) == 'Y') hmm->flags |= PLAN7_MAP;
+      }
+    else if (strncmp(buffer, "COM  ", 5) == 0) 
+      {				/* Command line log */
+	StringChop(buffer+6);
+	if (hmm->comlog == NULL)
+	  hmm->comlog = Strdup(buffer+6);
+	else
+	  {
+	    hmm->comlog = ReallocOrDie(hmm->comlog, sizeof(char *) * 
+				       (strlen(hmm->comlog) + 1 + strlen(buffer+6)));
+	    strcat(hmm->comlog, "\n");
+	    strcat(hmm->comlog, buffer+6);
+	  }
+      }
+    else if (strncmp(buffer, "DATE ", 5) == 0) 
+      {				/* Date file created */
+	StringChop(buffer+6);
+	hmm->ctime= Strdup(buffer+6); 
+      }
+    else if (strncmp(buffer, "GA   ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->ga1 = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->ga2 = atof(s);
+	hmm->flags |= PLAN7_GA;
+      }
+    else if (strncmp(buffer, "TC   ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->tc1 = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->tc2 = atof(s);
+	hmm->flags |= PLAN7_TC;
+      }
+    else if (strncmp(buffer, "NC   ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->nc1 = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->nc2 = atof(s);
+	hmm->flags |= PLAN7_NC;
+      }
+    else if (strncmp(buffer, "MODE ", 5) == 0)
+      {
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	if      (strcmp(s, "LS")   == 0) hmm->mode = P7_LS_MODE;
+	else if (strcmp(s, "FS")   == 0) hmm->mode = P7_FS_MODE;
+	else if (strcmp(s, "SW")   == 0) hmm->mode = P7_SW_MODE;
+	else if (strcmp(s, "S")    == 0) hmm->mode = P7_S_MODE;
+	else if (strcmp(s, "G")    == 0) hmm->mode = P7_G_MODE;
+	else if (strcmp(s, "NONE") == 0) hmm->mode = P7_NO_MODE;
+	else goto FAILURE;
+      }
+    else if (strncmp(buffer, "NULT ", 5) == 0) 
+      {				/* Null model transitions */
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->p1 = ascii2prob(s, 1.);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->p1 = hmm->p1 / (hmm->p1 + ascii2prob(s, 1.0));
+      }
+    else if (strncmp(buffer, "NULE ", 5) == 0) 
+      {				/* Null model emissions */
+	if (Alphabet_type == hmmNOTSETYET)
+	  Die("ALPH must precede NULE in HMM save files");
+	s = strtok(buffer+6, " \t\n");
+	for (x = 0; x < Alphabet_size; x++) {
+	  if (s == NULL) goto FAILURE;
+	  hmm->null[x] = ascii2prob(s, 1./(float)Alphabet_size);    
+	  s = strtok(NULL, " \t\n");
+	}
+      }
+    else if (strncmp(buffer, "EVD  ", 5) == 0) 
+      {				/* EVD parameters */
+	hmm->flags |= PLAN7_STATS;
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->mu = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->lambda = atof(s);
+      }
+    else if (strncmp(buffer, "CKSUM", 5) == 0) hmm->checksum = atoi(buffer+6);
+    else if (strncmp(buffer, "HMM  ", 5) == 0) break;
+  }
+
+				/* partial check for mandatory fields */
+  if (feof(hmmfp->f))                goto FAILURE;
+  if (M < 1)                         goto FAILURE;
+  if (hmm->name == NULL)             goto FAILURE;
+  if (Alphabet_type == hmmNOTSETYET) goto FAILURE;
+
+  /* Main model section. Read as integer log odds, convert
+   * to probabilities
+   */
+  AllocPlan7Body(hmm, M);  
+				/* skip an annotation line */
+  if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
+				/* parse tbd1 line */
+  if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
+  if ((s = strtok(buffer, " \t\n")) == NULL) goto FAILURE;
+  p = ascii2prob(s, 1.0);
+  if ((s = strtok(NULL,   " \t\n")) == NULL) goto FAILURE;
+  if ((s = strtok(NULL,   " \t\n")) == NULL) goto FAILURE;
+  hmm->tbd1 = ascii2prob(s, 1.0);
+  hmm->tbd1 = hmm->tbd1 / (p + hmm->tbd1);
+
+				/* main model */
+  for (k = 1; k <= hmm->M; k++) {
+                                /* Line 1: k, match emissions, map */
+    if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
+    if ((s = strtok(buffer, " \t\n")) == NULL) goto FAILURE;
+    if (atoi(s) != k)                          goto FAILURE;
+    for (x = 0; x < Alphabet_size; x++) {
+      if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+      hmm->mat[k][x] = ascii2prob(s, hmm->null[x]);
+    }
+    if (hmm->flags & PLAN7_MAP) {
+      if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+      hmm->map[k] = atoi(s);
+    }
+				/* Line 2:  RF and insert emissions */
+    if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
+    if ((s = strtok(buffer, " \t\n")) == NULL) goto FAILURE;
+    if (hmm->flags & PLAN7_RF) hmm->rf[k] = *s;
+    if (k < hmm->M) {
+      for (x = 0; x < Alphabet_size; x++) {
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->ins[k][x] = ascii2prob(s, hmm->null[x]);
+      }
+    }
+				/* Line 3: CS and transitions */
+    if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
+    if ((s = strtok(buffer, " \t\n")) == NULL) goto FAILURE;
+    if (hmm->flags & PLAN7_CS) hmm->cs[k] = *s;
+    for (x = 0; x < 7; x++) {
+      if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+      if (k < hmm->M) hmm->t[k][x] = ascii2prob(s, 1.0);
+    }
+  } /* end loop over main model */
+
+  /* Advance to record separator
+   */
+  while (fgets(buffer, 512, hmmfp->f) != NULL) 
+    if (strncmp(buffer, "//", 2) == 0) break;
+  
+  Plan7Renormalize(hmm);	/* Paracel reported bug 6/11/99 */
+
+  /* Configure model into the given mode.
+   */
+  switch (hmm->mode) {
+  case P7_LS_MODE: Plan7LSConfig(hmm);     break;
+  case P7_FS_MODE: Plan7FSConfig(hmm);     break;
+  case P7_SW_MODE: Plan7SWConfig(hmm);     break;
+  case P7_S_MODE:  Plan7GlobalConfig(hmm); break;
+  case P7_G_MODE:  Plan7NakedConfig(hmm);  break;
+  case P7_NO_MODE: break;
+  default: Die("no such mode %d\n", hmm->mode);
+  }    
+
+  /* Set flags and return
+   */
+  hmm->flags |= PLAN7_HASPROB;	/* probabilities are valid */
+  *ret_hmm = hmm;
+  return 1;
+
+FAILURE:
+  if (hmm  != NULL) FreePlan7(hmm);
+  *ret_hmm = NULL;
+  return 1;
+}
+
 
 static int
 read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm) 
@@ -1738,3 +1970,8 @@ read_plan9_aschmm(FILE *fp, int version)
   P9Renormalize(hmm);
   return hmm;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

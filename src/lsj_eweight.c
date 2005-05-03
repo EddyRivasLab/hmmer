@@ -1,16 +1,11 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* lsjfuncs.c
- * LSJ, Wed Feb  4 15:03:58 CST 2004
- * 
  * entropy targeting:
  * Code for setting effective sequence number (in hmmbuild) by
  * achieving a certain target entropy loss, relative to background
  * null distribution.
  *
- * CVS $Id$
+ * LSJ, Wed Feb  4 15:03:58 CST 2004
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -19,10 +14,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "structs.h"
-#include "funcs.h"
 #include "squid.h"
 #include "vectorops.h"
+
+#include "plan7.h"
+#include "structs.h"
+#include "funcs.h"
 #include "lsjfuncs.h"
 
 /* Function: Eweight() LSJ 2/6/04
@@ -216,4 +213,9 @@ void ModelContent(float *ent1, float *ent2, int M)
   printf("Counts+Priors Mean Entropy/Column: %2.4f\n", mean2);
   printf("Diff: %2.4f\n", (mean2-mean1));
 }
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

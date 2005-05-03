@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* emit.c
- * SRE, Sun Mar  8 12:26:58 1998
- * CVS $Id$
- * 
  * Generation of sequences/traces from an HMM.
+ *
+ * SRE, Sun Mar  8 12:26:58 1998
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -14,9 +10,12 @@
 
 #include <ctype.h>
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
-#include "squid.h"
+
 
 
 
@@ -357,3 +356,8 @@ StateOccupancy(struct plan7_s *hmm, float **ret_mp, float **ret_ip, float **ret_
   *ret_dp = fdp;
   *ret_ip = fip;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

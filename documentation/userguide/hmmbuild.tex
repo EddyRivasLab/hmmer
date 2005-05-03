@@ -9,13 +9,16 @@ We'll start with a description of the ``Plan 7'' profile HMM
 architecture used by HMMER, and the philosophy behind it. It differs
 in small but important ways from the original Krogh/Haussler
 architecture. Specifically, Plan 7 is a fully probabilistic model of
-both local and global profile alignment.
+both local and global profile alignment. It distinguishes between
+\emph{data-dependent} probabilities that are learned from a query
+multiple alignment and \emph{algorithm-dependent} probabilities that
+are configured by choosing a particular alignment mode.
 
 \subsection{The Plan 7 profile HMM architecture}
 
-HMMER uses a profile HMM architecture called Plan 7. This is somewhat
+HMMER uses a profile HMM architecture called Plan 7 that is somewhat
 more complex than the original profile HMM architecture introduced by
-Krogh, Haussler, and coworkers \cite{Krogh94}.
+Krogh, Haussler, and coworkers \citep{Krogh94}.
 
 The heart of a profile HMM is a linear set of match (M) states, one
 per consensus column in the multiple alignment. Each M state emits
@@ -25,20 +28,23 @@ corresponding column of the multiple alignment. Each match state
 therefore carries a vector of 20 probabilities, for scoring the 20
 amino acids.
 
-Some analysis approaches, including BLOCKS \cite{Henikoff94}, are
+Some analysis approaches, including BLOCKS \citep{Henikoff94}, are
 essentially equivalent to a profile HMM composed only of M states.
 These methods are called \emph{weight matrices} or
 \emph{position-specific score matrices} (PSSMs); they look for
 \emph{ungapped} alignments to a consensus.
 
 \begin{figure}[t]
-\includegraphics{plan7}
-\caption{\textit{The Plan7 architecture. Squares indicate match states
-(modeling consensus positions in the alignment). Diamonds indicate
-insert states (modeling insertions relative to consensus) and special
-random sequence emitting states. Circles indicate delete states
-(modeling deletions relative to consensus) and special begin/end
-states. Arrows indicate state transitions.}}
+\includegraphics{plan7-core}
+\caption{\textit{The core of the Plan7 architecture. Squares indicate
+match states (modeling consensus positions in the alignment).
+Diamonds indicate insert states (modeling insertions relative to
+consensus) and special random sequence emitting states. Circles
+indicate delete states (modeling deletions relative to consensus) and
+special begin/end states. Arrows indicate state transitions. Every
+match state and insert state also carries an emission probability
+distribution, for the observable symbols (4 nucleotides or 20 amino
+acids).}}
 \end{figure}
 
 A profile HMM is capable of modeling gapped alignments, e.g. including
@@ -67,7 +73,7 @@ The model begins and ends with dummy non-emitting states, B and E.
 
 This core section of the Plan 7 model, composed of M, D, and I nodes,
 flanked by B and E states, is essentially a Krogh/Haussler profile
-HMM.  This is the ``main model''. The main model controls the
+HMM.  This is the ``core model''. The core model controls the
 \textit{data dependent} features of the model. All the probability
 parameters in the main model are generally estimated from observed
 frequencies of residues and transitions in a multiple sequence
@@ -77,20 +83,26 @@ Unlike the original Krogh/Haussler and HMMER model architecture, Plan
 7 has no D $\rightarrow$ I or I $\rightarrow$ D transitions. This
 reduction from 9 to 7 transitions per node in the main model is one of
 the origins of the name Plan 7. (The original Krogh/Haussler
-architecture is called Plan 9 in parts of the code.)\footnote{The true
-origin of the codename is left undocumented, as it reveals an
-inordinate fondness for bad science fiction movies. Frighteningly,
-David Haussler understood immediately.}
+architecture is called Plan 9 in parts of the HMMER source
+code.)\footnote{The true origin of the codename is left undocumented,
+as it reveals an inordinate fondness for bad science fiction
+movies. Frighteningly, David Haussler understood immediately.}
 
-The other states (S,N,C,T,J) are ``special states''. They (combined
-with special entry probabilities from B and exit probabilities to E)
-control \textit{algorithm dependent} features of the model: e.g. how
-likely the model is to generate various sorts of local or multihit
+\begin{figure}[t]
+\includegraphics{plan7-search}
+\caption{\textit{A complete Plan7 model, after configuration.}}
+\end{figure}
+
+The core model is augmented by five special states (S,N,C,T,J) and
+additional state transition parameters to create the fully configured
+Plan7 model. These additional states and parameters control
+\textit{algorithm dependent} features of the model: e.g. how likely
+the model is to generate various sorts of local or multihit
 alignments. The algorithm dependent parameters are typically not
 learned from data, but rather set externally by choosing a desired
 alignment style.
 
-The abbreviations for the states are as follows:
+In summary, the abbreviations for the states are as follows:
 
 \begin{wideitem}
 \item [\textbf{M$_x$}] Match state $x$.  Has $K$ emission probabilities.
@@ -133,9 +145,10 @@ realistic insertion models are computationally more expensive. The
 marginal expected gain in performance is not thought to be worth the
 extra computational effort.)
 
-As described in \cite{Krogh94}, profile HMMs were models of
-\emph{global alignment}: the $S$ that the model generates usually
-starts at the first match state and ends at the last match state.
+As described in \citep{Krogh94}, profile HMMs were originally
+described as models of \emph{global alignment}: the sequence $S$ that
+the model generates usually starts at the first match state and ends
+at the last match state.
 
 In real alignments of real biological sequences, global alignment is
 rarely useful. A profile HMM is usually a model of a conserved domain,
@@ -149,7 +162,7 @@ sequence and a part of the query model. The common tools of sequence
 analysis -- BLAST, FASTA, and Smith/Waterman alignment -- are all
 local alignment algorithms.
 
-It is straightforward to wrap local alignment style algorithms around
+It is straightforward to hack local alignment style algorithms around
 the core Krogh/Haussler model of global alignment to a domain.  This
 is what early versions of profile HMM software did, including
 HMMER1. But some of the power of probabilistic modeling gets thrown
@@ -169,20 +182,21 @@ the \emph{unaligned} sequence in the target. This is what Plan 7 does.
 The Plan 7 architecture explicitly models the \emph{entire} target
 sequence, regardless of how much of that sequence matches the main
 model. \emph{All alignments to a Plan 7 model are ``global''
-alignments (!)}, in that the complete target sequence is aligned to a
-complete path through the model from a start state (S) to the terminal
-state (T).  However, some (possibly most) of the sequence may be
-assigned to Plan 7 states (N,C,J) that generate nonhomologous,
-unaligned, ``random'' sequence that is not aligned to the main model.
-Thus, the algorithm dependent parts of the model control the
-\textit{apparent} locality of the alignments.
+alignments:} a complete target sequence is aligned to a complete path
+through the model from a start state (S) to the terminal state (T).
+However, some (possibly most) of the sequence may be assigned to Plan
+7 states (N,C,J) that generate nonhomologous, unaligned, ``random''
+sequence that is not aligned to the main model.  Thus, the algorithm
+dependent parts of the model control the \emph{apparent} locality of
+the alignments.
 
 Local alignments with respect to the sequence (i.e., allowing a match
 to the main model anywhere internal to a longer sequence) are
 controlled by the N and C states. If the N $\rightarrow$ N transition
-is set to 0, alignments are constrained to start in the main model at
-the first node. Similarly, if the C $\rightarrow$ C transition is set
-to 0, alignments are constrained to end from the very last node.
+is set to 0, alignments are constrained to have no unaligned
+N-terminal sequence. Similarly, if the C $\rightarrow$ C transition is
+set to 0, alignments are constrained to have no unaligned C-terminal
+sequence.
 
 Local alignments with respect to the model (i.e., allowing fragments
 of the model to match the sequence) are controlled by B $\rightarrow$
@@ -229,15 +243,11 @@ default mode for HMMER.
 with respect to both the main model and the sequence; in addition,
 multiple nonoverlapping alignments to more than one domain in the same
 target sequence are allowed.  $t_{NN}$ and $t_{CC}$ set to $t_{GG}$
-from the null model.  $t_{EJ}$ is set to 0.5.  Internal entries are
-set to $0.5/(M-1)$ for a model with $M$ match states. Exit
-probabilities are set such that the overall chance of exiting from an
-internal match state is 0.5, and the posterior probability
-distribution over which match state is exited is equal (I'm wording
-this carefully; the M $\rightarrow$ E probabilities are not equal,
-because there's a small compensation for the fact that if you can
-leave from $M_5$, then the chance that you'll even get to $M_6$ is
-reduced.) Activated by the \prog{hmmbuild -f} option.
+from the null model.  $t_{EJ}$ is set to 0.5.  Entry and exit
+probabilities are set in a way such that all subsequences $i,j$ of the
+model (starting at position $i$ and ending from position $j$) are
+equiprobable (this is only roughly correct, as worded here; see source
+code for detail). Activated by the \prog{hmmbuild -f} option.
 
 \item [\emprog{hmmsw}] Smith/Waterman ``classic'' local alignment,
 single best alignment per target. Same as \emprog{hmmfs} above, but
@@ -277,27 +287,27 @@ models; for maximum detection ability of all homologies, both sets of
 models have to be used.
 \end{srefaq}
 
-\subsubsection{wing retraction in Plan 7 dynamic programming}
+\subsection{Technical details on Plan 7 model configuration}
 
-A rather technical point...
+Skip this section unless you're interested in source code level detail.
 
-In the figure of the Plan 7 architecture, you may have noticed that
-the first and last delete states are greyed out. Internally in HMMER,
-these delete states exist in the ``probability form'' of the model
-(when the model is being worked with in every way except alignments)
-but they are carefully removed in the ``search form'' of the model
-(when the model is converted to log-odds scores and used for
-alignments). This process is called ``wing retraction'' in the code;
-an analogy to a swept-wing fighter changing from a wings-out takeoff
-and landing configuration to a wings-back configuration for high speed
-flight.
+In the figure of the fully configured Plan 7 architecture, you may
+have noticed that the first and last delete states are greyed
+out. Internally in HMMER, these delete states exist in the
+``probability form'' of the model (when the model is being worked with
+in every way except alignments) but they are carefully removed in the
+``search form'' of the model (when the model is converted to log-odds
+scores and used for alignments). This process is called ``wing
+retraction'' in the code, by analogy to a swept-wing fighter changing
+from a wings-out takeoff and landing configuration to a wings-back
+configuration for high speed flight.
 
 The technical problem that this is addressing is that the Plan 7 model
 allows cycles through the J state. If a continuous nonemitting ``mute
 cycle'' were allowed (J, B, D states, E, and back to J), dynamic
 programming recursions would fail. This is why special mute states
 like delete states must be handled carefully in HMM dynamic
-programming algorithms \cite{Durbin98}. The easiest way to prevent a
+programming algorithms \citep{Durbin98}. The easiest way to prevent a
 mute cycle is to disallow them: make sure that the model must pass
 through at least one match state per path through the main model.
 Usually this can be done by breaking the chain somewhere and absorbing
@@ -310,10 +320,29 @@ $\rightarrow$ M$_{3}$ entry probability is incremented by the
 probability of the ``data dependent'' path B $\rightarrow$ D$_1$
 $\rightarrow$ D$_2$ $\rightarrow$ M$_3$.
 
-Having the wing retraction step, rather than {\em always} folding
-these probabilities together, is a design decision, preserving a
-distinction between the ``algorithm dependent'' and ``data dependent''
-parts of the model.
+Wing retraction is done by the algorithm configuration routines. It is
+only done for algorithms that allow beginning in or ending from a
+delete state (global and glocal alignment modes). It is not done for
+fully local Smith/Waterman modes (hmmfs and hmmsw modes) where the
+algorithm-dependent begin and end distributions force entry and exit
+only at match states.  Having the wing retraction step, rather than
+{\em always} folding these probabilities together, is a design
+decision, preserving a distinction between the ``algorithm dependent''
+and ``data dependent'' parts of the model.
+
+Because of wing retraction, the $D_1$ and $D_M$ states are never
+accessed in dynamic programming alignment code. Their probabilities
+are still kept in the model, so that the core model is remembered, and
+a model can be ``deconfigured'' or reconfigured to a new algorithm
+style. 
+
+This leads to a peculiar technicality: the match state exit
+transitions in a configured model can appear to be unnormalized,
+because the exit transition from match state $k$ includes a dollop of
+extra probability for the path that goes all-delete for the remainder
+of the model ($k+1..M$). This is as should be, and everything balances
+out, because exactly the sum of all those extra dollops of probability
+get ignored when the DP algorithms ignore the final delete state.
 
 \subsection{Parsing the residue information in input multiple sequence alignments}
 
@@ -390,7 +419,7 @@ a choice of three architecture construction algorithms.
 By default, HMMER uses a maximum a posteriori (MAP) architecture
 algorithm, e.g. one that is guaranteed to find the model architecture
 with the highest posterior probability for the alignment data
-\cite{Durbin98}.  This is a dynamic programming algorithm, and it is
+\citep{Durbin98}.  This is a dynamic programming algorithm, and it is
 almost always fast enough that you won't notice that it's running --
 the rate limiting step in model construction is more often the
 sequence weighting algorithm (see below). 
@@ -427,7 +456,7 @@ one of the other two architecture construction algorithms,
 The \prog{--fast} option selects an alternative, heuristic model
 architecture algorithm: all columns that contain more than a certain
 fraction $x$ of gap characters will be assigned as an insert column.
-This is the original Krogh/Haussler method \cite{Krogh94}.
+This is the original Krogh/Haussler method \citep{Krogh94}.
 
 By default, $x$ is 0.5. It can be set to something else using the
 \prog{--gapmax <x>} option. $x$ can be anything between 0 and 1.  The
@@ -488,17 +517,17 @@ a sequence weighting algorithm to downweight counts from closely
 related sequences, and upweight distantly related sequences.
 
 The default weighting algorithm is the Gerstein/Sonnhammer/Chothia
-tree weighting algorithm \cite{Gerstein94}. 
+tree weighting algorithm \citep{Gerstein94}. 
 
 Several weighting schemes are available as options, as follows:
 
 \begin{tabular}{lll}
 Option            & Weighting method   &  Reference \\ \hline
-\prog{--wblosum}  & Henikoff simple filter weights  & \cite{Henikoff92} \\
-\prog{--wgsc}     & GSC tree weights (default)      & \cite{Gerstein94}\\
-\prog{--wme}      & maximum entropy (ME)            & \cite{KroghMitchison95}\\
-\prog{--wpb}      & Henikoff position-based weights & \cite{Henikoff94b}\\
-\prog{--wvoronoi} & Sibbald/Argos Voronoi weights   & \cite{Sibbald90}\\
+\prog{--wblosum}  & Henikoff simple filter weights  & \citep{Henikoff92} \\
+\prog{--wgsc}     & GSC tree weights (default)      & \citep{Gerstein94}\\
+\prog{--wme}      & maximum entropy (ME)            & \citep{KroghMitchison95}\\
+\prog{--wpb}      & Henikoff position-based weights & \citep{Henikoff94b}\\
+\prog{--wvoronoi} & Sibbald/Argos Voronoi weights   & \citep{Sibbald90}\\
 \prog{--wnone}    & don't do any weighting          & \\ \hline
 \end{tabular}
 
@@ -508,7 +537,7 @@ sequences). If you are trying to weight by the GSC, BLOSUM, or Voronoi
 methods, for alignments over a threshold of $n$ sequences, the
 weighting algorithm is instead switched automatically to the
 \prog{--wpb} style, Henikoff position based weights
-\cite{Henikoff94b}. The default switching threshold is 1000 sequences;
+\citep{Henikoff94b}. The default switching threshold is 1000 sequences;
 this can be adjusted with the \prog{--pbswitch <n>} option. Set
 \prog{--pbswitch} to something very large if you don't want this
 algorithm switching behavior to happen.
@@ -517,7 +546,7 @@ The \prog{--wblosum} scheme works by single linkage clustering of all
 sequences related by more than some threshold $x$ of fractional
 sequence identity, then distributing a weight of 1 across each
 cluster. By default $x$ is 0.62 (62\%), the rule used for weighting
-the BLOSUM62 scoring matrix \cite{Henikoff92}. The \prog{--idlevel
+the BLOSUM62 scoring matrix \citep{Henikoff92}. The \prog{--idlevel
 <x>} option can be used to set the threshold to something else.
 Beware, \prog{--idlevel} also affects the effective sequence number
 calculation, as described in the next subsection.
@@ -526,7 +555,7 @@ There is no satisfactory theory behind setting the weights; this is an
 \emph{ad hoc} step. The maximum entropy method comes with the most
 theoretical motivation, but even it is a bit of a stretch as far as
 biological realism. A correct model would incorporate an explicit
-model of phylogeny (e.g. ``tree HMMs'' \cite{Mitchison95}). There is a
+model of phylogeny (e.g. ``tree HMMs'' \citep{Mitchison95}). There is a
 growing body of literature from Jotun Hein, Ian Holmes, Bill Bruno,
 Richard Goldstein and others, moving towards combining profile HMMs
 and explicit phylogenetic modeling.
@@ -556,7 +585,7 @@ counts, though. Observed count data are combined with \emph{priors},
 which incorporate \emph{a priori} knowledge about what homologous,
 aligned sequences usually look like; profile HMM parameters are
 \emph{mean posterior estimates}, not maximum likelihood estimates
-\cite{Durbin98,Sjolander96}. The less count data there are, the more
+\citep{Durbin98,Sjolander96}. The less count data there are, the more
 the priors affect the parameter estimates, so the choice of effective
 sequence number $X$ becomes relevant.
 
@@ -639,7 +668,7 @@ for a mixture of Dirichlet parameters $\alpha$, with each individual
 Dirichlet mixture component numbered by $k$. The probability of
 mixture $k$ given the count vector $\vec{c}$, $P(k | \vec{c})$, is a
 mess of gamma functions; its equation is given by Sj\"{o}lander
-\cite{Sjolander96,Durbin98}.
+\citep{Sjolander96,Durbin98}.
 
 In the case of a single-component Dirichlet, this equation reduces to:
 
@@ -659,7 +688,7 @@ HMMER has hardcoded defaults; copies of these defaults are in
 prior file format (see page~\pageref{section:priorfiles}).
 
 For proteins, the match emission prior is the nine-component Blocks9
-mixture from Sj\"{o}lander et al. \cite{Sjolander96}. The insert
+mixture from Sj\"{o}lander et al. \citep{Sjolander96}. The insert
 emission prior is a slightly hydrophilic-biased distribution estimated
 from inserted residues in an early version of the Pfam database. The
 insert prior has then been artificially scaled to very high values of
@@ -688,7 +717,7 @@ the \prog{--pam <f>} option. There is a weighting parameter $A$ that
 affects how much weight (in counts) the prior has; by default $A=20$,
 but this can be set with the \prog{--pamwgt <x>} option. This
 implements the ``substitution matrix mixture'' strategy discussed by
-Durbin et al. on p.117-119 \cite{Durbin98}.
+Durbin et al. on p.117-119 \citep{Durbin98}.
 
 \subsection{Calculating scores from counts}
 
@@ -696,7 +725,7 @@ The alignment scores reported by HMMER are log-odds scores: the log of
 the probability of the sequence given the HMM, divided by the
 probability of the sequence given a ``null hypothesis'' that the
 sequence is just a random sequence, unrelated to the HMM
-\cite{Barrett97}. The ``null model'' is also a probabilistic model,
+\citep{Barrett97}. The ``null model'' is also a probabilistic model,
 but a simpler one than the profile:
 
 \begin{center}

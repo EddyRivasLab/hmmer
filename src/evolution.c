@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* evolution.c
  * Routines for phylogenetic "extrapolation" of profile HMMs.
  * 
- * CVS $Id$
- * incept: SRE, Sun Oct 31 08:13:33 2004 [St. Louis]
+ * SRE, Sun Oct 31 08:13:33 2004 [St. Louis]
+ * SVN $Id$
  */
 
 #include <math.h>
@@ -98,3 +94,8 @@ EvolveOneTransitionVector(float *qs, float ts, int n, float *q0, float *qz, floa
     q[i] = (qz[i] + exp(t*q[i])*(q0[i]-qz[i])) / (1. + wt);
   return;
 }
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+
