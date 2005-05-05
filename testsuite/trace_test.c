@@ -1,8 +1,7 @@
 /* trace_test.c
- * Mon Feb  2 07:57:47 1998
- * 
  * Test driver for Viterbi tracebacks.
  * 
+ * Mon Feb  2 07:57:47 1998
  * CVS $Id$
  */
 
@@ -14,10 +13,13 @@
 #include <time.h>
 #include <math.h>
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 #include "globals.h"
-#include "squid.h"
+
 
 static char banner[] = "\
 trace_test : testing of Plan7 Viterbi traceback code";
@@ -101,7 +103,7 @@ main(int argc, char **argv)
 
   /*********************************************** 
    * Open HMM file 
-   * Read a single HMM from it. (Config HMM, if necessary).
+   * Read a single HMM from it.
    ***********************************************/
 
   if ((hmmfp = HMMFileOpen(hmmfile, NULL)) == NULL)
@@ -110,7 +112,6 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  P7Logoddsify(hmm, TRUE);
 
   /*********************************************** 
    * Search HMM against each sequence

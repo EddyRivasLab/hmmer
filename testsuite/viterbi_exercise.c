@@ -1,9 +1,8 @@
 /* viterbi_exercise.c
- * SRE, Mon Mar  9 07:55:47 1998 [St. Louis]
- * 
  * Exercise the various Viterbi algorithms, big and small.
  * 
- * CVS $Id$
+ * SRE, Mon Mar  9 07:55:47 1998 [St. Louis]
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -13,10 +12,13 @@
 #include <math.h>
 #include <string.h>
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 #include "globals.h"
-#include "squid.h"
+
 
 static char banner[] = "\
 viterbi_exercise : testing of Plan7 Viterbi code";
@@ -98,7 +100,6 @@ main(int argc, char **argv)
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   HMMFileClose(hmmfp);
-  Plan7Renormalize(hmm);
 
   /*********************************************** 
    * We cycle through different model configurations.
@@ -111,15 +112,13 @@ main(int argc, char **argv)
   for (config = 1; config <= 5; config++)
     {
       switch (config) {
-      case 1: Plan7NakedConfig(hmm);            break;
-      case 2: Plan7GlobalConfig(hmm);           break;
-      case 3: Plan7LSConfig(hmm);               break;
-      case 4: Plan7FSConfig(hmm, 0.5, 0.5);     break;
-      case 5: Plan7SWConfig(hmm, 0.5, 0.5);     break;
+      case 1: Plan7NakedConfig(hmm);  break;
+      case 2: Plan7GlobalConfig(hmm); break;
+      case 3: Plan7LSConfig(hmm);     break;
+      case 4: Plan7FSConfig(hmm);     break;
+      case 5: Plan7SWConfig(hmm);     break;
       default: Die("never happens");
       }
-      P7Logoddsify(hmm, TRUE);
-
       
       mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
       for (i = 0; i < nseq; i++)

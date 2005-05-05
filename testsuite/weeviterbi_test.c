@@ -1,9 +1,8 @@
 /* weeviterbi_test.c
- * Wed Mar  4 17:30:39 1998
- * 
  * Test driver for Myers/Miller/Hirschberg linear memory Viterbi tracebacks.
  * 
- * CVS $Id$
+ * Wed Mar  4 17:30:39 1998
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -13,10 +12,13 @@
 #include <time.h>
 #include <math.h>
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 #include "globals.h"
-#include "squid.h"
+
 
 static char banner[] = "\
 weeviterbi_test : testing of Plan7 Myers/Miller/Hirschberg Viterbi traceback code";
@@ -105,7 +107,6 @@ main(int argc, char **argv)
     Die("Failed to read any HMMs from %s\n", hmmfile);
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
-  P7Logoddsify(hmm, TRUE);
 
   /*********************************************** 
    * Search HMM against each sequence

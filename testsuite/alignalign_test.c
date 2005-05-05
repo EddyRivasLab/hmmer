@@ -1,6 +1,4 @@
 /* alignalign_test.c
- * Sun Jul  5 13:42:41 1998
- * 
  * Test driver for P7ViterbiAlignAlignment().
  * 
  * The test is to 
@@ -16,7 +14,8 @@
  *    7) If an excessive number of individual traces differ from
  *          those imposed by master, fail.
  * 
- * CVS $Id$
+ * Sun Jul  5 13:42:41 1998
+ * SVN $Id$
  */
 
 #include "config.h"
@@ -24,10 +23,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 #include "globals.h"
-#include "squid.h"
+
 
 static char banner[] = "\
 alignalign_test : testing of P7ViterbiAlignAlignment() code";
@@ -131,7 +133,6 @@ main(int argc, char **argv)
   if (hmm == NULL) 
     Die("HMM file %s corrupt or in incorrect format? Parse failed", hmmfile);
   HMMFileClose(hmmfp);
-  P7Logoddsify(hmm, TRUE);
 
   if (! (hmm->flags & PLAN7_MAP))
     Die("HMM in %s has no map", hmmfile);
