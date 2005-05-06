@@ -34,8 +34,8 @@ extern void           DefaultCodonBias(float *codebias);
 extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, int padN, int padM);
 extern void   ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
-struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, 
-				    int ***xmx, int ***mmx, int ***imx, int ***dmx);
+extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, 
+					   int ***xmx, int ***mmx, int ***imx, int ***dmx);
 extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb, 
 					    char ***mtb, char ***itb, char ***dtb);
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
@@ -249,16 +249,12 @@ extern void Plan7FSConfig(struct plan7_s *hmm);
 /* from modelmakers.c
  * Model construction algorithms
  */
-extern void P7Handmodelmaker(MSA *msa, unsigned char **dsq, struct plan7_s **ret_hmm,
+extern void P7Handmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
+			     struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq,
-			     float maxgap, struct plan7_s **ret_hmm,
+extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
+			     float symfrac, struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Maxmodelmaker(MSA *msa, unsigned char **dsq,
-			    float maxgap, struct p7prior_s *prior,
-			    float *null, float null_p1, float mpri,
-			    struct plan7_s **ret_hmm,
-			    struct p7trace_s  ***ret_tr);
 
 /* from plan7.c
  * Plan7 HMM structure support
@@ -280,6 +276,7 @@ extern void Plan7Renormalize(struct plan7_s *hmm);
 extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, 
 			    int nseq, struct p7trace_s **tr);
 extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
+extern void Plan7_DumpScores(FILE *fp, struct plan7_s *hmm);
 
 /* 
  * from plan9.c

@@ -456,8 +456,8 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
 
   /* Print HMM parameters (main section of the save file)
    */
-  fprintf(fp, "       %6s %6s ", prob2ascii(1-hmm->tbd1, 1.0), "*");
-  fprintf(fp, "%6s\n", prob2ascii(hmm->tbd1, 1.0));
+  fprintf(fp, "       %6s %6s %6s\n",
+	  prob2ascii(hmm->tbm1, 1.0), "*", prob2ascii(hmm->tbd1, 1.0));
   for (k = 1; k <= hmm->M; k++)
     {
 				/* Line 1: k, match emissions, map */
@@ -716,11 +716,13 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 				/* parse tbd1 line */
   if (fgets(buffer, 512, hmmfp->f) == NULL)  goto FAILURE;
   if ((s = strtok(buffer, " \t\n")) == NULL) goto FAILURE;
-  p = ascii2prob(s, 1.0);
+  hmm->tbm1 = ascii2prob(s, 1.0);
   if ((s = strtok(NULL,   " \t\n")) == NULL) goto FAILURE;
   if ((s = strtok(NULL,   " \t\n")) == NULL) goto FAILURE;
   hmm->tbd1 = ascii2prob(s, 1.0);
-  hmm->tbd1 = hmm->tbd1 / (p + hmm->tbd1);
+  p =  (hmm->tbm1 + hmm->tbd1);
+  hmm->tbd1 = hmm->tbd1 / p;
+  hmm->tbm1 = hmm->tbm1 / p;
 
 				/* main model */
   for (k = 1; k <= hmm->M; k++) {

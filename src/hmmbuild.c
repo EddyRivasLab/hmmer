@@ -44,11 +44,9 @@ static char experts[] = "\
    --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
 \n\
   Alternative model construction strategies: (default: --fast)\n\
-   --fast        : assign columns w/ < gapmax gaps to be MAT; else INS {default}\n\
+   --fast        : assign cols w/ >= symfrac residues to be consensus {default}\n\
    --hand        : manual construction (requires annotated alignment)\n\
-   --map         : maximum a posteriori architecture [deprecated]\n\
-   --gapmax <x>  : for --fast: max fraction of gaps in MAT column {0.50} [0..1]\n\
-   --archpri <x> : for --map: set architecture size prior to <x>  {0.85} [0..1]\n\
+   --symfrac <x> : for --fast: min fraction of syms in MAT col {0.50} [0<=x<=1]\n\
 \n\
   Customization of null model and priors:\n\
    --null  <f>   : read null (random sequence) model from file <f>\n\
@@ -96,7 +94,6 @@ static struct opt_s OPTIONS[] = {
   { "-A", TRUE, sqdARG_NONE },
   { "-F", TRUE, sqdARG_NONE },
   { "--amino",   FALSE, sqdARG_NONE  },
-  { "--archpri", FALSE, sqdARG_FLOAT },
   { "--binary",  FALSE, sqdARG_NONE  },
   { "--cfile",   FALSE, sqdARG_STRING},
   { "--effnone", FALSE, sqdARG_NONE },
@@ -107,10 +104,9 @@ static struct opt_s OPTIONS[] = {
   { "--eloss",   FALSE, sqdARG_FLOAT },
   { "--evolveic", FALSE, sqdARG_FLOAT },
   { "--fast",    FALSE, sqdARG_NONE },
-  { "--gapmax",  FALSE, sqdARG_FLOAT },
+  { "--symfrac", FALSE, sqdARG_FLOAT },
   { "--hand",    FALSE, sqdARG_NONE},
   { "--informat",FALSE, sqdARG_STRING },
-  { "--map",     FALSE, sqdARG_NONE },
   { "--matrix",  FALSE, sqdARG_STRING },
   { "--noevolve", FALSE, sqdARG_NONE  },
   { "--nucleic", FALSE, sqdARG_NONE },
@@ -130,6 +126,8 @@ static struct opt_s OPTIONS[] = {
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
+static int tag_candidate_seq_fragments(MSA *msa, float thresh, 
+				       int *rlen, char *isfrag);
 static void print_all_scores(FILE *fp, struct plan7_s *hmm,
 			     unsigned char **dsq, MSA *msa, struct p7trace_s **tr);
 static void save_countvectors(FILE *cfp, char *name, struct plan7_s *hmm);
@@ -163,6 +161,9 @@ main(int argc, char **argv)
   int              nali;	/* count number of alignments/HMMs         */
   char             fpopts[3];   /* options to open a file with, e.g. "ab"  */
   int              checksum;	/* checksum of the alignment               */
+  int             *rlen;	/* raw (unaligned) seq lengths 0..nseq-1   */
+  char            *isfrag;	/* TRUE/FALSE for candidate seq frags      */
+  float            fragthresh;	/* rlen < fragthresh*mean len defines frag */
 
   char *optname;                /* name of option found by Getopt()      */
   char *optarg;                 /* argument found by Getopt()            */
@@ -171,7 +172,6 @@ main(int argc, char **argv)
   enum {	                /* Model architecture strategy:           */
     P7_FAST_CONSTRUCTION,       /* --fast: default: ad hoc architecture   */
     P7_HAND_CONSTRUCTION,	/* --hand: manually specified             */
-    P7_MAP_CONSTRUCTION   	/* --map: maximum a posteriori            */
   } c_strategy;
   enum {			/* Effective sequence number strategy:        */
     EFF_NOTSETYET, 		/* (can't set default 'til alphabet known)    */
@@ -183,8 +183,8 @@ main(int argc, char **argv)
   enum p7_weight {		/* relative sequence weighting strategy  */
     WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_PB, WGT_VORONOI, WGT_ME} w_strategy;
   enum  p7_algmode  mode;	/* desired algorithm mode                */
-  float gapmax;			/* max frac gaps in mat col for -k       */
-  int   gapmax_set;		/* TRUE if gapmax was set on commandline */
+  float symfrac;		/* min frac symbols in match column      */
+  int   symfrac_set;		/* TRUE if gapmax was set on commandline */
   int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
   int   verbose;		/* TRUE to show a lot of output          */
   char *rndfile;		/* random sequence model file to read    */
@@ -194,7 +194,6 @@ main(int argc, char **argv)
   char *cfile;			/* output file for count vectors         */
   FILE *alignfp;                /* open filehandle for alignment resaves */
   FILE *cfp;                    /* open filehandle for count vector saves*/
-  float archpri;		/* "architecture" prior on model size    */
   float pamwgt;			/* weight on PAM for heuristic prior     */
   int   do_append;		/* TRUE to append to hmmfile             */
   int   do_binary;		/* TRUE to write in binary format        */
@@ -223,8 +222,8 @@ main(int argc, char **argv)
   eidlevel          = 0.62;
   widlevel          = 0.62;
   mode              = P7_LS_MODE; /* default: ls glocal, multihit mode */
-  gapmax            = 0.5;
-  gapmax_set        = FALSE;
+  symfrac           = 0.5;
+  symfrac_set       = FALSE;
   overwrite_protect = TRUE;
   verbose           = FALSE;
   rndfile           = NULL;
@@ -234,7 +233,6 @@ main(int argc, char **argv)
   alignfp           = NULL;
   cfile             = NULL;
   cfp               = NULL;
-  archpri           = 0.85;
   pamwgt            = 20.;
   Alphabet_type     = hmmNOTSETYET;	/* initially unknown */
   name              = NULL;
@@ -246,6 +244,7 @@ main(int argc, char **argv)
   info		    = -100.;
   evolve_ic	    = TRUE;
   matrixfile 	    = NULL;
+  fragthresh        = 0.5;
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
                 &optind, &optname, &optarg))  {
@@ -257,7 +256,6 @@ main(int argc, char **argv)
     else if (strcmp(optname, "-A") == 0) do_append         = TRUE;
     else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
     else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
-    else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);
     else if (strcmp(optname, "--binary")  == 0) do_binary     = TRUE;
     else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
     else if (strcmp(optname, "--effclust")== 0) eff_strategy  = EFF_NCLUSTERS;
@@ -266,15 +264,14 @@ main(int argc, char **argv)
     else if (strcmp(optname, "--effset")  == 0) { eff_strategy= EFF_USERSET; eff_nseq = atof(optarg); }
     else if (strcmp(optname, "--eidlevel")== 0) eidlevel      = atof(optarg);
     else if (strcmp(optname, "--eloss")   == 0) { eloss       = atof(optarg); eloss_set  = TRUE; }
-    else if (strcmp(optname, "--gapmax")  == 0) { gapmax      = atof(optarg); gapmax_set = TRUE; }
     else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
-    else if (strcmp(optname, "--map")     == 0) c_strategy    = P7_MAP_CONSTRUCTION;
     else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
     else if (strcmp(optname, "--null")    == 0) rndfile       = optarg;
     else if (strcmp(optname, "--pam")     == 0) pamfile       = optarg;
     else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
     else if (strcmp(optname, "--pbswitch")== 0) pbswitch      = atoi(optarg);
     else if (strcmp(optname, "--prior")   == 0) prifile       = optarg;
+    else if (strcmp(optname, "--symfrac") == 0) { symfrac     = atof(optarg); symfrac_set = TRUE; }
     else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
     else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
     else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM;
@@ -306,18 +303,15 @@ main(int argc, char **argv)
   hmmfile = argv[optind++];
   seqfile = argv[optind++];
 
-  if (gapmax < 0. || gapmax > 1.)
-    Die("--gapmax must be a value from 0 to 1\n%s\n", usage);
-  if (archpri < 0. || archpri > 1.)
-    Die("--archpri must be a value from 0 to 1\n%s\n", usage);
+  if (symfrac < 0. || symfrac > 1.)
+    Die("--symfrac must be a value from 0 to 1\n%s\n", usage);
   if (overwrite_protect && !do_append && FileExists(hmmfile))
     Die("HMM file %s already exists. Rename or delete it.", hmmfile);
   if (overwrite_protect && align_ofile != NULL && FileExists(align_ofile))
     Die("Alignment resave file %s exists. Rename or delete it.", align_ofile);
-  if (gapmax_set && c_strategy  != P7_FAST_CONSTRUCTION)
-    Die("using --gapmax only makes sense for default construction strategy");
-  if (c_strategy == P7_MAP_CONSTRUCTION && w_strategy == WGT_ME)
-    Die("Can't use --wme weighting and --map construction together.");
+  if (symfrac_set && c_strategy  != P7_FAST_CONSTRUCTION)
+    Die("using --symfrac only makes sense for default --fast construction strategy");
+
 
   /***********************************************
    * Preliminaries: open our files for i/o
@@ -368,8 +362,7 @@ main(int argc, char **argv)
 
   printf("Model construction strategy:       ");
   if (c_strategy == P7_HAND_CONSTRUCTION)    puts("Manual, from #=RF annotation");
-  else if (c_strategy==P7_FAST_CONSTRUCTION) printf("Fast/ad hoc (gapmax %.2f)\n", gapmax);
-  else                                       printf("MAP (gapmax hint: %.2f)\n", gapmax);
+  else if (c_strategy==P7_FAST_CONSTRUCTION) printf("Fast/ad hoc (symfrac %.2f)\n", symfrac);
 
   printf("Null model used:                   %s\n",
 	 (rndfile == NULL) ? "(default)" : rndfile);
@@ -462,19 +455,11 @@ main(int argc, char **argv)
 	  if (rndfile == NULL)  P7DefaultNullModel(randomseq, &p1);
 	  else                  P7ReadNullModel(rndfile, randomseq, &p1);
 
-	  /* Effective sequence number calculation defaults to entropy
-           * targeting for protein, but we haven't tested DNA yet.
+	  /* Fix this. What's our default position?
            */
 	  if (eff_strategy == EFF_NOTSETYET) {
 	    if      (Alphabet_type == hmmNUCLEIC)  eff_strategy = EFF_NONE;
-	    else if (Alphabet_type == hmmAMINO) {
-	      eff_strategy = EFF_NCLUSTERS;
-	      if (c_strategy == P7_MAP_CONSTRUCTION)
-		Die("\n\
-To use --map on a protein model, you need to use an effective\n\
-sequence number calculation other than the default entropy targeting;\n\
-see --effnone, --effset, or --effclust\n");
-	    }
+	    else if (Alphabet_type == hmmAMINO)    eff_strategy = EFF_NCLUSTERS;
 	  }
 
 	  /* If we're using the entropy-target strategy for effective
@@ -515,6 +500,7 @@ To use --effent on DNA models (or other alphabets), you must set\n\
       /* Prepare unaligned digitized sequences for internal use
        */
       DigitizeAlignment(msa, &dsq);
+
 
 
       /* Determine "effective sequence number", according to the selected
@@ -596,6 +582,13 @@ To use --effent on DNA models (or other alphabets), you must set\n\
       }
 
 
+      /* Identify candidate seq frags, to inform the model
+       * construction algorithms. Relative sequence weighting must precede this.
+       */
+      rlen   = MallocOrDie(sizeof(int)  * msa->nseq);
+      isfrag = MallocOrDie(sizeof(char) * msa->nseq);
+      tag_candidate_seq_fragments(msa, fragthresh, rlen, isfrag);
+
       /* Build a model architecture.
        * If we're not doing MD or ME, that's all we need to do.
        * We get an allocated, counts-based HMM back.
@@ -603,28 +596,16 @@ To use --effent on DNA models (or other alphabets), you must set\n\
        * Because the architecture algorithms are allowed to change
        * gap characters in the alignment, we have to calculate the
        * alignment checksum before we enter the algorithms.
-       *
-       * MAP construction is deprecated. To be correct, it needs
-       * effective sequence number to be set *before* construction.
-       * But entropy loss targeting (the default eff_nseq calculation)
-       * depends on the architecture, so we have a chicken and egg.
-       * LSJ ASTRAL benchmarks show strong benefit of entropy targeting,
-       * and a slight disadvantage of MAP compared to the simple heuristic
-       * --fast: so, we throw --map to the fires.
        */
       printf("%-40s ... ", "Constructing model architecture");
       fflush(stdout);
       checksum = GCGMultchecksum(msa->aseq, msa->nseq);
       if (c_strategy == P7_FAST_CONSTRUCTION)
-	P7Fastmodelmaker(msa, dsq, gapmax, &hmm, &tr);
+	P7Fastmodelmaker(msa, dsq, isfrag, symfrac, &hmm, &tr);
       else if (c_strategy == P7_HAND_CONSTRUCTION)
-	P7Handmodelmaker(msa, dsq, &hmm, &tr);
-      else if (c_strategy == P7_MAP_CONSTRUCTION) {
-	if (! eff_nseq_set) Die("can't do --map without knowing eff seq #");
-	if (! wgt_set)      Die("can't do --map without knowing weights");
-	P7Maxmodelmaker(msa, dsq, gapmax,
-			pri, randomseq, p1, archpri, &hmm, &tr);
-      } else Die("no such construction strategy");
+	P7Handmodelmaker(msa, dsq, isfrag, &hmm, &tr);
+      else 
+	Die("no such construction strategy");
       hmm->checksum = checksum;
       printf("done.\n");
 
@@ -686,7 +667,6 @@ To use --effent on DNA models (or other alphabets), you must set\n\
        * use it.
        */
       Plan7SWConfig(hmm);
-
 
       /* Relative weighting:  architecture-dependent strategies.
        * (if we don't have relative weights yet, calculate them now)
@@ -823,6 +803,8 @@ To use --effent on DNA models (or other alphabets), you must set\n\
       free(tr);
       FreePlan7(hmm);
       Free2DArray((void **) dsq, msa->nseq); 
+      free(rlen);
+      free(isfrag);
       MSAFree(msa);
       fflush(hmmfp);
       if (cfp != NULL)     fflush(cfp);
@@ -844,6 +826,72 @@ To use --effent on DNA models (or other alphabets), you must set\n\
   SqdClean();
   return 0;
 }
+
+
+
+
+/* Function:  tag_candidate_seq_fragments()
+ * Incept:    SRE, Fri May  6 13:32:20 2005 [St. Louis]
+ *
+ * Purpose:   Heuristic identification of candidate sequence
+ *            "fragments": any individual seq with a length <
+ *            <thresh> * mean length of all seqs is tagged
+ *            as a candidate fragment. 
+ *            
+ *            The modelmakers then use this information. Any seq
+ *            tagged as a candidate fragment that shows
+ *            a B->D+->Mk internal entry path or a Mk->D+->E
+ *            internal exit path has those transitions ignored,
+ *            on the principle that it's just a local alignment,
+ *            not a true deletion. Delete transitions on internal
+ *            entry/exit paths are only counted on sequences that
+ *            are not identified as candidate fragments.
+ *            
+ *            The mean length is a weighted average, taking relative
+ *            seq weights into account.
+ *            
+ * Args:      msa    - the sequence alignment
+ *            thresh - threshold fraction; rlen < thresh*mean rlen 
+ *                      defines candidate fragment.
+ *            rlen   - RETURN: raw (unaligned) lengths of seqs in residues,
+ *                      [0..nseq-1]
+ *                  old    (Caller allocates this for at least msa->nseq integers).
+ *            isfrag - RETURN: TRUE/FALSE flags for whether seq i is a candidate
+ *                      fragment or not; [0..nseq-1]
+ *                      Caller allocates this for at least msa->nseq chars.
+ *
+ * Returns:   # of fragments that were flagged.
+ */
+static int
+tag_candidate_seq_fragments(MSA *msa, float thresh, int *rlen, char *isfrag) 
+{
+  int i;
+  float mean;
+  float totwgt;
+  int nfrags;
+
+  /* Calculate lengths of each seq, and mean length */
+  mean   = 0.;
+  totwgt = 0.;
+  for (i = 0; i < msa->nseq; i++)
+    {
+      rlen[i] = DealignedLength(msa->aseq[i]);
+      mean   += msa->wgt[i] * (float) rlen[i];
+      totwgt += msa->wgt[i];
+    }
+  mean /= totwgt;
+
+  /* any seq < threshold * mean is identified as a fragment */
+  nfrags = 0;
+  for (i = 0; i < msa->nseq; i++)
+    if (rlen[i] < (int) (thresh * mean))
+      { isfrag[i] = TRUE; nfrags++; }
+    else
+      isfrag[i] = FALSE;
+    
+  return nfrags;
+}
+
 
 
 /* Function: print_all_scores()

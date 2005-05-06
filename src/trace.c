@@ -169,6 +169,9 @@ P7ReverseTrace(struct p7trace_s *tr)
  * Purpose:  Count a traceback into a count-based HMM structure.
  *           (Usually as part of a model parameter re-estimation.)
  *           
+ *           Only events in the core model are counted.
+ *           Algorithm-dependent transitions are ignored.
+ *           
  * Args:     hmm   - counts-based HMM
  *           dsq   - digitized sequence that traceback aligns to the HMM (1..L)
  *           wt    - weight on the sequence
@@ -199,10 +202,10 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
       switch (tr->statetype[tpos]) {
       case STS:
 	break;			/* don't bother; P=1 */
-      case STN:
+      case STN:			/* don't bother; it's algorithm dependent */
 	switch (tr->statetype[tpos+1]) {
-	case STB: hmm->xt[XTN][MOVE] += wt; break;
-	case STN: hmm->xt[XTN][LOOP] += wt; break;
+	case STB: break;
+	case STN: break;
 	default:
 	  Die("illegal state transition %s->%s in traceback", 
 	      Statetype(tr->statetype[tpos]),
@@ -211,7 +214,8 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 	break;
       case STB:
 	switch (tr->statetype[tpos+1]) {
-	case STM: hmm->begin[tr->nodeidx[tpos+1]] += wt; break;
+	  /*B->M1 are counted; B->Mk are ignored local S/W frags */
+	case STM: if (tr->nodeidx[tpos+1] == 1) hmm->tbm1 += wt; break;
 	case STD: hmm->tbd1 += wt;                       break;
 	default:      
 	  Die("illegal state transition %s->%s in traceback", 
@@ -224,7 +228,7 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 	case STM: hmm->t[tr->nodeidx[tpos]][TMM] += wt; break;
 	case STI: hmm->t[tr->nodeidx[tpos]][TMI] += wt; break;
 	case STD: hmm->t[tr->nodeidx[tpos]][TMD] += wt; break;
-	case STE: hmm->end[tr->nodeidx[tpos]]    += wt; break;
+	case STE: /* no need to count M->E */           break;
 	default:    
 	  Die("illegal state transition %s->%s in traceback", 
 	      Statetype(tr->statetype[tpos]),
@@ -245,7 +249,7 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 	switch (tr->statetype[tpos+1]) {
 	case STM: hmm->t[tr->nodeidx[tpos]][TDM] += wt; break;
 	case STD: hmm->t[tr->nodeidx[tpos]][TDD] += wt; break;
-	case STE: /* ignore; p(D->E) = 1.0 */           break;
+	case STE: /* ignore; must be D_M, and p(D_M->E) = 1.0 */ break;
 	default: 
 	  Die("illegal state transition %s->%s in traceback", 
 	      Statetype(tr->statetype[tpos]),
@@ -254,8 +258,8 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 	break;
       case STE:
 	switch (tr->statetype[tpos+1]) {
-	case STC: hmm->xt[XTE][MOVE] += wt; break;
-	case STJ: hmm->xt[XTE][LOOP] += wt; break;
+	case STC: break;
+	case STJ: break;
 	default:     
 	  Die("illegal state transition %s->%s in traceback", 
 	      Statetype(tr->statetype[tpos]),
@@ -264,8 +268,8 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 	break;
      case STJ:
 	switch (tr->statetype[tpos+1]) {
-	case STB: hmm->xt[XTJ][MOVE] += wt; break;
-	case STJ: hmm->xt[XTJ][LOOP] += wt; break;
+	case STB: break;
+	case STJ: break;
 	default:     
 	  Die("illegal state transition %s->%s in traceback", 
 	      Statetype(tr->statetype[tpos]),
@@ -274,12 +278,12 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 	break;
       case STC:
 	switch (tr->statetype[tpos+1]) {
-	case STT: hmm->xt[XTC][MOVE] += wt; break;
-	case STC: hmm->xt[XTC][LOOP] += wt; break;
+	case STT: break;
+	case STC: break;
 	default:     
-	 Die("illegal state transition %s->%s in traceback", 
-	     Statetype(tr->statetype[tpos]),
-	     Statetype(tr->statetype[tpos+1])); 
+	  Die("illegal state transition %s->%s in traceback", 
+	      Statetype(tr->statetype[tpos]),
+	      Statetype(tr->statetype[tpos+1])); 
 	}
 	break;
       case STT:

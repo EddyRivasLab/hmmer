@@ -20,7 +20,7 @@
 #include "structs.h"
 
 
-
+static char *score2ascii(int sc);
 
 /* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
  * 
@@ -381,6 +381,8 @@ Plan7Rescale(struct plan7_s *hmm, float scale)
  *           all of its probability vectors. Also enforces
  *           Plan7 restrictions on nonexistent transitions.
  *           
+ *           Note: only the core probability model is renormalized.
+ *           
  * Args:     hmm - the model to renormalize.
  *                 
  * Return:   (void)
@@ -390,7 +392,6 @@ void
 Plan7Renormalize(struct plan7_s *hmm)
 {
   int   k;			/* counter for model position */
-  int   st;			/* counter for special states */
   float d;			/* denominator */
 
 				/* match emissions */
@@ -399,25 +400,17 @@ Plan7Renormalize(struct plan7_s *hmm)
 				/* insert emissions */
   for (k = 1; k < hmm->M; k++)
     FNorm(hmm->ins[k], Alphabet_size);
-				/* begin transitions */
-  d = FSum(hmm->begin+1, hmm->M) + hmm->tbd1;
-  FScale(hmm->begin+1, hmm->M, 1./d);
+                                /* tbd1,tbm1 */
+  d = hmm->tbd1 + hmm->tbm1;
+  hmm->tbm1 /= d;
   hmm->tbd1 /= d;
 				/* main model transitions */
   for (k = 1; k < hmm->M; k++)
     {
-      d = FSum(hmm->t[k], 3) + hmm->end[k]; 
-      FScale(hmm->t[k], 3, 1./d);
-      hmm->end[k] /= d;
-
+      FNorm(hmm->t[k],   3);	/* match  */
       FNorm(hmm->t[k]+3, 2);	/* insert */
       FNorm(hmm->t[k]+5, 2);	/* delete */
     }
-				/* null model emissions */
-  FNorm(hmm->null, Alphabet_size);
-				/* special transitions  */
-  for (st = 0; st < 4; st++)
-    FNorm(hmm->xt[st], 2);
 				/* enforce nonexistent transitions */
 				/* (is this necessary?) */
   hmm->t[0][TDM] = hmm->t[0][TDD] = 0.0;
@@ -589,6 +582,77 @@ DegenerateSymbolScore(float *p, float *null, int ambig)
   }
   return (int) (INTSCALE * numer / denom);
 }
+
+/* Function:  Plan7_DumpScores()
+ * Incept:    SRE, Fri May  6 08:37:17 2005 [St. Louis]
+ *
+ * Purpose:   Debugging:
+ *            print log-odds scores of a plan7 model <hmm>
+ *            to a stream <fp>, in roughly the same format
+ *            as a save file.
+ *
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+void
+Plan7_DumpScores(FILE *fp, struct plan7_s *hmm)
+{
+  int k;			/* counter for nodes */
+  int x;			/* counter for symbols */
+  int ts;			/* counter for state transitions */
+  
+  fprintf(fp, "N: %6s %6s\n", 
+	  score2ascii(hmm->xsc[XTN][LOOP]),
+	  score2ascii(hmm->xsc[XTN][MOVE]));
+
+  for (k = 1; k <= hmm->M; k++)
+    {
+				/* Line 1: k, match emissions */
+      fprintf(fp, " %5d ", k);
+      for (x = 0; x < Alphabet_size; x++) 
+        fprintf(fp, "%6s ", score2ascii(hmm->msc[x][k]));
+      fputs("\n", fp);
+				/* Line 2: insert emissions */
+      fprintf(fp, "       ");
+      for (x = 0; x < Alphabet_size; x++) 
+	fprintf(fp, "%6s ", (k < hmm->M) ? score2ascii(hmm->isc[x][k]) : "*");
+      fputs("\n", fp);
+				/* Line 3: transition probs; begin, end */
+      fprintf(fp, "       ");
+      for (ts = 0; ts < 7; ts++)
+	fprintf(fp, "%6s ", (k < hmm->M) ? score2ascii(hmm->tsc[ts][k]) : "*"); 
+      fprintf(fp, "%6s ", score2ascii(hmm->bsc[k]));
+      fprintf(fp, "%6s ", score2ascii(hmm->esc[k]));
+      fputs("\n", fp);
+    }
+  fprintf(fp, "E: %6s %6s\n", 
+	  score2ascii(hmm->xsc[XTE][LOOP]), 
+	  score2ascii(hmm->xsc[XTE][MOVE]));
+  fprintf(fp, "J: %6s %6s\n", 
+	  score2ascii(hmm->xsc[XTJ][LOOP]),
+	  score2ascii(hmm->xsc[XTJ][MOVE]));
+  fprintf(fp, "C: %6s %6s\n", 
+	  score2ascii(hmm->xsc[XTC][LOOP]),
+	  score2ascii(hmm->xsc[XTC][MOVE]));
+  fputs("//\n", fp);
+}
+
+static char *
+score2ascii(int sc)
+{
+  static char buf[8];
+  if (sc == -INFTY) return "*";
+  sprintf(buf, "%6d", sc);
+  return buf;
+}
+    
+
 
 
 /************************************************************

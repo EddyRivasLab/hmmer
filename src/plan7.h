@@ -124,6 +124,7 @@ struct plan7_s {
   float **mat;                  /* match emissions.  mat[1..M][0..19]   +*/ 
   float **ins;                  /* insert emissions. ins[1..M-1][0..19] +*/
   float   tbd1;			/* B->D1 prob (data dependent)          +*/
+  float   tbm1;			/* B->M1 prob (data dependent)          +*/
 
   /* The null model probabilities.
    */
