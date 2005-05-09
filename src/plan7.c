@@ -477,55 +477,6 @@ Plan7ESTConfig(struct plan7_s *hmm, int *aacode, float **estmodel,
 }
 #endif /*SRE_REMOVED*/
 	  
-/* Function: PrintPlan7Stats()
- * 
- * Purpose:  Given a newly constructed HMM and the tracebacks
- *           of the sequences it was trained on, print out all
- *           the interesting information at the end of hmmbuild
- *           runs that convinces the user we actually
- *           did something.
- *           
- * Args:     fp   - where to send the output (stdout, usually)
- *           hmm  - the new HMM, probability form
- *           dsq  - digitized training seqs
- *           nseq - number of dsq's
- *           tr   - array of tracebacks for dsq
- *                  
- * Return:   (void)
- */
-void
-PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, int nseq,
-		struct p7trace_s **tr)
-{
-  int   idx;			/* counter for sequences                */
-  float score;			/* an individual trace score            */
-  float total, best, worst;	/* for the avg. and range of the scores */
-  float sqsum, stddev;		/* for the std. deviation of the scores */
-
-  if (! (hmm->flags & PLAN7_HASBITS)) Die("no model scores");
-
-				/* find individual trace scores */
-  score = P7TraceScore(hmm, dsq[0], tr[0]);
-  total = best = worst = score;
-  sqsum = score * score;
-  for (idx = 1; idx < nseq; idx++) {
-    /* P7PrintTrace(stdout, tr[idx], hmm, dsq[idx]); */
-    score  = P7TraceScore(hmm, dsq[idx], tr[idx]);
-    total += score;
-    sqsum += score * score;
-    if (score > best)  best = score;
-    if (score < worst) worst = score;
-  }
-  if (nseq > 1) {
-    stddev = (sqsum - (total * total / (float) nseq)) / ((float) nseq - 1.);
-    stddev = (stddev > 0) ? sqrt(stddev) : 0.0;
-  } else stddev = 0.0;
-				/* print out stuff. */
-  fprintf(fp, "Average score:  %10.2f bits\n", total / (float) nseq);
-  fprintf(fp, "Minimum score:  %10.2f bits\n", worst);
-  fprintf(fp, "Maximum score:  %10.2f bits\n", best);
-  fprintf(fp, "Std. deviation: %10.2f bits\n", stddev);
-}
 
 /* Function: DegenerateSymbolScore()
  * 
@@ -586,19 +537,9 @@ DegenerateSymbolScore(float *p, float *null, int ambig)
 /* Function:  Plan7_DumpScores()
  * Incept:    SRE, Fri May  6 08:37:17 2005 [St. Louis]
  *
- * Purpose:   Debugging:
- *            print log-odds scores of a plan7 model <hmm>
- *            to a stream <fp>, in roughly the same format
- *            as a save file.
- *
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ * Purpose:   Debugging: print log-odds scores of a configured plan7
+ *            model <hmm> to a stream <fp>, in roughly the same format
+ *            as a save file.  
  */
 void
 Plan7_DumpScores(FILE *fp, struct plan7_s *hmm)
@@ -652,6 +593,42 @@ score2ascii(int sc)
   return buf;
 }
     
+/* Function:  Plan7_DumpCounts()
+ * Incept:    SRE, Sun May  8 08:34:55 2005 [St. Louis]
+ *
+ * Purpose:   Debugging: given an HMM that contains weighted counts,
+ *            (not normalized yet, but may or may not contain
+ *            Dirichlet pseudocounts), dump those counts out as a save
+ *            file.  
+ */
+void
+Plan7_DumpCounts(FILE *fp, struct plan7_s *hmm)
+{
+  int k;			/* counter for nodes */
+  int x;			/* counter for symbols */
+  int ts;			/* counter for state transitions */
+  
+  fprintf(fp, "tbm1,tbd1: %5.1f %5.1f\n", hmm->tbm1, hmm->tbd1);
+  for (k = 1; k <= hmm->M; k++)
+    {
+				/* Line 1: k, match emissions */
+      fprintf(fp, " %5d ", k);
+      for (x = 0; x < Alphabet_size; x++) 
+        fprintf(fp, "%5.1f ", hmm->mat[k][x]);
+      fputs("\n", fp);
+				/* Line 2: insert emissions */
+      fprintf(fp, "       ");
+      for (x = 0; x < Alphabet_size; x++) 
+	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->ins[k][x] : 0);
+      fputs("\n", fp);
+				/* Line 3: transition probs */
+      fprintf(fp, "       ");
+      for (ts = 0; ts < 7; ts++)
+	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->t[k][ts] : 0); 
+      fputs("\n", fp);
+    }
+  fputs("//\n", fp);
+}
 
 
 

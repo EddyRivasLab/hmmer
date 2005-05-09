@@ -277,6 +277,7 @@ extern void PrintPlan7Stats(FILE *fp, struct plan7_s *hmm, unsigned char **dsq,
 			    int nseq, struct p7trace_s **tr);
 extern int  DegenerateSymbolScore(float *p, float *null, int ambig);
 extern void Plan7_DumpScores(FILE *fp, struct plan7_s *hmm);
+extern void Plan7_DumpCounts(FILE *fp, struct plan7_s *hmm);
 
 /* 
  * from plan9.c

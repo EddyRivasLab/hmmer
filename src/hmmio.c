@@ -455,9 +455,11 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
           "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d", "b->m", "m->e");
 
   /* Print HMM parameters (main section of the save file)
+   * Do not call prob2ascii() twice in the same fprintf(); it
+   * is using an internal static buffer, so it's not reentrant.
    */
-  fprintf(fp, "       %6s %6s %6s\n",
-	  prob2ascii(hmm->tbm1, 1.0), "*", prob2ascii(hmm->tbd1, 1.0));
+  fprintf(fp, "       %6s %6s", prob2ascii(hmm->tbm1, 1.0), "*");
+  fprintf(fp, " %6s\n", prob2ascii(hmm->tbd1, 1.0));
   for (k = 1; k <= hmm->M; k++)
     {
 				/* Line 1: k, match emissions, map */
@@ -1492,6 +1494,8 @@ read_bin10hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
  * 
  * Purpose:  Format a probability for output to an ASCII save
  *           file. Returns a ptr to a static internal buffer.
+ *           Not reentrant; don't call it twice in the same
+ *           fprintf(), for instance.
  *              
  */
 static char *
