@@ -548,9 +548,11 @@ Plan7_DumpScores(FILE *fp, struct plan7_s *hmm)
   int x;			/* counter for symbols */
   int ts;			/* counter for state transitions */
   
-  fprintf(fp, "N: %6s %6s\n", 
-	  score2ascii(hmm->xsc[XTN][LOOP]),
-	  score2ascii(hmm->xsc[XTN][MOVE]));
+  /* score2ascii() uses static buffer, and
+   * can't be called twice in the same line; be careful 
+   */
+  fprintf(fp, "N: %6s ", score2ascii(hmm->xsc[XTN][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTN][LOOP]));
 
   for (k = 1; k <= hmm->M; k++)
     {
@@ -572,15 +574,15 @@ Plan7_DumpScores(FILE *fp, struct plan7_s *hmm)
       fprintf(fp, "%6s ", score2ascii(hmm->esc[k]));
       fputs("\n", fp);
     }
-  fprintf(fp, "E: %6s %6s\n", 
-	  score2ascii(hmm->xsc[XTE][LOOP]), 
-	  score2ascii(hmm->xsc[XTE][MOVE]));
-  fprintf(fp, "J: %6s %6s\n", 
-	  score2ascii(hmm->xsc[XTJ][LOOP]),
-	  score2ascii(hmm->xsc[XTJ][MOVE]));
-  fprintf(fp, "C: %6s %6s\n", 
-	  score2ascii(hmm->xsc[XTC][LOOP]),
-	  score2ascii(hmm->xsc[XTC][MOVE]));
+  fprintf(fp, "E: %6s ", score2ascii(hmm->xsc[XTE][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTE][LOOP])); 
+
+  fprintf(fp, "J: %6s ", score2ascii(hmm->xsc[XTJ][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTJ][LOOP])); 
+
+  fprintf(fp, "C: %6s ", score2ascii(hmm->xsc[XTC][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTC][LOOP])); 
+
   fputs("//\n", fp);
 }
 

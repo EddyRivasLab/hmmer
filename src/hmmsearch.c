@@ -285,9 +285,6 @@ main(int argc, char **argv)
   if (do_xnu && Alphabet_type == hmmNUCLEIC) 
     Die("The HMM is a DNA model, and you can't use the --xnu filter on DNA data");
 
-  /* debug */
-  Plan7_DumpScores(stdout, hmm);
-
   /*****************************************************************
    * Set up optional Pfam score thresholds. 
    * Can do this before starting any searches, since we'll only use 1 HMM.

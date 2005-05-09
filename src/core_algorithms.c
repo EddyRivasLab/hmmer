@@ -486,18 +486,23 @@ P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **re
 			      ILogsum(xmx[i-1][XMB] + hmm->bsc[k],
 				     dmx[i-1][k-1] + hmm->tsc[TDM][k-1]));
 	  mmx[i][k] += hmm->msc[dsq[i]][k];
+	  if (mmx[i][k] < -INFTY) mmx[i][k] = -INFTY;
 
 	  dmx[i][k]  = ILogsum(mmx[i][k-1] + hmm->tsc[TMD][k-1],
 			      dmx[i][k-1] + hmm->tsc[TDD][k-1]);
+	  if (dmx[i][k] < -INFTY) dmx[i][k] = -INFTY;
+
 	  imx[i][k]  = ILogsum(mmx[i-1][k] + hmm->tsc[TMI][k],
 			      imx[i-1][k] + hmm->tsc[TII][k]);
 	  imx[i][k] += hmm->isc[dsq[i]][k];
+	  if (imx[i][k] < -INFTY) imx[i][k] = -INFTY;
 	}
       mmx[i][hmm->M] = ILogsum(ILogsum(mmx[i-1][hmm->M-1] + hmm->tsc[TMM][hmm->M-1],
 				   imx[i-1][hmm->M-1] + hmm->tsc[TIM][hmm->M-1]),
 			       ILogsum(xmx[i-1][XMB] + hmm->bsc[hmm->M],
 				   dmx[i-1][hmm->M-1] + hmm->tsc[TDM][hmm->M-1]));
       mmx[i][hmm->M] += hmm->msc[dsq[i]][hmm->M];
+      if (mmx[i][hmm->M] < -INFTY) mmx[i][hmm->M] = -INFTY;
 
       /* Now the special states.
        * remember, C and J emissions are zero score by definition

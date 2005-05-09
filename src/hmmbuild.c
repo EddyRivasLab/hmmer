@@ -338,11 +338,6 @@ main(int argc, char **argv)
        */
       construct_model(&cfg, msa, dsq, isfrag, &hmm, &tr);
 
-      /* Determine the model's name - usually either from the
-       * MSA's name, or from the name of the alifile.
-       */
-      set_model_name(hmm, cfg.setname, msa->name, alifile, nali);
-
       /* Determine "effective sequence number", and rescale counts. */
       set_effective_seqnumber(&cfg, msa, hmm, pri);
 
@@ -366,7 +361,7 @@ main(int argc, char **argv)
       {
         /* if info wasn't defined by user, use default settings for gl or ll */
         if (cfg.info == 0.0) {
-	  if (cfg.mode == P7_FS_MODE) { cfg.info = 0.65; } /* ll default */
+	  if (cfg.mode == P7_FS_MODE || cfg.mode == P7_SW_MODE) { cfg.info = 0.65; } /* ll default */
 	  else { cfg.info = 1.4; } /* gl default */
 	}
         AdjustAveInfoContent(hmm, cfg.info, cfg.matrixfile);  /* DJB */
@@ -405,12 +400,12 @@ main(int argc, char **argv)
 	{ hmm->flags |= PLAN7_NC; hmm->nc1 = msa->cutoff[MSA_CUTOFF_NC1]; hmm->nc2 = msa->cutoff[MSA_CUTOFF_NC2]; }
 
       /* Record some other miscellaneous information in the HMM,
-       * like how/when we built it.
+       * like its name, and how/when we built it.
        */
+      set_model_name(hmm, cfg.setname, msa->name, alifile, nali);
       Plan7ComlogAppend(hmm, argc, argv);
       Plan7SetCtime(hmm);
       hmm->nseq = msa->nseq;
-      printf("done. [%s]\n", hmm->name); 
    
       /* Print information for the user
        */
@@ -432,8 +427,6 @@ main(int argc, char **argv)
       default:          Die("bogus configuration choice");
       }
       printf("done.\n");
-      Plan7_DumpScores(stdout, hmm); 
-
 
       /* Save new HMM to disk: open a file for appending or writing.
        */
@@ -488,6 +481,7 @@ main(int argc, char **argv)
 static void
 default_config(struct p7config_s *cfg)
 {
+  cfg->setname      = NULL;
   cfg->rndfile      = NULL;
   FSet(cfg->randomseq, MAXABET, 0.); /* not set yet */
   cfg->p1           = 0.;	/* not set yet  */
@@ -815,6 +809,7 @@ set_relative_weights(MSA *msa, struct p7config_s *cfg)
       else if (cfg->w_strategy ==  WGT_VORONOI)
 	VoronoiWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
     }
+  printf("done.\n");
 }
 
 
@@ -859,6 +854,8 @@ tag_candidate_seq_fragments(MSA *msa, float thresh, int *rlen, char *isfrag)
   float totwgt;
   int nfrags;
 
+  printf("%-40s ... ", "Tagging putative sequence fragments");
+
   /* Calculate lengths of each seq, and mean length */
   mean   = 0.;
   totwgt = 0.;
@@ -878,6 +875,7 @@ tag_candidate_seq_fragments(MSA *msa, float thresh, int *rlen, char *isfrag)
     else
       isfrag[i] = FALSE;
     
+  printf("done.\n");
   return nfrags;
 }
 
@@ -1429,7 +1427,7 @@ set_model_name(struct plan7_s *hmm, char *setname, char *msa_name, char *alifile
 {
   char *name;
 
-  printf("%-40s ... ", "Setting model name, etc.");
+  printf("%-40s ... ", "Set model name, record commandline");
   fflush(stdout);
 
   if (nali == 0)		/* first (only?) HMM in file:  */
@@ -1448,6 +1446,7 @@ set_model_name(struct plan7_s *hmm, char *setname, char *msa_name, char *alifile
     }
   Plan7SetName(hmm, name);
   free(name);
+  printf("done. [%s]\n", hmm->name);
 }
 
 /* print_statistics()

@@ -170,7 +170,26 @@ P7ReverseTrace(struct p7trace_s *tr)
  *           (Usually as part of a model parameter re-estimation.)
  *           
  *           Only events in the core model are counted.
- *           Algorithm-dependent transitions are ignored.
+ *           Algorithm-dependent transitions are ignored, including
+ *           B->Mk and Mk->E internal entry/exit events. 
+ *           
+ * Note:     regarding internal entry/exit paths:
+ * 
+ *           In hmmbuild, traces are constructed by defining some seqs
+ *           as short fragments (with BMk and MkE events that
+ *           P7TraceCount() ignores), and other seqs as full length
+ *           (with BDDMk and MkDDE paths) that are counted. This
+ *           construction happens in modelmakers.c::fake_tracebacks(),
+ *           so P7TraceCount() doesn't worry about it.
+ *           
+ *           In alignments, including hmmsearch/hmmpfam/hmmcalibrate,
+ *           since alignment uses the scoring model, we initially 
+ *           get only BMk and MkE events. The DP traceback algorithm
+ *           is responsible for making sure that, if the model was in
+ *           ls mode, these events are made into full BDDMk and MkDDE
+ *           paths. This construction is the responsibility of
+ *           traceback functions. Again, P7TraceCount() doesn't worry
+ *           about it. 
  *           
  * Args:     hmm   - counts-based HMM
  *           dsq   - digitized sequence that traceback aligns to the HMM (1..L)
@@ -178,6 +197,8 @@ P7ReverseTrace(struct p7trace_s *tr)
  *           tr    - alignment of seq to HMM
  *           
  * Return:   (void)
+ *           Weighted count events are accumulated in hmm's mat[][], ins[][],
+ *           t[][], tbm1, and tbd1: the "core model".
  */
 void
 P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s *tr)
@@ -299,6 +320,24 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
 /* Function: P7TraceScore()
  * 
  * Purpose:  Score a traceback and return the score in scaled bits.
+ *
+ * Note:     on internal entry/exit paths:
+ *           A scorable trace should not normally include explicit,
+ *           full B->DDDD->Mk or Mk->DDDD->E terminal delete
+ *           entry/exit paths, because the score model accounts for
+ *           these with B->Mk (hmm->bsc[k]) and Mk->E (hmm->esc[k])
+ *           internal entry/exit scores. 
+ *           
+ *           However, at least one case arises where such paths do
+ *           occur in a trace: when hmmbuild makes its *countable*
+ *           traces, using modelmaker.c::fake_tracebacks(), it
+ *           includes full paths because it wants to count them into
+ *           the core model.  When we go to report the average score
+ *           of a new model, we want to score those same
+ *           traces. Therefore, we have some extra code in
+ *           P7TraceScore() that automatically interprets B->DDDD->Mk
+ *           or Mk->DDDD->E paths as BMk or MkE internal entry/exit
+ *           events.
  *           
  * Args:     hmm   - HMM with valid log odds scores.
  *           dsq   - digitized sequence that traceback aligns to the HMM (1..L)
@@ -312,6 +351,7 @@ P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr)
   int score;			/* total score as a scaled integer */
   int tpos;                     /* position in tr */
   unsigned char sym;		/* digitized symbol in dsq */
+  int i;			/* an extra tr position index, for lookahead */
   
   /*  P7PrintTrace(stdout, tr, hmm, dsq); */
   score = 0;
@@ -328,7 +368,27 @@ P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr)
 	score += hmm->isc[sym][tr->nodeidx[tpos]];
 
       /* State transitions.
-       */
+       */			/* watch for internal entries.... */
+      if (tr->statetype[tpos] == STB && tr->statetype[tpos+1] == STD)
+	{
+	  while (tr->statetype[tpos+1] == STD) tpos++;  /* find first Mk */
+	  score += hmm->bsc[tr->nodeidx[tpos+1]];	/* score B->Mk */
+	  continue;
+	}
+                                /* watch out for internal exits */
+      else if (tr->statetype[tpos] == STM && tr->statetype[tpos+1] == STD)
+	{
+	  i = tpos;
+	  while (tr->statetype[i+1] == STD) i++; /* look ahead for an E... */
+	  if (tr->statetype[i+1] == STE) /* if it's there, score as Mk->E */
+	    {
+	      tpos = i;
+	      score += hmm->esc[tr->nodeidx[tpos]];
+	      continue;
+	    }
+	  /* and if not, fall through to transition score lookup for M->D */
+	}
+
       score += TransitionScoreLookup(hmm, 
 			     tr->statetype[tpos], tr->nodeidx[tpos],
 			     tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
@@ -581,14 +641,14 @@ TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1,
     switch (st2) {
     case STB: return hmm->xsc[XTN][MOVE]; 
     case STN: return hmm->xsc[XTN][LOOP]; 
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STB:
     switch (st2) {
     case STM: return hmm->bsc[k2]; 
-    case STD: return Prob2Score(hmm->tbd1, 1.);
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    case STD: Die("B->D transition doesn't happen in a scoring model.");
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STM:
@@ -597,47 +657,47 @@ TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1,
     case STI: return hmm->tsc[TMI][k1];
     case STD: return hmm->tsc[TMD][k1];
     case STE: return hmm->esc[k1];
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STI:
     switch (st2) {
     case STM: return hmm->tsc[TIM][k1];
     case STI: return hmm->tsc[TII][k1];
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STD:
     switch (st2) {
     case STM: return hmm->tsc[TDM][k1]; 
     case STD: return hmm->tsc[TDD][k1];
-    case STE: return 0;	/* D_m->E has probability 1.0 by definition in Plan7 */
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    case STE: Die("D->E transition doesn't happen in a scoring model.");
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STE:
     switch (st2) {
     case STC: return hmm->xsc[XTE][MOVE]; 
     case STJ: return hmm->xsc[XTE][LOOP]; 
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STJ:
     switch (st2) {
     case STB: return hmm->xsc[XTJ][MOVE]; 
     case STJ: return hmm->xsc[XTJ][LOOP]; 
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STC:
     switch (st2) {
     case STT: return hmm->xsc[XTC][MOVE]; 
     case STC: return hmm->xsc[XTC][LOOP]; 
-    default:      Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
+    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STT:   return 0;	/* T makes no transitions */
-  default:        Die("illegal state %s in traceback", Statetype(st1));
+  default:    Die("illegal state %s in traceback", Statetype(st1));
   }
   /*NOTREACHED*/
   return 0;
@@ -1207,6 +1267,135 @@ rightjustify(char *s, int n)
 }
 
 
+/* Function: P7PrintTrace()
+ * 
+ * Purpose:  Print out a traceback structure.
+ *           If hmm is non-NULL, also print transition and emission scores.
+ *           
+ * Args:     fp  - stderr or stdout, often
+ *           tr  - trace structure to print
+ *           hmm - NULL or hmm containing scores to print
+ *           dsq - NULL or digitized sequence trace refers to.                
+ */
+void
+P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char *dsq)
+{
+  int          tpos;		/* counter for trace position */
+  unsigned int sym;
+  int          sc;
+  int          i;
+
+  if (tr == NULL) {
+    fprintf(fp, " [ trace is NULL ]\n");
+    return;
+  }
+
+  if (hmm == NULL) {
+    fprintf(fp, "st  node   rpos  - traceback len %d\n", tr->tlen);
+    fprintf(fp, "--  ---- ------\n");
+    for (tpos = 0; tpos < tr->tlen; tpos++) {
+      fprintf(fp, "%1s  %4d %6d\n", 
+	      Statetype(tr->statetype[tpos]),
+	      tr->nodeidx[tpos],
+	      tr->pos[tpos]);
+    } 
+  } else {
+    if (!(hmm->flags & PLAN7_HASBITS))
+      Die("oi, you can't print scores from that hmm, it's not ready.");
+
+    sc = 0;
+    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->tlen);
+    fprintf(fp, "--  ---- ------  ------- --------\n");
+    for (tpos = 0; tpos < tr->tlen; tpos++) {
+      if (dsq != NULL) sym = dsq[tr->pos[tpos]];
+
+      /* B->DDD->Mk paths must be scored as B->Mk.
+       * Suck up the B->DDD->Mk whole path here, display that score once,
+       * on the D->Mk transition. tpos sits on the D when
+       * we're done, so that tpos++ loop sets us on the M for the
+       * next goround.
+       */
+      if (tr->statetype[tpos] == STB && tr->statetype[tpos+1] == STD)
+	{
+	  fprintf(fp, "%1s  %4d %6d  *", "B", 0, 0);
+	  tpos++;
+	  while (tr->statetype[tpos+1] == STD) {
+	    fprintf(fp, "%1s  %4d %6d  *", "D", tr->nodeidx[tpos], tr->pos[tpos]);
+	    tpos++;  /* stop when tpos+1 is an Mk */
+	  }
+
+	  fprintf(fp, "%1s  %4d %6d  %7d", 
+		  Statetype(tr->statetype[tpos]), /* D */
+		  tr->nodeidx[tpos],              /* k-1 */
+		  tr->pos[tpos],                  /* 0 */
+		  hmm->bsc[tr->nodeidx[tpos+1]]);
+	  continue;
+	}
+      
+      /* Similarly, Mk->DDDD->E paths must be scored as Mk->E.
+       */
+      if (tr->statetype[tpos] == STM && tr->statetype[tpos+1] == STD)
+	{
+	  i = tpos;
+	  while (tr->statetype[i+1] == STD) i++; /* look ahead for an E... */
+	  if (tr->statetype[i+1] == STE) /* if it's there, score as Mk->E */
+	    {
+	      fprintf(fp, "%1s  %4d %6d  %7d", 
+		      Statetype(tr->statetype[tpos]), /* M */
+		      tr->nodeidx[tpos],              /* k */
+		      tr->pos[tpos],                  /* whatever */
+		      hmm->esc[tr->nodeidx[tpos]]);   /* Mk->E */
+	      while (++tpos <= i) 
+		fprintf(fp, "%1s  %4d %6d  *", 
+			Statetype(tr->statetype[tpos]),     
+			tr->nodeidx[tpos], tr->pos[tpos]);
+	      /* tpos now sits on the last D state; main loop will advance to E */
+	      continue;
+	    }
+	}
+
+      fprintf(fp, "%1s  %4d %6d  %7d", 
+	      Statetype(tr->statetype[tpos]),
+	      tr->nodeidx[tpos],
+	      tr->pos[tpos],
+	      (tpos < tr->tlen-1) ? 
+	      TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
+				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]) : 0);
+
+      if (tpos < tr->tlen-1)
+	sc += TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
+				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
+
+      if (dsq != NULL) {
+	if (tr->statetype[tpos] == STM)  
+	  {
+	    fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
+		    Alphabet[sym]);
+	    sc += hmm->msc[sym][tr->nodeidx[tpos]];
+	  }
+	else if (tr->statetype[tpos] == STI) 
+	  {
+	    fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
+		    (char) tolower((int) Alphabet[sym]));
+	    sc += hmm->isc[sym][tr->nodeidx[tpos]];
+	  }
+	else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
+		 (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
+		 (tr->statetype[tpos] == STJ && tr->statetype[tpos-1] == STJ))
+	  {
+	    fprintf(fp, " %8d %c", 0, (char) tolower((int) Alphabet[sym]));
+	  }
+      } else {
+	fprintf(fp, " %8s %c", "-", '-');
+      }
+
+
+      fputs("\n", fp);
+    }
+    fprintf(fp, "                 ------- --------\n");
+    fprintf(fp, "           total: %6d\n\n", sc);
+  }
+}
 
 /************************************************************
  * @LICENSE@
