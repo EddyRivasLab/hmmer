@@ -1012,6 +1012,87 @@ TraceDomainNumber(struct p7trace_s *tr)
 }
 
 
+/* Function:  Trace_GetAlignmentBounds()
+ * Incept:    SRE, Fri May 13 08:54:43 2005 [St. Louis]
+ *
+ * Purpose:   Retrieve the bounds of domain alignment number <which> in
+ *            a traceback <tr>. Usually, <which>==1 (the first and
+ *            only domain), but for a multihit trace, there may be
+ *            more than one domain in the trace.
+ *            
+ *            The total number of domains in a trace can be calculated
+ *            by a call to TraceDomainNumber().  To retrieve coords
+ *            for all N domains, you can loop <which> from 1..N.
+ *            
+ * Args:      tr     - traceback structure, containing N>=1 domains
+ *            which  - which domain to get coords for, 1..N
+ *            ret_i1 - RETURN: start point on sequence [1..L] (or NULL)
+ *            ret_i2 - RETURN: end point on sequence   [1..L] (or NULL)
+ *            ret_k1 - RETURN: start point on model    [1..M] (or NULL)
+ *            ret_k2 - RETURN: end point on model      [1..M] (or NULL)
+ *            ret_avlen - RETURN: the average length of the alignment,
+ *                        ((k2-k1+1)+(i2-i1+1))/2. This gets used in
+ *                        edge correction of E-value statistics.
+ *            
+ * Returns:   1 on success. 0 if no such domain <which> is in the trace.
+ */
+int
+Trace_GetAlignmentBounds(struct p7trace_s *tr, int which,
+			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2,
+			 int *ret_avlen)
+{
+  int i1, i2, k1, k2;
+  int tpos;
+
+  i1 = k1 = i2 = k2 = -1;
+
+  /* skip to the which'th B state.
+   */
+  for (tpos = 0; which > 0 && tpos < tr->tlen; tpos++)
+    {
+      if (tr->statetype[tpos] == STB) which--;
+    }
+  if (tpos == tr->tlen) return 0;
+
+  /* skip to the first M state; record i1,k1.
+   * (should be next state, if this is a normal
+   * trace from a scoring model.)
+   */
+  for (; tpos < tr->tlen; tpos++)
+    {
+      if (tr->statetype[tpos] == STM) 
+	{
+	  i1 = tr->pos[tpos];
+	  k1 = tr->nodeidx[tpos];
+	  break;
+	}
+    }
+  if (tpos == tr->tlen) Die("no M found after B: invalid trace");
+  
+  /* skip to the end E, remembering i2,k2 as
+   * the last M we see. tpos is sitting on the
+   * first M state right now, which inits i2,k2.
+   */
+  for (; tpos < tr->tlen; tpos++)
+    {
+      if (tr->statetype[tpos] == STM)
+	{
+	  i2 = tr->pos[tpos];
+	  k2 = tr->nodeidx[tpos];
+	}
+      if (tr->statetype[tpos] == STE)
+	break;
+    }
+  if (tpos == tr->tlen) Die("No E found: invalid trace");
+  
+  if (ret_k1 != NULL)    *ret_k1    = k1;
+  if (ret_i1 != NULL)    *ret_i1    = i1;
+  if (ret_k2 != NULL)    *ret_k2    = k2;
+  if (ret_i2 != NULL)    *ret_i2    = i2;
+  if (ret_avlen != NULL) *ret_avlen = ((k2-k1+1) + (i2-i1+1)) / 2;
+  return 1;
+}
+
 /* Function: TraceSimpleBounds()
  * 
  * Purpose:  For a trace that contains only a single

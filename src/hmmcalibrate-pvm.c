@@ -44,16 +44,15 @@ main(void)
   int      master_tid;		/* PVM TID of our master */
   int      slaveidx;		/* my slave index (0..nslaves-1) */
   struct plan7_s *hmm;		/* HMM to calibrate, sent from master */
+  struct p7trace_s *tr;         /* traceback from an alignment */
   struct dpmatrix_s *mx;        /* growable DP matrix */
   char              *seq;	/* synthetic random sequence */
   unsigned char     *dsq;	/* digitized seq */
-  int      len;			/* length of seq */
   float   *sc;			/* scores of seqs */
+  int     *alen;		/* lengths of alignments */
   int      seed;		/* random number seed */
-  int      nsample;		/* number of seqs to sample */
-  int      fixedlen;		/* if nonzero, fixed length of seq */
-  float    lenmean;		/* Gaussian mean length of seq */
-  float    lensd;		/* Gaussian length std. dev. for seq */
+  int      N;			/* number of seqs to sample */
+  int      L;			/* length of random sequences */
   float    randomseq[MAXABET];	/* iid frequencies of residues */
   float    p1;
   int      alphatype;		/* alphabet type, hmmAMINO or hmmNUCLEIC    */
@@ -82,9 +81,7 @@ main(void)
   master_tid = pvm_parent();	/* who's our master? */
 
   pvm_recv(master_tid, HMMPVM_INIT);
-  pvm_upkfloat(&lenmean,  1, 1); /* mean length of random seqs    */
-  pvm_upkfloat(&lensd,    1, 1); /* std. dev. of random seq len   */
-  pvm_upkint(&fixedlen,   1, 1); /* if non-zero, override lenmean */
+  pvm_upkint(&L,          1, 1); /* if non-zero, override lenmean */
   pvm_upkint(&alphatype,  1, 1); /* alphabet type, hmmAMINO or hmmNUCLEIC */
   pvm_upkint(&seed,       1, 1); /* random number seed */
   SetAlphabet(alphatype);	 /* must set alphabet before reading HMM! */
@@ -92,7 +89,7 @@ main(void)
   if (hmm == NULL) Die("oh no, the HMM never arrived");
   if (! (hmm->flags & PLAN7_HASBITS)) Die("Oops, that model isn't configured");
   P7DefaultNullModel(randomseq, &p1);
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx = CreatePlan7Matrix(L, hmm->M, 0, 0);
 
   /* tell the master we're OK and ready to go (or not)
    */
@@ -123,31 +120,21 @@ main(void)
 	sre_srandom(seed+idx);	/* unique seed in current PVM   */
       }
 
-      sc = MallocOrDie(sizeof(float) * nsample);
+      sc   = MallocOrDie(sizeof(float) * nsample);
+      alen = MallocOrDie(sizeof(int)   * nsample);
       for (idx = 0; idx < nsample; idx++)
 	{
-  				/* choose length of random sequence */
-	  if (fixedlen) len = fixedlen;
-	  else do len = (int) Gaussrandom(lenmean, lensd); while (len < 1);
-				/* generate it */
-	  seq = RandomSequence(Alphabet, randomseq, Alphabet_size, len);
-	  dsq = DigitizeSequence(seq, len);
-	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, len, seq));
+	  seq = RandomSequence(Alphabet, randomseq, Alphabet_size, L);
+	  dsq = DigitizeSequence(seq, L);
+	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, L, seq));
 
-#ifdef ALTIVEC
-      /* We only need the score here (not the trace), so we can just
-       * call the fast Altivec routine directly. The memory needs in this
-       * routine is only proportional to the model length (hmm->M), and 
-       * preallocated, so we don't have to consider the low-memory alternative.   
-       */    
-      sc[idx] = P7ViterbiNoTrace(dsq, len, hmm, mx); 
-#else
-	  if (P7ViterbiSpaceOK(len, hmm->M, mx))
-	    sc[idx] = P7Viterbi(dsq, len, hmm, mx, NULL);
+	  if (P7ViterbiSpaceOK(L, hmm->M, mx))
+	    sc[idx] = P7Viterbi(dsq, L, hmm, mx, &tr);
 	  else
-	    sc[idx] = P7SmallViterbi(dsq, len, hmm, mx, NULL);
-#endif
+	    sc[idx] = P7SmallViterbi(dsq, L, hmm, mx, &tr);
+	  TraceGetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL, &(alen[idx]));
 	  
+	  P7FreeTrace(tr);
 	  free(seq);
 	  free(dsq);
 	}
@@ -157,15 +144,18 @@ main(void)
        *   2. how many seqs we simulated.
        *   3. the array of scores we got, so the master can stuff
        *      them into a histogram.
+       *   4. array of alignment lengths, for calculating edge corrections.
        */
       pvm_initsend(PvmDataDefault);
       pvm_pkint(&slaveidx, 1, 1);
       pvm_pkint(&nsample,  1, 1);
-      pvm_pkfloat(sc, nsample,1); 
+      pvm_pkfloat(sc,   nsample, 1); 
+      pvm_pkfloat(alen, nsample, 1); 
       pvm_send(master_tid, HMMPVM_RESULTS);
 
       /* cleanup
        */
+      free(alen);
       free(sc);
     }
 

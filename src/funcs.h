@@ -399,8 +399,9 @@ extern void PrintFancyAli(FILE *fp, struct fancyali_s *ali);
 extern void TraceDecompose(struct p7trace_s *otr, struct p7trace_s ***ret_tr,
 			   int *ret_ntr);
 extern int  TraceDomainNumber(struct p7trace_s *tr);
-extern void TraceSimpleBounds(struct p7trace_s *tr, int *ret_i1, int *ret_i2, 
-			      int *ret_k1,  int *ret_k2);
+extern int  Trace_GetAlignmentBounds(struct p7trace_s *tr, int which,
+				     int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2,
+				     int *ret_avlen);
 extern struct p7trace_s *MasterTraceFromMap(int *map, int M, int alen);
 extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, 
 			      struct p7trace_s ***ret_tr);

@@ -2604,7 +2604,10 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   for (tidx = 0, didx = 1; tidx < ntr; tidx++) {
     if (! usedomain[tidx]) continue;
 
-    TraceSimpleBounds(tarr[tidx], &i1, &i2, &k1, &k2);
+    /* domain #1 = the only domain in tarr[tidx], because we've
+     * already split the main trace up --v
+     */
+    Trace_GetAlignmentBounds(tarr[tidx], 1, &i1, &i2, &k1, &k2, NULL);
     pvalue = PValue(hmm, score[tidx]); 
 
     if (pvalue <= thresh->domE && score[tidx] >= thresh->domT) {

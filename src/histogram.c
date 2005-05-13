@@ -669,7 +669,7 @@ FITFAILED:
  *                        else 2 if mu, lambda are estimated from data
  */
 void
-ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, 
+ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda, 
 			 float lowbound, float highbound, int ndegrees)
 {
   int   sc;

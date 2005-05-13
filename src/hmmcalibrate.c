@@ -45,10 +45,9 @@ static char experts[] = "\
   --cpu <n>      : run <n> threads in parallel (if threaded)\n\
   --fixed <n>    : fix random sequence length at <n>\n\
   --histfile <f> : save histogram(s) to file <f>\n\
-  --mean <x>     : set random seq length mean at <x> [350]\n\
+  --mult <x>     : set length multiplier to <x> [3.0]\n\
   --num <n>      : set number of sampled seqs to <n> [5000]\n\
   --pvm          : run on a Parallel Virtual Machine (PVM)\n\
-  --sd <x>       : set random seq length std. dev to <x> [350]\n\
   --seed <n>     : set random seed to <n> [time()]\n\
 ";
 
@@ -57,18 +56,17 @@ static struct opt_s OPTIONS[] = {
    { "--cpu",      FALSE, sqdARG_INT },
    { "--fixed",    FALSE, sqdARG_INT   },
    { "--histfile", FALSE, sqdARG_STRING },
-   { "--mean",     FALSE, sqdARG_FLOAT },
+   { "--mult",     FALSE, sqdARG_FLOAT },
    { "--num",      FALSE, sqdARG_INT   },
    { "--pvm",      FALSE, sqdARG_NONE  },
-   { "--sd",       FALSE, sqdARG_FLOAT },   
    { "--seed",     FALSE, sqdARG_INT}, 
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 
-static void main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
-			     float lenmean, float lensd, int fixedlen,
-			     struct histogram_s **ret_hist, float *ret_max);
+static void main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
+			     float *sc, int *alen);
+
 
 #ifdef HMMER_THREADS
 /* A structure of this type is shared by worker threads in the POSIX
@@ -77,21 +75,19 @@ static void main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
 struct workpool_s {
   /* Static configuration:
    */
-  struct plan7_s  *hmm;		/* ptr to single HMM to search with    */
-  int    fixedlen;		/* if >0, fix random seq len to this   */
-  float  lenmean;		/* mean of Gaussian for random seq len */
-  float  lensd;			/* s.d. of Gaussian for random seq len */
-  float *randomseq;             /* 0..Alphabet_size-1 i.i.d. probs     */
-  int    nsample;		/* number of random seqs to do         */
+  struct plan7_s  *hmm;	     /* ptr to single HMM to search with    */
+  int    N;		     /* number of random seqs to do         */
+  int    L;		     /* length of random sequences          */
+  float *randomseq;          /* 0..Alphabet_size-1 i.i.d. probs     */
 
   /* Shared (mutex-protected) input:
    */
-  int    nseq;			/* current number of seqs searched     */
+  int    nseq;		     /* current number of seqs searched     */
 
   /* Shared (mutex-protected) output:
    */
-  struct histogram_s *hist;     /* histogram          */
-  float          max_score;     /* maximum score seen */
+  float         *sc;		/* unsorted score array */
+  int           *alen;		/* opt ali length array  */
   Stopwatch_t    watch;		/* Timings accumulated for threads */
 
   /* Thread pool information:
@@ -101,26 +97,21 @@ struct workpool_s {
   pthread_mutex_t input_lock;	/* a mutex protecting input fields */
   pthread_mutex_t output_lock;  /* a mutex protecting output fields */
 };
-static void main_loop_threaded(struct plan7_s *hmm, int seed, int nsample, 
-			       float lenmean, float lensd, int fixedlen,
+static void main_loop_threaded(struct plan7_s *hmm, int seed, int N, int L,
 			       int nthreads,
-			       struct histogram_s **ret_hist, float *ret_max,
-			       Stopwatch_t *twatch);
-static struct workpool_s *workpool_start(struct plan7_s *hmm, 
-				 float lenmean, float lensd, int fixedlen,
-				 float *randomseq, int nsample, 
-				 struct histogram_s *hist, 
-				 int num_threads);
+			       float *sc, int *alen, Stopwatch_t *twatch);
+static struct workpool_s *workpool_start(struct plan7_s *hmm, int N, int L,
+					 float *randomseq, 
+					 float *sc, int *alen, int num_threads);
 static void  workpool_stop(struct workpool_s *wpool);
 static void  workpool_free(struct workpool_s *wpool);
 static void *worker_thread(void *ptr);
 #endif /* HMMER_THREADS */
 
 #ifdef HMMER_PVM
-static void main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, 
+static void main_loop_pvm(struct plan7_s *hmm, int seed, int N, int L,
 			  int lumpsize,
-			  float lenmean, float lensd, int fixedlen,
-			  struct histogram_s **ret_hist, float *ret_max, 
+			  float *sc, int *alen, 
 			  Stopwatch_t *extrawatch, int *ret_nslaves);
 #endif /* HMMER_PVM */
 
@@ -135,38 +126,41 @@ main(int argc, char **argv)
   char    *mode;                /* write mode, "w" or "wb"         */
   struct plan7_s *hmm;          /* the hidden Markov model         */
   int     idx;			/* counter over sequences          */
-  sigset_t blocksigs;		/* list of signals to protect from */
-  int     nhmm;			/* number of HMMs calibrated       */
-
-  struct histogram_s *hist;     /* a resulting histogram           */
-  float   max;			/* maximum score from an HMM       */
   char   *histfile;             /* histogram save file             */
   FILE   *hfp;                  /* open file pointer for histfile  */
 
-  Stopwatch_t stopwatch;	/* main stopwatch for process       */
-  Stopwatch_t extrawatch;	/* stopwatch for threads/PVM slaves */
+  /* Control over the random sequence simulation: */
+  int     N;			/* number of random seqs to sample */
+  float   mult;			/* default: L= mult * hmm->M       */
+  int     fixedL;		/* if >0, L is fixed to this       */
+  int     seed;			/* random number seed              */
+  float  *sc;			/* array of <nsample> scores       */
+  int    *alen;			/* array of <nsample> ali lengths  */
 
+  /* For each HMM, we obtain results: */
+  int    *L;		        /* random sequence length          */
   float  *mu;			/* array of EVD mu's for HMMs      */
   float  *lambda;		/* array of EVD lambda's for HMMs  */
-  int     mu_lumpsize;		/* allocation lumpsize for mu, lambda */
+  float  *kappa;		/* array of edge correction kappa's*/
+  float  *sigma;		/* array of edge correction sigma's*/
+  int     nhmm;			/* number of HMMs calibrated       */
+  int     halloc;		/* number of HMMs allocated for    */
 
-  int     nsample;		/* number of random seqs to sample */
-  int     seed;			/* random number seed              */
-  int     fixedlen;		/* fixed length, or 0 if unused    */
-  float   lenmean;		/* mean of length distribution     */
-  float   lensd;		/* std dev of length distribution  */
   int     do_pvm;		/* TRUE to use PVM                 */
   int     pvm_lumpsize;		/* # of seqs to do per PVM slave exchange */
 #ifdef HMMER_PVM
   int     pvm_nslaves;		/* number of slaves used in the PVM */
 #endif
 
-
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
 
   int   num_threads;            /* number of worker threads */   
+
+  Stopwatch_t stopwatch;	/* main stopwatch for process       */
+  Stopwatch_t extrawatch;	/* stopwatch for threads/PVM slaves */
+  sigset_t blocksigs;		/* list of signals to protect from */
 
 
   /***********************************************
@@ -175,15 +169,12 @@ main(int argc, char **argv)
   StopwatchStart(&stopwatch);
   StopwatchZero(&extrawatch);
 
-  nsample      = 5000;
-  fixedlen     = 0;
-  lenmean      = 325.;
-  lensd        = 200.;
+  N            = 5000;
+  fixedL       = 0;
   seed         = (int) time ((time_t *) NULL);
   histfile     = NULL;
   do_pvm       = FALSE;
   pvm_lumpsize = 20;		/* 20 seqs/PVM exchange: sets granularity */
-  mu_lumpsize  = 100;
 #ifdef HMMER_THREADS
   num_threads  = ThreadNumber(); /* only matters if we're threaded */
 #else
@@ -194,12 +185,11 @@ main(int argc, char **argv)
 		&optind, &optname, &optarg))
     {
       if      (strcmp(optname, "--cpu")      == 0) num_threads  = atoi(optarg);
-      else if (strcmp(optname, "--fixed")    == 0) fixedlen = atoi(optarg);
+      else if (strcmp(optname, "--fixed")    == 0) fixedL   = atoi(optarg);
       else if (strcmp(optname, "--histfile") == 0) histfile = optarg;
-      else if (strcmp(optname, "--mean")     == 0) lenmean  = atof(optarg); 
+      else if (strcmp(optname, "--mult")     == 0) mult     = atof(optarg); 
       else if (strcmp(optname, "--num")      == 0) nsample  = atoi(optarg); 
       else if (strcmp(optname, "--pvm")      == 0) do_pvm   = TRUE;
-      else if (strcmp(optname, "--sd")       == 0) lensd    = atof(optarg); 
       else if (strcmp(optname, "--seed")     == 0) seed     = atoi(optarg);
       else if (strcmp(optname, "-h") == 0)
 	{
@@ -259,12 +249,11 @@ main(int argc, char **argv)
   HMMERBanner(stdout, banner);
   printf("HMM file:                 %s\n", hmmfile);
   if (fixedlen) 
-    printf("Length fixed to:          %d\n", fixedlen);
+    printf("Length fixed to:          %d\n", fixedL);
   else {
-    printf("Length distribution mean: %.0f\n", lenmean);
-    printf("Length distribution s.d.: %.0f\n", lensd);
+    printf("Length multiplier:        %.0f\n", mult);
   }
-  printf("Number of samples:        %d\n", nsample);
+  printf("Number of samples:        %d\n", N);
   printf("random seed:              %d\n", seed);
   printf("histogram(s) saved to:    %s\n",
 	 histfile != NULL ? histfile : "[not saved]");
@@ -274,43 +263,73 @@ main(int argc, char **argv)
     printf("POSIX threads:            %d\n", num_threads);
   printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
+
+  /* Initial allocations for results per HMM;
+   * we'll resize these arrays dynamically as we read more HMMs.
+   */
+  halloc = 128;
+  L      = MallocOrDie(sizeof(int)   * halloc); 
+  mu     = MallocOrDie(sizeof(float) * halloc); 
+  lambda = MallocOrDie(sizeof(float) * halloc); 
+  kappa  = MallocOrDie(sizeof(float) * halloc); 
+  sigma  = MallocOrDie(sizeof(float) * halloc); 
+  nhmm   = 0;
+
+  /* Allocation for results per simulation, for one HMM.
+   */
+  sc     = MallocOrDie(sizeof(float) * nsample);
+  alen   = MallocOrDie(sizeof(int)   * nsample);
+
+
   /***********************************************
    * Read the HMMs one at a time, and send them off
-   * in probability form to one of the main loops.
-   * The main loop functions are responsible for 
-   * synthesizing random sequences and returning
-   * a score histogram for each HMM.
+   * to one of the main loops to collect sc, alen arrays.
    ***********************************************/
-
-  nhmm = 0;
-  mu     = MallocOrDie(sizeof(float) * mu_lumpsize);
-  lambda = MallocOrDie(sizeof(float) * mu_lumpsize);
 
   while (HMMFileRead(hmmfp, &hmm))
     {
       if (hmm == NULL)
 	Die("HMM file may be corrupt or in incorrect format; parse failed");
 
+      /* Determine what length the random seqs should be.
+       */
+      if (fixedL) L[nhmm] = fixedL;
+      else        L[nhmm] = (int) (mult * (float) hmm->M);
+
+      /* Use one of the engines to collect sc, alen arrays
+       * for N random seqs of length L. This is the compute
+       * intensive part.
+       */
       if (! do_pvm && num_threads == 0)
-	main_loop_serial(hmm, seed, nsample, lenmean, lensd, fixedlen, 
-			 &hist, &max);
+	main_loop_serial(hmm, seed, N, L[nhmm], sc, alen);
 #ifdef HMMER_PVM
       else if (do_pvm) {
 	pvm_nslaves = 0;	/* solely to silence compiler warnings */
-	main_loop_pvm(hmm, seed, nsample, pvm_lumpsize, 
-		      lenmean, lensd, fixedlen, 
-		      &hist, &max, &extrawatch, &pvm_nslaves);
+	main_loop_pvm(hmm, seed, N, L[nhmm], pvm_lumpsize, 
+		      sc, alen, &extrawatch, &pvm_nslaves);
       }
 #endif 
 #ifdef HMMER_THREADS
       else if (num_threads > 0)
-	main_loop_threaded(hmm, seed, nsample, lenmean, lensd, fixedlen,
-			   num_threads, &hist, &max, &extrawatch);
+	main_loop_threaded(hmm, seed, N, L[nhmm], num_threads, 
+			   sc, alen, &extrawatch);
 #endif
       else 
 	Die("wait. that can't happen. I didn't do anything.");
 
+      /* Fit an EVD to the scores to get mu, lambda params.
+       */
+      if (hmm->mode == P7_SW_MODE || hmm->mode == P7_FS_MODE)
+	EVDMaxLikelyFit(sc, NULL, N, &(mu[nhmm]), &(lambda[nhmm]));
+      else
+	Die("Work in progress - only fitting to SW/FS local EVDs right now.");
 
+      /* Calculate mean ali length (kappa) and std. dev of ali lengths (sigma).
+       */
+      imean_sd(alen, N, &(kappa[nhmm]), &(sigma[nhmm]));
+      
+      
+#ifdef OLDCODE
       /* Fit an EVD to the observed histogram.
        * The TRUE left-censors and fits only the right slope of the histogram.
        * The 9999. is an arbitrary high number that means we won't trim
@@ -318,20 +337,16 @@ main(int argc, char **argv)
        */
       if (! ExtremeValueFitHistogram(hist, TRUE, 9999.))
 	Die("fit failed; --num may be set too small?\n");
+#endif
       
-      mu[nhmm]     = hist->param[EVD_MU];
-      lambda[nhmm] = hist->param[EVD_LAMBDA];
-      nhmm++;
-      if (nhmm % 100 == 0) {
-	mu     = ReallocOrDie(mu,     sizeof(float) * (nhmm+mu_lumpsize));
-	lambda = ReallocOrDie(lambda, sizeof(float) * (nhmm+mu_lumpsize));
-      }      
-
       /* Output
        */
       printf("HMM    : %s\n",   hmm->name);
-      printf("mu     : %12f\n", hist->param[EVD_MU]);
-      printf("lambda : %12f\n", hist->param[EVD_LAMBDA]);
+      printf("L      : %d\n",   L[nhmm]);
+      printf("mu     : %12f\n", mu[nhmm]);
+      printf("lambda : %12f\n", lambda[nhmm]);
+      printf("kappa  : %12f\n", kappa[nhmm]);
+      printf("sigma  : %12f\n", sigma[nhmm]);
       printf("max    : %12f\n", max);
       printf("//\n");
 
@@ -342,7 +357,18 @@ main(int argc, char **argv)
 	  fprintf(hfp, "//\n");
 	}
 
-      FreeHistogram(hist);
+      /* Reallocation, if needed.
+       */
+      nhmm++;
+      if (nhmm == halloc) {
+	halloc *= 2;		/* realloc by doubling */
+	L      = ReallocOrDie(L,      sizeof(int)   * halloc);
+	mu     = ReallocOrDie(mu,     sizeof(float) * halloc);
+	lambda = ReallocOrDie(lambda, sizeof(float) * halloc);
+	kappa  = ReallocOrDie(kappa,  sizeof(float) * halloc);
+	sigma  = ReallocOrDie(sigma,  sizeof(float) * halloc);
+      }      
+
       FreePlan7(hmm);
     }
   SQD_DPRINTF1(("Main body believes it has calibrations for %d HMMs\n", nhmm));
@@ -417,8 +443,13 @@ main(int argc, char **argv)
 
   /*  StopwatchDisplay(stdout, "CPU Time: ", &stopwatch); */
 
+  free(sc);
+  free(alen);
+  free(L);
   free(mu);
   free(lambda);
+  free(kappa);
+  free(sigma);
   if (hfp != NULL) fclose(hfp);
   SqdClean();
   return 0;
@@ -433,30 +464,24 @@ main(int argc, char **argv)
  *
  * Args:     hmm      - an HMM to calibrate.
  *           seed     - random number seed
- *           nsample  - number of seqs to synthesize
- *           lenmean  - mean length of random sequence
- *           lensd    - std dev of random seq length
- *           fixedlen - if nonzero, override lenmean, always this len
- *           ret_hist - RETURN: the score histogram 
- *           ret_max  - RETURN: highest score seen in simulation
+ *           N        - number of seqs to synthesize
+ *           L        - mean length of random sequence
+ *           sc       - RETURN: unsorted array of <nsample> scores
+ *           alen     - RETURN: array of <nsample> optimal ali lengths
  *
  * Returns:  (void)
- *           hist is alloc'ed here, and must be free'd by caller.
  */
 static void
-main_loop_serial(struct plan7_s *hmm, int seed, int nsample, 
-		 float lenmean, float lensd, int fixedlen,
-		 struct histogram_s **ret_hist, float *ret_max)
+main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
+		 float *sc, int *alen)
 {
-  struct histogram_s *hist;
+  struct p7trace_s   *tr;
   struct dpmatrix_s  *mx;
   float  randomseq[MAXABET];
   float  p1;
-  float  max;
-  char  *seq;
+  char           *seq;
   unsigned char  *dsq;
   float  score;
-  int    sqlen;
   int    idx;
   
   /* Initialize.
@@ -466,36 +491,22 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
   sre_srandom(seed);
   if (! (hmm->flags & PLAN7_HASBITS)) Die("oops: that model isn't configured");
   P7DefaultNullModel(randomseq, &p1);
-  hist = AllocHistogram(-200, 200, 100);
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
-  max = -FLT_MAX;
+  mx = CreatePlan7Matrix(L, hmm->M, 0, 0);
 
-  for (idx = 0; idx < nsample; idx++)
+  for (idx = 0; idx < N; idx++)
   {
-      /* choose length of random sequence */
-      if (fixedlen) sqlen = fixedlen;
-      else do sqlen = (int) Gaussrandom(lenmean, lensd); while (sqlen < 1);
-      /* generate it */
-      seq = RandomSequence(Alphabet, randomseq, Alphabet_size, sqlen);
-      dsq = DigitizeSequence(seq, sqlen);
+      seq = RandomSequence(Alphabet, randomseq, Alphabet_size, L);
+      dsq = DigitizeSequence(seq, L);
       
-#ifdef ALTIVEC
-      /* We only need the score here (not the trace), so we can just
-       * call the fast Altivec routine directly. The memory needs in this
-       * routine is only proportional to the model length (hmm->M), and 
-       * preallocated, so we don't have to consider the low-memory alternative.   
-       */    
-      score = P7ViterbiNoTrace(dsq, sqlen, hmm, mx); 
-#else      
-      if (P7ViterbiSpaceOK(sqlen, hmm->M, mx))
-          score = P7Viterbi(dsq, sqlen, hmm, mx, NULL);
+      if (P7ViterbiSpaceOK(L, hmm->M, mx))
+          score = P7Viterbi(dsq, sqlen, hmm, mx, &tr);
       else
-          score = P7SmallViterbi(dsq, sqlen, hmm, mx, NULL);
-#endif
+          score = P7SmallViterbi(dsq, sqlen, hmm, mx, &tr);
 
-      AddToHistogram(hist, score);
-      if (score > max) max = score;
+      sc[idx] = score;
+      Trace_GetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL, &(alen[idx]));
 
+      P7FreeTrace(tr);
       free(dsq); 
       free(seq);
     }
@@ -517,26 +528,20 @@ main_loop_serial(struct plan7_s *hmm, int seed, int nsample,
  *
  * Args:     hmm      - an HMM to calibrate.
  *           seed     - random number seed
- *           nsample  - number of seqs to synthesize
- *           lenmean  - mean length of random sequence
- *           lensd    - std dev of random seq length
- *           fixedlen - if nonzero, override lenmean, always this len
+ *           N        - number of seqs to synthesize
+ *           L        - sequence length
  *           nthreads - number of threads to start
- *           ret_hist - RETURN: the score histogram 
- *           ret_max  - RETURN: highest score seen in simulation
+ *           sc       - RETURN: unsorted array of <nsample> scores
+ *           alen     - RETURN: array of <nsample> optimal ali lengths
  *           twatch   - RETURN: accumulation of thread times
  *
  * Returns:  (void)
- *           hist is alloc'ed here, and must be free'd by caller.
  */
 static void
-main_loop_threaded(struct plan7_s *hmm, int seed, int nsample, 
-		   float lenmean, float lensd, int fixedlen,
+main_loop_threaded(struct plan7_s *hmm, int seed, int N, int L,
 		   int nthreads,
-		   struct histogram_s **ret_hist, float *ret_max,
-		   Stopwatch_t *twatch)
+		   float *sc, int *alen, Stopwatch_t *twatch)
 {
-  struct histogram_s *hist;
   float  randomseq[MAXABET];
   float  p1;
   struct workpool_s *wpool;     /* pool of worker threads  */
@@ -548,14 +553,10 @@ main_loop_threaded(struct plan7_s *hmm, int seed, int nsample,
   sre_srandom(seed);
   P7Logoddsify(hmm, TRUE);
   P7DefaultNullModel(randomseq, &p1);
-  hist = AllocHistogram(-200, 200, 100);
 
-  wpool = workpool_start(hmm, lenmean, lensd, fixedlen, randomseq, nsample,
-			 hist, nthreads);
+  wpool = workpool_start(hmm, N, L, randomseq, sc, alen, nthreads);
   workpool_stop(wpool);
 
-  *ret_hist = hist;
-  *ret_max  = wpool->max_score;
   StopwatchInclude(twatch, &(wpool->watch));
 
   workpool_free(wpool);
@@ -586,6 +587,8 @@ main_loop_threaded(struct plan7_s *hmm, int seed, int nsample,
  *           randomseq- i.i.d. frequencies for residues, 0..Alphabet_size-1
  *           nsample  - how many seqs to calibrate on
  *           hist     - histogram structure for storing results
+ *           sc       - unsorted array of score results 0..nsample-1
+ *           alen     - RETURN: array of <nsample> optimal ali lengths
  *           num_threads - how many processors to run on
  *
  * Returns:  ptr to struct workpool_s.
@@ -593,9 +596,8 @@ main_loop_threaded(struct plan7_s *hmm, int seed, int nsample,
  *           then free the structure with workpool_free().
  */
 static struct workpool_s *
-workpool_start(struct plan7_s *hmm, float lenmean, float lensd, int fixedlen,
-	       float *randomseq, int nsample, struct histogram_s *hist, 
-	       int num_threads)
+workpool_start(struct plan7_s *hmm, int N, int L, float *randomseq, 
+	       float *sc, int *alen, int num_threads)
 {
   struct workpool_s *wpool;
   pthread_attr_t    attr;
@@ -605,15 +607,13 @@ workpool_start(struct plan7_s *hmm, float lenmean, float lensd, int fixedlen,
   wpool         = MallocOrDie(sizeof(struct workpool_s));
   wpool->thread = MallocOrDie(num_threads * sizeof(pthread_t));
   wpool->hmm        = hmm;
-  wpool->fixedlen   = fixedlen;
-  wpool->lenmean    = lenmean;
-  wpool->lensd      = lensd;
+  wpool->N          = N;
+  wpool->L          = L;
   wpool->randomseq  = randomseq;
-  wpool->nsample    = nsample;
   
   wpool->nseq       = 0;
-  wpool->hist       = hist;
-  wpool->max_score  = -FLT_MAX;
+  wpool->sc         = sc;
+  wpool->alen       = alen;
   wpool->num_threads= num_threads;
 
   StopwatchZero(&(wpool->watch));
@@ -709,11 +709,11 @@ void *
 worker_thread(void *ptr)
 {
   struct plan7_s    *hmm;
+  struct p7trace_s  *tr;
   struct dpmatrix_s *mx;
   struct workpool_s *wpool;
   char              *seq;
   unsigned char     *dsq;
-  int         len;
   float       sc;
   int         rtn;
   Stopwatch_t thread_watch;
@@ -721,7 +721,7 @@ worker_thread(void *ptr)
   StopwatchStart(&thread_watch);
   wpool = (struct workpool_s *) ptr;
   hmm   = wpool->hmm;
-  mx    = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx    = CreatePlan7Matrix(wpool->L, hmm->M, 0, 0);
   for (;;)
     {
       /* 1. Synthesize a random sequence. 
@@ -740,9 +740,7 @@ worker_thread(void *ptr)
 	    Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
 	  break;
 	}
-      if (wpool->fixedlen) len = wpool->fixedlen;
-      else do len = (int) Gaussrandom(wpool->lenmean, wpool->lensd); while (len < 1);
-      seq = RandomSequence(Alphabet, wpool->randomseq, Alphabet_size, len);
+      seq = RandomSequence(Alphabet, wpool->randomseq, Alphabet_size, wpool->L);
 
 				/* release the lock */
       if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
@@ -751,20 +749,10 @@ worker_thread(void *ptr)
       /* 2. Score the sequence against the model.
        */
       dsq = DigitizeSequence(seq, len);
-      
-#ifdef ALTIVEC
-      /* We only need the score here (not the trace), so we can just
-       * call the fast Altivec routine directly. The memory needs in this
-       * routine is only proportional to the modem length (hmm->M), and 
-       * preallocated, so we don't have to consider the low-memory alternative.   
-       */    
-      sc = P7ViterbiNoTrace(dsq, len, hmm, mx); 
-#else
       if (P7ViterbiSpaceOK(len, hmm->M, mx))
-          sc = P7Viterbi(dsq, len, hmm, mx, NULL);
+          sc = P7Viterbi(dsq, len, hmm, mx, &tr);
       else
-          sc = P7SmallViterbi(dsq, len, hmm, mx, NULL);
-#endif
+          sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
       
       free(dsq); 
       free(seq);
@@ -776,11 +764,13 @@ worker_thread(void *ptr)
       if ((rtn = pthread_mutex_lock(&(wpool->output_lock))) != 0)
           Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
       /* save output */
-      AddToHistogram(wpool->hist, sc);
-      if (sc > wpool->max_score) wpool->max_score = sc;
+      wpool->sc[wpool->nseq-1] = sc;
+      Trace_GetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL,
+			       &(wpool->alen[wpool->nseq-1]));
       /* release our lock */
       if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
           Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
+      P7FreeTrace(tr);
     }
 
   StopwatchStop(&thread_watch);
@@ -811,13 +801,11 @@ worker_thread(void *ptr)
  *
  * Args:     hmm     - an HMM to calibrate.
  *           seed    - random number seed
- *           nsample - number of seqs to synthesize
+ *           N       - number of seqs to synthesize
+ *           L       - length of random sequences
  *           lumpsize- # of seqs per slave exchange; controls granularity
- *           lenmean - mean length of random sequence
- *           lensd   - std dev of random seq length
- *           fixedlen- if nonzero, override lenmean, always this len
- *           hist       - RETURN: the score histogram 
- *           ret_max    - RETURN: highest score seen in simulation
+ *           sc         - RETURN: unsorted array of <nsample> scores
+ *           alen     - RETURN: array of <nsample> optimal ali lengths
  *           extrawatch - RETURN: total CPU time spend in slaves.
  *           ret_nslaves- RETURN: number of PVM slaves run.
  *
@@ -825,27 +813,22 @@ worker_thread(void *ptr)
  *           hist is alloc'ed here, and must be free'd by caller.
  */
 static void
-main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
-	      float lenmean, float lensd, int fixedlen,
-	      struct histogram_s **ret_hist, float *ret_max, 
-	      Stopwatch_t *extrawatch, int *ret_nslaves)
+main_loop_pvm(struct plan7_s *hmm, int seed, int N, int L, int lumpsize,
+	      float *sc, int *alen, Stopwatch_t *extrawatch, int *ret_nslaves)
 {
-  struct histogram_s *hist;
   int                 master_tid;
   int                *slave_tid;
   int                 nslaves;
   int                 nsent;	/* # of seqs we've asked for so far       */
   int                 ndone;	/* # of seqs we've got results for so far */
   int		      packet;	/* # of seqs to have a slave do           */
-  float               max;
   int                 slaveidx;	/* id of a slave */
-  float              *sc;        /* scores returned by a slave */
+  float              *tmpsc;    /* scores returned by a slave */
+  int                *tmplen;   /* ali lengths returned by a slave */
   Stopwatch_t         slavewatch;
   int                 i;
   
   StopwatchZero(extrawatch);
-  hist = AllocHistogram(-200, 200, 100);
-  max  = -FLT_MAX;
 
   /* Initialize PVM
    */
@@ -859,9 +842,7 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
   /* Initialize the slaves
    */
   pvm_initsend(PvmDataDefault);
-  pvm_pkfloat(&lenmean,       1, 1);
-  pvm_pkfloat(&lensd,         1, 1);
-  pvm_pkint(  &fixedlen,      1, 1);
+  pvm_pkint(  &L,             1, 1);
   pvm_pkint(  &Alphabet_type, 1, 1);
   pvm_pkint(  &seed,          1, 1);
   if (! PVMPackHMM(hmm)) Die("Failed to pack the HMM");
@@ -890,7 +871,8 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
 
   /* Receive/send loop
    */
-  sc = MallocOrDie(sizeof(float) * lumpsize);
+  tmpsc  = MallocOrDie(sizeof(float) * lumpsize);
+  tmplen = MallocOrDie(sizeof(int)   * lumpsize);
   while (nsent < nsample)
     {
 				/* integrity check of slaves */
@@ -901,14 +883,15 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
       pvm_recv(-1, HMMPVM_RESULTS);
       pvm_upkint(&slaveidx,   1, 1);
       pvm_upkint(&packet,     1, 1);
-      pvm_upkfloat(sc,   packet, 1);
+      pvm_upkfloat(tmpsc, packet, 1);
+      pvm_upkfloat(tmplen, packet, 1);
       SQD_DPRINTF2(("Got results.\n"));
-      ndone += packet;
 
 				/* store results */
       for (i = 0; i < packet; i++) {
-	AddToHistogram(hist, sc[i]);
-	if (sc[i] > max) max = sc[i];
+	sc[ndone]   = tmpsc[i];
+	alen[ndone] = tmplen[i];
+	ndone++;
       }
 				/* send new work */
       packet    = (nsample - nsent > lumpsize ? lumpsize : nsample - nsent);
@@ -933,13 +916,14 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
       pvm_recv(-1, HMMPVM_RESULTS);
       pvm_upkint(&slaveidx, 1, 1);
       pvm_upkint(&packet,   1, 1);
-      pvm_upkfloat(sc, packet, 1);
+      pvm_upkfloat(tmpsc, packet, 1);
+      pvm_upkfloat(tmplen, packet, 1);
       SQD_DPRINTF2(("Got some final results.\n"));
-      ndone += packet;
 				/* store results */
       for (i = 0; i < packet; i++) {
-	AddToHistogram(hist, sc[i]);
-	if (sc[i] > max) max = sc[i];
+	sc[ndone]   = tmpsc[i];
+	alen[ndone] = tmplen[i];
+	ndone++;
       }
     }
 
@@ -967,15 +951,81 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int nsample, int lumpsize,
     }
 
   free(slave_tid);
-  free(sc);
+  free(tmpsc);
+  free(tmplen);
   pvm_exit();
-  *ret_hist    = hist;
-  *ret_max     = max;
   *ret_nslaves = nslaves;
   return;
 }
 #endif /* HMMER_PVM */
 
+
+
+/* imean-sd()
+ * 
+ * Calculate the mean and sd of an array of integer values.
+ */
+static void
+imean_sd(int *v, int N, float *ret_mean, float *ret_sd)
+{
+  int    i;
+  float sum = 0.;
+  float sqsum = 0.;
+  float mean;
+  float var;
+  float sd;
+
+  for (i = 0; i < N; i++)
+    {
+      sum += (float) v[i];
+      sqsum += (float) v[i] * (float) v[i];
+    }
+  mean = sum / (float) N;
+  var  = (sqsum - (sum*sum / (float) N)) / ((float) N - 1.);
+  sd   = sqrt(var);
+  
+  if (ret_mean != NULL) *ret_mean = mean;
+  if (ret_sd   != NULL) *ret_sd   = sd;
+}
+
+
+
+
+static void
+save_fitted_histogram(FILE *hfp, float *sc, int N, double mu, double lambda)
+{
+  struct histogram_s *h;     
+  int i;
+
+  h = AllocHistogram(-200, 200, 100);
+  for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);
+  ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 2);
+  
+  PrintASCIIHistogram(hfp, h);
+  FreeHistogram(h);
+}
+
+
+static void
+save_predicted_histogram(FILE *hfp, float *sc, int L, int Lcal, 
+			 float mu, float lambda, float kappa, float sigma)
+{
+  struct histogram_s *h;     
+  float  pmu;
+  double L1, L2;
+  int    i;
+  
+  L1 = EdgeCorrection((double) L,    kappa, sigma);
+  L2 = EdgeCorrection((double) Lcal, kappa, sigma);
+  pmu = mu + sreLOG2(L1/L2) / lambda;
+
+  h = AllocHistogram(-200, 200, 100);
+  for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);
+  ExtremeValueSetHistogram(h, pmu, lambda, h->lowscore, h->highscore, 0);
+  
+  PrintASCIIHistogram(hfp, h);
+  FreeHistogram(h);
+}
 
 
 

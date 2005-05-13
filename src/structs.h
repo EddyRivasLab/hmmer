@@ -198,11 +198,11 @@ struct histogram_s {
   int  lumpsize;		/* when resizing, overalloc by this   */
   int  total;			/* total # of hits counted            */
 
-  float *expect;		/* expected counts of hits            */
+  double *expect;		/* expected counts of hits            */
   int    fit_type;		/* flag indicating distribution type  */
-  float  param[3];		/* parameters used for fits           */
-  float  chisq;			/* chi-squared val for goodness of fit*/
-  float  chip;			/* P value for chisquared             */
+  double param[3];		/* parameters used for fits           */
+  double chisq;			/* chi-squared val for goodness of fit*/
+  double chip;			/* P value for chisquared             */
 };
 #define HISTFIT_NONE     0	/* no fit done yet               */
 #define HISTFIT_EVD      1	/* fit type = extreme value dist */

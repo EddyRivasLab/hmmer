@@ -18,15 +18,6 @@ enum p7_algmode {
   P7_G_MODE     = 5
 };
 
-/* Plan 7 parameter optimization strategies, used in hmmbuild.
- */
-enum p7_param {
-  P7_MAP_PARAM,			/* standard maximum a posteriori    */
-  P7_MD_PARAM,			/* maximum discrimination           */
-  P7_MRE_PARAM,			/* maximum relative entropy         */
-  P7_WMAP_PARAM			/* ad hoc weighted MAP              */
-};
-
 
 /* Structure: plan7_s
  * 
@@ -228,8 +219,11 @@ struct plan7_s {
   /* P-value and E-value statistical parameters
    * Only valid if PLAN7_STATS is set.
    */
-  float  mu;			/* EVD mu       +*/
-  float  lambda;		/* EVD lambda   +*/
+  float  mu;			/* EVD mu                               +*/
+  float  lambda;		/* EVD lambda                           +*/
+  float  kappa;			/* mean length of optimal alignments    +*/
+  float  sigma;			/* std dev. of length of opt alignments +*/
+  float  Lbase;			/* seq length that EVD was cali */
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
 };
