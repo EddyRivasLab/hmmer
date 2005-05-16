@@ -444,7 +444,8 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   /* EVD statistics
    */
   if (hmm->flags & PLAN7_STATS) 
-    fprintf(fp, "EVD   %10f %10f\n", hmm->mu, hmm->lambda);
+    fprintf(fp, "EVDL  %10f %10f %10f %10f %d\n", 
+	    hmm->mu, hmm->lambda, hmm->kappa, hmm->sigma, hmm->Lbase);
   
   /* Print header
    */
@@ -691,13 +692,19 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 	  s = strtok(NULL, " \t\n");
 	}
       }
-    else if (strncmp(buffer, "EVD  ", 5) == 0) 
-      {				/* EVD parameters */
+    else if (strncmp(buffer, "EVDL ", 5) == 0) 
+      {				/* local (Smith/Waterman) EVD parameters */
 	hmm->flags |= PLAN7_STATS;
 	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
 	hmm->mu = atof(s);
 	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
 	hmm->lambda = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->kappa = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->sigma = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
+	hmm->Lbase = atoi(s);
       }
     else if (strncmp(buffer, "CKSUM", 5) == 0) hmm->checksum = atoi(buffer+6);
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;

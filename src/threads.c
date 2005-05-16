@@ -11,7 +11,9 @@
 #include "config.h"
 #include "squidconf.h"
 
-#ifdef HMMER_THREADS		/* conditional inclusion of the entire file */
+#ifndef HMMER_THREADS
+int ThreadNumber(void) { return 0; }
+#else /*HMMER_THREADS is on; define ThreadNumber()*/
 #include <stdlib.h>
 #include <string.h>
 #include <float.h>

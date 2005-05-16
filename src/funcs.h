@@ -125,32 +125,33 @@ extern int EvolveOneTransitionVector(float *qs, float ts, int n, float *q0, floa
 extern struct histogram_s *AllocHistogram(int min, int max, int lumpsize);
 extern void FreeHistogram(struct histogram_s *h);
 extern void UnfitHistogram(struct histogram_s *h);
-extern void AddToHistogram(struct histogram_s *h, float sc);
+extern void AddToHistogram(struct histogram_s *h, double sc);
 extern void PrintASCIIHistogram(FILE *fp, struct histogram_s *h); 
 extern void PrintXMGRHistogram(FILE *fp, struct histogram_s *h);
 extern void PrintXMGRDistribution(FILE *fp, struct histogram_s *h);
 extern void PrintXMGRRegressionLine(FILE *fp, struct histogram_s *h);
 extern void EVDBasicFit(struct histogram_s *h);
 extern int  ExtremeValueFitHistogram(struct histogram_s *h, int censor,
-				     float high_hint);
-extern void ExtremeValueSetHistogram(struct histogram_s *h, float mu, float lambda, 
-				     float low, float high, int ndegrees);
-extern int  GaussianFitHistogram(struct histogram_s *h, float high_hint);
-extern void GaussianSetHistogram(struct histogram_s *h, float mean, float sd);
-extern double EVDDensity(float x, float mu, float lambda);
-extern double EVDDistribution(float x, float mu, float lambda);
-extern double ExtremeValueP (float x, float mu, float lambda);
-extern double ExtremeValueP2(float x, float mu, float lambda, int N);
-extern double ExtremeValueE (float x, float mu, float lambda, int N);
-extern float  EVDrandom(float mu, float lambda);
-extern int    EVDMaxLikelyFit(float *x, int *y, int n, 
-			      float *ret_mu, float *ret_lambda);
-extern int    EVDCensoredFit(float *x, int *y, int n, int z, float c, 
-			     float *ret_mu, float *ret_lambda);
-extern void   Lawless416(float *x, int *y, int n, float lambda, 
-			 float *ret_f, float *ret_df);
-extern void   Lawless422(float *x, int *y, int n, int z, float c,
-			 float lambda, float *ret_f, float *ret_df);
+				     double high_hint);
+extern void ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda, 
+				     double low, double high, int ndegrees);
+extern int  GaussianFitHistogram(struct histogram_s *h, double high_hint);
+extern void GaussianSetHistogram(struct histogram_s *h, double mean, double sd);
+
+extern double EVDDensity(double x, double mu, double lambda);
+extern double EVDDistribution(double x, double mu, double lambda);
+extern double ExtremeValueP (double x, double mu, double lambda);
+extern double ExtremeValueP2(double x, double mu, double lambda, int N);
+extern double ExtremeValueE (double x, double mu, double lambda, int N);
+extern double EVDrandom(double mu, double lambda);
+extern int    EVDMaxLikelyFit(double *x, int *y, int n, 
+			      double *ret_mu, double *ret_lambda);
+extern int    EVDCensoredFit(double *x, int *y, int n, int z, double c, 
+			     double *ret_mu, double *ret_lambda);
+extern void   Lawless416(double *x, int *y, int n, double lambda, 
+			 double *ret_f, double *ret_df);
+extern void   Lawless422(double *x, int *y, int n, int z, double c,
+			 double lambda, double *ret_f, double *ret_df);
 
 /* from hmmio.c
  * Input/output (saving/reading) of models
@@ -196,7 +197,9 @@ extern int   Prob2Score(float p, float null);
 extern int   LL2Score(float ll, float null);
 extern float Score2Prob(int sc, float null);
 extern float Scorify(int sc);
-extern double PValue(struct plan7_s *hmm, float sc);
+extern double PValue(struct plan7_s *hmm, double sc);
+extern double LPValue(struct plan7_s *hmm, int L, double sc);
+extern double EdgeCorrection(double L, double kappa, double sigma);
 extern float LogSum(float p1, float p2);
 extern int   ILogsum(int p1, int p2);
 extern void  LogNorm(float *vec, int n);
@@ -340,13 +343,10 @@ extern int               PVMPackHMM(struct plan7_s *hmm);
 extern struct plan7_s *  PVMUnpackHMM(void);
 #endif /*HMMER_PVM*/
 
-#ifdef HMMER_THREADS
 /* from threads.c
- * POSIX threads implementation
+ * util for POSIX threads implementation
  */
 extern int   ThreadNumber(void);
-#endif /*HMMER_THREADS*/
-
 
 /* from tophits.c
  * Support for keeping/sorting top scoring hit/alignment lists

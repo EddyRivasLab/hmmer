@@ -2600,7 +2600,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
 
   /* Go through and put all the accepted domains into the hit list.
    */
-  whole_pval = PValue(hmm, whole_sc);
+  whole_pval = LPValue(hmm, L, whole_sc);
   for (tidx = 0, didx = 1; tidx < ntr; tidx++) {
     if (! usedomain[tidx]) continue;
 
@@ -2608,7 +2608,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
      * already split the main trace up --v
      */
     Trace_GetAlignmentBounds(tarr[tidx], 1, &i1, &i2, &k1, &k2, NULL);
-    pvalue = PValue(hmm, score[tidx]); 
+    pvalue = LPValue(hmm, L, score[tidx]); 
 
     if (pvalue <= thresh->domE && score[tidx] >= thresh->domT) {
       ali     = CreateFancyAli(tarr[tidx], hmm, dsq, seqname);
@@ -2635,19 +2635,17 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
    */
 
   /* sorting: 
-   * hmmpfam has to worry that score and E-value are not monotonic
-   * when multiple HMMs (with different EVD parameters) are potential
-   * targets. Therefore in hmmpfam_mode we apply a weird hack
-   * to sort primarily on E-value, but on score
-   * for really good hits with E=0.0... works because we can
-   * assume 100000. > -log(DBL_MIN).
-   * hmmsearch simply sorts on score (which for a single HMM, we
-   * know is monotonic with E-value).
+   * Both hmmpfam and hmmsearch now need to worry that score and
+   * E-value are not monotonic. (In previous HMMER versions, only
+   * hmmpfam worried about this; but now E-values are dependent
+   * on not just the HMM, but also target sequence length; and someday
+   * they'll be dependent on target composition too.)
+   * 
+   * We apply a weird hack to sort primarily on E-value, but on score for
+   * really good hits with E=0.0... works because we can assume
+   * 100000. > -log(DBL_MIN).  
    */  
-  if (hmmpfam_mode)
-    sortkey = (whole_pval > 0.0) ? -1.*log(whole_pval) : 100000. + whole_sc;
-  else
-    sortkey = whole_sc;
+  sortkey = (whole_pval > 0.0) ? -1.*log(whole_pval) : 100000. + whole_sc;
 
   /* Note: we've recalculated whole_sc and it may have decreased
    *       after the null2 correction was applied. For Pfam GA, TC,

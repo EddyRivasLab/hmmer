@@ -1,6 +1,6 @@
 /* hmmcalibrate.c
- * Score an HMM against random sequence data sets;
- * set histogram fitting parameters.
+ * Score an HMM against random sequence data to set the statistical
+ * parameters for E-value determination.
  * 
  * SRE, Fri Oct 31 09:25:21 1997 [St. Louis]
  * SVN $Id$
@@ -43,10 +43,12 @@ Available options are:\n\
 
 static char experts[] = "\
   --cpu <n>      : run <n> threads in parallel (if threaded)\n\
+  --dry          : show output, but don't save params in the HMM(s)\n\
   --fixed <n>    : fix random sequence length at <n>\n\
-  --histfile <f> : save histogram(s) to file <f>\n\
+  --histfile <f> : save fitted histogram(s) to file <f>\n\
   --mult <x>     : set length multiplier to <x> [3.0]\n\
   --num <n>      : set number of sampled seqs to <n> [5000]\n\
+  --phist <f>    : save predicted histogram(s) to file <f>\n\
   --pvm          : run on a Parallel Virtual Machine (PVM)\n\
   --seed <n>     : set random seed to <n> [time()]\n\
 ";
@@ -54,19 +56,27 @@ static char experts[] = "\
 static struct opt_s OPTIONS[] = {
    { "-h",         TRUE,  sqdARG_NONE  },
    { "--cpu",      FALSE, sqdARG_INT },
+   { "--dry",      FALSE, sqdARG_NONE },
    { "--fixed",    FALSE, sqdARG_INT   },
    { "--histfile", FALSE, sqdARG_STRING },
    { "--mult",     FALSE, sqdARG_FLOAT },
    { "--num",      FALSE, sqdARG_INT   },
+   { "--phist",    FALSE, sqdARG_STRING },
    { "--pvm",      FALSE, sqdARG_NONE  },
    { "--seed",     FALSE, sqdARG_INT}, 
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 
-static void main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
-			     float *sc, int *alen);
+static void imean_sd(int *v, int N, double *ret_mean, double *ret_sd);
+static void save_fitted_histogram(FILE *hfp, double *sc, int N, double mu, double lambda);
+static void save_predicted_histogram(FILE *hfp, double *sc, int N, int L, int Lcal, 
+				     double mu, double lambda, double kappa, double sigma);
 
+
+
+static void main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
+			     double *sc, int *alen);
 
 #ifdef HMMER_THREADS
 /* A structure of this type is shared by worker threads in the POSIX
@@ -86,7 +96,7 @@ struct workpool_s {
 
   /* Shared (mutex-protected) output:
    */
-  float         *sc;		/* unsorted score array */
+  double        *sc;		/* unsorted score array */
   int           *alen;		/* opt ali length array  */
   Stopwatch_t    watch;		/* Timings accumulated for threads */
 
@@ -99,10 +109,10 @@ struct workpool_s {
 };
 static void main_loop_threaded(struct plan7_s *hmm, int seed, int N, int L,
 			       int nthreads,
-			       float *sc, int *alen, Stopwatch_t *twatch);
+			       double *sc, int *alen, Stopwatch_t *twatch);
 static struct workpool_s *workpool_start(struct plan7_s *hmm, int N, int L,
 					 float *randomseq, 
-					 float *sc, int *alen, int num_threads);
+					 double *sc, int *alen, int num_threads);
 static void  workpool_stop(struct workpool_s *wpool);
 static void  workpool_free(struct workpool_s *wpool);
 static void *worker_thread(void *ptr);
@@ -111,7 +121,7 @@ static void *worker_thread(void *ptr);
 #ifdef HMMER_PVM
 static void main_loop_pvm(struct plan7_s *hmm, int seed, int N, int L,
 			  int lumpsize,
-			  float *sc, int *alen, 
+			  double *sc, int *alen, 
 			  Stopwatch_t *extrawatch, int *ret_nslaves);
 #endif /* HMMER_PVM */
 
@@ -126,71 +136,85 @@ main(int argc, char **argv)
   char    *mode;                /* write mode, "w" or "wb"         */
   struct plan7_s *hmm;          /* the hidden Markov model         */
   int     idx;			/* counter over sequences          */
-  char   *histfile;             /* histogram save file             */
-  FILE   *hfp;                  /* open file pointer for histfile  */
 
-  /* Control over the random sequence simulation: */
+  /* Controls over the random sequence simulation: */
   int     N;			/* number of random seqs to sample */
   float   mult;			/* default: L= mult * hmm->M       */
   int     fixedL;		/* if >0, L is fixed to this       */
   int     seed;			/* random number seed              */
-  float  *sc;			/* array of <nsample> scores       */
+  double *sc;			/* array of <nsample> scores       */
   int    *alen;			/* array of <nsample> ali lengths  */
 
-  /* For each HMM, we obtain results: */
-  int    *L;		        /* random sequence length          */
-  float  *mu;			/* array of EVD mu's for HMMs      */
-  float  *lambda;		/* array of EVD lambda's for HMMs  */
-  float  *kappa;		/* array of edge correction kappa's*/
-  float  *sigma;		/* array of edge correction sigma's*/
+  /* For each HMM, we obtain these results: */
+  int    *L;		        /* random sequence lengths per HMM */
+  double *mu;			/* array of EVD mu's for HMMs      */
+  double *lambda;		/* array of EVD lambda's for HMMs  */
+  double *kappa;		/* array of edge correction kappa's*/
+  double *sigma;		/* array of edge correction sigma's*/
   int     nhmm;			/* number of HMMs calibrated       */
   int     halloc;		/* number of HMMs allocated for    */
 
+  /* Control over optional output files:
+   */
+  char   *histfile;             /* histogram save file             */
+  FILE   *hfp;                  /* open file pointer for histfile  */
+  char   *phistfile;		/* predicted histogram save file   */
+  FILE   *pfp;			/* open file ptr for phistfile     */
+
+  /* Control over PVM parallelization:
+   */
   int     do_pvm;		/* TRUE to use PVM                 */
   int     pvm_lumpsize;		/* # of seqs to do per PVM slave exchange */
-#ifdef HMMER_PVM
   int     pvm_nslaves;		/* number of slaves used in the PVM */
-#endif
 
+  /* Parsing the command line:
+   */
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
   int   optind;		        /* index in argv[]                  */
+  int   do_dryrun;		/* TRUE to not save params          */
 
+  /* Control over POSIX thread parallelization
+   */
   int   num_threads;            /* number of worker threads */   
 
+  /* Misc timing and OS control
+   */
   Stopwatch_t stopwatch;	/* main stopwatch for process       */
   Stopwatch_t extrawatch;	/* stopwatch for threads/PVM slaves */
   sigset_t blocksigs;		/* list of signals to protect from */
 
+  StopwatchStart(&stopwatch);
+  StopwatchZero(&extrawatch);
 
   /***********************************************
    * Parse the command line
    ***********************************************/
-  StopwatchStart(&stopwatch);
-  StopwatchZero(&extrawatch);
 
+  do_dryrun    = FALSE;
   N            = 5000;
+  mult         = 3.0;		/* default: make seqs 3.0 * HMM length */
   fixedL       = 0;
   seed         = (int) time ((time_t *) NULL);
   histfile     = NULL;
+  phistfile    = NULL;
   do_pvm       = FALSE;
   pvm_lumpsize = 20;		/* 20 seqs/PVM exchange: sets granularity */
-#ifdef HMMER_THREADS
-  num_threads  = ThreadNumber(); /* only matters if we're threaded */
-#else
-  num_threads  = 0;
-#endif
+  pvm_nslaves  = 0;	/* solely to silence compiler warnings: PVM main sets this */
+  num_threads  = ThreadNumber(); /* 0 if unthreaded; else >=1 default */
 
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
       if      (strcmp(optname, "--cpu")      == 0) num_threads  = atoi(optarg);
-      else if (strcmp(optname, "--fixed")    == 0) fixedL   = atoi(optarg);
-      else if (strcmp(optname, "--histfile") == 0) histfile = optarg;
-      else if (strcmp(optname, "--mult")     == 0) mult     = atof(optarg); 
-      else if (strcmp(optname, "--num")      == 0) nsample  = atoi(optarg); 
-      else if (strcmp(optname, "--pvm")      == 0) do_pvm   = TRUE;
-      else if (strcmp(optname, "--seed")     == 0) seed     = atoi(optarg);
+      else if (strcmp(optname, "--dry")      == 0) do_dryrun    = TRUE;
+      else if (strcmp(optname, "--fixed")    == 0) fixedL       = atoi(optarg);
+      else if (strcmp(optname, "--histfile") == 0) histfile     = optarg;
+      else if (strcmp(optname, "--mult")     == 0) mult         = atof(optarg); 
+      else if (strcmp(optname, "--num")      == 0) N            = atoi(optarg); 
+      else if (strcmp(optname, "--phist")    == 0) phistfile    = optarg;
+      else if (strcmp(optname, "--pvm")      == 0) do_pvm       = TRUE;
+      else if (strcmp(optname, "--seed")     == 0) seed         = atoi(optarg);
       else if (strcmp(optname, "-h") == 0)
 	{
 	  HMMERBanner(stdout, banner);
@@ -218,11 +242,16 @@ main(int argc, char **argv)
   if ((hmmfp = HMMFileOpen(hmmfile, NULL)) == NULL)
     Die("failed to open HMM file %s for reading.", hmmfile);
 
-				/* histogram file */
+				/* histogram files, fitted and predicted */
   hfp = NULL;
   if (histfile != NULL) {
     if ((hfp = fopen(histfile, "w")) == NULL)
       Die("Failed to open histogram save file %s for writing\n", histfile);
+  }
+  pfp = NULL;
+  if (phistfile != NULL) {
+    if ((pfp = fopen(phistfile, "w")) == NULL)
+      Die("Failed to open predicted histogram file %s for writing\n", phistfile);
   }
 
   /* Generate calibrated HMM(s) in a tmp file in the current
@@ -248,15 +277,18 @@ main(int argc, char **argv)
 
   HMMERBanner(stdout, banner);
   printf("HMM file:                 %s\n", hmmfile);
-  if (fixedlen) 
+  if (fixedL) 
     printf("Length fixed to:          %d\n", fixedL);
   else {
     printf("Length multiplier:        %.0f\n", mult);
   }
   printf("Number of samples:        %d\n", N);
   printf("random seed:              %d\n", seed);
-  printf("histogram(s) saved to:    %s\n",
-	 histfile != NULL ? histfile : "[not saved]");
+  if (histfile != NULL) 
+    printf("histogram(s) saved to:    %s\n", histfile);
+  if (phistfile != NULL) 
+    printf("predicted histogram(s) to: %s\n", phistfile);
+
   if (do_pvm)
     printf("PVM:                      ACTIVE\n");
   else if (num_threads > 0)
@@ -268,17 +300,17 @@ main(int argc, char **argv)
    * we'll resize these arrays dynamically as we read more HMMs.
    */
   halloc = 128;
-  L      = MallocOrDie(sizeof(int)   * halloc); 
-  mu     = MallocOrDie(sizeof(float) * halloc); 
-  lambda = MallocOrDie(sizeof(float) * halloc); 
-  kappa  = MallocOrDie(sizeof(float) * halloc); 
-  sigma  = MallocOrDie(sizeof(float) * halloc); 
+  L      = MallocOrDie(sizeof(int)    * halloc); 
+  mu     = MallocOrDie(sizeof(double) * halloc); 
+  lambda = MallocOrDie(sizeof(double) * halloc); 
+  kappa  = MallocOrDie(sizeof(double) * halloc); 
+  sigma  = MallocOrDie(sizeof(double) * halloc); 
   nhmm   = 0;
 
   /* Allocation for results per simulation, for one HMM.
    */
-  sc     = MallocOrDie(sizeof(float) * nsample);
-  alen   = MallocOrDie(sizeof(int)   * nsample);
+  sc     = MallocOrDie(sizeof(double) * N);
+  alen   = MallocOrDie(sizeof(int)    * N);
 
 
   /***********************************************
@@ -290,6 +322,10 @@ main(int argc, char **argv)
     {
       if (hmm == NULL)
 	Die("HMM file may be corrupt or in incorrect format; parse failed");
+
+      /* Configure for SW calibration.
+       */
+      Plan7SWConfig(hmm);
 
       /* Determine what length the random seqs should be.
        */
@@ -304,7 +340,6 @@ main(int argc, char **argv)
 	main_loop_serial(hmm, seed, N, L[nhmm], sc, alen);
 #ifdef HMMER_PVM
       else if (do_pvm) {
-	pvm_nslaves = 0;	/* solely to silence compiler warnings */
 	main_loop_pvm(hmm, seed, N, L[nhmm], pvm_lumpsize, 
 		      sc, alen, &extrawatch, &pvm_nslaves);
       }
@@ -319,25 +354,11 @@ main(int argc, char **argv)
 
       /* Fit an EVD to the scores to get mu, lambda params.
        */
-      if (hmm->mode == P7_SW_MODE || hmm->mode == P7_FS_MODE)
-	EVDMaxLikelyFit(sc, NULL, N, &(mu[nhmm]), &(lambda[nhmm]));
-      else
-	Die("Work in progress - only fitting to SW/FS local EVDs right now.");
+      EVDMaxLikelyFit(sc, NULL, N, &(mu[nhmm]), &(lambda[nhmm]));
 
       /* Calculate mean ali length (kappa) and std. dev of ali lengths (sigma).
        */
       imean_sd(alen, N, &(kappa[nhmm]), &(sigma[nhmm]));
-      
-      
-#ifdef OLDCODE
-      /* Fit an EVD to the observed histogram.
-       * The TRUE left-censors and fits only the right slope of the histogram.
-       * The 9999. is an arbitrary high number that means we won't trim
-       * outliers on the right.
-       */
-      if (! ExtremeValueFitHistogram(hist, TRUE, 9999.))
-	Die("fit failed; --num may be set too small?\n");
-#endif
       
       /* Output
        */
@@ -347,26 +368,35 @@ main(int argc, char **argv)
       printf("lambda : %12f\n", lambda[nhmm]);
       printf("kappa  : %12f\n", kappa[nhmm]);
       printf("sigma  : %12f\n", sigma[nhmm]);
-      printf("max    : %12f\n", max);
       printf("//\n");
 
       if (hfp != NULL) 
 	{
 	  fprintf(hfp, "HMM: %s\n", hmm->name);
-	  PrintASCIIHistogram(hfp, hist);
+	  save_fitted_histogram(hfp, sc, N, mu[nhmm], lambda[nhmm]);
 	  fprintf(hfp, "//\n");
 	}
+      if (pfp != NULL)
+	{
+	  fprintf(pfp, "HMM: %s\n", hmm->name);
+	  if (hmm->flags & PLAN7_STATS)
+	    save_predicted_histogram(pfp, sc, N, L[nhmm], 
+				     hmm->Lbase, hmm->mu, hmm->lambda, hmm->kappa, hmm->sigma);
+	  else
+	    fprintf(pfp, "[No previous EVD parameters set in this model.]\n");
+	  fprintf(pfp, "//\n");
+	}	
 
       /* Reallocation, if needed.
        */
       nhmm++;
       if (nhmm == halloc) {
 	halloc *= 2;		/* realloc by doubling */
-	L      = ReallocOrDie(L,      sizeof(int)   * halloc);
-	mu     = ReallocOrDie(mu,     sizeof(float) * halloc);
-	lambda = ReallocOrDie(lambda, sizeof(float) * halloc);
-	kappa  = ReallocOrDie(kappa,  sizeof(float) * halloc);
-	sigma  = ReallocOrDie(sigma,  sizeof(float) * halloc);
+	L      = ReallocOrDie(L,      sizeof(int)    * halloc);
+	mu     = ReallocOrDie(mu,     sizeof(double) * halloc);
+	lambda = ReallocOrDie(lambda, sizeof(double) * halloc);
+	kappa  = ReallocOrDie(kappa,  sizeof(double) * halloc);
+	sigma  = ReallocOrDie(sigma,  sizeof(double) * halloc);
       }      
 
       FreePlan7(hmm);
@@ -377,54 +407,62 @@ main(int argc, char **argv)
    * Rewind the HMM file for a second pass.
    * Write a temporary HMM file with new mu, lambda values in it
    *****************************************************************/
-
-  HMMFileRewind(hmmfp);
-  if (FileExists(tmpfile))
-    Die("Ouch. Temporary file %s appeared during the run.", tmpfile);
-  if ((outfp = fopen(tmpfile, mode)) == NULL)
-    Die("Ouch. Temporary file %s couldn't be opened for writing.", tmpfile); 
-  
-  for (idx = 0; idx < nhmm; idx++)
+  if (do_dryrun) 
     {
-      /* Sanity checks 
-       */
-      if (!HMMFileRead(hmmfp, &hmm))
-	Die("Ran out of HMMs too early in pass 2");
-      if (hmm == NULL) 
-	Die("HMM file %s was corrupted? Parse failed in pass 2", hmmfile);
-
-      /* Put results in HMM
-       */
-      hmm->mu     = mu[idx];
-      hmm->lambda = lambda[idx];
-      hmm->flags |= PLAN7_STATS;
-      Plan7ComlogAppend(hmm, argc, argv);
-
-      /* Save HMM to tmpfile
-       */
-      if (hmmfp->is_binary) WriteBinHMM(outfp, hmm);
-      else                  WriteAscHMM(outfp, hmm); 
-
-      FreePlan7(hmm);
+      HMMFileClose(hmmfp);
     }
+  else 
+    {
+      HMMFileRewind(hmmfp);
+      if (FileExists(tmpfile))
+	Die("Ouch. Temporary file %s appeared during the run.", tmpfile);
+      if ((outfp = fopen(tmpfile, mode)) == NULL)
+	Die("Ouch. Temporary file %s couldn't be opened for writing.", tmpfile); 
+      
+      for (idx = 0; idx < nhmm; idx++)
+	{
+	  /* Sanity checks 
+	   */
+	  if (!HMMFileRead(hmmfp, &hmm))
+	    Die("Ran out of HMMs too early in pass 2");
+	  if (hmm == NULL) 
+	    Die("HMM file %s was corrupted? Parse failed in pass 2", hmmfile);
+
+	  /* Put results in HMM
+	   */
+	  hmm->mu     = mu[idx];
+	  hmm->lambda = lambda[idx];
+	  hmm->kappa  = kappa[idx];
+	  hmm->sigma  = sigma[idx];
+	  hmm->Lbase  = L[idx];
+	  hmm->flags |= PLAN7_STATS;
+	  Plan7ComlogAppend(hmm, argc, argv);
+
+	  /* Save HMM to tmpfile
+	   */
+	  if (hmmfp->is_binary) WriteBinHMM(outfp, hmm);
+	  else                  WriteAscHMM(outfp, hmm); 
+
+	  FreePlan7(hmm);
+	}
   
-  /*****************************************************************
-   * Now, carefully remove original file and replace it
-   * with the tmpfile. Note the protection from signals;
-   * we wouldn't want a user to ctrl-C just as we've deleted
-   * their HMM file but before the new one is moved.
-   *****************************************************************/
+      /*****************************************************************
+       * Now, carefully remove original file and replace it
+       * with the tmpfile. Note the protection from signals;
+       * we wouldn't want a user to ctrl-C just as we've deleted
+       * their HMM file but before the new one is moved.
+       *****************************************************************/
 
-  HMMFileClose(hmmfp);
-  if (fclose(outfp)   != 0) PANIC;
-
-  if (sigemptyset(&blocksigs) != 0) PANIC;
-  if (sigaddset(&blocksigs, SIGINT) != 0) PANIC;
-  if (sigprocmask(SIG_BLOCK, &blocksigs, NULL) != 0)   PANIC;
-  if (remove(hmmfile) != 0)                            PANIC;
-  if (rename(tmpfile, hmmfile) != 0)                   PANIC;
-  if (sigprocmask(SIG_UNBLOCK, &blocksigs, NULL) != 0) PANIC;
-  free(tmpfile);
+      HMMFileClose(hmmfp);
+      if (fclose(outfp)   != 0)                            PANIC;
+      if (sigemptyset(&blocksigs) != 0)                    PANIC;
+      if (sigaddset(&blocksigs, SIGINT) != 0)              PANIC;
+      if (sigprocmask(SIG_BLOCK, &blocksigs, NULL) != 0)   PANIC;
+      if (remove(hmmfile) != 0)                            PANIC;
+      if (rename(tmpfile, hmmfile) != 0)                   PANIC;
+      if (sigprocmask(SIG_UNBLOCK, &blocksigs, NULL) != 0) PANIC;
+      free(tmpfile);
+    } /* end of ! do_dryrun section */
 
   /***********************************************
    * Exit
@@ -451,6 +489,7 @@ main(int argc, char **argv)
   free(kappa);
   free(sigma);
   if (hfp != NULL) fclose(hfp);
+  if (pfp != NULL) fclose(pfp);
   SqdClean();
   return 0;
 }
@@ -466,14 +505,14 @@ main(int argc, char **argv)
  *           seed     - random number seed
  *           N        - number of seqs to synthesize
  *           L        - mean length of random sequence
- *           sc       - RETURN: unsorted array of <nsample> scores
- *           alen     - RETURN: array of <nsample> optimal ali lengths
+ *           sc       - RETURN: unsorted array of <N> scores
+ *           alen     - RETURN: array of <N> optimal ali lengths
  *
  * Returns:  (void)
  */
 static void
 main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
-		 float *sc, int *alen)
+		 double *sc, int *alen)
 {
   struct p7trace_s   *tr;
   struct dpmatrix_s  *mx;
@@ -499,11 +538,11 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
       dsq = DigitizeSequence(seq, L);
       
       if (P7ViterbiSpaceOK(L, hmm->M, mx))
-          score = P7Viterbi(dsq, sqlen, hmm, mx, &tr);
+          score = P7Viterbi(dsq, L, hmm, mx, &tr);
       else
-          score = P7SmallViterbi(dsq, sqlen, hmm, mx, &tr);
+          score = P7SmallViterbi(dsq, L, hmm, mx, &tr);
 
-      sc[idx] = score;
+      sc[idx] = (double) score;
       Trace_GetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL, &(alen[idx]));
 
       P7FreeTrace(tr);
@@ -512,8 +551,6 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
     }
 
   FreePlan7Matrix(mx);
-  *ret_hist   = hist;
-  *ret_max    = max;
   return;
 }
 
@@ -531,8 +568,8 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
  *           N        - number of seqs to synthesize
  *           L        - sequence length
  *           nthreads - number of threads to start
- *           sc       - RETURN: unsorted array of <nsample> scores
- *           alen     - RETURN: array of <nsample> optimal ali lengths
+ *           sc       - RETURN: unsorted array of <N> scores
+ *           alen     - RETURN: array of <N> optimal ali lengths
  *           twatch   - RETURN: accumulation of thread times
  *
  * Returns:  (void)
@@ -540,7 +577,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
 static void
 main_loop_threaded(struct plan7_s *hmm, int seed, int N, int L,
 		   int nthreads,
-		   float *sc, int *alen, Stopwatch_t *twatch)
+		   double *sc, int *alen, Stopwatch_t *twatch)
 {
   float  randomseq[MAXABET];
   float  p1;
@@ -597,7 +634,7 @@ main_loop_threaded(struct plan7_s *hmm, int seed, int N, int L,
  */
 static struct workpool_s *
 workpool_start(struct plan7_s *hmm, int N, int L, float *randomseq, 
-	       float *sc, int *alen, int num_threads)
+	       double *sc, int *alen, int num_threads)
 {
   struct workpool_s *wpool;
   pthread_attr_t    attr;
@@ -764,7 +801,7 @@ worker_thread(void *ptr)
       if ((rtn = pthread_mutex_lock(&(wpool->output_lock))) != 0)
           Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
       /* save output */
-      wpool->sc[wpool->nseq-1] = sc;
+      wpool->sc[wpool->nseq-1] = (double) sc;
       Trace_GetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL,
 			       &(wpool->alen[wpool->nseq-1]));
       /* release our lock */
@@ -889,7 +926,7 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int N, int L, int lumpsize,
 
 				/* store results */
       for (i = 0; i < packet; i++) {
-	sc[ndone]   = tmpsc[i];
+	sc[ndone]   = (double) tmpsc[i];
 	alen[ndone] = tmplen[i];
 	ndone++;
       }
@@ -921,7 +958,7 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int N, int L, int lumpsize,
       SQD_DPRINTF2(("Got some final results.\n"));
 				/* store results */
       for (i = 0; i < packet; i++) {
-	sc[ndone]   = tmpsc[i];
+	sc[ndone]   = (double) tmpsc[i];
 	alen[ndone] = tmplen[i];
 	ndone++;
       }
@@ -966,22 +1003,22 @@ main_loop_pvm(struct plan7_s *hmm, int seed, int N, int L, int lumpsize,
  * Calculate the mean and sd of an array of integer values.
  */
 static void
-imean_sd(int *v, int N, float *ret_mean, float *ret_sd)
+imean_sd(int *v, int N, double *ret_mean, double *ret_sd)
 {
   int    i;
-  float sum = 0.;
-  float sqsum = 0.;
-  float mean;
-  float var;
-  float sd;
+  double sum = 0.;
+  double sqsum = 0.;
+  double mean;
+  double var;
+  double sd;
 
   for (i = 0; i < N; i++)
     {
-      sum += (float) v[i];
-      sqsum += (float) v[i] * (float) v[i];
+      sum += (double) v[i];
+      sqsum += (double) v[i] * (double) v[i];
     }
-  mean = sum / (float) N;
-  var  = (sqsum - (sum*sum / (float) N)) / ((float) N - 1.);
+  mean = sum / (double) N;
+  var  = (sqsum - (sum*sum / (double) N)) / ((double) N - 1.);
   sd   = sqrt(var);
   
   if (ret_mean != NULL) *ret_mean = mean;
@@ -992,7 +1029,7 @@ imean_sd(int *v, int N, float *ret_mean, float *ret_sd)
 
 
 static void
-save_fitted_histogram(FILE *hfp, float *sc, int N, double mu, double lambda)
+save_fitted_histogram(FILE *hfp, double *sc, int N, double mu, double lambda)
 {
   struct histogram_s *h;     
   int i;
@@ -1007,17 +1044,17 @@ save_fitted_histogram(FILE *hfp, float *sc, int N, double mu, double lambda)
 
 
 static void
-save_predicted_histogram(FILE *hfp, float *sc, int L, int Lcal, 
-			 float mu, float lambda, float kappa, float sigma)
+save_predicted_histogram(FILE *hfp, double *sc, int N, int L, int Lcal, 
+			 double mu, double lambda, double kappa, double sigma)
 {
   struct histogram_s *h;     
-  float  pmu;
+  double pmu;
   double L1, L2;
   int    i;
   
   L1 = EdgeCorrection((double) L,    kappa, sigma);
   L2 = EdgeCorrection((double) Lcal, kappa, sigma);
-  pmu = mu + sreLOG2(L1/L2) / lambda;
+  pmu = mu + log(L1/L2) / lambda;
 
   h = AllocHistogram(-200, 200, 100);
   for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);

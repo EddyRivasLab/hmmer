@@ -229,7 +229,7 @@ main(void)
               sc -= TraceScoreCorrection(hmm, tr, dsq);
           }
       }
-      pvalue = PValue(hmm, sc);
+      pvalue = LPValue(hmm, len, sc);
       evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
       send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
 

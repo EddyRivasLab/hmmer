@@ -683,7 +683,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	}
     /* Store scores/pvalue for each HMM aligned to this sequence, overall
      */
-    pvalue = PValue(hmm, sc);
+    pvalue = LPValue(hmm, sqinfo->len, sc);
     evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nhmm * pvalue;
     if (sc >= thresh->globT && evalue <= thresh->globE) {
         /* Recalculate trace if we used altivec */
@@ -1297,7 +1297,7 @@ worker_thread(void *ptr)
       Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("model %s scores %f\n", hmm->name, sc));
     
-    pvalue = PValue(hmm, sc);
+    pvalue = LPValue(hmm, wpool->L, sc);
     evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) wpool->nhmm * pvalue;
     if (sc >= thresh.globT && evalue <= thresh.globE) 
     { 

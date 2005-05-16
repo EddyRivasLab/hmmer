@@ -677,15 +677,14 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       P7PrintTrace(stdout, tr, hmm, dsq); 
 #endif
 
-      /* 2. Store score/pvalue for global alignment; will sort on score,
-       *    which in hmmsearch is monotonic with E-value. 
+      /* 2. Store score/pvalue for global alignment.
        *    Keep all domains in a significant sequence hit.
        *    We can only make a lower bound estimate of E-value since
        *    we don't know the final value of nseq yet, so the list
        *    of hits we keep in memory is >= the list we actually
        *    output. 
        */
-      pvalue = PValue(hmm, sc);
+      pvalue = LPValue(hmm, sqinfo.len, sc);
       evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nseq * pvalue;
       if (sc >= thresh->globT && evalue <= thresh->globE) 
       {
@@ -1291,7 +1290,7 @@ worker_thread(void *ptr)
         Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("seq %s scores %f\n", sqinfo.name, sc));
     
-    pvalue = PValue(wpool->hmm, sc);
+    pvalue = LPValue(wpool->hmm, sqinfo.len, sc);
     evalue = wpool->thresh->Z ? (double) wpool->thresh->Z * pvalue : (double) wpool->nseq * pvalue;
  
     if (sc >= wpool->thresh->globT && evalue <= wpool->thresh->globE) 

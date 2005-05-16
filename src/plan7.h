@@ -223,7 +223,7 @@ struct plan7_s {
   float  lambda;		/* EVD lambda                           +*/
   float  kappa;			/* mean length of optimal alignments    +*/
   float  sigma;			/* std dev. of length of opt alignments +*/
-  float  Lbase;			/* seq length that EVD was cali */
+  int    Lbase;			/* seq length that EVD was cali */
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
 };

@@ -105,7 +105,7 @@ UnfitHistogram(struct histogram_s *h)
  *           next lower integer.
  */
 void
-AddToHistogram(struct histogram_s *h, float sc)
+AddToHistogram(struct histogram_s *h, double sc)
 {
   int score;
   int moveby;
@@ -345,7 +345,7 @@ PrintXMGRHistogram(FILE *fp, struct histogram_s *h)
   for (sc = h->lowscore; sc <= h->highscore; sc++)
     if (h->histogram[sc - h->min] > 0)
       fprintf(fp, "%-6d %f\n", sc, 
-	      (float) h->histogram[sc - h->min]/ (float) h->total);
+	      (double) h->histogram[sc - h->min]/ (double) h->total);
   fprintf(fp, "&\n");
 
   /* Second data set is the theoretical histogram
@@ -355,8 +355,8 @@ PrintXMGRHistogram(FILE *fp, struct histogram_s *h)
         for (sc = h->lowscore; sc <= h->highscore; sc++)
 	  {
 	    val = 
-	      (1. - ExtremeValueP((float)sc+1, h->param[EVD_MU], h->param[EVD_LAMBDA]))-
-	      (1. - ExtremeValueP((float)sc, h->param[EVD_MU], h->param[EVD_LAMBDA]));
+	      (1. - ExtremeValueP((double)sc+1, h->param[EVD_MU], h->param[EVD_LAMBDA]))-
+	      (1. - ExtremeValueP((double)sc, h->param[EVD_MU], h->param[EVD_LAMBDA]));
 	    fprintf(fp, "%-6d %f\n", sc, val);
 	  }
 	fprintf(fp, "&\n");
@@ -384,7 +384,7 @@ PrintXMGRDistribution(FILE *fp, struct histogram_s *h)
   for (cum = 0, sc = h->lowscore; sc <= h->highscore; sc++)
     {
       cum += h->histogram[sc - h->min];
-      fprintf(fp, "%-6d %f\n", sc + 1, (float) cum / (float) h->total);
+      fprintf(fp, "%-6d %f\n", sc + 1, (double) cum / (double) h->total);
     }
   fprintf(fp, "&\n");
 
@@ -394,7 +394,7 @@ PrintXMGRDistribution(FILE *fp, struct histogram_s *h)
     {
       for (sc = h->lowscore; sc <= h->highscore; sc++)
 	{
-	  val = (1. - ExtremeValueP((float) sc, h->param[EVD_MU], 
+	  val = (1. - ExtremeValueP((double) sc, h->param[EVD_MU], 
 				    h->param[EVD_LAMBDA]));
 	  fprintf(fp, "%-6d %f\n", sc, val);
 	}
@@ -435,8 +435,8 @@ PrintXMGRRegressionLine(FILE *fp, struct histogram_s *h)
     {
       for (sc = h->lowscore; sc <= h->highscore; sc++)
 	{
-	  val = log(-1. * log(1. - ExtremeValueP((float) sc, h->param[EVD_MU], 
-						       h->param[EVD_LAMBDA])));
+	  val = log(-1. * log(1. - ExtremeValueP((double) sc, h->param[EVD_MU], 
+						 h->param[EVD_LAMBDA])));
 	  fprintf(fp, "%-6d %f\n", sc, val);
 	}
       fprintf(fp, "&\n");
@@ -465,22 +465,22 @@ PrintXMGRRegressionLine(FILE *fp, struct histogram_s *h)
 void
 EVDBasicFit(struct histogram_s *h)
 {
-  float *d;            /* distribution P(S < x)          */
-  float *x;            /* x-axis of P(S<x) for Linefit() */
+  double  *d;            /* distribution P(S < x)          */
+  double  *x;            /* x-axis of P(S<x) for Linefit() */
   int    hsize;
   int    sum;
   int    sc, idx;		/* loop indices for score or score-h->min   */
-  float  slope, intercept;	/* m,b fit from Linefit()                   */
-  float  corr;			/* correlation coeff of line fit, not used  */
-  float  lambda, mu;		/* slope, intercept converted to EVD params */
+  double  slope, intercept;	/* m,b fit from Linefit()                   */
+  double  corr;			/* correlation coeff of line fit, not used  */
+  double  lambda, mu;		/* slope, intercept converted to EVD params */
 
   /* Allocations for x, y axes
    * distribution d runs from min..max with indices 0..max-min
    *     i.e. score - min = index into d, x, histogram, and expect
    */
   hsize = h->highscore - h->lowscore + 1;
-  d         = (float *) MallocOrDie(sizeof(float) * hsize);
-  x         = (float *) MallocOrDie(sizeof(float) * hsize);
+  d         = MallocOrDie(sizeof(double) * hsize);
+  x         = MallocOrDie(sizeof(double) * hsize);
   for (idx = 0; idx < hsize; idx++)
     d[idx] = x[idx] = 0.;
 
@@ -492,8 +492,8 @@ EVDBasicFit(struct histogram_s *h)
   for (sc = h->lowscore; sc <= h->highscore; sc++)
     {
       sum += h->histogram[sc - h->min];
-      d[sc - h->lowscore] = (float) sum / (float) h->total;
-      x[sc - h->lowscore] = (float) (sc + 1);
+      d[sc - h->lowscore] = (double) sum / (double) h->total;
+      x[sc - h->lowscore] = (double) (sc + 1);
     }
 
   /* Do a linear regression fit to the log[-log(P(S<x))] "line".
@@ -505,7 +505,7 @@ EVDBasicFit(struct histogram_s *h)
     d[sc - h->lowscore] = log(-1. * log(d[sc - h->lowscore]));
 
 				/* do the linear regression */
-  Linefit(x, d, hsize-1, &intercept, &slope, &corr);
+  DLinefit(x, d, hsize-1, &intercept, &slope, &corr);
 				/* calc mu, lambda */
   lambda = -1. * slope;
   mu     = intercept / lambda;
@@ -542,14 +542,14 @@ EVDBasicFit(struct histogram_s *h)
  *           else 0 if fit is invalid (too few seqs.)
  */
 int
-ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint) 
+ExtremeValueFitHistogram(struct histogram_s *h, int censor, double high_hint) 
 {
-  float *x;                     /* array of EVD samples to fit */
+  double *x;                    /* array of EVD samples to fit */
   int   *y;                     /* histogram counts            */ 
   int    n;			/* number of observed samples  */
   int    z;			/* number of censored samples  */
   int    hsize;			/* size of histogram           */
-  float  lambda, mu;		/* new estimates of lambda, mu */
+  double lambda, mu;		/* new estimates of lambda, mu */
   int    sc;		        /* loop index for score        */
   int    lowbound;		/* lower bound of fitted region*/
   int    highbound;		/* upper bound of fitted region*/
@@ -587,12 +587,12 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
       hsize = highbound - lowbound + 1;
       if (hsize < 5) goto FITFAILED; /* require at least 5 bins or we don't fit */
 
-      x = MallocOrDie(sizeof(float) * hsize);
-      y = MallocOrDie(sizeof(int)   * hsize);
+      x = MallocOrDie(sizeof(double) * hsize);
+      y = MallocOrDie(sizeof(int)    * hsize);
       n = 0;
       for (sc = lowbound; sc <= highbound; sc++)
 	{
-	  x[sc-lowbound] = (float) sc + 0.5; /* crude, but tests OK */
+	  x[sc-lowbound] = (double) sc + 0.5; /* crude, but tests OK */
 	  y[sc-lowbound] = h->histogram[sc - h->min];
 	  n             += h->histogram[sc - h->min];
 	}
@@ -608,11 +608,11 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
       if (censor)
 	{
 	  if (iteration == 0)
-	    z = MIN(h->total-n, (int) (0.58198 * (float) n));
+	    z = MIN(h->total-n, (int) (0.58198 * (double) n));
 	  else
 	    {
 	      double psx;
-	      psx = EVDDistribution((float) lowbound, mu, lambda);
+	      psx = EVDDistribution((double) lowbound, mu, lambda);
 	      z = MIN(h->total-n, (int) ((double) n * psx / (1. - psx)));
 	    }
 	}
@@ -620,7 +620,7 @@ ExtremeValueFitHistogram(struct histogram_s *h, int censor, float high_hint)
       /* Do an ML fit
        */
       if (censor) {
-	if (! EVDCensoredFit(x, y, hsize, z, (float) lowbound, &mu, &lambda))
+	if (! EVDCensoredFit(x, y, hsize, z, lowbound, &mu, &lambda))
 	  goto FITFAILED;
       } else  
 	if (! EVDMaxLikelyFit(x, y, hsize, &mu, &lambda))
@@ -670,12 +670,12 @@ FITFAILED:
  */
 void
 ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda, 
-			 float lowbound, float highbound, int ndegrees)
+			 double lowbound, double highbound, int ndegrees)
 {
   int   sc;
   int   hsize, idx;
   int   nbins;
-  float delta;
+  double delta;
 
   UnfitHistogram(h);
   h->fit_type          = HISTFIT_EVD;
@@ -683,7 +683,7 @@ ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda,
   h->param[EVD_MU]     = mu;
 
   hsize     = h->max - h->min + 1;
-  h->expect = (float *) MallocOrDie(sizeof(float) * hsize);
+  h->expect = (double *) MallocOrDie(sizeof(double) * hsize);
   for (idx = 0; idx < hsize; idx++)
     h->expect[idx] = 0.;
 
@@ -691,9 +691,9 @@ ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda,
    */
   for (sc = h->min; sc <= h->max; sc++)
     h->expect[sc - h->min] =
-      ExtremeValueE((float)(sc), h->param[EVD_MU], h->param[EVD_LAMBDA], 
+      ExtremeValueE((double)(sc), h->param[EVD_MU], h->param[EVD_LAMBDA], 
 		    h->total) -
-      ExtremeValueE((float)(sc+1), h->param[EVD_MU], h->param[EVD_LAMBDA],
+      ExtremeValueE((double)(sc+1), h->param[EVD_MU], h->param[EVD_LAMBDA],
 		    h->total);
   
   /* Calculate the goodness-of-fit (within whole region)
@@ -703,7 +703,7 @@ ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda,
   for (sc = lowbound; sc <= highbound; sc++)
     if (h->expect[sc-h->min] >= 5. && h->histogram[sc-h->min] >= 5)
       {
-	delta = (float) h->histogram[sc-h->min] - h->expect[sc-h->min];
+	delta = (double) h->histogram[sc-h->min] - h->expect[sc-h->min];
 	h->chisq += delta * delta / h->expect[sc-h->min];
 	nbins++;
       }
@@ -712,8 +712,8 @@ ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda,
    * one constraint on chi-square: the normalization to h->total.
    */
   if (nbins > 1 + ndegrees)
-    h->chip = (float) IncompleteGamma((double)(nbins-1-ndegrees)/2., 
-				      (double) h->chisq/2.);
+    h->chip = IncompleteGamma((double)(nbins-1-ndegrees)/2., 
+			      h->chisq/2.);
   else
     h->chip = 0.;		
 }
@@ -734,11 +734,11 @@ ExtremeValueSetHistogram(struct histogram_s *h, double mu, double lambda,
  *           else 0 if fit is invalid (too few seqs.)           
  */
 int
-GaussianFitHistogram(struct histogram_s *h, float high_hint)
+GaussianFitHistogram(struct histogram_s *h, double high_hint)
 {
-  float sum;
-  float sqsum;
-  float delta;
+  double sum;
+  double sqsum;
+  double delta;
   int   sc;
   int   nbins;
   int   hsize, idx;
@@ -762,14 +762,14 @@ GaussianFitHistogram(struct histogram_s *h, float high_hint)
   sum = sqsum = 0.;
   for (sc = h->lowscore; sc <= h->highscore; sc++)
     {
-      delta  = (float) sc + 0.5;
-      sum   += (float) h->histogram[sc-h->min] * delta;
-      sqsum += (float) h->histogram[sc-h->min] * delta * delta;
+      delta  = (double) sc + 0.5;
+      sum   += (double) h->histogram[sc-h->min] * delta;
+      sqsum += (double) h->histogram[sc-h->min] * delta * delta;
     }
   h->fit_type          = HISTFIT_GAUSSIAN;
-  h->param[GAUSS_MEAN] = sum / (float) h->total;
-  h->param[GAUSS_SD]   = sqrt((sqsum - (sum*sum/(float)h->total)) / 
-			      (float)(h->total-1));
+  h->param[GAUSS_MEAN] = sum / (double) h->total;
+  h->param[GAUSS_SD]   = sqrt((sqsum - (sum*sum/(double)h->total)) / 
+			      (double)(h->total-1));
   
   /* Calculate the expected values for the histogram.
    * Note that the magic 0.5 correction appears again.
@@ -777,15 +777,15 @@ GaussianFitHistogram(struct histogram_s *h, float high_hint)
    * would be correct but hard.
    */
   hsize     = h->max - h->min + 1;
-  h->expect = (float *) MallocOrDie(sizeof(float) * hsize);
+  h->expect = (double *) MallocOrDie(sizeof(double) * hsize);
   for (idx = 0; idx < hsize; idx++)
     h->expect[idx] = 0.;
 
   for (sc = h->min; sc <= h->max; sc++)
     {
-      delta = (float) sc + 0.5 - h->param[GAUSS_MEAN];
+      delta = (double) sc + 0.5 - h->param[GAUSS_MEAN];
       h->expect[sc - h->min] =
-	(float) h->total * ((1. / (h->param[GAUSS_SD] * sqrt(2.*3.14159))) * 
+	(double) h->total * ((1. / (h->param[GAUSS_SD] * sqrt(2.*3.14159))) * 
         (exp(-1.* delta*delta / (2. * h->param[GAUSS_SD] * h->param[GAUSS_SD]))));
     }
 
@@ -796,14 +796,14 @@ GaussianFitHistogram(struct histogram_s *h, float high_hint)
   for (sc = h->lowscore; sc <= h->highscore; sc++)
     if (h->expect[sc-h->min] >= 5. && h->histogram[sc-h->min] >= 5)
       {
-	delta = (float) h->histogram[sc-h->min] - h->expect[sc-h->min];
+	delta = (double) h->histogram[sc-h->min] - h->expect[sc-h->min];
 	h->chisq += delta * delta / h->expect[sc-h->min];
 	nbins++;
       }
 	/* -1 d.f. for normalization; -2 d.f. for two free parameters */
   if (nbins > 3)
-    h->chip = (float) IncompleteGamma((double)(nbins-3)/2., 
-				      (double) h->chisq/2.);
+    h->chip = IncompleteGamma((double)(nbins-3)/2., 
+			      h->chisq/2.);
   else
     h->chip = 0.;		
 
@@ -817,12 +817,12 @@ GaussianFitHistogram(struct histogram_s *h, float high_hint)
  *           simply set the Gaussian parameters from an external source.
  */
 void
-GaussianSetHistogram(struct histogram_s *h, float mean, float sd)
+GaussianSetHistogram(struct histogram_s *h, double mean, double sd)
 {
-  int   sc;
-  int   hsize, idx;
-  int   nbins;
-  float delta;
+  int    sc;
+  int    hsize, idx;
+  int    nbins;
+  double delta;
 
   UnfitHistogram(h);
   h->fit_type          = HISTFIT_GAUSSIAN;
@@ -832,7 +832,7 @@ GaussianSetHistogram(struct histogram_s *h, float mean, float sd)
   /* Calculate the expected values for the histogram.
    */
   hsize     = h->max - h->min + 1;
-  h->expect = (float *) MallocOrDie(sizeof(float) * hsize);
+  h->expect = (double *) MallocOrDie(sizeof(double) * hsize);
   for (idx = 0; idx < hsize; idx++)
     h->expect[idx] = 0.;
 
@@ -843,9 +843,9 @@ GaussianSetHistogram(struct histogram_s *h, float mean, float sd)
    */
   for (sc = h->min; sc <= h->max; sc++)
     { 
-      delta = ((float)sc + 0.5) - h->param[GAUSS_MEAN];
+      delta = ((double)sc + 0.5) - h->param[GAUSS_MEAN];
       h->expect[sc - h->min] =
-	(float) h->total * ((1. / (h->param[GAUSS_SD] * sqrt(2.*3.14159))) * 
+	(double) h->total * ((1. / (h->param[GAUSS_SD] * sqrt(2.*3.14159))) * 
 	    (exp(-1.*delta*delta / (2. * h->param[GAUSS_SD] * h->param[GAUSS_SD]))));
     }
 
@@ -856,14 +856,13 @@ GaussianSetHistogram(struct histogram_s *h, float mean, float sd)
   for (sc = h->lowscore; sc <= h->highscore; sc++)
     if (h->expect[sc-h->min] >= 5. && h->histogram[sc-h->min] >= 5)
       {
-	delta = (float) h->histogram[sc-h->min] - h->expect[sc-h->min];
+	delta = h->histogram[sc-h->min] - h->expect[sc-h->min];
 	h->chisq += delta * delta / h->expect[sc-h->min];
 	nbins++;
       }
 	/* -1 d.f. for normalization */
   if (nbins > 1)
-    h->chip = (float) IncompleteGamma((double)(nbins-1)/2., 
-				      (double) h->chisq/2.);
+    h->chip = IncompleteGamma((double)(nbins-1)/2., h->chisq/2.);
   else
     h->chip = 0.;		
 }
@@ -878,7 +877,7 @@ GaussianSetHistogram(struct histogram_s *h, float mean, float sd)
  *           parameters mu and lambda.
  */
 double
-EVDDensity(float x, float mu, float lambda)
+EVDDensity(double x, double mu, double lambda)
 {
   return (lambda * exp(-1. * lambda * (x - mu) 
 		       - exp(-1. * lambda * (x - mu))));
@@ -892,7 +891,7 @@ EVDDensity(float x, float mu, float lambda)
  *           mu and lambda.
  */
 double
-EVDDistribution(float x, float mu, float lambda)
+EVDDistribution(double x, double mu, double lambda)
 {
   return (exp(-1. * exp(-1. * lambda * (x - mu))));
 }
@@ -915,7 +914,7 @@ EVDDistribution(float x, float mu, float lambda)
  * Return:   P(S>x)
  */                   
 double
-ExtremeValueP(float x, float mu, float lambda)
+ExtremeValueP(double x, double mu, double lambda)
 {
   double y;
 			/* avoid exceptions near P=1.0 */
@@ -944,7 +943,7 @@ ExtremeValueP(float x, float mu, float lambda)
  * Return:   P(S>x) for database of size N
  */
 double
-ExtremeValueP2(float x, float mu, float lambda, int N)
+ExtremeValueP2(double x, double mu, double lambda, int N)
 {
   double y;
   y = N * ExtremeValueP(x,mu,lambda);
@@ -965,7 +964,7 @@ ExtremeValueP2(float x, float mu, float lambda, int N)
  * Return:   E(S>x) for database of size N
  */
 double
-ExtremeValueE(float x, float mu, float lambda, int N)
+ExtremeValueE(double x, double mu, double lambda, int N)
 {
   return (double)N * ExtremeValueP(x,mu,lambda);
 }
@@ -979,10 +978,10 @@ ExtremeValueE(float x, float mu, float lambda, int N)
  *              x = \mu - \frac{\log \left[ -\log P(S<x) \right]}{\lambda}
  *           where P(S<x) is sampled uniformly on 0 < P(S<x) < 1.
  */
-float
-EVDrandom(float mu, float lambda)
+double
+EVDrandom(double mu, double lambda)
 {
-  float p = 0.0;
+  double p = 0.0;
 
   /* Very unlikely, but possible,
    * that sre_random() would give us exactly 0 or 1 
@@ -1015,7 +1014,7 @@ EVDrandom(float mu, float lambda)
  * Return:   (void)
  */ 
 void
-Lawless416(float *x, int *y, int n, float lambda, float *ret_f, float *ret_df)
+Lawless416(double *x, int *y, int n, double lambda, double *ret_f, double *ret_df)
 {
 
   double esum;			/* \sum e^(-lambda xi)      */
@@ -1072,8 +1071,8 @@ Lawless416(float *x, int *y, int n, float lambda, float *ret_f, float *ret_df)
  * Return:   (void)
  */ 
 void
-Lawless422(float *x, int *y, int n, int z, float c,
-	   float lambda, float *ret_f, float *ret_df)
+Lawless422(double *x, int *y, int n, int z, double c,
+	   double lambda, double *ret_f, double *ret_df)
 {
   double esum;			/* \sum e^(-lambda xi)      + z term    */
   double xesum;			/* \sum xi e^(-lambda xi)   + z term    */
@@ -1134,15 +1133,15 @@ Lawless422(float *x, int *y, int n, int z, float c,
  * Return:   1 on success; 0 on any failure
  */
 int
-EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
+EVDMaxLikelyFit(double *x, int *c, int n, double *ret_mu, double *ret_lambda)
 {
-  float  lambda, mu;
-  float  fx;			/* f(x)  */
-  float  dfx;			/* f'(x) */
+  double  lambda, mu;
+  double  fx;			/* f(x)  */
+  double  dfx;			/* f'(x) */
   double esum;                  /* \sum e^(-lambda xi) */ 
   double mult;
   double total;
-  float  tol = 1e-5;
+  double  tol = 1e-5;
   int    i;
 
   /* 1. Find an initial guess at lambda: linear regression here?
@@ -1168,7 +1167,7 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
    */ 
   if (i == 100)
     {
-      float left, right, mid;
+      double left, right, mid;
       SQD_DPRINTF2(("EVDMaxLikelyFit(): Newton/Raphson failed; switchover to bisection"));
 
 				/* First we need to bracket the root */
@@ -1258,16 +1257,16 @@ EVDMaxLikelyFit(float *x, int *c, int n, float *ret_mu, float *ret_lambda)
  * Return:   (void)
  */
 int
-EVDCensoredFit(float *x, int *y, int n, int z, float c, 
-	       float *ret_mu, float *ret_lambda)
+EVDCensoredFit(double *x, int *y, int n, int z, double c, 
+	       double *ret_mu, double *ret_lambda)
 {
-  float  lambda, mu;
-  float  fx;			/* f(x)  */
-  float  dfx;			/* f'(x) */
+  double lambda, mu;
+  double fx;			/* f(x)  */
+  double dfx;			/* f'(x) */
   double esum;                  /* \sum e^(-lambda xi) */ 
   double mult;
   double total;
-  float  tol = 1e-5;
+  double  tol = 1e-5;
   int    i;
 
   /* 1. Find an initial guess at lambda: linear regression here?
@@ -1293,7 +1292,7 @@ EVDCensoredFit(float *x, int *y, int n, int z, float c,
    */ 
   if (i == 100)
     {
-      float left, right, mid;
+      double left, right, mid;
 				/* First we need to bracket the root */
       SQD_DPRINTF2(("EVDCensoredFit(): Newton/Raphson failed; switched to bisection"));
       lambda = right = left = 0.2;

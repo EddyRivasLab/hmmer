@@ -184,7 +184,7 @@ main(void)
           }
       }
 	
-      pvalue = PValue(hmm, sc);
+      pvalue = LPValue(hmm, L, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
       send_trace = (sc >= globT && evalue <= globE) ? 1 : 0;
      

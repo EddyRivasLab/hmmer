@@ -141,7 +141,7 @@ PValue(struct plan7_s *hmm, double sc)
  *            contributed the original version of LPValue().
  */
 double
-LPValue(struct plan7_s *hmm, double L, double sc)
+LPValue(struct plan7_s *hmm, int L, double sc)
 {
   double L1, L2;
   double mu2;
@@ -151,12 +151,17 @@ LPValue(struct plan7_s *hmm, double L, double sc)
   if      (sc >= sreLOG2(DBL_MAX))       pval = 0.0;
   else if (sc <= -1. * sreLOG2(DBL_MAX)) pval = 1.0;
   else    pval = 1. / (1.+sreEXP2(sc));
+
+  /* note: the following code will only work properly
+   * for SW and FS mode right now, during testing...
+   */
 				/* try for a better estimate from EVD fit */
   if (hmm != NULL && (hmm->flags & PLAN7_STATS))
     {		
-      L1  = EdgeCorrection(L,          hmm->kappa, hmm->sigma);
-      L2  = EdgeCorrection(hmm->Lbase, hmm->kappa, hmm->sigma);
+      L1  = EdgeCorrection((double) L,          hmm->kappa, hmm->sigma);
+      L2  = EdgeCorrection((double) hmm->Lbase, hmm->kappa, hmm->sigma);
       mu2 = hmm->mu + sreLOG2(L1/L2) / hmm->lambda;
+      if (hmm->mode == P7_FS_MODE) mu2 -= 1.0; /* fs differs from sw by exactly 1 bit */
 
       pval2 = ExtremeValueP(sc, mu2, hmm->lambda);
       if (pval2 < pval) pval = pval2;
@@ -228,10 +233,14 @@ EdgeCorrection(double L, double kappa, double sigma)
   double z1, z2;
   double Lp;
 
-  z1 = (N-kappa) / sigma;
+  /* If L >> kappa, we don't need the fancy integral; L' =~ L-kappa.
+   */
+  if (L > kappa + 6. * sigma) { return (L-kappa); }
+
+  z1 = (L-kappa) / sigma;
   z2 = kappa / sigma;
 
-  term1 = (N-kappa) * (erf(z1/sqrt(2.)) + erf(z2/sqrt(2.)));
+  term1 = (L-kappa) * (erf(z1/sqrt(2.)) + erf(z2/sqrt(2.)));
   term2 = sigma * sqrt(2.) / sqrt(SQDCONST_PI) * (exp(-0.5 * z1 * z1) - exp(-0.5 * z2 * z2));
   term3 = 1. + erf(z2/sqrt(2.));
 
