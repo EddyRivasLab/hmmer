@@ -1,0 +1,15 @@
+# nucleic.null
+#
+# Example of a null model file for DNA/RNA sequences.
+# The values in this file are the HMMER 2 default
+# settings.
+
+Nucleic
+
+0.25 # A
+0.25 # C
+0.25 # G
+0.25 # T
+
+0.999001 # p1
+

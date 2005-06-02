@@ -1,0 +1,57 @@
+% Organizing document for the HMMER User's Guide
+%
+% SVN $Id$
+
+\documentclass[11pt]{article}
+\usepackage{newcent}
+\usepackage{fullpage}
+\usepackage{fancyvrb}
+\usepackage[pdftex]{graphicx}
+\usepackage[backref,colorlinks]{hyperref}
+\usepackage[authoryear]{natbib}
+
+%\usepackage{html}		% From the LaTeX2html translator
+%\usepackage{apalike}
+%\usepackage{url}
+
+\setcounter{secnumdepth}{1}
+\input{macros}
+
+\begin{document}
+\bibliographystyle{apalike}
+
+\input{titlepage}
+\input{copyright}
+\newpage
+\tableofcontents
+
+\newpage
+\input{introduction}
+\newpage
+\input{install}
+\newpage
+\input{tutorial}
+\newpage
+\input{hmmbuild}
+\newpage
+\input{scores}
+%\newpage
+%\input{topics}
+\newpage
+\input{formats}
+\newpage
+\input{manpages}
+\newpage
+\section{Index of frequently asked questions}
+\listoffaqs
+\newpage
+\input{license}
+\newpage
+\input{ack}
+
+
+
+\newpage
+\bibliography{master,lab}
+
+\end{document}
