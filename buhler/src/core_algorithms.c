@@ -1532,7 +1532,7 @@ Plan7ESTViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_
   sc = xmx[L][XMC] + p7lom->xsc[XTC][MOVE];
 
   if (ret_mx != NULL) *ret_mx = mx;
-  else                FreePlan7Matrix(mx);
+  else                FreeDPMatrix(mx);
 
   return Scorify(sc);            /* the total Viterbi score. */
 }
@@ -1892,8 +1892,8 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
    * Garbage collection, return.
    *****************************************************************/
   
-  FreePlan7Matrix(fwd);
-  FreePlan7Matrix(bck);
+  FreeDPMatrix(fwd);
+  FreeDPMatrix(bck);
   *ret_k2 = k2;
   *ret_t2 = t2;
   *ret_s2 = s2;
@@ -2108,7 +2108,7 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 				/* do the traceback */
   tr = ShadowTrace(tb, hmm, msa->alen);
 				/* cleanup and return */
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   FreeShadowMatrix(tb);
   for (i = 1; i <= msa->alen; i++)
     free(con[i]);

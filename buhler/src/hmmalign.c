@@ -199,7 +199,7 @@ main(int argc, char **argv)
    */
   dsq = MallocOrDie(sizeof(unsigned char *)    * nseq);
   tr  = MallocOrDie(sizeof(struct p7trace_s *) * nseq);
-  mx  = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx  = CreateDPMatrix(1, hmm->M, 25, 0);
 
   /* Align each sequence to the model, collect traces
    */
@@ -212,7 +212,7 @@ main(int argc, char **argv)
       else
 	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
     }
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
 
   /* Include an aligned alignment, if desired.
    */

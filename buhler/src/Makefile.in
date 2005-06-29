@@ -86,6 +86,25 @@ HDRS =  config.h\
 	postprob.h\
 	structs.h
 
+# Configuration for customized implementations
+#
+HMMERMODE ?= FAST
+
+ifeq "$(HMMERMODE)" 'FAST'
+DEFS += -DFAST
+OBJS += defaultstructs.o fastfuncs.o
+endif
+
+ifeq "$(HMMERMODE)" 'SLOW'
+DEFS += -DSLOW
+OBJS += defaultstructs.o slowfuncs.o
+endif
+
+ifeq "$(HMMERMODE)" 'ALTIVEC'
+DEFS += -DALTIVEC
+OBJS += altivecstructs.o altivecfuncs.o
+endif
+
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
 

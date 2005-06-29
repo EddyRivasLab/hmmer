@@ -1101,6 +1101,8 @@ position_average_score(struct plan7_s    *hmm,
   int    k;                     /* counter for model position */
   int    idx;                   /* counter for sequence number */
 
+  REQUIRE_P7LOGODDS(hmm);
+
   /* Allocations
    */
   counts = MallocOrDie ((hmm->M+1) * sizeof(float));
@@ -1125,9 +1127,9 @@ position_average_score(struct plan7_s    *hmm,
 	/* Emission scores.
 	 */
 	if (tr[idx]->statetype[tpos] == STM) 
-	  pernode[k] += wgt[idx] * Scorify(hmm->msc[sym][k]);
+	  pernode[k] += wgt[idx] * Scorify(hmm->p7lom->msc[sym][k]);
 	else if (tr[idx]->statetype[tpos] == STI) 
-	  pernode[k] += wgt[idx] * Scorify(hmm->isc[sym][k]);
+	  pernode[k] += wgt[idx] * Scorify(hmm->p7lom->isc[sym][k]);
 	
 	/* Transition scores.
 	 */
