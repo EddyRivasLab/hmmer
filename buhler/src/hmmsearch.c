@@ -571,7 +571,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
    * we overalloc by 25 rows (L dimension) when we grow; not growable
    * in model dimension, since we know the hmm size
    */
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0); 
+  mx = CreateDPMatrix(1, hmm->M, 25, 0); 
 
   nseq = 0;
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo))
@@ -725,7 +725,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       free(dsq);
     }
   
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   *ret_nseq = nseq;
   return;
 }

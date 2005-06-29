@@ -31,14 +31,22 @@ extern void           DefaultCodonBias(float *codebias);
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
  */
+/*
+ * Note: I am commenting out the Matrix function declarations for now,
+ *       since a) I am renaming them with more generic names as I move them
+ *       around, and b) I want to see where they are called from, so I don't
+ *       want the old names declared.  - CRS 21 June 2005
+ *
 extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, int padN, int padM);
 extern void   ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
 extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, 
 					   int ***xmx, int ***mmx, int ***imx, int ***dmx);
+extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
+*
+*/
 extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb, 
 					    char ***mtb, char ***itb, char ***dtb);
-extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
 extern void  FreeShadowMatrix(struct dpshadow_s *tb);
 extern int   P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx);
 extern int   P7ViterbiSize(int L, int M);
@@ -263,6 +271,9 @@ extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
  * Plan7 HMM structure support
 
  */
+extern void REQUIRE_P7LOGODDS(struct plan7_s *hmm);
+extern void AllocP7Logodds(struct plan7_s *hmm);
+extern void FreeP7Logodds(struct plan7_s *hmm);
 extern struct plan7_s *AllocPlan7(int M);
 extern struct plan7_s *AllocPlan7Shell(void);
 extern void AllocPlan7Body(struct plan7_s *hmm, int M);
@@ -406,6 +417,38 @@ extern struct p7trace_s *MasterTraceFromMap(int *map, int M, int alen);
 extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, 
 			      struct p7trace_s ***ret_tr);
 
+
+/*
+ * These are generic function declarations that are defined by each 
+ * implemenation.  Ideally, they are in a file called something ilke 
+ * <implementation>structs.c, like defaultstructs.c, for example.
+ *
+ * Functions for customizing data structures used by each implementation.
+ */
+extern void AllocLogoddsShell(struct plan7_s *hmm);
+extern void AllocLogoddsBody(struct plan7_s *hmm);
+extern void FreeLogodds(struct plan7_s *hmm);
+extern void FillP7Logodds(struct plan7_s *hmm);
+extern void UnfillP7Logodds(struct plan7_s *hmm);
+extern struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
+extern void   ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M, 
+				int ***xmx, int ***mmx, int ***imx, int ***dmx);
+extern struct dpmatrix_s *AllocDPMatrix(int rows, int M, 
+				    int ***xmx, int ***mmx, int ***imx, int ***dmx);
+extern void  FreeDPMatrix(struct dpmatrix_s *mx);
+
+
+/*
+ * These are generic function declarations that are defined by each 
+ * implementation.  Ideally, they are in a file called something like
+ * <implementation>funcs.c, like fastfuncs.c, for example.  
+ *
+ * Customized and/or optimized version of the functions in
+ * core_algorithms.c
+ */
+extern void Logoddsify(struct plan7_s *hmm);
+extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
+		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 #endif /*FUNCSH_INCLUDED*/
 
