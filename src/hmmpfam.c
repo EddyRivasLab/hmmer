@@ -573,7 +573,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
    * we're going to be calling P7Viterbi on subpieces that vary in size,
    * and for different models.
    */
-  mx = CreatePlan7Matrix(300, 300, 25, 25);
+  mx = CreateDPMatrix(300, 300, 25, 25);
 
   nhmm = 0;
   while (HMMFileRead(hmmfp, &hmm)) {
@@ -720,7 +720,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
     nhmm++;
   }
 
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   free(dsq);
   *ret_nhmm = nhmm;
   return;

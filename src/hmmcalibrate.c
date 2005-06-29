@@ -530,7 +530,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
   sre_srandom(seed);
   if (! (hmm->flags & PLAN7_HASBITS)) Die("oops: that model isn't configured");
   P7DefaultNullModel(randomseq, &p1);
-  mx = CreatePlan7Matrix(L, hmm->M, 0, 0);
+  mx = CreateDPMatrix(L, hmm->M, 0, 0);
 
   for (idx = 0; idx < N; idx++)
   {
@@ -550,7 +550,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
       free(seq);
     }
 
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   return;
 }
 
