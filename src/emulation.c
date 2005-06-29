@@ -74,8 +74,7 @@
  *
  * Args:     fp      - open FILE to write to (or stdout, possibly)
  *           hmm     - the HMM to write   
- *           do_xsw  - TRUE to write Compugen's experimental extended profile format
- *
+ *           do_xsw  - TRUE to write Compugen's experimental extended profile format *
  * Returns:  (void)
  */
 void
@@ -86,6 +85,10 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
   int sc;			/* a score to print       */
   float nx;			/* expected # of symbol x */
   int gap, len, qgap, qlen;	/* penalties to charge    */
+  struct p7logodds_s *p7lom;
+
+  REQUIRE_P7LOGODDS(hmm);
+  p7lom = hmm->p7lom;
   
   if (! (hmm->flags & PLAN7_HASBITS)) 
     Die("Can't write a profile HMM as a GCG profile unless it's configured w/ scores.");
@@ -102,8 +105,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
    * GCG will look for sequence type and length of model.
    * Other than this, nothing is parsed until we get to the 
    * Cons line that has a ".." on it.
-   * Lines that begin with "!" are comments.
-   */
+   * Lines that begin with "!" are comments.   */
   if (Alphabet_type == hmmAMINO)        fprintf(fp, "!!AA_PROFILE 1.0\n");
   else if (Alphabet_type == hmmNUCLEIC) fprintf(fp, "!!NA_PROFILE 1.0\n");
   else Die("No support for profiles with non-biological alphabets");
@@ -166,8 +168,8 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 				 */
       for (x = 0; x < Alphabet_iupac; x++)
 	{
-	  sc = hmm->msc[x][k];
-	  if (k < hmm->M) sc += hmm->tsc[TMM][k];
+	  sc = p7lom->msc[x][k];
+	  if (k < hmm->M) sc += p7lom->tsc[TMM][k];
 	  sc = sc * 100 / INTSCALE;
 	  fprintf(fp, "%5d ", sc);
 	}
@@ -178,7 +180,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 				/* gap open (insertion)*/
       if (k > 1)
 	{
-	  gap = -1 * (hmm->tsc[TMI][k-1] + hmm->tsc[TIM][k-1] - hmm->tsc[TMM][k-1] - hmm->tsc[TII][k-1]);
+	  gap = -1 * (p7lom->tsc[TMI][k-1] + p7lom->tsc[TIM][k-1] - p7lom->tsc[TMM][k-1] - p7lom->tsc[TII][k-1]);
 	  gap = gap * 100 / (10.0 * INTSCALE);
 	}
       else gap = 100;		/* doesn't matter because GAP_1 is never used */
@@ -186,7 +188,7 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 				/* gap extend (insertion)*/
       if (k > 1)
 	{
-	  len = -1 * hmm->tsc[TII][k-1];
+	  len = -1 * p7lom->tsc[TII][k-1];
 	  len = len * 100 / (1.0 * INTSCALE);
 	}
       else len = 100;		/* again, doesn't matter because LEN_1 is never used */
@@ -194,14 +196,14 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
 				/* gap open (deletion) */
       if (k > 1)
 	{
-	  qgap = -1 * (hmm->tsc[TDM][k-1] + hmm->tsc[TMD][k-1] - hmm->tsc[TMM][k-1] - hmm->tsc[TDD][k-1]);
+	  qgap = -1 * (p7lom->tsc[TDM][k-1] + p7lom->tsc[TMD][k-1] - p7lom->tsc[TMM][k-1] - p7lom->tsc[TDD][k-1]);
 	  qgap = qgap * 100 / (10.0 * INTSCALE);
 	}
       else qgap = 100;
 				/* gap extend (deletion) */
       if (k > 1)
 	{
-	  qlen = -1 * hmm->tsc[TDD][k-1];
+	  qlen = -1 * p7lom->tsc[TDD][k-1];
 	  qlen = qlen * 100 / (1.0 * INTSCALE);
 	}
       else qlen = 100;
