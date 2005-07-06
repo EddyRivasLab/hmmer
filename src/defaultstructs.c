@@ -10,7 +10,7 @@ inline void AllocLogoddsShell(struct plan7_s *hmm){}
 inline void AllocLogoddsBody(struct plan7_s *hmm){}
 inline void FreeLogodds(struct plan7_s *hmm){}
 inline void FillCustomLogodds(struct plan7_s *hmm){}
-inline void UnfillCustomLogodds(struct plan7_s *hmm){}
+
 
 /* Function: CreateDPMatrix()
  *
