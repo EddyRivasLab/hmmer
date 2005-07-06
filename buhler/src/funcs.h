@@ -429,7 +429,6 @@ extern void AllocLogoddsShell(struct plan7_s *hmm);
 extern void AllocLogoddsBody(struct plan7_s *hmm);
 extern void FreeLogodds(struct plan7_s *hmm);
 extern void FillCustomLogodds(struct plan7_s *hmm);
-extern void UnfillCustomLogodds(struct plan7_s *hmm);
 extern struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
 extern void   ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
