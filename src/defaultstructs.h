@@ -26,12 +26,7 @@ struct dpmatrix_s {
    * introduced by Erik Lindahl with the Altivec port; it's used to
    * align xmx, etc. on 16-byte boundaries for cache optimization.
    */
-  /* These aren't used by the default implementation, so I am commenting
-   * them out.  I am only leaveing them in here so I can remember the 
-   * changes I made.
-   *   - CRS 21 June 2005
-   */
-  /* void *xmx_mem, *mmx_mem, *imx_mem, *dmx_mem; */
+  void *xmx_mem, *mmx_mem, *imx_mem, *dmx_mem;
 
   int *  workspace;      /* Workspace for altivec (aligned ptr)    */
   int *  workspace_mem;  /* Actual allocated pointer for workspace */

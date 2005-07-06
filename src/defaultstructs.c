@@ -9,69 +9,8 @@
 inline void AllocLogoddsShell(struct plan7_s *hmm){}
 inline void AllocLogoddsBody(struct plan7_s *hmm){}
 inline void FreeLogodds(struct plan7_s *hmm){}
-
-/*
- * Function:    FillP7Logodds()
- * Date:        CRS, 24 June 2005 [Jeremy Buhler's student, St. Louis]
- *
- * Purpose:     Fills the p7lom field of the plan7_s strcture.
- *
- * Explanation: The plan7_s structure has two logodds fields, p7lom and lom.  
- *              The former is of the default logodds type (p7logodds_s), 
- *              and the latter is the customizable logodds type (logodds_s).  
- *		We could easily allocate, fill, and maintain these structures 
- *		idenpendently.  In many implementaions, however, these 
- *              structures will look very similar (the ALTIVEC implementation 
- *		is a good example).  Thus, maintaining them independently will 
- *		add much unneeded overhead, in both memory use and running 
- *		time (since we would be calculating and storing the same values 
- *		twice).  To avoid this, we create this function, which can fill 
- *		the default logodds structure from the customized structure.
- *		
- *		Now, some implementations will not use a customized logodds
- *		structure.  In that case, this is where they should allocate
- *		memory for the default logodds structure, and fill it using
- *		P7Logoddisy().
- *
- * Note:        IMPORTANT - we assume the memory for the p7logodds_s structure
- *              has been allocated (i.e., the shell), but not any additional
- *              memory.  - CRS 24 June 2005
- *	     
- * Args:        hmm - the profile hmm for which the default logodds information
- *                   needs to be filled.  
- *
- *
- * Returns:     (void)
- *              hmm->p7lom is filled as useable
- */
-void FillP7Logodds(struct plan7_s *hmm){
-  /* Note:  The default implementations do not customize the logodds
-   *        structure.  Thus, we just allocate memory for the default
-   *        structure, and fill it in using P7Logoddsify().
-   *           - CRS 24 June 2005
-   */
-  AllocP7Logodds(hmm);
-  P7Logoddsify(hmm);  
-}
-
-/* Function: UnfillP7Logodds()
- * 
- * Purpose:  Frees any memory that may have been allocated when the
- *           default logodds strcutre of the plan7_s structure 
- *           (hmm->p7lom) was filled.
- *
- * Args:     hmm - the profile hmm for which the memory used by the
- *                 default logodds structure can be freed.
- * 
- * Returns:  (void)
- *           The memory used by the default logodds structure is freed
- *
- * Note:     IMPORTANT - the memory for the logodds structure itself
- *           (i.e. the shell) IS NOT freed.
- */
-void UnfillP7Logodds(struct plan7_s *hmm){
-  FreeP7Logodds(hmm);
-}
+inline void FillCustomLogodds(struct plan7_s *hmm){}
+inline void UnfillCustomLogodds(struct plan7_s *hmm){}
 
 /* Function: CreateDPMatrix()
  *
@@ -257,7 +196,7 @@ struct dpmatrix_s *
 AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
 {
   struct dpmatrix_s *mx;
-  mx = CreatePlan7Matrix(rows-1, M, 0, 0);
+  mx = CreateDPMatrix(rows-1, M, 0, 0);
   if (xmx != NULL) *xmx = mx->xmx;
   if (mmx != NULL) *mmx = mx->mmx;
   if (imx != NULL) *imx = mx->imx;

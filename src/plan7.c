@@ -22,154 +22,6 @@
 
 static char *score2ascii(int sc);
 
-/* Function: REQUIRE_P7LOGODDS()
- * Date:     CRS, 11 June 2005 [Jeremy Buhler's student, St. Louis]
- *
- * Purpose:  This function is meant to emulate to a preprocessor macro that 
- *           ensures that we only allocate the default logodds model once.  
- *	     We need this function because some implementations will use 
- *	     sometimes implement customized versions of the core functions 
- *	     (i.e. Viterbi), but will use the default implementation for 
- *	     others (i.e. Forward).  The latter will require the default
- *	     logodds model, which may have not yet been created.  We could
- *	     always allocate the model, but we would be wasting memory and
- *	     clock cycles if we never use it.  Instead, we could delay
- *	     allocating it until we absolutely need it, but then we risk 
- *	     allocating it more than once, which introduces all sorts of
- *	     problems like memory leaks and performance penalties (for doing
- *	     the same work twice).  By providing this function, we can defer 
- *	     allocation of the model until we need it, without having to worry 
- *	     about it being allocated twice.
- *
- * Note:     This function is meant to emulate a preprocessor macro, but we
- *           actually define it as an inline C function.  This allows us to
- *           take advantage of safety features of the C programming language
- *           (like type safety), without paying a significant performance 
- *           penalty.  Unfortunately, inline functions are not part of the 
- *           C standard until C99, so this may present compatability issues.
- *              - CRS 11 June 2005
- *
- * Args:     hmm - the profile hmm for which the default logodds model is 
- *           needed.
- * 
- * Returns:  (void)
- *           If the default logodds model (hmm->p7lom) has not been previously
- *           allocated, then it is allocated here.  Otherwise, no changes ocurr.
- */
-inline void REQUIRE_P7LOGODDS(struct plan7_s *hmm){
-  if (hmm->flags & PLAN7_HASBITS)
-    return;
-  FillP7Logodds(hmm);
-  /*
-   * Note:  Some implementations will fill default logodds 
-   *        structure without calling P7Logoddsify().  (They could,
-   *        for example, just have the pointers point to locations
-   *        in their default structure).  In that case, they may not
-   *        have set the PLAN7_HASBITS flag.  So, JIC, we set it here.
-   *          - CRS 24 June 2005
-   */
-  hmm->flags |= PLAN7_HASBITS;
-}
-
-/* Fumctions: AllocP7Logodds(), FreeP7logodds()
- * Date:      CRS, 11 June 2005 [Jeremy Buhler's student, St. Louis]
- *
- * Purpose:   Allocates and Frees memory for the default form of the logodds 
- *            model of the profile hmm.  This default version is used by
- *            the default implementations of the core algorithms such as
- *            P7Forward and P7Viterbi.
- *
- * Note:      The keen observer will notice that we require that a pointer
- *            to the actual hmm, even though we only use that pointer to 
- *            get to the p7lom member.  Thus, we really could just require
- *            a pointer that points directly to that member.  We decided to
- *            require a pointer to the hmm, however, to reflect that the
- *            p7logodds_s structure is not meant to be used independently, but
- *            as an extension to the plan7_s structure.
- * 
- * Args:      hmm - the hmm for which the logodds model should be allocated
- *                  or freed.
- *
- * Returns:   (void)
- *            AllocP7Logodds() allocates memory for hmm->p7lom.
- *            FreeP7Logodds() will free hmm->p7lom if it was previously allocated,
- *            and set hmm->p7lom to NULL
- */
-void
-AllocP7Logodds(struct plan7_s *hmm){
-  int x = 0;
-  int M = hmm->M;
-  struct p7logodds_s *p7lom;
-
-  p7lom = hmm->p7lom;
-
-  p7lom->tsc     = MallocOrDie (7     *           sizeof(int *));
-  p7lom->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
-  p7lom->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
-
-  /* 
-   * Note:  The default implementation doesn't use _mem pointers, so I am
-   *        commenting out the lines that use them, and adjusting the code as
-   *        needed.  - CRS 11 June 2005
-   *
-   p7lom->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
-   p7lom->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-   p7lom->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
-
-   hmm->tsc[0] = hmm->tsc_mem;
-   hmm->msc[0] = hmm->msc_mem;
-   hmm->isc[0] = hmm->isc_mem;
-   *
-   */
-
-   p7lom->tsc[0] = MallocOrDie ((7*M)     *       sizeof(int));
-   p7lom->msc[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-   p7lom->isc[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
-  
-  for (x = 1; x < MAXCODE; x++) {
-    p7lom->msc[x] = p7lom->msc[0] + x * (M+1);
-    p7lom->isc[x] = p7lom->isc[0] + x * M;
-  }
-  for (x = 0; x < 7; x++)
-    p7lom->tsc[x] = p7lom->tsc[0] + x * M;
-
-  /* tsc[x][0] is used as a boundary condition sometimes [Viterbi()],
-   * so set to -inf always.
-   */
-  for (x = 0; x < 7; x++)
-    p7lom->tsc[x][0] = -INFTY;
-
-  p7lom->bsc/*_mem*/  = MallocOrDie  ((M+1) * sizeof(int));
-  p7lom->esc/*_mem*/  = MallocOrDie  ((M+1) * sizeof(int));
-
-  /*hmm->bsc = hmm->bsc_mem;
-    hmm->esc = hmm->esc_mem;*/
-}
-void FreeP7Logodds(struct plan7_s *hmm){
-  struct p7logodds_s *p7lom = hmm->p7lom;
-
-  /* 
-   * The p7lom structure may not be used by all implementations
-   */
-  if (p7lom == NULL)
-    return;
-  
-  /* We don't have to nullify the arrays pointed to by tsc, msc, and isc
-   * because we will nullify the pointers to the pointers themselves. */
-  if (p7lom->tsc[0] != NULL) { free(p7lom->tsc[0]); }
-  if (p7lom->msc[0] != NULL) { free(p7lom->msc[0]); }
-  if (p7lom->isc[0] != NULL) { free(p7lom->isc[0]); }
-  if (p7lom->tsc != NULL) { free(p7lom->tsc); p7lom->tsc = NULL; }
-  if (p7lom->msc != NULL) { free(p7lom->tsc); p7lom->tsc = NULL; }
-  if (p7lom->isc != NULL) { free(p7lom->isc); p7lom->isc = NULL; }
-  
-  if (p7lom->bsc != NULL) { free(p7lom->bsc); p7lom->bsc = NULL; }
-  if (p7lom->esc != NULL) { free(p7lom->esc); p7lom->esc = NULL; }
-  
-  free(hmm->p7lom);
-  hmm->p7lom = NULL;
-}
-
 /* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
  * 
  * Purpose:   Allocate or free a Plan7 HMM structure.
@@ -205,15 +57,11 @@ AllocPlan7Shell(void)
 
   hmm->mode    = P7_NO_MODE;
 
-  /*
-   *
-   hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
-   hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
-   hmm->bsc = hmm->bsc_mem = NULL;
-   hmm->esc = hmm->esc_mem = NULL; 
-   *
-   */
-
+  hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
+  hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
+  hmm->bsc = hmm->bsc_mem = NULL;
+  hmm->esc = hmm->esc_mem = NULL; 
+  
   hmm->name     = NULL;
   hmm->acc      = NULL;
   hmm->desc     = NULL;
@@ -244,8 +92,6 @@ AllocPlan7Shell(void)
   
   hmm->flags = 0;
 
-  hmm->p7lom = (struct p7logodds_s *) MallocOrDie 
-    (sizeof(struct p7logodds_s));
   AllocLogoddsShell(hmm);
 
   return hmm;
@@ -277,6 +123,35 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
   hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
 
+  hmm->tsc     = MallocOrDie (7     *           sizeof(int *));
+  hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
+  hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
+  hmm->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
+  hmm->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
+  hmm->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
+  hmm->tsc[0]  = hmm->tsc_mem;
+  hmm->msc[0]  = hmm->msc_mem;
+  hmm->isc[0]  = hmm->isc_mem;
+
+  for (x = 1; x < MAXCODE; x++) {
+    hmm->msc[x] = hmm->msc[0] + x * (M+1);
+    hmm->isc[x] = hmm->isc[0] + x * M;
+  }
+  for (x = 0; x < 7; x++)
+    hmm->tsc[x] = hmm->tsc[0] + x * M;
+
+  /* tsc[x][0] is used as a boundary condition sometimes [Viterbi()],
+   * so init (and keep) at -inf always.
+   */
+  for (x = 0; x < 7; x++)
+    hmm->tsc[x][0] = -INFTY;
+
+  hmm->bsc_mem  = MallocOrDie  ((M+1) * sizeof(int));
+  hmm->esc_mem  = MallocOrDie  ((M+1) * sizeof(int));
+  hmm->bsc = hmm->bsc_mem;
+  hmm->esc = hmm->esc_mem;
+
+
   hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
   hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
   hmm->ca     = MallocOrDie ((M+2) * sizeof(char));
@@ -298,6 +173,14 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->t       != NULL) free(hmm->t);
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->end     != NULL) free(hmm->end);
+  if (hmm->bsc_mem != NULL) free(hmm->bsc_mem);
+  if (hmm->esc_mem != NULL) free(hmm->esc_mem);
+  if (hmm->msc_mem != NULL) free(hmm->msc_mem);
+  if (hmm->isc_mem != NULL) free(hmm->isc_mem);
+  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
+  if (hmm->msc     != NULL) free(hmm->msc);
+  if (hmm->isc     != NULL) free(hmm->isc);
+  if (hmm->tsc     != NULL) free(hmm->tsc);
   if (hmm->name    != NULL) free(hmm->name);
   if (hmm->acc     != NULL) free(hmm->acc);
   if (hmm->desc    != NULL) free(hmm->desc);
@@ -313,10 +196,6 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->dnam    != NULL) free(hmm->dnam);
   if (hmm->dnai    != NULL) free(hmm->dnai);
 
-  if (hmm->p7lom != NULL){ 
-    UnfillP7Logodds(hmm);
-    free(hmm->p7lom);
-  }
   if (hmm->lom != NULL) FreeLogodds(hmm);
 
   free(hmm);
@@ -677,45 +556,41 @@ Plan7_DumpScores(FILE *fp, struct plan7_s *hmm)
   int k;			/* counter for nodes */
   int x;			/* counter for symbols */
   int ts;			/* counter for state transitions */
-  struct p7logodds_s *p7lom;
-
-  REQUIRE_P7LOGODDS(hmm);
-  p7lom = hmm->p7lom;
   
   /* score2ascii() uses static buffer, and
    * can't be called twice in the same line; be careful 
    */
-  fprintf(fp, "N: %6s ", score2ascii(p7lom->xsc[XTN][MOVE]));
-  fprintf(fp, "%6s\n",   score2ascii(p7lom->xsc[XTN][LOOP]));
+  fprintf(fp, "N: %6s ", score2ascii(hmm->xsc[XTN][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTN][LOOP]));
 
   for (k = 1; k <= hmm->M; k++)
     {
 				/* Line 1: k, match emissions */
       fprintf(fp, " %5d ", k);
       for (x = 0; x < Alphabet_size; x++) 
-        fprintf(fp, "%6s ", score2ascii(p7lom->msc[x][k]));
+        fprintf(fp, "%6s ", score2ascii(hmm->msc[x][k]));
       fputs("\n", fp);
 				/* Line 2: insert emissions */
       fprintf(fp, "       ");
       for (x = 0; x < Alphabet_size; x++) 
-	fprintf(fp, "%6s ", (k < hmm->M) ? score2ascii(p7lom->isc[x][k]) : "*");
+	fprintf(fp, "%6s ", (k < hmm->M) ? score2ascii(hmm->isc[x][k]) : "*");
       fputs("\n", fp);
 				/* Line 3: transition probs; begin, end */
       fprintf(fp, "       ");
       for (ts = 0; ts < 7; ts++)
-	fprintf(fp, "%6s ", (k < hmm->M) ? score2ascii(p7lom->tsc[ts][k]) : "*"); 
-      fprintf(fp, "%6s ", score2ascii(p7lom->bsc[k]));
-      fprintf(fp, "%6s ", score2ascii(p7lom->esc[k]));
+	fprintf(fp, "%6s ", (k < hmm->M) ? score2ascii(hmm->tsc[ts][k]) : "*"); 
+      fprintf(fp, "%6s ", score2ascii(hmm->bsc[k]));
+      fprintf(fp, "%6s ", score2ascii(hmm->esc[k]));
       fputs("\n", fp);
     }
-  fprintf(fp, "E: %6s ", score2ascii(p7lom->xsc[XTE][MOVE]));
-  fprintf(fp, "%6s\n",   score2ascii(p7lom->xsc[XTE][LOOP])); 
+  fprintf(fp, "E: %6s ", score2ascii(hmm->xsc[XTE][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTE][LOOP])); 
 
-  fprintf(fp, "J: %6s ", score2ascii(p7lom->xsc[XTJ][MOVE]));
-  fprintf(fp, "%6s\n",   score2ascii(p7lom->xsc[XTJ][LOOP])); 
+  fprintf(fp, "J: %6s ", score2ascii(hmm->xsc[XTJ][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTJ][LOOP])); 
 
-  fprintf(fp, "C: %6s ", score2ascii(p7lom->xsc[XTC][MOVE]));
-  fprintf(fp, "%6s\n",   score2ascii(p7lom->xsc[XTC][LOOP])); 
+  fprintf(fp, "C: %6s ", score2ascii(hmm->xsc[XTC][MOVE]));
+  fprintf(fp, "%6s\n",   score2ascii(hmm->xsc[XTC][LOOP])); 
 
   fputs("//\n", fp);
 }

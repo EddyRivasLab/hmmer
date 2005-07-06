@@ -9,56 +9,6 @@
 
 #include "customstructs.h"
 
-/* Structure: p7logodds_s
- * Date:      CRS, 11 June 2005 [Jeremy Buhler's student, St. Louis]
- *
- * Purpose:   Some implementations may wish to customize the logodds 
- *            structure in order to improve the performance of functions
- *            like Logoddsify() and Viterbi().  We allow for this by 
- *	      delcaring a structure called logodds_s, and we require each 
- *	      implementation to provide its own definition of this structure.  
- *	      (Which could actually be empty).  There are places in the 
- *	      non-implementation-code, though, where the logodds information 
- *	      is also used.  We need a way to access this information, but we 
- *	      can't make assumptions about the way the logodds_s structure 
- *	      looks, because then it wouldn't be (completely) customizable, 
- *	      and would thus defeat the whole purpose of creating it.  
- *	      Instead, we create an additional structure called p7logodds_s.
- *	      We know what this structure looks like, so this is the structure
- *	      we refer to in the non-implementation-specific code.
- *	      
- * Declaration of the default form of the log odds model of the profile-HMM
- */
-struct p7logodds_s {
-  /* The model in log-odds score form.
-   * These are created from the probabilities by LogoddsifyHMM().
-   * By definition, null[] emission scores are all zero.
-   * Note that emission distributions are over 26 upper-case letters,
-   * not just the unambiguous protein or DNA alphabet: we
-   * precalculate the scores for all IUPAC degenerate symbols we
-   * may see. Non-IUPAC symbols simply have a -INFTY score.
-   *
-   * Note the reversed indexing on msc, isc, tsc -- for efficiency reasons.
-   * They're not probability vectors any more so we can reorder them
-   * without wildly complicating our life.
-   * 
-   * The _mem ptrs are where the real memory is alloc'ed and free'd,
-   * as opposed to where it is accessed.
-   * This came in with Erik Lindahl's altivec port; it allows alignment on
-   * 16-byte boundaries. In the non-altivec code, this is just a little
-   * redundancy; tsc and tsc_mem point to the same thing, for example.
-   * 
-   * Only valid if PLAN7_HASBITS is set.
-   */
-  int  **tsc;                   /* transition scores     [0.6][1.M-1]       -*/
-  int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] -*/
-  int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] -*/
-  int    xsc[4][2];             /* N,E,C,J transitions                      -*/
-  int   *bsc;                   /* begin transitions     [1.M]              -*/
-  int   *esc;			/* end transitions       [1.M]              -*/
-  /* int  *tsc_mem, *msc_mem, *isc_mem, *bsc_mem, *esc_mem; */
-};
-
 /* Plan 7 algorithm modes
  */
 enum p7_algmode {
@@ -179,6 +129,32 @@ struct plan7_s {
   float   xt[4][2];             /* N,E,C,J extra states: 2 transitions        +*/
   float  *begin;                /* 1..M B->M state transitions                +*/
   float  *end;                  /* 1..M M->E state transitions (!= a dist!)   +*/
+  /* The model's log-odds score form: xref modelconfig.c
+   *
+   * Note that emission distributions are over possible alphabet
+   * symbols, not just the unambiguous protein or DNA alphabet: we
+   * precalculate the scores for all IUPAC degenerate symbols we may
+   * see.
+   *
+   * Note the reversed indexing on msc, isc, tsc -- for efficiency
+   * reasons. They're not probability vectors, so we can reorder them.
+   * 
+   * The _mem ptrs are where the real memory is alloc'ed and free'd,
+   * as opposed to where it is accessed.  This came in with Erik
+   * Lindahl's altivec port; it allows alignment on 16-byte
+   * boundaries. In the non-altivec code, this is just a little
+   * redundancy; tsc and tsc_mem point to the same thing, for example.
+   * 
+   * PLAN7_HASBITS flag is up when these scores are valid.
+   */
+  enum p7_algmode mode;		/* configured algorithm mode  */
+  int  **tsc;                   /* transition scores     [0.6][1.M-1]       +*/
+  int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] +*/
+  int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] +*/
+  int    xsc[4][2];             /* N,E,C,J transitions                      +*/
+  int   *bsc;                   /* begin transitions     [1.M]              +*/
+  int   *esc;			/* end transitions       [1.M]              +*/
+  int   *tsc_mem, *msc_mem, *isc_mem, *bsc_mem, *esc_mem;
 
   /* Annotation on the model. A name is mandatory.
    * Other fields are optional; whether they are present is
@@ -251,8 +227,6 @@ struct plan7_s {
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
 
-  enum p7_algmode mode;		/* configured algorithm mode  */
-  struct p7logodds_s *p7lom;    /* the default logodds form of the hmm */
   struct logodds_s *lom;        /* a customized logodds form of the hmm */
 };
 
