@@ -1,19 +1,5 @@
+#include "funcs.h"
 #include "structs.h"
-
-/*
- * We have to have to provide a declaration for this function for the
- * the code to compile, the fast version currently doesn't optimize this
- * function, so we just need to call the default P7Logoddsify().  We can't
- * call that function directly, howwever, since the memory for it probably 
- * hasn't been allocated yet.  Instead, we just dispatch back to  
- * REQUIRE_P7LOGODDS, which will allocate the memory for us, and then call 
- * P7Logoddsify().  We inline this function to avoid paying a performance 
- * penalty for making a useless function call. - CRS 21 June 2005
- */
-inline void
-Logoddsify(struct plan7_s *hmm){
-  REQUIRE_P7LOGODDS(hmm);
-}
 
 /* the DEFAULT Viterbi() is portably optimized; code follows:
  */
@@ -59,7 +45,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   
   /* Make sure we have space for a DP matrix with 0..L rows, 0..M-1 columns.
    */ 
-  ResizePlan7Matrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
+  ResizeDPMatrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
 
   /* Initialization of the zero row.
    */

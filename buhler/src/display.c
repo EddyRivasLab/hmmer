@@ -93,12 +93,8 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
   int* max;
   int* on;
   char state;
-  struct p7logodds_s *p7lom;
 
-  REQUIRE_P7LOGODDS(hmm);
-  p7lom = hmm->p7lom;
-
-  sc = forward->xmx[L][XMC] + p7lom->xsc[XTC][MOVE];     /* total Forward score */
+  sc = forward->xmx[L][XMC] + hmm->xsc[XTC][MOVE];     /* total Forward score */
 
   min = (int*) calloc (A, sizeof(int));
   max = (int*) calloc (A, sizeof(int));
@@ -141,32 +137,32 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 		case STM:
 		  if (i<L && k<hmm->M)
 		    PrintTransition (STM,i,k, STM,i+1,k+1,
-				     forward->mmx[i][k] + p7lom->tsc[TMM][k] + backward->mmx[i+1][k+1] - sc,
+				     forward->mmx[i][k] + hmm->tsc[TMM][k] + backward->mmx[i+1][k+1] - sc,
 				     alignment, min, max, on, A);
 
 		  if (i<L && k<hmm->M)
 		    PrintTransition (STM,i,k, STI,i+1,k,
-				     forward->mmx[i][k] + p7lom->tsc[TMI][k] + backward->imx[i+1][k] - sc,
+				     forward->mmx[i][k] + hmm->tsc[TMI][k] + backward->imx[i+1][k] - sc,
 				     alignment, min, max, on, A);
 
 		  if (k<hmm->M-1)
 		    PrintTransition (STM,i,k, STD,i,k+1,
-				     forward->mmx[i][k] + p7lom->tsc[TMD][k] + backward->dmx[i][k+1] - sc,
+				     forward->mmx[i][k] + hmm->tsc[TMD][k] + backward->dmx[i][k+1] - sc,
 				     alignment, min, max, on, A);
 		  
 		  PrintTransition (STM,i,k, STE,i,0,
-				   forward->mmx[i][k] + p7lom->esc[k] + backward->xmx[i][XME] - sc,
+				   forward->mmx[i][k] + hmm->esc[k] + backward->xmx[i][XME] - sc,
 				   alignment, min, max, on, A);
 		  break;
 
 		case STD:
 		  if (i<L)
 		    PrintTransition (STD,i,k, STM,i+1,k+1,
-				     forward->dmx[i][k] + p7lom->tsc[TDM][k] + backward->mmx[i+1][k+1] - sc,
+				     forward->dmx[i][k] + hmm->tsc[TDM][k] + backward->mmx[i+1][k+1] - sc,
 				     alignment, min, max, on, A);
 
 		  PrintTransition (STD,i,k, STD,i,k+1,
-				   forward->dmx[i][k] + p7lom->tsc[TDD][k] + backward->dmx[i][k+1] - sc,
+				   forward->dmx[i][k] + hmm->tsc[TDD][k] + backward->dmx[i][k+1] - sc,
 				   alignment, min, max, on, A);
 
 		  break;
@@ -174,12 +170,12 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 		case STI:
 		  if (i<L)
 		    PrintTransition (STI,i,k, STM,i+1,k+1,
-				     forward->imx[i][k] + p7lom->tsc[TIM][k] + backward->mmx[i+1][k+1] - sc,
+				     forward->imx[i][k] + hmm->tsc[TIM][k] + backward->mmx[i+1][k+1] - sc,
 				     alignment, min, max, on, A);
 
 		  if (i<L)
 		    PrintTransition (STI,i,k, STI,i+1,k,
-				     forward->imx[i][k] + p7lom->tsc[TII][k] + backward->imx[i+1][k] - sc,
+				     forward->imx[i][k] + hmm->tsc[TII][k] + backward->imx[i+1][k] - sc,
 				     alignment, min, max, on, A);
 
 		  break;
@@ -187,7 +183,7 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 		case STB:
 		  if (i<L)
 		    PrintTransition (STB,i,0, STM,i+1,k,
-				     forward->xmx[i][XMB] + p7lom->bsc[k] + backward->mmx[i+1][k] - sc,
+				     forward->xmx[i][XMB] + hmm->bsc[k] + backward->mmx[i+1][k] - sc,
 				     alignment, min, max, on, A);
 		  break;
 		  
@@ -201,44 +197,44 @@ void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
 	    {
 	    case STN:
 	      PrintTransition (STN,i,0, STB,i,0,
-			       forward->xmx[i][XMN] + p7lom->xsc[XTN][MOVE] + backward->xmx[i][XMB] - sc,
+			       forward->xmx[i][XMN] + hmm->xsc[XTN][MOVE] + backward->xmx[i][XMB] - sc,
 			       alignment, min, max, on, A);
 	      
 	      if (i<L)
 		PrintTransition (STN,i,0, STN,i+1,0,
-				 forward->xmx[i][XMN] + p7lom->xsc[XTN][LOOP] + backward->xmx[i+1][XMN] - sc,
+				 forward->xmx[i][XMN] + hmm->xsc[XTN][LOOP] + backward->xmx[i+1][XMN] - sc,
 				 alignment, min, max, on, A);
 	      break;
 
 	    case STJ:
 	      PrintTransition (STJ,i,0, STB,i,0,
-			       forward->xmx[i][XMJ] + p7lom->xsc[XTJ][MOVE] + backward->xmx[i][XMB] - sc,
+			       forward->xmx[i][XMJ] + hmm->xsc[XTJ][MOVE] + backward->xmx[i][XMB] - sc,
 			       alignment, min, max, on, A);
 	      
 	      if (i<L)
 		PrintTransition (STJ,i,0, STJ,i+1,0,
-				 forward->xmx[i][XMJ] + p7lom->xsc[XTJ][LOOP] + backward->xmx[i+1][XMJ] - sc,
+				 forward->xmx[i][XMJ] + hmm->xsc[XTJ][LOOP] + backward->xmx[i+1][XMJ] - sc,
 				 alignment, min, max, on, A);
 	      break;
 
 	    case STC:
 	      PrintTransition (STC,i,0, STT,i,0,
-			       forward->xmx[i][XMC] + p7lom->xsc[XTC][MOVE] - sc,      /* should be 1 */
+			       forward->xmx[i][XMC] + hmm->xsc[XTC][MOVE] - sc,      /* should be 1 */
 			       alignment, min, max, on, A);
 	      
 	      if (i<L)
 		PrintTransition (STC,i,0, STC,i+1,0,
-				 forward->xmx[i][XMC] + p7lom->xsc[XTC][LOOP] + backward->xmx[i+1][XMC] - sc,
+				 forward->xmx[i][XMC] + hmm->xsc[XTC][LOOP] + backward->xmx[i+1][XMC] - sc,
 				 alignment, min, max, on, A);
 	      break;
 
 	    case STE:
 	      PrintTransition (STE,i,0, STC,i,0,
-			       forward->xmx[i][XME] + p7lom->xsc[XTE][MOVE] + backward->xmx[i][XMC] - sc,
+			       forward->xmx[i][XME] + hmm->xsc[XTE][MOVE] + backward->xmx[i][XMC] - sc,
 			       alignment, min, max, on, A);
 	      
 	      PrintTransition (STE,i,0, STJ,i,0,
-			       forward->xmx[i][XME] + p7lom->xsc[XTE][LOOP] + backward->xmx[i][XMJ] - sc,
+			       forward->xmx[i][XME] + hmm->xsc[XTE][LOOP] + backward->xmx[i][XMJ] - sc,
 			       alignment, min, max, on, A);
 	      break;
 	      

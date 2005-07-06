@@ -428,8 +428,8 @@ extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr,
 extern void AllocLogoddsShell(struct plan7_s *hmm);
 extern void AllocLogoddsBody(struct plan7_s *hmm);
 extern void FreeLogodds(struct plan7_s *hmm);
-extern void FillP7Logodds(struct plan7_s *hmm);
-extern void UnfillP7Logodds(struct plan7_s *hmm);
+extern void FillCustomLogodds(struct plan7_s *hmm);
+extern void UnfillCustomLogodds(struct plan7_s *hmm);
 extern struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
 extern void   ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
@@ -446,7 +446,6 @@ extern void  FreeDPMatrix(struct dpmatrix_s *mx);
  * Customized and/or optimized version of the functions in
  * core_algorithms.c
  */
-extern void Logoddsify(struct plan7_s *hmm);
 extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 

@@ -325,7 +325,7 @@ P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s
  *           A scorable trace should not normally include explicit,
  *           full B->DDDD->Mk or Mk->DDDD->E terminal delete
  *           entry/exit paths, because the score model accounts for
- *           these with B->Mk (p7lom->bsc[k]) and Mk->E (p7lom->esc[k])
+ *           these with B->Mk (hmm->bsc[k]) and Mk->E (hmm->esc[k])
  *           internal entry/exit scores. 
  *           
  *           However, at least one case arises where such paths do
@@ -353,8 +353,6 @@ P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr)
   unsigned char sym;		/* digitized symbol in dsq */
   int i;			/* an extra tr position index, for lookahead */
   
-  REQUIRE_P7LOGODDS(hmm);
-
   /*  P7PrintTrace(stdout, tr, hmm, dsq); */
   score = 0;
   for (tpos = 0; tpos < tr->tlen-1; tpos++)
@@ -365,16 +363,16 @@ P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr)
        * Don't bother counting null states N,J,C.
        */
       if (tr->statetype[tpos] == STM) 
-	score += hmm->p7lom->msc[sym][tr->nodeidx[tpos]];
+	score += hmm->msc[sym][tr->nodeidx[tpos]];
       else if (tr->statetype[tpos] == STI) 
-	score += hmm->p7lom->isc[sym][tr->nodeidx[tpos]];
+	score += hmm->isc[sym][tr->nodeidx[tpos]];
 
       /* State transitions.
        */			/* watch for internal entries.... */
       if (tr->statetype[tpos] == STB && tr->statetype[tpos+1] == STD)
 	{
 	  while (tr->statetype[tpos+1] == STD) tpos++;  /* find first Mk */
-	  score += hmm->p7lom->bsc[tr->nodeidx[tpos+1]];	/* score B->Mk */
+	  score += hmm->bsc[tr->nodeidx[tpos+1]];	/* score B->Mk */
 	  continue;
 	}
                                 /* watch out for internal exits */
@@ -385,7 +383,7 @@ P7TraceScore(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr)
 	  if (tr->statetype[i+1] == STE) /* if it's there, score as Mk->E */
 	    {
 	      tpos = i;
-	      score += hmm->p7lom->esc[tr->nodeidx[tpos]];
+	      score += hmm->esc[tr->nodeidx[tpos]];
 	      continue;
 	    }
 	  /* and if not, fall through to transition score lookup for M->D */
@@ -637,69 +635,64 @@ int
 TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1, 
 		      char st2, int k2)
 {
-  struct p7logodds_s *p7lom;
-
-  REQUIRE_P7LOGODDS(hmm);
-  p7lom = hmm->p7lom;
-
   switch (st1) {
   case STS: return 0;	/* S never pays */
   case STN:
     switch (st2) {
-    case STB: return p7lom->xsc[XTN][MOVE]; 
-    case STN: return p7lom->xsc[XTN][LOOP]; 
+    case STB: return hmm->xsc[XTN][MOVE]; 
+    case STN: return hmm->xsc[XTN][LOOP]; 
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STB:
     switch (st2) {
-    case STM: return p7lom->bsc[k2]; 
+    case STM: return hmm->bsc[k2]; 
     case STD: Die("B->D transition doesn't happen in a scoring model.");
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STM:
     switch (st2) {
-    case STM: return p7lom->tsc[TMM][k1];
-    case STI: return p7lom->tsc[TMI][k1];
-    case STD: return p7lom->tsc[TMD][k1];
-    case STE: return p7lom->esc[k1];
+    case STM: return hmm->tsc[TMM][k1];
+    case STI: return hmm->tsc[TMI][k1];
+    case STD: return hmm->tsc[TMD][k1];
+    case STE: return hmm->esc[k1];
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STI:
     switch (st2) {
-    case STM: return p7lom->tsc[TIM][k1];
-    case STI: return p7lom->tsc[TII][k1];
+    case STM: return hmm->tsc[TIM][k1];
+    case STI: return hmm->tsc[TII][k1];
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STD:
     switch (st2) {
-    case STM: return p7lom->tsc[TDM][k1]; 
-    case STD: return p7lom->tsc[TDD][k1];
+    case STM: return hmm->tsc[TDM][k1]; 
+    case STD: return hmm->tsc[TDD][k1];
     case STE: Die("D->E transition doesn't happen in a scoring model.");
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STE:
     switch (st2) {
-    case STC: return p7lom->xsc[XTE][MOVE]; 
-    case STJ: return p7lom->xsc[XTE][LOOP]; 
+    case STC: return hmm->xsc[XTE][MOVE]; 
+    case STJ: return hmm->xsc[XTE][LOOP]; 
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STJ:
     switch (st2) {
-    case STB: return p7lom->xsc[XTJ][MOVE]; 
-    case STJ: return p7lom->xsc[XTJ][LOOP]; 
+    case STB: return hmm->xsc[XTJ][MOVE]; 
+    case STJ: return hmm->xsc[XTJ][LOOP]; 
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
   case STC:
     switch (st2) {
-    case STT: return p7lom->xsc[XTC][MOVE]; 
-    case STC: return p7lom->xsc[XTC][LOOP]; 
+    case STT: return hmm->xsc[XTC][MOVE]; 
+    case STC: return hmm->xsc[XTC][LOOP]; 
     default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
     }
     break;
@@ -735,8 +728,6 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
   int   tpos;			/* position in trace and alignment    */
   int   bestsym;		/* index of best symbol at this pos   */
   float mthresh;		/* above this P(x), display uppercase */
-
-  REQUIRE_P7LOGODDS(hmm);
 
   /* Allocate and initialize the five lines of display
    */
@@ -822,7 +813,7 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
 	  if (hmm->mat[tr->nodeidx[tpos]][bestsym] < mthresh)
 	    ali->mline[tpos] = tolower(ali->mline[tpos]);
 	}
-      else if (hmm->p7lom->msc[dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
+      else if (hmm->msc[dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
 	ali->mline[tpos] = '+';
       ali->aseq[tpos]  = Alphabet[dsq[tr->pos[tpos]]];
       break;
@@ -839,7 +830,7 @@ CreateFancyAli(struct p7trace_s *tr, struct plan7_s *hmm,
 
     case STI:
       ali->model[tpos] = '.';
-      if (hmm->p7lom->isc[dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
+      if (hmm->isc[dsq[tr->pos[tpos]]] [tr->nodeidx[tpos]] > 0)
 	ali->mline[tpos] = '+';
       ali->aseq[tpos]  = (char) tolower((int) Alphabet[dsq[tr->pos[tpos]]]);
       break;
@@ -1375,8 +1366,6 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char 
   int          sc;
   int          i;
 
-  REQUIRE_P7LOGODDS(hmm);
-
   if (tr == NULL) {
     fprintf(fp, " [ trace is NULL ]\n");
     return;
@@ -1420,7 +1409,7 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char 
 		  Statetype(tr->statetype[tpos]), /* D */
 		  tr->nodeidx[tpos],              /* k-1 */
 		  tr->pos[tpos],                  /* 0 */
-		  hmm->p7lom->bsc[tr->nodeidx[tpos+1]]);
+		  hmm->bsc[tr->nodeidx[tpos+1]]);
 	  continue;
 	}
       
@@ -1436,7 +1425,7 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char 
 		      Statetype(tr->statetype[tpos]), /* M */
 		      tr->nodeidx[tpos],              /* k */
 		      tr->pos[tpos],                  /* whatever */
-		      hmm->p7lom->esc[tr->nodeidx[tpos]]);   /* Mk->E */
+		      hmm->esc[tr->nodeidx[tpos]]);   /* Mk->E */
 	      while (++tpos <= i) 
 		fprintf(fp, "%1s  %4d %6d  *", 
 			Statetype(tr->statetype[tpos]),     
@@ -1461,15 +1450,15 @@ P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char 
       if (dsq != NULL) {
 	if (tr->statetype[tpos] == STM)  
 	  {
-	    fprintf(fp, " %8d %c", hmm->p7lom->msc[sym][tr->nodeidx[tpos]], 
+	    fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
 		    Alphabet[sym]);
-	    sc += hmm->p7lom->msc[sym][tr->nodeidx[tpos]];
+	    sc += hmm->msc[sym][tr->nodeidx[tpos]];
 	  }
 	else if (tr->statetype[tpos] == STI) 
 	  {
-	    fprintf(fp, " %8d %c", hmm->p7lom->isc[sym][tr->nodeidx[tpos]], 
+	    fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
 		    (char) tolower((int) Alphabet[sym]));
-	    sc += hmm->p7lom->isc[sym][tr->nodeidx[tpos]];
+	    sc += hmm->isc[sym][tr->nodeidx[tpos]];
 	  }
 	else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
 		 (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
