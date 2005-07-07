@@ -538,7 +538,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
       dsq = DigitizeSequence(seq, L);
       
       if (P7ViterbiSpaceOK(L, hmm->M, mx))
-          score = P7Viterbi(dsq, L, hmm, mx, &tr);
+          score = Viterbi(dsq, L, hmm, mx, &tr);
       else
           score = P7SmallViterbi(dsq, L, hmm, mx, &tr);
 
@@ -787,7 +787,7 @@ worker_thread(void *ptr)
        */
       dsq = DigitizeSequence(seq, len);
       if (P7ViterbiSpaceOK(len, hmm->M, mx))
-          sc = P7Viterbi(dsq, len, hmm, mx, &tr);
+          sc = Viterbi(dsq, len, hmm, mx, &tr);
       else
           sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
       

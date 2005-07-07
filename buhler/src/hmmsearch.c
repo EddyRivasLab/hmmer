@@ -607,7 +607,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
           if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
           {    
               /* Slower altivec */
-              sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+              sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
           }
           else
           {
@@ -637,7 +637,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 
       if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
       {
-          sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+          sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
       }
       else
       {
@@ -661,7 +661,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
               {
                   if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
                   {
-                      sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+                      sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
                   }
                   else
                   {
@@ -694,7 +694,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
           {
               if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
               {
-                  sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+                  sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
               }
               else
               {
@@ -1219,7 +1219,7 @@ worker_thread(void *ptr)
         /* Need the trace, first check space */
         if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
         {
-            sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+            sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
         }
         else
         {
@@ -1248,7 +1248,7 @@ worker_thread(void *ptr)
 
     if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
     {
-        sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+        sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
     }
     else
     {
@@ -1272,7 +1272,7 @@ worker_thread(void *ptr)
             {
                 if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
                 {
-                    sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+                    sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
                 }
                 else
                 {
@@ -1301,7 +1301,7 @@ worker_thread(void *ptr)
         {
             if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
             {
-                sc = P7Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
+                sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
             }
             else
             {

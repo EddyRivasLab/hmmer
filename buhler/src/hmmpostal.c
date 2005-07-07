@@ -492,7 +492,7 @@ main(int argc, char **argv)
       if (tr[idx]) P7FreeTrace (tr[idx]);
 
       if (P7ViterbiSize(len, hmm->M) * 3 <= RAMLIMIT)
-	(void) P7Viterbi(dsq[idx], len, hmm, &(tr[idx]));
+	(void) Viterbi(dsq[idx], len, hmm, &(tr[idx]));
       else
 	(void) P7SmallViterbi(dsq[idx], len, hmm, &(tr[idx]));
 
