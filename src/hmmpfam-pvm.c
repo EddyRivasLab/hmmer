@@ -172,7 +172,7 @@ main(void)
           if (P7ViterbiSpaceOK(len, hmm->M, mx))
           {
               /* Slower altivec version */
-              sc = P7Viterbi(dsq, len, hmm, mx, &tr);
+              sc = Viterbi(dsq, len, hmm, mx, &tr);
           }
           else
           {
@@ -192,7 +192,7 @@ main(void)
       if (P7ViterbiSpaceOK(len, hmm->M, mx))
       {
           SQD_DPRINTF1(("P7Viterbi(): Estimated size %d Mb\n", P7ViterbiSize(len, hmm->M)));
-          sc = P7Viterbi(dsq, len, hmm, mx, &tr);
+          sc = Viterbi(dsq, len, hmm, mx, &tr);
       }
       else
       {
@@ -217,7 +217,7 @@ main(void)
                   if (P7ViterbiSpaceOK(len, hmm->M, mx))
                   {
                       /* Slower altivec version */
-                      P7Viterbi(dsq, len, hmm, mx, &tr);
+                      Viterbi(dsq, len, hmm, mx, &tr);
                   }
                   else
                   {
@@ -250,7 +250,7 @@ main(void)
               if (P7ViterbiSpaceOK(len, hmm->M, mx))
               {
                   /* Slower altivec version */
-                  P7Viterbi(dsq, len, hmm, mx, &tr);
+                  Viterbi(dsq, len, hmm, mx, &tr);
               }
               else
               {

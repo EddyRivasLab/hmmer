@@ -129,7 +129,7 @@ main(void)
 	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, L, seq));
 
 	  if (P7ViterbiSpaceOK(L, hmm->M, mx))
-	    sc[idx] = P7Viterbi(dsq, L, hmm, mx, &tr);
+	    sc[idx] = Viterbi(dsq, L, hmm, mx, &tr);
 	  else
 	    sc[idx] = P7SmallViterbi(dsq, L, hmm, mx, &tr);
 	  TraceGetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL, &(alen[idx]));

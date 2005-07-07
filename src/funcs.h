@@ -54,8 +54,8 @@ extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
 extern float P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			  struct dpmatrix_s **ret_mx);
-extern float P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
-			  struct p7trace_s **ret_tr);
+/*extern float P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
+  struct p7trace_s **ret_tr);*/
 extern float P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm,
 			      struct dpmatrix_s *mx);
 extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int L,

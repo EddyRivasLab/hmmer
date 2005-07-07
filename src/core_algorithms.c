@@ -790,7 +790,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
 	{
 	  SQD_DPRINTF1(("      -- using P7Viterbi on an %dx%d subproblem\n",
 			hmm->M, sqlen));
-	  P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
+	  Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
 	}
       else if (sqlen == 1)
 	{			/* xref bug#h30. P7WeeViterbi() can't take L=1. This
@@ -801,7 +801,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
 	  SQD_DPRINTF1(("      -- using P7Viterbi on %dx%d subproblem that P7WeeV should get\n",
 			hmm->M, sqlen));
 	  tiny = CreateDPMatrix(1, hmm->M, 0, 0);
-	  P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, tiny, &(tarr[i]));
+	  Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, tiny, &(tarr[i]));
 	  FreeDPMatrix(tiny);
 	}
       else

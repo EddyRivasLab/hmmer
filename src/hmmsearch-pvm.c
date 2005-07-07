@@ -121,7 +121,7 @@ main(void)
           /* Need the trace - first check space */
           if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
           {
-              sc = P7Viterbi(dsq, L, hmm, mx, &tr);
+              sc = Viterbi(dsq, L, hmm, mx, &tr);
           }
           else
           {
@@ -151,7 +151,7 @@ main(void)
       if (P7ViterbiSpaceOK(L, hmm->M, mx))
       {
           SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-          sc = P7Viterbi(dsq, L, hmm, mx, &tr);
+          sc = Viterbi(dsq, L, hmm, mx, &tr);
       }
       else
       {
@@ -172,7 +172,7 @@ main(void)
               {
                   if (P7ViterbiSpaceOK(L, hmm->M, mx))
                   {
-                      P7Viterbi(dsq, L, hmm, mx, &tr);
+                      Viterbi(dsq, L, hmm, mx, &tr);
                   }
                   else
                   {
@@ -204,7 +204,7 @@ main(void)
           {
               if (P7ViterbiSpaceOK(L, hmm->M, mx))
               {
-                  P7Viterbi(dsq, L, hmm, mx, &tr);
+                  Viterbi(dsq, L, hmm, mx, &tr);
               }
               else
               {
