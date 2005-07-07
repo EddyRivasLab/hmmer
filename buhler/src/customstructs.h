@@ -8,7 +8,7 @@
 #include "defaultstructs.h"
 #endif
 #ifdef ALTIVEC
-#include "defaultstructs.h"
+#include "altivecstructs.h"
 #endif
 
 #endif /*LOCALSTRUCTSH_INCLUDED*/

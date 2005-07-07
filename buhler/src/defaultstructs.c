@@ -52,19 +52,34 @@ CreateDPMatrix(int N, int M, int padN, int padM)
   mx->mmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->imx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->dmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
-  mx->xmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
-  mx->mmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
-  mx->imx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
-  mx->dmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  
+  /*
+   * Note: I am commenting out or replacing the lines with the *_mem pointers,
+   *       since the default implementation doesn't actually use them.  As 
+   *       noted below, they existed for the altivec implementation, but this
+   *       is now acheived by taking advantage of the new architecture.
+   *        - CRS 6 July 2005
+   mx->xmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
+   mx->mmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+   mx->imx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+   mx->dmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
 
-  /* The indirect assignment below looks wasteful; it's actually
+   /\* The indirect assignment below looks wasteful; it's actually
    * used for aligning data on 16-byte boundaries as a cache 
    * optimization in the fast altivec implementation
+   *\/
+   mx->xmx[0] = (int *) mx->xmx_mem;
+   mx->mmx[0] = (int *) mx->mmx_mem;
+   mx->imx[0] = (int *) mx->imx_mem;
+   mx->dmx[0] = (int *) mx->dmx_mem;
+   *
    */
-  mx->xmx[0] = (int *) mx->xmx_mem;
-  mx->mmx[0] = (int *) mx->mmx_mem;
-  mx->imx[0] = (int *) mx->imx_mem;
-  mx->dmx[0] = (int *) mx->dmx_mem;
+
+  mx->xmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
+  mx->mmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  mx->imx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  mx->dmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+
   for (i = 1; i <= N; i++)
     {
       mx->xmx[i] = mx->xmx[0] + (i*5); 
@@ -140,15 +155,25 @@ ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M,
     mx->maxM = M; 
   }
 
-  mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((mx->maxN+1)*5));
-  mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
-  mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
-  mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  /* 
+   *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
+   *
+   mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((mx->maxN+1)*5));
+   mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+   mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+   mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
 
-  mx->xmx[0] = (int *) mx->xmx_mem;
-  mx->mmx[0] = (int *) mx->mmx_mem;
-  mx->imx[0] = (int *) mx->imx_mem;
-  mx->dmx[0] = (int *) mx->dmx_mem;
+   mx->xmx[0] = (int *) mx->xmx_mem;
+   mx->mmx[0] = (int *) mx->mmx_mem;
+   mx->imx[0] = (int *) mx->imx_mem;
+   mx->dmx[0] = (int *) mx->dmx_mem;
+   *
+   */
+
+  mx->xmx[0] = (void *) ReallocOrDie (mx->xmx[0], sizeof(int) * ((mx->maxN+1)*5));
+  mx->mmx[0] = (void *) ReallocOrDie (mx->mmx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  mx->imx[0] = (void *) ReallocOrDie (mx->imx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  mx->dmx[0] = (void *) ReallocOrDie (mx->dmx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
 
   for (i = 1; i <= mx->maxN; i++)
     {
@@ -218,10 +243,19 @@ AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
 void
 FreeDPMatrix(struct dpmatrix_s *mx)
 {
-  free (mx->xmx_mem);
-  free (mx->mmx_mem);
-  free (mx->imx_mem);
-  free (mx->dmx_mem);
+  /* 
+   *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
+   *
+   free (mx->xmx_mem);
+   free (mx->mmx_mem);
+   free (mx->imx_mem);
+   free (mx->dmx_mem);
+   *
+   */
+  free (mx->xmx[0]);
+  free (mx->mmx[0]);
+  free (mx->imx[0]);
+  free (mx->dmx[0]);
   free (mx->xmx);
   free (mx->mmx);
   free (mx->imx);
