@@ -32,7 +32,7 @@ struct dpmatrix_s {
    *
    */   
 
-  int *  workspace;      /* Workspace for altivec (aligned ptr)    */
+  /*  int *  workspace;      /\* Workspace for altivec (aligned ptr)    *\/ */
   /*  int *  workspace_mem;  /\* Actual allocated pointer for workspace *\/ */
   
   /* The other trick brought in w/ the Lindahl Altivec port; dp matrix
