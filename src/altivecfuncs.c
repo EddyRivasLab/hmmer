@@ -127,7 +127,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
     mask4 = vec_sld(mask1,mask1,4);
     
     /* Make sure our DP matrix has 0..L rows, 0..M columns; grow it if needed. */
-    ResizePlan7Matrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
+    ResizeDPMatrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
     
     /* Initialization of the zero row. */
     xmx[0][XMN] = 0;		                     /* S->N, p=1            */

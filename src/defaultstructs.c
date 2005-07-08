@@ -6,7 +6,7 @@
  *        still have to provide them, however, for the program to
  *        compile successfully.  - CRS 20 June 2005
  */
-inline void AllocLogoddsShell(struct plan7_s *hmm){}
+inline void AllocLogoddsShell(struct plan7_s *hmm){ hmm->lom = NULL; }
 inline void AllocLogoddsBody(struct plan7_s *hmm){}
 inline void FreeLogodds(struct plan7_s *hmm){}
 inline void FillCustomLogodds(struct plan7_s *hmm){}
