@@ -1,6 +1,12 @@
+#include "config.h"
+#include "squidconf.h"
+
 #include "structs.h"
 #include "funcs.h"
 
+#if (defined __GNUC__) && (defined __APPLE__)
+#include <ppc_intrinsics.h>
+#endif
 
 /* Echo a message about Altivec being used once: 
  *   (1) Confirm that the Altivec kernel is indeed being used
