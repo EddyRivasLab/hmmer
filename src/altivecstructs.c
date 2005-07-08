@@ -126,7 +126,7 @@ void FillCustomLogodds(struct plan7_s *hmm){
  *           padM  - over-realloc in HMM/column dimension, or 0
  *                 
  * Return:   mx
- *           mx is allocated here. Caller frees with FreePlan7Matrix(mx).
+ *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
  */
 struct dpmatrix_s *
 CreateDPMatrix(int N, int M, int padN, int padM)
@@ -322,7 +322,7 @@ AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
  * !!UNRESOLVED!! - Adding redundancy again.  Is there a better way to do
  *                  this?  - CRS 21 June 2005
  * 
- * Purpose:  Free a dynamic programming matrix allocated by CreatePlan7Matrix().
+ * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
  * 
  * Return:   (void)
  */

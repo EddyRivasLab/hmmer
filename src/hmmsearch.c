@@ -1176,7 +1176,7 @@ worker_thread(void *ptr)
   /* Init with a small DP matrix; we'll grow in the sequence dimension
    * overalloc'ing by 25 rows (residues).
    */
-  mx = CreatePlan7Matrix(1, wpool->hmm->M, 25, 0);
+  mx = CreateDPMatrix(1, wpool->hmm->M, 25, 0);
   for (;;) {
 
     /* 1. acquire lock on sequence input, and get
@@ -1189,7 +1189,7 @@ worker_thread(void *ptr)
       {	/* we're done. release lock, exit thread */
 	if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
 	  Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
-	FreePlan7Matrix(mx);
+	FreeDPMatrix(mx);
 	pthread_exit(NULL);
       }
     SQD_DPRINTF1(("a thread is working on %s\n", sqinfo.name));

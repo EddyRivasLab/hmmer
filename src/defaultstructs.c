@@ -39,7 +39,7 @@ inline void FillCustomLogodds(struct plan7_s *hmm){}
  *           padM  - over-realloc in HMM/column dimension, or 0
  *                 
  * Return:   mx
- *           mx is allocated here. Caller frees with FreePlan7Matrix(mx).
+ *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
  */
 struct dpmatrix_s *
 CreateDPMatrix(int N, int M, int padN, int padM)
@@ -215,7 +215,7 @@ ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M,
  *                 - RETURN: ptrs to four mx components as a convenience
  *
  * Returns:  mx
- *           Caller free's w/ FreePlan7Matrix()
+ *           Caller free's w/ FreeDPMatrix()
  */
 struct dpmatrix_s *
 AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
@@ -236,7 +236,7 @@ AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
  *           but was moved here to match the new architecture.
  *             - CRS 21 June 2005
  * 
- * Purpose:  Free a dynamic programming matrix allocated by CreatePlan7Matrix().
+ * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
  * 
  * Return:   (void)
  */

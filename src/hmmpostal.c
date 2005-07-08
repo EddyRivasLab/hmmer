@@ -511,8 +511,8 @@ main(int argc, char **argv)
       (void) P7FillOptimalAccuracy (len, hmm->M, posterior_mx,
 				    optacc_mx, &(tr[idx]));
 
-      FreePlan7Matrix (posterior_mx);
-      FreePlan7Matrix (optacc_mx);
+      FreeDPMatrix (posterior_mx);
+      FreeDPMatrix (optacc_mx);
       
     }
 
@@ -529,8 +529,8 @@ main(int argc, char **argv)
 			   &(tr[idx]), 1);
     */
 
-    FreePlan7Matrix (backward_mx);
-    FreePlan7Matrix (forward_mx);
+    FreeDPMatrix (backward_mx);
+    FreeDPMatrix (forward_mx);
     
   }
 
