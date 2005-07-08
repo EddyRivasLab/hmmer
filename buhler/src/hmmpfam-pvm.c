@@ -112,7 +112,7 @@ main(void)
    * we're going to be calling P7Viterbi on subpieces that vary in size,
    * and for different models.
    */
-  mx = CreatePlan7Matrix(300, 300, 25, 25);
+  mx = CreateDPMatrix(300, 300, 25, 25);
 
   dsq = DigitizeSequence(seq, len);
   if (do_xnu) XNU(dsq, len);
@@ -279,7 +279,7 @@ main(void)
    ***********************************************/
 
   HMMFileClose(hmmfp);
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   free(seq);
   free(dsq);
   free(hmmfile);

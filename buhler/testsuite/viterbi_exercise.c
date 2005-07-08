@@ -120,7 +120,7 @@ main(int argc, char **argv)
       default: Die("never happens");
       }
       
-      mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+      mx = CreateDPMatrix(1, hmm->M, 25, 0);
       for (i = 0; i < nseq; i++)
 	{
 	  EmitSequence(hmm, &dsq, &L, NULL);
@@ -164,7 +164,7 @@ main(int argc, char **argv)
 	  P7FreeTrace(tr2);
 	  free(dsq);
 	}
-      FreePlan7Matrix(mx);
+      FreeDPMatrix(mx);
     }
 
   FreePlan7(hmm);

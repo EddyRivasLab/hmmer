@@ -114,7 +114,7 @@ main(int argc, char **argv)
    ***********************************************/
 
   nseq = 0;
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx = CreateDPMatrix(1, hmm->M, 25, 0);
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
     {
       nseq++;
@@ -164,7 +164,7 @@ main(int argc, char **argv)
       free(dsq);
     }
 
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   FreePlan7(hmm);
   HMMFileClose(hmmfp);
   SeqfileClose(sqfp);

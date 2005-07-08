@@ -681,7 +681,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
      * spending 30% of the runtime allocating/freeing memory.
      * Provide a pointer to a dpmatrix_s structure to this routine,
      * and we try to reuse it. After the final call to P7Viterbi,
-     * free it with FreePlan7Matrix.
+     * free it with FreeDPMatrix.
      */
     return Scorify(sc);		/* the total Viterbi score. */
 }

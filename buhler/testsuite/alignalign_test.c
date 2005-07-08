@@ -169,7 +169,7 @@ main(int argc, char **argv)
    * we overalloc by 25 rows (L dimension) when we grow; not growable
    * in model dimension, since we know the hmm size
    */
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx = CreateDPMatrix(1, hmm->M, 25, 0);
 
 				/* align individuals, compare traces */
   ndiff = 0;
@@ -182,7 +182,7 @@ main(int argc, char **argv)
 	ndiff++;
       free(dsq);
     }
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
 
   /* Determine success/failure.
    */

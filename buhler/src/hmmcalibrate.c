@@ -758,7 +758,7 @@ worker_thread(void *ptr)
   StopwatchStart(&thread_watch);
   wpool = (struct workpool_s *) ptr;
   hmm   = wpool->hmm;
-  mx    = CreatePlan7Matrix(wpool->L, hmm->M, 0, 0);
+  mx    = CreateDPMatrix(wpool->L, hmm->M, 0, 0);
   for (;;)
     {
       /* 1. Synthesize a random sequence. 
@@ -820,7 +820,7 @@ worker_thread(void *ptr)
   if ((rtn = pthread_mutex_unlock(&(wpool->output_lock))) != 0)
     Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
 
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   pthread_exit(NULL);
   return NULL; /* solely to silence compiler warnings */
 }

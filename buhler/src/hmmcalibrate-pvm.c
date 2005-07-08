@@ -89,7 +89,7 @@ main(void)
   if (hmm == NULL) Die("oh no, the HMM never arrived");
   if (! (hmm->flags & PLAN7_HASBITS)) Die("Oops, that model isn't configured");
   P7DefaultNullModel(randomseq, &p1);
-  mx = CreatePlan7Matrix(L, hmm->M, 0, 0);
+  mx = CreateDPMatrix(L, hmm->M, 0, 0);
 
   /* tell the master we're OK and ready to go (or not)
    */
@@ -164,7 +164,7 @@ main(void)
    ***********************************************/
   
   FreePlan7(hmm);
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   StopwatchStop(&stopwatch);
 
   /* tell the master we heard his shutdown signal, and

@@ -36,8 +36,8 @@
  *     MSAAppendGR(msa, "POST", seqidx, postcode);  -- or a similar annotation call --
  *     
  *     free(postcode);
- *     FreePlan7Matrix(fwd);
- *     FreePlan7Matrix(bck);
+ *     FreeDPMatrix(fwd);
+ *     FreeDPMatrix(bck);
  *     
  * P7OptimalAccuracy() - the Durbin/Holmes optimal accuracy
  *                       alignment algorithm. Takes a sequence

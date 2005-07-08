@@ -1190,7 +1190,7 @@ worker_thread(void *ptr)
    * we're going to be calling P7Viterbi on subpieces that vary in size,
    * and for different models.
    */
-  mx = CreatePlan7Matrix(300, 300, 25, 25);
+  mx = CreateDPMatrix(300, 300, 25, 25);
 
   for (;;) {
 
@@ -1205,7 +1205,7 @@ worker_thread(void *ptr)
       {	/* we're done. release lock, exit thread */
 	if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
 	  Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
-	FreePlan7Matrix(mx);
+	FreeDPMatrix(mx);
 	pthread_exit(NULL);
       }
     wpool->nhmm++;

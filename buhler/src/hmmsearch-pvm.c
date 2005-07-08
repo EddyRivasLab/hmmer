@@ -75,7 +75,7 @@ main(void)
   SetAlphabet(alphatype);
   hmm = PVMUnpackHMM();
 
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx = CreateDPMatrix(1, hmm->M, 25, 0);
   if (! (hmm->flags & PLAN7_HASBITS)) Die("no scores in the model");
 
   /* tell the master we're OK and ready to go (or not)
@@ -231,7 +231,7 @@ main(void)
    ***********************************************/
 
   SQD_DPRINTF1(("Slave is done; performing a normal exit.\n"));
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   FreePlan7(hmm);
   exit(0);			/* pvm_exit() gets called by atexit() registration. */
 }
