@@ -865,6 +865,14 @@ logoddsify_the_rest(struct plan7_s *hmm)
   hmm->xsc[XTJ][LOOP] = Prob2Score(hmm->xt[XTJ][LOOP], hmm->p1);
   hmm->xsc[XTJ][MOVE] = Prob2Score(hmm->xt[XTJ][MOVE], 1.0);
 
+  /*
+   * !!UNRESOLVED!! - The following line is a hack, but we currently don't have
+   *                  a better place to put this.  Eventually, there will be
+   *                  a wrapper config function, and we will put this there.
+   *                   - CRS 8 July 2005
+   */
+  FillCustomLogodds(hmm);
+
   return;
 }
 
