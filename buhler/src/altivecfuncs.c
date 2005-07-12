@@ -79,7 +79,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
      * so we use a dummy variable instead to get an adress to load from...
      */   
     int t_lowscore = -INFTY;
-    
+
     /* vector variables. We avoid the stupid gcc spill/fill code by
      * limiting ourselves to 32 generic variables and making the all registers.
      * (This reuse is the reason for the generic variable names).
@@ -116,6 +116,8 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
     vector signed int v14;
     vector signed int v15;
 
+    struct logodds_s *lom = hmm->lom;
+
     if(first_altivec)
       AltivecMessage();
 
@@ -137,7 +139,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
     
     /* Initialization of the zero row. */
     xmx[0][XMN] = 0;		                     /* S->N, p=1            */
-    xmx[0][XMB] = hmm->xsc[XTN][MOVE];                 /* S->N->B, no N-tail   */
+    xmx[0][XMB] = lom->xsc[XTN][MOVE];                 /* S->N->B, no N-tail   */
     xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /* need seq to get here */
   
     mmxi=mmx[0];
@@ -157,14 +159,14 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
      */
     for(k=1+hmm->M;k<=(3+hmm->M);k++) 
     {
-        hmm->esc[k]=-INFTY;
-        hmm->bsc[k]=-INFTY;
+        lom->esc[k]=-INFTY;
+        lom->bsc[k]=-INFTY;
         for(i=0;i<7;i++)
-            hmm->tsc[i][k]=-INFTY;
+            lom->tsc[i][k]=-INFTY;
         for(i=0;i<MAXCODE;i++)
         {
-            hmm->msc[i][k]=-INFTY;
-            hmm->isc[i][k]=-INFTY;
+            lom->msc[i][k]=-INFTY;
+            lom->isc[i][k]=-INFTY;
         }
     }
   
@@ -195,18 +197,18 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
         v14   = (vector signed int)vec_lvsl(0,&(xmx[i-1][XMB]));
         v13   = vec_perm(v13,v13,(vector unsigned char)v14);
         v_xmb = vec_splat(v13,0);
-        p_tmm = hmm->tsc[TMM];
-        p_tim = hmm->tsc[TIM];
-        p_tdm = hmm->tsc[TDM];
-        p_bsc = hmm->bsc;
+        p_tmm = lom->tsc[TMM];
+        p_tim = lom->tsc[TIM];
+        p_tdm = lom->tsc[TDM];
+        p_bsc = lom->bsc;
         k = dsq[i];
-        p_msc = hmm->msc[k];
-        p_isc = hmm->isc[k];
-        p_tmd = hmm->tsc[TMD];
-        p_tdd = hmm->tsc[TDD];
-        p_tmi = hmm->tsc[TMI];
-        p_tii = hmm->tsc[TII];
-        p_esc = hmm->esc;
+        p_msc = lom->msc[k];
+        p_isc = lom->isc[k];
+        p_tmd = lom->tsc[TMD];
+        p_tdd = lom->tsc[TDD];
+        p_tmi = lom->tsc[TMI];
+        p_tii = lom->tsc[TII];
+        p_esc = lom->esc;
         max_mmxesc = v_lowscore;
         
         /* the 0 element of vectors are aligned 12 bytes up from the 16-byte boundary,
@@ -429,7 +431,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
             /* insertion stuff: select max of mmx+TMI and imx+TII */
             v9     = vec_max(v9,v11); /* ins */
             v10    = vec_max(v10,v12); /* ins */
-            /* insertion stuff: load data from hmm->isc[tmpidx] */
+            /* insertion stuff: load data from lom->isc[tmpidx] */
             v11    = vec_ld(n, p_isc); /* ins */
             v12    = vec_ld(n+16, p_isc); /* ins */
             
@@ -439,7 +441,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
             v_save_dmx = vec_max(v_save_dmx,v4); /* del */
             v4     = vec_sel(v4,v_save_dmx,mask2); /* del */
             
-            /* insertion: compare max of mmx+TMI, imx+TII with hmm->isc */
+            /* insertion: compare max of mmx+TMI, imx+TII with lom->isc */
             v13    = (vector signed int)vec_cmpgt(v11,v_lowscore);
             v14    = (vector signed int)vec_cmpgt(v12,v_lowscore);
             
@@ -619,10 +621,10 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
             
             /* insertion stuff: select max of mmx+TMI and imx+TII */
             v9     = vec_max(v9,v11); /* ins */
-            /* insertion stuff: load data from hmm->isc[tmpidx] */
+            /* insertion stuff: load data from lom->isc[tmpidx] */
             v11    = vec_ld(n, p_isc); /* ins */
             
-            /* insertion: compare max of mmx+TMI, imx+TII with hmm->isc */
+            /* insertion: compare max of mmx+TMI, imx+TII with lom->isc */
             v13    = (vector signed int)vec_cmpgt(v11,v_lowscore);
             
             v9     = vec_adds(v9,v11);
@@ -643,7 +645,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
          */
         /* N state */
         xmx[i][XMN] = -INFTY;
-        if ((sc = xmx[i-1][XMN] + hmm->xsc[XTN][LOOP]) > -INFTY)
+        if ((sc = xmx[i-1][XMN] + lom->xsc[XTN][LOOP]) > -INFTY)
             xmx[i][XMN] = sc;
         
         /* E state */
@@ -655,27 +657,27 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
         
         /* J state */
         xmxi[XMJ] = -INFTY;
-        if ((sc = lxmxi[XMJ] + hmm->xsc[XTJ][LOOP]) > -INFTY)
+        if ((sc = lxmxi[XMJ] + lom->xsc[XTJ][LOOP]) > -INFTY)
             xmxi[XMJ] = sc;
-        if ((sc = xmxi[XME]   + hmm->xsc[XTE][LOOP]) > xmxi[XMJ])
+        if ((sc = xmxi[XME]   + lom->xsc[XTE][LOOP]) > xmxi[XMJ])
             xmxi[XMJ] = sc;
         
         /* B state */
         xmxi[XMB] = -INFTY;
-        if ((sc = xmxi[XMN] + hmm->xsc[XTN][MOVE]) > -INFTY)
+        if ((sc = xmxi[XMN] + lom->xsc[XTN][MOVE]) > -INFTY)
             xmxi[XMB] = sc;
-        if ((sc = xmxi[XMJ] + hmm->xsc[XTJ][MOVE]) > xmxi[XMB])
+        if ((sc = xmxi[XMJ] + lom->xsc[XTJ][MOVE]) > xmxi[XMB])
             xmxi[XMB] = sc;
         
         /* C state */
         xmxi[XMC] = -INFTY;
-        if ((sc = lxmxi[XMC] + hmm->xsc[XTC][LOOP]) > -INFTY)
+        if ((sc = lxmxi[XMC] + lom->xsc[XTC][LOOP]) > -INFTY)
             xmxi[XMC] = sc;
-        if ((sc = xmxi[XME] + hmm->xsc[XTE][MOVE]) > xmxi[XMC])
+        if ((sc = xmxi[XME] + lom->xsc[XTE][MOVE]) > xmxi[XMC])
             xmxi[XMC] = sc;
     }
     /* T state (not stored) */
-    sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
+    sc = xmx[L][XMC] + lom->xsc[XTC][MOVE];
     
     if (ret_tr != NULL) 
     {
@@ -772,6 +774,8 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
     vector signed int v_work3;
     
     vector unsigned char perm;
+
+    struct logodds_s *lom = hmm->lom;
     
     if(first_altivec)
       AltivecMessage();
@@ -780,7 +784,7 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
             
     /* Initialization of the zero row. */
     xmx_XMN = 0;		                     /* S->N, p=1            */
-    xmx_XMB = hmm->xsc[XTN][MOVE];           /* S->N->B, no N-tail   */
+    xmx_XMB = lom->xsc[XTN][MOVE];           /* S->N->B, no N-tail   */
     xmx_XME = xmx_XMC = xmx_XMJ = -INFTY;    /* need seq to get here */
       
     workp = mx->workspace;
@@ -793,22 +797,22 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
         workp += 12;
     }
 
-    tpmm  = hmm->tsc[TMM];
-    tpim  = hmm->tsc[TIM];
-    tpdm  = hmm->tsc[TDM];
-    tpmd  = hmm->tsc[TMD];
-    tpdd  = hmm->tsc[TDD];
-    tpmi  = hmm->tsc[TMI];
-    tpii  = hmm->tsc[TII];
-    bp    = hmm->bsc;     
-    ep    = hmm->esc;     
+    tpmm  = lom->tsc[TMM];
+    tpim  = lom->tsc[TIM];
+    tpdm  = lom->tsc[TDM];
+    tpmd  = lom->tsc[TMD];
+    tpdd  = lom->tsc[TDD];
+    tpmi  = lom->tsc[TMI];
+    tpii  = lom->tsc[TII];
+    bp    = lom->bsc;     
+    ep    = lom->esc;     
     
     /* Fill data beyound M with -INFTY, so we can take the maximum including
      * elements with k>M.
      */
     for(k=1+M;k<=(3+M);k++) {
-        hmm->esc[k] = -INFTY;
-        hmm->bsc[k] = -INFTY;
+        lom->esc[k] = -INFTY;
+        lom->bsc[k] = -INFTY;
         
         tpmm[k] = -INFTY;
         tpim[k] = -INFTY;
@@ -819,8 +823,8 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
         tpii[k] = -INFTY;  
         
         for(i=0;i<MAXCODE;i++) {
-            hmm->msc[i][k]=-INFTY;
-            hmm->isc[i][k]=-INFTY;
+            lom->msc[i][k]=-INFTY;
+            lom->isc[i][k]=-INFTY;
         }
     }
 
@@ -843,8 +847,8 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
         __dcbtst(workp,256);
 #endif
         
-        ms    = hmm->msc[dsq[i]] + 1;
-        is    = hmm->isc[dsq[i]] + 1;
+        ms    = lom->msc[dsq[i]] + 1;
+        is    = lom->isc[dsq[i]] + 1;
         
         /* load and splat (spread to all elements) XMX[i-1][XMB] */
         v_xmb = vec_lde(0,&xmx_XMB);
@@ -1324,7 +1328,7 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
          * remember, C and J emissions are zero score by definition,
          */
         /* N state */
-        if ((sc = xmx_XMN + hmm->xsc[XTN][LOOP]) > -INFTY)
+        if ((sc = xmx_XMN + lom->xsc[XTN][LOOP]) > -INFTY)
             xmx_XMN = sc;
         else
             xmx_XMN = -INFTY;
@@ -1343,35 +1347,35 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix
             xmx_XME = -INFTY;
         
         /* J state */
-        if ((sc = xmx_XMJ + hmm->xsc[XTJ][LOOP]) > -INFTY)
+        if ((sc = xmx_XMJ + lom->xsc[XTJ][LOOP]) > -INFTY)
             xmx_XMJ = sc;
         else
             xmx_XMJ = -INFTY;
         
-        if ((sc = xmx_XME   + hmm->xsc[XTE][LOOP]) > xmx_XMJ)
+        if ((sc = xmx_XME   + lom->xsc[XTE][LOOP]) > xmx_XMJ)
             xmx_XMJ = sc;
         
         /* B state */
-        if ((sc = xmx_XMN + hmm->xsc[XTN][MOVE]) > -INFTY)
+        if ((sc = xmx_XMN + lom->xsc[XTN][MOVE]) > -INFTY)
             xmx_XMB = sc;
         else
             xmx_XMB = -INFTY;
         
-        if ((sc = xmx_XMJ + hmm->xsc[XTJ][MOVE]) > xmx_XMB)
+        if ((sc = xmx_XMJ + lom->xsc[XTJ][MOVE]) > xmx_XMB)
             xmx_XMB = sc;
         
         /* C state */
-        if ((sc = xmx_XMC + hmm->xsc[XTC][LOOP]) > -INFTY)
+        if ((sc = xmx_XMC + lom->xsc[XTC][LOOP]) > -INFTY)
             xmx_XMC = sc;
         else
             xmx_XMC = -INFTY;
         
-        if ((sc = xmx_XME + hmm->xsc[XTE][MOVE]) > xmx_XMC)
+        if ((sc = xmx_XME + lom->xsc[XTE][MOVE]) > xmx_XMC)
             xmx_XMC = sc;
         
     }
     /* T state (not stored) */
-    sc = xmx_XMC + hmm->xsc[XTC][MOVE];
+    sc = xmx_XMC + lom->xsc[XTC][MOVE];
         
     return Scorify(sc);
 }
