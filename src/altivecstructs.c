@@ -14,9 +14,19 @@ void AllocLogoddsBody(struct plan7_s *hmm){
   lom->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
   lom->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
 
-  lom->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
-  lom->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  lom->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
+
+  /* Allocate extra memory so tsc[TMM,TIM,TDM,TMD,TDD] start on the 
+   * 16-byte cache boundary, and tsc[TMI,TII] start
+   * 12 bytes offset from the boundary. 
+   */
+  lom->tsc_mem = MallocOrDie (((7*(M+16)))  *   sizeof(int));
+
+  /* Allocate extra mem. to make sure all members of msc,isc start
+   * on 12-byte offsets from cache boundary.
+   */
+  lom->msc_mem = MallocOrDie ((MAXCODE*(M+1+16)) * sizeof(int));
+  lom->isc_mem = MallocOrDie ((MAXCODE*(M+16)) *   sizeof(int));
+
   lom->tsc[0]  = lom->tsc_mem;
   lom->msc[0]  = lom->msc_mem;
   lom->isc[0]  = lom->isc_mem;
@@ -26,19 +36,31 @@ void AllocLogoddsBody(struct plan7_s *hmm){
   lom->bsc = lom->bsc_mem;
   lom->esc = lom->esc_mem;
 
-  for (x = 1; x < MAXCODE; x++) {
-    lom->msc[x] = lom->msc[0] + x * (M+1);
-    lom->isc[x] = lom->isc[0] + x * M;
-  }
-  for (x = 0; x < 7; x++)
-    lom->tsc[x] = lom->tsc[0] + x * M;
+  /* align tsc pointers */
+  lom->tsc[TMM] = (int *) (((((size_t) lom->tsc_mem) + 15) & (~0xf)));
+  lom->tsc[TMI] = (int *) (((((size_t) lom->tsc_mem) + (M+12)*sizeof(int) + 15) & (~0xf)) + 12);
+  lom->tsc[TMD] = (int *) (((((size_t) lom->tsc_mem) + 2*(M+12)*sizeof(int) + 15) & (~0xf)));
+  lom->tsc[TIM] = (int *) (((((size_t) lom->tsc_mem) + 3*(M+12)*sizeof(int) + 15) & (~0xf)));
+  lom->tsc[TII] = (int *) (((((size_t) lom->tsc_mem) + 4*(M+12)*sizeof(int) + 15) & (~0xf)) + 12);
+  lom->tsc[TDM] = (int *) (((((size_t) lom->tsc_mem) + 5*(M+12)*sizeof(int) + 15) & (~0xf)));
+  lom->tsc[TDD] = (int *) (((((size_t) lom->tsc_mem) + 6*(M+12)*sizeof(int) + 15) & (~0xf)));
 
-  /* tsc[x][0] is used as a boundary condition sometimes [Viterbi()],
-   * so init (and keep) at -inf always.
+  for (x = 0; x < MAXCODE; x++) {
+    lom->msc[x] = (int *) (((((size_t)lom->msc_mem) + x*(M+1+12)*sizeof(int) + 15) & (~0xf)) + 12);
+    lom->isc[x] = (int *) (((((size_t)lom->isc_mem) + x*(M+12)*sizeof(int) + 15) & (~0xf)) + 12);
+  }
+  /* tsc[0] is used as a boundary condition sometimes [Viterbi()],
+   * so set to -inf always.
    */
   for (x = 0; x < 7; x++)
     lom->tsc[x][0] = -INFTY;
 
+  lom->bsc_mem= MallocOrDie  ((M+1+12) * sizeof(int));
+  lom->esc_mem= MallocOrDie  ((M+1+12) * sizeof(int));
+
+  lom->bsc = (int *) (((((size_t) lom->bsc_mem) + 15) & (~0xf)) + 12);
+  lom->esc = (int *) (((((size_t) lom->esc_mem) + 15) & (~0xf)) + 12);
+  
   return;
 }
 
