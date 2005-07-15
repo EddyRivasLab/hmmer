@@ -45,7 +45,11 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   
   /* Make sure we have space for a DP matrix with 0..L rows, 0..M-1 columns.
    */ 
-  ResizeDPMatrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
+  ResizeDPMatrix(mx, L, hmm->M);
+  xmx = mx->xmx;
+  mmx = mx->mmx;
+  imx = mx->imx;
+  dmx = mx->dmx;
 
   /* Initialization of the zero row.
    */
@@ -147,7 +151,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
 
   if (ret_tr != NULL) {
-      P7ViterbiTrace(hmm, dsq, L, mx, &tr);
+      ViterbiTrace(hmm, dsq, L, mx, &tr);
       *ret_tr = tr;
   }
 

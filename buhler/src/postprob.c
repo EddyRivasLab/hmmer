@@ -94,8 +94,8 @@ P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace
   struct dpmatrix_s *forward;
   struct dpmatrix_s *backward;
 
-  (void) P7Forward(dsq, L, hmm, &forward);
-  (void) P7Backward(dsq, L, hmm, &backward);
+  (void) Forward(dsq, L, hmm, &forward);
+  (void) Backward(dsq, L, hmm, &backward);
 
   P7EmitterPosterior(L, hmm, forward, backward, backward);           /* Re-use backward matrix for posterior scores */
 
@@ -106,120 +106,6 @@ P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace
 
   return sc;
 }
-
-
-
-/* Function: P7Backward()
- * 
- * Purpose:  The Backward dynamic programming algorithm.
- *           The scaling issue is dealt with by working in log space
- *           and calling ILogsum(); this is a slow but robust approach.
- *           
- * Args:     dsq    - sequence in digitized form
- *           L      - length of dsq
- *           hmm    - the model
- *           ret_mx - RETURN: dp matrix; pass NULL if it's not wanted
- *           
- * Return:   log P(S|M)/P(S|R), as a bit score.
- */
-float
-P7Backward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
-{
-  struct dpmatrix_s *mx;
-  int **xmx;
-  int **mmx;
-  int **imx;
-  int **dmx;
-  int   i,k;
-  int   sc;
-
-  /* Allocate a DP matrix with 0..L rows, 0..M-1 columns.
-   */ 
-  mx = AllocDPMatrix(L+1, hmm->M, &xmx, &mmx, &imx, &dmx);
-
-  /* Initialization of the L row.
-   * Note that xmx[i][stS] = xmx[i][stN] by definition for all i,
-   *    so stS need not be calculated in backward DP matrices.
-   */
-  xmx[L][XMC] = hmm->xsc[XTC][MOVE];                 /* C<-T                          */
-  xmx[L][XME] = xmx[L][XMC] + hmm->xsc[XTE][MOVE];   /* E<-C, no C-tail               */
-  xmx[L][XMJ] = xmx[L][XMB] = xmx[L][XMN] = -INFTY;  /* need seq to get out from here */
-  for (k = hmm->M; k >= 1; k--) {
-    mmx[L][k] = xmx[L][XME] + hmm->esc[k];           /* M<-E ...                      */
-    mmx[L][k] += hmm->msc[dsq[L]][k];                /* ... + emitted match symbol    */
-    imx[L][k] = dmx[L][k] = -INFTY;                  /* need seq to get out from here */
-  }
-
-  /* Recursion. Done as a pull.
-   * Note slightly wasteful boundary conditions:
-   *    M_M precalculated, D_M set to -INFTY,
-   *    D_1 wastefully calculated.
-   * Scores for transitions to D_M also have to be hacked to -INFTY,
-   * as Plan7Logoddsify does not do this for us (I think? - ihh).
-   */
-  hmm->tsc[TDD][hmm->M-1] = hmm->tsc[TMD][hmm->M-1] = -INFTY;    /* no D_M state -- HACK -- should be in Plan7Logoddsify */
-  for (i = L-1; i >= 0; i--)
-    {
-      /* Do the special states first.
-       * remember, C, N and J emissions are zero score by definition
-       */
-      xmx[i][XMC] = xmx[i+1][XMC] + hmm->xsc[XTC][LOOP];
-      
-      xmx[i][XMB] = -INFTY;
-      /* The following section has been hacked to fit a bug in core_algorithms.c
-       * The "correct" code is:
-       * for (k = hmm->M; k >= 1; k--)
-       * xmx[i][XMB] = ILogsum(xmx[i][XMB], mmx[i+1][k] + hmm->bsc[k];
-       *
-       * The following code gives the same results as core_algorithms.c:
-       */
-      xmx[i][XMB] = ILogsum(xmx[i][XMB], mmx[i+1][hmm->M] + hmm->bsc[hmm->M-1]);
-      for (k = hmm->M-1; k >= 1; k--)
-	xmx[i][XMB] = ILogsum(xmx[i][XMB], mmx[i+1][k] + hmm->bsc[k]);
-      
-      xmx[i][XMJ] = ILogsum(xmx[i][XMB] + hmm->xsc[XTJ][MOVE],
-			    xmx[i+1][XMJ] + hmm->xsc[XTJ][LOOP]);
-
-      xmx[i][XME] = ILogsum(xmx[i][XMC] + hmm->xsc[XTE][MOVE],
-			    xmx[i][XMJ] + hmm->xsc[XTE][LOOP]);
-
-      xmx[i][XMN] = ILogsum(xmx[i][XMB] + hmm->xsc[XTN][MOVE],
-			    xmx[i+1][XMN] + hmm->xsc[XTN][LOOP]);
-
-      /* Now the main states. Note the boundary conditions at M.
-       */
-
-      if (i>0) {
-	mmx[i][hmm->M] = xmx[i][XME] + hmm->esc[hmm->M] + hmm->msc[dsq[i]][hmm->M];
-	dmx[i][hmm->M] = -INFTY;
-	for (k = hmm->M-1; k >= 1; k--)
-	  {
-	    mmx[i][k]  = ILogsum(ILogsum(xmx[i][XME] + hmm->esc[k],
-					 mmx[i+1][k+1] + hmm->tsc[TMM][k]),
-				 ILogsum(imx[i+1][k] + hmm->tsc[TMI][k],
-					 dmx[i][k+1] + hmm->tsc[TMD][k]));
-	    mmx[i][k] += hmm->msc[dsq[i]][k];
-	    
-	    imx[i][k]  = ILogsum(imx[i+1][k] + hmm->tsc[TII][k],
-				 mmx[i+1][k+1] + hmm->tsc[TIM][k]);
-	    imx[i][k] += hmm->isc[dsq[i]][k];
-	    
-	    dmx[i][k]  = ILogsum(dmx[i][k+1] + hmm->tsc[TDD][k],
-				 mmx[i+1][k+1] + hmm->tsc[TDM][k]);
-	    
-	  }
-      }
-      
-    }
-
-  sc = xmx[0][XMN];
-
-  if (ret_mx != NULL) *ret_mx = mx;
-  else                FreeDPMatrix(mx);
-
-  return Scorify(sc);		/* the total Backward score. */
-}
-
 
 /* Function: P7EmitterPosterior()
  *

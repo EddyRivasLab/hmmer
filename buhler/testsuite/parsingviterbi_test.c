@@ -120,7 +120,7 @@ main(int argc, char **argv)
       nseq++;
       dsq = DigitizeSequence(seq, sqinfo.len);
 
-      sc1  = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr1);
+      sc1  = Viterbi(dsq, sqinfo.len, hmm, mx, &tr1);
       sc2  = P7ParsingViterbi(dsq, sqinfo.len, hmm, &tr2);
 
       if (be_verbose)

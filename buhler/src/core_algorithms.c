@@ -25,6 +25,253 @@ static float get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 			   int k3, char t3, int s3,
 			   int *ret_k2, char *ret_t2, int *ret_s2);
 
+/* Function: CreatePlan7DPMatrix()
+ *
+ * Note:     This was originally defined as CreatePlan7Matrix(), but I renamed
+ *           it to make it obvious that this was for the allocating the default
+ *           dpmatrix, not the customized one.  - CRS 13 July 2005
+ *
+ * Purpose:  Create a dynamic programming matrix for standard Forward,
+ *           Backward, or Viterbi, with scores kept as scaled log-odds
+ *           integers. Keeps 2D arrays compact in RAM in an attempt 
+ *           to maximize cache hits. 
+ *           
+ *           The mx structure can be dynamically grown, if a new
+ *           HMM or seq exceeds the currently allocated size. Dynamic
+ *           growing is more efficient than an alloc/free of a whole
+ *           matrix for every new target. The ResizePlan7Matrix()
+ *           call does this reallocation, if needed. Here, in the
+ *           creation step, we set up some pads - to inform the resizing
+ *           call how much to overallocate when it realloc's. 
+ *           
+ * Args:     N     - N+1 rows are allocated, for sequence.  
+ *           M     - size of model in nodes
+ *           padN  - over-realloc in seq/row dimension, or 0
+ *           padM  - over-realloc in HMM/column dimension, or 0
+ *                 
+ * Return:   mx
+ *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
+ */
+struct p7dpmatrix_s *
+CreatePlan7DPMatrix(int N, int M, int padN, int padM)
+{
+  struct p7dpmatrix_s *mx;
+  int i;
+
+  mx          = (struct p7dpmatrix_s *) MallocOrDie (sizeof(struct dpmatrix_s));
+  mx->xmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->mmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->imx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  mx->dmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
+  
+  /*
+   * Note: I am commenting out or replacing the lines with the *_mem pointers,
+   *       since the default implementation doesn't actually use them.  As 
+   *       noted below, they existed for the altivec implementation, but this
+   *       is now acheived by taking advantage of the new architecture.
+   *        - CRS 6 July 2005
+   mx->xmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
+   mx->mmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+   mx->imx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+   mx->dmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+
+   /\* The indirect assignment below looks wasteful; it's actually
+   * used for aligning data on 16-byte boundaries as a cache 
+   * optimization in the fast altivec implementation
+   *\/
+   mx->xmx[0] = (int *) mx->xmx_mem;
+   mx->mmx[0] = (int *) mx->mmx_mem;
+   mx->imx[0] = (int *) mx->imx_mem;
+   mx->dmx[0] = (int *) mx->dmx_mem;
+   *
+   */
+
+  mx->xmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
+  mx->mmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  mx->imx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+  mx->dmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
+
+  for (i = 1; i <= N; i++)
+    {
+      mx->xmx[i] = mx->xmx[0] + (i*5); 
+      mx->mmx[i] = mx->mmx[0] + (i*(M+2));
+      mx->imx[i] = mx->imx[0] + (i*(M+2));
+      mx->dmx[i] = mx->dmx[0] + (i*(M+2));
+    }
+
+  mx->maxN = N;
+  mx->maxM = M;
+  mx->padN = padN;
+  mx->padM = padM;
+  
+  return mx;
+}
+
+/* Function: ResizePlan7DPMatrix()
+ *
+ * Note:     This was originally defined as ResizePlan7Matrix(), but I renamed
+ *           it to make it obvious that this was for the allocating the default
+ *           dpmatrix, not the customized one.  - CRS 13 July 2005 
+ * 
+ * Purpose:  Reallocate a dynamic programming matrix, if necessary,
+ *           for a problem of NxM: sequence length N, model size M.
+ *           (N=1 for small memory score-only variants; we allocate
+ *           N+1 rows in the DP matrix.) 
+ *           
+ *           We know (because of the way hmmsearch and hmmpfam are coded)
+ *           that only one of the two dimensions is going to change
+ *           in size after the first call to ResizePlan7Matrix();
+ *           that is, for hmmsearch, we have one HMM of fixed size M
+ *           and our target sequences may grow in N; for hmmpfam,
+ *           we have one sequence of fixed size N and our target models
+ *           may grow in M. What we have to watch out for is P7SmallViterbi()
+ *           working on a divide and conquer problem and passing us N < maxN,
+ *           M > maxM; we should definitely *not* reallocate a smaller N.
+ *           Since we know that only one dimension is going to grow,
+ *           we aren't scared of reallocating to maxN,maxM. (If both
+ *           M and N could grow, we would be more worried.)
+ *
+ *           Returns individual ptrs to the four matrix components
+ *           as a convenience.
+ *           
+ * Args:     mx    - an already allocated model to grow.
+ *           N     - seq length to allocate for; N+1 rows
+ *           M     - size of model
+ *           xmx, mmx, imx, dmx 
+ *                 - RETURN: ptrs to four mx components as a convenience
+ *                   
+ * Return:   (void)
+ *           mx is (re)allocated here.
+ */
+void
+ResizePlan7DPMatrix(struct p7dpmatrix_s *mx, int N, int M, 
+		    int ***xmx, int ***mmx, int ***imx, int ***dmx)
+{
+  int i;
+
+  if (N <= mx->maxN && M <= mx->maxM) goto DONE;
+  
+  if (N > mx->maxN) {
+    N          += mx->padN; 
+    mx->maxN    = N; 
+    mx->xmx     = (int **) ReallocOrDie (mx->xmx, sizeof(int *) * (mx->maxN+1));
+    mx->mmx     = (int **) ReallocOrDie (mx->mmx, sizeof(int *) * (mx->maxN+1));
+    mx->imx     = (int **) ReallocOrDie (mx->imx, sizeof(int *) * (mx->maxN+1));
+    mx->dmx     = (int **) ReallocOrDie (mx->dmx, sizeof(int *) * (mx->maxN+1));
+  }
+
+  if (M > mx->maxM) {
+    M += mx->padM; 
+    mx->maxM = M; 
+  }
+
+  /* 
+   *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
+   *
+   mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((mx->maxN+1)*5));
+   mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+   mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+   mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+
+   mx->xmx[0] = (int *) mx->xmx_mem;
+   mx->mmx[0] = (int *) mx->mmx_mem;
+   mx->imx[0] = (int *) mx->imx_mem;
+   mx->dmx[0] = (int *) mx->dmx_mem;
+   *
+   */
+
+  mx->xmx[0] = (void *) ReallocOrDie (mx->xmx[0], sizeof(int) * ((mx->maxN+1)*5));
+  mx->mmx[0] = (void *) ReallocOrDie (mx->mmx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  mx->imx[0] = (void *) ReallocOrDie (mx->imx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+  mx->dmx[0] = (void *) ReallocOrDie (mx->dmx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
+
+  for (i = 1; i <= mx->maxN; i++)
+    {
+      mx->xmx[i] = mx->xmx[0] + (i*5); 
+      mx->mmx[i] = mx->mmx[0] + (i*(mx->maxM+2));
+      mx->imx[i] = mx->imx[0] + (i*(mx->maxM+2));
+      mx->dmx[i] = mx->dmx[0] + (i*(mx->maxM+2));
+    }
+
+ DONE:
+  if (xmx != NULL) *xmx = mx->xmx;
+  if (mmx != NULL) *mmx = mx->mmx;
+  if (imx != NULL) *imx = mx->imx;
+  if (dmx != NULL) *dmx = mx->dmx;
+}
+
+/* Function: AllocPlan7DPMatrix()
+ * Date:     SRE, Tue Nov 19 07:14:47 2002 [St. Louis]
+ *
+ * Note:     This was originally defined as AllocPlan7Matrix(), but I renamed
+ *           it to make it obvious that this was for the allocating the default
+ *           dpmatrix, not the customized one.  - CRS 13 July 2005 
+ *
+ * Purpose:  Used to be the main allocator for dp matrices; we used to
+ *           allocate, calculate, free. But this spent a lot of time
+ *           in malloc(). Replaced with Create..() and Resize..() to
+ *           allow matrix reuse in P7Viterbi(), the main alignment 
+ *           engine. But matrices are alloc'ed by other alignment engines
+ *           too, ones that are less frequently called and less 
+ *           important to optimization of cpu performance. Instead of
+ *           tracking changes through them, for now, provide
+ *           an Alloc...() call with the same API that's just a wrapper.
+ *
+ * Args:     rows  - generally L+1, or 2; # of DP rows in seq dimension to alloc
+ *           M     - size of model, in nodes
+ *           xmx, mmx, imx, dmx 
+ *                 - RETURN: ptrs to four mx components as a convenience
+ *
+ * Returns:  mx
+ *           Caller free's w/ FreeDPMatrix()
+ */
+struct p7dpmatrix_s *
+AllocPlan7DPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
+{
+  struct p7dpmatrix_s *mx;
+  mx = CreatePlan7DPMatrix(rows-1, M, 0, 0);
+  if (xmx != NULL) *xmx = mx->xmx;
+  if (mmx != NULL) *mmx = mx->mmx;
+  if (imx != NULL) *imx = mx->imx;
+  if (dmx != NULL) *dmx = mx->dmx;
+  return mx;
+}
+
+
+/* Function: FreePlan7DPMatrix()
+ *
+ * Note:     This was originally defined as FreePlan7Matrix(), but I renamed
+ *           it to make it obvious that this was for the freeing the default
+ *           dpmatrix, not the customized one.  - CRS 13 July 2005 
+ * 
+ * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
+ * 
+ * Return:   (void)
+ */
+void
+FreePlan7DPMatrix(struct p7dpmatrix_s *mx)
+{
+  /* 
+   *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
+   *
+   free (mx->xmx_mem);
+   free (mx->mmx_mem);
+   free (mx->imx_mem);
+   free (mx->dmx_mem);
+   *
+   */
+  free (mx->xmx[0]);
+  free (mx->mmx[0]);
+  free (mx->imx[0]);
+  free (mx->dmx[0]);
+  free (mx->xmx);
+  free (mx->mmx);
+  free (mx->imx);
+  free (mx->dmx);
+  free (mx);
+}
+
+
 /* Function: AllocShadowMatrix()
  * 
  * Purpose:  Allocate a dynamic programming traceback pointer matrix for 
@@ -230,496 +477,6 @@ P7WeeViterbiSize(int L, int M)
 	   (L+2) * sizeof(char))           /* state assignments to seq pos */
 	  / 1000000);
 }
-
-
-/* Function: P7Forward()
- * 
- * Purpose:  The Forward dynamic programming algorithm.
- *           The scaling issue is dealt with by working in log space
- *           and calling ILogsum(); this is a slow but robust approach.
- *           
- * Args:     dsq    - sequence in digitized form
- *           L      - length of dsq
- *           hmm    - the model
- *           ret_mx - RETURN: dp matrix; pass NULL if it's not wanted
- *           
- * Return:   log P(S|M)/P(S|R), as a bit score.
- */
-float
-P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
-{
-  struct dpmatrix_s *mx;
-  int **xmx;
-  int **mmx;
-  int **imx;
-  int **dmx;
-  int   i,k;
-  int   sc;  
-
-  /* Allocate a DP matrix with 0..L rows, 0..M-1 columns.
-   */ 
-  mx = AllocDPMatrix(L+1, hmm->M, &xmx, &mmx, &imx, &dmx);
-
-  /* Initialization of the zero row.
-   * Note that xmx[i][stN] = 0 by definition for all i,
-   *    and xmx[i][stT] = xmx[i][stC], so neither stN nor stT need
-   *    to be calculated in DP matrices.
-   */
-  xmx[0][XMN] = 0;		                     /* S->N, p=1            */
-  xmx[0][XMB] = hmm->xsc[XTN][MOVE];                 /* S->N->B, no N-tail   */
-  xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /* need seq to get here */
-  for (k = 0; k <= hmm->M; k++)
-    mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /* need seq to get here */
-
-  /* Recursion. Done as a pull.
-   * Note some slightly wasteful boundary conditions:  
-   *    tsc[0] = -INFTY for all eight transitions (no node 0)
-   */
-  for (i = 1; i <= L; i++)
-    {
-      mmx[i][0] = imx[i][0] = dmx[i][0] = -INFTY;
-      for (k = 1; k < hmm->M; k++)
-	{
-	  mmx[i][k]  = ILogsum(ILogsum(mmx[i-1][k-1] + hmm->tsc[TMM][k-1],
-				     imx[i-1][k-1] + hmm->tsc[TIM][k-1]),
-			      ILogsum(xmx[i-1][XMB] + hmm->bsc[k],
-				     dmx[i-1][k-1] + hmm->tsc[TDM][k-1]));
-	  mmx[i][k] += hmm->msc[dsq[i]][k];
-	  if (mmx[i][k] < -INFTY) mmx[i][k] = -INFTY;
-
-	  dmx[i][k]  = ILogsum(mmx[i][k-1] + hmm->tsc[TMD][k-1],
-			      dmx[i][k-1] + hmm->tsc[TDD][k-1]);
-	  if (dmx[i][k] < -INFTY) dmx[i][k] = -INFTY;
-
-	  imx[i][k]  = ILogsum(mmx[i-1][k] + hmm->tsc[TMI][k],
-			      imx[i-1][k] + hmm->tsc[TII][k]);
-	  imx[i][k] += hmm->isc[dsq[i]][k];
-	  if (imx[i][k] < -INFTY) imx[i][k] = -INFTY;
-	}
-      mmx[i][hmm->M] = ILogsum(ILogsum(mmx[i-1][hmm->M-1] + hmm->tsc[TMM][hmm->M-1],
-				   imx[i-1][hmm->M-1] + hmm->tsc[TIM][hmm->M-1]),
-			       ILogsum(xmx[i-1][XMB] + hmm->bsc[hmm->M],
-				   dmx[i-1][hmm->M-1] + hmm->tsc[TDM][hmm->M-1]));
-      mmx[i][hmm->M] += hmm->msc[dsq[i]][hmm->M];
-      if (mmx[i][hmm->M] < -INFTY) mmx[i][hmm->M] = -INFTY;
-
-      /* Now the special states.
-       * remember, C and J emissions are zero score by definition
-       */
-      xmx[i][XMN] = xmx[i-1][XMN] + hmm->xsc[XTN][LOOP];
-
-      xmx[i][XME] = -INFTY;
-      for (k = 1; k <= hmm->M; k++)
-	xmx[i][XME] = ILogsum(xmx[i][XME], mmx[i][k] + hmm->esc[k]);
-
-      xmx[i][XMJ] = ILogsum(xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP],
-			   xmx[i][XME]   + hmm->xsc[XTE][LOOP]);
-
-      xmx[i][XMB] = ILogsum(xmx[i][XMN] + hmm->xsc[XTN][MOVE],
-			    xmx[i][XMJ] + hmm->xsc[XTJ][MOVE]);
-
-      xmx[i][XMC] = ILogsum(xmx[i-1][XMC] + hmm->xsc[XTC][LOOP],
-			    xmx[i][XME] + hmm->xsc[XTE][MOVE]);
-    }
-			    
-  sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
-
-  if (ret_mx != NULL) *ret_mx = mx;
-  else                FreeDPMatrix(mx);
-
-  return Scorify(sc);		/* the total Forward score. */
-}
-
-/* Function: P7Viterbi()
- * 
- * Purpose:  The Viterbi dynamic programming algorithm. 
- *           Identical to Forward() except that max's
- *           replace sum's. 
- *           
- *           This is the slower, more understandable version
- *           of P7Viterbi(). The default version in fast_algorithms.c
- *           is portably optimized and more difficult to understand;
- *           the ALTIVEC version in fast_algorithms.c is vectorized
- *           with Altivec-specific code, and is pretty opaque.
- *           
- *           This function is not enabled by default; it is only
- *           activated by -DSLOW at compile time.
- *           
- * Args:     dsq    - sequence in digitized form
- *           L      - length of dsq
- *           hmm    - the model
- *           mx     - reused DP matrix
- *           ret_tr - RETURN: traceback; pass NULL if it's not wanted
- *           
- * Return:   log P(S|M)/P(S|R), as a bit score
- */
-float
-P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
-{
-  struct p7trace_s  *tr;
-  int **xmx;
-  int **mmx;
-  int **imx;
-  int **dmx;
-  int   i,k;
-  int   sc;  
-
-  /* Allocate a DP matrix with 0..L rows, 0..M-1 columns.
-   */ 
-  ResizeDPMatrix(mx, L, hmm->M, &xmx, &mmx, &imx, &dmx);
-
-  /* Initialization of the zero row.
-   */
-  xmx[0][XMN] = 0;		                     /* S->N, p=1            */
-  xmx[0][XMB] = hmm->xsc[XTN][MOVE];                 /* S->N->B, no N-tail   */
-  xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /* need seq to get here */
-  for (k = 0; k <= hmm->M; k++)
-    mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /* need seq to get here */
-
-  /* Recursion. Done as a pull.
-   * Note some slightly wasteful boundary conditions:  
-   *    tsc[0] = -INFTY for all eight transitions (no node 0)
-   *    D_M and I_M are wastefully calculated (they don't exist)
-   */
-  for (i = 1; i <= L; i++) {
-    mmx[i][0] = imx[i][0] = dmx[i][0] = -INFTY;
-
-    for (k = 1; k <= hmm->M; k++) {
-				/* match state */
-      mmx[i][k]  = -INFTY;
-      if ((sc = mmx[i-1][k-1] + hmm->tsc[TMM][k-1]) > mmx[i][k])
-	mmx[i][k] = sc;
-      if ((sc = imx[i-1][k-1] + hmm->tsc[TIM][k-1]) > mmx[i][k])
-	mmx[i][k] = sc;
-      if ((sc = xmx[i-1][XMB] + hmm->bsc[k]) > mmx[i][k])
-	mmx[i][k] = sc;
-      if ((sc = dmx[i-1][k-1] + hmm->tsc[TDM][k-1]) > mmx[i][k])
-	mmx[i][k] = sc;
-      if (hmm->msc[dsq[i]][k] != -INFTY) mmx[i][k] += hmm->msc[dsq[i]][k];
-      else                                     mmx[i][k] = -INFTY;
-
-				/* delete state */
-      dmx[i][k] = -INFTY;
-      if ((sc = mmx[i][k-1] + hmm->tsc[TMD][k-1]) > dmx[i][k])
-	dmx[i][k] = sc;
-      if ((sc = dmx[i][k-1] + hmm->tsc[TDD][k-1]) > dmx[i][k])
-	dmx[i][k] = sc;
-
-				/* insert state */
-      if (k < hmm->M) {
-	imx[i][k] = -INFTY;
-	if ((sc = mmx[i-1][k] + hmm->tsc[TMI][k]) > imx[i][k])
-	  imx[i][k] = sc;
-	if ((sc = imx[i-1][k] + hmm->tsc[TII][k]) > imx[i][k])
-	  imx[i][k] = sc;
-	if (hmm->isc[dsq[i]][k] != -INFTY) imx[i][k] += hmm->isc[dsq[i]][k];
-	else                                    imx[i][k] = -INFTY;   
-      }
-    }
-
-    /* Now the special states. Order is important here.
-     * remember, C and J emissions are zero score by definition,
-     */
-				/* N state */
-    xmx[i][XMN] = -INFTY;
-    if ((sc = xmx[i-1][XMN] + hmm->xsc[XTN][LOOP]) > -INFTY)
-      xmx[i][XMN] = sc;
-
-				/* E state */
-    xmx[i][XME] = -INFTY;
-    for (k = 1; k <= hmm->M; k++)
-      if ((sc =  mmx[i][k] + hmm->esc[k]) > xmx[i][XME])
-	xmx[i][XME] = sc;
-				/* J state */
-    xmx[i][XMJ] = -INFTY;
-    if ((sc = xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP]) > -INFTY)
-      xmx[i][XMJ] = sc;
-    if ((sc = xmx[i][XME]   + hmm->xsc[XTE][LOOP]) > xmx[i][XMJ])
-      xmx[i][XMJ] = sc;
-
-				/* B state */
-    xmx[i][XMB] = -INFTY;
-    if ((sc = xmx[i][XMN] + hmm->xsc[XTN][MOVE]) > -INFTY)
-      xmx[i][XMB] = sc;
-    if ((sc = xmx[i][XMJ] + hmm->xsc[XTJ][MOVE]) > xmx[i][XMB])
-      xmx[i][XMB] = sc;
-
-				/* C state */
-    xmx[i][XMC] = -INFTY;
-    if ((sc = xmx[i-1][XMC] + hmm->xsc[XTC][LOOP]) > -INFTY)
-      xmx[i][XMC] = sc;
-    if ((sc = xmx[i][XME] + hmm->xsc[XTE][MOVE]) > xmx[i][XMC])
-      xmx[i][XMC] = sc;
-  }
-				/* T state (not stored) */
-  sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
-
-  if (ret_tr != NULL) {
-    P7ViterbiTrace(hmm, dsq, L, mx, &tr);
-    *ret_tr = tr;
-  }
-
-  return Scorify(sc);		/* the total Viterbi score. */
-}
-
-/* Function: P7ViterbiTrace()
- * Date:     SRE, Sat Aug 23 10:30:11 1997 (St. Louis Lambert Field) 
- * 
- * Purpose:  Traceback of a Viterbi matrix: i.e. retrieval 
- *           of optimum alignment.
- *           
- * Args:     hmm    - hmm, log odds form, used to make mx
- *           dsq    - sequence aligned to (digital form) 1..N  
- *           N      - length of seq
- *           mx     - the matrix to trace back in, N x hmm->M
- *           ret_tr - RETURN: traceback.
- *           
- * Return:   (void)
- *           ret_tr is allocated here. Free using P7FreeTrace().
- */
-void
-P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-	       struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
-{
-  struct p7trace_s *tr;
-  int curralloc;		/* current allocated length of trace */
-  int tpos;			/* position in trace */
-  int i;			/* position in seq (1..N) */
-  int k;			/* position in model (1..M) */
-  int **xmx, **mmx, **imx, **dmx;
-  int sc;			/* temp var for pre-emission score */
-
-  /* Overallocate for the trace.
-   * S-N-B- ... - E-C-T  : 6 states + N is minimum trace;
-   * add N more as buffer.             
-   */
-  curralloc = N * 2 + 6; 
-  P7AllocTrace(curralloc, &tr);
-
-  xmx = mx->xmx;
-  mmx = mx->mmx;
-  imx = mx->imx;
-  dmx = mx->dmx;
-
-  /* Initialization of trace
-   * We do it back to front; ReverseTrace() is called later.
-   */
-  tr->statetype[0] = STT;
-  tr->nodeidx[0]   = 0;
-  tr->pos[0]       = 0;
-  tr->statetype[1] = STC;
-  tr->nodeidx[1]   = 0;
-  tr->pos[1]       = 0;
-  tpos = 2;
-  i    = N;			/* current i (seq pos) we're trying to assign */
-
-  /* Traceback
-   */
-  while (tr->statetype[tpos-1] != STS) {
-    switch (tr->statetype[tpos-1]) {
-    case STM:			/* M connects from i-1,k-1, or B */
-      sc = mmx[i+1][k+1] - hmm->msc[dsq[i+1]][k+1];
-      if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (sc == xmx[i][XMB] + hmm->bsc[k+1])
-	{
-				/* Check for wing unfolding */
-	  if (Prob2Score(hmm->begin[k+1], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k+1])
-	    while (k > 0)
-	      {
-		tr->statetype[tpos] = STD;
-		tr->nodeidx[tpos]   = k--;
-		tr->pos[tpos]       = 0;
-		tpos++;
-		if (tpos == curralloc) 
-		  {				/* grow trace if necessary  */
-		    curralloc += N;
-		    P7ReallocTrace(tr, curralloc);
-		  }
-	      }
-
-	  tr->statetype[tpos] = STB;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-      else if (sc == mmx[i][k] + hmm->tsc[TMM][k])
-	{
-	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (sc == imx[i][k] + hmm->tsc[TIM][k])
-	{
-	  tr->statetype[tpos] = STI;
-	  tr->nodeidx[tpos]   = k;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (sc == dmx[i][k] + hmm->tsc[TDM][k])
-	{
-	  tr->statetype[tpos] = STD;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = 0;
-	}
-      else
-	Die("traceback failed");
-      break;
-
-    case STD:			/* D connects from M,D */
-      if (dmx[i][k+1] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[TMD][k])
-	{
-	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (dmx[i][k+1] == dmx[i][k] + hmm->tsc[TDD][k]) 
-	{
-	  tr->statetype[tpos] = STD;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = 0;
-	}
-      else Die("traceback failed");
-      break;
-
-    case STI:			/* I connects from M,I */
-      sc = imx[i+1][k] - hmm->isc[dsq[i+1]][k];
-      if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (sc == mmx[i][k] + hmm->tsc[TMI][k])
-	{
-	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (sc == imx[i][k] + hmm->tsc[TII][k])
-	{
-	  tr->statetype[tpos] = STI;
-	  tr->nodeidx[tpos]   = k;
-	  tr->pos[tpos]       = i--;
-	}
-      else Die("traceback failed");
-      break;
-
-    case STN:			/* N connects from S, N */
-      if (i == 0 && xmx[i][XMN] == 0)
-	{
-	  tr->statetype[tpos] = STS;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-      else if (i > 0 && xmx[i+1][XMN] == xmx[i][XMN] + hmm->xsc[XTN][LOOP])
-	{
-	  tr->statetype[tpos] = STN;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;    /* note convention adherence:  */
-	  tr->pos[tpos-1]     = i--;  /* first N doesn't emit        */
-	}
-      else Die("traceback failed");
-      break;
-
-    case STB:			/* B connects from N, J */
-      if (xmx[i][XMB] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (xmx[i][XMB] == xmx[i][XMN] + hmm->xsc[XTN][MOVE])
-	{
-	  tr->statetype[tpos] = STN;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-      else if (xmx[i][XMB] == xmx[i][XMJ] + hmm->xsc[XTJ][MOVE])
-	{
-	  tr->statetype[tpos] = STJ;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-
-      else Die("traceback failed");
-      break;
-
-    case STE:			/* E connects from any M state. k set here */
-      if (xmx[i][XME] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      for (k = hmm->M; k >= 1; k--)
-	if (xmx[i][XME] == mmx[i][k] + hmm->esc[k])
-	  {
-				/* check for wing unfolding */
-	    if (Prob2Score(hmm->end[k], 1.) + 1*INTSCALE <=  hmm->esc[k])
-	      {
-		int dk;		/* need a tmp k while moving thru delete wing */
-		for (dk = hmm->M; dk > k; dk--)
-		  {
-		    tr->statetype[tpos] = STD;
-		    tr->nodeidx[tpos]   = dk;
-		    tr->pos[tpos]       = 0;
-		    tpos++;
-		    if (tpos == curralloc) 
-		      {				/* grow trace if necessary  */
-			curralloc += N;
-			P7ReallocTrace(tr, curralloc);
-		      }
-		  }
-	      }
-
-	    tr->statetype[tpos] = STM;
-	    tr->nodeidx[tpos]   = k--;
-	    tr->pos[tpos]       = i--;
-	    break;
-	  }
-      if (k < 0) Die("traceback failed");
-      break;
-
-    case STC:			/* C comes from C, E */
-      if (xmx[i][XMC] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (xmx[i][XMC] == xmx[i-1][XMC] + hmm->xsc[XTC][LOOP])
-	{
-	  tr->statetype[tpos] = STC;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;    /* note convention adherence: */
-	  tr->pos[tpos-1]     = i--;  /* first C doesn't emit       */
-	}
-      else if (xmx[i][XMC] == xmx[i][XME] + hmm->xsc[XTE][MOVE])
-	{
-	  tr->statetype[tpos] = STE;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0; /* E is a nonemitter */
-	}
-      
-      else Die("Traceback failed.");
-      break;
-
-    case STJ:			/* J connects from E, J */
-      if (xmx[i][XMJ] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (xmx[i][XMJ] == xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP])
-	{
-	  tr->statetype[tpos] = STJ;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;    /* note convention adherence: */
-	  tr->pos[tpos-1]     = i--;  /* first J doesn't emit       */
-	}
-      else if (xmx[i][XMJ] == xmx[i][XME] + hmm->xsc[XTE][LOOP])
-	{
-	  tr->statetype[tpos] = STE;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0; /* E is a nonemitter */
-	}
-
-      else Die("Traceback failed.");
-      break;
-
-    default:
-      Die("traceback failed");
-
-    } /* end switch over statetype[tpos-1] */
-    
-    tpos++;
-    if (tpos == curralloc) 
-      {				/* grow trace if necessary  */
-	curralloc += N;
-	P7ReallocTrace(tr, curralloc);
-      }
-
-  } /* end traceback, at S state; tpos == tlen now */
-  tr->tlen = tpos;
-  P7ReverseTrace(tr);
-  *ret_tr = tr;
-}
-
 
 /* Function: P7SmallViterbi()
  * Date:     SRE, Fri Mar  6 15:29:41 1998 [St. Louis]
@@ -936,8 +693,8 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
 float
 P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
-  struct dpmatrix_s *mx;        /* two rows of score matrix */
-  struct dpmatrix_s *tmx;       /* two rows of misused score matrix: traceback ptrs */
+  struct p7dpmatrix_s *mx;        /* two rows of score matrix */
+  struct p7dpmatrix_s *tmx;       /* two rows of misused score matrix: traceback ptrs */
   struct p7trace_s  *tr;        /* RETURN: collapsed traceback */
   int  **xmx, **mmx, **dmx, **imx; /* convenience ptrs to score matrix */  
   int  **xtr, **mtr, **dtr, **itr; /* convenience ptrs to traceback pointers */
@@ -950,8 +707,8 @@ P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_
   /* Alloc a DP matrix and traceback pointers, two rows each, O(M).
    * Alloc two O(L) arrays to trace back through the sequence thru B and E.
    */
-  mx  = AllocDPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
-  tmx = AllocDPMatrix(2, hmm->M, &xtr, &mtr, &itr, &dtr);
+  mx  = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  tmx = AllocPlan7DPMatrix(2, hmm->M, &xtr, &mtr, &itr, &dtr);
   btr = MallocOrDie(sizeof(int) * (L+1));
   etr = MallocOrDie(sizeof(int) * (L+1));
 
@@ -1096,8 +853,8 @@ P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_
   tr->tlen = tpos + 1;
   P7ReverseTrace(tr);
   
-  FreeDPMatrix(mx);
-  FreeDPMatrix(tmx);
+  FreePlan7DPMatrix(mx);
+  FreePlan7DPMatrix(tmx);
   free(btr);
   free(etr);
 
@@ -1373,7 +1130,11 @@ Plan7ESTViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_
   
   /* Allocate a DP matrix with 0..L rows, 0..M+1 columns.
    */ 
-  mx = AllocDPMatrix(L+1, hmm->M, &xmx, &mmx, &imx, &dmx);
+  mx = CreateDPMatrix(L+1, hmm->M, 0, 0);
+  xmx = mx->xmx;
+  mmx = mx->mmx;
+  imx = mx->imx;
+  dmx = mx->dmx;
 
   /* Initialization of the zero row (DNA sequence of length 0)
    * Note that xmx[i][stN] = 0 by definition for all i,
@@ -1535,8 +1296,8 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 	      int k3, char t3, int s3,
 	      int *ret_k2, char *ret_t2, int *ret_s2)
 {
-  struct dpmatrix_s *fwd;
-  struct dpmatrix_s *bck;
+  struct p7dpmatrix_s *fwd;
+  struct p7dpmatrix_s *bck;
   int        **xmx;             /* convenience ptr into special states */
   int        **mmx;             /* convenience ptr into match states   */
   int        **imx;             /* convenience ptr into insert states  */
@@ -1568,7 +1329,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
   /* Allocate our forward two rows.
    * Initialize row zero.
    */
-  fwd = AllocDPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  fwd = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
   cur = start%2;
   xmx[cur][XMN] = xmx[cur][XMB] = -INFTY;
   xmx[cur][XME] = xmx[cur][XMC] = -INFTY;  
@@ -1722,7 +1483,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 
   /* Allocate our backwards two rows. Init last row.
    */
-  bck = AllocDPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  bck = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
   nxt = s3%2;
   xmx[nxt][XMN] = xmx[nxt][XMB] = -INFTY;
   xmx[nxt][XME] = xmx[nxt][XMC] = -INFTY;  
@@ -1853,8 +1614,8 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
    * Garbage collection, return.
    *****************************************************************/
   
-  FreeDPMatrix(fwd);
-  FreeDPMatrix(bck);
+  FreePlan7DPMatrix(fwd);
+  FreePlan7DPMatrix(bck);
   *ret_k2 = k2;
   *ret_t2 = t2;
   *ret_s2 = s2;
@@ -1900,7 +1661,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 struct p7trace_s *
 P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 {
-  struct dpmatrix_s *mx;        /* Viterbi calculation lattice (two rows) */
+  struct p7dpmatrix_s *mx;        /* Viterbi calculation lattice (two rows) */
   struct dpshadow_s *tb;        /* shadow matrix of traceback pointers */
   struct p7trace_s  *tr;        /* RETURN: traceback */
   int  **xmx, **mmx, **imx, **dmx;
@@ -1943,7 +1704,7 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
   /* Allocate a DP matrix with 2 rows, 0..M columns,
    * and a shadow matrix with 0,1..alen rows, 0..M columns.
    */ 
-  mx = AllocDPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  mx = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
   tb = AllocShadowMatrix(msa->alen+1, hmm->M, &xtb, &mtb, &itb, &dtb);
 
   /* Initialization of the zero row.
@@ -2064,7 +1825,7 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 				/* do the traceback */
   tr = ShadowTrace(tb, hmm, msa->alen);
 				/* cleanup and return */
-  FreeDPMatrix(mx);
+  FreePlan7DPMatrix(mx);
   FreeShadowMatrix(tb);
   for (i = 1; i <= msa->alen; i++)
     free(con[i]);
