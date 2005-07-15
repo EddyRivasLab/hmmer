@@ -45,19 +45,24 @@ extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M,
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
 *
 */
-extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb, 
-					    char ***mtb, char ***itb, char ***dtb);
+extern struct p7dpmatrix_s 
+             *CreatePlan7DPMatrix(int N, int M, 
+						int padN, int padM);
+extern void  ResizePlan7DPMatrix(struct p7dpmatrix_s *mx, int N, int M, 
+				int ***xmx, int ***mmx, int ***imx, int ***dmx);
+extern struct p7dpmatrix_s 
+             *AllocPlan7DPMatrix(int rows, int M, int ***xmx, 
+					       int ***mmx, int ***imx, 
+					       int ***dmx);
+extern void  FreePlan7DPMatrix(struct p7dpmatrix_s *mx);
+extern struct dpshadow_s 
+             *AllocShadowMatrix(int rows, int M, char ***xtb, 
+				char ***mtb, char ***itb, char ***dtb);
 extern void  FreeShadowMatrix(struct dpshadow_s *tb);
 extern int   P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx);
 extern int   P7ViterbiSize(int L, int M);
 extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
-extern float P7Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
-			  struct dpmatrix_s **ret_mx);
-/*extern float P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
-  struct p7trace_s **ret_tr);*/
-extern float P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm,
-			      struct dpmatrix_s *mx);
 extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int L,
 			   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern float P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
@@ -309,7 +314,6 @@ extern void Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7);
  * Functions for working with posterior probabilities within alignments
  */
 extern float P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr);
-extern float P7Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	struct dpmatrix_s **ret_mx);
 extern void  P7EmitterPosterior(int L, struct plan7_s *hmm, struct dpmatrix_s *forward,
 				struct dpmatrix_s *backward, struct dpmatrix_s *mx);
 extern float P7FillOptimalAccuracy(int L, int M, struct dpmatrix_s *posterior,
@@ -429,12 +433,22 @@ extern void AllocLogoddsShell(struct plan7_s *hmm);
 extern void AllocLogoddsBody(struct plan7_s *hmm);
 extern void FreeLogodds(struct plan7_s *hmm);
 extern void FillCustomLogodds(struct plan7_s *hmm);
-extern struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
-extern void   ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M, 
-				int ***xmx, int ***mmx, int ***imx, int ***dmx);
-extern struct dpmatrix_s *AllocDPMatrix(int rows, int M, 
-				    int ***xmx, int ***mmx, int ***imx, int ***dmx);
-extern void  FreeDPMatrix(struct dpmatrix_s *mx);
+extern struct dpmatrix_s 
+            *CreateDPMatrix(int N, int M, int padN, int padM);
+extern void ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M);
+/*
+********************************************************************************
+ * Note:  I am commenting this line out because I don't think we need it 
+ *        anymore.  It seems to have existed mainly for convenenience purposes, 
+ *        but we can no longer include the convenenience pointers in the 
+ *        function call in the new architecture, because we can't assume the 
+ *        custom dpmatrix actually has those pointers.  - CRS 14 July 2005
+ *
+ extern struct dpmatrix_s *AllocDPMatrix(int rows, int M, 
+ int ***xmx, int ***mmx, int ***imx, int ***dmx);
+ *
+ */
+extern void FreeDPMatrix(struct dpmatrix_s *mx);
 
 
 /*
@@ -445,8 +459,14 @@ extern void  FreeDPMatrix(struct dpmatrix_s *mx);
  * Customized and/or optimized version of the functions in
  * core_algorithms.c
  */
+extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
+		      struct dpmatrix_s **ret_mx);
+extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
+		     struct dpmatrix_s **ret_mx);
 extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+extern float ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm,
+			    struct dpmatrix_s *mx);
 
 #endif /*FUNCSH_INCLUDED*/
 

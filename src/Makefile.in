@@ -92,17 +92,22 @@ HMMERMODE ?= FAST
 
 ifeq "$(HMMERMODE)" 'FAST'
 DEFS += -DFAST
-OBJS += defaultstructs.o fastfuncs.o
+OBJS += defaultstructs.o default_altivec_sharedfuncs.o fastfuncs.o
 endif
 
 ifeq "$(HMMERMODE)" 'SLOW'
 DEFS += -DSLOW
-OBJS += defaultstructs.o slowfuncs.o
+OBJS += defaultstructs.o default_altivec_sharedfuncs.o slowfuncs.o
 endif
 
 ifeq "$(HMMERMODE)" 'ALTIVEC'
 DEFS += -DALTIVEC
-OBJS += altivecstructs.o altivecfuncs.o
+OBJS += altivecstructs.o default_altived_sharedfuncs.o altivecfuncs.o
+endif
+
+ifeq "$(HMMERMODE)" 'LOCAL'
+DEFS += -DLOCAL
+OBJS += localstructs.o localfuncs.o
 endif
 
 .c.o:

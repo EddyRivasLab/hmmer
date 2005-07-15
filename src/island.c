@@ -85,9 +85,9 @@ float
 IslandViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 	      int **ret_isle_sc, int **ret_isle_len, int *ret_inum)
 {
-  struct dpmatrix_s *mx;        /* 2 rows of score matrix */
-  struct dpmatrix_s *inmx;      /* propagated island lengths */
-  struct dpmatrix_s *itag;	/* propagated island number tags (~ I(r,z))*/
+  struct p7dpmatrix_s *mx;        /* 2 rows of score matrix */
+  struct p7dpmatrix_s *inmx;      /* propagated island lengths */
+  struct p7dpmatrix_s *itag;	/* propagated island number tags (~ I(r,z))*/
   int  **xmx, **mmx, **dmx, **imx; /* convenience ptrs to score matrix   */  
   int  **xn, **mn, **dn, **in;     /* convenience ptrs to island lengths */
   int  **xi, **mi, **di, **ii;     /* convenience ptrs to island tags    */
@@ -106,9 +106,9 @@ IslandViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
    * propagated island tag #.
    * Allocate for the max island scores, and lengths.
    */
-  mx    = AllocDPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
-  inmx  = AllocDPMatrix(2, hmm->M, &xn,  &mn,  &in,  &dn);
-  itag  = AllocDPMatrix(2, hmm->M, &xi,  &mi,  &ii,  &di);
+  mx    = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  inmx  = AllocPlan7DPMatrix(2, hmm->M, &xn,  &mn,  &in,  &dn);
+  itag  = AllocPlan7DPMatrix(2, hmm->M, &xi,  &mi,  &ii,  &di);
 
   ialloc = L;			/* just an initial guess. */
   inum   = 0;
@@ -283,9 +283,9 @@ IslandViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   sc = xmx[cur][XMC] + hmm->xsc[XTC][MOVE];
   /* sc is the overall optimal score. */
 
-  FreeDPMatrix(mx);
-  FreeDPMatrix(inmx);
-  FreeDPMatrix(itag);
+  FreePlan7DPMatrix(mx);
+  FreePlan7DPMatrix(inmx);
+  FreePlan7DPMatrix(itag);
 
   *ret_isle_sc  = isc;
   *ret_isle_len = ilen;

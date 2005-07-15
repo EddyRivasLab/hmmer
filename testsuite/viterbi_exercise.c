@@ -128,7 +128,7 @@ main(int argc, char **argv)
 	  sqinfo.len   = L;
 	  sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
 
-	  sc1 = P7Viterbi(dsq, L, hmm, mx, &tr1);
+	  sc1 = Viterbi(dsq, L, hmm, mx, &tr1);
 	  sc2 = P7SmallViterbi(dsq, L, hmm, mx, &tr2);
 
 	  if (be_verbose)

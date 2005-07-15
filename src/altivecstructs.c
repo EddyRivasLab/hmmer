@@ -234,17 +234,12 @@ CreateDPMatrix(int N, int M, int padN, int padM)
  *           mx is (re)allocated here.
  */
 void
-ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M, 
-		  int ***xmx, int ***mmx, int ***imx, int ***dmx)
+ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M)
 {
   int i,n;
 
   if (N <= mx->maxN && M <= mx->maxM) 
     {
-      if (xmx != NULL) *xmx = mx->xmx;
-      if (mmx != NULL) *mmx = mx->mmx;
-      if (imx != NULL) *imx = mx->imx;
-      if (dmx != NULL) *dmx = mx->dmx;
       return; 
     }
 
@@ -281,55 +276,58 @@ ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M,
       mx->imx[i] = mx->imx[0] + i*(mx->maxM+2+n);
       mx->dmx[i] = mx->dmx[0] + i*(mx->maxM+2+n);
     }
- 
-  if (xmx != NULL) *xmx = mx->xmx;
-  if (mmx != NULL) *mmx = mx->mmx;
-  if (imx != NULL) *imx = mx->imx;
-  if (dmx != NULL) *dmx = mx->dmx;
 }
 
-/* Function: AllocDPMatrix()
- * Date:     SRE, Tue Nov 19 07:14:47 2002 [St. Louis]
+/*
+ * Note: I am commenting this function out because I don't think we need it 
+ *       anymore.  It seems to have existed mainly for convenenience purposes, 
+ *       but we can no longer include the convenenience pointers in the function 
+ *       call in the new architecture, because we can't assume the custom 
+ *       dpmatrix actually has those pointers.  - CRS 14 July 2005
  *
- * Note:     This was originally defined as AllocPlan7Matrix in 
- *           core_algorithms.c, which was then moved to AllocDPMatrix in
- *           defaultstructs.c.  The altivec version used the original
- *           version of this method however, so I also placed a copy
- *           here.
- *             - CRS 21 June 2005
- *
- * !!UNRESOLVED!! - Adding redundancy again.  Is there a better way to do
- *                  this?  - CRS 21 June 2005
- *
- * Purpose:  Used to be the main allocator for dp matrices; we used to
- *           allocate, calculate, free. But this spent a lot of time
- *           in malloc(). Replaced with Create..() and Resize..() to
- *           allow matrix reuse in P7Viterbi(), the main alignment 
- *           engine. But matrices are alloc'ed by other alignment engines
- *           too, ones that are less frequently called and less 
- *           important to optimization of cpu performance. Instead of
- *           tracking changes through them, for now, provide
- *           an Alloc...() call with the same API that's just a wrapper.
- *
- * Args:     rows  - generally L+1, or 2; # of DP rows in seq dimension to alloc
- *           M     - size of model, in nodes
- *           xmx, mmx, imx, dmx 
- *                 - RETURN: ptrs to four mx components as a convenience
- *
- * Returns:  mx
- *           Caller free's w/ FreePlan7Matrix()
  */
-struct dpmatrix_s *
-AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
-{
-  struct dpmatrix_s *mx;
-  mx = CreateDPMatrix(rows-1, M, 0, 0);
-  if (xmx != NULL) *xmx = mx->xmx;
-  if (mmx != NULL) *mmx = mx->mmx;
-  if (imx != NULL) *imx = mx->imx;
-  if (dmx != NULL) *dmx = mx->dmx;
-  return mx;
-}
+/* /\* Function: AllocDPMatrix() */
+/*  * Date:     SRE, Tue Nov 19 07:14:47 2002 [St. Louis] */
+/*  * */
+/*  * Note:     This was originally defined as AllocPlan7Matrix in  */
+/*  *           core_algorithms.c, which was then moved to AllocDPMatrix in */
+/*  *           defaultstructs.c.  The altivec version used the original */
+/*  *           version of this method however, so I also placed a copy */
+/*  *           here. */
+/*  *             - CRS 21 June 2005 */
+/*  * */
+/*  * !!UNRESOLVED!! - Adding redundancy again.  Is there a better way to do */
+/*  *                  this?  - CRS 21 June 2005 */
+/*  * */
+/*  * Purpose:  Used to be the main allocator for dp matrices; we used to */
+/*  *           allocate, calculate, free. But this spent a lot of time */
+/*  *           in malloc(). Replaced with Create..() and Resize..() to */
+/*  *           allow matrix reuse in P7Viterbi(), the main alignment  */
+/*  *           engine. But matrices are alloc'ed by other alignment engines */
+/*  *           too, ones that are less frequently called and less  */
+/*  *           important to optimization of cpu performance. Instead of */
+/*  *           tracking changes through them, for now, provide */
+/*  *           an Alloc...() call with the same API that's just a wrapper. */
+/*  * */
+/*  * Args:     rows  - generally L+1, or 2; # of DP rows in seq dimension to alloc */
+/*  *           M     - size of model, in nodes */
+/*  *           xmx, mmx, imx, dmx  */
+/*  *                 - RETURN: ptrs to four mx components as a convenience */
+/*  * */
+/*  * Returns:  mx */
+/*  *           Caller free's w/ FreePlan7Matrix() */
+/*  *\/ */
+/* struct dpmatrix_s * */
+/* AllocDPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx) */
+/* { */
+/*   struct dpmatrix_s *mx; */
+/*   mx = CreateDPMatrix(rows-1, M, 0, 0); */
+/*   if (xmx != NULL) *xmx = mx->xmx; */
+/*   if (mmx != NULL) *mmx = mx->mmx; */
+/*   if (imx != NULL) *imx = mx->imx; */
+/*   if (dmx != NULL) *dmx = mx->dmx; */
+/*   return mx; */
+/* } */
 
 
 /* Function: FreeDPMatrix()

@@ -125,7 +125,7 @@ main(int argc, char **argv)
       dsq = DigitizeSequence(seq, sqinfo.len);
 
       if (do_small) sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
-      else          sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+      else          sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
 
       if (be_verbose)
 	{

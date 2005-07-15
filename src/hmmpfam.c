@@ -659,7 +659,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
     if (do_forward) 
     {
         
-        sc = P7Forward(dsq, sqinfo->len, hmm, NULL);
+        sc = Forward(dsq, sqinfo->len, hmm, NULL);
         if (do_null2) 
         {
             /* We need the trace - recalculate it if we didn't already do it */

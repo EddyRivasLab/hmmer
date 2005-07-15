@@ -10,11 +10,12 @@ struct logodds_s {
 
 /* Declaration of Plan7 dynamic programming matrix structure.
  *
- * Note:  This was originally defined in structs.h, but this structure is
- *        really implementation dependent, so I moved it here.  Since the
- *        default implementation doesn't use the _mem pointers, I 
- *        commented those parts out.
- *          - CRS 21 June 2005
+ * Note:  Even though this structure is identical to the default structure, we
+ *        have to provide a definition here, too, since the architecture does
+ *        not expect a custom implementation to use the default structure.
+ *        Even though the default implementation isn't really a customization,
+ *        we treat it like one so that it fits nicely into the architecture.
+ *          - CRS 13 July 2005
  */
 struct dpmatrix_s {
   int **xmx;			/* special scores [0.1..N][BECJN]     */

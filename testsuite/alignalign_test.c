@@ -177,7 +177,7 @@ main(int argc, char **argv)
     {
       rlen = strlen(rseq[idx]);
       dsq  = DigitizeSequence(rseq[idx], rlen);
-      P7Viterbi(dsq, rlen, hmm, mx, &(itr[idx]));
+      Viterbi(dsq, rlen, hmm, mx, &(itr[idx]));
       if (! TraceCompare(itr[idx], tr[idx]))
 	ndiff++;
       free(dsq);

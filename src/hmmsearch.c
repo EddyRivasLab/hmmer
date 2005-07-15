@@ -652,7 +652,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        */
       if (do_forward)
       {
-          sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
+          sc  = Forward(dsq, sqinfo.len, hmm, NULL);
           if (do_null2) 
           {
               /* We need the trace - recalculate it if we didn't already do it */
