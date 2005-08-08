@@ -685,7 +685,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
     
     if (ret_tr != NULL) 
     {
-        P7ViterbiTrace(hmm, dsq, L, mx, &tr);
+        ViterbiTrace(hmm, dsq, L, mx, &tr);
         *ret_tr = tr; 
     }
     

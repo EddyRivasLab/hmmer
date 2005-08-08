@@ -5,7 +5,109 @@
 #include "structs.h"
 #include "funcs.h"
 
-/* Function: P7Backward()
+/* Function: P7ViterbiSize()
+ * Date:     SRE, Fri Mar  6 15:13:20 1998 [St. Louis]
+ *
+ * Note:      This was originally defined as in core_algorithms.c, but it is 
+ *            mainly a helper function for ViterbiSpaceOK(), which is 
+ *            implementation-dependedent.  So, I moved it here because it
+ *            should really only be used for the default implementation.
+ *	        - CRS 19 July 2005
+ *
+ * Purpose:  Returns the ballpark predicted memory requirement for a 
+ *           P7Viterbi() alignment, in MB. 
+ *           
+ *           Currently L must fit in an int (< 2 GB), but we have
+ *           to deal with LM > 2 GB - e.g. watch out for overflow, do
+ *           the whole calculation in floating point. Bug here detected
+ *           in 2.1.1 by David Harper, Sanger Centre.
+ *                                    
+ * Args:     L  - length of sequence
+ *           M  - length of HMM       
+ *
+ * Returns:  # of MB
+ */
+int
+P7ViterbiSize(int L, int M)
+{
+  float Mbytes;
+
+  /* We're excessively precise here, but it doesn't cost
+   * us anything to be pedantic. The four terms are:
+   *   1. the matrix structure itself;
+   *   2. the O(NM) main matrix (this dominates!)
+   *   3. ptrs into the rows of the matrix
+   *   4. storage for 5 special states. (xmx)
+   */
+  Mbytes =  (float) sizeof(struct dpmatrix_s); 
+  Mbytes += 3. * (float) (L+1) * (float) (M+2) * (float) sizeof(int); 
+  Mbytes += 4. * (float) (L+1) * (float) sizeof(int *); 
+  Mbytes += 5. * (float) (L+1) * (float) sizeof(int);
+  Mbytes /= 1048576.;
+  return (int) Mbytes;
+}
+
+
+/* Function:  ViterbiSpaceOK()
+ * Incept:    SRE, Wed Oct  1 12:53:13 2003 [St. Louis]
+ *
+ * Note:      This was originally defined as P7ViterbiSpaceOK() in 
+ *            core_algorithms.c, but it is implementation-dependedent since it
+ *	      accesses the customized dpmatrix structure.  Hence, I moved it
+ *	      here and renamed it so that it fit into the new architecture.
+ *	        - CRS 19 July 2005
+ *
+ * Purpose:   Returns TRUE if the existing matrix allocation
+ *            is already sufficient to hold the requested MxN, or if
+ *            the matrix can be expanded in M and/or N without
+ *            exceeding RAMLIMIT megabytes. 
+ *            
+ *            This gets called anytime we're about to do P7Viterbi().
+ *            If it returns FALSE, we switch into the appropriate
+ *            small-memory alternative: P7SmallViterbi() or
+ *            P7WeeViterbi().
+ *            
+ *            Checking the DP problem size against P7ViterbiSize()
+ *            is not enough, because the DP matrix may be already
+ *            allocated in MxN. For example, if we're already
+ *            allocated to maxM,maxN of 1447x979, and we try to
+ *            do a problem of MxN=12x125000, P7ViterbiSize() may
+ *            think that's fine - but when we resize, we can only
+ *            grow, so we'll expand to 1447x125000, which is 
+ *            likely over the RAMLIMIT. [bug#h26; xref SLT7 p.122]
+ *
+ * Args:      
+ *
+ * Returns:   TRUE if we can run P7Viterbi(); FALSE if we need
+ *            to use a small memory variant.
+ *
+ * Xref:      STL7 p.122.
+ */
+int
+ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx)
+{
+  int newM;
+  int newN;
+
+  if (M <= mx->maxM && L <= mx->maxN) return TRUE;
+
+  if (M > mx->maxM) newM = M + mx->padM; else newM = mx->maxM;
+  if (L > mx->maxN) newN = L + mx->padN; else newN = mx->maxN;
+
+  if (P7ViterbiSize(newN, newM) <= RAMLIMIT)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+
+/* Function: Backward()
+ *
+ * Note:     This was originally defined as P7Backward() in postprob.c, but it
+ *           is implementation dependent, since it accesses the customized 
+ *           dpmatrix structure.  So I moved it here and renamed it with a more
+ *           generic name that fits into the new architecture.
+ *             - CRS 15 July 2005
  * 
  * Purpose:  The Backward dynamic programming algorithm.
  *           The scaling issue is dealt with by working in log space
@@ -123,6 +225,12 @@ Backward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret
 
 /* Function: P7Forward()
  * 
+ * Note:     This was originally defined as P7Forward() in core_algorithms.c, 
+ *           but it is implementation dependent, since it accesses the 
+ *           customized dpmatrix structure.  So I moved it here and renamed it 
+ *           with a more generic name that fits into the new architecture.
+ *             - CRS 15 July 2005
+ *
  * Purpose:  The Forward dynamic programming algorithm.
  *           The scaling issue is dealt with by working in log space
  *           and calling ILogsum(); this is a slow but robust approach.
@@ -223,9 +331,15 @@ Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_
   return Scorify(sc);		/* the total Forward score. */
 }
 
-/* Function: P7ViterbiTrace()
+/* Function: ViterbiTrace()
  * Date:     SRE, Sat Aug 23 10:30:11 1997 (St. Louis Lambert Field) 
  * 
+ * Note:     This was originally defined as P7ViterbiTrace() in 
+ *           core_algorithms.c, but it is implementation dependent, since it 
+ *           accesses the customized dpmatrix structure.  So I moved it here 
+ *           and renamed it with a more generic name that fits into the new 
+ *           architecture. - CRS 15 July 2005
+ *
  * Purpose:  Traceback of a Viterbi matrix: i.e. retrieval 
  *           of optimum alignment.
  *           

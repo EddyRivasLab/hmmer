@@ -102,7 +102,7 @@ endif
 
 ifeq "$(HMMERMODE)" 'ALTIVEC'
 DEFS += -DALTIVEC
-OBJS += altivecstructs.o default_altived_sharedfuncs.o altivecfuncs.o
+OBJS += altivecstructs.o default_altivec_sharedfuncs.o altivecfuncs.o
 endif
 
 ifeq "$(HMMERMODE)" 'LOCAL'

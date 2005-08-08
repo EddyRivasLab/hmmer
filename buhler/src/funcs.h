@@ -59,8 +59,6 @@ extern struct dpshadow_s
              *AllocShadowMatrix(int rows, int M, char ***xtb, 
 				char ***mtb, char ***itb, char ***dtb);
 extern void  FreeShadowMatrix(struct dpshadow_s *tb);
-extern int   P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx);
-extern int   P7ViterbiSize(int L, int M);
 extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
 extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int L,
@@ -456,17 +454,18 @@ extern void FreeDPMatrix(struct dpmatrix_s *mx);
  * implementation.  Ideally, they are in a file called something like
  * <implementation>funcs.c, like fastfuncs.c, for example.  
  *
- * Customized and/or optimized version of the functions in
- * core_algorithms.c
+ * Customized and/or optimized version of the dynamic programming
+ * algorithms and related support functions.
  */
+extern int   ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx);
 extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
 		      struct dpmatrix_s **ret_mx);
 extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
 		     struct dpmatrix_s **ret_mx);
 extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
-extern float ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm,
-			    struct dpmatrix_s *mx);
+extern void  ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
+			  struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 #endif /*FUNCSH_INCLUDED*/
 
