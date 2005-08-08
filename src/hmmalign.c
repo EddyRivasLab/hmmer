@@ -207,7 +207,7 @@ main(int argc, char **argv)
     {
       dsq[i] = DigitizeSequence(rseq[i], sqinfo[i].len);
 
-      if (P7ViterbiSpaceOK(sqinfo[i].len, hmm->M, mx))
+      if (ViterbiSpaceOK(sqinfo[i].len, hmm->M, mx))
 	(void) Viterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
       else
 	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));

@@ -604,7 +604,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       if(do_forward && do_null2)
       {
           /* Need the trace - first check space */
-          if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+          if (ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
           {    
               /* Slower altivec */
               sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
@@ -635,7 +635,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       
 #else /* not altivec */
 
-      if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+      if (ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
       {
           sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
       }
@@ -659,7 +659,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 #ifdef ALTIVEC
               if(tr == NULL)
               {
-                  if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+                  if (ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
                   {
                       sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
                   }
@@ -692,7 +692,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 #ifdef ALTIVEC
           if(tr == NULL)
           {
-              if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+              if (ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
               {
                   sc = Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
               }
@@ -1217,7 +1217,7 @@ worker_thread(void *ptr)
     if(wpool->do_forward && wpool->do_null2)
     {
         /* Need the trace, first check space */
-        if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+        if (ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
         {
             sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
         }
@@ -1246,7 +1246,7 @@ worker_thread(void *ptr)
     
 #else /* not altivec */
 
-    if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+    if (ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
     {
         sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
     }
@@ -1270,7 +1270,7 @@ worker_thread(void *ptr)
 #ifdef ALTIVEC
             if(tr == NULL)
             {
-                if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+                if (ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
                 {
                     sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
                 }
@@ -1299,7 +1299,7 @@ worker_thread(void *ptr)
 #ifdef ALTIVEC
         if(tr == NULL)
         {
-            if (P7ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
+            if (ViterbiSpaceOK(sqinfo.len, wpool->hmm->M, mx))
             {
                 sc = Viterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr);
             }

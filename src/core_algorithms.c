@@ -338,90 +338,6 @@ FreeShadowMatrix(struct dpshadow_s *tb)
   free (tb);
 }
 
-
-/* Function:  P7ViterbiSpaceOK()
- * Incept:    SRE, Wed Oct  1 12:53:13 2003 [St. Louis]
- *
- * Purpose:   Returns TRUE if the existing matrix allocation
- *            is already sufficient to hold the requested MxN, or if
- *            the matrix can be expanded in M and/or N without
- *            exceeding RAMLIMIT megabytes. 
- *            
- *            This gets called anytime we're about to do P7Viterbi().
- *            If it returns FALSE, we switch into the appropriate
- *            small-memory alternative: P7SmallViterbi() or
- *            P7WeeViterbi().
- *            
- *            Checking the DP problem size against P7ViterbiSize()
- *            is not enough, because the DP matrix may be already
- *            allocated in MxN. For example, if we're already
- *            allocated to maxM,maxN of 1447x979, and we try to
- *            do a problem of MxN=12x125000, P7ViterbiSize() may
- *            think that's fine - but when we resize, we can only
- *            grow, so we'll expand to 1447x125000, which is 
- *            likely over the RAMLIMIT. [bug#h26; xref SLT7 p.122]
- *
- * Args:      
- *
- * Returns:   TRUE if we can run P7Viterbi(); FALSE if we need
- *            to use a small memory variant.
- *
- * Xref:      STL7 p.122.
- */
-int
-P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx)
-{
-  int newM;
-  int newN;
-
-  if (M <= mx->maxM && L <= mx->maxN) return TRUE;
-
-  if (M > mx->maxM) newM = M + mx->padM; else newM = mx->maxM;
-  if (L > mx->maxN) newN = L + mx->padN; else newN = mx->maxN;
-
-  if (P7ViterbiSize(newN, newM) <= RAMLIMIT)
-    return TRUE;
-  else
-    return FALSE;
-}
-
-
-/* Function: P7ViterbiSize()
- * Date:     SRE, Fri Mar  6 15:13:20 1998 [St. Louis]
- *
- * Purpose:  Returns the ballpark predicted memory requirement for a 
- *           P7Viterbi() alignment, in MB. 
- *           
- *           Currently L must fit in an int (< 2 GB), but we have
- *           to deal with LM > 2 GB - e.g. watch out for overflow, do
- *           the whole calculation in floating point. Bug here detected
- *           in 2.1.1 by David Harper, Sanger Centre.
- *                                    
- * Args:     L  - length of sequence
- *           M  - length of HMM       
- *
- * Returns:  # of MB
- */
-int
-P7ViterbiSize(int L, int M)
-{
-  float Mbytes;
-
-  /* We're excessively precise here, but it doesn't cost
-   * us anything to be pedantic. The four terms are:
-   *   1. the matrix structure itself;
-   *   2. the O(NM) main matrix (this dominates!)
-   *   3. ptrs into the rows of the matrix
-   *   4. storage for 5 special states. (xmx)
-   */
-  Mbytes =  (float) sizeof(struct dpmatrix_s); 
-  Mbytes += 3. * (float) (L+1) * (float) (M+2) * (float) sizeof(int); 
-  Mbytes += 4. * (float) (L+1) * (float) sizeof(int *); 
-  Mbytes += 5. * (float) (L+1) * (float) sizeof(int);
-  Mbytes /= 1048576.;
-  return (int) Mbytes;
-}
-
 /* Function: P7SmallViterbiSize()
  * Date:     SRE, Fri Mar  6 15:20:04 1998 [St. Louis]
  *
@@ -543,7 +459,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
     {
       sqlen = ctr->pos[i*2+2] - ctr->pos[i*2+1];   /* length of subseq */
 
-      if (P7ViterbiSpaceOK(sqlen, hmm->M, mx))
+      if (ViterbiSpaceOK(sqlen, hmm->M, mx))
 	{
 	  SQD_DPRINTF1(("      -- using P7Viterbi on an %dx%d subproblem\n",
 			hmm->M, sqlen));
@@ -1109,160 +1025,164 @@ P7WeeViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **
   return ret_sc;
 }
 
-
-/* Function: Plan7ESTViterbi()
- * 
- * Purpose:  Frameshift-tolerant alignment of protein model to cDNA EST.
- *           
- * 
+/*
+ * Note: I am commenting out the following function because I don't know
+ *       what else to do with it right now, and it currently isn't used.
+ *         - CRS 21 July 2005
  */
-float
-Plan7ESTViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
-{
-  struct dpmatrix_s *mx;
-  int **xmx;
-  int **mmx;
-  int **imx;
-  int **dmx;
-  int   i,k;
-  int   sc;
-  int   codon;
+/* /\* Function: Plan7ESTViterbi() */
+/*  *  */
+/*  * Purpose:  Frameshift-tolerant alignment of protein model to cDNA EST. */
+/*  *            */
+/*  *  */
+/*  *\/ */
+/* float */
+/* Plan7ESTViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx) */
+/* { */
+/*   struct dpmatrix_s *mx; */
+/*   int **xmx; */
+/*   int **mmx; */
+/*   int **imx; */
+/*   int **dmx; */
+/*   int   i,k; */
+/*   int   sc; */
+/*   int   codon; */
   
-  /* Allocate a DP matrix with 0..L rows, 0..M+1 columns.
-   */ 
-  mx = CreateDPMatrix(L+1, hmm->M, 0, 0);
-  xmx = mx->xmx;
-  mmx = mx->mmx;
-  imx = mx->imx;
-  dmx = mx->dmx;
+/*   /\* Allocate a DP matrix with 0..L rows, 0..M+1 columns. */
+/*    *\/  */
+/*   mx = CreateDPMatrix(L+1, hmm->M, 0, 0); */
+/*   xmx = mx->xmx; */
+/*   mmx = mx->mmx; */
+/*   imx = mx->imx; */
+/*   dmx = mx->dmx; */
 
-  /* Initialization of the zero row (DNA sequence of length 0)
-   * Note that xmx[i][stN] = 0 by definition for all i,
-   *    and xmx[i][stT] = xmx[i][stC], so neither stN nor stT need
-   *    to be calculated in DP matrices.
-   */
-  xmx[0][XMN] = 0;		                     /* S->N, p=1            */
-  xmx[0][XMB] = hmm->xsc[XTN][MOVE];                 /* S->N->B, no N-tail   */
-  xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /* need seq to get here */
-  for (k = 0; k <= hmm->M; k++)
-    mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /* need seq to get here */
+/*   /\* Initialization of the zero row (DNA sequence of length 0) */
+/*    * Note that xmx[i][stN] = 0 by definition for all i, */
+/*    *    and xmx[i][stT] = xmx[i][stC], so neither stN nor stT need */
+/*    *    to be calculated in DP matrices. */
+/*    *\/ */
+/*   xmx[0][XMN] = 0;		                     /\* S->N, p=1            *\/ */
+/*   xmx[0][XMB] = hmm->xsc[XTN][MOVE];                 /\* S->N->B, no N-tail   *\/ */
+/*   xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /\* need seq to get here *\/ */
+/*   for (k = 0; k <= hmm->M; k++) */
+/*     mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /\* need seq to get here *\/ */
 
-  /* Initialization of the first row (DNA sequence of length 1);
-   * only N state can make this nucleotide.
-   */
-  xmx[1][XMN] = xmx[0][XMN] + hmm->xsc[XTN][LOOP];
-  xmx[1][XMB] = xmx[1][XMN] + hmm->xsc[XTN][MOVE]; 
-  xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /* need 2 nt to get here */
-  for (k = 0; k <= hmm->M; k++)
-    mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /* need 2 nt to get into model */
+/*   /\* Initialization of the first row (DNA sequence of length 1); */
+/*    * only N state can make this nucleotide. */
+/*    *\/ */
+/*   xmx[1][XMN] = xmx[0][XMN] + hmm->xsc[XTN][LOOP]; */
+/*   xmx[1][XMB] = xmx[1][XMN] + hmm->xsc[XTN][MOVE];  */
+/*   xmx[0][XME] = xmx[0][XMC] = xmx[0][XMJ] = -INFTY;  /\* need 2 nt to get here *\/ */
+/*   for (k = 0; k <= hmm->M; k++) */
+/*     mmx[0][k] = imx[0][k] = dmx[0][k] = -INFTY;      /\* need 2 nt to get into model *\/ */
 
-  /* Recursion. Done as a pull.
-   * Note some slightly wasteful boundary conditions:  
-   *    tsc[0] = -INFTY for all eight transitions (no node 0)
-   *    D_M and I_M are wastefully calculated (they don't exist)
-   */
-  for (i = 2; i <= L; i++) {
-    mmx[i][0] = imx[i][0] = dmx[i][0] = -INFTY;
+/*   /\* Recursion. Done as a pull. */
+/*    * Note some slightly wasteful boundary conditions:   */
+/*    *    tsc[0] = -INFTY for all eight transitions (no node 0) */
+/*    *    D_M and I_M are wastefully calculated (they don't exist) */
+/*    *\/ */
+/*   for (i = 2; i <= L; i++) { */
+/*     mmx[i][0] = imx[i][0] = dmx[i][0] = -INFTY; */
 
-				/* crude calculation of lookup value for codon */
-    if (i > 2) {
-      if (dsq[i-2] < 4 && dsq[i-1] < 4 && dsq[i] < 4)
-	codon = dsq[i-2] * 16 + dsq[i-1] * 4 + dsq[i];
-      else
-	codon = 64;		/* ambiguous codon; punt */
-    }
+/* 				/\* crude calculation of lookup value for codon *\/ */
+/*     if (i > 2) { */
+/*       if (dsq[i-2] < 4 && dsq[i-1] < 4 && dsq[i] < 4) */
+/* 	codon = dsq[i-2] * 16 + dsq[i-1] * 4 + dsq[i]; */
+/*       else */
+/* 	codon = 64;		/\* ambiguous codon; punt *\/ */
+/*     } */
 
-    for (k = 1; k <= hmm->M; k++) {
-				/* match state */
-      if (i > 2) {
-	mmx[i][k]  = mmx[i-3][k-1] + hmm->tsc[TMM][k-1];
-	if ((sc = imx[i-3][k-1] + hmm->tsc[TIM][k-1]) > mmx[i][k])
-	  mmx[i][k] = sc;
-	if ((sc = xmx[i-3][XMB] + hmm->bsc[k]) > mmx[i][k])
-	  mmx[i][k] = sc;
-	if ((sc = dmx[i-3][k-1] + hmm->tsc[TDM][k-1]) > mmx[i][k])
-	  mmx[i][k] = sc;
-	mmx[i][k] += hmm->dnam[codon][k];
-      }
-				/* -1 frameshifts into match state */
-      if ((sc = mmx[i-2][k-1] + hmm->tsc[TMM][k-1] + hmm->dna2) > mmx[i][k])
-	mmx[i][k] = sc;
-      if ((sc = imx[i-2][k-1] + hmm->tsc[TIM][k-1] + hmm->dna2) > mmx[i][k])
-	mmx[i][k] = sc;
-      if ((sc = xmx[i-2][XMB] + hmm->bsc[k] + hmm->dna2) > mmx[i][k])
-	mmx[i][k] = sc;
-      if ((sc = dmx[i-2][k-1] + hmm->tsc[TDM][k-1] + hmm->dna2) > mmx[i][k])
-	mmx[i][k] = sc;
+/*     for (k = 1; k <= hmm->M; k++) { */
+/* 				/\* match state *\/ */
+/*       if (i > 2) { */
+/* 	mmx[i][k]  = mmx[i-3][k-1] + hmm->tsc[TMM][k-1]; */
+/* 	if ((sc = imx[i-3][k-1] + hmm->tsc[TIM][k-1]) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/* 	if ((sc = xmx[i-3][XMB] + hmm->bsc[k]) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/* 	if ((sc = dmx[i-3][k-1] + hmm->tsc[TDM][k-1]) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/* 	mmx[i][k] += hmm->dnam[codon][k]; */
+/*       } */
+/* 				/\* -1 frameshifts into match state *\/ */
+/*       if ((sc = mmx[i-2][k-1] + hmm->tsc[TMM][k-1] + hmm->dna2) > mmx[i][k]) */
+/* 	mmx[i][k] = sc; */
+/*       if ((sc = imx[i-2][k-1] + hmm->tsc[TIM][k-1] + hmm->dna2) > mmx[i][k]) */
+/* 	mmx[i][k] = sc; */
+/*       if ((sc = xmx[i-2][XMB] + hmm->bsc[k] + hmm->dna2) > mmx[i][k]) */
+/* 	mmx[i][k] = sc; */
+/*       if ((sc = dmx[i-2][k-1] + hmm->tsc[TDM][k-1] + hmm->dna2) > mmx[i][k]) */
+/* 	mmx[i][k] = sc; */
       
-				/* +1 frameshifts into match state */
-      if (i > 3) {
-	if ((sc = mmx[i-4][k-1] + hmm->tsc[TMM][k-1] + hmm->dna4) > mmx[i][k])
-	  mmx[i][k] = sc;
-	if ((sc = imx[i-4][k-1] + hmm->tsc[TIM][k-1] + hmm->dna4) > mmx[i][k])
-	  mmx[i][k] = sc;
-	if ((sc = xmx[i-4][XMB] + hmm->bsc[k] + hmm->dna4) > mmx[i][k])
-	  mmx[i][k] = sc;
-	if ((sc = dmx[i-4][k-1] + hmm->tsc[TDM][k-1] + hmm->dna4) > mmx[i][k])
-	  mmx[i][k] = sc;
-      }
-      				/* delete state */
-      dmx[i][k]  = mmx[i][k-1] + hmm->tsc[TMD][k-1];
-      if ((sc = dmx[i][k-1] + hmm->tsc[TDD][k-1]) > dmx[i][k])
-	dmx[i][k] = sc;
+/* 				/\* +1 frameshifts into match state *\/ */
+/*       if (i > 3) { */
+/* 	if ((sc = mmx[i-4][k-1] + hmm->tsc[TMM][k-1] + hmm->dna4) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/* 	if ((sc = imx[i-4][k-1] + hmm->tsc[TIM][k-1] + hmm->dna4) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/* 	if ((sc = xmx[i-4][XMB] + hmm->bsc[k] + hmm->dna4) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/* 	if ((sc = dmx[i-4][k-1] + hmm->tsc[TDM][k-1] + hmm->dna4) > mmx[i][k]) */
+/* 	  mmx[i][k] = sc; */
+/*       } */
+/*       				/\* delete state *\/ */
+/*       dmx[i][k]  = mmx[i][k-1] + hmm->tsc[TMD][k-1]; */
+/*       if ((sc = dmx[i][k-1] + hmm->tsc[TDD][k-1]) > dmx[i][k]) */
+/* 	dmx[i][k] = sc; */
 
-				/* insert state */
-      if (i > 2) {
-	imx[i][k] = mmx[i-3][k] + hmm->tsc[TMI][k];
-	if ((sc = imx[i-3][k] + hmm->tsc[TII][k]) > imx[i][k])
-	  imx[i][k] = sc;
-	imx[i][k] += hmm->dnai[codon][k];
-      }
+/* 				/\* insert state *\/ */
+/*       if (i > 2) { */
+/* 	imx[i][k] = mmx[i-3][k] + hmm->tsc[TMI][k]; */
+/* 	if ((sc = imx[i-3][k] + hmm->tsc[TII][k]) > imx[i][k]) */
+/* 	  imx[i][k] = sc; */
+/* 	imx[i][k] += hmm->dnai[codon][k]; */
+/*       } */
 
-				/* -1 frameshifts into insert state */
-      if ((sc = mmx[i-2][k] + hmm->tsc[TMI][k] + hmm->dna2) > imx[i][k])
-	imx[i][k] = sc;
-      if ((sc = imx[i-2][k] + hmm->tsc[TII][k] + hmm->dna2) > imx[i][k])
-	imx[i][k] = sc;
+/* 				/\* -1 frameshifts into insert state *\/ */
+/*       if ((sc = mmx[i-2][k] + hmm->tsc[TMI][k] + hmm->dna2) > imx[i][k]) */
+/* 	imx[i][k] = sc; */
+/*       if ((sc = imx[i-2][k] + hmm->tsc[TII][k] + hmm->dna2) > imx[i][k]) */
+/* 	imx[i][k] = sc; */
 
-				/* +1 frameshifts into insert state */
-      if (i > 4) {
-	if ((sc = mmx[i-4][k] + hmm->tsc[TMI][k] + hmm->dna4) > imx[i][k])
-	  imx[i][k] = sc;
-	if ((sc = imx[i-4][k] + hmm->tsc[TII][k] + hmm->dna4) > imx[i][k])
-	  imx[i][k] = sc;
-      }
-    }
-    /* Now the special states. Order is important here.
-     * remember, C and J emissions are zero score by definition,
-     */
-				/* N state: +1 nucleotide */
-    xmx[i][XMN] = xmx[i-1][XMN] + hmm->xsc[XTN][LOOP];
-                                /* E state: collect from M's, and last D  */
-    xmx[i][XME] = dmx[i][hmm->M];    /* transition prob from last D = 1.0 */
-    for (k = 1; k <= hmm->M; k++)
-      if ((sc =  mmx[i][k] + hmm->esc[k]) > xmx[i][XME])
-        xmx[i][XME] = sc;
-                                /* J state: +1 nucleotide */
-    xmx[i][XMJ] = xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP];
-    if ((sc = xmx[i][XME]   + hmm->xsc[XTE][LOOP]) > xmx[i][XMJ])
-      xmx[i][XMJ] = sc;
-                                /* B state: collect from N,J */
-    xmx[i][XMB] = xmx[i][XMN] + hmm->xsc[XTN][MOVE];
-    if ((sc = xmx[i][XMJ] + hmm->xsc[XTJ][MOVE]) > xmx[i][XMB])
-      xmx[i][XMB] = sc;
-				/* C state: +1 nucleotide */
-    xmx[i][XMC] = xmx[i-1][XMC] + hmm->xsc[XTC][LOOP];
-    if ((sc = xmx[i][XME] + hmm->xsc[XTE][MOVE]) > xmx[i][XMC])
-      xmx[i][XMC] = sc;
-  }
+/* 				/\* +1 frameshifts into insert state *\/ */
+/*       if (i > 4) { */
+/* 	if ((sc = mmx[i-4][k] + hmm->tsc[TMI][k] + hmm->dna4) > imx[i][k]) */
+/* 	  imx[i][k] = sc; */
+/* 	if ((sc = imx[i-4][k] + hmm->tsc[TII][k] + hmm->dna4) > imx[i][k]) */
+/* 	  imx[i][k] = sc; */
+/*       } */
+/*     } */
+/*     /\* Now the special states. Order is important here. */
+/*      * remember, C and J emissions are zero score by definition, */
+/*      *\/ */
+/* 				/\* N state: +1 nucleotide *\/ */
+/*     xmx[i][XMN] = xmx[i-1][XMN] + hmm->xsc[XTN][LOOP]; */
+/*                                 /\* E state: collect from M's, and last D  *\/ */
+/*     xmx[i][XME] = dmx[i][hmm->M];    /\* transition prob from last D = 1.0 *\/ */
+/*     for (k = 1; k <= hmm->M; k++) */
+/*       if ((sc =  mmx[i][k] + hmm->esc[k]) > xmx[i][XME]) */
+/*         xmx[i][XME] = sc; */
+/*                                 /\* J state: +1 nucleotide *\/ */
+/*     xmx[i][XMJ] = xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP]; */
+/*     if ((sc = xmx[i][XME]   + hmm->xsc[XTE][LOOP]) > xmx[i][XMJ]) */
+/*       xmx[i][XMJ] = sc; */
+/*                                 /\* B state: collect from N,J *\/ */
+/*     xmx[i][XMB] = xmx[i][XMN] + hmm->xsc[XTN][MOVE]; */
+/*     if ((sc = xmx[i][XMJ] + hmm->xsc[XTJ][MOVE]) > xmx[i][XMB]) */
+/*       xmx[i][XMB] = sc; */
+/* 				/\* C state: +1 nucleotide *\/ */
+/*     xmx[i][XMC] = xmx[i-1][XMC] + hmm->xsc[XTC][LOOP]; */
+/*     if ((sc = xmx[i][XME] + hmm->xsc[XTE][MOVE]) > xmx[i][XMC]) */
+/*       xmx[i][XMC] = sc; */
+/*   } */
 
-  sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
+/*   sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE]; */
 
-  if (ret_mx != NULL) *ret_mx = mx;
-  else                FreeDPMatrix(mx);
+/*   if (ret_mx != NULL) *ret_mx = mx; */
+/*   else                FreeDPMatrix(mx); */
 
-  return Scorify(sc);            /* the total Viterbi score. */
-}
+/*   return Scorify(sc);            /\* the total Viterbi score. *\/ */
+/* } */
 
 
 

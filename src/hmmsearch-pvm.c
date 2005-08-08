@@ -119,7 +119,7 @@ main(void)
       if(do_forward && do_null2)
       {
           /* Need the trace - first check space */
-          if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
+          if (ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
           {
               sc = Viterbi(dsq, L, hmm, mx, &tr);
           }
@@ -148,7 +148,7 @@ main(void)
       
 #else /* not altivec */
       
-      if (P7ViterbiSpaceOK(L, hmm->M, mx))
+      if (ViterbiSpaceOK(L, hmm->M, mx))
       {
           SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
           sc = Viterbi(dsq, L, hmm, mx, &tr);
@@ -170,7 +170,7 @@ main(void)
 #ifdef ALTIVEC
               if(tr == NULL)
               {
-                  if (P7ViterbiSpaceOK(L, hmm->M, mx))
+                  if (ViterbiSpaceOK(L, hmm->M, mx))
                   {
                       Viterbi(dsq, L, hmm, mx, &tr);
                   }
@@ -202,7 +202,7 @@ main(void)
 #ifdef ALTIVEC
           if(tr == NULL)
           {
-              if (P7ViterbiSpaceOK(L, hmm->M, mx))
+              if (ViterbiSpaceOK(L, hmm->M, mx))
               {
                   Viterbi(dsq, L, hmm, mx, &tr);
               }
