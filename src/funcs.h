@@ -13,7 +13,7 @@
 
 #include "plan7.h"
 #include "structs.h"
-
+#include "customfuncs.h"
 
 /* alphabet.c
  * Configuration of global alphabet information
@@ -466,6 +466,7 @@ extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
 		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern void  ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
 			  struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+
 
 #endif /*FUNCSH_INCLUDED*/
 
