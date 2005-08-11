@@ -27,15 +27,6 @@ void AllocLogoddsBody(struct plan7_s *hmm){
   lom->msc_mem = MallocOrDie ((MAXCODE*(M+1+16)) * sizeof(int));
   lom->isc_mem = MallocOrDie ((MAXCODE*(M+16)) *   sizeof(int));
 
-  lom->tsc[0]  = lom->tsc_mem;
-  lom->msc[0]  = lom->msc_mem;
-  lom->isc[0]  = lom->isc_mem;
-  
-  lom->bsc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-  lom->esc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-  lom->bsc = lom->bsc_mem;
-  lom->esc = lom->esc_mem;
-
   /* align tsc pointers */
   lom->tsc[TMM] = (int *) (((((size_t) lom->tsc_mem) + 15) & (~0xf)));
   lom->tsc[TMI] = (int *) (((((size_t) lom->tsc_mem) + (M+12)*sizeof(int) + 15) & (~0xf)) + 12);
@@ -49,12 +40,13 @@ void AllocLogoddsBody(struct plan7_s *hmm){
     lom->msc[x] = (int *) (((((size_t)lom->msc_mem) + x*(M+1+12)*sizeof(int) + 15) & (~0xf)) + 12);
     lom->isc[x] = (int *) (((((size_t)lom->isc_mem) + x*(M+12)*sizeof(int) + 15) & (~0xf)) + 12);
   }
+
   /* tsc[0] is used as a boundary condition sometimes [Viterbi()],
    * so set to -inf always.
    */
   for (x = 0; x < 7; x++)
     lom->tsc[x][0] = -INFTY;
-
+  
   lom->bsc_mem= MallocOrDie  ((M+1+12) * sizeof(int));
   lom->esc_mem= MallocOrDie  ((M+1+12) * sizeof(int));
 
@@ -88,26 +80,6 @@ void FillCustomLogodds(struct plan7_s *hmm){
   int k, x;
   struct logodds_s *lom = hmm->lom;
 
-  for (k = 0; k <= hmm->M; ++k){
-    for (x = 0; x < Alphabet_iupac; ++x){
-      lom->msc[x][k] = hmm->msc[x][k];
-      lom->isc[x][k] = hmm->isc[x][k];
-    }
-    lom->bsc[k] = hmm->bsc[k];
-  }
-
-  for (k = 0; k < hmm->M; ++k){
-    lom->tsc[TMM][k] = hmm->tsc[TMM][k];
-    lom->tsc[TMI][k] = hmm->tsc[TMI][k];
-    lom->tsc[TMD][k] = hmm->tsc[TMD][k];
-    lom->tsc[TIM][k] = hmm->tsc[TIM][k];
-    lom->tsc[TII][k] = hmm->tsc[TII][k];
-    lom->tsc[TDM][k] = hmm->tsc[TDM][k];
-    lom->tsc[TDD][k] = hmm->tsc[TDD][k];
-    
-    lom->esc[k] = hmm->esc[k];
-  }
-
   lom->xsc[XTN][LOOP] = hmm->xsc[XTN][LOOP];
   lom->xsc[XTN][MOVE] = hmm->xsc[XTN][MOVE];
   lom->xsc[XTE][LOOP] = hmm->xsc[XTE][LOOP];
@@ -116,6 +88,42 @@ void FillCustomLogodds(struct plan7_s *hmm){
   lom->xsc[XTC][MOVE] = hmm->xsc[XTC][MOVE];
   lom->xsc[XTJ][LOOP] = hmm->xsc[XTJ][LOOP];
   lom->xsc[XTJ][MOVE] = hmm->xsc[XTJ][MOVE];
+
+  /*
+   * tsc has 7 dimensions (TMM, TMI, TMD, TIM, TII, TDM, TDD).  Each dimension
+   * has 0..M spaces.
+   */
+  for (k = 0; k < hmm->M; ++k){
+    lom->tsc[TMM][k] = hmm->tsc[TMM][k];
+    lom->tsc[TMI][k] = hmm->tsc[TMI][k];
+    lom->tsc[TMD][k] = hmm->tsc[TMD][k];
+    lom->tsc[TIM][k] = hmm->tsc[TIM][k];
+    lom->tsc[TII][k] = hmm->tsc[TII][k];
+    lom->tsc[TDM][k] = hmm->tsc[TDM][k];
+    lom->tsc[TDD][k] = hmm->tsc[TDD][k];
+  }
+
+  /*
+   * msc and isc both have 0..MAXCODE dimensions.  Each msc dimension has 
+   * 0..M+1 spaces, while each isc dimension has 0..M spaces.
+   */
+  for (x = 0; x < MAXCODE; ++x){
+    for (k = 0; k < hmm->M; ++k){
+      lom->msc[x][k] = hmm->msc[x][k];
+      lom->isc[x][k] = hmm->isc[x][k];
+    }
+    lom->msc[x][hmm->M] = hmm->msc[x][hmm->M];
+  }
+
+  /*
+   * bsc and esc have one dimension only.  Each dimension has 0..M+1 spaces.
+   */
+  for (k = 0; k < hmm->M+1; ++k){
+    lom->bsc[k] = hmm->bsc[k];
+    lom->esc[k] = hmm->esc[k];
+  }
+  
+  return;
 }
 
 

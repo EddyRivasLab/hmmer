@@ -54,7 +54,6 @@ PROGS = hmmalign\
 OBJS =  alphabet.o\
 	core_algorithms.o\
 	debug.o\
-	display.o\
 	emit.o\
 	emulation.o\
 	fast_algorithms.o\
@@ -71,12 +70,14 @@ OBJS =  alphabet.o\
 	modelmakers.o\
 	plan7.o\
 	plan9.o\
-	postprob.o\
 	prior.o\
 	pvm.o\
 	threads.o\
 	tophits.o\
-	trace.o 
+	trace.o \
+#	display.o\
+#	postprob.o\
+
 
 HDRS =  config.h\
 	funcs.h\
