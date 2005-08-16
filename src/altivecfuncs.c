@@ -63,7 +63,8 @@ printivec(vector signed int z)
 
 
 float
-Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr) 
+Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
+	cust_dpmatrix_s *mx, struct p7trace_s **ret_tr) 
 {
     struct p7trace_s  *tr;
     int **xmx;
@@ -720,7 +721,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, s
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 float
-P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx) 
+P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx) 
 {
     struct p7trace_s *   tr;
     int *                workp;

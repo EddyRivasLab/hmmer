@@ -17,7 +17,8 @@ struct logodds_s {
  *
  * Purpose:   Stores the calculations of the dynamic programming algorithms.
  */
-struct dpmatrix_s {
-};
+typedef struct {
+
+} cust_dpmatrix_s;
 
 #endif

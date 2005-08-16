@@ -17,7 +17,7 @@ struct logodds_s {
   int  *tsc_mem, *msc_mem, *isc_mem, *bsc_mem, *esc_mem; 
 };
 
-struct dpmatrix_s {
+typedef struct {
   int **xmx;			/* special scores [0.1..N][BECJN]     */
   int **mmx;			/* match scores [0.1..N][0.1..M]      */
   int **imx;			/* insert scores [0.1..N][0.1..M-1.M] */
@@ -44,7 +44,7 @@ struct dpmatrix_s {
 
   int padN;			/* extra pad in sequence length/rows */
   int padM;			/* extra pad in HMM length/columns   */
-};
+} cust_dpmatrix_s;
 
 
 #endif /*ALTIVECSTRUCTSH_INCLUDED*/

@@ -25,11 +25,7 @@ static float get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 			   int k3, char t3, int s3,
 			   int *ret_k2, char *ret_t2, int *ret_s2);
 
-/* Function: CreatePlan7DPMatrix()
- *
- * Note:     This was originally defined as CreatePlan7Matrix(), but I renamed
- *           it to make it obvious that this was for the allocating the default
- *           dpmatrix, not the customized one.  - CRS 13 July 2005
+/* Function: CreatePlan7Matrix()
  *
  * Purpose:  Create a dynamic programming matrix for standard Forward,
  *           Backward, or Viterbi, with scores kept as scaled log-odds
@@ -52,13 +48,13 @@ static float get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
  * Return:   mx
  *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
  */
-struct p7dpmatrix_s *
-CreatePlan7DPMatrix(int N, int M, int padN, int padM)
+struct dpmatrix_s *
+CreatePlan7Matrix(int N, int M, int padN, int padM)
 {
-  struct p7dpmatrix_s *mx;
+  struct dpmatrix_s *mx;
   int i;
 
-  mx          = (struct p7dpmatrix_s *) MallocOrDie (sizeof(struct dpmatrix_s));
+  mx          = (struct dpmatrix_s *) MallocOrDie (sizeof(struct dpmatrix_s));
   mx->xmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->mmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->imx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
@@ -107,12 +103,8 @@ CreatePlan7DPMatrix(int N, int M, int padN, int padM)
   return mx;
 }
 
-/* Function: ResizePlan7DPMatrix()
+/* Function: ResizePlan7Matrix()
  *
- * Note:     This was originally defined as ResizePlan7Matrix(), but I renamed
- *           it to make it obvious that this was for the allocating the default
- *           dpmatrix, not the customized one.  - CRS 13 July 2005 
- * 
  * Purpose:  Reallocate a dynamic programming matrix, if necessary,
  *           for a problem of NxM: sequence length N, model size M.
  *           (N=1 for small memory score-only variants; we allocate
@@ -144,7 +136,7 @@ CreatePlan7DPMatrix(int N, int M, int padN, int padM)
  *           mx is (re)allocated here.
  */
 void
-ResizePlan7DPMatrix(struct p7dpmatrix_s *mx, int N, int M, 
+ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
 		    int ***xmx, int ***mmx, int ***imx, int ***dmx)
 {
   int i;
@@ -200,12 +192,8 @@ ResizePlan7DPMatrix(struct p7dpmatrix_s *mx, int N, int M,
   if (dmx != NULL) *dmx = mx->dmx;
 }
 
-/* Function: AllocPlan7DPMatrix()
+/* Function: AllocPlan7Matrix()
  * Date:     SRE, Tue Nov 19 07:14:47 2002 [St. Louis]
- *
- * Note:     This was originally defined as AllocPlan7Matrix(), but I renamed
- *           it to make it obvious that this was for the allocating the default
- *           dpmatrix, not the customized one.  - CRS 13 July 2005 
  *
  * Purpose:  Used to be the main allocator for dp matrices; we used to
  *           allocate, calculate, free. But this spent a lot of time
@@ -225,11 +213,11 @@ ResizePlan7DPMatrix(struct p7dpmatrix_s *mx, int N, int M,
  * Returns:  mx
  *           Caller free's w/ FreeDPMatrix()
  */
-struct p7dpmatrix_s *
-AllocPlan7DPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
+struct dpmatrix_s *
+AllocPlan7Matrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
 {
-  struct p7dpmatrix_s *mx;
-  mx = CreatePlan7DPMatrix(rows-1, M, 0, 0);
+  struct dpmatrix_s *mx;
+  mx = CreatePlan7Matrix(rows-1, M, 0, 0);
   if (xmx != NULL) *xmx = mx->xmx;
   if (mmx != NULL) *mmx = mx->mmx;
   if (imx != NULL) *imx = mx->imx;
@@ -238,18 +226,14 @@ AllocPlan7DPMatrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***d
 }
 
 
-/* Function: FreePlan7DPMatrix()
- *
- * Note:     This was originally defined as FreePlan7Matrix(), but I renamed
- *           it to make it obvious that this was for the freeing the default
- *           dpmatrix, not the customized one.  - CRS 13 July 2005 
+/* Function: FreePlan7Matrix()
  * 
  * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
  * 
  * Return:   (void)
  */
 void
-FreePlan7DPMatrix(struct p7dpmatrix_s *mx)
+FreePlan7Matrix(struct dpmatrix_s *mx)
 {
   /* 
    *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
@@ -419,7 +403,7 @@ P7WeeViterbiSize(int L, int M)
  * Returns:  Score of optimal alignment in bits.
  */
 float
-P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
+P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *ctr;        /* collapsed trace of optimal parse */
   struct p7trace_s *tr;         /* full trace of optimal alignment */
@@ -470,7 +454,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
 				   is a hack to work around the problem, which is rare. 
 				   Attempts to use our main dp mx will violate our 
 				   RAMLIMIT guarantee, so allocate a tiny linear one. */
-	  struct dpmatrix_s *tiny;
+	  cust_dpmatrix_s *tiny;
 	  SQD_DPRINTF1(("      -- using P7Viterbi on %dx%d subproblem that P7WeeV should get\n",
 			hmm->M, sqlen));
 	  tiny = CreateDPMatrix(1, hmm->M, 0, 0);
@@ -609,8 +593,8 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
 float
 P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
-  struct p7dpmatrix_s *mx;        /* two rows of score matrix */
-  struct p7dpmatrix_s *tmx;       /* two rows of misused score matrix: traceback ptrs */
+  struct dpmatrix_s *mx;        /* two rows of score matrix */
+  struct dpmatrix_s *tmx;       /* two rows of misused score matrix: traceback ptrs */
   struct p7trace_s  *tr;        /* RETURN: collapsed traceback */
   int  **xmx, **mmx, **dmx, **imx; /* convenience ptrs to score matrix */  
   int  **xtr, **mtr, **dtr, **itr; /* convenience ptrs to traceback pointers */
@@ -623,8 +607,8 @@ P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_
   /* Alloc a DP matrix and traceback pointers, two rows each, O(M).
    * Alloc two O(L) arrays to trace back through the sequence thru B and E.
    */
-  mx  = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
-  tmx = AllocPlan7DPMatrix(2, hmm->M, &xtr, &mtr, &itr, &dtr);
+  mx  = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  tmx = AllocPlan7Matrix(2, hmm->M, &xtr, &mtr, &itr, &dtr);
   btr = MallocOrDie(sizeof(int) * (L+1));
   etr = MallocOrDie(sizeof(int) * (L+1));
 
@@ -769,8 +753,8 @@ P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_
   tr->tlen = tpos + 1;
   P7ReverseTrace(tr);
   
-  FreePlan7DPMatrix(mx);
-  FreePlan7DPMatrix(tmx);
+  FreePlan7Matrix(mx);
+  FreePlan7Matrix(tmx);
   free(btr);
   free(etr);
 
@@ -1216,8 +1200,8 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 	      int k3, char t3, int s3,
 	      int *ret_k2, char *ret_t2, int *ret_s2)
 {
-  struct p7dpmatrix_s *fwd;
-  struct p7dpmatrix_s *bck;
+  struct dpmatrix_s *fwd;
+  struct dpmatrix_s *bck;
   int        **xmx;             /* convenience ptr into special states */
   int        **mmx;             /* convenience ptr into match states   */
   int        **imx;             /* convenience ptr into insert states  */
@@ -1249,7 +1233,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
   /* Allocate our forward two rows.
    * Initialize row zero.
    */
-  fwd = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  fwd = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
   cur = start%2;
   xmx[cur][XMN] = xmx[cur][XMB] = -INFTY;
   xmx[cur][XME] = xmx[cur][XMC] = -INFTY;  
@@ -1403,7 +1387,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 
   /* Allocate our backwards two rows. Init last row.
    */
-  bck = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  bck = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
   nxt = s3%2;
   xmx[nxt][XMN] = xmx[nxt][XMB] = -INFTY;
   xmx[nxt][XME] = xmx[nxt][XMC] = -INFTY;  
@@ -1534,8 +1518,8 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
    * Garbage collection, return.
    *****************************************************************/
   
-  FreePlan7DPMatrix(fwd);
-  FreePlan7DPMatrix(bck);
+  FreePlan7Matrix(fwd);
+  FreePlan7Matrix(bck);
   *ret_k2 = k2;
   *ret_t2 = t2;
   *ret_s2 = s2;
@@ -1581,7 +1565,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
 struct p7trace_s *
 P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 {
-  struct p7dpmatrix_s *mx;        /* Viterbi calculation lattice (two rows) */
+  struct dpmatrix_s *mx;        /* Viterbi calculation lattice (two rows) */
   struct dpshadow_s *tb;        /* shadow matrix of traceback pointers */
   struct p7trace_s  *tr;        /* RETURN: traceback */
   int  **xmx, **mmx, **imx, **dmx;
@@ -1624,7 +1608,7 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
   /* Allocate a DP matrix with 2 rows, 0..M columns,
    * and a shadow matrix with 0,1..alen rows, 0..M columns.
    */ 
-  mx = AllocPlan7DPMatrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
+  mx = AllocPlan7Matrix(2, hmm->M, &xmx, &mmx, &imx, &dmx);
   tb = AllocShadowMatrix(msa->alen+1, hmm->M, &xtb, &mtb, &itb, &dtb);
 
   /* Initialization of the zero row.
@@ -1745,7 +1729,7 @@ P7ViterbiAlignAlignment(MSA *msa, struct plan7_s *hmm)
 				/* do the traceback */
   tr = ShadowTrace(tb, hmm, msa->alen);
 				/* cleanup and return */
-  FreePlan7DPMatrix(mx);
+  FreePlan7Matrix(mx);
   FreeShadowMatrix(tb);
   for (i = 1; i <= msa->alen; i++)
     free(con[i]);

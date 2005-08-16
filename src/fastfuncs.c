@@ -23,7 +23,7 @@
  */
 float
 Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
-	struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
+	cust_dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s  *tr;
   int **xmx;

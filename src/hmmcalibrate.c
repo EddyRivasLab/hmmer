@@ -515,7 +515,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
 		 double *sc, int *alen)
 {
   struct p7trace_s   *tr;
-  struct dpmatrix_s  *mx;
+  cust_dpmatrix_s  *mx;
   float  randomseq[MAXABET];
   float  p1;
   char           *seq;

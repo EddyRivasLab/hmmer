@@ -45,16 +45,16 @@ extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M,
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
 *
 */
-extern struct p7dpmatrix_s 
-             *CreatePlan7DPMatrix(int N, int M, 
+extern struct dpmatrix_s 
+             *CreatePlan7Matrix(int N, int M, 
 						int padN, int padM);
-extern void  ResizePlan7DPMatrix(struct p7dpmatrix_s *mx, int N, int M, 
+extern void  ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
-extern struct p7dpmatrix_s 
-             *AllocPlan7DPMatrix(int rows, int M, int ***xmx, 
+extern struct dpmatrix_s 
+             *AllocPlan7Matrix(int rows, int M, int ***xmx, 
 					       int ***mmx, int ***imx, 
 					       int ***dmx);
-extern void  FreePlan7DPMatrix(struct p7dpmatrix_s *mx);
+extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
 extern struct dpshadow_s 
              *AllocShadowMatrix(int rows, int M, char ***xtb, 
 				char ***mtb, char ***itb, char ***dtb);
@@ -64,7 +64,7 @@ extern int   P7WeeViterbiSize(int L, int M);
 extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int L,
 			   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern float P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
-			    struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+			    cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern float P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			      struct p7trace_s **ret_tr);
 extern float P7WeeViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
@@ -431,22 +431,9 @@ extern void AllocLogoddsShell(struct plan7_s *hmm);
 extern void AllocLogoddsBody(struct plan7_s *hmm);
 extern void FreeLogodds(struct plan7_s *hmm);
 extern void FillCustomLogodds(struct plan7_s *hmm);
-extern struct dpmatrix_s 
-            *CreateDPMatrix(int N, int M, int padN, int padM);
-extern void ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M);
-/*
-********************************************************************************
- * Note:  I am commenting this line out because I don't think we need it 
- *        anymore.  It seems to have existed mainly for convenenience purposes, 
- *        but we can no longer include the convenenience pointers in the 
- *        function call in the new architecture, because we can't assume the 
- *        custom dpmatrix actually has those pointers.  - CRS 14 July 2005
- *
- extern struct dpmatrix_s *AllocDPMatrix(int rows, int M, 
- int ***xmx, int ***mmx, int ***imx, int ***dmx);
- *
- */
-extern void FreeDPMatrix(struct dpmatrix_s *mx);
+extern cust_dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
+extern void ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M);
+extern void FreeDPMatrix(cust_dpmatrix_s *mx);
 
 
 /*
@@ -457,15 +444,15 @@ extern void FreeDPMatrix(struct dpmatrix_s *mx);
  * Customized and/or optimized version of the dynamic programming
  * algorithms and related support functions.
  */
-extern int   ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx);
+extern int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx);
 extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
-		      struct dpmatrix_s **ret_mx);
+		      cust_dpmatrix_s **ret_mx);
 extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     struct dpmatrix_s **ret_mx);
+		     cust_dpmatrix_s **ret_mx);
 extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+		     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern void  ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-			  struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
+			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 
 #endif /*FUNCSH_INCLUDED*/

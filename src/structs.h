@@ -56,7 +56,7 @@ extern int   DegenCount[MAXCODE];
 
 /* Declaration of default Plan7 dynamic programming matrix structure.
  */
-struct p7dpmatrix_s {
+struct dpmatrix_s {
   int **xmx;			/* special scores [0.1..N][BECJN]     */
   int **mmx;			/* match scores [0.1..N][0.1..M]      */
   int **imx;			/* insert scores [0.1..N][0.1..M-1.M] */
