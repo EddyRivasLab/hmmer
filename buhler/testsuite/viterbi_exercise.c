@@ -51,7 +51,7 @@ main(int argc, char **argv)
   char    *seq;
   SQINFO   sqinfo;
   int      L;			/* length of dsq                           */
-  struct dpmatrix_s *mx;        /* growable, reusable DP matrix            */
+  cust_dpmatrix_s *mx;        /* growable, reusable DP matrix            */
   struct p7trace_s  *tr1;	/* traceback                               */
   struct p7trace_s  *tr2;	/* another traceback                       */
   int       nseq;

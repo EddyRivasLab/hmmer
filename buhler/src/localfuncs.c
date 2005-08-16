@@ -29,7 +29,7 @@
  *
  * Xref:      STL7 p.122.
  */
-extern int   ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx){
+extern int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx){
 
 }
 
@@ -47,7 +47,7 @@ extern int   ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx){
  * Return:   log P(S|M)/P(S|R), as a bit score.
  */
 extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
-		      struct dpmatrix_s **ret_mx){
+		      cust_dpmatrix_s **ret_mx){
 
 }
 
@@ -71,7 +71,7 @@ extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,
  * Return:   log P(S|M)/P(S|R), as a bit score.
  */
 extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     struct dpmatrix_s **ret_mx){
+		     cust_dpmatrix_s **ret_mx){
 
 }
 
@@ -99,7 +99,7 @@ extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm,
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     struct dpmatrix_s *mx, struct p7trace_s **ret_tr){
+		     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr){
 
 }
 
@@ -119,6 +119,6 @@ extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
  *           ret_tr is allocated here. Free using P7FreeTrace().
  */
 extern void  ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-			  struct dpmatrix_s *mx, struct p7trace_s **ret_tr){
+			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr){
 
 }

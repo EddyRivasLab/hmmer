@@ -29,7 +29,7 @@
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 float
-Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx, 
+Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx, 
 	struct p7trace_s **ret_tr)
 {
   struct p7trace_s  *tr;

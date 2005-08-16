@@ -84,7 +84,7 @@ P7ViterbiSize(int L, int M)
  * Xref:      STL7 p.122.
  */
 int
-ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx)
+ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx)
 {
   int newM;
   int newN;
@@ -121,9 +121,9 @@ ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx)
  * Return:   log P(S|M)/P(S|R), as a bit score.
  */
 float
-Backward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
+Backward(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s **ret_mx)
 {
-  struct dpmatrix_s *mx;
+  cust_dpmatrix_s *mx;
   int **xmx;
   int **mmx;
   int **imx;
@@ -243,9 +243,9 @@ Backward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret
  * Return:   log P(S|M)/P(S|R), as a bit score.
  */
 float
-Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_mx)
+Forward(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s **ret_mx)
 {
-  struct dpmatrix_s *mx;
+  cust_dpmatrix_s *mx;
   int **xmx;
   int **mmx;
   int **imx;
@@ -354,7 +354,7 @@ Forward(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s **ret_
  */
 void
 ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-	       struct dpmatrix_s *mx, struct p7trace_s **ret_tr)
+	     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr)
 {
   struct p7trace_s *tr;
   int curralloc;		/* current allocated length of trace */

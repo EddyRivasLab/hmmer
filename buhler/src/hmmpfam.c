@@ -550,7 +550,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   int                nhmm;	/* number of HMMs searched                 */
   struct plan7_s    *hmm;       /* current HMM to search with              */ 
   struct p7trace_s  *tr;	/* traceback of alignment                  */
-  struct dpmatrix_s *mx;        /* growable DP matrix                      */
+  cust_dpmatrix_s *mx;        /* growable DP matrix                      */
   float   sc;                   /* an alignment score                      */ 
   double  pvalue;		/* pvalue of an HMM score                  */
   double  evalue;		/* evalue of an HMM score                  */

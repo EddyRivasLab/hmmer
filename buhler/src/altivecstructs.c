@@ -1,6 +1,8 @@
 #include "structs.h"
 #include "funcs.h"
 
+#include <assert.h>
+
 inline void AllocLogoddsShell(struct plan7_s *hmm){
   hmm->lom = (struct logodds_s *) MallocOrDie(sizeof(struct logodds_s));
 }
@@ -79,6 +81,7 @@ void FreeLogodds(struct plan7_s *hmm){
 void FillCustomLogodds(struct plan7_s *hmm){
   int k, x;
   struct logodds_s *lom = hmm->lom;
+  int M = hmm->M;
 
   lom->xsc[XTN][LOOP] = hmm->xsc[XTN][LOOP];
   lom->xsc[XTN][MOVE] = hmm->xsc[XTN][MOVE];
@@ -93,36 +96,29 @@ void FillCustomLogodds(struct plan7_s *hmm){
    * tsc has 7 dimensions (TMM, TMI, TMD, TIM, TII, TDM, TDD).  Each dimension
    * has 0..M spaces.
    */
-  for (k = 0; k < hmm->M; ++k){
-    lom->tsc[TMM][k] = hmm->tsc[TMM][k];
-    lom->tsc[TMI][k] = hmm->tsc[TMI][k];
-    lom->tsc[TMD][k] = hmm->tsc[TMD][k];
-    lom->tsc[TIM][k] = hmm->tsc[TIM][k];
-    lom->tsc[TII][k] = hmm->tsc[TII][k];
-    lom->tsc[TDM][k] = hmm->tsc[TDM][k];
-    lom->tsc[TDD][k] = hmm->tsc[TDD][k];
-  }
+  memcpy(lom->tsc[TMM], hmm->tsc[TMM], sizeof(int) * M);
+  memcpy(lom->tsc[TMI], hmm->tsc[TMI], sizeof(int) * M);
+  memcpy(lom->tsc[TMD], hmm->tsc[TMD], sizeof(int) * M);
+  memcpy(lom->tsc[TIM], hmm->tsc[TIM], sizeof(int) * M);
+  memcpy(lom->tsc[TII], hmm->tsc[TII], sizeof(int) * M);
+  memcpy(lom->tsc[TDM], hmm->tsc[TDM], sizeof(int) * M);
+  memcpy(lom->tsc[TDD], hmm->tsc[TDD], sizeof(int) * M);
 
   /*
    * msc and isc both have 0..MAXCODE dimensions.  Each msc dimension has 
    * 0..M+1 spaces, while each isc dimension has 0..M spaces.
    */
   for (x = 0; x < MAXCODE; ++x){
-    for (k = 0; k < hmm->M; ++k){
-      lom->msc[x][k] = hmm->msc[x][k];
-      lom->isc[x][k] = hmm->isc[x][k];
-    }
-    lom->msc[x][hmm->M] = hmm->msc[x][hmm->M];
+    memcpy(lom->msc[x], hmm->msc[x], sizeof(int) * (M+1));
+    memcpy(lom->isc[x], hmm->isc[x], sizeof(int) * M);
   }
 
   /*
    * bsc and esc have one dimension only.  Each dimension has 0..M+1 spaces.
    */
-  for (k = 0; k < hmm->M+1; ++k){
-    lom->bsc[k] = hmm->bsc[k];
-    lom->esc[k] = hmm->esc[k];
-  }
-  
+  memcpy(lom->bsc, hmm->bsc, sizeof(int) * (M+1));
+  memcpy(lom->esc, hmm->esc, sizeof(int) * (M+1));
+
   return;
 }
 
@@ -158,13 +154,13 @@ void FillCustomLogodds(struct plan7_s *hmm){
  * Return:   mx
  *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
  */
-struct dpmatrix_s *
+cust_dpmatrix_s *
 CreateDPMatrix(int N, int M, int padN, int padM)
 {
-  struct dpmatrix_s *mx;
+  cust_dpmatrix_s *mx;
   int i,n;
 
-  mx         = (struct dpmatrix_s *) MallocOrDie (sizeof(struct dpmatrix_s));
+  mx         = (cust_dpmatrix_s *) MallocOrDie (sizeof(cust_dpmatrix_s));
   mx->xmx    = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->mmx    = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->imx    = (int **) MallocOrDie (sizeof(int *) * (N+1));
@@ -242,7 +238,7 @@ CreateDPMatrix(int N, int M, int padN, int padM)
  *           mx is (re)allocated here.
  */
 void
-ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M)
+ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M)
 {
   int i,n;
 
@@ -355,7 +351,7 @@ ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M)
  * Return:   (void)
  */
 void
-FreeDPMatrix(struct dpmatrix_s *mx)
+FreeDPMatrix(cust_dpmatrix_s *mx)
 {
   free (mx->xmx_mem);
   free (mx->mmx_mem);

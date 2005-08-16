@@ -555,7 +555,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 		 struct histogram_s *histogram, 
 		 struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
 {
-  struct dpmatrix_s *mx;        /* DP matrix, growable                     */
+  cust_dpmatrix_s *mx;        /* DP matrix, growable                     */
   struct p7trace_s *tr;         /* traceback                               */
   char   *seq;                  /* target sequence                         */
   unsigned char   *dsq;	        /* digitized target sequence               */
@@ -1162,7 +1162,7 @@ worker_thread(void *ptr)
   char  *seq;                   /* target sequence                 */
   SQINFO sqinfo;		/* information assoc w/ seq        */
   unsigned char     *dsq;       /* digitized sequence              */
-  struct dpmatrix_s *mx;        /* growable DP matrix              */
+  cust_dpmatrix_s *mx;        /* growable DP matrix              */
   struct p7trace_s  *tr;        /* traceback from an alignment     */
   float  sc;			/* score of an alignment           */
   int    rtn;			/* a return code from pthreads lib */

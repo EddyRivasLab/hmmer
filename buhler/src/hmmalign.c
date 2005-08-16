@@ -73,7 +73,7 @@ main(int argc, char **argv)
   float           *wgt;		/* weights to assign to alignment          */
   MSA             *msa;         /* alignment that's created                */    
   int              i;
-  struct dpmatrix_s *mx;        /* growable DP matrix                      */
+  cust_dpmatrix_s *mx;        /* growable DP matrix                      */
   struct p7trace_s **tr;        /* traces for aligned sequences            */
 
   char *optname;                /* name of option found by Getopt()         */
