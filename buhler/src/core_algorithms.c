@@ -46,7 +46,7 @@ static float get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
  *           padM  - over-realloc in HMM/column dimension, or 0
  *                 
  * Return:   mx
- *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
+ *           mx is allocated here. Caller frees with FreePlan7Matrix(mx).
  */
 struct dpmatrix_s *
 CreatePlan7Matrix(int N, int M, int padN, int padM)
@@ -60,27 +60,7 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
   mx->imx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
   mx->dmx     = (int **) MallocOrDie (sizeof(int *) * (N+1));
   
-  /*
-   * Note: I am commenting out or replacing the lines with the *_mem pointers,
-   *       since the default implementation doesn't actually use them.  As 
-   *       noted below, they existed for the altivec implementation, but this
-   *       is now acheived by taking advantage of the new architecture.
-   *        - CRS 6 July 2005
-   mx->xmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
-   mx->mmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
-   mx->imx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
-   mx->dmx_mem = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
 
-   /\* The indirect assignment below looks wasteful; it's actually
-   * used for aligning data on 16-byte boundaries as a cache 
-   * optimization in the fast altivec implementation
-   *\/
-   mx->xmx[0] = (int *) mx->xmx_mem;
-   mx->mmx[0] = (int *) mx->mmx_mem;
-   mx->imx[0] = (int *) mx->imx_mem;
-   mx->dmx[0] = (int *) mx->dmx_mem;
-   *
-   */
 
   mx->xmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*5));
   mx->mmx[0] = (void *) MallocOrDie (sizeof(int) * ((N+1)*(M+2)));
@@ -137,7 +117,7 @@ CreatePlan7Matrix(int N, int M, int padN, int padM)
  */
 void
 ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
-		    int ***xmx, int ***mmx, int ***imx, int ***dmx)
+		  int ***xmx, int ***mmx, int ***imx, int ***dmx)
 {
   int i;
 
@@ -156,21 +136,6 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
     M += mx->padM; 
     mx->maxM = M; 
   }
-
-  /* 
-   *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
-   *
-   mx->xmx_mem = (void *) ReallocOrDie (mx->xmx_mem, sizeof(int) * ((mx->maxN+1)*5));
-   mx->mmx_mem = (void *) ReallocOrDie (mx->mmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
-   mx->imx_mem = (void *) ReallocOrDie (mx->imx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
-   mx->dmx_mem = (void *) ReallocOrDie (mx->dmx_mem, sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
-
-   mx->xmx[0] = (int *) mx->xmx_mem;
-   mx->mmx[0] = (int *) mx->mmx_mem;
-   mx->imx[0] = (int *) mx->imx_mem;
-   mx->dmx[0] = (int *) mx->dmx_mem;
-   *
-   */
 
   mx->xmx[0] = (void *) ReallocOrDie (mx->xmx[0], sizeof(int) * ((mx->maxN+1)*5));
   mx->mmx[0] = (void *) ReallocOrDie (mx->mmx[0], sizeof(int) * ((mx->maxN+1)*(mx->maxM+2)));
@@ -211,7 +176,7 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
  *                 - RETURN: ptrs to four mx components as a convenience
  *
  * Returns:  mx
- *           Caller free's w/ FreeDPMatrix()
+ *           Caller free's w/ FreePlan7Matrix()
  */
 struct dpmatrix_s *
 AllocPlan7Matrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx)
@@ -228,22 +193,13 @@ AllocPlan7Matrix(int rows, int M, int ***xmx, int ***mmx, int ***imx, int ***dmx
 
 /* Function: FreePlan7Matrix()
  * 
- * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
+ * Purpose:  Free a dynamic programming matrix allocated by CreatePlan7Matrix().
  * 
  * Return:   (void)
  */
 void
 FreePlan7Matrix(struct dpmatrix_s *mx)
 {
-  /* 
-   *Note: Same deal with the *_mem pointers as before.  - CRS 6 July 2005
-   *
-   free (mx->xmx_mem);
-   free (mx->mmx_mem);
-   free (mx->imx_mem);
-   free (mx->dmx_mem);
-   *
-   */
   free (mx->xmx[0]);
   free (mx->mmx[0]);
   free (mx->imx[0]);

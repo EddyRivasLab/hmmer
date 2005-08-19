@@ -31,23 +31,9 @@ extern void           DefaultCodonBias(float *codebias);
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
  */
-/*
- * Note: I am commenting out the Matrix function declarations for now,
- *       since a) I am renaming them with more generic names as I move them
- *       around, and b) I want to see where they are called from, so I don't
- *       want the old names declared.  - CRS 21 June 2005
- *
-extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, int padN, int padM);
-extern void   ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
-				int ***xmx, int ***mmx, int ***imx, int ***dmx);
-extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, 
-					   int ***xmx, int ***mmx, int ***imx, int ***dmx);
-extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
-*
-*/
-extern struct dpmatrix_s 
-             *CreatePlan7Matrix(int N, int M, 
-						int padN, int padM);
+
+extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, 
+					    int padN, int padM);
 extern void  ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
 extern struct dpmatrix_s 
@@ -274,9 +260,6 @@ extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
  * Plan7 HMM structure support
 
  */
-extern void REQUIRE_P7LOGODDS(struct plan7_s *hmm);
-extern void AllocP7Logodds(struct plan7_s *hmm);
-extern void FreeP7Logodds(struct plan7_s *hmm);
 extern struct plan7_s *AllocPlan7(int M);
 extern struct plan7_s *AllocPlan7Shell(void);
 extern void AllocPlan7Body(struct plan7_s *hmm, int M);
