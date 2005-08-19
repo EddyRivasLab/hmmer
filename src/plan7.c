@@ -59,19 +59,6 @@ AllocPlan7Shell(void)
 
   hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
   hmm->esc     = hmm->bsc     =                NULL;
-
-  /*
-   * Note: I am commenting these lines out because the default version doesn't 
-   *       have the *_mem pointers.  They existed to support the altivec 
-   *	   architecture, but now there's an altivec-specific implementation to
-   *       deal with those requirements. Just using a comment in case 
-   *       something goes wrong. - CRS 6 July 2005
-   *
-   hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
-   hmm->bsc = hmm->bsc_mem = NULL;
-   hmm->esc = hmm->esc_mem = NULL; 
-   *
-   */
  
   hmm->name     = NULL;
   hmm->acc      = NULL;
@@ -138,26 +125,6 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
   hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
 
-  /*
-   * Note: I am removing and/or redoing these lines because the default version 
-   *       doesn't have the *_mem pointers.  They existed to support the altivec 
-   *	   architecture, but now there's an altivec-specific implementation to
-   *       deal with those requirements. Using a comment in case 
-   *       something goes wrong. - CRS 6 July 2005
-   hmm->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
-   hmm->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-   hmm->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
-   hmm->tsc[0]  = hmm->tsc_mem;
-   hmm->msc[0]  = hmm->msc_mem;
-   hmm->isc[0]  = hmm->isc_mem;
-
-   hmm->bsc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-   hmm->esc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-   hmm->bsc = hmm->bsc_mem;
-   hmm->esc = hmm->esc_mem;
-   *
-   */
-
   hmm->bsc  = MallocOrDie  ((M+1) * sizeof(int));
   hmm->esc  = MallocOrDie  ((M+1) * sizeof(int));
 
@@ -199,19 +166,6 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->t       != NULL) free(hmm->t);
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->end     != NULL) free(hmm->end);
-  /*
-   * Note: I am removing and/or redoing these lines because the default version 
-   *       doesn't have the *_mem pointers.  They existed to support the altivec 
-   *	   architecture, but now there's an altivec-specific implementation to
-   *       deal with those requirements. Using a comment in case 
-   *       something goes wrong. - CRS 6 July 2005
-   if (hmm->bsc_mem != NULL) free(hmm->bsc_mem);
-   if (hmm->esc_mem != NULL) free(hmm->esc_mem);
-   if (hmm->msc_mem != NULL) free(hmm->msc_mem);
-   if (hmm->isc_mem != NULL) free(hmm->isc_mem);
-   if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
-   *
-   */
   if (hmm->bsc != NULL) free(hmm->bsc);
   if (hmm->esc != NULL) free(hmm->esc);
   if (hmm->msc[0] != NULL) free(hmm->msc[0]);

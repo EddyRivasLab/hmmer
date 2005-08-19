@@ -137,10 +137,6 @@ inline void ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M){
 
 /* Function: FreeDPMatrix()
  *
- * Note:     Originally defined as FreePlan7Matrix() in core_algorithms.c,
- *           but was moved here to match the new architecture.
- *             - CRS 21 June 2005
- * 
  * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
  * 
  * Return:   (void)

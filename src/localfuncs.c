@@ -52,12 +52,6 @@ extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,
 }
 
 /* Function: P7Forward()
- * 
- * Note:     This was originally defined as P7Forward() in core_algorithms.c, 
- *           but it is implementation dependent, since it accesses the 
- *           customized dpmatrix structure.  So I moved it here and renamed it 
- *           with a more generic name that fits into the new architecture.
- *             - CRS 15 July 2005
  *
  * Purpose:  The Forward dynamic programming algorithm.
  *           The scaling issue is dealt with by working in log space

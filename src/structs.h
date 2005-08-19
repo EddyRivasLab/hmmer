@@ -62,19 +62,6 @@ struct dpmatrix_s {
   int **imx;			/* insert scores [0.1..N][0.1..M-1.M] */
   int **dmx;			/* delete scores [0.1..N][0.1..M-1.M] */
 
-  /*
-   *
-  /\* Hidden ptrs where the real memory is kept; this trick was
-   * introduced by Erik Lindahl with the Altivec port; it's used to
-   * align xmx, etc. on 16-byte boundaries for cache optimization.
-   *\/
-   void *xmx_mem, *mmx_mem, *imx_mem, *dmx_mem;
-   *
-   */   
-
-  /*  int *  workspace;      /\* Workspace for altivec (aligned ptr)    *\/ */
-  /*  int *  workspace_mem;  /\* Actual allocated pointer for workspace *\/ */
-  
   /* The other trick brought in w/ the Lindahl Altivec port; dp matrix
    * is retained and grown, rather than reallocated for every HMM or sequence.
    * Keep track of current allocated-for size in rows (sequence length N)

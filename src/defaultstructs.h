@@ -10,7 +10,7 @@ struct logodds_s {
 
 
 /*
- * Note: Since the cust_dpmatrix_s structure is really customized in the
+ * Note: Since the cust_dpmatrix_s structure isn't really customized in the
  *       default implementation, we just use a typedef here to define the
  *       cust_dpmatrix_s structure. - CRS 16 Aug 2005
  */
