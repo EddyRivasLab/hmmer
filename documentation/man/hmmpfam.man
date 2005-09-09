@@ -101,10 +101,11 @@ will be shown.
 
 .TP
 .BI -Z " <n>"
-Calculate the E-value scores as if we had seen a sequence database of 
+Calculate the E-value scores as if we had seen an HMM database of 
 .I <n>
-sequences. The default is arbitrarily set to 59021, the size of
-Swissprot 34.
+models. The default is to use the actual number of models
+in the 
+.I hmmfile.
 
 .SH EXPERT OPTIONS
 

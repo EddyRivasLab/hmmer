@@ -898,7 +898,7 @@ EVDDistribution(double x, double mu, double lambda)
 
 /* Function: ExtremeValueP()
  * 
- * Purpose:  Calculate P(S>x) according to an extreme
+ * Purpose:  Calculate P(S>=x) according to an extreme
  *           value distribution, given x and the parameters
  *           of the distribution (characteristic
  *           value mu, decay constant lambda).
@@ -953,8 +953,8 @@ ExtremeValueP2(double x, double mu, double lambda, int N)
 
 /* Function: ExtremeValueE()
  * 
- * Purpose:  Calculate E(S>x) in a database of size N,
- *           using P(S>x) for a single sequence: simply np.
+ * Purpose:  Calculate E(S>=x) in a database of size N,
+ *           using P(S>=x) for a single sequence: simply np.
  *
  * Args:     x      = score
  *           mu     = characteristic value of extreme value distribution
