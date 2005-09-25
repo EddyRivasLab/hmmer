@@ -489,6 +489,114 @@ Plan7FSConfig(struct plan7_s *hmm)
 }
 
 
+/* xref STL10/25
+ * length dependent configuration
+ * L is target sequence length
+ * x is alignment length, dependent on model
+ */
+void
+ExperimentalSWConfig(struct plan7_s *hmm, int L, int x)
+{
+  int   k;			/* counter over states      */
+
+  /* Configure hmm->p1, the null model. 
+   * Its expected length should be L.
+   */
+  hmm->p1 = (double) L / (double) (L+1);
+
+  /* For small L/large x, we have to avoid calculating a negative
+   * probability below. Fallback to a heuristic of min(L-x) = L/2: 
+   * expected max of one half of the target seq is assigned to the model
+   */
+  if (x > L/2) x = L/2;
+
+  /* Configure special states.
+   * N and C have to deal w/ a length of L-x on average, and they
+   * split this responsibility equally. 
+   */
+  hmm->xt[XTN][MOVE] = 2. / (double) (L-x+2);   /* E(len) = (L-x)/2 */
+  hmm->xt[XTN][LOOP] = 1. - hmm->xt[XTN][MOVE];
+  hmm->xt[XTE][MOVE] = 1.;	                /* disallow jump state */
+  hmm->xt[XTE][LOOP] = 0.;
+  hmm->xt[XTC][MOVE] = 2. / (double) (L-x+2);   /* E(len) = (L-x)/2 */
+  hmm->xt[XTC][LOOP] = 1. - hmm->xt[XTC][MOVE];
+  hmm->xt[XTJ][MOVE] = 1.;                      /* J is unused */
+  hmm->xt[XTJ][LOOP] = 0.;
+
+  /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
+   * (tbd1 is ignored)
+   */
+  for (k = 1; k <= hmm->M; k++)
+    hmm->begin[k] = 2. * (float) (hmm->M-k+1) / (float) hmm->M / (float) (hmm->M+1);
+
+  /* Configure exit:   1/(M-k+1)  (xref STL9/77)
+   */
+  for (k = 1; k <= hmm->M; k++)
+    hmm->end[k] = 1. / (float) (hmm->M-k+1);
+
+  left_wing_retraction_imposed(hmm);
+  right_wing_retraction_imposed(hmm);
+  local_dpath_accounting(hmm);
+  logoddsify_the_rest(hmm);
+
+  hmm->mode   = P7_SW_MODE; 	/* hmmsw mode: local, onehit */
+  hmm->flags |= PLAN7_BIMPOSED; /* internal entry set by algorithm mode */
+  hmm->flags |= PLAN7_EIMPOSED; /* internal exit set by algorithm mode  */
+  hmm->flags |= PLAN7_HASBITS;  /* we're configured */
+}
+void
+ExperimentalFSConfig(struct plan7_s *hmm, int L, int x)
+{
+  int   k;			/* counter over states      */
+
+  /* Configure hmm->p1, the null model. 
+   * Its expected length should be L.
+   */
+  hmm->p1 = (double) L / (double) (L+1);
+
+  /* For small L/large x, we have to avoid calculating a negative
+   * probability below. Fallback to a heuristic of min(L-2x) = L/2: 
+   * expected max of one half of the target seq is assigned to the model
+   */
+  if (x > L/4) x = L/4;
+
+  /* Configure special states.
+   * At E->J 0.5, we have an expectation of using the J state once;
+   * so crudely we expect 2 passes through the model; so N,C,J have
+   * to deal with an expected unaligned length L-2x; they split the
+   * responsibility equally, each dealing with (L-2x)/3. 
+   */
+  hmm->xt[XTN][MOVE] = 3. / (double)(L-2*x+3);        /* E(len) = (L-2x)/3 */
+  hmm->xt[XTN][LOOP] = 1. - hmm->xt[XTN][MOVE];
+  hmm->xt[XTE][MOVE] = 0.5;	                      /* allow loops / multihits   */
+  hmm->xt[XTE][LOOP] = 0.5;
+  hmm->xt[XTC][MOVE] = 3. / (double)(L-2*x+3);        /* E(len) = (L-2x)/3 */
+  hmm->xt[XTC][LOOP] = 1. - hmm->xt[XTC][MOVE];
+  hmm->xt[XTJ][MOVE] = 3. / (double)(L-2*x+3);        /* E(len) = (L-2x)/3 */
+  hmm->xt[XTJ][LOOP] = 1. - hmm->xt[XTJ][MOVE];
+
+  /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
+   * (tbd1 is ignored)
+   */
+  for (k = 1; k <= hmm->M; k++)
+    hmm->begin[k] = 2. * (float) (hmm->M-k+1) / (float) hmm->M / (float) (hmm->M+1);
+
+  /* Configure exit:   1/(M-k+1)  (xref STL9/77)
+   */
+  for (k = 1; k <= hmm->M; k++)
+    hmm->end[k] = 1. / (float) (hmm->M-k+1);
+
+  left_wing_retraction_imposed(hmm);
+  right_wing_retraction_imposed(hmm);
+  local_dpath_accounting(hmm);
+  logoddsify_the_rest(hmm);
+
+  hmm->mode   = P7_FS_MODE; 	/* hmmfs mode: local, multihit */
+  hmm->flags |= PLAN7_BIMPOSED; /* internal entry set by algorithm mode */
+  hmm->flags |= PLAN7_EIMPOSED; /* internal exit set by algorithm mode  */
+  hmm->flags |= PLAN7_HASBITS;  /* we're configured */
+}
+
 
 /*****************************************************************
  * Section 2. Wing retraction routines.

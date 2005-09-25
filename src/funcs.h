@@ -247,7 +247,8 @@ extern void Plan7GlobalConfig(struct plan7_s *hmm);
 extern void Plan7LSConfig(struct plan7_s *hmm);
 extern void Plan7SWConfig(struct plan7_s *hmm);
 extern void Plan7FSConfig(struct plan7_s *hmm);
-
+extern void ExperimentalSWConfig(struct plan7_s *hmm, int L, int x);
+extern void ExperimentalFSConfig(struct plan7_s *hmm, int L, int x);
 
 /* from modelmakers.c
  * Model construction algorithms
