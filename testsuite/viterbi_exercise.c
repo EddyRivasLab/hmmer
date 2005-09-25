@@ -111,14 +111,7 @@ main(int argc, char **argv)
 
   for (config = 1; config <= 5; config++)
     {
-      switch (config) {
-      case 1: Plan7NakedConfig(hmm);  break;
-      case 2: Plan7GlobalConfig(hmm); break;
-      case 3: Plan7LSConfig(hmm);     break;
-      case 4: Plan7FSConfig(hmm);     break;
-      case 5: Plan7SWConfig(hmm);     break;
-      default: Die("never happens");
-      }
+      P7Config(hmm, config);
       
       mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
       for (i = 0; i < nseq; i++)

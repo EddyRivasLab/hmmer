@@ -776,15 +776,7 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 
   /* Configure model into the given mode.
    */
-  switch (hmm->mode) {
-  case P7_LS_MODE: Plan7LSConfig(hmm);     break;
-  case P7_FS_MODE: Plan7FSConfig(hmm);     break;
-  case P7_SW_MODE: Plan7SWConfig(hmm);     break;
-  case P7_S_MODE:  Plan7GlobalConfig(hmm); break;
-  case P7_G_MODE:  Plan7NakedConfig(hmm);  break;
-  case P7_NO_MODE: break;
-  default: Die("no such mode %d\n", hmm->mode);
-  }    
+  P7Config(hmm, hmm->mode);
 
   /* Set flags and return
    */
@@ -1263,7 +1255,7 @@ read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    */
   AllocPlan7Body(hmm, M);
   ZeroPlan7(hmm);
-  Plan7LSConfig(hmm);
+  P7Config(hmm, P7_LS_MODE);
 
   /* The zero row has: 4 or 20 unused scores for nonexistent M0 state
    * then: B->M, tbd1, a B->I that Plan7 doesn't have;

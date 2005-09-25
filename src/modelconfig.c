@@ -2,31 +2,177 @@
  * Model configuration: the process of converting a core model to a
  * fully configured Plan7 HMM with an "algorithm mode" built into it.
  * 
- * Revised and refactored May 2005: xref STL9/77-81.
+ * Revised, refactored May 2005: xref STL9/77-81.  (Uniform fragment length distribution)
+ * And then again, Sept 2005:    xref STL10/24-26. (Inherent target length dependency)
  * 
  * SRE, Mon May  2 10:55:16 2005 [St. Louis]
  * SVN $Id$
  */
 
+#include "config.h"		/* must be included first */
+#include "squidconf.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <float.h>
+
+#include "squid.h"
+
+#include "plan7.h"		/* the model structure */
+#include "funcs.h"
+#include "structs.h"
+
+static void config_g (struct plan7_s *hmm);
+static void config_s (struct plan7_s *hmm);
+static void config_ls(struct plan7_s *hmm);
+static void config_sw(struct plan7_s *hmm);
+static void config_fs(struct plan7_s *hmm);
+
+static void left_wing_retraction_imposed(struct plan7_s *hmm);
+static void left_wing_retraction_added(struct plan7_s *hmm);
+static void right_wing_retraction_imposed(struct plan7_s *hmm);
+static void right_wing_retraction_added(struct plan7_s *hmm);
+
+static void local_dpath_accounting(struct plan7_s *hmm);
+static void normal_delete_scores(struct plan7_s *hmm);
+
+static void target_ldependence(struct plan7_s *hmm, int L);
+
+static void logoddsify_the_rest(struct plan7_s *hmm);
+
+
+/* Function:  P7Config()
+ * Incept:    SRE, Sun Sep 25 12:21:25 2005 [St. Louis]
+ *
+ * Purpose:   Given a model <hmm>, with core probabilities set and null
+ *            model probabilities set, and a mode <mode> (one of
+ *            <P7_LS_MODE>, <P7_FS_MODE>, <P7_SW_MODE>, <P7_S_MODE>,
+ *            <P7_G_MODE>); configure the model into the appropriate
+ *            scoring form for that algorithm mode.
+ *            
+ *            Specifically, all scores <tsc>,<msc>,<xsc>,<bsc>,<esc>
+ *            are set by this call, and the <PLAN7_HASBITS> flag is
+ *            raised on the model.
+ *            
+ *            The model is not configured yet for a specific target
+ *            sequence length.  (By default, it is set to whatever the
+ *            expectation of the null model was.)  To reconfigure both
+ *            the HMM and the null model for a specific target length,
+ *            call <P7ReconfigLength()>.
+ *            
+ *            The configuration-dependent model probability params are
+ *            also set (N,E,C,J,B states), and the <M->E> end
+ *            probabilities are set, for reference only. (Because the
+ *            main model transition probabilities may be implicitly
+ *            renormalized as scores are calculated, because of added
+ *            <M->E> transitions, wing retraction, and d-path
+ *            leveling, the HMM structure does not store an explicit
+ *            full probabilistic model of the search-configured HMM;
+ *            the probabilistic model is implicit in the log-odds
+ *            scores.) The caller only needs to be aware of this if it
+ *            intends to do something with the search-configured
+ *            probabilistic model.
+ *            
+ *            If necessary (for numerical reasons), the <PLAN7_LCORRECT>
+ *            flag will be raised on the model. This indicates that we
+ *            lack sufficient numeric precision to represent transition scores
+ *            for the unaligned residues, so their contribution (a total
+ *            of ~1 bit for single-hit mode, ~2 bits for default multihit 
+ *            mode) must instead be added post hoc to a sequence score.
+ *            [SRE_FIXME: xref to the approp function here]
+ */
+void
+P7Config(struct plan7_s *hmm, enum p7_algmode mode)
+{
+  switch (mode) {
+  case P7_NO_MODE: Die("No mode selected."); break;
+  case P7_LS_MODE: config_ls(hmm);           break;
+  case P7_FS_MODE: config_fs(hmm);           break;
+  case P7_SW_MODE: config_sw(hmm);           break;
+  case P7_S_MODE:  config_s(hmm);            break;
+  case P7_G_MODE:  config_g(hmm);            break; /* "naked", pure global alignment mode */
+  default:         Die("Bad mode.");
+  }
+}
+
+
+/* Function:  P7ReconfigLength()
+ * Incept:    SRE, Sun Sep 25 12:38:55 2005 [St. Louis]
+ *
+ * Purpose:   Given a model already configured for scoring, in some  
+ *            particular algorithm mode; 
+ *            reset the expected length distribution of the HMM
+ *            and the null model to a mean of <L>.
+ *            
+ *            Do this as quickly as possible, so that the caller
+ *            can dynamically reconfigure the model for the length
+ *            of each target sequence in a database search.
+ */
+void
+P7ReconfigLength(struct plan7_s *hmm, int L)
+{
+  target_ldependence(hmm, L);
+}
+
+
+/* Function:  P7FinalBitscore()
+ * Incept:    SRE, Sun Sep 25 14:10:31 2005 [St. Louis]
+ *
+ * Purpose:   Given an integer lod score <sc> from an alignment
+ *            algorithm, apply any necessary posthoc correction to it and
+ *            return the score in bits (as a float). All alignment
+ *            algorithms that return a bit score should translate
+ *            the integer lod score to bits using this function.
+ *            
+ *            Currently the only correction is a numerical tweak
+ *            to the length correction, if the <PLAN7_LCORRECT> 
+ *            flag is up. 
+ *            
+ *            This is distinct from other corrections, like the
+ *            TraceScoreCorrection(). 
+ */
+float
+P7FinalBitscore(struct plan7_s *hmm, int sc, int L)
+{
+  float xbits;
+  float Lp;
+
+  xbits = Scorify(sc);
+  if (hmm->flags & PLAN7_LCORRECT)
+    {
+      Lp = (float) L - hmm->kappa * (hmm->nj+1);
+      if (Lp > 0) xbits += hmm->lscore * Lp;
+    }
+  return xbits;
+}
 
 /******************************************************************
- * General notes, model configuration.
+ * General notes on model configuration.
  * 
  * When you enter this module, you've got an HMM in "core" probability
  * form: t[], mat[], ins[], and tbd1 are all valid, normalized
- * probabilities. The routines here are used to create the "configured"
- * score form of the model: tsc[], msc[], isc[], bsc[], esc[], and
- * xsc[] fields become valid integer log-odds scores. Also in the process,
- * xt[], begin[], and end[] are set to their algorithm-dependent
- * probabilities.
+ * probabilities. The routines here are used to create the
+ * "configured" score form of the model: tsc[], msc[], isc[], bsc[],
+ * esc[], and xsc[] fields become valid integer log-odds scores. 
  * 
- * The configuration process breaks down into three conceptual steps:
+ * Also in the process, xt[], begin[], and end[] are set to their
+ * algorithm-dependent probabilities, though these probabilities are
+ * only for reference.  Because of the way the main model's
+ * probabilities must be modified to deal with entry/exit
+ * probabilities, and because we don't want to modify the core
+ * probabilities, we don't ever quite store the full probabilistic
+ * model of the configured model, only its log odds scores.
+ * 
+ * The configuration process breaks down into distinct conceptual steps:
  * 
  * 1. Algorithm configuration.
- *    An "algorithm mode" is chosen; this sets the probabilities in
- *    xt[], begin[], and end[], which specify local/global and
+ *    An "algorithm mode" is chosen. This sets the probabilities in
+ *    xt[XTE], begin[], and end[], which determine local/global and
  *    multihit/single hit behavior in an HMM alignment to a target
- *    sequence.
+ *    sequence. The "nj" value of the HMM is also set here (the expected
+ *    # of times the J state will be used; 0 for single-hit mode and
+ *    1 for the default parameterization of multihit modes).
  *    
  * 2. Wing retraction.
  *    In a configured model, the D_1 and D_M states are removed.
@@ -110,7 +256,33 @@
  *    * e_j = 2/M(M+1), and another term consisting of the actual
  *    model transition path score between i,j.
  *    
- * 4. Conversion of probabilities to integer log-odds scores.
+ * 4. Target length dependence. 
+ *    Given a particular target sequence of length L, we want our HMM score
+ *    to be as independent as possible of L. Otherwise, long sequences will
+ *    give higher scores, even if they are nonhomologous. 
+ *    
+ *    The traditional solution to this is Karlin/Altschul statistics,
+ *    which tells us that E(s=x) = KMNe^-{\lambda x}, so we expect to
+ *    have to make a -1 bit score correction for every 2x increase in
+ *    target sequence length (ignoring edge correction effects). K/A
+ *    statistics have only been proven for local Viterbi single-hit
+ *    ungapped alignments. They have been shown to hold empirically
+ *    for local Viterbi single-hit gapped alignments. In my hands the. In my hands 
+ *    they also hold for any single-hit alignment (local or glocal, Viterbi
+ *    or forward) but they do not hold for multihit alignment modes.
+ *    
+ *    An alternative solution is to build the length dependence right
+ *    into the probabilistic model, since we have a full probabilistic
+ *    model of the target sequence. We match the expected lengths of
+ *    the model M and the null model R by setting the p1, N, C, and J
+ *    transitions appropriately. R has to emit the whole sequence, so
+ *    it has a self-transition of L/(L+1). N, C, and J have to emit
+ *    (L-(k+1)x) residues of the sequence, where x is the expected length
+ *    of an alignment to the core model, and k is the expected number
+ *    of times that we cycle through the J state. k=0 in sw mode, and k=1
+ *    in fs/ls mode w/ the standard [XTE][LOOP] probability of 0.5. 
+ *    
+ * 5. Conversion of probabilities to integer log-odds scores.
  *    This step incorporates the contribution of the null model,
  *    and converts floating-point probs to the scaled integer log-odds
  *    score values that are used by the DP alignment routines. 
@@ -123,10 +295,12 @@
  *  left wing retraction sets bsc[], right wing retraction sets
  *  esc[] and tsc[TM*].
  *  
- * Step 3 is carried out by one of two delet path accounting routines,
+ * Step 3 is carried out by one of two delete path accounting routines,
  *  which go ahead and set tsc[TD*].
  *  
- * Step 4 is carried out for all remaining scores by logoddsify_the_rest().   
+ * Step 4 is carried out by the target_ldependence() routine.
+ * 
+ * Step 5 is carried out for all remaining scores by logoddsify_the_rest().   
  * 
  * The model never exists in a configured probability form. The core
  * model is in probabilities; the configured model is in scores. In
@@ -136,43 +310,20 @@
  * underlying fully local alignment is an implicit one that cannot
  * be represented in the profile HMM structure.
  *
- * So, overall, to find where the various scores are set:
+ * So, overall, to find where the various scores and probs are set:
  *   bsc      :  wing retraction          (section 2)
  *   esc      :  wing retraction          (section 2)
- *   xsc (all):  logoddsify_the_rest()    (section 4)
  *   tsc[TM*] :  wing retraction          (section 2)
  *   tsc[TI*] :  logoddsify_the_rest()    (section 4)
  *   tsc[TD*] :  dpath leveling           (section 3)
- *   msc      :  logoddsify_the_rest()    (section 4)
- *   isc      :  logoddsify_the_rest()    (section 4)
+ *   p1       :  target_ldependence()     (section 4)  
+ *   xt[NCJ]  :  target_ldependence()     (section 4)  
+ *   xsc (all):  logoddsify_the_rest()    (section 4)
+ *   msc      :  logoddsify_the_rest()    (section 5)
+ *   isc      :  logoddsify_the_rest()    (section 5)
  *****************************************************************
  */
 
-#include "config.h"		/* must be included first */
-#include "squidconf.h"
-
-#include <stdio.h>
-#include <string.h>
-#include <math.h>
-#include <float.h>
-
-#include "squid.h"
-
-#include "plan7.h"		/* the model structure */
-#include "funcs.h"
-#include "structs.h"
-
-
-
-static void left_wing_retraction_imposed(struct plan7_s *hmm);
-static void left_wing_retraction_added(struct plan7_s *hmm);
-static void right_wing_retraction_imposed(struct plan7_s *hmm);
-static void right_wing_retraction_added(struct plan7_s *hmm);
-
-static void local_dpath_accounting(struct plan7_s *hmm);
-static void normal_delete_scores(struct plan7_s *hmm);
-
-static void logoddsify_the_rest(struct plan7_s *hmm);
 
 
 /*****************************************************************
@@ -241,7 +392,7 @@ static void logoddsify_the_rest(struct plan7_s *hmm);
 
 
 
-/* Function: Plan7NakedConfig()
+/* config_g()
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
  *           of a Plan7 model so that no special states (N,C,J) emit anything:
@@ -253,17 +404,20 @@ static void logoddsify_the_rest(struct plan7_s *hmm);
  *           The HMM is modified; algorithm dependent parameters are set.
  *           Previous scores are invalidated if they existed.
  */
-void
-Plan7NakedConfig(struct plan7_s *hmm)                           
+static void
+config_g(struct plan7_s *hmm)
 {
-  hmm->xt[XTN][MOVE] = 1.;	      /* disallow N-terminal tail */
-  hmm->xt[XTN][LOOP] = 0.;
   hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
   hmm->xt[XTE][LOOP] = 0.;
+  hmm->xt[XTN][MOVE] = 1.;	      /* disallow N-terminal tail */
+  hmm->xt[XTN][LOOP] = 0.;
   hmm->xt[XTC][MOVE] = 1.;	      /* disallow C-terminal tail */
   hmm->xt[XTC][LOOP] = 0.;
   hmm->xt[XTJ][MOVE] = 0.;	      /* J state unused */
   hmm->xt[XTJ][LOOP] = 1.;
+
+  hmm->nj    = 0.;		      /* avg. usage of J state per path       */
+  hmm->kappa = hmm->M;		      /* kappa: avg. length of one model pass */
 
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
   hmm->begin[1]    = 1.0;
@@ -273,6 +427,7 @@ Plan7NakedConfig(struct plan7_s *hmm)
   left_wing_retraction_added(hmm);
   right_wing_retraction_added(hmm);
   normal_delete_scores(hmm);
+  target_ldependence(hmm, 400);
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_G_MODE; 	 /* true global mode */
@@ -281,7 +436,7 @@ Plan7NakedConfig(struct plan7_s *hmm)
   hmm->flags |= PLAN7_HASBITS;   /* we're configured. */
 }
    
-/* Function: Plan7GlobalConfig()
+/* config_s()
  * 
  * Purpose:  Set the alignment-independent, algorithm-dependent parameters
  *           of a Plan7 model to global (Needleman/Wunsch) configuration:
@@ -296,8 +451,8 @@ Plan7NakedConfig(struct plan7_s *hmm)
  *           The HMM is modified; algorithm dependent parameters are set.
  *           Previous scores are invalidated if they existed.
  */
-void
-Plan7GlobalConfig(struct plan7_s *hmm)                           
+static void
+config_s(struct plan7_s *hmm)
 {
   hmm->xt[XTN][MOVE] = 1. - hmm->p1;  /* allow N-terminal tail */
   hmm->xt[XTN][LOOP] = hmm->p1;
@@ -307,6 +462,10 @@ Plan7GlobalConfig(struct plan7_s *hmm)
   hmm->xt[XTC][LOOP] = hmm->p1;
   hmm->xt[XTJ][MOVE] = 0.;	      /* J state unused */
   hmm->xt[XTJ][LOOP] = 1.;
+
+  hmm->nj    = 0.;
+  hmm->kappa = hmm->M;		      /* avg. seq length in one model pass  */
+
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
   hmm->begin[1]    = 1.0;
   FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits. */
@@ -315,6 +474,7 @@ Plan7GlobalConfig(struct plan7_s *hmm)
   left_wing_retraction_added(hmm);
   right_wing_retraction_added(hmm);
   normal_delete_scores(hmm);
+  target_ldependence(hmm, 400);
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_S_MODE; 	 /* hmms mode */
@@ -323,7 +483,7 @@ Plan7GlobalConfig(struct plan7_s *hmm)
   hmm->flags |= PLAN7_HASBITS;   /* we're configured */
 }
    
-/* Function: Plan7LSConfig()
+/* config_ls()
  * 
  * Purpose:  Set the alignment independent parameters of a Plan7 model
  *           to hmmls (global in HMM, local in sequence) configuration.
@@ -333,8 +493,8 @@ Plan7GlobalConfig(struct plan7_s *hmm)
  * Return:   (void);
  *           the HMM probabilities are modified.
  */
-void
-Plan7LSConfig(struct plan7_s *hmm)
+static void
+config_ls(struct plan7_s *hmm)
 {
   hmm->xt[XTN][MOVE] = 1.-hmm->p1;    /* allow N-terminal tail */
   hmm->xt[XTN][LOOP] = hmm->p1;
@@ -344,6 +504,10 @@ Plan7LSConfig(struct plan7_s *hmm)
   hmm->xt[XTC][LOOP] = hmm->p1;
   hmm->xt[XTJ][MOVE] = 1.-hmm->p1;    /* allow J junction state */
   hmm->xt[XTJ][LOOP] = hmm->p1;
+
+  hmm->nj    = 1.;		      /* because E->J = 0.5, geometric */
+  hmm->kappa = hmm->M;
+
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries */
   hmm->begin[1]    = 1.0;
   FSet(hmm->end+1,   hmm->M-1, 0.);   /* disallow internal exits */
@@ -352,6 +516,7 @@ Plan7LSConfig(struct plan7_s *hmm)
   left_wing_retraction_added(hmm);
   right_wing_retraction_added(hmm);
   normal_delete_scores(hmm);
+  target_ldependence(hmm, 400);
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_LS_MODE; 	 /* hmmls mode: glocal, multihit */
@@ -361,7 +526,7 @@ Plan7LSConfig(struct plan7_s *hmm)
 }  
                              
 
-/* Function: Plan7SWConfig()
+/* config_sw()
  * 
  * Purpose:  Set the alignment independent parameters of
  *           a Plan7 model to hmmsw (Smith/Waterman) configuration.
@@ -394,8 +559,8 @@ Plan7LSConfig(struct plan7_s *hmm)
  * Return:   (void)
  *           HMM probabilities are modified.
  */
-void
-Plan7SWConfig(struct plan7_s *hmm)
+static void
+config_sw(struct plan7_s *hmm)
 {
   int   k;			/* counter over states      */
 
@@ -409,6 +574,9 @@ Plan7SWConfig(struct plan7_s *hmm)
   hmm->xt[XTC][LOOP] = hmm->p1;
   hmm->xt[XTJ][MOVE] = 1.;           /* J is unused */
   hmm->xt[XTJ][LOOP] = 0.;
+
+  hmm->nj    = 0.;
+  hmm->kappa = ((float) hmm->M+2.)/3.0;	/* xref STL10/24 for this */
 
   /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
    * (tbd1 is ignored)
@@ -424,6 +592,7 @@ Plan7SWConfig(struct plan7_s *hmm)
   left_wing_retraction_imposed(hmm);
   right_wing_retraction_imposed(hmm);
   local_dpath_accounting(hmm);
+  target_ldependence(hmm, 400);
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_SW_MODE; 	/* hmmsw mode: local, onehit */
@@ -432,7 +601,7 @@ Plan7SWConfig(struct plan7_s *hmm)
   hmm->flags |= PLAN7_HASBITS;  /* we're configured */
 }
 
-/* Function: Plan7FSConfig()
+/* config_fs()
  * Date:     SRE, Fri Jan  2 15:34:40 1998 [StL]
  * 
  * Purpose:  Set the alignment independent parameters of
@@ -450,8 +619,8 @@ Plan7SWConfig(struct plan7_s *hmm)
  * Return:   (void)
  *           HMM probabilities are modified.
  */
-void
-Plan7FSConfig(struct plan7_s *hmm)
+static void
+config_fs(struct plan7_s *hmm)
 {
   int   k;			/* counter over states      */
 
@@ -466,62 +635,8 @@ Plan7FSConfig(struct plan7_s *hmm)
   hmm->xt[XTJ][MOVE] = 1.-hmm->p1;   /* allow J junction between domains */
   hmm->xt[XTJ][LOOP] = hmm->p1;
 
-  /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
-   * (tbd1 is ignored)
-   */
-  for (k = 1; k <= hmm->M; k++)
-    hmm->begin[k] = 2. * (float) (hmm->M-k+1) / (float) hmm->M / (float) (hmm->M+1);
-
-  /* Configure exit:   1/(M-k+1)  (xref STL9/77)
-   */
-  for (k = 1; k <= hmm->M; k++)
-    hmm->end[k] = 1. / (float) (hmm->M-k+1);
-
-  left_wing_retraction_imposed(hmm);
-  right_wing_retraction_imposed(hmm);
-  local_dpath_accounting(hmm);
-  logoddsify_the_rest(hmm);
-
-  hmm->mode   = P7_FS_MODE; 	/* hmmfs mode: local, multihit */
-  hmm->flags |= PLAN7_BIMPOSED; /* internal entry set by algorithm mode */
-  hmm->flags |= PLAN7_EIMPOSED; /* internal exit set by algorithm mode  */
-  hmm->flags |= PLAN7_HASBITS;  /* we're configured */
-}
-
-
-/* xref STL10/25
- * length dependent configuration
- * L is target sequence length
- * x is alignment length, dependent on model
- */
-void
-ExperimentalSWConfig(struct plan7_s *hmm, int L, int x)
-{
-  int   k;			/* counter over states      */
-
-  /* Configure hmm->p1, the null model. 
-   * Its expected length should be L.
-   */
-  hmm->p1 = (double) L / (double) (L+1);
-
-  /* For small L/large x, we have to avoid calculating a negative
-   * probability below. Fallback to a heuristic of min(L-x) = L/2: 
-   * expected max of one half of the target seq is assigned to the model
-   */
-  if (x > L/2) x = L/2;
-
-  /* Configure special states.
-   * N and C have to deal w/ a length of L-x on average, and they
-   * split this responsibility equally. 
-   */
-  hmm->xt[XTN][MOVE] = 2. / (double) (L-x+2);   /* E(len) = (L-x)/2 */
-  hmm->xt[XTN][LOOP] = 1. - hmm->xt[XTN][MOVE];
-  hmm->xt[XTE][MOVE] = 1.;	                /* disallow jump state */
-  hmm->xt[XTE][LOOP] = 0.;
-  hmm->xt[XTC][MOVE] = 2. / (double) (L-x+2);   /* E(len) = (L-x)/2 */
-  hmm->xt[XTC][LOOP] = 1. - hmm->xt[XTC][MOVE];
-  hmm->xt[XTJ][MOVE] = 1.;                      /* J is unused */
-  hmm->xt[XTJ][LOOP] = 0.;
+  hmm->nj = 1.;			/* E->J = 0.5 sets geometric distribution on J usage */
+  hmm->kappa = ((float) hmm->M+2.)/3.0;	/* xref STL10/24 for this */
 
   /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
    * (tbd1 is ignored)
@@ -537,58 +652,7 @@ ExperimentalSWConfig(struct plan7_s *hmm, int L, int x)
   left_wing_retraction_imposed(hmm);
   right_wing_retraction_imposed(hmm);
   local_dpath_accounting(hmm);
-  logoddsify_the_rest(hmm);
-
-  hmm->mode   = P7_SW_MODE; 	/* hmmsw mode: local, onehit */
-  hmm->flags |= PLAN7_BIMPOSED; /* internal entry set by algorithm mode */
-  hmm->flags |= PLAN7_EIMPOSED; /* internal exit set by algorithm mode  */
-  hmm->flags |= PLAN7_HASBITS;  /* we're configured */
-}
-void
-ExperimentalFSConfig(struct plan7_s *hmm, int L, int x)
-{
-  int   k;			/* counter over states      */
-
-  /* Configure hmm->p1, the null model. 
-   * Its expected length should be L.
-   */
-  hmm->p1 = (double) L / (double) (L+1);
-
-  /* For small L/large x, we have to avoid calculating a negative
-   * probability below. Fallback to a heuristic of min(L-2x) = L/2: 
-   * expected max of one half of the target seq is assigned to the model
-   */
-  if (x > L/4) x = L/4;
-
-  /* Configure special states.
-   * At E->J 0.5, we have an expectation of using the J state once;
-   * so crudely we expect 2 passes through the model; so N,C,J have
-   * to deal with an expected unaligned length L-2x; they split the
-   * responsibility equally, each dealing with (L-2x)/3. 
-   */
-  hmm->xt[XTN][MOVE] = 3. / (double)(L-2*x+3);        /* E(len) = (L-2x)/3 */
-  hmm->xt[XTN][LOOP] = 1. - hmm->xt[XTN][MOVE];
-  hmm->xt[XTE][MOVE] = 0.5;	                      /* allow loops / multihits   */
-  hmm->xt[XTE][LOOP] = 0.5;
-  hmm->xt[XTC][MOVE] = 3. / (double)(L-2*x+3);        /* E(len) = (L-2x)/3 */
-  hmm->xt[XTC][LOOP] = 1. - hmm->xt[XTC][MOVE];
-  hmm->xt[XTJ][MOVE] = 3. / (double)(L-2*x+3);        /* E(len) = (L-2x)/3 */
-  hmm->xt[XTJ][LOOP] = 1. - hmm->xt[XTJ][MOVE];
-
-  /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
-   * (tbd1 is ignored)
-   */
-  for (k = 1; k <= hmm->M; k++)
-    hmm->begin[k] = 2. * (float) (hmm->M-k+1) / (float) hmm->M / (float) (hmm->M+1);
-
-  /* Configure exit:   1/(M-k+1)  (xref STL9/77)
-   */
-  for (k = 1; k <= hmm->M; k++)
-    hmm->end[k] = 1. / (float) (hmm->M-k+1);
-
-  left_wing_retraction_imposed(hmm);
-  right_wing_retraction_imposed(hmm);
-  local_dpath_accounting(hmm);
+  target_ldependence(hmm, 400);
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_FS_MODE; 	/* hmmfs mode: local, multihit */
@@ -906,7 +970,78 @@ normal_delete_scores(struct plan7_s *hmm)
 
 
 /*****************************************************************
- * Section 4. Conversion of everything else to log-odds scores.
+ * Section 4. Target length dependence.
+ * 
+ * Here we set the p1 and xt[NCJ] probabilities, and the
+ * xt[NCJ] scores, which control target length dependence of the
+ * model. 
+ * 
+ * A special numerical issue (STL10/26): we will have trouble with
+ * the [NCJ][LOOP] scores for large L, because these scores will
+ * be ~ 1/L, and we can only hold scores down to 0.001 bits if 
+ * INTSCALE is at its default 1000. As a workaround, we catch the
+ * case where the absolute value of one of these scores would be <10;
+ * in this case, we set a PLAN7_LCORRECT flag in the hmm, and store
+ * the score in floating pt as hmm->lscore. We can then post-hoc
+ * correct an alignment score by (L-kappa) * hmm->lscore. 
+ *****************************************************************/
+
+static void
+target_ldependence(struct plan7_s *hmm, int L)
+{
+  double Lp;		/* target length that aligns to non-model states NCJ */
+  double ploop, pmove;
+
+  /* Configure hmm->p1 in the null model to an expected length of L
+   */
+  hmm->p1 = (double) L / (double) (L+1);
+  
+  /* For small L/large kappa, we have to avoid calculating a negative
+   * probability below, which means not making Lp negative. Totally
+   * arbitrarily, enforce a minimum of 25 on Lp.
+   */
+  Lp = (double) L - (hmm->nj+1) * hmm->kappa;
+  if (Lp < 25.) Lp = 25.;
+
+  /* Configure N,J,C transitions so they bear Lp/(1+n) of the load of
+   * generating Lp. 
+   */
+  pmove = (2. + hmm->nj) / (Lp + 1. + hmm->nj); /* 2/(Lp+2) for sw; 3/(Lp+3) for fs */
+  ploop = 1. - pmove;
+  hmm->xt[XTN][MOVE] = pmove;
+  hmm->xt[XTN][LOOP] = ploop;
+  hmm->xt[XTC][MOVE] = pmove;
+  hmm->xt[XTC][LOOP] = ploop;
+  hmm->xt[XTJ][MOVE] = pmove;
+  hmm->xt[XTJ][LOOP] = ploop;
+
+  /* Set the scores.
+   */
+  hmm->xsc[XTN][LOOP] = Prob2Score(hmm->xt[XTN][LOOP], hmm->p1);
+  hmm->xsc[XTN][MOVE] = Prob2Score(hmm->xt[XTN][MOVE], 1.0);
+  hmm->xsc[XTC][LOOP] = Prob2Score(hmm->xt[XTC][LOOP], hmm->p1);
+  hmm->xsc[XTC][MOVE] = Prob2Score(hmm->xt[XTC][MOVE], 1.-hmm->p1);
+  hmm->xsc[XTJ][LOOP] = Prob2Score(hmm->xt[XTJ][LOOP], hmm->p1);
+  hmm->xsc[XTJ][MOVE] = Prob2Score(hmm->xt[XTJ][MOVE], 1.0);
+
+  /* Detect the "special" (actually common) case of the LOOP scores
+   * being too small to keep track of properly. This code assumes that
+   * all three scores (N,C,J)[LOOP] are equal, which is how we set them
+   * above.
+   */
+  if (abs(hmm->xsc[XTN][LOOP]) < 10) 
+    {
+      hmm->xsc[XTN][LOOP] = 0;
+      hmm->xsc[XTC][LOOP] = 0;
+      hmm->xsc[XTJ][LOOP] = 0;
+      hmm->flags |= PLAN7_LCORRECT;
+      hmm->lscore = 1.4427 * log(hmm->xt[XTN][LOOP] / hmm->p1);
+    }
+}
+
+
+/*****************************************************************
+ * Section 5. Conversion of everything else to log-odds scores.
  * 
  * The log-odds scores account for null model as follows:          
  *         type of parameter       probability        score
@@ -962,17 +1097,11 @@ logoddsify_the_rest(struct plan7_s *hmm)
       hmm->tsc[TII][k] = Prob2Score(hmm->t[k][TII], hmm->p1);
     }
 
-  /* The xsc[] special state scores.
+  /* The xsc[XTE] special state scores.
+   * N,C,J were already set by target_ldependence().
    */
-  hmm->xsc[XTN][LOOP] = Prob2Score(hmm->xt[XTN][LOOP], hmm->p1);
-  hmm->xsc[XTN][MOVE] = Prob2Score(hmm->xt[XTN][MOVE], 1.0);
   hmm->xsc[XTE][LOOP] = Prob2Score(hmm->xt[XTE][LOOP], 1.0);
   hmm->xsc[XTE][MOVE] = Prob2Score(hmm->xt[XTE][MOVE], 1.0);
-  hmm->xsc[XTC][LOOP] = Prob2Score(hmm->xt[XTC][LOOP], hmm->p1);
-  hmm->xsc[XTC][MOVE] = Prob2Score(hmm->xt[XTC][MOVE], 1.-hmm->p1);
-  hmm->xsc[XTJ][LOOP] = Prob2Score(hmm->xt[XTJ][LOOP], hmm->p1);
-  hmm->xsc[XTJ][MOVE] = Prob2Score(hmm->xt[XTJ][MOVE], 1.0);
-
   return;
 }
 

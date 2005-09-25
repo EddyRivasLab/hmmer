@@ -341,8 +341,7 @@ main(int argc, char **argv)
 
       /* Configure for SW calibration.
        */
-      /* Plan7SWConfig(hmm); */
-      Plan7SWConfig(hmm); 
+      P7Config(hmm, P7_SW_MODE); 
 
       /* Determine what length the random seqs should be.
        */

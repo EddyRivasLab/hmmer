@@ -242,13 +242,10 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
  * Model configuration, from core model probabilities
  * to the full Plan7 score model
  */
-extern void Plan7NakedConfig(struct plan7_s *hmm);
-extern void Plan7GlobalConfig(struct plan7_s *hmm);
-extern void Plan7LSConfig(struct plan7_s *hmm);
-extern void Plan7SWConfig(struct plan7_s *hmm);
-extern void Plan7FSConfig(struct plan7_s *hmm);
-extern void ExperimentalSWConfig(struct plan7_s *hmm, int L, int x);
-extern void ExperimentalFSConfig(struct plan7_s *hmm, int L, int x);
+extern void  P7Config(struct plan7_s *hmm, enum p7_algmode mode);
+extern void  P7ReconfigLength(struct plan7_s *hmm, int L);
+extern float P7FinalBitscore(struct plan7_s *hmm, int sc, int L);
+
 
 /* from modelmakers.c
  * Model construction algorithms
@@ -262,7 +259,6 @@ extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
 
 /* from plan7.c
  * Plan7 HMM structure support
-
  */
 extern struct plan7_s *AllocPlan7(int M);
 extern struct plan7_s *AllocPlan7Shell(void);

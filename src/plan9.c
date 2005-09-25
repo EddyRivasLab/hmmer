@@ -198,8 +198,8 @@ Plan9toPlan7(struct plan9_s *hmm, struct plan7_s **ret_plan7)
     plan7->flags |= PLAN7_CS;
   }
 
-  Plan7LSConfig(plan7);		/* configure specials for ls-style alignment */
-  Plan7Renormalize(plan7);	/* mainly to correct for missing ID and DI */
+  P7Config(plan7, P7_LS_MODE);		/* configure specials for ls-style alignment */
+  Plan7Renormalize(plan7);	        /* mainly to correct for missing ID and DI */
   plan7->flags |= PLAN7_HASPROB;	/* probabilities are valid */
   plan7->flags &= ~PLAN7_HASBITS;	/* scores are not valid    */
   *ret_plan7 = plan7;

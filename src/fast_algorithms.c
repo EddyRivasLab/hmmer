@@ -1106,7 +1106,7 @@ P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
      * and we try to reuse it. After the final call to P7Viterbi,
      * free it with FreePlan7Matrix.
      */
-    return Scorify(sc);		/* the total Viterbi score. */
+    return Scorify(sc);
 }
 
 
