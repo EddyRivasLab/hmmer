@@ -420,4 +420,40 @@ DESCRIPTION
 
   Document P7WeeViterbi(): it can't take L=1.
 //
+ID              h31
+TITLE           Malloc failure in hmmsearch
+STATUS          CLOSED
+XREF            2005:1002-hmmer-bug-h31
+REPORTED_BY     Robert Petryszak <rpetry@ebi.ac.uk>
+OPENED_DATE     SRE, Sun Oct  2 10:39:30 2005
+CLOSED_DATE     SRE, Sun Oct 16 13:37:50 2005
+DESCRIPTION     
+  hmmsearch fails w/ "realloc of X bytes failed: file core_algorithms.c line
+  157". Petryszak provides a "test case" consisting of a 1.9 GB FASTA
+  file and an HMM:
+     hmmsearch PF01121.10.fs UPI0000000001_UPI00005B0DDD
+
+  However, this runs fine on whelk01, wildebeest (Power5/Linux), and
+  an AIX Power 5 in Warren's lab. Petryszak's machine is an IBM p690
+  Regatta (8x Power4, AIX 5.2), hanni1 at HLRN
+  (http://www.hlrn.de/doc/basics.html). Tests on hanni1 reproduce
+  the failure.
+
+  The problem appears to be that IBM AIX inscrutably limits 32-bit
+  applications to one 256 MB data segment of memory by default.  On
+  hanni, w/ 8 processors and a RAMLIMIT of 32 MB/proc, this limitation
+  is exposed.  This memory limitation needs to be lifted. There are
+  three options:
+
+  1. Compile w/ xlc_r -q64 flag, to create a 64-bit executable. 
+     ar needs -X64 flag as well, to archive 64-bit object files.
+     Manually modify AR command in Makefile.in in hmmer/ and squid/
+     subdirs.
+
+  2. Compile w/ xlc_r -bmaxdata:0x80000000 flag, to make a 32-bit
+     executable w/ "large memory model".
+
+  3. Don't run that many cpus; use --cpu <n> flag.
+
+//
 
