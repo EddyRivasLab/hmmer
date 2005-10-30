@@ -1006,7 +1006,7 @@ target_ldependence(struct plan7_s *hmm, int L)
   /* Configure N,J,C transitions so they bear Lp/(1+n) of the load of
    * generating Lp. 
    */
-  pmove = (2. + hmm->nj) / (Lp + 1. + hmm->nj); /* 2/(Lp+2) for sw; 3/(Lp+3) for fs */
+  pmove = (2. + hmm->nj) / (Lp + 2. + hmm->nj); /* 2/(Lp+2) for sw; 3/(Lp+3) for fs */
   ploop = 1. - pmove;
   hmm->xt[XTN][MOVE] = pmove;
   hmm->xt[XTN][LOOP] = ploop;
