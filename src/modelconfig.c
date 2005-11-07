@@ -133,18 +133,16 @@ P7ReconfigLength(struct plan7_s *hmm, int L)
  *            TraceScoreCorrection(). 
  */
 float
-P7FinalBitscore(struct plan7_s *hmm, int sc, int L)
+P7FinalBitscore(struct plan7_s *hmm, float sc, int L)
 {
-  float xbits;
   float Lp;
 
-  xbits = Scorify(sc);
   if (hmm->flags & PLAN7_LCORRECT)
     {
       Lp = (float) L - hmm->kappa * (hmm->nj+1);
-      if (Lp > 0) xbits += hmm->lscore * Lp;
+      if (Lp > 0) sc += hmm->lscore * Lp;
     }
-  return xbits;
+  return sc;
 }
 
 /******************************************************************
@@ -417,7 +415,6 @@ config_g(struct plan7_s *hmm)
   hmm->xt[XTJ][LOOP] = 1.;
 
   hmm->nj    = 0.;		      /* avg. usage of J state per path       */
-  hmm->kappa = hmm->M;		      /* kappa: avg. length of one model pass */
 
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
   hmm->begin[1]    = 1.0;
@@ -464,7 +461,6 @@ config_s(struct plan7_s *hmm)
   hmm->xt[XTJ][LOOP] = 1.;
 
   hmm->nj    = 0.;
-  hmm->kappa = hmm->M;		      /* avg. seq length in one model pass  */
 
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
   hmm->begin[1]    = 1.0;
@@ -506,7 +502,6 @@ config_ls(struct plan7_s *hmm)
   hmm->xt[XTJ][LOOP] = hmm->p1;
 
   hmm->nj    = 1.;		      /* because E->J = 0.5, geometric */
-  hmm->kappa = hmm->M;
 
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries */
   hmm->begin[1]    = 1.0;
@@ -576,7 +571,6 @@ config_sw(struct plan7_s *hmm)
   hmm->xt[XTJ][LOOP] = 0.;
 
   hmm->nj    = 0.;
-  hmm->kappa = ((float) hmm->M+2.)/3.0;	/* xref STL10/24 for this */
 
   /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
    * (tbd1 is ignored)
@@ -636,7 +630,6 @@ config_fs(struct plan7_s *hmm)
   hmm->xt[XTJ][LOOP] = hmm->p1;
 
   hmm->nj = 1.;			/* E->J = 0.5 sets geometric distribution on J usage */
-  hmm->kappa = ((float) hmm->M+2.)/3.0;	/* xref STL10/24 for this */
 
   /* Configure entry:   (M-k+1) / [M(M+1)/2]   (xref STL9/77)
    * (tbd1 is ignored)
@@ -998,10 +991,13 @@ target_ldependence(struct plan7_s *hmm, int L)
   
   /* For small L/large kappa, we have to avoid calculating a negative
    * probability below, which means not making Lp negative. Totally
-   * arbitrarily, enforce a minimum of 25 on Lp.
+   * arbitrarily, enforce a minimum of 5 on Lp.
    */
+  /*
   Lp = (double) L - (hmm->nj+1) * hmm->kappa;
-  if (Lp < 25.) Lp = 25.;
+  if (Lp < 5.) Lp = 5.;
+  */
+  Lp = EdgeCorrection(L, hmm->kappa, hmm->sigma); /* xref STL10/53 */
 
   /* Configure N,J,C transitions so they bear Lp/(1+n) of the load of
    * generating Lp. 
@@ -1037,6 +1033,8 @@ target_ldependence(struct plan7_s *hmm, int L)
       hmm->flags |= PLAN7_LCORRECT;
       hmm->lscore = 1.4427 * log(hmm->xt[XTN][LOOP] / hmm->p1);
     }
+  else
+    hmm->flags &= ~PLAN7_LCORRECT;
 }
 
 

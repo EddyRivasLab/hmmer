@@ -621,7 +621,7 @@ P7Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s *mx,
     }
 
     /* Now the special states. Order is important here.
-     * remember, C and J emissions are zero score by definition,
+     * remember, N, C and J emissions are zero score by definition.
      */
 				/* N state */
     xmx[i][XMN] = -INFTY;

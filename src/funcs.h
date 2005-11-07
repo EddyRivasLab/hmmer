@@ -244,7 +244,7 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
  */
 extern void  P7Config(struct plan7_s *hmm, enum p7_algmode mode);
 extern void  P7ReconfigLength(struct plan7_s *hmm, int L);
-extern float P7FinalBitscore(struct plan7_s *hmm, int sc, int L);
+extern float P7FinalBitscore(struct plan7_s *hmm, float sc, int L);
 
 
 /* from modelmakers.c
