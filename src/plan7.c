@@ -88,6 +88,9 @@ AllocPlan7Shell(void)
 			/* statistical parameters set to innocuous empty values */
   hmm->mu     = 0.; 
   hmm->lambda = 0.;
+  hmm->kappa  = 0.;
+  hmm->sigma  = 0.;
+  hmm->Lbase  = 0;
   
   hmm->flags = 0;
   return hmm;
@@ -210,11 +213,14 @@ ZeroPlan7(struct plan7_s *hmm)
     }
   FSet(hmm->mat[hmm->M], Alphabet_size, 0.);
   hmm->tbd1 = 0.;
+  hmm->tbm1 = 0.;
   FSet(hmm->begin+1, hmm->M, 0.);
   FSet(hmm->end+1, hmm->M, 0.);
   for (k = 0; k < 4; k++)
     FSet(hmm->xt[k], 2, 0.);
   
+  hmm->kappa  = 0;
+  hmm->sigma  = 0;
   hmm->mode   = P7_NO_MODE;
   hmm->flags &= ~PLAN7_HASBITS;	/* invalidates scores */
   hmm->flags &= ~PLAN7_HASPROB;	/* invalidates probabilities */

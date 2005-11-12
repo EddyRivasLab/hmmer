@@ -139,8 +139,9 @@ P7FinalBitscore(struct plan7_s *hmm, float sc, int L)
 
   if (hmm->flags & PLAN7_LCORRECT)
     {
-      Lp = (float) L - hmm->kappa * (hmm->nj+1);
-      if (Lp > 0) sc += hmm->lscore * Lp;
+      Lp = (float) L - hmm->kappa;
+      if (Lp < 1.) Lp = 1.;
+      sc += hmm->lscore * Lp;
     }
   return sc;
 }
@@ -686,9 +687,14 @@ left_wing_retraction_imposed(struct plan7_s *hmm)
   for (k = 1; k <= hmm->M; k++)
     hmm->bsc[k] = Prob2Score(hmm->begin[k], hmm->p1);
 
-  /* Virtual removal of D_1 state. */
-  hmm->tsc[TDM][1] = -INFTY;
-  hmm->tsc[TDD][1] = -INFTY;
+  /* Virtual removal of D_1 state; 
+   * assure that its transitions are impossible 
+   */
+  if (hmm->M > 1) 
+    {
+      hmm->tsc[TDM][1] = -INFTY;
+      hmm->tsc[TDD][1] = -INFTY;
+    }
   return;
 }
 
@@ -748,9 +754,11 @@ left_wing_retraction_added(struct plan7_s *hmm)
   
   /* Virtual removal of D_1 state.
    */
-  hmm->tsc[TDM][1] = -INFTY;
-  hmm->tsc[TDD][1] = -INFTY;
-
+  if (hmm->M > 1)
+    {
+      hmm->tsc[TDM][1] = -INFTY;
+      hmm->tsc[TDD][1] = -INFTY;
+    }
   free(bmk);
   return;
 }
@@ -938,10 +946,13 @@ local_dpath_accounting(struct plan7_s *hmm)
     }
   /* Handle M-1 differently, since D_M is being removed.
    */
-  x = 0.0;
-  if (hmm->end[hmm->M-1] > FLT_EPSILON) x += log(1.0 - hmm->end[hmm->M-1]);
-  hmm->tsc[TDM][hmm->M-1] = LL2Score(x, hmm->p1);
-  hmm->tsc[TDD][hmm->M-1] = -INFTY;
+  if (hmm->M > 1)
+    {
+      x = 0.0;
+      if (hmm->end[hmm->M-1] > FLT_EPSILON) x += log(1.0 - hmm->end[hmm->M-1]);
+      hmm->tsc[TDM][hmm->M-1] = LL2Score(x, hmm->p1);
+      hmm->tsc[TDD][hmm->M-1] = -INFTY;
+    }
 }
 
 static void
@@ -956,9 +967,11 @@ normal_delete_scores(struct plan7_s *hmm)
     }
   /* Handle M-1 differently, since D_M is being removed.
    */
-  hmm->tsc[TDM][hmm->M-1] = Prob2Score(1.0, hmm->p1);
-  hmm->tsc[TDD][hmm->M-1] = -INFTY;
-
+  if (hmm->M > 1)
+    {
+      hmm->tsc[TDM][hmm->M-1] = Prob2Score(1.0, hmm->p1);
+      hmm->tsc[TDD][hmm->M-1] = -INFTY;
+    }
 }
 
 
@@ -991,13 +1004,10 @@ target_ldependence(struct plan7_s *hmm, int L)
   
   /* For small L/large kappa, we have to avoid calculating a negative
    * probability below, which means not making Lp negative. Totally
-   * arbitrarily, enforce a minimum of 5 on Lp.
+   * arbitrarily, enforce a minimum of 1 on Lp.
    */
-  /*
-  Lp = (double) L - (hmm->nj+1) * hmm->kappa;
-  if (Lp < 5.) Lp = 5.;
-  */
-  Lp = EdgeCorrection(L, hmm->kappa, hmm->sigma); /* xref STL10/53 */
+  Lp = (double) L - hmm->kappa;
+  if (Lp < 1.) Lp = 1.;
 
   /* Configure N,J,C transitions so they bear Lp/(1+n) of the load of
    * generating Lp. 
