@@ -2,7 +2,7 @@
  * Generation of sequences/traces from an HMM.
  *
  * SRE, Sun Mar  8 12:26:58 1998
- * SVN $Id$
+ * SVN $Id: emit.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

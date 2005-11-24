@@ -4,7 +4,7 @@
  * functions, see fast_algorithms.c.
  *
  * SRE, Mon Nov 11 15:58:52 1996
- * SVN $Id$
+ * SVN $Id: core_algorithms.c 1483 2005-11-07 18:38:55Z eddy $
  */
 #include "config.h"
 #include "squidconf.h"
@@ -2600,7 +2600,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
 
   /* Go through and put all the accepted domains into the hit list.
    */
-  whole_pval = LPValue(hmm, L, whole_sc);
+  whole_pval = PValue(hmm, whole_sc);
   for (tidx = 0, didx = 1; tidx < ntr; tidx++) {
     if (! usedomain[tidx]) continue;
 
@@ -2608,7 +2608,7 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
      * already split the main trace up --v
      */
     Trace_GetAlignmentBounds(tarr[tidx], 1, &i1, &i2, &k1, &k2, NULL);
-    pvalue = LPValue(hmm, L, score[tidx]); 
+    pvalue = PValue(hmm, score[tidx]); 
 
     if (pvalue <= thresh->domE && score[tidx] >= thresh->domT) {
       ali     = CreateFancyAli(tarr[tidx], hmm, dsq, seqname);

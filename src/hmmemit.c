@@ -2,7 +2,7 @@
  * main() for generating sequences from an HMM
  *
  * SRE, Sun Mar  8 14:11:24 1998 [St. Louis]
- * SVN $Id$
+ * SVN $Id: hmmemit.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -154,7 +154,8 @@ main(int argc, char **argv)
     /* Configure the HMM to shut off N,J,C emission: so we
      * do a simple single pass through the model.
      */
-    P7Config(hmm, P7_G_MODE);
+    P7Config(hmm, P7_S_MODE);
+    P7ReconfigLength(hmm, 0);	/* as close as we can get to no length model right now */
     Plan7Renormalize(hmm);
 
     /*********************************************** 

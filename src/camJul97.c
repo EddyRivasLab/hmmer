@@ -1,7 +1,7 @@
 /* Source code from Cambridge visit July 1997
  *
  * Position-specific matrices.
- * SVN $Id$
+ * SVN $Id: camJul97.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

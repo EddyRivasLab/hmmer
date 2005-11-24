@@ -1,7 +1,7 @@
 /* hmmio.c
  * Input/output of HMMs.
  *
- * SVN $Id$
+ * SVN $Id: hmmio.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
 
@@ -425,7 +425,6 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   case P7_FS_MODE:     fprintf(fp, "MODE  FS (local, multihit)\n");         break;
   case P7_SW_MODE:     fprintf(fp, "MODE  SW (local, single best hit)\n");  break;
   case P7_S_MODE:      fprintf(fp, "MODE  S  (glocal, single best hit)\n"); break;
-  case P7_G_MODE:      fprintf(fp, "MODE  G  (global)\n");                  break;
   default: Die("no such mode %s\n", hmm->mode);
   }
 
@@ -444,8 +443,8 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   /* EVD statistics
    */
   if (hmm->flags & PLAN7_STATS) 
-    fprintf(fp, "EVDL  %10f %10f %10f %10f %d\n", 
-	    hmm->mu, hmm->lambda, hmm->kappa, hmm->sigma, hmm->Lbase);
+    fprintf(fp, "EVDL  %10f %10f %10f \n", 
+	    hmm->mu, hmm->lambda, hmm->kappa);
   
   /* Print header
    */
@@ -670,7 +669,6 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 	else if (strcmp(s, "FS")   == 0) hmm->mode = P7_FS_MODE;
 	else if (strcmp(s, "SW")   == 0) hmm->mode = P7_SW_MODE;
 	else if (strcmp(s, "S")    == 0) hmm->mode = P7_S_MODE;
-	else if (strcmp(s, "G")    == 0) hmm->mode = P7_G_MODE;
 	else if (strcmp(s, "NONE") == 0) hmm->mode = P7_NO_MODE;
 	else goto FAILURE;
       }
@@ -701,10 +699,6 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 	hmm->lambda = atof(s);
 	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
 	hmm->kappa = atof(s);
-	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
-	hmm->sigma = atof(s);
-	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
-	hmm->Lbase = atoi(s);
       }
     else if (strncmp(buffer, "CKSUM", 5) == 0) hmm->checksum = atoi(buffer+6);
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;

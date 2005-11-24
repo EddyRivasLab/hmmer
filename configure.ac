@@ -578,9 +578,10 @@ AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
 AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
 AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 
-# Configure the squid library
+# Configure the squid and easel libraries
 #
 AC_CONFIG_SUBDIRS(squid)
+AC_CONFIG_SUBDIRS(easel)
 
 # Write the config.h header
 #

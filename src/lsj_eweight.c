@@ -5,7 +5,7 @@
  * null distribution.
  *
  * LSJ, Wed Feb  4 15:03:58 CST 2004
- * SVN $Id$
+ * SVN $Id: lsj_eweight.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

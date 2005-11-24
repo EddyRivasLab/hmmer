@@ -4,7 +4,7 @@
  *    at compile time; hmmsearch --pvm runs the PVM version.
  *
  * SRE, Tue Jan  7 17:19:20 1997 [St. Louis]
- * SVN $Id$
+ * SVN $Id: hmmsearch.c 1388 2005-05-16 12:27:46Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -684,7 +684,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    of hits we keep in memory is >= the list we actually
        *    output. 
        */
-      pvalue = LPValue(hmm, sqinfo.len, sc);
+      pvalue = PValue(hmm, sc);
       evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nseq * pvalue;
       if (sc >= thresh->globT && evalue <= thresh->globE) 
       {
@@ -1290,7 +1290,7 @@ worker_thread(void *ptr)
         Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("seq %s scores %f\n", sqinfo.name, sc));
     
-    pvalue = LPValue(wpool->hmm, sqinfo.len, sc);
+    pvalue = PValue(wpool->hmm, sc);
     evalue = wpool->thresh->Z ? (double) wpool->thresh->Z * pvalue : (double) wpool->nseq * pvalue;
  
     if (sc >= wpool->thresh->globT && evalue <= wpool->thresh->globE) 

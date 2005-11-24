@@ -2,7 +2,7 @@
  * for matrix manipulation
  * many functions borrowed from Elena Rivas matrix package (as noted)
  *
- * SVN $Id$
+ * SVN $Id: matrices.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include <stdio.h>

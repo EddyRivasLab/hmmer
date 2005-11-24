@@ -3,7 +3,7 @@
  * parameters for E-value determination.
  * 
  * SRE, Fri Oct 31 09:25:21 1997 [St. Louis]
- * SVN $Id$
+ * SVN $Id: hmmcalibrate.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -444,8 +444,6 @@ main(int argc, char **argv)
 	  hmm->mu     = mu[idx];
 	  hmm->lambda = lambda[idx];
 	  hmm->kappa  = kappa[idx];
-	  hmm->sigma  = sigma[idx];
-	  hmm->Lbase  = L[idx];
 	  hmm->flags |= PLAN7_STATS;
 	  Plan7ComlogAppend(hmm, argc, argv);
 
@@ -1135,13 +1133,9 @@ save_predicted_histogram(FILE *hfp, struct plan7_s *hmm, double *sc, int N, int 
     fprintf(hfp, "[No previous EVD parameters set in this model.]\n");
   else
     {
-      L1 = EdgeCorrection((double) L,          hmm->kappa, hmm->sigma);
-      L2 = EdgeCorrection((double) hmm->Lbase, hmm->kappa, hmm->sigma);
-      pmu = hmm->mu + log(L1/L2) / hmm->lambda;
-
       h = AllocHistogram(-200, 200, 100);
       for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);
-      ExtremeValueSetHistogram(h, pmu, hmm->lambda, h->lowscore, h->highscore, 0);
+      ExtremeValueSetHistogram(h, hmm->mu, hmm->lambda, h->lowscore, h->highscore, 0);
   
       PrintASCIIHistogram(hfp, h);
       FreeHistogram(h);
@@ -1169,7 +1163,7 @@ save_score_list(FILE *sfp, double *sc, int N, int L,
   for (i = 0; i < N; i++) 
     {
       Efitted    = ExtremeValueE(sc[i], mu, lambda, N);
-      Epredicted = LPValue(hmm, L, sc[i]) * (double) N;
+      Epredicted = PValue(hmm, sc[i]) * (double) N;
       fprintf(sfp, "%-6d %12.2f %16.2f %16.2f\n", 
 	      i+1, sc[i], Efitted, Epredicted);
     }

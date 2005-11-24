@@ -1,7 +1,7 @@
 /* states.c
  * alloc, free, and initialization of obsolete Plan 9 HMM structures
  *
- * SVN $Id$
+ * SVN $Id: states.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

@@ -15,9 +15,7 @@ enum p7_algmode {
   P7_FS_MODE    = 2,
   P7_SW_MODE    = 3,
   P7_S_MODE     = 4,
-  P7_G_MODE     = 5
 };
-
 
 /* Structure: plan7_s
  * 
@@ -128,7 +126,6 @@ struct plan7_s {
   float   xt[4][2];             /* N,E,C,J extra states: 2 transitions        +*/
   float  *begin;                /* 1..M B->M state transitions                +*/
   float  *end;                  /* 1..M M->E state transitions (!= a dist!)   +*/
-  float   nj;			/* expected # of times the j state is used     */
 
   /* The model's log-odds score form: xref modelconfig.c
    *
@@ -224,8 +221,6 @@ struct plan7_s {
   float  mu;			/* EVD mu                               +*/
   float  lambda;		/* EVD lambda                           +*/
   float  kappa;			/* mean length of optimal alignments    +*/
-  float  sigma;			/* std dev. of length of opt alignments +*/
-  int    Lbase;			/* seq length that EVD was cali */
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
 };

@@ -4,7 +4,7 @@
  * Rescued from the wreckage of HMMER 1.9m code.
  *
  * SRE, Wed Apr  8 07:35:30 1998
- * SVN $Id$
+ * SVN $Id: plan9.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
 #include "config.h"

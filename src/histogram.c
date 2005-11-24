@@ -3,7 +3,7 @@
  * from database searches.
  *
  * SRE, Sat Jan 20 16:16:17 1996
- * SVN $Id$
+ * SVN $Id: histogram.c 1441 2005-09-09 16:26:32Z eddy $
  ************************************************************
  * Basic API:
  * 

@@ -2,7 +2,7 @@
  * main() for HMM construction from an alignment.
  *
  * SRE, Mon Nov 18 12:41:29 1996
- * SVN $Id$
+ * SVN $Id: hmmbuild.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -1326,8 +1326,8 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
 	  /* Failsafe: we're not converging. Set epsilon to zero,
 	   * do one more round.
 	   */
-	  if (use_epsilon < 1e-6) use_epsilon = 0.0; 
 	  if (use_epsilon == 0.0) break;
+	  if (use_epsilon < 1e-6) use_epsilon = 0.0; 
           
           /* Failsafe: avoid infinite loops. Sometimes the
              new entropy converges without ever being better 

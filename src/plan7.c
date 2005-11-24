@@ -2,7 +2,7 @@
  * Support for Plan 7 HMM data structure, plan7_s.
  * 
  * SRE, Sat Nov 16 14:19:56 1996
- * SVN $Id$
+ * SVN $Id: plan7.c 1487 2005-11-12 20:40:57Z eddy $
  */
 
 #include "config.h"		/* must be included first */
@@ -89,8 +89,6 @@ AllocPlan7Shell(void)
   hmm->mu     = 0.; 
   hmm->lambda = 0.;
   hmm->kappa  = 0.;
-  hmm->sigma  = 0.;
-  hmm->Lbase  = 0;
   
   hmm->flags = 0;
   return hmm;
@@ -220,7 +218,6 @@ ZeroPlan7(struct plan7_s *hmm)
     FSet(hmm->xt[k], 2, 0.);
   
   hmm->kappa  = 0;
-  hmm->sigma  = 0;
   hmm->mode   = P7_NO_MODE;
   hmm->flags &= ~PLAN7_HASBITS;	/* invalidates scores */
   hmm->flags &= ~PLAN7_HASPROB;	/* invalidates probabilities */

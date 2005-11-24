@@ -2,7 +2,7 @@
  * PVM code shared amongst pvm masters and slaves.
  * 
  * SRE, Wed Aug  5 15:40:09 1998 [St. Louis]
- * SVN $Id$
+ * SVN $Id: pvm.c 1382 2005-05-03 22:25:36Z eddy $
  */
 #include "config.h"
 #include "squidconf.h"

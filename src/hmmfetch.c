@@ -3,7 +3,7 @@
  * an SSI index (created with hmmindex).
  * 
  * SRE, Wed Aug  5 14:26:51 1998 [St. Louis]
- * SVN $Id$
+ * SVN $Id: hmmfetch.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

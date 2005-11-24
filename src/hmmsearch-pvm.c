@@ -2,7 +2,7 @@
  * PVM slave for hmmsearch.
  * 
  * SRE, Wed Sep 23 09:30:53 1998
- * SVN $Id$
+ * SVN $Id: hmmsearch-pvm.c 1388 2005-05-16 12:27:46Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -184,7 +184,7 @@ main(void)
           }
       }
 	
-      pvalue = LPValue(hmm, L, sc);
+      pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
       send_trace = (sc >= globT && evalue <= globE) ? 1 : 0;
      

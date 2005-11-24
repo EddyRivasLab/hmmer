@@ -25,7 +25,7 @@
  *   enable Erik Lindahl's Altivec code for Macintosh OSX
  *
  * SRE, Sun Nov 10 08:54:48 2002 [AA 3080, Denver to StL]
- * SVN $Id$
+ * SVN $Id: fast_algorithms.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
 #include "config.h"

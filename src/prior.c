@@ -2,7 +2,7 @@
  * Support for Dirichlet prior data structure, p7prior_s.
  *
  * SRE, Mon Nov 18 15:44:08 1996
- * SVN $Id$
+ * SVN $Id: prior.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

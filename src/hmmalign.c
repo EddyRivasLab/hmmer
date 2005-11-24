@@ -2,7 +2,7 @@
  * main() for aligning a set of sequences to an HMM
  *
  * SRE, Thu Dec 18 16:05:29 1997 [St. Louis]
- * SVN $Id$
+ * SVN $Id: hmmalign.c 1382 2005-05-03 22:25:36Z eddy $
  */ 
 
 #include "config.h"		/* compile-time configuration constants */

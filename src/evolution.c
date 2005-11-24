@@ -2,7 +2,7 @@
  * Routines for phylogenetic "extrapolation" of profile HMMs.
  * 
  * SRE, Sun Oct 31 08:13:33 2004 [St. Louis]
- * SVN $Id$
+ * SVN $Id: evolution.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include <math.h>

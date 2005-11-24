@@ -2,7 +2,7 @@
  * Interfaces between HMMER and other software packages.
  * 
  * SRE, Wed Jan 21 07:50:01 1998
- * SVN $Id$
+ * SVN $Id: emulation.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

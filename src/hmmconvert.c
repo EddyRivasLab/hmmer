@@ -3,7 +3,7 @@
  * for converting HMMs to other software formats like GCG profiles.
  * 
  * SRE, Thu Oct 30 08:56:22 1997; St. Louis
- * SVN $Id$
+ * SVN $Id: hmmconvert.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */

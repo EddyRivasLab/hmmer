@@ -2,7 +2,7 @@
  * PVM slave for hmmpfam-pvm and hmmsearch-pvm.
  *
  * SRE, Sun Jul 12 17:15:36 1998
- * SVN $Id$
+ * SVN $Id: hmmpfam-pvm.c 1388 2005-05-16 12:27:46Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -229,7 +229,7 @@ main(void)
               sc -= TraceScoreCorrection(hmm, tr, dsq);
           }
       }
-      pvalue = LPValue(hmm, len, sc);
+      pvalue = PValue(hmm, sc);
       evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
       send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
 

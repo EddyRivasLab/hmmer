@@ -2,7 +2,7 @@
  * Create an SSI index file for an HMM database.
  * 
  * SRE, Wed Aug  5 11:05:03 1998 [St. Louis]
- * SVN $Id$
+ * SVN $Id: hmmindex.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

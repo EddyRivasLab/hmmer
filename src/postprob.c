@@ -8,7 +8,7 @@
  * Derived from core_algorithms.c (SRE, Nov 11 1996)
  * Incorporated SRE, Sat Nov  6 09:07:12 1999 [Cold Spring Harbor]
  *
- * SVN $Id$ 
+ * SVN $Id: postprob.c 1382 2005-05-03 22:25:36Z eddy $ 
  *****************************************************************
  * IHH's notes:
  * 

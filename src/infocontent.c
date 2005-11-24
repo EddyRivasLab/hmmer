@@ -1,7 +1,7 @@
 /* infocontent.c
  * for evolving models to a specified information content
  *
- * SVN $Id$
+ * SVN $Id: infocontent.c 1487 2005-11-12 20:40:57Z eddy $
  * Original author: Dawn J. Brooks (dbrooks@genetics.wustl.edu); 2004.
  */
 

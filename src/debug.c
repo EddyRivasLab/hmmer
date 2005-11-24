@@ -3,7 +3,7 @@
  * innards.
  * 
  * Thu Nov 21 09:58:05 1996
- * SVN $Id$
+ * SVN $Id: debug.c 1386 2005-05-09 16:52:01Z eddy $
  */
 
 #include "config.h"

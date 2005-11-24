@@ -2,7 +2,7 @@
  * Functions that I don't know quite where to put yet.
  *
  * SRE, Thu Jul 15 18:49:19 1993
- * SVN $Id$
+ * SVN $Id: misc.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

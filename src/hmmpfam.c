@@ -4,7 +4,7 @@
  *    at compile time; hmmpfam --pvm runs the PVM version.
  *    
  * SRE, Mon Aug 25 17:03:14 1997 [Denver] 
- * SVN $Id$
+ * SVN $Id: hmmpfam.c 1388 2005-05-16 12:27:46Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -683,7 +683,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 	}
     /* Store scores/pvalue for each HMM aligned to this sequence, overall
      */
-    pvalue = LPValue(hmm, sqinfo->len, sc);
+    pvalue = PValue(hmm, sc);
     evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nhmm * pvalue;
     if (sc >= thresh->globT && evalue <= thresh->globE) {
         /* Recalculate trace if we used altivec */
@@ -1297,7 +1297,7 @@ worker_thread(void *ptr)
       Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("model %s scores %f\n", hmm->name, sc));
     
-    pvalue = LPValue(hmm, wpool->L, sc);
+    pvalue = PValue(hmm, sc);
     evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) wpool->nhmm * pvalue;
     if (sc >= thresh.globT && evalue <= thresh.globE) 
     { 

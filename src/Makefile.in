@@ -36,9 +36,9 @@ PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
 SHELL    = /bin/sh
-MYLIBS   = -lsquid
-MYLIBDIR = -L../squid
-MYINCDIR = -I../squid
+MYLIBS   = -lsquid -leasel
+MYLIBDIR = -L../squid -L../easel
+MYINCDIR = -I../squid -I../easel
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -52,6 +52,7 @@ PROGS = hmmalign\
 	${PVMPROGS}
 
 OBJS =  alphabet.o\
+	calibration.o\
 	core_algorithms.o\
 	debug.o\
 	display.o\

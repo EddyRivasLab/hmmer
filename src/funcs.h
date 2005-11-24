@@ -198,8 +198,6 @@ extern int   LL2Score(float ll, float null);
 extern float Score2Prob(int sc, float null);
 extern float Scorify(int sc);
 extern double PValue(struct plan7_s *hmm, double sc);
-extern double LPValue(struct plan7_s *hmm, int L, double sc);
-extern double EdgeCorrection(double L, double kappa, double sigma);
 extern float LogSum(float p1, float p2);
 extern int   ILogsum(int p1, int p2);
 extern void  LogNorm(float *vec, int n);
@@ -243,8 +241,9 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
  * to the full Plan7 score model
  */
 extern void  P7Config(struct plan7_s *hmm, enum p7_algmode mode);
-extern void  P7ReconfigLength(struct plan7_s *hmm, int L);
-extern float P7FinalBitscore(struct plan7_s *hmm, float sc, int L);
+extern void  P7ReconfigLength (struct plan7_s *hmm, int L);
+extern float P7EdgeCorrection (struct plan7_s *hmm, int L);
+extern float P7ScoreCorrection(struct plan7_s *hmm, int L);
 
 
 /* from modelmakers.c
@@ -399,6 +398,7 @@ extern int  TraceDomainNumber(struct p7trace_s *tr);
 extern int  Trace_GetAlignmentBounds(struct p7trace_s *tr, int which,
 				     int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2,
 				     int *ret_avlen);
+extern int  P7TraceCountAnnotated(struct p7trace_s *tr);
 extern struct p7trace_s *MasterTraceFromMap(int *map, int M, int alen);
 extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, 
 			      struct p7trace_s ***ret_tr);

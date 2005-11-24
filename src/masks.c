@@ -13,7 +13,7 @@
  * The TraceScoreCorrection() code is the default.
  * 
  * SRE, Tue Nov 18 10:12:28 1997
- * SVN $Id$
+ * SVN $Id: masks.c 1382 2005-05-03 22:25:36Z eddy $
  */
 
 #include "config.h"

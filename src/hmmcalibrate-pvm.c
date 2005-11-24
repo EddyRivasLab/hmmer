@@ -16,7 +16,7 @@
  *       master sends a shutdown signal instead of a work packet.
  * 
  * SRE, Tue Aug 18 15:19:28 1998
- * SVN $Id$
+ * SVN $Id: hmmcalibrate-pvm.c 1387 2005-05-13 20:50:29Z eddy $
  */
 
 #include "config.h"		/* compile-time configuration constants */

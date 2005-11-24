@@ -18,7 +18,7 @@
  *    are removed.
  *
  * SRE, Fri Nov 15 10:00:04 1996
- * SVN $Id$
+ * SVN $Id: modelmakers.c 1384 2005-05-06 23:04:04Z eddy $
  */
 
 #include "config.h"

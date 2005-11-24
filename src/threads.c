@@ -5,7 +5,7 @@
  * main's, i.e. hmmsearch.c, hmmpfam.c, hmmcalibrate.c
  * 
  * SRE, Fri Jul 10 10:05:44 1998
- * SVN $Id$
+ * SVN $Id: threads.c 1388 2005-05-16 12:27:46Z eddy $
  */
 
 #include "config.h"
