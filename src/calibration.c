@@ -18,41 +18,49 @@
 #include <esl_random.h>
 #include <esl_gumbel.h>
 
-/* Function:  P7CalibrateVL()
+/* Function:  P7CalibrateV()
  * Incept:    SRE, Wed Nov 23 19:41:54 2005 [St. Louis]
  *
- * Purpose:   Calibrate for Viterbi local modes (fs and sw), assuming
- *            that $\lambda = 0.693$. Sample <N> iid random sequences
- *            of length <L> using the residue frequencies in <fq>. Collect
- *            scores and determine ML estimate of Gumbel $\mu$
- *            parameter.  Collect optimal alignment lengths, and
- *            estimate $\kappa$ parameter for edge effect correction.
- *
+ * Purpose:   Sample <N> iid random sequences of length <L> using the
+ *            residue frequencies <fq>; perform Viterbi alignments to
+ *            the model <hmm>; collect scores and optimal alignment
+ *            lengths. Fit the scores to a Gumbel distribution with
+ *            fixed $\lambda=0.693$, and determine a ML estimate of
+ *            $\mu$; return this estimate in <ret_mu>. Calculate the
+ *            mean alignment length; return this in <ret_kappa>.
+ *            
+ *            The model is used exactly as provided; the caller is
+ *            responsible for configuring in the desired mode with
+ *            <P7Config()>, setting the edge correction parameter
+ *            <hmm->kappa>, and configuring the length model with
+ *            <P7ReconfigLength()>.
+ *            
+ *            Typically, to determine an <hmm->mu> Gumbel parameter,
+ *            the model would be configured in sw mode, <hmm->kappa>
+ *            would be set first by a prior call to <P7CalibrateV()>,
+ *            and the length model would be configured to length <L>.
+ *            
+ *            To determine a new <hmm->kappa> parameter, the model
+ *            would be configured in the desired mode, <hmm->kappa>
+ *            would be set to 0, and the length model would be 
+ *            configured to length <L>.
+ *            
  *            Caller provides random number source <r> for iid seq
  *            generation. This way, the caller controls whether the
  *            simulation is reproducible or not.
  *            
- *            The <hmm> must be configured in a local alignment
- *            mode (fs or sw) before calling <P7CalibrateVL()>, by
- *            an appropriate call to <P7Config()>. 
- *            
- *            <hmm->kappa> is set to zero during the calibration.
- *            Edge effect is assumed to be negligible during the
- *            simulation ($L' \simeq L - \kappa \simeq L). 
- *            <hmm->kappa> is then set to the mean optimal alignment
- *            length.
- *            
- * Args:      r    - source of random numbers
- 8            hmm  - the profile HMM
- *            N    - number of iid random sequences to sample
- *            L    - length of iid random sequences
+ * Args:      r         - source of random numbers
+ *            hmm       - the profile HMM
+ *            N         - number of iid random sequences to sample
+ *            L         - length of iid random sequences
+ *            ret_mu    - optRETURN: fitted Gumbel ML mu estimate
+ *            ret_kappa - optRETURN: mean alignment length         
  *
  * Returns:   (void).
- *            <hmm->mu>, <hmm->lambda>, and <hmm->kappa> are set,
- *            and the <PLAN7_STATS> flag is raised on the model.
  */
 void
-P7CalibrateVL(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L)
+P7CalibrateV(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L,
+	     float *ret_mu, float *ret_kappa)
 {
   struct p7trace_s  *tr;
   struct dpmatrix_s *mx;
@@ -64,15 +72,12 @@ P7CalibrateVL(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L)
   double  mu, lambda, kappa;	/* Easel works in doubles; HMMER in floats. */
   
   sc  = malloc(sizeof(double) * N);
-  len = malloc(sizeof(int)    * N);
+  len = malloc(sizeof(double) * N);
 
   if (P7ViterbiSize(L, hmm->M) <= RAMLIMIT)
     mx = CreatePlan7Matrix(L, hmm->M, 0, 0);  /* full matrix  */
   else
     mx = CreatePlan7Matrix(1, hmm->M, 25, 0); /* initially 2 rows, growable */
-
-  hmm->kappa = 0;	/* kappa=0 must precede P7ReconfigLength() */
-  P7ReconfigLength(hmm, L);
 
   /* Collect scores and optimal alignment lengths.
    * We could parallelize this section (threads and/or MPI) someday;
@@ -109,17 +114,15 @@ P7CalibrateVL(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L)
    */
   esl_stats_Mean(len, N, &kappa, NULL);
 
-  hmm->lambda = (float) lambda;
-  hmm->mu     = (float) mu;
-  hmm->kappa  = (float) kappa;
+
+  FreePlan7Matrix(mx);
   free(sc);
   free(len);
+
+  if (ret_mu    != NULL) *ret_mu    = (float) mu;
+  if (ret_kappa != NULL) *ret_kappa = (float) kappa;
   return;
 }
-
-
-
- 
  
 /************************************************************
  * @LICENSE@

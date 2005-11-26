@@ -12,8 +12,10 @@
  * target length. Thus "LS/400" means a model configured for glocal,
  * multihit alignment of a target sequence of length 400.
  * 
- * Revised, refactored May 2005: xref STL9/77-81.  (Uniform fragment length distribution)
- * And then again, Sept 2005:    xref STL10/24-26. (Inherent target length dependency)
+ * Revised, refactored May 2005: xref STL9/77-81.  
+ *   (Uniform fragment length distribution)
+ * And then again, Sept 2005:    xref STL10/24-26. 
+ *   (Inherent target length dependency)
  * 
  * SRE, Mon May  2 10:55:16 2005 [St. Louis]
  * SVN $Id: modelconfig.c 1487 2005-11-12 20:40:57Z eddy $
@@ -139,7 +141,7 @@
  *    target sequence length (ignoring edge correction effects). K/A
  *    statistics have only been proven for local Viterbi single-hit
  *    ungapped alignments. They have been shown to hold empirically
- *    for local Viterbi single-hit gapped alignments. In my hands the. In my hands 
+ *    for local Viterbi single-hit gapped alignments. In my hands 
  *    they also hold for any single-hit alignment (local or glocal, Viterbi
  *    or forward) but they do not hold for multihit alignment modes.
  *    
@@ -340,7 +342,7 @@ P7ReconfigLength(struct plan7_s *hmm, int L)
   /* Figure out the expected number of uses of the J state.
    */
   if (hmm->xt[XTE][LOOP] == 0.) nj = 0.; /* make sure. */
-  else                          nj = hmm->xt[XTE][LOOP] / (1. - hmm->xt[XTE][LOOP]);
+  else  nj = hmm->xt[XTE][LOOP] / (1. - hmm->xt[XTE][LOOP]);
 
   /* Figure out the effective sequence length L', the expected number of
    * unannotated residues in the target.
@@ -356,7 +358,7 @@ P7ReconfigLength(struct plan7_s *hmm, int L)
   hmm->xt[XTN][LOOP] = ploop;
   hmm->xt[XTC][MOVE] = pmove;
   hmm->xt[XTC][LOOP] = ploop;
-  hmm->xt[XTJ][MOVE] = pmove;	/* note that J will be unused if [XTE][LOOP] = 0. */
+  hmm->xt[XTJ][MOVE] = pmove;	/* note, J unused if [XTE][LOOP] = 0. */
   hmm->xt[XTJ][LOOP] = ploop;
 
   /* Set the scores. (integer scaled bit scores)
@@ -397,7 +399,10 @@ P7ReconfigLength(struct plan7_s *hmm, int L)
       hmm->lscore -= (float) hmm->xsc[XTN][LOOP] / (float) INTSCALE;
     }
   else
-    hmm->flags &= ~PLAN7_LCORRECT;
+    {
+      hmm->lscore = 0.;
+      hmm->flags &= ~PLAN7_LCORRECT;
+    }
 }
 
 
@@ -421,10 +426,9 @@ float
 P7EdgeCorrection(struct plan7_s *hmm, int L)
 {
   float Lp;
-  float use_kappa;
 
   if (hmm->mode == P7_S_MODE || hmm->mode == P7_LS_MODE)
-    Lp = (float) L - hmm->M;
+    Lp = (float) L - hmm->kappa_g;
   else
     Lp = (float) L - hmm->kappa;
 
@@ -487,8 +491,8 @@ P7ScoreCorrection(struct plan7_s *hmm, int L)
  *    2. xt[XTE][MOVE,LOOP] dist controls multihits. 
  *       Setting xt[XTE][LOOP] to 0.0 forces one hit per model.
  *    3. begin[1..M] controls entry probabilities. An algorithm 
- *       mode either imposes internal begin probabilities, or leaves begin[1] as
- *       1.0 and begin[k] = 0.0 for k>1.
+ *       mode either imposes internal begin probabilities, or leaves begin[1] 
+ *       as 1.0 and begin[k] = 0.0 for k>1.
  *    4. end[1..M] controls exit probabilities. An algorithm mode either
  *       imposes internal exit probabilities, or leaves end[M] = 1.0
  *       and end[k] = 0.0 for k<M.
@@ -541,7 +545,7 @@ P7ScoreCorrection(struct plan7_s *hmm, int L)
 static void
 config_s(struct plan7_s *hmm)
 {
-  hmm->xt[XTE][MOVE] = 1.;	      /* only 1 domain/sequence ("global" alignment) */
+  hmm->xt[XTE][MOVE] = 1.;	      /* 1 domain/sequence */
   hmm->xt[XTE][LOOP] = 0.;
 
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries. */
@@ -559,8 +563,8 @@ config_s(struct plan7_s *hmm)
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_S_MODE; 	 /* hmms mode */
-  hmm->flags &= ~PLAN7_BIMPOSED; /* no internal entry -> entry comes from wing retraction  */
-  hmm->flags &= ~PLAN7_EIMPOSED; /* no internal exit  -> exit comes from wing retraction */
+  hmm->flags &= ~PLAN7_BIMPOSED; /* no internal entry -> entry from wing retraction  */
+  hmm->flags &= ~PLAN7_EIMPOSED; /* no internal exit  -> exit from wing retraction */
   hmm->flags |= PLAN7_HASBITS;   /* we're configured */
 }
    
@@ -577,7 +581,7 @@ config_s(struct plan7_s *hmm)
 static void
 config_ls(struct plan7_s *hmm)
 {
-  hmm->xt[XTE][MOVE] = 0.5;	      /* sets an expectation of 2 domains/seq, geometric dist */
+  hmm->xt[XTE][MOVE] = 0.5;	      /* expectation of 2 domains/seq */
   hmm->xt[XTE][LOOP] = 0.5;
 
   FSet(hmm->begin+2, hmm->M-1, 0.);   /* disallow internal entries */
@@ -592,8 +596,8 @@ config_ls(struct plan7_s *hmm)
   logoddsify_the_rest(hmm);
 
   hmm->mode   = P7_LS_MODE; 	 /* hmmls mode: glocal, multihit */
-  hmm->flags &= ~PLAN7_BIMPOSED; /* no internal entry -> entry comes from wing retraction  */
-  hmm->flags &= ~PLAN7_EIMPOSED; /* no internal exit  -> exit comes from wing retraction */
+  hmm->flags &= ~PLAN7_BIMPOSED; /* no internal entry; entry from wing retraction  */
+  hmm->flags &= ~PLAN7_EIMPOSED; /* no internal exit; exit from wing retraction */
   hmm->flags |=  PLAN7_HASBITS;  /* we're configured */
 }  
                              
@@ -1104,6 +1108,94 @@ logoddsify_the_rest(struct plan7_s *hmm)
 /*****************************************************************
  * Experimental code, not hooked up, relegated to the end:
  *****************************************************************/
+/* lengthmodel_scheme1()
+ * 
+ * Sets the length model to HMMER2's original default, called "scheme
+ * 1" in the documentation: all N,C,J transitions are identical to the
+ * R transitions of the null model, so that (most) scores go to zero.
+ * 
+ * This means that model M generates sequences of greater mean length
+ * than model R. Scores exhibit length dependence. For some scoring
+ * modes, this length dependence obeys Karlin/Altschul expectations,
+ * but for others, it does not.
+ */
+static void
+lengthmodel_scheme1(struct plan7_s *hmm)
+{
+  /* Configure hmm->p1 in the null model R to an expected length of 350
+   */
+  hmm->p1 = 350. / 351.;
+
+  /* Configure N,J,C transitions identical to R transitions.
+   */
+  hmm->xt[XTN][MOVE] = 1. - hmm->p1;
+  hmm->xt[XTN][LOOP] = hmm->p1;
+  hmm->xt[XTC][MOVE] = 1. - hmm->p1;
+  hmm->xt[XTC][LOOP] = hmm->p1;
+  hmm->xt[XTJ][MOVE] = 1. - hmm->p1;
+  hmm->xt[XTJ][LOOP] = hmm->p1;
+
+  /* Set the scores.
+   */
+  hmm->xsc[XTN][LOOP] = Prob2Score(hmm->xt[XTN][LOOP], hmm->p1);    /* -> 0 */
+  hmm->xsc[XTN][MOVE] = Prob2Score(hmm->xt[XTN][MOVE], 1.0);       
+  hmm->xsc[XTC][LOOP] = Prob2Score(hmm->xt[XTC][LOOP], hmm->p1);    /* -> 0 */
+  hmm->xsc[XTC][MOVE] = Prob2Score(hmm->xt[XTC][MOVE], 1.-hmm->p1); /* -> 0 */
+  hmm->xsc[XTJ][LOOP] = Prob2Score(hmm->xt[XTJ][LOOP], hmm->p1);    /* -> 0 */
+  hmm->xsc[XTJ][MOVE] = Prob2Score(hmm->xt[XTJ][MOVE], 1.0);
+
+  hmm->flags &= ~PLAN7_LCORRECT;
+  return;
+}
+
+/* lengthmodel_scheme2()
+ * 
+ * Sets the length model such that models M and R both generate
+ * an expected length of 350. This model is used for illustrative
+ * purposes in the documentation, and is available here for testing
+ * purposes, but is not used in HMMER.
+ */
+static void
+lengthmodel_scheme2(struct plan7_s *hmm)
+{
+  double ploop, pmove;
+  double nj;
+
+  /* Configure hmm->p1 in the null model R to an expected length of 350
+   */
+  hmm->p1 = 350. / 351.;
+
+  /* Figure out the expected number of uses of the J state.
+   */
+  if (hmm->xt[XTE][LOOP] == 0.) nj = 0.; /* make sure. */
+  else  nj = hmm->xt[XTE][LOOP] / (1. - hmm->xt[XTE][LOOP]);
+
+  /* Configure N,J,C transitions to generated expected length of 350;
+   * N,C,J states share the burden according to their expected usage.
+   */
+  pmove = (2. + nj) / (350. + 2. + nj); /* 2/352 for sw; 3/353 for fs */
+  ploop = 1. - pmove;
+
+  hmm->xt[XTN][MOVE] = pmove;
+  hmm->xt[XTN][LOOP] = ploop;
+  hmm->xt[XTC][MOVE] = pmove; 
+  hmm->xt[XTC][LOOP] = ploop;
+  hmm->xt[XTJ][MOVE] = pmove;
+  hmm->xt[XTJ][LOOP] = ploop;
+
+  /* Set the scores.
+   */
+  hmm->xsc[XTN][LOOP] = Prob2Score(hmm->xt[XTN][LOOP], hmm->p1);    
+  hmm->xsc[XTN][MOVE] = Prob2Score(hmm->xt[XTN][MOVE], 1.0);       
+  hmm->xsc[XTC][LOOP] = Prob2Score(hmm->xt[XTC][LOOP], hmm->p1);    
+  hmm->xsc[XTC][MOVE] = Prob2Score(hmm->xt[XTC][MOVE], 1.-hmm->p1); 
+  hmm->xsc[XTJ][LOOP] = Prob2Score(hmm->xt[XTJ][LOOP], hmm->p1);    
+  hmm->xsc[XTJ][MOVE] = Prob2Score(hmm->xt[XTJ][MOVE], 1.0);
+
+  hmm->flags &= ~PLAN7_LCORRECT;
+  return;
+}
+
 /* bruno_edge_correction()
  * SRE, Fri May 13 13:08:18 2005 [St. Louis]
  *
@@ -1164,7 +1256,7 @@ logoddsify_the_rest(struct plan7_s *hmm)
  *            emails from Bill Bruno, 2004-2005;
  *            STL10/59.
  */
-double
+static double
 bruno_edge_correction(int L, double kappa, double sigma)
 {
   double term1, term2, term3;

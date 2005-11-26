@@ -3,7 +3,6 @@
  *
  * SVN $Id$
  */            
-
 #ifndef FUNCSH_INCLUDED
 #define FUNCSH_INCLUDED
 
@@ -14,6 +13,8 @@
 #include "plan7.h"
 #include "structs.h"
 
+#include <easel.h>
+#include <esl_random.h>		/* ESL_RANDOMNESS */
 
 /* alphabet.c
  * Configuration of global alphabet information
@@ -27,6 +28,12 @@ extern void           DigitizeAlignment(MSA *msa, unsigned char ***ret_dsqs);
 extern void           P7CountSymbol(float *counters, unsigned char sym, float wt);
 extern void           DefaultGeneticCode(int *aacode);
 extern void           DefaultCodonBias(float *codebias);
+
+/* from calibration.c
+ * Determination of parameters needed for E-values.
+ */
+extern void P7CalibrateV(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L,
+			 float *ret_mu, float *ret_kappa);
 
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.

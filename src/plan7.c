@@ -86,9 +86,10 @@ AllocPlan7Shell(void)
   hmm->dna2   = -INFTY;
   hmm->dna4   = -INFTY;
 			/* statistical parameters set to innocuous empty values */
-  hmm->mu     = 0.; 
-  hmm->lambda = 0.;
-  hmm->kappa  = 0.;
+  hmm->mu      = 0.; 
+  hmm->lambda  = 0.;
+  hmm->kappa   = 0.;
+  hmm->kappa_g = 0.;
   
   hmm->flags = 0;
   return hmm;
@@ -217,10 +218,11 @@ ZeroPlan7(struct plan7_s *hmm)
   for (k = 0; k < 4; k++)
     FSet(hmm->xt[k], 2, 0.);
   
-  hmm->kappa  = 0;
-  hmm->mode   = P7_NO_MODE;
-  hmm->flags &= ~PLAN7_HASBITS;	/* invalidates scores */
-  hmm->flags &= ~PLAN7_HASPROB;	/* invalidates probabilities */
+  hmm->kappa   = 0;
+  hmm->kappa_g = 0;
+  hmm->mode    = P7_NO_MODE;
+  hmm->flags  &= ~PLAN7_HASBITS;	/* invalidates scores */
+  hmm->flags  &= ~PLAN7_HASPROB;	/* invalidates probabilities */
 }
 
 

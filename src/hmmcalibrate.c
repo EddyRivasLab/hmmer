@@ -1124,8 +1124,6 @@ static void
 save_predicted_histogram(FILE *hfp, struct plan7_s *hmm, double *sc, int N, int L)
 {
   struct histogram_s *h;     
-  double pmu;
-  double L1, L2;
   int    i;
   
   fprintf(hfp, "HMM: %s\n", hmm->name);

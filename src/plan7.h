@@ -218,9 +218,10 @@ struct plan7_s {
   /* P-value and E-value statistical parameters
    * Only valid if PLAN7_STATS is set.
    */
-  float  mu;			/* EVD mu                               +*/
-  float  lambda;		/* EVD lambda                           +*/
-  float  kappa;			/* mean length of optimal alignments    +*/
+  float  mu;			/* Gumbel mu                                +*/
+  float  lambda;		/* Gumbel lambda                            +*/
+  float  kappa;			/* mean length of optimal local alignments  +*/
+  float  kappa_g;		/* mean length of optimal glocal alignments +*/
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
 };

@@ -34,7 +34,7 @@ SHIVA = alignalign_test\
 #######
 
 .c.o:
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) ${CPPFLAGS} $(DEFS) -I../squid -I../src -c $<		
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) ${CPPFLAGS} $(DEFS) -I../squid -I../easel -I../src -c $<		
 
 all: 	$(SHIVA)
 
