@@ -2,12 +2,12 @@
 
 /*
  * Function: AllocLogoddsShell()
- * Date:     CRS, 10 June 2005
+ * Date:     CRS, 10 June 2005 [J. Buhler's student, St. Louis]
  * 
  * Purpose:  Allocates the memory needed by the shell of the logodds_s
  *           structure.  Called from within AllocPlan7Shell().
  *
- * Args:     hmm - the profile hmm containing the logodds_s structure
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
  *
  * Returns:  (void)
  *           Memory is allocated for the shell of hmm->lom.  Freed 
@@ -23,12 +23,12 @@ inline void AllocLogoddsShell(struct plan7_s *hmm){
 
 /*
  * Function: AllocLogoddsBody()
- * Date:     CRS, 10 June 2005
+ * Date:     CRS, 10 June 2005 [J. Buhler's student, St. Louis]
  *
  * Purpose:  Allocates the memory needed by the logodds_s strcuture.
  *           Called from within AllocPlan7Body().
  *
- * Args:     hmm - the profile hmm containing the logodds_s structure
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
  *
  * Returns:  (void)
  *           Memory is allocated for  hmm->lom.  Freed from FreeLogodds(), 
@@ -40,12 +40,12 @@ inline void AllocLogoddsBody(struct plan7_s *hmm){
 
 /*
  * Function: FreeLogodds()
- * Date:     CRS, 10 June 2005
+ * Date:     CRS, 10 June 2005 [J. Buhler's student, St. Louis]
  *
  * Purpose:  Frees ALL memory (shell and body) used by the logodds_s
  *           structure.  Called from FreePlan7().
  * 
- * Args:     hmm - the profile hmm containing the logodds_s structure
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
  *
  * Returns:  (void)
  *           Memory used by hmm->lom is freed.  
@@ -56,15 +56,15 @@ inline void FreeLogodds(struct plan7_s *hmm){
 
 /*
  * Function: FillCustomLogodds()
- * Date:     CRS, 13 July 2005
+ * Date:     CRS, 13 July 2005 [J. Buhler's student, St. Louis]
  *
- * Purpose:  Fills the custom_s logodds structure using the data from the
+ * Purpose:  Fills the custom logodds_s structure using the data from the
  *           profile hmm.  One can assume all non-customized values of the 
  *           hmm have been filled in before this function is called.  No
  *           memory should be allocated here; that should be done in
  *           AllocLogoddsBody().
  *
- * Args:     hmm - the profile hmm containing the logodds_s structure
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
  *
  * Returns:  (void)
  */
@@ -79,10 +79,10 @@ inline void FillCustomLogodds(struct plan7_s *hmm){
  *           integers. Keeps 2D arrays compact in RAM in an attempt 
  *           to maximize cache hits. 
  *           
- *           The mx structure can be dynamically grown, if a new
+ *           The structure can be dynamically grown, if a new
  *           HMM or seq exceeds the currently allocated size. Dynamic
  *           growing is more efficient than an alloc/free of a whole
- *           matrix for every new target. The ResizePlan7Matrix()
+ *           matrix for every new target. The ResizeDPMatrix()
  *           call does this reallocation, if needed. Here, in the
  *           creation step, we set up some pads - to inform the resizing
  *           call how much to overallocate when it realloc's. 
@@ -95,7 +95,7 @@ inline void FillCustomLogodds(struct plan7_s *hmm){
  * Return:   mx
  *           mx is allocated here. Caller frees with FreeDPMatrix(mx).
  */
-inline struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM){
+cust_dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM){
 
 }
 
@@ -108,7 +108,7 @@ inline struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM){
  *           
  *           We know (because of the way hmmsearch and hmmpfam are coded)
  *           that only one of the two dimensions is going to change
- *           in size after the first call to ResizePlan7Matrix();
+ *           in size after the first call to ResizeDPMatrix();
  *           that is, for hmmsearch, we have one HMM of fixed size M
  *           and our target sequences may grow in N; for hmmpfam,
  *           we have one sequence of fixed size N and our target models
@@ -118,29 +118,24 @@ inline struct dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM){
  *           Since we know that only one dimension is going to grow,
  *           we aren't scared of reallocating to maxN,maxM. (If both
  *           M and N could grow, we would be more worried.)
- *
- *           Returns individual ptrs to the four matrix components
- *           as a convenience.
  *           
  * Args:     mx    - an already allocated model to grow.
  *           N     - seq length to allocate for; N+1 rows
  *           M     - size of model
- *           xmx, mmx, imx, dmx 
- *                 - RETURN: ptrs to four mx components as a convenience
  *                   
  * Return:   (void)
  *           mx is (re)allocated here.
  */
-inline void ResizeDPMatrix(struct dpmatrix_s *mx, int N, int M){
+void ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M){
 
 }
 
 /* Function: FreeDPMatrix()
  *
- * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
+ * Purpose:  Free the dynamic programming matrix allocated by CreateDPMatrix().
  * 
  * Return:   (void)
  */
-inline void FreeDPMatrix(struct dpmatrix_s *mx){
+void FreeDPMatrix(cust_dpmatrix_s *mx){
 
 }
