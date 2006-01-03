@@ -13,7 +13,6 @@
 
 #include "plan7.h"
 #include "structs.h"
-#include "customfuncs.h"
 
 /* alphabet.c
  * Configuration of global alphabet information
@@ -428,14 +427,15 @@ extern void FreeDPMatrix(cust_dpmatrix_s *mx);
  * algorithms and related support functions.
  */
 extern int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx);
+extern float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
+			     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr,
+			     int need_trace);
 extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
 		      cust_dpmatrix_s **ret_mx);
 extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
 		     cust_dpmatrix_s **ret_mx);
 extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 		     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
-extern void  ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 
 #endif /*FUNCSH_INCLUDED*/

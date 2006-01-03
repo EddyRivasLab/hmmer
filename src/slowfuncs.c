@@ -1,6 +1,16 @@
 #include "structs.h"
 #include "funcs.h"
 
+/*
+ * Note:  P7ViterbiTrace() is shared by the Altivec and Default
+ *        implementations, so it is defined in default_altivec_sharedfuncs.c.
+ *        Since it only applies to these implementations, however, we export
+ *        it locally where it is used, instead of exporting it globally in
+ *        funcs.h - CRS 24 August 2005
+ */
+extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
+			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
+
 /* Function: Viterbi()
  *
  * Note:     This used to be defined as P7Viterbi() in core_algorithms.c, but I
@@ -12,9 +22,9 @@
  *           replace sum's. 
  *           
  *           This is the slower, more understandable version
- *           of P7Viterbi(). The default version in fastfuncs.c
+ *           of Viterbi(). The default version in fastfuncs.c
  *           is portably optimized and more difficult to understand;
- *           the ALTIVEC version in altivecfuncs.c is vectorized
+ *           the Altivec version in altivecfuncs.c is vectorized
  *           with Altivec-specific code, and is pretty opaque.
  *           
  *           This function is not enabled by default; it is only
@@ -135,7 +145,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx,
   sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
 
   if (ret_tr != NULL) {
-    ViterbiTrace(hmm, dsq, L, mx, &tr);
+    P7ViterbiTrace(hmm, dsq, L, mx, &tr);
     *ret_tr = tr;
   }
 

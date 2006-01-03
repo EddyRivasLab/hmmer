@@ -8,6 +8,16 @@
 #include <ppc_intrinsics.h>
 #endif
 
+/*
+ * Note:  P7ViterbiTrace() is shared by the Altivec and Default
+ *        implementations, so it is defined in default_altivec_sharedfuncs.c.
+ *        Since it only applies to these implementations, however, we export
+ *        it locally where it is used, instead of exporting it globally in
+ *        funcs.h - CRS 24 August 2005
+ */
+extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
+			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
+
 /* Echo a message about Altivec being used once: 
  *   (1) Confirm that the Altivec kernel is indeed being used
  *   (2) Trace bugs to the Altivec kernel instead of the vanilla code
@@ -29,7 +39,7 @@ AltivecMessage()
  *
  * Note:     This was originally defined as P7Viterbi() in fast_algorithms.c,
  *           inside of an #ifdef ALTIVEC preprocessor block.  It is the 
- *           altivec specific impelmention of Viterbi, so I moved it here with
+ *           altivec specific implemention of Viterbi, so I moved it here with
  *           the rest of the altivec specific (non-structure-related) functions.
  *             - CRS 23 June 2005
  * 
@@ -44,7 +54,7 @@ AltivecMessage()
  *           
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
-/* This first version of P7Viterbi has been accelerated with Altivec vectorization.
+/* This first version of Viterbi() has been accelerated with Altivec vectorization.
  * On Apple hardware, it is up to a factor 10 faster than the old non-altivec version.
  */
 typedef union 
@@ -686,14 +696,14 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
     
     if (ret_tr != NULL) 
     {
-        ViterbiTrace(hmm, dsq, L, mx, &tr);
-        *ret_tr = tr; 
+      P7ViterbiTrace(hmm, dsq, L, mx, &tr);
+      *ret_tr = tr; 
     }
     
     /* Note (Lindahl): we do NOT free the dpmatrix here anymore - the code was 
      * spending 30% of the runtime allocating/freeing memory.
      * Provide a pointer to a dpmatrix_s structure to this routine,
-     * and we try to reuse it. After the final call to P7Viterbi,
+     * and we try to reuse it. After the final call to Viterbi,
      * free it with FreeDPMatrix.
      */
     return Scorify(sc);		/* the total Viterbi score. */
@@ -702,7 +712,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
 /* Function: P7ViterbiNoTrace()
  *
  * Note:     This was originally defined in fast_algorithms.c, inside of an
- *           #ifdef ALTIVED preprocessor blcok, but I moved it here so that
+ *           #ifdef ALTIVEC preprocessor block, but I moved it here so that
  *           it is with the (non-structure-related) altivec-specific 
  *           functions.  - CRS 23 June 2005
  * 
@@ -1383,4 +1393,68 @@ P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s
     sc = xmx_XMC + lom->xsc[XTC][MOVE];
         
     return Scorify(sc);
+}
+
+/*
+ * Function: DispatchViterbi()
+ * Date:     CRS, Wed 18 Aug 2005 [J. Buhler's student, St. Louis]
+ *
+ * Purpose:  Determines the appropriate Viterbi algorithm to call,
+ *           based on the values of the parameters provided.  
+ *
+ * Args:     dsq    - sequence in digitized form
+ *           L      - length of dsq
+ *           hmm    - the model
+ *           mx     - reused dp matrix
+ *           ret_tr - RETURN: traceback; pass NULL if it's not wanted,
+ *                    see below
+ *           need_trace - true if traceback is needed, false otherwise
+ *
+ * Return:   log P(S|M)/P(S|R), as a bit score
+ */
+float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
+		      cust_dpmatrix_s *mx, struct p7trace_s **ret_tr,
+		      int need_trace){
+  float sc = 0.0;
+
+  /* By default we call an Altivec routine that doesn't save the full
+   * trace. This also means the memory usage is just proportional to the
+   * model (hmm->M), so we don't need to check if space is OK unless
+   * we need the trace.   
+   */   
+
+  if(need_trace)
+    {
+      /* Need the trace - first check space */
+      if (ViterbiSpaceOK(L, hmm->M, mx))
+        {
+	  /* Slower altivec version */
+	  sc = Viterbi(dsq, L, hmm, mx, ret_tr);
+        }
+      else
+        {
+	  /* Low-memory C version */
+	  sc = P7SmallViterbi(dsq, L, hmm, mx, ret_tr);
+        }
+    }
+  else
+    {
+      /* When using Altivec, the new dynamic programming process is so 
+       * effective that it is constrained by the memory bandwidth used
+       * for loading/storing values in the dynamic programming matrix.
+       *
+       * In 99% of all cases the score is anyway so low that we are not
+       * interested in the alignment, and thus don't NEED the trace.
+       * which is the only reason to store the full programming matrix.
+       *
+       * Do the programming without a trace first, and recalculate the
+       * trace further down if it turns out we need it.
+       */
+      
+      /* Fastest altivec version */
+      sc = P7ViterbiNoTrace(dsq, L, hmm, mx);
+      *ret_tr = NULL;
+    }
+
+  return sc;
 }

@@ -1,13 +1,22 @@
 #ifndef ALTIVECSTRUCTSH_INCLUDED
 #define ALTIVECSTRUCTSH_INCLUDED
 
-struct logodds_s {
-  /* This is essentially the p7logodds structure, but with added
-   * _mem ptrs.  The _mem ptrs are where the real memory is alloc'ed and 
-   * free'd, as opposed to where it is accessed.  They allows alignment on
-   * 16-byte boundaries.
-   */
 
+/*
+ * Structure: logodds_s
+ * Date:      CRS, 10 June 2005
+ *
+ * Purpose:   Used to customize the layout of the data used by the dynamic
+ *            programming algorithms.
+ */
+struct logodds_s {
+  /* Note: The Altivec implementation needs the logodds scores aligned on
+   *       16-byte boundaries.  In the original code, this was accomplished
+   *       by adding _mem pointers, which point to  where the real memory 
+   *       is alloc'ed and free'd, as opposed to where it is accessed.  
+   *       We move those pointers here, to accomplish this under the new
+   *       architecture.
+   */
   int  **tsc;                   /* transition scores     [0.6][1.M-1]       -*/
   int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] -*/
   int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] -*/
@@ -17,6 +26,13 @@ struct logodds_s {
   int  *tsc_mem, *msc_mem, *isc_mem, *bsc_mem, *esc_mem; 
 };
 
+/*
+ * Structure: cust_dpmatrix_s
+ * Date:      CRS, 13 July 2005 
+ *
+ * Purpose:   Stores the calculations of the dynamic programming algorithms.
+ *
+ */
 typedef struct {
   int **xmx;			/* special scores [0.1..N][BECJN]     */
   int **mmx;			/* match scores [0.1..N][0.1..M]      */

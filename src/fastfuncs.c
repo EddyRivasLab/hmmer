@@ -1,9 +1,19 @@
 #include "funcs.h"
 #include "structs.h"
 
+/*
+ * Note:  P7ViterbiTrace() is shared by the Altivec and Default
+ *        implementations, so it is defined in default_altivec_sharedfuncs.c.
+ *        Since it only applies to these implementations, however, we export
+ *        it locally where it is used, instead of exporting it globally in
+ *        funcs.h - CRS 24 August 2005
+ */
+extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
+			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
+
 /* the DEFAULT Viterbi() is portably optimized; code follows:
  */
-/* Function: P7Viterbi() - portably optimized version
+/* Function: Viterbi() - portably optimized version
  * Incept:   SRE, Fri Nov 15 13:14:33 2002 [St. Louis]
  *
  * Note:     This was originally defined as P7Viterbi() in fast_algorithms.c,
@@ -11,7 +21,7 @@
  *           better support customized implementations.  - CRS 18 June 2005
  * 
  * Purpose:  The Viterbi dynamic programming algorithm. 
- *           Derived from core_algorithms.c:P7Viterbi().
+ *           Derived from slowfuncs.c:Viterbi().
  *           
  * Args:     dsq    - sequence in digitized form
  *           L      - length of dsq
@@ -151,9 +161,11 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
 
   if (ret_tr != NULL) {
-      ViterbiTrace(hmm, dsq, L, mx, &tr);
-      *ret_tr = tr;
+    P7ViterbiTrace(hmm, dsq, L, mx, &tr);
+    *ret_tr = tr;
   }
 
-  return Scorify(sc);		/* the total Viterbi score. */
+  printf("Viterbi: %d\n", sc);
+	
+return Scorify(sc);		/* the total Viterbi score. */
 }

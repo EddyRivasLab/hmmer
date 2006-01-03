@@ -747,7 +747,7 @@ worker_thread(void *ptr)
 {
   struct plan7_s    *hmm;
   struct p7trace_s  *tr;
-  struct dpmatrix_s *mx;
+  cust_dpmatrix_s *mx;
   struct workpool_s *wpool;
   char              *seq;
   unsigned char     *dsq;

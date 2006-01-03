@@ -31,7 +31,7 @@ main(void)
   char              *hmmfile;   /* file to read HMM(s) from                */
   HMMFILE           *hmmfp;     /* opened hmmfile for reading              */
   struct plan7_s    *hmm;
-  struct dpmatrix_s *mx;        /* growable DP matrix                      */
+  cust_dpmatrix_s *mx;        /* growable DP matrix                      */
   char              *seq;
   unsigned char     *dsq;
   int      len;
@@ -47,6 +47,7 @@ main(void)
   int      do_null2;		/* TRUE to correct scores w/ ad hoc null2   */
   int      alphatype;		/* alphabet type, hmmAMINO or hmmNUCLEIC    */
   int      code;		/* return code after initialization         */
+  int      need_trace;
 
   tr = NULL;
   
@@ -109,7 +110,7 @@ main(void)
    * asymmetric matrices.
    * 
    * We're growable in both M and N, because inside of P7SmallViterbi,
-   * we're going to be calling P7Viterbi on subpieces that vary in size,
+   * we're going to be calling Viterbi() on subpieces that vary in size,
    * and for different models.
    */
   mx = CreateDPMatrix(300, 300, 25, 25);
@@ -158,74 +159,18 @@ main(void)
 
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-
-#ifdef ALTIVEC 
-      
-      /* By default we call an Altivec routine that doesn't save the full
-       * trace. This also means the memory usage is just proportional to the
-       * model (hmm->M), so we don't need to check if space is OK unless
-       * we need the trace.   
-       */   
-      if(do_forward && do_null2)
-      {
-          /* Need the trace - first check space */
-          if (ViterbiSpaceOK(len, hmm->M, mx))
-          {
-              /* Slower altivec version */
-              sc = Viterbi(dsq, len, hmm, mx, &tr);
-          }
-          else
-          {
-              /* Low-memory C version */
-              sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
-          }
-      }
-      else
-      {
-          /* Fastest altivec version */
-          sc = P7ViterbiNoTrace(dsq, len, hmm, mx);
-          tr = NULL;
-      }
-      
-#else /* not altivec */
-      
-      if (ViterbiSpaceOK(len, hmm->M, mx))
-      {
-          SQD_DPRINTF1(("P7Viterbi(): Estimated size %d Mb\n", P7ViterbiSize(len, hmm->M)));
-          sc = Viterbi(dsq, len, hmm, mx, &tr);
-      }
-      else
-      {
-          SQD_DPRINTF1(("P7SmallViterbi() called; %d Mb > %d\n", P7ViterbiSize(len, hmm->M), RAMLIMIT));
-          sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
-      }
-
-#endif
+      need_trace = do_forward && do_null2;
+      sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
+			   need_trace);
       
       /* The Forward score override. 
        * See comments in hmmpfam.c in serial version.
        */
       if (do_forward)
       {
-          sc  = P7Forward(dsq, len, hmm, NULL);
+          sc  = Forward(dsq, len, hmm, NULL);
           if (do_null2) 
           {
-              /* We need the trace - recalculate it if we didn't already do it */
-#ifdef ALTIVEC
-              if(tr == NULL)
-              {
-                  if (ViterbiSpaceOK(len, hmm->M, mx))
-                  {
-                      /* Slower altivec version */
-                      Viterbi(dsq, len, hmm, mx, &tr);
-                  }
-                  else
-                  {
-                      /* Low-memory C version */
-                      P7SmallViterbi(dsq, len, hmm, mx, &tr);
-                  }                  
-              }
-#endif
               sc -= TraceScoreCorrection(hmm, tr, dsq);
           }
       }
@@ -243,23 +188,11 @@ main(void)
       pvm_pkint(&send_trace, 1, 1); /* flag for whether a trace structure is coming */
       if (send_trace) 
       {
-          /* We need the trace - recalculate it if we didn't already do it */
-#ifdef ALTIVEC
           if(tr == NULL)
           {
-              if (ViterbiSpaceOK(len, hmm->M, mx))
-              {
-                  /* Slower altivec version */
-                  Viterbi(dsq, len, hmm, mx, &tr);
-              }
-              else
-              {
-                  /* Low-memory C version */
-                  P7SmallViterbi(dsq, len, hmm, mx, &tr);
-              }
-              
+	    DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
+			    W_TRACE);
           }
-#endif
           PVMPackTrace(tr);
       }
       pvm_send(master_tid, HMMPVM_RESULTS);
