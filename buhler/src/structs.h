@@ -13,7 +13,6 @@
 #include "squid.h"
 #include "ssi.h"
 
-#include "customstructs.h"
 #include "plan7.h"
 
 
@@ -128,6 +127,12 @@ typedef struct hmmfile_s HMMFILE;
 #define STC     8
 #define STT     9
 #define STJ     10     
+
+/* Constants to indicate if we need 
+ * the trace from Viterbi
+ */
+#define WO_TRACE 0
+#define W_TRACE  1
 
 /* Structure: p7trace_s
  * 

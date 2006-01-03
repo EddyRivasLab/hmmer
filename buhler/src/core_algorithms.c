@@ -163,7 +163,7 @@ ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M,
  * Purpose:  Used to be the main allocator for dp matrices; we used to
  *           allocate, calculate, free. But this spent a lot of time
  *           in malloc(). Replaced with Create..() and Resize..() to
- *           allow matrix reuse in P7Viterbi(), the main alignment 
+ *           allow matrix reuse in Viterbi(), the main alignment 
  *           engine. But matrices are alloc'ed by other alignment engines
  *           too, ones that are less frequently called and less 
  *           important to optimization of cpu performance. Instead of
@@ -338,11 +338,11 @@ P7WeeViterbiSize(int L, int M)
  * Date:     SRE, Fri Mar  6 15:29:41 1998 [St. Louis]
  *
  * Purpose:  Wrapper function, for linear memory alignment
- *           with same arguments as P7Viterbi(). 
+ *           with same arguments as Viterbi(). 
  *           
  *           Calls P7ParsingViterbi to break the sequence
  *           into fragments. Then, based on size of fragments,
- *           calls either P7Viterbi() or P7WeeViterbi() to 
+ *           calls either Viterbi() or P7WeeViterbi() to 
  *           get traces for them. Finally, assembles all these
  *           traces together to produce an overall optimal
  *           trace for the sequence.
@@ -388,7 +388,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *
       return sc;
     }
   
-  /* Step 2. Call either P7Viterbi or P7WeeViterbi on each subsequence
+  /* Step 2. Call either Viterbi() or P7WeeViterbi() on each subsequence
    *         to recover a full traceback of each, collecting them in 
    *         an array. 
    */
@@ -401,7 +401,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *
 
       if (ViterbiSpaceOK(sqlen, hmm->M, mx))
 	{
-	  SQD_DPRINTF1(("      -- using P7Viterbi on an %dx%d subproblem\n",
+	  SQD_DPRINTF1(("      -- using Viterbi on an %dx%d subproblem\n",
 			hmm->M, sqlen));
 	  Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
 	}
@@ -411,7 +411,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *
 				   Attempts to use our main dp mx will violate our 
 				   RAMLIMIT guarantee, so allocate a tiny linear one. */
 	  cust_dpmatrix_s *tiny;
-	  SQD_DPRINTF1(("      -- using P7Viterbi on %dx%d subproblem that P7WeeV should get\n",
+	  SQD_DPRINTF1(("      -- using Viterbi on %dx%d subproblem that P7WeeV should get\n",
 			hmm->M, sqlen));
 	  tiny = CreateDPMatrix(1, hmm->M, 0, 0);
 	  Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, tiny, &(tarr[i]));
@@ -432,7 +432,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *
    *         This is wasteful because we're going to TraceDecompose()
    *         it again in both hmmsearch and hmmpfam to look at
    *         individual domains; but we do it anyway so the P7SmallViterbi
-   *         interface looks exactly like the P7Viterbi interface. Maybe
+   *         interface looks exactly like the Viterbi interface. Maybe
    *         long traces shouldn't include all the N/J/C states anyway,
    *         since they're unambiguously implied.
    */
@@ -525,7 +525,7 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *
  *           the optimal alignment of a very long sequence to
  *           a looping, multihit (e.g. Plan7) model, parsing it into
  *           a series of nonoverlapping subsequences that match  
- *           the model once. Other algorithms (e.g. P7Viterbi()
+ *           the model once. Other algorithms (e.g. Viterbi()
  *           or P7WeeViterbi()) are applied subsequently to
  *           these subsequences to recover complete alignments.
  *           
@@ -1488,7 +1488,7 @@ get_wee_midpt(struct plan7_s *hmm, unsigned char *dsq, int L,
  *
  * Purpose:  Align a multiple alignment to an HMM without
  *           changing the multiple alignment itself.
- *           Adapted from P7Viterbi().
+ *           Adapted from Viterbi().
  *           
  *           Heuristic; not a guaranteed optimal alignment.
  *           Guaranteeing an optimal alignment appears difficult.
@@ -2007,9 +2007,9 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   }
 
   /* Implement --do_forward: override the trace-dependent sum-of-domain
-   * whole score, use the P7Forward() score that the called passed
+   * whole score, use the Forward() score that the called passed
    * us instead. This is a hack; null2 is trace-dependent and
-   * thus undefined for P7Forward() scoring; see commentary in hmmpfam.c. 
+   * thus undefined for Forward() scoring; see commentary in hmmpfam.c. 
    */
   if (do_forward) whole_sc = sc_override;
 

@@ -45,7 +45,7 @@ main(void)
   int      slaveidx;		/* my slave index (0..nslaves-1) */
   struct plan7_s *hmm;		/* HMM to calibrate, sent from master */
   struct p7trace_s *tr;         /* traceback from an alignment */
-  struct dpmatrix_s *mx;        /* growable DP matrix */
+  cust_dpmatrix_s *mx;        /* growable DP matrix */
   char              *seq;	/* synthetic random sequence */
   unsigned char     *dsq;	/* digitized seq */
   float   *sc;			/* scores of seqs */

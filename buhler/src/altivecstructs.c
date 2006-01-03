@@ -3,10 +3,36 @@
 
 #include <assert.h>
 
-inline void AllocLogoddsShell(struct plan7_s *hmm){
+/*
+ * Function: AllocLogoddsShell()
+ * Date:     CRS, 10 June 2005 [J. Buhler's student, St. Louis]
+ * 
+ * Purpose:  Allocates the memory needed by the shell of the logodds_s
+ *           structure.  Called from within AllocPlan7Shell().
+ *
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
+ *
+ * Returns:  (void)
+ *           Memory is allocated for the shell of hmm->lom.  Freed 
+ *           from FreeLogodds(), which is called from within FreePlan7().
+ */
+void AllocLogoddsShell(struct plan7_s *hmm){
   hmm->lom = (struct logodds_s *) MallocOrDie(sizeof(struct logodds_s));
 }
 
+/*
+ * Function: AllocLogoddsBody()
+ * Date:     CRS, 10 June 2005 [J. Buhler's student, St. Louis]
+ *
+ * Purpose:  Allocates the memory needed by the logodds_s strcuture.
+ *           Called from within AllocPlan7Body().
+ *
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
+ *
+ * Returns:  (void)
+ *           Memory is allocated for  hmm->lom.  Freed from FreeLogodds(), 
+ *           which is called from within FreePlan7().
+ */
 void AllocLogoddsBody(struct plan7_s *hmm){
   int x;
   int M = hmm->M;
@@ -58,6 +84,18 @@ void AllocLogoddsBody(struct plan7_s *hmm){
   return;
 }
 
+/*
+ * Function: FreeLogodds()
+ * Date:     CRS, 10 June 2005 [J. Buhler's student, St. Louis]
+ *
+ * Purpose:  Frees ALL memory (shell and body) used by the logodds_s
+ *           structure.  Called from FreePlan7().
+ * 
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
+ *
+ * Returns:  (void)
+ *           Memory used by hmm->lom is freed.  
+ */
 void FreeLogodds(struct plan7_s *hmm){
   struct logodds_s *lom = hmm->lom;
 
@@ -78,6 +116,20 @@ void FreeLogodds(struct plan7_s *hmm){
   lom = NULL;
 }
 
+/*
+ * Function: FillCustomLogodds()
+ * Date:     CRS, 13 July 2005 [J. Buhler's student, St. Louis]
+ *
+ * Purpose:  Fills the custom logodds_s structure using the data from the
+ *           profile hmm.  One can assume all non-customized values of the 
+ *           hmm have been filled in before this function is called.  No
+ *           memory should be allocated here; that should be done in
+ *           AllocLogoddsBody().
+ *
+ * Args:     hmm - the profile hmm that contains the logodds_s structure
+ *
+ * Returns:  (void)
+ */
 void FillCustomLogodds(struct plan7_s *hmm){
   int k, x;
   struct logodds_s *lom = hmm->lom;
@@ -231,8 +283,6 @@ CreateDPMatrix(int N, int M, int padN, int padM)
  * Args:     mx    - an already allocated model to grow.
  *           N     - seq length to allocate for; N+1 rows
  *           M     - size of model
- *           xmx, mmx, imx, dmx 
- *                 - RETURN: ptrs to four mx components as a convenience
  *                   
  * Return:   (void)
  *           mx is (re)allocated here.
@@ -285,15 +335,10 @@ ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M)
 /* Function: FreeDPMatrix()
  *
  * Note:     This was originally defined as FreePlan7Matrix in 
- *           core_algorithms.c, which was then moved to FreeDPMatrix in
- *           defaultstructs.c.  The altivec version used the original
- *           version of this method however, so I also placed a copy
- *           here.
- *             - CRS 21 June 2005
+ *           core_algorithms.c, but it is really the altivec-specific
+ *           implementation of this function, so I moved it here
+ *           accordingly.  - CRS 21 June 2005
  *
- * !!UNRESOLVED!! - Adding redundancy again.  Is there a better way to do
- *                  this?  - CRS 21 June 2005
- * 
  * Purpose:  Free a dynamic programming matrix allocated by CreateDPMatrix().
  * 
  * Return:   (void)

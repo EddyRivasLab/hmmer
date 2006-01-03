@@ -27,7 +27,7 @@ int
 main(void)
 {
   struct plan7_s *hmm;          /* HMM to search with */
-  struct dpmatrix_s *mx;        /* growable DP matrix */
+  cust_dpmatrix_s *mx;          /* growable DP matrix */
   struct p7trace_s *tr;         /* trace structure for a Viterbi alignment */
   int master_tid;		/* PVM TID of our master */
   int alphatype;		/* alphabet type */
@@ -45,6 +45,7 @@ main(void)
   int    Z;			/* nseq to base E value calculation on      */
   int    nseq;			/* actual nseq so far (master keeps updating this) */
   int    send_trace;		/* TRUE if sc looks significant and we return tr */
+  int need_trace;
   
   tr = NULL;
   
@@ -108,78 +109,16 @@ main(void)
       
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      
-#ifdef ALTIVEC
-      /* By default we call an Altivec routine that doesn't save the full
-       * trace. This also means the memory usage is just proportional to the
-       * model (hmm->M), so we don't need to check if space is OK unless
-       * we need the trace.   
-       */   
+      need_trace = do_forward && do_null2;
+      sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
+			   need_trace);
 
-      if(do_forward && do_null2)
-      {
-          /* Need the trace - first check space */
-          if (ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
-          {
-              sc = Viterbi(dsq, L, hmm, mx, &tr);
-          }
-          else
-          {
-              /* Low-memory version */
-              sc = P7SmallViterbi(dsq, L, hmm, mx, &tr);
-          }
-      }
-      else
-      {
-          /* When using Altivec, the new dynamic programming process is so 
-          * effective that it is constrained by the memory bandwidth used
-          * for loading/storing values in the dynamic programming matrix.
-          *
-          * In 99% of all cases the score is anyway so low that we are not
-          * interested in the alignment, and thus don't NEED the trace.
-          * which is the only reason to store the full programming matrix.
-          *
-          * Do the programming without a trace first, and recalculate the
-          * trace further down if it turns out we need it.
-          */          
-          sc = P7ViterbiNoTrace(dsq, L, hmm, mx);
-          tr = NULL;
-      }
-      
-#else /* not altivec */
-      
-      if (ViterbiSpaceOK(L, hmm->M, mx))
-      {
-          SQD_DPRINTF1(("Slave doing Viterbi after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-          sc = Viterbi(dsq, L, hmm, mx, &tr);
-      }
-      else
-      {
-          SQD_DPRINTF1(("Slave going small after estimating %d MB\n", (P7ViterbiSize(L, hmm->M))));
-          sc = P7SmallViterbi(dsq, L, hmm, mx, &tr);
-      }
-
-#endif
       
       if (do_forward) 
       {
-          sc  = P7Forward(dsq, L, hmm, NULL);
+          sc  = Forward(dsq, L, hmm, NULL);
           if (do_null2) 
           {
-              /* We need the trace - recalculate it if we didn't already do it */
-#ifdef ALTIVEC
-              if(tr == NULL)
-              {
-                  if (ViterbiSpaceOK(L, hmm->M, mx))
-                  {
-                      Viterbi(dsq, L, hmm, mx, &tr);
-                  }
-                  else
-                  {
-                      P7SmallViterbi(dsq, L, hmm, mx, &tr);
-                  }
-              }
-#endif
               sc -= TraceScoreCorrection(hmm, tr, dsq);
           }
       }
@@ -199,19 +138,12 @@ main(void)
       if (send_trace)
       {
           /* We need the trace - recalculate it if we didn't already do it */
-#ifdef ALTIVEC
           if(tr == NULL)
           {
-              if (ViterbiSpaceOK(L, hmm->M, mx))
-              {
-                  Viterbi(dsq, L, hmm, mx, &tr);
-              }
-              else
-              {
-                  P7SmallViterbi(dsq, L, hmm, mx, &tr);
-              }              
+	    DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
+			    W_TRACE);
           }
-#endif
+
           PVMPackTrace(tr);
       }
       pvm_send(master_tid, HMMPVM_RESULTS);
