@@ -1,4 +1,5 @@
 #include "structs.h"
+#include "funcs.h"
 
 /*
  * Note:  The default implementation doesn't use any custom data
@@ -6,10 +7,10 @@
  *        still have to provide them, however, for the program to
  *        compile successfully.  - CRS 20 June 2005
  */
-inline void AllocLogoddsShell(struct plan7_s *hmm){ hmm->lom = NULL; }
-inline void AllocLogoddsBody(struct plan7_s *hmm){}
-inline void FreeLogodds(struct plan7_s *hmm){}
-inline void FillCustomLogodds(struct plan7_s *hmm){}
+void AllocLogoddsShell(struct plan7_s *hmm){ hmm->lom = NULL; }
+void AllocLogoddsBody(struct plan7_s *hmm){}
+void FreeLogodds(struct plan7_s *hmm){}
+void FillCustomLogodds(struct plan7_s *hmm){}
 
 
 /*
@@ -19,20 +20,20 @@ inline void FillCustomLogodds(struct plan7_s *hmm){}
  *       have to provide these definitions, however, to get things
  *       to compile under the architecture. - CRS 15 Aug 2005
  */
-inline cust_dpmatrix_s *
+cust_dpmatrix_s *
 CreateDPMatrix(int N, int M, int padN, int padM)
 {
   return (cust_dpmatrix_s*)CreatePlan7Matrix(N, M, padN, padM);
 }
 
-inline void
+void
 ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M)
 {
   ResizePlan7Matrix(mx, N, M, NULL, NULL, NULL, NULL);
   return;
 }
 
-inline void
+void
 FreeDPMatrix(cust_dpmatrix_s *mx)
 {
   FreePlan7Matrix(mx);
