@@ -42,6 +42,11 @@ MANSUFFIX = 1
 CC     = @CC@
 CFLAGS = @CFLAGS@
 
+# Configuration for customized implementations
+#
+CORE_IMPL ?= FAST
+export CORE_IMPL
+
 #######
 ## You should not need to modify below this line.
 ## Much of it is concerned with maintenance of the development version
@@ -77,7 +82,6 @@ PROGS = hmmalign\
 
 PVMPROGS = @PVMPROGS@
 
-
 # all: Compile everything.
 #
 all: 
@@ -88,6 +92,7 @@ all:
 	  echo "binaries/ subdirectory."; \
 	else\
 	  (cd squid;     ${MAKE}; ${MAKE} module);\
+	  (cd easel;     ${MAKE});\
 	  (cd src;       ${MAKE}; ${MAKE} module);\
 	  (cd testsuite; ${MAKE});\
 	fi
@@ -146,6 +151,7 @@ bindist:
 clean:
 	(cd src;       make clean)
 	(cd squid;     make clean)
+	(cd easel;     make clean)
 	(cd testsuite; make clean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
@@ -158,15 +164,16 @@ distclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm Makefile
 	(cd src;       make distclean)
+	(cd easel;     make distclean)
 	(cd squid;     make distclean)
 	(cd testsuite; make distclean)
-
 
 # "make binclean" is special: it cleans up and leaves only a binary
 #       distribution behind, including configured Makefiles.
 #
 binclean:
 	(cd src;       make binclean)
+	(cd easel;     make binclean)
 	(cd squid;     make binclean)
 	(cd testsuite; make binclean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out

@@ -45,7 +45,7 @@ main(void)
   int      slaveidx;		/* my slave index (0..nslaves-1) */
   struct plan7_s *hmm;		/* HMM to calibrate, sent from master */
   struct p7trace_s *tr;         /* traceback from an alignment */
-  cust_dpmatrix_s *mx;        /* growable DP matrix */
+  cust_dpmatrix_s *mx;          /* growable DP matrix */
   char              *seq;	/* synthetic random sequence */
   unsigned char     *dsq;	/* digitized seq */
   float   *sc;			/* scores of seqs */
@@ -127,11 +127,9 @@ main(void)
 	  seq = RandomSequence(Alphabet, randomseq, Alphabet_size, L);
 	  dsq = DigitizeSequence(seq, L);
 	  SQD_DPRINTF2(("slave %d seq: %d : %20.20s...\n", slaveidx, L, seq));
-
-	  if (ViterbiSpaceOK(L, hmm->M, mx))
-	    sc[idx] = Viterbi(dsq, L, hmm, mx, &tr);
-	  else
-	    sc[idx] = P7SmallViterbi(dsq, L, hmm, mx, &tr);
+	  
+	  DispatchViterbi(dsq, L, hmm, mx, &tr, TRUE);
+	  
 	  TraceGetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL, &(alen[idx]));
 	  
 	  P7FreeTrace(tr);

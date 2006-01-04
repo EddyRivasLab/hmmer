@@ -374,7 +374,7 @@ main(int argc, char **argv)
        * model into S/W mode. Later we'll configure the model
        * according to how the user wants to use it.
        */
-      Plan7SWConfig(hmm);
+      P7Config(hmm, P7_SW_MODE);
       /* Plan7_DumpScores(stdout, hmm); */
 
 
@@ -419,13 +419,7 @@ main(int argc, char **argv)
        */
       printf("%-40s ... ", "Finalizing model configuration");
       fflush(stdout);
-      switch (cfg.mode) {
-      case P7_S_MODE:   Plan7GlobalConfig(hmm);  break;
-      case P7_SW_MODE:  Plan7SWConfig(hmm);      break;
-      case P7_LS_MODE:  Plan7LSConfig(hmm);      break;
-      case P7_FS_MODE:  Plan7FSConfig(hmm);      break;
-      default:          Die("bogus configuration choice");
-      }
+      P7Config(hmm, cfg.mode);
       printf("done.\n");
 
       /* Save new HMM to disk: open a file for appending or writing.
@@ -1258,7 +1252,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
   /* Initialization. Start with all weights == 1.0.
    * Find relative entropy and gradient.
    */
-  Plan7SWConfig(hmm);
+  P7Config(hmm, P7_SW_MODE);
 
   FSet(wgt, msa->nseq, eff_nseq / (float) msa->nseq);
   position_average_score(hmm, dsq, wgt, msa->nseq, tr, pernode,&expscore);
@@ -1322,7 +1316,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
 
   
                                 /* Evaluate new point */
-	  Plan7SWConfig(hmm);
+	  P7Config(hmm, P7_SW_MODE);
 	  position_average_score(hmm, dsq, new_wgt, msa->nseq, tr, pernode, &expscore);
           for (idx = 0; idx < msa->nseq; idx++) 
 	    sc[idx]      = frag_trace_score(hmm, dsq[idx], tr[idx], pernode, expscore);
@@ -1332,8 +1326,8 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
 	  /* Failsafe: we're not converging. Set epsilon to zero,
 	   * do one more round.
 	   */
-	  if (use_epsilon < 1e-6) use_epsilon = 0.0; 
 	  if (use_epsilon == 0.0) break;
+	  if (use_epsilon < 1e-6) use_epsilon = 0.0; 
           
           /* Failsafe: avoid infinite loops. Sometimes the
              new entropy converges without ever being better 

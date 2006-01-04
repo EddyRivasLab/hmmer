@@ -564,7 +564,6 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
   double pvalue;		        /* pvalue of an HMM score                  */
   double evalue;		        /* evalue of an HMM score                  */
   int    nseq;			        /* number of sequences searched            */
-  int    need_trace;
  
   tr = NULL;
   
@@ -594,10 +593,8 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    necessarily <= -INFTY, because we're not terribly careful
        *    about underflow issues), and tr will be returned as NULL.
        */
-      need_trace = do_forward && do_null2;
       sc = DispatchViterbi(dsq, sqinfo.len, hmm, mx, &tr, 
-			   need_trace);
-
+			   do_forward && do_null2);
       
       /* 2. If we're using Forward scores, calculate the
        *    whole sequence score; this overrides anything
@@ -605,9 +602,13 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        */
       if (do_forward)
       {
-          sc  = Forward(dsq, sqinfo.len, hmm, NULL);
+	  sc  = Forward(dsq, sqinfo.len, hmm, NULL);
           if (do_null2) 
           {
+	    /* We need the trace - recalculate it if we didn't already do it */
+	    if(tr == NULL)
+	      sc = DispatchViterbi(dsq, sqinfo.len, hmm, mx, &tr, TRUE);
+		
 	    sc -= TraceScoreCorrection(hmm, tr, dsq); 
           }
       }
@@ -623,16 +624,14 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    of hits we keep in memory is >= the list we actually
        *    output. 
        */
-      pvalue = LPValue(hmm, sqinfo.len, sc);
+      pvalue = PValue(hmm, sc);
       evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nseq * pvalue;
       if (sc >= thresh->globT && evalue <= thresh->globE) 
       {
-          /* Recalculate trace if we used altivec */
-        if(tr == NULL)
-	  {
-	    DispatchViterbi(dsq, sqinfo.len, hmm, mx, &tr, 
-			    W_TRACE);
-	  }
+          /* Recalculate trace if we do not yet have it */
+	if (tr == NULL)
+	  sc = DispatchViterbi(dsq, sqinfo.len, hmm, mx, &tr, TRUE);
+	
 	sc = PostprocessSignificantHit(ghit, dhit, 
 				       tr, hmm, dsq, sqinfo.len,
 				       sqinfo.name, 
@@ -642,7 +641,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 				       do_null2,
 				       thresh,
 				       FALSE);
-          /* FALSE-> not hmmpfam mode, hmmsearch mode */
+	/* FALSE-> not hmmpfam mode, hmmsearch mode */
       }
       SQD_DPRINTF2(("AddToHistogram: %s\t%f\n", sqinfo.name, sc));
       AddToHistogram(histogram, sc);
@@ -1099,8 +1098,7 @@ worker_thread(void *ptr)
   int    rtn;			/* a return code from pthreads lib */
   double pvalue;		/* P-value of score                */
   double evalue;		/* E-value of score                */
-  int need_trace;
-
+  
   wpool = (struct workpool_s *) ptr;
   
   tr = NULL;
@@ -1137,9 +1135,8 @@ worker_thread(void *ptr)
       
     /* 1. Recover a trace by Viterbi.
      */
-    need_trace = wpool->do_forward && wpool->do_null2;
     sc = DispatchViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr, 
-			 need_trace);
+			 wpool->do_forward && wpool->do_null2);
     
     /* 2. If we're using Forward scores, do another DP
      *    to get it; else, we already have a Viterbi score
@@ -1150,7 +1147,13 @@ worker_thread(void *ptr)
         sc  = Forward(dsq, sqinfo.len, wpool->hmm, NULL);
         if (wpool->do_null2) 
         {
-	  sc -= TraceScoreCorrection(wpool->hmm, tr, dsq);
+            /* We need the trace - calculate it if necessary */
+	  if (tr == NULL)
+	    {
+	      DispatchViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr, TRUE);
+	    }
+	  
+            sc -= TraceScoreCorrection(wpool->hmm, tr, dsq);
         }
     }
 
@@ -1160,18 +1163,16 @@ worker_thread(void *ptr)
         Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("seq %s scores %f\n", sqinfo.name, sc));
     
-    pvalue = LPValue(wpool->hmm, sqinfo.len, sc);
+    pvalue = PValue(wpool->hmm, sc);
     evalue = wpool->thresh->Z ? (double) wpool->thresh->Z * pvalue : (double) wpool->nseq * pvalue;
  
     if (sc >= wpool->thresh->globT && evalue <= wpool->thresh->globE) 
     { 
-        /* Recalculate trace if we used altivec */
-      if(tr == NULL)
-        {
-	  DispatchViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr, 
-			  W_TRACE);
-        }
-        sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
+        /* Recalculate trace if we do not yet have it */
+	if (tr == NULL)
+	  sc = DispatchViterbi(dsq, sqinfo.len, wpool->hmm, mx, &tr, TRUE);
+	
+	sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
                                        tr, wpool->hmm, dsq, sqinfo.len,
                                        sqinfo.name, 
                                        sqinfo.flags & SQINFO_ACC  ? sqinfo.acc  : NULL, 

@@ -81,6 +81,7 @@ AdjustAveInfoContent (struct plan7_s *hmm, float desired, char *matrixfile)
   if (observed < desired)
   {
     printf ("your information content is already %f\n", observed);
+    free(temp_emits);
     return;
   }
 

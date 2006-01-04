@@ -550,12 +550,11 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
   int                nhmm;	/* number of HMMs searched                 */
   struct plan7_s    *hmm;       /* current HMM to search with              */ 
   struct p7trace_s  *tr;	/* traceback of alignment                  */
-  cust_dpmatrix_s *mx;        /* growable DP matrix                      */
+  cust_dpmatrix_s   *mx;        /* growable DP matrix                      */
   float   sc;                   /* an alignment score                      */ 
   double  pvalue;		/* pvalue of an HMM score                  */
   double  evalue;		/* evalue of an HMM score                  */
-  int need_trace;
-
+    
   tr = NULL; 
   
   /* Prepare sequence.
@@ -571,7 +570,7 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
    * asymmetric matrices.
    * 
    * We're growable in both M and N, because inside of P7SmallViterbi,
-   * we're going to be calling Viterbi() on subpieces that vary in size,
+   * we're going to be calling Viterbi on subpieces that vary in size,
    * and for different models.
    */
   mx = CreateDPMatrix(300, 300, 25, 25);
@@ -589,10 +588,8 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
 
     /* Score sequence, do alignment (Viterbi), recover trace
      */
-    need_trace = do_forward && do_null2;
-    sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
-			 need_trace);
-    
+    sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr,
+			 do_forward && do_null2);
     
     /* Implement do_forward; we'll override the whole_sc with a Forward()
      * calculation.
@@ -617,25 +614,26 @@ main_loop_serial(char *hmmfile, HMMFILE *hmmfp, char *seq, SQINFO *sqinfo,
      */
     if (do_forward) 
     {
-        
-        sc = Forward(dsq, sqinfo->len, hmm, NULL);
+      sc = Forward(dsq, sqinfo->len, hmm, NULL);
         if (do_null2) 
         {
-            sc -= TraceScoreCorrection(hmm, tr, dsq);
-        }
+	  /* We need the trace - recalculate it if we didn't already do it */
+	  if (tr == NULL)
+	    DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, TRUE);
+	  
+	  sc -= TraceScoreCorrection(hmm, tr, dsq);
+	}
     }
+    
     /* Store scores/pvalue for each HMM aligned to this sequence, overall
      */
-    pvalue = LPValue(hmm, sqinfo->len, sc);
+    pvalue = PValue(hmm, sc);
     evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nhmm * pvalue;
     if (sc >= thresh->globT && evalue <= thresh->globE) {
-        /* Recalculate trace if we didn't calculate it before */
-
-        if(tr == NULL)
-            {
-	      DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
-			      W_TRACE);
-	    }
+      /* Recalculate trace if we didn't calculate it before */
+      if(tr == NULL)
+	  DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, TRUE);
+	
         sc = PostprocessSignificantHit(ghit, dhit, 
                                        tr, hmm, dsq, sqinfo->len, 
                                        sqinfo->name, NULL, NULL, /* won't need acc or desc even if we have 'em */
@@ -1099,9 +1097,7 @@ worker_thread(void *ptr)
   double pvalue;		/* P-value of score                */
   double evalue;		/* E-value of a score              */
   struct threshold_s thresh;	/* a local copy of thresholds      */
-  cust_dpmatrix_s *mx;   /* growable DP matrix              */
-
-  int need_trace;
+  cust_dpmatrix_s   *mx;        /* growable DP matrix              */
 
   tr = NULL;
   
@@ -1123,7 +1119,7 @@ worker_thread(void *ptr)
    * asymmetric matrices.
    * 
    * We're growable in both M and N, because inside of P7SmallViterbi,
-   * we're going to be calling Viterbi() on subpieces that vary in size,
+   * we're going to be calling Viterbi on subpieces that vary in size,
    * and for different models.
    */
   mx = CreateDPMatrix(300, 300, 25, 25);
@@ -1141,7 +1137,7 @@ worker_thread(void *ptr)
       {	/* we're done. release lock, exit thread */
 	if ((rtn = pthread_mutex_unlock(&(wpool->input_lock))) != 0)
 	  Die("pthread_mutex_unlock failure: %s\n", strerror(rtn));
-	FreeDPMatrix(mx);
+	FreePlan7Matrix(mx);
 	pthread_exit(NULL);
       }
     wpool->nhmm++;
@@ -1159,17 +1155,20 @@ worker_thread(void *ptr)
     /* 2. We have an HMM in score form.
      *    Score the sequence.
      */
-    need_trace = wpool->do_forward && wpool->do_null2;
     sc = DispatchViterbi(wpool->dsq, wpool->L, hmm, mx, &tr, 
-			 need_trace);
+			 wpool->do_forward && wpool->do_null2);
 
+    
     /* The Forward score override (see comments in serial vers)
      */
     if (wpool->do_forward) {
       sc  = Forward(wpool->dsq, wpool->L, hmm, NULL);
       if (wpool->do_null2)  
       {
-	sc -= TraceScoreCorrection(hmm, tr, wpool->dsq);
+          if(tr == NULL)
+	    DispatchViterbi(wpool->dsq, wpool->L, hmm, mx, &tr, TRUE);
+          
+          sc -= TraceScoreCorrection(hmm, tr, wpool->dsq);
       }
     }
     
@@ -1179,16 +1178,14 @@ worker_thread(void *ptr)
       Die("pthread_mutex_lock failure: %s\n", strerror(rtn));
     SQD_DPRINTF1(("model %s scores %f\n", hmm->name, sc));
     
-    pvalue = LPValue(hmm, wpool->L, sc);
+    pvalue = PValue(hmm, sc);
     evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) wpool->nhmm * pvalue;
     if (sc >= thresh.globT && evalue <= thresh.globE) 
     { 
         if(tr == NULL)
-        {
-	  DispatchViterbi(wpool->dsq, wpool->L, hmm, mx, &tr, 
-			  W_TRACE);
-        }
-        sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
+	  DispatchViterbi(wpool->dsq, wpool->L, hmm, mx, &tr, TRUE);
+        
+	sc = PostprocessSignificantHit(wpool->ghit, wpool->dhit, 
                                        tr, hmm, wpool->dsq, wpool->L, 
                                        wpool->seqname, 
                                        NULL, NULL, /* won't need seq's acc or desc */

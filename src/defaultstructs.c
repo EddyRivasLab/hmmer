@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include "structs.h"
 #include "funcs.h"
 
@@ -7,10 +9,10 @@
  *        still have to provide them, however, for the program to
  *        compile successfully.  - CRS 20 June 2005
  */
-void AllocLogoddsShell(struct plan7_s *hmm){ hmm->lom = NULL; }
-void AllocLogoddsBody(struct plan7_s *hmm){}
-void FreeLogodds(struct plan7_s *hmm){}
-void FillCustomLogodds(struct plan7_s *hmm){}
+void AllocLogoddsShell(struct plan7_s *hmm) { hmm->lom = NULL; }
+void AllocLogoddsBody(struct plan7_s *hmm)  {}
+void FreeLogodds(struct plan7_s *hmm)       {}
+void FillCustomLogodds(struct plan7_s *hmm) {}
 
 
 /*
@@ -23,7 +25,7 @@ void FillCustomLogodds(struct plan7_s *hmm){}
 cust_dpmatrix_s *
 CreateDPMatrix(int N, int M, int padN, int padM)
 {
-  return (cust_dpmatrix_s*)CreatePlan7Matrix(N, M, padN, padM);
+  return (cust_dpmatrix_s *) CreatePlan7Matrix(N, M, padN, padM);
 }
 
 void

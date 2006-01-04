@@ -73,7 +73,7 @@ main(int argc, char **argv)
   float           *wgt;		/* weights to assign to alignment          */
   MSA             *msa;         /* alignment that's created                */    
   int              i;
-  cust_dpmatrix_s *mx;        /* growable DP matrix                      */
+  cust_dpmatrix_s *mx;          /* growable DP matrix                      */
   struct p7trace_s **tr;        /* traces for aligned sequences            */
 
   char *optname;                /* name of option found by Getopt()         */
@@ -207,10 +207,7 @@ main(int argc, char **argv)
     {
       dsq[i] = DigitizeSequence(rseq[i], sqinfo[i].len);
 
-      if (ViterbiSpaceOK(sqinfo[i].len, hmm->M, mx))
-	(void) Viterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
-      else
-	(void) P7SmallViterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]));
+      DispatchViterbi(dsq[i], sqinfo[i].len, hmm, mx, &(tr[i]), TRUE);
     }
   FreeDPMatrix(mx);
 

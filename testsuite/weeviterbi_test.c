@@ -54,7 +54,7 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   unsigned char   *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
-  cust_dpmatrix_s *mx;        /* growable, reusable DP matrix            */
+  cust_dpmatrix_s *mx;          /* growable, reusable DP matrix            */
   struct p7trace_s  *t1;	/* standard Viterbi traceback              */
   struct p7trace_s  *t2;	/* WeeViterbi traceback                    */
   int       nseq;

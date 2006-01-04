@@ -1,22 +1,18 @@
 #include "config.h"
 #include "squidconf.h"
 
+#include "squid.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
+
+#include "default_altivec_sharedfuncs.h"
 
 #if (defined __GNUC__) && (defined __APPLE__)
 #include <ppc_intrinsics.h>
 #endif
 
-/*
- * Note:  P7ViterbiTrace() is shared by the Altivec and Default
- *        implementations, so it is defined in default_altivec_sharedfuncs.c.
- *        Since it only applies to these implementations, however, we export
- *        it locally where it is used, instead of exporting it globally in
- *        funcs.h - CRS 24 August 2005
- */
-extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 /* Echo a message about Altivec being used once: 
  *   (1) Confirm that the Altivec kernel is indeed being used
@@ -696,7 +692,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
     
     if (ret_tr != NULL) 
     {
-      P7ViterbiTrace(hmm, dsq, L, mx, &tr);
+      ViterbiTrace(hmm, dsq, L, mx, &tr);
       *ret_tr = tr; 
     }
     
@@ -709,7 +705,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
     return Scorify(sc);		/* the total Viterbi score. */
 }
 
-/* Function: P7ViterbiNoTrace()
+/* Function: ViterbiNoTrace()
  *
  * Note:     This was originally defined in fast_algorithms.c, inside of an
  *           #ifdef ALTIVEC preprocessor block, but I moved it here so that
@@ -731,7 +727,7 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
 float
-P7ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx) 
+ViterbiNoTrace(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx) 
 {
     struct p7trace_s *   tr;
     int *                workp;
@@ -1452,7 +1448,7 @@ float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
        */
       
       /* Fastest altivec version */
-      sc = P7ViterbiNoTrace(dsq, L, hmm, mx);
+      sc = ViterbiNoTrace(dsq, L, hmm, mx);
       *ret_tr = NULL;
     }
 

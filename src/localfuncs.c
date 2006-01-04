@@ -1,3 +1,4 @@
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
 

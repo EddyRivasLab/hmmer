@@ -154,7 +154,8 @@ main(int argc, char **argv)
     /* Configure the HMM to shut off N,J,C emission: so we
      * do a simple single pass through the model.
      */
-    Plan7NakedConfig(hmm);
+    P7Config(hmm, P7_S_MODE);
+    P7ReconfigLength(hmm, 0);	/* as close as we can get to no length model right now */
     Plan7Renormalize(hmm);
 
     /*********************************************** 

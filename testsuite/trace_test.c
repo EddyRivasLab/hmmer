@@ -57,7 +57,7 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   unsigned char   *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
-  cust_dpmatrix_s *mx;        /* reusable, growable DP matrix            */
+  cust_dpmatrix_s *mx;          /* reusable, growable DP matrix            */
   struct p7trace_s  *tr;	/* traceback                               */
   int       nseq;
   float     sc;

@@ -11,7 +11,7 @@ CC       = @CC@
 CFLAGS   = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
+DEFS     = @DEFS@ -DIMPL_$(CORE_IMPL)
 LIBS     = @LIBS@ -lm
 
 ## archiving command, and ranlib command if you need one.
@@ -36,9 +36,9 @@ PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
 SHELL    = /bin/sh
-MYLIBS   = -lsquid
-MYLIBDIR = -L../squid
-MYINCDIR = -I../squid
+MYLIBS   = -lsquid -leasel
+MYLIBDIR = -L../squid -L../easel
+MYINCDIR = -I../squid -I../easel
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -52,8 +52,10 @@ PROGS = hmmalign\
 	${PVMPROGS}
 
 OBJS =  alphabet.o\
+	calibration.o\
 	core_algorithms.o\
 	debug.o\
+	display.o\
 	emit.o\
 	emulation.o\
 	histogram.o\
@@ -69,14 +71,12 @@ OBJS =  alphabet.o\
 	modelmakers.o\
 	plan7.o\
 	plan9.o\
+	postprob.o\
 	prior.o\
 	pvm.o\
 	threads.o\
 	tophits.o\
-	trace.o \
-#	display.o\
-#	postprob.o\
-
+	trace.o 
 
 HDRS =  config.h\
 	funcs.h\
@@ -86,37 +86,38 @@ HDRS =  config.h\
 	postprob.h\
 	structs.h
 
-# Configuration for customized implementations
-#
-HMMERMODE ?= FAST
+# Extra files for customized implementations
 
-ifeq "$(HMMERMODE)" 'FAST'
-DEFS += -DFAST
+ifeq "$(CORE_IMPL)" 'FAST'
 OBJS += defaultstructs.o \
 	default_altivec_sharedfuncs.o \
 	defaultfuncs.o \
 	fastfuncs.o 
+HDRS += defaultstructs.h \
+        default_altivec_sharedfuncs.h
 endif
 
-ifeq "$(HMMERMODE)" 'SLOW'
-DEFS += -DSLOW
+ifeq "$(CORE_IMPL)" 'SLOW'
 OBJS += defaultstructs.o \
 	default_altivec_sharedfuncs.o \
 	defaultfuncs.o \
 	slowfuncs.o
+HDRS += defaultstructs.h \
+        default_altivec_sharedfuncs.h
 endif
 
-ifeq "$(HMMERMODE)" 'ALTIVEC'
-DEFS += -DALTIVEC
+ifeq "$(CORE_IMPL)" 'ALTIVEC'
 OBJS += altivecstructs.o \
 	default_altivec_sharedfuncs.o \
 	altivecfuncs.o
+HDRS += defaultstructs.h \
+        default_altivec_sharedfuncs.h
 endif
 
-ifeq "$(HMMERMODE)" 'LOCAL'
-DEFS += -DLOCAL
+ifeq "$(CORE_IMPL)" 'LOCAL'
 OBJS += localstructs.o \
 	localfuncs.o
+HDRS += localstructs.h
 endif
 
 .c.o:
