@@ -33,7 +33,7 @@
  *
  * Xref:      STL7 p.122.
  */
-extern int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx){
+int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx){
 
 }
 
@@ -56,44 +56,11 @@ extern int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx){
  */
 float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
 		      cust_dpmatrix_s *mx, struct p7trace_s **ret_tr,
-		      int need_trace){
+		      int need_trace)
+{
+  
 }
 
-/* Function: Backward()
- * 
- * Purpose:  The Backward dynamic programming algorithm.
- *           The scaling issue is dealt with by working in log space
- *           and calling ILogsum(); this is a slow but robust approach.
- *           
- * Args:     dsq    - sequence in digitized form
- *           L      - length of dsq
- *           hmm    - the model
- *           ret_mx - RETURN: dp matrix; pass NULL if it's not wanted
- *           
- * Return:   log P(S|M)/P(S|R), as a bit score.
- */
-extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
-		      cust_dpmatrix_s **ret_mx){
-
-}
-
-/* Function: Forward()
- *
- * Purpose:  The Forward dynamic programming algorithm.
- *           The scaling issue is dealt with by working in log space
- *           and calling ILogsum(); this is a slow but robust approach.
- *           
- * Args:     dsq    - sequence in digitized form
- *           L      - length of dsq
- *           hmm    - the model
- *           ret_mx - RETURN: dp matrix; pass NULL if it's not wanted
- *           
- * Return:   log P(S|M)/P(S|R), as a bit score.
- */
-extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     cust_dpmatrix_s **ret_mx){
-
-}
 
 /* Function: Viterbi()
  *
@@ -109,7 +76,48 @@ extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm,
  *           
  * Return:   log P(S|M)/P(S|R), as a bit score
  */
-extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr){
+float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
+	      cust_dpmatrix_s *mx, struct p7trace_s **ret_tr)
+{
 
+}
+
+
+/* Function: Forward()
+ *
+ * Purpose:  The Forward dynamic programming algorithm.
+ *           The scaling issue is dealt with by working in log space
+ *           and calling ILogsum(); this is a slow but robust approach.
+ *           
+ * Args:     dsq    - sequence in digitized form
+ *           L      - length of dsq
+ *           hmm    - the model
+ *           ret_mx - RETURN: dp matrix; pass NULL if it's not wanted
+ *           
+ * Return:   log P(S|M)/P(S|R), as a bit score.
+ */
+float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
+	      cust_dpmatrix_s **ret_mx)
+{
+  
+}
+
+
+/* Function: Backward()
+ * 
+ * Purpose:  The Backward dynamic programming algorithm.
+ *           The scaling issue is dealt with by working in log space
+ *           and calling ILogsum(); this is a slow but robust approach.
+ *           
+ * Args:     dsq    - sequence in digitized form
+ *           L      - length of dsq
+ *           hmm    - the model
+ *           ret_mx - RETURN: dp matrix; pass NULL if it's not wanted
+ *           
+ * Return:   log P(S|M)/P(S|R), as a bit score.
+ */
+float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
+	       cust_dpmatrix_s **ret_mx)
+{
+  
 }
