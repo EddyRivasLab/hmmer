@@ -63,7 +63,7 @@ P7CalibrateV(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L,
 	     float *ret_mu, float *ret_kappa)
 {
   struct p7trace_s  *tr;
-  struct dpmatrix_s *mx;
+  cust_dpmatrix_s *mx;
   int     i;
   char   *seq;
   unsigned char *dsq;

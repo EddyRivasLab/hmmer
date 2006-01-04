@@ -94,7 +94,7 @@ P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace
   (void) Forward(dsq, L, hmm, &forward);
   (void) Backward(dsq, L, hmm, &backward);
 
-  /* Note: next two lines should fail to compile if 
+  /* Note: next two lines will cause warnings if
    * cust_dp_matrix != struct dpmatrix_s */
   P7EmitterPosterior(L, hmm, forward, backward, backward);           /* Re-use backward matrix for posterior scores */
 
