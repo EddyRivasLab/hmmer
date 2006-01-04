@@ -120,6 +120,12 @@ OBJS += localstructs.o \
 HDRS += localstructs.h
 endif
 
+ifeq "$(CORE_IMPL)" 'JDB'
+OBJS += jdbstructs.o \
+	jdbfuncs.o
+HDRS += jdbstructs.h
+endif
+
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
 

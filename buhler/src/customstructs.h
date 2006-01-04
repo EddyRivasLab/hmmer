@@ -13,5 +13,8 @@
 #ifdef IMPL_LOCAL
 #include "localstructs.h"
 #endif
+#ifdef IMPL_JDB
+#include "jdbstructs.h"
+#endif
 
 #endif /*LOCALSTRUCTSH_INCLUDED*/
