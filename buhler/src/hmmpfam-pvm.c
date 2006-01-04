@@ -31,7 +31,7 @@ main(void)
   char              *hmmfile;   /* file to read HMM(s) from                */
   HMMFILE           *hmmfp;     /* opened hmmfile for reading              */
   struct plan7_s    *hmm;
-  cust_dpmatrix_s *mx;        /* growable DP matrix                      */
+  cust_dpmatrix_s   *mx;        /* growable DP matrix                      */
   char              *seq;
   unsigned char     *dsq;
   int      len;
@@ -47,7 +47,6 @@ main(void)
   int      do_null2;		/* TRUE to correct scores w/ ad hoc null2   */
   int      alphatype;		/* alphabet type, hmmAMINO or hmmNUCLEIC    */
   int      code;		/* return code after initialization         */
-  int      need_trace;
 
   tr = NULL;
   
@@ -110,7 +109,7 @@ main(void)
    * asymmetric matrices.
    * 
    * We're growable in both M and N, because inside of P7SmallViterbi,
-   * we're going to be calling Viterbi() on subpieces that vary in size,
+   * we're going to be calling Viterbi on subpieces that vary in size,
    * and for different models.
    */
   mx = CreateDPMatrix(300, 300, 25, 25);
@@ -159,9 +158,8 @@ main(void)
 
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      need_trace = do_forward && do_null2;
       sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
-			   need_trace);
+			   do_forward && do_null2);
       
       /* The Forward score override. 
        * See comments in hmmpfam.c in serial version.
@@ -171,10 +169,14 @@ main(void)
           sc  = Forward(dsq, len, hmm, NULL);
           if (do_null2) 
           {
-              sc -= TraceScoreCorrection(hmm, tr, dsq);
+	    /* We need the trace - recalculate it if we didn't already do it */
+	    if(tr == NULL)
+	      sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, TRUE);
+	    
+	    sc -= TraceScoreCorrection(hmm, tr, dsq);
           }
       }
-      pvalue = LPValue(hmm, len, sc);
+      pvalue = PValue(hmm, sc);
       evalue = thresh.Z ? (double) thresh.Z * pvalue : (double) nhmm * pvalue;
       send_trace = (sc >= thresh.globT && evalue <= thresh.globE) ? 1 : 0;
 
@@ -188,11 +190,11 @@ main(void)
       pvm_pkint(&send_trace, 1, 1); /* flag for whether a trace structure is coming */
       if (send_trace) 
       {
+          /* We need the trace - recalculate it if we didn't already do it */
+
           if(tr == NULL)
-          {
-	    DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
-			    W_TRACE);
-          }
+	    DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, TRUE);
+	    
           PVMPackTrace(tr);
       }
       pvm_send(master_tid, HMMPVM_RESULTS);

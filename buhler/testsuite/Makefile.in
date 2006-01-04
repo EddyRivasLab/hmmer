@@ -9,7 +9,7 @@ CC        = @CC@
 CFLAGS    = @CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
-DEFS      = @DEFS@
+DEFS      = @DEFS@ -DIMPL_$(CORE_IMPL)
 LIBS      = @LIBS@ -lm
 MYLIBS    = -lhmmer -lsquid
 
@@ -29,37 +29,12 @@ SHIVA = alignalign_test\
 	viterbi_exercise\
 	weeviterbi_test
 
-
-# Configuration for customized implementations
-#
-HMMERMODE ?= FAST
-
-ifeq "$(HMMERMODE)" 'FAST'
-DEFS += -DFAST
-OBJS += defaultstructs.o default_altivec_sharedfuncs.o fastfuncs.o
-endif
-
-ifeq "$(HMMERMODE)" 'SLOW'
-DEFS += -DSLOW
-OBJS += defaultstructs.o default_altivec_sharedfuncs.o slowfuncs.o
-endif
-
-ifeq "$(HMMERMODE)" 'ALTIVEC'
-DEFS += -DALTIVEC
-OBJS += altivecstructs.o default_altivec_sharedfuncs.o altivecfuncs.o
-endif
-
-ifeq "$(HMMERMODE)" 'LOCAL'
-DEFS += -DLOCAL
-OBJS += localstructs.o localfuncs.o
-endif
-
 #######
 ## Targets defining how to make Shiva executables.
 #######
 
 .c.o:
-	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) ${CPPFLAGS} $(DEFS) -I../squid -I../src -c $<		
+	$(CC) $(CFLAGS) $(PTHREAD_CFLAGS) ${CPPFLAGS} $(DEFS) -I../squid -I../easel -I../src -c $<		
 
 all: 	$(SHIVA)
 

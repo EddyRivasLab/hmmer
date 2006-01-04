@@ -3,7 +3,6 @@
  *
  * SVN $Id$
  */            
-
 #ifndef FUNCSH_INCLUDED
 #define FUNCSH_INCLUDED
 
@@ -13,6 +12,9 @@
 
 #include "plan7.h"
 #include "structs.h"
+
+#include <easel.h>
+#include <esl_random.h>		/* ESL_RANDOMNESS */
 
 /* alphabet.c
  * Configuration of global alphabet information
@@ -27,27 +29,26 @@ extern void           P7CountSymbol(float *counters, unsigned char sym, float wt
 extern void           DefaultGeneticCode(int *aacode);
 extern void           DefaultCodonBias(float *codebias);
 
+/* from calibration.c
+ * Determination of parameters needed for E-values.
+ */
+extern void P7CalibrateV(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L,
+			 float *ret_mu, float *ret_kappa);
+
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
  */
-
-extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, 
-					    int padN, int padM);
-extern void  ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
+extern struct dpmatrix_s *CreatePlan7Matrix(int N, int M, int padN, int padM);
+extern void   ResizePlan7Matrix(struct dpmatrix_s *mx, int N, int M, 
 				int ***xmx, int ***mmx, int ***imx, int ***dmx);
-extern struct dpmatrix_s 
-             *AllocPlan7Matrix(int rows, int M, int ***xmx, 
-					       int ***mmx, int ***imx, 
-					       int ***dmx);
+extern struct dpmatrix_s *AllocPlan7Matrix(int rows, int M, 
+					   int ***xmx, int ***mmx, int ***imx, int ***dmx);
+extern struct dpshadow_s *AllocShadowMatrix(int rows, int M, char ***xtb, 
+					    char ***mtb, char ***itb, char ***dtb);
 extern void  FreePlan7Matrix(struct dpmatrix_s *mx);
-extern struct dpshadow_s 
-             *AllocShadowMatrix(int rows, int M, char ***xtb, 
-				char ***mtb, char ***itb, char ***dtb);
 extern void  FreeShadowMatrix(struct dpshadow_s *tb);
 extern int   P7SmallViterbiSize(int L, int M);
 extern int   P7WeeViterbiSize(int L, int M);
-extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int L,
-			   struct dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern float P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
 			    cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 extern float P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
@@ -65,6 +66,39 @@ extern float  PostprocessSignificantHit(struct tophit_s *ghit, struct tophit_s *
 					struct threshold_s *thresh, int hmmpfam_mode);
 
 
+/*
+ * from custom structs code
+ * These are generic function declarations that are defined by each 
+ * implemenation.  Ideally, they are in a file called something like 
+ * <implementation>structs.c, e.g. "defaultstructs.c".
+ *
+ * Functions for customizing data structures used by each implementation.
+ */
+extern void AllocLogoddsShell(struct plan7_s *hmm);
+extern void AllocLogoddsBody(struct plan7_s *hmm);
+extern void FreeLogodds(struct plan7_s *hmm);
+extern void FillCustomLogodds(struct plan7_s *hmm);
+extern cust_dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
+extern void ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M);
+extern void FreeDPMatrix(cust_dpmatrix_s *mx);
+
+
+/*
+ * from custom functions code
+ * These are generic function declarations that are defined by each 
+ * implementation.  Ideally, they are in a file called something like
+ * <implementation>funcs.c, e.g. "defaultfuncs.c".
+ */
+extern int ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx);
+extern float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
+			     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr,
+			     int return_trace);
+extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
+		      cust_dpmatrix_s **ret_mx);
+extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
+		     cust_dpmatrix_s **ret_mx);
+extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
+		     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 /* from debug.c
  * Debugging output of various sorts.
@@ -194,8 +228,6 @@ extern int   LL2Score(float ll, float null);
 extern float Score2Prob(int sc, float null);
 extern float Scorify(int sc);
 extern double PValue(struct plan7_s *hmm, double sc);
-extern double LPValue(struct plan7_s *hmm, int L, double sc);
-extern double EdgeCorrection(double L, double kappa, double sigma);
 extern float LogSum(float p1, float p2);
 extern int   ILogsum(int p1, int p2);
 extern void  LogNorm(float *vec, int n);
@@ -238,11 +270,10 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
  * Model configuration, from core model probabilities
  * to the full Plan7 score model
  */
-extern void Plan7NakedConfig(struct plan7_s *hmm);
-extern void Plan7GlobalConfig(struct plan7_s *hmm);
-extern void Plan7LSConfig(struct plan7_s *hmm);
-extern void Plan7SWConfig(struct plan7_s *hmm);
-extern void Plan7FSConfig(struct plan7_s *hmm);
+extern void  P7Config(struct plan7_s *hmm, enum p7_algmode mode);
+extern void  P7ReconfigLength (struct plan7_s *hmm, int L);
+extern float P7EdgeCorrection (struct plan7_s *hmm, int L);
+extern float P7ScoreCorrection(struct plan7_s *hmm, int L);
 
 
 /* from modelmakers.c
@@ -257,7 +288,6 @@ extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
 
 /* from plan7.c
  * Plan7 HMM structure support
-
  */
 extern struct plan7_s *AllocPlan7(int M);
 extern struct plan7_s *AllocPlan7Shell(void);
@@ -397,45 +427,10 @@ extern int  TraceDomainNumber(struct p7trace_s *tr);
 extern int  Trace_GetAlignmentBounds(struct p7trace_s *tr, int which,
 				     int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2,
 				     int *ret_avlen);
+extern int  P7TraceCountAnnotated(struct p7trace_s *tr);
 extern struct p7trace_s *MasterTraceFromMap(int *map, int M, int alen);
 extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, 
 			      struct p7trace_s ***ret_tr);
-
-
-/*
- * These are generic function declarations that are defined by each 
- * implemenation.  Ideally, they are in a file called something ilke 
- * <implementation>structs.c, like defaultstructs.c, for example.
- *
- * Functions for customizing data structures used by each implementation.
- */
-extern void AllocLogoddsShell(struct plan7_s *hmm);
-extern void AllocLogoddsBody(struct plan7_s *hmm);
-extern void FreeLogodds(struct plan7_s *hmm);
-extern void FillCustomLogodds(struct plan7_s *hmm);
-extern cust_dpmatrix_s *CreateDPMatrix(int N, int M, int padN, int padM);
-extern void ResizeDPMatrix(cust_dpmatrix_s *mx, int N, int M);
-extern void FreeDPMatrix(cust_dpmatrix_s *mx);
-
-
-/*
- * These are generic function declarations that are defined by each 
- * implementation.  Ideally, they are in a file called something like
- * <implementation>funcs.c, like fastfuncs.c, for example.  
- *
- * Customized and/or optimized version of the dynamic programming
- * algorithms and related support functions.
- */
-extern int   ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx);
-extern float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
-			     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr,
-			     int need_trace);
-extern float Backward(unsigned char *dsq, int L, struct plan7_s *hmm,	
-		      cust_dpmatrix_s **ret_mx);
-extern float Forward(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     cust_dpmatrix_s **ret_mx);
-extern float Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, 
-		     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
 
 
 #endif /*FUNCSH_INCLUDED*/

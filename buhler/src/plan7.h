@@ -17,7 +17,6 @@ enum p7_algmode {
   P7_FS_MODE    = 2,
   P7_SW_MODE    = 3,
   P7_S_MODE     = 4,
-  P7_G_MODE     = 5
 };
 
 /* Structure: plan7_s
@@ -129,6 +128,7 @@ struct plan7_s {
   float   xt[4][2];             /* N,E,C,J extra states: 2 transitions        +*/
   float  *begin;                /* 1..M B->M state transitions                +*/
   float  *end;                  /* 1..M M->E state transitions (!= a dist!)   +*/
+
   /* The model's log-odds score form: xref modelconfig.c
    *
    * Note that emission distributions are over possible alphabet
@@ -139,12 +139,6 @@ struct plan7_s {
    * Note the reversed indexing on msc, isc, tsc -- for efficiency
    * reasons. They're not probability vectors, so we can reorder them.
    * 
-   * The _mem ptrs are where the real memory is alloc'ed and free'd,
-   * as opposed to where it is accessed.  This came in with Erik
-   * Lindahl's altivec port; it allows alignment on 16-byte
-   * boundaries. In the non-altivec code, this is just a little
-   * redundancy; tsc and tsc_mem point to the same thing, for example.
-   * 
    * PLAN7_HASBITS flag is up when these scores are valid.
    */
   enum p7_algmode mode;		/* configured algorithm mode  */
@@ -154,6 +148,7 @@ struct plan7_s {
   int    xsc[4][2];             /* N,E,C,J transitions                      +*/
   int   *bsc;                   /* begin transitions     [1.M]              +*/
   int   *esc;			/* end transitions       [1.M]              +*/
+  float  lscore;		/* score for each unaligned res when LCORRECT flag is up */
 
   /* Annotation on the model. A name is mandatory.
    * Other fields are optional; whether they are present is
@@ -218,35 +213,35 @@ struct plan7_s {
   /* P-value and E-value statistical parameters
    * Only valid if PLAN7_STATS is set.
    */
-  float  mu;			/* EVD mu                               +*/
-  float  lambda;		/* EVD lambda                           +*/
-  float  kappa;			/* mean length of optimal alignments    +*/
-  float  sigma;			/* std dev. of length of opt alignments +*/
-  int    Lbase;			/* seq length that EVD was cali */
+  float  mu;			/* Gumbel mu                                +*/
+  float  lambda;		/* Gumbel lambda                            +*/
+  float  kappa;			/* mean length of optimal local alignments  +*/
+  float  kappa_g;		/* mean length of optimal glocal alignments +*/
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
-
-  struct logodds_s *lom;        /* a customized logodds form of the hmm */
+  
+  struct logodds_s *lom;        /* customized logodds structure */
 };
 
 /* Flag codes for plan7->flags.
  */
-#define PLAN7_HASBITS (1<<0)    /* raised if model has log-odds scores      */
-#define PLAN7_DESC    (1<<1)    /* raised if description exists             */
-#define PLAN7_RF      (1<<2)    /* raised if #RF annotation available       */
-#define PLAN7_CS      (1<<3)    /* raised if #CS annotation available       */
-#define PLAN7_XRAY    (1<<4)    /* raised if structural data available      */
-#define PLAN7_HASPROB (1<<5)    /* raised if model has probabilities        */
-#define PLAN7_HASDNA  (1<<6)	/* raised if protein HMM->DNA seq params set*/
-#define PLAN7_STATS   (1<<7)	/* raised if EVD parameters are available   */
-#define PLAN7_MAP     (1<<8)	/* raised if alignment map is available     */
-#define PLAN7_ACC     (1<<9)	/* raised if accession number is available  */
-#define PLAN7_GA      (1<<10)	/* raised if gathering thresholds available */
-#define PLAN7_TC      (1<<11)	/* raised if trusted cutoffs available      */
-#define PLAN7_NC      (1<<12)	/* raised if noise cutoffs available        */
-#define PLAN7_CA      (1<<13)   /* raised if surface accessibility avail.   */
-#define PLAN7_BIMPOSED (1<<14)  /* raised if all entries are B->M_k (not D) */
-#define PLAN7_EIMPOSED (1<<15)  /* raised if all ends are M_k->E (not D)    */
+#define PLAN7_HASBITS (1<<0)    /* model has log-odds scores            */
+#define PLAN7_DESC    (1<<1)    /* description exists                   */
+#define PLAN7_RF      (1<<2)    /* #RF annotation available             */
+#define PLAN7_CS      (1<<3)    /* #CS annotation available             */
+#define PLAN7_XRAY    (1<<4)    /* structural data available            */
+#define PLAN7_HASPROB (1<<5)    /* model has probabilities              */
+#define PLAN7_HASDNA  (1<<6)	/* protein HMM->DNA seq params set      */
+#define PLAN7_STATS   (1<<7)	/* EVD parameters are available         */
+#define PLAN7_MAP     (1<<8)	/* alignment map is available           */
+#define PLAN7_ACC     (1<<9)	/* accession number is available        */
+#define PLAN7_GA      (1<<10)	/* gathering thresholds available       */
+#define PLAN7_TC      (1<<11)	/* trusted cutoffs available            */
+#define PLAN7_NC      (1<<12)	/* noise cutoffs available              */
+#define PLAN7_CA      (1<<13)   /* surface accessibility avail.         */
+#define PLAN7_BIMPOSED (1<<14)  /* all entries are B->M_k (not D)       */
+#define PLAN7_EIMPOSED (1<<15)  /* all ends are M_k->E (not D)          */
+#define PLAN7_LCORRECT (1<<16)  /* require L-dependent score correction */
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB

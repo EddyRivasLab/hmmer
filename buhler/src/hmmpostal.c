@@ -481,17 +481,17 @@ main(int argc, char **argv)
     printf ("#\n# Sequence %d: %s\n#\n", idx + 1, msa->sqname[idx]);
 
     len = DealignedLength(msa->aseq[idx]);
-    if (P7ViterbiSize(len, hmm->M) * 2 > RAMLIMIT)
+    if (ViterbiSize(len, hmm->M) * 2 > RAMLIMIT)
       Die("insufficient memory");
       
-    (void) P7Forward (dsq[idx], len, hmm, &forward_mx);
-    (void) P7Backward (dsq[idx],len, hmm, &backward_mx);
+    (void) Forward (dsq[idx], len, hmm, &forward_mx);
+    (void) Backward (dsq[idx],len, hmm, &backward_mx);
     
     if (r_strategy == REALIGN_VITERBI) {
 
       if (tr[idx]) P7FreeTrace (tr[idx]);
 
-      if (P7ViterbiSize(len, hmm->M) * 3 <= RAMLIMIT)
+      if (ViterbiSize(len, hmm->M) * 3 <= RAMLIMIT)
 	(void) Viterbi(dsq[idx], len, hmm, &(tr[idx]));
       else
 	(void) P7SmallViterbi(dsq[idx], len, hmm, &(tr[idx]));
@@ -500,7 +500,7 @@ main(int argc, char **argv)
 
       if (tr[idx]) P7FreeTrace (tr[idx]);
 
-      if (P7ViterbiSize(len, hmm->M) * 4 > RAMLIMIT)
+      if (ViterbiSize(len, hmm->M) * 4 > RAMLIMIT)
 	Die("insufficient memory");
       
       posterior_mx = AllocPlan7Matrix (len + 1, hmm->M, 0, 0, 0, 0);

@@ -45,7 +45,6 @@ main(void)
   int    Z;			/* nseq to base E value calculation on      */
   int    nseq;			/* actual nseq so far (master keeps updating this) */
   int    send_trace;		/* TRUE if sc looks significant and we return tr */
-  int need_trace;
   
   tr = NULL;
   
@@ -109,21 +108,23 @@ main(void)
       
       /* Score sequence, do alignment (Viterbi), recover trace
        */
-      need_trace = do_forward && do_null2;
       sc = DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
-			   need_trace);
-
+			   do_forward && do_null2);
       
       if (do_forward) 
       {
-          sc  = Forward(dsq, L, hmm, NULL);
+	  sc  = Forward(dsq, L, hmm, NULL);
           if (do_null2) 
           {
-              sc -= TraceScoreCorrection(hmm, tr, dsq);
+	    /* We need the trace - recalculate it if we didn't already do it */
+	    if (tr == NULL)
+	      DispatchViterbi(dsq, L, hmm, mx, &tr, TRUE);
+	    
+	    sc -= TraceScoreCorrection(hmm, tr, dsq);
           }
       }
 	
-      pvalue = LPValue(hmm, L, sc);
+      pvalue = PValue(hmm, sc);
       evalue = Z ? (double) Z * pvalue : (double) nseq * pvalue;
       send_trace = (sc >= globT && evalue <= globE) ? 1 : 0;
      
@@ -138,11 +139,8 @@ main(void)
       if (send_trace)
       {
           /* We need the trace - recalculate it if we didn't already do it */
-          if(tr == NULL)
-          {
-	    DispatchViterbi(dsq, sqinfo->len, hmm, mx, &tr, 
-			    W_TRACE);
-          }
+	if (tr == NULL)
+	  DispatchViterbi(dsq, L, hmm, mx, &tr, TRUE);
 
           PVMPackTrace(tr);
       }

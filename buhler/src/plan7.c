@@ -56,10 +56,10 @@ AllocPlan7Shell(void)
   hmm->end    = NULL;
 
   hmm->mode    = P7_NO_MODE;
-
-  hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
-  hmm->esc     = hmm->bsc     =                NULL;
- 
+  hmm->tsc = hmm->msc = hmm->isc = NULL;
+  hmm->bsc = NULL;
+  hmm->esc = NULL;
+  
   hmm->name     = NULL;
   hmm->acc      = NULL;
   hmm->desc     = NULL;
@@ -85,13 +85,15 @@ AllocPlan7Shell(void)
   hmm->dna2   = -INFTY;
   hmm->dna4   = -INFTY;
 			/* statistical parameters set to innocuous empty values */
-  hmm->mu     = 0.; 
-  hmm->lambda = 0.;
+  hmm->mu      = 0.; 
+  hmm->lambda  = 0.;
+  hmm->kappa   = 0.;
+  hmm->kappa_g = 0.;
   
   hmm->flags = 0;
-
+  
   AllocLogoddsShell(hmm);
-
+  
   return hmm;
 }  
 
@@ -124,10 +126,6 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   hmm->tsc     = MallocOrDie (7     *           sizeof(int *));
   hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
   hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
-
-  hmm->bsc  = MallocOrDie  ((M+1) * sizeof(int));
-  hmm->esc  = MallocOrDie  ((M+1) * sizeof(int));
-
   hmm->tsc[0] = MallocOrDie ((7*M)     *       sizeof(int));
   hmm->msc[0] = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
   hmm->isc[0] = MallocOrDie ((MAXCODE*M) *     sizeof(int));
@@ -145,13 +143,16 @@ AllocPlan7Body(struct plan7_s *hmm, int M)
   for (x = 0; x < 7; x++)
     hmm->tsc[x][0] = -INFTY;
 
+  hmm->bsc = MallocOrDie  ((M+1) * sizeof(int));
+  hmm->esc = MallocOrDie  ((M+1) * sizeof(int));
+  
   hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
   hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
   hmm->ca     = MallocOrDie ((M+2) * sizeof(char));
   hmm->map    = MallocOrDie ((M+1) * sizeof(int));
-
+  
   AllocLogoddsBody(hmm);
-
+  
   return;
 }  
 
@@ -166,14 +167,11 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->t       != NULL) free(hmm->t);
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->end     != NULL) free(hmm->end);
-  if (hmm->bsc != NULL) free(hmm->bsc);
-  if (hmm->esc != NULL) free(hmm->esc);
-  if (hmm->msc[0] != NULL) free(hmm->msc[0]);
-  if (hmm->isc[0] != NULL) free(hmm->isc[0]);
-  if (hmm->tsc[0] != NULL) free(hmm->tsc[0]);
-  if (hmm->msc     != NULL) free(hmm->msc);
-  if (hmm->isc     != NULL) free(hmm->isc);
-  if (hmm->tsc     != NULL) free(hmm->tsc);
+  if (hmm->bsc     != NULL) free(hmm->bsc);
+  if (hmm->esc     != NULL) free(hmm->esc);
+  if (hmm->msc[0]  != NULL) free(hmm->msc[0]);
+  if (hmm->isc[0]  != NULL) free(hmm->isc[0]);
+  if (hmm->tsc[0]  != NULL) free(hmm->tsc[0]);
   if (hmm->name    != NULL) free(hmm->name);
   if (hmm->acc     != NULL) free(hmm->acc);
   if (hmm->desc    != NULL) free(hmm->desc);
@@ -188,9 +186,8 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->ipri    != NULL) free(hmm->ipri);
   if (hmm->dnam    != NULL) free(hmm->dnam);
   if (hmm->dnai    != NULL) free(hmm->dnai);
-
+  
   if (hmm->lom != NULL) FreeLogodds(hmm);
-
   free(hmm);
 }
 
@@ -212,14 +209,17 @@ ZeroPlan7(struct plan7_s *hmm)
     }
   FSet(hmm->mat[hmm->M], Alphabet_size, 0.);
   hmm->tbd1 = 0.;
+  hmm->tbm1 = 0.;
   FSet(hmm->begin+1, hmm->M, 0.);
   FSet(hmm->end+1, hmm->M, 0.);
   for (k = 0; k < 4; k++)
     FSet(hmm->xt[k], 2, 0.);
   
-  hmm->mode   = P7_NO_MODE;
-  hmm->flags &= ~PLAN7_HASBITS;	/* invalidates scores */
-  hmm->flags &= ~PLAN7_HASPROB;	/* invalidates probabilities */
+  hmm->kappa   = 0;
+  hmm->kappa_g = 0;
+  hmm->mode    = P7_NO_MODE;
+  hmm->flags  &= ~PLAN7_HASBITS;	/* invalidates scores */
+  hmm->flags  &= ~PLAN7_HASPROB;	/* invalidates probabilities */
 }
 
 

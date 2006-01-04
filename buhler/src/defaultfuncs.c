@@ -1,5 +1,10 @@
+#include "config.h"
+
+#include "plan7.h"
 #include "structs.h"
 #include "funcs.h"
+
+#include "default_altivec_sharedfuncs.h"
 
 /*
  * Function: DispatchViterbi()
@@ -26,13 +31,13 @@ float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   if (ViterbiSpaceOK(L, hmm->M, mx))
     {
       SQD_DPRINTF1(("   ... using normal Viterbi(); size ~%d MB\n", 
-		    P7ViterbiSize(L, hmm->M)));
+		    ViterbiSize(L, hmm->M)));
       sc = Viterbi(dsq, L, hmm, mx, ret_tr);
     }
   else
     {
       SQD_DPRINTF1(("   ... using P7SmallViterbi(); size ~%d MB\n",
-		    P7ViterbiSize(L, hmm->M)));
+		    ViterbiSize(L, hmm->M)));
       sc = P7SmallViterbi(dsq, L, hmm, mx, ret_tr);
     }
   

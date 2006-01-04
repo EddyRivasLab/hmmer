@@ -27,8 +27,8 @@
  *     
  *     (get a traceback from somewhere: P7Viterbi() or a modelmaker)
  *     (get an HMM from somewhere: read file or construct it)
- *     P7Forward (dsq, len, hmm, &fwd);
- *     P7Backward(dsq, len, hmm, &bck);
+ *     Forward (dsq, len, hmm, &fwd);
+ *     Backward(dsq, len, hmm, &bck);
  *     posterior = bck;              -- can alloc posterior, but also can re-use bck --
  *     P7EmitterPosterior(len, hmm, fwd, bck, posterior);
  *     postcode = PostalCode(len, posterior, tr);
@@ -36,17 +36,14 @@
  *     MSAAppendGR(msa, "POST", seqidx, postcode);  -- or a similar annotation call --
  *     
  *     free(postcode);
- *     FreeDPMatrix(fwd);
- *     FreeDPMatrix(bck);
+ *     FreePlan7Matrix(fwd);
+ *     FreePlan7Matrix(bck);
  *     
  * P7OptimalAccuracy() - the Durbin/Holmes optimal accuracy
  *                       alignment algorithm. Takes a sequence
  *                       and an HMM, returns an alignment as
  *                       a trace structure.
  * 
- * P7Backward()        - The Backward() algorithm, counterpart
- *                       of P7Forward() in core_algorithms.c.
- *                       
  * P7EmitterPosterior()- The heart of postprob.c: given a Forward
  *                       and a Backward matrix, calculate a new matrix
  *                       that contains the posterior probabilities
@@ -91,12 +88,14 @@ float
 P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **ret_tr)
 {
   double sc;
-  struct dpmatrix_s *forward;
-  struct dpmatrix_s *backward;
+  cust_dpmatrix_s *forward;
+  cust_dpmatrix_s *backward;
 
   (void) Forward(dsq, L, hmm, &forward);
   (void) Backward(dsq, L, hmm, &backward);
 
+  /* Note: next two lines should fail to compile if 
+   * cust_dp_matrix != struct dpmatrix_s */
   P7EmitterPosterior(L, hmm, forward, backward, backward);           /* Re-use backward matrix for posterior scores */
 
   sc = P7FillOptimalAccuracy(L, hmm->M, backward, forward, ret_tr);  /* Re-use forward matrix for optimal accuracy scores */
@@ -106,6 +105,7 @@ P7OptimalAccuracy(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace
 
   return sc;
 }
+
 
 /* Function: P7EmitterPosterior()
  *

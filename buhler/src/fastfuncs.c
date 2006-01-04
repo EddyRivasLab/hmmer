@@ -1,15 +1,11 @@
-#include "funcs.h"
-#include "structs.h"
+#include "config.h"
 
-/*
- * Note:  P7ViterbiTrace() is shared by the Altivec and Default
- *        implementations, so it is defined in default_altivec_sharedfuncs.c.
- *        Since it only applies to these implementations, however, we export
- *        it locally where it is used, instead of exporting it globally in
- *        funcs.h - CRS 24 August 2005
- */
-extern void  P7ViterbiTrace(struct plan7_s *hmm, unsigned char *dsq, int N,
-			  cust_dpmatrix_s *mx, struct p7trace_s **ret_tr);
+#include "plan7.h"
+#include "structs.h"
+#include "funcs.h"
+
+#include "default_altivec_sharedfuncs.h"
+
 
 /* the DEFAULT Viterbi() is portably optimized; code follows:
  */
@@ -161,11 +157,9 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
   sc = xmx[L][XMC] + hmm->xsc[XTC][MOVE];
 
   if (ret_tr != NULL) {
-    P7ViterbiTrace(hmm, dsq, L, mx, &tr);
+    ViterbiTrace(hmm, dsq, L, mx, &tr);
     *ret_tr = tr;
   }
-
-  printf("Viterbi: %d\n", sc);
-	
-return Scorify(sc);		/* the total Viterbi score. */
+  
+  return Scorify(sc);		/* the total Viterbi score. */
 }

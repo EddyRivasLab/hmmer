@@ -15,7 +15,6 @@
 
 #include "plan7.h"
 
-
 /* Miscellaneous math macros used in the package
  */
 #define sreLOG2(x)  ((x) > 0 ? log(x) * 1.44269504 : -9999.)
@@ -53,6 +52,7 @@ extern int   DegenCount[MAXCODE];
 #define hmmNUCLEIC   2		/* compatibility with squid's kRNA   */
 #define hmmAMINO     3		/* compatibility with squid's kAmino */
 
+ 
 /* Declaration of default Plan7 dynamic programming matrix structure.
  */
 struct dpmatrix_s {
@@ -127,12 +127,6 @@ typedef struct hmmfile_s HMMFILE;
 #define STC     8
 #define STT     9
 #define STJ     10     
-
-/* Constants to indicate if we need 
- * the trace from Viterbi
- */
-#define WO_TRACE 0
-#define W_TRACE  1
 
 /* Structure: p7trace_s
  * 

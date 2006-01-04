@@ -74,7 +74,8 @@
  *
  * Args:     fp      - open FILE to write to (or stdout, possibly)
  *           hmm     - the HMM to write   
- *           do_xsw  - TRUE to write Compugen's experimental extended profile format *
+ *           do_xsw  - TRUE to write Compugen's experimental extended profile format
+ *
  * Returns:  (void)
  */
 void
@@ -101,7 +102,8 @@ WriteProfile(FILE *fp, struct plan7_s *hmm, int do_xsw)
    * GCG will look for sequence type and length of model.
    * Other than this, nothing is parsed until we get to the 
    * Cons line that has a ".." on it.
-   * Lines that begin with "!" are comments.   */
+   * Lines that begin with "!" are comments.
+   */
   if (Alphabet_type == hmmAMINO)        fprintf(fp, "!!AA_PROFILE 1.0\n");
   else if (Alphabet_type == hmmNUCLEIC) fprintf(fp, "!!NA_PROFILE 1.0\n");
   else Die("No support for profiles with non-biological alphabets");

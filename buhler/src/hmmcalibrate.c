@@ -50,6 +50,7 @@ static char experts[] = "\
   --num <n>      : set number of sampled seqs to <n> [5000]\n\
   --phist <f>    : save predicted histogram(s) to file <f>\n\
   --pvm          : run on a Parallel Virtual Machine (PVM)\n\
+  --sctbl <f>    : save score/Evalue table to file <f>\n\
   --seed <n>     : set random seed to <n> [time()]\n\
 ";
 
@@ -63,16 +64,20 @@ static struct opt_s OPTIONS[] = {
    { "--num",      FALSE, sqdARG_INT   },
    { "--phist",    FALSE, sqdARG_STRING },
    { "--pvm",      FALSE, sqdARG_NONE  },
+   { "--sctbl",    FALSE, sqdARG_STRING },
    { "--seed",     FALSE, sqdARG_INT}, 
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
 
-static void imean_sd(int *v, int N, double *ret_mean, double *ret_sd);
-static void save_fitted_histogram(FILE *hfp, double *sc, int N, double mu, double lambda);
-static void save_predicted_histogram(FILE *hfp, double *sc, int N, int L, int Lcal, 
-				     double mu, double lambda, double kappa, double sigma);
-
+static void   imean_sd(int *v, int N, double *ret_mean, double *ret_sd);
+static void   dmean_sd(double *v, int N, double *ret_mean, double *ret_sd);
+static double dmode(double *v, int N, double window);
+static void sort_scores(double *sc, int N);
+static void save_fitted_histogram(FILE *hfp, char *name, double *sc, int N, double mu, double lambda);
+static void save_predicted_histogram(FILE *hfp, struct plan7_s *hmm, double *sc, int N, int L);
+static void save_score_list(FILE *sfp, double *sc, int N, int L, 
+			    struct plan7_s *hmm, double mu, double lambda);
 
 
 static void main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
@@ -153,6 +158,8 @@ main(int argc, char **argv)
   double *sigma;		/* array of edge correction sigma's*/
   int     nhmm;			/* number of HMMs calibrated       */
   int     halloc;		/* number of HMMs allocated for    */
+  double  mean, median, sd;	/* mean, median, sd for scores     */
+  double  scmode;
 
   /* Control over optional output files:
    */
@@ -160,6 +167,8 @@ main(int argc, char **argv)
   FILE   *hfp;                  /* open file pointer for histfile  */
   char   *phistfile;		/* predicted histogram save file   */
   FILE   *pfp;			/* open file ptr for phistfile     */
+  char   *sctblfile;		/* score/Evalue table              */
+  FILE   *sfp;			/* open file ptr for sctblfile     */
 
   /* Control over PVM parallelization:
    */
@@ -198,6 +207,7 @@ main(int argc, char **argv)
   seed         = (int) time ((time_t *) NULL);
   histfile     = NULL;
   phistfile    = NULL;
+  sctblfile    = NULL;
   do_pvm       = FALSE;
   pvm_lumpsize = 20;		/* 20 seqs/PVM exchange: sets granularity */
   pvm_nslaves  = 0;	/* solely to silence compiler warnings: PVM main sets this */
@@ -214,6 +224,7 @@ main(int argc, char **argv)
       else if (strcmp(optname, "--num")      == 0) N            = atoi(optarg); 
       else if (strcmp(optname, "--phist")    == 0) phistfile    = optarg;
       else if (strcmp(optname, "--pvm")      == 0) do_pvm       = TRUE;
+      else if (strcmp(optname, "--sctbl")    == 0) sctblfile    = optarg;
       else if (strcmp(optname, "--seed")     == 0) seed         = atoi(optarg);
       else if (strcmp(optname, "-h") == 0)
 	{
@@ -252,6 +263,11 @@ main(int argc, char **argv)
   if (phistfile != NULL) {
     if ((pfp = fopen(phistfile, "w")) == NULL)
       Die("Failed to open predicted histogram file %s for writing\n", phistfile);
+  }
+  sfp = NULL;
+  if (sctblfile != NULL) {
+    if ((sfp = fopen(sctblfile, "w")) == NULL)
+      Die("Failed to open score table file 5s for writing\n", sctblfile);
   }
 
   /* Generate calibrated HMM(s) in a tmp file in the current
@@ -325,7 +341,7 @@ main(int argc, char **argv)
 
       /* Configure for SW calibration.
        */
-      Plan7SWConfig(hmm);
+      P7Config(hmm, P7_SW_MODE); 
 
       /* Determine what length the random seqs should be.
        */
@@ -349,8 +365,7 @@ main(int argc, char **argv)
 	main_loop_threaded(hmm, seed, N, L[nhmm], num_threads, 
 			   sc, alen, &extrawatch);
 #endif
-      else 
-	Die("wait. that can't happen. I didn't do anything.");
+      else Die("That can't happen. I didn't do anything.");
 
       /* Fit an EVD to the scores to get mu, lambda params.
        */
@@ -359,33 +374,29 @@ main(int argc, char **argv)
       /* Calculate mean ali length (kappa) and std. dev of ali lengths (sigma).
        */
       imean_sd(alen, N, &(kappa[nhmm]), &(sigma[nhmm]));
-      
+
+      sort_scores(sc, N);
+      dmean_sd(sc, N, &mean, &sd);
+      median = sc[N/2];
+      scmode = dmode(sc, N, 2.0); /* mode in 2.0 bit windows */
+
       /* Output
        */
       printf("HMM    : %s\n",   hmm->name);
       printf("L      : %d\n",   L[nhmm]);
+      printf("mean   : %12f\n", mean);
+      printf("stddev : %12f\n", sd);
+      printf("median : %12f\n", median);
+      printf("scmode : %12f\n", scmode);
       printf("mu     : %12f\n", mu[nhmm]);
       printf("lambda : %12f\n", lambda[nhmm]);
       printf("kappa  : %12f\n", kappa[nhmm]);
       printf("sigma  : %12f\n", sigma[nhmm]);
       printf("//\n");
 
-      if (hfp != NULL) 
-	{
-	  fprintf(hfp, "HMM: %s\n", hmm->name);
-	  save_fitted_histogram(hfp, sc, N, mu[nhmm], lambda[nhmm]);
-	  fprintf(hfp, "//\n");
-	}
-      if (pfp != NULL)
-	{
-	  fprintf(pfp, "HMM: %s\n", hmm->name);
-	  if (hmm->flags & PLAN7_STATS)
-	    save_predicted_histogram(pfp, sc, N, L[nhmm], 
-				     hmm->Lbase, hmm->mu, hmm->lambda, hmm->kappa, hmm->sigma);
-	  else
-	    fprintf(pfp, "[No previous EVD parameters set in this model.]\n");
-	  fprintf(pfp, "//\n");
-	}	
+      if (hfp != NULL) 	save_fitted_histogram(hfp, hmm->name, sc, N, mu[nhmm], lambda[nhmm]);
+      if (pfp != NULL)	save_predicted_histogram(pfp, hmm, sc, N, L[nhmm]); 
+      if (sfp != NULL)	save_score_list(sfp, sc, N, L[nhmm], hmm, mu[nhmm], lambda[nhmm]);
 
       /* Reallocation, if needed.
        */
@@ -433,8 +444,6 @@ main(int argc, char **argv)
 	  hmm->mu     = mu[idx];
 	  hmm->lambda = lambda[idx];
 	  hmm->kappa  = kappa[idx];
-	  hmm->sigma  = sigma[idx];
-	  hmm->Lbase  = L[idx];
 	  hmm->flags |= PLAN7_STATS;
 	  Plan7ComlogAppend(hmm, argc, argv);
 
@@ -515,7 +524,7 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
 		 double *sc, int *alen)
 {
   struct p7trace_s   *tr;
-  cust_dpmatrix_s  *mx;
+  cust_dpmatrix_s    *mx;
   float  randomseq[MAXABET];
   float  p1;
   char           *seq;
@@ -537,11 +546,8 @@ main_loop_serial(struct plan7_s *hmm, int seed, int N, int L,
       seq = RandomSequence(Alphabet, randomseq, Alphabet_size, L);
       dsq = DigitizeSequence(seq, L);
       
-      if (ViterbiSpaceOK(L, hmm->M, mx))
-          score = Viterbi(dsq, L, hmm, mx, &tr);
-      else
-          score = P7SmallViterbi(dsq, L, hmm, mx, &tr);
-
+      DispatchViterbi(dsq, L, hmm, mx, &tr, TRUE);
+      
       sc[idx] = (double) score;
       Trace_GetAlignmentBounds(tr, 1, NULL, NULL, NULL, NULL, &(alen[idx]));
 
@@ -747,7 +753,7 @@ worker_thread(void *ptr)
 {
   struct plan7_s    *hmm;
   struct p7trace_s  *tr;
-  cust_dpmatrix_s *mx;
+  cust_dpmatrix_s   *mx;
   struct workpool_s *wpool;
   char              *seq;
   unsigned char     *dsq;
@@ -786,10 +792,7 @@ worker_thread(void *ptr)
       /* 2. Score the sequence against the model.
        */
       dsq = DigitizeSequence(seq, len);
-      if (ViterbiSpaceOK(len, hmm->M, mx))
-          sc = Viterbi(dsq, len, hmm, mx, &tr);
-      else
-          sc = P7SmallViterbi(dsq, len, hmm, mx, &tr);
+      DispatchViterbi(dsq, len, hmm, mx, &tr, TRUE);
       
       free(dsq); 
       free(seq);
@@ -1025,46 +1028,139 @@ imean_sd(int *v, int N, double *ret_mean, double *ret_sd)
   if (ret_sd   != NULL) *ret_sd   = sd;
 }
 
+/* dmean-sd()
+ * 
+ * Calculate the mean and sd of an array of double values.
+ */
+static void
+dmean_sd(double *v, int N, double *ret_mean, double *ret_sd)
+{
+  int    i;
+  double sum = 0.;
+  double sqsum = 0.;
+  double mean;
+  double var;
+  double sd;
+
+  for (i = 0; i < N; i++)
+    {
+      sum += v[i];
+      sqsum += v[i] * v[i];
+    }
+  mean = sum / N;
+  var  = (sqsum - (sum*sum / N)) / (N - 1.);
+  sd   = sqrt(var);
+  
+  if (ret_mean != NULL) *ret_mean = mean;
+  if (ret_sd   != NULL) *ret_sd   = sd;
+}
 
 
+
+/* dmode()
+ * This could surely be optimized.
+ */
+static double
+dmode(double *v, int N, double window)
+{
+  int i,j;
+  int n;
+  int nmax;
+  double mode;
+
+  nmax = -1;
+  mode = 0.;
+  for (i = 0; i < N; i++)
+    {
+      n = 1;
+      for (j = i-1; j >= 0 && v[j]-v[i] < window/2.; j--) n++;
+      for (j = i+1; j <  N && v[i]-v[j] < window/2.; j++) n++;
+      if (n > nmax) { nmax = n; mode = v[i]; }
+    }
+  return mode;
+}
+
+static int
+cmp_scores(const void *sp1, const void *sp2)
+{
+  double sc1;
+  double sc2; 
+  sc1 = * (double *) sp1;
+  sc2 = * (double *) sp2;
+  if (sc1 <  sc2) return 1;
+  if (sc1 >  sc2) return -1;
+  return 0;
+}
+static void
+sort_scores(double *sc, int N)
+{
+  qsort((void *) sc, N, sizeof(double), cmp_scores);
+}
 
 static void
-save_fitted_histogram(FILE *hfp, double *sc, int N, double mu, double lambda)
+save_fitted_histogram(FILE *hfp, char *name, double *sc, int N, double mu, double lambda)
 {
   struct histogram_s *h;     
   int i;
 
+  fprintf(hfp, "HMM: %s\n", name);
   h = AllocHistogram(-200, 200, 100);
   for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);
   ExtremeValueSetHistogram(h, mu, lambda, h->lowscore, h->highscore, 2);
   
   PrintASCIIHistogram(hfp, h);
   FreeHistogram(h);
+  fprintf(hfp, "//\n");
 }
 
 
 static void
-save_predicted_histogram(FILE *hfp, double *sc, int N, int L, int Lcal, 
-			 double mu, double lambda, double kappa, double sigma)
+save_predicted_histogram(FILE *hfp, struct plan7_s *hmm, double *sc, int N, int L)
 {
   struct histogram_s *h;     
-  double pmu;
-  double L1, L2;
   int    i;
   
-  L1 = EdgeCorrection((double) L,    kappa, sigma);
-  L2 = EdgeCorrection((double) Lcal, kappa, sigma);
-  pmu = mu + log(L1/L2) / lambda;
-
-  h = AllocHistogram(-200, 200, 100);
-  for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);
-  ExtremeValueSetHistogram(h, pmu, lambda, h->lowscore, h->highscore, 0);
+  fprintf(hfp, "HMM: %s\n", hmm->name);
+  if (! (hmm->flags & PLAN7_STATS)) 
+    fprintf(hfp, "[No previous EVD parameters set in this model.]\n");
+  else
+    {
+      h = AllocHistogram(-200, 200, 100);
+      for (i = 0; i < N; i++) AddToHistogram(h, sc[i]);
+      ExtremeValueSetHistogram(h, hmm->mu, hmm->lambda, h->lowscore, h->highscore, 0);
   
-  PrintASCIIHistogram(hfp, h);
-  FreeHistogram(h);
+      PrintASCIIHistogram(hfp, h);
+      FreeHistogram(h);
+    }
+  fprintf(hfp, "//\n");
 }
 
+/* save_score_list()
+ * 
+ * Saves a file of sorted scores w/ four fields:
+ *  <#>  <sc>  <fitted E-val>  <predicted E-val>
+ *  
+ * where the <fitted E-val> uses mu, lambda that hmmcalibrate just fitted; 
+ * and the <predicted E-val> uses the previous statistics stored
+ * in the HMM.
+ */
+static void
+save_score_list(FILE *sfp, double *sc, int N, int L, 
+		struct plan7_s *hmm, double mu, double lambda)
+{
+  int i;
+  double Epredicted, Efitted;
 
+  fprintf(sfp, "HMM: %s\n", hmm->name);
+  for (i = 0; i < N; i++) 
+    {
+      Efitted    = ExtremeValueE(sc[i], mu, lambda, N);
+      Epredicted = PValue(hmm, sc[i]) * (double) N;
+      fprintf(sfp, "%-6d %12.2f %16.2f %16.2f\n", 
+	      i+1, sc[i], Efitted, Epredicted);
+    }
+  fprintf(sfp, "//\n");
+}
 
 /************************************************************
  * @LICENSE@
