@@ -294,7 +294,6 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx,
   
   /* T state (not stored) */
   final_score = XMX(L,_XMC) + lom->xsc[_XTC][_MOVE];
-  printf("Viterbi: %d\n", final_score);
   
   if (ret_tr != NULL) 
     {
@@ -424,7 +423,6 @@ Viterbi(unsigned char *dsq, int L, struct plan7_s *hmm, cust_dpmatrix_s *mx,
   
   /* T state (not stored) */
   final_score = XMX(L,_XMC) + lom->xsc[_XTC][_MOVE];
-  printf("Forward: %d\n", final_score);
   
   if (ret_mx != NULL) *ret_mx = mx;
   else                FreeDPMatrix(mx);
@@ -557,7 +555,6 @@ Backward(unsigned char *dsq, int L, struct plan7_s *hmm,
     }
   
   final_score = XMX(0,_XMN);
-  printf("Backward: %d\n", final_score);
   
   if (ret_mx != NULL) *ret_mx = mx;
   else                FreeDPMatrix(mx);
