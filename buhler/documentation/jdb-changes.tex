@@ -311,27 +311,16 @@ reimplemented using reshaped versions of the core HMM and matrix
 structures.  Our changes simplify the inner loops of the algorithms
 and tend to improve their generated assembly.  On architectures with
 sufficient registers and conditional branches (notably x86-64), a good
-compiler will generate no spills or branches in the inner loops.
-Our Viterbi implementation runs between 1.5x and 2x faster than the
-``fast'' implementation from HMMer 2.3.2, depending on the target
-architecture and compiler.
+compiler (e.g.\ gcc 3.4.4) will generate no spills or branches in the
+inner loops.
 
 Our implementation of the Forward algorithm uses a slightly more
-accurate version of the lookup table used to accelerate the
-``ilogsum'' computation.  The results obtained with our lookup table
-are closer to (usually within 1\% of) those observed for a
-double-precision floating-point implementation of the Forward
-algorithm, either in the linear or in the log domain.
-
-We note that, on modern CPUs such as the Opteron with high-performance
-floating point, an FP implementation of the Forward algorithm can be
-both faster and more accurate than the present integer computation.
-In particular, doing the computation in the linear rather than the log
-domain (i.e.\ with multiplications) proved to run at about the same
-speed as the the JDB integer implementation.  Inspection of the
-resulting assembly code suggests that one might further speed up
-this implementation by vectorizing pairs of floating-point multiply
-add and multiply operations.
+accurate version of the lookup table used by the ``ilogsum''
+computation.  The results obtained with our lookup table are closer to
+(usually within 1\% of) those observed when the algorithm is
+implemented using double-precision floating point. We have also
+accelerated the computation slightly by moving the check for table
+initialization out of the fast path.
 
 \section{Building Different Implementations}
 
@@ -341,7 +330,7 @@ building HMMer builds the ``fast'' implementation, i.e.\ the
 one using the generic C functions from fast\_algorithms.c
 and core\_algorithms.c.  To specify a different implementation,
 one may set the environment variable \texttt{CORE\_IMPL} to
-one of the following \emph{tag values}:
+one of the following \emph{tag} values:
 \begin{itemize}
 \item \texttt{FAST} -- the default
 
@@ -351,7 +340,10 @@ one of the following \emph{tag values}:
 
 \item \texttt{JDB} -- use the JDB implementation of the core algorithms
 
-\item \texttt{LOCAL} -- use an implementation in the files localstructs.c/localstructs.h/localfuncs.c.  (These file are only templates -- they must be filled in by the user.)
+\item \texttt{LOCAL} -- use an implementation in the files
+localstructs.h, localstructs.c, and localfuncs.c.  (These files are
+only templates -- they must be filled in by the user.)
+
 \end{itemize}
 
 The mechanism for choosing among implementations by tag is as
