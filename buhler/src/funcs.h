@@ -89,6 +89,7 @@ extern void FreeDPMatrix(cust_dpmatrix_s *mx);
  * implementation.  Ideally, they are in a file called something like
  * <implementation>funcs.c, e.g. "defaultfuncs.c".
  */
+extern int ViterbiSize(int L, int M);
 extern int ViterbiSpaceOK(int L, int M, cust_dpmatrix_s *mx);
 extern float DispatchViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
 			     cust_dpmatrix_s *mx, struct p7trace_s **ret_tr,
