@@ -168,10 +168,7 @@ static int ilogsum(int p1, int p2)
  *
  * These Viterbi and Forward implementations were found to produce
  * very good inner loop code on an AMD Opteron, and decent code
- * on a Pentium 4, with gcc 3.4.4.  One may expect speedups > 1.5x,
- * and possibly 2x, for Viterbi over the "fast" implementation from
- * HMMer 2.3.2.  There is also a small speedup for Forward.
- * 
+ * on a Pentium 4, with gcc 3.4.4.
  **********************************************************************/
 
 #undef MAX
