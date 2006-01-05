@@ -1,0 +1,375 @@
+\documentclass[letterpaper,10pt]{article}
+\usepackage{fullpage}
+\setlength\parskip{\medskipamount}
+\setlength\parindent{0pt}
+
+\newcommand{\func}[1]{\texttt{#1()}}
+\newcommand{\struct}[1]{\texttt{#1}}
+\newcommand{\impl}[1]{\small{\textsc{\textsf{#1}}}}
+
+\newcommand{\altv}{\impl{altivec}}
+\newcommand{\deft}{\impl{default}}
+
+\begin{document}
+
+\title{Documentation of HMMer Changes for Generic Implementations}
+\author{Christopher Swope and Jeremy Buhler}
+
+\maketitle
+
+This document describes the structure of new code added to HMMer to
+support custom implementations of its core algorithms, particularly
+the Viterbi algorithm.  The work described here was implemented by
+Christopher Swope in summer 2005, starting from an SVN snapshot of the
+HMMer development tree.
+
+The most recent version of these changes is based on the HMMer trunk
+as it existed on January 3rd, 2006.
+
+\section*{Generic Functions and Structures}
+
+The new hooks for generic implementation in HMMer include two
+structures, \struct{logodds\_s} and \struct{dpmatrix\_s}, and twelve
+functions.  Seven of these functions exist solely to manage
+the generic structures:
+\begin{itemize}
+  \item \func{AllocLogoddsShell}
+  \item \func{AllocLogoddsBody}
+  \item \func{FreeLogodds}
+  \item \func{FillCustomLogodds}
+  \item \func{CreateDPMatrix}
+  \item \func{ResizeDPMatrix}
+  \item \func{FreeDPMatrix}
+\end{itemize} 
+The other five functions contain custom implementations of the core
+algorithms:
+\begin{itemize}
+  \item \func{ViterbiSpaceOK}
+  \item \func{ViterbiSize}
+  \item \func{Viterbi}
+  \item \func{Forward}
+  \item \func{Backward}
+  \item \func{DispatchViterbi}
+\end{itemize}
+
+\subsection*{Structures}
+
+The \struct{logodds\_s} type holds a custom version of a motif
+model's log-odds representation.  It is initialized from the core
+\struct{plan7\_s} structure.  The custom structure can rearrange the
+fields and add additional ``hints'' to assist accelerated
+implementations of the core algorithms.
+
+The \struct{cust\_dpmatrix\_s} structure holds the values produced by
+the custom implementations of the dynamic programming
+algorithms. Again, its fields may be rearranged or augmented
+relative to the standard \struct{dpmatrix\_s} structure.
+
+
+\subsection*{Functions for Managing Custom Structures}
+
+\func{AllocLogoddsShell}, \func{AllocLogoddsBody}, and
+\func{FreeLogodds} perform memory management for the 
+\struct{logodds\_s} structure.
+\begin{itemize}
+\item \func{AllocLogoddsShell} allocates memory for the shell of the 
+\struct{logodds\_s} structure, analogously to the \func{AllocPlan7Shell}
+function.
+
+\item \func{AllocLogoddsBody} allocates memory for the contents of
+the \struct{logodds\_s} structure.
+
+\item \func{FreeLogodds} frees all memory (both shell and body) used by
+the \struct{logodds\_s} structure.
+\end{itemize}
+To actually populate the fields of the \struct{logodds\_s} structure,
+the code core calls \func{FillCustomLogodds}, passing in a
+\struct{plan7\_s} structure.
+
+\func{CreateDPMatrix}, \func{ResizeDPMatrix}, and \func{FreeDPMatrix}
+are used to manage memory for the \struct{cust\_dpmatrix\_s}
+structure.  They operate analogously to the corresponding functions in
+the core code.  Currently, \func{CreateDPMatrix} assumes that the
+custom code will implement the same matrix resizing behavior as the
+core code; hence, it takes \texttt{padN} and \texttt{padM} arguments.
+Ultimately, the resizing behavior should be made internal to the
+implementation, rather than exposing it to the core code.
+
+\subsection*{Functions to Reimplement Core Algorithms}
+
+All of the following functions operate analogously to their
+core equivalents.
+\begin{itemize}
+
+\item \func{ViterbiSize} returns the space (in megabytes) needed by
+the \struct{cust\_dpmatrix\_s} structure for specified dimensions.
+
+\item \func{ViterbiSpaceOK} computes the space needed by the
+\struct{cust\_dpmatrix\_s} structure and determines whether
+this space is within the core code's defined \texttt{RAMLIMIT}.
+
+\item \func{Backward}, \func{Forward}, and \func{Viterbi} implement
+the named algorithms.
+
+\end{itemize}
+
+The remaining core function, \func{DispatchViterbi}, is responsible
+for determining whether to call the custom \func{Viterbi} function or
+the core code's \func{P7SmallViterbi}, based on the problem size.  It
+may also choose to call different custom implemntations depending on,
+e.g., the problem size, or whether the caller needs the traceback from
+the Viterbi algorithm.
+
+Ultimately, it should be possible to de-export \func{Viterbi} from the
+custom interface; all calls to it would then pass through
+\func{DispatchViterbi}. For now, we have left \func{Viterbi} in the
+exported interface to support a few places in the core code where we
+did not want to change the call sites; see, e.g.,
+\texttt{hmmcalibrate.c} and \texttt{hmmalign.c}.
+
+Currently we require users to implement both \func{ViterbiSpaceOK} and
+\func{ViterbiSize}, as each is used by the core code in several
+places.  A better interface would be to move \func{ViterbiSpaceOK} to
+the core code while excising from it any knowledge of ``padding'' or
+other memory management schemes used by the custom implementations.
+To do this, one would need to add a matrix parameter to
+\func{ViterbiSize} and move the calculations associated with padding
+into it.
+
+\section*{Incorporation of Existing Code into New Architecture}
+
+We approached the existing HMMer code as containing 2.5 different
+implementations of the core algorithms: an \altv\ implementation, a
+slow \deft\ implementation, and a fast \deft\ implementation.  The
+\deft\ implementations present some unique challenges, since they
+aren't really customized implementations.  In fact, they differ only
+in which \func{Viterbi} implementation they use.  Since it is tied so
+closely to the \deft\ implementations, the \altv\ implementation
+presents some of these challenges as well.  Unlike the \deft\
+implementations, though, the \altv\ implementation uses customized
+data structures.
+
+The existing code was incorporated into the new architecture with only
+minor changes. Table \ref{Table:CorresFuncs} summarizes how old
+functions correspond to functions under the new architecture.  We next
+describe in more detail how the the \deft\ and \altv\ implementations
+were constructed from the existing core code.
+
+\begin{table}[hbtp]
+
+\centering
+\begin{tabular}{llll}
+\bf{New Name} & 
+\bf{Old Name} &
+\bf{New Location} & 
+\bf{Old Location} \\
+
+\func{CreateDPMatrix} & 
+\func{CreatePlan7Matrix} & 
+defaultstructs.c & 
+core\_algorithms.c - \deft\\
+
+&
+&
+altivecstructs.c &
+fast\_algorithms.c - \altv\\
+
+\func{ResizeDPMatrix} &
+\func{ResizePlan7Matrix} &
+defaultstructs.c &
+core\_algorithms.c - \deft\\
+
+&
+&
+altivecstructs.c &
+fast\_algorithms.c - \altv\\
+
+\func{FreePlan7Matrix} &
+\func{FreeDPMatrix} &
+defaultstructs.c &
+core\_algorithms.c - \deft\\
+
+&
+&
+altivecstructs.c &
+fast\_algorithms.c - \altv\\
+
+\func{ViterbiSpaceOK} &
+\func{P7ViterbiSpaceOK} &
+default\_altivec\_sharedfuncs.c &
+core\_algorithms.c\\
+
+\func{Backward} &
+\func{P7Backward} &
+default\_altivec\_sharedfuncs.c &
+postprob.c\\
+
+\func{Forward} &
+\func{P7Forward} &
+default\_altivec\_sharedfuncs.c &
+core\_algorithms.c\\
+
+\func{Viterbi} &
+\func{P7Viterbi} &
+slowfuncs.c &
+core\_algorithms.c - \deft\ (Slow) \\
+
+&
+&
+fastfuncs.c &
+fast\_algorithms.c - \deft\ (Fast) \\
+
+&
+&
+altivecfuncs.c &
+fast\_algorithms.c - \altv \\
+
+\func{ViterbiTrace} &
+\func{P7ViterbiTrace} &
+default\_altivec\_sharedfuncs.c &
+core\_algorithms.c \\
+
+\end{tabular}
+\caption{Summary of how new functions correspond to old functions under the new
+  architecture.}
+\label{Table:CorresFuncs}
+\end{table}
+
+
+
+\subsection*{Altivec Implementation}
+
+The \altv\ implementation uses the standard core data structures but
+allocates these structures with stricter alignment in memory.  The
+custom model and matrix structure allocators allocate appropriately
+aligned versions of these structures.  The extra pointers that
+previously existed in the core structures to assist with this
+allocation have been moved into the \altv\-specific structures.
+
+the \func{FillCustomLogodds} function copies the model data structure
+into the more strictly aligned memory allocated by the custom code.
+appropriate boundaries. Each dimension of an array is copied as a
+single block.  The boundaries for the blocks were determined by
+looking at amount of memory allocated.
+
+The remaining functions were lifted from the \altv\ code in
+\texttt{fast\_algorithms.c}, and from the core functions where no
+\altv\-specific implementations existed.  We have placed the functions
+shared by the \deft\ and \altv\ implementations --
+\func{ViterbiSpaceOK}, \func{ViterbiSize}, \func{Backward}, and
+\func{Forward}, as well as the unexported \func{P7ViterbiTrace} -- in
+a common file, \texttt{default\_altivec\_sharedfuncs.c}.  The only
+\altv\-specific functions are \func{Viterbi} itself and
+\func{DispatchViterbi}, which determines whether to use the
+trace-generating or non-trace-generating version of the Viterbi
+algorithm.
+
+\subsection*{Default Implementations}
+
+\subsubsection*{Structures}
+
+The \deft\ implementations are somewhat unique in their treatment of
+the customized data structures, because they don't actually use them.
+We simply leave the custom \struct{logodds\_s} structure empty in the
+default implementation.  Because the \struct{cust\_dpmatrix\_s}
+structure actually replaces \struct{dpmatrix\_s} in several places, it
+cannot be left empty; however, we typedef it to be the same as
+\struct{dpmatrix\_s} to avoid the headache of maintaining the same
+definition in two places.
+
+\subsubsection*{Functions for Managing Structures}
+
+Since the \deft\ implementation doesn't use the \struct{logodds\_s}
+structure, the functions \func{AllocLogoddsShell}, \linebreak
+\func{AllocLogoddsBody}, \func{FreeLogodds}, and
+\func{FillCustomLogodds} aren't needed.  Thus, we just leave their
+definitions empty, except for \func{AllocLogoddsShell}.
+\func{AllocLogoddsShell} contains one line that ensures that the
+pointer to the \struct{logodds\_s} structure in \struct{plan7\_s} is
+NULL, so that we don't try to free the structure later.
+
+Because the \deft\ \struct{cust\_dpmatrix\_s} structure is identical
+to the \struct{dpmatrix\_s} structure, we can use the core functions
+to manage these structures.  Hence, the functions
+\func{CreateDPMatrix}, \func{ResizeDPMatrix}, and \func{FreeDPMatrix}
+respectively call \func{CreatePlan7Matrix}, \func{ResizePlan7Matrix},
+and \func{FreePlan7Matrix}.
+
+\subsubsection*{Algorithms}
+
+The fast \func{Viterbi} algorithm was transferred from
+\func{P7Viterbi} in fast\_algorithms.c.  The slow \func{Viterbi}
+algorithm, along with the other core algorithms, was transferred from
+\func{P7Viterbi} in core\_algorithms.c.  The \func{DispatchViterbi}
+code was newly written.
+ 
+\subsection*{JDB Implementation}
+
+We have included in this tree a new implementation of the core
+algorithms.  The Viterbi, Forward, and Backward algorithms were
+reimplemented using reshaped versions of the core HMM and matrix
+structures.  Our changes simplify the inner loops of the algorithms
+and tend to improve their generated assembly.  On architectures with
+sufficient registers and conditional branches (notably x86-64), a good
+compiler will generate no spills or branches in the inner loops.
+Our Viterbi implementation runs between 1.5x and 2x faster than the
+``fast'' implementation from HMMer 2.3.2, depending on the target
+architecture and compiler.
+
+Our implementation of the Forward algorithm uses a slightly more
+accurate version of the lookup table used to accelerate the
+``ilogsum'' computation.  The results obtained with our lookup table
+are closer to (usually within 1\% of) those observed for a
+double-precision floating-point implementation of the Forward
+algorithm, either in the linear or in the log domain.
+
+We note that, on modern CPUs such as the Opteron with high-performance
+floating point, an FP implementation of the Forward algorithm can be
+both faster and more accurate than the present integer computation.
+In particular, doing the computation in the linear rather than the log
+domain (i.e.\ with multiplications) proved to run at about the same
+speed as the the JDB integer implementation.  Inspection of the
+resulting assembly code suggests that one might further speed up
+this implementation by vectorizing pairs of floating-point multiply
+add and multiply operations.
+
+\section{Building Different Implementations}
+
+The HMMer makefiles have been augmented to allow choosing among
+different core implementations at compile time.  By default,
+building HMMer builds the ``fast'' implementation, i.e.\ the
+one using the generic C functions from fast\_algorithms.c
+and core\_algorithms.c.  To specify a different implementation,
+one may set the environment variable \texttt{CORE\_IMPL} to
+one of the following \emph{tag values}:
+\begin{itemize}
+\item \texttt{FAST} -- the default
+
+\item \texttt{SLOW} -- use only the algorithms originally in core\_algorithms.c
+
+\item \texttt{ALTIVEC} -- use Altivec-accelerated Viterbi
+
+\item \texttt{JDB} -- use the JDB implementation of the core algorithms
+
+\item \texttt{LOCAL} -- use an implementation in the files localstructs.c/localstructs.h/localfuncs.c.  (These file are only templates -- they must be filled in by the user.)
+\end{itemize}
+
+The mechanism for choosing among implementations by tag is as
+follows.  The source files associated with each tag's implementation
+are specified in src/Makefile.in, where they are conditionally
+included in the build if the tag is specified.  Specifying a tag
+\texttt{FOO} also causes the compile-time define \texttt{-DIMPL\_FOO}
+to be set in the \texttt{src} and \texttt{testsuite} makefiles.  This
+define is used by customstructs.h to select which tag's implementation
+of the core structures (\struct{logodds\_s} and
+\struct{cust\_dpmatrix\_s}) is used for the build.  HMMER's top-level
+makefile supplies the default tag of \texttt{FAST} if the environment
+variable is not set.
+
+To add a new localized implementation to the build, one need only edit
+\texttt{src/Makefile.in} and \texttt{src/customstructs.h}.
+Alternatively, one can simply fill in the implementation in the files
+associated with the existing \texttt{LOCAL} tag.
+
+
+\end{document}
