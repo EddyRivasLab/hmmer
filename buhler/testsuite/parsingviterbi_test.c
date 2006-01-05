@@ -50,7 +50,7 @@ main(int argc, char **argv)
   SQINFO    sqinfo;	        /* optional info for seq                   */
   unsigned char   *dsq;		/* digitized target sequence               */
   struct plan7_s  *hmm;         /* HMM to search with                      */ 
-  struct dpmatrix_s *mx;        /* growable, reusable DP matrix            */
+  cust_dpmatrix_s *mx;          /* growable, reusable DP matrix            */
   struct p7trace_s  *tr1;	/* traceback from P7Viterbi()              */
   struct p7trace_s  *tr2;	/* traceback from P7ParsingViterbi()       */
   int       nseq;
@@ -114,7 +114,7 @@ main(int argc, char **argv)
    ***********************************************/
 
   nseq = 0;
-  mx = CreatePlan7Matrix(1, hmm->M, 25, 0);
+  mx = CreateDPMatrix(1, hmm->M, 25, 0);
   while (ReadSeq(sqfp, sqfp->format, &seq, &sqinfo)) 
     {
       nseq++;
@@ -164,7 +164,7 @@ main(int argc, char **argv)
       free(dsq);
     }
 
-  FreePlan7Matrix(mx);
+  FreeDPMatrix(mx);
   FreePlan7(hmm);
   HMMFileClose(hmmfp);
   SeqfileClose(sqfp);
