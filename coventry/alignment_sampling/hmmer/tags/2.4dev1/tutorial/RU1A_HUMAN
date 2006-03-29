@@ -1,0 +1,146 @@
+ID   RU1A_HUMAN     STANDARD;      PRT;   282 AA.
+AC   P09012;
+DT   01-NOV-1988 (Rel. 09, Created)
+DT   01-NOV-1988 (Rel. 09, Last sequence update)
+DT   15-JUL-1998 (Rel. 36, Last annotation update)
+DE   U1 SMALL NUCLEAR RIBONUCLEOPROTEIN A (U1 SNRNP A PROTEIN).
+GN   SNRPA.
+OS   Homo sapiens (Human).
+OC   Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Mammalia;
+OC   Eutheria; Primates; Catarrhini; Hominidae; Homo.
+RN   [1]
+RP   SEQUENCE FROM N.A.
+RC   TISSUE=LIVER;
+RX   MEDLINE; 91340152.
+RA   NELISSEN R.L.H., SILLEKENS P.T.G., BEIJER R.P.,
+RA   GEURTS VAN KESSEL A.H.M., VAN VENROOIJ W.J.;
+RT   "Structure, chromosomal localization and evolutionary conservation of
+RT   the gene encoding human U1 snRNP-specific A protein.";
+RL   Gene 102:189-196(1991).
+RN   [2]
+RP   SEQUENCE FROM N.A.
+RX   MEDLINE; 88111575.
+RA   SILLEKENS P.T.G., HABETS W.J., BEIJER R.P., VAN VENROOIJ W.J.;
+RT   "cDNA cloning of the human U1 snRNA-associated A protein: extensive
+RT   homology between U1 and U2 snRNP-specific proteins.";
+RL   EMBO J. 6:3841-3848(1987).
+RN   [3]
+RP   X-RAY CRYSTALLOGRAPHY (2.8 ANGSTROMS) OF 1-95.
+RX   MEDLINE; 91061907.
+RA   NAGAI K., OUBRIDGE C., JESSEN T.-H., LI J., EVANS P.R.;
+RT   "Crystal structure of the RNA-binding domain of the U1 small nuclear
+RT   ribonucleoprotein A.";
+RL   Nature 348:515-520(1990).
+RN   [4]
+RP   X-RAY CRYSTALLOGRAPHY (1.92 ANGSTROMS).
+RX   MEDLINE; 95075454.
+RA   OUBRIDGE C., ITO N., EVANS P.R., TEO C.-H., NAGAI K.;
+RT   "Crystal structure at 1.92-A resolution of the RNA-binding domain of
+RT   the U1A spliceosomal protein complexed with an RNA hairpin.";
+RL   Nature 372:432-438(1994).
+RN   [5]
+RP   STRUCTURE BY NMR OF 11-94.
+RX   MEDLINE; 91172834.
+RA   HOFFMAN D.W., QUERY C.C., GOLDEN B.L., WHITE S.W., KEENE J.D.;
+RT   "RNA-binding domain of the A protein component of the U1 small
+RT   nuclear ribonucleoprotein analyzed by NMR spectroscopy is
+RT   structurally similar to ribosomal proteins.";
+RL   Proc. Natl. Acad. Sci. U.S.A. 88:2495-2499(1991).
+RN   [6]
+RP   STRUCTURE BY NMR OF 1-102.
+RX   MEDLINE; 94349935.
+RA   HOWE P.W.A., NAGAI K., NEUHAUS D., VARANI G.;
+RT   "NMR studies of U1 snRNA recognition by the N-terminal RNP domain of
+RT   the human U1A protein.";
+RL   EMBO J. 13:3873-3881(1994).
+RN   [7]
+RP   STRUCTURE BY NMR OF 2-102.
+RX   MEDLINE; 96186818.
+RA   ALLAIN F.H.-T., GUBSER C.C., HOWE P.W.A., NAGAI K., NEUHAUS D.,
+RA   VARANI G.;
+RT   "Specificity of ribonucleoprotein interaction determined by RNA
+RT   folding during complex formulation.";
+RL   Nature 380:646-650(1996).
+RN   [8]
+RP   STRUCTURE BY NMR OF 1-117.
+RX   MEDLINE; 96180024.
+RA   AVIS J.M., ALLAIN F.H.-T., HOWE P.W.A., VARANI G., NAGAI K.,
+RA   NEUHAUS D.;
+RT   "Solution structure of the N-terminal RNP domain of U1A protein: the
+RT   role of C-terminal residues in structure stability and RNA binding.";
+RL   J. Mol. Biol. 257:398-411(1996).
+RN   [9]
+RP   STRUCTURE BY NMR OF 1-102.
+RX   MEDLINE; 97459961.
+RA   ALLAIN F.H.-T., HOWE P.W., NEUHAUS D., VARANI G.;
+RT   "Structural basis of the RNA-binding specificity of human U1A
+RT   protein.";
+RL   EMBO J. 16:5764-5772(1997).
+RN   [10]
+RP   STRUCTURE BY NMR OF 195-282.
+RX   MEDLINE; 97410326.
+RA   LU J., HALL K.B.;
+RT   "Tertiary structure of RBD2 and backbone dynamics of RBD1 and RBD2 of
+RT   the human U1A protein determined by NMR spectroscopy.";
+RL   Biochemistry 36:10393-10405(1997).
+RN   [11]
+RP   MUTAGENESIS, AND DETAILED STUDIES OF RNA-BINDING.
+RX   MEDLINE; 92007796.
+RA   JESSEN T.-H., OUBRIDGE C., TEO C.H., PRITCHARD C., NAGAI K.;
+RT   "Identification of molecular contacts between the U1 A small nuclear
+RT   ribonucleoprotein and U1 RNA.";
+RL   EMBO J. 10:3447-3456(1991).
+CC   -!- FUNCTION: BINDS STEM LOOP II OF U1 SNRNA. IT IS THE FIRST SN-RNP
+CC       TO INTERACT WITH PRE-MRNA. THIS INTERACTION IS REQUIRED FOR THE
+CC       SUBSEQUENT BINDING OF U2 SN-RNP AND THE U4/U6/U5 TRI-SN-RNP.
+CC   -!- SUBUNIT: BELONGS TO THE SPLICEOSOME WHERE IT IS ASSOCIATED WITH
+CC       SN-RNP U1.
+CC   -!- SUBCELLULAR LOCATION: NUCLEAR.
+CC   -!- SIMILARITY: BELONGS TO THE U1 A/B" FAMILY.
+CC   -!- SIMILARITY: CONTAINS 2 RNA RECOGNITION MOTIFS (RNP).
+CC   --------------------------------------------------------------------------
+CC   This SWISS-PROT entry is copyright. It is produced through a collaboration
+CC   between  the Swiss Institute of Bioinformatics  and the  EMBL outstation -
+CC   the European Bioinformatics Institute.  There are no  restrictions on  its
+CC   use  by  non-profit  institutions as long  as its content  is  in  no  way
+CC   modified and this statement is not removed.  Usage  by  and for commercial
+CC   entities requires a license agreement (See http://www.isb-sib.ch/announce/
+CC   or send an email to license@isb-sib.ch).
+CC   --------------------------------------------------------------------------
+DR   EMBL; M60784; AAA61245.1; -.
+DR   EMBL; M60779; AAA61245.1; JOINED.
+DR   EMBL; M60780; AAA61245.1; JOINED.
+DR   EMBL; M60781; AAA61245.1; JOINED.
+DR   EMBL; M60782; AAA61245.1; JOINED.
+DR   EMBL; M60783; AAA61245.1; JOINED.
+DR   EMBL; X06347; CAA29653.1; -.
+DR   PIR; JQ1528; JQ1528.
+DR   PDB; 1NRC; 31-JAN-94.
+DR   PDB; 1FHT; 11-JUL-96.
+DR   PDB; 1AUD; 25-FEB-98.
+DR   PDB; 1URN; 08-MAR-96.
+DR   PDB; 2U1A; 26-SEP-97.
+DR   PDB; 3UTR; 03-APR-96.
+DR   MIM; 182285; -.
+DR   PFAM; PF00076; rrm; 2.
+DR   PROSITE; PS00030; RNP_1; 1.
+KW   Nuclear protein; RNA-binding; Ribonucleoprotein; Repeat;
+KW   Spliceosome; 3D-structure.
+FT   DOMAIN       12     17       RNA-BINDING (RNP2) (BY SIMILARITY).
+FT   DOMAIN       52     59       RNA-BINDING (RNP1) (BY SIMILARITY).
+FT   DOMAIN      210    215       RNA-BINDING (RNP2) (BY SIMILARITY).
+FT   DOMAIN      244    251       RNA-BINDING (RNP1) (BY SIMILARITY).
+FT   REPEAT        1     89
+FT   REPEAT      199    282
+FT   MUTAGEN      11     11       T->V: ABOLISHES RNA-BINDING.
+FT   MUTAGEN      13     13       Y->F: SUBSTANTIALLY REDUCES RNA-BINDING.
+FT   MUTAGEN      15     15       N->V: ABOLISHES RNA-BINDING.
+FT   MUTAGEN      16     16       N->V: SUBSTANTIALLY REDUCES RNA-BINDING.
+FT   MUTAGEN      52     52       R->Q: ABOLISHES RNA-BINDING.
+SQ   SEQUENCE   282 AA;  31279 MW;  22427816 CRC32;
+     MAVPETRPNH TIYINNLNEK IKKDELKKSL YAIFSQFGQI LDILVSRSLK MRGQAFVIFK
+     EVSSATNALR SMQGFPFYDK PMRIQYAKTD SDIIAKMKGT FVERDRKREK RKPKSQETPA
+     TKKAVQGGGA TPVVGAVQGP VPGMPPMTQA PRIMHHMPGQ PPYMPPPGMI PPPGLAPGQI
+     PPGAMPPQQL MPGQMPPAQP LSENPPNHIL FLTNLPEETN ELMLSMLFNQ FPGFKEVRLV
+     PGRHDIAFVE FDNEVQAGAA RDALQGFKIT QNNAMKISFA KK
+//

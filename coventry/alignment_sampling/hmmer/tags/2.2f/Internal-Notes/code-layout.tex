@@ -1,0 +1,92 @@
+\section{Notes on the layout of HMMER's source tree}
+
+\subsection{History}
+
+\begin{enumerate}
+\item The code was first moved under CVS control in April 2000.
+\end{enumerate}
+
+\subsection{Module inclusion}
+
+HMMER may rely on library code. An example is my SQUID library, which
+provides sequence i/o and other functions. Future modules may be
+provided by third parties; a possible example is the ``postprob''
+package from Ian Holmes. Considerations that I took into account in
+deciding how I include modules include:
+
+\begin{description}
+\item[Adhering to the GPL] Because modules may need to be removed from
+certain non-GPL distributions because of license issues, any module's
+code should be organized in an independent, easily removed
+subdirectory. Makefiles should easily deal with the absence of
+such encumbered modules.
+
+\item[Ease of updating modules] A second reason in favor of
+independent subdirectories: a module may be maintained by a third
+party, rather than our CVS tree, and it may be preferable to update
+such modules by rare complete replacements of their codebase, rather
+than frequent CVS revs.
+
+\item[Ease of configuration] A module must be compiled as part of a
+single \texttt{./configure; make} command from the top level
+directory.  Therefore each module has its own \texttt{Makefile.in}
+(possibly created by me in addition to a third-party module).  This
+\textt{Makefile.in} gets configuration variables in a standardized way
+(since there's a single top-level configure script).
+
+\item[No symbolic links during a build] Some systems allegedly don't
+support symbolic linking. We therefore choose to put module object
+files or .a files in a common directory -- for now, the \texttt{lib}
+subdirectory. This is not a good strategy for supporting
+multi-architecture 
+
+\item[CVS tracking vs. proper attribution in version stamps] All
+executables call \prog{Banner()} from \prog{squidcore.c} to print a
+standardized header, including package name, version, release date,
+copyright, and license info. Should a program from a module get
+stamped with package-wide (e.g. HMMER) info, or with module-specific
+(i.e. SQUID) information? Since I might release HMMER with
+inter-release SQUID files, CVS tracking is my principal concern: my
+modules get stamped as if they're all part of HMMER. With third-party
+modules -- where presumably I'm using a stable release of that module
+where someone else worries about rev control -- my principal concern
+is proper attribution and retention of the owner's copyright and
+license. In that (as yet hypothetical) case, module-specific programs
+would retain module-specific licenses, copyright, etc.
+
+\end{description}
+
+
+\subsection{The configure script}
+
+
+\subsection{The Makefile.in}
+
+Targets expected in the module's \prog{Makefile.in}:
+
+\begin{wideitem}
+\item{\emprog{make all}}
+
+Builds the object files and executables that the module provides.  If
+this is my module, the file \prog{version.h} must first be created by
+the top-level \prog{Makefile}, so that executables carry the
+license/copyright banner of the master (HMMER) package. (If this is a
+third party module, no versioning/copyright/license info is inherited
+from the master package.)
+
+\item{\emprog{make module}}
+Builds a \prog{libxxx.a} module. Makes sure the .h files are 
+ready, if any modifications need to be made. 
+
+\item{\emprog{make install-module}}
+Copies the \prog{.h} files to the build arena (currently 
+\prog{\$top_srcdir/lib/}). Moves the \prog{libxxx.a} file
+to the build arena.
+
+\item{\emprog{make clean}}
+Removes everything (e.g. \prog{.o} files) except configuration files
+that were generated (e.g. the \prog{Makefile}).
+
+\item{\emprog{make distclean}}
+Removes everything that wasn't in the original source distribution.
+\end{wideitem}

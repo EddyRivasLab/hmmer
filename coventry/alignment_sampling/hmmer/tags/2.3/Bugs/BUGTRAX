@@ -1,0 +1,235 @@
+ID              1
+STATUS          closed
+DESCRIPTION     BPA1_HUMAN crashes Pfam server
+NOTED_DATE      1/16/98
+NOTED_XREF      
+REPORTED_BY     David Kerk
+REPRODUCE_WITH  
+REPRODUCE_ON	ANY
+CLOSED_DATE     1/16/98
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              2
+STATUS          closed
+DESCRIPTION     null2 consistency problem between per-seq and per-domain
+NOTED_DATE      1/7/99
+NOTED_XREF      notebook STL1 p.117 
+REPORTED_BY     David Kerk
+REPRODUCE_WITH  bug2.pl
+REPRODUCE_ON	ANY
+CLOSED_DATE     SRE, Tue Dec 19 17:45:46 2000
+CLOSED_XREF     STL3 notebook, p.127
+CLOSED_ACTION   created postprocess_hit() in hmmpfam.c
+//
+ID              3
+STATUS          closed
+DESCRIPTION     hmmbuild segfaults on alignments labeled with #=ID
+NOTED_DATE      1/15/99
+NOTED_XREF      
+REPORTED_BY     SRE
+REPRODUCE_WITH  
+REPRODUCE_ON	Solaris
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              4
+STATUS          closed
+DESCRIPTION     sreformat core dumps when reformatting single seq to SELEX
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     sre
+REPRODUCE_WITH  
+REPRODUCE_ON    any
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              5
+STATUS          closed
+DESCRIPTION     hmmbuild core dumps when building model from single 
+	        seqs FASTA file
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     agb
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              6
+STATUS          closed
+DESCRIPTION     getseq clashes with GCG program of same name
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     sre
+REPRODUCE_WITH  
+REPRODUCE_ON    n/a
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   renamed getseq to sfetch
+//
+ID              7
+STATUS          closed
+DESCRIPTION     Digital 4.0d binaries do not run on 4.0b; 
+                pthread_setconcurrency() missing
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     Bill Pearson
+REPRODUCE_WITH  
+REPRODUCE_ON    Digital UNIX
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              8
+STATUS          closed
+DESCRIPTION     hmmpfam segfaults on GCG-reformatted Swissprot file 
+NOTED_DATE      1/19/99
+NOTED_XREF      
+REPORTED_BY     James Holzwarth
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              9
+STATUS          OPEN
+DESCRIPTION     C->T transition doesn't seem to be parsed from save files
+NOTED_DATE      6/29/99
+NOTED_XREF      
+REPORTED_BY     Bob Farrington
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              10
+STATUS          closed
+DESCRIPTION     Floating point exception in ExtremeValueP() on Digital 4.0b: 
+                range error. 
+NOTED_DATE      7/2/99
+NOTED_XREF      
+REPORTED_BY     ju@harvard
+REPRODUCE_WITH  
+REPRODUCE_ON    Digital UNIX 4.0b
+CLOSED_DATE     9/17/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              11
+STATUS          OPEN
+DESCRIPTION     hmmbuild, illegal B->E in traceback
+NOTED_DATE      11/15/99
+NOTED_XREF      
+REPORTED_BY     marcel@cs.berkeley.edu
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              12
+STATUS          closed
+DESCRIPTION     --domE, --domT don't work correctly in hmmpfam; E-value
+                is assumed to be monotonic w/ score.
+NOTED_DATE      11/29/00
+NOTED_XREF      STL3 p.127
+REPORTED_BY     vanschlun@gcg.com
+REPRODUCE_WITH  bug12.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Tue Dec 19 17:47:01 2000
+CLOSED_XREF     STL3 p.127
+CLOSED_ACTION   removed the break statements when looping over domain list.
+//
+ID              13
+STATUS          closed
+DESCRIPTION     hmmconvert happily converts a bogus HMM database w/ 
+                both DNA and protein
+NOTED_DATE      12/24/00
+NOTED_XREF      STL3 p.133
+REPORTED_BY     vanschlun@gcg.com, email 12/14/00
+REPRODUCE_WITH  bug13.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Sun Dec 24 11:58:28 2000
+CLOSED_XREF     STL3 p.133
+CLOSED_ACTION   hmmio.c now checks for changes in Alphabet_type while reading HMMs.
+//
+ID              14
+STATUS          closed
+DESCRIPTION     hmmconvert doesn't complain about appending binary to 
+	        ASCII HMMs, or vice versa
+NOTED_DATE      12/24/00
+NOTED_XREF      STL3 p.133
+REPORTED_BY     vanschlun@gcg.com, email 12/14/00
+REPRODUCE_WITH  bug13.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Sun Dec 24 15:33:11 2000
+CLOSED_XREF     STL3 p. 133
+CLOSED_ACTION   hmmconvert.c now tests for this case
+//
+ID              15
+STATUS          untested
+DESCRIPTION     hmmpfam slave process leak when nhmm < nslaves
+NOTED_DATE      10/25/01
+NOTED_XREF      STL5 p. 66
+REPORTED_BY     John Blanchard (johnb@incyte.com), email 10/17/01
+REPRODUCE_WITH  
+REPRODUCE_ON    any PVM
+CLOSED_DATE     
+CLOSED_XREF     STL5 p.66
+CLOSED_ACTION   hmmpfam.c modified: kill slaves off in a separate loop
+//
+ID              16
+STATUS          untested
+DESCRIPTION     PVMConfirmSlaves() assumes nslaves=nhosts 
+NOTED_DATE      10/25/01
+NOTED_XREF      STL5 p. 66
+REPORTED_BY     John Blanchard (johnb@incyte.com), email 10/17/01
+REPRODUCE_WITH  
+REPRODUCE_ON    any PVM; only when DEBUGLEVEL>0
+CLOSED_DATE     
+CLOSED_XREF     STL5 p.66
+CLOSED_ACTION   pvm.c:PVMConfirmSlaves()... replace pvm_config() w/ pvm_tasks().
+//
+ID              17
+STATUS          closed
+DESCRIPTION     threaded, unthreaded hmmsearch don't give same histogram
+NOTED_DATE      2/27/02
+NOTED_XREF      STL6 p.1
+REPORTED_BY     Yang Yang
+REPRODUCE_WITH  bug17.sh
+REPRODUCE_ON    any
+CLOSED_DATE     2/27/02
+CLOSED_XREF     STL6 p.1
+CLOSED_ACTION   modifications to hmmsearch.c; see notes.
+//
+ID              18
+STATUS          closed
+DESCRIPTION     HMMs differ when built from mul vs. Stockholm format
+NOTED_DATE      3/16/02
+NOTED_XREF      STL6 p.12
+REPORTED_BY     Sam Griffiths (sjg@sanger.ac.uk)
+REPRODUCE_WITH  bug18.sh - was deleted from CVS.
+REPRODUCE_ON    Alpha (waterbug) 
+CLOSED_DATE     3/29/02
+CLOSED_XREF     STL6 p.12
+CLOSED_ACTION   Not a bug. 
+//
+ID              h19
+TITLE           floating point exception on Alpha/Linux
+STATUS          CLOSED
+XREF            none
+REPORTED_BY     "Yungok S. Ihm" <youngok@iastate.edu>
+CLOSED_DATE     SRE, Fri May  9 15:31:23 2003
+DESCRIPTION     
+ hmmpfam crashes on extremely low scoring hits (<-1000),
+ on Alpha/Linux. Appears in both 2.2g and 2.3dev. 
+ mathsupport.c:PValue() doesn't check for underflow before
+ calling sreEXP2() on the score; the Alpha crashes on this.
+ No test case built for bugs.sqc.
+//

@@ -1,0 +1,409 @@
+.TH "hmmbuild" 1 "January 1998" "HMMER 2.0" "HMMER Manual"
+
+.SH NAME
+.TP 
+hmmbuild - build a profile HMM from an alignment
+
+.SH SYNOPSIS
+.B hmmbuild
+.I [options]
+.I hmmfile
+.I alignfile
+
+.SH DESCRIPTION
+
+.B hmmbuild 
+reads a multiple sequence alignment file 
+.I alignfile
+, builds a new profile HMM, and saves the HMM in 
+.I hmmfile.
+
+.PP
+.I alignfile
+may be in ClustalW, GCG MSF, or SELEX alignment format.
+
+.PP
+By default, the model is configured to find one or more
+nonoverlapping alignments to the complete model. This
+is analogous to the behavior of the 
+.B hmmls 
+program of HMMER 1. To configure the model for a single
+global alignment, use the 
+.B -g
+option;
+to configure the model for multiple local alignments
+a la the old program
+.B hmmfs,
+use the
+.B -f 
+option;
+and to configure the model for a single local alignment
+(a la standard Smith/Waterman, or the old
+.B hmmsw
+program), use the
+.B -s 
+option.
+
+.SH OPTIONS
+
+.TP 
+.B -f
+Configure the model for finding multiple domains per sequence,
+where each domain can be a local (fragmentary) alignment. This
+is analogous to the old
+.B hmmfs
+program of HMMER 1.
+
+.TP
+.B -g
+Configure the model for finding a single global alignment to
+a target sequence, analogous to the standard Needleman/Wunsch
+algorithm or the old
+.B hmms
+program of HMMER 1.
+
+.TP
+.B -h
+Print brief help; includes version number and summary of
+all options, including expert options.
+
+.TP
+.BI -n " <s>" 
+Name this HMM
+.I <s>. 
+.I <s>
+can be any string of non-whitespace characters (e.g. one "word").
+There is no length limit (at least not one imposed by HMMER;
+your shell will complain about command line lengths first).
+
+.TP
+.BI -o " <file>"
+Re-save the starting alignment to 
+.I <file>,
+in SELEX format.
+The columns which were assigned to match states will be
+marked with x's in an #=RF annotation line. 
+If either the
+.B --hand 
+or 
+.B --fast
+construction options were chosen, the alignment may have
+been slightly altered to be compatible with Plan 7 transitions,
+so saving the final alignment and comparing to the 
+starting alignment can let you view these alterations.
+See the User's Guide for more information on this arcane
+side effect.
+
+.TP
+.B -s 
+Configure the model for finding a single local alignment per
+target sequence. This is analogous to the standard Smith/Waterman
+algorithm or the 
+.B hmmsw
+program of HMMER 1. 
+
+.TP
+.B -A
+Append this model to an existing
+.I hmmfile
+rather than creating 
+.I hmmfile.
+Useful for building HMM libraries (like Pfam).
+
+.TP 
+.B -F
+Force overwriting of an existing 
+.I hmmfile.
+Otherwise HMMER will refuse to clobber your existing HMM files,
+for safety's sake.
+
+.SH EXPERT OPTIONS
+
+.TP
+.B --amino
+Force the sequence alignment to be interpreted as amino acid
+sequences. Normally HMMER autodetects whether the alignment is
+protein or DNA, but sometimes alignments are so small that
+autodetection is ambiguous. See
+.B --nucleic.
+
+.TP
+.BI --archpri " <x>"
+Set the "architecture prior" used by MAP architecture construction to 
+.I <x>,
+where 
+.I <x>
+is a probability between 0 and 1. This parameter governs a geometric
+prior distribution over model lengths. As
+.I <x> 
+increases, longer models are favored a priori.
+As 
+.I <x>
+decreases, it takes more residue conservation in a column to
+make a column a "consensus" match column in the model architecture.
+The 0.85 default has been chosen empirically as a reasonable setting.
+
+.TP
+.B --binary
+Write the HMM to
+.I hmmfile
+in HMMER binary format instead of readable ASCII text.
+
+.TP
+.BI --cfile " <file>"
+Save the observed emission and transition counts to 
+.I <file> 
+after the architecture has been determined (e.g. after residues/gaps
+have been assigned to match, delete, and insert states).
+This option is used in HMMER development for generating data files
+useful for training new Dirichlet priors. The format of
+count files is documented in the User's Guide.
+
+.TP
+.B --fast
+Quickly and heuristically determine the architecture of the model by
+assigning all columns will more than a certain fraction of gap
+characters to insert states. By default this fraction is 0.5, and it
+can be changed using the
+.B --gapmax
+option.
+The default construction algorithm is a maximum a posteriori (MAP)
+algorithm, which is slower. 
+
+.TP
+.BI --gapmax " <x>"
+Controls the 
+.I --fast
+model construction algorithm, but if 
+.I --fast
+is not being used, has no effect.
+If a column has more than a fraction
+.I <x>
+of gap symbols in it, it gets assigned to an insert column.
+.I <x> 
+is a frequency from 0 to 1, and by default is set
+to 0.5. Higher values of
+.I <x>
+mean more columns get assigned to consensus, and models get
+longer; smaller values of 
+.I <x> 
+mean fewer columns get assigned to consensus, and models get
+smaller.
+.I <x>
+
+.TP
+.B --hand
+Specify the architecture of the model by hand: the alignment file must
+be in SELEX format, and the #=RF annotation line is used to specify
+the architecture. Any column marked with a non-gap symbol (such
+as an 'x', for instance) is assigned as a consensus (match) column in
+the model.
+
+.TP 
+.BI --idlevel " <x>"
+Controls both the determination of effective sequence number and
+the behavior of the 
+.I --wblosum 
+weighting option. The sequence alignment is clustered by percent
+identity, and the number of clusters at a cutoff threshold of 
+.I <x> 
+is used to determine the effective sequence number.
+Higher values of 
+.I <x> 
+give more clusters and higher effective sequence
+numbers; lower values of 
+.I <x> 
+give fewer clusters and lower effective sequence numbers.
+.I <x> 
+is a fraction from 0 to 1, and 
+by default is set to 0.62 (corresponding to the clustering level used
+in constructing the BLOSUM62 substitution matrix).
+
+.TP
+.B --noeff
+Turn off the effective sequence number calculation, and use the
+true number of sequences instead. This will usually reduce the
+sensitivity of the final model (so don't do it without good reason!)
+
+.TP
+.B --nucleic
+Force the alignment to be interpreted as nucleic acid sequence,
+either RNA or DNA. Normally HMMER autodetects whether the alignment is
+protein or DNA, but sometimes alignments are so small that
+autodetection is ambiguous. See
+.B --amino.
+
+.TP
+.BI --null " <file>"
+Read a null model from 
+.I <file>.
+The default for protein is to use average amino acid frequencies from
+Swissprot 34 and p1 = 350/351; for nucleic acid, the default is
+to use 0.25 for each base and p1 = 1000/1001. For documentation
+of the format of the null model file and further explanation
+of how the null model is used, see the User's Guide.
+
+.TP
+.BI --pam " <file>"
+Apply a heuristic PAM- (substitution matrix-) based prior instead of
+the default mixture Dirichlet. The substitution matrix is read
+from 
+.I <file>. 
+See 
+.B --pamwgt.
+
+.TP 
+.BI --pamwgt " <x>"
+Controls the weight on a PAM-based prior. Only has effect if
+.B --pam 
+option is also in use. 
+.I <x>
+is a positive real number, 20.0 by default. 
+.I <x>
+is the number of "pseudocounts" contriubuted by the heuristic
+prior. Very high values of 
+.I <x> 
+can force a scoring system that is entirely driven by the
+substitution matrix, making
+HMMER somewhat approximate Gribskov profiles.
+
+.TP
+.BI --prior " <file>"
+Read a Dirichlet prior from 
+.I <file>, 
+replacing the default mixture Dirichlet.
+The format of prior files is documented in the User's Guide,
+and an example is given in the Demos directory of the HMMER
+distribution.
+
+.TP
+.B --star
+Experimental and secret. Computer may explode if you use this.
+
+.TP
+.BI --swentry " <x>"
+Controls the total probability that is distributed to local entries
+into the model, versus starting at the beginning of the model
+as in a global alignment.
+.I <x>
+is a probability from 0 to 1, and by default is set to 0.5.
+Higher values of
+.I <x>
+mean that hits that are fragments on their left (N or 5'-terminal) side will be
+penalized less, but complete global alignments will be penalized more.
+Lower values of
+.I <x>
+mean that fragments on the left will be penalized more, and
+global alignments on this side will be favored.
+This option only affects the configurations that allow local
+alignments,
+e.g. 
+.B -s
+and
+.B -f;
+unless one of these options is also activated, this option has no effect.
+You have independent control over local/global alignment behavior for
+the N/C (5'/3') termini of your target sequences using 
+.B --swentry
+and
+.B --swexit.
+
+.TP 
+.BI --swexit " <x>"
+Controls the total probability that is distributed to local exits
+from the model, versus ending an alignment at the end of the model
+as in a global alignment.
+.I <x>
+is a probability from 0 to 1, and by default is set to 0.5.
+Higher values of
+.I <x>
+mean that hits that are fragments on their right (C or 3'-terminal) side will be
+penalized less, but complete global alignments will be penalized more.
+Lower values of
+.I <x>
+mean that fragments on the right will be penalized more, and
+global alignments on this side will be favored.
+This option only affects the configurations that allow local
+alignments,
+e.g. 
+.B -s
+and
+.B -f;
+unless one of these options is also activated, this option has no effect.
+You have independent control over local/global alignment behavior for
+the N/C (5'/3') termini of your target sequences using 
+.B --swentry
+and
+.B --swexit.
+
+.TP 
+.B --verbose 
+Print more possibly useful stuff, such as the individual scores for
+each sequence in the alignment.
+
+.TP 
+.B --wblosum
+Use the BLOSUM filtering algorithm to weight the sequences,
+instead of the default.
+Cluster the sequences at a given percentage identity
+(see
+.B --idlevel);
+assign each cluster a total weight of 1.0, distributed equally
+amongst the members of that cluster.
+
+
+.TP
+.B --wgsc
+Use the Gerstein/Sonnhammer/Chothia ad hoc sequence weighting
+algorithm. This is already the default, so this option has no effect
+(unless it follows another option in the --w family, in which case it
+overrides it).
+
+.TP
+.B --wme
+Use the Krogh/Mitchison maximum entropy algorithm to "weight"
+the sequences. This supercedes the Eddy/Mitchison/Durbin
+maximum discrimination algorithm, which gives almost
+identical weights but is less robust. ME weighting seems 
+to give a marginal increase in sensitivity
+over the default GSC weights, but takes a fair amount of time.
+
+.TP 
+.B --wnone
+Turn off all sequence weighting.
+
+.TP
+.B --wvoronoi
+Use the Sibbald/Argos Voronoi sequence weighting algorithm
+in place of the default GSC weighting.
+
+.SH SEE ALSO
+
+.PP
+Individual man pages: hmmalign(1), hmmbuild(1), hmmcalibrate(1),
+hmmconvert(1), hmmpfam(1), hmmsearch(1)
+.PP
+User guide and tutorial: Userguide.ps
+.PP
+WWW: 
+.B http://genome.wustl.edu/eddy/hmmer.html
+
+.SH AUTHOR
+
+This software and documentation is Copyright (C) 1992-1998, Sean
+R. Eddy.  It is freely distributable under terms of the GNU General
+Public License. See COPYING in the source code distribution for more
+details, or contact me.
+
+.nf
+Sean Eddy
+Dept. of Genetics
+Washington Univ. School of Medicine
+4566 Scott Ave.
+St Louis, MO 63110 USA
+Phone: 1-314-362-7666
+FAX  : 1-314-362-7855
+Email: eddy@genetics.wustl.edu
+.fi
+
+

@@ -1,0 +1,185 @@
+HMMER 2.0 beta release notes 
+
+Overview of executables
+-----------------------
+hmmalign     - align sequences to an HMM to make new multiple alignment
+hmmbuild     - builds an HMM
+hmmcalibrate - determine empirical EVD statistics for an HMM
+hmmconvert   - convert HMMs between formats 
+hmmemit      - generate sequences from a profile HMM
+hmmpfam      - search one sequence against an HMM database
+hmmsearch    - search one HMM against a sequence database
+hmmpfam      - search one sequence against an HMM database
+
+
+Overview of major changes in 2.0 relative to 1.8
+------------------------------------------------
+- A new model architecture (called "Plan 7" for obscure reasons)
+    - D->I and I->D transitions are now disallowed to
+       circumvent the alignment chatter problem.
+    - full probabilistic Smith/Waterman and local alignment is
+       an integral part of the HMM, not an ad hoc addition.
+    - The null model is also fully probabilistic, including a length
+       distribution.
+
+- Built-in support for the PFAM protein family database, including
+  names attached to HMMs, and database searches against HMM libraries.
+
+- P-values and E-values are estimated from extreme value distributions 
+  in large database searches, supplementing Bayesian log-odds scores
+  and (in principle) increasing sensitivity.
+
+- Mixture Dirichlets are now the default prior on protein HMMs.
+
+- Database searches now sort and postprocess their results for
+  prettier and more useful output.
+
+- HMMER save files are a new ASCII format which
+  is easy for humans to read, and portable across all architectures
+  without byteswapping issues.
+
+
+Quick start
+------------
+Example files are in DEMOS/ subdirectory.
+
+Using HMMs to search sequence databases:
+
+	> cd DEMOS/
+	> hmmbuild new.hmm rrm.slx
+	     [Builds an HMM of the RNA recognition motif alignment in rrm.slx.]
+	> hmmcalibrate new.hmm
+	     [Sets the EVD statistics in new.hmm. May be slow.]
+	> hmmsearch new.hmm swiss34
+	     [Searches swiss34; substitute your favorite database path here.]
+     
+Building and using Pfam-like HMM databases:
+
+	> cd DEMOS/
+	> hmmbuild -A weepfam fn3.slx
+	> hmmbuild -A weepfam pkinase.slx
+	> hmmbuild -A weepfam rrm.slx
+             [-A option appends to a multi-HMM database]
+	> hmmcalibrate weepfam
+             [hmmcalibrate does all HMMs in a file]
+	> hmmpfam weepfam 7LES_DROME
+             [example of parsing a multidomain sequence]
+
+As always, typing the name of a program with no arguments causes it to
+output some help information on command line arguments and available
+options.
+
+
+Important notes on the behavior of individual programs
+------------------------------------------------------
+
+HMMBUILD
+--------
+Most importantly, hmmls, hmmsw, hmmfs, and hmms no longer exist.  The
+different search algorithms are now part of the models, and there is
+only one search program, hmmsearch. Plan7 models distinguish between
+data-dependent parts of the model and algorithm-dependent parts of the
+model. You choose the search algorithm style when you build the model.
+
+hmmbuild    : hmmls mode [default] : multihit, global in HMM, local in seq
+hmmbuild -f : hmmfs mode           : multihit, local in HMM, local in seq
+hmmbuild -l : hmmsw mode           : single hit, local in HMM, local in seq
+hmmbuild -g : hmms mode, sort of   : single hit, global in HMM, local in seq
+
+The defaults for hmmbuild are as follows:
+   - builds a model architecture by MAP construction.
+   - determines an "effective sequence number" by clustering at 62% identity.
+   - weights sequences using Sonnhammer tree weights, such that weights
+     sum to effective sequence number.
+   - Calculates data-dependent probabilities using Kimmen's mixture
+     Dirichlet priors.
+   - Temporarily configures the model in hmmsw mode
+   - Scores all the training sequences, outputs various results
+   - Configures the model for final behavior [hmmls is the default]
+   - Saves the model in ASCII format
+
+
+
+HMMCALIBRATE
+------------
+HMMER2 now includes E-value calculations of statistical significance.
+These are calculated two ways. One way is always available: a
+conservative upper bound related to that used by Karplus, calculated
+directly from the bit score. The second way is empirical fitting of an
+extreme value distribution, and this is only available if a model is
+"calibrated" before it is used.
+
+hmmcalibrate is therefore optional. It adds an "EVD" tag line to the
+HMM(s) with two numbers, mu and lambda. Because it is doing an
+empirical fit, hmmcalibrate can be quite slow. hmmcalibrate simulates
+5000 random sequences with a length distribution similar to Swissprot,
+scores them all, then resaves the HMM with the EVD tag line.
+
+
+HMMSEARCH, HMMPFAM
+------------------
+
+The search programs now collect all results before output. On the good
+side, this lets them organize and rank the hits. On the bad side, this
+means that a database search will run for a long time before printing
+anything.
+
+IMPORTANT: By default, a novel biased composition filter is used.
+This can be shut off in hmmsearch using the --null2 option.
+
+Output comes in several sections:
+
+- complete sequence hits
+    The scores and E-values reflect the alignment to the complete sequence.
+    If there is more than one domain in the sequence, the score will 
+    be the sum of all the domain scores, and the E-value will be better
+    than the E-value of any single domain.
+
+    Every sequence with an evalue better than 10 is reported. This
+    value is changed with the -E option. Alternatively, a bit value
+    threshold can be set using -T.
+
+- domain hits
+    For every sequence that was reported in the first hit, /every/
+    domain is now reported.
+  
+    Note that because each domain after the first one must score
+    >0 bits (else, the best alignment will have just one domain),
+    there is effectively a threshold of 0 bits for domains 2..N,
+    but /not for the first domain/. This is a consequence of
+    the model design and may have some paradoxical effects.
+
+    hmmsearch ranks all domains by their E-values. hmmpfam instead
+    ranks domains by their start position in the sequence, so
+    the output for multiple HMM hits comes out like an organized
+    feature table.
+
+    Thresholds may be set on the domain output using --domE 
+    or --domT options, for the domain E value or domain bit
+    threshold respectively.
+
+
+- alignments
+    Alignments of every reported domain are printed.
+
+
+- histogram
+    hmmsearch (but not hmmpfam) prints the histogram of all hits
+    in the database. If EVD parameters are available, a theoretical
+    fit is also displayed. Note that hmmls-mode searches do not
+    fit an EVD well at all.
+
+- useless info
+    Both programs still dump some info that's only meaningful to me
+    right at the end.
+
+
+
+
+
+    
+
+
+
+
+

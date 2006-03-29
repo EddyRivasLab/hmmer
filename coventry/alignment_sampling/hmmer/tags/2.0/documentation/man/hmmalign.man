@@ -1,0 +1,82 @@
+.TH "hmmalign" 1 "March 1998" "HMMER 2.0" "HMMER Manual"
+
+.SH NAME
+.TP 
+hmmalign - align sequences to an HMM profile
+
+.SH SYNOPSIS
+.B hmmalign
+.I [options]
+.I hmmfile
+.I seqfile
+
+.SH DESCRIPTION
+
+.B hmmalign
+reads an HMM file from
+.I hmmfile
+and a set of sequences from 
+.I seqfile,
+aligns the sequences to the profile HMM, 
+and outputs a multiple sequence alignment.
+
+.PP
+.I seqfile 
+may be in any unaligned or aligned file format
+accepted by HMMER. If it is in a multiple alignment format
+(e.g. MSF, SELEX, ClustalW), the existing alignment
+is ignored.
+
+.SH OPTIONS
+
+.TP
+.B -h
+Print brief help; includes version number and summary of
+all options, including expert options.
+
+.TP
+.B -m
+Include in the alignment only those symbols aligned to match states.
+Do not show symbols assigned to insert states. 
+
+.TP 
+.BI -o " <f>"
+Save alignment to file
+.I <f>
+instead of to standard output.
+
+.TP
+.B -q
+quiet; suppress all output except the alignment itself.
+Useful for piping or redirecting the output.
+
+.SH SEE ALSO
+
+.PP
+hmmer(1), hmmbuild(1), hmmcalibrate(1),
+hmmconvert(1), hmmemit(1), hmmpfam(1), hmmsearch(1)
+.PP
+User guide and tutorial: Userguide.ps
+.PP
+WWW: 
+.B http://hmmer.wustl.edu/
+
+.SH AUTHOR
+
+This software and documentation is Copyright (C) 1992-1998 Washington
+University School of Medicine.  It is freely distributable under terms
+of the GNU General Public License. See COPYING in the source code
+distribution for more details, or contact me.
+
+.nf
+Sean Eddy
+Dept. of Genetics
+Washington Univ. School of Medicine
+4566 Scott Ave.
+St Louis, MO 63110 USA
+Phone: 1-314-362-7666
+FAX  : 1-314-362-7855
+Email: eddy@genetics.wustl.edu
+.fi
+
+

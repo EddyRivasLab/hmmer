@@ -1,0 +1,16 @@
+Brief installation instructions for HMMER 2.1
+SRE, Wed Oct  7 10:45:15 1998
+------------------------------------------
+
+cd to toplevel directory (where this INSTALL file is), then:
+    ./configure            Configures the software for your system.
+    make                   Builds the binaries. 
+    make check             Runs the test suite.
+    make install           Installs the software. (You may need to be root.)
+
+That's it. It should build cleanly on just about any UNIX machine.
+
+For (much) more detail, see the Installation chapter in the HMMER
+User's Guide.
+
+

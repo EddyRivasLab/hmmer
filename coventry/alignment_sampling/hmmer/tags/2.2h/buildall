@@ -1,0 +1,17 @@
+#! /bin/sh
+
+pkg=$1
+
+echo Building $pkg...
+./rootbuild whelk01   /tmp $pkg intel-linux   --with-pvm,--with-lfs   CC=/usr/seshare/Linux/intel/compiler60/ia32/bin/icc,CFLAGS=+-static -O3 -axMKW+
+./rootbuild whippet   /tmp $pkg hp-hpux       none                    CFLAGS=-O         
+./rootbuild warhorse  /tmp $pkg sgi-irix64    none                    CC=cc,CFLAGS=-O2  
+./rootbuild warlord   /tmp $pkg sun-solaris   none                    CFLAGS=-O2        
+./rootbuild warlock   /tmp $pkg ibm-aix       none                    CC=/usr/vac/bin/xlc,CFLAGS=-O2
+./rootbuild waterbug  /tmp $pkg alpha-tru64   none                    CC=cc,CFLAGS=-O   
+./rootbuild warhawk   /tmp $pkg intel-freebsd none                    CFLAGS=-O2        
+./rootbuild wonderboy /tmp $pkg intel-openbsd --disable-threads       CFLAGS=-O2        
+./rootbuild whipworm  /tmp $pkg intel-solaris none                    CFLAGS=-O2        
+
+
+

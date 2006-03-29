@@ -1,0 +1,138 @@
+#! /usr/bin/perl
+
+# nodebuild
+# Build a binary distribution on a node of the compile farm.
+# Usage:
+# ssh <node> nodebuild <remotedir> <pkg> <platform> <configopts> <makeopts...>
+#
+# Looks for source code in <node>:<remote dir>/<pkg>.tar.gz
+# Creates binary dist in <node>:<remote dir>/<pkg>.bin.<platform>.tar.gz
+#
+# Also leaves a copy of stdout/stderr from configure, make, make check in
+# <pkg>.<platform>.log
+#
+# Configure opts are either something like
+#    "--enable-lfs --enable-threads"
+# or 
+#    ""
+# Double quotes are unnecessary for a single configure argument.
+#
+# Make options consist of any number of environment variables 
+# that will be set before running configure, e.g.
+#   CC=gcc CFLAGS="-O -static"
+#
+# Example: 
+# building a package "hmmer-2.2g" for platform "intel-linux" on host "wrasse"
+# in remote directory "/tmp":
+#    scp nodebuild wrasse:/tmp/
+#    scp hmmer-2.2g.tar.gz wrasse:/tmp/
+#    ssh wrasse /tmp/nodebuild /tmp hmmer-2.2g intel-linux \"--enable-threads --enable-lfs\" CC=gcc CFLAGS=\"-O2 -Wall\"
+#    ssh wrasse rm /tmp/nodebuild
+#    scp wrasse:/tmp/hmmer-2.2g.bin.intel-linux.tar.gz .
+#    ssh wrasse rm /tmp/hmmer-2.2g.bin.intel-linux.tar.gz
+#
+#
+# SRE, Sat Aug  4 11:29:53 2001, xref STL5 p.27
+# CVS $Id$
+
+$arena      = shift;
+$pkg        = shift;
+$platform   = shift;
+$configopts = shift;
+
+$makeenv = "";
+while ($opt = shift) {
+    if ($opt =~ /(\S+)=(.+)/) {
+	$newopt = qq/$1=\"$2\"/;
+	if ($makeenv ne "") { $makeenv = $makeenv." "; }
+	$makeenv = $makeenv.$newopt;
+    } else {
+	die ("malformed make environment option $opt?");
+    }
+}
+
+$binpkg  = "$pkg.bin.$platform";
+$logfile = "$pkg.$platform.log";
+
+print "pkg        = $pkg\n";
+print "arena      = $arena\n";
+print "platform   = $platform\n";
+print "configopts = $configopts\n";
+print "makeenv    = $makeenv\n";
+print "\n";
+
+print "chdir...           ";
+chdir $arena ||  die "chdir failed";
+print "[done]\n";
+
+print "Cleaning arena...  ";
+if (-e $binpkg) {
+   system "rm -rf $binpkg";
+   if ($? != 0) { die "rm -rf failed"; }
+}
+if (-e $binpkg.tar.gz) {
+    system "rm -f $binpkg.tar.gz";
+    if ($? != 0) { die "rm -f failed"; }
+}
+print "[done]\n";
+
+print "Uncompressing...   ";
+system "gunzip -c $pkg.tar.gz | tar xf -";
+if ($? != 0) { die "gunzip | tar xf of $pkg.tar.gz failed";}
+print "[done]\n";
+
+print "Renaming...        ";
+rename $pkg, $binpkg || die "rename failed";
+print "[done]\n";
+
+print "chdir...           ";
+chdir $binpkg ||  die "chdir failed";
+print "[done]\n";
+
+print "configure...       ";
+system "env $makeenv ./configure $configopts 2>&1 > $logfile";
+if ($? != 0) { die "configure failed"; }
+print "[done]\n";
+
+print "make...            ";
+system "make 2>&1 >> $logfile";
+if ($? != 0) { die "make failed"; }
+print "[done]\n";
+
+print "make check...      ";
+system "make check 2>&1 >> $logfile";
+if ($? != 0) { die "make check failed"; }
+print "[done]\n";
+
+print "make bindist...    ";
+system "make bindist 2>&1 >> $logfile";
+if ($? != 0) { die "make bindist failed"; }
+print "[done]\n";
+
+print "saving log...      ";
+system "mv $logfile ../";
+if ($? != 0) { die "mv $logfile failed"; }
+print "[done]\n";
+
+print "chdir...           ";
+chdir ".." || die "chdir .. failed";
+print "[done]\n";
+
+print "tar...             ";
+system "tar cf $binpkg.tar $binpkg";
+if ($? != 0) { die "tar failed"; }
+print "[done]\n";
+
+print "gzip...            ";
+system "gzip $binpkg.tar";
+if ($? != 0) { die "gzip failed"; }
+print "[done]\n";
+
+print "cleaning up...     ";
+system "rm -rf $binpkg";
+if ($? != 0) { die "rm -rf failed"; }
+system "rm -f $pkg.tar.gz";
+if ($? != 0) { die "rm -f failed"; }
+print "[done]\n";
+
+exit 0;

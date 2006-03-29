@@ -1,0 +1,131 @@
+.TH "hmmcalibrate" 1 "@RELEASEDATE@" "@PACKAGE@ @RELEASE@" "@PACKAGE@ Manual"
+
+.SH NAME
+.TP 
+hmmcalibrate - calibrate HMM search statistics
+
+.SH SYNOPSIS
+.B hmmcalibrate
+.I [options]
+.I hmmfile
+
+.SH DESCRIPTION
+
+.B hmmcalibrate
+reads an HMM file from
+.I hmmfile,
+scores a large number of synthesized random sequences with it, fits an
+extreme value distribution (EVD) to the histogram of those scores, and
+re-saves
+.I hmmfile
+now including the EVD parameters.
+
+.PP
+.B hmmcalibrate 
+may take several minutes (or longer) to run.
+While it is running, a temporary file called
+.I hmmfile.xxx
+is generated in your working directory. 
+If you abort 
+.B hmmcalibrate 
+prematurely (ctrl-C, for instance), your original
+.I hmmfile 
+will be untouched, and you should delete the
+.I hmmfile.xxx
+temporary file.
+
+.SH OPTIONS
+
+.TP
+.B -h
+Print brief help; includes version number and summary of
+all options, including expert options.
+
+.SH EXPERT OPTIONS
+
+.TP
+.BI --cpu " <n>"
+Sets the maximum number of CPUs that the program
+will run on. The default is to use all CPUs
+in the machine. Overrides the HMMER_NCPU
+environment variable. Only affects threaded
+versions of HMMER (the default on most systems).
+
+.TP
+.BI --fixed " <n>"
+Fix the length of the random sequences to
+.I <n>,
+where 
+.I <n>
+is a positive (and reasonably sized) integer.
+The default is instead to generate sequences with
+a variety of different lengths, controlled by a Gaussian
+(normal) distribution.
+
+.TP 
+.BI --histfile " <f>"
+Save a histogram of the scores and the fitted theoretical curve
+to file
+.I <f>.
+
+.TP 
+.BI --mean " <x>"
+Set the mean length of the synthetic sequences to
+.I <x>,
+where 
+.I <x>
+is a positive real number. The default is 350.
+
+.TP
+.BI --num " <n>"
+Set the number of synthetic sequences to 
+.I <n>,
+where 
+.I <n>
+is a positive integer. If
+.I <n> 
+is less than about 1000, the fit to the EVD may fail.
+Higher numbers of
+.I <n> 
+will give better determined EVD parameters. The default
+is 5000; it was empirically chosen as
+a tradeoff between accuracy and computation time.
+
+.TP
+.B --pvm
+Run on a Parallel Virtual Machine (PVM). The PVM must
+already be running. The client program 
+.B hmmcalibrate-pvm
+must be installed on all the PVM nodes.
+Optional PVM support must have been compiled into 
+HMMER. 
+
+.TP 
+.BI --sd " <x>"
+Set the standard deviation of the synthetic sequence
+length distribution to
+.I <x>,
+where
+.I <x> 
+is a positive real number. The default is 350. Note that the
+Gaussian is left-truncated so that no sequences have lengths 
+<= 0.
+
+.TP
+.BI --seed " <n>"
+Set the random seed to
+.I <n>,
+where 
+.I <n> 
+is a positive integer. The default is to use 
+.B time()
+to generate a different seed for each run, which
+means that two different runs of
+.B hmmcalibrate
+on the same HMM will give slightly different
+results.  You can use
+this option to generate reproducible results for
+different 
+.B hmmcalibrate 
+runs on the same HMM.
+

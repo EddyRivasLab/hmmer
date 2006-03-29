@@ -1,0 +1,535 @@
+\section{How HMMER scores alignments and determines significance}
+
+The search programs \prog{hmmsearch} and \prog{hmmpfam} give you a
+ranked list of hits in a sequence database.  Which ones are likely to
+be true homologous and which ones are likely to be nonhomologous to
+your query HMM?
+
+HMMER gives you at least two scoring criteria to judge by: the HMMER
+raw score, and an E-value. Additionally, Pfam models carry a third set
+of criteria: six expert-calibrated raw score cutoffs that the Pfam
+database maintainers set. How should you interpret all this
+information?
+
+\subsection{Executive summary}
+
+\begin{itemize}
+\item The best criterion of statistical significance is the E-value.
+The E-value is calculated from the bit score. It tells you how many
+false positives you would have expected to see at or above this bit
+score. Therefore a low E-value is best; an E-value of 0.1, for
+instance, means that there's only a 10\% chance that you would've seen
+a hit this good in a search of nonhomologous sequences. {\em
+Typically, I trust the results of HMMER searches at about E=0.1 and
+below, and I examine the hits manually down to E=10 or so.}
+
+\item HMMER bit scores are a stricter criterion: they reflect whether
+the sequence is a better match to the profile model (positive score)
+or to the null model of nonhomologous sequences (negative score).  A
+HMMER bit score above $\log_2$ of the number of sequences in the
+target database is likely to be a true homologue. For current NR
+databases, this rule-of-thumb number is on the order of 20 bits.
+Whereas the E-value measures how statistically significant the bit
+score is, the bit score itself is telling you how well the sequence
+matches your HMM. Because these things should be strongly correlated,
+usually, true homologues will have both a good bit score and a good
+E-value. However, sometimes (and these are the interesting cases), you
+will find remote homologues which do not match the model well (and so
+do not have good bit scores -- possibly even negative), but which
+nonetheless have significant E-values, indicating that the bit score,
+though ``bad'', is still better than you would've expected by chance,
+so it is suggestive of homology.
+
+\item For Pfam HMMs, you can also examine six other numbers that
+represent bit score thresholds: two TC (trusted cutoff) scores, two GA
+(gathering) scores, and two NC (noise cutoff) scores. The meaning of
+these numbers is described below.
+\end{itemize}
+
+\begin{srefaq}{What does it mean when I have a negative bit score,
+but a good E-value?} The negative bit score means that the sequence is
+not a good match to the model. The good E-value means that it's still
+a better score than you would've expected from a random sequence. The
+usual interpretation is that the sequence is homologous to the
+sequence family modeled by the HMM, but it's not ``within'' the family
+- it's a distant homologue of some sort. This happens most often with
+HMMs built from ``tight'' families of high sequence identity, aligned
+to remote homologues outside the family. For example, an actin HMM
+aligned to an actin-related protein will show this behavior - the bit
+score says the sequence isn't an actin (correct) but the E-value says
+it is significantly related to the actin family (also correct).
+\end{srefaq}
+
+\subsection{In more detail: HMMER bit scores}
+
+The bit score is a log-odds score in log base two (thus, in units of
+{\em bits}. Specifically, it is:
+
+\[
+	S = \log_2 \frac {P( \mbox{seq} | \mbox{HMM})} { P (\mbox{seq} |
+	\mbox{null})}.
+\]
+
+$P( \mbox{seq} | \mbox{HMM})$ is the probability of the target
+sequence according to your HMM. $ P (\mbox{seq} | \mbox{null}) $ is
+the probability of the target sequence given a ``null hypothesis''
+model of the statistics of random sequence. In HMMER, this null model
+is a simple one-state HMM that says that random sequences are i.i.d.
+sequences with a specific residue composition (this ``null model
+distribution'' is part of the HMM save file, and it can be altered
+when you do an \prog{hmmbuild}).
+
+Thus, a positive score means the HMM is a better model of the target
+sequence than the null model is (e.g. the HMM gives a higher
+probability).
+
+\prog{hmmsearch} reports two hit lists, with different types of
+scores. The first list is ranked by {\em per-sequence} scores, and the
+second is ranked by {\em per-domain} scores. The per-sequence score is
+the score of the entire target sequence according to the HMM. A
+per-domain score is a score of one matching subsequence (domain) from
+the target sequence: the per-domain score is calculated as if that
+subsequence was the entire target sequence.
+
+Because HMMER's Plan 7 model is capable of looping, and therefore of
+modeling more than one copy of a particular domain in a target
+sequence (for instance, a closely spaced array of immunoglobulin
+superfamily domains), HMMER may well report more than one domain per
+target sequence.
+
+For single domain proteins, the per-sequence and per-domain scores are
+identical. For multi-domain proteins, the per-sequence score is the
+sum of the individual per-domain scores.
+
+You can specify cutoffs for per-sequence and/or per-domain scores
+and/or E-values when you use \prog{hmmsearch} or \prog{hmmpfam}.  For
+a specific sensible use of such cutoffs, read about how the Pfam
+TC/NC/GA cutoffs are set and used (below).
+
+\subsubsection{interaction of multihit alignment with negative bit scores}
+
+HMMER will always report a score for the one best domain it finds in
+the target sequence, even if that hit is a negative bit score.  The
+Plan 7 model architecture forces a target sequence to pass through the
+model at least one time.
+
+However, each \emph{subsequent} domain must have a positive bit score
+to be identified. If an additional domain has a negative bit score,
+HMMER can find a better scoring alignment by using the
+``nonhomologous'' N, C, or J states to account for the residues in
+that domain -- \emph{even if the domain would have a significant
+E-value}.
+
+\begin{srefaq}{Why does HMMER give this domain a good E-value when
+I just give it the domain sequence, but it doesn't find the domain at
+all in the context of the whole sequence the domain came from?}  See
+above. The behavior of being able to report the single best hit,
+regardless of score, produces one counterintuitive behavior:
+statistically significant domains will be invisible in a sequence if
+they have negative bit scores. You can find cases where you can find
+additional domains with good E-values but negative bit scores by
+searching against a sequence that you've cut into smaller pieces. This
+is not a bug; it's a limitation of the approach.
+\end{srefaq}
+
+
+\subsection{In more detail: HMMER E-values}
+
+The E-value is the expected number of false positives with scores at
+least as high as your hit.
+
+Unlike the raw score, the E-value is dependent on the size of the
+database you search. If you detect a hit with an E-value of 0.1 in a
+search of a sequence database with 100,000 sequences, then you happen
+to re-score the sequence all by itself, you will get an E-value
+100,000 times better. The E-value is quite literally the expected
+number of false positives at this raw score; the larger the database
+you search, the greater the number of expected false positives.
+
+\begin{srefaq}{Why do I get a different E-value when I search
+against a file containing my sequence, than I got when I searched the
+database?} See above. This behavior is shared with BLAST and FASTA
+P-value and E-values, so it should not be unfamiliar to most users.
+However, it can cause consternation: a related phenomenon is that a
+hit that is marginally significant this year may no longer be
+significant next year, when the database is twice as large. You can
+specify a database size with the \prog{-Z} option.
+\end{srefaq}
+
+\begin{srefaq}{Why do hmmsearch and hmmpfam give me different
+E-values?} From the above discussion, it should also be clear that if
+you use \prog{hmmpfam} to search a sequence against Pfam (say, $\sim
+3000$ models) to find a matching HMM, you will get a different E-value
+than using \prog{hmmsearch} to search that single HMM against a
+sequence database to find the original sequence, because the size of
+the search spaces is entirely different. For hmmpfam, the search space
+size $Z$ is the number of \emph{models}; for hmmsearch, the search
+space size $Z$ is the number of \emph{sequences}. Some people want to
+argue that this is wrong, but it's something you have to deal with;
+that's statistics for you.
+\end{srefaq}
+
+HMMER has two ways of calculating E-values. One way is inaccurate but
+analytical (and fast); the other way is more accurate but empirical
+(and slow).
+
+If your HMM has not been calibrated with \prog{hmmcalibrate}, HMMER
+uses the analytic calculation. This is a conservative calculation,
+meaning that the ``true'' E-value will be lower; sometimes much lower.
+The calculation is essentially the same as that given in
+\cite{Barrett97}.
+
+It is highly recommended that you calibrate HMMs with
+\prog{hmmcalibrate}. \prog{hmmcalibrate} writes two parameters
+into your HMM file on a line labeled ``EVD'': these parameters are the
+$\mu$ (location) and $\lambda$ (scale) parameters of an extreme value
+distribution (EVD) that best fits a histogram of scores calculated on
+randomly generated sequences of about the same length and residue
+composition as SWISS-PROT. You only need to do this calibration once
+for a given HMM. All the Pfam HMMs come pre-calibrated.
+
+\subsubsection{fitting extreme value distributions to HMMER score histograms}
+
+Now, there's good news and bad news about extreme value distributions.
+
+Frst the good news. The extreme value distribution fitting is done
+with a rather robust and personally satisfying chunk of maximum
+likelihood code (see \prog{histogram.c} in the codebase). The ML
+approach was suggested to me by Stephen Altschul, who directed me to a
+lovely textbook by Lawless \cite{Lawless82}.  A brief technical report
+on HMMER's EVD fitting is available at
+\htmladdnormallink{ftp://ftp.genetics.wustl.edu/pub/eddy/papers/evd.pdf}
+{ftp://ftp.genetics.wustl.edu/pub/eddy/papers/evd.pdf}.  Any EVD
+fitting code that is relying on linear regression fits to log-log
+plots is bound to be less accurate, judging from my tests.
+
+However, the down side is that most profile HMM scores don't fit the
+extreme value distribution well. Fully local alignments (models built
+with \prog{hmmbuild -f} or \prog{hmmbuild -s} fit the EVD fairly well,
+as expected for Smith/Waterman style alignments, for the same reasons
+that gapped BLAST or FASTA alignment scores have been shown to be
+approximately EVD-distributed. By default, though, \prog{hmmbuild}
+makes models for ``glocal'' alignments which are global with respect
+to the model, and multi-hit-local with respect to the sequence.  Also
+called ``profile scores'' by Waterman, this sort of alignment score is
+known not to be EVD-distributed \cite{GoldsteinWaterman94}.
+
+Nonetheless, empirically, the tail of the distribution around E=1 is
+falling off more or less like an EVD, and this is the region of
+interest. HMMER does a ``censored EVD fit'' from the peak of the
+distribution down to the right tail, and does not include the data to
+the left of the peak in its fit. This produces a reasonable fit in the
+important region of the scores. Empirically, HMMER E-values tend to be
+accurate in the critical region (E~1), despite the lack of
+mathematical foundation.
+
+The end of \prog{hmmsearch} output shows you the observed histogram,
+and (if the model is calibrated) an expected curve according to the
+EVD fit. You should observe that the relevant tail (around E=1) is
+more or less well fitted. The bulk of the distribution, particularly
+at lower scores, is usually poorly fitted, but this is not the area of
+interest.
+
+\subsection{In more detail: Pfam TC/NC/GA cutoffs}
+
+When a Pfam model is built, the Pfam curation team keeps track of
+per-sequence and per-domain scores of every sequence in a large
+nonredundant database. They record three types of score cutoffs on
+Pfam HMM files:
+
+\begin{wideitem}
+\item[GA (gathering cutoffs)]: the scores used as cutoffs in
+constructing Pfam. All domains that are in a sequence satisfying the
+GA1 per-sequence score, and which themselves satisfy the GA2
+per-domain score, will be included in the Pfam ``full alignment''.
+
+\item[TC (trusted cutoffs)]: the scores of the lowest-scoring hit(s)
+that were included as true member(s) of the Pfam family. The
+per-domain TC2 score is the score of the lowest scoring domain
+\textit{in a sequence with a per-sequence score over the TC1 cutoff};
+therefore, the TC1 and TC2 scores could conceivably come from
+different targets. Hits above these scores are ``within'' the Pfam
+family and almost certainly members.
+
+\item[NC (noise cutoffs)]: the scores of the highest-scoring
+hit(s) that were \textit{not} included as true members of the Pfam
+family, because they were considered to be the top of the noise.
+Calculated analogously to TC1 and TC2. Hits above the NC cutoff are
+above the top scoring noise in the Pfam NR database search, so are
+likely homologues, but not as trustworthy as hits over the GA or TC
+cutoffs.
+\end{wideitem}
+
+In order of increasing conservativeness, the cutoffs rank: NC, GA, and
+TC.
+
+The GA cutoffs, being the actual cutoffs used in constructing Pfam,
+are a very good choice to use to collate large-scale automated data,
+like counting protein family members in a sequenced genome.
+
+The TC and NC cutoffs are less useful, and only really there as
+documentation of Pfam construction. In general, the TC cutoffs would
+be extremely conservative cutoffs to use in a database search, more
+conservative than GA. The NC cutoffs are less conservative than GA.
+
+Why use GA (or the other cutoffs) instead of the E-value? Pfam
+artificially imposes a ``flat'', nonhierarchical structure on protein
+sequence space.  Pfam asserts that no Pfam family is related to any
+other Pfam family. This is obvious nonsense: many Pfam families are in
+fact homologous.  The different 7-TM (G-protein coupled receptor)
+families are one example; the different GTPase families are
+another. HMMER often detect significant relationships between families
+that Pfam chooses to suppress. In these cases, the Pfam GA cutoff will
+be elevated to artifically separate two homologous but distantly
+related subgroups of the same structural superfamily. 
+
+\begin{srefaq}{Why isn't sequence X included in a Pfam full alignment?
+It has a significant score!} For the reasons above, the sequences in
+Pfam full alignments are harvested using curated GA
+thresholds, rather than using score or E-value
+thresholds. Interpro-based counts of domains in genome analyses also
+use curated GA thresholds.  Please don't go writing a
+paper that claims HMMs don't detect some similarity until you've done
+the experiment with HMMs instead of just looking at curated Pfam
+classifications. Yes, such paper(s) have been written. Sigh.
+\end{srefaq}
+
+The mechanism that HMMER uses to incorporate up these cutoffs is
+general: Stockholm format multiple sequence alignments can carry
+appropriate TC, NC, and GA markup lines. This means that you can use a
+Pfam-like cutoff system if you like, just by adding the appropriate
+Stockholm markup to your collection of alignments. When these numbers
+are available in the HMM, HMMER search programs provide options
+(\prog{--cut\_ga}, etc.) for setting search cutoffs to GA, TC, or NC
+automatically.
+
+\subsection{Biased composition filtering: the null2 model}
+
+I've lied. HMMER bit scores are actually calculated as log odds scores
+relative to \emph{two} null hypotheses. The first is the null model
+built into the profile HMM when it was built with \prog{hmmbuild}.
+The second, called \emph{null2}, is an \emph{ad hoc} model calculated
+on the fly for each alignment, from the characteristics of that
+alignment. The purpose of null2 is to compensate for false positive
+hits caused by simple biased composition regions in the target
+sequence.
+
+Common biased composition filters like XNU, DUST, and SEG are
+qualitative filters -- if a region is detected as biased composition,
+it is masked (the residues are converted to X's). A drawback of this
+approach is that some real domains are biased composition --
+collagens, for example, are almost completely masked by standard
+filters, and you won't see true collagen homologies.  The HMMER
+composition filter is a quantitative filter, that tests whether the
+sequence is a better match to the profile HMM, the null (random
+composition) model, or a null2 model of biased amino acid composition.
+
+This is a Good Thing, but on the other hand, the null2 model is not
+very sophisticated. It is a single-state HMM just like the main null
+model, which means it only captures residue composition, like DUST; no
+attempt is made in HMMER to filter short-period repetitive sequences
+like the XNU algorithm does. (The XNU masking algorithm is available
+as an option, \prog{--xnu}.)
+
+The null2 model was motivated by an artifact that appeared in the Plan
+7 implementation of HMMER2. In HMMER1, insertion emissions always
+scored zero: the insertion emission distribution was assumed to be
+identical to overall amino acid composition. But that loses a small
+amount of information. On average, insertions tend to occur in surface
+loops of proteins. Inserted residues have a small but significant
+hydrophilic bias. HMMER2's parameterization takes that into account.
+As a result, insertions of hydrophilic residues get slightly positive
+scores, while insertions of hydrophobic residues get slightly negative
+scores.
+
+\begin{srefaq}{Why is my alignment annotating inserted residues with
++'s? Shouldn't +'s only appear for aligned consensus residues?} This
+is not a bug. See above; certain inserted residues can contribute
+positive score to the alignment, because they are slighly more likely
+to be seen in insertions than in overall amino acid composition.
+\end{srefaq}
+
+If you give hydrophilic insertions positive score, and you combine
+that with the ability to do Smith/Waterman local alignment, you get an
+undesirable artifact: it's possible to get alignments that enter the
+model at some match state, align a residue to that match state, then
+proceed to use the insertion state for a long hydrophilic stretch
+before exiting the model from the next match state: thus, a ``high
+scoring'' alignment that aligns to only two consensus positions in the
+model, with a long insertion. It's this artifact that motivated the
+development of the null2 filter, though the null2 filter also happens
+to work well on a variety of other biased-composition scenarios.
+
+A different null2 model is calculated for every alignment. The 20
+emission probabilities of the null2 model are calculated as the
+occurrence-weighted average emission probability of all the states in
+the alignment's state path $\pi$. For example, if the state path is 52
+emissions long and contains M$_{32}$, 50 inserted residues aligned to
+I$_{32}$, and M$_{33}$, the null2 model will be calculated by averaging 52
+emission distributions (50 copies of I$_{32}$, 1 each of M$_{32}$ and
+M$_{33}$). 
+
+But now we've got \emph{two} null hypotheses. We said we report a bit
+score that's a log-odds ratio of our model likelihood and \emph{one}
+null hypothesis likelihood. How do we calculate a score if we have
+more than one null hypothesis? HMMER does a bit of algebraic sleight
+of hand here, to arrive at an additive correction to the original
+score that it calls the ``null2 score correction''. 
+
+Because the mysterious null2 correction generated a fair amount of
+faq-ish email traffic in the past, let's now finally slog through and
+document the null2 score correction calculation, and the unpublished
+(but relatively trivial) theory behind it.
+
+\subsubsection{derivation of the null2 score correction}
+
+We arrived at the parameters of the null2 model in a very \emph{ad
+hoc} way. However, after that, the way HMMER arrives at the final bit
+score once the null2 parameters have been determined is clean
+(e.g. derivable) Bayesian probability theory, and sort of a novel
+idea for quantitative sequence masking, I think.
+
+If we take the Bayesian view, we're interested in the probability of a
+hypothesis $H$ given some observed data $D$:
+
+\[
+   P(H | D) = \frac{P(D | H) P(H)}{\sum_{H_i} P(D | H_i) P(H_i)},
+\]
+
+an equation which forces us to state explicit probabilistic models not
+just for the hypothesis we want to test, but also for the alternative
+hypotheses we want to test against. Up until now, we've considered two
+hypotheses for an observed sequence $D$: either it came from our
+profile HMM (call that model $M$), or it came from our null hypothesis
+for random, unrelated sequences (call that model $N$). If these are
+the only two models we consider, the Bayesian posterior for the model
+$M$ is:
+
+\[
+   P(M | D) = \frac{P(D | M) P(M)}{P(D | M) P(M) + P(D | N) P(N)}
+\]
+
+Recall that the log odds score reported by HMMER's alignment
+algorithms is
+
+\[
+  s = \log \frac{P(D | M)}{P(D | N)}.
+\]
+
+Let's assume for simplicity that \emph{a priori}, the profile and the
+null model are equiprobable, so the priors $P(M)$ and $P(N)$
+cancel. Then the log odds score $s$ is related to the Bayesian
+posterior by a sigmoid function,
+
+\[
+  P(M | D) = \frac{e^s}{e^s + 1}.
+\]
+
+(We don't have to assume that the two hypotheses are equiprobable;
+keeping these around would just add an extra $\pi = \log P(M) / P(N)$
+factor to $s$. We'll reintroduce these prior log odds scores $\pi$
+shortly.)
+
+The simple sigmoid relationship between the posterior and the log odds
+score suggests a plausible basis for calculating a score that includes
+contributions of more than one null hypothesis: \textbf{we desire a
+generalized score $S$ such that:}
+
+\[
+  \frac{e^S}{e^S + 1} = P(M | D),
+\]
+
+\textbf{for \emph{any} number of alternative hypotheses under consideration.}
+
+So, let $N_i$ represent any number of alternative null models
+$N_i$. Then, by algebraic rearrangement of Bayes' theorem,
+
+\[
+   S = \log \frac{P(S | M) P(M)}{ \sum_{i} P(S | N_i) P(N_i)}. 
+\]
+
+We saw above that HMMER internally calculates a log odds score $s$, of
+the model relative to the first null hypothesis. Let's now call that
+$s_M$, the alignment score of the model. HMMER extends that same
+scoring system to all additional competing hypotheses, calculating a
+log odds score relative to the first null hypothesis for any
+additional null hypotheses $i > 1$:
+
+\[
+  s_i = \log \frac{P(D | N_i)}{P(D | N_1)}
+\]
+
+We can also state prior scores $\pi_i$ for how relatively likely
+each null hypothesis is, relative to the main one:
+
+\[
+  \pi_i = \log \frac{P(N_i)}{P(N_1)}
+\]
+
+(Remember that we assumed $\pi_M = 0$; but we're going to put it back
+in anyway now.)
+
+Now we can express $S$ in terms of the internal scores $s$ and
+prior scores $\pi$:
+
+\[
+   S = \log  \frac{e^{s_M + \pi_M}} { 1 + \sum_{i>1} e^{s_i + \pi_i}},
+\]
+
+which therefore simply amounts to an additive correction of the
+original score, $(s_M + \pi_M)$:
+
+\[
+  S = (s_M + \pi_M) - \log \left( 1 + \sum_{i>1} e^{s_i + \pi_i} \right)
+\]
+
+So, to calculate its reported score, HMMER uses four quantities:
+
+\begin{enumerate}
+\item [$s_M$] The (simple, uncorrected) log odds score for the model,
+calculated by optimal alignment of the model to the sequence.
+
+\item [$\pi_M$] The log odds of the priors, $\log P(M)/P(N_1)$. HMMER
+   implicitly assumes this factor to be 0.
+
+\item [$s_2$] The (simple, uncorrected) log odds score
+   for the null2 hypothesis, calculated by rescoring the residues
+   of the alignment under the null2 model.
+
+\item [$\pi_2$] The log odds of the priors, $\log
+P(N_2)/P(N_1)$. HMMER arbitrarily assumes that the null2 model is
+$\frac{1}{256}$ as likely as the main null model, so this factor
+is -8 bits.
+\end{enumerate}
+
+Thus, if you read the code in \prog{masks.c:TraceScoreCorrection()},
+you'll see:
+\begin{itemize}
+\item we start with an alignment.
+\item the null2 model is calculated from the state path, by
+      averaging over the emission distributions of all M and I 
+      states that appear in the path.
+\item The null2 emission probabilities are converted to 
+      log odds scores, relative to the main null model.
+\item The residues in the alignment are rescored under null2,
+      which gives $s_2$.
+\item We subtract the arbitrary 8 bit prior penalty from $s_2$,
+      so now we have $s_2 + \pi_2$.
+\item We calculate the value
+      $\log (1 + e^{s_2 + \pi_2})$.
+      This quantity is the ``null2 score correction''; we return it. 
+\end{itemize}
+
+The null2 correction is usually close to zero, for random sequences,
+but becomes a significant quantitative penalty on biased composition
+sequences.  It gets added to the original alignment score to form
+HMMER's final bit score.
+
+(Finally, in order to guarantee that the scores of individual domains
+add up to the score of a complete sequence, HMMER calculates and
+applies separate null2 corrections for each aligned domain.)
+
+
+
+
+

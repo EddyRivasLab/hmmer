@@ -1,0 +1,124 @@
+.TH "hmmalign" 1 "@RELEASEDATE@" "@PACKAGE@ @RELEASE@" "@PACKAGE@ Manual"
+
+.SH NAME
+.TP 
+hmmalign - align sequences to an HMM profile
+
+.SH SYNOPSIS
+.B hmmalign
+.I [options]
+.I hmmfile
+.I seqfile
+
+.SH DESCRIPTION
+
+.B hmmalign
+reads an HMM file from
+.I hmmfile
+and a set of sequences from 
+.I seqfile,
+aligns the sequences to the profile HMM, 
+and outputs a multiple sequence alignment.
+
+.PP
+.I seqfile 
+may be in any unaligned or aligned file format
+accepted by HMMER. If it is in a multiple alignment format
+(e.g. Stockholm, MSF, SELEX, ClustalW), the existing alignment
+is ignored (i.e., the sequences are read as if they were
+unaligned - hmmalign will align them the way it wants).
+
+.SH OPTIONS
+
+.TP
+.B -h
+Print brief help; includes version number and summary of
+all options, including expert options.
+
+.TP
+.B -m
+Include in the alignment only those symbols aligned to match states.
+Do not show symbols assigned to insert states. 
+
+.TP 
+.BI -o " <f>"
+Save alignment to file
+.I <f>
+instead of to standard output.
+
+.TP
+.B -q
+quiet; suppress all output except the alignment itself.
+Useful for piping or redirecting the output.
+
+.SH EXPERT OPTIONS
+
+.TP
+.BI --informat " <s>"
+Assert that the input 
+.I seqfile
+is in format
+.I <s>;
+do not run Babelfish format autodection. This increases
+the reliability of the program somewhat, because 
+the Babelfish can make mistakes; particularly
+recommended for unattended, high-throughput runs
+of HMMER. Valid format strings include FASTA,
+GENBANK, EMBL, GCG, PIR, STOCKHOLM, SELEX, MSF,
+CLUSTAL, and PHYLIP. See the User's Guide for a complete
+list.
+
+.TP
+.BI --mapali " <f>"
+Reads an alignment from file 
+.I <f>
+and aligns it as a single object to the HMM; e.g. the alignment in 
+.I <f> 
+is held fixed. 
+This allows you to align sequences to a model with 
+.B hmmalign
+and view them in the context of an existing trusted
+multiple alignment. 
+The alignment to the alignment is defined by a "map" kept
+in the HMM, and so is fast and guaranteed to be consistent
+with the way the HMM was constructed from the alignment.
+The alignment in the file
+.I <f> 
+must be exactly the alignment that the HMM was built from.
+Compare the
+.B --withali 
+option.
+
+.TP
+.B --oneline
+Output the alignment with one line per sequence, rather than
+interleaving the sequence alignment blocks. Only affects Stockholm
+format output.
+
+.TP
+.BI --outformat " <s>"
+Output the alignment in format
+.I <s>.
+The default is Stockholm format. Valid formats
+include Stockholm, SELEX, MSF, Clustal, Phylip, and A2M.
+
+.TP 
+.BI --withali " <f>"
+Reads an alignment from file 
+.I <f>
+and aligns it as a single object to the HMM; e.g. the alignment in 
+.I <f> 
+is held fixed.
+This allows you to align sequences to a model with 
+.B hmmalign
+and view them in the context of an existing trusted
+multiple alignment. The alignment to the alignment is
+done with a heuristic (nonoptimal) dynamic programming procedure,
+which may be somewhat slow and is not guaranteed to
+be completely consistent with the way the HMM was
+constructed (though it should be quite close).
+However, any alignment can be used, not just the alignment that
+the HMM was built from. Compare the
+.B --mapali 
+option.
+

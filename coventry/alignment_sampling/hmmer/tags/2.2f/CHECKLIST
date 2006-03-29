@@ -1,0 +1,23 @@
+Checklist for a distribution.
+
+- Update version number information. Versions appear in:
+       top-level Makefile
+       src/versions.h
+
+- Set RELCODE in Makefile. This is the tag that will be attached to
+  RCS files. Very important to change this before a new release.
+
+- Check that all RCS working files are checked in. Subdirectories:
+	src/
+	Demos/
+	Man/
+	Shiva/
+
+
+#################################################################
+future improvements:
+
+- modify man pages so that they can be modified on the fly in an
+installation to pick up information like the release, releasedate.
+
+
