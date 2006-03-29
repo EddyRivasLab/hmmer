@@ -1,0 +1,41 @@
+Shiva: HMMER testsuite
+
+#####################################################################
+I. Compiled test drivers.
+---------------------------------------------------------------------
+
+- A test driver runs with no arguments, gives no output, 
+  and returns EXIT_SUCCESS if the test passes.
+- If the test fails, the test driver calls Die() to print a diagnostic on
+  stderr, and exit with EXIT_FAILURE.
+- The -v option always activates rudimentary verbose output on stdout.
+
+Current tests:
+---------------
+
+evd_test.c           -- exercises code in histogram.c, especially EVD fitting
+masks.c              -- exercises code in masks.c
+tophits_test.c       -- exercises code in tophits.c
+trace_test.c         -- exercises traceback code in core_algorithms.c
+   trace_test.hmm        -- HMM used by trace_test.c
+   trace_test.seq        -- test set used by trace_test.c
+   trace_test.slx        -- alignment used to build trace_test.hmm
+
+
+
+
+
+#####################################################################
+Obsolete: kept in RCS archive only for reproducibility of old results
+---------------------------------------------------------------------
+
+fitting_test.c	Tests of EVD and Gaussian histogram fitting code.
+		17 June 1997
+
+
+
+#####################################################################
+"Shiva" refers to Shiva the Destroyer, from Hindu mythology. Shiva
+destroys to keep the world in balance. It seems an obvious name for
+a test suite directory.
+

@@ -1,0 +1,25 @@
+>seq1 Basic traceback. SNB M ECT
+ACDEFGHIKL
+>seq2 C-terminal tail; one CC transition
+ACDEFGHIKLY
+>seq3 C-terminal tail; three CC transitions
+ACDEFGHIKLYYY
+>seq4 N-terminal tail; one NN transition
+YACDEFGHIKL
+>seq5 N-terminal tail; three NN transitions
+YYYACDEFGHIKL
+>seq6 one JJ
+ACDEFGHIKLYACDEFGHIKL
+>seq7 three JJ
+ACDEFGHIKLYYYACDEFGHIKL
+>seq8 D->E wing unfolding
+ACDEFGHIK
+>seq9 B->D wing unfolding
+CDEFGHIKL
+>seq10 MD, DD, DM transitions
+ACDEHIKL
+>seq11 MI, II, IM transitions
+ACDEFYYYGHIKL
+>seq12 bogosity
+Y
+

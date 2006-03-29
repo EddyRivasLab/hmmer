@@ -1,0 +1,15 @@
+################################################################
+# Makefile for HMMER lib directory
+# Where modules go as they're compiled.
+# This Makefile is only responsible for cleaning the directory.
+# CVS $Id$
+###########
+# @LICENSE@
+###########
+
+clean:
+	-rm -f *.h *.a *~
+
+distclean:
+	-rm -f *.h *.a *~
+	-rm Makefile

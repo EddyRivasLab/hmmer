@@ -1,0 +1,953 @@
+\section{File formats}
+\label{section:formats}
+
+\subsection{HMMER save files}
+\label{section:savefiles}
+
+The file \prog{tutorial/rrm.hmm} gives an example of a HMMER ASCII save
+file. An abridged version is shown here, where (\ldots) mark deletions
+made for clarity and space:
+
+\begin{sreoutput}
+HMMER2.0  [2.3]
+NAME  rrm
+ACC   PF00076
+DESC  RNA recognition motif. (a.k.a. RRM, RBD, or RNP domain)
+LENG  77
+ALPH  Amino
+RF    no
+CS    yes
+MAP   yes
+COM   ../src/hmmbuild -F rrm.hmm rrm.sto
+NSEQ  90
+DATE  Tue Apr 29 11:01:43 2003
+CKSUM 8325
+GA    15.2 0.0
+TC    15.2 0.3
+XT      -8455     -4  -1000  -1000  -8455     -4  -8455     -4 
+NULT      -4  -8455
+NULE     595  -1558     85    338   -294    453  -1158    (...)
+   -21   -313     45    531    201    384  -1998   -644 
+HMM        A      C      D      E      F      G      H    (...)
+         m->m   m->i   m->d   i->m   i->i   d->m   d->d   b->m   m->e
+          -16      *  -6492
+     1  -1084    390  -8597  -8255  -5793  -8424  -8268   (...)  1
+     -   -149   -500    233     43   -381    399    106   (...)
+     C     -1 -11642 -12684   -894  -1115   -701  -1378    -16      * 
+     2  -2140  -3785  -6293  -2251   3226  -2495   -727   (...)  2
+     -   -149   -500    233     43   -381    399    106   (...)
+     C     -1 -11642 -12684   -894  -1115   -701  -1378      *      * 
+(...)
+    76  -2255  -5128   -302    363   -784  -2353   1398   (...)  103
+     -   -149   -500    233     43   -381    399    106   (...)
+     E     -1 -11642 -12684   -894  -1115   -701  -1378      *      * 
+    77   -633    879  -2198  -5620  -1457  -5498  -4367   (...)  104
+     -      *      *      *      *      *      *      *   (...)
+     C      *      *      *      *      *      *      *      *      0 
+//
+\end{sreoutput}
+
+The HMMER2 format provides all the necessary parameters to compare a
+protein sequence to a HMM, including the search mode of the HMM (local
+vs. global, and more), the null (background) model, and the statistics
+to evaluate the match on the basis of a previously fitted extreme
+value distribution.
+
+The format consists of one or more HMMs. Each HMM starts with the
+identifier ``HMMER2.0'' and ends with // on a line by itself. The
+identifier allows backward compatibility as the HMMER software
+evolves. The closing // allows multiple HMMs to be concatenated into a
+single file to provide a database of HMMs.
+
+The format for an HMM is divided into two regions. The first region
+contains text information and miscalleneous parameters in a (roughly)
+tag-value scheme, akin to EMBL formats. This section is ended by a
+line beginning with the keyword \prog{HMM}. The second region is of a
+more fixed whitespace-limited format that contains the main model
+parameters. It is ended by the // that ends the entire definition for
+a single profile HMM.
+
+Both regions contain numbers representing the probabilities that
+parameterize the HMM.  These are stored as integers which are related
+to the probability via a log-odds calculation. The log-odds score
+calculation is defined in \prog{mathsupport.c} and is:
+
+\[
+\mbox{score} = (\mbox{\texttt{int}}) \mbox{\texttt{floor}}(0.5 + (\mbox{\texttt{INTSCALE}} * \log_2(\mbox{prob}/\mbox{null-prob})))
+\]
+
+so conversely, to get a probability from the scores in an HMM save
+file:
+
+\[
+\mbox{prob} = \mbox{null-prob} * 2^{\mbox{score}/\mbox{\texttt{INTSCALE}}}
+\]
+
+\prog{INTSCALE} is defined in \prog{config.h} as 1000. 
+
+Notice that you must know a null model probability to convert scores
+back to HMM probabilities. 
+
+The special case of prob = 0 is translated to ``*'', so a score of *
+is read as a probability of 0. Null model probabilities are not
+allowed to be 0.
+
+This log-odds format has been chosen because it has a better dynamic
+range than storing probabilities as ASCII text, and because the
+numbers are more meaningful to a human reader to a certain extent:
+positive values means a better than expected probability, and negative
+values a worse than expected probability.  However, because of the
+conversion from probabilities, it should be noted that {\em you should
+not edit the numbers in a HMMER save file directly}. The HMM is a
+probabilistic model and expects state transition and symbol emission
+probability distributions to sum to one. If you want to edit the HMM,
+you must understand the underlying Plan7 probabilistic model, and
+ensure the correct summations yourself.
+
+A more detailed description of the format follows.
+
+\subsubsection{header section}
+
+In the header section, each line after the initial identifier has a
+unique tag of five characters or less. For shorter tags, the remainder
+of the five characters is padded with spaces. Therefore the first six
+characters of these lines are reserved for the tag and a space. The
+remainder of the line starts at the seventh character. The parser does
+require this.
+
+\begin{wideitem}
+
+\item [\emprog{HMMER2.0}]
+File format version; a unique identifier for this save file
+format. Used for backwards compatibility. {\em Not} necessarily the
+version number of the HMMER software that generated it; rather, the
+version number of the last HMMER that changed the format so much
+that a whole new function had to be introduced to do the parsing.
+(i.e., HMMER 2.8 might
+still be writing save files that are headed \prog{HMMER2.0}).
+The remainder of the line after the HMMER2.0 tag is free text:
+HMMER's \prog{hmmbuild} currently writes the real version number
+there in brackets, e.g. \prog{[2.3]} in the example ab
+\textbf{Mandatory.}
+
+\item [\emprog{NAME  <s>}] Model name; \prog{<s>} is a single word name for the HMM.
+No spaces or tabs may occur in the name. 
+\prog{hmmbuild} will use the \verb+#=GF ID+ line from a Stockholm alignment
+file to set the name. If this is not present, or the alignment
+is not in Stockholm format, 
+\prog{hmmbuild}
+sets the HMM name using the name of the alignment file, after removing any
+file type suffix. For example, an HMM built from the alignment file
+\prog{rrm.slx} would be named \prog{rrm} by default.
+\textbf{Mandatory.}
+
+\item [\emprog{ACC <s>}] Accession number; \prog{<s>} is a one-word
+accession number for an HMM. This is picked up from the \verb+#=GF AC+
+line in a Stockholm format alignment.  Accessions are stable
+identifiers for Pfam models, whereas names may change from release to
+release. Added in v2.1.1.  \textbf{Optional.}
+
+\item [\emprog{DESC  <s>}] Description line; \prog{<s>} is a one-line description 
+of the HMM. \prog{hmmbuild} will use the \verb+#=GF DE+ line from a
+Stockholm alignment file to set the description line. If this is not
+present, or the alignment is not in Stockholm format, the description
+line is left blank; one can be added manually (or by Perl script)
+if you wish. \textbf{Optional.}
+
+\item [\emprog{LENG  <d>}] Model length; \prog{<d>}, a positive nonzero integer, 
+is the number of match states in the model.
+\textbf{Mandatory.}
+
+\item [\emprog{ALPH  <s>}] Symbol alphabet; \prog{<s>} must be either
+\prog{Amino} or \prog{Nucleic}. This determines the symbol alphabet and the
+size of the symbol emission probability distributions.  If
+\prog{Amino}, the alphabet size is set to 20 and the symbol alphabet
+to ``ACDEFGHIKLMNPQRSTVWY'' (alphabetic order). If \prog{Nucleic}, the
+alphabet size is set to 4 and the symbol alphabet to ``ACGT''.  Case
+insensitive. \textbf{Mandatory.}
+
+\item [\emprog{RF <s>}] Reference annotation flag; \prog{<s>} must be
+either \prog{no} or \prog{yes} (case insensitive). If set to
+\prog{yes}, a character of reference annotation is read for each match
+state/consensus column in the main section of the file (see below);
+else this data field will be ignored.  Reference annotation lines are
+currently somewhat inconsistently used. The only major use in HMMER is
+to specify which columns of an alignment get turned into match states
+when using the \prog{hmmbuild --hand} manual model construction
+option. Reference annotation can only be picked up from Stockholm or
+SELEX format alignments. See description of Stockholm and SELEX formats
+for more details on reference annotation lines. \textbf{Optional};
+assumed to be no if not present.
+
+\item [\emprog{CS <s>}] Consensus structure annotation flag;
+\prog{<s>} must be either \prog{no} or \prog{yes} (case
+insensitive). If set to \prog{yes}, a character of consensus structure
+annotation is read for each match state/consensus column in the main
+section of the file (see below); else this data field will be
+ignored. Consensus structure annotation lines are currently somewhat
+inconsistently used.  Consensus structure annotation can only be
+picked up from Stockholm or SELEX format alignments.  See description
+of Stockholm and SELEX formats for more details on consensus structure
+annotation lines. \textbf{Optional}; assumed to be no if not present.
+
+\item [\emprog{MAP   <s>}] Map annotation flag;
+\prog{<s>} must be either \prog{no} or \prog{yes} (case insensitive).
+If set to \prog{yes}, each line of data for the match state/consensus
+column in the main section of the file is followed by an extra number.
+This number gives the index of the alignment column that the match
+state was made from. This information provides a ``map'' of the match
+states ($1..M$) onto the columns of the alignment ($1..alen$).  It is
+used for quickly aligning the model back to the original alignment,
+e.g.\ when using \prog{hmmalign --mapali}. Added in v2.0.1.
+\textbf{Optional}; assumed to be no if not present.
+
+\item [\emprog{COM   <s>}] Command line log; \prog{<s>} is a one-line
+command. There may be more than one \prog{COM} line per save
+file. These lines record the command line for every HMMER command that
+modifies the save file. This helps us automatically log Pfam
+construction strategies, for example. \textbf{Optional.}
+
+\item [\emprog{CKSUM  <d>}] Training alignment checksum; \prog{<d>} is a nonzero
+positive integer. This number is calculated from the training
+alignment and stored when \prog{hmmbuild} is used. It is used in
+conjunction with the alignment map information to to verify that some
+alignment is indeed the alignment that the map is for.  Added in
+v2.0.1. \textbf{Optional.}
+
+\item [\emprog{GA    <f> <f>}] Pfam gathering thresholds GA1 and GA2.
+This is a feature in progress. See Pfam documentation of GA lines.
+Added in v2.1.1. \textbf{Optional.}
+
+\item [\emprog{TC    <f> <f>}] Pfam trusted cutoffs TC1 and TC2.
+This is a feature in progress. See Pfam documentation of TC lines.
+Added in v2.1.1. \textbf{Optional.}
+
+\item [\emprog{NC    <f> <f>}] Pfam noise cutoffs NC1 and NC2.
+This is a feature in progress. See Pfam documentation of NC lines.
+Added in v2.1.1. \textbf{Optional.}
+
+\item [\emprog{NSEQ  <d>}] Sequence number; \prog{<d>} is a nonzero
+positive integer, the number of sequences that the HMM was trained on.
+This field is only used for logging purposes.
+\textbf{Optional.}
+
+\item [\emprog{DATE  <s>}] Creation date; \prog{<s>} is a date string.
+This field is only used for logging purposes.
+\textbf{Optional.}
+
+\item [\emprog{XT    <d>*8}] Eight ``special'' transitions for
+controlling parts of the algorithm-specific parts of the Plan7 model.
+The null probability used to convert these back to model probabilities
+is 1.0. The order of the eight fields is N $\rightarrow$ B, N
+$\rightarrow$ N, E $\rightarrow$ C, E $\rightarrow$ J, C $\rightarrow$
+T, C $\rightarrow$ C, J $\rightarrow$ B, J $\rightarrow$ J.  (Another
+way to view the order is as four transition probability distributions
+for N,E,C,J; each distribution has two probabilities, the first one
+for ``moving'' and the second one for ``looping''.) For an explanation
+of these special transitions (and definition of the state names), read
+the Plan7 architecture documentation.
+\textbf{Mandatory.}
+
+\item [\emprog{NULT  <d> <d>}] The transition probability distribution
+for the null model (single G state). The null probability used to
+convert these back to model probabilities is 1.0. The order is G
+$\rightarrow$ G, G $\rightarrow$ F.
+\textbf{Mandatory.}
+
+\item [\emprog{NULE  <d>*K}] The symbol emission probability
+distribution for the null model (G state); consists of $K$ (e.g. 4 or
+20) integers. The null probability used to convert these back to model
+probabilities is $1/K$. (Yes, it's a little weird to have a ``null
+probability'' for the null model symbol emission probabilities; this
+is strictly an aesthetic decision, so one can look at the null model
+and easily tell which amino acids are more common than chance
+expectation in the background distribution.) 
+\textbf{Mandatory.}
+
+\item [\emprog{EVD   <f> <f>}] The extreme value distribution
+parameters $\mu$ and $\lambda$, respectively; both floating point
+values. $\lambda$ is positive and nonzero. These values are set when
+the model is calibrated with \prog{hmmcalibrate}. They are used to
+determine E-values of bit scores. If this line is not present,
+E-values are calculated using a conservative analytic upper bound.
+\textbf{Optional.}
+
+\item [\emprog{HMM    }] HMM flag line; flags the end of the header
+section. Otherwised not parsed. Strictly for human readability, the
+symbol alphabet is also shown on this line, aligned to the \prog{NULE}
+fields and the fields of the match and insert symbol emission
+distributions in the main model. The immediately next line is also an
+unparsed human annotation line: column headers for the state
+transition probability fields in the main model section that follows.
+Both lines are \textbf{mandatory.}
+
+\end{wideitem}
+
+\subsubsection{main model section}
+
+All the remaining fields are \textbf{mandatory}, except for the
+alignment map.
+
+The first line in the main model section is atypical; it contains
+three fields, for transitions from the B state into the first node of
+the model. \textit{The only purpose of this line is to set the B
+$\rightarrow$ D transition probability}. The first field is the score
+for $ 1 - t(B \rightarrow D)$. The second field is always ``*'' (there
+is no B $\rightarrow$ I transition). The third field is the score for
+$t(B\rightarrow D)$. The null probability used for converting these
+scores back to probabilities is 1.0. In principle, only the third
+number is needed to obtain $t(B \rightarrow D)$.  In practice, HMMER
+reads both the first and the third number, converts them to
+probabilities, and renormalizes the distribution to obtain $t(B
+\rightarrow D)$. \footnote{OK, it's more complicated than it has to
+be. I discovered this temporary insanity when I tried to document it.}
+
+The remainder of the model has three lines per node, for $M$ nodes
+(where $M$ is the number of match states, as given by the \prog{LENG}
+line). These three lines are:
+
+\begin{wideitem}
+
+\item [\textbf{Match emission line}] The first field is the node number (1..M).
+The HMMER parser verifies this number as a consistency check (it
+expects the nodes to come in order). The next $K$ numbers for match
+emission scores, one per symbol. The null probability used to convert
+them to probabilities is the relevant null model emission probability
+calculated from the \prog{NULE} line.
+
+If \prog{MAP} was \prog{yes}, then there is one more number on this
+line, representing the alignment column index for this match state.
+See \prog{MAP} above for more information about the alignment map, and
+also see the man pages for \prog{hmmalign --mapali}.  Added in
+v2.0.1. This field is optional, for backwards compatibility with 2.0.
+
+\item [\textbf{Insert emission line}] The first field is a character of
+reference annotation (RF), or ``-'' if there is no reference
+annotation. The remaining fields are $K$ numbers for insert emission
+scores, one per symbol, in alphabetic order. The null probability used
+to convert them to probabilities is the relevant null model emission
+probability calculated from the \prog{NULE} line.
+
+\item [\textbf{State transition line}] The first field is a character
+of consensus structure annotation (CS), or ``-'' if there is no
+consensus structure annotation. The remaining 9 fields are state
+transition scores. The null probability used to convert them back from
+log odds scores to probabilities is 1.0. The order of these scores is
+given by the annotation line at the top of the main section: it is M
+$\rightarrow$ M, M $\rightarrow$ I, M $\rightarrow$ D; I $\rightarrow$
+M, I $\rightarrow$ I; D $\rightarrow$ M, D $\rightarrow$ D; B
+$\rightarrow$ M; M $\rightarrow$ E.
+
+\end{wideitem}
+
+The insert emission and state transition lines for the final node $M$
+are special.  Node $M$ has no insert state, so all the insert
+emissions are given as ``*''. (In fact, this line is skipped by the
+parser, except for its RF annotation.) There is also no next node, so
+only the B $\rightarrow$ M and M $\rightarrow$ E transitions are
+valid; the first seven transitions are always ``*''.  (Incidentally,
+the M $\rightarrow$ E transition score for the last node is always 0,
+because this probability has to be 1.0.)
+
+Finally, the last line of the format is the ``//'' record separator.
+
+\subsubsection{renormalization}
+
+After the parser reads the file and converts the scores back to
+probabilities, it renormalizes the probability distributions to sum to
+1.0 to eliminate minor rounding/conversion/numerical imprecision
+errors.  If you're trying to emulate HMMER save files, it might be
+useful to know what HMMER considers to be a probability
+distribution. See
+\prog{Plan7Renormalize()} in \prog{plan7.c} for the relevant
+function.
+
+\begin{wideitem}
+
+\item [\textbf{null emissions}] The $K$ symbol emissions 
+given on the \prog{NULE} line.
+
+\item [\textbf{null transitions}] The two null model transitions
+given on the \prog{NULT} line.
+
+\item [\textbf{N,E,C,J specials}] Each of the four special states N,E,C,J have two
+state transition probabilities (move and loop). All four distributions
+are specified on the \prog{XT} line.
+
+\item [\textbf{B transitions}] $M$ B $\rightarrow$
+M entry probabilities are given by the 9th field in the state
+transition line of each of the $M$ nodes. The B $\rightarrow$ D
+transition (from the atypical first line of the main model section) is
+also part of this state transition distribution.
+
+\item [\textbf{match transitions}] One distribution of 4 numbers per node; $M \rightarrow M$, 
+$M \rightarrow I$, $M \rightarrow D$, and $M \rightarrow E$ (fields 2,
+3, 4, and 10 in the state transition line of each node). Note the
+asymmetry between B $\rightarrow$ M and M $\rightarrow$ E; entries are
+a probability distribution of their own, while exits are not.
+
+\item [\textbf{insert transitions}] One distribution of 2 numbers per node; $I \rightarrow M$, 
+$I \rightarrow I$ (fields 5 and 6 of the state transition line of each
+node).
+
+\item [\textbf{delete transitions}] One distribution of 2 numbers per
+node; $D \rightarrow M$, $D \rightarrow D$ (fields 7 and 8 of the
+state transition line of each node).
+
+\item [\textbf{match emissions}] One distribution of $K$ numbers
+per node; the $K$ match symbol emissions given on the first line of
+each node in the main section.
+
+\item [\textbf{insert emissions}] One distribution of $K$ numbers
+per node; the $K$ insert symbol emissions given on the second line of
+each node in the main section.
+
+\end{wideitem}
+
+\subsubsection{note to developers}
+
+Though I make an effort to keep this documentation up to date, it may
+lag behind the code. For definitive answers, please check the parsing
+code in \prog{hmmio.c}. The relevant function to see what's being
+written is \prog{WriteAscHMM()}. The relevant function to see how it's
+being parsed is \prog{read\_asc20hmm()}.
+
+\subsection{HMMER null model files}
+
+A ``null model'' is used to calculate HMMER log odds scores. The null
+model states the expected background occurrence frequencies of the 20
+amino acids or the 4 nucleotide bases. The null model also contains a
+parameter called p1, which is the $G \rightarrow G$ transition
+probability in the Plan7 null model (see the figure in the
+Introduction).
+
+For protein models, by default, the 20 residue frequencies are set to
+the amino acid composition of SWISS-PROT 34, and p1 is set to 350/351
+(which, because the Plan7 null model implies a geometric length
+distribution, states that the mean length of a protein is about 350
+residues). For DNA/RNA models, by default, the 4 residue frequencies
+are set to 0.25 each, and p1 is set to 1000/1001.  [In the code, see
+\prog{prior.c:P7DefaultNullModel()}, and the amino acid frequencies are
+set in \prog{iupac.c:aafq}.]
+
+Each HMM carries its own null model (see above, HMM file format).  The
+null model is determined when the model is built using
+\prog{hmmbuild}. The default null model can be overridden using
+the \prog{--null <f>} option to \prog{hmmbuild}, where \prog{<f>} is
+the name of a null model file.  
+
+Two example null model files, \prog{amino.null} and
+\prog{nucleic.null}, are provided in the \prog{tutorial} subdirectory
+of the HMMER distribution. (They are copies of the internal default
+HMMER null model settings.)  \prog{nucleic.null} looks like this:
+
+\begin{sreoutput}
+# nucleic.null
+#
+# Example of a null model file for DNA/RNA sequences.
+# The values in this file are the HMMER 2 default
+# settings.
+
+Nucleic
+0.25     # A
+0.25     # C
+0.25     # G
+0.25     # T
+0.999001 # p1
+\end{sreoutput}
+
+Anything on a line following a \prog{\#} is a comment, and is ignored
+by the software. Blank lines are also ignored. Valid fields are
+separated by blanks or new lines. Only the order that the fields occur
+in the file is important, not how they're put on lines; for example,
+20 required fields can all occur on one line separated by blanks, or
+on 20 separate lines. 
+
+There must be 6 or 22 non-comment fields in a null model file,
+occurring in the following order:
+
+\begin{wideitem}
+\item [\textbf{Alphabet type}] The first (non-comment) word in the
+file must be Nucleic or Amino, specifying what kind of sequence the
+null model is for.
+
+\item [\textbf{Emission probabilities}] 4 or 20 background
+frequencies for the amino acids or nucleotides. These \textit{must}
+come in alphabetical order (the A, C, G, T comments in the example
+above are only for easier human viewing, and aren't parsed by the
+software).
+
+\item [\textbf{p1 probability}] The $G \rightarrow G$ transition
+probability in the null model. Basically, if the expected mean length
+of target sequences is $x$, p1 should be $\frac{x}{x+1}$.
+\end{wideitem}
+
+Null model files are parsed in \prog{prior.c:P7ReadNullModel()}.
+
+\subsection{HMMER prior files}
+\label{section:priorfiles}
+
+Observed counts of emissions (residues) and transitions (insertions
+and deletions) in a multiple alignment are combined with
+\textit{Dirichlet priors} to convert them to probabilities
+in an HMM. 
+
+For protein models, by default, HMMER uses a nine-component mixture
+Dirichlet prior for match emissions, and single component Dirichlet
+priors for insert emissions and transitions. The nine-component match
+emission mixture Dirichlet comes from the work of Kimmen Sj\"{o}lander
+\cite{Sjolander96}.
+
+For DNA/RNA models, by default, HMMER uses single component
+Dirichlets.
+
+Two example null model files, \prog{amino.pri} and \prog{nucleic.pri},
+are provided in the \prog{tutorial} subdirectory of the HMMER
+distribution. (They are copies of the internal default HMMER prior
+settings.)
+
+The way the format of these files is parsed is identical to null
+models: everything after a \prog{\#} on a line is a comment, the order
+of occurrence of the fields is important, and fields must be separated
+by either blanks or newlines.
+
+A prior file consists of the following fields:
+
+\begin{wideitem}
+\item [\textbf{Strategy}] Must be the keyword \prog{Dirichlet}. Currently 
+this is the only available prior strategy in the public HMMER release.
+
+\item [\textbf{Alphabet type}] Must be either \prog{Amino} or
+\prog{Nucleic}.
+
+\item [\textbf{Transition priors}] 1 + 8a fields, where a
+is the number of transition mixture components. The first field is the
+number of transition prior components, a (often just 1). Then, for each
+component, eight fields follow: the prior probability of that mixture
+component (1.0 if there is only one component), then the Dirichlet
+alpha parameters for the seven transitions, in order of $M \rightarrow
+M$, $M \rightarrow I$, $M \rightarrow D$, $I \rightarrow M$, $I
+\rightarrow I$, $D \rightarrow M$, $D \rightarrow I$.
+
+\item [\textbf{Match emission priors}] 1 + (5 or 21)b fields,
+where b is the number of match emission mixture components.  The first
+field is the number of match emission mixture components, b. Then, for
+each component, 5 or 21 fields follows: the prior probability of that
+mixture component (1.0 if there is only one component), then the
+Dirichlet alpha parameters for the 4 or 20 residue types, in
+alphabetical order.
+
+\item [\textbf{Insert emission priors}] 1 + (5 or 21)c fields,
+where c is the number of insert emission mixture components.  The
+first field is the number of insert emission mixture components,
+c. Then, for each component, 5 or 21 fields follows: the prior
+probability of that mixture component (1.0 if there is only one
+component), then the Dirichlet alpha parameters for the 4 or 20
+residue types, in alphabetical order.
+\end{wideitem}
+
+In the code, prior files are parsed by \prog{prior.c:P7ReadPrior()}.
+
+\subsection{Sequence files}
+
+\subsubsection{supported file formats}
+ 
+HMMER can automatically recognize and parse a number of common file
+formats. The best supported of these formats are listed below. If you
+know your sequence database is in one of these formats, you can use
+the file. If you are formatting sequences yourself, see the section of
+FASTA format below for unaligned sequences, and the section on
+Stockholm format for alignments; these are the recommended native
+formats for HMMER.
+
+\begin{tabular}{ll}
+\multicolumn{2}{l}{\textbf{Unaligned sequence formats}} \\
+FASTA      & Pearson FASTA format; BLAST databases \\
+SWISS-PROT & SWISS-PROT protein sequence database\\ 
+PIR        & PIR protein sequence database \\
+EMBL       & EMBL DNA sequence database \\
+GenBank    & GenBank DNA database flat files\\
+GCGdata    & Wisconsin GCG sequence database format \\
+GCG        & Wisconsin GCG single sequence format \\
+\end{tabular}
+
+\begin{tabular}{ll}
+\multicolumn{2}{l}{\textbf{Multiple sequence alignment formats}}\\
+Stockholm & The preferred format for HMMER/Pfam (see below)\\
+SELEX     & The old format for HMMER/Pfam\\
+GCG MSF   &   GCG alignment format \\
+CLUSTAL   &   CLUSTALW and CLUSTALV format \\
+PHYLIP    &   Phylip phylogenetic software format \\
+\end{tabular}
+
+For programs that do sequential, database-style access (i.e.  where
+you'd usually use an unaligned flat file), the alignment formats are
+read as if they were multiple unaligned sequences.
+
+There is no provision for enforcing that single unaligned sequence
+formats (i.e. GCG unaligned sequence format) are single sequence
+only. HMMER will happily try to read more than one sequence if your
+file contains more than one. However, this may not give the results
+you expected.
+
+Staden ``experiment file'' format is parsed using the EMBL file
+parser, but this functionality is relatively unsupported. There is one
+wrinkle in this. Staden experiment files use '-' characters to
+indicate 'N' -- i.e., that a base is present in a sequence read, but
+its identity is unknown. Therefore, the software replaces any '-' in
+an EMBL sequence with an 'N'. Sometimes people use the unaligned
+formats to distribute aligned sequences by including gap
+characters. If EMBL files are used i this way for aligned strings,
+they must use a different character than '-' to indicate gaps.
+
+\subsection{FASTA unaligned sequence format}
+
+An example of a simple FASTA file: 
+
+\begin{verbatim}
+>seq1 This is the description of my first sequence.
+AGTACGTAGTAGCTGCTGCTACGTGCGCTAGCTAGTACGTCA
+CGACGTAGATGCTAGCTGACTCGATGC
+>seq2 This is a description of my second sequence.
+CGATCGATCGTACGTCGACTGATCGTAGCTACGTCGTACGTAG
+CATCGTCAGTTACTGCATGCTCG
+\end{verbatim}
+
+FASTA is probably the simplest of formats for unaligned sequences.
+FASTA files are easily created in a text editor.  Each sequence is
+preceded by a line starting with \verb+>+. The first word on this line
+is the name of the sequence. The rest of the line is a description of
+the sequence (free format). The remaining lines contain the sequence
+itself. You can put as many letters on a sequence line as you want.
+
+Blank lines in a FASTA file are ignored, and so are spaces or other
+gap symbols (dashes, underscores, periods) in a sequence. Any other
+non-amino or non-nucleic acid symbols in the sequence should produce
+an appropriately strident string of warnings on your terminal screen
+when you try to use the file.
+
+
+\subsection{Stockholm, the recommended multiple sequence alignment format}
+
+While we recommend a community standard format (FASTA) for unaligned
+sequence files, the recommended multiple alignment file format is not
+a community standard.  The Pfam Consortium developed a format (based
+on extended SELEX) called ``Stockholm format''.  The reasons for this
+are two-fold. First, there really is no standard accepted format for
+multiple sequence alignment files, so we don't feel guilty about
+inventing a new one. Second, the formats of popular multiple alignment
+software (e.g. CLUSTAL, GCG MSF, PHYLIP) do not support rich
+documentation and markup of the alignment.  Stockholm format was
+developed to support extensible markup of multiple sequence
+alignments, and we use this capability extensively in both RNA work
+(with structural markup) and the Pfam database (with extensive use of
+both annotation and markup).
+
+\subsubsection{a minimal Stockholm file}
+\begin{sreoutput}
+# STOCKHOLM 1.0
+
+seq1  ACDEF...GHIKL
+seq2  ACDEF...GHIKL
+seq3  ...EFMNRGHIKL
+
+seq1  MNPQTVWY
+seq2  MNPQTVWY
+seq3  MNPQT...
+//
+\end{sreoutput}
+
+The simplest Stockholm file is pretty intuitive, easily generated in a
+text editor. It is usually easy to convert alignment formats into a
+``least common denominator'' Stockholm format. For instance, GCG's MSF
+format and the output of the CLUSTAL multiple alignment programs are
+similar interleaved formats.
+
+The first line in the file must be \verb+# STOCKHOLM 1.x+, where
+\verb+x+ is a minor version number for the format specification
+(and which currently has no effect on my parsers). This line allows a
+parser to instantly identify the file format.
+
+In the alignment, each line contains a name, followed by the aligned
+sequence. A dash or period denotes a gap. If the alignment is too long
+to fit on one line, the alignment may be split into multiple blocks,
+with blocks separated by blank lines. The number of sequences, their
+order, and their names must be the same in every block. Within a given
+block, each (sub)sequence (and any associated \verb+#=GR+ and
+\verb+#=GC+ markup, see below) is of equal length, called the
+\textit{block length}. Block lengths may differ from block to block;
+the block length must be at least one residue, and there is no
+maximum.  
+
+Other blank lines are ignored. You can add comments to the file on
+lines starting with a \verb+#+.
+
+All other annotation is added using a tag/value comment style. The
+tag/value format is inherently extensible, and readily made
+backwards-compatible; unrecognized tags will simply be ignored. Extra
+annotation includes consensus and individual RNA or protein secondary
+structure, sequence weights, a reference coordinate system for the
+columns, and database source information including name, accession
+number, and coordinates (for subsequences extracted from a longer
+source sequence) See below for details.
+
+\subsubsection{syntax of Stockholm markup}
+
+There are four types of Stockholm markup annotation, for per-file,
+per-sequence, per-column, and per-residue annotation:
+
+\begin{wideitem}
+\item [\emprog{\#=GF <tag> <s>}]
+        Per-file annotation. \prog{<s>} is a free format text line
+        of annotation type \prog{<tag>}. For example, \prog{\#=GF DATE
+        April 1, 2000}. Can occur anywhere in the file, but usually
+        all the \prog{\#=GF} markups occur in a header.
+
+\item [\emprog{\#=GS <seqname> <tag> <s>}]
+        Per-sequence annotation. \prog{<s>} is a free format text line
+        of annotation type \prog{tag} associated with the sequence
+        named \prog{<seqname>}. For example, \prog{\#=GS seq1
+        SPECIES\_SOURCE Caenorhabditis elegans}. Can occur anywhere
+        in the file, but in single-block formats (e.g. the Pfam
+        distribution) will typically follow on the line after the
+        sequence itself, and in multi-block formats (e.g. HMMER
+        output), will typically occur in the header preceding the
+        alignment but following the \prog{\#=GF} annotation.
+
+\item [\emprog{\#=GC <tag> <...s...>}]
+        Per-column annotation. \prog{<...s...>} is an aligned text line
+        of annotation type \prog{<tag>}.
+        \verb+#=GC+ lines are
+        associated with a sequence alignment block; \prog{<...s...>}
+        is aligned to the residues in the alignment block, and has
+        the same length as the rest of the block.
+        Typically \verb+#=GC+ lines are placed at the end of each block.
+
+\item [\emprog{\#=GR <seqname> <tag> <.....s.....>}]
+        Per-residue annotation. \prog{<...s...>} is an aligned text line
+        of annotation type \prog{<tag>}, associated with the sequence
+        named \prog{<seqname>}. 
+        \verb+#=GR+ lines are 
+        associated with one sequence in a sequence alignment block; 
+        \prog{<...s...>}
+        is aligned to the residues in that sequence, and has
+        the same length as the rest of the block.
+        Typically
+        \verb+#=GR+ lines are placed immediately following the
+        aligned sequence they annotate.
+\end{wideitem}
+
+\subsubsection{semantics of Stockholm markup}
+
+Any Stockholm parser will accept syntactically correct files, but is
+not obligated to do anything with the markup lines. It is up to the
+application whether it will attempt to interpret the meaning (the
+semantics) of the markup in a useful way. At the two extremes are the
+Belvu alignment viewer and the HMMER profile hidden Markov model
+software package.
+
+Belvu simply reads Stockholm markup and displays it, without trying to
+interpret it at all. The tag types (\prog{\#=GF}, etc.) are sufficient
+to tell Belvu how to display the markup: whether it is attached to the
+whole file, sequences, columns, or residues.
+
+HMMER uses Stockholm markup to pick up a variety of information from
+the Pfam multiple alignment database. The Pfam consortium therefore
+agrees on additional syntax for certain tag types, so HMMER can parse
+some markups for useful information. This additional syntax is imposed
+by Pfam, HMMER, and other software of mine, not by Stockholm format
+per se. You can think of Stockholm as akin to XML, and what my
+software reads as akin to an XML DTD, if you're into that sort of
+structured data format lingo.
+
+The Stockholm markup tags that are parsed semantically by my software
+are as follows:
+
+\subsubsection{recognized \#=GF annotations}
+\begin{wideitem}
+\item [\emprog{ID  <s>}] 
+        Identifier. \emprog{<s>} is a name for the alignment;
+        e.g. ``rrm''. One word. Unique in file.
+
+\item [\emprog{AC  <s>}]
+        Accession. \emprog{<s>} is a unique accession number for the
+        alignment; e.g. 
+        ``PF00001''. Used by the Pfam database, for instance. 
+        Often a alphabetical prefix indicating the database
+        (e.g. ``PF'') followed by a unique numerical accession.
+        One word. Unique in file. 
+        
+\item [\emprog{DE  <s>}]
+        Description. \emprog{<s>} is a free format line giving
+        a description of the alignment; e.g.
+        ``RNA recognition motif proteins''. One line. Unique in file.
+
+\item [\emprog{AU  <s>}]
+        Author. \emprog{<s>} is a free format line listing the 
+        authors responsible for an alignment; e.g. 
+        ``Bateman A''. One line. Unique in file.
+
+\item [\emprog{GA  <f> <f>}]
+        Gathering thresholds. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs used in gathering the
+        members of Pfam full alignments. 
+        
+\item [\emprog{NC  <f> <f>}]
+        Noise cutoffs. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs, set according to the
+        highest scores seen for unrelated sequences when gathering
+        members of Pfam full alignments.
+
+\item [\emprog{TC  <f> <f>}]
+        Trusted cutoffs. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs, set according to the
+        lowest scores seen for true homologous sequences that
+        were above the GA gathering thresholds, when gathering
+        members of Pfam full alignments. 
+\end{wideitem}
+
+\subsubsection{recognized \#=GS annotations}
+
+\begin{wideitem}
+\item [\emprog{WT  <f>}]
+        Weight. \emprog{<f>} is a positive real number giving the
+        relative weight for a sequence, usually used to compensate
+        for biased representation by downweighting similar sequences.   
+        Usually the weights average 1.0 (e.g. the weights sum to
+        the number of sequences in the alignment) but this is not
+        required. Either every sequence must have a weight annotated, 
+        or none of them can.  
+
+\item [\emprog{AC  <s>}]
+        Accession. \emprog{<s>} is a database accession number for 
+        this sequence. (Compare the \prog{\#=GF AC} markup, which gives
+        an accession for the whole alignment.) One word. 
+        
+\item [\emprog{DE  <s>}]
+        Description. \emprog{<s>} is one line giving a description for
+        this sequence. (Compare the \prog{\#=GF DE} markup, which gives
+        a description for the whole alignment.)
+\end{wideitem}
+
+
+\subsubsection{recognized \#=GC annotations}
+
+\begin{wideitem}
+\item [\emprog{RF}]
+        Reference line. Any character is accepted as a markup for a
+        column. The intent is to allow labeling the columns with some
+        sort of mark.
+        
+\item [\emprog{SS\_cons}]
+        Secondary structure consensus. For protein alignments,
+        DSSP codes or gaps are accepted as markup: [HGIEBTSCX.-\_], where
+        H is alpha helix, G is 3/10-helix, I is p-helix, E is extended
+        strand, B is a residue in an isolated b-bridge, T is a turn, 
+        S is a bend, C is a random coil or loop, and X is unknown
+        (for instance, a residue that was not resolved in a crystal
+        structure). 
+
+\item [\emprog{SA\_cons}]
+        Surface accessibility consensus. 0-9, gap symbols, or X are
+        accepted as markup. 0 means <10\% accessible residue surface
+        area, 1 means <20\%, 9 means <100\%, etc. X means unknown
+        structure.
+\end{wideitem}
+
+\subsubsection{recognized \#=GR annotations}
+\begin{wideitem}
+\item [\emprog{SS}]
+        Secondary structure consensus. See \prog{\#=GC SS\_cons} above.
+\item [\emprog{SA}]
+        Surface accessibility consensus. See \prog{\#=GC SA\_cons} above.
+\end{wideitem}
+
+
+\subsection{Count vector files}
+
+\prog{hmmbuild} saves a ``count vector file'' when the \prog{--cfile}
+option is invoked. The count vector file contains observed weighted
+counts for match emissions, insert emissions, and state transitions.
+The intended use of the count vector file is for training mixture
+Dirichlet priors (something we do locally), but since it may be useful
+for other purposes, the format is documented here.
+
+Each line of the file is an annotated count vector. The format of this
+line is:
+
+\begin{wideitem}
+\item[\textbf{Vector type}] The first field is a single letter M,
+I, or T, specifying whether the line is for a match emission, insert
+emission, or transition vector.
+
+\item[\textbf{Counts}] The next several fields are the counts
+themselves. 
+
+For match and insert emission vectors, there are either 4 or 20 real
+numbers, depending on whether the alignment was DNA/RNA or protein,
+respectively; and the counts are in alphabetical order by residue
+(``ACGT'' for DNA/RNA, ``AC..WY'' for protein).
+
+For state transition vectors, there are 7 real numbers, in order MM,
+MI, MD, IM, II, DM, DD.
+
+The counts are real numbers, not integers, because they're
+weighted. Both relative weights (default: tree weights) and absolute
+weights (effective sequence number) affect the observed counts. (They
+are exactly the numbers used by HMMER before addition of Dirichlet
+prior pseudocounts and renormalization.) Options affecting either
+relative or absolute weighting will therefore affect the count
+vectors. To see unweighted raw count vectors, add \prog{--wnone
+--idlevel 1.0} to the \prog{hmmbuild} command line.
+
+\item[\textbf{Alignment name}] If the alignment was in Stockholm
+format (for example, a Pfam distribution), the name of the alignment
+is recorded in this field. (A count vector file may contain vectors
+from a large number of alignments.) If this information is
+unavailable, ``-'' appears instead.
+
+\item[\textbf{Alignment column}] An integer indicating which alignment
+column this count vector corresponds to. In combination with the
+alignment name, this allows you to retrieve other annotation from the
+vicinity of this count vector in the original alignment file if you
+need to.
+
+\item[\textbf{HMM node}] An integer indicating which HMM node this
+vector corresponds to. This number is always $\leq$ the alignment
+column index, because some alignment columns are skipped in
+constructing an HMM. 
+
+Note that count vectors are only recorded for the alignment columns
+that became HMM match states. If you want to collect a count vector
+from \emph{every} alignment column, you need to make \prog{hmmbuild}
+assign every column to a match state. You can do this by invoking the
+\prog{--fast --gapmax 1.0} options to \prog{hmmbuild}.
+
+\item[\textbf{Structure annotation}] The next 2
+fields are single characters representing structural annotation
+for this column in the alignment, if available. If not,
+``-'' characters appear.
+
+The first field is Stockholm format's \verb+#=GC SS_cons+ secondary
+structure consensus annotation for the column. This is a single letter
+DSSP code.
+
+The second field is Stockholm format's \verb+#=GC SA_cons+ surface
+accessibility annotation for the column. This is a single character
+0-9 (representing $<$10\% to $<$100\% accessibility), or X for
+unknown, or - or . for columns that are gaps in all the known
+structures in the alignment.
+
+\item[\textbf{More structure annotation}] Transition vectors
+(only) have another two fields of structure annotation for the 
+\emph{next} (k+1'th) HMM node. Transition vectors are thought of as
+being between the k'th and the k+1'th HMM node, so most applications
+would probably want to see the annotation for both.  Note that this
+does not necessarily correspond to the annotation on the next
+alignment column, because that column is not necessarily assigned to
+an HMM node.
+
+\end{wideitem}
+
+
+

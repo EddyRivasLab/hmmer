@@ -1,0 +1,59 @@
+HMMER - Biological sequence analysis with profile hidden Markov models
+@COPYRIGHT@
+
+This source code is provided under a nonexclusive license granted by
+Washington University to Southwest Parallel Software, Inc. (SPS).  For
+details, see the text of the agreement signed by Washington University
+and Southwest Parallel Software, March 2003:
+
+     Washington University 
+     Center of Technology Management
+     Campus Box 8013
+     660 South Euclid Avenue
+     St. Louis MO 63110 USA
+     Reference: Washington University CTM case #CH0024-14.
+
+________________________________________________________________
+
+Some parts of this source code is copyrighted but freely
+redistributable work of other authors, as follows:
+
+Portions of src/sqio.c are 
+Copyright (C) 1990 D.G. Gilbert 
+[Freely redistributable from Don Gilbert's READSEQ package]
+
+install.sh and squid/install.sh are 
+Copyright (C) 1991 by the Massachusetts Institute of Technology
+[Freely redistributable under the MIT License; see top of files]
+
+squid/hsregex.c is
+Copyright (C) 1986, 1993, 1995 University of Toronto.
+[Freely redistributable; see notice in file]
+
+config.guess, config.sub, and portions of configure and squid/configure are:
+Copyright (C) Free Software Foundation
+[Freely distributable; see notice in files]
+________________________________________________________________
+
+Portions of HMMER cannot be redistributed under non-GPL licenses.
+These have been removed from this distribution. These include:
+   
+   configure.in, squid/configure.in:
+       These Autoconf scripts contain GPL'ed macros from the
+       GNU Autoconf macro archive.
+
+   "Postal" code from Ian Holmes (hmmpostal.c, display.c, postprob.c,
+   postprob.h in src/)
+       Copyrighted and GPL'ed by Ian Holmes, Oxford University.
+
+This distribution of HMMER will compile and run without these files.
+Should it be necessary, you can access the GPL'ed originals by
+downloading the GPL'ed version of the HMMER source code distribution
+at http://hmmer.wustl.edu.
+________________________________________________________________
+
+
+
+
+
+

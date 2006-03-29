@@ -1,0 +1,93 @@
+Checklist for a HMMER distribution.
+
+1. Make sure we're up to date w/ CVS. (Worry about commits here, on
+   other machines and other dirs that may have squid modifications)
+	% ./configure
+        % make distclean
+	% cvs update
+	% cvs commit
+   Clean up any stray files.
+
+2. Test dev code before making release.
+   This works anywhere (e.g. wren; don't have to be on wrasse)
+   With and without memory leak tests ('make check' doesn't include -m flag)
+   ccmalloc 0.3.9 is installed in /usr/local on wren and wrasse.
+   Note: ccmalloc not threadsafe, so this doesn't test threads implementation.
+   PVM isn't tested at all (yet).
+    	% autoconf; (cd squid; autoconf)
+     	% ./configure --enable-ccmalloc
+        % make
+	% (cd testsuite; ../ssdk/sqc -m -p ../squid 2 exercises.sqc . ../src)
+	% make distclean
+	% ./configure --enable-threads --enable-lfs
+	% make
+	% make check
+	% make optcheck
+
+3. Write release notes.
+   cvs2cl.pl creates ChangeLog; a useful summary of CVS logs
+	% ssdk/cvs2cl.pl    
+        % emacs Release-Notes/RELEASE-${RELEASE}
+	% cvs add Release-Notes/RELEASE-${RELEASE}
+
+4. Update copyright, year, relcode, etc:
+        configure.ac
+	Licenses/gnu   (year only)
+
+5. Commit to CVS. Include package and release # in the log message.
+	% cvs commit
+
+6. Make a distro. 
+   yes, you have to autoconf and make a new configure script; you
+   just updated the info in configure.ac, remember?
+	% make distclean
+	% autoconf; (cd squid; autoconf); ./configure
+	% make dist
+	
+
+7. Create the binary distributions, on w001, the compile farm master node.
+   ssh -x w001.
+   Make a directory somewhere, go there.
+         ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/nodebuild .
+         ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/rootbuild .
+         ln -s /nfs/wol2/people/eddy/src/hmmer/ssdk/buildall .
+         ln -s /nfs/wol2/people/eddy/src/hmmer/hmmer-2.3.tar.gz .
+         ./buildall hmmer-2.3 >& build.log &
+         tail -f build.log
+
+    darwin (dual800) is done manually:
+    ssh into dual800 in Warren's lab.
+      scp eddy@wrasse.wustl.edu:src/hmmer/hmmer-2.3.tar.gz .
+      scp eddy@wrasse.wustl.edu:src/hmmer/ssdk/nodebuild .
+      ./nodebuild /Users/seddy hmmer-2.3  powerpc-apple-osx "--enable-threads --enable-lfs --enable-altivec" CFLAGS="-O2" 
+      scp hmmer-2.3.bin.powerpc-apple-osx.tar.gz eddy@wrasse.wustl.edu:
+      scp hmmer-2.3.powerpc-apple-osx.log eddy@wrasse.wustl.edu:
+
+      [cpu0/pkinase/50000 =  513.270u  w/o altivec]
+      [cpu0/pkinase/50000 =  177.360u 2:58.04   w/  altivec]
+      [cpu2/pkinase/50000 =  206.610u 1:44.90   w/  altivec]
+      
+    whippet is also manual:
+      ssh -x -vv whippet
+      cd /scratch/eddy
+      cp ~/src/hmmer/hmmer-2.3.tar.gz .
+      cp ~/src/hmmer/ssdk/nodebuild .
+      ./nodebuild /scratch/eddy hmmer-2.3  hp-hpux "--enable-threads --enable-lfs" CFLAGS="-O"
+
+whelk01 
+  env CC=icc CFLAGS="-O -static" ./configure --enable-threads --enable-lfs
+  make
+  make bindist
+  make check
+
+  binaries/hmmsearch tutorial/rrm.hmm nr > foo1 &
+  binaries/hmmpfam /nfs/db01/databases/Pfam/Pfam_ls tutorial/Artemia.fa > foo2 &
+  binaries/hmmbuild foo3 /nfs/db01/databases/Pfam/Pfam-A.seed > foo4 &
+  binaries/hmmcalibrate foo3 >& foo5 &
+
+  binaries/hmmbuild foo6 tutorial/pkinase.sto
+  time binaries/hmmcalibrate --cpu 0 --num 50000 foo6
+  time binaries/hmmcalibrate --cpu 4 --num 50000 foo6
+
+  574.810u
+
