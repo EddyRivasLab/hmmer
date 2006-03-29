@@ -410,6 +410,12 @@ extern struct p7trace_s *MasterTraceFromMap(int *map, int M, int alen);
 extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr, 
 			      struct p7trace_s ***ret_tr);
 
+/* from sample.c
+ */
+extern void P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
+			      struct dpmatrix_s *mx, struct p7trace_s **ret_tr,
+			      ESL_RANDOMNESS *randomness);
+
 
 #endif /*FUNCSH_INCLUDED*/
 
