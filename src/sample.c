@@ -23,6 +23,9 @@
 #include "esl_random.h"
 
 
+#define MAX_CHOICE_WEIGHTS 10000 /* Maximum number of weights the choice
+				  * functions can handle. /*
+
 /* Function: _weighted_choice()
  * Date:     Alex Coventry, Tue Mar 28 3:22:10 2006 (St. Louis)
  *
@@ -39,9 +42,9 @@
  */
 int
 _weighted_choice(ESL_RANDOMNESS *randomness, int N,
-		 double *weights) {
-  int weight_idx;
-  double max_weight, total_weight;
+		 int *weights) {
+  int weight_idx, max_weight, rv;
+  double *eweights;
 
   /* Find the largest weight. */
   max_weight = -INFTY;
@@ -49,8 +52,18 @@ _weighted_choice(ESL_RANDOMNESS *randomness, int N,
     if (weights[weight_idx] > max_weight) 
       max_weight = weights[weight_idx];
 
-  DNorm(weights, N);
-  return esl_rnd_DChoose(randomness, weights, N);  
+  eweights = (double *)MallocOrDie(N*sizeof(double));
+
+  /* Convert to exponential space, normalizing to avoid under/overflow
+   * errors */
+  for (weight_idx = 0; weight_idx < N; weight_idx++)
+    eweights[weight_idx] = exp(weights[weight_idx] - max_weight);
+
+  /* esl_rnd_DChoose assumes weights sum to one. */
+  DNorm(eweights, N);
+  rv = esl_rnd_DChoose(randomness, eweights, N);
+  free(eweights);
+  return rv;
 }
  
 
@@ -62,26 +75,31 @@ _weighted_choice(ESL_RANDOMNESS *randomness, int N,
  *          entries in the function arguments (which must be doubles.)
  *
  * Args:    The ESL_RANDOMNESS placekeeper, followed by the weights as
- *          doubles, followed by 1e308 (as a sentinel.  C sucks.)
+ *          doubles, followed by two INFTY's (as a sentinel.  C sucks.)
  *
  * Returns: The index of the chosen weight.
  */
 int
 weighted_choice(ESL_RANDOMNESS *randomness, ...) {
-  va_list weight_args;     /* Tracks the variable arguments passed */
-  double  weights[100];    /* Array of weights to choose from. */
-  int     N;               /* Number of weights */
+  va_list weight_args;                /* Tracks the variable arguments passed */
+  int  weights[MAX_CHOICE_WEIGHTS+5]; /* Array of weights to choose from. */
+  int N;                              /* Number of weights */
+  int i;
 
   /* Take a copy of the weight arguments. */
   va_start(weight_args, randomness);
   N = 0;
-  while (N < 100) {
-    weights[N] = va_arg(weight_args, double);
-    if (weights[N] == 1e308) break; 
+  while (N < MAX_CHOICE_WEIGHTS) {
+    weights[N] = va_arg(weight_args, int);
+    if ((weights[N] == INFTY) && (weights[N-1] == INFTY)) break;
     N++;
   }
   va_end(weight_args);
-  if (N >= 100) Die("Too many weights.");
+  if (N >= MAX_CHOICE_WEIGHTS) Die("Too many weights.");
+  N--; /* We went one past the length of the actual weights to catch
+	* the sentinel. */
+  if (!((weights[N] == INFTY) && (weights[N+1] == INFTY)))
+    Die("Sentinel is missing.");
   return _weighted_choice(randomness, N, weights);
 }
 
@@ -116,8 +134,8 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
   int k;			/* position in model (1..M) */
   int **xmx, **mmx, **imx, **dmx;
   int trace_choice;             /* For random choice of traceback */
-  double current_null;          /* Null score for the current character. */
-  double *match_odds;           /* Keeps the log odds scores for us. */
+  int current_null;             /* Null score for the current character. */
+  int *match_odds;              /* Keeps the log odds scores for us. */
 
   /* Overallocate for the trace.
    * S-N-B- ... - E-C-T  : 6 states + N is minimum trace;
@@ -153,7 +171,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
        the value of "i",) it is important to correct their scores by
        the current null so that they can be fairly compared to moves
        which don't correspond to a move in the sequence space. */
-    current_null = sreLOG2(hmm->null[dsq[i]]) + sreLOG2(hmm->p1);
+    current_null = sreLOG2(hmm->null[dsq[i]] * hmm->p1);
     switch (tr->statetype[tpos-1]) {
     case STM:			/* M connects from i-1,k-1, or B */
       trace_choice = weighted_choice(randomness,
@@ -161,7 +179,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
 				     mmx[i][k] + hmm->tsc[TMM][k] - current_null,
 				     imx[i][k] + hmm->tsc[TIM][k] - current_null,
 				     dmx[i][k] + hmm->tsc[TDM][k],
-				     1e308);
+				     INFTY, INFTY);
       switch (trace_choice) {
       case 0: /* xmx[i][XMB] + hmm->bsc[k+1] */
 	  tr->statetype[tpos] = STB;
@@ -190,7 +208,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
       trace_choice = weighted_choice(randomness,
 				     mmx[i][k] + hmm->tsc[TMD][k] - current_null,
 				     dmx[i][k] + hmm->tsc[TDD][k],
-				     1e308);
+				     INFTY, INFTY);
       switch (trace_choice) {
       case 0: /* mmx[i][k] + hmm->tsc[TMD][k] */
 	  tr->statetype[tpos] = STM;
@@ -209,7 +227,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
       trace_choice = weighted_choice(randomness,
 				     mmx[i][k] + hmm->tsc[TMI][k] - current_null,
 				     imx[i][k] + hmm->tsc[TII][k] - current_null,
-				     1e308);
+				     INFTY, INFTY);
       switch (trace_choice) {
       case 0: /* mmx[i][k] + hmm->tsc[TMI][k] */
 	tr->statetype[tpos] = STM;
@@ -245,7 +263,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
       trace_choice = weighted_choice(randomness,
 				     xmx[i][XMN] + hmm->xsc[XTN][MOVE],
 				     xmx[i][XMJ] + hmm->xsc[XTJ][MOVE],
-				     1e308);
+				     INFTY, INFTY);
       switch (trace_choice) {
       case 0:
 	tr->statetype[tpos] = STN;
@@ -266,7 +284,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
 	 we don't know how many match states there are, and it would
 	 be a bore to write them all out even if we did.  Fill out the
 	 weights matrix. */
-      match_odds = (double *)MallocOrDie(sizeof(double)*hmm->M+1);
+      match_odds = (int *)MallocOrDie(sizeof(int)*hmm->M+1);
       match_odds[0] = -INFTY;   /* Match-state indexing starts at 1, not 0. */
       for (k = hmm->M; k >= 1; k--)
 
@@ -274,7 +292,8 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
 	 * the candidates involve a move in sequence space, so it'll
 	 * cancel out in the normalizations. */
 	match_odds[k] = mmx[i][k] + hmm->esc[k];
-      k = _weighted_choice(randomness, hmm->M, match_odds);
+      k = _weighted_choice(randomness, hmm->M+1, match_odds);
+      free(match_odds);
       tr->statetype[tpos] = STM;
       tr->nodeidx[tpos]   = k--;
       tr->pos[tpos]       = i--;
@@ -284,7 +303,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
       trace_choice = weighted_choice(randomness,
 				     xmx[i-1][XMC] + hmm->xsc[XTC][LOOP] - current_null,
 				     xmx[i][XME] + hmm->xsc[XTE][MOVE],
-				     1e308);
+				     INFTY, INFTY);
       switch (trace_choice) {
       case 0:  /* xmx[i-1][XMC] + hmm->xsc[XTC][LOOP] */
 	tr->statetype[tpos] = STC;
@@ -304,7 +323,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
       trace_choice = weighted_choice(randomness,
 				     xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP] - current_null,
 				     xmx[i][XME] + hmm->xsc[XTE][LOOP],
-				     1e308);
+				     INFTY, INFTY);
       switch (trace_choice) {
       case 0: /* xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP] */
 	tr->statetype[tpos] = STJ;
