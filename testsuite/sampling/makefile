@@ -1,0 +1,13 @@
+HMMERDIR=/home/coventry/src/alignment_sampling
+HMMERSRCDIR=${HMMERDIR}/src
+HMMERINCLUDES=-I ${HMMERSRCDIR} -I ${HMMERDIR}/squid -I ${HMMERDIR}/easel
+HMMEROBJS=${HMMERSRCDIR}/alphabet.o ${HMMERSRCDIR}/calibration.o ${HMMERSRCDIR}/core_algorithms.o ${HMMERSRCDIR}/debug.o ${HMMERSRCDIR}/display.o ${HMMERSRCDIR}/emit.o ${HMMERSRCDIR}/emulation.o ${HMMERSRCDIR}/fast_algorithms.o ${HMMERSRCDIR}/histogram.o ${HMMERSRCDIR}/hmmio.o ${HMMERSRCDIR}/infocontent.o ${HMMERSRCDIR}/island.o ${HMMERSRCDIR}/lsj_eweight.o ${HMMERSRCDIR}/mathsupport.o ${HMMERSRCDIR}/masks.o ${HMMERSRCDIR}/matrices.o ${HMMERSRCDIR}/misc.o ${HMMERSRCDIR}/modelconfig.o ${HMMERSRCDIR}/modelmakers.o ${HMMERSRCDIR}/plan7.o ${HMMERSRCDIR}/plan9.o ${HMMERSRCDIR}/postprob.o ${HMMERSRCDIR}/prior.o ${HMMERSRCDIR}/pvm.o ${HMMERSRCDIR}/sample.o ${HMMERSRCDIR}/threads.o ${HMMERSRCDIR}/tophits.o ${HMMERSRCDIR}/trace.o
+SQDIR=${HMMERDIR}/squid
+SQDOBJS=${SQDIR}/a2m.o ${SQDIR}/aligneval.o ${SQDIR}/alignio.o ${SQDIR}/clustal.o ${SQDIR}/cluster.o ${SQDIR}/dayhoff.o ${SQDIR}/dirichlet.o ${SQDIR}/eps.o ${SQDIR}/file.o ${SQDIR}/getopt.o ${SQDIR}/gki.o ${SQDIR}/hsregex.o ${SQDIR}/iupac.o ${SQDIR}/msa.o ${SQDIR}/msf.o ${SQDIR}/phylip.o ${SQDIR}/revcomp.o ${SQDIR}/rk.o ${SQDIR}/selex.o ${SQDIR}/seqencode.o ${SQDIR}/shuffle.o ${SQDIR}/sqerror.o ${SQDIR}/sqio.o ${SQDIR}/squidcore.o ${SQDIR}/sre_ctype.o ${SQDIR}/sre_math.o ${SQDIR}/sre_random.o ${SQDIR}/sre_stack.o ${SQDIR}/sre_string.o ${SQDIR}/ssi.o ${SQDIR}/stockholm.o ${SQDIR}/stopwatch.o ${SQDIR}/translate.o ${SQDIR}/types.o ${SQDIR}/vectorops.o ${SQDIR}/weight.o ${SQDIR}/wuss.o
+ESLDIR=${HMMERDIR}/easel
+ESLOBJS=${ESLDIR}/easel.o ${ESLDIR}/esl_alphabet.o ${ESLDIR}/esl_dirichlet.o ${ESLDIR}/esl_exponential.o ${ESLDIR}/esl_fileparser.o ${ESLDIR}/esl_gamma.o ${ESLDIR}/esl_getopts.o ${ESLDIR}/esl_gev.o ${ESLDIR}/esl_gumbel.o ${ESLDIR}/esl_histogram.o ${ESLDIR}/esl_hyperexp.o ${ESLDIR}/esl_keyhash.o ${ESLDIR}/esl_minimizer.o ${ESLDIR}/esl_mixgev.o ${ESLDIR}/esl_msa.o ${ESLDIR}/esl_random.o ${ESLDIR}/esl_regexp.o ${ESLDIR}/esl_sqio.o ${ESLDIR}/esl_ssi.o ${ESLDIR}/esl_stack.o ${ESLDIR}/esl_stats.o ${ESLDIR}/esl_stopwatch.o ${ESLDIR}/esl_stretchexp.o ${ESLDIR}/esl_vectorops.o ${ESLDIR}/esl_weibull.o ${ESLDIR}/esl_wuss.o 
+PYTHONINCLUDES=-I /scratch2/alex/include/python2.4 -I /scratch2/alex/include/python2.4/Numeric
+_HMMER.so: _HMMER.pyx
+	pyrexc _HMMER.pyx 
+	gcc -g -c -fPIC  ${PYTHONINCLUDES} ${HMMERINCLUDES} _HMMER.c
+	gcc -shared ${SQDOBJS} ${ESLOBJS} ${HMMEROBJS} -lxosd _HMMER.o -o _HMMER.so
