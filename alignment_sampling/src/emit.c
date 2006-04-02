@@ -24,15 +24,17 @@
  *
  * Purpose:  Given a model, sample a sequence and/or traceback.
  *
- * Args:     hmm     - the model
- *           ret_dsq - RETURN: generated digitized sequence (pass NULL if unwanted)
- *           ret_L   - RETURN: length of generated sequence 
- *           ret_tr  - RETURN: generated trace (pass NULL if unwanted)
+ * Args:     hmm        - the model
+ *           ret_dsq    - RETURN: generated digitized sequence (pass NULL if unwanted)
+ *           ret_L      - RETURN: length of generated sequence 
+ *           ret_tr     - RETURN: generated trace (pass NULL if unwanted)
+ *           randomness - Placekeeper for RNG
  *
  * Returns:  void
  */
 void
-EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr)
+EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7trace_s **ret_tr,
+	     ESL_RANDOMNESS * randomness)
 {
   struct p7trace_s *tr;
   unsigned char    *dsq;        /* generated sequence, digitized */
@@ -44,6 +46,15 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
   int   tpos;			/* position in traceback */
   unsigned char sym;		/* a generated symbol index */
   float t[4];			/* little array for choosing M transition from */
+  int start_match_idx;          /* Records choice of which match state
+				 * to start at */
+  int end_match_idx;            /* Records choice of which match state
+				 * to end at */
+  int temp_idx;                 /* For swapping integers */
+  int trace_match_start;        /* Index in the traceback where we
+				   entered the core model, for
+				   retrying when we reject a path. */
+  int dsq_match_start;          /* Length of dsq when entering core */
   
   /* Initialize; allocations
    */
@@ -66,9 +77,29 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
        */
       switch (type) {
       case STB:
-	hmm->begin[0] = hmm->tbd1; /* begin[0] hack (documented in structs.h) */
-	k = FChoose(hmm->begin, hmm->M+1);
-	if (k == 0) { type = STD; k = 1; } else {type = STM; }
+
+	/* Randomly choose a pair of match states to start and end in,
+	 * with uniform distribution over the N(N-1)/2 such pairs. */
+	start_match_idx = (int)(esl_random(randomness)*hmm->M) + 1;
+
+	/* ...randomly choose end_match_idx *different* from
+	 * start_match_idx */
+	for (end_match_idx = start_match_idx; 
+	     end_match_idx == start_match_idx;
+	     end_match_idx = (int)(esl_random(randomness)*hmm->M) + 1) {
+	  /* Noop.  All the action's in the for loop */ }
+	if (start_match_idx > end_match_idx) {
+	  temp_idx = start_match_idx;
+	  start_match_idx = end_match_idx;
+	  end_match_idx = temp_idx;
+	}
+	/* Record where we are in the return values, so that we can
+	 * rewind to these if the path through the core model fails
+	 * the rejection sampling condition that we reach the match
+	 * (not the delete state of the end_match_idx'th node. */
+	trace_match_start = tpos;
+	dsq_match_start = L;
+	k = start_match_idx; type = STM;
 	break;
 
       case STI:	type = (FChoose(hmm->t[k]+TIM, 2) == 0)    ? STM : STI; if (type == STM) k++; break;
@@ -77,18 +108,31 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
       case STC:	type = (FChoose(hmm->xt[XTC], 2)  == LOOP) ? STC : STT; k = 0; break;
       case STJ:	type = (FChoose(hmm->xt[XTJ], 2)  == LOOP) ? STJ : STB; k = 0; break;
 
-      case STD:	
-	if (k < hmm->M) {
-	  type = (FChoose(hmm->t[k]+TDM, 2) == 0) ? STM : STD; 
-	  k++;   
+      case STD:
+	if (k == end_match_idx) {
+
+	  /* Oops, we failed the sampling condition.  Go back and try again. */
+
+	  /* ...rewind in the return values... */
+	  tpos = trace_match_start;
+	  L = dsq_match_start;
+
+	  /* ...and restart the model traversal. */
+	  k = start_match_idx;
+	  type = STM;
 	} else {
-	  type = STE;
-	  k = 0;
+	  type = (FChoose(hmm->t[k]+TDM, 2) == 0) ? STM : STD; 
+	  k++;
 	}
 	break;
 
       case STM:
-	if (k < hmm->M) {
+	if (k == end_match_idx) {
+	  /* Back in case STB, we decided to exit the core model after
+	   * reaching this node, as long is we hit its match state. */
+	  k    = 0;
+	  type = STE;
+	} else {
 	  FCopy(t, hmm->t[k], 3);
 	  t[3] = hmm->end[k];
 	  switch (FChoose(t,4)) {
@@ -98,9 +142,6 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
 	  case 3: k=0;  type = STE; break;
 	  default: Die("never happens");
 	  }
-	} else {
-	  k    = 0;
-	  type = STE;
 	}
 	break;
 
