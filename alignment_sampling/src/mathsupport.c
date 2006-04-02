@@ -36,7 +36,8 @@ int
 Prob2Score(float p, float null)
 {
   if   (p == 0.0) return -INFTY;
-  else            return (int) floor(0.5 + INTSCALE * sreLOG2(p/null));
+  else            return MAX((int) floor(0.5 + INTSCALE * sreLOG2(p/null)),
+			     -INFTY);
 }
 
 /* Function:  LL2Score()
