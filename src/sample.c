@@ -57,7 +57,7 @@ _weighted_choice(ESL_RANDOMNESS *randomness, int N,
   /* Convert to exponential space, normalizing to avoid under/overflow
    * errors */
   for (weight_idx = 0; weight_idx < N; weight_idx++)
-    eweights[weight_idx] = exp(weights[weight_idx] - max_weight);
+    eweights[weight_idx] = Score2Prob(weights[weight_idx] - max_weight, 1);
 
   /* esl_rnd_DChoose assumes weights sum to one. */
   DNorm(eweights, N);
@@ -171,7 +171,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
        the value of "i",) it is important to correct their scores by
        the current null so that they can be fairly compared to moves
        which don't correspond to a move in the sequence space. */
-    current_null = sreLOG2(hmm->null[dsq[i]] * hmm->p1);
+    current_null = sreLOG2(hmm->null[dsq[i]]);
     switch (tr->statetype[tpos-1]) {
     case STM:			/* M connects from i-1,k-1, or B */
       trace_choice = weighted_choice(randomness,
