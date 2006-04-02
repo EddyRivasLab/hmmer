@@ -107,7 +107,7 @@ extern void DisplayPlan7PostAlign(int L, struct plan7_s *hmm,
  * Generation of sequences/traces from an HMM
  */
 extern void EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, 
-			 struct p7trace_s **ret_tr);
+			 struct p7trace_s **ret_tr, ESL_RANDOMNESS *randomness);
 extern void EmitConsensusSequence(struct plan7_s *hmm, char **ret_seq, unsigned char **ret_dsq,
 				  int *ret_L, struct p7trace_s **ret_tr);
 extern void StateOccupancy(struct plan7_s *hmm, float **ret_mp, float **ret_ip, float **ret_dp);
