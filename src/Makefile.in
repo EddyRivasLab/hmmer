@@ -56,6 +56,7 @@ OBJS =  alphabet.o\
 	core_algorithms.o\
 	debug.o\
 	display.o\
+	dp_buhler.o\
 	emit.o\
 	emulation.o\
 	fast_algorithms.o\
@@ -74,17 +75,20 @@ OBJS =  alphabet.o\
 	plan9.o\
 	postprob.o\
 	prior.o\
+	profile.o\
 	pvm.o\
 	threads.o\
 	tophits.o\
 	trace.o 
 
 HDRS =  config.h\
+	dp_buhler.h\
 	funcs.h\
 	globals.h\
 	lsjfuncs.h\
 	plan7.h\
 	postprob.h\
+	profile.h\
 	structs.h
 
 .c.o:

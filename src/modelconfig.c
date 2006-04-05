@@ -223,10 +223,6 @@
  * P7ReconfigLength(hmm, L) :: 
  *    Set the length modeling in a search model to a new target length <L>.
  *                            
- * P7EdgeCorrection(hmm, L) :: 
- *    Calculates an effective sequence length L', given target
- *    sequence length <L>.
- * 
  * P7ScoreCorrection(hmm, L) ::
  *    Returns a score correction that should be added to any 
  *    Forward or Viterbi bit score, compensating for a numerical
@@ -331,7 +327,6 @@ P7Config(struct plan7_s *hmm, enum p7_algmode mode)
 void
 P7ReconfigLength(struct plan7_s *hmm, int L)
 {
-  double Lp;		/* target length that aligns to non-model states NCJ */
   double ploop, pmove;
   double nj;
 
@@ -344,15 +339,10 @@ P7ReconfigLength(struct plan7_s *hmm, int L)
   if (hmm->xt[XTE][LOOP] == 0.) nj = 0.; /* make sure. */
   else  nj = hmm->xt[XTE][LOOP] / (1. - hmm->xt[XTE][LOOP]);
 
-  /* Figure out the effective sequence length L', the expected number of
-   * unannotated residues in the target.
+  /* Configure N,J,C transitions so they bear L/(2+nj) of the total
+   * unannotated sequence length L. 
    */
-  Lp = P7EdgeCorrection(hmm, L);
-
-  /* Configure N,J,C transitions so they bear Lp/(2+nj) of the total
-   * unannotated sequence length Lp. 
-   */
-  pmove = (2. + nj) / (Lp + 2. + nj); /* 2/(Lp+2) for sw; 3/(Lp+3) for fs */
+  pmove = (2. + nj) / (L + 2. + nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
   ploop = 1. - pmove;
   hmm->xt[XTN][MOVE] = pmove;
   hmm->xt[XTN][LOOP] = ploop;
@@ -406,37 +396,6 @@ P7ReconfigLength(struct plan7_s *hmm, int L)
 }
 
 
-/* Function:  P7EdgeCorrection()
- * Incept:    SRE, Wed Nov 23 17:05:54 2005 [St. Louis]
- *
- * Purpose:   Given an HMM <hmm> and a target sequence length <L>,
- *            calculate and return an effective sequence length L'.
- *            For local alignment modes, this is L-kappa, where 
- *            kappa is the HMM's parameter for the mean number of
- *            annotated residues in an alignment. For glocal alignment 
- *            modes, this is L-M, where M is the length of the model.
- *            If L'<1, it is reset to a minimum value of 1. 
- *
- * Args:      hmm  - a profile HMM
- *            L    - length of a target sequence
- *
- * Returns:   L', the effective target sequence length.
- */
-float
-P7EdgeCorrection(struct plan7_s *hmm, int L)
-{
-  float Lp;
-
-  if (hmm->mode == P7_S_MODE || hmm->mode == P7_LS_MODE)
-    Lp = (float) L - hmm->kappa_g;
-  else
-    Lp = (float) L - hmm->kappa;
-
-  if (Lp < 1.) Lp = 1.;
-  return Lp;
-}
-
-
 /* Function:  P7ScoreCorrection()
  * Incept:    SRE, Sun Sep 25 14:10:31 2005 [St. Louis]
  *
@@ -454,7 +413,7 @@ float
 P7ScoreCorrection(struct plan7_s *hmm, int L)
 {
   if (hmm->flags & PLAN7_LCORRECT)
-    return hmm->lscore * P7EdgeCorrection(hmm, L);
+    return hmm->lscore * L;
   else 
     return 0.;
 }

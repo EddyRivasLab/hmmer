@@ -96,6 +96,8 @@ Scorify(int sc)
  *           sc  - score in bits
  *           
  * Returns:  P value for score significance.          
+ *
+ * NOTE: deprecated; see calibration.c:P7PValueV() and P7PValueF().
  */
 double
 PValue(struct plan7_s *hmm, double sc)
@@ -110,7 +112,7 @@ PValue(struct plan7_s *hmm, double sc)
 				/* try for a better estimate from EVD fit */
   if (hmm != NULL && (hmm->flags & PLAN7_STATS))
     {		
-      pval2 = ExtremeValueP(sc, hmm->mu, hmm->lambda);
+      pval2 = ExtremeValueP(sc, hmm->vmu, hmm->vlambda);
       if (pval2 < pval) pval = pval2;
     }
   return pval;

@@ -32,8 +32,12 @@ extern void           DefaultCodonBias(float *codebias);
 /* from calibration.c
  * Determination of parameters needed for E-values.
  */
-extern void P7CalibrateV(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, int N, int L,
-			 float *ret_mu, float *ret_kappa);
+extern void   P7CalibrateV(ESL_RANDOMNESS *r, struct plan7_s *hmm,
+		  	   double *fq, int N, int L);
+extern void   P7CalibrateF(ESL_RANDOMNESS *r, struct plan7_s *hmm, double *fq, 
+			   double mass, int N, int L);
+extern double P7PValueV(struct plan7_s *hmm, double sc);
+extern double P7PValueF(struct plan7_s *hmm, double sc);
 
 /* from core_algorithms.c
  * Clean research/demonstration versions of basic algorithms.
@@ -249,7 +253,6 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
  */
 extern void  P7Config(struct plan7_s *hmm, enum p7_algmode mode);
 extern void  P7ReconfigLength (struct plan7_s *hmm, int L);
-extern float P7EdgeCorrection (struct plan7_s *hmm, int L);
 extern float P7ScoreCorrection(struct plan7_s *hmm, int L);
 
 

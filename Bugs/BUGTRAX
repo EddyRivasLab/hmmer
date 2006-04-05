@@ -123,7 +123,6 @@ CLOSED_ACTION
 //
 ID              11
 STATUS          OPEN
-DESCRIPTION     hmmbuild, illegal B->E in traceback
 NOTED_DATE      11/15/99
 NOTED_XREF      
 REPORTED_BY     marcel@cs.berkeley.edu
@@ -132,6 +131,10 @@ REPRODUCE_ON
 CLOSED_DATE     
 CLOSED_XREF     
 CLOSED_ACTION   
+DESCRIPTION     
+   hmmbuild, illegal B->E in traceback.
+   Appears to be exacerbated by fragment detection code;
+   a blank sequence in a multiple alignment will trigger it.
 //
 ID              12
 STATUS          closed
@@ -455,5 +458,16 @@ DESCRIPTION
 
   3. Don't run that many cpus; use --cpu <n> flag.
 
+//
+ID              h32
+TITLE		hmmalign can't handle length 0 sequences
+STATUS          OPEN
+XREF            2006/0316-hmmer-bug-h32
+REPORTED_BY     Allen Bryan <awbryan@mit.edu>
+OPENED_DATE     SRE, Thu Mar 16 17:46:42 2006
+CLOSED_DATE     -
+DESCRIPTION     
+  hmmalign segfaults when a sequence is "empty" (length 0) in 
+  an input fasta file.
 //
 

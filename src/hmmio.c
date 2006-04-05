@@ -96,8 +96,8 @@ static unsigned int  v19magic = 0xe8ededb4; /* V1.9 binary: "hmm4" + 0x80808080 
 static unsigned int  v19swap  = 0xb4edede8; /* V1.9 binary, byteswapped         */ 
 static unsigned int  v20magic = 0xe8ededb5; /* V2.0 binary: "hmm5" + 0x80808080 */
 static unsigned int  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
-static unsigned int  v24magic = 0xe8ededb6; /* V2.4 binary: "hmm6" + 0x80808080 */
-static unsigned int  v24swap  = 0xb6edede8; /* V2.4 binary, byteswapped         */
+static unsigned int  v30magic = 0xe8ededb6; /* V3.0 binary: "hmm6" + 0x80808080 */
+static unsigned int  v30swap  = 0xb6edede8; /* V3.0 binary, byteswapped         */
 
 /* Old HMMER 1.x file formats.
  */
@@ -110,8 +110,8 @@ static unsigned int  v24swap  = 0xb6edede8; /* V2.4 binary, byteswapped         
 #define HMMER1_9B  7            /* HMMER 1.9 binary     */
 #define HMMER1_9F  8            /* HMMER 1.9 flat ascii */
 
-static int  read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
-
+static int  read_asc30hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
+static int  read_bin30hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
 static int  read_asc19hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm);
@@ -221,7 +221,18 @@ HMMFileOpen(char *hmmfile, char *env)
   }
   rewind(hmmfp->f);
 
-  if (magic == v20magic) { 
+  if (magic == v30magic) { 
+    hmmfp->parser    = read_bin30hmm;
+    hmmfp->is_binary = TRUE;
+    return hmmfp;
+  }
+  else if (magic == v30swap) { 
+    hmmfp->parser    = read_bin30hmm;
+    hmmfp->is_binary = TRUE;
+    hmmfp->byteswap  = TRUE;
+    return hmmfp;
+  } 
+  else if (magic == v20magic) { 
     hmmfp->parser    = read_bin20hmm;
     hmmfp->is_binary = TRUE;
     return hmmfp;
@@ -298,8 +309,8 @@ or may be a different kind of binary altogether.\n", hmmfile);
   }
   rewind(hmmfp->f);
   
-  if        (strncmp("HMMER2.4", buf, 8) == 0) {
-    hmmfp->parser = read_asc24hmm;
+  if        (strncmp("HMMER3.0", buf, 8) == 0) {
+    hmmfp->parser = read_asc30hmm;
     return hmmfp;
   } else if (strncmp("HMMER2.0", buf, 8) == 0) {
     hmmfp->parser = read_asc20hmm;
@@ -391,7 +402,7 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
   int x;                        /* counter for symbols           */
   int ts;			/* counter for state transitions */
 
-  fprintf(fp, "HMMER2.4  [%s]\n", PACKAGE_VERSION);  /* magic header */
+  fprintf(fp, "HMMER3.0  [%s]\n", PACKAGE_VERSION);  /* magic header */
 
   /* write header information
    */
@@ -440,11 +451,15 @@ WriteAscHMM(FILE *fp, struct plan7_s *hmm)
     fprintf(fp, "%6s ", prob2ascii(hmm->null[x], 1/(float)(Alphabet_size)));
   fputs("\n", fp);
 
-  /* EVD statistics
+  /* E-value statistics
    */
-  if (hmm->flags & PLAN7_STATS) 
-    fprintf(fp, "EVDL  %10f %10f %10f \n", 
-	    hmm->mu, hmm->lambda, hmm->kappa);
+  if (hmm->flags & PLAN7_STATS_LV) 
+    fprintf(fp, "E-LV  %5d  %4d  %.3f  %.5f\n", 
+	    hmm->vN, hmm->vL, hmm->vmu, hmm->vlambda);
+  if (hmm->flags & PLAN7_STATS_LF) 
+    fprintf(fp, "E-LF  %5d  %4d  %.5f  %.3f  %.5f\n",
+	    hmm->fN, hmm->fL, hmm->fmass, hmm->fmu, hmm->flambda);
+  /* PLAN7_STATS_GV, PLAN7_STATS_GF remain unimplemented */
   
   /* Print header
    */
@@ -493,7 +508,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   int k;
 
   /* ye olde magic number */
-  fwrite((char *) &(v20magic), sizeof(unsigned int), 1, fp);
+  fwrite((char *) &(v30magic), sizeof(unsigned int), 1, fp);
 
   /* header section
    */
@@ -531,11 +546,21 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
   fwrite((char *)&(hmm->p1), sizeof(float), 1,             fp);
   fwrite((char *) hmm->null, sizeof(float), Alphabet_size, fp);
 
-  /* EVD stats */
-  if (hmm->flags & PLAN7_STATS) {
-    fwrite((char *) &(hmm->mu),      sizeof(float),  1,   fp); 
-    fwrite((char *) &(hmm->lambda),  sizeof(float),  1,   fp); 
+  /* E-value statistical parameters */
+  if (hmm->flags & PLAN7_STATS_LV) {
+    fwrite((char *) &(hmm->vN),      sizeof(int),    1,   fp); 
+    fwrite((char *) &(hmm->vL),      sizeof(int),    1,   fp); 
+    fwrite((char *) &(hmm->vmu),     sizeof(float),  1,   fp); 
+    fwrite((char *) &(hmm->vlambda), sizeof(float),  1,   fp); 
   }
+  if (hmm->flags & PLAN7_STATS_LF) {
+    fwrite((char *) &(hmm->fN),      sizeof(int),    1,   fp); 
+    fwrite((char *) &(hmm->fL),      sizeof(int),    1,   fp); 
+    fwrite((char *) &(hmm->fmass),   sizeof(float),  1,   fp); 
+    fwrite((char *) &(hmm->fmu),     sizeof(float),  1,   fp); 
+    fwrite((char *) &(hmm->flambda), sizeof(float),  1,   fp); 
+  }
+  /* PLAN7_STATS_GV and PLAN7_STATS_GF are unimplemented */
 
   /* entry/exit probabilities
    */
@@ -571,7 +596,7 @@ WriteBinHMM(FILE *fp, struct plan7_s *hmm)
  *****************************************************************/
 
 static int
-read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm) 
+read_asc30hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm) 
 {
   struct plan7_s *hmm;
   char  buffer[512];
@@ -583,7 +608,7 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 
   hmm = NULL;
   if (feof(hmmfp->f) || fgets(buffer, 512, hmmfp->f) == NULL) return 0;
-  if (strncmp(buffer, "HMMER2.4", 8) != 0)             goto FAILURE;
+  if (strncmp(buffer, "HMMER3.0", 8) != 0)             goto FAILURE;
 
   /* Get the header information: tag/value pairs in any order,
    * ignore unknown tags, stop when "HMM" is reached (signaling
@@ -690,16 +715,33 @@ read_asc24hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 	  s = strtok(NULL, " \t\n");
 	}
       }
-    else if (strncmp(buffer, "EVDL ", 5) == 0) 
-      {				/* local (Smith/Waterman) EVD parameters */
-	hmm->flags |= PLAN7_STATS;
+    else if (strncmp(buffer, "E-LV ", 5) == 0) 
+      {				/* local Viterbi Gumbel parameters */
+	hmm->flags |= PLAN7_STATS_LV;
 	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
-	hmm->mu = atof(s);
-	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
-	hmm->lambda = atof(s);
-	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
-	hmm->kappa = atof(s);
+	hmm->vN  = atoi(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->vL  = atoi(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->vmu = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->vlambda = atof(s);
       }
+    else if (strncmp(buffer, "E-LF ", 5) == 0) 
+      {				/* local Forward exponential tail parameters */
+	hmm->flags |= PLAN7_STATS_LF;
+	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
+	hmm->fN  = atoi(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->fL  = atoi(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->fmass = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->fmu = atof(s);
+	if ((s = strtok(NULL, " \t\n")) == NULL)     goto FAILURE;
+	hmm->flambda = atof(s);
+      }
+    /* PLAN7_STATS_LV, PLAN7_STATS_LF are unimplemented */
     else if (strncmp(buffer, "CKSUM", 5) == 0) hmm->checksum = atoi(buffer+6);
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;
   }
@@ -907,12 +949,8 @@ read_asc20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 	}
       }
     else if (strncmp(buffer, "EVD  ", 5) == 0) 
-      {				/* EVD parameters */
-	hmm->flags |= PLAN7_STATS;
-	if ((s = strtok(buffer+6, " \t\n")) == NULL) goto FAILURE;
-	hmm->mu = atof(s);
-	if ((s = strtok(NULL, " \t\n")) == NULL) goto FAILURE;
-	hmm->lambda = atof(s);
+      {				
+	/* ignore old EVD params. */
       }
     else if (strncmp(buffer, "CKSUM", 5) == 0) hmm->checksum = atoi(buffer+6);
     else if (strncmp(buffer, "HMM  ", 5) == 0) break;
@@ -999,6 +1037,11 @@ FAILURE:
   return 1;
 }
 
+static int
+read_bin30hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
+{
+  Die("This is only a placeholder, while 3.0 is in progress.");
+}
 
 static int
 read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
@@ -1007,6 +1050,7 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
    int    k,x;
    int    type;
    unsigned int magic;
+   float  ignored_float;
 
    hmm = NULL;
 
@@ -1113,13 +1157,8 @@ read_bin20hmm(HMMFILE *hmmfp, struct plan7_s **ret_hmm)
 
   /* EVD stats */
   if (hmm->flags & PLAN7_STATS) {
-    if (! fread((char *) &(hmm->mu),     sizeof(float), 1, hmmfp->f))goto FAILURE;
-    if (! fread((char *) &(hmm->lambda), sizeof(float), 1, hmmfp->f))goto FAILURE;
-
-    if (hmmfp->byteswap) {
-      byteswap((char *)&(hmm->mu),     sizeof(float));
-      byteswap((char *)&(hmm->lambda), sizeof(float));
-    }
+    if (! fread((char *) &ignored_float, sizeof(float), 1, hmmfp->f)) goto FAILURE;
+    if (! fread((char *) &ignored_float, sizeof(float), 1, hmmfp->f)) goto FAILURE;
   }
 
    /* entry/exit probabilities

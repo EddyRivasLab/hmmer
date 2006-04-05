@@ -7,15 +7,32 @@
 #ifndef PLAN7_INCLUDED
 #define PLAN7_INCLUDED
 
-/* Plan 7 algorithm modes
+
+/* P7_PROFILE 
+ * The score profile in its common representation.
  */
-enum p7_algmode {
-  P7_NO_MODE    = 0,
-  P7_LS_MODE    = 1,
-  P7_FS_MODE    = 2,
-  P7_SW_MODE    = 3,
-  P7_S_MODE     = 4,
-};
+#include "p7_profile.h"		
+
+
+/* P7_OPROFILE,  P7_OMX
+ * The score profile and DP matrix in their optimized representations, 
+ * for different implementations of the HMMER dynamic programming API.
+ */ 
+#ifdef    p7_IMPL_REFERENCE
+#include "p7_dp_referernce.h"	/* the reference implementation.        */
+#elif     p7_IMPL_FAST
+#include "p7_dp_fast.h"		/* our optimized implementation.        */
+#elif     p7_IMPL_ALTIVEC
+#include "p7_dp_altivec.h"	/* Erik Lindahl's Altivec for PowerPC   */
+#elif     p7_IMPL_BUHLER
+#include "p7_dp_buhler.h"	/* Jeremy Buhler's optimization         */
+#elif     p7_IMPL_SSE
+#include "p7_dp_sse.h"		/* Apple's SSE implementation.          */
+#endif
+
+
+
+
 
 /* Structure: plan7_s
  * 
@@ -100,25 +117,21 @@ enum p7_algmode {
  * Search programs like hmmpfam and hmmsearch read only the configured
  * score model, usually ignoring the core probability model.
  */
-struct plan7_s {
-  /* The core model in probability form: data-dependent probabilities.
-   * Transition probabilities are usually accessed as a
-   *   two-D array: hmm->t[k][TMM], for instance. They are allocated
-   *   such that they can also be stepped through in 1D by pointer
-   *   manipulations, for efficiency in DP algorithms.
-   * PLAN7_HASPROBS flag is raised when these probs are all valid.
+typedef struct {
+  /* The core model in probability form.
+   * Begin state transitions are stored in t[0][TMM], t[0][TMD].
+   * P7_HASPROBS flag is raised when these probs are all valid.
    */
-  int     M;                    /* length of the model (# nodes)        +*/
-  float **t;                    /* transition prob's. t[1..M-1][0..6]   +*/
-  float **mat;                  /* match emissions.  mat[1..M][0..19]   +*/ 
-  float **ins;                  /* insert emissions. ins[1..M-1][0..19] +*/
-  float   tbd1;			/* B->D1 prob (data dependent)          +*/
-  float   tbm1;			/* B->M1 prob (data dependent)          +*/
+  int     M;                    /* length of the model (# nodes)          */
+  int     K;			/* alphabet size (copy of Alphabet_size)  */
+  float **t;                    /* transition prob's. t[(0),1..M-1][0..6] */
+  float **mat;                  /* match emissions.  mat[1..M][0..K-1]    */ 
+  float **ins;                  /* insert emissions. ins[1..M-1][0..K-1]  */
 
   /* The null model probabilities.
    */
-  float  null[MAXABET];         /* "random sequence" emission prob's     +*/
-  float  p1;                    /* null model loop probability           +*/
+  float  *null;		         /* "random sequence" emission prob's     */
+  float   p1;                    /* null model loop probability           */
 
   /* The unique states of Plan 7 in probability form.
    * These are the algorithm-dependent, data-independent probabilities.
@@ -145,14 +158,8 @@ struct plan7_s {
    * 
    * PLAN7_HASBITS flag is up when these scores are valid.
    */
-  enum p7_algmode mode;		/* configured algorithm mode  */
-  int  **tsc;                   /* transition scores     [0.6][1.M-1]       +*/
-  int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] +*/
-  int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] +*/
-  int    xsc[4][2];             /* N,E,C,J transitions                      +*/
-  int   *bsc;                   /* begin transitions     [1.M]              +*/
-  int   *esc;			/* end transitions       [1.M]              +*/
-  int   *tsc_mem, *msc_mem, *isc_mem, *bsc_mem, *esc_mem;
+  P7_PROFILE  *gm;
+  P7_OPROFILE *om;
   float  lscore;		/* score for each unaligned res when LCORRECT flag is up */
 
   /* Annotation on the model. A name is mandatory.
@@ -201,32 +208,21 @@ struct plan7_s {
   float  tc1, tc2;		/* per-seq/per-domain trusted cutoff (bits)       +*/
   float  nc1, nc2;		/* per-seq/per-domain noise cutoff (bits)         +*/
 
-  /* DNA translation scoring parameters
-   * For aligning protein Plan7 models to DNA sequence.
-   * Lookup value for a codon is calculated by pos1 * 16 + pos2 * 4 + pos3,
-   * where 'pos1' is the digitized value of the first nucleotide position;
-   * if any of the positions are ambiguous codes, lookup value 64 is used
-   * (which will generally have a score of zero)
-   * 
-   * Only valid if PLAN7_HASDNA is set.
+  /* E-value statistical parameters.
+   * If any are non-NULL, a flag is raised in <flags>: 
+   * PLAN7_STATS_LV for lvstats, etc.
    */
-  int  **dnam;                  /* triplet match scores  [0.64][1.M]       -*/
-  int  **dnai;                  /* triplet insert scores [0.64][1.M]       -*/
-  int    dna2;			/* -1 frameshift, doublet emission, M or I -*/
-  int    dna4;			/* +1 frameshift, doublet emission, M or I -*/
-
-  /* P-value and E-value statistical parameters
-   * Only valid if PLAN7_STATS is set.
-   */
-  float  mu;			/* Gumbel mu                                +*/
-  float  lambda;		/* Gumbel lambda                            +*/
-  float  kappa;			/* mean length of optimal local alignments  +*/
-  float  kappa_g;		/* mean length of optimal glocal alignments +*/
+  P7_EVINFO *lvstats;		/* local Viterbi  */
+  P7_EVINFO *lfstats;		/* local Forward  */
+  P7_EVINFO *gvstats;		/* glocal Viterbi */
+  P7_EVINFO *gfstats;		/* glocal Forward */
 
   int flags;                    /* bit flags indicating state of HMM, valid data +*/
-};
+} P7_HMM;
 
 /* Flag codes for plan7->flags.
+ * Don't ever change these; we want to be able to read old binary save files
+ * that used these values.
  */
 #define PLAN7_HASBITS (1<<0)    /* model has log-odds scores            */
 #define PLAN7_DESC    (1<<1)    /* description exists                   */
@@ -235,7 +231,7 @@ struct plan7_s {
 #define PLAN7_XRAY    (1<<4)    /* structural data available            */
 #define PLAN7_HASPROB (1<<5)    /* model has probabilities              */
 #define PLAN7_HASDNA  (1<<6)	/* protein HMM->DNA seq params set      */
-#define PLAN7_STATS   (1<<7)	/* EVD parameters are available         */
+#define PLAN7_STATS   (1<<7)    /* obsolete (2.3 and earlier)           */
 #define PLAN7_MAP     (1<<8)	/* alignment map is available           */
 #define PLAN7_ACC     (1<<9)	/* accession number is available        */
 #define PLAN7_GA      (1<<10)	/* gathering thresholds available       */
@@ -245,6 +241,11 @@ struct plan7_s {
 #define PLAN7_BIMPOSED (1<<14)  /* all entries are B->M_k (not D)       */
 #define PLAN7_EIMPOSED (1<<15)  /* all ends are M_k->E (not D)          */
 #define PLAN7_LCORRECT (1<<16)  /* require L-dependent score correction */
+#define PLAN7_STATS_LV (1<<17)	/* local Viterbi E-val params available */
+#define PLAN7_STATS_LF (1<<18)	/* local Forward E-val params available */
+#define PLAN7_STATS_GV (1<<19)	/* have glocal Viterbi E-val params     */
+#define PLAN7_STATS_GF (1<<20)	/* have glocal Forward E-val params     */
+
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB
@@ -281,6 +282,7 @@ struct plan7_s {
 #define MOVE 0          /* trNB, trEC, trCT, trJB */
 #define LOOP 1          /* trNN, trEJ, trCC, trJJ */
 
+extern void p7_profile_Crutch(P7_HMM *hmm, P7_PROFILE *gm);
 
 #endif /* PLAN7_INCLUDED */
 

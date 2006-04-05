@@ -1,65 +1,79 @@
 /* plan7.c
- * Support for Plan 7 HMM data structure, plan7_s.
+ * The Plan 7 HMM data structure, P7_HMM
  * 
  * SRE, Sat Nov 16 14:19:56 1996
  * SVN $Id: plan7.c 1487 2005-11-12 20:40:57Z eddy $
  */
 
-#include "config.h"		/* must be included first */
-#include "squidconf.h"
+#include "p7_config.h"		/* must be included first */
 
 #include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <time.h>
+#include <string.h>		/* strcpy(), strlen()             */
+#include <time.h>		/* p7_hmm_SetCtime() calls time() */
 
-#include "squid.h"
+#include <easel.h>
+#include <esl_vectorops.h>
 
-#include "plan7.h"		/* the model structure */
-#include "funcs.h"
-#include "structs.h"
+#include "plan7.h"		
 
 
 static char *score2ascii(int sc);
 
-/* Functions: AllocPlan7(), AllocPlan7Shell(), AllocPlan7Body(), FreePlan7()
- * 
- * Purpose:   Allocate or free a Plan7 HMM structure.
- *            Can either allocate all at one (AllocPlan7()) or
- *            in two steps (AllocPlan7Shell(), AllocPlan7Body()).
- *            The two step method is used in hmmio.c where we start
- *            parsing the header of an HMM file but don't 
- *            see the size of the model 'til partway thru the header.
- */
-struct plan7_s *
-AllocPlan7(int M) 
-{
-  struct plan7_s *hmm;
 
-  hmm = AllocPlan7Shell();
-  AllocPlan7Body(hmm, M);
+/* Function:  p7_hmm_Create()
+ * Incept:    SRE, Fri Mar 31 14:07:43 2006 [St. Louis]
+ *
+ * Purpose:   Allocate a <P7_HMM> of <M> nodes, for a maximum alphabet
+ *            size of <K>, and return a pointer to it.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_HMM *
+p7_hmm_Create(int M, int K) 
+{
+  P7_HMM *hmm = NULL;
+
+  if (hmm = p7_hmm_CreateShell();
+  p7_hmm_CreateBody(hmm, M, K);
   return hmm;
 }  
-struct plan7_s *
-AllocPlan7Shell(void) 
+
+/* Function:  p7_hmm_CreateShell()
+ * Incept:    SRE, Fri Mar 31 14:09:45 2006 [St. Louis]
+ *
+ * Purpose:   Allocate the shell of a <P7_HMM>: everything that
+ *            doesn't depend on knowing the number of nodes M. 
+ *            
+ *            HMM input (<hmmio.c>) uses two-step shell/body allocation
+ *            because it has to read data before it reads the model
+ *            size M.
+ *
+ * Returns:   a pointer to the new <P7_HMM> on success.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_HMM *
+p7_hmm_CreateShell(void) 
 {
-  struct plan7_s *hmm;
+  P7_HMM *hmm = NULL;
 
-  hmm    = (struct plan7_s *) MallocOrDie (sizeof(struct plan7_s));
+  ESL_ALLOC(hmm, sizeof(P7_HMM));
+  hmm->M        = 0;
+  hmm->K        = 0;
+  hmm->t        = NULL;
+  hmm->mat      = NULL;
+  hmm->ins      = NULL;
 
-  hmm->M    = 0;
-  hmm->t    = NULL;
-  hmm->mat  = NULL;
-  hmm->ins  = NULL;
+  hmm->null     = NULL;
+  hmm->p1       = 0.;
 
-  hmm->begin  = NULL;
-  hmm->end    = NULL;
+  /* xt[][] left un-init */
+  hmm->begin    = NULL;
+  hmm->end      = NULL;
 
-  hmm->mode    = P7_NO_MODE;
-  hmm->tsc     = hmm->msc     = hmm->isc     = NULL;
-  hmm->tsc_mem = hmm->msc_mem = hmm->msc_mem = NULL;
-  hmm->bsc = hmm->bsc_mem = NULL;
-  hmm->esc = hmm->esc_mem = NULL;
+  hmm->gm       = NULL;
+  hmm->om       = NULL;
+  hmm->lscore   = 0.;
 
   hmm->name     = NULL;
   hmm->acc      = NULL;
@@ -68,115 +82,113 @@ AllocPlan7Shell(void)
   hmm->cs       = NULL;
   hmm->ca       = NULL;
   hmm->comlog   = NULL; 
-  hmm->nseq     = 0;
   hmm->ctime    = NULL;
   hmm->map      = NULL;
   hmm->checksum = 0;
 
-  hmm->tpri = NULL;
-  hmm->mpri = NULL;
-  hmm->ipri = NULL;
+  hmm->tpri     = NULL;
+  hmm->mpri     = NULL;
+  hmm->ipri     = NULL;
 
-  hmm->ga1 = hmm->ga2 = 0.0;
-  hmm->tc1 = hmm->tc2 = 0.0;
-  hmm->nc1 = hmm->nc2 = 0.0;
-				/* DNA translation is not enabled by default */
-  hmm->dnam   = NULL;
-  hmm->dnai   = NULL;
-  hmm->dna2   = -INFTY;
-  hmm->dna4   = -INFTY;
-			/* statistical parameters set to innocuous empty values */
-  hmm->mu      = 0.; 
-  hmm->lambda  = 0.;
-  hmm->kappa   = 0.;
-  hmm->kappa_g = 0.;
+  hmm->ga1 = hmm->ga2 = 0.;
+  hmm->tc1 = hmm->tc2 = 0.;
+  hmm->nc1 = hmm->nc2 = 0.;
+
+  hmm->lvstats  = NULL;
+  hmm->lfstats  = NULL;
+  hmm->gvstats  = NULL;
+  hmm->gfstats  = NULL;
   
-  hmm->flags = 0;
+  hmm->flags    = 0;
+
+ CLEANEXIT:
   return hmm;
 }  
-#ifndef ALTIVEC  /* in Altivec port, this func is replaced in fast_algorithms.c */
-void
-AllocPlan7Body(struct plan7_s *hmm, int M) 
+
+/* Function:  p7_hmm_CreateBody()
+ * Incept:    SRE, Fri Mar 31 14:24:44 2006 [St. Louis]
+ *
+ * Purpose:   Given an allocated shell <hmm>, and a now-known number
+ *            of nodes <M> and maximum alphabet size <K>, allocate
+ *            the remainder of it for that many nodes.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure; in this case, the entire
+ *            HMM is free'd (including the shell).
+ */
+int
+p7_hmm_CreateBody(P7_HMM *hmm, int M, int K) 
 {
   int k, x;
 
-  hmm->M = M;
-  hmm->t      = MallocOrDie (M     *           sizeof(float *));
-  hmm->mat    = MallocOrDie ((M+1) *           sizeof(float *));
-  hmm->ins    = MallocOrDie (M     *           sizeof(float *));
-  hmm->t[0]   = MallocOrDie ((7*M)     *       sizeof(float));
-  hmm->mat[0] = MallocOrDie ((MAXABET*(M+1)) * sizeof(float));
-  hmm->ins[0] = MallocOrDie ((MAXABET*M) *     sizeof(float));
-  /* note allocation strategy for important 2D arrays -- trying
-   * to keep locality as much as possible, cache efficiency etc.
-   */
+  hmm->M      = M;
+  hmm->K      = K;
+
+  ESL_ALLOC(hmm->t,      M         * sizeof(float *));
+  ESL_ALLOC(hmm->mat,    (M+1)     * sizeof(float *));
+  ESL_ALLOC(hmm->ins,    M         * sizeof(float *));
+  ESL_ALLOC(hmm->t[0],   (7*M)     * sizeof(float));
+  ESL_ALLOC(hmm->mat[0], (K*(M+1)) * sizeof(float));
+  ESL_ALLOC(hmm->ins[0], (K*M)     * sizeof(float));
+
   for (k = 1; k <= M; k++) {
-    hmm->mat[k] = hmm->mat[0] + k * MAXABET;
+    hmm->mat[k] = hmm->mat[0] + k * K;
     if (k < M) {
-      hmm->ins[k] = hmm->ins[0] + k * MAXABET;
+      hmm->ins[k] = hmm->ins[0] + k * K;
       hmm->t[k]   = hmm->t[0]   + k * 7;
     }
   }
 
-  hmm->begin  = MallocOrDie  ((M+1) * sizeof(float));
-  hmm->end    = MallocOrDie  ((M+1) * sizeof(float));
+  ESL_ALLOC(hmm->null,  K * sizeof(float));
+  esl_vec_FSet(hmm->null, K, 1./(float)K); /* init to uniform */
 
-  hmm->tsc     = MallocOrDie (7     *           sizeof(int *));
-  hmm->msc     = MallocOrDie (MAXCODE   *       sizeof(int *));
-  hmm->isc     = MallocOrDie (MAXCODE   *       sizeof(int *)); 
-  hmm->tsc_mem = MallocOrDie ((7*M)     *       sizeof(int));
-  hmm->msc_mem = MallocOrDie ((MAXCODE*(M+1)) * sizeof(int));
-  hmm->isc_mem = MallocOrDie ((MAXCODE*M) *     sizeof(int));
-  hmm->tsc[0]  = hmm->tsc_mem;
-  hmm->msc[0]  = hmm->msc_mem;
-  hmm->isc[0]  = hmm->isc_mem;
+  ESL_ALLOC(hmm->begin, (M+1) * sizeof(float));
+  ESL_ALLOC(hmm->end,   (M+1) * sizeof(float));
 
-  for (x = 1; x < MAXCODE; x++) {
-    hmm->msc[x] = hmm->msc[0] + x * (M+1);
-    hmm->isc[x] = hmm->isc[0] + x * M;
-  }
-  for (x = 0; x < 7; x++)
-    hmm->tsc[x] = hmm->tsc[0] + x * M;
+  ESL_ALLOC(hmm->rf,  (M+2) * sizeof(char));
+  ESL_ALLOC(hmm->cs,  (M+2) * sizeof(char));
+  ESL_ALLOC(hmm->ca,  (M+2) * sizeof(char));
+  ESL_ALLOC(hmm->map, (M+1) * sizeof(int));
+  
+  p7_hmm_ZeroCounts(hmm);
 
-  /* tsc[x][0] is used as a boundary condition sometimes [Viterbi()],
-   * so init (and keep) at -inf always.
-   */
-  for (x = 0; x < 7; x++)
-    hmm->tsc[x][0] = -INFTY;
-
-  hmm->bsc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-  hmm->esc_mem  = MallocOrDie  ((M+1) * sizeof(int));
-  hmm->bsc = hmm->bsc_mem;
-  hmm->esc = hmm->esc_mem;
-
-  hmm->rf     = MallocOrDie ((M+2) * sizeof(char));
-  hmm->cs     = MallocOrDie ((M+2) * sizeof(char));
-  hmm->ca     = MallocOrDie ((M+2) * sizeof(char));
-  hmm->map    = MallocOrDie ((M+1) * sizeof(int));
-
-  return;
+ CLEANEXIT:
+  if (status != eslOK) p7_hmm_Destroy(hmm);
+  return status;
 }  
-#endif /* not the ALTIVEC version */
 
+
+/* Function:  p7_hmm_Destroy()
+ * Incept:    SRE, Fri Mar 31 15:13:25 2006 [St. Louis]
+ *
+ * Purpose:   Frees both the shell and body of an <hmm>.
+ *            The <hmm> may be damaged (incompletely allocated),
+ *            or even <NULL>.
+ *
+ * Returns:   (void).
+ */
 void
-FreePlan7(struct plan7_s *hmm)
+p7_hmm_Destroy(P7_HMM *hmm)
 {
-  if (hmm->mat     != NULL) free(hmm->mat[0]);
-  if (hmm->ins     != NULL) free(hmm->ins[0]);
-  if (hmm->t       != NULL) free(hmm->t[0]);
-  if (hmm->mat     != NULL) free(hmm->mat);
-  if (hmm->ins     != NULL) free(hmm->ins);
-  if (hmm->t       != NULL) free(hmm->t);
+  if (hmm == NULL) return;
+
+  if (hmm->mat     != NULL) {
+    if (hmm->mat[0] != NULL) free(hmm->mat[0]);
+    free(hmm->mat);
+  }
+  if (hmm->ins     != NULL) {
+    if (hmm->ins[0] != NULL) free(hmm->ins[0]);
+    free(hmm->ins);
+  }
+  if (hmm->t != NULL) {
+    if (hmm->t[0] != NULL) free(hmm->t[0]);
+    free(hmm->t);
+  }
+  if (hmm->null    != NULL) free(hmm->null);
   if (hmm->begin   != NULL) free(hmm->begin);
   if (hmm->end     != NULL) free(hmm->end);
-  if (hmm->bsc_mem != NULL) free(hmm->bsc_mem);
-  if (hmm->esc_mem != NULL) free(hmm->esc_mem);
-  if (hmm->msc_mem != NULL) free(hmm->msc_mem);
-  if (hmm->isc_mem != NULL) free(hmm->isc_mem);
-  if (hmm->tsc_mem != NULL) free(hmm->tsc_mem);
-  if (hmm->msc     != NULL) free(hmm->msc);
-  if (hmm->isc     != NULL) free(hmm->isc);
-  if (hmm->tsc     != NULL) free(hmm->tsc);
+
   if (hmm->name    != NULL) free(hmm->name);
   if (hmm->acc     != NULL) free(hmm->acc);
   if (hmm->desc    != NULL) free(hmm->desc);
@@ -186,302 +198,323 @@ FreePlan7(struct plan7_s *hmm)
   if (hmm->comlog  != NULL) free(hmm->comlog);
   if (hmm->ctime   != NULL) free(hmm->ctime);
   if (hmm->map     != NULL) free(hmm->map);
+
   if (hmm->tpri    != NULL) free(hmm->tpri);
   if (hmm->mpri    != NULL) free(hmm->mpri);
   if (hmm->ipri    != NULL) free(hmm->ipri);
-  if (hmm->dnam    != NULL) free(hmm->dnam);
-  if (hmm->dnai    != NULL) free(hmm->dnai);
+
+  if (hmm->lvstats != NULL) p7_evinfo_Destroy(hmm->lvstats);
+  if (hmm->lfstats != NULL) p7_evinfo_Destroy(hmm->lfstats);
+  if (hmm->gvstats != NULL) p7_evinfo_Destroy(hmm->gvstats);
+  if (hmm->gfstats != NULL) p7_evinfo_Destroy(hmm->gfstats);
+
   free(hmm);
+  return;
 }
 
-/* Function: ZeroPlan7()
+/* Function: p7_hmm_ZeroCounts()
  * 
  * Purpose:  Zeros the counts/probabilities fields in a model (both
  *           core and configured form).  
- *           Leaves null model untouched. 
+ *           Leaves null model alone;
+ *           invalidates any profile or optimized profile by dropping
+ *           HASBITS flag, but leaves the memory allocated;
+ *           invalidates any statistical fits by dropping STATS flags,
+ *           but leaves memory allocated.
  */
 void
-ZeroPlan7(struct plan7_s *hmm)
+p7_hmm_ZeroCounts(P7_HMM *hmm)
 {
   int k;
-  for (k = 1; k < hmm->M; k++)
+  for (k = 0; k < hmm->M; k++)
     {
-      FSet(hmm->t[k], 7, 0.);
-      FSet(hmm->mat[k], Alphabet_size, 0.);
-      FSet(hmm->ins[k], Alphabet_size, 0.);
+      esl_vec_FSet(hmm->t[k], 7, 0.);         /* t[0] uses TMM,TMD; not other 5 */
+      esl_vec_FSet(hmm->mat[k], hmm->K, 0.);  /* mat[0] unused */
+      esl_vec_FSet(hmm->ins[k], hmm->K, 0.);  /* ins[0] unused */
     }
-  FSet(hmm->mat[hmm->M], Alphabet_size, 0.);
-  hmm->tbd1 = 0.;
-  hmm->tbm1 = 0.;
-  FSet(hmm->begin+1, hmm->M, 0.);
-  FSet(hmm->end+1, hmm->M, 0.);
+  esl_vec_FSet(hmm->mat[hmm->M], hmm->K, 0.);
+
+  esl_vec_FSet(hmm->begin, hmm->M+1, 0.); /* include unused begin[0] */
+  esl_vec_FSet(hmm->end,   hmm->M+1, 0.); /* include unused begin[0] */
   for (k = 0; k < 4; k++)
-    FSet(hmm->xt[k], 2, 0.);
+    esl_vec_FSet(hmm->xt[k], 2, 0.);
   
-  hmm->kappa   = 0;
-  hmm->kappa_g = 0;
-  hmm->mode    = P7_NO_MODE;
-  hmm->flags  &= ~PLAN7_HASBITS;	/* invalidates scores */
-  hmm->flags  &= ~PLAN7_HASPROB;	/* invalidates probabilities */
+  hmm->mode   =   P7_NO_MODE;
+  hmm->flags  &= ~PLAN7_HASPROB;	/* invalidates probabilities        */
+  hmm->flags  &= ~PLAN7_HASBITS;	/* invalidates scores               */
+  hmm->flags  &= ~PLAN7_STATS_LV;	/* invalidates local Viterbi stats  */
+  hmm->flags  &= ~PLAN7_STATS_LF;	/* invalidates local Forward stats  */
+  hmm->flags  &= ~PLAN7_STATS_GV;	/* invalidates glocal Viterbi stats */
+  hmm->flags  &= ~PLAN7_STATS_GF;	/* invalidates glocal Forward stats */
+  return;
 }
 
 
-/* Function: Plan7SetName()
+/*****************************************************************
+ * 2. Convenience functions for setting annotation in the HMM.
+ *****************************************************************/ 
+
+/* Function: p7_hmm_SetName()
  * 
- * Purpose:  Change the name of a Plan7 HMM. Convenience function.
+ * Purpose:  Set or change the name of a Plan7 HMM to <name>.
+ *           Any trailing whitespace (including newline) is chopped off.     
  *      
- * Note:     Trailing whitespace and \n's are chopped.     
+ * Returns:  <eslOK> on success.
+ *
+ * Throws:   <eslEMEM> on allocation error, and original name (if any) 
+ *           remains.
  */
-void
-Plan7SetName(struct plan7_s *hmm, char *name)
+int
+p7_hmm_SetName(P7_HMM *hmm, char *name)
 {
-  if (hmm->name != NULL) free(hmm->name);
-  hmm->name = Strdup(name);
-  StringChop(hmm->name);
-}
-/* Function: Plan7SetAccession()
- * 
- * Purpose:  Change the accession number of a Plan7 HMM. Convenience function.
- *      
- * Note:     Trailing whitespace and \n's are chopped.     
- */
-void
-Plan7SetAccession(struct plan7_s *hmm, char *acc)
-{
-  if (hmm->acc != NULL) free(hmm->acc);
-  hmm->acc = Strdup(acc);
-  StringChop(hmm->acc);
-  hmm->flags |= PLAN7_ACC;
-}
+  int   status;
+  void *tmp;
+  int   n;
 
-/* Function: Plan7SetDescription()
- * 
- * Purpose:  Change the description line of a Plan7 HMM. Convenience function.
- * 
- * Note:     Trailing whitespace and \n's are chopped.
- */
-void
-Plan7SetDescription(struct plan7_s *hmm, char *desc)
-{
-  if (hmm->desc != NULL) free(hmm->desc);
-  hmm->desc = Strdup(desc);
-  StringChop(hmm->desc); 
-  hmm->flags |= PLAN7_DESC;
-}
-
-/* Function: Plan7ComlogAppend()
- * Date:     SRE, Wed Oct 29 09:57:30 1997 [TWA 721 over Greenland] 
- * 
- * Purpose:  Concatenate command line options and append to the
- *           command line log.
- */
-void
-Plan7ComlogAppend(struct plan7_s *hmm, int argc, char **argv)
-{
-  int len;
-  int i;
-
-  /* figure out length of command line, w/ spaces and \n */
-  len = argc;
-  for (i = 0; i < argc; i++)
-    len += strlen(argv[i]);
-
-  /* allocate */
-  if (hmm->comlog != NULL)
+  if (name == NULL) 
     {
-      len += strlen(hmm->comlog);
-      hmm->comlog = ReallocOrDie(hmm->comlog, sizeof(char)* (len+1));
+      if (hmm->name != NULL) free(hmm->name); 
+      hmm->name = NULL;
     }
   else
     {
-      hmm->comlog = MallocOrDie(sizeof(char)* (len+1));
+      n = strlen(name);
+      if      (hmm->name == NULL)     ESL_ALLOC (hmm->name,      sizeof(char)*(n+1));
+      else if (n > strlen(hmm->name)) ESL_RALLOC(hmm->name, tmp, sizeof(char)*(n+1));
+      strcpy(hmm->name, name);
+      esl_strchop(hmm->name);
+    }
+ CLEANEXIT:
+  return status;
+}
+
+
+/* Function: p7_hmm_SetAccession()
+ * 
+ * Purpose:  Set of change the accession number of a Plan7 HMM to <acc>. 
+ *           Trailing whitespace (including newline) is chopped.     
+
+ * Returns:  <eslOK> on success.
+ *
+ * Throws:   <eslEMEM> on allocation error, and original name (if any) 
+ *           remains.
+ */
+int
+p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
+{
+  int   status;
+  void *tmp;
+  int   n;
+
+  if (acc == NULL) 
+    {
+      if (hmm->acc != NULL) free(hmm->acc); 
+      hmm->acc = NULL;
+    }
+  else
+    {
+      n = strlen(acc);
+      if      (hmm->acc == NULL)     ESL_ALLOC (hmm->acc,      sizeof(char)*(n+1));
+      else if (n > strlen(hmm->acc)) ESL_RALLOC(hmm->acc, tmp, sizeof(char)*(n+1));
+      strcpy(hmm->acc, acc);
+      esl_strchop(hmm->acc);
+    }
+  status = eslOK;
+ CLEANEXIT:
+  return status;
+}
+
+/* Function: p7_hmm_SetDescription()
+ * 
+ * Purpose:  Change the description line of a Plan7 HMM. 
+ *           Trailing whitespace (including newline) is chopped.
+ */
+void
+p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
+{
+  int   status;
+  void *tmp;
+  int   n;
+
+  if (desc == NULL) 
+    {
+      if (hmm->desc != NULL) free(hmm->desc); 
+      hmm->desc = NULL;
+      hmm->flags &= ~PLAN7_DESC;
+    }
+  else
+    {
+      n = strlen(desc);
+      if      (hmm->desc == NULL)     ESL_ALLOC (hmm->desc,      sizeof(char)*(n+1));
+      else if (n > strlen(hmm->desc)) ESL_RALLOC(hmm->desc, tmp, sizeof(char)*(n+1));
+      strcpy(hmm->desc, desc);
+      esl_strchop(hmm->desc);
+      hmm->flags |= PLAN7_DESC;
+    }
+  status = eslOK;
+ CLEANEXIT:
+  return status;
+}
+
+/* Function: p7_hmm_Comlog()
+ * Date:     SRE, Wed Oct 29 09:57:30 1997 [TWA 721 over Greenland] 
+ * 
+ * Purpose:  Concatenate command line options and append as a line in the
+ *           command line log. Command line log is multiline, with each line
+ *           ending in newline char, except for last line.
+ *           
+ * Returns:  <eslOK> on success.
+ * 
+ * Throws:   <eslEMEM> on allocation failure.          
+ */
+int
+p7_hmm_Comlog(P7_HMM *hmm, int argc, char **argv)
+{
+  int   status;
+  void *tmp;
+  int   len;
+  int   i;
+
+  /* figure out length of added command line, and (re)allocate comlog */
+  len = argc;	/* account for 1 space or \n per arg */
+  for (i = 0; i < argc; i++)
+    len += strlen(argv[i]);
+  if (hmm->comlog != NULL)
+    {
+      len += strlen(hmm->comlog); /* last comlog already ends w/ \n. */
+      ESL_RALLOC(hmm->comlog, tmp, sizeof(char)* (len+1));
+    }
+  else
+    {
+      ESL_ALLOC(hmm->comlog, sizeof(char)* (len+1));
       *(hmm->comlog) = '\0'; /* need this to make strcat work */
     }
 
-  /* append */
   strcat(hmm->comlog, "\n");
   for (i = 0; i < argc; i++)
     {
       strcat(hmm->comlog, argv[i]);
       if (i < argc-1) strcat(hmm->comlog, " ");
     }
+
+  status = eslOK;
+ CLEANEXIT:
+  return status;
 }
 
-/* Function: Plan7SetCtime()
+/* Function: p7_hmm_SetCtime()
  * Date:     SRE, Wed Oct 29 11:53:19 1997 [TWA 721 over the Atlantic]
  * 
- * Purpose:  Set the ctime field in a new HMM to the current time.
+ * Purpose:  Set the <ctime> field in a new HMM to the current time.
+ *           This function is not reentrant and not threadsafe, because
+ *           it calls the nonreentrant ANSI C ctime() function.
+ * 
+ * Returns:  <eslOK> on success.
+ * 
+ * Throws:   <eslEMEM> on allocation failure.
  */
-void
-Plan7SetCtime(struct plan7_s *hmm)
+int
+p7_hmm_SetCtime(P7_HMM *hmm)
 {
   time_t date = time(NULL);
   if (hmm->ctime != NULL) free(hmm->ctime);
-  hmm->ctime = Strdup(ctime(&date));
-  StringChop(hmm->ctime);
+  if (esl_strdup(ctime(&date), -1, &(hmm->ctime)) != eslOK)
+    { hmm->ctime = NULL; return eslEMEM; }
+  esl_strchop(hmm->ctime, -1);
+  return eslOK;
 }
 
 
-/* Function: Plan7SetNullModel()
+/* Function: p7_hmm_SetNull()
  * 
- * Purpose:  Set the null model section of an HMM.
- *           Convenience function.
+ * Purpose:  Set the null model emission probabilities of an HMM.
+ *           Null model <p1> is set by length modeling; see P7ReconfigLength().
  */
-void
-Plan7SetNullModel(struct plan7_s *hmm, float null[MAXABET], float p1)
+int
+p7_hmm_SetNull(P7_HMM *hmm, float *null, int K)
 {
-  int x;
-  for (x = 0; x < Alphabet_size; x++)
-    hmm->null[x] = null[x];
-  hmm->p1 = p1;
+  if (K != hmm->K) ESL_ERROR(eslEINVAL, "null model, hmm alphabet sizes differ");
+  esl_vec_FCopy(hmm->null, null, hmm->K);
+  return eslOK;
 }
 
-/* Function:  Plan7Rescale()
+
+
+/* Function:  p7_hmm_Rescale()
  * Incept:    Steve Johnson, 3 May 2004
  *            eweights code incorp: SRE, Thu May 20 10:34:03 2004 [St. Louis]
  *
  * Purpose:   Scale a counts-based HMM by some factor, for
  *            adjusting counts to a new effective sequence number.
+ *            Only affects the core probability model (<t>, <ins>, and <mat>).
  *
  * Args:      hmm        - counts based HMM.
  *            scale      - scaling factor (e.g. eff_nseq/nseq); 1.0= no scaling.
  *
- * Returns:   (void)
+ * Returns:   <eslOK> on success.
  */
-void 
-Plan7Rescale(struct plan7_s *hmm, float scale)
+int
+p7_hmm_Rescale(P7_HMM *hmm, float scale)
 {
   int k;
-  int st;
 
-  /* emissions and transitions in the main model.
-   * Note that match states are 1..M, insert states are 1..M-1,
-   * and only nodes 1..M-1 have a valid array of transitions.
-   */
-  for(k = 1; k <= hmm->M; k++) 
-    FScale(hmm->mat[k], Alphabet_size, scale);
-  for(k = 1; k <  hmm->M; k++) 
-    FScale(hmm->ins[k], Alphabet_size, scale);
-  for(k = 1; k <  hmm->M; k++) 
-    FScale(hmm->t[k],   7,             scale);
-
-  /* begin, end transitions; only valid [1..M] */
-  FScale(hmm->begin+1, hmm->M, scale);
-  FScale(hmm->end+1,   hmm->M, scale);
-  
-  /* B->D1 transition */
-  hmm->tbd1 *= scale;
-
-  /* special transitions */
-  for (st = 0; st < 4; st++)
-    FScale(hmm->xt[st], 2, scale);
-
-  return;
+  for (k = 1; k <= hmm->M; k++) 
+    esl_vec_FScale(hmm->mat[k], hmm->K, scale);
+  for (k = 1; k <  hmm->M; k++) 
+    esl_vec_FScale(hmm->ins[k], hmm->K, scale);
+  for (k = 0; k <  hmm->M; k++) /* including begin->M1 and begin->D1 */
+    esl_vec_FScale(hmm->t[k],   7,      scale);
+  return eslOK;
 }
 
 
-/* Function: Plan7Renormalize()
+/* Function: p7_hmm_Renormalize()
  * 
  * Purpose:  Take an HMM in counts form, and renormalize
- *           all of its probability vectors. Also enforces
- *           Plan7 restrictions on nonexistent transitions.
- *           
- *           Note: only the core probability model is renormalized.
+ *           all probability vectors in the core probability model. Also enforces
+ *           Plan7 restrictions on nonexistent transitions. Sets the
+ *           <PLAN7_HASPROB> flag. 
+ *
+ *           Leaves other flags (stats and profile) alone, so caller
+ *           needs to be wary. Renormalizing a probability model that
+ *           has stats and profile scores wouldn't usually invalidate
+ *           those data; and if we're renormalizing a counts model, we
+ *           shouldn't have stats or profile scores yet anyway.
  *           
  * Args:     hmm - the model to renormalize.
  *                 
- * Return:   (void)
- *           hmm is changed.
+ * Return:   <eslOK> on success.
  */                          
-void
-Plan7Renormalize(struct plan7_s *hmm)
+int
+p7_hmm_Renormalize(P7_HMM *hmm)
 {
   int   k;			/* counter for model position */
   float d;			/* denominator */
 
-				/* match emissions */
-  for (k = 1; k <= hmm->M; k++) 
-    FNorm(hmm->mat[k], Alphabet_size);
-				/* insert emissions */
-  for (k = 1; k < hmm->M; k++)
-    FNorm(hmm->ins[k], Alphabet_size);
-                                /* tbd1,tbm1 */
-  d = hmm->tbd1 + hmm->tbm1;
-  hmm->tbm1 /= d;
-  hmm->tbd1 /= d;
-				/* main model transitions */
-  for (k = 1; k < hmm->M; k++)
+  for (k = 1; k <= hmm->M; k++)  /* match emissions: 1..M */
+    esl_vec_FNorm(hmm->mat[k], hmm->K);
+  for (k = 1; k < hmm->M; k++)	/* insert emissions: 1..M-1 */
+    esl_vec_FNorm(hmm->ins[k], hmm->K);
+  for (k = 1; k < hmm->M; k++)	/* transitions: 1..M-1 */
     {
-      FNorm(hmm->t[k],   3);	/* match  */
-      FNorm(hmm->t[k]+3, 2);	/* insert */
-      FNorm(hmm->t[k]+5, 2);	/* delete */
+      esl_vec_FNorm(hmm->t[k],   3);	/* match  */
+      esl_vec_FNorm(hmm->t[k]+3, 2);	/* insert */
+      esl_vec_FNorm(hmm->t[k]+5, 2);	/* delete */
     }
-				/* enforce nonexistent transitions */
-				/* (is this necessary?) */
-  hmm->t[0][TDM] = hmm->t[0][TDD] = 0.0;
 
-  hmm->flags &= ~PLAN7_HASBITS;	/* clear the log-odds ready flag */
+  hmm->t[0][TMI] = 0.;          /* make sure... */
+  esl_vec_FNorm(hmm->t[0], 3);  /* begin transitions; TMM, TMD are valid */
+
+  /* Enforce nonexistent but allocated transitions: */
+  esl_vec_FSet(hmm->mat[0], hmm->K, 0.); /* mat[0] */
+  esl_vec_FSet(hmm->ins[0], hmm->K, 0.); /* ins[0] */
+  esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* t[0] delete */
+  esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* t[0] insert */
+
   hmm->flags |= PLAN7_HASPROB;	/* set the probabilities OK flag */
 }
   
 
-
-#ifdef SRE_REMOVED
-/* Function: Plan7ESTConfig()
- * 
- * Purpose:  Configure a Plan7 model for EST Smith/Waterman
- *           analysis.
- *           
- *           OUTDATED; DO NOT USE WITHOUT RECHECKING
- *           
- * Args:     hmm        - hmm to configure.
- *           aacode     - 0..63 vector mapping genetic code to amino acids
- *           estmodel   - 20x64 translation matrix, w/ codon bias and substitution error
- *           dna2       - probability of a -1 frameshift in a triplet
- *           dna4       - probability of a +1 frameshift in a triplet     
- */ 
-void
-Plan7ESTConfig(struct plan7_s *hmm, int *aacode, float **estmodel, 
-	       float dna2, float dna4)
-{
-  int k;
-  int x;
-  float p;
-  float *tripnull;		/* UNFINISHED!!! */
-
-				/* configure specials */
-  hmm->xt[XTN][MOVE] = 1./351.;
-  hmm->xt[XTN][LOOP] = 350./351.;
-  hmm->xt[XTE][MOVE] = 1.;
-  hmm->xt[XTE][LOOP] = 0.;
-  hmm->xt[XTC][MOVE] = 1./351.;
-  hmm->xt[XTC][LOOP] = 350./351.;
-  hmm->xt[XTJ][MOVE] = 1.;
-  hmm->xt[XTJ][LOOP] = 0.;
-				/* configure entry/exit */
-  hmm->begin[1] = 0.5;
-  FSet(hmm->begin+2, hmm->M-1, 0.5 / ((float)hmm->M - 1.));
-  hmm->end[hmm->M] = 1.;
-  FSet(hmm->end, hmm->M-1, 0.5 / ((float)hmm->M - 1.));
-
-				/* configure dna triplet/frameshift emissions */
-  for (k = 1; k <= hmm->M; k++)
-    {
-				/* translate aa to triplet probabilities */
-      for (x = 0; x < 64; x++) {
-	p =  hmm->mat[k][aacode[x]] * estmodel[aacode[x]][x] * (1.-dna2-dna4);
-	hmm->dnam[x][k] = Prob2Score(p, tripnull[x]);
-
-	p = hmm->ins[k][aacode[x]] * estmodel[aacode[x]][x] * (1.-dna2-dna4);
-	hmm->dnai[x][k] = Prob2Score(p, tripnull[x]);
-      }
-      hmm->dnam[64][k] = 0;	/* ambiguous codons score 0 (danger?) */
-      hmm->dna2 = Prob2Score(dna2, 1.);
-      hmm->dna4 = Prob2Score(dna4, 1.);
-    }
-}
-#endif /*SRE_REMOVED*/
-	  
 
 /* Function: DegenerateSymbolScore()
  * 

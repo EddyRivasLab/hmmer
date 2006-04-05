@@ -38,7 +38,7 @@ pdf:  manpages
 # manpages: convert man pages to LaTeX chapter in User Guide.
 #    uses PolyglotMan 3.0.5 "rman", and rmanprocess.pl script
 manpages:
-				# write the manpages.tex "chapter" by conversion
+# write the manpages.tex "chapter" by conversion
 	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
 	@echo "\section{Manual pages}" >> manpages.tex 
 	for file in $(HMMERMANS); do\
