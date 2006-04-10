@@ -179,13 +179,13 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *d
        FAdd(p, hmm->ins[tr->nodeidx[tpos]], Alphabet_size);
   FNorm(p, Alphabet_size);
 
-  for (x = 0; x < Alphabet_size; x++)
+  for (x = 0; x < hmm->abc->K; x++)
     sc[x] = Prob2Score(p[x], hmm->null[x]);
 				/* could avoid this chunk if we knew
 				   we didn't need any degenerate char scores */
-  for (x = Alphabet_size; x < Alphabet_iupac; x++)
-    sc[x] = DegenerateSymbolScore(p, hmm->null, x);
-					       
+  sc[hmm->abc->K] = -INFTY;	/* (gap chars are in alphabet; unused in target seqs) */
+  for (x = hmm->abc->K+1; x < hmm->abc->Kp; x++)
+    sc[x] = esl_abc_IExpectScore(hmm->abc, x, sc, hmm->null);
 
   /* Score all the M,I state emissions that appear in the trace.
    */

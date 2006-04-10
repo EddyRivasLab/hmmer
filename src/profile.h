@@ -23,10 +23,11 @@ enum p7_searchmode {
  */
 typedef struct {
   enum p7_searchmode mode;	/* configured algorithm mode                */
+  ESL_ALPHABET *abc;		/* copy of pointer to appropriate alphabet  */
   int    M;
   int  **tsc;                   /* transition scores     [0.6][1.M-1]       */
-  int  **msc;                   /* match emission scores [0.MAXCODE-1][1.M] */
-  int  **isc;                   /* ins emission scores [0.MAXCODE-1][1.M-1] */
+  int  **msc;                   /* match emission scores [0.Kp-1][1.M]      */
+  int  **isc;                   /* ins emission scores   [0.Kp-1][1.M-1]    */
   int    xsc[4][2];             /* N,E,C,J transitions   [][LOOP,MOVE]      */
   int   *bsc;                   /* begin transitions     [1.M]              */
   int   *esc;			/* end transitions       [1.M]              */

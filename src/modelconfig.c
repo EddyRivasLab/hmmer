@@ -1024,25 +1024,28 @@ logoddsify_the_rest(struct plan7_s *hmm)
 {
   int k;			/* counter for model position */
   int x;			/* counter for symbols        */
+  int sc[MAXCODE];
 
-  /* Symbol emission scores, match msc[] and insert isc[].
-   */
+  sc[hmm->abc->K] = 0;		/* unused gap score in alphabet */
+
+  /* Match emissions */
   for (k = 1; k <= hmm->M; k++) 
     {
-				/* match/insert emissions in main model */
-      for (x = 0; x < Alphabet_size; x++) 
-	{
-	  hmm->msc[x][k] = Prob2Score(hmm->mat[k][x], hmm->null[x]);
-	  if (k < hmm->M) 
-	    hmm->isc[x][k] =  Prob2Score(hmm->ins[k][x], hmm->null[x]); 
-	}
-				/* degenerate match/insert emissions */
-      for (x = Alphabet_size; x < Alphabet_iupac; x++) 
-	{
-	  hmm->msc[x][k] = DegenerateSymbolScore(hmm->mat[k], hmm->null, x);
-	  if (k < hmm->M)
-	    hmm->isc[x][k] = DegenerateSymbolScore(hmm->ins[k], hmm->null, x);
-	}
+      for (x = 0; x < hmm->abc->K; x++) 
+	sc[x] = Prob2Score(hmm->mat[k][x], hmm->null[x]); /* base   */
+      esl_abc_IExpScVec(hmm->abc, sc, hmm->null);         /* degens */
+      for (x = 0; x < hmm->abc->Kp; x++)
+	hmm->msc[x][k] = sc[x];
+    }
+  
+  /* Insert emissions */
+  for (k = 1; k < hmm->M; k++) 
+    {
+      for (x = 0; x < hmm->abc->K; x++) 
+	sc[x] = Prob2Score(hmm->ins[k][x], hmm->null[x]); /* base   */
+      esl_abc_IExpScVec(hmm->abc, sc, hmm->null);         /* degens */
+      for (x = 0; x < hmm->abc->Kp; x++)
+	hmm->isc[x][k] = sc[x];
     }
 
   /* The tsc[TI*] insert transition scores.

@@ -1,20 +1,19 @@
 /* @configure_input@
  * 
- * config.h.in -> config.h
+ * p7_config.h.in -> p7_config.h
  * 
  * Configurable compile-time parameters and options in HMMER.
- * config.h is generated from config.h.in by the ./configure script.
- * DO NOT EDIT config.h; only edit config.h.in.
+ * p7_config.h is generated from p7_config.h.in by the ./configure script.
+ * DO NOT EDIT p7_config.h; only edit p7_config.h.in.
  *
  * Because this header may configure the behavior of system headers
  * (for example, LFS support), it must be included before any other
  * header file.
  * 
- * SVN $Id$
+ * SVN $Id: config.h.in 1382 2005-05-03 22:25:36Z eddy $
  */
-
-#ifndef CONFIGH_INCLUDED
-#define CONFIGH_INCLUDED
+#ifndef P7_CONFIGH_INCLUDED
+#define P7_CONFIGH_INCLUDED
 
 /*****************************************************************
  * 1. This first section consists of compile-time constants that control 
@@ -23,20 +22,6 @@
  *****************************************************************/
 
 
-/* HMMER_NCPU determines the number of threads/processors that
- * a multithreaded version will parallelize across. This can be overridden
- * by -DHMMER_NCPU=x in the Makefile, and by a setenv HMMER_NCPU x
- * in the environment, and usually by a command line option.
- * By default, we detect the number of processors dynamically, and use
- * them all. 
- *
- * However, on some systems (FreeBSD and older Linuxen, notably), we
- * can't autodetect the available # of cpus. On these systems we
- * assume 2 processors by default - dual processor Intel servers
- * are common. That assumption can be overridden
- * here if HMMER_NCPU is uncommented.  
- */
-/* #define HMMER_NCPU 4 */ 
 
 
 #define ALILENGTH   50		/* length of displayed alignment lines        */
@@ -120,3 +105,19 @@
 
 
 #endif /*CONFIGH_INCLUDED*/ 
+
+#ifdef OBSOLETE
+/* HMMER_NCPU determines the number of threads/processors that
+ * a multithreaded version will parallelize across. This can be overridden
+ * by -DHMMER_NCPU=x in the Makefile, and by a setenv HMMER_NCPU x
+ * in the environment, and usually by a command line option.
+ * By default, we detect the number of processors dynamically, and use
+ * them all. 
+ *
+ * However, on some systems (FreeBSD and older Linuxen, notably), we
+ * can't autodetect the available # of cpus. On these systems we
+ * assume 2 processors by default - dual processor Intel servers
+ * are common. That assumption can be overridden
+ * here if HMMER_NCPU is uncommented.  
+ */
+/* #define HMMER_NCPU 4 */ 

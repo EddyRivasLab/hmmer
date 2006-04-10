@@ -7,12 +7,14 @@
 #ifndef PLAN7_INCLUDED
 #define PLAN7_INCLUDED
 
+#include <esl_alphabet.h>	/* ESL_ALPHABET */
+
+
 
 /* P7_PROFILE 
  * The score profile in its common representation.
  */
 #include "p7_profile.h"		
-
 
 /* P7_OPROFILE,  P7_OMX
  * The score profile and DP matrix in their optimized representations, 
@@ -34,7 +36,7 @@
 
 
 
-/* Structure: plan7_s
+/* Structure: P7_HMM 
  * 
  * Declaration of a Plan 7 profile-HMM structure.
  * 
@@ -118,12 +120,15 @@
  * score model, usually ignoring the core probability model.
  */
 typedef struct {
+  /* Alphabet information (includes hmm->abc->K, alphabet size)
+   */
+  ESL_ALPHABET *abc;
+
   /* The core model in probability form.
    * Begin state transitions are stored in t[0][TMM], t[0][TMD].
    * P7_HASPROBS flag is raised when these probs are all valid.
    */
   int     M;                    /* length of the model (# nodes)          */
-  int     K;			/* alphabet size (copy of Alphabet_size)  */
   float **t;                    /* transition prob's. t[(0),1..M-1][0..6] */
   float **mat;                  /* match emissions.  mat[1..M][0..K-1]    */ 
   float **ins;                  /* insert emissions. ins[1..M-1][0..K-1]  */
@@ -282,7 +287,20 @@ typedef struct {
 #define MOVE 0          /* trNB, trEC, trCT, trJB */
 #define LOOP 1          /* trNN, trEJ, trCC, trJJ */
 
-extern void p7_profile_Crutch(P7_HMM *hmm, P7_PROFILE *gm);
+extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
+extern P7_HMM *p7_hmm_CreateShell(void);
+extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
+extern void    p7_hmm_Destroy(P7_HMM *hmm);
+extern void    p7_hmm_ZeroCounts(P7_HMM *hmm);
+extern int     p7_hmm_SetName(P7_HMM *hmm, char *name);
+extern int     p7_hmm_SetAccession(P7_HMM *hmm, char *acc);
+extern void    p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
+extern int     p7_hmm_Comlog(P7_HMM *hmm, int argc, char **argv);
+extern int     p7_hmm_SetCtime(P7_HMM *hmm);
+extern int     p7_hmm_SetNull(P7_HMM *hmm, float *null, int K);
+extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
+extern int     p7_hmm_Renormalize(P7_HMM *hmm);
+extern void    p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 
 #endif /* PLAN7_INCLUDED */
 

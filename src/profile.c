@@ -73,3 +73,53 @@ p7_profile_Destroy(P7_PROFILE *gm)
   return;
 }
   
+/* Function:  p7_profile_Dump()
+ * Incept:    SRE, Thu Apr  6 13:46:25 2006 [AA890 enroute to Boston]
+ *
+ * Purpose:   Debugging: print log-odds scores of a configured plan7
+ *            profile <gm> to a stream <fp>, in roughly the same format
+ *            as a save file.  
+ */
+void
+p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
+{
+  char buf[p7_MAX_SC_TXTLEN];
+  int k;			/* counter for nodes */
+  int x;			/* counter for symbols */
+  int ts;			/* counter for state transitions */
+  
+  fprintf(fp, "N: %6s ", p7_score2txt(gm->xsc[XTN][MOVE]), buf);
+  fprintf(fp, "%6s\n",   p7_score2txt(gm->xsc[XTN][LOOP]), buf);
+
+  for (k = 1; k <= gm->M; k++)
+    {
+				/* Line 1: k, match emissions */
+      fprintf(fp, " %5d ", k);
+      for (x = 0; x < gm->abc->K; x++) 
+        fprintf(fp, "%6s ", p7_score2txt(gm->msc[x][k]), buf);
+      fputs("\n", fp);
+				/* Line 2: insert emissions */
+      fprintf(fp, "       ");
+      for (x = 0; x < gm->abc->K; x++) 
+	fprintf(fp, "%6s ", (k < gm->M) ? p7_score2txt(gm->isc[x][k], buf) : "*");
+      fputs("\n", fp);
+				/* Line 3: transition probs; begin, end */
+      fprintf(fp, "       ");
+      for (ts = 0; ts < 7; ts++)
+	fprintf(fp, "%6s ", (k < gm->M) ? p7_score2txt(gm->tsc[ts][k], buf) : "*"); 
+      fprintf(fp, "%6s ", p7_score2txt(gm->bsc[k]), buf);
+      fprintf(fp, "%6s ", p7_score2txt(gm->esc[k]), buf);
+      fputs("\n", fp);
+    }
+  fprintf(fp, "E: %6s ", p7_score2txt(gm->xsc[XTE][MOVE]));
+  fprintf(fp, "%6s\n",   p7_score2txt(gm->xsc[XTE][LOOP])); 
+
+  fprintf(fp, "J: %6s ", p7_score2txt(gm->xsc[XTJ][MOVE]));
+  fprintf(fp, "%6s\n",   p7_score2txt(gm->xsc[XTJ][LOOP])); 
+
+  fprintf(fp, "C: %6s ", p7_score2txt(gm->xsc[XTC][MOVE]));
+  fprintf(fp, "%6s\n",   p7_score2txt(gm->xsc[XTC][LOOP])); 
+
+  fputs("//\n", fp);
+}
+

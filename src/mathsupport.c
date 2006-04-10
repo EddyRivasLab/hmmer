@@ -84,6 +84,31 @@ Scorify(int sc)
 }
 
 
+
+
+/* Function:  p7_score2txt()
+ * Incept:    SRE, Thu Apr  6 13:34:32 2006 [St. Louis]
+ *
+ * Purpose:   Formats a scaled integer score <sc> into a buffer <buf> for
+ *            output. Scores of $-\infty$ (<-p7_IMPOSSIBLE>) are 
+ *            represented as <*>.
+ *            
+ *            The provided buffer must have space for at least
+ *            <p7_MAX_SC_TXTLEN> characters. 
+ *            
+ * Returns:   a pointer to <buf>, to facilitate in-line use
+ *            of this formatting function in <printf()> calls.  
+ */
+char *
+p7_score2txt(int sc, char *buf)
+{
+  if (sc == -p7_IMPOSSIBLE) strcpy(buf, "*");
+  else sprintf(buf, "%*d", p7_MAX_SC_TXTLEN-1, sc);
+  return buf;
+}
+
+
+
 /* Function: PValue()
  * Date:     SRE, Mon Oct 27 12:21:02 1997 [Sanger Centre, UK]
  * 
