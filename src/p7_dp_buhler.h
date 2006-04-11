@@ -1,4 +1,4 @@
-/* dp_buhler.h
+/* p7_dp_buhler.h
  * 
  * Definitions of optimized profile and DP matrix (P7_OPROFILE,
  * P7_OMX) structures for Jeremy Buhler's DP implementation.
@@ -9,8 +9,8 @@
  * SVN $Id$
  */
 
-#ifndef P7_DPBUHLERH_INCLUDED
-#define P7_DPBUHLERH_INCLUDED
+#ifndef P7_DPBUHLER_INCLUDED
+#define P7_DPBUHLER_INCLUDED
 
 /* Model constants for JB implementation of Viterbi algo */
 
@@ -56,7 +56,7 @@ typedef struct {
   unsigned int padM, padN;
 } P7_OMX;
 
-#endif /*P7_DPBUHLERH_INCLUDED*/
+#endif /*P7_DPBUHLER_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  *****************************************************************/

@@ -7,19 +7,12 @@
 #ifndef PLAN7_INCLUDED
 #define PLAN7_INCLUDED
 
-#include <esl_alphabet.h>	/* ESL_ALPHABET */
+#include "p7config.h"
+#include <esl_alphabet.h>	/* ESL_ALPHABET       */
+#include "p7_profile.h"		/* P7_PROFILE, P7_GMX */
+#include "p7_evalues.h"		/* P7_EVINFO          */
 
-
-
-/* P7_PROFILE 
- * The score profile in its common representation.
- */
-#include "p7_profile.h"		
-
-/* P7_OPROFILE,  P7_OMX
- * The score profile and DP matrix in their optimized representations, 
- * for different implementations of the HMMER dynamic programming API.
- */ 
+/* P7_OPROFILE, P7_OMX are provided by one and only one optimized impl: */
 #ifdef    p7_IMPL_REFERENCE
 #include "p7_dp_reference.h"	/* the reference implementation.        */
 #elif     p7_IMPL_FAST
@@ -291,10 +284,10 @@ extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
 extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
-extern void    p7_hmm_ZeroCounts(P7_HMM *hmm);
+extern int     p7_hmm_ZeroCounts(P7_HMM *hmm);
 extern int     p7_hmm_SetName(P7_HMM *hmm, char *name);
 extern int     p7_hmm_SetAccession(P7_HMM *hmm, char *acc);
-extern void    p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
+extern int     p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
 extern int     p7_hmm_Comlog(P7_HMM *hmm, int argc, char **argv);
 extern int     p7_hmm_SetCtime(P7_HMM *hmm);
 extern int     p7_hmm_SetNull(P7_HMM *hmm, float *null, int K);

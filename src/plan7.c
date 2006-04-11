@@ -17,7 +17,6 @@
 
 #include "plan7.h"		
 
-
 /* Function:  p7_hmm_Create()
  * Incept:    SRE, Fri Mar 31 14:07:43 2006 [St. Louis]
  *
@@ -38,7 +37,7 @@ p7_hmm_Create(int M, ESL_ALPHABET *abc)
 {
   P7_HMM *hmm = NULL;
 
-  if (hmm = p7_hmm_CreateShell();
+  if ((hmm = p7_hmm_CreateShell()) == NULL) return NULL;
   p7_hmm_CreateBody(hmm, M, abc);
   return hmm;
 }  
@@ -61,6 +60,7 @@ P7_HMM *
 p7_hmm_CreateShell(void) 
 {
   P7_HMM *hmm = NULL;
+  int     status;
 
   ESL_ALLOC(hmm, sizeof(P7_HMM));
   hmm->abc      = NULL;
@@ -126,6 +126,7 @@ int
 p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc) 
 {
   int k, x;
+  int status;
 
   hmm->abc    = abc;
   hmm->M      = M;
@@ -230,7 +231,7 @@ p7_hmm_Destroy(P7_HMM *hmm)
  *           invalidates any statistical fits by dropping STATS flags,
  *           but leaves memory allocated.
  */
-void
+int
 p7_hmm_ZeroCounts(P7_HMM *hmm)
 {
   int k;
@@ -247,14 +248,13 @@ p7_hmm_ZeroCounts(P7_HMM *hmm)
   for (k = 0; k < 4; k++)
     esl_vec_FSet(hmm->xt[k], 2, 0.);
   
-  hmm->mode   =   P7_NO_MODE;
   hmm->flags  &= ~PLAN7_HASPROB;	/* invalidates probabilities        */
   hmm->flags  &= ~PLAN7_HASBITS;	/* invalidates scores               */
   hmm->flags  &= ~PLAN7_STATS_LV;	/* invalidates local Viterbi stats  */
   hmm->flags  &= ~PLAN7_STATS_LF;	/* invalidates local Forward stats  */
   hmm->flags  &= ~PLAN7_STATS_GV;	/* invalidates glocal Viterbi stats */
   hmm->flags  &= ~PLAN7_STATS_GF;	/* invalidates glocal Forward stats */
-  return;
+  return eslOK;
 }
 
 
@@ -294,7 +294,7 @@ p7_hmm_SetName(P7_HMM *hmm, char *name)
 	ESL_RALLOC(hmm->name, tmp, sizeof(char)*(n+1));
 
       strcpy(hmm->name, name);
-      esl_strchop(hmm->name);
+      esl_strchop(hmm->name, n);
     }
  CLEANEXIT:
   return status;
@@ -333,7 +333,7 @@ p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
 	ESL_RALLOC(hmm->acc, tmp, sizeof(char)*(n+1));
 
       strcpy(hmm->acc, acc);
-      esl_strchop(hmm->acc);
+      esl_strchop(hmm->acc, n);
     }
   status = eslOK;
  CLEANEXIT:
@@ -345,7 +345,7 @@ p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
  * Purpose:  Change the description line of a Plan7 HMM. 
  *           Trailing whitespace (including newline) is chopped.
  */
-void
+int
 p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
 {
   int   status;
@@ -368,7 +368,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
 	ESL_RALLOC(hmm->desc, tmp, sizeof(char)*(n+1));
 
       strcpy(hmm->desc, desc);
-      esl_strchop(hmm->desc);
+      esl_strchop(hmm->desc, n);
       hmm->flags |= PLAN7_DESC;
     }
   status = eslOK;

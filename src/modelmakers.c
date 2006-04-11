@@ -1,9 +1,9 @@
 /* modelmakers.c
  * Construction of models from multiple alignments. Three versions:
- *    Handmodelmaker() -- use #=RF annotation to indicate match columns
- *    Fastmodelmaker() -- Krogh/Haussler heuristic
- *    Maxmodelmaker()  -- MAP model construction algorithm (Eddy, 
- *                          unpublished)
+ *    p7_Handmodelmaker() -- use #=RF annotation to indicate match columns
+ *    p7_Fastmodelmaker() -- Krogh/Haussler heuristic
+ *    p7_Maxmodelmaker()  -- MAP model construction algorithm (Eddy, 
+ *                           unpublished)
  *                          
  * The meat of the model construction code is in matassign2hmm().
  * The three model construction strategies simply label which columns
@@ -17,12 +17,11 @@
  *    imply these. Look in trace_doctor() for how DI and ID transitions
  *    are removed.
  *
- * SRE, Fri Nov 15 10:00:04 1996
  * SVN $Id: modelmakers.c 1384 2005-05-06 23:04:04Z eddy $
+ * SRE, Fri Nov 15 10:00:04 1996
  */
 
-#include "config.h"
-#include "squidconf.h"
+#include "p7config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -31,12 +30,11 @@
 #include <float.h>
 #include <ctype.h>
 
-#include "squid.h"
-#include "msa.h"
-#include "structs.h"
-#include "funcs.h"
+#include <easel.h>
+#include <esl_msa.h>
 
-
+#include "plan7.h"
+#include "p7_trace.h"
 
 /* flags used for matassign[] arrays -- 
  *   assignment of aligned columns to match/insert states
@@ -48,21 +46,20 @@
 #define EXTERNAL_INSERT_N (1<<4)
 #define EXTERNAL_INSERT_C (1<<5) 
 
-static void matassign2hmm(MSA *msa, unsigned char **dsq, char *isfrag,
-			  int *matassign, struct plan7_s **ret_hmm,
-			  struct p7trace_s ***ret_tr);
+static void matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag,
+			  int *matassign, P7_HMM **ret_hmm,
+			  P7_TRACE ***ret_tr);
 static void fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag,
-			    int *matassign, struct p7trace_s ***ret_tr);
-static void trace_doctor(struct p7trace_s *tr, int M, int *ret_ndi, 
-			 int *ret_nid);
-static void annotate_model(struct plan7_s *hmm, int *matassign, MSA *msa);
+			    int *matassign, P7_TRACE ***ret_tr);
+static void trace_doctor(P7_TRACE *tr, int M, int *ret_ndi, int *ret_nid);
+static void annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
 #if 0
 static void print_matassign(int *matassign, int alen);
 #endif
 
 
 
-/* Function: P7Handmodelmaker()
+/* Function: p7_Handmodelmaker()
  * 
  * Purpose:  Manual model construction:
  *           Construct an HMM from an alignment, where the #=RF line
@@ -84,12 +81,11 @@ static void print_matassign(int *matassign, int alen);
  *           ret_tr  - RETURN: array of tracebacks for aseq's
  *           
  * Return:   (void)
- *           ret_hmm and ret_tr alloc'ed here; FreeTrace(tr[i]), free(tr),
- *           FreeHMM(hmm).
+ *           ret_hmm and ret_tr alloc'ed here. 
  */            
 void
-P7Handmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
-		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
+p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
+		  P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
   int      apos;                /* counter for aligned columns         */
