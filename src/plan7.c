@@ -5,7 +5,7 @@
  * SVN $Id: plan7.c 1487 2005-11-12 20:40:57Z eddy $
  */
 
-#include "p7_config.h"		/* must be included first */
+#include "p7config.h"		/* must be included first */
 
 #include <stdio.h>
 #include <string.h>		/* strcpy(), strlen()             */

@@ -51,12 +51,12 @@ CFLAGS = @CFLAGS@
 SHELL       = /bin/sh
 PACKAGE     = @PACKAGE_NAME@
 BASENAME    = @PACKAGE_TARNAME@
-RELEASE     = @PACKAGE_VERSION@
-RELEASEDATE = "@PACKAGE_DATE@"
-COPYRIGHT   = "@PACKAGE_COPYRIGHT@"
-LICENSELINE = "@PACKAGE_LICENSE@"
-RELCODE     = @PACKAGE_RELCODE@
-LICENSETAG  = gnu
+RELEASE     = @HMMER_VERSION@
+RELEASEDATE = "@HMMER_DATE@"
+COPYRIGHT   = "@HMMER_COPYRIGHT@"
+LICENSELINE = "@HMMER_LICENSE@"
+RELCODE     = @HMMER_RELCODE@
+LICENSETAG  = @HMMER_LICENSETAG@
 COMPRESS    = gzip
 FTPDIR      = /nfs/ftp/eddy/hmmer/${RELEASE}/
 
@@ -80,14 +80,13 @@ PVMPROGS = @PVMPROGS@
 
 # all: Compile everything.
 #
-all: 
+all:   
 	@ if test -d binaries; then\
 	  echo "This appears to be a binary distribution; nothing needs to be compiled." ; \
           echo "Use make install to install the precompiled binaries." ; \
 	  echo "If you really want to rebuild from source, move or delete the" ;\
 	  echo "binaries/ subdirectory."; \
 	else\
-	  (cd squid;     ${MAKE}; ${MAKE} module);\
 	  (cd easel;     ${MAKE});\
 	  (cd src;       ${MAKE}; ${MAKE} module);\
 	  (cd testsuite; ${MAKE});\
@@ -98,9 +97,6 @@ all:
 #
 check:	
 	(cd testsuite; make check)
-
-squid/libsquid.a:
-	(cd squid; make; make module)
 
 src/libhmmer.a: 
 	(cd src;   make; make module)
@@ -146,7 +142,6 @@ bindist:
 #
 clean:
 	(cd src;       make clean)
-	(cd squid;     make clean)
 	(cd easel;     make clean)
 	(cd testsuite; make clean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
@@ -161,7 +156,6 @@ distclean:
 	-rm Makefile
 	(cd src;       make distclean)
 	(cd easel;     make distclean)
-	(cd squid;     make distclean)
 	(cd testsuite; make distclean)
 
 # "make binclean" is special: it cleans up and leaves only a binary
@@ -170,7 +164,6 @@ distclean:
 binclean:
 	(cd src;       make binclean)
 	(cd easel;     make binclean)
-	(cd squid;     make binclean)
 	(cd testsuite; make binclean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm config.log config.status

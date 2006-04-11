@@ -1,13 +1,59 @@
-f# Process this file with autoconf to produce a configure script.
+# configure.ac
+# Process this file with autoconf to produce a configure script.
+#
+# reminders to save re-reading autoconf manual for the n'th time:
+#   - output variables:
+#        are defined here as normal shell variables, e.g. FOO="my string"
+#        are made into output variables by calling AC_SUBST(FOO)
+#        any occurrence of @FOO@ in an output file is then substituted
+#        I think this only happens in files we assign w/ AC_CONFIG_FILES;
+#        that's the Makefile.in's.
+#
+#   - C preprocessor symbols:
+#        are defined here by calling AC_DEFINE(FOO) or AC_DEFINE(FOO, [42])
+#        then #undef FOO lines in easel.h.in become #define FOO or #define FOO 42
+#        I think this only happens in header files that we assign
+#        w/ AC_CONFIG_HEADERS -- which means, easel.h.in
+#
 # SRE, Mon Oct  5 14:55:45 1998
-# CVS $Id$
-# 
-# Hint: See autoconf macro archive at 
-#     http://www.gnu.org/software/ac-archive/
+# SVN $Id$
+# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
+#
+# GNU recommends the following order:
+#   1. autoconf requirements
+#   2. AC_INIT
+#   3. info on the package
+#   4. checks for programs
+#   5. checks for libraries
+#   6. checks for header files
+#   7. checks for types
+#   8. checks for structures
+#   9. checks for compiler characteristics
+#  10. checks for library functions
+#  11. checks for system services
+#  12. AC_CONFIG_FILES
+#  13. AC_OUTPUT
 
-# Initialize w/ AC_INIT(<package> <version> <bug-report> <tarname>)
-# 
-# The four AC_INIT args set the following output variables and preprocessor symbols:
+
+
+################################################################
+# 1. autoconf requirements
+################################################################
+AC_PREREQ(2.57)
+
+
+################################################################
+# 2. AC_INIT
+################################################################
+
+AC_INIT(HMMER, 3.0, eddy@genetics.wustl.edu, hmmer)
+AC_MSG_NOTICE([Configuring HMMER for your system.])
+
+
+################################################################
+# 3. Info on the package
+#
+# The four AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
 #     PACKAGE_VERSION   <version>     e.g. "2.2h"
 #     PACKAGE_BUGREPORT <bug-report>  e.g. "eddy@genetics.wustl.edu"
@@ -15,67 +61,40 @@ f# Process this file with autoconf to produce a configure script.
 # From them, it derives one more:
 #     PACKAGE_STRING    <package> <version>, e.g. "HMMER 2.2h"
 # We also define additional variables:
-#     PACKAGE_RELCODE     unique CVS tag without .'s: e.g. "hmmer2_2i"
-#     PACKAGE_DATE        release date: e.g. "January 2003"
-#     PACKAGE_COPYRIGHT   one-line copyright string
-#     PACKAGE_LICENSE     one-line license string
-#     PACKAGE_LICENSETAG  which license to bundle from Licenses/ subdirectory.
+#     HMMER_RELCODE     unique CVS tag without .'s: e.g. "hmmer2_2i"
+#     HMMER_DATE        release date: e.g. "January 2003"
+#     HMMER_COPYRIGHT   one-line copyright string
+#     HMMER_LICENSE     one-line license string
+#     HMMER_LICENSETAG  which license to bundle from Licenses/ subdirectory.
+#     HMMER_VERSION     copy of version code, e.g. "2.2h"
+#     HMMER_URL         URL home for HMMER.
 #
-# The preprocessor symbols get picked up in config.h.
-# The output variables are used in Makefiles.
-#
-AC_PREREQ(2.57)
-AC_INIT(HMMER, 2.4dev1, eddy@genetics.wustl.edu, hmmer)
-AC_MSG_NOTICE([configuring HMMER for your system.])
+# We avoid using AC_INIT's PACKAGE_ variables, because we want to be able
+# to use HMMER as a library inside other packages, with no name clashes.
+################################################################
 
-PACKAGE_RELCODE="hmmer2_4dev1"
-PACKAGE_DATE="June 2004"
-PACKAGE_COPYRIGHT="Copyright (C) 1992-2004 HHMI/Washington University School of Medicine"
-PACKAGE_LICENSE="Freely distributed under the GNU General Public License (GPL)"
-PACKAGE_LICENSETAG=gnu
+HMMER_RELCODE="hmmer3_0"
+HMMER_DATE="April 2006"
+HMMER_COPYRIGHT="Copyright (C) 1992-2006 HHMI/Washington University School of Medicine"
+HMMER_LICENSE="Freely distributed under the GNU General Public License (GPL)"
+HMMER_LICENSETAG=gnu
+HMMER_VERSION=$PACKAGE_VERSION
+HMMER_URL="http://hmmer.wustl.edu/"
 
+# Output variables  (AC_OUTPUT replaces @var@ in Makefiles, p7config.h)
+AC_SUBST(HMMER_RELCODE)
+AC_SUBST(HMMER_DATE)
+AC_SUBST(HMMER_COPYRIGHT)
+AC_SUBST(HMMER_LICENSE)
+AC_SUBST(HMMER_LICENSETAG)
+AC_SUBST(HMMER_VERSION)
+AC_SUBST(HMMER_URL)
 
-
-
-# For a normal release, you don't need to edit below this line.
-#
-AC_SUBST(PACKAGE_RELCODE)
-AC_SUBST(PACKAGE_DATE)
-AC_SUBST(PACKAGE_COPYRIGHT)
-AC_SUBST(PACKAGE_LICENSE)
-AC_SUBST(PACKAGE_LICENSETAG)
-
-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "$PACKAGE_DATE")
-AC_DEFINE_UNQUOTED(PACKAGE_COPYRIGHT, "$PACKAGE_COPYRIGHT")
-AC_DEFINE_UNQUOTED(PACKAGE_LICENSE, "$PACKAGE_LICENSE")
-
-
-# Check if we're a binary distribution. 
-# The trigger for this is the existence of the binaries/ subdirectory,
-# and the nonexistence of a src/ subdirectory.
-# 
-# If we are a binary dist, we only do a minimal configuration, setting up
-# version information and installation path names.
-# This makes ./configure independent of having a working
-# C compiler.
-#
-# Watch out: this is implemented as a sneaky if statement that wraps the
-# majority of the configure.ac M4 code.
-#
-if ((! test -d binaries) && test -d src); then 
-AC_MSG_NOTICE([This is a full source distribution - using full config])
-
-# Checks for programs.
-# Sets output variables CC, CFLAGS, and RANLIB.
-# AR might be hidden away on Solaris; provide some hints in the PATH.
-#
-AC_PROG_CC
-if test "$CC" = xlc ; then	# IBM's xlc?
-  CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
-fi
-AC_PROG_RANLIB
-AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
-
+# Preprocessor symbols (replace #undefs in p7config.h)
+AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
+AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
+AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
+AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
@@ -91,7 +110,31 @@ AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 #
 AC_CANONICAL_HOST
 
+# Check if we're a binary distribution. 
+# Trigger is existence of binaries/, nonexistence of src/.
+# 
+# For binary distro, we do minimal configuration, setting version information 
+# and installation path names, making ./configure independent of having a working
+# C compiler.
+#
+# Implements a sneaky if statement that wraps most of the configure.ac M4 code.
+#
+if ((! test -d binaries) && test -d src); then 
+AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
+
+
+
+
+################################################################
+# 4. Checks for programs
+################################################################
+
+# Set output variable "RANLIB"
+AC_PROG_RANLIB
+
+# Set output variable "AR"
+AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 
 # GNU make check; format of makefile dependency lines for executables.
 # original from John Darrington <j.darrington@elvis.murdoch.edu.au> 
@@ -124,61 +167,143 @@ AC_DEFUN(CHECK_GNU_MAKE,[
 ])
 CHECK_GNU_MAKE
 
-#################################################################################
-# Now we're into our "optional features"
-#################################################################################
+################################################################
+# 5. Libraries
+################################################################
 
+################################################################
+# 6. Header files
+################################################################
 
-# --enable-altivec         - enable Erik Lindahl's Altivec code for PowerPC
+################################################################
+# 7. Types
+################################################################
+
+################################################################
+# 8. Structures
+################################################################
+
+################################################################
+# 9. Compiler
+################################################################
+
+# --enable-debugging=x    - set debugging level to <x> (1-3)
 #
-# Sets the ALTIVEC preprocessor variable; adds -faltivec to the CFLAGS.
+# At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
+# Sets the p7_DEBUGLEVEL preprocessor symbol to <x>
 #
-AC_ARG_ENABLE(altivec,
-[  --enable-altivec        enable Altivec-specific code for PowerPC],
-[case $enable_altivec in
-   yes)  AC_MSG_NOTICE([enabled Altivec optimization for PowerPC (Erik Lindahl)])
-         AC_DEFINE(ALTIVEC)
-	# We support altivec both on Apple platforms (Lindahl's contribs)
-        # and on IBM PowerPC platforms (IBM/Yinhe Cheng's contribs).
-	# Three cases: 
-	#  1. we're using cc/gcc on an IBM PowerPC;
-        #  2. we're using OS/X's cc on an Apple;
-        #  3. we're using IBM's xlc on an IBM PowerPC.
-	 if test "$CC" != xlc; then 
-	   if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then 
-	     altivecOP="-maltivec -mabi=altivec"  # IBM gcc
-	   else
-	     altivecOP="-faltivec -mcpu=G5 -mtune=G5" # Apple cc
-	   fi
-	 else
-	   altivecOP="-qaltivec"  # IBM xlc
-	 fi
+AC_ARG_ENABLE(debugging,
+[  --enable-debugging      set CFLAGS for debugging
+  --enable-debugging=x    also set diagnostics level to <x> (1-3) (3 = most verbose)],
+[ case $enable_debugging in
+   yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
+         CFLAGS="-g -Wall"
+         AC_DEFINE(p7_DEBUGLEVEL, 0)
+         ;;
+     1)  AC_MSG_NOTICE([enabled debugging diagnostics level 1 (low verbosity)])
+         CFLAGS="-g -Wall"
+         AC_DEFINE(p7_DEBUGLEVEL, 1)
+         ;;
+     2)  AC_MSG_NOTICE([enabled debugging diagnostics level 2 (moderate verbosity)])
+         CFLAGS="-g -Wall"
+         AC_DEFINE(p7_DEBUGLEVEL, 2)
+         ;;
+     3)  AC_MSG_NOTICE([enabled debugging diagnostics level 3 (high verbosity)])
+         CFLAGS="-g -Wall"
+         AC_DEFINE(p7_DEBUGLEVEL, 3)
+         ;;
+    no)  AC_MSG_NOTICE([debugging diagnostics disabled])
+         AC_DEFINE(p7_DEBUGLEVEL, 0)
+         ;;
+     *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
+         ;;
+esac])
 
-         CFLAGS="$CFLAGS $altivecOP" 
+# Choose the compiler
+#
+AC_PROG_CC
+if test "$CC" = xlc ; then	# IBM's xlc?
+  CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
+fi
+
+# --enable-ccmalloc      - configure for compiling in ccmalloc memory checks
+#
+# The CC output variable is modified.
+# Requires ccmalloc version >= 0.4.0 because of the --no-wrapper option.
+#
+AC_ARG_ENABLE(ccmalloc,
+[  --enable-ccmalloc       turn ccmalloc memory debugging on ],
+[case $enable_ccmalloc in
+   yes)  AC_MSG_NOTICE([enabled ccmalloc memory debugging])
+         CC="ccmalloc --no-wrapper $CC" 
          ;;
-    no)  AC_MSG_NOTICE([Altivec/PowerPC optimization disabled])
+    no)  AC_MSG_NOTICE([ccmalloc memory debug/tracing disabled])
          ;;
-     *)  echo "Ignoring unknown argument to --enable-altivec: $enable_altivec"
+     *)  echo "Ignoring unknown argument to --enable-ccmalloc: $enable_ccmalloc"
 	 ;;
 esac])
+
+################################################################
+# 9a. Choice of optimized implementation.
+################################################################
+
+impl_choice="fast"
+impl_cflags=""
+AC_ARG_ENABLE(impl,
+              [AS_HELP_STRING([--enable-impl],
+                [enable an optimized DP implementation (default=fast)]) ],
+              [ $impl_choice=$enable_impl])
+
+case $impl_choice in
+reference) AC_MSG_NOTICE([Using reference (unoptimized) DP implementation])
+           AC_DEFINE(p7_IMPL_REFERENCE)
+           ;;
+
+fast)      AC_MSG_NOTICE([Using standard (optimized) DP implementation])
+           AC_DEFINE(p7_IMPL_FAST)
+           ;;
+
+altivec)   AC_MSG_NOTICE([Using Altivec DP implementation for PowerPC (Erik Lindahl)])
+           AC_DEFINE(p7_IMPL_ALTIVEC)
+	   if test "$CC" != xlc; then 
+	     if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then 
+  	       impl_cflags="-maltivec -mabi=altivec"      # IBM gcc
+  	     else
+	       impl_cflags="-faltivec -mcpu=G5 -mtune=G5" # Apple cc
+	     fi
+ 	   else
+	     impl_cflags="-qaltivec"  # IBM xlc
+ 	   fi
+	   ;;
+
+buhler)    AC_MSG_NOTICE([Using optimized DP implementation from Jeremy Buhler])
+           AC_DEFINE(p7_IMPL_BUHLER)
+           ;;
+
+sse)       AC_MSG_NOTICE([Using SSE2 DP implementation for Intel (contrib by Apple)])
+           AC_DEFINE(p7_IMPL_SSE)
+           ;;
+
+*)         AC_MSG_NOTICE([Ignoring unknown argument to --enable-imp: $impl_choice])
+           ;;
+esac
+
+CFLAGS="$CFLAGS $impl_cflags"
+
+# For Altivec: test that the compiler is really going to support this.
+# (M4 code from Erik Lindahl, Stanford University; 
+#  modified for IBM PowerPC xlc tests by Yinhe Cheng, IBM).
 #
-# Now check whether the compiler supports altivec extensions, if enabled.
-# In theory we could do this in the source, but this way we can give
-# the user an explicit error message telling him/her to upgrade the compiler.
-# (M4 code from Erik Lindahl, Stanford University; modified to include
-# IBM PowerPC xlc tests by Yinhe Cheng, IBM).
-#
-if test x"$enable_altivec" = xyes; then
+if test "$impl_choice" = altivec; then
 	if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then
 	   cat >> confdefs.h << \_ACEOF
 #include "altivec.h"
 _ACEOF
         fi
-
         AC_MSG_CHECKING([whether the compiler supports altivec extensions])
-############################################################################
-#### IBM PPC xlc altivec compile test: (Yinhe Cheng, IBM)
-############################################################################
+################################################################
+# IBM PPC xlc altivec compile test: (Yinhe Cheng, IBM)
+################################################################
 	if test "$CC" = "xlc"; then  
 		AC_TRY_COMPILE([],[
 #ifndef __IBM_VACPP_altivec_h
@@ -220,85 +345,30 @@ vector signed char X;
         fi
 fi
 
-
-
-
-# --enable-ccmalloc      - configure for compiling in ccmalloc memory checks
+################################################################
+# 10. Library functions
+################################################################
+# Although we configure our fixed-size integers in squid,
+# we do need some of that configuration code here, because
+# we might (on Solaris, for instance) need to include
+# -lsocket to the linker to get ntohs() and friends. These
+# define preprocessor variables HAVE_NTOHS, HAVE_NTOHL,
+# HAVE_HTONS, and HAVE_HTONL.
 #
-# The CC output variable is modified.
-# Requires ccmalloc version >= 0.4.0 because of the --no-wrapper option.
-#
-AC_ARG_ENABLE(ccmalloc,
-[  --enable-ccmalloc       turn ccmalloc memory debugging on ],
-[case $enable_ccmalloc in
-   yes)  AC_MSG_NOTICE([enabled ccmalloc memory debugging])
-         CC="ccmalloc --no-wrapper $CC" 
-         ;;
-    no)  AC_MSG_NOTICE([ccmalloc memory debug/tracing disabled])
-         ;;
-     *)  echo "Ignoring unknown argument to --enable-ccmalloc: $enable_ccmalloc"
-	 ;;
-esac])
-
-
-# --enable-debugging=x    - set debugging level to <x> (1-3)
-# 
-# At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
-# Sets the DEBUGLEVEL preprocessor symbol to <x>
-#
-AC_ARG_ENABLE(debugging,
-[  --enable-debugging      set CFLAGS for debugging
-  --enable-debugging=x    also set diagnostics level to <x> (1-3) 
-                          (where 3 = most verbose)],
-[ case $enable_debugging in
-   yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
-         CFLAGS="-g -Wall"
-         AC_DEFINE(DEBUGLEVEL, 0)
-         ;;
-     1)  AC_MSG_NOTICE([enabled debugging diagnostics level 1 (low verbosity)])
-         CFLAGS="-g -Wall"
-         AC_DEFINE(DEBUGLEVEL, 1)
-         ;;
-     2)  AC_MSG_NOTICE([enabled debugging diagnostics level 2 (moderate verbosity)])
-         CFLAGS="-g -Wall"
-	 AC_DEFINE(DEBUGLEVEL, 2)
-         ;;
-     3)  AC_MSG_NOTICE([enabled debugging diagnostics level 3 (high verbosity)])
-         CFLAGS="-g -Wall"
-	 AC_DEFINE(DEBUGLEVEL, 3)
-         ;;
-    no)  AC_MSG_NOTICE([debugging diagnostics disabled])
-         ;;
-     *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
-	 ;;
-esac])
-
-
-# --enable-lfs           Large File Summit (LFS) support for >2GB files
-# See: http://ftp.sas.com/standards/large.file/x_open.20Mar96.html
-#
-AC_ARG_ENABLE(lfs, 
-[  --enable-lfs            enable LFS, Large File Support],
-[case $enable_lfs in
-   yes) AC_MSG_NOTICE([configured for optional LFS, large file support])
-	AC_DEFINE(_LARGEFILE_SOURCE)
-	AC_DEFINE(_LARGEFILE64_SOURCE)
-	AC_DEFINE(_FILE_OFFSET_BITS, 64)
-        ;;
-   no)  ;;
-    *)  echo "Ignoring unknown argument to --enable-lfs: $enable_lfs"
-        ;;
-esac])
-
+AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
+AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
+AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
+AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 
 
 # --enable-pvm       Enable Parallel Virtual Machine (PVM) support
 # 
-# Sets PVMLIBDIR, PVMINCDIR, PCMPROGS, PVMLIBS output variables
+# Sets PVMLIBDIR, PVMINCDIR, PVMPROGS, PVMLIBS output variables
 # Sets HMMER_PVM preprocessor variable.
 #
 AC_ARG_ENABLE(pvm, 
-[  --enable-pvm            enable PVM, Parallel Virtual Machine],
+[  AS_HELP_STRING([--enable-pvm],
+                  [enable PVM, Parallel Virtual Machine])],
 [case $enable_pvm in
    yes)  AC_MSG_NOTICE([enabled optional PVM (Parallel Virtual Machine) support])
  	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
@@ -534,7 +604,6 @@ AC_LANG_RESTORE
 # ACX_PTHREAD macro end.
 # ****************************************************************
 # ****************************************************************
-
 #
 # Back to my code to finish enabling pthreads...
 # Define these preprocessor variables:
@@ -556,7 +625,6 @@ AC_ARG_ENABLE(threads,
 	;;
 esac])
 
-
 # Check for incompatible optional features
 #
 if test x"$enable_threads" = xyes; then
@@ -565,41 +633,51 @@ if test x"$enable_threads" = xyes; then
   fi
 fi
 
+################################################################
+# 11. System services
+################################################################
 
-# Although we configure our fixed-size integers in squid,
-# we do need some of that configuration code here, because
-# we might (on Solaris, for instance) need to include
-# -lsocket to the linker to get ntohs() and friends. These
-# define preprocessor variables HAVE_NTOHS, HAVE_NTOHL,
-# HAVE_HTONS, and HAVE_HTONL.
-#
-AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
-AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
-AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
-AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+AC_SYS_LARGEFILE
 
-# Configure the squid and easel libraries
-#
-AC_CONFIG_SUBDIRS(squid)
+
+################################################################
+# 12. Config subdirs and files (except main Makefile, which we defer)
+################################################################
+
 AC_CONFIG_SUBDIRS(easel)
-
-# Write the config.h header
-#
-AC_CONFIG_HEADERS(src/config.h)
-
-# Write out Makefiles
-#
+AC_CONFIG_HEADERS(src/p7config.h)
 AC_CONFIG_FILES(src/Makefile)
 AC_CONFIG_FILES(testsuite/Makefile)
 
+################################################################
+# 13. AC_OUTPUT
+################################################################
 # remember that sneaky if statement that wraps the source
 # configuration? well, it ends here.
 else
   AC_MSG_NOTICE([This is a precompiled binary distribution - using abbreviated config])
 fi
-
 AC_CONFIG_FILES(Makefile)
 AC_OUTPUT
+
+
+echo "
+
+HMMER configuration:
+
+     DP implementation:    ${impl_choice}
+"
+
+
+
+
+
+
+
+
+
+
+
 
 
 

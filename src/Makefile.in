@@ -36,60 +36,16 @@ PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
 SHELL    = /bin/sh
-MYLIBS   = -lsquid -leasel
-MYLIBDIR = -L../squid -L../easel
-MYINCDIR = -I../squid -I../easel
+MYLIBS   = -leasel
+MYLIBDIR = -L../easel
+MYINCDIR = -I../easel
 
-PROGS = hmmalign\
-	hmmbuild\
-	hmmcalibrate\
-	hmmconvert\
-	hmmemit\
-	hmmfetch\
-	hmmindex\
-	hmmpfam\
-	hmmsearch\
-	${PVMPROGS}
+PROGS = 
 
-OBJS =  alphabet.o\
-	calibration.o\
-	core_algorithms.o\
-	debug.o\
-	display.o\
-	dp_buhler.o\
-	emit.o\
-	emulation.o\
-	fast_algorithms.o\
-	histogram.o\
-	hmmio.o\
-	infocontent.o\
-	island.o\
-	lsj_eweight.o\
-	mathsupport.o\
-        masks.o\
-	matrices.o\
-	misc.o\
-	modelconfig.o\
-	modelmakers.o\
-	plan7.o\
-	plan9.o\
-	postprob.o\
-	prior.o\
-	profile.o\
-	pvm.o\
-	threads.o\
-	tophits.o\
-	trace.o 
+OBJS =  plan7.o
 
-HDRS =  config.h\
-	dp_buhler.h\
-	funcs.h\
-	globals.h\
-	lsjfuncs.h\
-	plan7.h\
-	postprob.h\
-	profile.h\
-	structs.h
+HDRS =  p7config.h\
+	plan7.h
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
@@ -119,7 +75,7 @@ libhmmer.a: $(OBJS)
 ##
 distclean:
 	make clean
-	-rm -f Makefile config.h
+	-rm -f Makefile p7config.h
 
 clean:
 	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a
@@ -129,4 +85,57 @@ binclean:
 
 TAGS:
 	etags -t *.c *.h Makefile.in
+
+
+
+OLDPROGS = hmmalign\
+	hmmbuild\
+	hmmcalibrate\
+	hmmconvert\
+	hmmemit\
+	hmmfetch\
+	hmmindex\
+	hmmpfam\
+	hmmsearch\
+	${PVMPROGS}
+
+OLDOBJS =  alphabet.o\
+	calibration.o\
+	core_algorithms.o\
+	debug.o\
+	display.o\
+	dp_buhler.o\
+	emit.o\
+	emulation.o\
+	fast_algorithms.o\
+	histogram.o\
+	hmmio.o\
+	infocontent.o\
+	island.o\
+	lsj_eweight.o\
+	mathsupport.o\
+        masks.o\
+	matrices.o\
+	misc.o\
+	modelconfig.o\
+	modelmakers.o\
+	plan7.o\
+	plan9.o\
+	postprob.o\
+	prior.o\
+	profile.o\
+	pvm.o\
+	threads.o\
+	tophits.o\
+	trace.o 
+
+OLDHDRS =  config.h\
+	dp_buhler.h\
+	funcs.h\
+	globals.h\
+	lsjfuncs.h\
+	plan7.h\
+	postprob.h\
+	profile.h\
+	structs.h
 

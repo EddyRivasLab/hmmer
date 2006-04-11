@@ -20,7 +20,7 @@
 #define p7_RAMLIMIT        32
 #endif
 
-
+#define p7_ALILENGTH   50	/* length of displayed alignment lines        */
 
 
 

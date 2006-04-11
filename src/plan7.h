@@ -21,7 +21,7 @@
  * for different implementations of the HMMER dynamic programming API.
  */ 
 #ifdef    p7_IMPL_REFERENCE
-#include "p7_dp_referernce.h"	/* the reference implementation.        */
+#include "p7_dp_reference.h"	/* the reference implementation.        */
 #elif     p7_IMPL_FAST
 #include "p7_dp_fast.h"		/* our optimized implementation.        */
 #elif     p7_IMPL_ALTIVEC
