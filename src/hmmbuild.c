@@ -1,3 +1,13 @@
+p7ERR_CONSENSUS:
+    Die("No conserved consensus columns found; aborting construction!\n\
+This is an unusual situation. If you're using default --fast heuristic\n\
+construction, reexamine your alignment; it is probably unusually full of\n\
+gaps, or lots of sequence fragments. You may be able to force HMMER to\n\
+model it by using the --symfrac option. If you're using --hand construction,\n\
+then you didn't mark any match columns in your reference line annotation;\n\
+see the documentation.");
+
+
 /* hmmbuild.c
  * main() for HMM construction from an alignment.
  *

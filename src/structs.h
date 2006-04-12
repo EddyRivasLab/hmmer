@@ -123,33 +123,7 @@ struct hmmfile_s {
 typedef struct hmmfile_s HMMFILE; 
 
 
-/* Plan 7 model state types
- * used in traceback structure
- */
-#define STBOGUS 0
-#define STM     1
-#define STD     2
-#define STI     3
-#define STS     4
-#define STN     5
-#define STB     6
-#define STE     7
-#define STC     8
-#define STT     9
-#define STJ     10     
 
-/* Structure: p7trace_s
- * 
- * Traceback structure for alignments of model to sequence.
- * Each array in a trace_s is 0..tlen-1.
- * Element 0 is always to STATE_S. Element tlen-1 is always to STATE_T. 
- */
-struct p7trace_s {
-  int   tlen;                   /* length of traceback                      */
-  char *statetype;              /* state type used for alignment            */
-  int  *nodeidx;                /* idx of aligned node, 1..M if M,D,I; or 0 */
-  int  *pos;                    /* position in dsq, 1..L, or 0 if none      */ 
-};
 
 /* Structure: p7prior_s
  * 

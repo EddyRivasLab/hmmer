@@ -1,12 +1,10 @@
 /* modelmakers.c
- * Construction of models from multiple alignments. Three versions:
+ * Construction of models from multiple alignments. Two versions:
  *    p7_Handmodelmaker() -- use #=RF annotation to indicate match columns
  *    p7_Fastmodelmaker() -- Krogh/Haussler heuristic
- *    p7_Maxmodelmaker()  -- MAP model construction algorithm (Eddy, 
- *                           unpublished)
  *                          
  * The meat of the model construction code is in matassign2hmm().
- * The three model construction strategies simply label which columns
+ * The two model construction strategies simply label which columns
  * are supposed to be match states, and then hand this info to
  * matassign2hmm().
  * 
@@ -80,46 +78,39 @@ static void print_matassign(int *matassign, int alen);
  *           ret_hmm - RETURN: counts-form HMM
  *           ret_tr  - RETURN: array of tracebacks for aseq's
  *           
- * Return:   (void)
+ * Return:   <eslOK> on success.
+ *           <p7ERR_RF> if alignment doesn't have RF column annotation.
  *           ret_hmm and ret_tr alloc'ed here. 
+ *           
+ * Throws:   <eslEMEM> on allocation failure.          
  */            
-void
+int
 p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
 		  P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
-  int     *matassign;           /* MAT state assignments if 1; 1..alen */
-  int      apos;                /* counter for aligned columns         */
+  int  status;
+  int *matassign = NULL;    /* MAT state assignments if 1; 1..alen */
+  int  apos;                /* counter for aligned columns         */
+  *ret_hmm = NULL;
+  *ret_tr  = NULL;
 
-  /* Make sure we have all the info about the alignment that we need */
-  if (msa->rf == NULL)
-    Die("Alignment must have RF annotation to hand-build an HMM");
-
-				/* Allocation */
-  matassign = (int *) MallocOrDie (sizeof(int) * (msa->alen+1));
+  if (msa->rf == NULL) { status = p7_ERR_NO_RF; goto CLEANEXIT; }
+  ESL_ALLOC(matassign, sizeof(int) * (msa->alen+1));
+  esl_vec_ISet(matassign, msa->alen+1, 0);
   
-  /* Determine match assignment from optional annotation
-   */
-  matassign[0] = 0;
   for (apos = 0; apos < msa->alen; apos++)
-    {
-      matassign[apos+1] = 0;
-      if (!isgap(msa->rf[apos])) 
-	matassign[apos+1] |= ASSIGN_MATCH;
-      else 
-	matassign[apos+1] |= ASSIGN_INSERT;
-    }
+    if (!isgap(msa->rf[apos])) matassign[apos+1] |= ASSIGN_MATCH;
+    else        	       matassign[apos+1] |= ASSIGN_INSERT;
 
-  /* Hand matassign off for remainder of model construction
-   */
   /*   print_matassign(matassign, msa->alen); */
-  matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
-
-  free(matassign);
-  return;
+  status = matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
+ CLEANEXIT:
+  if (matassign != NULL) free(matassign);
+  return status;
 }
 
 
-/* Function: P7Fastmodelmaker()
+/* Function: p7_Fastmodelmaker()
  * 
  * Purpose:  Heuristic model construction:
  *           Construct an HMM from an alignment using a heuristic,
@@ -169,28 +160,36 @@ p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
  *           ret_hmm   - RETURN: counts-form HMM
  *           ret_tr    - RETURN: array of tracebacks for aseq's
  *           
- * Return:   (void)
+ * Return:   <eslOK> on success.
  *           ret_hmm and ret_tr alloc'ed here; FreeTrace(tr[i]), free(tr),
  *           FreeHMM(hmm).       
+ *           
+ * Throws:   <eslEMEM> on allocation failure.          
  */
-void
-P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag, float symfrac,
-		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
+int
+p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
+		  P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
-  int     *matassign;        /* MAT state assignments if 1; 1..alen */
+  int      status;	     /* return status flag                  */
+  int     *matassign = NULL; /* MAT state assignments if 1; 1..alen */
   int      idx;              /* counter over sequences              */
   int      apos;             /* counter for aligned columns         */
-  float   *r;		     /* weighted frac of gaps in column     */
+  float   *r = NULL;	     /* weighted frac of gaps in column     */
   float    totwgt;	     /* total non-fragment seq weight       */
   float    maxR;     	     /* maximum r_i                         */
-  int      incfrags;		/* TRUE to include candidate frags  */
+  int      incfrags;	     /* TRUE to include candidate frags     */
+  *ret_hmm = NULL;
+  *ret_tr  = NULL;
 
   /* Allocations: matassign is 1..alen array of bit flags;
    *              gapfrac is 1..alen array of fractions 0<=gapfrac[i]<=1
    */
-  matassign = MallocOrDie (sizeof(int)   * (msa->alen+1));
-  r         = MallocOrDie (sizeof(float) * (msa->alen+1));
-  
+  ESL_ALLOC(matassign, sizeof(int)     * (msa->alen+1));
+  ESL_ALLOC(r,         sizeof(float)   * (msa->alen+1));
+
+  esl_vec_ISet(matassign, msa->alen+1, 0);  
+  esl_vec_FSet(r,         msa->alen+1, 0.);
+
   /* Determine total non-frag weight, just once.
    */
   incfrags = FALSE;
@@ -203,7 +202,7 @@ P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag, float symfrac,
    */
   if (totwgt == 0.) /* yes, this fp compare is safe */
     {
-      totwgt = FSum(msa->wgt, msa->nseq);
+      totwgt = esl_vec_FSum(msa->wgt, msa->nseq);
       incfrags = TRUE;
     }
 
@@ -212,35 +211,28 @@ P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag, float symfrac,
    */
   for (apos = 0; apos < msa->alen; apos++) 
     {  
-      r[apos+1] = 0.;
       for (idx = 0; idx < msa->nseq; idx++) 
 	if ((incfrags || ! isfrag[idx]) 
 	    && ! isgap(msa->aseq[idx][apos])) 
 	  r[apos+1] += msa->wgt[idx];
       r[apos+1] /= totwgt;
     }
-  maxR = FMax(r+1, msa->alen);
+  maxR = esl_vec_FMax(r+1, msa->alen);
   
   /* Determine match assignment. (Both matassign and r are 1..alen)
    */
-  matassign[0] = 0;
   for (apos = 1; apos <= msa->alen; apos++) 
-    {
-      matassign[apos] = 0;
-      if (r[apos] >= symfrac * maxR)
-	matassign[apos] |= ASSIGN_MATCH;
-      else
-	matassign[apos] |= ASSIGN_INSERT;
-    }
+    if (r[apos] >= symfrac * maxR) matassign[apos] |= ASSIGN_MATCH;
+    else	                   matassign[apos] |= ASSIGN_INSERT;
 
   /* Once we have matassign calculated, modelmakers behave
    * the same; matassign2hmm() does this stuff (traceback construction,
    * trace counting) and sets up ret_hmm and ret_tr.
    */
-  matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
-
-  free(r);
-  free(matassign);
+  status = matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
+ CLEANEXIT:
+  if (r != NULL)         free(r);
+  if (matassign != NULL) free(matassign);
   return;
 }
   
@@ -260,57 +252,51 @@ P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag, float symfrac,
  *           ret_hmm   - RETURN: counts-form HMM
  *           ret_tr    - RETURN: array of tracebacks for aseq's
  *                         
- * Return:   (void)
+ * Return:   <eslOK> on success.
  *           ret_hmm and ret_tr alloc'ed here for the calling
  *           modelmaker function.
  */
-static void
-matassign2hmm(MSA *msa, unsigned char **dsq, char *isfrag, int *matassign, 
-	      struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
+static int
+matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag, int *matassign, 
+	      P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
-  struct plan7_s    *hmm;       /* RETURN: new hmm                     */
-  struct p7trace_s **tr;        /* fake tracebacks for each seq        */
+  int        status;		/* return status                       */
+  P7_HMM    *hmm = NULL;        /* RETURN: new hmm                     */
+  P7_TRACE **tr  = NULL;        /* RETURN: 0..nseq-1 fake traces       */
   int      M;                   /* length of new model in match states */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
+  *ret_hmm = NULL;
+  *ret_tr  = NULL;
 
-				/* how many match states in the HMM? */
-  M = 0;
-  for (apos = 1; apos <= msa->alen; apos++) {
-    if (matassign[apos] & ASSIGN_MATCH) 
-      M++;
-  }
+  /* How many match states in the HMM? */
+  for (M=0,apos = 1; apos <= msa->alen; apos++) 
+    if (matassign[apos] & ASSIGN_MATCH) M++;
+  if (M == 0) { status = p7ERR_NO_CONSENSUS; goto CLEANEXIT; }
 
-  if (M == 0) 
-    Die("No conserved consensus columns found; aborting construction!\n\
-This is an unusual situation. If you're using default --fast heuristic\n\
-construction, reexamine your alignment; it is probably unusually full of\n\
-gaps, or lots of sequence fragments. You may be able to force HMMER to\n\
-model it by using the --symfrac option. If you're using --hand construction,\n\
-then you didn't mark any match columns in your reference line annotation;\n\
-see the documentation.");
-
-				/* delimit N-terminal tail */
+  /* Delimit N-terminal tail */
   for (apos=1; matassign[apos] & ASSIGN_INSERT && apos <= msa->alen; apos++)
     matassign[apos] |= EXTERNAL_INSERT_N;
   if (apos <= msa->alen) matassign[apos] |= FIRST_MATCH;
 
-				/* delimit C-terminal tail */
+  /* Delimit C-terminal tail */
   for (apos=msa->alen; matassign[apos] & ASSIGN_INSERT && apos > 0; apos--)
     matassign[apos] |= EXTERNAL_INSERT_C;
   if (apos > 0) matassign[apos] |= LAST_MATCH;
 
   /* print_matassign(matassign, msa->alen);  */
 
-				/* make fake tracebacks for each seq */
-  fake_tracebacks(msa->aseq, msa->nseq, msa->alen, isfrag, matassign, &tr);
+  /* Make fake tracebacks for each seq */
+  status = fake_tracebacks(msa->aseq, msa->nseq, msa->alen, isfrag, matassign, &tr);
+  if (status != eslOK) goto CLEANEXIT;
 
-				/* build count model from tracebacks */
-  hmm = AllocPlan7(M);
-  ZeroPlan7(hmm);
+  /* Build count model from tracebacks */
+  hmm = p7_hmm_Create(M, global_abc);
+  if (hmm == NULL) { status = eslEMEM; goto CLEANEXIT; }
+  p7_hmm_ZeroCounts(hmm);
   for (idx = 0; idx < msa->nseq; idx++) {
-    /* P7PrintTrace(stdout, tr[idx], NULL, NULL);   */
-    P7TraceCount(hmm, dsq[idx], msa->wgt[idx], tr[idx]);
+    /* p7_trace_Dump(stdout, tr[idx], NULL, NULL);   */
+    p7_trace_Count(hmm, dsq[idx], msa->wgt[idx], tr[idx]);
   }
 				/* annotate new model */
   annotate_model(hmm, matassign, msa);
@@ -326,10 +312,11 @@ see the documentation.");
   msa->rf[msa->alen] = '\0';
 
 				/* Cleanup and return. */
+ CLEANEXIT:
   if (ret_tr != NULL) *ret_tr = tr;
   else   { for (idx = 0; idx < msa->nseq; idx++) P7FreeTrace(tr[idx]); free(tr); }
   if (ret_hmm != NULL) *ret_hmm = hmm; else FreePlan7(hmm);
-  return;
+  return status;
 }
   
 
@@ -353,7 +340,7 @@ see the documentation.");
  * Return:   (void)
  *           ret_tr is alloc'ed here. Caller must free.
  */          
-static void
+static int
 fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag, int *matassign,
 		struct p7trace_s ***ret_tr)
 {

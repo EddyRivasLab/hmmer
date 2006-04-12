@@ -1,80 +1,304 @@
 /* trace.c
  * Support for Plan 7 traceback data structure, p7trace_s.
  * 
- * SRE, Sat Nov 16 12:34:57 1996
  * SVN $Id: trace.c 1387 2005-05-13 20:50:29Z eddy $
+ * SRE, Sat Nov 16 12:34:57 1996
  */
-
-#include "config.h"
-#include "squidconf.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
-#include "squid.h"
+#include <easel.h>
 
-#include "plan7.h"
-#include "structs.h"
-#include "funcs.h"
+#include "p7_trace.h"
 
-static void rightjustify(char *s, int n);
-
-/* Function: P7AllocTrace(), P7ReallocTrace(), P7FreeTrace()
- * 
- * Purpose:  allocation and freeing of traceback structures
+/* Function:  p7_trace_Create()
+ * Incept:    SRE, Tue Apr 11 16:40:40 2006 [St. Louis]
+ *
+ * Purpose:   Allocate a traceback of length <N> states (inclusive
+ *            of S, T states); return it via <ret_tr>.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error.
  */
-void
-P7AllocTrace(int tlen, struct p7trace_s **ret_tr)
+int
+p7_trace_Create(int N, P7_TRACE **ret_tr)
 {
-  struct p7trace_s *tr;
+  int       status;
+  P7_TRACE *tr = NULL;
+  *ret_tr      = NULL;
   
-  tr =            MallocOrDie (sizeof(struct p7trace_s));
-  tr->statetype = MallocOrDie (sizeof(char) * tlen);
-  tr->nodeidx   = MallocOrDie (sizeof(int)  * tlen);
-  tr->pos       = MallocOrDie (sizeof(int)  * tlen);
-  *ret_tr = tr;
+  ESL_ALLOC(tr,     sizeof(P7_TRACE));
+  tr->st = tr->k = tr->i = NULL;
+  ESL_ALLOC(tr->st, sizeof(char) * N);
+  ESL_ALLOC(tr->k,  sizeof(int)  * N);
+  ESL_ALLOC(tr->i,  sizeof(int)  * N);
+  tr->N      = 0;
+  tr->nalloc = N;
+  status = eslOK;
+ CLEANEXIT:
+  if (status != eslOK) p7_trace_Destroy(tr);
+  else                 *ret_tr = tr;
+  return eslOK;
 }
-void
-P7ReallocTrace(struct p7trace_s *tr, int tlen)
+
+/* Function:  p7_trace_Expand()
+ * Incept:    SRE, Tue Apr 11 16:52:55 2006 [St. Louis]
+ *
+ * Purpose:   Doubles the allocation in a trace structure <tr>.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure; the data in
+ *            <tr> are unaffected by failure.
+ */
+int
+p7_trace_Expand(P7_TRACE *tr)
 {
-  tr->statetype = ReallocOrDie (tr->statetype, tlen * sizeof(char));
-  tr->nodeidx   = ReallocOrDie (tr->nodeidx,   tlen * sizeof(int));
-  tr->pos       = ReallocOrDie (tr->pos,       tlen * sizeof(int));
+  int status;
+  
+  ESL_RALLOC(tr->st, sizeof(char) *2*tr->nalloc);
+  ESL_RALLOC(tr->k,  sizeof(int)  *2*tr->nalloc);
+  ESL_RALLOC(tr->i,  sizeof(int)  *2*tr->nalloc);
+  tr->nalloc *= 2;
+  status = eslOK;
+ CLEANEXIT:
+  return status;
 }
+
+/* Function:  p7_trace_ExpandTo()
+ * Incept:    SRE, Tue Apr 11 16:56:19 2006 [St. Louis]
+ *
+ * Purpose:   Reallocates a trace structure <tr> to hold a trace
+ *            of length <N> states.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure; the data in <tr>
+ *            are unaffected by failure.
+ */
+int
+p7_trace_ExpandTo(P7_TRACE *tr, int N)
+{
+  int status;
+  if (N < tr->nalloc) return eslOK; /* no-op */
+  
+  ESL_RALLOC(tr->st, sizeof(char) *N);
+  ESL_RALLOC(tr->k,  sizeof(int)  *N);
+  ESL_RALLOC(tr->i,  sizeof(int)  *N);
+  tr->nalloc = N;
+  status = eslOK;
+ CLEANEXIT:
+  return status;
+}
+
+/* Function:  p7_trace_Destroy()
+ * Incept:    SRE, Tue Apr 11 16:58:35 2006 [St. Louis]
+ *
+ * Purpose:   Frees a trace structure <tr>.
+ *
+ * Returns:   (void)
+ */
 void 
-P7FreeTrace(struct p7trace_s *tr)
+p7_trace_Destroy(P7_TRACE *tr)
 {
   if (tr == NULL) return;
-  free(tr->pos);
-  free(tr->nodeidx);
-  free(tr->statetype);
+  if (tr->st != NULL) free(tr->st);
+  if (tr->k  != NULL) free(tr->k);
+  if (tr->i  != NULL) free(tr->i);
   free(tr);
+  return;
 }
 
 
-/* Function: TraceSet()
- * Date:     SRE, Sun Mar  8 12:39:00 1998 [St. Louis]
+/* Function:  p7_trace_Dump()
+ * Incept:    SRE, Tue Apr 11 17:38:07 2006 [St. Louis]
  *
- * Purpose:  Convenience function; set values at position tpos
- *           in a trace. 
+ * Purpose:   Dumps internals of a traceback structure <tr> to <fp>.
+ *            If <gm> is non-NULL, also prints transition/emission scores.
+ *            If <dsq> is non-NULL, also prints residues.
+
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+
+
+/* Function: P7PrintTrace()
+ * 
+ * Purpose:  Print out a traceback structure.
+ *           If hmm is non-NULL, also print transition and emission scores.
  *           
- *
- * Args:     tr   - trace object to write to
- *           tpos - ptr to position in trace to set
- *           type - statetype e.g. STS, etc.
- *           idx  - nodeidx 1..M or 0
- *           pos  - seq position 1..L or 0
- *
- * Returns:  void
+ * Args:     fp  - stderr or stdout, often
+ *           tr  - trace structure to print
+ *           hmm - NULL or hmm containing scores to print
+ *           dsq - NULL or digitized sequence trace refers to.                
  */
 void
-TraceSet(struct p7trace_s *tr, int tpos, char type, int idx, int pos)
+P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char *dsq)
 {
-  tr->statetype[tpos] = type;
-  tr->nodeidx[tpos]   = idx;
-  tr->pos[tpos]       = pos;
+  int          tpos;		/* counter for trace position */
+  unsigned int sym;
+  int          sc;
+  int          i;
+
+  if (tr == NULL) {
+    fprintf(fp, " [ trace is NULL ]\n");
+    return;
+  }
+
+  if (hmm == NULL) {
+    fprintf(fp, "st  node   rpos  - traceback len %d\n", tr->tlen);
+    fprintf(fp, "--  ---- ------\n");
+    for (tpos = 0; tpos < tr->tlen; tpos++) {
+      fprintf(fp, "%1s  %4d %6d\n", 
+	      Statetype(tr->statetype[tpos]),
+	      tr->nodeidx[tpos],
+	      tr->pos[tpos]);
+    } 
+  } else {
+    if (!(hmm->flags & PLAN7_HASBITS))
+      Die("oi, you can't print scores from that hmm, it's not ready.");
+
+    sc = 0;
+    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->tlen);
+    fprintf(fp, "--  ---- ------  ------- --------\n");
+    for (tpos = 0; tpos < tr->tlen; tpos++) {
+      if (dsq != NULL) sym = dsq[tr->pos[tpos]];
+
+      /* B->DDD->Mk paths must be scored as B->Mk.
+       * Suck up the B->DDD->Mk whole path here, display that score once,
+       * on the D->Mk transition. tpos sits on the D when
+       * we're done, so that tpos++ loop sets us on the M for the
+       * next goround.
+       */
+      if (tr->statetype[tpos] == STB && tr->statetype[tpos+1] == STD)
+	{
+	  fprintf(fp, "%1s  %4d %6d  *", "B", 0, 0);
+	  tpos++;
+	  while (tr->statetype[tpos+1] == STD) {
+	    fprintf(fp, "%1s  %4d %6d  *", "D", tr->nodeidx[tpos], tr->pos[tpos]);
+	    tpos++;  /* stop when tpos+1 is an Mk */
+	  }
+
+	  fprintf(fp, "%1s  %4d %6d  %7d", 
+		  Statetype(tr->statetype[tpos]), /* D */
+		  tr->nodeidx[tpos],              /* k-1 */
+		  tr->pos[tpos],                  /* 0 */
+		  hmm->bsc[tr->nodeidx[tpos+1]]);
+	  continue;
+	}
+      
+      /* Similarly, Mk->DDDD->E paths must be scored as Mk->E.
+       */
+      if (tr->statetype[tpos] == STM && tr->statetype[tpos+1] == STD)
+	{
+	  i = tpos;
+	  while (tr->statetype[i+1] == STD) i++; /* look ahead for an E... */
+	  if (tr->statetype[i+1] == STE) /* if it's there, score as Mk->E */
+	    {
+	      fprintf(fp, "%1s  %4d %6d  %7d", 
+		      Statetype(tr->statetype[tpos]), /* M */
+		      tr->nodeidx[tpos],              /* k */
+		      tr->pos[tpos],                  /* whatever */
+		      hmm->esc[tr->nodeidx[tpos]]);   /* Mk->E */
+	      while (++tpos <= i) 
+		fprintf(fp, "%1s  %4d %6d  *", 
+			Statetype(tr->statetype[tpos]),     
+			tr->nodeidx[tpos], tr->pos[tpos]);
+	      /* tpos now sits on the last D state; main loop will advance to E */
+	      continue;
+	    }
+	}
+
+      fprintf(fp, "%1s  %4d %6d  %7d", 
+	      Statetype(tr->statetype[tpos]),
+	      tr->nodeidx[tpos],
+	      tr->pos[tpos],
+	      (tpos < tr->tlen-1) ? 
+	      TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
+				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]) : 0);
+
+      if (tpos < tr->tlen-1)
+	sc += TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
+				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
+
+      if (dsq != NULL) {
+	if (tr->statetype[tpos] == STM)  
+	  {
+	    fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
+		    Alphabet[sym]);
+	    sc += hmm->msc[sym][tr->nodeidx[tpos]];
+	  }
+	else if (tr->statetype[tpos] == STI) 
+	  {
+	    fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
+		    (char) tolower((int) Alphabet[sym]));
+	    sc += hmm->isc[sym][tr->nodeidx[tpos]];
+	  }
+	else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
+		 (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
+		 (tr->statetype[tpos] == STJ && tr->statetype[tpos-1] == STJ))
+	  {
+	    fprintf(fp, " %8d %c", 0, (char) tolower((int) Alphabet[sym]));
+	  }
+      } else {
+	fprintf(fp, " %8s %c", "-", '-');
+      }
+
+
+      fputs("\n", fp);
+    }
+    fprintf(fp, "                 ------- --------\n");
+    fprintf(fp, "           total: %6d\n\n", sc);
+  }
 }
+
+/* Function:  p7_trace_Append()
+ * Incept:    SRE, Tue Apr 11 17:11:04 2006 [St. Louis]
+ *
+ * Purpose:   Adds an element to a trace <tr> that is growing
+ *            left-to-right. The element is defined by a state type
+ *            <st> (such as <p7_STM>); a node index <k> (1..M for
+ *            M,D,I main states; else 0); and a seq position <i> (1..L
+ *            for emitters, else 0).
+ *            
+ *            Reallocates the trace (by doubling) if necessary.
+ *            
+ *            Caller can grow a trace right-to-left too, if it
+ *            plans to call <p7_trace_Reverse()>. 
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on reallocation failure. The element is successfully
+ *            added, but no more elements can be added before this trace is
+ *            destroyed.
+ *            
+ *            <eslEINVAL> if you try to add an element to a trace whose
+ *            reallocation has already failed.
+ */
+int
+p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
+{
+  
+  if (tr->N >= tr->nalloc) ESL_ERROR(eslEINVAL, "no space in trace");
+
+  tr->st[tr->N] = type;
+  tr->k[tr->N]  = k;
+  tr->i[tr->N]  = i;
+  tr->N++;
+  if (tr->N == tr->nalloc) return p7_trace_Expand(tr);
+  return eslOK;
+}
+
+
+
 
 
 /* Function: MergeTraceArrays()
@@ -1376,135 +1600,6 @@ rightjustify(char *s, int n)
 }
 
 
-/* Function: P7PrintTrace()
- * 
- * Purpose:  Print out a traceback structure.
- *           If hmm is non-NULL, also print transition and emission scores.
- *           
- * Args:     fp  - stderr or stdout, often
- *           tr  - trace structure to print
- *           hmm - NULL or hmm containing scores to print
- *           dsq - NULL or digitized sequence trace refers to.                
- */
-void
-P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char *dsq)
-{
-  int          tpos;		/* counter for trace position */
-  unsigned int sym;
-  int          sc;
-  int          i;
-
-  if (tr == NULL) {
-    fprintf(fp, " [ trace is NULL ]\n");
-    return;
-  }
-
-  if (hmm == NULL) {
-    fprintf(fp, "st  node   rpos  - traceback len %d\n", tr->tlen);
-    fprintf(fp, "--  ---- ------\n");
-    for (tpos = 0; tpos < tr->tlen; tpos++) {
-      fprintf(fp, "%1s  %4d %6d\n", 
-	      Statetype(tr->statetype[tpos]),
-	      tr->nodeidx[tpos],
-	      tr->pos[tpos]);
-    } 
-  } else {
-    if (!(hmm->flags & PLAN7_HASBITS))
-      Die("oi, you can't print scores from that hmm, it's not ready.");
-
-    sc = 0;
-    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->tlen);
-    fprintf(fp, "--  ---- ------  ------- --------\n");
-    for (tpos = 0; tpos < tr->tlen; tpos++) {
-      if (dsq != NULL) sym = dsq[tr->pos[tpos]];
-
-      /* B->DDD->Mk paths must be scored as B->Mk.
-       * Suck up the B->DDD->Mk whole path here, display that score once,
-       * on the D->Mk transition. tpos sits on the D when
-       * we're done, so that tpos++ loop sets us on the M for the
-       * next goround.
-       */
-      if (tr->statetype[tpos] == STB && tr->statetype[tpos+1] == STD)
-	{
-	  fprintf(fp, "%1s  %4d %6d  *", "B", 0, 0);
-	  tpos++;
-	  while (tr->statetype[tpos+1] == STD) {
-	    fprintf(fp, "%1s  %4d %6d  *", "D", tr->nodeidx[tpos], tr->pos[tpos]);
-	    tpos++;  /* stop when tpos+1 is an Mk */
-	  }
-
-	  fprintf(fp, "%1s  %4d %6d  %7d", 
-		  Statetype(tr->statetype[tpos]), /* D */
-		  tr->nodeidx[tpos],              /* k-1 */
-		  tr->pos[tpos],                  /* 0 */
-		  hmm->bsc[tr->nodeidx[tpos+1]]);
-	  continue;
-	}
-      
-      /* Similarly, Mk->DDDD->E paths must be scored as Mk->E.
-       */
-      if (tr->statetype[tpos] == STM && tr->statetype[tpos+1] == STD)
-	{
-	  i = tpos;
-	  while (tr->statetype[i+1] == STD) i++; /* look ahead for an E... */
-	  if (tr->statetype[i+1] == STE) /* if it's there, score as Mk->E */
-	    {
-	      fprintf(fp, "%1s  %4d %6d  %7d", 
-		      Statetype(tr->statetype[tpos]), /* M */
-		      tr->nodeidx[tpos],              /* k */
-		      tr->pos[tpos],                  /* whatever */
-		      hmm->esc[tr->nodeidx[tpos]]);   /* Mk->E */
-	      while (++tpos <= i) 
-		fprintf(fp, "%1s  %4d %6d  *", 
-			Statetype(tr->statetype[tpos]),     
-			tr->nodeidx[tpos], tr->pos[tpos]);
-	      /* tpos now sits on the last D state; main loop will advance to E */
-	      continue;
-	    }
-	}
-
-      fprintf(fp, "%1s  %4d %6d  %7d", 
-	      Statetype(tr->statetype[tpos]),
-	      tr->nodeidx[tpos],
-	      tr->pos[tpos],
-	      (tpos < tr->tlen-1) ? 
-	      TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
-				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]) : 0);
-
-      if (tpos < tr->tlen-1)
-	sc += TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
-				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
-
-      if (dsq != NULL) {
-	if (tr->statetype[tpos] == STM)  
-	  {
-	    fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
-		    Alphabet[sym]);
-	    sc += hmm->msc[sym][tr->nodeidx[tpos]];
-	  }
-	else if (tr->statetype[tpos] == STI) 
-	  {
-	    fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
-		    (char) tolower((int) Alphabet[sym]));
-	    sc += hmm->isc[sym][tr->nodeidx[tpos]];
-	  }
-	else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
-		 (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
-		 (tr->statetype[tpos] == STJ && tr->statetype[tpos-1] == STJ))
-	  {
-	    fprintf(fp, " %8d %c", 0, (char) tolower((int) Alphabet[sym]));
-	  }
-      } else {
-	fprintf(fp, " %8s %c", "-", '-');
-      }
-
-
-      fputs("\n", fp);
-    }
-    fprintf(fp, "                 ------- --------\n");
-    fprintf(fp, "           total: %6d\n\n", sc);
-  }
-}
 
 /************************************************************
  * @LICENSE@
