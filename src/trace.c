@@ -1,5 +1,5 @@
 /* trace.c
- * Support for Plan 7 traceback data structure, p7trace_s.
+ * The Plan 7 traceback data structure, P7_TRACE.
  * 
  * SVN $Id: trace.c 1387 2005-05-13 20:50:29Z eddy $
  * SRE, Sat Nov 16 12:34:57 1996
@@ -10,6 +10,8 @@
 
 #include <easel.h>
 
+#include "plan7.h"
+#include "p7_profile.h"
 #include "p7_trace.h"
 
 /* Function:  p7_trace_Create()
@@ -117,142 +119,69 @@ p7_trace_Destroy(P7_TRACE *tr)
  *
  * Purpose:   Dumps internals of a traceback structure <tr> to <fp>.
  *            If <gm> is non-NULL, also prints transition/emission scores.
- *            If <dsq> is non-NULL, also prints residues.
-
+ *            If <dsq> is non-NULL, also prints residues (using alphabet
+ *            in the <gm>).
+ *            
+ * Args:      fp   - stream to dump to (often stdout)
+ *            tr   - trace to dump
+ *            gm   - NULL, or score profile corresponding to trace
+ *            dsq  - NULL, or digitized seq corresponding to trace        
  *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
- */
-
-
-/* Function: P7PrintTrace()
- * 
- * Purpose:  Print out a traceback structure.
- *           If hmm is non-NULL, also print transition and emission scores.
- *           
- * Args:     fp  - stderr or stdout, often
- *           tr  - trace structure to print
- *           hmm - NULL or hmm containing scores to print
- *           dsq - NULL or digitized sequence trace refers to.                
+ * Returns:   (void)
  */
 void
-P7PrintTrace(FILE *fp, struct p7trace_s *tr, struct plan7_s *hmm, unsigned char *dsq)
+p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, char *dsq)
 {
-  int          tpos;		/* counter for trace position */
-  unsigned int sym;
-  int          sc;
-  int          i;
+  int j;		/* counter for trace position */
+  int xi;		/* digital residue            */
+  int sc;		/* total score of the trace   */
+  int tsc;		/* one transition score       */
 
-  if (tr == NULL) {
-    fprintf(fp, " [ trace is NULL ]\n");
-    return;
-  }
+  if (tr == NULL) { fprintf(fp, " [ trace is NULL ]\n"); return; }
 
-  if (hmm == NULL) {
-    fprintf(fp, "st  node   rpos  - traceback len %d\n", tr->tlen);
+  if (gm == NULL) {
+    fprintf(fp, "st  node   rpos  - traceback len %d\n", tr->N);
     fprintf(fp, "--  ---- ------\n");
-    for (tpos = 0; tpos < tr->tlen; tpos++) {
+    for (j = 0; j < tr->N; j++) {
       fprintf(fp, "%1s  %4d %6d\n", 
-	      Statetype(tr->statetype[tpos]),
-	      tr->nodeidx[tpos],
-	      tr->pos[tpos]);
+	      p7_hmm_Statetype(tr->st[j]),
+	      tr->k[j],
+	      tr->i[j]);
     } 
   } else {
-    if (!(hmm->flags & PLAN7_HASBITS))
-      Die("oi, you can't print scores from that hmm, it's not ready.");
-
     sc = 0;
-    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->tlen);
+    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->N);
     fprintf(fp, "--  ---- ------  ------- --------\n");
-    for (tpos = 0; tpos < tr->tlen; tpos++) {
-      if (dsq != NULL) sym = dsq[tr->pos[tpos]];
+    for (j = 0; j < tr->N; j++) {
+      if (j < tr->N-1) 
+	p7_profile_GetTransition(gm, tr->st[j], tr->k[j],
+				 tr->st[j+1], tr->k[j+1], &tsc);
+      else tsc = 0;
 
-      /* B->DDD->Mk paths must be scored as B->Mk.
-       * Suck up the B->DDD->Mk whole path here, display that score once,
-       * on the D->Mk transition. tpos sits on the D when
-       * we're done, so that tpos++ loop sets us on the M for the
-       * next goround.
-       */
-      if (tr->statetype[tpos] == STB && tr->statetype[tpos+1] == STD)
-	{
-	  fprintf(fp, "%1s  %4d %6d  *", "B", 0, 0);
-	  tpos++;
-	  while (tr->statetype[tpos+1] == STD) {
-	    fprintf(fp, "%1s  %4d %6d  *", "D", tr->nodeidx[tpos], tr->pos[tpos]);
-	    tpos++;  /* stop when tpos+1 is an Mk */
-	  }
-
-	  fprintf(fp, "%1s  %4d %6d  %7d", 
-		  Statetype(tr->statetype[tpos]), /* D */
-		  tr->nodeidx[tpos],              /* k-1 */
-		  tr->pos[tpos],                  /* 0 */
-		  hmm->bsc[tr->nodeidx[tpos+1]]);
-	  continue;
-	}
-      
-      /* Similarly, Mk->DDDD->E paths must be scored as Mk->E.
-       */
-      if (tr->statetype[tpos] == STM && tr->statetype[tpos+1] == STD)
-	{
-	  i = tpos;
-	  while (tr->statetype[i+1] == STD) i++; /* look ahead for an E... */
-	  if (tr->statetype[i+1] == STE) /* if it's there, score as Mk->E */
-	    {
-	      fprintf(fp, "%1s  %4d %6d  %7d", 
-		      Statetype(tr->statetype[tpos]), /* M */
-		      tr->nodeidx[tpos],              /* k */
-		      tr->pos[tpos],                  /* whatever */
-		      hmm->esc[tr->nodeidx[tpos]]);   /* Mk->E */
-	      while (++tpos <= i) 
-		fprintf(fp, "%1s  %4d %6d  *", 
-			Statetype(tr->statetype[tpos]),     
-			tr->nodeidx[tpos], tr->pos[tpos]);
-	      /* tpos now sits on the last D state; main loop will advance to E */
-	      continue;
-	    }
-	}
-
-      fprintf(fp, "%1s  %4d %6d  %7d", 
-	      Statetype(tr->statetype[tpos]),
-	      tr->nodeidx[tpos],
-	      tr->pos[tpos],
-	      (tpos < tr->tlen-1) ? 
-	      TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
-				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]) : 0);
-
-      if (tpos < tr->tlen-1)
-	sc += TransitionScoreLookup(hmm, tr->statetype[tpos], tr->nodeidx[tpos],
-				    tr->statetype[tpos+1], tr->nodeidx[tpos+1]);
+      fprintf(fp, "%1s  %4d %6d  %7d", p7_hmm_Statetype(tr->st[j]),
+	      tr->k[j], tr->i[j], tsc);
+      sc += tsc;
 
       if (dsq != NULL) {
-	if (tr->statetype[tpos] == STM)  
-	  {
-	    fprintf(fp, " %8d %c", hmm->msc[sym][tr->nodeidx[tpos]], 
-		    Alphabet[sym]);
-	    sc += hmm->msc[sym][tr->nodeidx[tpos]];
-	  }
-	else if (tr->statetype[tpos] == STI) 
-	  {
-	    fprintf(fp, " %8d %c", hmm->isc[sym][tr->nodeidx[tpos]], 
-		    (char) tolower((int) Alphabet[sym]));
-	    sc += hmm->isc[sym][tr->nodeidx[tpos]];
-	  }
-	else if ((tr->statetype[tpos] == STN && tr->statetype[tpos-1] == STN) ||
-		 (tr->statetype[tpos] == STC && tr->statetype[tpos-1] == STC) ||
-		 (tr->statetype[tpos] == STJ && tr->statetype[tpos-1] == STJ))
-	  {
-	    fprintf(fp, " %8d %c", 0, (char) tolower((int) Alphabet[sym]));
-	  }
-      } else {
-	fprintf(fp, " %8s %c", "-", '-');
-      }
+	xi = dsq[tr->i[j]];
 
-
+	if (tr->st[j] == STM) {
+	  fprintf(fp, " %8d %c", gm->msc[xi][tr->k[j]], 
+		  gm->abc->sym[xi]);
+	  sc += gm->msc[xi][tr->k[j]];
+	} 
+	else if (tr->statetype[j] == STI) {
+	  fprintf(fp, " %8d %c", gm->isc[xi][tr->k[j]], 
+		  (char) tolower((int) gm->abc->sym[xi]));
+	  sc += gm->isc[xi][tr->k[j]];
+	}
+	else if ((tr->st[j] == p7_STN && tr->st[j-1] == p7_STN) ||
+		 (tr->st[j] == p7_STC && tr->st[j-1] == p7_STC) ||
+		 (tr->st[j] == p7_STJ && tr->st[j-1] == p7_STJ))  {
+	  fprintf(fp, " %8d %c", 0, (char) tolower((int) gm->abc->sym[xi]));
+	}
+      } 
+      else fprintf(fp, " %8s %c", "-", '-');
       fputs("\n", fp);
     }
     fprintf(fp, "                 ------- --------\n");
@@ -299,42 +228,7 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
 
 
 
-
-
-/* Function: MergeTraceArrays()
- * Date:     SRE, Sun Jul  5 15:09:10 1998 [St. Louis]
- *
- * Purpose:  Combine two arrays of traces into a single array.
- *           Used in hmmalign to merge traces from a fixed alignment
- *           with traces from individual unaligned seqs.
- * 
- *           t1 traces always precede t2 traces in the resulting array.
- *
- * Args:     t1 - first set of traces
- *           n1 - number of traces in t1
- *           t2 - second set of traces
- *           n2 - number of traces in t2
- *
- * Returns:  pointer to new array of traces.
- *           Both t1 and t2 are free'd here! Do not reuse.
- */
-struct p7trace_s **
-MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2)
-{
-  struct p7trace_s **tr;
-  int i;			/* index in traces */
-
-  tr = MallocOrDie(sizeof(struct p7trace_s *) * (n1+n2));
-  for (i = 0; i < n1; i++) tr[i]    = t1[i];
-  for (i = 0; i < n2; i++) tr[n1+i] = t2[i];
-  free(t1);
-  free(t2);
-  return tr;
-}
-
-
-
-/* Function: P7ReverseTrace()
+/* Function: p7_trace_Reverse()
  * Date:     SRE, Mon Aug 25 12:57:29 1997; Denver CO. 
  * 
  * Purpose:  Reverse the arrays in a traceback structure.
@@ -348,120 +242,160 @@ MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2)
  *           into the right size of memory. (Tracebacks
  *           overallocate.)
  *           
- * Args:     tr - the traceback to reverse. tr->tlen must be set.
+ * Args:     tr - the traceback to reverse. tr->N must be set.
  *                
- * Return:   (void)
- *           tr is modified.
+ * Return:   <eslOK> on success; <tr> is modified.
+ * 
+ * Throws:   <eslEMEM> on allocation failure; in which case, <tr>
+ *           is left unmodified, but you're probably in trouble.
  */                
-void
-P7ReverseTrace(struct p7trace_s *tr)
+int
+p7_trace_Reverse(struct p7trace_s *tr)
 {
-  char  *statetype;
-  int   *nodeidx;
-  int   *pos;
-  int    opos, npos;
+  int    status;
+  char  *st = NULL;
+  int   *k  = NULL;
+  int   *i  = NULL;
+  int    op, np;
 
   /* Allocate
    */
-  statetype = MallocOrDie (sizeof(char)* tr->tlen);
-  nodeidx   = MallocOrDie (sizeof(int) * tr->tlen);
-  pos       = MallocOrDie (sizeof(int) * tr->tlen);
+  ESL_ALLOC(st, sizeof(char)* tr->N);
+  ESL_ALLOC(k,  sizeof(int) * tr->N);
+  ESL_ALLOC(i,  sizeof(int) * tr->N);
   
   /* Reverse the trace.
    */
-  for (opos = tr->tlen-1, npos = 0; npos < tr->tlen; npos++, opos--)
+  for (opos = tr->N-1, npos = 0; npos < tr->N; npos++, opos--)
     {
-      statetype[npos] = tr->statetype[opos];
-      nodeidx[npos]   = tr->nodeidx[opos];
-      pos[npos]       = tr->pos[opos];
+      st[npos] = tr->st[opos];
+      k[npos]  = tr->k[opos];
+      i[npos]  = tr->i[opos];
     }
 
   /* Swap old, new arrays.
    */
-  free(tr->statetype);
-  free(tr->nodeidx);
-  free(tr->pos);
-  tr->statetype = statetype;
-  tr->nodeidx   = nodeidx;
-  tr->pos       = pos;
+  free(tr->st); tr->st = st;
+  free(tr->k);  tr->k  = k;
+  free(tr->i);  tr->i  = i;
+  tr->nalloc = tr->N;
+
+  status = eslOK;
+ CLEANEXIT:
+  if (status != eslOK) 
+    {
+      if (st != NULL) free(st);
+      if (k  != NULL) free(k);
+      if (i  != NULL) free(i);
+    }
+  return status;
 }
 
 
 
-/* Function: P7TraceCount()
+/* Function: p7_trace_Count()
  * 
- * Purpose:  Count a traceback into a count-based HMM structure.
+ * Purpose:  Count a traceback into a count-based core HMM structure.
  *           (Usually as part of a model parameter re-estimation.)
  *           
- *           Only events in the core model are counted.
- *           Algorithm-dependent transitions are ignored, including
- *           B->Mk and Mk->E internal entry/exit events. 
+ * Note:     A traceback is relative to a score profile (it does not
+ *           contain B->D1 and Dm->E transitions) so we have to define
+ *           how we translate internal/exit paths from a score profile
+ *           back to a profile HMM.
  *           
- * Note:     regarding internal entry/exit paths:
+ *           That is, where are the terminal probabilities in the core
+ *           model going to come from, if tracebacks never contain
+ *           them?
  * 
- *           In hmmbuild, traces are constructed by defining some seqs
- *           as short fragments (with BMk and MkE events that
- *           P7TraceCount() ignores), and other seqs as full length
- *           (with BDDMk and MkDDE paths) that are counted. This
- *           construction happens in modelmakers.c::fake_tracebacks(),
- *           so P7TraceCount() doesn't worry about it.
+ *           In hmmbuild, we want to deal with two different situations.
+ *           Some sequences are considered to be fragments, and some
+ *           sequences are considered to be full length. For fragments,
+ *           we'll ignore internal entry/exit events. For full length
+ *           sequences, we'll count internal entry/exits as paths through
+ *           D1 and Dm.
+ *
+ *           In DP alignments, including
+ *           hmmsearch/hmmpfam/hmmcalibrate, local mode and glocal
+ *           mode have disjoint treatments of entry/exit; in glocal
+ *           mode, all internal entry/exit is actually a path through
+ *           D1/Dm, whereas local mode's uniform fragment length
+ *           distribution is imposed on the model in a way that
+ *           ignored the paths through D1/Dm.
  *           
- *           In alignments, including hmmsearch/hmmpfam/hmmcalibrate,
- *           since alignment uses the scoring model, we initially 
- *           get only BMk and MkE events. The DP traceback algorithm
- *           is responsible for making sure that, if the model was in
- *           ls mode, these events are made into full BDDMk and MkDDE
- *           paths. This construction is the responsibility of
- *           traceback functions. Again, P7TraceCount() doesn't worry
- *           about it. 
+ *           Thus we can deal with both situations consistently,
+ *           by passing the <mode> argument. For traces in a local mode
+ *           (FS,SW) we ignore internal entry/exit; for traces in
+ *           glocal mode (LS,S) we count them as BDDMk and MkDDE
+ *           paths. 
  *           
- * Args:     hmm   - counts-based HMM
- *           dsq   - digitized sequence that traceback aligns to the HMM (1..L)
- *           wt    - weight on the sequence
+ * Args:     hmm   - counts-based HMM to count <tr> into
  *           tr    - alignment of seq to HMM
+ *           dsq   - digitized sequence that traceback aligns to the HMM (1..L)
+ *           wt    - weight on this sequence
+ *           mode  - alignment mode, such as p7_LOCAL
  *           
- * Return:   (void)
+ * Return:   <eslOK> on success.
  *           Weighted count events are accumulated in hmm's mat[][], ins[][],
- *           t[][], tbm1, and tbd1: the "core model".
+ *           t[][] fields: the core probability model.
+ *           
+ * Throws:   <eslEINVAL> if something's corrupt in the trace; effect on hmm
+ *           counts is undefined.          
  */
-void
-P7TraceCount(struct plan7_s *hmm, unsigned char *dsq, float wt, struct p7trace_s *tr)
+int
+p7_trace_Count(P7_HMM *hmm, char *dsq, float wt, P7_TRACE *tr, int mode)
 {
   int tpos;                     /* position in tr */
   int i;			/* symbol position in seq */
+  int st,st2;			/* state type (cur, nxt) */
+  int k,k2,ktmp;		/* node index (cur, nxt) */
   
-  for (tpos = 0; tpos < tr->tlen; tpos++)
+  for (tpos = 0; tpos < tr->N; tpos++)
     {
-      i = tr->pos[tpos];
+      /* pull some info into tmp vars for notational clarity later.
+       */
+      st = tr->st[tpos];
+      i  = tr->i[tpos];
+      k  = tr->k[tpos];
+      if (tpos < tr->N-1) {
+	st2 = tr->st[tpos+1];
+	k2  = tr->k[tpos+1];
+      }
 
       /* Emission counts. 
        * Don't bother counting null states N,J,C.
        */
-      if (tr->statetype[tpos] == STM) 
-	P7CountSymbol(hmm->mat[tr->nodeidx[tpos]], dsq[i], wt);
-      else if (tr->statetype[tpos] == STI) 
-	P7CountSymbol(hmm->ins[tr->nodeidx[tpos]], dsq[i], wt);
+      if (st == p7_STM) 
+	esl_abc_FCount(hmm->abc, hmm->mat[k], dsq[i], wt);
+      else if (st == p7_STI) 
+	esl_abc_FCount(hmm->abc, hmm->ins[k], dsq[i], wt);
 
       /* State transition counts
        */
-      switch (tr->statetype[tpos]) {
-      case STS:
-	break;			/* don't bother; P=1 */
-      case STN:			/* don't bother; it's algorithm dependent */
-	switch (tr->statetype[tpos+1]) {
-	case STB: break;
-	case STN: break;
-	default:
-	  Die("illegal state transition %s->%s in traceback", 
-	      Statetype(tr->statetype[tpos]),
-	      Statetype(tr->statetype[tpos+1]));
-	}
-	break;
-      case STB:
-	switch (tr->statetype[tpos+1]) {
-	  /*B->M1 are counted; B->Mk are ignored local S/W frags */
-	case STM: if (tr->nodeidx[tpos+1] == 1) hmm->tbm1 += wt; break;
-	case STD: hmm->tbd1 += wt;                       break;
+      switch (st) {
+      case p7_STS:			
+      case p7_STN:
+	break;			
+
+      case p7_STB:
+
+	if (mode == p7_LOCAL || mode == p7_UNILOCAL)
+	  {	/* in local modes: next state is an Mk; ignore internal entry */
+	    if (st2 != p7_STM) ESL_ERROR(eslEINVAL, "local mode: B must go to an M_k");
+	    if (k2 == 1) hmm->mat[0][TMM] += wt; 
+	  }
+	else /* in glocal modes: next state is Mk or D1; */
+	  {  /* if Mk, count as B->DDD->Mk path. */	
+	    if (st2 == p7_STM)
+	      {
+		for (ktmp = 1; ktmp < k2; k++)
+
+		  /* SRE STOPPED HERE */
+
+		  }
+
+
+	  }
+
 	default:      
 	  Die("illegal state transition %s->%s in traceback", 
 	      Statetype(tr->statetype[tpos]),
@@ -849,83 +783,6 @@ P7Traces2Alignment(unsigned char **dsq, SQINFO *sqinfo, float *wgt, int nseq, in
   return msa;
 }
 
-/* Function: TransitionScoreLookup()
- * 
- * Purpose:  Convenience function used in PrintTrace() and TraceScore();
- *           given state types and node indices for a transition,
- *           return the integer score for that transition. 
- */
-int
-TransitionScoreLookup(struct plan7_s *hmm, char st1, int k1, 
-		      char st2, int k2)
-{
-  switch (st1) {
-  case STS: return 0;	/* S never pays */
-  case STN:
-    switch (st2) {
-    case STB: return hmm->xsc[XTN][MOVE]; 
-    case STN: return hmm->xsc[XTN][LOOP]; 
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STB:
-    switch (st2) {
-    case STM: return hmm->bsc[k2]; 
-    case STD: Die("B->D transition doesn't happen in a scoring model.");
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STM:
-    switch (st2) {
-    case STM: return hmm->tsc[TMM][k1];
-    case STI: return hmm->tsc[TMI][k1];
-    case STD: return hmm->tsc[TMD][k1];
-    case STE: return hmm->esc[k1];
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STI:
-    switch (st2) {
-    case STM: return hmm->tsc[TIM][k1];
-    case STI: return hmm->tsc[TII][k1];
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STD:
-    switch (st2) {
-    case STM: return hmm->tsc[TDM][k1]; 
-    case STD: return hmm->tsc[TDD][k1];
-    case STE: Die("D->E transition doesn't happen in a scoring model.");
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STE:
-    switch (st2) {
-    case STC: return hmm->xsc[XTE][MOVE]; 
-    case STJ: return hmm->xsc[XTE][LOOP]; 
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STJ:
-    switch (st2) {
-    case STB: return hmm->xsc[XTJ][MOVE]; 
-    case STJ: return hmm->xsc[XTJ][LOOP]; 
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STC:
-    switch (st2) {
-    case STT: return hmm->xsc[XTC][MOVE]; 
-    case STC: return hmm->xsc[XTC][LOOP]; 
-    default:  Die("illegal %s->%s transition", Statetype(st1), Statetype(st2));
-    }
-    break;
-  case STT:   return 0;	/* T makes no transitions */
-  default:    Die("illegal state %s in traceback", Statetype(st1));
-  }
-  /*NOTREACHED*/
-  return 0;
-}
 
 
 /* Function: CreateFancyAli()

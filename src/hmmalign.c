@@ -351,7 +351,36 @@ include_alignment(char *seqfile, struct plan7_s *hmm, int do_mapped,
 }
 
 
+/* Function: MergeTraceArrays()
+ * Date:     SRE, Sun Jul  5 15:09:10 1998 [St. Louis]
+ *
+ * Purpose:  Combine two arrays of traces into a single array.
+ *           Used in hmmalign to merge traces from a fixed alignment
+ *           with traces from individual unaligned seqs.
+ * 
+ *           t1 traces always precede t2 traces in the resulting array.
+ *
+ * Args:     t1 - first set of traces
+ *           n1 - number of traces in t1
+ *           t2 - second set of traces
+ *           n2 - number of traces in t2
+ *
+ * Returns:  pointer to new array of traces.
+ *           Both t1 and t2 are free'd here! Do not reuse.
+ */
+struct p7trace_s **
+MergeTraceArrays(struct p7trace_s **t1, int n1, struct p7trace_s **t2, int n2)
+{
+  struct p7trace_s **tr;
+  int i;			/* index in traces */
 
+  tr = MallocOrDie(sizeof(struct p7trace_s *) * (n1+n2));
+  for (i = 0; i < n1; i++) tr[i]    = t1[i];
+  for (i = 0; i < n2; i++) tr[n1+i] = t2[i];
+  free(t1);
+  free(t2);
+  return tr;
+}
 
 /************************************************************
  * @LICENSE@

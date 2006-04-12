@@ -11,26 +11,24 @@
 
 /* Search modes.
  */
-enum p7_searchmode {
-  P7_NO_MODE    = 0,
-  P7_LS_MODE    = 1,
-  P7_FS_MODE    = 2,
-  P7_SW_MODE    = 3,
-  P7_S_MODE     = 4,
-};
+#define p7_LOCAL     1		/* multi-hit local:  "fs" mode   */
+#define p7_GLOCAL    2		/* multi-hit glocal: "ls" mode   */
+#define p7_UNILOCAL  3		/* one-hit local: "sw" mode      */
+#define p7_UNIGLOCAL 4		/* one-hit glocal: "s" mode      */
+
 
 /* The P7_PROFILE structure: generic score profile.
  */
 typedef struct {
-  enum p7_searchmode mode;	/* configured algorithm mode                */
-  ESL_ALPHABET *abc;		/* copy of pointer to appropriate alphabet  */
-  int    M;
-  int  **tsc;                   /* transition scores     [0.6][1.M-1]       */
-  int  **msc;                   /* match emission scores [0.Kp-1][1.M]      */
-  int  **isc;                   /* ins emission scores   [0.Kp-1][1.M-1]    */
-  int    xsc[4][2];             /* N,E,C,J transitions   [][LOOP,MOVE]      */
-  int   *bsc;                   /* begin transitions     [1.M]              */
-  int   *esc;			/* end transitions       [1.M]              */
+  int    mode;         	/* configured algorithm mode (e.g. p7_LOCAL)   */ 
+  ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet     */
+  int    M;		/* number of nodes in the model                */
+  int  **tsc;           /* transition scores     [0.6][1.M-1]          */
+  int  **msc;           /* match emission scores [0.Kp-1][1.M]         */
+  int  **isc;           /* ins emission scores   [0.Kp-1][1.M-1]       */
+  int    xsc[4][2];     /* N,E,C,J transitions   [][LOOP,MOVE]         */
+  int   *bsc;           /* begin transitions     [1.M]                 */
+  int   *esc;		/* end transitions       [1.M]                 */
 } P7_PROFILE;
 
 
@@ -53,6 +51,10 @@ typedef struct {
 
 extern P7_PROFILE *p7_profile_Create(int M);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
+extern int         p7_profile_GetTransition(P7_PROFILE *gm, 
+					    char st1, int k1, char st2, int k2,
+					    int *ret_tsc);
+
 
 #endif /*P7_PROFILE_INCLUDED*/
 /*****************************************************************

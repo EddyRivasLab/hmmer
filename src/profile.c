@@ -123,3 +123,112 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
   fputs("//\n", fp);
 }
 
+
+
+/* Function:  p7_profile_GetTransition()
+ * Incept:    SRE, Wed Apr 12 14:20:18 2006 [St. Louis]
+ *
+ * Purpose:   Convenience function that looks up a transition score in
+ *            profile <gm> for a transition from state type <st1> in
+ *            node <k1> to state type <st2> in node <k2>. For unique
+ *            state types that aren't in nodes (<p7_STS>, for example), the
+ *            <k> value is ignored; would be customarily passed as 0.
+ *            Return the transition score in <ret_tsc>.
+ *            
+ * Returns:   <eslOK> on success.            
+ * 
+ * Throws:    <eslEINVAL> if a nonexistent transition is requested.
+ */
+int
+p7_profile_GetTransition(P7_PROFILE *gm, char st1, int k1, char st2, int k2,
+			 int *ret_tsc)
+{
+  int status = eslOK;
+  int tsc    = 0;
+  *ret_tsc   = 0;
+
+  switch (st1) {
+    case p7_STS: /* S->N is p=1 */
+    break;	
+
+  case p7_STN:
+    switch (st2) {
+    case p7_STB: tsc =  gm->xsc[p7_XTN][p7_MOVE]; 
+    case p7_STN: tsc =  gm->xsc[p7_XTN][p7_LOOP]; 
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STB:
+    switch (st2) {
+    case p7_STM: tsc = gm->bsc[k2]; 
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STM:
+    switch (st2) {
+    case p7_STM: tsc = gm->tsc[p7_TMM][k1];
+    case p7_STI: tsc = gm->tsc[p7_TMI][k1];
+    case p7_STD: tsc = gm->tsc[p7_TMD][k1];
+    case p7_STE: tsc = gm->esc[k1];
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STD:
+    switch (st2) {
+    case p7_STM: tsc = gm->tsc[p7_TDM][k1]; 
+    case p7_STD: tsc = gm->tsc[p7_TDD][k1];
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STI:
+    switch (st2) {
+    case p7_STM: tsc = gm->tsc[p7_TIM][k1];
+    case p7_STI: tsc = gm->tsc[p7_TII][k1];
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STE:
+    switch (st2) {
+    case p7_STC: tsc = gm->xsc[p7_XTE][p7_MOVE]; 
+    case p7_STJ: tsc = gm->xsc[p7_XTE][p7_LOOP]; 
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STJ:
+    switch (st2) {
+    case p7_STB: tsc = gm->xsc[p7_XTJ][p7_MOVE]; 
+    case p7_STJ: tsc = gm->xsc[p7_XTJ][p7_LOOP]; 
+    default:     status = eslEINVAL;
+    }
+    break;
+
+  case p7_STC:
+    switch (st2) {
+    case p7_STT:  tsc = gm->xsc[p7_XTC][p7_MOVE]; 
+    case p7_STC:  tsc = gm->xsc[p7_XTC][p7_LOOP]; 
+    default:      status = eslEINVAL;
+    }
+    break;
+
+  case p7_STT:   
+    break;
+
+  default:
+    esl_error(eslEINVAL, "illegal state typde %d in traceback", st1);
+    return eslEINVAL;
+  }
+
+  if (status != eslOK)
+    {
+      esl_error(status, "illegal %s->%s transition", 
+		p7_hmm_Statetype(st1), p7_hmm_Statetype(st2));
+      return status;
+    }
+  return eslOK;
+}

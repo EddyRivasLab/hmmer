@@ -574,6 +574,33 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
 }
 
 
+/* Function:  p7_hmm_Statetype()
+ * Incept:    SRE, Wed Apr 12 09:50:08 2006 [St. Louis]
+ *
+ * Purpose:   Returns the state type in text, as a string of length 1 
+ *            (2 if you count NUL). For example, <p7_Statetype(p7_STS)>
+ *            returns "S".
+ */
+char *
+p7_hmm_Statetype(char st)
+{
+  switch (st) {
+  case STM: return "M";
+  case STD: return "D";
+  case STI: return "I";
+  case STS: return "S";
+  case STN: return "N";
+  case STB: return "B";
+  case STE: return "E";
+  case STC: return "C";
+  case STT: return "T";
+  case STJ: return "J";
+  default:  return "?";
+  }
+}
+
+
+
 
 /************************************************************
  * @LICENSE@

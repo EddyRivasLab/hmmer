@@ -248,37 +248,51 @@ typedef struct {
 /* Indices for special state types, I: used for dynamic programming xmx[][]
  * mnemonic: eXtra Matrix for B state = XMB
  */
-#define XMB 0
-#define XME 1
-#define XMC 2
-#define XMJ 3
-#define XMN 4
+#define p7_XMB 0
+#define p7_XME 1
+#define p7_XMC 2
+#define p7_XMJ 3
+#define p7_XMN 4
 
 /* Indices for special state types, II: used for hmm->xt[] indexing
  * mnemonic: eXtra Transition for N state = XTN
  */
-#define XTN  0
-#define XTE  1
-#define XTC  2
-#define XTJ  3
+#define p7_XTN  0
+#define p7_XTE  1
+#define p7_XTC  2
+#define p7_XTJ  3
 
 /* Indices for Plan7 main model state transitions.
  * Used for indexing hmm->t[k][]
  * mnemonic: Transition from Match to Match = TMM
  */
-#define TMM  0
-#define TMI  1
-#define TMD  2
-#define TIM  3
-#define TII  4
-#define TDM  5
-#define TDD  6 
+#define p7_TMM  0
+#define p7_TMI  1
+#define p7_TMD  2
+#define p7_TIM  3
+#define p7_TII  4
+#define p7_TDM  5
+#define p7_TDD  6 
 
 /* Indices for extra state transitions
  * Used for indexing hmm->xt[][].
  */
-#define MOVE 0          /* trNB, trEC, trCT, trJB */
-#define LOOP 1          /* trNN, trEJ, trCC, trJJ */
+#define p7_MOVE 0          /* trNB, trEC, trCT, trJB */
+#define p7_LOOP 1          /* trNN, trEJ, trCC, trJJ */
+
+/* Plan 7 model state types (esp. used in P7_TRACE structure)
+ */
+#define p7_BOGUS 0
+#define p7_STM   1
+#define p7_STD   2
+#define p7_STI   3
+#define p7_STS   4
+#define p7_STN   5
+#define p7_STB   6
+#define p7_STE   7
+#define p7_STC   8
+#define p7_STT   9
+#define p7_STJ   10     
 
 extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
@@ -294,6 +308,7 @@ extern int     p7_hmm_SetNull(P7_HMM *hmm, float *null, int K);
 extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 extern void    p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
+extern char   *p7_hmm_Statetype(char st);
 
 #endif /* PLAN7_INCLUDED */
 
