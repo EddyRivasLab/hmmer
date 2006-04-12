@@ -206,6 +206,49 @@ TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *d
 }
 
 
+/* Function: ForwardScoreCorrection()
+ * Date:     Alex Coventry, Wed Apr 12 13:52:15 2006 [StL]
+ * 
+ * Purpose: Calculate a correction (in integer log_2 odds) to be
+ *           applied to the forward score of a sequence, using a
+ *           second null model, based on sampled tracebacks. Do this
+ *           by averaging the "null2" correction used in Viterbi over
+ *           the posterior distribution on the alignments.
+ *           
+ * Return:   the log_2-odds score correction.          
+ */
+float
+ForwardScoreCorrection(struct plan7_s *hmm, unsigned char *dsq, int length,
+		       struct dpmatrix_s *mx)
+{
+  /* Just do a fixed number of samples, for now.  Later, it may prove
+     slightly more accurate to estimate when to stop based on the
+     observed variance of the corrections sampled so far. */
+#define NUMALGSAMPLES 10
+  /* Place holder for the RNG.  Use a constant seed for now, for
+     repeatability and convenience of coding. */
+  ESL_RANDOMNESS *randomness = esl_randomness_Create(1);
+  float scores[NUMALGSAMPLES], escores, max_score;
+  int sampidx;
+  struct p7trace_s *tr;
+  max_score = -INFTY;
+  for (sampidx = 0; sampidx < NUMALGSAMPLES; sampidx++) {
+    P7SampleAlignment(hmm, dsq, length, mx, &tr, randomness);
+    scores[sampidx] = TraceScoreCorrection(hmm, tr, dsq);
+    if (scores[sampidx] > max_score)
+      max_score = scores[sampidx];
+  }
+  /* Compute and return the average of these scores, first converting
+     to exponentials to take the sum, then converting back to
+     scores. */
+  escores = 0;
+  for (sampidx = 0; sampidx < NUMALGSAMPLES; sampidx++) {
+    /* Subtract off max_score, to avoid overflow errors. */
+    escores += Score2Prob(scores[sampidx]-max_score, 1);
+  }
+  return ((float)Prob2Score(escores/NUMALGSAMPLES, 1)) + max_score;
+}
+
 /* THE FOLLOWING CODE IS IN DEVELOPMENT.
  * it is commented out of the current release deliberately.
  * If you activate it, I'm not responsible for the consequences.

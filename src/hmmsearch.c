@@ -555,12 +555,13 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
 		 struct histogram_s *histogram, 
 		 struct tophit_s *ghit, struct tophit_s *dhit, int *ret_nseq)
 {
-  struct dpmatrix_s *mx;        /* DP matrix, growable                     */
+  struct dpmatrix_s *mx, *fmx;  /* DP matrices, growable                   */
   struct p7trace_s *tr;         /* traceback                               */
   char   *seq;                  /* target sequence                         */
   unsigned char   *dsq;	        /* digitized target sequence               */
   SQINFO sqinfo;	   	        /* optional info for seq                   */
   float  sc;	          	    /* score of an HMM search                  */
+  float  correction; 
   double pvalue;		        /* pvalue of an HMM score                  */
   double evalue;		        /* evalue of an HMM score                  */
   int    nseq;			        /* number of sequences searched            */
@@ -594,47 +595,6 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
        *    about underflow issues), and tr will be returned as NULL.
        */
       
-#ifdef ALTIVEC 
-      
-      /* By default we call an Altivec routine that doesn't save the full
-       * trace. This also means the memory usage is just proportional to the
-       * model (hmm->M), so we don't need to check if space is OK unless
-       * we need the trace.   
-       */   
-      if(do_forward && do_null2)
-      {
-          /* Need the trace - first check space */
-          if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
-          {    
-              /* Slower altivec */
-              sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
-          }
-          else
-          {
-              /* C code */
-              sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
-          }
-
-      }
-      else
-      {
-          /* When using Altivec, the new dynamic programming process is so 
-          * effective that it is constrained by the memory bandwidth used
-          * for loading/storing values in the dynamic programming matrix.
-          *
-          * In 99% of all cases the score is anyway so low that we are not
-          * interested in the alignment, and thus don't NEED the trace.
-          * which is the only reason to store the full programming matrix.
-          *
-          * Do the programming without a trace first, and recalculate the
-          * trace further down if it turns out we need it.
-          */
-          sc = P7ViterbiNoTrace(dsq, sqinfo.len, hmm, mx);
-          tr = NULL;
-      }
-      
-#else /* not altivec */
-
       if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
       {
           sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
@@ -644,32 +604,20 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
           sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
       }
       
-#endif
-      
       /* 2. If we're using Forward scores, calculate the
        *    whole sequence score; this overrides anything
        *    PostprocessSignificantHit() is going to do to the per-seq score.
        */
       if (do_forward)
       {
-          sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
-          if (do_null2) 
+	  if (!do_null2)
+	      sc  = P7Forward(dsq, sqinfo.len, hmm, NULL);
+          else
           {
-              /* We need the trace - recalculate it if we didn't already do it */
-#ifdef ALTIVEC
-              if(tr == NULL)
-              {
-                  if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
-                  {
-                      sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
-                  }
-                  else
-                  {
-                      sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
-                  }
-              }
-#endif
-              sc -= TraceScoreCorrection(hmm, tr, dsq); 
+	    sc = P7Forward(dsq, sqinfo.len, hmm, &fmx);
+	    correction = ForwardScoreCorrection(hmm, dsq, sqinfo.len, fmx);
+	    sc = sc - correction;
+	    FreePlan7Matrix(fmx);
           }
       }
 
