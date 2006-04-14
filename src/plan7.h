@@ -261,6 +261,8 @@ typedef struct {
 #define p7_STT   9
 #define p7_STJ   10     
 
+/* Functions in plan7.c:  the model structure.
+ */
 extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
 extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
@@ -276,6 +278,13 @@ extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 extern void    p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern char   *p7_hmm_Statetype(char st);
+
+/* Functions in modelmakers.c:  constructing HMMs from alignments
+ */
+extern int p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
+			     P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+
+
 
 #endif /* PLAN7_INCLUDED */
 
