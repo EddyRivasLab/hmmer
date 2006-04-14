@@ -819,7 +819,7 @@ right_wing_retraction_imposed(struct plan7_s *hmm)
    * the match transitions are renormalized to account for the new
    * end[k] probability; and the match transitions are also renormalized
    * to account for the newly missing MkE path probability from TMD.
-   * (xref STL9/91 for details).
+   * (xref STL9/81 for details).
    */
   for (k = 1; k < hmm->M; k++)
     {

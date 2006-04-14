@@ -524,7 +524,7 @@ p7_hmm_Renormalize(P7_HMM *hmm)
       esl_vec_FNorm(hmm->t[k]+5, 2);	/* delete */
     }
 
-  hmm->t[0][TMI] = 0.;          /* make sure... */
+  hmm->t[0][p7_TMI] = 0.;       /* make sure... */
   esl_vec_FNorm(hmm->t[0], 3);  /* begin transitions; TMM, TMD are valid */
 
   /* Enforce nonexistent but allocated transitions: */
@@ -551,7 +551,7 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
   int x;			/* counter for symbols */
   int ts;			/* counter for state transitions */
   
-  fprintf(fp, "B->M1,B->D1: %5.1f %5.1f\n", hmm->t[0][TMM], hmm->t[0][TMD]);
+  fprintf(fp, "B->M1,B->D1: %5.1f %5.1f\n", hmm->t[0][p7_TMM], hmm->t[0][p7_TMD]);
   for (k = 1; k <= hmm->M; k++)
     {
 				/* Line 1: k, match emissions */
@@ -585,17 +585,17 @@ char *
 p7_hmm_Statetype(char st)
 {
   switch (st) {
-  case STM: return "M";
-  case STD: return "D";
-  case STI: return "I";
-  case STS: return "S";
-  case STN: return "N";
-  case STB: return "B";
-  case STE: return "E";
-  case STC: return "C";
-  case STT: return "T";
-  case STJ: return "J";
-  default:  return "?";
+  case p7_STM: return "M";
+  case p7_STD: return "D";
+  case p7_STI: return "I";
+  case p7_STS: return "S";
+  case p7_STN: return "N";
+  case p7_STB: return "B";
+  case p7_STE: return "E";
+  case p7_STC: return "C";
+  case p7_STT: return "T";
+  case p7_STJ: return "J";
+  default:     return "?";
   }
 }
 

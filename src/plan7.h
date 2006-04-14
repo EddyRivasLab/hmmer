@@ -30,27 +30,6 @@
 
 
 /* Structure: P7_HMM 
- * 
- * Declaration of a Plan 7 profile-HMM structure.
- * 
- * The model has two forms:
- * 1. The "core" model is the probability form.
- *    It has 1..M nodes, and one additional <tbd1> parameter.
- *    Nodes 1..M-1 have M,D,I states; node M has M,D states. 
- *    
- *    t[1..M-1] are the state transition probs. (t[M] are special,
- *      because this node transits to the end. M_M->E and D_M->E
- *      are implicitly 1.0. All other transitions are implicitly 0.0.)
- *    
- *    mat[1..M] are match emission probs.
- *    ins[1..M-1] are insert emission probs. (No I_M state.)
- *    
- *    Entry into the first node is controlled by <tbd1>: B->M1 is
- *      (1-tbd1), and B->D1 is (tbd1). 
- *    
- *    The PLAN7_HASPROB flag is up when these all correspond to a fully normalized
- *    profile HMM.
- *    
  *    
  * 2. The "configured" model is the scoring form.
  *    It adds the S,N,B; J; E,C,T special states of the Plan7
@@ -118,13 +97,14 @@ typedef struct {
   ESL_ALPHABET *abc;
 
   /* The core model in probability form.
-   * Begin state transitions are stored in t[0][TMM], t[0][TMD].
    * P7_HASPROBS flag is raised when these probs are all valid.
    */
+  /*::cexcerpt::plan7_core::begin::*/
   int     M;                    /* length of the model (# nodes)          */
   float **t;                    /* transition prob's. t[(0),1..M-1][0..6] */
   float **mat;                  /* match emissions.  mat[1..M][0..K-1]    */ 
   float **ins;                  /* insert emissions. ins[1..M-1][0..K-1]  */
+  /*::cexcerpt::plan7_core::end::*/
 
   /* The null model probabilities.
    */
@@ -183,19 +163,6 @@ typedef struct {
   int   *map;			/* map of alignment cols onto model 1..M+*/
   int    checksum;              /* checksum of training sequences       +*/
 
-  /* The following are annotations added to support work by Michael Asman, 
-   * CGR Stockholm. They are not stored in model files; they are only
-   * used in model construction.
-   * 
-   * #=GC X-PRM (PRT,PRI) annotation is picked up by hmmbuild and interpreted
-   * as specifying which mixture Dirichlet component to use. If these flags
-   * are non-NULL, the normal mixture Dirichlet code is bypassed, and a
-   * single specific Dirichlet is used at each position.
-   */
-  int   *tpri;                  /* which transition mixture prior to use */ 
-  int   *mpri;                  /* which match mixture prior to use */
-  int   *ipri;                  /* which insert mixture prior to use */
-
   /* Pfam-specific score cutoffs.
    * 
    * ga1, ga2 are valid if PLAN7_GA is set in flags.
@@ -222,27 +189,27 @@ typedef struct {
  * Don't ever change these; we want to be able to read old binary save files
  * that used these values.
  */
-#define PLAN7_HASBITS (1<<0)    /* model has log-odds scores            */
-#define PLAN7_DESC    (1<<1)    /* description exists                   */
-#define PLAN7_RF      (1<<2)    /* #RF annotation available             */
-#define PLAN7_CS      (1<<3)    /* #CS annotation available             */
-#define PLAN7_XRAY    (1<<4)    /* structural data available            */
-#define PLAN7_HASPROB (1<<5)    /* model has probabilities              */
-#define PLAN7_HASDNA  (1<<6)	/* protein HMM->DNA seq params set      */
-#define PLAN7_STATS   (1<<7)    /* obsolete (2.3 and earlier)           */
-#define PLAN7_MAP     (1<<8)	/* alignment map is available           */
-#define PLAN7_ACC     (1<<9)	/* accession number is available        */
-#define PLAN7_GA      (1<<10)	/* gathering thresholds available       */
-#define PLAN7_TC      (1<<11)	/* trusted cutoffs available            */
-#define PLAN7_NC      (1<<12)	/* noise cutoffs available              */
-#define PLAN7_CA      (1<<13)   /* surface accessibility avail.         */
-#define PLAN7_BIMPOSED (1<<14)  /* all entries are B->M_k (not D)       */
-#define PLAN7_EIMPOSED (1<<15)  /* all ends are M_k->E (not D)          */
-#define PLAN7_LCORRECT (1<<16)  /* require L-dependent score correction */
-#define PLAN7_STATS_LV (1<<17)	/* local Viterbi E-val params available */
-#define PLAN7_STATS_LF (1<<18)	/* local Forward E-val params available */
-#define PLAN7_STATS_GV (1<<19)	/* have glocal Viterbi E-val params     */
-#define PLAN7_STATS_GF (1<<20)	/* have glocal Forward E-val params     */
+#define p7_HASBITS (1<<0)    /* model has log-odds scores            */
+#define p7_DESC    (1<<1)    /* description exists                   */
+#define p7_RF      (1<<2)    /* #RF annotation available             */
+#define p7_CS      (1<<3)    /* #CS annotation available             */
+#define p7_XRAY    (1<<4)    /* structural data available            */
+#define p7_HASPROB (1<<5)    /* model has probabilities              */
+#define p7_HASDNA  (1<<6)	/* protein HMM->DNA seq params set      */
+#define p7_STATS   (1<<7)    /* obsolete (2.3 and earlier)           */
+#define p7_MAP     (1<<8)	/* alignment map is available           */
+#define p7_ACC     (1<<9)	/* accession number is available        */
+#define p7_GA      (1<<10)	/* gathering thresholds available       */
+#define p7_TC      (1<<11)	/* trusted cutoffs available            */
+#define p7_NC      (1<<12)	/* noise cutoffs available              */
+#define p7_CA      (1<<13)   /* surface accessibility avail.         */
+#define p7_BIMPOSED (1<<14)  /* all entries are B->M_k (not D)       */
+#define p7_EIMPOSED (1<<15)  /* all ends are M_k->E (not D)          */
+#define p7_LCORRECT (1<<16)  /* require L-dependent score correction */
+#define p7_STATS_LV (1<<17)	/* local Viterbi E-val params available */
+#define p7_STATS_LF (1<<18)	/* local Forward E-val params available */
+#define p7_STATS_GV (1<<19)	/* have glocal Viterbi E-val params     */
+#define p7_STATS_GF (1<<20)	/* have glocal Forward E-val params     */
 
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]

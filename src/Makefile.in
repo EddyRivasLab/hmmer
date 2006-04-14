@@ -42,13 +42,16 @@ MYINCDIR = -I../easel
 
 PROGS = 
 
-OBJS =  plan7.o
+OBJS =  plan7.o\
+	trace.o
 
 HDRS =  p7config.h\
-	plan7.h
+	plan7.h\
+	p7_trace.h
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
+
 
 #################################################################
 ## Targets defining how to make HMMER executables.

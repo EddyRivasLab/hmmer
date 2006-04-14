@@ -31,18 +31,19 @@
 #include <easel.h>
 #include <esl_msa.h>
 
+#include "hmmer.h"
 #include "plan7.h"
 #include "p7_trace.h"
 
 /* flags used for matassign[] arrays -- 
  *   assignment of aligned columns to match/insert states
  */
-#define ASSIGN_MATCH      (1<<0) 
-#define FIRST_MATCH       (1<<1)
-#define LAST_MATCH        (1<<2)
-#define ASSIGN_INSERT     (1<<3)
-#define EXTERNAL_INSERT_N (1<<4)
-#define EXTERNAL_INSERT_C (1<<5) 
+#define p7_ASSIGN_MATCH      (1<<0) 
+#define p7_FIRST_MATCH       (1<<1)
+#define p7_LAST_MATCH        (1<<2)
+#define p7_ASSIGN_INSERT     (1<<3)
+#define p7_EXTERNAL_INSERT_N (1<<4)
+#define p7_EXTERNAL_INSERT_C (1<<5) 
 
 static void matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag,
 			  int *matassign, P7_HMM **ret_hmm,
@@ -60,32 +61,33 @@ static void print_matassign(int *matassign, int alen);
 /* Function: p7_Handmodelmaker()
  * 
  * Purpose:  Manual model construction:
- *           Construct an HMM from an alignment, where the #=RF line
- *           of a HMMER alignment file is given to indicate
+ *           Construct an HMM from an alignment, where the <#=RF> line
+ *           of the alignment file is used to indicate
  *           the columns assigned to matches vs. inserts.
  *           
- *           NOTE: Handmodelmaker() will slightly revise the alignment
- *           if necessary, if the assignment of columns implies
- *           DI and ID transitions.
+ *           NOTE: <p7_Handmodelmaker()> will slightly revise the
+ *           alignment if necessary, if the assignment of columns
+ *           implies DI and ID transitions.
  *           
  *           Returns both the HMM in counts form (ready for applying
  *           Dirichlet priors as the next step), and fake tracebacks
  *           for each aligned sequence.
  *           
- * Args:     msa  - multiple sequence alignment          
- *           dsq  - digitized unaligned aseq's
- *           isfrag  - [0..nseq-1] flags for candidate seq frags
+ * Args:     msa     - multiple sequence alignment          
+ *           abc     - symbol alphabet to use
+ *           dsq     - digitized unaligned aseq's
  *           ret_hmm - RETURN: counts-form HMM
  *           ret_tr  - RETURN: array of tracebacks for aseq's
  *           
  * Return:   <eslOK> on success.
+ *
  *           <p7ERR_RF> if alignment doesn't have RF column annotation.
  *           ret_hmm and ret_tr alloc'ed here. 
  *           
  * Throws:   <eslEMEM> on allocation failure.          
  */            
 int
-p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
+p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
 		  P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
   int  status;
@@ -99,11 +101,13 @@ p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
   esl_vec_ISet(matassign, msa->alen+1, 0);
   
   for (apos = 0; apos < msa->alen; apos++)
-    if (!isgap(msa->rf[apos])) matassign[apos+1] |= ASSIGN_MATCH;
-    else        	       matassign[apos+1] |= ASSIGN_INSERT;
+    if (!esl_abc_CIsGap(abc, msa->rf[apos]))
+      matassign[apos+1] |= p7_ASSIGN_MATCH;
+    else
+      matassign[apos+1] |= p7_ASSIGN_INSERT;
 
-  /*   print_matassign(matassign, msa->alen); */
-  status = matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
+  status = matassign2hmm(msa, abc, dsq, matassign, ret_hmm, ret_tr);
+  /* matassign2hmm leaves ret_hmm, ret_tr in their proper state */
  CLEANEXIT:
   if (matassign != NULL) free(matassign);
   return status;
@@ -116,8 +120,8 @@ p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
  *           Construct an HMM from an alignment using a heuristic,
  *           based on the fractional occupancy of each columns w/
  *           residues vs gaps. Roughly, any column w/ a fractional
- *           occupancy of >= <thresh> is assigned as a MATCH column;
- *           for instance, if thresh = 0.5, columns w/ >= 50% 
+ *           occupancy of $\geq$ <thresh> is assigned as a MATCH column;
+ *           for instance, if thresh = 0.5, columns w/ $\geq$ 50\% 
  *           residues are assigned to match... roughly speaking.
  *           
  *           "Roughly speaking" because sequences are weighted; we
@@ -145,7 +149,7 @@ p7_Handmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag,
  *           if r_i >= tR, column is assigned as a MATCH column;
  *           else it's an INSERT column.
  *
- *           NOTE: Fastmodelmaker() will slightly revise the
+ *           NOTE: p7_Fastmodelmaker() will slightly revise the
  *           alignment if the assignment of columns implies
  *           DI and ID transitions.
  *           
@@ -222,8 +226,8 @@ p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
   /* Determine match assignment. (Both matassign and r are 1..alen)
    */
   for (apos = 1; apos <= msa->alen; apos++) 
-    if (r[apos] >= symfrac * maxR) matassign[apos] |= ASSIGN_MATCH;
-    else	                   matassign[apos] |= ASSIGN_INSERT;
+    if (r[apos] >= symfrac * maxR) matassign[apos] |= p7_ASSIGN_MATCH;
+    else	                   matassign[apos] |= p7_ASSIGN_INSERT;
 
   /* Once we have matassign calculated, modelmakers behave
    * the same; matassign2hmm() does this stuff (traceback construction,
@@ -247,17 +251,17 @@ p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
  *           
  * Args:     msa       - multiple sequence alignment
  *           dsq       - digitized unaligned aseq's
- *           isfrag    - 0..nseq-1 T/F flags on candidate fragments
  *           matassign - 1..alen bit flags for column assignments
  *           ret_hmm   - RETURN: counts-form HMM
  *           ret_tr    - RETURN: array of tracebacks for aseq's
  *                         
  * Return:   <eslOK> on success.
- *           ret_hmm and ret_tr alloc'ed here for the calling
- *           modelmaker function.
+ *           <p7_ERR_NO_CONSENSUS> if no consensus columns are identified.
+ *
+ *           ret_hmm and ret_tr alloc'ed here.
  */
 static int
-matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag, int *matassign, 
+matassign2hmm(ESL_MSA *msa, char **dsq, int *matassign, 
 	      P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
   int        status;		/* return status                       */
@@ -271,24 +275,21 @@ matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag, int *matassign,
 
   /* How many match states in the HMM? */
   for (M=0,apos = 1; apos <= msa->alen; apos++) 
-    if (matassign[apos] & ASSIGN_MATCH) M++;
+    if (matassign[apos] & p7_ASSIGN_MATCH) M++;
   if (M == 0) { status = p7ERR_NO_CONSENSUS; goto CLEANEXIT; }
 
   /* Delimit N-terminal tail */
-  for (apos=1; matassign[apos] & ASSIGN_INSERT && apos <= msa->alen; apos++)
-    matassign[apos] |= EXTERNAL_INSERT_N;
-  if (apos <= msa->alen) matassign[apos] |= FIRST_MATCH;
+  for (apos=1; matassign[apos] & p7_ASSIGN_INSERT && apos <= msa->alen; apos++)
+    matassign[apos] |= p7_EXTERNAL_INSERT_N;
+  if (apos <= msa->alen) matassign[apos] |= p7_FIRST_MATCH;
 
   /* Delimit C-terminal tail */
-  for (apos=msa->alen; matassign[apos] & ASSIGN_INSERT && apos > 0; apos--)
-    matassign[apos] |= EXTERNAL_INSERT_C;
-  if (apos > 0) matassign[apos] |= LAST_MATCH;
-
-  /* print_matassign(matassign, msa->alen);  */
+  for (apos=msa->alen; matassign[apos] & p7_ASSIGN_INSERT && apos > 0; apos--)
+    matassign[apos] |= p7_EXTERNAL_INSERT_C;
+  if (apos > 0) matassign[apos] |= p7_LAST_MATCH;
 
   /* Make fake tracebacks for each seq */
-  status = fake_tracebacks(msa->aseq, msa->nseq, msa->alen, isfrag, matassign, &tr);
-  if (status != eslOK) goto CLEANEXIT;
+  ESL_TRY( fake_tracebacks(msa->aseq, msa->nseq, msa->alen, matassign, &tr) );
 
   /* Build count model from tracebacks */
   hmm = p7_hmm_Create(M, global_abc);
@@ -326,14 +327,12 @@ matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag, int *matassign,
  * Purpose:  From a consensus assignment of columns to MAT/INS, construct fake
  *           tracebacks for each individual sequence.
  *           
- * Note:     Fragment tolerant by default. Internal entries are 
- *           B->M_x, instead of B->D1->D2->...->M_x; analogously
- *           for internal exits. 
+ *           Tracebacks are always relative to the search model (with
+ *           internal entry/exit, B->Mk and Mk->E).
  *           
  * Args:     aseqs     - alignment [0..nseq-1][0..alen-1]
  *           nseq      - number of seqs in alignment
  *           alen      - length of alignment in columns
- *           isfrag    - T/F flags for candidate fragments
  *           matassign - assignment of column; [1..alen] (off one from aseqs)
  *           ret_tr    - RETURN: array of tracebacks
  *           
@@ -341,142 +340,95 @@ matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag, int *matassign,
  *           ret_tr is alloc'ed here. Caller must free.
  */          
 static int
-fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag, int *matassign,
-		struct p7trace_s ***ret_tr)
+fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
+		P7_TRACE ***ret_tr)
 {
-  struct p7trace_s **tr;
+  int  status;
+  P7_TRACE **tr = NULL;
   int  idx;                     /* counter over sequences          */
   int  i;                       /* position in raw sequence (1..L) */
   int  k;                       /* position in HMM                 */
   int  apos;                    /* position in alignment columns   */
-  int  tpos;			/* position in traceback           */
 
-  tr = (struct p7trace_s **) MallocOrDie (sizeof(struct p7trace_s *) * nseq);
+  ESL_ALLOC(tr, sizeof(P7_TRACE *) * nseq);
+  for (idx = 0; idx < nseq; idx++) tr[idx] = NULL;
   
   for (idx = 0; idx < nseq; idx++)
     {
-      P7AllocTrace(alen+6, &tr[idx]); /* allow room for S,N,B,E,C,T */
+      ESL_TRY( p7_trace_Create(alen+6, &tr[idx]) ); /* +6 = S,N,B,E,C,T */
       
-				/* all traces start with S state... */
-      tr[idx]->statetype[0] = STS;
-      tr[idx]->nodeidx[0]   = 0;
-      tr[idx]->pos[0]       = 0;
-				/* ...and transit to N state; N-term tail
-				   is emitted on N->N transitions */
-      tr[idx]->statetype[1] = STN;
-      tr[idx]->nodeidx[1]   = 0;
-      tr[idx]->pos[1]       = 0;
-      
+      ESL_TRY( p7_trace_Append(tr, p7_STS, 0, 0) ); /* traces start with S... */
+      ESL_TRY( p7_trace_Append(tr, p7_STN, 0, 0) ); /*...and transit to N.    */
+
       i = 1;
       k = 0;
-      tpos = 2;
       for (apos = 0; apos < alen; apos++)
         {
-	  tr[idx]->statetype[tpos] = STBOGUS; /* bogus, deliberately, to debug */
+	  if (matassign[apos+1] & p7_FIRST_MATCH) 	/* BEGIN */
+	    ESL_TRY( p7_trace_Append(tr, p7_STB, 0, 0) );
 
-	  if (matassign[apos+1] & FIRST_MATCH)
-	    {			/* BEGIN */
-	      tr[idx]->statetype[tpos] = STB;
-	      tr[idx]->nodeidx[tpos]   = 0;
-	      tr[idx]->pos[tpos]       = 0;
-	      tpos++;
-	    }
-
-	  if (matassign[apos+1] & ASSIGN_MATCH && ! isgap(aseq[idx][apos]))
+	  if (matassign[apos+1] & p7_ASSIGN_MATCH && ! esl_abc_CIsGap(aseq[idx][apos]))
 	    {			/* MATCH */
 	      k++;		/* move to next model pos */
-	      tr[idx]->statetype[tpos] = STM;
-	      tr[idx]->nodeidx[tpos]   = k;
-	      tr[idx]->pos[tpos]       = i;
+	      ESL_TRY( p7_trace_Append(tr, p7_STM, k, i) );
 	      i++;
-	      tpos++;
 	    }	      
-          else if (matassign[apos+1] & ASSIGN_MATCH)
-            {                   /* DELETE */
-		/* being careful about S/W transitions.
-                 * Count B->D1 transitions only if we're not
-                 * a candidate fragment seq.
-		 */
+          else if (matassign[apos+1] & p7_ASSIGN_MATCH)
+            {                   /* DELETE */ /* No B->D transitions */
 	      k++;		/* *always* move on model when ASSIGN_MATCH */
-	      if (tr[idx]->statetype[tpos-1] != STB || ! isfrag[idx])
-		{
-		  tr[idx]->statetype[tpos] = STD;
-		  tr[idx]->nodeidx[tpos]   = k;
-		  tr[idx]->pos[tpos]       = 0;
-		  tpos++;
-		}
+	      if (tr[idx]->st[tpos-1] != STB)
+		ESL_TRY( p7_trace_Append(tr, p7_STD, k, 0) );
             }
-          else if (matassign[apos+1] & EXTERNAL_INSERT_N &&
-		   ! isgap(aseq[idx][apos]))
+          else if (matassign[apos+1] & p7_EXTERNAL_INSERT_N &&
+		   ! esl_abc_CIsGap(aseq[idx][apos]))
             {                   /* N-TERMINAL TAIL */
-              tr[idx]->statetype[tpos] = STN;
-              tr[idx]->nodeidx[tpos]   = 0;
-              tr[idx]->pos[tpos]       = i;
+	      ESL_TRY( p7_trace_Append(tr, p7_STN, 0, i) );
 	      i++;
-	      tpos++;
             }
-	  else if (matassign[apos+1] & EXTERNAL_INSERT_C &&
-		   ! isgap(aseq[idx][apos]))
+	  else if (matassign[apos+1] & p7_EXTERNAL_INSERT_C &&
+		   ! esl_abc_CIsGap(aseq[idx][apos]))
 	    {			/* C-TERMINAL TAIL */
-	      tr[idx]->statetype[tpos] = STC;
-              tr[idx]->nodeidx[tpos]   = 0;
-              tr[idx]->pos[tpos]       = i;
+	      ESL_TRY( p7_trace_Append(tr, p7_STC, 0, i) );
 	      i++;
-	      tpos++;
 	    }
-	  else if (! isgap(aseq[idx][apos]))
+	  else if (! esl_abc_CIsGap(aseq[idx][apos]))
 	    {			/* INSERT */
-	      tr[idx]->statetype[tpos] = STI;
-              tr[idx]->nodeidx[tpos]   = k;
-              tr[idx]->pos[tpos]       = i;
+	      ESL_TRY( p7_trace_Append(tr, p7_STI, k, i) );
 	      i++;
-	      tpos++;
 	    }
 
-	  if (matassign[apos+1] & LAST_MATCH)
+	  if (matassign[apos+1] & p7_LAST_MATCH)
 	    {			/* END */
 	      /* be careful about S/W transitions; if we're 
                * a candidate sequence fragment, we need to roll
 	       * back over some D's because there's no D->E transition
                * for fragments. k==M right now; don't change it.
 	       */
-	      if (isfrag[idx])
-		while (tr[idx]->statetype[tpos-1] == STD) 
-		  tpos--;
-	      tr[idx]->statetype[tpos] = STE;
-	      tr[idx]->nodeidx[tpos]   = 0;
-	      tr[idx]->pos[tpos]       = 0;
-	      tpos++;
-				/* and then transit E->C;
-				   alignments that use J are undefined;
-				   C-term tail is emitted on C->C transitions */
-	      tr[idx]->statetype[tpos] = STC;
-	      tr[idx]->nodeidx[tpos]   = 0;
-	      tr[idx]->pos[tpos]       = 0;
-	      tpos++;
+	      while (tr[idx]->st[tr->N-1] == p7_STD) 
+		tr->N--;	/* gratuitous chumminess with trace */
+	      ESL_TRY( p7_trace_Append(tr, p7_STE, 0, 0) );
+	      ESL_TRY( p7_trace_Append(tr, p7_STC, 0, 0) );
 	    }
         }
-                                /* all traces end with T state */
-      tr[idx]->statetype[tpos] = STT;
-      tr[idx]->nodeidx[tpos]   = 0;
-      tr[idx]->pos[tpos]       = 0;
-      tr[idx]->tlen = ++tpos;
-				/* deal with DI, ID transitions */
-				/* k == M here */
-      trace_doctor(tr[idx], k, NULL, NULL);
+      ESL_TRY( p7_trace_Append(tr, p7_STT, 0, 0) );
 
-    }    /* end for sequence # idx */
+      /* deal with DI, ID transitions and other plan7 impossibilities */
+      /* (k == M at this point) */
+      ESL_TRY ( trace_doctor(tr[idx], k, NULL, NULL) );
+    } 
 
+  status = eslOK;
+ CLEANEXIT:
+  if (status != eslOK) { esl_Free2D((void **) tr, nseq); tr = NULL; }
   *ret_tr = tr;
-  return;
+  return status;
 }
 
 /* Function: trace_doctor()
  * 
  * Purpose:  Plan 7 disallows D->I and I->D "chatter" transitions.
  *           However, these transitions may be implied by many
- *           alignments for hand- or heuristic- built HMMs.
- *           trace_doctor() collapses I->D or D->I into a
+ *           alignments. trace_doctor() collapses I->D or D->I into a
  *           single M position in the trace. 
  *           Similarly, B->I and I->E transitions may be implied
  *           by an alignment.
@@ -491,11 +443,11 @@ fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag, int *matassign,
  *           ret_ndi - number of DI transitions doctored
  *           ret_nid - number of ID transitions doctored
  * 
- * Return:   (void)
- *           tr is modified
+ * Return:   <eslOK>
+ *           tr is modified.
  */               
-static void
-trace_doctor(struct p7trace_s *tr, int mlen, int *ret_ndi, int *ret_nid)
+static int
+trace_doctor(P7_TRACE *tr, int mlen, int *ret_ndi, int *ret_nid)
 {
   int opos;			/* position in old trace                 */
   int npos;			/* position in new trace (<= opos)       */
@@ -504,190 +456,135 @@ trace_doctor(struct p7trace_s *tr, int mlen, int *ret_ndi, int *ret_nid)
 				/* overwrite the trace from left to right */
   ndi  = nid  = 0;
   opos = npos = 0;
-  while (opos < tr->tlen) {
+  while (opos < tr->N) {
       /* fix implied D->I transitions; D transforms to M, I pulled in */
-    if (tr->statetype[opos] == STD && tr->statetype[opos+1] == STI) {
-      tr->statetype[npos] = STM;
-      tr->nodeidx[npos]   = tr->nodeidx[opos]; /* D transforms to M      */
-      tr->pos[npos]       = tr->pos[opos+1];   /* insert char moves back */
+    if (tr->st[opos] == p7_STD && tr->st[opos+1] == p7_STI) {
+      tr->st[npos] = p7_STM;
+      tr->k[npos]  = tr->k[opos];     /* D transforms to M      */
+      tr->i[npos]  = tr->i[opos+1];   /* insert char moves back */
       opos += 2;
       npos += 1;
       ndi++;
     } /* fix implied I->D transitions; D transforms to M, I is pushed in */
-    else if (tr->statetype[opos]== STI && tr->statetype[opos+1]== STD) {
-      tr->statetype[npos] = STM;
-      tr->nodeidx[npos]   = tr->nodeidx[opos+1];/* D transforms to M    */
-      tr->pos[npos]       = tr->pos[opos];      /* insert char moves up */
+    else if (tr->st[opos]== p7_STI && tr->st[opos+1]== p7_STD) {
+      tr->st[npos] = p7_STM;
+      tr->k[npos]  = tr->k[opos+1];    /* D transforms to M    */
+      tr->i[npos]  = tr->i[opos];      /* insert char moves up */
       opos += 2;
       npos += 1;
       nid++; 
     } /* fix implied B->I transitions; pull I back to its M */
-    else if (tr->statetype[opos]== STI && tr->statetype[opos-1]== STB) {
-      tr->statetype[npos] = STM;
-      tr->nodeidx[npos]   = tr->nodeidx[opos]; /* offending I transforms to M */
-      tr->pos[npos]       = tr->pos[opos];
+    else if (tr->st[opos]== p7_STI && tr->st[opos-1]== p7_STB) {
+      tr->st[npos] = p7_STM;
+      tr->k[npos]  = tr->k[opos];    /* offending I transforms to M */
+      tr->i[npos]  = tr->i[opos];
       opos++;
       npos++;
     } /* fix implied I->E transitions; push I to next M */
-    else if (tr->statetype[opos]== STI && tr->statetype[opos+1]== STE) {
-      tr->statetype[npos] = STM;
-      tr->nodeidx[npos]   = tr->nodeidx[opos]+1;/* offending I transforms to M */
-      tr->pos[npos]       = tr->pos[opos];
+    else if (tr->st[opos]== p7_STI && tr->st[opos+1]== p7_STE) {
+      tr->st[npos] = p7_STM;
+      tr->k[npos]  = tr->k[opos]+1;  /* offending I transforms to M */
+      tr->i[npos]  = tr->i[opos];
       opos++;
       npos++;
     } /* rare: N-N-B-E becomes N-B-M_1-E (swap B,N) */
-    else if (tr->statetype[opos]==STB && tr->statetype[opos+1]==STE
-	     && tr->statetype[opos-1]==STN && tr->pos[opos-1] > 0) {   
-      tr->statetype[npos]   = STM;
-      tr->nodeidx[npos]     = 1;
-      tr->pos[npos]         = tr->pos[opos-1];
-      tr->statetype[npos-1] = STB;
-      tr->nodeidx[npos-1]   = 0;
-      tr->pos[npos-1]       = 0;
+    else if (tr->st[opos]==p7_STB && tr->st[opos+1]==p7_STE
+	     && tr->st[opos-1]==p7_STN && tr->i[opos-1] > 0) {   
+      tr->st[npos]   = p7_STM;
+      tr->k[npos]    = 1;
+      tr->i[npos]    = tr->i[opos-1];
+      tr->st[npos-1] = p7_STB;
+      tr->k[npos-1]  = 0;
+      tr->i[npos-1]  = 0;
       opos++;
       npos++;
     } /* rare: B-E-C-C-x becomes B-M_M-E-C-x (swap E,C) */
-    else if (tr->statetype[opos]==STE && tr->statetype[opos-1]==STB
-	     && tr->statetype[opos+1]==STC 
-	     && tr->statetype[opos+2]==STC) { 
-      tr->statetype[npos]   = STM;
-      tr->nodeidx[npos]     = mlen;
-      tr->pos[npos]         = tr->pos[opos+2];
-      tr->statetype[npos+1] = STE;
-      tr->nodeidx[npos+1]   = 0;
-      tr->pos[npos+1]       = 0;
-      tr->statetype[npos+2] = STC; /* first C must be a nonemitter  */
-      tr->nodeidx[npos+2]   = 0;
-      tr->pos[npos+2]       = 0;
+    else if (tr->st[opos]==p7_STE && tr->st[opos-1]==p7_STB
+	     && tr->st[opos+1]==p7_STC 
+	     && tr->st[opos+2]==p7_STC) { 
+      tr->st[npos]   = p7_STM;
+      tr->k[npos]    = mlen;
+      tr->i[npos]    = tr->pos[opos+2];
+      tr->st[npos+1] = p7_STE;
+      tr->k[npos+1]  = 0;
+      tr->i[npos+1]  = 0;
+      tr->st[npos+2] = p7_STC; /* first C must be a nonemitter  */
+      tr->k[npos+2]  = 0;
+      tr->i[npos+2]  = 0;
       opos+=3;
       npos+=3;
     } /* everything else is just copied */
     else {
-      tr->statetype[npos] = tr->statetype[opos];
-      tr->nodeidx[npos]   = tr->nodeidx[opos];
-      tr->pos[npos]       = tr->pos[opos];
+      tr->st[npos] = tr->st[opos];
+      tr->k[npos]  = tr->k[opos];
+      tr->i[npos]  = tr->i[opos];
       opos++;
       npos++;
     }
   }
-  tr->tlen = npos;
+  tr->N = npos;
 
   if (ret_ndi != NULL) *ret_ndi = ndi;
   if (ret_nid != NULL) *ret_nid = nid;
-  return;
+  return eslOK;
 }
 
 
 /* Function: annotate_model()
  * 
- * Purpose:  Add rf, cs optional annotation to a new model.
+ * Purpose:  Transfer rf, cs, and other optional annotation from the alignment
+ *           to the new model.
  * 
  * Args:     hmm       - new model
  *           matassign - which alignment columns are MAT; [1..alen]
  *           msa       - alignment, including annotation to transfer
  *           
- * Return:   (void)
+ * Return:   <eslOK> on success.
  */
-static void
-annotate_model(struct plan7_s *hmm, int *matassign, MSA *msa)
+static int
+annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
 {                      
   int   apos;			/* position in matassign, 1.alen  */
   int   k;			/* position in model, 1.M         */
   char *pri;			/* X-PRM, X-PRI, X-PRT annotation */
 
-  /* Transfer reference coord annotation from alignment,
-   * if available
-   */
+  /* Reference coord annotation  */
   if (msa->rf != NULL) {
     hmm->rf[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
-      if (matassign[apos] & ASSIGN_MATCH) /* ainfo is off by one from HMM */
-	hmm->rf[k++] = (msa->rf[apos-1] == ' ') ? '.' : msa->rf[apos-1];
+      if (matassign[apos] & ASSIGN_MATCH) /* apos is off by one from HMM */
+	hmm->rf[k++] = msa->rf[apos-1];
     hmm->rf[k] = '\0';
-    hmm->flags |= PLAN7_RF;
+    hmm->flags |= p7_RF;
   }
 
-  /* Transfer consensus structure annotation from alignment, 
-   * if available
-   */
+  /* Consensus structure annotation */
   if (msa->ss_cons != NULL) {
     hmm->cs[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH)
-	hmm->cs[k++] = (msa->ss_cons[apos-1] == ' ') ? '.' : msa->ss_cons[apos-1];
+	hmm->cs[k++] = msa->ss_cons[apos-1];
     hmm->cs[k] = '\0';
-    hmm->flags |= PLAN7_CS;
+    hmm->flags |= p7_CS;
   }
 
-  /* Transfer surface accessibility annotation from alignment,
-   * if available
-   */
+  /* Surface accessibility annotation */
   if (msa->sa_cons != NULL) {
     hmm->ca[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
       if (matassign[apos] & ASSIGN_MATCH)
-	hmm->ca[k++] = (msa->sa_cons[apos-1] == ' ') ? '.' : msa->sa_cons[apos-1];
+	hmm->ca[k++] = msa->sa_cons[apos-1];
     hmm->ca[k] = '\0';
-    hmm->flags |= PLAN7_CA;
+    hmm->flags |= p7_CA;
   }
 
-  /* Store the alignment map
-   */
+  /* The alignment map (1..M in model, 1..alen in alignment) */
   for (apos = k = 1; apos <= msa->alen; apos++)
     if (matassign[apos] & ASSIGN_MATCH)
       hmm->map[k++] = apos;
-  hmm->flags |= PLAN7_MAP;
+  hmm->flags |= p7_MAP;
 
-  /* Translate and transfer X-PRM annotation. 
-   * 0-9,[a-zA-Z] are legal; translate as 0-9,10-35 into hmm->mpri.
-   * Any other char is translated as -1, and this will be interpreted
-   * as a flag that means "unknown", e.g. use the normal mixture Dirichlet
-   * procedure for this column.
-   */
-  if ((pri = MSAGetGC(msa, "X-PRM")) != NULL)
-    {
-      hmm->mpri = MallocOrDie(sizeof(int) * (hmm->M+1));
-      for (apos = k = 1; apos <= msa->alen; apos++)
-	if (matassign[apos] & ASSIGN_MATCH)
-	  {
-	    if      (isdigit((int) pri[apos-1])) hmm->mpri[k] = pri[apos-1] - '0';
-	    else if (islower((int) pri[apos-1])) hmm->mpri[k] = pri[apos-1] - 'a' + 10;
-	    else if (isupper((int) pri[apos-1])) hmm->mpri[k] = pri[apos-1] - 'A' + 10;
-	    else hmm->mpri[k] = -1;
-	    k++;
-	  }
-    }
-  /* And again for X-PRI annotation on insert priors:
-   */
-  if ((pri = MSAGetGC(msa, "X-PRI")) != NULL)
-    {
-      hmm->ipri = MallocOrDie(sizeof(int) * (hmm->M+1));
-      for (apos = k = 1; apos <= msa->alen; apos++)
-	if (matassign[apos] & ASSIGN_MATCH)
-	  {
-	    if      (isdigit((int) pri[apos-1])) hmm->ipri[k] = pri[apos-1] - '0';
-	    else if (islower((int) pri[apos-1])) hmm->ipri[k] = pri[apos-1] - 'a' + 10;
-	    else if (isupper((int) pri[apos-1])) hmm->ipri[k] = pri[apos-1] - 'A' + 10;
-	    else hmm->ipri[k] = -1;
-	    k++;
-	  }
-    }
-  /* And one last time for X-PRT annotation on transition priors:
-   */
-  if ((pri = MSAGetGC(msa, "X-PRT")) != NULL)
-    {
-      hmm->tpri = MallocOrDie(sizeof(int) * (hmm->M+1));
-      for (apos = k = 1; apos <= msa->alen; apos++)
-	if (matassign[apos] & ASSIGN_MATCH)
-	  {
-	    if      (isdigit((int) pri[apos-1])) hmm->tpri[k] = pri[apos-1] - '0';
-	    else if (islower((int) pri[apos-1])) hmm->tpri[k] = pri[apos-1] - 'a' + 10;
-	    else if (isupper((int) pri[apos-1])) hmm->tpri[k] = pri[apos-1] - 'A' + 10;
-	    else hmm->tpri[k] = -1;
-	    k++;
-	  }
-    }
-
+  return eslOK;
 }
 
 #if 0

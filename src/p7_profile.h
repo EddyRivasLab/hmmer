@@ -51,9 +51,9 @@ typedef struct {
 
 extern P7_PROFILE *p7_profile_Create(int M);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
-extern int         p7_profile_GetTransition(P7_PROFILE *gm, 
-					    char st1, int k1, char st2, int k2,
-					    int *ret_tsc);
+extern int         p7_profile_GetTScore(P7_PROFILE *gm, 
+					char st1, int k1, char st2, int k2,
+					int *ret_tsc);
 
 
 #endif /*P7_PROFILE_INCLUDED*/

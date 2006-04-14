@@ -125,7 +125,7 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
 
 
 
-/* Function:  p7_profile_GetTransition()
+/* Function:  p7_profile_GetTScore()
  * Incept:    SRE, Wed Apr 12 14:20:18 2006 [St. Louis]
  *
  * Purpose:   Convenience function that looks up a transition score in
@@ -140,8 +140,8 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
  * Throws:    <eslEINVAL> if a nonexistent transition is requested.
  */
 int
-p7_profile_GetTransition(P7_PROFILE *gm, char st1, int k1, char st2, int k2,
-			 int *ret_tsc)
+p7_profile_GetTScore(P7_PROFILE *gm, char st1, int k1, char st2, int k2,
+		     int *ret_tsc)
 {
   int status = eslOK;
   int tsc    = 0;
