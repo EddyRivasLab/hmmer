@@ -244,9 +244,9 @@ ForwardScoreCorrection(struct plan7_s *hmm, unsigned char *dsq, int length,
   escores = 0;
   for (sampidx = 0; sampidx < NUMALGSAMPLES; sampidx++) {
     /* Subtract off max_score, to avoid overflow errors. */
-    escores += Score2Prob(scores[sampidx]-max_score, 1);
+    escores += pow(2, scores[sampidx]-max_score);
   }
-  return ((float)Prob2Score(escores/NUMALGSAMPLES, 1)) + max_score;
+  return log(escores/NUMALGSAMPLES)/log(2) + max_score;
 }
 
 /* THE FOLLOWING CODE IS IN DEVELOPMENT.
