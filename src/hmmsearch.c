@@ -592,22 +592,10 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       
       if (do_xnu && Alphabet_type == hmmAMINO) XNU(dsq, sqinfo.len);
       
-      /* 1. Recover a trace by Viterbi.
-       *    In extreme cases, the alignment may be literally impossible;
-       *    in which case, the score comes out ridiculously small (but not
-       *    necessarily <= -INFTY, because we're not terribly careful
-       *    about underflow issues), and tr will be returned as NULL.
-       */
-      
-      if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
-      {
-          sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
-      }
-      else
-      {
-          sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
-      }
-      
+      /* Ripped out the computation of Viterbi, for obvious reasons. */
+      if (!do_forward)
+	Die("This version isn't set up to do Viterbi!\n");
+
       /* 2. If we're using Forward scores, calculate the
        *    whole sequence score; this overrides anything
        *    PostprocessSignificantHit() is going to do to the per-seq score.
