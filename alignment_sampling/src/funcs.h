@@ -196,6 +196,9 @@ extern float IslandViterbi(unsigned char *dsq, int L, struct plan7_s *hmm,
  */
 extern int   XNU(unsigned char *dsq, int len);
 extern float TraceScoreCorrection(struct plan7_s *hmm, struct p7trace_s *tr, unsigned char *dsq);
+extern float ForwardScoreCorrection(struct plan7_s *hmm, unsigned char *dsq, int length,
+				    struct dpmatrix_s *mx, ESL_RANDOMNESS *randomness);
+
 
 /* mathsupport.c
  * Much of this code deals with Dirichlet prior mathematics.
@@ -415,7 +418,6 @@ extern void ImposeMasterTrace(char **aseq, int nseq, struct p7trace_s *mtr,
 extern void P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
 			      struct dpmatrix_s *mx, struct p7trace_s **ret_tr,
 			      ESL_RANDOMNESS *randomness);
-
 
 #endif /*FUNCSH_INCLUDED*/
 

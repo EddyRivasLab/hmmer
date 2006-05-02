@@ -565,7 +565,11 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
   double pvalue;		        /* pvalue of an HMM score                  */
   double evalue;		        /* evalue of an HMM score                  */
   int    nseq;			        /* number of sequences searched            */
- 
+  ESL_RANDOMNESS *randomness;   /* Place holder for the RNG. */
+
+  /* Use a constant seed for now, for repeatability and convenience of
+     coding. */
+  randomness = esl_randomness_Create(1);
   tr = NULL;
   
   /* Create a DP matrix; initially only two rows big, but growable;
@@ -615,7 +619,8 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
           else
           {
 	    sc = P7Forward(dsq, sqinfo.len, hmm, &fmx);
-	    correction = ForwardScoreCorrection(hmm, dsq, sqinfo.len, fmx);
+	    correction = ForwardScoreCorrection(hmm, dsq, sqinfo.len, fmx,
+						randomness);
 	    sc = sc - correction;
 	    FreePlan7Matrix(fmx);
           }
@@ -674,6 +679,7 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
     }
   
   FreePlan7Matrix(mx);
+  esl_randomness_Destroy(randomness);
   *ret_nseq = nseq;
   return;
 }
