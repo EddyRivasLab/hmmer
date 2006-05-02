@@ -17,7 +17,19 @@
 #include "funcs.h"
 
 
-
+int
+HotChoice(float *p, int N) {
+  float *pn;
+  int i;
+  pn = (float *)MallocOrDie(sizeof(float)*N);
+  for (i = 0; i < N; i++) {
+    pn[i] = powf(p[i], 0.5);
+  }
+  FNorm(pn, N);
+  i = FChoose(pn, N);
+  free(pn);
+  return i;
+}
 
 /* Function: EmitSequence()
  * Date:     SRE, Sun Mar  8 12:28:03 1998 [St. Louis]
@@ -102,11 +114,11 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
 	k = start_match_idx; type = STM;
 	break;
 
-      case STI:	type = (FChoose(hmm->t[k]+TIM, 2) == 0)    ? STM : STI; if (type == STM) k++; break;
-      case STN: type = (FChoose(hmm->xt[XTN], 2)  == LOOP) ? STN : STB; k = 0; break;
-      case STE:	type = (FChoose(hmm->xt[XTE], 2)  == LOOP) ? STJ : STC; k = 0; break;
-      case STC:	type = (FChoose(hmm->xt[XTC], 2)  == LOOP) ? STC : STT; k = 0; break;
-      case STJ:	type = (FChoose(hmm->xt[XTJ], 2)  == LOOP) ? STJ : STB; k = 0; break;
+      case STI:	type = (HotChoice(hmm->t[k]+TIM, 2) == 0)    ? STM : STI; if (type == STM) k++; break;
+      case STN: type = (HotChoice(hmm->xt[XTN], 2)  == LOOP) ? STN : STB; k = 0; break;
+      case STE:	type = (HotChoice(hmm->xt[XTE], 2)  == LOOP) ? STJ : STC; k = 0; break;
+      case STC:	type = (HotChoice(hmm->xt[XTC], 2)  == LOOP) ? STC : STT; k = 0; break;
+      case STJ:	type = (HotChoice(hmm->xt[XTJ], 2)  == LOOP) ? STJ : STB; k = 0; break;
 
       case STD:
 	if (k == end_match_idx) {
@@ -121,7 +133,7 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
 	  k = start_match_idx;
 	  type = STM;
 	} else {
-	  type = (FChoose(hmm->t[k]+TDM, 2) == 0) ? STM : STD; 
+	  type = (HotChoice(hmm->t[k]+TDM, 2) == 0) ? STM : STD; 
 	  k++;
 	}
 	break;
@@ -135,7 +147,7 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
 	} else {
 	  FCopy(t, hmm->t[k], 3);
 	  t[3] = hmm->end[k];
-	  switch (FChoose(t,4)) {
+	  switch (HotChoice(t,4)) {
 	  case 0: k++;  type = STM; break;
 	  case 1:       type = STI; break;
 	  case 2: k++;  type = STD; break;
@@ -154,12 +166,12 @@ EmitSequence(struct plan7_s *hmm, unsigned char **ret_dsq, int *ret_L, struct p7
       /* Choose a symbol emission, if necessary
        */
       sym = Alphabet_iupac;	/* use sentinel byte to mean "not set yet" */
-      if      (type == STM) sym = FChoose(hmm->mat[k], Alphabet_size);
-      else if (type == STI) sym = FChoose(hmm->ins[k], Alphabet_size); 
+      if      (type == STM) sym = HotChoice(hmm->mat[k], Alphabet_size);
+      else if (type == STI) sym = HotChoice(hmm->ins[k], Alphabet_size); 
       else if ((type == STN && tr->statetype[tpos-1] == STN) ||
 	       (type == STC && tr->statetype[tpos-1] == STC) ||
 	       (type == STJ && tr->statetype[tpos-1] == STJ))
-	sym = FChoose(hmm->null, Alphabet_size);
+	sym = HotChoice(hmm->null, Alphabet_size);
 	
       /* Add to the traceback; deal with realloc if necessary
        */
