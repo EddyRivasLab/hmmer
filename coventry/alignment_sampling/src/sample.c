@@ -284,7 +284,7 @@ P7SampleAlignment(struct plan7_s *hmm, unsigned char *dsq, int N,
 	 we don't know how many match states there are, and it would
 	 be a bore to write them all out even if we did.  Fill out the
 	 weights matrix. */
-      match_odds = (int *)MallocOrDie(sizeof(int)*hmm->M+1);
+      match_odds = (int *)MallocOrDie(sizeof(int)*(hmm->M+1));
       match_odds[0] = -INFTY;   /* Match-state indexing starts at 1, not 0. */
       for (k = hmm->M; k >= 1; k--)
 
