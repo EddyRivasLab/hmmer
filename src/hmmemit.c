@@ -71,6 +71,8 @@ main(int argc, char **argv)
   char *optname;                /* name of option found by Getopt()         */
   char *optarg;                 /* argument found by Getopt()               */
   int   optind;                 /* index in argv[]                          */
+  ESL_RANDOMNESS *randomness; 
+  randomness = esl_randomness_Create(1);
 
   /*********************************************** 
    * Parse command line
@@ -196,7 +198,7 @@ main(int argc, char **argv)
 
 	for (i = 0; i < nseq; i++)
 	  {
-	    EmitSequence(hmm, &(dsq[i]), &L, &(tr[i]));
+	    EmitSequence(hmm, &(dsq[i]), &L, &(tr[i]), randomness);
 	    sprintf(sqinfo[i].name, "seq%d", i+1);
 	    sqinfo[i].len   = L;
 	    sqinfo[i].flags = SQINFO_NAME | SQINFO_LEN;
@@ -231,7 +233,7 @@ main(int argc, char **argv)
 
 	for (i = 0; i < nseq; i++)
 	  {
-	    EmitSequence(hmm, &dsq, &L, &tr);
+	    EmitSequence(hmm, &dsq, &L, &tr, randomness);
 	    sprintf(sqinfo.name, "%s-%d", hmm->name, i+1);
 	    sqinfo.len   = L;
 	    sqinfo.flags = SQINFO_NAME | SQINFO_LEN;
