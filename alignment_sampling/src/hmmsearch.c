@@ -629,20 +629,17 @@ main_loop_serial(struct plan7_s *hmm, SQFILE *sqfp, struct threshold_s *thresh, 
       evalue = thresh->Z ? (double) thresh->Z * pvalue : (double) nseq * pvalue;
       if (sc >= thresh->globT && evalue <= thresh->globE) 
       {
-          /* Recalculate trace if we used altivec */
-#ifdef ALTIVEC
           if(tr == NULL)
           {
               if (P7ViterbiSpaceOK(sqinfo.len, hmm->M, mx))
               {
-                  sc = P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
+                  P7Viterbi(dsq, sqinfo.len, hmm, mx, &tr);
               }
               else
               {
-                  sc = P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
+                  P7SmallViterbi(dsq, sqinfo.len, hmm, mx, &tr);
               }
           }
-#endif
           sc = PostprocessSignificantHit(ghit, dhit, 
                                          tr, hmm, dsq, sqinfo.len,
                                          sqinfo.name, 
