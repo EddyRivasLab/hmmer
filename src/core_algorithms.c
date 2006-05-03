@@ -2548,88 +2548,15 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
   double  pvalue;
   double  sortkey;
 
-  /* Special case: rarely, the alignment was totally impossible
-   * and tr is NULL.
-   */
-  if (tr == NULL) return sc_override;
+  if (!do_forward) Die("Only set up for forward!");
 
-  /* Break the trace into one or more individual domains.
-   */
-  TraceDecompose(tr, &tarr, &ntr);
-  if (ntr == 0) Die("TraceDecompose() screwup"); /* "can't happen" (!) */
+  ndom = -1; // Absurd value, since we're no concerned with domains.
 
-  /* Rescore each domain, apply null2 correction if asked.
-   * Mark positive-scoring ones (we'll definitely report those),
-   * and include their score in the whole sequence score.
-   */
-  score     = MallocOrDie(sizeof(float) * ntr);
-  usedomain = MallocOrDie(sizeof(int)   * ntr);
-  ndom      = 0;
-  whole_sc  = 0.;
-  for (tidx = 0; tidx < ntr; tidx++)
-    {
-      score[tidx]  = P7TraceScore(hmm, dsq, tarr[tidx]);
-      if (do_null2) score[tidx] -= TraceScoreCorrection(hmm, tarr[tidx], dsq);
-      if (score[tidx] > 0.0) {
-	usedomain[tidx] = TRUE;
-	ndom++;
-	whole_sc += score[tidx];
-      } else 
-	usedomain[tidx] = FALSE;
-    }
-
-  /* Make sure at least one positive scoring domain is in
-   * the trace. If not, invoke "weak single domain" rules:
-   * we will always report at least one domain per sequence, even
-   * if it has a negative score. (HMMER's Plan7 architecture can report
-   * one negative scoring domain but not more.)
-   */
-  if (ndom == 0) {
-    tidx            = FArgMax(score, ntr);
-    usedomain[tidx] = TRUE;
-    whole_sc        = score[tidx];
-    ndom            = 1;
-  }
-
-  /* Implement --do_forward: override the trace-dependent sum-of-domain
-   * whole score, use the P7Forward() score that the called passed
-   * us instead. This is a hack; null2 is trace-dependent and
-   * thus undefined for P7Forward() scoring; see commentary in hmmpfam.c. 
-   */
-  if (do_forward) whole_sc = sc_override;
+  whole_sc = sc_override;
 
   /* Go through and put all the accepted domains into the hit list.
    */
   whole_pval = PValue(hmm, whole_sc);
-  for (tidx = 0, didx = 1; tidx < ntr; tidx++) {
-    if (! usedomain[tidx]) continue;
-
-    /* domain #1 = the only domain in tarr[tidx], because we've
-     * already split the main trace up --v
-     */
-    Trace_GetAlignmentBounds(tarr[tidx], 1, &i1, &i2, &k1, &k2, NULL);
-    pvalue = PValue(hmm, score[tidx]); 
-
-    if (pvalue <= thresh->domE && score[tidx] >= thresh->domT) {
-      ali     = CreateFancyAli(tarr[tidx], hmm, dsq, seqname);
-
-      if (hmmpfam_mode) 
-	sortkey = -1.*(double)i1; /* hmmpfam: sort on position in seq    */
-      else
-	sortkey = score[tidx];	  /* hmmsearch: sort on E (monotonic w/ sc) */
-
-      RegisterHit(dhit, sortkey,
-		  pvalue,     score[tidx], 
-		  whole_pval, whole_sc,
-		  hmmpfam_mode ? hmm->name : seqname,
-		  hmmpfam_mode ? hmm->acc  : seqacc,
-		  hmmpfam_mode ? hmm->desc : seqdesc,
-		  i1,i2, L, 
-		  k1,k2, hmm->M, 
-		  didx,ndom,ali);
-    }
-    didx++;
-  }
 
   /* Now register the global hit, with the domain-derived score.
    */
@@ -2672,13 +2599,6 @@ PostprocessSignificantHit(struct tophit_s    *ghit,
 		NULL);	                  /* alignment info */
   }
 
-  /* Clean up and return.
-   */
-  for (tidx = 0; tidx < ntr; tidx++)
-    P7FreeTrace(tarr[tidx]);
-  free(tarr);
-  free(score);
-  free(usedomain);
   return whole_sc;
 }
 
