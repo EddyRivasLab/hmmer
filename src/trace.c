@@ -10,9 +10,7 @@
 
 #include <easel.h>
 
-#include "plan7.h"
-#include "p7_profile.h"
-#include "p7_trace.h"
+#include "hmmer.h"
 
 /* Function:  p7_trace_Create()
  * Incept:    SRE, Tue Apr 11 16:40:40 2006 [St. Louis]

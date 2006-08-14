@@ -1,11 +1,11 @@
-/* plan7.c
+/* hmm.c
  * The Plan 7 HMM data structure, P7_HMM
  * 
  * SRE, Sat Nov 16 14:19:56 1996
  * SVN $Id: plan7.c 1487 2005-11-12 20:40:57Z eddy $
  */
 
-#include "p7config.h"		/* must be included first */
+#include "p7_config.h"		/* must be included first */
 
 #include <stdio.h>
 #include <string.h>		/* strcpy(), strlen()             */
@@ -15,7 +15,7 @@
 #include <esl_alphabet.h>
 #include <esl_vectorops.h>
 
-#include "plan7.h"		
+#include "hmmer.h"		
 
 /* Function:  p7_hmm_Create()
  * Incept:    SRE, Fri Mar 31 14:07:43 2006 [St. Louis]
@@ -91,10 +91,6 @@ p7_hmm_CreateShell(void)
   hmm->map      = NULL;
   hmm->checksum = 0;
 
-  hmm->tpri     = NULL;
-  hmm->mpri     = NULL;
-  hmm->ipri     = NULL;
-
   hmm->ga1 = hmm->ga2 = 0.;
   hmm->tc1 = hmm->tc2 = 0.;
   hmm->nc1 = hmm->nc2 = 0.;
@@ -157,7 +153,7 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc)
   ESL_ALLOC(hmm->ca,  (M+2) * sizeof(char));
   ESL_ALLOC(hmm->map, (M+1) * sizeof(int));
   
-  p7_hmm_ZeroCounts(hmm);
+  ESL_TRY( p7_hmm_ZeroCounts(hmm) );
 
  CLEANEXIT:
   if (status != eslOK) p7_hmm_Destroy(hmm);
@@ -208,10 +204,6 @@ p7_hmm_Destroy(P7_HMM *hmm)
   if (hmm->ctime   != NULL) free(hmm->ctime);
   if (hmm->map     != NULL) free(hmm->map);
 
-  if (hmm->tpri    != NULL) free(hmm->tpri);
-  if (hmm->mpri    != NULL) free(hmm->mpri);
-  if (hmm->ipri    != NULL) free(hmm->ipri);
-
   if (hmm->lvstats != NULL) p7_evinfo_Destroy(hmm->lvstats);
   if (hmm->lfstats != NULL) p7_evinfo_Destroy(hmm->lfstats);
   if (hmm->gvstats != NULL) p7_evinfo_Destroy(hmm->gvstats);
@@ -248,12 +240,12 @@ p7_hmm_ZeroCounts(P7_HMM *hmm)
   for (k = 0; k < 4; k++)
     esl_vec_FSet(hmm->xt[k], 2, 0.);
   
-  hmm->flags  &= ~PLAN7_HASPROB;	/* invalidates probabilities        */
-  hmm->flags  &= ~PLAN7_HASBITS;	/* invalidates scores               */
-  hmm->flags  &= ~PLAN7_STATS_LV;	/* invalidates local Viterbi stats  */
-  hmm->flags  &= ~PLAN7_STATS_LF;	/* invalidates local Forward stats  */
-  hmm->flags  &= ~PLAN7_STATS_GV;	/* invalidates glocal Viterbi stats */
-  hmm->flags  &= ~PLAN7_STATS_GF;	/* invalidates glocal Forward stats */
+  hmm->flags  &= ~p7_HASPROB;	/* invalidates probabilities        */
+  hmm->flags  &= ~p7_HASBITS;	/* invalidates scores               */
+  hmm->flags  &= ~p7_STATS_LV;	/* invalidates local Viterbi stats  */
+  hmm->flags  &= ~p7_STATS_LF;	/* invalidates local Forward stats  */
+  hmm->flags  &= ~p7_STATS_GV;	/* invalidates glocal Viterbi stats */
+  hmm->flags  &= ~p7_STATS_GF;	/* invalidates glocal Forward stats */
   return eslOK;
 }
 
@@ -356,7 +348,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
     {
       if (hmm->desc != NULL) free(hmm->desc); 
       hmm->desc = NULL;
-      hmm->flags &= ~PLAN7_DESC;
+      hmm->flags &= ~p7_DESC;
     }
   else
     {
@@ -369,7 +361,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
 
       strcpy(hmm->desc, desc);
       esl_strchop(hmm->desc, n);
-      hmm->flags |= PLAN7_DESC;
+      hmm->flags |= p7_DESC;
     }
   status = eslOK;
  CLEANEXIT:
@@ -495,7 +487,7 @@ p7_hmm_Rescale(P7_HMM *hmm, float scale)
  * Purpose:  Take an HMM in counts form, and renormalize
  *           all probability vectors in the core probability model. Enforces
  *           Plan7 restrictions on nonexistent transitions. Sets the
- *           <PLAN7_HASPROB> flag. 
+ *           <p7_HASPROB> flag. 
  *
  *           Leaves other flags (stats and profile) alone, so caller
  *           needs to be wary. Renormalizing a probability model that
@@ -533,7 +525,7 @@ p7_hmm_Renormalize(P7_HMM *hmm)
   esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* t[0] delete */
   esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* t[0] insert */
 
-  hmm->flags |= PLAN7_HASPROB;	/* set the probabilities OK flag */
+  hmm->flags |= p7_HASPROB;	/* set the probabilities OK flag */
   return eslOK;
 }
   

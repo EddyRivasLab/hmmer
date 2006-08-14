@@ -42,12 +42,12 @@ MYINCDIR = -I../easel
 
 PROGS = 
 
-OBJS =  plan7.o\
+OBJS =  hmm.o\
+	modelmakers.o\
 	trace.o
 
-HDRS =  p7config.h\
-	plan7.h\
-	p7_trace.h
+HDRS =  hmmer.h
+
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
@@ -78,7 +78,7 @@ libhmmer.a: $(OBJS)
 ##
 distclean:
 	make clean
-	-rm -f Makefile p7config.h
+	-rm -f Makefile p7_config.h
 
 clean:
 	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a

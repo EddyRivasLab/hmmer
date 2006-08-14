@@ -10,7 +10,7 @@
 #ifndef P7_DPFAST_INCLUDED
 #define P7_DPFAST_INCLUDED
 
-#include "p7_profile.h"
+#include "hmmer.h"
 
 typedef P7_PROFILE P7_OPROFILE;
 typedef P7_GMX     P7_OMX;

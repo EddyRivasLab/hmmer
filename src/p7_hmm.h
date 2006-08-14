@@ -1,18 +1,20 @@
-/* plan7.h
- * The Plan7 HMM structure used by HMMER.
+/* p7_hmm.h
+ * The Plan7 HMM structure.
  * 
  * SRE, Sat Apr 30 13:05:35 2005
  * SVN $Id$
  */
 #ifndef PLAN7_INCLUDED
 #define PLAN7_INCLUDED
+#include "p7_config.h"
 
-#include "p7config.h"
-#include <esl_alphabet.h>	/* ESL_ALPHABET       */
-#include "p7_profile.h"		/* P7_PROFILE, P7_GMX */
-#include "p7_evalues.h"		/* P7_EVINFO          */
+#include <esl_alphabet.h>	
+#include <esl_msa.h>		
 
-/* P7_OPROFILE, P7_OMX are provided by one and only one optimized impl: */
+#include "p7_profile.h"		
+#include "p7_trace.h"          	
+#include "p7_evalues.h"		
+
 #ifdef    p7_IMPL_REFERENCE
 #include "p7_dp_reference.h"	/* the reference implementation.        */
 #elif     p7_IMPL_FAST
@@ -283,8 +285,8 @@ extern char   *p7_hmm_Statetype(char st);
  */
 extern int p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
 			     P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
-
-
+extern int p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
+			     P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
 #endif /* PLAN7_INCLUDED */
 

@@ -8,18 +8,34 @@
  * are supposed to be match states, and then hand this info to
  * matassign2hmm().
  * 
- * Two wrinkles to watch for:
- * 1) The alignment is assumed to contain sequence fragments. Look in
- *    fake_tracebacks() for how internal entry/exit points are handled.
+ * Wrinkles to watch for:
+ * 1) The alignment may contain sequence fragments, which shouldn't be
+ *    counted towards delete paths on entry/exit. Caller provides us with
+ *    an isfrag[0..nseq-1] array of 0/1 flags declaring which sequences
+ *    in the alignment should be treated as fragments. We count fragments
+ *    in UNILOCAL mode, and "full-length" training sequences in UNIGLOCAL
+ *    mode.
+ *    
  * 2) Plan7 disallows DI and ID transitions, but an alignment may
- *    imply these. Look in trace_doctor() for how DI and ID transitions
- *    are removed.
+ *    imply these (as well as some others). Look in trace_doctor() for how
+ *    DI and ID transitions are brutally removed. Not many people like this
+ *    step, because it implicitly alters the example alignment, but this
+ *    is the price of the Plan7 architecture. If an alignment contains
+ *    DI or ID transitions, the alignment is "wrong".
+ *    
+ * 3) Nothing prevents the alignment from containing an L=0 sequence, with
+ *    no residues at all. (For example, this commonly arises when people chop
+ *    larger alignments into pieces.) Plan7 can't emit L=0 seqs, so 
+ *    a legal trace cannot be constructed for one. fake_tracebacks()
+ *    detects this case and leaves that individual trace as NULL. The
+ *    caller, if it uses the returned trace array, must watch out for 
+ *    NULL traces.
  *
  * SVN $Id: modelmakers.c 1384 2005-05-06 23:04:04Z eddy $
  * SRE, Fri Nov 15 10:00:04 1996
  */
 
-#include "p7config.h"
+#include "p7_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -29,11 +45,11 @@
 #include <ctype.h>
 
 #include <easel.h>
+#include <esl_alphabet.h>
 #include <esl_msa.h>
 
 #include "hmmer.h"
-#include "plan7.h"
-#include "p7_trace.h"
+
 
 /* flags used for matassign[] arrays -- 
  *   assignment of aligned columns to match/insert states
@@ -45,16 +61,13 @@
 #define p7_EXTERNAL_INSERT_N (1<<4)
 #define p7_EXTERNAL_INSERT_C (1<<5) 
 
-static void matassign2hmm(ESL_MSA *msa, char **dsq, char *isfrag,
-			  int *matassign, P7_HMM **ret_hmm,
-			  P7_TRACE ***ret_tr);
-static void fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag,
-			    int *matassign, P7_TRACE ***ret_tr);
-static void trace_doctor(P7_TRACE *tr, int M, int *ret_ndi, int *ret_nid);
-static void annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
-#if 0
-static void print_matassign(int *matassign, int alen);
-#endif
+static int matassign2hmm(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
+			 int *matassign, char *isfrag,
+			 P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+static int fake_tracebacks(char **aseq, int nseq, int alen, ESL_ALPHABET *abc,
+			   int *matassign, P7_TRACE ***ret_tr);
+static int trace_doctor(P7_TRACE *tr, int M, int *ret_ndi, int *ret_nid);
+static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
 
 
 
@@ -71,11 +84,12 @@ static void print_matassign(int *matassign, int alen);
  *           
  *           Returns both the HMM in counts form (ready for applying
  *           Dirichlet priors as the next step), and fake tracebacks
- *           for each aligned sequence.
+ *           for each aligned sequence. 
  *           
  * Args:     msa     - multiple sequence alignment          
  *           abc     - symbol alphabet to use
  *           dsq     - digitized unaligned aseq's
+ *           isfrag  - 0/1 flags denoting seq fragments  (0..nseq-1)
  *           ret_hmm - RETURN: counts-form HMM
  *           ret_tr  - RETURN: array of tracebacks for aseq's
  *           
@@ -87,7 +101,7 @@ static void print_matassign(int *matassign, int alen);
  * Throws:   <eslEMEM> on allocation failure.          
  */            
 int
-p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
+p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, char *isfrag,
 		  P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
   int  status;
@@ -96,7 +110,7 @@ p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq,
   *ret_hmm = NULL;
   *ret_tr  = NULL;
 
-  if (msa->rf == NULL) { status = p7_ERR_NO_RF; goto CLEANEXIT; }
+  if (msa->rf == NULL) { status = p7ERR_RF; goto CLEANEXIT; }
   ESL_ALLOC(matassign, sizeof(int) * (msa->alen+1));
   esl_vec_ISet(matassign, msa->alen+1, 0);
   
@@ -106,7 +120,7 @@ p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq,
     else
       matassign[apos+1] |= p7_ASSIGN_INSERT;
 
-  status = matassign2hmm(msa, abc, dsq, matassign, ret_hmm, ret_tr);
+  status = matassign2hmm(msa, abc, dsq, matassign, isfrag, ret_hmm, ret_tr);
   /* matassign2hmm leaves ret_hmm, ret_tr in their proper state */
  CLEANEXIT:
   if (matassign != NULL) free(matassign);
@@ -158,6 +172,7 @@ p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq,
  *           for each training sequence.
  *           
  * Args:     msa       - multiple sequence alignment
+ *           abc       - symbol alphabet to use
  *           dsq       - digitized unaligned aseq's
  *           isfrag    - [0..nseq-1] T/F flags for candidate seq frags
  *           symfrac   - threshold for residue occupancy
@@ -171,7 +186,8 @@ p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq,
  * Throws:   <eslEMEM> on allocation failure.          
  */
 int
-p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
+p7_Fastmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
+		  char *isfrag, float symfrac,
 		  P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
   int      status;	     /* return status flag                  */
@@ -217,7 +233,7 @@ p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
     {  
       for (idx = 0; idx < msa->nseq; idx++) 
 	if ((incfrags || ! isfrag[idx]) 
-	    && ! isgap(msa->aseq[idx][apos])) 
+	    && ! esl_abc_CIsGap(abc, msa->aseq[idx][apos])) 
 	  r[apos+1] += msa->wgt[idx];
       r[apos+1] /= totwgt;
     }
@@ -233,7 +249,7 @@ p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
    * the same; matassign2hmm() does this stuff (traceback construction,
    * trace counting) and sets up ret_hmm and ret_tr.
    */
-  status = matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
+  status = matassign2hmm(msa, abc, dsq, matassign, isfrag, ret_hmm, ret_tr);
  CLEANEXIT:
   if (r != NULL)         free(r);
   if (matassign != NULL) free(matassign);
@@ -250,18 +266,21 @@ p7_Fastmodelmaker(ESL_MSA *msa, char **dsq, char *isfrag, float symfrac,
  *           algorithms.
  *           
  * Args:     msa       - multiple sequence alignment
+ *           abc       - symbol alphabet to use
  *           dsq       - digitized unaligned aseq's
  *           matassign - 1..alen bit flags for column assignments
+ *           isfrag    - 0..nseq-1 0/1 flag denoting seq fragments
  *           ret_hmm   - RETURN: counts-form HMM
  *           ret_tr    - RETURN: array of tracebacks for aseq's
  *                         
  * Return:   <eslOK> on success.
- *           <p7_ERR_NO_CONSENSUS> if no consensus columns are identified.
+ *           <p7ERR_CONSENSUS> if no consensus columns are identified.
  *
  *           ret_hmm and ret_tr alloc'ed here.
  */
 static int
-matassign2hmm(ESL_MSA *msa, char **dsq, int *matassign, 
+matassign2hmm(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, 
+	      int *matassign, char *isfrag,
 	      P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 {
   int        status;		/* return status                       */
@@ -270,13 +289,14 @@ matassign2hmm(ESL_MSA *msa, char **dsq, int *matassign,
   int      M;                   /* length of new model in match states */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
+  int      mode;
   *ret_hmm = NULL;
   *ret_tr  = NULL;
 
   /* How many match states in the HMM? */
   for (M=0,apos = 1; apos <= msa->alen; apos++) 
     if (matassign[apos] & p7_ASSIGN_MATCH) M++;
-  if (M == 0) { status = p7ERR_NO_CONSENSUS; goto CLEANEXIT; }
+  if (M == 0) { status = p7ERR_CONSENSUS; goto CLEANEXIT; }
 
   /* Delimit N-terminal tail */
   for (apos=1; matassign[apos] & p7_ASSIGN_INSERT && apos <= msa->alen; apos++)
@@ -289,34 +309,46 @@ matassign2hmm(ESL_MSA *msa, char **dsq, int *matassign,
   if (apos > 0) matassign[apos] |= p7_LAST_MATCH;
 
   /* Make fake tracebacks for each seq */
-  ESL_TRY( fake_tracebacks(msa->aseq, msa->nseq, msa->alen, matassign, &tr) );
+  ESL_TRY( fake_tracebacks(msa->aseq, msa->nseq, msa->alen, abc, matassign, &tr) );
 
   /* Build count model from tracebacks */
-  hmm = p7_hmm_Create(M, global_abc);
+  hmm = p7_hmm_Create(M, abc);
   if (hmm == NULL) { status = eslEMEM; goto CLEANEXIT; }
-  p7_hmm_ZeroCounts(hmm);
+  ESL_TRY( p7_hmm_ZeroCounts(hmm) );
   for (idx = 0; idx < msa->nseq; idx++) {
+    if (tr[idx] == NULL) continue; /* rare L=0 seq case */
     /* p7_trace_Dump(stdout, tr[idx], NULL, NULL);   */
-    p7_trace_Count(hmm, dsq[idx], msa->wgt[idx], tr[idx]);
+    if (isfrag[idx]) mode = (isfrag[idx] ? p7_UNILOCAL : p7_UNIGLOCAL);
+    ESL_TRY( p7_trace_Count(hmm, dsq[idx], msa->wgt[idx], tr[idx], mode) );
   }
 				/* annotate new model */
-  annotate_model(hmm, matassign, msa);
+  ESL_TRY( annotate_model(hmm, matassign, msa) );
 
-  /* Set #=RF line of alignment to reflect our assignment
+  /* Reset #=RF line of alignment to reflect our assignment
    * of match, delete. matassign is valid from 1..alen and is off
    * by one from msa->rf.
    */
-  if (msa->rf != NULL) free(msa->rf);
-  msa->rf = (char *) MallocOrDie (sizeof(char) * (msa->alen + 1));
+  if (msa->rf == NULL)
+    ESL_ALLOC(msa->rf, sizeof(char) * (msa->alen + 1));
   for (apos = 0; apos < msa->alen; apos++)
-    msa->rf[apos] = matassign[apos+1] & ASSIGN_MATCH ? 'x' : '.';
+    msa->rf[apos] = matassign[apos+1] & p7_ASSIGN_MATCH ? 'x' : '.';
   msa->rf[msa->alen] = '\0';
 
-				/* Cleanup and return. */
+  status = eslOK;
  CLEANEXIT:
-  if (ret_tr != NULL) *ret_tr = tr;
-  else   { for (idx = 0; idx < msa->nseq; idx++) P7FreeTrace(tr[idx]); free(tr); }
-  if (ret_hmm != NULL) *ret_hmm = hmm; else FreePlan7(hmm);
+  if (status != eslOK || ret_tr == NULL) {
+    if (tr != NULL) {
+      for (idx = 0; idx < msa->nseq; idx++) 
+	if (tr[idx] != NULL) p7_trace_Destroy(tr[idx]);
+      free(tr); 
+    }
+    tr = NULL;
+  }
+  if (status != eslOK || ret_hmm == NULL) 
+    { p7_hmm_Destroy(hmm); hmm = NULL; }
+
+  if (ret_tr  != NULL) *ret_tr  = tr;
+  if (ret_hmm != NULL) *ret_hmm = hmm;
   return status;
 }
   
@@ -330,17 +362,23 @@ matassign2hmm(ESL_MSA *msa, char **dsq, int *matassign,
  *           Tracebacks are always relative to the search model (with
  *           internal entry/exit, B->Mk and Mk->E).
  *           
+ *           Rarely, an individual traceback may be left as NULL. This
+ *           happens when a sequence has no residues at all; Plan7 models
+ *           cannot emit L=0 sequences. Caller must watch out for NULL
+ *           traces.
+ *           
  * Args:     aseqs     - alignment [0..nseq-1][0..alen-1]
  *           nseq      - number of seqs in alignment
  *           alen      - length of alignment in columns
+ *           abc       - symbol alphabet to use
  *           matassign - assignment of column; [1..alen] (off one from aseqs)
  *           ret_tr    - RETURN: array of tracebacks
  *           
- * Return:   (void)
- *           ret_tr is alloc'ed here. Caller must free.
+ * Return:   <eslOK> on success.
+ *           ret_tr array is alloc'ed here. Caller must free.
  */          
 static int
-fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
+fake_tracebacks(char **aseq, int nseq, int alen, ESL_ALPHABET *abc, int *matassign,
 		P7_TRACE ***ret_tr)
 {
   int  status;
@@ -357,43 +395,43 @@ fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
     {
       ESL_TRY( p7_trace_Create(alen+6, &tr[idx]) ); /* +6 = S,N,B,E,C,T */
       
-      ESL_TRY( p7_trace_Append(tr, p7_STS, 0, 0) ); /* traces start with S... */
-      ESL_TRY( p7_trace_Append(tr, p7_STN, 0, 0) ); /*...and transit to N.    */
+      ESL_TRY( p7_trace_Append(tr[idx], p7_STS, 0, 0) ); /* traces start with S... */
+      ESL_TRY( p7_trace_Append(tr[idx], p7_STN, 0, 0) ); /*...and transit to N.    */
 
       i = 1;
       k = 0;
       for (apos = 0; apos < alen; apos++)
         {
 	  if (matassign[apos+1] & p7_FIRST_MATCH) 	/* BEGIN */
-	    ESL_TRY( p7_trace_Append(tr, p7_STB, 0, 0) );
+	    ESL_TRY( p7_trace_Append(tr[idx], p7_STB, 0, 0) );
 
-	  if (matassign[apos+1] & p7_ASSIGN_MATCH && ! esl_abc_CIsGap(aseq[idx][apos]))
+	  if (matassign[apos+1] & p7_ASSIGN_MATCH && ! esl_abc_CIsGap(abc, aseq[idx][apos]))
 	    {			/* MATCH */
 	      k++;		/* move to next model pos */
-	      ESL_TRY( p7_trace_Append(tr, p7_STM, k, i) );
+	      ESL_TRY( p7_trace_Append(tr[idx], p7_STM, k, i) );
 	      i++;
 	    }	      
           else if (matassign[apos+1] & p7_ASSIGN_MATCH)
             {                   /* DELETE */ /* No B->D transitions */
 	      k++;		/* *always* move on model when ASSIGN_MATCH */
-	      if (tr[idx]->st[tpos-1] != STB)
-		ESL_TRY( p7_trace_Append(tr, p7_STD, k, 0) );
+	      if (tr[idx]->st[tr[idx]->N-1] != p7_STB)
+		ESL_TRY( p7_trace_Append(tr[idx], p7_STD, k, 0) );
             }
           else if (matassign[apos+1] & p7_EXTERNAL_INSERT_N &&
-		   ! esl_abc_CIsGap(aseq[idx][apos]))
+		   ! esl_abc_CIsGap(abc, aseq[idx][apos]))
             {                   /* N-TERMINAL TAIL */
-	      ESL_TRY( p7_trace_Append(tr, p7_STN, 0, i) );
+	      ESL_TRY( p7_trace_Append(tr[idx], p7_STN, 0, i) );
 	      i++;
             }
 	  else if (matassign[apos+1] & p7_EXTERNAL_INSERT_C &&
-		   ! esl_abc_CIsGap(aseq[idx][apos]))
+		   ! esl_abc_CIsGap(abc, aseq[idx][apos]))
 	    {			/* C-TERMINAL TAIL */
-	      ESL_TRY( p7_trace_Append(tr, p7_STC, 0, i) );
+	      ESL_TRY( p7_trace_Append(tr[idx], p7_STC, 0, i) );
 	      i++;
 	    }
-	  else if (! esl_abc_CIsGap(aseq[idx][apos]))
+	  else if (! esl_abc_CIsGap(abc, aseq[idx][apos]))
 	    {			/* INSERT */
-	      ESL_TRY( p7_trace_Append(tr, p7_STI, k, i) );
+	      ESL_TRY( p7_trace_Append(tr[idx], p7_STI, k, i) );
 	      i++;
 	    }
 
@@ -404,17 +442,27 @@ fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
 	       * back over some D's because there's no D->E transition
                * for fragments. k==M right now; don't change it.
 	       */
-	      while (tr[idx]->st[tr->N-1] == p7_STD) 
-		tr->N--;	/* gratuitous chumminess with trace */
-	      ESL_TRY( p7_trace_Append(tr, p7_STE, 0, 0) );
-	      ESL_TRY( p7_trace_Append(tr, p7_STC, 0, 0) );
+	      while (tr[idx]->st[tr[idx]->N-1] == p7_STD) 
+		tr[idx]->N--;	/* gratuitous chumminess with trace */
+	      ESL_TRY( p7_trace_Append(tr[idx], p7_STE, 0, 0) );
+	      ESL_TRY( p7_trace_Append(tr[idx], p7_STC, 0, 0) );
 	    }
         }
-      ESL_TRY( p7_trace_Append(tr, p7_STT, 0, 0) );
+      ESL_TRY( p7_trace_Append(tr[idx], p7_STT, 0, 0) );
 
       /* deal with DI, ID transitions and other plan7 impossibilities */
       /* (k == M at this point) */
       ESL_TRY ( trace_doctor(tr[idx], k, NULL, NULL) );
+
+      /* What happens if we had a length 0 sequence? 
+       * At this point, we'd have an invalid SNBECT trace.
+       * Check for this; if so, free the trace and leave it NULL.
+       */
+      if (tr[idx]->st[2] == p7_STB && tr[idx]->st[3] == p7_STE)
+	{
+	  p7_trace_Destroy(tr[idx]);
+	  tr[idx] = NULL;
+	}
     } 
 
   status = eslOK;
@@ -440,10 +488,10 @@ fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
  *           
  * Args:     tr      - trace to doctor
  *           M       - length of model that traces are for 
- *           ret_ndi - number of DI transitions doctored
- *           ret_nid - number of ID transitions doctored
+ *           ret_ndi - optRETURN: number of DI transitions doctored
+ *           ret_nid - optRETURN: number of ID transitions doctored
  * 
- * Return:   <eslOK>
+ * Return:   <eslOK> on success.
  *           tr is modified.
  */               
 static int
@@ -504,7 +552,7 @@ trace_doctor(P7_TRACE *tr, int mlen, int *ret_ndi, int *ret_nid)
 	     && tr->st[opos+2]==p7_STC) { 
       tr->st[npos]   = p7_STM;
       tr->k[npos]    = mlen;
-      tr->i[npos]    = tr->pos[opos+2];
+      tr->i[npos]    = tr->i[opos+2];
       tr->st[npos+1] = p7_STE;
       tr->k[npos+1]  = 0;
       tr->i[npos+1]  = 0;
@@ -552,7 +600,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   if (msa->rf != NULL) {
     hmm->rf[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
-      if (matassign[apos] & ASSIGN_MATCH) /* apos is off by one from HMM */
+      if (matassign[apos] & p7_ASSIGN_MATCH) /* apos is off by one from HMM */
 	hmm->rf[k++] = msa->rf[apos-1];
     hmm->rf[k] = '\0';
     hmm->flags |= p7_RF;
@@ -562,7 +610,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   if (msa->ss_cons != NULL) {
     hmm->cs[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
-      if (matassign[apos] & ASSIGN_MATCH)
+      if (matassign[apos] & p7_ASSIGN_MATCH)
 	hmm->cs[k++] = msa->ss_cons[apos-1];
     hmm->cs[k] = '\0';
     hmm->flags |= p7_CS;
@@ -572,7 +620,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   if (msa->sa_cons != NULL) {
     hmm->ca[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
-      if (matassign[apos] & ASSIGN_MATCH)
+      if (matassign[apos] & p7_ASSIGN_MATCH)
 	hmm->ca[k++] = msa->sa_cons[apos-1];
     hmm->ca[k] = '\0';
     hmm->flags |= p7_CA;
@@ -580,29 +628,14 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
 
   /* The alignment map (1..M in model, 1..alen in alignment) */
   for (apos = k = 1; apos <= msa->alen; apos++)
-    if (matassign[apos] & ASSIGN_MATCH)
+    if (matassign[apos] & p7_ASSIGN_MATCH)
       hmm->map[k++] = apos;
   hmm->flags |= p7_MAP;
 
   return eslOK;
 }
 
-#if 0
-static void
-print_matassign(int *matassign, int alen)
-{
-  int apos;
 
-  for (apos = 0; apos <= alen; apos++) {
-    printf("%3d %c %c %c\n", 
-	   apos,
-	   (matassign[apos] & ASSIGN_MATCH) ? 'x':' ',
-	   (matassign[apos] & FIRST_MATCH || matassign[apos] & LAST_MATCH) ? '<' : ' ',
-	   (matassign[apos] & EXTERNAL_INSERT_N ||
-	    matassign[apos] & EXTERNAL_INSERT_C) ? '|':' ');
-  }
-}
-#endif
 
 /*****************************************************************
  * @LICENSE@

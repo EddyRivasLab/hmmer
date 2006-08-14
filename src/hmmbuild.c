@@ -1,155 +1,80 @@
-p7ERR_CONSENSUS:
-    Die("No conserved consensus columns found; aborting construction!\n\
-This is an unusual situation. If you're using default --fast heuristic\n\
-construction, reexamine your alignment; it is probably unusually full of\n\
-gaps, or lots of sequence fragments. You may be able to force HMMER to\n\
-model it by using the --symfrac option. If you're using --hand construction,\n\
-then you didn't mark any match columns in your reference line annotation;\n\
-see the documentation.");
-
-
 /* hmmbuild.c
  * main() for HMM construction from an alignment.
- *
+ * 
  * SRE, Mon Nov 18 12:41:29 1996
  * SVN $Id: hmmbuild.c 1443 2005-09-25 20:54:00Z eddy $
  */
 
-#include "config.h"		/* compile-time configuration constants */
-#include "squidconf.h"
+#include "p7_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "squid.h"		/* general sequence analysis library    */
-#include "msa.h"                /* squid's multiple alignment i/o       */
+#include <easel.h>
+#include <esl_getopts.h>
 
-#include "plan7.h"		/* plan 7 profile HMM structure         */
-#include "structs.h"		/* data structures, macros, #define's   */
-#include "funcs.h"		/* function declarations                */
-#include "globals.h"		/* alphabet global variables            */
-#include "lsjfuncs.h"		/* Steve Johnson's additions            */
+#include "hmmer.h"
 
-static char banner[] = "hmmbuild - build a hidden Markov model from an alignment";
 
-static char usage[]  = "\
-Usage: hmmbuild [-options] <hmmfile output> <alignment file>\n\
-  Available options are:\n\
-   -h     : help; print brief help on version and usage\n\
-   -n <s> : name; name this (first) HMM <s>\n\
-   -o <f> : re-save annotated alignment to <f>\n\
-   -A     : append; append this HMM to <hmmfile>\n\
-   -F     : force; allow overwriting of <hmmfile>\n\
-\n\
-  Alternative alignment types: (default: multihit full domain alignment; hmmls)\n\
-   -f     : multihit local (hmmfs style)\n\
-   -g     : single global alignment (hmms style, Needleman/Wunsch)\n\
-   -s     : single local alignment (hmmsw style, Smith/Waterman)\n\
-";
-
-static char experts[] = "\
-  Forcing an alphabet: (normally autodetected)\n\
-   --amino   : override autodetection, assert that seqs are protein\n\
-   --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
-\n\
-  Alternative model construction strategies: (default: --fast)\n\
-   --fast        : assign cols w/ >= symfrac residues to be consensus {default}\n\
-   --hand        : manual construction (requires annotated alignment)\n\
-   --symfrac <x> : for --fast: min fraction of syms in MAT col {0.50} [0<=x<=1]\n\
-\n\
-  Customization of null model and priors:\n\
-   --null  <f>   : read null (random sequence) model from file <f>\n\
-   --prior <f>   : read Dirichlet prior parameters from file <f>\n\
-   --pam   <f>   : heuristic PAM-based prior, using BLAST PAM matrix in <f>\n\
-   --pamwgt <x>  : for --pam: set weight on PAM-based prior to <x> {20.}[>=0]\n\
-\n\
-  Alternative effective sequence number strategies:\n\
-   --effnone     : effective sequence number is just # of seqs [default]\n\
-   --effclust    : eff seq # is # of clusters by single linkage\n\
-   --effent      : adjust eff seq # to achieve entropy loss target\n\
-   --effset <x>  : set effective sequence number to <x>\n\
-   --eloss <x>   : for --effent: set target loss [defaults: fs=0.59; ls=1.30]\n\
-   --eidlevel <x>: for --effclust: set identity cutoff to <x> {0.62}\n\
-\n\
-  Relative sequence weighting strategies: (default: GSC weights)\n\
-   --wblosum     : Henikoff simple filter weights (see --idlevel)\n\
-   --wgsc        : Gerstein/Sonnhammer/Chothia tree weights (default)\n\
-   --wme         : maximum entropy (ME)\n\
-   --wpb         : Henikoff position-based weights\n\
-   --wvoronoi    : Sibbald/Argos Voronoi weights\n\
-   --wnone       : don't do any relative weighting\n\
-   --pbswitch <n>: set switch from GSC to position-based wgts at > n seqs\n\
-   --widlevel <x>: for --wblosum: set identity cutoff {0.62}\n\
-\n\
-  Evolving information content of MATCH emission probabilities\n\
-   --evolveic <x> : evolve match emission probabilities to average info content [>=0]\n\
-   --matrix <f>  : use matrix in <f> rather than default WAG\n\
-   --noevolve    : do not evolve information content of models\n\
-\n\
-  Other expert options:\n\
-   --binary      : save the model in binary format, not ASCII text\n\
-   --cfile <f>   : save count vectors to <f>\n\
-   --informat <s>: input alignment is in format <s>, not Stockholm\n\
-   --verbose     : print boring information\n\
-\n";
-
-static struct opt_s OPTIONS[] = {
-  { "-f", TRUE, sqdARG_NONE },
-  { "-g", TRUE, sqdARG_NONE },
-  { "-h", TRUE, sqdARG_NONE },
-  { "-n", TRUE, sqdARG_STRING},
-  { "-o", TRUE, sqdARG_STRING},
-  { "-s", TRUE, sqdARG_NONE },
-  { "-A", TRUE, sqdARG_NONE },
-  { "-F", TRUE, sqdARG_NONE },
-  { "--amino",   FALSE, sqdARG_NONE  },
-  { "--binary",  FALSE, sqdARG_NONE  },
-  { "--cfile",   FALSE, sqdARG_STRING},
-  { "--effnone", FALSE, sqdARG_NONE },
-  { "--effclust",FALSE, sqdARG_NONE },
-  { "--effent",  FALSE, sqdARG_NONE },
-  { "--effset",  FALSE, sqdARG_FLOAT },
-  { "--eidlevel",FALSE, sqdARG_FLOAT },
-  { "--eloss",   FALSE, sqdARG_FLOAT },
-  { "--evolveic", FALSE, sqdARG_FLOAT },
-  { "--fast",    FALSE, sqdARG_NONE },
-  { "--symfrac", FALSE, sqdARG_FLOAT },
-  { "--hand",    FALSE, sqdARG_NONE},
-  { "--informat",FALSE, sqdARG_STRING },
-  { "--matrix",  FALSE, sqdARG_STRING },
-  { "--noevolve", FALSE, sqdARG_NONE  },
-  { "--nucleic", FALSE, sqdARG_NONE },
-  { "--null",    FALSE, sqdARG_STRING },
-  { "--pam",     FALSE, sqdARG_STRING },
-  { "--pamwgt",  FALSE, sqdARG_FLOAT },
-  { "--pbswitch",FALSE, sqdARG_INT },
-  { "--prior",   FALSE, sqdARG_STRING },
-  { "--verbose", FALSE, sqdARG_NONE  },
-  { "--wgsc",    FALSE, sqdARG_NONE },
-  { "--wblosum", FALSE, sqdARG_NONE },
-  { "--widlevel",FALSE, sqdARG_FLOAT },
-  { "--wme",     FALSE, sqdARG_NONE },
-  { "--wnone",   FALSE, sqdARG_NONE },
-  { "--wpb",     FALSE, sqdARG_NONE },
-  { "--wvoronoi",FALSE, sqdARG_NONE },
+#define CONOPTS "--hand,--fast"
+#define EFFOPTS "--effent,--effev,--effclust,--effset,--effnone"
+#define WGTOPTS "--wblosum,--wgsc,--wme,--wpb,--wvoronoi,--wnone"
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",     0 },
+  { "-n",        eslARG_STRING,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "name this HMM <s> (single HMM only)",      0 },
+  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "re-save annotated alignment to file <f>",  0 },
+  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "append this HMM to <hmmfile>",             0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "force; allow overwriting <hmmfile>",       0 },
+/* Forcing an alphabet:  */
+  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "--dna,--rna",   "assert that seqs are protein",  1 },
+  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "--amino,--rna", "assert that seqs are DNA",      1 },
+  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "--amino,--dna", "assert that seqs are RNA",      1 },
+/* Alternate model construction strategies: */
+  { "--fast",    eslARG_NONE,"default",NULL, NULL,    CONOPTS,    NULL,    NULL, "assign cols w/ >= symfrac residues as consensus",     2 },
+  { "--hand",    eslARG_NONE,   FALSE, NULL, NULL,    CONOPTS,    NULL,    NULL, "manual construction (requires reference annotation)", 2 },
+  { "--symfrac", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,   "--fast",   NULL, "manual construction (requires reference annotation)", 2 },
+/* Customization of null model and priors */
+  { "--null",    eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "read null (random seq) model from file <f>",    3),
+  { "--prior",   eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "read Dirichlet prior parameters from file <f>", 3),
+/* Alternate effective seq number strategies */
+  { "--effent",  eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to achieve entropy loss target", 4),
+  { "--effev",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "simulated evolution to achieve info target",      4),
+  { "--effclust",eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "eff seq # is # of clusters by single linkage",    4),
+  { "--effset",  eslARG_REAL,   NULL,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "set effective seq number to <x>",                 4),
+  { "--effnone", eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "effective sequence number is just # of seqs",     4),
+  { "--eloss",   eslARG_REAL,  "0.59", NULL, "x>0",      NULL, "--effent",   NULL,   "for --effent: set target entropy loss to <x>",   4),
+  { "--evic",    eslARG_REAL,  "0.00", NULL, "x>0",      NULL, "--effev",    NULL,   "for --effev: set info content target to <x>",    4),
+  { "--evmx",    eslARG_INFILE, NULL,  NULL, NULL,       NULL, "--effev",    NULL,   "for --effev: use rate matrix in <f>, not WAG",   4),
+  { "--eid",     eslARG_REAL,  "0.62", NULL, "0<=x<=1",  NULL, "--effclust", NULL,   "for --effclust: set identity cutoff to <x>",     4),
+/* Alternate relative sequence weighting strategies */
+  { "--wgsc",    eslARG_NONE,"default",NULL, NULL,    WGTOPTS,    NULL,      NULL, "Gerstein/Sonnhammer/Chothia tree weights",         5),
+  { "--wblosum", eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff simple filter weights",                   5),
+  { "--wme",     eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "maximum entropy (ME)",                             5),
+  { "--wpb",     eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff position-based weights",                  5),
+  { "--wvoronoi",eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Sibbald/Argos Voronoi weights",                    5),
+  { "--wnone",   eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "don't do any relative weighting",                  5),
+  { "--pbswitch",eslARG_REAL, "1000",  NULL, NULL,       NULL,    NULL,      NULL, "set failover to efficient PB wgts at > <n> seqs",  5),
+  { "--wid",     eslARG_REAL, "0.62",  NULL, NULL,       NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",               5),
+/* Miscellaneous */
+  { "--cfile",   eslARG_OUTFILE, NULL, NULL, NULL,       NULL,    NULL,      NULL, "save count vectors to file <f>",                   6),
+  { "--informat",eslARG_STRING,  NULL, NULL, NULL,       NULL,    NULL,      NULL, "alignment is in format <s> (don't autodetect)",    6),
+  { "--verbose", eslARG_NONE,    NULL, NULL, NULL,       NULL,    NULL,      NULL, "be more chatty about what's happening",            6),
+  { 0,0,0,0,0,0,0,0,0,0, },
 };
-#define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
+static char banner[] = "hmmbuild - build a profile HMM from an alignment";
+static char usage[]  = "hmmbuild [-options] <hmmfile output> <alignment file input>";
 
-
-
-
+enum cconfig_e   { FAST_CONSTRUCTION, HAND_CONSTRUCTION };
 enum wgtconfig_e { WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_PB, WGT_VORONOI, WGT_ME };
-enum cconfig_e   { P7_FAST_CONSTRUCTION,  P7_HAND_CONSTRUCTION };
-enum effconfig_e { EFF_NONE, EFF_USERSET, EFF_NCLUSTERS, EFF_ENTROPY };
+enum effconfig_e { EFF_ENTROPY, EFF_EVOLUTION, EFF_NCLUSTERS, EFF_USERSET, EFF_NONE };
 
-/* Structure: p7config_s
- * Configuration options for a model under construction. We keep all
- * this stuff in a static structure in hmmbuild.c, to keep
- * it bundled out of the way, in the hope of making the main()
- * a little cleaner and more understandable.
+/* Structure: buildcfg_s
+ * Configuration options for a model under construction - kept in 
+ * a static structure in hmmbuild.c to be able to pass cfg in a neat bundle.
  */
-struct p7config_s {
+static struct buildcfg_s {
   char *setname;		/* name of the HMM */
 
   /* The null model. */
@@ -159,16 +84,9 @@ struct p7config_s {
 
   /* The priors. */
   char *prifile;		/* Dirichlet prior file to read          */
-  char *pamfile;		/* PAM matrix file for heuristic prior   */
-  float pamwgt;			/* weight on PAM for heuristic prior     */
 
   /* Fragment identification in alignments */
   float fragthresh;		/* rlen_i < fragthresh*mean rlen -> fragment  */
-
-  /* Relative sequence weighting */
-  enum wgtconfig_e w_strategy;	/* which relative weight strategy we're using */
-  int   pbswitch;		/* if nseq >= this, failover to PB weights    */
-  float widlevel;		/* --wblosum: frac id filtering level [0.62]  */
 
   /* Model construction */
   enum cconfig_e c_strategy;	/* which construction algorithm we're using    */
@@ -182,14 +100,13 @@ struct p7config_s {
   float eloss;		        /* --effent: target entropy loss                */
   int   eloss_set;		/* --effent: TRUE if eloss set on commandline   */
   float etarget;		/* --effent: target entropy (background - eloss)*/
-
-  /* Phylogenetic extrapolation */
-  int	evolve_ic;              /* TRUE to evolve to specified info content */
-  float info;        		/* specified ave model info content      */
-  char *matrixfile;	   	/* open file containing rate matrices    */
+  float evic;        		/* --effev:  specified ave model info content   */
+  char *evmatrix;	   	/* --effev:  file containing rate matrix        */
   
-  /* Choice of algorithm mode */
-  enum p7_algmode mode;
+  /* Relative sequence weighting */
+  enum wgtconfig_e w_strategy;	/* which relative weight strategy we're using */
+  int   pbswitch;		/* if nseq >= this, failover to PB weights    */
+  float widlevel;		/* --wblosum: frac id filtering level [0.62]  */
 
   /* Optional output files for hmmbuild
    */
@@ -203,8 +120,30 @@ struct p7config_s {
   int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
   int   verbose;		/* TRUE to show a lot of output          */
   int   do_append;		/* TRUE to append to hmmfile             */
-  int   do_binary;		/* TRUE to write in binary format        */
 };
+
+
+int
+main(int argc, char **argv)
+{
+
+
+
+
+  return 0;
+}
+
+
+
+#if 0 
+p7ERR_CONSENSUS:
+    Die("No conserved consensus columns found; aborting construction!\n\
+This is an unusual situation. If you're using default --fast heuristic\n\
+construction, reexamine your alignment; it is probably unusually full of\n\
+gaps, or lots of sequence fragments. You may be able to force HMMER to\n\
+model it by using the --symfrac option. If you're using --hand construction,\n\
+then you didn't mark any match columns in your reference line annotation;\n\
+see the documentation.");
 
 
 
@@ -1534,7 +1473,7 @@ save_hmmbuild_alignment(FILE *alignfp, MSA *msa, unsigned char **dsq, struct pla
   free(sqinfo);
   printf("done.\n");
 }
-
+#endif
 
 
 

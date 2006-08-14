@@ -645,7 +645,7 @@ AC_SYS_LARGEFILE
 ################################################################
 
 AC_CONFIG_SUBDIRS(easel)
-AC_CONFIG_HEADERS(src/p7config.h)
+AC_CONFIG_HEADERS(src/p7_config.h)
 AC_CONFIG_FILES(src/Makefile)
 AC_CONFIG_FILES(testsuite/Makefile)
 

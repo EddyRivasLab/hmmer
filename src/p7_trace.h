@@ -8,9 +8,9 @@
 #ifndef P7_TRACE_INCLUDED
 #define P7_TRACE_INCLUDED
 
-#include <stdio.h>		/* FILE       */
-#include "plan7.h"		/* P7_HMM     */
-#include "p7_profile.h"		/* P7_PROFILE */
+#include <stdio.h>		
+#include "p7_hmm.h"		
+#include "p7_profile.h"		
 
 /* P7_TRACE.
  * Traceback structure for alignments of model to sequence.
