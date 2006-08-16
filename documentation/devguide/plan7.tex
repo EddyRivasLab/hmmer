@@ -10,7 +10,7 @@
 The \textbf{core model} is a generative probabilistic model of global
 sequence alignment. It consists of match (M), delete (D), and insert
 (I) states, plus a special begin state (B) and end state (E) as shown
-in Figure~\ref{plan7-core}.
+in Figure~\ref{fig:plan7-core}.
 
 \begin{figure}
 \begin{center}
@@ -21,7 +21,7 @@ transitions (\ccode{t[k][TMM]}, etc.) are shown in red.}
 \label{fig:plan7-core}
 \end{figure}
 
-The core model is implemented in the \ccode{P7_HMM} structure in
+The core model is implemented in the \ccode{P7\_HMM} structure in
 \ccode{plan7.h}:
 
 \input{cexcerpts/plan7_core}
@@ -30,7 +30,7 @@ Each consensus column $1..k..M$ of a multiple alignment is assigned to
 one \textbf{node} consisting of a M, D, and I state triplet. The $M_k$
 state generates a residue $x$ according to emission probabilities
 estimated from consensus column $k$ with probability
-$\ccode{mat[k][x]$.  The $I_k$ state emits one or more residues $x$,
+\ccode{mat[k][x]}.  The $I_k$ state emits one or more residues $x$,
 inserted between consensus columns $k$ and $k+1$, each with
 probability \ccode{ins[k][x]}). The match and insert emission
 distributions represent an alphabet of $K$ total residues, $K=4$ for a
@@ -44,12 +44,13 @@ difference is that $D_k \rightarrow I_k$ and $I_k \rightarrow D_{k+1}$
 transitions are omitted by HMMER. The Krogh/Haussler model has nine
 transitions per node, whereas HMMER has seven. Internally, we call the
 HMMER architecture ``Plan 7''. The seven transition probabilities for
-node $k$ are stored in \ccode{t[k][p7_TXX]}, where \ccode{XX} is one of
-the seven possible combinations of M,D,and I (Figure~\ref{plan7-core}.
+node $k$ are stored in \ccode{t[k][p7\_TXX]}, where \ccode{XX} is one
+of the seven possible combinations of M,D,and I
+(Figure~\ref{fig:plan7-core}).
 
 The begin state (B) is stored internally as match state 0 with two
-transitions \ccode{t[0][p7_TMM]} and
-\ccode{t[0][p7_TMD]}. \ccode{t[0][p7_TMI]} is hardcoded to be zero.
+transitions \ccode{t[0][p7\_TMM]} and
+\ccode{t[0][p7\_TMD]}. \ccode{t[0][p7\_TMI]} is hardcoded to be zero.
 
 The end state (E) is not explicitly represented in the core model.
 Neither are the transitions of the final node $M$.  Transitions from
@@ -129,6 +130,7 @@ match or an insert state.
  * Search programs like hmmpfam and hmmsearch read only the configured
  * score model, usually ignoring the core probability model.
  */
+
 \end{cchunk}
 
 % Another comment fragment, also from plan7.h P7_HMM
