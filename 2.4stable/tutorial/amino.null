@@ -1,0 +1,30 @@
+# amino.null
+#
+# Example of a null model file for protein sequences.
+# The values in this file are the HMMER 2 default
+# settings.
+
+Amino
+
+0.075520 # A
+0.016973 # C
+0.053029 # D
+0.063204 # E
+0.040762 # F
+0.068448 # G
+0.022406 # H
+0.057284 # I
+0.059398 # K			
+0.093399 # L
+0.023569 # M
+0.045293 # N
+0.049262 # P
+0.040231 # Q 
+0.051573 # R
+0.072214 # S
+0.057454 # T
+0.065252 # V
+0.012513 # W
+0.031985 # Y
+
+0.997151 # p1
