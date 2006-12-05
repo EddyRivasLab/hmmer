@@ -154,10 +154,35 @@ useful for training new Dirichlet priors. The format of
 count files is documented in the User's Guide.
 
 .TP
+.B --effclust
+[This is the default.] Calculate the effective sequence number
+as the number of clusters in a single-linkage clustering at
+the threshold set by
+.I --eidlevel.
+
+.TP
+.B --effent
+Use 'entropy weighting' to calculate effective sequence number. This
+is currently experimental code in 2.4x releases, and it will only work
+on protein sequence alignments.
+
+.TP
+.BI --effloss " <x>"
+Undocumented option controlling experimental 
+.I --effent
+entropy weighting behavior.
+
+.TP
 .B --effnone
 Turn off the effective sequence number calculation, and use the
 true number of sequences instead. This will usually reduce the
 sensitivity of the final model (so don't do it without good reason!)
+
+.TP
+.BI --effset " <x>"
+Set the effective sequence number to
+.I <x>,
+overriding other possible calculations.
 
 .TP 
 .BI --eidlevel " <x>"
@@ -179,6 +204,18 @@ give fewer clusters and lower effective sequence numbers.
 is a fraction from 0 to 1, and 
 by default is set to 0.62 (corresponding to the clustering level used
 in constructing the BLOSUM62 substitution matrix).
+
+.TP
+.B --evolve
+Undocumented experimental option.
+
+.TP
+.BI --evolveic " <x>"
+Undocumented experimental option.
+
+.TP
+.BI --matrix " <f>"
+Undocumented experimental option.
 
 
 .TP
