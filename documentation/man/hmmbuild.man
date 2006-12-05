@@ -138,22 +138,6 @@ autodetection is ambiguous. See
 .B --nucleic.
 
 .TP
-.BI --archpri " <x>"
-Set the "architecture prior" used by MAP architecture construction to 
-.I <x>,
-where 
-.I <x>
-is a probability between 0 and 1. This parameter governs a geometric
-prior distribution over model lengths. As
-.I <x> 
-increases, longer models are favored a priori.
-As 
-.I <x>
-decreases, it takes more residue conservation in a column to
-make a column a "consensus" match column in the model architecture.
-The 0.85 default has been chosen empirically as a reasonable setting.
-
-.TP
 .B --binary
 Write the HMM to
 .I hmmfile
@@ -170,52 +154,18 @@ useful for training new Dirichlet priors. The format of
 count files is documented in the User's Guide.
 
 .TP
-.B --fast
-Quickly and heuristically determine the architecture of the model by
-assigning all columns will more than a certain fraction of gap
-characters to insert states. By default this fraction is 0.5, and it
-can be changed using the
-.B --gapmax
-option.
-The default construction algorithm is a maximum a posteriori (MAP)
-algorithm, which is slower. 
-
-.TP
-.BI --gapmax " <x>"
-Controls the 
-.I --fast
-model construction algorithm, but if 
-.I --fast
-is not being used, has no effect.
-If a column has more than a fraction
-.I <x>
-of gap symbols in it, it gets assigned to an insert column.
-.I <x> 
-is a frequency from 0 to 1, and by default is set
-to 0.5. Higher values of
-.I <x>
-mean more columns get assigned to consensus, and models get
-longer; smaller values of 
-.I <x> 
-mean fewer columns get assigned to consensus, and models get
-smaller.
-.I <x>
-
-.TP
-.B --hand
-Specify the architecture of the model by hand: the alignment file must
-be in SELEX or Stockholm format, and the reference annotation
-line (#=RF in SELEX, #=GC RF in Stockholm) is used to specify
-the architecture. Any column marked with a non-gap symbol (such
-as an 'x', for instance) is assigned as a consensus (match) column in
-the model.
+.B --effnone
+Turn off the effective sequence number calculation, and use the
+true number of sequences instead. This will usually reduce the
+sensitivity of the final model (so don't do it without good reason!)
 
 .TP 
-.BI --idlevel " <x>"
-Controls both the determination of effective sequence number and
-the behavior of the 
-.I --wblosum 
-weighting option. The sequence alignment is clustered by percent
+.BI --eidlevel " <x>"
+Controls the determination of effective sequence number
+(but otherwise, behaves the same as 
+.I --widlevel,
+which controls optional BLOSUM weights.)
+The sequence alignment is clustered by percent
 identity, and the number of clusters at a cutoff threshold of 
 .I <x> 
 is used to determine the effective sequence number.
@@ -229,6 +179,26 @@ give fewer clusters and lower effective sequence numbers.
 is a fraction from 0 to 1, and 
 by default is set to 0.62 (corresponding to the clustering level used
 in constructing the BLOSUM62 substitution matrix).
+
+
+.TP
+.B --fast
+Quickly and heuristically determine the architecture of the model by
+assigning all columns with at least a certain fraction of residues
+(non-gaps) to match states. By default this fraction is 0.5, and it
+can be changed using the
+.B --symfrac
+option.
+This is the default construction algorithm.
+
+.TP
+.B --hand
+Specify the architecture of the model by hand: the alignment file must
+be in SELEX or Stockholm format, and the reference annotation
+line (#=RF in SELEX, #=GC RF in Stockholm) is used to specify
+the architecture. Any column marked with a non-gap symbol (such
+as an 'x', for instance) is assigned as a consensus (match) column in
+the model.
 
 .TP
 .BI --informat " <s>"
@@ -244,12 +214,6 @@ of HMMER. Valid format strings include FASTA,
 GENBANK, EMBL, GCG, PIR, STOCKHOLM, SELEX, MSF,
 CLUSTAL, and PHYLIP. See the User's Guide for a complete
 list.
-
-.TP
-.B --noeff
-Turn off the effective sequence number calculation, and use the
-true number of sequences instead. This will usually reduce the
-sensitivity of the final model (so don't do it without good reason!)
 
 .TP
 .B --nucleic
@@ -331,60 +295,29 @@ and an example is given in the Demos directory of the HMMER
 distribution.
 
 .TP
-.BI --swentry " <x>"
-Controls the total probability that is distributed to local entries
-into the model, versus starting at the beginning of the model
-as in a global alignment.
+.BI --symfrac " <x>"
+Controls the 
+.I --fast
+model construction algorithm, but if 
+.I --fast
+is not being used, has no effect.
+If a column contains at least fraction
 .I <x>
-is a probability from 0 to 1, and by default is set to 0.5.
-Higher values of
+of residues, it 
+gets assigned to a match column.
+The calculation of <x> uses relative sequence weighting (if any is
+set), and it is fragment-tolerant (leading and trailing gaps in
+sequence fragments are ignored).
+.I <x> 
+is a frequency from 0 to 1, and by default is set
+to 0.5. Lower values of
 .I <x>
-mean that hits that are fragments on their left (N or 5'-terminal) side will be
-penalized less, but complete global alignments will be penalized more.
-Lower values of
+mean more columns get assigned to consensus, and models get
+longer; higher values of 
+.I <x> 
+mean fewer columns get assigned to consensus, and models get
+smaller.
 .I <x>
-mean that fragments on the left will be penalized more, and
-global alignments on this side will be favored.
-This option only affects the configurations that allow local
-alignments,
-e.g. 
-.B -s
-and
-.B -f;
-unless one of these options is also activated, this option has no effect.
-You have independent control over local/global alignment behavior for
-the N/C (5'/3') termini of your target sequences using 
-.B --swentry
-and
-.B --swexit.
-
-.TP 
-.BI --swexit " <x>"
-Controls the total probability that is distributed to local exits
-from the model, versus ending an alignment at the end of the model
-as in a global alignment.
-.I <x>
-is a probability from 0 to 1, and by default is set to 0.5.
-Higher values of
-.I <x>
-mean that hits that are fragments on their right (C or 3'-terminal) side will be
-penalized less, but complete global alignments will be penalized more.
-Lower values of
-.I <x>
-mean that fragments on the right will be penalized more, and
-global alignments on this side will be favored.
-This option only affects the configurations that allow local
-alignments,
-e.g. 
-.B -s
-and
-.B -f;
-unless one of these options is also activated, this option has no effect.
-You have independent control over local/global alignment behavior for
-the N/C (5'/3') termini of your target sequences using 
-.B --swentry
-and
-.B --swexit.
 
 .TP 
 .B --verbose 
@@ -397,10 +330,29 @@ Use the BLOSUM filtering algorithm to weight the sequences,
 instead of the default.
 Cluster the sequences at a given percentage identity
 (see
-.B --idlevel);
+.B --widlevel);
 assign each cluster a total weight of 1.0, distributed equally
 amongst the members of that cluster.
 
+.TP 
+.BI --widlevel " <x>"
+Controls the 
+behavior of the 
+.I --wblosum 
+weighting option. The sequence alignment is clustered by percent
+identity, and the number of clusters at a cutoff threshold of 
+.I <x> 
+is used to determine the effective sequence number.
+Higher values of 
+.I <x> 
+give more clusters and higher effective sequence
+numbers; lower values of 
+.I <x> 
+give fewer clusters and lower effective sequence numbers.
+.I <x> 
+is a fraction from 0 to 1, and 
+by default is set to 0.62 (corresponding to the clustering level used
+in constructing the BLOSUM62 substitution matrix).
 
 .TP
 .B --wgsc

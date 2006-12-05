@@ -247,6 +247,7 @@ P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag, float symfrac,
   matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
 
   free(matassign);
+  free(r);
   return;
 }
   

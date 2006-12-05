@@ -1,0 +1,96 @@
+HMMER 2.4i release notes
+http://hmmer.janelia.org
+SRE, Tue Dec  5 10:03:27 2006
+________________________________________________________________
+
+2.4i is an interim version, containing a few feature requests and bug
+fixes for aficionados. This is not a production release. The current
+production release is still version 2.3.2 (October 2003).
+
+
+===============
+= Expostulation
+===============
+
+HMMER is currently being rewritten for a planned 3.0 release.
+However, no end to that project is clearly in sight.
+
+In order to be able to release minor feature requests and bug fixes, I
+have decided to continue to develop and release the 2.x code,
+independent of the major changes going on in HMMER3.
+
+2.4i ("2.4 interim") is the first release from this branch.  This
+release should be considered to be development code. Use it if its
+added features are useful to you, but be cautious, as this release has
+not been tested as extensively as 2.3.2, the current stable HMMER
+release.
+
+I chose not to base this release on the 2.3.2 production code because
+there were several useful changes in the development code from Oct
+2003 to early 2005 that made it easier to incorporate the "fragment
+tolerance" feature in hmmbuild. I could not use any dev code from
+later than spring 2005, when 3.0 development started and the
+development trunk became unusable. Thus, 2.4i consists of a snapshot
+of HMMER's development trunk as of January 2005, plus a limited merge
+of some later changes. Thus it does contain some experimental and
+unfinished code - precisely the code that led me in early 2005 to
+decide a complete 3.0 rewrite was necessary. That unfinished code
+makes me worry a bit about possible stability issues in 2.4i. I think
+I closed all the loose ends, but can't be sure. Please report any
+problems you see.
+
+
+
+=======================
+= New features included
+=======================
+
+-:-  hmmbuild now deals with alignments that contain sequence
+     fragments. Alignments like this have become common because
+     of metagenomic analysis projects.  (Requested by many, including
+     Gerard Manning [Salk Institute] and Shibu Yooseph [Venter
+     Institute].)
+
+-:-  'hmmindex --av' indexes a Pfam database better, or any database
+     that uses <accession>.<version> style accession numbers. The --av
+     option tells hmmindex to index both the full accession name
+     (that is, <accession>.<version>) and the base accession name
+     (that is, <accession>) as retrieval keys. This lets you 
+     use hmmfetch to retrieve models by their base Pfam accession, even
+     when you don't know the latest version number. (Requested
+     by Ewan Birney, Dec 2006.)
+
+-:-  A new implementation of the Altivec optimized code for PowerPC
+     chips is included from Erik Lindahl [Stanford]. (It is activated
+     by ./configure --enable-altivec, when you install on a Mac or IBM
+     PowerPC platform.) This version is about twice as fast as the 
+     previous version.
+
+
+
+=============================
+= New features *not* included
+=============================
+
+A number of important features have been contributed to HMMER in the
+past three years, including optimizations for several platforms from
+Intel, IBM, and others; a general new framework to support many such
+optimizations from Jeremy Buhler [WashU]; new parallel implementations
+for MPI, OpenMP, and vector Crays; a BLAST-like accelerated algorithm
+from Elon Portugaly and Steve Johnson (HMMERHEAD); and an iterative
+search version (JACKHMMER) from Steve Johnson. I hate to delay the
+release of all these great features, but currently my plan is to
+release them all with 3.0 in one big bang. 
+
+However, now that we have an interim 2.4 release branch where this
+stuff can go while 3.0 develops, waiting is not the only option. Feel
+free to pressure me into incorporating your favorite feature into 2.4
+if you like. I'm trying to strike a balance of where I spend my time.
+Left to my own devices, I'm trying to invest all my time in getting
+3.0 done right now.
+
+
+
+- Sean Eddy
+- HHMI Janelia Farm
+- http://selab.janelia.org/
