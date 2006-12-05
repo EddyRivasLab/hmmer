@@ -67,6 +67,16 @@ extern int   DegenCount[MAXCODE];
  * an evolutionary rather than revolutionary manner. 
  *
  **********************************************************************/
+/* Plan 7 algorithm modes
+ */
+enum p7_algmode {
+  P7_NO_MODE    = 0,
+  P7_LS_MODE    = 1,
+  P7_FS_MODE    = 2,
+  P7_SW_MODE    = 3,
+  P7_S_MODE     = 4,
+  P7_G_MODE     = 5
+};
 
 /* Plan 7 parameter optimization strategies
  */

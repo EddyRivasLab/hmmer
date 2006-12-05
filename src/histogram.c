@@ -510,7 +510,7 @@ EVDBasicFit(struct histogram_s *h)
     d[sc - h->lowscore] = log(-1. * log(d[sc - h->lowscore]));
 
 				/* do the linear regression */
-  Linefit(x, d, hsize-1, &intercept, &slope, &corr);
+  FLinefit(x, d, hsize-1, &intercept, &slope, &corr);
 				/* calc mu, lambda */
   lambda = -1. * slope;
   mu     = intercept / lambda;

@@ -37,9 +37,7 @@
 
 2 exercise    hmmbuild/fast        @hmmbuild@ -F --fast %OPT.HMM% Optiontests.nslx
 2 exercise    hmmbuild/hand        @hmmbuild@ -F --hand %OPT.HMM% Optiontests.nslx
-2 exercise    hmmbuild/map         @hmmbuild@ -F --map  %OPT.HMM% Optiontests.nslx
-2 exercise    hmmbuild/gapmax      @hmmbuild@ -F --fast --gapmax 0.3 %OPT.HMM% Optiontests.nslx
-2 exercise    hmmbuild/archpri     @hmmbuild@ -F --map --archpri 0.5 %OPT.HMM% Optiontests.nslx
+2 exercise    hmmbuild/symfrac     @hmmbuild@ -F --fast --symfrac 0.3 %OPT.HMM% Optiontests.nslx
 
 2 exercise    hmmbuild/null        @hmmbuild@ -F --null ../tutorial/nucleic.null %OPT.HMM% Optiontests.nslx
 2 exercise    hmmbuild/prior       @hmmbuild@ -F --prior ../tutorial/nucleic.pri %OPT.HMM% Optiontests.nslx
@@ -65,10 +63,7 @@
 2 exercise    hmmbuild/binary      @hmmbuild@ -F --binary %OPT.HMM% Optiontests.nslx
 2 exercise    hmmbuild/cfile       @hmmbuild@ -F --cfile %OPT.OUT% %OPT.HMM% Optiontests.nslx
 2 exercise    hmmbuild/informat    @hmmbuild@ -F --informat selex %OPT.HMM% Optiontests.nslx
-2 exercise    hmmbuild/swentry     @hmmbuild@ -F --swentry 0.4 %OPT.HMM% Optiontests.nslx
-2 exercise    hmmbuild/swexit      @hmmbuild@ -F --swexit 0.4 %OPT.HMM% Optiontests.nslx
 2 exercise    hmmbuild/verbose     @hmmbuild@ -F --verbose %OPT.HMM% Optiontests.nslx
-
 
 
 # Option tests for hmmcalibrate

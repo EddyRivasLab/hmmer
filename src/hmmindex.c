@@ -33,10 +33,12 @@ Available options are:\n\
 ";
 
 static char experts[] = "\
+  --av           : index both accession.version and accession as keys\n\
 ";
 
 static struct opt_s OPTIONS[] = {
-   { "-h", TRUE, sqdARG_NONE  },
+   { "-h",   TRUE,  sqdARG_NONE  },
+   { "--av", FALSE, sqdARG_NONE  },
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
@@ -52,6 +54,8 @@ main(int argc, char **argv)
   int     npri, nsec;		/* # of names, accessions          */
   int     fh;			/* file handle                     */
   int     status;		/* return status from SSI call     */
+  int     do_av;		/* TRUE to index accession separately */
+  int     nacc;			/* number of accessions, when --av    */
 
   char *optname;		/* name of option found by Getopt() */
   char *optarg;			/* argument found by Getopt()       */
@@ -61,9 +65,13 @@ main(int argc, char **argv)
    * Parse the command line
    ***********************************************/
 
+  do_av = FALSE;
+
   while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
 		&optind, &optname, &optarg))
     {
+      if (strcmp(optname, "--av")      == 0) do_av = TRUE; 
+
       if (strcmp(optname, "-h")        == 0)
 	{
 	  HMMERBanner(stdout, banner);
@@ -111,7 +119,7 @@ main(int argc, char **argv)
 
   printf("Determining offsets for %s, please be patient...\n", hmmfile);
 
-  nhmm = npri = nsec = 0;
+  nhmm = npri = nsec = nacc = 0;
   while (HMMFileRead(hmmfp, &hmm)) 
     {	
       if (hmm == NULL) 
@@ -122,12 +130,21 @@ main(int argc, char **argv)
       if (status != 0) Die("SSIAddPrimaryKeyToIndex() failed");
       npri++;
 
-				/* record accession of HMM as a secondary retrieval key */
+				/* record accession.version of HMM as a secondary retrieval key */
       if (hmm->flags & PLAN7_ACC) {
 	status = SSIAddSecondaryKeyToIndex(ssi, hmm->acc, hmm->name);
 	if (status != 0) Die("SSIAddSecondaryKeyToIndex() failed");
 	nsec++;
       }
+
+      /* optionally, also index accession by itself (without version) as secondary key */
+      if (do_av && (hmm->flags & PLAN7_ACC))
+	{
+	  Strparse("(.+)\\.[0-9]+", hmm->acc, 1);
+	  status = SSIAddSecondaryKeyToIndex(ssi, sqd_parse[1], hmm->name);
+	  if (status != 0) Die("SSIAddSecondaryKeyToIndex() failed");
+	  nacc++;
+	}
 
       nhmm++;
       FreePlan7(hmm);
@@ -146,8 +163,10 @@ main(int argc, char **argv)
   printf("SSI index:      %s\n", ssifile);
   printf("# of HMMS:      %d\n", nhmm);
   printf("HMM names:      %d\n", npri);
-  printf("HMM accessions: %d\n", nsec);
-
+  if (do_av)
+    printf("HMM accessions: %d  [stored as both accession and accession.version]\n", nsec);
+  else
+    printf("HMM accessions: %d\n", nsec);
 
   /***********************************************
    * Exit
