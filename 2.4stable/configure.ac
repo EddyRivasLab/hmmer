@@ -1,6 +1,6 @@
-f# Process this file with autoconf to produce a configure script.
+# Process this file with autoconf to produce a configure script.
 # SRE, Mon Oct  5 14:55:45 1998
-# CVS $Id$
+# SVN $Id$
 # 
 # Hint: See autoconf macro archive at 
 #     http://www.gnu.org/software/ac-archive/
@@ -25,15 +25,14 @@ f# Process this file with autoconf to produce a configure script.
 # The output variables are used in Makefiles.
 #
 AC_PREREQ(2.57)
-AC_INIT(HMMER, 2.4dev1, eddy@genetics.wustl.edu, hmmer)
+AC_INIT(HMMER, 2.4i, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([configuring HMMER for your system.])
 
-PACKAGE_RELCODE="hmmer2_4dev1"
-PACKAGE_DATE="June 2004"
-PACKAGE_COPYRIGHT="Copyright (C) 1992-2004 HHMI/Washington University School of Medicine"
+PACKAGE_RELCODE="hmmer2_4i"
+PACKAGE_DATE="December 2006"
+PACKAGE_COPYRIGHT="Copyright (C) 1992-2006 HHMI Janelia Farm"
 PACKAGE_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 PACKAGE_LICENSETAG=gnu
-
 
 
 

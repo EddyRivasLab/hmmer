@@ -5,19 +5,19 @@
 
 \subsubsection{configuring, compiling, and installing a source code distribution}
 
-Download the source tarball (\prog{hmmer.tar.gz}) from 
-\htmladdnormallink{ftp://ftp.genetics.wustl.edu/pub/eddy/hmmer/}
-                  {ftp://ftp.genetics.wustl.edu/pub/eddy/hmmer/}
-or \\
-\htmladdnormallink{http://hmmer.wustl.edu/}
-                  {http://hmmer.wustl.edu/}.
+Download the source tarball (\prog{hmmer-xx.tar.gz}) from 
+\htmladdnormallink{ftp://selab.janelia.org/pub/software/hmmer/CURRENT/}
+                  {ftp://selab.janelia.org/pub/software/hmmer/CURRENT/}
+(where \prog{xx} is the current release number, like @RELEASE@)
+or from \\
+\htmladdnormallink{http://hmmer.janelia.org/}
+                  {http://hmmer.janelia.org/}.
 
 Unpack the software:
 
-\user{tar xvf hmmer.tar.gz}
+\user{tar xvf hmmer-xx.tar.gz}
 
-Go into the newly created top-level directory (named \prog{hmmer-xx},
-where \prog{xx} is a release number):
+Go into the newly created top-level directory (named \prog{hmmer-xx}):
 
 \user{cd hmmer-@RELEASE@}
 
@@ -53,8 +53,8 @@ including how to change the default installation directories for
 \subsubsection{configuring and installing a precompiled binary distribution}
 
 Alternatively, you can obtain a precompiled binary distribution of
-HMMER from \htmladdnormallink{http://hmmer.wustl.edu/}
-{http://hmmer.wustl.edu/}. Thanks to generous hardware support from
+HMMER from \htmladdnormallink{http://hmmer.janelia.org/}
+{http://hmmer.janelia.org/}. Thanks to generous hardware support from
 many manufacturers, binary distributions are available for most common
 UNIX and UNIX-like OS's. For example, the distribution for Intel
 x86/GNU Linux machines is
@@ -695,7 +695,7 @@ copy of Pfam.
 It appears that the PVM port may not be as good as it should be. It
 happens to work well in St. Louis. It is used 24/7 on the servers
 backing the St. Louis Pfam search server at
-\htmladdnormallink{http://pfam.wustl.edu}{http://pfam.wustl.edu/}.
+\htmladdnormallink{http://pfam.janelia.org}{http://pfam.janelia.org/}.
 However, I receive occasional reports of problems at other
 sites. John Blanchard at Incyte has contributed a number of
 improvements to the PVM code, but despite his generous hard work, scattered problems
@@ -784,8 +784,7 @@ Skip to ``Sending the files'', below.
 \subsubsection{Automatic, using the \prog{nodebuild} script}
 
 The \prog{nodebuild} script is part of the automation on our compile
-farm.  You can download a copy from
-\url{ftp://ftp.genetics.wustl.edu/pub/eddy/software/nodebuild}.
+farm.  Ask me if you want a copy of it.
 
 The top of the \prog{nodebuild} file contains some documentation for
 using \prog{nodebuild} to build binary distros on a remote host

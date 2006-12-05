@@ -109,6 +109,8 @@
 1 prep        hmm                  @hmmbuild@ -n foo -A %OPT.HMM% Optiontests.slx
 1 exercise    hmmindex             @hmmindex@ %OPT.HMM%
 2 exercise    hmmindex/h           @hmmindex@ -h
+2 prep        clear                rm %OPT.HMM%.ssi
+2 exercise    hmmindex/av          @hmmindex@ --av %OPT.HMM%
 1 exercise    hmmfetch             @hmmfetch@ %OPT.HMM% fn3
 2 exercise    hmmfetch/h           @hmmfetch@ -h
 2 exercise    hmmfetch/n           @hmmfetch@ -n %OPT.HMM% 1
