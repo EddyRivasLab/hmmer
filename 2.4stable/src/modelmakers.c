@@ -51,13 +51,10 @@
 #define EXTERNAL_INSERT_N (1<<4)
 #define EXTERNAL_INSERT_C (1<<5) 
 
-static int build_cij(char **aseqs, int nseq, int *insopt, int i, int j,
-		     float *wgt, float *cij);
-static int estimate_model_length(MSA *msa);
-static void matassign2hmm(MSA *msa, unsigned char **dsq,
+static void matassign2hmm(MSA *msa, unsigned char **dsq, char *isfrag,
 			  int *matassign, struct plan7_s **ret_hmm,
 			  struct p7trace_s ***ret_tr);
-static void fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
+static void fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag, int *matassign,
 			    struct p7trace_s ***ret_tr);
 static void trace_doctor(struct p7trace_s *tr, int M, int *ret_ndi, 
 			 int *ret_nid);
@@ -85,6 +82,7 @@ static void print_matassign(int *matassign, int alen);
  *           
  * Args:     msa  - multiple sequence alignment          
  *           dsq  - digitized unaligned aseq's
+ *           isfrag  - [0..nseq-1] flags for candidate seq frags
  *           ret_hmm - RETURN: counts-form HMM
  *           ret_tr  - RETURN: array of tracebacks for aseq's
  *           
@@ -93,7 +91,7 @@ static void print_matassign(int *matassign, int alen);
  *           FreeHMM(hmm).
  */            
 void
-P7Handmodelmaker(MSA *msa, unsigned char **dsq,
+P7Handmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
 		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
@@ -121,7 +119,7 @@ P7Handmodelmaker(MSA *msa, unsigned char **dsq,
   /* Hand matassign off for remainder of model construction
    */
   /*   print_matassign(matassign, msa->alen); */
-  matassign2hmm(msa, dsq, matassign, ret_hmm, ret_tr);
+  matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
 
   free(matassign);
   return;
@@ -130,13 +128,41 @@ P7Handmodelmaker(MSA *msa, unsigned char **dsq,
 
 /* Function: P7Fastmodelmaker()
  * 
- * Purpose:  Heuristic model construction:
- *           Construct an HMM from an alignment using the original
- *           Krogh/Haussler heuristic; any column with more 
- *           symbols in it than a given fraction is assigned to
- *           match.
+ * Purpose:  Heuristic model construction.
+ *
+ *           Construct an HMM from an alignment using a heuristic,
+ *           based on the fractional occupancy of each columns w/
+ *           residues vs gaps. Roughly, any column w/ a fractional
+ *           occupancy of $\geq$ <symfrac> is assigned as a MATCH column;
+ *           for instance, if thresh = 0.5, columns w/ $\geq$ 50\% 
+ *           residues are assigned to match... roughly speaking.
  *           
- *           NOTE: Fastmodelmaker() will slightly revise the
+ *           "Roughly speaking" because sequences are weighted; we
+ *           guard against fragments counting against us by not
+ *           counting frags at all unless we have to; and we guard
+ *           against highly gappy alignments by reweighting the threshold
+ *           according to the most occupied column in the alignment.
+ *           
+ *           The detailed calculation is:
+ *           
+ *           Count the weighted fraction r_i of symbols in column i
+ *           (weighted by relative sequence weights): 0<=r_i<=1, with
+ *           r_i = 1.0 in fully occupied columns. Only sequences that
+ *           are not flagged as candidate fragments are counted toward
+ *           the r_i calculation. (If *all* sequences are candidate
+ *           fragments, then revert to counting them, rather than
+ *           giving up w/ undefined r_i's.)
+ *           
+ *           Determine the fraction of symbols in the most occupied
+ *           column: R = max_i r_i. Normally R=1.0, but if we're given
+ *           a gappy alignment, R may be less than that.
+ *           
+ *           Then given threshold t:
+ *           
+ *           if r_i >= tR, column is assigned as a MATCH column;
+ *           else it's an INSERT column.
+ *
+ *           NOTE: p7_Fastmodelmaker() will slightly revise the
  *           alignment if the assignment of columns implies
  *           DI and ID transitions.
  *           
@@ -144,349 +170,86 @@ P7Handmodelmaker(MSA *msa, unsigned char **dsq,
  *           priors as the next step). Also returns fake traceback
  *           for each training sequence.
  *           
- * Args:     msa     - multiple sequence alignment
- *           dsq     - digitized unaligned aseq's
- *           maxgap  - if more gaps than this, column becomes insert.
- *           ret_hmm - RETURN: counts-form HMM
- *           ret_tr  - RETURN: array of tracebacks for aseq's
+ * Args:     msa       - multiple sequence alignment
+ *           abc       - symbol alphabet to use
+ *           dsq       - digitized unaligned aseq's
+ *           isfrag    - [0..nseq-1] T/F flags for candidate seq frags
+ *           symfrac   - threshold for residue occupancy
+ *           ret_hmm   - RETURN: counts-form HMM
+ *           ret_tr    - RETURN: array of tracebacks for aseq's
  *           
  * Return:   (void)
  *           ret_hmm and ret_tr alloc'ed here; FreeTrace(tr[i]), free(tr),
  *           FreeHMM(hmm).       
  */
 void
-P7Fastmodelmaker(MSA *msa, unsigned char **dsq, float maxgap,
+P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag, float symfrac,
 		 struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   int     *matassign;           /* MAT state assignments if 1; 1..alen */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
-  int      ngap;		/* number of gaps in a column          */
+  float   *r;		        /* weighted frac of gaps in column     */
+  float    totwgt;	        /* total non-fragment seq weight       */
+  float    maxR;     	        /* maximum r_i                         */
+  int      incfrags;		/* TRUE to include candidate frags  */
 
-  /* Allocations: matassign is 1..alen array of bit flags
+  /* Allocations: matassign is 1..alen array of bit flags;
+   *              gapfrac is 1..alen array of fractions 0<=gapfrac[i]<=1
    */
-  matassign = (int *) MallocOrDie (sizeof(int) * (msa->alen+1));
+  matassign = MallocOrDie (sizeof(int)   * (msa->alen+1));
+  r         = MallocOrDie (sizeof(float) * (msa->alen+1));
   
-  /* Determine match assignment by counting symbols in columns
+  /* Determine total non-frag weight, just once.
+   */
+  incfrags = FALSE;
+  totwgt   = 0.;
+  for (idx = 0; idx < msa->nseq; idx++) 
+    if (! isfrag[idx]) totwgt += msa->wgt[idx];
+
+  /* Fallback position, if we don't have any non-candidate frags:
+   * count all seqs.
+   */
+  if (totwgt == 0.) /* yes, this fp compare is safe */
+    {
+      totwgt = FSum(msa->wgt, msa->nseq);
+      incfrags = TRUE;
+    }
+
+  /* Determine weighted sym freq in each column; keep track of max.
+   * Mind the off-by-one (r is 1..alen, msa->aseq is 0..alen-1)
+   */
+  for (apos = 0; apos < msa->alen; apos++) 
+    {  
+      r[apos+1] = 0.;
+      for (idx = 0; idx < msa->nseq; idx++) 
+	if ((incfrags || ! isfrag[idx]) 
+	    && ! isgap(msa->aseq[idx][apos])) 
+	  r[apos+1] += msa->wgt[idx];
+      r[apos+1] /= totwgt;
+    }
+  maxR = FMax(r+1, msa->alen);
+
+  /* Determine match assignment. (Both matassign and r are 1..alen)
    */
   matassign[0] = 0;
-  for (apos = 0; apos < msa->alen; apos++) {
-      matassign[apos+1] = 0;
-
-      ngap = 0;
-      for (idx = 0; idx < msa->nseq; idx++) 
-	if (isgap(msa->aseq[idx][apos])) 
-	  ngap++;
-      
-      if ((float) ngap / (float) msa->nseq > maxgap)
-	matassign[apos+1] |= ASSIGN_INSERT;
-      else
-	matassign[apos+1] |= ASSIGN_MATCH;
-  }
+  for (apos = 1; apos <= msa->alen; apos++) 
+    {
+      matassign[apos] = 0;
+      if (r[apos] >= symfrac * maxR) matassign[apos] |= ASSIGN_MATCH;
+      else    	                     matassign[apos] |= ASSIGN_INSERT;
+    }
 
   /* Once we have matassign calculated, all modelmakers behave
    * the same; matassign2hmm() does this stuff (traceback construction,
    * trace counting) and sets up ret_hmm and ret_tr.
    */
-  matassign2hmm(msa, dsq, matassign, ret_hmm, ret_tr);
+  matassign2hmm(msa, dsq, isfrag, matassign, ret_hmm, ret_tr);
 
   free(matassign);
   return;
 }
   
-
-/* Function: P7Maxmodelmaker()
- * 
- * Purpose:  The Unholy Beast of HMM model construction algorithms --
- *           maximum a posteriori construction. A tour de force and
- *           probably overkill. MAP construction for Krogh 
- *           HMM-profiles is fairly straightforward, but MAP construction of
- *           Plan 7 HMM-profiles is, er, intricate.
- *           
- *           Given a multiple alignment, construct an optimal (MAP) model
- *           architecture. Return a counts-based HMM.
- *           
- * Args:     msa     - multiple sequence alignment 
- *           dsq     - digitized, unaligned seqs
- *           maxgap  - above this, trailing columns are assigned to C           
- *           prior   - priors on parameters to use for model construction
- *           null    - random sequence model emissions
- *           null_p1 - random sequence model p1 transition 
- *           mpri    - prior on architecture: probability of new match node
- *           ret_hmm - RETURN: new hmm (counts form)
- *           ret_tr  - RETURN: array of tracebacks for aseq's
- *
- * Return:   (void)
- *           ret_hmm and ret_tr (if !NULL) must be free'd by the caller.
- */          
-void
-P7Maxmodelmaker(MSA *msa, unsigned char **dsq, float maxgap,
-		struct p7prior_s *prior, 
-		float *null, float null_p1, float mpri, 
-		struct plan7_s **ret_hmm, struct p7trace_s  ***ret_tr)
-{
-  int     idx;			/* counter for seqs                */
-  int     i, j;			/* positions in alignment          */
-  int     x;			/* counter for syms or transitions */
-  float **matc;                 /* count vectors: [1..alen][0..19] */ 
-  float   cij[8], tij[8];	/* count and score transit vectors */
-  float   matp[MAXABET];        /* match emission vector           */
-  float   insp[MAXABET];	/* insert score vector             */
-  float   insc[MAXABET];	/* insert count vector             */
-  float  *sc;                   /* DP scores [0,1..alen,alen+1]    */
-  int    *tbck;                 /* traceback ptrs for sc           */
-  int    *matassign;            /* match assignments [1..alen]     */ 
-  int    *insopt;		/* number of inserted chars [0..nseq-1] */
-  int     first, last;		/* positions of first and last cols [1..alen] */
-  float   bm1, bm2;		/* estimates for start,internal b->m t's  */
-  int     est_M;		/* estimate for the size of the model */
-  float   t_me;			/* estimate for an internal M->E transition */
-  float   new, bestsc;		/* new score, best score so far     */
-  int     code;			/* optimization: return code from build_cij() */
-  int     ngap;			/* gap count in a column                      */
-  float   wgtsum;		/* sum of weights; do not assume it is nseq */
-
-  /* Allocations
-   */
-  matc      = (float **) MallocOrDie (sizeof(float *) * (msa->alen+1));
-  sc        = (float *)  MallocOrDie (sizeof(float)   * (msa->alen+2));
-  tbck      = (int *)    MallocOrDie (sizeof(int)     * (msa->alen+2));
-  matassign = (int *)    MallocOrDie (sizeof(int)     * (msa->alen+1));
-  insopt    = (int *)    MallocOrDie (sizeof(int)     * msa->nseq);    
-  for (i = 0; i < msa->alen; i++) {
-    matc[i+1] = (float *) MallocOrDie (Alphabet_size * sizeof(float));
-    FSet(matc[i+1], Alphabet_size, 0.);
-  }
-
-  /* Precalculations
-   */
-  for (i = 0; i < msa->alen; i++) 
-    for (idx = 0; idx < msa->nseq; idx++) 
-      if (!isgap(msa->aseq[idx][i])) 
-	P7CountSymbol(matc[i+1], SymbolIndex(msa->aseq[idx][i]), msa->wgt[idx]);
-  mpri = sreLOG2(mpri);
-  
-  FCopy(insp, prior->i[0], Alphabet_size);
-  FNorm(insp, Alphabet_size);
-  wgtsum = FSum(msa->wgt, msa->nseq);
-  for (x = 0; x < Alphabet_size; x++)
-    insp[x] = sreLOG2(insp[x] / null[x]);
-  
-  /* Estimate the relevant special transitions.
-   */
-  est_M = estimate_model_length(msa);
-  t_me  = 0.5 / (float) (est_M-1);
-  bm1   = 0.5;
-  bm2   = 0.5 / (float) (est_M-1);
-  bm1   = sreLOG2(bm1 / null_p1);
-  bm2   = sreLOG2(bm2 / null_p1);
-
-  /* Estimate the position of the last match-assigned column
-   * by counting gap frequencies.
-   */ 
-  maxgap = 0.5;
-  for (last = msa->alen; last >= 1; last--) {
-    ngap = 0;
-    for (idx = 0; idx < msa->nseq; idx++)
-      if (isgap(msa->aseq[idx][last-1])) ngap++;
-    if ((float) ngap / (float) msa->nseq <= maxgap)
-      break;
-  }
-
-  /* Initialization
-   */
-  sc[last]   = 0.;
-  tbck[last] = 0;
-
-  /* Set ME gaps to '_'
-   */
-  for (idx = 0; idx < msa->nseq; idx++) 
-    for (i = last; i > 0 && isgap(msa->aseq[idx][i-1]); i--)
-      msa->aseq[idx][i-1] = '_';
-
-  /* Main recursion moves from right to left.
-   */
-  for (i = last-1; i > 0; i--) {
-				/* Calculate match emission scores for i  */
-    FCopy(matp, matc[i], Alphabet_size);
-    P7PriorifyEmissionVector(matp, prior, prior->mnum, prior->mq, prior->m, NULL); 
-    for (x = 0; x < Alphabet_size; x++)
-      matp[x] = sreLOG2(matp[x] / null[x]);
-
-				/* Initialize insert counters to zero */
-    FSet(insc, Alphabet_size, 0.);
-    for (idx = 0; idx < msa->nseq; idx++) insopt[idx] = 0;
-
-    sc[i] = -FLT_MAX; 
-    for (j = i+1; j <= last; j++) {
-			/* build transition matrix for column pair i,j */
-      code = build_cij(msa->aseq, msa->nseq, insopt, i, j, msa->wgt, cij);
-      if (code == -1) break;	/* no j to our right can work for us */
-      if (code == 1) {
-	FCopy(tij, cij, 7);
-	P7PriorifyTransitionVector(tij, prior, prior->tq); 
-	FNorm(tij, 3);
-	tij[TMM] = sreLOG2(tij[TMM] / null_p1); 
-	tij[TMI] = sreLOG2(tij[TMI] / null_p1); 
-	tij[TMD] = sreLOG2(tij[TMD]); 
-	tij[TIM] = sreLOG2(tij[TIM] / null_p1); 
-	tij[TII] = sreLOG2(tij[TII] / null_p1); 
-	tij[TDM] = sreLOG2(tij[TDM] / null_p1); 
-	tij[TDD] = sreLOG2(tij[TDD]); 
-  				/* calculate the score of using this j. */
-	new = sc[j] +  FDot(tij, cij, 7) + FDot(insp, insc, Alphabet_size);
-
-	SQD_DPRINTF2(("%3d %3d new=%6.2f scj=%6.2f m=%6.2f i=%6.2f t=%6.2f\n",
-	       i, j, new, sc[j], FDot(matp, matc[i], Alphabet_size), 
-	       FDot(insp, insc, Alphabet_size), FDot(tij, cij, 7)));
-
-				/* keep it if it's better */
-	if (new > sc[i]) {
-	  sc[i]   = new;
-	  tbck[i] = j;
-	} 
-      }
-				/* bump insc, insopt insert symbol counters */
-      FAdd(insc, matc[j], Alphabet_size);
-      for (idx = 0; idx < msa->nseq; idx++)
-	if (!isgap(msa->aseq[idx][j-1])) insopt[idx]++;
-    }
-				/* add in constant contributions for col i */
-				/* note ad hoc scaling of mpri by wgtsum (us. nseq)*/
-    sc[i] += FDot(matp, matc[i], Alphabet_size) + mpri * wgtsum;
-  } /* end loop over start positions i */
-
-  /* Termination: place the begin state.
-   * log odds score for S->N->B is all zero except for NB transition, which
-   * is a constant. So we only have to evaluate BM transitions.
-   */
-  bestsc = -FLT_MAX;
-  first  = 0;
-  for (i = 1; i <= last; i++) {
-    new = sc[i]; 
-    for (idx = 0; idx < msa->nseq; idx++) {
-      if (isgap(msa->aseq[idx][i-1])) 
-	new += bm2;		/* internal B->M transition */
-      else
-	new += bm1;		/* B->M1 transition         */
-    }
-    if (new > bestsc) {
-      bestsc = new;
-      first  = i;
-    }
-  }
-
-  /* Traceback
-   */
-  matassign[0] = 0;
-  for (i = 1; i <= msa->alen; i++) matassign[i] = ASSIGN_INSERT; 
-  for (i = first; i != 0; i = tbck[i]) {
-    matassign[i] &= ~ASSIGN_INSERT;
-    matassign[i] |= ASSIGN_MATCH;
-  }
-
-  /* Hand matassign off for remainder of model construction
-   */
-  /*  print_matassign(matassign, ainfo->alen); */
-  matassign2hmm(msa, dsq, matassign, ret_hmm, ret_tr);
-
-  /* Clean up.
-   */
-  for (i = 1; i <= msa->alen; i++) free(matc[i]);
-  free(matc);
-  free(sc);
-  free(tbck);
-  free(matassign);
-  free(insopt);
-}
-
-
-/* Function: build_cij()
- * 
- * Purpose:  Construct a counts vector for transitions between
- *           column i and column j in a multiple alignment.
- *
- *           '_' gap characters indicate "external" gaps which
- *           are to be dealt with by B->M and M->E transitions. 
- *           These characters must be placed by a preprocessor.
- *
- *           insopt is an "insert optimization" -- an incrementor
- *           which keeps track of the number of insert symbols
- *           between i and j.
- *       
- * Args:     aseqs  - multiple alignment. [0.nseq-1][0.alen-1]
- *           nseq   - number of seqs in aseqs
- *           insopt - number of inserts per seq between i/j [0.nseq-1]
- *           i      - i column [1.alen], off by one from aseqs
- *           j      - j column [1.alen], off by one from aseqs
- *           wgt    - per-seq weights [0.nseq-1]
- *           cij    - transition count vectors [0..7]
- *           
- * Return:   -1 if an illegal transition was seen for this i/j assignment *and*
- *              we are guaranteed that any j to the right will also
- *              have illegal transitions.
- *           0  if an illegal transition was seen, but a j further to the
- *              right may work.  
- *           1 if all transitions were legal.
- */          
-static int 
-build_cij(char **aseqs, int nseq, int *insopt, int i, int j,
-          float *wgt, float *cij)
-{
-  int idx;			/* counter for seqs */
-
-  i--;				/* make i,j relative to aseqs [0..alen-1] */
-  j--;
-  FSet(cij, 8, 0.);		/* zero cij */
-  for (idx = 0; idx < nseq; idx++) {
-    if (insopt[idx] > 0) {
-      if (isgap(aseqs[idx][i])) return -1; /* D->I prohibited. */
-      if (isgap(aseqs[idx][j])) return 0;  /* I->D prohibited. */
-      cij[TMI] += wgt[idx];
-      cij[TII] += (insopt[idx]-1) * wgt[idx];
-      cij[TIM] += wgt[idx];
-    } else {
-      if (!isgap(aseqs[idx][i])) {
-	if (aseqs[idx][j] == '_')      ; /* YO! what to do with trailer? */
-	else if (isgap(aseqs[idx][j])) cij[TMD] += wgt[idx];
-	else                           cij[TMM] += wgt[idx];
-      } else {			/* ignores B->E possibility */
-	if (aseqs[idx][j] == '_')      continue;
-	else if (isgap(aseqs[idx][j])) cij[TDD] += wgt[idx];
-	else                           cij[TDM] += wgt[idx];
-      }
-    }
-  }
-  return 1;
-}
-
-
-/* Function: estimate_model_length()
- * 
- * Purpose:  Return a decent guess about the length of the model,
- *           based on the lengths of the sequences.
- *           
- *           Algorithm is dumb: use weighted average length.
- *           
- *           Don't assume that weights sum to nseq!
- */
-static int
-estimate_model_length(MSA *msa)
-{
-  int   idx;
-  float total = 0.;
-  float wgtsum = 0.;
-
-  for (idx = 0; idx < msa->nseq; idx++)
-    {
-      total  += msa->wgt[idx] * DealignedLength(msa->aseq[idx]);
-      wgtsum += msa->wgt[idx];
-    }
-    
-  return (int) (total / wgtsum);
-}
- 
-
 /* Function: matassign2hmm()
  * 
  * Purpose:  Given an assignment of alignment columns to match vs.
@@ -505,7 +268,7 @@ estimate_model_length(MSA *msa)
  *           modelmaker function.
  */
 static void
-matassign2hmm(MSA *msa, unsigned char **dsq, int *matassign, 
+matassign2hmm(MSA *msa, unsigned char **dsq, char *isfrag, int *matassign, 
 	      struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
 {
   struct plan7_s    *hmm;       /* RETURN: new hmm                     */
@@ -541,7 +304,7 @@ options to hmmbuild.");
   /* print_matassign(matassign, msa->alen);  */
 
 				/* make fake tracebacks for each seq */
-  fake_tracebacks(msa->aseq, msa->nseq, msa->alen, matassign, &tr);
+  fake_tracebacks(msa->aseq, msa->nseq, msa->alen, isfrag, matassign, &tr);
 				/* build model from tracebacks */
   hmm = AllocPlan7(M);
   ZeroPlan7(hmm);
@@ -583,6 +346,7 @@ options to hmmbuild.");
  * Args:     aseqs     - alignment [0..nseq-1][0..alen-1]
  *           nseq      - number of seqs in alignment
  *           alen      - length of alignment in columns
+ *           isfrag    - T/F flags for candidate fragments
  *           matassign - assignment of column; [1..alen] (off one from aseqs)
  *           ret_tr    - RETURN: array of tracebacks
  *           
@@ -590,7 +354,7 @@ options to hmmbuild.");
  *           ret_tr is alloc'ed here. Caller must free.
  */          
 static void
-fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
+fake_tracebacks(char **aseq, int nseq, int alen, char *isfrag, int *matassign,
 		struct p7trace_s ***ret_tr)
 {
   struct p7trace_s **tr;
@@ -642,9 +406,12 @@ fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
 	    }	      
           else if (matassign[apos+1] & ASSIGN_MATCH)
             {                   /* DELETE */
-		/* being careful about S/W transitions; no B->D transitions */
+		/* being careful about S/W transitions.
+                 * Count B->D1 transitions only if we're not
+                 * a candidate fragment seq.
+		 */
 	      k++;		/* *always* move on model when ASSIGN_MATCH */
-	      if (tr[idx]->statetype[tpos-1] != STB)
+	      if (tr[idx]->statetype[tpos-1] != STB || ! isfrag[idx])
 		{
 		  tr[idx]->statetype[tpos] = STD;
 		  tr[idx]->nodeidx[tpos]   = k;
@@ -681,11 +448,14 @@ fake_tracebacks(char **aseq, int nseq, int alen, int *matassign,
 
 	  if (matassign[apos+1] & LAST_MATCH)
 	    {			/* END */
-	      /* be careful about S/W transitions; may need to roll
+	      /* be careful about S/W transitions; if we're 
+               * a candidate sequence fragment, we need to roll
 	       * back over some D's because there's no D->E transition
+               * for fragments. k==M right now; don't change it.
 	       */
-	      while (tr[idx]->statetype[tpos-1] == STD) 
-		tpos--;
+	      if (isfrag[idx])
+		while (tr[idx]->statetype[tpos-1] == STD) 
+		  tpos--;
 	      tr[idx]->statetype[tpos] = STE;
 	      tr[idx]->nodeidx[tpos]   = 0;
 	      tr[idx]->pos[tpos]       = 0;

@@ -1,12 +1,8 @@
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 /* hmmbuild.c
- * SRE, Mon Nov 18 12:41:29 1996
- *
  * main() for HMM construction from an alignment.
- * CVS $Id$
+ *
+ * SRE, Mon Nov 18 12:41:29 1996
+ * SVN $Id$
  */
 
 #include "config.h"		/* compile-time configuration constants */
@@ -16,11 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "squid.h"		/* general sequence analysis library    */
+#include "msa.h"                /* squid's multiple alignment i/o       */
+
 #include "structs.h"		/* data structures, macros, #define's   */
 #include "funcs.h"		/* function declarations                */
 #include "globals.h"		/* alphabet global variables            */
-#include "squid.h"		/* general sequence analysis library    */
-#include "msa.h"                /* squid's multiple alignment i/o       */
 #include "lsjfuncs.h"		/* Steve Johnson's additions            */
 
 static char banner[] = "hmmbuild - build a hidden Markov model from an alignment";
@@ -46,11 +43,9 @@ static char experts[] = "\
    --nucleic : override autodetection, assert that seqs are DNA/RNA\n\
 \n\
   Alternative model construction strategies: (default: --fast)\n\
-   --fast        : assign columns w/ < gapmax gaps to be MAT; else INS {default}\n\
+   --fast        : assign cols w/ >= symfrac residues to be consensus {default}\n\
    --hand        : manual construction (requires annotated alignment)\n\
-   --map         : maximum a posteriori architecture [deprecated]\n\
-   --gapmax <x>  : for --fast: max fraction of gaps in MAT column {0.50} [0..1]\n\
-   --archpri <x> : for --map: set architecture size prior to <x>  {0.85} [0..1]\n\
+   --symfrac <x> : for --fast: min fraction of syms in MAT col {0.50} [0<=x<=1]\n\
 \n\
   Customization of null model and priors:\n\
    --null  <f>   : read null (random sequence) model from file <f>\n\
@@ -59,10 +54,10 @@ static char experts[] = "\
    --pamwgt <x>  : for --pam: set weight on PAM-based prior to <x> {20.}[>=0]\n\
 \n\
   Alternative effective sequence number strategies:\n\
-   --effent      : entropy loss target [protein default]\n\
-   --effnone     : effective sequence number is just # of seqs [DNA default]\n\
+   --effnone     : effective sequence number is just # of seqs [default]\n\
+   --effclust    : eff seq # is # of clusters by single linkage\n\
+   --effent      : adjust eff seq # to achieve entropy loss target\n\
    --effset <x>  : set effective sequence number to <x>\n\
-   --effclust    : eff seq # is = # of clusters by single linkage\n\
    --eloss <x>   : for --effent: set target loss [defaults: fs=0.59; ls=1.30]\n\
    --eidlevel <x>: for --effclust: set identity cutoff to <x> {0.62}\n\
 \n\
@@ -76,17 +71,15 @@ static char experts[] = "\
    --pbswitch <n>: set switch from GSC to position-based wgts at > n seqs\n\
    --widlevel <x>: for --wblosum: set identity cutoff {0.62}\n\
 \n\
-  Evolving information content of MATCH emission probabilities\n\
+  Evolving information content of match emission probabilities (experimental)\n\
+   --evolve       : evolve information content of models\n\
    --evolveic <x> : evolve match emission probabilities to average info content [>=0]\n\
-   --matrix <f>  : use matrix in <f> rather than default WAG\n\
-   --noevolve    : do not evolve information content of models\n\
+   --matrix <f>   : use matrix in <f> rather than default WAG\n\
 \n\
   Other expert options:\n\
    --binary      : save the model in binary format, not ASCII text\n\
    --cfile <f>   : save count vectors to <f>\n\
    --informat <s>: input alignment is in format <s>, not Stockholm\n\
-   --swentry <x> : set S/W aggregate entry prob. to <x> {0.5}\n\
-   --swexit <x>  : set S/W aggregate exit prob. to <x>  {0.5}\n\
    --verbose     : print boring information\n\
 \n";
 
@@ -100,7 +93,6 @@ static struct opt_s OPTIONS[] = {
   { "-A", TRUE, sqdARG_NONE },
   { "-F", TRUE, sqdARG_NONE },
   { "--amino",   FALSE, sqdARG_NONE  },
-  { "--archpri", FALSE, sqdARG_FLOAT },
   { "--binary",  FALSE, sqdARG_NONE  },
   { "--cfile",   FALSE, sqdARG_STRING},
   { "--effnone", FALSE, sqdARG_NONE },
@@ -111,10 +103,9 @@ static struct opt_s OPTIONS[] = {
   { "--eloss",   FALSE, sqdARG_FLOAT },
   { "--evolveic", FALSE, sqdARG_FLOAT },
   { "--fast",    FALSE, sqdARG_NONE },
-  { "--gapmax",  FALSE, sqdARG_FLOAT },
+  { "--symfrac", FALSE, sqdARG_FLOAT },
   { "--hand",    FALSE, sqdARG_NONE},
   { "--informat",FALSE, sqdARG_STRING },
-  { "--map",     FALSE, sqdARG_NONE },
   { "--matrix",  FALSE, sqdARG_STRING },
   { "--noevolve", FALSE, sqdARG_NONE  },
   { "--nucleic", FALSE, sqdARG_NONE },
@@ -123,8 +114,6 @@ static struct opt_s OPTIONS[] = {
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--pbswitch",FALSE, sqdARG_INT },
   { "--prior",   FALSE, sqdARG_STRING },
-  { "--swentry", FALSE, sqdARG_FLOAT },
-  { "--swexit",  FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_NONE },
@@ -136,299 +125,153 @@ static struct opt_s OPTIONS[] = {
 };
 #define NOPTIONS (sizeof(OPTIONS) / sizeof(struct opt_s))
 
-static void print_all_scores(FILE *fp, struct plan7_s *hmm,
-			     unsigned char **dsq, MSA *msa, struct p7trace_s **tr);
-static void save_countvectors(FILE *cfp, char *name, struct plan7_s *hmm);
-static void position_average_score(struct plan7_s *hmm, unsigned char **dsq, float *wgt,
+
+
+
+enum wgtconfig_e { WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_PB, WGT_VORONOI, WGT_ME };
+enum cconfig_e   { P7_FAST_CONSTRUCTION,  P7_HAND_CONSTRUCTION };
+enum effconfig_e { EFF_NONE, EFF_USERSET, EFF_NCLUSTERS, EFF_ENTROPY };
+
+/* Structure: p7config_s
+ * Configuration options for a model under construction. We keep all
+ * this stuff in a static structure in hmmbuild.c, to keep
+ * it bundled out of the way, in the hope of making the main()
+ * a little cleaner and more understandable.
+ */
+struct p7config_s {
+  char *setname;		/* name of the HMM */
+
+  /* The null model. */
+  char *rndfile;                /* file to read random model from, or NULL for default */
+  float randomseq[MAXABET];
+  float p1;
+
+  /* The priors. */
+  char *prifile;		/* Dirichlet prior file to read          */
+  char *pamfile;		/* PAM matrix file for heuristic prior   */
+  float pamwgt;			/* weight on PAM for heuristic prior     */
+
+  /* Fragment identification in alignments */
+  float fragthresh;		/* rlen_i < fragthresh*mean rlen -> fragment  */
+
+  /* Relative sequence weighting */
+  enum wgtconfig_e w_strategy;	/* which relative weight strategy we're using */
+  int   pbswitch;		/* if nseq >= this, failover to PB weights    */
+  float widlevel;		/* --wblosum: frac id filtering level [0.62]  */
+
+  /* Model construction */
+  enum cconfig_e c_strategy;	/* which construction algorithm we're using    */
+  float symfrac;		/* --fast: min frac of syms in MATCH col, 0..1 */
+  int   symfrac_set;		/* T/F, was symfrac set at command line?       */
+  
+  /* Effective sequence number */
+  enum effconfig_e eff_strategy;/* which eff sequence # calculation we're using */
+  float eff_nseq;		/* effective sequence number                    */
+  float eidlevel;		/* --effclust: frac id filter level [0.62]      */
+  float eloss;		        /* --effent: target entropy loss                */
+  int   eloss_set;		/* --effent: TRUE if eloss set on commandline   */
+  float etarget;		/* --effent: target entropy (background - eloss)*/
+
+  /* Phylogenetic extrapolation */
+  int	evolve_ic;              /* TRUE to evolve to specified info content */
+  float info;        		/* specified ave model info content      */
+  char *matrixfile;	   	/* open file containing rate matrices    */
+  
+  /* Choice of algorithm mode */
+  enum p7_algmode mode;
+
+  /* Optional output files for hmmbuild
+   */
+  char *align_ofile;            /* name of output alignment file, or NULL */
+  FILE *alignfp;
+  char *cfile;			/* output file for count vectors, or NULL */
+  FILE *cfp;
+
+  /* Control over normal hmmbuild outputs
+   */
+  int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
+  int   verbose;		/* TRUE to show a lot of output          */
+  int   do_append;		/* TRUE to append to hmmfile             */
+  int   do_binary;		/* TRUE to write in binary format        */
+};
+
+
+
+
+static void  default_config(struct p7config_s *cfg);
+static void  process_cmdline(int argc, char **argv, struct p7config_s *cfg, 
+			     char **ret_hmmfile, char **ret_alifile, int *ret_format);
+static void  verify_options(struct p7config_s *cfg, char *hmmfile);
+static FILE *open_hmmfile(struct p7config_s *cfg, char *hmmfile);
+static void  open_optional_outputfiles(struct p7config_s *cfg);
+static void  print_config_header(struct p7config_s *cfg, char *alifile, int aliformat, char *hmmfile);
+static void  set_alphabet(MSA *msa);
+static void  set_relative_weights(MSA *msa, struct p7config_s *cfg);
+static float set_entropy_target(int eloss_set, float eloss, int mode, float *randomseq);
+static int   tag_candidate_seq_fragments(MSA *msa, float thresh, 
+					 int *rlen, char *isfrag);
+static void  construct_model(struct p7config_s *cfg, MSA *msa, unsigned char **dsq, char *isfrag, 
+			     struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr);
+static void  set_effective_seqnumber(struct p7config_s *cfg, MSA *msa, struct plan7_s *hmm, struct p7prior_s *pri);
+static void  save_countvectors(FILE *cfp, char *cfile, char *name, struct plan7_s *hmm);
+static void  position_average_score(struct plan7_s *hmm, unsigned char **dsq, float *wgt,
 				   int nseq, struct p7trace_s **tr, float *pernode,
 				   float *ret_avg);
 static float frag_trace_score(struct plan7_s *hmm, unsigned char *dsq, struct p7trace_s *tr,
 			      float *pernode, float expected);
-static void maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
-			    float eff_nseq,
-			    struct p7prior_s *prior, struct p7trace_s **tr);
+static void  maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
+			     float eff_nseq,
+			     struct p7prior_s *prior, struct p7trace_s **tr);
+static void  set_model_name(struct plan7_s *hmm, char *setname, char *msa_name, char *alifile, int nali);
+static void  print_statistics(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, int nseq,
+			      struct p7trace_s **tr);
+static void  save_hmmbuild_alignment(FILE *alignfp, MSA *msa, unsigned char **dsq, struct plan7_s *hmm,
+				     struct p7trace_s **tr);
+static void  print_all_scores(FILE *fp, struct plan7_s *hmm,
+			      unsigned char **dsq, MSA *msa, struct p7trace_s **tr);
+
+
+
 
 
 int
 main(int argc, char **argv)
 {
-  char            *seqfile;     /* seqfile to read alignment from          */
-  int              format;	/* format of seqfile                       */
+  struct p7config_s cfg;	/* holds a multitude of config options     */
+  char            *hmmfile;     /* file to write HMM to                    */
+  FILE            *hmmfp;       /* HMM output file handle                  */
+  char            *alifile;     /* seqfile to read alignment from          */
+  int              format;	/* format of the alifile                   */
   MSAFILE         *afp;         /* open alignment file                     */
   MSA             *msa;         /* a multiple sequence alignment           */
   unsigned char  **dsq;         /* digitized unaligned aseq's              */
   struct plan7_s  *hmm;         /* constructed HMM; written to hmmfile     */
   struct p7prior_s *pri;        /* Dirichlet priors to use                 */
   struct p7trace_s **tr;        /* fake tracebacks for aseq's              */
-  char            *hmmfile;     /* file to write HMM to                    */
-  FILE            *hmmfp;       /* HMM output file handle                  */
-  char            *name;        /* name of the HMM                         */
   int              idx;		/* counter for sequences                   */
-  float  randomseq[MAXABET];	/* null sequence model                     */
-  float            p1;		/* null sequence model p1 transition       */
   int              nali;	/* count number of alignments/HMMs         */
-  char             fpopts[3];   /* options to open a file with, e.g. "ab"  */
-  int              checksum;	/* checksum of the alignment               */
-
-  char *optname;                /* name of option found by Getopt()      */
-  char *optarg;                 /* argument found by Getopt()            */
-  int   optind;                 /* index in argv[]                       */
-
-  enum {	                /* Model architecture strategy:           */
-    P7_FAST_CONSTRUCTION,       /* --fast: default: ad hoc architecture   */
-    P7_HAND_CONSTRUCTION,	/* --hand: manually specified             */
-    P7_MAP_CONSTRUCTION   	/* --map: maximum a posteriori            */
-  } c_strategy;
-  enum {			/* Effective sequence number strategy:        */
-    EFF_NOTSETYET, 		/* (can't set default 'til alphabet known)    */
-    EFF_NONE, 			/* --effnone: DNA default: eff_nseq is nseq   */
-    EFF_USERSET, 		/* --effset:  eff_nseq set explicitly         */
-    EFF_NCLUSTERS,              /* --effclust: # of blosumclusters            */
-    EFF_ENTROPY                 /* --effent:  AA default: entropy loss target */
-  } eff_strategy;
-  enum p7_weight {		/* relative sequence weighting strategy  */
-    WGT_NONE, WGT_GSC, WGT_BLOSUM, WGT_PB, WGT_VORONOI, WGT_ME} w_strategy;
-  enum p7_config {              /* algorithm configuration strategy      */
-    P7_BASE_CONFIG, P7_LS_CONFIG, P7_FS_CONFIG, P7_SW_CONFIG } cfg_strategy;
-  float gapmax;			/* max frac gaps in mat col for -k       */
-  int   gapmax_set;		/* TRUE if gapmax was set on commandline */
-  int   overwrite_protect;	/* TRUE to prevent overwriting HMM file  */
-  int   verbose;		/* TRUE to show a lot of output          */
-  char *rndfile;		/* random sequence model file to read    */
-  char *prifile;		/* Dirichlet prior file to read          */
-  char *pamfile;		/* PAM matrix file for heuristic prior   */
-  char *align_ofile;            /* name of output alignment file         */
-  char *cfile;			/* output file for count vectors         */
-  FILE *alignfp;                /* open filehandle for alignment resaves */
-  FILE *cfp;                    /* open filehandle for count vector saves*/
-  float archpri;		/* "architecture" prior on model size    */
-  float pamwgt;			/* weight on PAM for heuristic prior     */
-  int   do_append;		/* TRUE to append to hmmfile             */
-  int   do_binary;		/* TRUE to write in binary format        */
-  float eidlevel;		/* --effclust frac id filtering level [0.62] */
-  float widlevel;		/* --wblosum frac id filtering level [0.62]  */
-  float swentry;		/* S/W aggregate entry probability       */
-  float swexit;			/* S/W aggregate exit probability        */
-  float eff_nseq;		/* effective sequence number             */
-  int   eff_nseq_set;		/* TRUE if eff_nseq has been calculated  */
-  int   pbswitch;		/* nseq >= this, switchover to PB weights*/
-  char *setname;                /* NULL, or ptr to HMM name to set       */
-  float eloss;		        /* target entropy loss, entropy-weights  */
-  int   eloss_set;		/* TRUE if eloss was set on commandline  */
-  float etarget;		/* target entropy (background - eloss)   */
-  int   wgt_set;		/* TRUE if relative weights are calculated */
-  float info;        		/* specified ave model info content      */
-  int	evolve_ic;              /* TRUE to evolve to specified info content */
-  char *matrixfile;	   	/* open file containing rate matrices    */
+  int             *rlen;	/* raw (unaligned) seq lengths 0..nseq-1   */
+  char            *isfrag;	/* TRUE/FALSE for candidate seq frags      */
 
   /***********************************************
    * Parse command line
    ***********************************************/
 
-  format            = MSAFILE_UNKNOWN;        /* autodetect format by default. */
-  c_strategy        = P7_FAST_CONSTRUCTION;   /* Krogh/Haussler strategy       */
-  eff_strategy      = EFF_NOTSETYET;          /* default depends on alphabet   */
-  w_strategy        = WGT_GSC;	              /* Gerstein/Sonnhammer/Chothia   */
-  eidlevel          = 0.62;
-  widlevel          = 0.62;
-  cfg_strategy      = P7_LS_CONFIG;
-  gapmax            = 0.5;
-  gapmax_set        = FALSE;
-  overwrite_protect = TRUE;
-  verbose           = FALSE;
-  rndfile           = NULL;
-  prifile           = NULL;
-  pamfile           = NULL;
-  align_ofile       = NULL;
-  alignfp           = NULL;
-  cfile             = NULL;
-  cfp               = NULL;
-  archpri           = 0.85;
-  pamwgt            = 20.;
+  format            = MSAFILE_UNKNOWN;  /* autodetect format by default.      */
   Alphabet_type     = hmmNOTSETYET;	/* initially unknown */
-  name              = NULL;
-  do_append         = FALSE;
-  swentry           = 0.5;
-  swexit            = 0.5;
-  do_binary         = FALSE;
-  pbswitch          = 1000;
-  setname           = NULL;
-  eloss_set         = FALSE;
-  info		    = -100.;
-  evolve_ic	    = TRUE;
-  matrixfile 	    = NULL;
-
-  while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
-                &optind, &optname, &optarg))  {
-    if      (strcmp(optname, "-f") == 0) cfg_strategy      = P7_FS_CONFIG;
-    else if (strcmp(optname, "-g") == 0) cfg_strategy      = P7_BASE_CONFIG;
-    else if (strcmp(optname, "-n") == 0) setname           = optarg;
-    else if (strcmp(optname, "-o") == 0) align_ofile       = optarg;
-    else if (strcmp(optname, "-s") == 0) cfg_strategy      = P7_SW_CONFIG;
-    else if (strcmp(optname, "-A") == 0) do_append         = TRUE;
-    else if (strcmp(optname, "-F") == 0) overwrite_protect = FALSE;
-    else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
-    else if (strcmp(optname, "--archpri") == 0) archpri       = atof(optarg);
-    else if (strcmp(optname, "--binary")  == 0) do_binary     = TRUE;
-    else if (strcmp(optname, "--cfile")   == 0) cfile         = optarg;
-    else if (strcmp(optname, "--effclust")== 0) eff_strategy  = EFF_NCLUSTERS;
-    else if (strcmp(optname, "--effent")  == 0) eff_strategy  = EFF_ENTROPY;
-    else if (strcmp(optname, "--effnone") == 0) eff_strategy  = EFF_NONE;
-    else if (strcmp(optname, "--effset")  == 0) { eff_strategy= EFF_USERSET; eff_nseq = atof(optarg); }
-    else if (strcmp(optname, "--eidlevel")== 0) eidlevel      = atof(optarg);
-    else if (strcmp(optname, "--eloss")   == 0) { eloss       = atof(optarg); eloss_set  = TRUE; }
-    else if (strcmp(optname, "--gapmax")  == 0) { gapmax      = atof(optarg); gapmax_set = TRUE; }
-    else if (strcmp(optname, "--hand")    == 0) c_strategy    = P7_HAND_CONSTRUCTION;
-    else if (strcmp(optname, "--map")     == 0) c_strategy    = P7_MAP_CONSTRUCTION;
-    else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
-    else if (strcmp(optname, "--null")    == 0) rndfile       = optarg;
-    else if (strcmp(optname, "--pam")     == 0) pamfile       = optarg;
-    else if (strcmp(optname, "--pamwgt")  == 0) pamwgt        = atof(optarg);
-    else if (strcmp(optname, "--pbswitch")== 0) pbswitch      = atoi(optarg);
-    else if (strcmp(optname, "--prior")   == 0) prifile       = optarg;
-    else if (strcmp(optname, "--swentry") == 0) swentry       = atof(optarg);
-    else if (strcmp(optname, "--swexit")  == 0) swexit        = atof(optarg);
-    else if (strcmp(optname, "--verbose") == 0) verbose       = TRUE;
-    else if (strcmp(optname, "--wgsc")    == 0) w_strategy    = WGT_GSC;
-    else if (strcmp(optname, "--wblosum") == 0) w_strategy    = WGT_BLOSUM;
-    else if (strcmp(optname, "--widlevel")== 0) widlevel      = atof(optarg);
-    else if (strcmp(optname, "--wme")     == 0) w_strategy    = WGT_ME;
-    else if (strcmp(optname, "--wpb")     == 0) w_strategy    = WGT_PB;
-    else if (strcmp(optname, "--wnone")   == 0) w_strategy    = WGT_NONE;
-    else if (strcmp(optname, "--wvoronoi")== 0) w_strategy    = WGT_VORONOI;
-    else if (strcmp(optname, "--informat") == 0) {
-      format = String2SeqfileFormat(optarg);
-      if (format == MSAFILE_UNKNOWN)
-	Die("unrecognized sequence file format \"%s\"", optarg);
-      if (! IsAlignmentFormat(format))
-	Die("%s is an unaligned format, can't read as an alignment", optarg);
-    }
-    else if (strcmp(optname, "-h") == 0) {
-      HMMERBanner(stdout, banner);
-      puts(usage);
-      puts(experts);
-      exit(EXIT_SUCCESS);
-    }
-    else if (strcmp(optname, "--noevolve")   == 0) evolve_ic = FALSE;
-    else if (strcmp(optname, "--evolveic")   == 0) info         = atof(optarg);
-    else if (strcmp(optname, "--matrix")  == 0) matrixfile       = optarg;
-  }
-  if (argc - optind != 2)
-    Die("Incorrect number of arguments.\n%s\n", usage);
-
-  hmmfile = argv[optind++];
-  seqfile = argv[optind++];
-
-  if (gapmax < 0. || gapmax > 1.)
-    Die("--gapmax must be a value from 0 to 1\n%s\n", usage);
-  if (archpri < 0. || archpri > 1.)
-    Die("--archpri must be a value from 0 to 1\n%s\n", usage);
-  if (overwrite_protect && !do_append && FileExists(hmmfile))
-    Die("HMM file %s already exists. Rename or delete it.", hmmfile);
-  if (overwrite_protect && align_ofile != NULL && FileExists(align_ofile))
-    Die("Alignment resave file %s exists. Rename or delete it.", align_ofile);
-  if (gapmax_set && c_strategy  != P7_FAST_CONSTRUCTION)
-    Die("using --gapmax only makes sense for default construction strategy");
-  if (c_strategy == P7_MAP_CONSTRUCTION && w_strategy == WGT_ME)
-    Die("Can't use --wme weighting and --map construction together.");
+  default_config(&cfg);		        /* see buildconfig.h for this structure */
+  process_cmdline(argc, argv, &cfg, &hmmfile, &alifile, &format);
+  verify_options(&cfg, hmmfile);
 
   /***********************************************
-   * Preliminaries: open our files for i/o
+   * Preliminaries: open our files for i/o; print header
    ***********************************************/
 
-				/* Open the alignment file */
-  if ((afp = MSAFileOpen(seqfile, format, NULL)) == NULL)
-    Die("Alignment file %s could not be opened for reading", seqfile);
-
-				/* Open the HMM output file */
-  if (do_append) strcpy(fpopts, "a");
-  else           strcpy(fpopts, "w");
-  if (do_binary) strcat(fpopts, "b");
-  if ((hmmfp = fopen(hmmfile, fpopts)) == NULL)
-    Die("Failed to open HMM file %s for %s\n", hmmfile,
-	do_append ? "appending" : "writing");
-
-				/* Open optional count vector save file */
-  cfp = NULL;
-  if (cfile != NULL)
-    if ((cfp = fopen(cfile, "w")) == NULL)
-      Die("Failed to open count vector file %s for writing\n", cfile);
-
-				/* Open optional alignment resave file */
-  alignfp = NULL;
-  if (align_ofile != NULL)
-    if ((alignfp = fopen(align_ofile, "w")) == NULL)
-      Die("Failed to open alignment resave file %s for writing\n", align_ofile);
-
-
-
-  /***********************************************
-   * Show the banner
-   ***********************************************/
-
-  HMMERBanner(stdout, banner);
-  printf("Alignment file:                    %s\n",
-	 seqfile);
-  printf("File format:                       %s\n",
-	 SeqfileFormat2String(afp->format));
-
-  printf("Search algorithm configuration:    ");
-  if      (cfg_strategy == P7_BASE_CONFIG)   puts("Global alignment (hmms)");
-  else if (cfg_strategy == P7_SW_CONFIG)     {
-    puts("Local  (hmmsw)");
-    printf("S/W aggregate entry probability:   %.2f\n", swentry);
-    printf("S/W aggregate exit probability:    %.2f\n", swexit);
-  }
-  else if (cfg_strategy == P7_LS_CONFIG)     puts("Multiple domain (hmmls)");
-  else if (cfg_strategy == P7_FS_CONFIG)     {
-    puts("Multiple local (hmmfs)");
-    printf("S/W aggregate entry probability:   %.2f\n", swentry);
-    printf("S/W aggregate exit probability:    %.2f\n", swexit);
-  }
-
-  printf("Model construction strategy:       ");
-  if (c_strategy == P7_HAND_CONSTRUCTION)    puts("Manual, from #=RF annotation");
-  else if (c_strategy==P7_FAST_CONSTRUCTION) printf("Fast/ad hoc (gapmax %.2f)\n", gapmax);
-  else                                       printf("MAP (gapmax hint: %.2f)\n", gapmax);
-
-  printf("Null model used:                   %s\n",
-	 (rndfile == NULL) ? "(default)" : rndfile);
-
-  printf("Prior used:                        %s\n",
-	 (prifile == NULL) ? "(default)" : prifile);
-
-  printf("Effective sequence # calculation:  ");
-  if      (eff_strategy == EFF_NOTSETYET) puts("(default)");
-  else if (eff_strategy == EFF_NONE)      puts("none; use actual seq #");
-  else if (eff_strategy == EFF_USERSET)   printf("set to %.2f\n", eff_nseq);
-  else if (eff_strategy == EFF_NCLUSTERS) {
-    puts("# single-linkage clusters");
-    printf("  by single-linkage clustering at: %.2f identity\n", eidlevel);
-  }
-  else if (eff_strategy == EFF_ENTROPY) {
-    puts("entropy targeting");
-    if (eloss_set)
-      printf("  mean target entropy loss:        %.2f bits\n", eloss);
-    else
-      printf("  mean target entropy loss:        (default)\n");
-  }
-
-  printf("Relative sequence weighting:       ");
-  if      (w_strategy == WGT_NONE)   puts("none");
-  else if (w_strategy == WGT_GSC)    puts("G/S/C tree weights");
-  else if (w_strategy == WGT_BLOSUM) printf("BLOSUM filter at %.2f id\n", widlevel);
-  else if (w_strategy == WGT_PB)     puts("Henikoff position-based");
-  else if (w_strategy == WGT_VORONOI)puts("Sibbald/Argos Voronoi");
-  else if (w_strategy == WGT_ME)     puts("Maximum entropy");
-
-  printf("New HMM file:                      %s %s\n",
-	 hmmfile, do_append? "[appending]" : "");
-  if (cfile != NULL)
-    printf("Count vectors saved to:            %s\n", cfile);
-  if (align_ofile != NULL)
-    printf("Annotated alignment(s) resaved to: %s\n", align_ofile);
-  printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
-
+  if ((afp = MSAFileOpen(alifile, format, NULL)) == NULL)
+    Die("Alignment file %s could not be opened for reading", alifile);
+  hmmfp = open_hmmfile(&cfg, hmmfile);
+  open_optional_outputfiles(&cfg);
+  print_config_header(&cfg, alifile, afp->format, hmmfile);
 
   /***********************************************
    * Get alignment(s), build HMMs one at a time
@@ -458,309 +301,88 @@ main(int argc, char **argv)
        */
       if (nali == 0)
 	{
-	  /* Set up the alphabet globals:
-	   * either already set by --amino or --nucleic, or
-	   * we guess based on the first alignment we see
-	   */
-	  if (Alphabet_type == hmmNOTSETYET)
-	    {
-	      printf("%-40s ... ", "Determining alphabet");
-	      fflush(stdout);
-	      DetermineAlphabet(msa->aseq, msa->nseq);
-	      if      (Alphabet_type == hmmNUCLEIC) puts("done. [DNA]");
-	      else if (Alphabet_type == hmmAMINO)   puts("done. [protein]");
-	      else                                  puts("done.");
-	    }
+	  if (Alphabet_type == hmmNOTSETYET)  set_alphabet(msa);	
 
-				/* Set up Dirichlet priors */
-	  if (prifile == NULL)  pri = P7DefaultPrior();
-	  else                  pri = P7ReadPrior(prifile);
+	  if (cfg.prifile == NULL)  pri = P7DefaultPrior();
+	  else                      pri = P7ReadPrior(cfg.prifile);
 
-	  if (pamfile != NULL)  PAMPrior(pamfile, pri, pamwgt);
+	  if (cfg.pamfile != NULL)  PAMPrior(cfg.pamfile, pri, cfg.pamwgt);
 
-				/* Set up the null/random seq model */
-	  if (rndfile == NULL)  P7DefaultNullModel(randomseq, &p1);
-	  else                  P7ReadNullModel(rndfile, randomseq, &p1);
+	  if (cfg.rndfile == NULL)  P7DefaultNullModel(cfg.randomseq, &(cfg.p1));
+	  else                      P7ReadNullModel(cfg.rndfile, cfg.randomseq, &(cfg.p1));
 
-	  /* Effective sequence number calculation defaults to entropy
-           * targeting for protein, but we haven't tested DNA yet.
-           */
-	  if (eff_strategy == EFF_NOTSETYET) {
-	    if      (Alphabet_type == hmmNUCLEIC)  eff_strategy = EFF_NONE;
-	    else if (Alphabet_type == hmmAMINO) {
-	      eff_strategy = EFF_NCLUSTERS;
-	      if (c_strategy == P7_MAP_CONSTRUCTION)
-		Die("\n\
-To use --map on a protein model, you need to use an effective\n\
-sequence number calculation other than the default entropy targeting;\n\
-see --effnone, --effset, or --effclust\n");
-	    }
-	  }
-
-	  /* If we're using the entropy-target strategy for effective
-	   * sequence number calculation, and we haven't manually set the
-	   * default target entropy loss, do it now. We have only tested default
-	   * entropy targets for fs and ls mode, the usual modes. We assume
-	   * that -s behaves like fs mode, and -g behaves like -s mode.  The
-	   * default numbers are in config.h; they come from LSJ's optimizations
-           * on the ASTRAL benchmark.
-	   */
-	  if (eff_strategy == EFF_ENTROPY) {
-	    if (Alphabet_type == hmmAMINO) {
-	      if   (cfg_strategy == P7_FS_CONFIG || cfg_strategy == P7_SW_CONFIG){
-		if (eloss_set == FALSE){
-		  etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
-		}
-		else{
-		  etarget = FEntropy(randomseq, Alphabet_size) - eloss;
-		}
-	      }
-	      else if (eloss_set == FALSE){
-		etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_LS_AMINO_DEFAULT;
-	      }
-	      else{
-		etarget = FEntropy(randomseq, Alphabet_size) - eloss;
-	      }
-	    } else {
-	      Die("\
---effent: entropy loss targeting:\n\
-Default entropy loss targets are only available for protein models.\n\
-To use --effent on DNA models (or other alphabets), you must set\n\
---eloss <x> explicitly, in addition to selecting --effent.\n");
-	    }
-	  }
+	  if (cfg.eff_strategy == EFF_ENTROPY) 
+	    cfg.etarget = set_entropy_target(cfg.eloss_set, cfg.eloss, cfg.mode, cfg.randomseq);
 	} /* -- this ends the post-alphabet initialization section -- */
 
-
-      /* Prepare unaligned digitized sequences for internal use
-       */
+      /* Prepare unaligned digitized sequences for internal use */
       DigitizeAlignment(msa, &dsq);
 
-
-      /* Determine "effective sequence number", according to the selected
-       * strategy, if we can. (We can't do EFF_ENTROPY strategy until after
-       * we have a model architecture.)
+      /* Determine relative sequence weights (except ME, which comes later).
+       * The weights are stored in msa->wgt.
        */
-      if (eff_strategy == EFF_NONE)
-	{
-	  eff_nseq = (float) msa->nseq;
-	  eff_nseq_set = TRUE;
-	}
-      else if (eff_strategy == EFF_USERSET)
-	{
-	  if (nali > 0)
-	    Warn("[WARNING: same eff_nseq of %f is being applied to all models]\n",
-		 eff_nseq);
-	  eff_nseq_set = TRUE;
-	}
-      else if (eff_strategy == EFF_NCLUSTERS)
-	{
-	  float *wgt;		/* dummy weights array to feed BlosumWeights*/
-	  wgt = MallocOrDie(sizeof(float) * msa->nseq);
-	  printf("%-40s ... ", "Determining eff seq # by clustering");
-	  fflush(stdout);
-	  BlosumWeights(msa->aseq, msa->nseq, msa->alen, eidlevel, wgt);
-	  eff_nseq = FSum(wgt, msa->nseq);
-	  free(wgt);
-	  printf("done. [%.1f]\n", eff_nseq);
-	  eff_nseq_set = TRUE;
-	}
-      else
-	eff_nseq_set = FALSE;
+      set_relative_weights(msa, &cfg);
 
-
-      /* Determine relative sequence weights
-       * (maximum entropy code appears later; it's dependent on
-       *  counts and architecture).
+      /* Identify candidate seq frags, to inform the model
+       * construction algorithms. Relative sequence weighting must precede this.
+       * Upon return, rlen[i] is the unaligned length of seq i [0..nseq-1];
+       * isfrag[i] is a 1/0 flag for whether we defined it as a frag or not.
        */
-      if (w_strategy == WGT_GSC     ||
-	  w_strategy == WGT_BLOSUM  ||
-	  w_strategy == WGT_VORONOI ||
-	  w_strategy == WGT_PB)
-	{
-	  printf("%-40s ... ", "Weighting sequences heuristically");
-	  fflush(stdout);
+      rlen   = MallocOrDie(sizeof(int)  * msa->nseq);
+      isfrag = MallocOrDie(sizeof(char) * msa->nseq);
+      tag_candidate_seq_fragments(msa, cfg.fragthresh, rlen, isfrag);
 
-	  if (w_strategy != WGT_PB && msa->nseq >= pbswitch)
-	    {
-	      printf("[big alignment! doing PB]... ");
-	      PositionBasedWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
-	    }
-	  else if (w_strategy == WGT_GSC)
-	    GSCWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
-	  else if (w_strategy == WGT_BLOSUM)
-	    BlosumWeights(msa->aseq, msa->nseq, msa->alen, widlevel, msa->wgt);
-	  else if (w_strategy == WGT_PB)
-	    PositionBasedWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
-	  else if (w_strategy ==  WGT_VORONOI)
-	    VoronoiWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
-
-	  wgt_set = TRUE;
-	  printf("done.\n");
-	}
-      else if (w_strategy == WGT_NONE)
-	wgt_set = TRUE;
-      else
-	wgt_set = FALSE;
-
-
-      /* Rescale weights to sum to eff_nseq -- if we have it.
-       * Else, they stay where they are, w/ sum of nseq.
+      /* Build the model architecture, and collect counts in it.
+       * Upon return, the core HMM contains counts.
        */
-      if (eff_nseq_set) {
-	FNorm(msa->wgt,  msa->nseq);
-	FScale(msa->wgt, msa->nseq, eff_nseq);
-      } else {
-	FNorm(msa->wgt,  msa->nseq);
-	FScale(msa->wgt, msa->nseq, msa->nseq);
-      }
+      construct_model(&cfg, msa, dsq, isfrag, &hmm, &tr);
 
-
-      /* Build a model architecture.
-       * If we're not doing MD or ME, that's all we need to do.
-       * We get an allocated, counts-based HMM back.
-       *
-       * Because the architecture algorithms are allowed to change
-       * gap characters in the alignment, we have to calculate the
-       * alignment checksum before we enter the algorithms.
-       *
-       * MAP construction is deprecated. To be correct, it needs
-       * effective sequence number to be set *before* construction.
-       * But entropy loss targeting (the default eff_nseq calculation)
-       * depends on the architecture, so we have a chicken and egg.
-       * LSJ ASTRAL benchmarks show strong benefit of entropy targeting,
-       * and a slight disadvantage of MAP compared to the simple heuristic
-       * --fast: so, we throw --map to the fires.
-       */
-      printf("%-40s ... ", "Constructing model architecture");
-      fflush(stdout);
-      checksum = GCGMultchecksum(msa->aseq, msa->nseq);
-      if (c_strategy == P7_FAST_CONSTRUCTION)
-	P7Fastmodelmaker(msa, dsq, gapmax, &hmm, &tr);
-      else if (c_strategy == P7_HAND_CONSTRUCTION)
-	P7Handmodelmaker(msa, dsq, &hmm, &tr);
-      else if (c_strategy == P7_MAP_CONSTRUCTION) {
-	if (! eff_nseq_set) Die("can't do --map without knowing eff seq #");
-	if (! wgt_set)      Die("can't do --map without knowing weights");
-	P7Maxmodelmaker(msa, dsq, gapmax,
-			pri, randomseq, p1, archpri, &hmm, &tr);
-      } else Die("no such construction strategy");
-      hmm->checksum = checksum;
-      printf("done.\n");
-
-
-      /* Effective sequence number calculation: post-architecture strategies.
-       * (if we don't have eff_nseq yet, calculate it now).
-       */
-      if (! eff_nseq_set) {
-	if (eff_strategy == EFF_ENTROPY) {
-	  printf("%-40s ... ", "Determining eff seq # by entropy target");
-	  fflush(stdout);
-	  eff_nseq = Eweight(hmm, pri, (float) msa->nseq, etarget);
-	} else Die("no effective seq #: shouldn't happen");
-
-	Plan7Rescale(hmm, eff_nseq / (float) msa->nseq);
-	eff_nseq_set = TRUE;
-	printf("done. [%.1f]\n", eff_nseq);
-      }
+      /* Determine "effective sequence number", and rescale counts. */
+      set_effective_seqnumber(&cfg, msa, hmm, pri);
 
       /* Save the count vectors if asked. Used primarily for
        * making the data files for training priors.
        */
-      if (cfile != NULL)
-	{
-	  printf("%-40s ... ", "Saving count vector file");
-	  fflush(stdout);
-	  save_countvectors(cfp,
-			    (msa->name != NULL ? msa->name : "-"),
-			    hmm);
-	  printf("done. [%s]\n", cfile);
-	}
+      if (cfg.cfile != NULL)
+	save_countvectors(cfg.cfp, cfg.cfile, (msa->name != NULL ? msa->name : "-"), hmm);
+      /* Plan7_DumpCounts(stdout, hmm); */
 
       /* Record the null model in the HMM;
        * add prior contributions in pseudocounts and renormalize.
        */
-      printf("%-40s ... ", "Converting counts to probabilities");
-      fflush(stdout);
-      Plan7SetNullModel(hmm, randomseq, p1);
-      P7PriorifyHMM(hmm, pri);
-
-      /* if evolving information content (DEFAULT) */
-      if (evolve_ic)
-      {
-        /* if info wasn't defined by user, use default settings for gl or ll */
-        if (info < -99.)
-	  if (cfg_strategy == P7_FS_CONFIG) info = 0.65; /* ll default */
-	  else info = 1.4; /* gl default */
-        AdjustAveInfoContent(hmm, info, matrixfile);  /* DJB */
-     }
+      printf("%-40s ... ", "Converting counts to probabilities"); fflush(stdout);
+      Plan7SetNullModel(hmm, cfg.randomseq, cfg.p1);
+      P7PriorifyHMM(hmm, pri);	/* this function also renormalizes. */
       printf("done.\n");
 
-      /* Model configuration, temporary.
-       * hmmbuild assumes that it's given an alignment of single domains,
-       * and the alignment may contain fragments. So, for the purpose of
-       * scoring the sequences (or, optionally, MD/ME weighting),
-       * configure the model into hmmsw mode. Later we'll
-       * configure the model according to how the user wants to
-       * use it.
-       */
-      Plan7SWConfig(hmm, 0.5, 0.5);
-
-
-      /* Relative weighting:  architecture-dependent strategies.
-       * (if we don't have relative weights yet, calculate them now)
-       * Depends on having a model configuration: must follow Plan7SWConfig()
-       * call above.
-       */
-      if (! wgt_set) {
-	if (w_strategy == WGT_ME) {
-	  printf("\n%-40s ...\n", "Maximum entropy weighting, iterative");
-	  maximum_entropy(hmm, dsq, msa, eff_nseq, pri, tr);
-	  printf("----------------------------------------------\n\n");
-	  /* note: ME code actually rescales counts itself. */
-	} else Die("no relative weighting strategy: shouldn't happen");
-	wgt_set = TRUE;
+      /* if evolving information content: */
+      if (cfg.evolve_ic)
+      {
+        /* if info wasn't defined by user, use default settings for gl or ll */
+        if (cfg.info == 0.0) {
+	  if (cfg.mode == P7_FS_MODE || cfg.mode == P7_SW_MODE) { cfg.info = 0.65; } /* ll default */
+	  else { cfg.info = 1.4; } /* gl default */
+	}
+        AdjustAveInfoContent(hmm, cfg.info, cfg.matrixfile);  /* DJB */
       }
 
-
-      /* Give the model a name.
-       * We deal with this differently depending on whether
-       * we're in an alignment database or a single alignment.
-       * 
-       * If a single alignment, priority is:
-       *      1. Use -n <name> if set.
-       *      2. Use msa->name (avail in Stockholm or SELEX formats only)
-       *      3. If all else fails, use alignment file name without
-       *         filename extension (e.g. "globins.slx" gets named "globins"
-       *         
-       * If a multiple MSA database (e.g. Stockholm/Pfam), 
-       * only msa->name is applied. -n is not allowed.
-       * if msa->name is unavailable, or -n was used,
-       * a fatal error is thrown.
-       * 
-       * Because we can't tell whether we've got more than one
-       * alignment 'til we're on the second one, these fatal errors
-       * only happen after the first HMM has already been built.
-       * Oh well.
+      /* Model configuration, temporary.  hmmbuild assumes that it's
+       * given an alignment of single domains, and the alignment may
+       * contain fragments. So, for the purpose of scoring the
+       * sequences (or, optionally, MD/ME weighting), configure the
+       * model into S/W mode. Later we'll configure the model
+       * according to how the user wants to use it.
        */
-      printf("%-40s ... ", "Setting model name, etc.");
-      fflush(stdout);
-      if (nali == 0)		/* first (only?) HMM in file:  */
-	{
-	  if      (setname != NULL)   name = Strdup(setname);
-	  else if (msa->name != NULL) name = Strdup(msa->name);
-	  else                        name = FileTail(seqfile, TRUE);
-	}
-      else
-	{
-	  if (setname != NULL) 
-	    Die("Oops. Wait. You can't use -n with an alignment database.");
-	  else if (msa->name != NULL) name = Strdup(msa->name);
-	  else
-	    Die("Oops. Wait. I need name annotation on each alignment.\n");
-	}
-      Plan7SetName(hmm, name);
-      free(name);
+      Plan7SWConfig(hmm, 0.5, 0.5);
+      /* Plan7_DumpScores(stdout, hmm); */
+
+
+      /* Maximum entropy is the one relative weighting strategy
+       * that requires having a model architecture, and a model
+       * scoring configuration.
+       */
+      if (cfg.w_strategy == WGT_ME) 
+	maximum_entropy(hmm, dsq, msa, cfg.eff_nseq, pri, tr);
 
       /* Transfer other information from the alignment to
        * the HMM. This typically only works for Stockholm or SELEX format
@@ -777,63 +399,48 @@ To use --effent on DNA models (or other alphabets), you must set\n\
 	{ hmm->flags |= PLAN7_NC; hmm->nc1 = msa->cutoff[MSA_CUTOFF_NC1]; hmm->nc2 = msa->cutoff[MSA_CUTOFF_NC2]; }
 
       /* Record some other miscellaneous information in the HMM,
-       * like how/when we built it.
+       * like its name, and how/when we built it.
        */
+      set_model_name(hmm, cfg.setname, msa->name, alifile, nali);
       Plan7ComlogAppend(hmm, argc, argv);
       Plan7SetCtime(hmm);
       hmm->nseq = msa->nseq;
-      printf("done. [%s]\n", hmm->name); 
    
       /* Print information for the user
        */
       printf("\nConstructed a profile HMM (length %d)\n", hmm->M);
-      PrintPlan7Stats(stdout, hmm, dsq, msa->nseq, tr); 
+      print_statistics(stdout, hmm, dsq, msa->nseq, tr); 
       printf("\n");
 
-      /* Configure the model for chosen algorithm
+
+      /* Configure the model for chosen algorithm.
+       * For an ASCII text model format, this isn't actually necessary any more.
        */
       printf("%-40s ... ", "Finalizing model configuration");
       fflush(stdout);
-      switch (cfg_strategy) {
-      case P7_BASE_CONFIG:  Plan7GlobalConfig(hmm);              break;
-      case P7_SW_CONFIG:    Plan7SWConfig(hmm, swentry, swexit); break;
-      case P7_LS_CONFIG:    Plan7LSConfig(hmm);                  break;
-      case P7_FS_CONFIG:    Plan7FSConfig(hmm, swentry, swexit); break;
-      default:              Die("bogus configuration choice");
+      switch (cfg.mode) {
+      case P7_S_MODE:   Plan7GlobalConfig(hmm);        break;
+      case P7_SW_MODE:  Plan7SWConfig(hmm, 0.5, 0.5);  break;
+      case P7_LS_MODE:  Plan7LSConfig(hmm);            break;
+      case P7_FS_MODE:  Plan7FSConfig(hmm, 0.5, 0.5);  break;
+      default:          Die("bogus configuration choice");
       }
       printf("done.\n");
 
       /* Save new HMM to disk: open a file for appending or writing.
        */
-      printf("%-40s ... ", "Saving model to file");
-      fflush(stdout);
-      if (do_binary) WriteBinHMM(hmmfp, hmm);
-      else           WriteAscHMM(hmmfp, hmm);
+      printf("%-40s ... ", "Saving model to file");  fflush(stdout);
+      if (cfg.do_binary) WriteBinHMM(hmmfp, hmm);
+      else               WriteAscHMM(hmmfp, hmm);
       printf("done.\n");
 
-				/* the annotated alignment may be resaved */
-      if (alignfp != NULL) 
-	{
-	  MSA    *new_msa;
-	  SQINFO *sqinfo; 
-
-	  printf("%-40s ... ", "Saving annotated alignment");
-	  fflush(stdout);
-	  sqinfo  = MSAToSqinfo(msa);
-	  new_msa = P7Traces2Alignment(dsq, sqinfo, msa->wgt, msa->nseq, 
-				       hmm->M, tr, FALSE);
-
-	  WriteStockholm(alignfp, new_msa);
-	  MSAFree(new_msa);
-	  for (idx = 0; idx < msa->nseq; idx++)
-	    FreeSequence(NULL, &(sqinfo[idx]));
-	  free(sqinfo);
-	  printf("done.\n");
-	}
+      /* the annotated alignment may be resaved */
+      if (cfg.alignfp != NULL) 
+	save_hmmbuild_alignment(cfg.alignfp, msa, dsq, hmm, tr);
 
       /* Verbose output; show scores for each sequence
        */
-      if (verbose)
+      if (cfg.verbose)
 	print_all_scores(stdout, hmm, dsq, msa, tr);
 
       /* Clean up before moving on to next alignment
@@ -842,26 +449,499 @@ To use --effent on DNA models (or other alphabets), you must set\n\
       free(tr);
       FreePlan7(hmm);
       Free2DArray((void **) dsq, msa->nseq); 
+      free(rlen);
+      free(isfrag);
       MSAFree(msa);
       fflush(hmmfp);
-      if (cfp != NULL)     fflush(cfp);
-      if (alignfp != NULL) fflush(alignfp);
+      if (cfg.cfp != NULL)     fflush(cfg.cfp);
+      if (cfg.alignfp != NULL) fflush(cfg.alignfp);
 
       puts("//\n");
       nali++;
     }
 
 
-
   /* Clean up and exit
    */
   MSAFileClose(afp);
   fclose(hmmfp);
-  if (cfp != NULL)     fclose(cfp);
-  if (alignfp != NULL) fclose(alignfp);
+  if (cfg.cfp     != NULL) fclose(cfg.cfp);
+  if (cfg.alignfp != NULL) fclose(cfg.alignfp);
   P7FreePrior(pri);
   SqdClean();
   return 0;
+}
+
+
+
+/* default_configuration()
+ * 
+ */
+static void
+default_config(struct p7config_s *cfg)
+{
+  cfg->setname      = NULL;
+  cfg->rndfile      = NULL;
+  FSet(cfg->randomseq, MAXABET, 0.); /* not set yet */
+  cfg->p1           = 0.;	/* not set yet  */
+  cfg->prifile      = NULL;
+  cfg->pamfile      = NULL;
+  cfg->pamwgt       = 20.;
+  cfg->fragthresh   = 0.5;
+  cfg->w_strategy   = WGT_GSC;
+  cfg->pbswitch     = 1000;
+  cfg->widlevel     = 0.62;
+  cfg->c_strategy   = P7_FAST_CONSTRUCTION;
+  cfg->symfrac      = 0.5;
+  cfg->symfrac_set  = FALSE;
+  cfg->eff_strategy = EFF_NONE;
+  cfg->eff_nseq     = 0.;	/* not set yet */
+  cfg->eidlevel     = 0.62;
+  cfg->eloss        = 0.0;	/* not set yet */
+  cfg->eloss_set    = FALSE;
+  cfg->etarget      = 0.0;	/* not set yet */
+  cfg->evolve_ic    = FALSE;
+  cfg->info         = 0.;	/* not set yet */
+  cfg->matrixfile   = NULL;
+  cfg->mode         = P7_LS_MODE;
+  cfg->align_ofile  = NULL;
+  cfg->cfile        = NULL;
+  cfg->overwrite_protect = TRUE;
+  cfg->verbose           = FALSE;
+  cfg->do_append         = FALSE;
+  cfg->do_binary         = FALSE;
+}
+
+static void
+process_cmdline(int argc, char **argv, struct p7config_s *cfg, char **hmmfile, char **alifile, int *ret_format)
+{
+  char *optname;                /* name of option found by Getopt()      */
+  char *optarg;                 /* argument found by Getopt()            */
+  int   optind;                 /* index in argv[]                       */
+
+  while (Getopt(argc, argv, OPTIONS, NOPTIONS, usage,
+                &optind, &optname, &optarg))  {
+    if      (strcmp(optname, "-f") == 0) cfg->mode              = P7_FS_MODE;
+    else if (strcmp(optname, "-g") == 0) cfg->mode              = P7_S_MODE;
+    else if (strcmp(optname, "-n") == 0) cfg->setname           = optarg;
+    else if (strcmp(optname, "-o") == 0) cfg->align_ofile       = optarg;
+    else if (strcmp(optname, "-s") == 0) cfg->mode              = P7_SW_MODE;
+    else if (strcmp(optname, "-A") == 0) cfg->do_append         = TRUE;
+    else if (strcmp(optname, "-F") == 0) cfg->overwrite_protect = FALSE;
+    else if (strcmp(optname, "--amino")   == 0) SetAlphabet(hmmAMINO);
+    else if (strcmp(optname, "--binary")  == 0) cfg->do_binary     = TRUE;
+    else if (strcmp(optname, "--cfile")   == 0) cfg->cfile         = optarg;
+    else if (strcmp(optname, "--effclust")== 0) cfg->eff_strategy  = EFF_NCLUSTERS;
+    else if (strcmp(optname, "--effent")  == 0) cfg->eff_strategy  = EFF_ENTROPY;
+    else if (strcmp(optname, "--effnone") == 0) cfg->eff_strategy  = EFF_NONE;
+    else if (strcmp(optname, "--effset")  == 0) { cfg->eff_strategy= EFF_USERSET; cfg->eff_nseq = atof(optarg); }
+    else if (strcmp(optname, "--eidlevel")== 0) cfg->eidlevel      = atof(optarg);
+    else if (strcmp(optname, "--eloss")   == 0) { cfg->eloss       = atof(optarg); cfg->eloss_set  = TRUE; }
+    else if (strcmp(optname, "--evolve")  == 0) cfg->evolve_ic     = TRUE;
+    else if (strcmp(optname, "--evolveic")== 0) { cfg->evolve_ic   = TRUE; cfg->info          = atof(optarg); }
+    else if (strcmp(optname, "--hand")    == 0) cfg->c_strategy    = P7_HAND_CONSTRUCTION;
+    else if (strcmp(optname, "--matrix")  == 0) cfg->matrixfile    = optarg;
+    else if (strcmp(optname, "--nucleic") == 0) SetAlphabet(hmmNUCLEIC);
+    else if (strcmp(optname, "--null")    == 0) cfg->rndfile       = optarg;
+    else if (strcmp(optname, "--pam")     == 0) cfg->pamfile       = optarg;
+    else if (strcmp(optname, "--pamwgt")  == 0) cfg->pamwgt        = atof(optarg);
+    else if (strcmp(optname, "--pbswitch")== 0) cfg->pbswitch      = atoi(optarg);
+    else if (strcmp(optname, "--prior")   == 0) cfg->prifile       = optarg;
+    else if (strcmp(optname, "--symfrac") == 0) { cfg->symfrac     = atof(optarg); cfg->symfrac_set = TRUE; }
+    else if (strcmp(optname, "--verbose") == 0) cfg->verbose       = TRUE;
+    else if (strcmp(optname, "--wgsc")    == 0) cfg->w_strategy    = WGT_GSC;
+    else if (strcmp(optname, "--wblosum") == 0) cfg->w_strategy    = WGT_BLOSUM;
+    else if (strcmp(optname, "--widlevel")== 0) cfg->widlevel      = atof(optarg);
+    else if (strcmp(optname, "--wme")     == 0) cfg->w_strategy    = WGT_ME;
+    else if (strcmp(optname, "--wpb")     == 0) cfg->w_strategy    = WGT_PB;
+    else if (strcmp(optname, "--wnone")   == 0) cfg->w_strategy    = WGT_NONE;
+    else if (strcmp(optname, "--wvoronoi")== 0) cfg->w_strategy    = WGT_VORONOI;
+    else if (strcmp(optname, "--informat") == 0) {
+      *ret_format = String2SeqfileFormat(optarg);
+      if (*ret_format == MSAFILE_UNKNOWN)
+	Die("unrecognized sequence file format \"%s\"", optarg);
+      if (! IsAlignmentFormat(*ret_format))
+	Die("%s is an unaligned format, can't read as an alignment", optarg);
+    }
+    else if (strcmp(optname, "-h") == 0) {
+      HMMERBanner(stdout, banner);
+      puts(usage);
+      puts(experts);
+      exit(EXIT_SUCCESS);
+    }
+  }
+  if (argc - optind != 2)
+    Die("Incorrect number of arguments.\n%s\n", usage);
+
+  *hmmfile = argv[optind++];
+  *alifile = argv[optind++];
+}
+
+
+/* verify_options()
+ * 
+ * Check that nothing silly has been done to the configuration.
+ * More could be done here; eventually, we'll bring in Easel's
+ * improved command line parser.
+ */
+static void
+verify_options(struct p7config_s *cfg, char *hmmfile)
+{
+  if (cfg->symfrac < 0. || cfg->symfrac > 1.)
+    Die("--symfrac must be a value from 0 to 1\n%s\n", usage);
+
+  if (cfg->overwrite_protect && !cfg->do_append && FileExists(hmmfile))
+    Die("HMM file %s already exists. Rename or delete it.", hmmfile);
+
+  if (cfg->overwrite_protect && cfg->align_ofile != NULL && FileExists(cfg->align_ofile))
+    Die("Alignment resave file %s exists. Rename or delete it.", cfg->align_ofile);
+
+  if (cfg->symfrac_set && cfg->c_strategy  != P7_FAST_CONSTRUCTION)
+    Die("using --symfrac only makes sense for default --fast construction strategy");
+}
+
+/* open_hmmfile()
+ * 
+ * Open the output hmmfile, return a writable FILE ptr.
+ */
+static FILE *
+open_hmmfile(struct p7config_s *cfg, char *hmmfile)
+{
+  FILE *hmmfp;
+  char  fpopts[3];   /* options to open with, e.g. "ab"  */
+
+  if (cfg->do_append) strcpy(fpopts, "a");
+  else                strcpy(fpopts, "w");
+  if (cfg->do_binary) strcat(fpopts, "b");
+  if ((hmmfp = fopen(hmmfile, fpopts)) == NULL)
+    Die("Failed to open HMM file %s for %s\n", hmmfile,
+	cfg->do_append ? "appending" : "writing");
+
+  return hmmfp;
+}
+
+/* open_optional_outputfiles()
+ * 
+ * counts file, alignment resave file...
+ */
+static void
+open_optional_outputfiles(struct p7config_s *cfg)
+{
+  				/* optional count vector save file */
+  cfg->cfp = NULL;
+  if (cfg->cfile != NULL)
+    if ((cfg->cfp = fopen(cfg->cfile, "w")) == NULL)
+      Die("Failed to open count vector file %s for writing\n", cfg->cfile);
+
+				/* optional alignment resave file */
+  cfg->alignfp = NULL;
+  if (cfg->align_ofile != NULL)
+    if ((cfg->alignfp = fopen(cfg->align_ofile, "w")) == NULL)
+      Die("Failed to open alignment resave file %s for writing\n", cfg->align_ofile);
+}
+
+
+/* print_config_header()
+ * 
+ * Print out the configuration, at the start of an hmmbuild
+ * output.
+ */
+static void
+print_config_header(struct p7config_s *cfg, char *alifile, int aliformat, char *hmmfile)
+{
+  HMMERBanner(stdout, banner);
+  printf("Alignment file:                    %s\n",
+	 alifile);
+  printf("File format:                       %s\n",
+	 SeqfileFormat2String(aliformat));
+
+  printf("Search algorithm configuration:    ");
+  if      (cfg->mode == P7_S_MODE)   puts("Global alignment (hmms)");
+  else if (cfg->mode == P7_SW_MODE)  puts("local Smith/Waterman (hmmsw)");
+  else if (cfg->mode == P7_LS_MODE)  puts("glocal, multihit (hmmls)");
+  else if (cfg->mode == P7_FS_MODE)  puts("local, multihit (hmmfs)");
+  else Die("whoops. can't build in mode %d\n", cfg->mode);
+
+  printf("Model construction strategy:       ");
+  if (cfg->c_strategy == P7_HAND_CONSTRUCTION)    puts("Manual, from #=RF annotation");
+  else if (cfg->c_strategy==P7_FAST_CONSTRUCTION) printf("Fast/ad hoc (symfrac %.2f)\n", cfg->symfrac);
+
+  printf("Null model used:                   %s\n",
+	 (cfg->rndfile == NULL) ? "(default)" : cfg->rndfile);
+
+  printf("Prior used:                        %s\n",
+	 (cfg->prifile == NULL) ? "(default)" : cfg->prifile);
+
+  printf("Effective sequence # calculation:  ");
+  if      (cfg->eff_strategy == EFF_NONE)      puts("none; using actual seq #");
+  else if (cfg->eff_strategy == EFF_USERSET)   printf("set to %.2f\n", cfg->eff_nseq);
+  else if (cfg->eff_strategy == EFF_NCLUSTERS) {
+    puts("# single-linkage clusters");
+    printf("  by single-linkage clustering at: %.2f identity\n", cfg->eidlevel);
+  }
+  else if (cfg->eff_strategy == EFF_ENTROPY) {
+    puts("entropy targeting");
+    if (cfg->eloss_set)
+      printf("  mean target entropy loss:        %.2f bits\n", cfg->eloss);
+    else
+      printf("  mean target entropy loss:        (default)\n");
+  }
+
+  printf("Relative sequence weighting:       ");
+  if      (cfg->w_strategy == WGT_NONE)   puts("none");
+  else if (cfg->w_strategy == WGT_GSC)    puts("G/S/C tree weights");
+  else if (cfg->w_strategy == WGT_BLOSUM) printf("BLOSUM filter at %.2f id\n", cfg->widlevel);
+  else if (cfg->w_strategy == WGT_PB)     puts("Henikoff position-based");
+  else if (cfg->w_strategy == WGT_VORONOI)puts("Sibbald/Argos Voronoi");
+  else if (cfg->w_strategy == WGT_ME)     puts("Maximum entropy");
+
+  printf("New HMM file:                      %s %s\n",
+	 hmmfile, cfg->do_append? "[appending]" : "");
+  if (cfg->cfile != NULL)
+    printf("Count vectors saved to:            %s\n", cfg->cfile);
+  if (cfg->align_ofile != NULL)
+    printf("Annotated alignment(s) resaved to: %s\n", cfg->align_ofile);
+  printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+}
+
+
+
+/* set_alphabet():
+ * 
+ * Called if alphabet wasn't set explicitly by --amino or --nucleic
+ * on the command line.
+ * Examine the multiple seq alignment <msa>, make a guess at the
+ * alphabet, and set the globals accordingly.
+ */
+static void
+set_alphabet(MSA *msa)
+{
+  printf("%-40s ... ", "Determining alphabet");
+  fflush(stdout);
+  DetermineAlphabet(msa->aseq, msa->nseq);
+  if      (Alphabet_type == hmmNUCLEIC) puts("done. [DNA]");
+  else if (Alphabet_type == hmmAMINO)   puts("done. [protein]");
+  else                                  puts("done.");
+}
+
+
+/* set_entropy_target()
+ * 
+ * Called when we're using entropy-weighting to determine
+ * effective sequence number.
+ *   eloss_set: TRUE/FALSE, whether we set a target entropy loss
+ *              w/ --eloss <x> on the command line;
+ *   eloss:     if eloss_set was TRUE, what was the setting;
+ *   mode:      alignment mode, example: P7_FS_MODE;
+ *              affects choice of default eloss.
+ *   randomseq: the null model, for calculating background
+ *              sequence entropy that eloss is measured against.
+ *              
+ * Returns <etarget>, the target entropy of the model:
+ *   H(background) - eloss.
+ *                   
+ * We have only tested default entropy targets for fs and ls mode, the
+ * usual modes. We assume that -s behaves like fs mode, and -g behaves
+ * like -s mode.  The default numbers are in config.h; they come from
+ * LSJ's optimizations on the ASTRAL benchmark.
+ */
+static float
+set_entropy_target(int eloss_set, float eloss, int mode, float *randomseq)
+{
+  float etarget;
+
+  /* explicit setting? */
+  if (eloss_set) return FEntropy(randomseq, Alphabet_size) - eloss;
+
+  /* if not, protein defaults: */
+  if (Alphabet_type == hmmAMINO) 
+    {
+      if   (mode == P7_FS_MODE || mode == P7_SW_MODE)
+	etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_FS_AMINO_DEFAULT;
+      else if (mode == P7_LS_MODE || mode == P7_S_MODE)
+	etarget = FEntropy(randomseq, Alphabet_size) - ENTROPYLOSS_LS_AMINO_DEFAULT;
+      else
+	Die("I don't have a entropy loss default for alignment mode %d\n", mode);
+      return etarget;
+    }
+
+  /* we don't have defaults available for DNA, or other alphabets for that matter */
+  Die("\
+--effent: entropy loss targeting:\n\
+Default entropy loss targets are only available for protein models.\n\
+To use --effent on DNA models (or other alphabets), you must set\n\
+--eloss <x> explicitly, in addition to selecting --effent.\n");
+  /*NOTREACHED*/
+  return 0.;
+}
+
+
+
+/* set_relative_weights()
+ * 
+ * Given a multiple sequence alignment;
+ * determine the relative sequence weights for it, and
+ * set msa->wgt array accordingly.
+ */
+static void
+set_relative_weights(MSA *msa, struct p7config_s *cfg)
+{
+  if (cfg->w_strategy == WGT_GSC     ||
+      cfg->w_strategy == WGT_BLOSUM  ||
+      cfg->w_strategy == WGT_VORONOI ||
+      cfg->w_strategy == WGT_PB)
+    {
+      printf("%-40s ... ", "Weighting sequences heuristically");
+      fflush(stdout);
+
+      if (cfg->w_strategy != WGT_PB && msa->nseq >= cfg->pbswitch)
+	{
+	  printf("[big alignment! doing PB]... ");
+	  PositionBasedWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
+	}
+      else if (cfg->w_strategy == WGT_GSC)
+	GSCWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
+      else if (cfg->w_strategy == WGT_BLOSUM)
+	BlosumWeights(msa->aseq, msa->nseq, msa->alen, cfg->widlevel, msa->wgt);
+      else if (cfg->w_strategy == WGT_PB)
+	PositionBasedWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
+      else if (cfg->w_strategy ==  WGT_VORONOI)
+	VoronoiWeights(msa->aseq, msa->nseq, msa->alen, msa->wgt);
+    }
+  printf("done.\n");
+}
+
+
+
+/* Function:  tag_candidate_seq_fragments()
+ * Incept:    SRE, Fri May  6 13:32:20 2005 [St. Louis]
+ *
+ * Purpose:   Heuristic identification of candidate sequence
+ *            "fragments": any individual seq with a length <
+ *            <thresh> * mean length of all seqs is tagged
+ *            as a candidate fragment. 
+ *            
+ *            The modelmakers then use this information. Any seq
+ *            tagged as a candidate fragment that shows
+ *            a B->D+->Mk internal entry path or a Mk->D+->E
+ *            internal exit path has those transitions ignored,
+ *            on the principle that it's just a local alignment,
+ *            not a true deletion. Delete transitions on internal
+ *            entry/exit paths are only counted on sequences that
+ *            are not identified as candidate fragments.
+ *            
+ *            The mean length is a weighted average, taking relative
+ *            seq weights into account.
+ *            
+ * Args:      msa    - the sequence alignment
+ *            thresh - threshold fraction; rlen < thresh*mean rlen 
+ *                      defines candidate fragment.
+ *            rlen   - RETURN: raw (unaligned) lengths of seqs in residues,
+ *                      [0..nseq-1]
+ *                  old    (Caller allocates this for at least msa->nseq integers).
+ *            isfrag - RETURN: TRUE/FALSE flags for whether seq i is a candidate
+ *                      fragment or not; [0..nseq-1]
+ *                      Caller allocates this for at least msa->nseq chars.
+ *
+ * Returns:   # of fragments that were flagged.
+ */
+static int
+tag_candidate_seq_fragments(MSA *msa, float thresh, int *rlen, char *isfrag) 
+{
+  int i;
+  float mean;
+  float totwgt;
+  int nfrags;
+
+  printf("%-40s ... ", "Tagging putative sequence fragments");
+
+  /* Calculate lengths of each seq, and mean length */
+  mean   = 0.;
+  totwgt = 0.;
+  for (i = 0; i < msa->nseq; i++)
+    {
+      rlen[i] = DealignedLength(msa->aseq[i]);
+      mean   += msa->wgt[i] * (float) rlen[i];
+      totwgt += msa->wgt[i];
+    }
+  mean /= totwgt;
+
+  /* any seq < threshold * mean is identified as a fragment */
+  nfrags = 0;
+  for (i = 0; i < msa->nseq; i++)
+    if (rlen[i] < (int) (thresh * mean))
+      { isfrag[i] = TRUE; nfrags++; }
+    else
+      isfrag[i] = FALSE;
+    
+  printf("done.\n");
+  return nfrags;
+}
+
+
+/* construct_model()
+ * 
+ * Determine the architecture, collect counts; return 
+ * a new HMM containing counts.
+ */
+static void
+construct_model(struct p7config_s *cfg, MSA *msa, unsigned char **dsq, char *isfrag, 
+		struct plan7_s **ret_hmm, struct p7trace_s ***ret_tr)
+{
+  int checksum;
+
+  printf("%-40s ... ", "Constructing model architecture");
+  fflush(stdout);
+
+  checksum = GCGMultchecksum(msa->aseq, msa->nseq);
+  if (cfg->c_strategy == P7_FAST_CONSTRUCTION)
+    P7Fastmodelmaker(msa, dsq, isfrag, cfg->symfrac, ret_hmm, ret_tr);
+  else if (cfg->c_strategy == P7_HAND_CONSTRUCTION)
+    P7Handmodelmaker(msa, dsq, isfrag, ret_hmm, ret_tr);
+  else 
+    Die("no such construction strategy");
+  (*ret_hmm)->checksum = checksum;
+  printf("done.\n");
+}
+
+
+static void
+set_effective_seqnumber(struct p7config_s *cfg, MSA *msa, struct plan7_s *hmm, struct p7prior_s *pri)
+{
+  if (cfg->eff_strategy == EFF_NONE)
+    {
+      printf("%-40s ... ", "Set effective seq # to just nseq");
+      cfg->eff_nseq     = (float) msa->nseq;
+    }
+
+  else if (cfg->eff_strategy == EFF_USERSET)
+    {
+      printf("%-40s ... ", "Set effective seq #");
+    }
+
+  else if (cfg->eff_strategy == EFF_NCLUSTERS)
+    {
+      float *wgt;		/* dummy weights array to feed BlosumWeights*/
+      wgt = MallocOrDie(sizeof(float) * msa->nseq);
+      printf("%-40s ... ", "Determining eff seq # by clustering");
+      fflush(stdout);
+      BlosumWeights(msa->aseq, msa->nseq, msa->alen, cfg->eidlevel, wgt);
+      cfg->eff_nseq = FSum(wgt, msa->nseq);
+      free(wgt);
+    }
+
+  else if (cfg->eff_strategy == EFF_ENTROPY) 
+    {
+      printf("%-40s ... ", "Determining eff seq # by entropy target");
+      fflush(stdout);
+      cfg->eff_nseq = Eweight(hmm, pri, (float) msa->nseq, cfg->etarget);
+    } 
+
+  else
+    Die("no effective seq # strategy: shouldn't happen");
+
+  Plan7Rescale(hmm, cfg->eff_nseq / (float) msa->nseq);
+  printf("done. [%.1f]\n", cfg->eff_nseq);
 }
 
 
@@ -884,7 +964,7 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
 {
   int idx;			/* counter for sequences */
 
-				/* make sure model scores are ready */
+  				/* make sure model scores are ready */
   P7Logoddsify(hmm, TRUE);
 				/* header */
   fputs("**\n", fp);
@@ -920,14 +1000,17 @@ print_all_scores(FILE *fp, struct plan7_s *hmm,
  *                            followed by four chars of structure
  *                            annotation: CS, CS of M+1; CA, CA of M+1. 
  *           
- * Args:     cfp    - open counts file 
+ * Args:     cfg    - config includes cfp, open counts file, and cfile, its name
  *           name   - name of alignment or HMM to associate with these vectors
  *           hmm    - counts-based HMM
  */
 static void
-save_countvectors(FILE *cfp, char *name, struct plan7_s *hmm)
+save_countvectors(FILE *cfp, char *cfile, char *name, struct plan7_s *hmm)
 {
   int k, x;
+
+  printf("%-40s ... ", "Saving count vector file");
+  fflush(stdout);
 				/* match emission vectors */
   for (k = 1; k <= hmm->M; k++)
     {
@@ -974,6 +1057,7 @@ save_countvectors(FILE *cfp, char *name, struct plan7_s *hmm)
 	fputs("- -", cfp);
       fputs("\n", cfp);
     }
+    printf("done. [%s]\n", cfile);
 }
 
 
@@ -1186,7 +1270,7 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
   for (idx = 0; idx < msa->nseq; idx++)
     grad[idx] = relative_entropy - sc[idx];
 
-  
+  printf("\n%-40s ...\n", "Maximum entropy weighting, iterative");
   printf("iter avg-sc min-sc max-sc min-wgt max-wgt +wgt ++wgt rel.ent convergence\n");
   printf("---- ------ ------ ------ ------- ------- ---- ----- ------- -----------\n");
   mins = maxs = avgs = sc[0];
@@ -1316,5 +1400,145 @@ maximum_entropy(struct plan7_s *hmm, unsigned char **dsq, MSA *msa,
   free(grad);
   free(wgt);
   free(sc);
+  printf("----------------------------------------------\n\n");
   return;
 }
+
+/* set_model_name()
+ * Give the model a name.
+ * We deal with this differently depending on whether
+ * we're in an alignment database or a single alignment.
+ * 
+ * If a single alignment, priority is:
+ *      1. Use -n <name> if set.
+ *      2. Use msa->name (avail in Stockholm or SELEX formats only)
+ *      3. If all else fails, use alignment file name without
+ *         filename extension (e.g. "globins.slx" gets named "globins"
+ *         
+ * If a multiple MSA database (e.g. Stockholm/Pfam), 
+ * only msa->name is applied. -n is not allowed.
+ * if msa->name is unavailable, or -n was used,
+ * a fatal error is thrown.
+ * 
+ * Because we can't tell whether we've got more than one
+ * alignment 'til we're on the second one, these fatal errors
+ * only happen after the first HMM has already been built.
+ * Oh well.
+ */
+static void
+set_model_name(struct plan7_s *hmm, char *setname, char *msa_name, char *alifile, int nali)
+{
+  char *name;
+
+  printf("%-40s ... ", "Set model name, record commandline");
+  fflush(stdout);
+
+  if (nali == 0)		/* first (only?) HMM in file:  */
+    {
+      if      (setname  != NULL) name = Strdup(setname);
+      else if (msa_name != NULL) name = Strdup(msa_name);
+      else                       name = FileTail(alifile, TRUE);
+    }
+  else
+    {
+      if (setname != NULL) 
+	Die("Oops. Wait. You can't use -n with an alignment database.");
+      else if (msa_name != NULL) name = Strdup(msa_name);
+      else
+	Die("Oops. Wait. I need name annotation on each alignment.\n");
+    }
+  Plan7SetName(hmm, name);
+  free(name);
+  printf("done. [%s]\n", hmm->name);
+}
+
+/* print_statistics()
+ * 
+ * Purpose:  Given a newly constructed HMM and the tracebacks
+ *           of the sequences it was trained on, print out all
+ *           the interesting information at the end of hmmbuild
+ *           runs that convinces the user we actually
+ *           did something.
+ *           
+ * Args:     fp   - where to send the output (stdout, usually)
+ *           hmm  - the new HMM, probability form
+ *           dsq  - digitized training seqs
+ *           nseq - number of dsq's
+ *           tr   - array of tracebacks for dsq
+ */
+static void
+print_statistics(FILE *fp, struct plan7_s *hmm, unsigned char **dsq, int nseq,
+		 struct p7trace_s **tr)
+{
+  int   idx;			/* counter for sequences                */
+  float score;			/* an individual trace score            */
+  float total, best, worst;	/* for the avg. and range of the scores */
+  float sqsum, stddev;		/* for the std. deviation of the scores */
+
+  P7Logoddsify(hmm, TRUE);
+				/* find individual trace scores */
+  score = P7TraceScore(hmm, dsq[0], tr[0]);
+  total = best = worst = score;
+  sqsum = score * score;
+  for (idx = 1; idx < nseq; idx++) {
+    /* P7PrintTrace(stdout, tr[idx], hmm, dsq[idx]); */
+    score  = P7TraceScore(hmm, dsq[idx], tr[idx]);
+    total += score;
+    sqsum += score * score;
+    if (score > best)  best = score;
+    if (score < worst) worst = score;
+  }
+  if (nseq > 1) {
+    stddev = (sqsum - (total * total / (float) nseq)) / ((float) nseq - 1.);
+    stddev = (stddev > 0) ? sqrt(stddev) : 0.0;
+  } else stddev = 0.0;
+				/* print out stuff. */
+  fprintf(fp, "Average score:  %10.2f bits\n", total / (float) nseq);
+  fprintf(fp, "Minimum score:  %10.2f bits\n", worst);
+  fprintf(fp, "Maximum score:  %10.2f bits\n", best);
+  fprintf(fp, "Std. deviation: %10.2f bits\n", stddev);
+}
+
+
+/* save_hmmbuild_alignment()
+ * 
+ * hmmbuild modifies the input alignment in a number of ways:
+ *   1. Implied D->I and I->D transitions are removed, by small
+ *      alterations in the aligned residues;
+ *   2. Weights have been determined (relative and absolute);
+ *   3. Reference line is added, marking w/ x those columns that
+ *      were called consensus (M/D).
+ *
+ * For caller's information, optionally output the alignment 
+ * to a save file.
+ */
+static void
+save_hmmbuild_alignment(FILE *alignfp, MSA *msa, unsigned char **dsq, struct plan7_s *hmm,
+			struct p7trace_s **tr)
+{
+  MSA    *new_msa;
+  SQINFO *sqinfo;
+  int     idx;
+
+  printf("%-40s ... ", "Saving annotated alignment");
+  fflush(stdout);
+  sqinfo  = MSAToSqinfo(msa);
+  new_msa = P7Traces2Alignment(dsq, sqinfo, msa->wgt, msa->nseq, 
+			       hmm->M, tr, FALSE);
+  WriteStockholm(alignfp, new_msa);
+  MSAFree(new_msa);
+  for (idx = 0; idx < msa->nseq; idx++)
+    FreeSequence(NULL, &(sqinfo[idx]));
+  free(sqinfo);
+  printf("done.\n");
+}
+
+
+
+
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
+

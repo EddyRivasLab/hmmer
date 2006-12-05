@@ -3,7 +3,7 @@
  ************************************************************/
 
 /* funcs.h 
- * CVS $Id$
+ * SVN $Id$
  *
  * Declarations of external functions in HMMER.
  */            
@@ -232,16 +232,12 @@ extern int   SetAutocuts(struct threshold_s *thresh, struct plan7_s *hmm);
 /* from modelmakers.c
  * Model construction algorithms
  */
-extern void P7Handmodelmaker(MSA *msa, unsigned char **dsq, struct plan7_s **ret_hmm,
+extern void P7Handmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
+			     struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq,
-			     float maxgap, struct plan7_s **ret_hmm,
+extern void P7Fastmodelmaker(MSA *msa, unsigned char **dsq, char *isfrag,
+			     float symfrac, struct plan7_s **ret_hmm,
 			     struct p7trace_s ***ret_tr);
-extern void P7Maxmodelmaker(MSA *msa, unsigned char **dsq,
-			    float maxgap, struct p7prior_s *prior,
-			    float *null, float null_p1, float mpri,
-			    struct plan7_s **ret_hmm,
-			    struct p7trace_s  ***ret_tr);
 
 /* from plan7.c
  * Plan7 HMM structure support
