@@ -68,7 +68,7 @@
 
 # Option tests for hmmcalibrate
 #
-1 prep        hmm                  @hmmbuild@ -F %OPT.HMM% Optiontests.nslx
+1 prep        hmm                  @hmmbuild@ -F %OPT.HMM% Optiontests.sto
 1 exercise    hmmcalibrate         @hmmcalibrate@ %OPT.HMM%
 2 exercise    hmmcalibrate/h       @hmmcalibrate@ -h
 2 exercise    hmmcalibrate/fixed   @hmmcalibrate@ --fixed 15 %OPT.HMM%

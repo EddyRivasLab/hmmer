@@ -7,13 +7,13 @@ pages: see
 .PP
 For complete documentation, see the user guide that came with the
 distribution (Userguide.pdf); or see the HMMER web page,
-http://hmmer.wustl.edu/.
+http://hmmer.janelia.org/
 
 .SH COPYRIGHT
 
 .nf
-@COPYRIGHT@.
-@LICENSELINE@.
+Copyright (C) 1992-2006 HHMI Janelia Farm.
+Freely distributed under the GNU General Public License (GPL).
 .fi
 See the file COPYING in your distribution for details on redistribution
 conditions.
@@ -22,11 +22,10 @@ conditions.
 
 .nf
 Sean Eddy
-HHMI/Dept. of Genetics
-Washington Univ. School of Medicine
-4566 Scott Ave.
-St Louis, MO 63110 USA
-http://www.genetics.wustl.edu/eddy/
+HHMI Janelia Farm
+19700 Helix Drive
+Ashburn VA 20147
+http://selab.janelia.org/
 .fi
 
 
