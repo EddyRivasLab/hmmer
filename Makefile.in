@@ -1,6 +1,6 @@
 ################################################################# 
 # Makefile for HMMER: Main project directory: installation, documentation
-# CVS $Id$
+# SVN $Id$
 ###########
 # @LICENSE@
 ###########
@@ -58,7 +58,6 @@ LICENSELINE = "@PACKAGE_LICENSE@"
 RELCODE     = @PACKAGE_RELCODE@
 LICENSETAG  = gnu
 COMPRESS    = gzip
-FTPDIR      = /nfs/ftp/eddy/hmmer/${RELEASE}/
 
 # The program lists below for HMMER are not necessarily
 # a complete manifest. They are the list of stable programs that the

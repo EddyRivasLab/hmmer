@@ -54,8 +54,8 @@ static char experts[] = "\
    --pamwgt <x>  : for --pam: set weight on PAM-based prior to <x> {20.}[>=0]\n\
 \n\
   Alternative effective sequence number strategies:\n\
-   --effent      : adjust eff seq # to achieve entropy loss target [default]\n\
-   --effclust    : eff seq # is # of clusters by single linkage\n\
+   --effclust    : eff seq # is # of clusters by single linkage [default]\n\
+   --effent      : adjust eff seq # to achieve entropy loss target\n\
    --effnone     : effective sequence number is just # of seqs\n\
    --effset <x>  : set effective sequence number to <x>\n\
    --eloss <x>   : for --effent: set target loss [defaults: fs=0.59; ls=1.30]\n\
@@ -101,19 +101,19 @@ static struct opt_s OPTIONS[] = {
   { "--effset",  FALSE, sqdARG_FLOAT },
   { "--eidlevel",FALSE, sqdARG_FLOAT },
   { "--eloss",   FALSE, sqdARG_FLOAT },
+  { "--evolve",  FALSE, sqdARG_NONE  },
   { "--evolveic", FALSE, sqdARG_FLOAT },
   { "--fast",    FALSE, sqdARG_NONE },
-  { "--symfrac", FALSE, sqdARG_FLOAT },
   { "--hand",    FALSE, sqdARG_NONE},
   { "--informat",FALSE, sqdARG_STRING },
   { "--matrix",  FALSE, sqdARG_STRING },
-  { "--noevolve", FALSE, sqdARG_NONE  },
   { "--nucleic", FALSE, sqdARG_NONE },
   { "--null",    FALSE, sqdARG_STRING },
   { "--pam",     FALSE, sqdARG_STRING },
   { "--pamwgt",  FALSE, sqdARG_FLOAT },
   { "--pbswitch",FALSE, sqdARG_INT },
   { "--prior",   FALSE, sqdARG_STRING },
+  { "--symfrac", FALSE, sqdARG_FLOAT },
   { "--verbose", FALSE, sqdARG_NONE  },
   { "--wgsc",    FALSE, sqdARG_NONE },
   { "--wblosum", FALSE, sqdARG_NONE },
@@ -494,7 +494,7 @@ default_config(struct p7config_s *cfg)
   cfg->c_strategy   = P7_FAST_CONSTRUCTION;
   cfg->symfrac      = 0.5;
   cfg->symfrac_set  = FALSE;
-  cfg->eff_strategy = EFF_ENTROPY;
+  cfg->eff_strategy = EFF_NCLUSTERS;
   cfg->eff_nseq     = 0.;	/* not set yet */
   cfg->eidlevel     = 0.62;
   cfg->eloss        = 0.0;	/* not set yet */
