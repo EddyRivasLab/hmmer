@@ -46,7 +46,7 @@ AC_PREREQ(2.57)
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.0, eddy@genetics.wustl.edu, hmmer)
+AC_INIT(HMMER, 3.0, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 
@@ -55,18 +55,18 @@ AC_MSG_NOTICE([Configuring HMMER for your system.])
 #
 # The four AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
-#     PACKAGE_VERSION   <version>     e.g. "2.2h"
-#     PACKAGE_BUGREPORT <bug-report>  e.g. "eddy@genetics.wustl.edu"
+#     PACKAGE_VERSION   <version>     e.g. "3.0"
+#     PACKAGE_BUGREPORT <bug-report>  e.g. "eddys@janelia.hhmi.org"
 #     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
 # From them, it derives one more:
-#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 2.2h"
+#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
 # We also define additional variables:
-#     HMMER_RELCODE     unique CVS tag without .'s: e.g. "hmmer2_2i"
-#     HMMER_DATE        release date: e.g. "January 2003"
+#     HMMER_RELCODE     unique CVS tag without .'s: e.g. "hmmer3_0"
+#     HMMER_DATE        release date: e.g. "January 2007"
 #     HMMER_COPYRIGHT   one-line copyright string
 #     HMMER_LICENSE     one-line license string
 #     HMMER_LICENSETAG  which license to bundle from Licenses/ subdirectory.
-#     HMMER_VERSION     copy of version code, e.g. "2.2h"
+#     HMMER_VERSION     copy of version code, e.g. "3.0"
 #     HMMER_URL         URL home for HMMER.
 #
 # We avoid using AC_INIT's PACKAGE_ variables, because we want to be able
@@ -74,12 +74,12 @@ AC_MSG_NOTICE([Configuring HMMER for your system.])
 ################################################################
 
 HMMER_RELCODE="hmmer3_0"
-HMMER_DATE="April 2006"
-HMMER_COPYRIGHT="Copyright (C) 1992-2006 HHMI/Washington University School of Medicine"
+HMMER_DATE="January 2007"
+HMMER_COPYRIGHT="Copyright (C) 1992-2007 HHMI/Washington University School of Medicine"
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 HMMER_LICENSETAG=gnu
 HMMER_VERSION=$PACKAGE_VERSION
-HMMER_URL="http://hmmer.wustl.edu/"
+HMMER_URL="http://hmmer.janelia.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in Makefiles, p7config.h)
 AC_SUBST(HMMER_RELCODE)
@@ -647,6 +647,8 @@ AC_SYS_LARGEFILE
 AC_CONFIG_SUBDIRS(easel)
 AC_CONFIG_HEADERS(src/p7_config.h)
 AC_CONFIG_FILES(src/Makefile)
+AC_CONFIG_FILES(h3/Makefile)
+AC_CONFIG_HEADERS(h3/p7_config.h)
 AC_CONFIG_FILES(testsuite/Makefile)
 
 ################################################################

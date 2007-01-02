@@ -1,0 +1,93 @@
+############################################################
+# Makefile for HMMER src directory
+#
+# SRE, Mon Jan  1 19:05:39 2007 [Casa de Gatos]
+# SVN $Id$
+#
+
+
+## your compiler and compiler flags
+#
+CC       = @CC@
+CFLAGS   = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+LDFLAGS  = @LDFLAGS@
+DEFS     = @DEFS@
+LIBS     = @LIBS@ -lm
+
+## archiving command, and ranlib command if you need one.
+#  In general, you shouldn't need to change these, and they're
+#  only used for building the testsuite anyway... e.g. we
+#  make a "libhmmer.a" library for building the testsuite.
+#
+AR     = @AR@ rcv 
+RANLIB = @RANLIB@
+
+# Configuration for optional pthreads multiprocessor support
+#
+PTHREAD_LIBS   = @PTHREAD_LIBS@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+
+
+# Configuration for optional PVM functionality
+#
+PVMLIBDIR = @PVMLIBDIR@
+PVMINCDIR = @PVMINCDIR@
+PVMLIBS   = @PVMLIBS@
+PVMPROGS  = @PVMPROGS@
+
+SHELL    = /bin/sh
+MYLIBS   = -leasel
+MYLIBDIR = -L../easel
+MYINCDIR = -I../easel
+
+PROGS = 
+
+OBJS =  p7_hmm.o
+
+HDRS =  p7_hmm.h
+
+.c.o:
+	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
+
+
+#################################################################
+## Targets defining how to make HMMER executables.
+##
+all: 	$(PROGS) 
+
+${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} 
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
+
+
+#################################################################
+## Targets used in making HMMER library for testsuite compilation.
+##
+module: libhmmer.a
+
+libhmmer.a: $(OBJS) 
+	$(AR) libhmmer.a $(OBJS) 
+	$(RANLIB) libhmmer.a
+	chmod 644 libhmmer.a
+
+
+
+#################################################################
+## Miscellaneous targets.
+##
+distclean:
+	make clean
+	-rm -f Makefile p7_config.h
+
+clean:
+	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a
+
+binclean:
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
+
+TAGS:
+	etags -t *.c *.h Makefile.in
+
+###########
+# @LICENSE@
+###########
