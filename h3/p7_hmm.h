@@ -107,7 +107,7 @@ typedef struct {
 #define p7_STC   8
 #define p7_STT   9
 #define p7_STJ   10     
-
+#define p7_STX   11 	/* missing data: used esp. for local entry/exits */
 
 
 extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);

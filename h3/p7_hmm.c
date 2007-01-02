@@ -14,9 +14,9 @@
 
 #include "p7_config.h"		/* must be included first */
 
-#include <easel.h>
-#include <esl_alphabet.h>
-#include <esl_vectorops.h>
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_vectorops.h"
 
 
 /*****************************************************************
