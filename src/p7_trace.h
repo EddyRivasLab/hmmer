@@ -3,7 +3,6 @@
  * alignment of a profile to a target sequence.
  * 
  * SVN $Id$
- * SRE, Tue Apr 11 16:32:50 2006
  */
 #ifndef P7_TRACE_INCLUDED
 #define P7_TRACE_INCLUDED

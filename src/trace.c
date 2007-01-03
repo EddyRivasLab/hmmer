@@ -2,7 +2,6 @@
  * The Plan 7 traceback data structure, P7_TRACE.
  * 
  * SVN $Id: trace.c 1387 2005-05-13 20:50:29Z eddy $
- * SRE, Sat Nov 16 12:34:57 1996
  */
 #include <stdio.h>
 #include <string.h>
@@ -13,7 +12,6 @@
 #include "hmmer.h"
 
 /* Function:  p7_trace_Create()
- * Incept:    SRE, Tue Apr 11 16:40:40 2006 [St. Louis]
  *
  * Purpose:   Allocate a traceback of length <N> states (inclusive
  *            of S, T states); return it via <ret_tr>.
@@ -46,7 +44,6 @@ p7_trace_Create(int N, P7_TRACE **ret_tr)
 }
 
 /* Function:  p7_trace_Expand()
- * Incept:    SRE, Tue Apr 11 16:52:55 2006 [St. Louis]
  *
  * Purpose:   Doubles the allocation in a trace structure <tr>.
  *
@@ -71,7 +68,6 @@ p7_trace_Expand(P7_TRACE *tr)
 }
 
 /* Function:  p7_trace_ExpandTo()
- * Incept:    SRE, Tue Apr 11 16:56:19 2006 [St. Louis]
  *
  * Purpose:   Reallocates a trace structure <tr> to hold a trace
  *            of length <N> states.
@@ -98,7 +94,6 @@ p7_trace_ExpandTo(P7_TRACE *tr, int N)
 }
 
 /* Function:  p7_trace_Destroy()
- * Incept:    SRE, Tue Apr 11 16:58:35 2006 [St. Louis]
  *
  * Purpose:   Frees a trace structure <tr>.
  *
@@ -117,7 +112,6 @@ p7_trace_Destroy(P7_TRACE *tr)
 
 
 /* Function:  p7_trace_Dump()
- * Incept:    SRE, Tue Apr 11 17:38:07 2006 [St. Louis]
  *
  * Purpose:   Dumps internals of a traceback structure <tr> to <fp>.
  *            If <gm> is non-NULL, also prints transition/emission scores.

@@ -49,9 +49,9 @@ typedef struct {
 
   /* Pfam-specific score cutoffs.
    * 
-   * ga1, ga2 are valid if PLAN7_GA is set in flags.
-   * tc1, tc2 are valid if PLAN7_TC is set in flags.
-   * nc1, nc2 are valid if PLAN7_NC is set in flags.
+   * ga1, ga2 are valid if p7_GA is set in flags.
+   * tc1, tc2 are valid if p7_TC is set in flags.
+   * nc1, nc2 are valid if p7_NC is set in flags.
    */
   float  ga1, ga2;	/* per-seq/per-domain gathering thresholds (bits) (p7_GA) */
   float  tc1, tc2;	/* per-seq/per-domain trusted cutoff (bits)       (p7_TC) */

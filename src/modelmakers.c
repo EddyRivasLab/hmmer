@@ -134,7 +134,7 @@ p7_Handmodelmaker(ESL_MSA *msa, ESL_ALPHABET *abc, char **dsq, char *isfrag,
  *           Construct an HMM from an alignment using a heuristic,
  *           based on the fractional occupancy of each columns w/
  *           residues vs gaps. Roughly, any column w/ a fractional
- *           occupancy of $\geq$ <thresh> is assigned as a MATCH column;
+ *           occupancy of $\geq$ <symfrac> is assigned as a MATCH column;
  *           for instance, if thresh = 0.5, columns w/ $\geq$ 50\% 
  *           residues are assigned to match... roughly speaking.
  *           
