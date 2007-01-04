@@ -1,4 +1,13 @@
-/* Input/output of HMMs
+/* Input/output of HMMs.
+ * 
+ * Contents:
+ *     1. The P7_HMMFILE object.
+ *     2. Writing HMMs to save files.
+ *     3. Reading HMMs from save files.
+ *     4. Some private functions.
+ *     5. Unit tests.
+ *     6. Test driver.
+ *     7. Copyright and license.
  * 
  * SRE, Wed Jan  3 13:48:12 2007 [Janelia]
  * SVN $Id$
@@ -6,9 +15,9 @@
 #include "p7_config.h"
 
 #include <stdio.h>
-
 #include "easel.h"
 #include "esl_ssi.h" 		/* this gives us esl_byteswap */
+#include "p7_hmmfile.h"
 
 /* Magic numbers identifying binary formats.
  * Do not change the old magics! Necessary for backwards compatibility.
@@ -28,6 +37,98 @@ static uint32_t  v30swap  = 0xb6edede8; /* V3.0 binary, byteswapped         */
 
 static int write_bin_string(FILE *fp, char *s);
 static int read_bin_string (FILE *fp, int doswap, char **ret_s);
+
+
+/*****************************************************************
+ * 1. The P7_HMMFILE object.
+ *****************************************************************/
+
+/* Function:  esl_hmmfile_Open()
+ * Incept:    SRE, Wed Jan  3 18:38:10 2007 [Casa de Gatos]
+ *
+ * Purpose:   Open an HMM file or HMM database in the file <filename>
+ *            and prepare to read the first HMM.
+ *            
+ *            We look for <filename> relative to the current working
+ *            directory. Additionally, if we don't find it in the cwd
+ *            and <env> is non-NULL, we will look for <filename>
+ *            relative to one or more directories in a colon-delimited
+ *            list obtained from the environment variable <env>. For
+ *            example, if we had <setenv HMMERDB
+ *            /misc/db/Pfam:/misc/db/Rfam> in the environment, a
+ *            profile HMM application might pass "HMMERDB" as <env>.
+ *            
+ *            As a special case, if <filename> is "-", then HMMs will
+ *            be read from <stdin>. In this case, <env> has no effect.
+ *            [NOT YET IMPLEMENTED]
+ *            
+ *            As another special case, if <filename> ends in a <.gz>
+ *            suffix, the file is assumed to be compressed by GNU
+ *            <gzip>, and it is opened for reading from a pipe with
+ *            <gunzip -dc>. This feature is only available on
+ *            POSIX-compliant systems that have a <popen()> call, and
+ *            <HAVE_POPEN> is defined by the configure script at
+ *            compile time. 
+ *            [NOT YET IMPLEMENTED]
+ *            
+ * Args:      
+ *
+ * Returns:   <eslOK> on success, and the open <ESL_HMMFILE> is returned
+ *            in <*ret_hfp>.
+ *            
+ *            <eslENOTFOUND> if <filename> can't be opened for
+ *            reading, even after the list of directories in <env> (if
+ *            any) is checked.
+
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
+{
+  P7_HMMFILE *hfp = NULL;
+  int         status;
+
+  ESL_ALLOC(hfp, sizeof(P7_HMMFILE));
+  hfp->f      = NULL;
+  hfp->parser = NULL;
+
+  if ((hfp->f = fopen(filename, "r")) != NULL) 
+    ;
+  else if (esl_FileEnvOpen(filename, env, &(hfp->f), &envfile) == eslOK)
+    ;
+  else
+    { status = eslENOTFOUND; goto ERROR; }
+  
+  hfp->parser = read_bin30hmm;
+
+  *ret_hfp = hfp;
+  return eslOK;
+
+ ERROR:
+  if (hfp != NULL) p7_hmmfile_Close(hfp);
+  *ret_hfp = NULL;
+  return status;
+}
+
+/* Function:  p7_hmmfile_Close()
+ * Incept:    SRE, Wed Jan  3 18:48:44 2007 [Casa de Gatos]
+ *
+ * Purpose:   Closes an open HMM file <hfp>.
+ *
+ * Returns:   (void)
+ */
+void
+p7_hmmfile_Close(P7_HMMFILE *hfp)
+{
+  if (hfp != NULL)
+    {
+      if (hfp->f != NULL) fclose(afp->f);
+    }
+  return;
+}
+
+
 
 /* Function:  p7_hmmfile_Write()
  * Incept:    SRE, Wed Jan  3 13:50:26 2007 [Janelia]			
@@ -92,6 +193,17 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
   return eslOK;
 }
 
+
+int
+p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm)
+{
+  /* A call to SSI to remember file position will go here.
+   */
+  return (*hfp->parser)(hfp, ret_abc, ret_hmm);
+}
+
+
+
 /*****************************************************************
  * 2. Private functions for reading/parsing various save file formats
  *****************************************************************/
@@ -99,28 +211,48 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
 /* Binary save files from HMMER 3.x
  */
 static int
-read_bin30hmm(P7_HMMFILE *hmmfp, P7_HMM *ret_hmm)
+read_bin30hmm(P7_HMMFILE *hmmfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
 {
   int     status;
   P7_HMM *hmm = NULL;
   uint32_t magic;
-  int     k,x;
+  int     flags;
+  int     M;
   int     alphabet_type;
+  int     k,x;
 
-  /* Check magic.
-   */
+  /* Check magic. */
   if (feof(hmmfp->f)) { status = eslEOD; goto ERROR; }
-  if (! fread((char *) &magic, sizeof(uint32_t), 1, hmmfp->f)) { status = eslEOD;     goto FAILURE; }
-  if (magic != v30magic)                                       { status = eslEFORMAT; goto FAILURE; }
-  if ((hmm = p7_hmm_CreateShell()) == NULL)                    { status = eslEMEM;    goto FAILURE; }
+  if (! fread((char *) &magic, sizeof(uint32_t), 1, hmmfp->f))    { status = eslEOD;       goto ERROR; }
+  if (magic != v30magic)                                          { status = eslEFORMAT;   goto ERROR; }
 
-  /* Get sizes of things
-   */
-  if (! fread((char *) &(hmm->flags),    sizeof(int), 1, hmmfp->f)) { status = eslEOD;   goto FAILURE; }
-  if (! fread((char *) &(hmm->M),        sizeof(int), 1, hmmfp->f)) { status = eslEOD;   goto FAILURE; }
-  if (! fread((char *) &(alphabet_type), sizeof(int), 1, hmmfp->f)) { status = eslEOD;   goto FAILURE; }
+  /* Get sizes of things */
+  if (! fread((char *) &flags,         sizeof(int), 1, hmmfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &M,             sizeof(int), 1, hmmfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &alphabet_type, sizeof(int), 1, hmmfp->f)) { status = eslEOD;       goto ERROR; }
   
- 
+  /* Set or verify alphabet. */
+  if (*ret_abc == NULL)	{	/* still unknown: set it, pass control of it back to caller */
+    if ((*ret_abc = esl_alphabet_Create(alphabet_type)) == NULL)  { status = eslEMEM;      goto ERROR; }
+  } else {			/* already known: check it */
+    if ((*ret_abc)->type != alphabet_type)                        { status = eslEINCOMPAT; goto ERROR; }
+  }
+
+  /* Allocate the new HMM. */
+  if ((hmm = p7_hmm_Create(M, *ret_abc)) == NULL)                 { status = eslEMEM;      goto ERROR; }  
+  
+  /* Core model probabilities. */
+  for (k = 1; k <= hmm->M; k++)
+    if (! fread((char *) hmm->mat[k], sizeof(float), hmm->abc->K, hfp->f)) { status = eslEOD; goto ERROR; }
+  for (k = 1; k < hmm->M; k++)
+    if (! fread((char *) hmm->ins[k], sizeof(float), hmm->abc->K, hfp->f)) { status = eslEOD; goto ERROR; }
+  for (k = 1; k < hmm->M; k++)
+    if (! fread((char *) hmm->t[k],   sizeof(float), 7,           hfp->f)) { status = eslEOD; goto ERROR; }
+  
+  /* Annotations. */
+  if ((status = read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->name))) != eslOK) goto ERROR;
+      
+
 
 }
 
