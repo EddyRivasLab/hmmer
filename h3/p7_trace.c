@@ -5,7 +5,12 @@
 
 #include "p7_config.h"
 
+#include <stdlib.h>
+#include <stdio.h>
+
 #include "easel.h"
+
+#include "p7_trace.h"
 
 
 /* Function:  p7_trace_Create()

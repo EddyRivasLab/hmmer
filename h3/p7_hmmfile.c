@@ -2,9 +2,9 @@
  * 
  * Contents:
  *     1. The P7_HMMFILE object.
- *     2. Writing HMMs to save files.
- *     3. Reading HMMs from save files.
- *     4. Some private functions.
+ *     2. External API for writing and reading save files.
+ *     3. Private functions for parsing HMM file formats.
+ *     4. Other private functions involved in i/o.
  *     5. Unit tests.
  *     6. Test driver.
  *     7. Copyright and license.
@@ -15,8 +15,11 @@
 #include "p7_config.h"
 
 #include <stdio.h>
+
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_ssi.h" 		/* this gives us esl_byteswap */
+
 #include "p7_hmmfile.h"
 
 /* Magic numbers identifying binary formats.
@@ -35,8 +38,10 @@ static uint32_t  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
 static uint32_t  v30magic = 0xe8ededb6; /* V3.0 binary: "hmm6" + 0x80808080 */
 static uint32_t  v30swap  = 0xb6edede8; /* V3.0 binary, byteswapped         */
 
+static int read_bin30hmm(P7_HMMFILE *hmmfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm);
+
 static int write_bin_string(FILE *fp, char *s);
-static int read_bin_string (FILE *fp, int doswap, char **ret_s);
+static int read_bin_string (FILE *fp, char **ret_s);
 
 
 /*****************************************************************
@@ -88,6 +93,7 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 {
   P7_HMMFILE *hfp = NULL;
   int         status;
+  char       *envfile = NULL;	/* full path to filename after using environment  */
 
   ESL_ALLOC(hfp, sizeof(P7_HMMFILE));
   hfp->f      = NULL;
@@ -102,11 +108,13 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
   
   hfp->parser = read_bin30hmm;
 
+  if (envfile != NULL) free(envfile);
   *ret_hfp = hfp;
   return eslOK;
 
  ERROR:
-  if (hfp != NULL) p7_hmmfile_Close(hfp);
+  if (envfile != NULL) free(envfile);
+  if (hfp     != NULL) p7_hmmfile_Close(hfp);
   *ret_hfp = NULL;
   return status;
 }
@@ -123,12 +131,16 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
 {
   if (hfp != NULL)
     {
-      if (hfp->f != NULL) fclose(afp->f);
+      if (hfp->f != NULL) fclose(hfp->f);
     }
   return;
 }
 
 
+
+/*****************************************************************
+ * 2. External API for writing and reading save files.
+ *****************************************************************/
 
 /* Function:  p7_hmmfile_Write()
  * Incept:    SRE, Wed Jan  3 13:50:26 2007 [Janelia]			
@@ -205,60 +217,113 @@ p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm)
 
 
 /*****************************************************************
- * 2. Private functions for reading/parsing various save file formats
+ * 3. Private functions for parsing HMM file formats.
  *****************************************************************/
 
 /* Binary save files from HMMER 3.x
+ * 
+ * Returns:    <eslOK> on success, and <ret_hmm> points at a newly allocated HMM.
+ *             Additionally, if <*ret_abc> was NULL, then a new alphabet is allocated
+ *             according to the alphabet type of this HMM, and returned thru <ret_abc>.
+ *             This mechanism allows a main() application that doesn't yet know its
+ *             alphabet to determine the alphabet when the first HMM is read.
+ *             
+ *             Other return codes for normal errors:
+ *             <eslEOD>     : an fread() failed, probably indicated premature end of data file.
+ *             <eslEFORMAT> : the binary magic number at the start of the file doesn't match
+ *                            the expected magic; this isn't a HMMER file.
+ *             <eslINCOMPAT>: the alphabet type of the HMM doesn't match the alphabet type 
+ *                            passed by the caller in <*ret_abc>.
+ *                            
+ * Throws:     <eslEMEM> on allocation error.
+ *             In cases of error (including both thrown error and normal error), <*ret_abc>
+ *             is left in its original state as passed by the caller, and <*ret_hmm> is
+ *             returned <NULL>.
  */
 static int
-read_bin30hmm(P7_HMMFILE *hmmfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
+read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
 {
-  int     status;
-  P7_HMM *hmm = NULL;
+  ESL_ALPHABET *abc = NULL;
+  P7_HMM       *hmm = NULL;
   uint32_t magic;
   int     flags;
   int     M;
   int     alphabet_type;
   int     k,x;
+  int     status;
 
   /* Check magic. */
-  if (feof(hmmfp->f)) { status = eslEOD; goto ERROR; }
-  if (! fread((char *) &magic, sizeof(uint32_t), 1, hmmfp->f))    { status = eslEOD;       goto ERROR; }
-  if (magic != v30magic)                                          { status = eslEFORMAT;   goto ERROR; }
+  if (feof(hfp->f))                                             { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOD;       goto ERROR; }
+  if (magic != v30magic)                                        { status = eslEFORMAT;   goto ERROR; }
 
   /* Get sizes of things */
-  if (! fread((char *) &flags,         sizeof(int), 1, hmmfp->f)) { status = eslEOD;       goto ERROR; }
-  if (! fread((char *) &M,             sizeof(int), 1, hmmfp->f)) { status = eslEOD;       goto ERROR; }
-  if (! fread((char *) &alphabet_type, sizeof(int), 1, hmmfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &flags,         sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &M,             sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &alphabet_type, sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
   
   /* Set or verify alphabet. */
   if (*ret_abc == NULL)	{	/* still unknown: set it, pass control of it back to caller */
-    if ((*ret_abc = esl_alphabet_Create(alphabet_type)) == NULL)  { status = eslEMEM;      goto ERROR; }
+    if ((abc = esl_alphabet_Create(alphabet_type)) == NULL)       { status = eslEMEM;      goto ERROR; }
   } else {			/* already known: check it */
+    abc = *ret_abc;
     if ((*ret_abc)->type != alphabet_type)                        { status = eslEINCOMPAT; goto ERROR; }
   }
 
   /* Allocate the new HMM. */
-  if ((hmm = p7_hmm_Create(M, *ret_abc)) == NULL)                 { status = eslEMEM;      goto ERROR; }  
+  if ((hmm = p7_hmm_Create(M, abc)) == NULL)                      { status = eslEMEM;      goto ERROR; }  
   
   /* Core model probabilities. */
   for (k = 1; k <= hmm->M; k++)
-    if (! fread((char *) hmm->mat[k], sizeof(float), hmm->abc->K, hfp->f)) { status = eslEOD; goto ERROR; }
+    if (! fread((char *) hmm->mat[k], sizeof(float), hmm->abc->K, hfp->f)) {status = eslEOD; goto ERROR;}
   for (k = 1; k < hmm->M; k++)
-    if (! fread((char *) hmm->ins[k], sizeof(float), hmm->abc->K, hfp->f)) { status = eslEOD; goto ERROR; }
+    if (! fread((char *) hmm->ins[k], sizeof(float), hmm->abc->K, hfp->f)) {status = eslEOD; goto ERROR;}
   for (k = 1; k < hmm->M; k++)
-    if (! fread((char *) hmm->t[k],   sizeof(float), 7,           hfp->f)) { status = eslEOD; goto ERROR; }
+    if (! fread((char *) hmm->t[k],   sizeof(float), 7,           hfp->f)) {status = eslEOD; goto ERROR;}
   
   /* Annotations. */
-  if ((status = read_bin_string(hmmfp->f, hmmfp->byteswap, &(hmm->name))) != eslOK) goto ERROR;
-      
+  if ((status = read_bin_string(hfp->f, &(hmm->name))) != eslOK)                            goto ERROR;
+  if ((hmm->flags & p7_ACC)  && (status = read_bin_string(hfp->f, &(hmm->acc)))   != eslOK) goto ERROR;
+  if ((hmm->flags & p7_DESC) && (status = read_bin_string(hfp->f, &(hmm->desc)))  != eslOK) goto ERROR;
+  if ((hmm->flags & p7_RF)   && ! fread((char *) hmm->rf, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
+  if ((hmm->flags & p7_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
+  if ((hmm->flags & p7_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
+  if (status = read_bin_string(hfp->f, &(hmm->comlog))  != eslOK)                           goto ERROR;
+  if (! fread((char *) &(hmm->nseq), sizeof(int), 1, hfp->f))                               {status = eslEOD; goto ERROR;}
+  if (status = read_bin_string(hfp->f, &(hmm->ctime))   != eslOK)                           goto ERROR;
+  if ((hmm->flags & p7_MAP)  && ! fread((char *) hmm->map, sizeof(char), hmm->M+1, hfp->f)) {status = eslEOD; goto ERROR;}
+  if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}
 
-
+  /* Pfam cutoffs */
+  if (hmm->flags & p7_GA) {
+    if (! fread((char *) &(hmm->ga1), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
+    if (! fread((char *) &(hmm->ga2), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
+  }
+  if (hmm->flags & p7_TC) {
+    if (! fread((char *) &(hmm->tc1), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
+    if (! fread((char *) &(hmm->tc2), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
+  }
+  if (hmm->flags & p7_NC) {
+    if (! fread((char *) &(hmm->nc1), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
+    if (! fread((char *) &(hmm->nc2), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
+  }
+  
+  if (*ret_abc == NULL) *ret_abc = abc;	/* pass our new alphabet back to caller, if caller didn't know it already */
+  *ret_hmm = hmm;
+  return eslOK;
+  
+ ERROR:
+  if (*ret_abc == NULL && abc != NULL) esl_alphabet_Destroy(abc); /* the test is for an alphabet created here, not passed */
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
 }
 
 
+
+
 /*****************************************************************
- * 3. Private functions involved in i/o
+ * 4. Other private functions involved in i/o
  *****************************************************************/
 
 /* Function: write_bin_string()
@@ -304,9 +369,9 @@ read_bin_string(FILE *fp, char **ret_s)
   char *s = NULL;
   int   len;
 
-  if (! fread((char *) &len, sizeof(int), 1, fp)) { status = eslEOD; goto FAILURE; }
+  if (! fread((char *) &len, sizeof(int), 1, fp)) { status = eslEOD; goto ERROR; }
   ESL_ALLOC(s,  (sizeof(char) * len));
-  if (! fread((char *) s, sizeof(char), len, fp)) { status = eslEOD; goto FAILURE; }
+  if (! fread((char *) s, sizeof(char), len, fp)) { status = eslEOD; goto ERROR; }
   *ret_s = s;
   return eslOK;
 
@@ -315,6 +380,14 @@ read_bin_string(FILE *fp, char **ret_s)
   *ret_s = NULL;
   return status;
 }
+
+/*****************************************************************
+ * 5. Unit tests.
+ *****************************************************************/
+
+/*****************************************************************
+ * 6. Test driver.
+ *****************************************************************/
 
 
 /*****************************************************************

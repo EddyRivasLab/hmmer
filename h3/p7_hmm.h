@@ -114,7 +114,7 @@ extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
 extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
-extern int     p7_hmm_ZeroCounts(P7_HMM *hmm);
+extern int     p7_hmm_Zero(P7_HMM *hmm);
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern char   *p7_hmm_DescribeStatetype(char st);
 

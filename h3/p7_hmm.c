@@ -14,9 +14,17 @@
 
 #include "p7_config.h"		/* must be included first */
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
+
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_vectorops.h"
+
+#include "p7_hmm.h"
+
+
 
 
 /*****************************************************************
@@ -201,7 +209,7 @@ p7_hmm_Destroy(P7_HMM *hmm)
  * Returns:   <eslOK> on success.
  */
 int
-p7_hmm_ZeroCounts(P7_HMM *hmm)
+p7_hmm_Zero(P7_HMM *hmm)
 {
   int k;
 

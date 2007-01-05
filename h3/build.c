@@ -32,8 +32,7 @@
 #include "esl_alphabet.h"
 #include "esl_msa.h"
 
-static int matassign2hmm(ESL_MSA *msa, ESL_ALPHABET *abc, int *matassign, 
-			 P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 static int fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr);
 static int trace_doctor(P7_TRACE *tr, int mlen, int *ret_ndi, int *ret_nid);
 static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
@@ -229,9 +228,6 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
   int      apos;                /* counter for aligned columns         */
   int      mode;
 
-  *ret_hmm = NULL;
-  *ret_tr  = NULL;
-
   /* How many match states in the HMM? */
   for (M = 0, apos = 1; apos <= msa->alen; apos++) 
     if (matassign[apos]) M++;
@@ -262,13 +258,13 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
   msa->rf[msa->alen] = '\0';
 
   if (ret_tr  != NULL) *ret_tr  = tr; 
-  else                  esl_trace_DestroyArray(tr, msa->nseq);
+  else                  p7_trace_DestroyArray(tr, msa->nseq);
   *ret_hmm = hmm;
   return eslOK;
 
  ERROR:
-  if (tr  != NULL) p7_trace_DestroyArray(tr, msa->nseq);
-  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  if (tr     != NULL) p7_trace_DestroyArray(tr, msa->nseq);
+  if (hmm    != NULL) p7_hmm_Destroy(hmm);
   if (ret_tr != NULL) *ret_tr = NULL;
   *ret_hmm = NULL;
   return status;
@@ -425,11 +421,13 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
       /* finally, clean up: deal with DI, ID transitions and other plan7 impossibilities */
       if ((status = trace_doctor(tr[idx], M, NULL, NULL)) != eslOK) goto ERROR;
     } 
-  ret_tr = tr;
+
+  *ret_tr = tr;
   return eslOK;
 
  ERROR:
-  esl_trace_DestroyArray(tr, msa->nseq);
+  p7_trace_DestroyArray(tr, msa->nseq);
+  *ret_tr = NULL;
   return status;
 }
 
@@ -516,6 +514,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   int   apos;			/* position in matassign, 1.alen  */
   int   k;			/* position in model, 1.M         */
   char *pri;			/* X-PRM, X-PRI, X-PRT annotation */
+  int   status;
 
   /* Reference coord annotation  */
   if (msa->rf != NULL) {

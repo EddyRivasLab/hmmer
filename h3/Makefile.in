@@ -41,11 +41,18 @@ MYLIBS   = -leasel
 MYLIBDIR = -L../easel
 MYINCDIR = -I../easel
 
-PROGS = 
+PROGS = hmmbuild
 
-OBJS =  p7_hmm.o
+OBJS =  build.o\
+	p7_hmm.o\
+	p7_hmmfile.o\
+	p7_trace.o
 
-HDRS =  p7_hmm.h
+HDRS =  hmmer.h\
+	p7_config.h\
+	p7_hmm.h\
+	p7_hmmfile.h\
+	p7_trace.h
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<

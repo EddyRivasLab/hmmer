@@ -21,6 +21,7 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",     0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 static char banner[] = "hmmbuild - build a profile HMM from an alignment";
