@@ -61,7 +61,7 @@ HDRS =  hmmer.h\
 #################################################################
 ## Targets defining how to make HMMER executables.
 ##
-all: 	$(PROGS) 
+all: 	$(PROGS) libhmmer.a
 
 ${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} 
 	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}

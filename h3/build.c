@@ -94,6 +94,8 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
 
   /* matassign2hmm leaves ret_hmm, ret_tr in their proper state: */
   if ((status = matassign2hmm(msa, matassign, ret_hmm, ret_tr)) != eslOK) goto ERROR;
+
+  free(matassign);
   return eslOK;
 
  ERROR:
@@ -184,6 +186,7 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret
    */
   if ((status = matassign2hmm(msa, matassign, ret_hmm, ret_tr)) != eslOK) goto ERROR;
 
+  free(matassign);
   return eslOK;
 
  ERROR:
@@ -226,7 +229,6 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
   int      M;                   /* length of new model in match states */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
-  int      mode;
 
   /* How many match states in the HMM? */
   for (M = 0, apos = 1; apos <= msa->alen; apos++) 
@@ -278,6 +280,9 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
  *           
  *           Tracebacks are always relative to the search model (with
  *           internal entry/exit, B->Mk and Mk->E).
+ *
+ *           These faked tracebacks use sequence indices <i> relative
+ *           to the aligned sequences in msa, not unaligned seqs as normal.
  *           
  *           Rarely, an individual traceback may be left as NULL. This
  *           happens when a sequence has no residues assigned to the
@@ -301,14 +306,12 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
   int  status;
   P7_TRACE **tr = NULL;
   int  idx;                     /* counter over sequences          */
-  int  i;                       /* position in raw sequence (1..L) */
   int  k;                       /* position in HMM                 */
   int  apos;                    /* position in alignment columns   */
   int  k1,k2;			/* first, last match state used    */
   int  c1,c2;			/* entered/exited column           */
   int  cfirst,clast;		/* loc's of p7_{FIRST,LAST}_MATCH  */
   int  M;
-  int  do_local;
 
   /* Allocate for nseq traces.
    */
@@ -337,12 +340,16 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
        * (node k2, column c2).
        */
       for (k1 = 0, c1 = cfirst; c1 <= clast; c1++) {
-	if (matassign[apos])                                k1++;
-	if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][c1])) break;
+	if (matassign[c1]) {
+	  k1++;
+	  if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][c1])) break;
+	}
       }
       for (k2 = M+1, c2 = clast; c2 >= cfirst; c2--) {
-	if (matassign[apos])                                k2--;
-	if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][c2])) break;
+	if (matassign[c2]) {
+	  k2--;
+	  if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][c2])) break;
+	}
       }
       if (c1 > clast || c2 < cfirst) continue; /* rare: empty sequence; leave trace NULL. */
 
@@ -352,12 +359,11 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
       if ((status = p7_trace_Create(msa->alen+6, &tr[idx])) != eslOK) goto ERROR; /* +6 = S,N,B,E,C,T */
       if ((status = p7_trace_Append(tr[idx], p7_STS, 0, 0)) != eslOK) goto ERROR; /* traces start with S... */
       if ((status = p7_trace_Append(tr[idx], p7_STN, 0, 0)) != eslOK) goto ERROR; /*...and transit to N.    */
-      i = 1;   /* i=index of next residue to deal with */
+
       for (apos = 1; apos < c1; apos++)
 	if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) 
 	  {
-	    if ((status = p7_trace_Append(tr[idx], p7_STN, 0, i)) != eslOK) goto ERROR;
-	    i++;
+	    if ((status = p7_trace_Append(tr[idx], p7_STN, 0, apos)) != eslOK) goto ERROR;
 	  }
       if ((status = p7_trace_Append(tr[idx], p7_STB, 0, 0)) != eslOK) goto ERROR;
       if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][cfirst]))
@@ -370,9 +376,8 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 	  if (matassign[apos]) {
 	    if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
 	      { /* on c1 and c2 endpoints themselves, this must be the case, by def'n of c1/c2 */
-		if ((status = p7_trace_Append(tr[idx], p7_STM, k, i)) != eslOK) goto ERROR;
+		if ((status = p7_trace_Append(tr[idx], p7_STM, k, apos)) != eslOK) goto ERROR;
 		k++;
-		i++;
 	      }
 	    else if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
 	      {
@@ -390,8 +395,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 	  } else { /* else, an insert-assigned column: */
 	    if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
 	      {
-		if ((status = p7_trace_Append(tr[idx], p7_STI, k-1, i)) != eslOK) goto ERROR;
-		i++;
+		if ((status = p7_trace_Append(tr[idx], p7_STI, k-1, apos)) != eslOK) goto ERROR;
 	      }
 	    else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 	      {
@@ -408,18 +412,22 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
       if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][clast]))
 	if ((status = p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
       if ((status = p7_trace_Append(tr[idx], p7_STE, 0, 0)) != eslOK) goto ERROR;
-      if ((status = p7_trace_Append(tr[idx], p7_STC, 0, i)) != eslOK) goto ERROR;
+      if ((status = p7_trace_Append(tr[idx], p7_STC, 0, 0)) != eslOK) goto ERROR;
 
       for (apos = c2+1; apos <= msa->alen; apos++)
 	if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) 
 	  {
-	    if ((status = p7_trace_Append(tr[idx], p7_STC, 0, i)) != eslOK) goto ERROR;
-	    i++;
+	    if ((status = p7_trace_Append(tr[idx], p7_STC, 0, apos)) != eslOK) goto ERROR;
 	  }	
       if ((status = p7_trace_Append(tr[idx], p7_STT, 0, 0)) != eslOK) goto ERROR;
 
       /* finally, clean up: deal with DI, ID transitions and other plan7 impossibilities */
       if ((status = trace_doctor(tr[idx], M, NULL, NULL)) != eslOK) goto ERROR;
+
+      /* Validate it.
+       */
+      p7_trace_Dump(stdout, tr[idx], NULL, NULL); 
+      p7_trace_Validate(tr[idx]);
     } 
 
   *ret_tr = tr;
@@ -513,7 +521,6 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
 {                      
   int   apos;			/* position in matassign, 1.alen  */
   int   k;			/* position in model, 1.M         */
-  char *pri;			/* X-PRM, X-PRI, X-PRT annotation */
   int   status;
 
   /* Reference coord annotation  */
@@ -547,7 +554,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   }
 
   /* The alignment map (1..M in model, 1..alen in alignment) */
-  ESL_ALLOC(hmm->map, sizeof(char) * (hmm->M+2));
+  ESL_ALLOC(hmm->map, sizeof(int) * (hmm->M+2));
   for (apos = k = 1; apos <= msa->alen; apos++)
     if (matassign[apos]) hmm->map[k++] = apos;
   hmm->flags |= p7_MAP;
@@ -563,13 +570,14 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
  *****************************************************************/
 #ifdef p7BUILD_TESTDRIVE
 
+#if 0
 static void
 utest_foo(void)
 {
 
   return;
 }
-
+#endif
 
 #endif /*p7BUILD_TESTDRIVE*/
 /*---------------------- end of unit tests -----------------------*/
@@ -582,16 +590,70 @@ utest_foo(void)
  *****************************************************************/
 
 #ifdef p7BUILD_TESTDRIVE
+/* gcc -g -Wall -Dp7BUILD_TESTDRIVE -I. -I../easel -L. -L../easel -o build_test build.c -lhmmer -leasel -lm
+ */
+#include "easel.h"
 
-#include <p7_config.h>
-#include <p7_hmm.h>
+#include "p7_config.h"
+#include "p7_hmm.h"
+
+static int write_test_msa(FILE *ofp);
 
 int
 main(int argc, char **argv)
-{
-  
-  exit(0); /* success */
+{  
+  char          msafile[10] = "eslXXXXXX"; /* tmpfile template */
+  FILE         *fp;        
+  ESL_ALPHABET *abc;
+  ESL_MSAFILE  *afp;
+  ESL_MSA      *msa;
+  P7_HMM       *hmm;
+  int           nali;
+  float         symfrac = 0.5;
+  int           status;
+
+
+  if ((status = esl_tmpfile_named(msafile, &fp)) != eslOK) esl_fatal("tmpfile creation failed");
+  if ((status = write_test_msa(fp))              != eslOK) esl_fatal("test msa write failed");
+  fclose(fp);
+
+  if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("alphabet creation failed");
+
+  status = esl_msafile_OpenDigital(abc, msafile, eslMSAFILE_UNKNOWN, NULL, &afp);
+  if (status != eslOK) esl_fatal("msa open failed");
+
+  while ((status = esl_msa_Read(afp, &msa)) == eslOK)
+    {
+      nali++;
+      
+      status = p7_Fastmodelmaker(msa, symfrac, &hmm, NULL);
+      if (status != eslOK) esl_fatal("Model construction failed.");
+
+      p7_hmm_Destroy(hmm);
+      esl_msa_Destroy(msa);
+    }
+  if (status != eslEOF) esl_fatal("Alignment read failed");
+
+  esl_msafile_Close(afp);
+  esl_alphabet_Destroy(abc);
+  remove(msafile);
+  return eslOK;
 }
+
+
+static int
+write_test_msa(FILE *ofp)
+{
+  fprintf(ofp, "# STOCKHOLM 1.0\n");
+  fprintf(ofp, "#=GC RF --xxxxxxxxxxxxxxxx-xxx-x--\n");
+  fprintf(ofp, "seq1    --ACDEFGHIKLMNPQRS-TVW-Yyy\n");
+  fprintf(ofp, "seq2    aaACDEFGHIKLMNPQRS-TVWw---\n");
+  fprintf(ofp, "seq3    aaAC-EFGHIKLMNPQRS-TVW-Y--\n");
+  fprintf(ofp, "seq4    aaAC-EFGHIKLMNPQRS-TVW-Y--\n");
+  fprintf(ofp, "//\n");
+  return eslOK;
+}
+
 
 #endif /*p7BUILD_TESTDRIVE*/
 /*-------------------- end of test driver ---------------------*/

@@ -9,6 +9,7 @@
 /* Structures
  */
 #include "p7_hmm.h"
+#include "p7_hmmfile.h"
 #include "p7_trace.h"
 
 /* build.c

@@ -1,5 +1,6 @@
 /* Support for P7_TRACE, the traceback structure.
  * 
+ * SRE, Tue Jan  2 2007 [Casa de Gatos] 
  * SVN $Id$
  */
 
@@ -145,6 +146,222 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
   return;
 }
 
+/* Function:  p7_trace_Validate()
+ * Incept:    SRE, Fri Jan  5 09:17:24 2007 [Janelia]
+ *
+ * Purpose:   Validate the internal data in a trace structure <tr>.
+ *            Intended for debugging, development, and testing
+ *            purposes.
+ *
+ * Returns:   <eslOK> if trace appears fine.
+ *
+ * Throws:    <eslFAIL> if a problem is detected.
+ */
+int
+p7_trace_Validate(P7_TRACE *tr)
+{
+  int  tpos;			/* position in trace    */
+  int  i;			/* position in sequence */
+  int  k;			/* position in model */
+  char prv;			/* type of the previous state */
+  int  status;
+
+  /* Verify that N is sensible (before we start using it in loops!)
+   * Minimum is S->N->B->M_k->E->C->T, for a seq of length 1: 7 states.
+   */
+  if (tr->N < 7 || tr->N > tr->nalloc) ESL_XEXCEPTION(eslFAIL, "N of %d isn't sensible", tr->N);
+
+  /* Verify "sentinels", the S and T at each end of the trace
+   * (before we start looking backwards and forwards from each state in 
+   * our main validation loop)
+   */
+  if (tr->st[0]       != p7_STS)   ESL_XEXCEPTION(eslFAIL, "first state not S");
+  if (tr->k[0]        != 0)        ESL_XEXCEPTION(eslFAIL, "first state shouldn't have k set");
+  if (tr->i[0]        != 0)        ESL_XEXCEPTION(eslFAIL, "first state shouldn't have i set");
+  if (tr->st[tr->N-1] != p7_STT)   ESL_XEXCEPTION(eslFAIL, "last state not N");
+  if (tr->k[tr->N-1]  != 0)        ESL_XEXCEPTION(eslFAIL, "last state shouldn't have k set");
+  if (tr->i[tr->N-1]  != 0)        ESL_XEXCEPTION(eslFAIL, "last state shouldn't have i set");
+
+  /* Main validation loop.
+   */
+  i = 1;
+  k = 0; 
+  for (tpos = 1; tpos < tr->N-1; tpos++)
+    {
+      /* Handle missing data states: can only be one.
+       * prv state might have to skip over one (but not more) missing data states
+       */
+      if (tr->st[tpos]   == p7_STX) continue; /* the main tests below will catch X->X cases. */
+      prv = (tr->st[tpos-1] == p7_STX)? tr->st[tpos-2] : tr->st[tpos-1];
+
+      switch (tr->st[tpos]) {
+      case p7_STS:
+	ESL_XEXCEPTION(eslFAIL, "S must be first state");
+	break;
+	
+      case p7_STN:
+	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "no N should have k set");
+	if (prv == p7_STS) { /* 1st N doesn't emit */
+	  if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "first N shouldn't have i set");
+	} else if (prv == p7_STN) { /* subsequent N's do */
+	  if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	  i++;
+	} else ESL_XEXCEPTION(eslFAIL, "bad transition to N; expected {S,N}->N");
+	break;
+
+      case p7_STB:
+	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "B shouldn't have k set");
+	if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "B shouldn't have i set");
+	if (prv != p7_STN && prv != p7_STJ) 
+	  ESL_XEXCEPTION(eslFAIL, "bad transition to B; expected {N,J}->B");
+	break;
+
+      case p7_STM:
+	if (prv == p7_STB) k = tr->k[tpos]; else k++; /* on a B->Mk entry, trust k; else verify */
+
+	if (tr->k[tpos] != k) ESL_XEXCEPTION(eslFAIL, "expected k doesn't match trace's k");
+	if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	if (prv != p7_STB && prv != p7_STM && prv != p7_STD && prv != p7_STI)
+	  ESL_XEXCEPTION(eslFAIL, "bad transition to M; expected {B,M,D,I}->M");
+	i++;
+	break;
+
+      case p7_STD:
+	k++;
+	if (tr->k[tpos] != k) ESL_XEXCEPTION(eslFAIL, "expected k doesn't match trace's k");
+	if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "D shouldn't have i set");
+	if (prv != p7_STM && prv != p7_STD)
+	  ESL_XEXCEPTION(eslFAIL, "bad transition to D; expected {M,D}->D");
+	break;
+	
+      case p7_STI:
+	if (tr->k[tpos] != k) ESL_XEXCEPTION(eslFAIL, "expected k doesn't match trace's k");
+	if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	if (prv != p7_STM && prv != p7_STI)
+	  ESL_XEXCEPTION(eslFAIL, "bad transition to I; expected {M,I}->I");
+	i++;
+	break;
+
+      case p7_STE:
+	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "E shouldn't have k set");
+	if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "E shouldn't have i set");
+	if (prv != p7_STM)
+	  ESL_XEXCEPTION(eslFAIL, "bad transition to E; expected M->E");
+	break;
+	
+      case p7_STJ:
+	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "no J should have k set");
+	if (prv == p7_STE) { /* 1st J doesn't emit */
+	  if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "first J shouldn't have i set");
+	} else if (prv == p7_STJ) { /* subsequent J's do */
+	  if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	  i++;
+	} else ESL_XEXCEPTION(eslFAIL, "bad transition to J; expected {E,J}->J");
+	break;
+
+      case p7_STC:
+	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "no C should have k set");
+	if (prv == p7_STE) { /* 1st C doesn't emit */
+	  if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "first C shouldn't have i set");
+	} else if (prv == p7_STC) { /* subsequent C's do */
+	  if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	  i++;
+	} else ESL_XEXCEPTION(eslFAIL, "bad transition to C; expected {E,C}->C");
+	break;
+	
+      case p7_STT:
+	ESL_XEXCEPTION(eslFAIL, "T must be last state");
+	break;	
+      }
+    }
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
+/* Function:  p7_trace_Dump()
+ * Incept:    SRE, Fri Jan  5 09:26:04 2007 [Janelia]
+ *
+ * Purpose:   Dumps internals of a traceback structure <tr> to <fp>.
+ *            If <gm> is non-NULL, also prints transition/emission scores.
+ *            If <dsq> is non-NULL, also prints residues (using alphabet
+ *            in the <gm>).
+ *            
+ * Args:      fp   - stream to dump to (often stdout)
+ *            tr   - trace to dump
+ *            gm   - NULL, or score profile corresponding to trace
+ *            dsq  - NULL, or digitized seq corresponding to trace        
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ * Throws:    <eslEINVAL> if trace contains something corrupt or invalid;
+ *            in this case, dump will be aborted, possibly after partial
+ *            output.
+ */
+int
+p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq) /* replace void w/ P7_PROFILE */
+{
+  int j;		/* counter for trace position */
+
+  if (tr == NULL) { fprintf(fp, " [ trace is NULL ]\n"); return eslOK; }
+
+  if (gm == NULL) {
+    fprintf(fp, "st   k      i   - traceback len %d\n", tr->N);
+    fprintf(fp, "--  ----   ----\n");
+    for (j = 0; j < tr->N; j++) {
+      fprintf(fp, "%1s  %4d %6d\n", 
+	      p7_hmm_DescribeStatetype(tr->st[j]),
+	      tr->k[j],
+	      tr->i[j]);
+    } 
+  } else {
+#if 0
+    sc = 0;
+    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->N);
+    fprintf(fp, "--  ---- ------  ------- --------\n");
+    for (j = 0; j < tr->N; j++) {
+      if (j < tr->N-1) {
+	status = p7_profile_GetTScore(gm, tr->st[j], tr->k[j],
+				      tr->st[j+1], tr->k[j+1], &tsc);
+	if (status != eslOK) return status;
+      }
+      else tsc = 0;
+
+      fprintf(fp, "%1s  %4d %6d  %7d", p7_hmm_Statetype(tr->st[j]),
+	      tr->k[j], tr->i[j], tsc);
+      sc += tsc;
+
+      if (dsq != NULL) {
+	xi = dsq[tr->i[j]];
+
+	if (tr->st[j] == p7_STM) {
+	  fprintf(fp, " %8d %c", gm->msc[xi][tr->k[j]], 
+		  gm->abc->sym[xi]);
+	  sc += gm->msc[xi][tr->k[j]];
+	} 
+	else if (tr->st[j] == p7_STI) {
+	  fprintf(fp, " %8d %c", gm->isc[xi][tr->k[j]], 
+		  (char) tolower((int) gm->abc->sym[xi]));
+	  sc += gm->isc[xi][tr->k[j]];
+	}
+	else if ((tr->st[j] == p7_STN && tr->st[j-1] == p7_STN) ||
+		 (tr->st[j] == p7_STC && tr->st[j-1] == p7_STC) ||
+		 (tr->st[j] == p7_STJ && tr->st[j-1] == p7_STJ))  {
+	  fprintf(fp, " %8d %c", 0, (char) tolower((int) gm->abc->sym[xi]));
+	}
+      } 
+      else fprintf(fp, " %8s %c", "-", '-');
+      fputs("\n", fp);
+    }
+    fprintf(fp, "                 ------- --------\n");
+    fprintf(fp, "           total: %6d\n\n", sc);
+#endif
+  }
+
+  return eslOK;
+}
 
 
 /* Function:  p7_trace_Append()
@@ -288,7 +505,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 {
   int tpos;                     /* position in tr */
   int i;			/* symbol position in seq */
-  int st,st2,sttmp;		/* state type (cur, nxt) */
+  int st,st2;     		/* state type (cur, nxt) */
   int k,k2,ktmp;		/* node index (cur, nxt) */
   
   for (tpos = 0; tpos < tr->N-1; tpos++) 
@@ -313,7 +530,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 	if (k2 == 1) hmm->t[0][p7_TMM] += wt;  /* B->M1 */
 	else {                                 /* wing-retracted B->DD->Mk path */
 	  hmm->t[0][p7_TMD] += wt;                
-	  for (ktmp = 1; ktmp < k2-1; k++) 
+	  for (ktmp = 1; ktmp < k2-1; ktmp++) 
 	    hmm->t[ktmp][p7_TDD] += wt;
 	  hmm->t[ktmp][p7_TDM] += wt;
 	}
@@ -330,6 +547,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 	      hmm->t[ktmp][p7_TDD] += wt;
 	    /* hmm->t[M] implicit 1.0's to E */
 	  } 
+	  break; 	
 	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
       }
@@ -351,4 +569,9 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
     } /* end loop over trace position */
   return eslOK;
 }
+
+
+/************************************************************
+ * @LICENSE@
+ ************************************************************/
 

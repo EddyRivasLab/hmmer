@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include "easel.h"
@@ -122,7 +123,7 @@ p7_hmm_CreateShell(void)
 int
 p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc) 
 {
-  int k, x;
+  int k;
   int status;
 
   hmm->abc    = abc;
@@ -527,7 +528,6 @@ int
 p7_hmm_Renormalize(P7_HMM *hmm)
 {
   int   k;			/* counter for model position */
-  float d;			/* denominator */
 
   for (k = 1; k <= hmm->M; k++) 
     esl_vec_FNorm(hmm->mat[k], hmm->abc->K);

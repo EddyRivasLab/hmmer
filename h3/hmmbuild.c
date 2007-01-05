@@ -17,14 +17,12 @@
 
 #include "hmmer.h"
 
-
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char banner[] = "hmmbuild - build a profile HMM from an alignment";
 static char usage[]  = "hmmbuild [-options] <hmmfile output> <alignment file input>";
 
 
@@ -83,6 +81,14 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   esl_fatal("Couldn't determine format of alignment file %s.\n",        alifile);
   else if (status != eslOK)        esl_fatal("Alignment file open unexpectedly failed with error %d.\n", status);
 
+
+  /*****************************************************************
+   * Open the HMM output file.
+   *****************************************************************/
+
+  hmmfp = fopen(hmmfile, "w");
+  if (hmmfp == NULL) esl_fatal("Failed to open HMM file %s for writing", hmmfile);
+
   /*****************************************************************
    * Read alignments one at a time, build HMMs, and save them.
    *****************************************************************/
@@ -92,8 +98,13 @@ main(int argc, char **argv)
     {
       nali++;
 
+      printf("Working on %s...\n", msa->name);
+
       status = p7_Fastmodelmaker(msa, symfrac, &hmm, NULL);
       if (status != eslOK) esl_fatal("Model construction failed.");
+
+      status = p7_hmmfile_Write(hmmfp, hmm);
+      if (status != eslOK) esl_fatal("Failed to write model to disk.");
 
       p7_hmm_Destroy(hmm);
       esl_msa_Destroy(msa);

@@ -14,7 +14,9 @@
  */
 #include "p7_config.h"
 
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -25,6 +27,7 @@
 /* Magic numbers identifying binary formats.
  * Do not change the old magics! Necessary for backwards compatibility.
  */
+#if 0 /* temporarily remove all the magic; write backwards compat stuff later */
 static uint32_t  v10magic = 0xe8ededb1; /* v1.0 binary: "hmm1" + 0x80808080 */
 static uint32_t  v10swap  = 0xb1edede8; /* byteswapped v1.0                 */
 static uint32_t  v11magic = 0xe8ededb2; /* v1.1 binary: "hmm2" + 0x80808080 */
@@ -35,8 +38,10 @@ static uint32_t  v19magic = 0xe8ededb4; /* V1.9 binary: "hmm4" + 0x80808080 */
 static uint32_t  v19swap  = 0xb4edede8; /* V1.9 binary, byteswapped         */ 
 static uint32_t  v20magic = 0xe8ededb5; /* V2.0 binary: "hmm5" + 0x80808080 */
 static uint32_t  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
-static uint32_t  v30magic = 0xe8ededb6; /* V3.0 binary: "hmm6" + 0x80808080 */
 static uint32_t  v30swap  = 0xb6edede8; /* V3.0 binary, byteswapped         */
+#endif
+static uint32_t  v30magic = 0xe8ededb6; /* V3.0 binary: "hmm6" + 0x80808080 */
+
 
 static int read_bin30hmm(P7_HMMFILE *hmmfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm);
 
@@ -249,7 +254,7 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   int     flags;
   int     M;
   int     alphabet_type;
-  int     k,x;
+  int     k;
   int     status;
 
   /* Check magic. */
@@ -288,9 +293,9 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   if ((hmm->flags & p7_RF)   && ! fread((char *) hmm->rf, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if ((hmm->flags & p7_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if ((hmm->flags & p7_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
-  if (status = read_bin_string(hfp->f, &(hmm->comlog))  != eslOK)                           goto ERROR;
+  if ((status = read_bin_string(hfp->f, &(hmm->comlog))) != eslOK)                          goto ERROR;
   if (! fread((char *) &(hmm->nseq), sizeof(int), 1, hfp->f))                               {status = eslEOD; goto ERROR;}
-  if (status = read_bin_string(hfp->f, &(hmm->ctime))   != eslOK)                           goto ERROR;
+  if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                          goto ERROR;
   if ((hmm->flags & p7_MAP)  && ! fread((char *) hmm->map, sizeof(char), hmm->M+1, hfp->f)) {status = eslEOD; goto ERROR;}
   if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}
 
