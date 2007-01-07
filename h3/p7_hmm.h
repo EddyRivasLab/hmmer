@@ -8,8 +8,8 @@
 
 #include "p7_config.h"
 
-#include <esl_alphabet.h>	
-
+#include "esl_alphabet.h"	
+#include "esl_random.h"
 
 /* P7_HMM
  * The core model, in counts or probability form.
@@ -33,7 +33,8 @@ typedef struct {
   /*::cexcerpt::plan7_core::end::*/
 
   /* Annotation. Everything but <name> is optional. Flags are set when
-   * optional values are set.
+   * optional values are set. All the char *'s are proper nul-terminated
+   * strings, not just arrays. (hmm->map is an int array).
    */
   char  *name;                  /* name of the model                     (mandatory) */
   char  *acc;			/* accession number of model (Pfam)      (p7_ACC)    */
@@ -110,22 +111,30 @@ typedef struct {
 #define p7_STX   11 	/* missing data: used esp. for local entry/exits */
 
 
+/* 1. The P7_HMM object: allocation, initialization, destruction. */
 extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
 extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
-extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern char   *p7_hmm_DescribeStatetype(char st);
 
+/* 2. Convenience routines for setting fields in an HMM. */
 extern int     p7_hmm_SetName(P7_HMM *hmm, char *name);
 extern int     p7_hmm_SetAccession(P7_HMM *hmm, char *acc);
 extern int     p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
 extern int     p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv);
 extern int     p7_hmm_SetCtime(P7_HMM *hmm);
 
+/* 3. Renormalization and rescaling counts in core HMMs. */
 extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
+
+/* 4. Debugging and development code. */
+extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
+extern int     p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
+extern int     p7_hmm_Validate(P7_HMM *hmm, float tol);
 
 
 

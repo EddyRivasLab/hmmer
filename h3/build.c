@@ -427,7 +427,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
       /* Validate it.
        */
       p7_trace_Dump(stdout, tr[idx], NULL, NULL); 
-      p7_trace_Validate(tr[idx]);
+      p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx]);
     } 
 
   *ret_tr = tr;

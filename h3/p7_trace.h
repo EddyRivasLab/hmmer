@@ -38,7 +38,7 @@ extern int  p7_trace_Expand(P7_TRACE *tr);
 extern int  p7_trace_ExpandTo(P7_TRACE *tr, int N);
 extern void p7_trace_Destroy(P7_TRACE *tr);
 extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
-extern int  p7_trace_Validate(P7_TRACE *tr);
+extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq);
 extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);

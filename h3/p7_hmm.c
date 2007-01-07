@@ -4,9 +4,10 @@
  *   1. The P7_HMM object: allocation, initialization, destruction.
  *   2. Convenience routines for setting fields in an HMM.
  *   3. Renormalization and rescaling counts in core HMMs.
- *   4. Unit tests.
- *   5. Test driver. 
- *   6. Copyright and license.
+ *   4. Debugging and development code.
+ *   5. Unit tests.
+ *   6. Test driver. 
+ *   7. Copyright and license.
  * 
  * SRE, Mon Jan  1 16:20:29 2007 [Casa de Gatos] [Verdi, La Traviata; Maria Callas]
  * SVN $Id$
@@ -22,6 +23,8 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_vectorops.h"
+#include "esl_random.h"
+#include "esl_dirichlet.h"
 
 #include "p7_hmm.h"
 
@@ -227,42 +230,6 @@ p7_hmm_Zero(P7_HMM *hmm)
   return eslOK;
 }
 
-/* Function:  p7_hmm_Dump()
- * Incept:    SRE, Mon Jan  1 18:44:15 2007 [Casa de Gatos]
- *
- * Purpose:   Debugging: dump the probabilities (or counts) from an HMM.
- * 
- * Returns:   <eslOK> on success.
- */
-int
-p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
-{
-  int k;			/* counter for nodes */
-  int x;			/* counter for symbols */
-  int ts;			/* counter for state transitions */
-  
-  fprintf(fp, "B->M1,B->D1: %5.1f %5.1f\n", hmm->t[0][p7_TMM], hmm->t[0][p7_TMD]);
-  for (k = 1; k <= hmm->M; k++)
-    {
-				/* Line 1: k, match emissions */
-      fprintf(fp, " %5d ", k);
-      for (x = 0; x < hmm->abc->K; x++) 
-        fprintf(fp, "%5.1f ", hmm->mat[k][x]);
-      fputs("\n", fp);
-				/* Line 2: insert emissions */
-      fprintf(fp, "       ");
-      for (x = 0; x < hmm->abc->K; x++) 
-	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->ins[k][x] : 0.);
-      fputs("\n", fp);
-				/* Line 3: transition probs */
-      fprintf(fp, "       ");
-      for (ts = 0; ts < 7; ts++)
-	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->t[k][ts] : 0.); 
-      fputs("\n", fp);
-    }
-  fputs("//\n", fp);
-  return eslOK;
-}
 
 
 /* Function:  p7_hmm_DescribeStatetype()
@@ -289,6 +256,9 @@ p7_hmm_DescribeStatetype(char st)
   default:     return "?";
   }
 }
+
+
+
 
 /*****************************************************************
  * 2. Convenience routines for setting fields in an HMM.
@@ -476,6 +446,9 @@ p7_hmm_SetCtime(P7_HMM *hmm)
   if (s != NULL) free(s);
   return status;
 }
+/*---------------- end, internal-setting routines ---------------*/
+
+
 
 
 /*****************************************************************
@@ -543,8 +516,8 @@ p7_hmm_Renormalize(P7_HMM *hmm)
    */
   hmm->t[0][p7_TMI] = 0.;       /* make sure TMI = 0. */
   esl_vec_FNorm(hmm->t[0], 3);  /* begin transitions; TMM, TMD are valid */
-  esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* t[0] delete */
-  esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* t[0] insert */
+  esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* t[0] insert */
+  esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* t[0] delete */
   esl_vec_FSet(hmm->mat[0], hmm->abc->K, 0.); /* mat[0] */
   esl_vec_FSet(hmm->ins[0], hmm->abc->K, 0.); /* ins[0] */
 
@@ -552,10 +525,256 @@ p7_hmm_Renormalize(P7_HMM *hmm)
   return eslOK;
 }
   
+/*****************************************************************
+ * 4. Debugging and development code
+ *****************************************************************/
+
+/* Function:  p7_hmm_Dump()
+ * Incept:    SRE, Mon Jan  1 18:44:15 2007 [Casa de Gatos]
+ *
+ * Purpose:   Debugging: dump the probabilities (or counts) from an HMM.
+ * 
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
+{
+  int k;			/* counter for nodes */
+  int x;			/* counter for symbols */
+  int ts;			/* counter for state transitions */
+  
+  fprintf(fp, "B->M1,B->D1: %5.1f %5.1f\n", hmm->t[0][p7_TMM], hmm->t[0][p7_TMD]);
+  for (k = 1; k <= hmm->M; k++)
+    {
+				/* Line 1: k, match emissions */
+      fprintf(fp, " %5d ", k);
+      for (x = 0; x < hmm->abc->K; x++) 
+        fprintf(fp, "%5.1f ", hmm->mat[k][x]);
+      fputs("\n", fp);
+				/* Line 2: insert emissions */
+      fprintf(fp, "       ");
+      for (x = 0; x < hmm->abc->K; x++) 
+	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->ins[k][x] : 0.);
+      fputs("\n", fp);
+				/* Line 3: transition probs */
+      fprintf(fp, "       ");
+      for (ts = 0; ts < 7; ts++)
+	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->t[k][ts] : 0.); 
+      fputs("\n", fp);
+    }
+  fputs("//\n", fp);
+  return eslOK;
+}
+
+/* Function:  p7_hmm_Sample()
+ * Incept:    SRE, Sat Jan  6 13:43:03 2007 [Casa de Gatos]
+ *
+ * Purpose:   Creates a random HMM of length <M> nodes,
+ *            for alphabet <abc>, obtaining randomness from
+ *            <r>.
+ * 
+ *            Probably only useful for debugging.
+ *            
+ * Note:      Compare p7_hmm_Renormalize(), which has a similar
+ *            structure, except it normalizes instead of
+ *            sampling each probability vector.           
+ *
+ * Returns:   <eslOK> on success, and the new hmm is returned
+ *            through <ret_hmm); caller is responsible for 
+ *            freeing this object with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm    = NULL;
+  char   *logmsg = "[random HMM created by sampling]";
+  int     k;
+  int     status;
+
+  hmm = p7_hmm_Create(M, abc);
+  if (hmm == NULL) { status = eslEMEM; goto ERROR; }
+  
+  /* Node 0 is special; M0 = B, and I,D don't exist
+   */
+  esl_dirichlet_FSampleUniform(r, 2, hmm->t[0]);	/* samples into TMM,TMI */
+  hmm->t[0][p7_TMD] = hmm->t[0][p7_TMI];        /* but we don't want TMI, we want TMD */
+  hmm->t[0][p7_TMI] = 0.;		        /* because TMI = 0 */
+  esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* insert */
+  esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* delete */
+  esl_vec_FSet(hmm->mat[0], abc->K, 0.);
+  esl_vec_FSet(hmm->ins[0], abc->K, 0.);
+
+  /* The main states from 1..M-1
+   */
+  for (k = 1; k < M; k++)
+    {
+      esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
+      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
+      esl_dirichlet_FSampleUniform(r, 3,      hmm->t[k]);
+      esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+3);
+      esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5);
+    }
+
+  /* In node M, only the match state exists and only it is
+   * allocated.
+   */
+  esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[M]);
+  
+  /* Add mandatory annotation
+   */
+  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  hmm->nseq     = 0;
+  p7_hmm_SetCtime(hmm);
+  hmm->checksum = 0;
+
+  hmm->flags |= p7_HASPROB;
+  *ret_hmm = hmm;
+  return eslOK;
+  
+ ERROR:
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+
+}
+
+/* Function:  p7_hmm_Compare()
+ * Incept:    SRE, Sat Jan  6 14:14:58 2007 [Casa de Gatos]
+ *
+ * Purpose:   Compare two HMMs <h1> and <h2> to each other;
+ *            return <eslOK> if they're identical, and <eslFAIL>
+ *            if they differ. Floating-point probabilities are 
+ *            compared for equality within a fractional tolerance
+ *            <tol>. 
+ *
+ *            Probably only useful for debugging.
+ *
+ * Returns:   <eslOK> if the two HMMs are identical; <eslFAIL>
+ *            if they differ.
+ */
+int
+p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
+{
+  int k;
+  
+  if (h1->abc->type != h2->abc->type) return eslFAIL;
+  if (h1->M         != h2->M)         return eslFAIL;
+  if (h1->flags     != h2->flags)     return eslFAIL;
+  
+  for (k = 0; k < h1->M; k++)	/* (it's safe to include 0 here.) */
+    {
+      if (esl_vec_FCompare(h1->mat[k], h2->mat[k], h1->abc->K, tol) != eslOK) return eslFAIL;
+      if (esl_vec_FCompare(h1->ins[k], h2->ins[k], h1->abc->K, tol) != eslOK) return eslFAIL;
+      if (esl_vec_FCompare(h1->t[k],   h2->t[k],   7,          tol) != eslOK) return eslFAIL;
+    }
+  if (esl_vec_FCompare(h1->mat[h1->M], h2->mat[h1->M], h1->abc->K, tol) != eslOK) return eslFAIL;
+
+  if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
+  if (strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
+  if (strcmp(h1->ctime,  h2->ctime)  != 0) return eslFAIL;
+  if (h1->nseq     != h2->nseq)            return eslFAIL;
+  if (h1->checksum != h2->checksum)        return eslFAIL;
+
+  if ((h1->flags & p7_ACC)  && strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
+  if ((h1->flags & p7_DESC) && strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
+  if ((h1->flags & p7_RF)   && strcmp(h1->rf,   h2->rf)   != 0) return eslFAIL;
+  if ((h1->flags & p7_CS)   && strcmp(h1->cs,   h2->cs)   != 0) return eslFAIL;
+  if ((h1->flags & p7_CA)   && strcmp(h1->ca,   h2->ca)   != 0) return eslFAIL;
+  if ((h1->flags & p7_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
+
+  if (h1->flags & p7_GA) {
+    if (esl_FCompare(h1->ga1, h2->ga1, tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->ga2, h2->ga2, tol) != eslOK) return eslFAIL;
+  }
+  if (h1->flags & p7_TC) {
+    if (esl_FCompare(h1->tc1, h2->tc1, tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->tc2, h2->tc2, tol) != eslOK) return eslFAIL;
+  }
+  if (h1->flags & p7_NC) {
+    if (esl_FCompare(h1->nc1, h2->nc1, tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->nc2, h2->nc2, tol) != eslOK) return eslFAIL;
+  }
+  return eslOK;
+}
+
+/* Function:  p7_hmm_Validate()
+ * Incept:    SRE, Sat Jan  6 14:43:00 2007 [Casa de Gatos]
+ *
+ * Purpose:   Validates the internals of the HMM structure <hmm>.
+ * 
+ *            Probability vectors are validated to sum up to
+ *            within a fractional tolerance <tol> of 1.0.
+ *
+ *            Probably only useful for debugging and development,
+ *            not production code.
+ *
+ * Returns:   <eslOK> if <hmm> internals look fine.
+ *            Returns <eslFAIL> if something is wrong.
+ */
+int
+p7_hmm_Validate(P7_HMM *hmm, float tol)
+{
+  int k, x;
+
+  if (hmm            == NULL)       return eslFAIL;
+  if (hmm->M         <  1)          return eslFAIL;
+  if (hmm->abc       == NULL)       return eslFAIL; 
+  if (hmm->abc->type == eslUNKNOWN) return eslFAIL;
+  
+  if (esl_vec_FValidate(hmm->t[0], 7, tol) != eslOK) return eslFAIL;
+  if (hmm->t[0][p7_TMI] != 0.)                       return eslFAIL;
+  if (hmm->t[0][p7_TIM] != 0.)                       return eslFAIL;
+  if (hmm->t[0][p7_TII] != 0.)                       return eslFAIL;
+  if (hmm->t[0][p7_TDM] != 0.)                       return eslFAIL;
+  if (hmm->t[0][p7_TDD] != 0.)                       return eslFAIL;
+  for (x = 0; x < hmm->abc->K; x ++) {
+    if (hmm->mat[0][x] != 0.) return eslFAIL;
+    if (hmm->ins[0][x] != 0.) return eslFAIL;
+  }
+  
+  for (k = 1; k < hmm->M; k++)
+    {
+      if (esl_vec_FValidate(hmm->mat[k], hmm->abc->K, tol) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->ins[k], hmm->abc->K, tol) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->t[k],   3,           tol) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol) != eslOK) return eslFAIL;
+    }
+  if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol) != eslOK) return eslFAIL;
+
+  if (hmm->name     == NULL) return eslFAIL;
+  if (hmm->comlog   == NULL) return eslFAIL;
+  if (hmm->ctime    == NULL) return eslFAIL;
+  if (hmm->nseq     <  0 )   return eslFAIL;
+  if (hmm->checksum <  0 )   return eslFAIL;
+
+  if (  (hmm->flags & p7_ACC)  && hmm->acc  == NULL) return eslFAIL;
+  if (! (hmm->flags & p7_ACC)  && hmm->acc  != NULL) return eslFAIL;
+  if (  (hmm->flags & p7_DESC) && hmm->desc == NULL) return eslFAIL;
+  if (! (hmm->flags & p7_DESC) && hmm->desc != NULL) return eslFAIL;
+  if (hmm->flags & p7_RF) {
+    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1) return eslFAIL;
+  } else { if (hmm->desc != NULL) return eslFAIL; }
+  if (hmm->flags & p7_CS) {
+    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1) return eslFAIL;
+  } else { if (hmm->cs != NULL) return eslFAIL; }
+  if (hmm->flags & p7_CA) {
+    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1) return eslFAIL;
+  } else { if (hmm->ca != NULL) return eslFAIL; }
+  if (  (hmm->flags & p7_MAP) && hmm->map == NULL) return eslFAIL;
+  if (! (hmm->flags & p7_MAP) && hmm->map != NULL) return eslFAIL;
+
+  return eslOK;
+}
+/*------------- end of debugging/development code ----------------*/
+
 
 
 /*****************************************************************
- * 4. Unit tests.
+ * 5. Unit tests.
  *****************************************************************/
 #ifdef p7HMM_TESTDRIVE
 
@@ -571,10 +790,8 @@ utest_foo(void)
 /*---------------------- end of unit tests -----------------------*/
 
 
-
-
 /*****************************************************************
- * 5. Test driver.
+ * 6. Test driver.
  *****************************************************************/
 
 #ifdef p7HMM_TESTDRIVE

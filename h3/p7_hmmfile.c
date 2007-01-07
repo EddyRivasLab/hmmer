@@ -138,6 +138,7 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
     {
       if (hfp->f != NULL) fclose(hfp->f);
     }
+  free(hfp);
   return;
 }
 
@@ -176,7 +177,7 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
     fwrite((char *) hmm->mat[k], sizeof(float), hmm->abc->K, fp);
   for (k = 1; k < hmm->M; k++)
     fwrite((char *) hmm->ins[k], sizeof(float), hmm->abc->K, fp);
-  for (k = 1; k < hmm->M; k++)
+  for (k = 0; k < hmm->M; k++)	/* note: start from 0, to include B state */
     fwrite((char *) hmm->t[k], sizeof(float), 7, fp);
 
   /* annotation section
@@ -211,6 +212,41 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
 }
 
 
+/* Function:  p7_hmmfile_Read()
+ * Incept:    SRE, Sat Jan  6 18:04:58 2007 [Casa de Gatos]
+ *
+ * Purpose:   Read the next HMM from open save file <hfp>, and
+ *            return this newly allocated HMM in <ret_hmm>.
+ *            
+ *            Caller may or may not already know what alphabet the HMM
+ *            is expected to be in.  A reference to the pointer to the
+ *            current alphabet is passed in <ret_abc>. If the alphabet
+ *            is unknown, this is a pointer to <NULL>, and when the
+ *            new HMM is read, an appropriate new alphabet object is
+ *            allocated and passed back to the caller via <ret_abc)>.
+ *            If the alphabet is already known, <ret_abc> points to
+ *            that object ptr, and the new HMM's alphabet type is
+ *            verified to agree with it. This mechanism allows an
+ *            application to let the first HMM determine the alphabet
+ *            type for the application, while still keeping the
+ *            alphabet under the application's scope of control.
+ *            
+ * Returns:   <eslOK> on success, and the newly allocated HMM
+ *            is returned via <ret_hmm>; additionally, if <ret_abc>
+ *            pointed to <NULL>, it now points to a newly allocated
+ *            alphabet.
+ *
+ *            Returns <eslEOF> if no HMMs remain in the file.
+ *
+ *            Other return codes, indicating problems with the HMM file:
+ *             <eslEOD>     : an fread() failed, probably indicated premature end of data file.
+ *             <eslEFORMAT> : the binary magic number at the start of the file doesn't match
+ *                            the expected magic; this isn't a HMMER file.
+ *             <eslINCOMPAT>: the alphabet type of the HMM doesn't match the alphabet type 
+ *                            passed by the caller in <*ret_abc>.
+ * 
+ * Throws:    <eslEMEM> upon an allocation error.
+ */
 int
 p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm)
 {
@@ -233,7 +269,11 @@ p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm)
  *             This mechanism allows a main() application that doesn't yet know its
  *             alphabet to determine the alphabet when the first HMM is read.
  *             
+ *             Returns <eslEOF> when no HMM remains in the file,
+ *             indicating a normal end-of-file.
+ *
  *             Other return codes for normal errors:
+ *         
  *             <eslEOD>     : an fread() failed, probably indicated premature end of data file.
  *             <eslEFORMAT> : the binary magic number at the start of the file doesn't match
  *                            the expected magic; this isn't a HMMER file.
@@ -258,8 +298,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   int     status;
 
   /* Check magic. */
-  if (feof(hfp->f))                                             { status = eslEOD;       goto ERROR; }
-  if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOD;       goto ERROR; }
+  if (feof(hfp->f))                                             { status = eslEOF;       goto ERROR; }
+  if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOF;       goto ERROR; }
   if (magic != v30magic)                                        { status = eslEFORMAT;   goto ERROR; }
 
   /* Get sizes of things */
@@ -277,13 +317,15 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
 
   /* Allocate the new HMM. */
   if ((hmm = p7_hmm_Create(M, abc)) == NULL)                      { status = eslEMEM;      goto ERROR; }  
+  hmm->flags = flags;
+  hmm->M     = M;
   
   /* Core model probabilities. */
   for (k = 1; k <= hmm->M; k++)
     if (! fread((char *) hmm->mat[k], sizeof(float), hmm->abc->K, hfp->f)) {status = eslEOD; goto ERROR;}
   for (k = 1; k < hmm->M; k++)
     if (! fread((char *) hmm->ins[k], sizeof(float), hmm->abc->K, hfp->f)) {status = eslEOD; goto ERROR;}
-  for (k = 1; k < hmm->M; k++)
+  for (k = 0; k < hmm->M; k++)
     if (! fread((char *) hmm->t[k],   sizeof(float), 7,           hfp->f)) {status = eslEOD; goto ERROR;}
   
   /* Annotations. */
@@ -389,10 +431,97 @@ read_bin_string(FILE *fp, char **ret_s)
 /*****************************************************************
  * 5. Unit tests.
  *****************************************************************/
+#ifdef p7HMMFILE_TESTDRIVE
+/* utest_io_30: tests binary read/write for 3.0 save files.
+ *              Caller provides a named tmpfile that we can
+ *              open, write to, close, reopen, then read from.
+ *              Caller also provides a test HMM, which might
+ *              be a nasty random-sampled HMM.
+ */
+static int
+utest_io_30(char *tmpfile, P7_HMM *hmm)
+{
+  FILE         *fp     = NULL;
+  P7_HMMFILE   *hfp    = NULL;
+  P7_HMM       *new    = NULL;
+  ESL_ALPHABET *newabc = NULL;
+  char          msg[] = "3.0 binary file i/o unit test failed";
+  
+  /* Write the HMM to disk */
+  if ((fp = fopen(tmpfile, "w")) == NULL)  esl_fatal(msg);
+  if (p7_hmmfile_Write(fp, hmm)  != eslOK) esl_fatal(msg);
+  fclose(fp);
+  
+  /* Read it back */
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK) esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new) != eslOK)  esl_fatal(msg);
+  
+  /* It should be identical to what we started with */
+  if (p7_hmm_Compare(hmm, new, 0.0001)     != eslOK) esl_fatal(msg);
+  p7_hmm_Destroy(new);
+
+  /* Trying to read one more HMM should give us a normal EOF */
+  if (p7_hmmfile_Read(hfp, &newabc, &new) != eslEOF) esl_fatal(msg);
+
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(newabc);
+  return eslOK;
+}
+#endif /*p7HMMFILE_TESTDRIVE*/
+/*-------------------- end, unit tests --------------------------*/
+
+
+
 
 /*****************************************************************
  * 6. Test driver.
  *****************************************************************/
+
+#ifdef p7HMMFILE_TESTDRIVE
+/* gcc -g -Wall -Dp7HMMFILE_TESTDRIVE -I. -I../easel -L. -L../easel -o hmmfile_test p7_hmmfile.c -lhmmer -leasel -lm
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_random.h"
+
+#include "p7_hmm.h"
+
+int
+main(int argc, char **argv)
+{
+  ESL_RANDOMNESS *r    = NULL;
+  ESL_ALPHABET *aa_abc = NULL,
+               *nt_abc = NULL;
+  P7_HMM       *hmm    = NULL;
+  FILE         *fp     = NULL;
+  char tmpfile[32]     = "tmp-hmmerXXXXXX";
+  int           M      = 20;
+  
+  if ((aa_abc = esl_alphabet_Create(eslAMINO))     == NULL)  esl_fatal("failed to create amino alphabet");
+  if ((nt_abc = esl_alphabet_Create(eslDNA))       == NULL)  esl_fatal("failed to create DNA alphabet");
+  if ((r      = esl_randomness_CreateTimeseeded()) == NULL)  esl_fatal("failed to create randomness");
+  if ((esl_tmpfile_named(tmpfile, &fp))            != eslOK) esl_fatal("failed to create tmp file");
+  fclose(fp);
+
+  /* Protein HMMs */
+  p7_hmm_Sample(r, M, aa_abc, &hmm);
+  utest_io_30(tmpfile, hmm);
+  p7_hmm_Destroy(hmm);
+
+  /* Nucleic acid HMMs */
+  p7_hmm_Sample(r, M, nt_abc, &hmm);
+  utest_io_30(tmpfile, hmm);
+  p7_hmm_Destroy(hmm);
+
+  esl_alphabet_Destroy(aa_abc);
+  esl_alphabet_Destroy(nt_abc);
+  esl_randomness_Destroy(r);
+  remove(tmpfile);
+  exit(0);
+}
+#endif /*p7HMMFILE_TESTDRIVE*/
 
 
 /*****************************************************************

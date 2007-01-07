@@ -149,7 +149,18 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
 /* Function:  p7_trace_Validate()
  * Incept:    SRE, Fri Jan  5 09:17:24 2007 [Janelia]
  *
- * Purpose:   Validate the internal data in a trace structure <tr>.
+ * Purpose:   Validate the internal data in a trace structure <tr>
+ *            representing an alignment of an HMM to a 
+ *            digital sequence <sq>. The digital sequence may be either
+ *            unaligned (usually) or aligned (in the case of "fake"
+ *            tracebacks generated from an MSA during a
+ *            model construction process). 
+ *            
+ *            We don't pass the HMM that the trace is associated with,
+ *            because we might have constructed the trace during
+ *            HMM construction when we don't have an HMM yet; but 
+ *            we always have a digital sequence.
+ *
  *            Intended for debugging, development, and testing
  *            purposes.
  *
@@ -158,7 +169,7 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
  * Throws:    <eslFAIL> if a problem is detected.
  */
 int
-p7_trace_Validate(P7_TRACE *tr)
+p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq)
 {
   int  tpos;			/* position in trace    */
   int  i;			/* position in sequence */
@@ -184,10 +195,13 @@ p7_trace_Validate(P7_TRACE *tr)
 
   /* Main validation loop.
    */
-  i = 1;
   k = 0; 
+  i = 1;
   for (tpos = 1; tpos < tr->N-1; tpos++)
     {
+      for (; sq[i] != eslDSQ_SENTINEL; i++) /* find next residue in sq (sq might have gaps to skip) */
+	if (esl_abc_XIsResidue(abc, sq[i])) break;
+
       /* Handle missing data states: can only be one.
        * prv state might have to skip over one (but not more) missing data states
        */
@@ -274,6 +288,13 @@ p7_trace_Validate(P7_TRACE *tr)
 	break;	
       }
     }
+
+  /* Trace should have accounted for all residues in the sq
+   */
+  for (; sq[i] != eslDSQ_SENTINEL; i++) 
+    if (esl_abc_XIsResidue(abc, sq[i])) 
+      ESL_XEXCEPTION(eslFAIL, "trace didn't account for all residues in the sq");
+
   return eslOK;
 
  ERROR:
