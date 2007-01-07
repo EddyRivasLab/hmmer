@@ -96,6 +96,7 @@ p7_hmm_CreateShell(void)
   hmm->cs       = NULL;
   hmm->ca       = NULL;
   hmm->comlog   = NULL; 
+  hmm->nseq     = 0;
   hmm->ctime    = NULL;
   hmm->map      = NULL;
   hmm->checksum = 0;
@@ -745,9 +746,10 @@ p7_hmm_Validate(P7_HMM *hmm, float tol)
     }
   if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol) != eslOK) return eslFAIL;
 
-  if (hmm->name     == NULL) return eslFAIL;
-  if (hmm->comlog   == NULL) return eslFAIL;
-  if (hmm->ctime    == NULL) return eslFAIL;
+  /* Don't be strict about mandatory name, comlog, ctime for now in development */
+  /*  if (hmm->name     == NULL) return eslFAIL; */
+  /*  if (hmm->comlog   == NULL) return eslFAIL; */
+  /*  if (hmm->ctime    == NULL) return eslFAIL;  */
   if (hmm->nseq     <  0 )   return eslFAIL;
   if (hmm->checksum <  0 )   return eslFAIL;
 

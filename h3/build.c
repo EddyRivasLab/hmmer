@@ -426,8 +426,11 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 
       /* Validate it.
        */
+      /*
       p7_trace_Dump(stdout, tr[idx], NULL, NULL); 
-      p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx]);
+      */
+      if (p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx]) != eslOK) 
+	ESL_XEXCEPTION(eslFAIL, "validation failed");
     } 
 
   *ret_tr = tr;
@@ -554,7 +557,8 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   }
 
   /* The alignment map (1..M in model, 1..alen in alignment) */
-  ESL_ALLOC(hmm->map, sizeof(int) * (hmm->M+2));
+  ESL_ALLOC(hmm->map, sizeof(int) * (hmm->M+1));
+  hmm->map[0] = 0;
   for (apos = k = 1; apos <= msa->alen; apos++)
     if (matassign[apos]) hmm->map[k++] = apos;
   hmm->flags |= p7_MAP;
@@ -641,12 +645,19 @@ main(int argc, char **argv)
 }
 
 
+/* 
+ * An MSA to ex{e,o}rcise past demons.
+ *   1. seq2 gives an I->end transition, that construction must
+ *      recognize as a C tail instead.
+ *   2. seq1 contains degenerate Z,X, exercising symbol counting
+ *      of degenerate residues.
+ */
 static int
 write_test_msa(FILE *ofp)
 {
   fprintf(ofp, "# STOCKHOLM 1.0\n");
   fprintf(ofp, "#=GC RF --xxxxxxxxxxxxxxxx-xxx-x--\n");
-  fprintf(ofp, "seq1    --ACDEFGHIKLMNPQRS-TVW-Yyy\n");
+  fprintf(ofp, "seq1    --ACDEFGHIKLMNPZXS-TVW-Yyy\n");
   fprintf(ofp, "seq2    aaACDEFGHIKLMNPQRS-TVWw---\n");
   fprintf(ofp, "seq3    aaAC-EFGHIKLMNPQRS-TVW-Y--\n");
   fprintf(ofp, "seq4    aaAC-EFGHIKLMNPQRS-TVW-Y--\n");

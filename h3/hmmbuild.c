@@ -101,9 +101,18 @@ main(int argc, char **argv)
       printf("Working on %s...\n", msa->name);
 
       status = p7_Fastmodelmaker(msa, symfrac, &hmm, NULL);
-      if (status != eslOK) esl_fatal("Model construction failed.");
+      if (status == eslENORESULT) {
+	esl_fatal("Model %s has no consensus columns - can't build a model.", msa->name);
+      } else if (status != eslOK)
+	esl_fatal("Model construction failed.");
 
-      status = p7_hmmfile_Write(hmmfp, hmm);
+      /* For now... eventually, priors go here. */
+      p7_hmm_Renormalize(hmm);
+
+      if (p7_hmm_Validate(hmm, 0.0001) != eslOK)
+	esl_fatal("HMM validation failed.");
+
+      status = p7_hmmfile_Write(hmmfp, hmm); 
       if (status != eslOK) esl_fatal("Failed to write model to disk.");
 
       p7_hmm_Destroy(hmm);
@@ -118,6 +127,7 @@ Offending line is:\n\
   else if (status != eslEOF)
     esl_fatal("Alignment file read unexpectedly failed with code %d\n", status);
       
+  fclose(hmmfp);
   esl_msafile_Close(afp);
   esl_getopts_Destroy(go);
   esl_alphabet_Destroy(abc);
