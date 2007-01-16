@@ -25,6 +25,7 @@ static ESL_OPTIONS options[] = {
 
 static char usage[]  = "hmmbuild [-options] <hmmfile output> <alignment file input>";
 
+static void set_model_name(P7_HMM *hmm, char *setname, char *msa_name, char *alifile, int nali);
 
 int
 main(int argc, char **argv)
@@ -53,12 +54,12 @@ main(int argc, char **argv)
     puts(usage);
     puts("\n  where options are:\n");
     esl_opt_DisplayHelp(stdout, go, 0, 2, 80); /* 0=all docgroups; 2 = indentation; 80=textwidth*/
-    return 0;
+    return eslOK;
   }
   if (esl_opt_ArgNumber(go) != 2) {
     puts("Incorrect number of command line arguments.");
     puts(usage);
-    return 1;
+    return eslFAIL;
   }
   hmmfile = esl_opt_GetCmdlineArg(go, eslARG_STRING, NULL); /* NULL=no range checking */
   alifile = esl_opt_GetCmdlineArg(go, eslARG_STRING, NULL);
@@ -98,13 +99,27 @@ main(int argc, char **argv)
     {
       nali++;
 
-      printf("Working on %s...\n", msa->name);
+      /* Print some stuff about what we're about to do.
+       */
+      if (msa->name != NULL) printf("Alignment:           %s\n",  msa->name);
+      else                   printf("Alignment:           #%d\n", nali);
+      printf                       ("Number of sequences: %d\n",  msa->nseq);
+      printf                       ("Number of columns:   %d\n",  msa->alen);
+      puts("");
+      fflush(stdout);
 
+      /* Construct the model architecture
+       */
       status = p7_Fastmodelmaker(msa, symfrac, &hmm, NULL);
       if (status == eslENORESULT) {
 	esl_fatal("Model %s has no consensus columns - can't build a model.", msa->name);
       } else if (status != eslOK)
 	esl_fatal("Model construction failed.");
+
+      /* Give the model a name
+       */
+      set_model_name(hmm, NULL, msa->name, alifile, nali);
+  
 
       /* For now... eventually, priors go here. */
       p7_hmm_Renormalize(hmm);
@@ -132,4 +147,54 @@ Offending line is:\n\
   esl_getopts_Destroy(go);
   esl_alphabet_Destroy(abc);
   return 0;
+}
+
+
+
+
+/* set_model_name()
+ * Give the model a name.
+ * We deal with this differently depending on whether
+ * we're in an alignment database or a single alignment.
+ * 
+ * If a single alignment, priority is:
+ *      1. Use -n <name> if set.
+ *      2. Use msa->name (avail in Stockholm or SELEX formats only)
+ *      3. If all else fails, use alignment file name without
+ *         filename extension (e.g. "globins.slx" gets named "globins"
+ *         
+ * If a multiple MSA database (e.g. Stockholm/Pfam), 
+ * only msa->name is applied. -n is not allowed.
+ * if msa->name is unavailable, or -n was used,
+ * a fatal error is thrown.
+ * 
+ * Because we can't tell whether we've got more than one
+ * alignment 'til we're on the second one, these fatal errors
+ * only happen after the first HMM has already been built.
+ * Oh well.
+ */
+static void
+set_model_name(P7_HMM *hmm, char *setname, char *msa_name, char *alifile, int nali)
+{
+  char *name;
+
+  printf("%-40s ... ", "Set model name");
+  fflush(stdout);
+
+  if (nali == 1)		/* first (only?) HMM in file:  */
+    {
+      if      (setname  != NULL) esl_strdup(setname,  -1, &name);
+      else if (msa_name != NULL) esl_strdup(msa_name, -1, &name);
+      else                       esl_FileTail(alifile, TRUE, &name); /* TRUE=nosuffix */
+    }
+  else
+    {
+      if      (setname  != NULL) esl_fatal("Oops. Wait. You can't use -n with an alignment database.\n");
+      else if (msa_name != NULL) esl_strdup(msa_name, -1, &name);
+      else    esl_fatal("Oops. Wait. I need name annotation on each alignment.\n");
+    }
+
+  p7_hmm_SetName(hmm, name);
+  free(name);
+  printf("done. [%s]\n", hmm->name);
 }

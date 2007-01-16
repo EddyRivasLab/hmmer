@@ -50,6 +50,28 @@ p7_trace_Create(int N, P7_TRACE **ret_tr)
 }
 
 
+/* Function:  p7_trace_Reuse()
+ * Incept:    SRE, Tue Jan  9 13:02:34 2007 [Janelia]
+ *
+ * Purpose:   Reinitializes an existing trace object, reusing its
+ *            memory.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      STL11/124
+ */
+int
+p7_trace_Reuse(P7_TRACE *tr)
+{
+  /* At least right now, reusing a trace is as simple as: */
+  tr->N = 0;
+  return eslOK;
+}
+
+
+
 /* Function:  p7_trace_Expand()
  *
  * Purpose:   Doubles the allocation in a trace structure <tr>.

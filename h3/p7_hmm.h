@@ -23,8 +23,6 @@
  *      state M.
  */
 typedef struct {
-  ESL_ALPHABET  *abc;		/* ptr to alphabet info (hmm->abc->K is alphabet size) */
-
   /*::cexcerpt::plan7_core::begin::*/
   int     M;                    /* length of the model (# nodes)          */
   float **t;                    /* transition prob's. t[(0),1..M-1][0..6] */
@@ -57,6 +55,12 @@ typedef struct {
   float  ga1, ga2;	/* per-seq/per-domain gathering thresholds (bits) (p7_GA) */
   float  tc1, tc2;	/* per-seq/per-domain trusted cutoff (bits)       (p7_TC) */
   float  nc1, nc2;	/* per-seq/per-domain noise cutoff (bits)         (p7_NC) */
+
+  /* Things we keep references to.
+   */
+  ESL_ALPHABET  *abc;		/* ptr to alphabet info (hmm->abc->K is alphabet size) */
+  P7_PROFILE    *gm;		/* generic search profile */
+  P7_BG         *bg;		/* null background model */
 
   int flags;
 } P7_HMM;

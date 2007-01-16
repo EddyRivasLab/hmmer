@@ -83,7 +83,6 @@ p7_hmm_CreateShell(void)
   int     status;
 
   ESL_ALLOC(hmm, sizeof(P7_HMM));
-  hmm->abc      = NULL;
   hmm->M        = 0;
   hmm->t        = NULL;
   hmm->mat      = NULL;
@@ -106,6 +105,10 @@ p7_hmm_CreateShell(void)
   hmm->nc1 = hmm->nc2 = 0.;
 
   hmm->flags    = 0;
+
+  hmm->abc      = NULL;
+  hmm->gm       = NULL;
+  hmm->bg       = NULL;
   return hmm;
 
  ERROR:
@@ -121,8 +124,8 @@ p7_hmm_CreateShell(void)
  *
  * Returns:   <eslOK> on success.
  *
- * Throws:    <eslEMEM> on allocation failure; in this case, the entire
- *            HMM is free'd (including the shell).
+ * Throws:    <eslEMEM> on allocation failure; in this case, the HMM
+ *            is likely corrupted, and the caller should destroy it.
  */
 int
 p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc) 
@@ -156,7 +159,6 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc)
   return eslOK;
 
  ERROR:
-  if (hmm != NULL) p7_hmm_Destroy(hmm);
   return status;
 }  
 
@@ -168,8 +170,8 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc)
  *            Works even if the <hmm> is damaged (incompletely allocated)
  *            or even <NULL>.
  *
- * Note:      Remember, leave abc alone. It's just a reference ptr
- *            that the application gave us.
+ * Note:      Remember, leave reference pointers like abc, gm, and
+ *            bg alone. These are under the application's control not ours.
  *
  * Returns:   (void).
  */

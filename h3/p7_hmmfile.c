@@ -242,8 +242,8 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
  *             <eslEOD>     : an fread() failed, probably indicated premature end of data file.
  *             <eslEFORMAT> : the binary magic number at the start of the file doesn't match
  *                            the expected magic; this isn't a HMMER file.
- *             <eslINCOMPAT>: the alphabet type of the HMM doesn't match the alphabet type 
- *                            passed by the caller in <*ret_abc>.
+ *             <eslEINCOMPAT>: the alphabet type of the HMM doesn't match the alphabet type 
+ *                             passed by the caller in <*ret_abc>.
  * 
  * Throws:    <eslEMEM> upon an allocation error.
  */
@@ -291,8 +291,6 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   ESL_ALPHABET *abc = NULL;
   P7_HMM       *hmm = NULL;
   uint32_t magic;
-  int     flags;
-  int     M;
   int     alphabet_type;
   int     k;
   int     status;
@@ -302,9 +300,15 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOF;       goto ERROR; }
   if (magic != v30magic)                                        { status = eslEFORMAT;   goto ERROR; }
 
+  /* Allocate shell of the new HMM. 
+   * Two-step allocation lets us read/set the flags first; 
+   * then the later CreateBody() call will allocate optional internal fields we need. 
+   */
+  if ((hmm = p7_hmm_CreateShell()) == NULL)                      { status = eslEMEM;     goto ERROR; }  
+
   /* Get sizes of things */
-  if (! fread((char *) &flags,         sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
-  if (! fread((char *) &M,             sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &(hmm->flags),  sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
+  if (! fread((char *) &(hmm->M),      sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
   if (! fread((char *) &alphabet_type, sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
   
   /* Set or verify alphabet. */
@@ -315,10 +319,10 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
     if ((*ret_abc)->type != alphabet_type)                        { status = eslEINCOMPAT; goto ERROR; }
   }
 
-  /* Allocate the new HMM. */
-  if ((hmm = p7_hmm_Create(M, abc)) == NULL)                      { status = eslEMEM;      goto ERROR; }  
-  hmm->flags = flags;
-  hmm->M     = M;
+  /* Finish the allocation of the HMM
+   */
+  if ((status = p7_hmm_CreateBody(hmm, hmm->M, abc)) != eslOK)    goto ERROR;
+
   
   /* Core model probabilities. */
   for (k = 1; k <= hmm->M; k++)
@@ -338,7 +342,7 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   if ((status = read_bin_string(hfp->f, &(hmm->comlog))) != eslOK)                          goto ERROR;
   if (! fread((char *) &(hmm->nseq), sizeof(int), 1, hfp->f))                               {status = eslEOD; goto ERROR;}
   if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                          goto ERROR;
-  if ((hmm->flags & p7_MAP)  && ! fread((char *) hmm->map, sizeof(char), hmm->M+1, hfp->f)) {status = eslEOD; goto ERROR;}
+  if ((hmm->flags & p7_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}
 
   /* Pfam cutoffs */
@@ -403,6 +407,8 @@ write_bin_string(FILE *fp, char *s)
  * 
  * Purpose:  Read in a string from a binary file, where
  *           the first integer is the length (including '\0').
+ *           If the length is 0, <*ret_s> is set to <NULL>.
+ *           
  *           
  * Args:     fp       - FILE to read from
  *           ret_s    - string to read into
@@ -417,8 +423,10 @@ read_bin_string(FILE *fp, char **ret_s)
   int   len;
 
   if (! fread((char *) &len, sizeof(int), 1, fp)) { status = eslEOD; goto ERROR; }
-  ESL_ALLOC(s,  (sizeof(char) * len));
-  if (! fread((char *) s, sizeof(char), len, fp)) { status = eslEOD; goto ERROR; }
+  if (len > 0) {
+    ESL_ALLOC(s,  (sizeof(char) * len));
+    if (! fread((char *) s, sizeof(char), len, fp)) { status = eslEOD; goto ERROR; }
+  }
   *ret_s = s;
   return eslOK;
 

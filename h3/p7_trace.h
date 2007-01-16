@@ -34,6 +34,7 @@ typedef struct {
 } P7_TRACE;
 
 extern int  p7_trace_Create(int N, P7_TRACE **ret_tr);
+extern int  p7_trace_Reuse(P7_TRACE *tr);
 extern int  p7_trace_Expand(P7_TRACE *tr);
 extern int  p7_trace_ExpandTo(P7_TRACE *tr, int N);
 extern void p7_trace_Destroy(P7_TRACE *tr);

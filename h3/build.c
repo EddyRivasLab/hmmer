@@ -20,17 +20,19 @@
  *    4. Test driver.
  *    5. Copyright and license.
  * 
+ * SRE, Tue Jan 2 2007 [Casa de Gatos]
  * SVN $Id$
  */
 
 #include "p7_config.h"
 
-#include "p7_hmm.h"
-#include "p7_trace.h"
-
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_msa.h"
+
+#include "p7_hmm.h"
+#include "p7_trace.h"
+
 
 static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 static int fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr);
