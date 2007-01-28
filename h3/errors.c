@@ -12,6 +12,12 @@
  * SVN $Id$
  */
 
+#include "p7_config.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+
+#include "hmmer.h"
 
 /* Function:  p7_Die()
  * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]

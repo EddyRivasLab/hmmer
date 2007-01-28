@@ -6,9 +6,15 @@
 
 #include "p7_config.h"
 
+#include <math.h>
+#include <float.h>
+
+#include "easel.h"
+#include "hmmer.h"
+
 /* Function: p7_Prob2Score()
  * 
- * Purpose:  Convert a probability to a scaled integer log_2 odds score. 
+ * Purpose:  Convert a probability to a scaled integer log odds score. 
  *           Round to nearest integer (i.e. note use of +0.5 and floor())
  *           Return the score. 
  */
@@ -22,7 +28,7 @@ p7_Prob2Score(float p, float null)
 /* Function:  p7_LL2Score()
  * Incept:    SRE, Mon May  2 08:19:36 2005 [St. Louis]
  *
- * Purpose:   Convert a log likelihood to a scaled integer log_2 odds score,
+ * Purpose:   Convert a log likelihood to a scaled integer log odds score,
  *            rounded to nearest integer, given a <null> probability; 
  *            return the score. 
  *            

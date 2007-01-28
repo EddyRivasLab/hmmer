@@ -10,9 +10,7 @@
 #include <stdio.h>
 
 #include "easel.h"
-
-#include "p7_trace.h"
-
+#include "hmmer.h"
 
 /* Function:  p7_trace_Create()
  *

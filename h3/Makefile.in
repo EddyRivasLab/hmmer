@@ -41,18 +41,22 @@ MYLIBS   = -leasel
 MYLIBDIR = -L../easel
 MYINCDIR = -I../easel
 
-PROGS = hmmbuild
+PROGS = hmmbuild hmmemit
 
 OBJS =  build.o\
+	emit.o\
+	errors.o\
+	heatmap.o\
+	hmmer.o\
+	modelconfig.o\
+	p7_bg.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
+	p7_profile.o\
 	p7_trace.o
 
 HDRS =  hmmer.h\
-	p7_config.h\
-	p7_hmm.h\
-	p7_hmmfile.h\
-	p7_trace.h
+	p7_config.h
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
@@ -63,7 +67,7 @@ HDRS =  hmmer.h\
 ##
 all: 	$(PROGS) libhmmer.a  ../easel/libeasel.a
 
-${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} 
+${PROGS}: @EXEC_DEPENDENCY@ ${OBJS}   libhmmer.a ../easel/libeasel.a
 	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
 
 
@@ -82,6 +86,9 @@ libhmmer.a: $(OBJS)
 #################################################################
 ## Miscellaneous targets.
 ##
+check:
+	(cd testsuite; ./sqc 2 testsuite.sqc .)
+
 distclean:
 	make clean
 	-rm -f Makefile p7_config.h

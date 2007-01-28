@@ -30,8 +30,7 @@
 #include "esl_alphabet.h"
 #include "esl_msa.h"
 
-#include "p7_hmm.h"
-#include "p7_trace.h"
+#include "hmmer.h"
 
 
 static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
@@ -601,7 +600,7 @@ utest_foo(void)
 #include "easel.h"
 
 #include "p7_config.h"
-#include "p7_hmm.h"
+#include "hmmer.h"
 
 static int write_test_msa(FILE *ofp);
 

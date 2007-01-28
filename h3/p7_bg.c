@@ -11,8 +11,9 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_vectorops.h"
 
-#include "p7_null.h"
+#include "hmmer.h"
 
 
 /*****************************************************************
@@ -40,12 +41,12 @@ p7_bg_Create(ESL_ALPHABET *abc)
   bg->f = NULL;
 
   ESL_ALLOC(bg->f, sizeof(float) * abc->K);
-  if       (abc->type == eslAMINO && p7_AAFrequencies(bg->f) != eslOK) goto ERROR;
+  if       (abc->type == eslAMINO && p7_AminoFrequencies(bg->f) != eslOK) goto ERROR;
   else     esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
 
   bg->p1  = 350./351.;
   bg->abc = abc;
-  return eslOK;
+  return bg;
 
  ERROR:
   p7_bg_Destroy(bg);

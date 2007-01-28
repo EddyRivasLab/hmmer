@@ -22,7 +22,7 @@
 #include "esl_alphabet.h"
 #include "esl_ssi.h" 		/* this gives us esl_byteswap */
 
-#include "p7_hmmfile.h"
+#include "hmmer.h"
 
 /* Magic numbers identifying binary formats.
  * Do not change the old magics! Necessary for backwards compatibility.
@@ -494,7 +494,7 @@ utest_io_30(char *tmpfile, P7_HMM *hmm)
 #include "esl_alphabet.h"
 #include "esl_random.h"
 
-#include "p7_hmm.h"
+#include "hmmer.h"
 
 int
 main(int argc, char **argv)

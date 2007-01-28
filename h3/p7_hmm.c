@@ -9,7 +9,7 @@
  *   6. Test driver. 
  *   7. Copyright and license.
  * 
- * SRE, Mon Jan  1 16:20:29 2007 [Casa de Gatos] [Verdi, La Traviata; Maria Callas]
+ * SRE, Mon Jan  1 16:20:29 2007 [Casa de Gatos] [Verdi, La Traviata]
  * SVN $Id$
  */
 
@@ -26,7 +26,7 @@
 #include "esl_random.h"
 #include "esl_dirichlet.h"
 
-#include "p7_hmm.h"
+#include "hmmer.h"
 
 
 
@@ -205,6 +205,66 @@ p7_hmm_Destroy(P7_HMM *hmm)
 
   free(hmm);
   return;
+}
+
+/* Function:  p7_hmm_Duplicate()
+ * Incept:    SRE, Fri Jan 26 15:34:42 2007 [Janelia]
+ *
+ * Purpose:   Duplicates an hmm.
+ * 
+ *            Note: does not duplicate the objects the HMM refers to,
+ *            if any (profile, null model, or alphabet); only copies
+ *            the reference pointers.
+ * 
+ * Returns:   a pointer to the duplicate.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_HMM *
+p7_hmm_Duplicate(P7_HMM *hmm)
+{
+  int     status;
+  int     k;
+  P7_HMM *new = NULL;
+
+  if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
+
+  for (k = 0; k < hmm->M; k++) {
+    esl_vec_FCopy(new->t[k],   hmm->t[k],   7);
+    esl_vec_FCopy(new->mat[k], hmm->mat[k], hmm->abc->K);
+    esl_vec_FCopy(new->ins[k], hmm->ins[k], hmm->abc->K);
+  }
+  esl_vec_FCopy(new->mat[hmm->M], hmm->mat[new->M], hmm->abc->K);
+  
+  if (hmm->name != NULL    && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
+  if (hmm->acc  != NULL    && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
+  if (hmm->desc != NULL    && (status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+  if (hmm->flags & p7_RF   && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
+  if (hmm->flags & p7_CS   && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
+  if (hmm->flags & p7_CA   && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
+  if (hmm->comlog != NULL  && (status = esl_strdup(hmm->comlog, -1, &(new->comlog))) != eslOK) goto ERROR;
+  if (hmm->ctime  != NULL  && (status = esl_strdup(hmm->ctime,  -1, &(new->ctime)))  != eslOK) goto ERROR;
+  if (hmm->flags & p7_MAP) {
+    ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
+    esl_vec_ICopy(new->map, hmm->map, hmm->M+1);
+  }
+  new->nseq     = hmm->nseq;
+  new->checksum = hmm->checksum;
+  new->ga1      = hmm->ga1;
+  new->ga2      = hmm->ga2;
+  new->tc1      = hmm->tc1;
+  new->tc2      = hmm->tc2;
+  new->nc1      = hmm->nc1;
+  new->nc2      = hmm->nc2;
+  new->abc      = hmm->abc;
+  new->gm       = hmm->gm;
+  new->bg       = hmm->bg;
+  new->flags    = hmm->flags;
+  return new;
+
+ ERROR:
+  if (new != NULL) p7_hmm_Destroy(new);
+  return NULL;
 }
 
 /* Function:  p7_hmm_Zero()
@@ -644,6 +704,48 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 
 }
 
+/* Function:  p7_hmm_SampleUngapped()
+ * Incept:    SRE, Thu Jan 25 09:38:30 2007 [Janelia]
+ *
+ * Purpose:   Same as <p7_hmm_Sample()>, except all 
+ *            M $\rightarrow$ M transitions are 1.0:
+ *            an ungapped model. Useful for testing 
+ *            as a limit case.
+ *            
+ * Returns:   <eslOK> on success, and the new hmm is returned
+ *            through <ret_hmm); caller is responsible for 
+ *            freeing this object with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      STL11/140
+ */
+int
+p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm    = NULL;
+  int     k;
+  int     status;
+
+  if ((status = p7_hmm_Sample(r, M, abc, &hmm)) != eslOK) goto ERROR;
+  for (k = 0; k < M; k++) {
+    esl_vec_FSet(hmm->t[k], 3, 0.);
+    hmm->t[k][p7_TMM] = 1.0;
+  }
+  *ret_hmm = hmm;
+  return eslOK;
+
+ ERROR:
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
+
+
+
+
 /* Function:  p7_hmm_Compare()
  * Incept:    SRE, Sat Jan  6 14:14:58 2007 [Casa de Gatos]
  *
@@ -801,12 +903,12 @@ utest_foo(void)
 #ifdef p7HMM_TESTDRIVE
 
 #include <p7_config.h>
-#include <p7_hmm.h>
+#include <hmmer.h>
 
 int
 main(int argc, char **argv)
 {
-  
+  utest_foo();
   exit(0); /* success */
 }
 

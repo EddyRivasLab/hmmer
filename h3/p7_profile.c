@@ -1,9 +1,23 @@
 /* Routines for the P7_PROFILE structure - a Plan 7 search profile
  *                                         
+ *    1. The P7_PROFILE object: allocation, initialization, destruction.
+ *    2. Debugging and development code.
+ *    
  * SRE, Thu Jan 11 15:16:47 2007 [Janelia] [Sufjan Stevens, Illinois]
  * SVN $Id$
  */
 
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_vectorops.h"
+
+#include "hmmer.h"
+
+
+/*****************************************************************
+ * 1. The P7_PROFILE object: allocation, initialization, destruction.
+ *****************************************************************/
 
 /* Function:  p7_profile_Create()
  * Incept:    SRE, Thu Jan 11 15:53:28 2007 [Janelia]
@@ -47,17 +61,42 @@ p7_profile_Create(int M, ESL_ALPHABET *abc)
   ESL_ALLOC(gm->tsc[0], sizeof(int) * 7*M);    
   ESL_ALLOC(gm->msc[0], sizeof(int) * (abc->Kp-1) * (M+1));
   ESL_ALLOC(gm->isc[0], sizeof(int) * (abc->Kp-1) * M);
-  for (x = 1; x < p7_MAXCODE; x++) {
+  for (x = 1; x < abc->Kp-1; x++) {
     gm->msc[x] = gm->msc[0] + x * (M+1);
     gm->isc[x] = gm->isc[0] + x * M;
   }
   for (x = 0; x < 7; x++)
     gm->tsc[x] = gm->tsc[0] + x * M;
 
-  gm->M    = M;
-  gm->abc  = abc;
-  gm->hmm  = NULL;
-  gm->bg   = NULL;
+  /* Initialize some pieces of memory that are never used,
+   * only there for indexing convenience.
+   */
+  gm->tsc[p7_TMM][0] = p7_IMPOSSIBLE; /* node 0 nonexistent, has no transitions  */
+  gm->tsc[p7_TMI][0] = p7_IMPOSSIBLE;
+  gm->tsc[p7_TMD][0] = p7_IMPOSSIBLE;
+  gm->tsc[p7_TIM][0] = p7_IMPOSSIBLE;
+  gm->tsc[p7_TII][0] = p7_IMPOSSIBLE;
+  gm->tsc[p7_TDM][0] = p7_IMPOSSIBLE;
+  gm->tsc[p7_TDD][0] = p7_IMPOSSIBLE;
+  gm->tsc[p7_TDM][1] = p7_IMPOSSIBLE; /* delete state D_1 is wing-retracted */
+  gm->tsc[p7_TDD][1] = p7_IMPOSSIBLE;
+  for (x = 0; x < abc->Kp-1; x++) {   /* no emissions from nonexistent M_0, I_0 */
+    gm->msc[x][0] = p7_IMPOSSIBLE;
+    gm->isc[x][0] = p7_IMPOSSIBLE;
+  }
+  x = esl_abc_XGetGap(abc);	      /* no emission can emit/score gap characters */
+  esl_vec_ISet(gm->msc[x], M+1, p7_IMPOSSIBLE);
+  esl_vec_ISet(gm->isc[x], M,   p7_IMPOSSIBLE);
+  
+  /* Set remaining info
+   */
+  gm->mode        = p7_NO_MODE;
+  gm->M           = M;
+  gm->abc         = abc;
+  gm->hmm         = NULL;
+  gm->bg          = NULL;
+  gm->do_lcorrect = FALSE;
+  gm->lscore      = 0.;
   return gm;
 
  ERROR:
@@ -92,3 +131,53 @@ p7_profile_Destroy(P7_PROFILE *gm)
   free(gm);
   return;
 }
+
+
+/*****************************************************************
+ * 2. Debugging and development code.
+ *****************************************************************/
+
+/* Function:  p7_profile_Validate()
+ * Incept:    SRE, Tue Jan 23 13:58:04 2007 [Janelia]
+ *
+ * Purpose:   Validates the internals of the generic profile structure
+ *            <gm>. Probability vectors in the implicit profile
+ *            probabilistic model are validated to sum to 1.0 +/- <tol>.
+ *            
+ *            TODO: currently this function only validates the implicit
+ *            model's probabilities, nothing else.
+ *            
+ * Returns:   <eslOK> if <gm> internals look fine. Returns <eslFAIL>
+ *            if something is wrong.
+ */
+int
+p7_profile_Validate(P7_PROFILE *gm, float tol)
+{
+  float sum;
+  int k,i;
+
+  /* begin[k] should sum to 1.0 over the M(M+1)/2 entries in
+   * the implicit model
+   */
+  for (sum = 0., k = 1; k <= gm->M; k++)
+    sum += gm->begin[k] * (gm->M - k + 1);
+  if (esl_FCompare(sum, 1.0, tol) != eslOK) return eslFAIL;
+
+  /* end[k] should all be 1.0 in the implicit model
+   */
+  for (k = 1; k <= gm->M; k++)
+    if (gm->end[k] != 1.0) return eslFAIL;
+
+  /* all four xt's should sum to 1.0
+   */
+  for (i = 0; i < 4; i++)
+    if (esl_FCompare(gm->xt[i][p7_MOVE] + gm->xt[i][p7_LOOP], 1.0, tol) != eslOK) return eslFAIL;
+
+  return eslOK;
+}
+
+
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
