@@ -45,14 +45,27 @@ p7_LL2Score(float ll, float null)
 
 /* Function: p7_Score2Prob()
  * 
- * Purpose:  Convert an integer lod score back to a probability;
+ * Purpose:  Convert a scaled integer lod score back to a probability;
  *           needs the null model probability (or 1.0) to do the conversion.
  */
 float 
-Score2Prob(int sc, float null)
+p7_Score2Prob(int sc, float null)
 {
   if (sc == p7_IMPOSSIBLE) return 0.;
   else                     return (null * exp((float) sc / p7_INTSCALE));
+}
+
+/* Function:  p7_Score2Output()
+ * Incept:    SRE, Thu Feb  1 10:13:40 2007 [UA8018 St. Louis to Dulles]
+ *
+ * Purpose:   Convert an scaled integer lod score to a
+ *            standard real-valued bit score, suitable for output.
+ *
+ */
+float 
+p7_Score2Output(int sc)
+{
+  return ((float) sc / p7_INTSCALE / eslCONST_LOG2);
 }
 
 

@@ -5,7 +5,8 @@
  *    3. P7_BG:      a null (background) model.
  *    4. P7_TRACE:   a traceback (alignment of seq to profile).
  *    5. P7_HMMFILE: an HMM save file or database, open for reading.
- *    6. Other routines in HMMER's exposed API.
+ *    6. P7_GMX:     a "generic" dynamic programming matrix
+ *    7. Other routines in HMMER's exposed API.
  * 
  * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
  * SVN $Id$
@@ -186,6 +187,10 @@ typedef struct p7_profile_s {
   /* Numerical correction detail for long sequences */
   int           do_lcorrect;	/* TRUE to apply score correction      */
   float         lscore;		/* the correction to apply per residue */
+
+  /* Flag(s) indicating test/debugging modes */
+  int h2_mode;        		/* TRUE if model config is HMMER2 style */
+
 } P7_PROFILE;
 
 /* Indices for special state types, I: used for dynamic programming xmx[][]
@@ -252,6 +257,12 @@ extern void   p7_bg_Destroy(P7_BG *bg);
  * A traceback is always relative to the search form of the model,
  * so they always include the S,N,B... E,C,T states. Element 0 always 
  * a p7_STS. Element N-1 always a p7_STT.
+ * 
+ * The N,C,J states emit on transition, not on state, so a path of N
+ * emits 0 residues, NN emits 1 residue, NNN emits 2 residues, and so
+ * on. By convention, the trace always associates an
+ * emission-on-transition with the following (destination) state, so
+ * the first N, C, or J is stored in a trace as a nonemitter (i=0).
  *
  * A traceback may be relative to an aligned sequence or an unaligned
  * sequence in digital mode.
@@ -270,7 +281,7 @@ extern int  p7_trace_Expand(P7_TRACE *tr);
 extern int  p7_trace_ExpandTo(P7_TRACE *tr, int N);
 extern void p7_trace_Destroy(P7_TRACE *tr);
 extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
-extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq);
+extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf);
 extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
@@ -297,7 +308,35 @@ extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **r
 
 
 /*****************************************************************
- * 6. Other routines in HMMER's exposed API.
+ * 6. P7_GMX: a "generic" dynamic programming matrix
+ *****************************************************************/
+
+struct p7_gmx_s {
+  int  M;		/* actual model dimension (model 1..M)    */
+  int  L;		/* actual sequence dimension (seq 1..L)   */
+  
+  size_t ncells;	/* current cell allocation limit: >= (M+1)*(L+1) */
+  size_t nrows;    	/* current row allocation limit:  >= L+1  */
+
+  int **xmx;		/* special scores [0.1..L][BECJN]      */
+  int **mmx;		/* match scores   [0.1..L][0.1..M]     */
+  int **imx;		/* insert scores  [0.1..L][0.1..M-1.M] */
+  int **dmx;		/* delete scores  [0.1..L][0.1..M-1.M] */
+
+  int  *xmx_mem;	
+  int  *mmx_mem;
+  int  *imx_mem;
+  int  *dmx_mem;
+
+} P7_GMX;
+
+
+extern P7_GMX *p7_gmx_Create(int allocM, int allocN);
+extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
+extern void    p7_gmx_Destroy(P7_GMX *gx);
+
+/*****************************************************************
+ * 7. Other routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c
@@ -307,8 +346,9 @@ extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_T
 
 /* emit.c
  */
-extern int p7_CoreEmit   (ESL_RANDOMNESS *r, P7_HMM     *hmm, ESL_SQ *sq, P7_TRACE *tr);
-extern int p7_ProfileEmit(ESL_RANDOMNESS *r, P7_PROFILE *gm,  ESL_SQ *sq, P7_TRACE *tr);
+extern int p7_CoreEmit      (ESL_RANDOMNESS *r, P7_HMM     *hmm, ESL_SQ *sq, P7_TRACE *tr);
+extern int p7_ProfileEmit   (ESL_RANDOMNESS *r, P7_PROFILE *gm,  ESL_SQ *sq, P7_TRACE *tr);
+extern int p7_H2_ProfileEmit(ESL_RANDOMNESS *r, P7_PROFILE *gm,  ESL_SQ *sq, P7_TRACE *tr);
 
 /* errors.c
  */
@@ -327,6 +367,7 @@ extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 extern int   p7_Prob2Score(float p, float null);
 extern int   p7_LL2Score(float ll, float null);
 extern float p7_Score2Prob(int sc, float null);
+extern float p7_Score2Output(int sc);
 extern int   p7_AminoFrequencies(float *f);
 
 /* modelconfig.c

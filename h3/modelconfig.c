@@ -4,7 +4,7 @@
  * Contents:
  *     1. Routines in the exposed API.
  *     2. Private functions.
- *     3. Routines that emulate HMMER2 behavior.
+ *     3. Routines emulating HMMER2, for testing.
  *     4. Unit tests.
  *     5. Test driver.
  *     6. Statistics collection driver.
@@ -331,7 +331,7 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
 }
 
 /*****************************************************************
- * 3. Routines that emulate HMMER2 behavior.
+ * 3. Routines emulating HMMER2, for testing.
  *****************************************************************/
 
 /* Function:  p7_H2_ProfileConfig()
@@ -359,20 +359,27 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
 
   /* Contract checks: HMM must have null model */
   if (hmm->bg == NULL)  ESL_XEXCEPTION(eslECONTRACT, "HMM needs to have a null model here");
-  if (mode != p7_LOCAL) ESL_XEXCEPTION(eslECONTRACT, "I'm not ready for any mode but local mode");
+  if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
+    ESL_XEXCEPTION(eslECONTRACT, "I'm not ready for any mode but local mode");
 
   /* Copy some pointer references and other info across from HMM */
-  gm->M    = hmm->M;
-  gm->abc  = hmm->abc;
-  gm->hmm  = hmm;
-  gm->bg   = hmm->bg;
-  gm->mode = p7_LOCAL; 	/* hmmfs mode: local, multihit */
+  gm->M       = hmm->M;
+  gm->abc     = hmm->abc;
+  gm->hmm     = hmm;
+  gm->bg      = hmm->bg;
+  gm->mode    = mode;
+  gm->h2_mode = TRUE;
 
   /* Configure special states */
   gm->xt[p7_XTN][p7_MOVE] = 1.0 - hmm->bg->p1;    /* allow N-terminal tail     */
   gm->xt[p7_XTN][p7_LOOP] = hmm->bg->p1;
-  gm->xt[p7_XTE][p7_MOVE] = 0.5;  
-  gm->xt[p7_XTE][p7_LOOP] = 0.5;  
+  if (mode == p7_LOCAL) {
+    gm->xt[p7_XTE][p7_MOVE] = 0.5; /* multihit */
+    gm->xt[p7_XTE][p7_LOOP] = 0.5;  
+  } else {
+    gm->xt[p7_XTE][p7_MOVE] = 1.0; /* singlehit */
+    gm->xt[p7_XTE][p7_LOOP] = 0.0;  
+  }
   gm->xt[p7_XTC][p7_MOVE] = 1.0 - hmm->bg->p1;    /* allow C-terminal tail     */
   gm->xt[p7_XTC][p7_LOOP] = hmm->bg->p1;
   gm->xt[p7_XTJ][p7_MOVE] = 1.0 - hmm->bg->p1;    /* allow J junction between domains */
@@ -522,11 +529,12 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",       0 },
   { "-i",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "sample by two-step ideal rule, not from profile", 0},
-  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL, "-n,-M", "input HMM from file <f> instead of sampling",0 },
+  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL, "-u,-M", "input HMM from file <f> instead of sampling",0 },
   { "-n",        eslARG_INT, "100000", NULL, "n>0",     NULL,      NULL,    NULL, "number of seqs to sample",                   0 },
   { "-u",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-m", "make sampled HMM ungapped",                  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "set expected length from profile to <n>",    0 },
   { "-M",        eslARG_INT,     "50", NULL, "n>0",     NULL,      NULL,    "-m", "set sampled model length to <n>",            0 },
+  { "-2",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "emulate HMMER2 configuration",               0 },
   { "--ips",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output PostScript mx of i endpoints to <f>", 0 },
   { "--kps",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output PostScript mx of k endpoints to <f>", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -535,9 +543,9 @@ static ESL_OPTIONS options[] = {
 static char usage[] = "./statprog [options]";
 
 static int ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
-			 float *ret_i1, float *ret_i2, int *ret_k1, int *ret_k2);
+			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2);
 static int klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr,
-			 float *ret_i1, float *ret_i2, int *ret_k1, int *ret_k2);
+			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2);
 
 int
 main(int argc, char **argv)
@@ -551,7 +559,7 @@ main(int argc, char **argv)
   ESL_SQ          *sq      = NULL;     /* sampled sequence                        */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   int              i,j;
-  float            i1,i2;
+  int            i1,i2;
   int              k1,k2;
   int              iseq;
   FILE            *fp      = NULL;
@@ -562,6 +570,7 @@ main(int argc, char **argv)
   int              do_ungapped;
   int              L;
   int              M;
+  int              do_h2;
   char            *ipsfile = NULL;
   char            *kpsfile = NULL;
   ESL_DMATRIX     *imx     = NULL;
@@ -585,6 +594,7 @@ main(int argc, char **argv)
   esl_opt_GetBooleanOption(go, "-u",    &do_ungapped);
   esl_opt_GetIntegerOption(go, "-L",    &L);
   esl_opt_GetIntegerOption(go, "-M",    &M);
+  esl_opt_GetBooleanOption(go, "-2",    &do_h2);
   esl_opt_GetStringOption (go, "--ips", &ipsfile);
   esl_opt_GetStringOption (go, "--kps", &kpsfile);
 
@@ -619,7 +629,7 @@ main(int argc, char **argv)
       if (do_ungapped) p7_hmm_SampleUngapped(r, M, abc, &hmm);
       else             p7_hmm_Sample        (r, M, abc, &hmm);
     }
-  imx = esl_dmatrix_Create(100, 100);
+  imx = esl_dmatrix_Create(M, M);
   kmx = esl_dmatrix_Create(M, M);
   esl_dmatrix_SetZero(imx);
   esl_dmatrix_SetZero(kmx);
@@ -628,23 +638,24 @@ main(int argc, char **argv)
   hmm->bg = p7_bg_Create(abc);
   core    = p7_hmm_Duplicate(hmm);
 
-  /* need H2 config...
-   */
-  hmm->gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
-  p7_ReconfigLength(hmm->gm, L);
-
-  if (p7_hmm_Validate    (hmm,     0.0001)       != eslOK) esl_fatal("whoops, HMM is bad!");
-  if (p7_profile_Validate(hmm->gm, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
+  if (do_h2) {
+    hmm->gm = p7_profile_Create(hmm->M, abc);
+    p7_H2_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
+  } else {
+    hmm->gm = p7_profile_Create(hmm->M, abc);
+    p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
+    p7_ReconfigLength(hmm->gm, L);
+    if (p7_hmm_Validate    (hmm,     0.0001)       != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_profile_Validate(hmm->gm, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
+  }
 
   for (iseq = 0; iseq < nseq; iseq++)
     {
-      if (do_ilocal) ilocal_sample(r, hmm,           sq, tr, &i1, &i2, &k1, &k2);
+      if (do_ilocal) ilocal_sample(r, core,          sq, tr, &i1, &i2, &k1, &k2);
       else           klocal_sample(r, core, hmm->gm, sq, tr, &i1, &i2, &k1, &k2);
 
-      /* 0 < i1,i2 <= 100, so (int)ceil(x) makes them 1..100, and -1 makes them 0..99 for mx */
-      imx->mx[(int)ceilf(i1)-1][(int)ceilf(i2)-1] += 1.;
-      kmx->mx[k1][k2] += 1.;
+      imx->mx[i1-1][i2-1] += 1.;
+      kmx->mx[k1-1][k2-1] += 1.; 
     }
 
   /* Adjust both mx's to log_2(obs/exp) ratio */
@@ -663,14 +674,19 @@ main(int argc, char **argv)
   /* Print ps files */
   if (kpsfile != NULL) {
     if ((fp = fopen(kpsfile, "w")) == NULL) esl_fatal("Failed to open output postscript file %s", kpsfile);
-    dmx_Visualize(fp, kmx, dmx_upper_min(kmx), dmx_upper_max(kmx));
+    dmx_Visualize(fp, kmx, -2., 2.);
     fclose(fp);
   }
   if (ipsfile != NULL) {
     if ((fp = fopen(ipsfile, "w")) == NULL) esl_fatal("Failed to open output postscript file %s", ipsfile);
-    dmx_Visualize(fp, imx, dmx_upper_min(imx), dmx_upper_max(imx));
+    dmx_Visualize(fp, imx, -2., 2.); 
+    /* dmx_Visualize(fp, imx, dmx_upper_min(imx), dmx_upper_max(imx)); */
     fclose(fp);
   }
+
+  printf("i matrix values range from %f to %f\n", dmx_upper_min(imx), dmx_upper_max(imx));
+  printf("k matrix values range from %f to %f\n", dmx_upper_min(kmx), dmx_upper_max(kmx));
+
   
   p7_profile_Destroy(hmm->gm);
   p7_bg_Destroy(hmm->bg);
@@ -714,7 +730,7 @@ main(int argc, char **argv)
  */
 static int
 ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
-	      float *ret_i1, float *ret_i2, int *ret_k1, int *ret_k2)
+	      int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
 {
   int status;
   int tpos;
@@ -736,9 +752,11 @@ ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr,
   for (tpos = tr->N-1; tpos >= 0; tpos--)
     if (tr->i[tpos] == i2) { *ret_k2 = tr->k[tpos]; break; }
 
-  /* Normalize sequence coords */
-  *ret_i1 = (float) i1 * 100. / (float) sq->n;
-  *ret_i2 = (float) i2 * 100. / (float) sq->n;
+  /* Normalize sequence coords.
+   * They're 1..L now; make them 1..M
+   */
+  *ret_i1 = ((i1-1) * hmm->M / sq->n) + 1;
+  *ret_i2 = ((i2-1) * hmm->M / sq->n) + 1;
   return eslOK;
 
  ERROR:
@@ -802,13 +820,14 @@ ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr,
  */
 static int
 klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr,
-	      float *ret_i1, float *ret_i2, int *ret_k1, int *ret_k2)
+	      int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
 {
   int i1,i2;
   int t1,t2;			/* entry/exit positions in local trace, tr */
   int tg1, tg2;			/* entry/exit positions in global trace, tr2 */
   int tpos;
-  int offset;
+  int nterm, cterm;		/* offsets at N, C terminus. */
+  int L;			/* inferred length from 3-part patching */
   ESL_SQ *sq2   = NULL;
   P7_TRACE *tr2 = NULL;
   int status;
@@ -816,8 +835,12 @@ klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TR
   if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslECONTRACT, "profile must be unilocal");
 
   /* sample local alignment from the implicit model */
-  if ((status = p7_ProfileEmit(r, gm, sq, tr)) != eslOK) goto ERROR;
-
+  if (gm->h2_mode) {
+    if ((status = p7_H2_ProfileEmit(r, gm, sq, tr)) != eslOK) goto ERROR;
+  } else {
+    if ((status = p7_ProfileEmit(r, gm, sq, tr)) != eslOK) goto ERROR;
+  }
+    
   /* Get trace coords */
   for (tpos = 0; tpos < tr->N; tpos++)
     if (tr->st[tpos] == p7_STM || tr->st[tpos] == p7_STD) { t1 = tpos; break; }
@@ -847,15 +870,19 @@ klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TR
     for (tpos = tr2->N-1; tpos >= 0; tpos--)
       if (tr2->k[tpos] == *ret_k2) { tg2 = tpos; break; }
   }  while (tr2->st[tg1] != tr->st[t1] && tr2->st[tg2] != tr->st[t2]);
-  for (offset = 0, tpos = 0; tpos <= tg1; tpos++) 
-    if (tr2->st[tpos] == p7_STM || tr2->st[tpos] == p7_STI) offset++;
+
+  for (nterm = 0, tpos = 0; tpos < tg1; tpos++) 
+    if (tr2->st[tpos] == p7_STM || tr2->st[tpos] == p7_STI) nterm++;
+  for (cterm = 0, tpos = tr2->N-1; tpos > tg2; tpos--)
+    if (tr2->st[tpos] == p7_STM || tr2->st[tpos] == p7_STI) cterm++;
 
   /* Now, offset and normalize the coords. */
-  i2 = (i2 - i1) + offset;
-  i1 = offset;
+  L  = (i2-i1+1) + nterm + cterm;
+  i2 = (i2-i1+1) + nterm;
+  i1 = nterm+1;
   
-  *ret_i1 = (float) i1 * 100. / (float) sq2->n;
-  *ret_i2 = (float) i2 * 100. / (float) sq2->n;
+  *ret_i1 = ((i1-1) * gm->M / L) + 1;
+  *ret_i2 = ((i2-1) * gm->M / L) + 1;
   p7_trace_Destroy(tr2);
   esl_sq_Destroy(sq2);
   return eslOK;

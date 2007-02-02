@@ -97,6 +97,7 @@ p7_profile_Create(int M, ESL_ALPHABET *abc)
   gm->bg          = NULL;
   gm->do_lcorrect = FALSE;
   gm->lscore      = 0.;
+  gm->h2_mode     = FALSE;
   return gm;
 
  ERROR:

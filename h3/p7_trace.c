@@ -183,13 +183,20 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
  *
  *            Intended for debugging, development, and testing
  *            purposes.
+ *            
+ * Args:      tr     - trace to validate
+ *            abc    - alphabet corresponding to sequence <sq>
+ *            sq     - digital sequence that <tr> is explaining
+ *            errbuf - NULL, or an error message buffer allocated
+ *                     for at least eslERRBUFSIZE chars.           
  *
  * Returns:   <eslOK> if trace appears fine.
- *
- * Throws:    <eslFAIL> if a problem is detected.
+ *            Returns <eslFAIL> if a problem is detected; if <errbuf> is
+ *            provided (non-<NULL>), an informative message is formatted
+ *            there to indicate the reason for the failure.
  */
 int
-p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq)
+p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
 {
   int  tpos;			/* position in trace    */
   int  i;			/* position in sequence */
@@ -200,18 +207,18 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq)
   /* Verify that N is sensible (before we start using it in loops!)
    * Minimum is S->N->B->M_k->E->C->T, for a seq of length 1: 7 states.
    */
-  if (tr->N < 7 || tr->N > tr->nalloc) ESL_XEXCEPTION(eslFAIL, "N of %d isn't sensible", tr->N);
+  if (tr->N < 7 || tr->N > tr->nalloc) ESL_XFAIL(eslFAIL, errbuf, "N of %d isn't sensible", tr->N);
 
   /* Verify "sentinels", the S and T at each end of the trace
    * (before we start looking backwards and forwards from each state in 
    * our main validation loop)
    */
-  if (tr->st[0]       != p7_STS)   ESL_XEXCEPTION(eslFAIL, "first state not S");
-  if (tr->k[0]        != 0)        ESL_XEXCEPTION(eslFAIL, "first state shouldn't have k set");
-  if (tr->i[0]        != 0)        ESL_XEXCEPTION(eslFAIL, "first state shouldn't have i set");
-  if (tr->st[tr->N-1] != p7_STT)   ESL_XEXCEPTION(eslFAIL, "last state not N");
-  if (tr->k[tr->N-1]  != 0)        ESL_XEXCEPTION(eslFAIL, "last state shouldn't have k set");
-  if (tr->i[tr->N-1]  != 0)        ESL_XEXCEPTION(eslFAIL, "last state shouldn't have i set");
+  if (tr->st[0]       != p7_STS)   ESL_XFAIL(eslFAIL, errbuf, "first state not S");
+  if (tr->k[0]        != 0)        ESL_XFAIL(eslFAIL, errbuf, "first state shouldn't have k set");
+  if (tr->i[0]        != 0)        ESL_XFAIL(eslFAIL, errbuf, "first state shouldn't have i set");
+  if (tr->st[tr->N-1] != p7_STT)   ESL_XFAIL(eslFAIL, errbuf, "last state not N");
+  if (tr->k[tr->N-1]  != 0)        ESL_XFAIL(eslFAIL, errbuf, "last state shouldn't have k set");
+  if (tr->i[tr->N-1]  != 0)        ESL_XFAIL(eslFAIL, errbuf, "last state shouldn't have i set");
 
   /* Main validation loop.
    */
@@ -230,81 +237,81 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq)
 
       switch (tr->st[tpos]) {
       case p7_STS:
-	ESL_XEXCEPTION(eslFAIL, "S must be first state");
+	ESL_XFAIL(eslFAIL, errbuf, "S must be first state");
 	break;
 	
       case p7_STN:
-	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "no N should have k set");
+	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no N should have k set");
 	if (prv == p7_STS) { /* 1st N doesn't emit */
-	  if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "first N shouldn't have i set");
+	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first N shouldn't have i set");
 	} else if (prv == p7_STN) { /* subsequent N's do */
-	  if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	  if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	  i++;
-	} else ESL_XEXCEPTION(eslFAIL, "bad transition to N; expected {S,N}->N");
+	} else ESL_XFAIL(eslFAIL, errbuf, "bad transition to N; expected {S,N}->N");
 	break;
 
       case p7_STB:
-	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "B shouldn't have k set");
-	if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "B shouldn't have i set");
+	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "B shouldn't have k set");
+	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "B shouldn't have i set");
 	if (prv != p7_STN && prv != p7_STJ) 
-	  ESL_XEXCEPTION(eslFAIL, "bad transition to B; expected {N,J}->B");
+	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to B; expected {N,J}->B");
 	break;
 
       case p7_STM:
 	if (prv == p7_STB) k = tr->k[tpos]; else k++; /* on a B->Mk entry, trust k; else verify */
 
-	if (tr->k[tpos] != k) ESL_XEXCEPTION(eslFAIL, "expected k doesn't match trace's k");
-	if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
+	if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	if (prv != p7_STB && prv != p7_STM && prv != p7_STD && prv != p7_STI)
-	  ESL_XEXCEPTION(eslFAIL, "bad transition to M; expected {B,M,D,I}->M");
+	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to M; expected {B,M,D,I}->M");
 	i++;
 	break;
 
       case p7_STD:
 	k++;
-	if (tr->k[tpos] != k) ESL_XEXCEPTION(eslFAIL, "expected k doesn't match trace's k");
-	if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "D shouldn't have i set");
+	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
+	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "D shouldn't have i set");
 	if (prv != p7_STM && prv != p7_STD)
-	  ESL_XEXCEPTION(eslFAIL, "bad transition to D; expected {M,D}->D");
+	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to D; expected {M,D}->D");
 	break;
 	
       case p7_STI:
-	if (tr->k[tpos] != k) ESL_XEXCEPTION(eslFAIL, "expected k doesn't match trace's k");
-	if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
+	if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	if (prv != p7_STM && prv != p7_STI)
-	  ESL_XEXCEPTION(eslFAIL, "bad transition to I; expected {M,I}->I");
+	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to I; expected {M,I}->I");
 	i++;
 	break;
 
       case p7_STE:
-	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "E shouldn't have k set");
-	if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "E shouldn't have i set");
+	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have k set");
+	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have i set");
 	if (prv != p7_STM)
-	  ESL_XEXCEPTION(eslFAIL, "bad transition to E; expected M->E");
+	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to E; expected M->E");
 	break;
 	
       case p7_STJ:
-	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "no J should have k set");
+	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no J should have k set");
 	if (prv == p7_STE) { /* 1st J doesn't emit */
-	  if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "first J shouldn't have i set");
+	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first J shouldn't have i set");
 	} else if (prv == p7_STJ) { /* subsequent J's do */
-	  if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	  if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	  i++;
-	} else ESL_XEXCEPTION(eslFAIL, "bad transition to J; expected {E,J}->J");
+	} else ESL_XFAIL(eslFAIL, errbuf, "bad transition to J; expected {E,J}->J");
 	break;
 
       case p7_STC:
-	if (tr->k[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "no C should have k set");
+	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no C should have k set");
 	if (prv == p7_STE) { /* 1st C doesn't emit */
-	  if (tr->i[tpos] != 0) ESL_XEXCEPTION(eslFAIL, "first C shouldn't have i set");
+	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first C shouldn't have i set");
 	} else if (prv == p7_STC) { /* subsequent C's do */
-	  if (tr->i[tpos] != i) ESL_XEXCEPTION(eslFAIL, "expected i doesn't match trace's i");
+	  if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	  i++;
-	} else ESL_XEXCEPTION(eslFAIL, "bad transition to C; expected {E,C}->C");
+	} else ESL_XFAIL(eslFAIL, errbuf, "bad transition to C; expected {E,C}->C");
 	break;
 	
       case p7_STT:
-	ESL_XEXCEPTION(eslFAIL, "T must be last state");
+	ESL_XFAIL(eslFAIL, errbuf, "T must be last state");
 	break;	
       }
     }
@@ -313,7 +320,7 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq)
    */
   for (; sq[i] != eslDSQ_SENTINEL; i++) 
     if (esl_abc_XIsResidue(abc, sq[i])) 
-      ESL_XEXCEPTION(eslFAIL, "trace didn't account for all residues in the sq");
+      ESL_XFAIL(eslFAIL, errbuf, "trace didn't account for all residues in the sq");
 
   return eslOK;
 

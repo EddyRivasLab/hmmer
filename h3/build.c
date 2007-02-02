@@ -430,7 +430,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
       /*
       p7_trace_Dump(stdout, tr[idx], NULL, NULL); 
       */
-      if (p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx]) != eslOK) 
+      if (p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], NULL) != eslOK) 
 	ESL_XEXCEPTION(eslFAIL, "validation failed");
     } 
 
