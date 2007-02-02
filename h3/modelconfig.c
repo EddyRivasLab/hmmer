@@ -392,7 +392,7 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
   */
   esl_vec_FSet(gm->begin+1, hmm->M, 1.0 / hmm->M);
 
-  /* Configure exit.  */
+  /* Configure exit, uniform exit given entry: which is 1/(M-k+1)  */
   gm->end[hmm->M] = 1.0;
   basep = pexit / (float) (hmm->M-1);
   for (k = 1; k < hmm->M; k++)

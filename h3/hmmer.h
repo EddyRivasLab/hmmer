@@ -311,7 +311,7 @@ extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **r
  * 6. P7_GMX: a "generic" dynamic programming matrix
  *****************************************************************/
 
-struct p7_gmx_s {
+typedef struct p7_gmx_s {
   int  M;		/* actual model dimension (model 1..M)    */
   int  L;		/* actual sequence dimension (seq 1..L)   */
   
@@ -327,7 +327,6 @@ struct p7_gmx_s {
   int  *mmx_mem;
   int  *imx_mem;
   int  *dmx_mem;
-
 } P7_GMX;
 
 

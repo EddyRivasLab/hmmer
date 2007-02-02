@@ -15,6 +15,7 @@
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_sqio.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
