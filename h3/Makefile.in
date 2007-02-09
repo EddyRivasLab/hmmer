@@ -41,15 +41,17 @@ MYLIBS   = -leasel
 MYLIBDIR = -L../easel
 MYINCDIR = -I../easel
 
-PROGS = hmmbuild hmmemit
+PROGS = hmmbuild hmmemit hmmsim
 
 OBJS =  build.o\
+	dp_slow.o\
 	emit.o\
 	errors.o\
 	heatmap.o\
 	hmmer.o\
 	modelconfig.o\
 	p7_bg.o\
+	p7_gmx.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
 	p7_profile.o\

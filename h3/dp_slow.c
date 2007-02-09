@@ -50,8 +50,8 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
   /* Initialization of the zero row.  */
   xmx[0][p7_XMN] = 0;		                     /* S->N, p=1            */
   xmx[0][p7_XMB] = gm->xsc[p7_XTN][p7_MOVE];         /* S->N->B, no N-tail   */
-  xmx[0][p7_XME] = xmx[p7_0][p7_XMC] = xmx[0][p7_XMJ] = p7_IMPOSSIBLE;  /* need seq to get here */
-  for (k = 0; k <= hmm->M; k++)
+  xmx[0][p7_XME] = xmx[0][p7_XMC] = xmx[0][p7_XMJ] = p7_IMPOSSIBLE;  /* need seq to get here */
+  for (k = 0; k <= gm->M; k++)
     mmx[0][k] = imx[0][k] = dmx[0][k] = p7_IMPOSSIBLE;      /* need seq to get here */
 
   /* Recursion. Done as a pull.
@@ -60,7 +60,7 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
    *    D_M and I_M are wastefully calculated (they don't exist)
    */
   for (i = 1; i <= L; i++) {
-    mmx[i][0] = imx[i][0] = dmx[i][0] = -INFTY;
+    mmx[i][0] = imx[i][0] = dmx[i][0] = p7_IMPOSSIBLE;
 
     for (k = 1; k <= gm->M; k++) {
 				/* match state */
@@ -84,7 +84,7 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
 	dmx[i][k] = sc;
 
 				/* insert state */
-      if (k < hmm->M) {
+      if (k < gm->M) {
 	imx[i][k] = p7_IMPOSSIBLE;
 	if ((sc = mmx[i-1][k] + gm->tsc[p7_TMI][k]) > imx[i][k])
 	  imx[i][k] = sc;
@@ -119,9 +119,9 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
 
 				/* B state */
     xmx[i][p7_XMB] = p7_IMPOSSIBLE;
-    if ((sc = xmx[i][XMN] + gm->xsc[p7_XTN][p7_MOVE]) > p7_IMPOSSIBLE)
+    if ((sc = xmx[i][p7_XMN] + gm->xsc[p7_XTN][p7_MOVE]) > p7_IMPOSSIBLE)
       xmx[i][p7_XMB] = sc;
-    if ((sc = xmx[i][XMJ] + gm->xsc[p7_XTJ][p7_MOVE]) > xmx[i][p7_XMB])
+    if ((sc = xmx[i][p7_XMJ] + gm->xsc[p7_XTJ][p7_MOVE]) > xmx[i][p7_XMB])
       xmx[i][p7_XMB] = sc;
 
 				/* C state */
@@ -132,15 +132,14 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
       xmx[i][p7_XMC] = sc;
   }
 				/* T state (not stored) */
-  sc = xmx[L][p7_XMC] + hmm->xsc[p7_XTC][p7_MOVE];
+  sc = xmx[L][p7_XMC] + gm->xsc[p7_XTC][p7_MOVE];
 
-  if (ret_tr != NULL) {
-    P7ViterbiTrace(hmm, dsq, L, mx, &tr);
-    *ret_tr = tr;
-  }
-
-  return p7_Score2Output(sc);	/* the total Viterbi score, in bits */
+  if (tr != NULL) p7_ViterbiTrace(dsq, L, gm, mx, tr);
+  *ret_sc = p7_Score2Output(sc);  /* the total Viterbi score, in bits */
+  return eslOK;
 }
+
+
 
 /* Function: p7_ViterbiTrace()
  * Incept:   SRE, Thu Feb  1 10:25:56 2007 [UA 8018 St. Louis to Dulles]
@@ -162,8 +161,6 @@ int
 p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
 {
   int status;
-  int tpos;			/* position in trace */
-  char st;			/* last state type we assigned */
   int i;			/* position in seq (1..L) */
   int k;			/* position in model (1..M) */
   int **xmx, **mmx, **imx, **dmx;
@@ -175,223 +172,118 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
   imx = mx->imx;
   dmx = mx->dmx;
 
-  /* Initialization of trace
-   * We do it back to front; ReverseTrace() is called later.
+  /* Initialization.
+   * (back to front. ReverseTrace() called later.)
    */
   if ((status = p7_trace_Append(tr, p7_STT, 0, 0)) != eslOK) goto ERROR;
   if ((status = p7_trace_Append(tr, p7_STC, 0, 0)) != eslOK) goto ERROR;
-  i    = L;			/* next i (seq pos) to assign    */
-  k    = gm->M;			/* next k (model node) to assign */
-  st   = p7_STC;		/* last state type we assigned   */
+  i    = L;			/* next position to explain in seq */
 
   /* Traceback
    */
-  while (st != p7_STS) {
-    switch (st) {
-    case p7_STC:			/* C comes from C, E */
-      if      (xmx[i][p7_XMC] <= p7_IMPOSSIBLE) { status = eslFAIL; goto ERROR; }
-      else if (xmx[i][p7_XMC] == xmx[i-1][p7_XMC] + gm->xsc[p7_XTC][p7_LOOP])
-	{
-	  if ((status = p7_trace_Append(tr, p7_STC, 0, i)) != eslOK) goto ERROR;
-	  tr->statetype[tpos] = STC;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;    /* note convention adherence: */
-	  tr->pos[tpos-1]     = i--;  /* first C doesn't emit       */
-	}
-      else if (xmx[i][XMC] == xmx[i][XME] + hmm->xsc[XTE][MOVE])
-	{
-	  tr->statetype[tpos] = STE;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0; /* E is a nonemitter */
-	}
-      
-      else Die("Traceback failed.");
+  while (tr->st[tr->N-1] != p7_STS) {
+    switch (tr->st[tr->N-1]) {
+    case p7_STC:		/* C(i) comes from C(i-1) or E(i) */
+      if   (xmx[i][p7_XMC] <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
+
+      if (xmx[i][p7_XMC] == xmx[i-1][p7_XMC] + gm->xsc[p7_XTC][p7_LOOP]) {
+	tr->i[tr->N-1]    = i--;  /* first C doesn't emit: subsequent ones do */
+	status = p7_trace_Append(tr, p7_STC, 0, 0);
+      } else if (xmx[i][p7_XMC] == xmx[i][p7_XME] + gm->xsc[p7_XTE][p7_MOVE]) 
+	status = p7_trace_Append(tr, p7_STE, 0, 0);
+      else ESL_XEXCEPTION(eslFAIL, "C at i=%d couldn't be traced", i);
       break;
 
+    case p7_STE:		/* E connects from any M state. k set here */
+      if (xmx[i][p7_XME] <= p7_IMPOSSIBLE)  ESL_XEXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
 
+      for (k = gm->M; k >= 1; k--)
+	if (xmx[i][p7_XME] == mmx[i][k] + gm->esc[k]) {
+	  status = p7_trace_Append(tr, p7_STM, k, i);
+	  break;
+	}
+      if (k < 0) ESL_XEXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
+      break;
 
     case p7_STM:			/* M connects from i-1,k-1, or B */
       sc = mmx[i][k] - gm->msc[dsq[i]][k];
-      if (sc <= p7_IMPOSSIBLE) ESL_XFAIL(eslFAIL, NULL, "impossible trace");
-      else if (sc == xmx[i][p7_XMB] + gm->bsc[k+1])
-	{
-				/* Check for wing unfolding */
-	  if (Prob2Score(hmm->begin[k+1], hmm->p1) + 1 * INTSCALE <= hmm->bsc[k+1])
-	    while (k > 0)
-	      {
-		tr->statetype[tpos] = STD;
-		tr->nodeidx[tpos]   = k--;
-		tr->pos[tpos]       = 0;
-		tpos++;
-		if (tpos == curralloc) 
-		  {				/* grow trace if necessary  */
-		    curralloc += N;
-		    P7ReallocTrace(tr, curralloc);
-		  }
-	      }
+      if (sc <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 
-	  tr->statetype[tpos] = STB;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-      else if (sc == mmx[i][k] + hmm->tsc[TMM][k])
-	{
-	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (sc == imx[i][k] + hmm->tsc[TIM][k])
-	{
-	  tr->statetype[tpos] = STI;
-	  tr->nodeidx[tpos]   = k;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (sc == dmx[i][k] + hmm->tsc[TDM][k])
-	{
-	  tr->statetype[tpos] = STD;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = 0;
-	}
-      else
-	Die("traceback failed");
+      if      (sc == xmx[i-1][p7_XMB] + gm->bsc[k])        status = p7_trace_Append(tr, p7_STB, 0,   i-1);
+      else if (sc == mmx[i-1][k-1] + gm->tsc[p7_TMM][k-1]) status = p7_trace_Append(tr, p7_STM, k-1, i-1);
+      else if (sc == imx[i-1][k-1] + gm->tsc[p7_TIM][k-1]) status = p7_trace_Append(tr, p7_STI, k-1, i-1);
+      else if (sc == dmx[i-1][k-1] + gm->tsc[p7_TDM][k-1]) status = p7_trace_Append(tr, p7_STD, k-1, 0);
+      else ESL_XEXCEPTION(eslFAIL, "M at k=%d,i=%d couldn't be traced", k,i);
+      if (status != eslOK) goto ERROR;
+      k--; 
+      i--;
       break;
 
-    case STD:			/* D connects from M,D */
-      if (dmx[i][k+1] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (dmx[i][k+1] == mmx[i][k] + hmm->tsc[TMD][k])
-	{
-	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (dmx[i][k+1] == dmx[i][k] + hmm->tsc[TDD][k]) 
-	{
-	  tr->statetype[tpos] = STD;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = 0;
-	}
-      else Die("traceback failed");
+    case p7_STD:			/* D connects from M,D at i,k-1 */
+      if (dmx[i][k] <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible D reached at k=%d,i=%d", k,i);
+
+      if      (dmx[i][k] == mmx[i][k-1] + gm->tsc[p7_TMD][k-1]) status = p7_trace_Append(tr, p7_STM, k-1, i);
+      else if (dmx[i][k] == dmx[i][k-1] + gm->tsc[p7_TDD][k-1]) status = p7_trace_Append(tr, p7_STD, k-1, 0);
+      else ESL_XEXCEPTION(eslFAIL, "D at k=%d,i=%d couldn't be traced", k,i);
+      if (status != eslOK) goto ERROR;
+      k--;
       break;
 
-    case STI:			/* I connects from M,I */
-      sc = imx[i+1][k] - hmm->isc[dsq[i+1]][k];
-      if (sc <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (sc == mmx[i][k] + hmm->tsc[TMI][k])
-	{
-	  tr->statetype[tpos] = STM;
-	  tr->nodeidx[tpos]   = k--;
-	  tr->pos[tpos]       = i--;
-	}
-      else if (sc == imx[i][k] + hmm->tsc[TII][k])
-	{
-	  tr->statetype[tpos] = STI;
-	  tr->nodeidx[tpos]   = k;
-	  tr->pos[tpos]       = i--;
-	}
-      else Die("traceback failed");
+    case p7_STI:			/* I connects from M,I at i-1,k*/
+      sc = imx[i][k] - gm->isc[dsq[i]][k];
+      if (sc <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
+
+      if      (sc == mmx[i-1][k] + gm->tsc[p7_TMI][k]) status = p7_trace_Append(tr, p7_STM, k-1, i);
+      else if (sc == imx[i-1][k] + gm->tsc[p7_TII][k]) status = p7_trace_Append(tr, p7_STI, k-1, i);
+      else ESL_XEXCEPTION(eslFAIL, "I at k=%d,i=%d couldn't be traced", k,i);
+      if (status != eslOK) goto ERROR;
+      i--;
       break;
 
-    case STN:			/* N connects from S, N */
-      if (i == 0 && xmx[i][XMN] == 0)
-	{
-	  tr->statetype[tpos] = STS;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-      else if (i > 0 && xmx[i+1][XMN] == xmx[i][XMN] + hmm->xsc[XTN][LOOP])
-	{
-	  tr->statetype[tpos] = STN;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;    /* note convention adherence:  */
-	  tr->pos[tpos-1]     = i--;  /* first N doesn't emit        */
-	}
-      else Die("traceback failed");
+    case p7_STN:			/* N connects from S, N */
+      if (xmx[i][p7_XMN] <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible N reached at i=%d", i);
+
+      if      (i == 0 && xmx[i][p7_XMN] == 0) 
+	status = p7_trace_Append(tr, p7_STS, 0, 0);
+      else if (i > 0  && xmx[i][p7_XMN] == xmx[i-1][p7_XMN] + gm->xsc[p7_XTN][p7_LOOP]) {
+	tr->i[tr->N-1] = i--;
+	status = p7_trace_Append(tr, p7_STN, 0, 0);
+      } else ESL_XEXCEPTION(eslFAIL, "N at i=%d couldn't be traced", i);
+      if (status != eslOK) goto ERROR;
       break;
 
-    case STB:			/* B connects from N, J */
-      if (xmx[i][XMB] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (xmx[i][XMB] == xmx[i][XMN] + hmm->xsc[XTN][MOVE])
-	{
-	  tr->statetype[tpos] = STN;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
-      else if (xmx[i][XMB] == xmx[i][XMJ] + hmm->xsc[XTJ][MOVE])
-	{
-	  tr->statetype[tpos] = STJ;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;
-	}
+    case p7_STB:			/* B connects from N, J */
+      if (xmx[i][p7_XMB] <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible B reached at i=%d", i);
 
-      else Die("traceback failed");
+      if (xmx[i][p7_XMB] == xmx[i][p7_XMN] + gm->xsc[p7_XTN][p7_MOVE]) 
+	status = p7_trace_Append(tr, p7_STN, 0, 0);
+      else if (xmx[i][p7_XMB] == xmx[i][p7_XMJ] + gm->xsc[p7_XTJ][p7_MOVE])
+	status = p7_trace_Append(tr, p7_STJ, 0, 0);
+      else  ESL_XEXCEPTION(eslFAIL, "B at i=%d couldn't be traced", i);
       break;
 
-    case STE:			/* E connects from any M state. k set here */
-      if (xmx[i][XME] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      for (k = hmm->M; k >= 1; k--)
-	if (xmx[i][XME] == mmx[i][k] + hmm->esc[k])
-	  {
-				/* check for wing unfolding */
-	    if (Prob2Score(hmm->end[k], 1.) + 1*INTSCALE <=  hmm->esc[k])
-	      {
-		int dk;		/* need a tmp k while moving thru delete wing */
-		for (dk = hmm->M; dk > k; dk--)
-		  {
-		    tr->statetype[tpos] = STD;
-		    tr->nodeidx[tpos]   = dk;
-		    tr->pos[tpos]       = 0;
-		    tpos++;
-		    if (tpos == curralloc) 
-		      {				/* grow trace if necessary  */
-			curralloc += N;
-			P7ReallocTrace(tr, curralloc);
-		      }
-		  }
-	      }
+    case p7_STJ:			/* J connects from E(i) or J(i-1) */
+      if (xmx[i][p7_XMJ] <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible J reached at i=%d", i);
 
-	    tr->statetype[tpos] = STM;
-	    tr->nodeidx[tpos]   = k--;
-	    tr->pos[tpos]       = i--;
-	    break;
-	  }
-      if (k < 0) Die("traceback failed");
+      if (xmx[i][p7_XMJ] == xmx[i-1][p7_XMJ] + gm->xsc[p7_XTJ][p7_LOOP]) {
+	tr->i[tr->N-1] = i--;
+	status = p7_trace_Append(tr, p7_STJ, 0, 0);
+      } else if (xmx[i][p7_XMJ] == xmx[i][p7_XME] + gm->xsc[p7_XTE][p7_LOOP])
+	status = p7_trace_Append(tr, p7_STE, 0, 0);
+      else  ESL_XEXCEPTION(eslFAIL, "J at i=%d couldn't be traced", i);
       break;
 
-    case STJ:			/* J connects from E, J */
-      if (xmx[i][XMJ] <= -INFTY) { P7FreeTrace(tr); *ret_tr = NULL; return; }
-      else if (xmx[i][XMJ] == xmx[i-1][XMJ] + hmm->xsc[XTJ][LOOP])
-	{
-	  tr->statetype[tpos] = STJ;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0;    /* note convention adherence: */
-	  tr->pos[tpos-1]     = i--;  /* first J doesn't emit       */
-	}
-      else if (xmx[i][XMJ] == xmx[i][XME] + hmm->xsc[XTE][LOOP])
-	{
-	  tr->statetype[tpos] = STE;
-	  tr->nodeidx[tpos]   = 0;
-	  tr->pos[tpos]       = 0; /* E is a nonemitter */
-	}
-
-      else Die("Traceback failed.");
-      break;
-
-    default:
-      Die("traceback failed");
-
+    default: ESL_XEXCEPTION(eslFAIL, "bogus state in traceback");
     } /* end switch over statetype[tpos-1] */
-    
-    tpos++;
-    if (tpos == curralloc) 
-      {				/* grow trace if necessary  */
-	curralloc += N;
-	P7ReallocTrace(tr, curralloc);
-      }
 
-  } /* end traceback, at S state; tpos == tlen now */
-  tr->tlen = tpos;
-  P7ReverseTrace(tr);
-  *ret_tr = tr;
+    if (status != eslOK) goto ERROR;
+  } /* end traceback, at S state */
+
+  if ((status = p7_trace_Reverse(tr)) != eslOK) goto ERROR;
+  return eslOK;
+
+ ERROR:
+  return status;
 }
 
 

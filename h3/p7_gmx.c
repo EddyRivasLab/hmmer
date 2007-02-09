@@ -20,6 +20,7 @@
 P7_GMX *
 p7_gmx_Create(int allocM, int allocL)
 {
+  int     status;
   P7_GMX *gx = NULL;
   int     i;
 
@@ -37,7 +38,7 @@ p7_gmx_Create(int allocM, int allocL)
   ESL_ALLOC(gx->imx_mem, (allocM+1) * (allocL+1) * sizeof(int));
   ESL_ALLOC(gx->dmx_mem, (allocM+1) * (allocL+1) * sizeof(int));
 
-  for (i = 0; i <= L; i++) {
+  for (i = 0; i <= allocL; i++) {
     gx->xmx[i] = gx->xmx_mem + i * 5;
     gx->mmx[i] = gx->mmx_mem + i * (allocM+1);
     gx->imx[i] = gx->imx_mem + i * (allocM+1);
@@ -76,6 +77,7 @@ p7_gmx_Create(int allocM, int allocL)
 int
 p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL)
 {
+  int     status;
   void   *p;
   int     i;
   size_t  ncells, nrows;
@@ -109,7 +111,7 @@ p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL)
    * there's some wasted cycles here - but I'm not sure this case
    * arises, and I'm not sure it's worth thinking hard about. )
    */
-  for (i = 0; i <= L; i++) {
+  for (i = 0; i <= allocL; i++) {
     gx->xmx[i] = gx->xmx_mem + i * 5;
     gx->mmx[i] = gx->mmx_mem + i * (allocM+1);
     gx->imx[i] = gx->imx_mem + i * (allocM+1);
@@ -121,6 +123,9 @@ p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL)
   gx->ncells = ncells;
   gx->nrows  = nrows;
   return eslOK;
+
+ ERROR:
+  return status;
 }
 
 

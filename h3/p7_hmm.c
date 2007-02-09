@@ -829,7 +829,7 @@ p7_hmm_Validate(P7_HMM *hmm, float tol)
   if (hmm->abc       == NULL)       return eslFAIL; 
   if (hmm->abc->type == eslUNKNOWN) return eslFAIL;
   
-  if (esl_vec_FValidate(hmm->t[0], 7, tol) != eslOK) return eslFAIL;
+  if (esl_vec_FValidate(hmm->t[0], 7, tol, NULL) != eslOK) return eslFAIL;
   if (hmm->t[0][p7_TMI] != 0.)                       return eslFAIL;
   if (hmm->t[0][p7_TIM] != 0.)                       return eslFAIL;
   if (hmm->t[0][p7_TII] != 0.)                       return eslFAIL;
@@ -842,13 +842,13 @@ p7_hmm_Validate(P7_HMM *hmm, float tol)
   
   for (k = 1; k < hmm->M; k++)
     {
-      if (esl_vec_FValidate(hmm->mat[k], hmm->abc->K, tol) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->ins[k], hmm->abc->K, tol) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->t[k],   3,           tol) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->mat[k], hmm->abc->K, tol, NULL) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->ins[k], hmm->abc->K, tol, NULL) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->t[k],   3,           tol, NULL) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol, NULL) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol, NULL) != eslOK) return eslFAIL;
     }
-  if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol) != eslOK) return eslFAIL;
+  if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol, NULL) != eslOK) return eslFAIL;
 
   /* Don't be strict about mandatory name, comlog, ctime for now in development */
   /*  if (hmm->name     == NULL) return eslFAIL; */

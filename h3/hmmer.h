@@ -330,7 +330,7 @@ typedef struct p7_gmx_s {
 } P7_GMX;
 
 
-extern P7_GMX *p7_gmx_Create(int allocM, int allocN);
+extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
 extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
 extern void    p7_gmx_Destroy(P7_GMX *gx);
 
@@ -342,6 +342,11 @@ extern void    p7_gmx_Destroy(P7_GMX *gx);
  */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+
+/* dp_slow.c
+ */
+extern int p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float *ret_sc);
+extern int p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr);
 
 /* emit.c
  */
