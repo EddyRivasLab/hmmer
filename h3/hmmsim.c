@@ -44,6 +44,7 @@ main(int argc, char **argv)
   int              do_oldconfig;       /* TRUE to use H2 exit/entry configuration */
   float            sc;		       /* a Viterbi score                         */
   int              nseq;	       /* counter over sequences                  */
+  char errbuf[eslERRBUFSIZE];
 
   /*****************************************************************
    * Parse the command line
@@ -105,6 +106,8 @@ main(int argc, char **argv)
     {
       if (esl_rnd_xfIID(r, hmm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
       if (p7_Viterbi(dsq, L, hmm->gm, mx, tr, &sc)     != eslOK) esl_fatal("viterbi failed");
+      /*p7_trace_Dump(stdout, tr, NULL, dsq);*/
+      if (p7_trace_Validate(tr, abc, dsq, errbuf)      != eslOK) esl_fatal("trace validation failed:\n%s", errbuf);
       printf("score = %6.2f bits\n", sc);
     }
 

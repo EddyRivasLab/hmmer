@@ -209,7 +209,7 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
       sc = mmx[i][k] - gm->msc[dsq[i]][k];
       if (sc <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 
-      if      (sc == xmx[i-1][p7_XMB] + gm->bsc[k])        status = p7_trace_Append(tr, p7_STB, 0,   i-1);
+      if      (sc == xmx[i-1][p7_XMB] + gm->bsc[k])        status = p7_trace_Append(tr, p7_STB, 0,   0);
       else if (sc == mmx[i-1][k-1] + gm->tsc[p7_TMM][k-1]) status = p7_trace_Append(tr, p7_STM, k-1, i-1);
       else if (sc == imx[i-1][k-1] + gm->tsc[p7_TIM][k-1]) status = p7_trace_Append(tr, p7_STI, k-1, i-1);
       else if (sc == dmx[i-1][k-1] + gm->tsc[p7_TDM][k-1]) status = p7_trace_Append(tr, p7_STD, k-1, 0);
@@ -233,8 +233,8 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
       sc = imx[i][k] - gm->isc[dsq[i]][k];
       if (sc <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
 
-      if      (sc == mmx[i-1][k] + gm->tsc[p7_TMI][k]) status = p7_trace_Append(tr, p7_STM, k-1, i);
-      else if (sc == imx[i-1][k] + gm->tsc[p7_TII][k]) status = p7_trace_Append(tr, p7_STI, k-1, i);
+      if      (sc == mmx[i-1][k] + gm->tsc[p7_TMI][k]) status = p7_trace_Append(tr, p7_STM, k, i-1);
+      else if (sc == imx[i-1][k] + gm->tsc[p7_TII][k]) status = p7_trace_Append(tr, p7_STI, k, i-1);
       else ESL_XEXCEPTION(eslFAIL, "I at k=%d,i=%d couldn't be traced", k,i);
       if (status != eslOK) goto ERROR;
       i--;

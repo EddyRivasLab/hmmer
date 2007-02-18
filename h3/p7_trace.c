@@ -367,7 +367,7 @@ p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq) /* replace void w/
   } else {
 #if 0
     sc = 0;
-    fprintf(fp, "st  node   rpos  transit emission - traceback len %d\n", tr->N);
+    fprintf(fp, "st   k     i     transit emission - traceback len %d\n", tr->N);
     fprintf(fp, "--  ---- ------  ------- --------\n");
     for (j = 0; j < tr->N; j++) {
       if (j < tr->N-1) {
