@@ -17,7 +17,7 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",     0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",   0 },
   { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of random seqs",                  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random seqs",                  0 },
   { "--h2",      eslARG_NONE,    NULL, NULL, NULL,      NULL,      "-p",    NULL, "configure profile in old HMMER2 style",  0 },
@@ -38,11 +38,12 @@ main(int argc, char **argv)
   P7_HMM          *hmm     = NULL;     /* HMM to emit from                        */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   P7_GMX          *mx      = NULL;     /* DP matrix                               */
-  ESL_SQ          *dsq     = NULL;     /* sampled digital sequence                */
+  ESL_DSQ         *dsq     = NULL;     /* sampled digital sequence                */
   int              N;		       /* number of seqs to generate              */
   int              L;		       /* length of generated seqs                */
   int              do_oldconfig;       /* TRUE to use H2 exit/entry configuration */
   float            sc;		       /* a Viterbi score                         */
+  int              nseq;	       /* counter over sequences                  */
 
   /*****************************************************************
    * Parse the command line
@@ -86,10 +87,10 @@ main(int argc, char **argv)
 
   if ((r       = esl_randomness_CreateTimeseeded()) == NULL)  esl_fatal("Failed to create rng");
   if ((status  = p7_trace_Create(256, &tr))         != eslOK) esl_fatal("Failed to allocate trace");
-  if ((sq      = esl_sq_CreateDigital(abc))         == NULL)  esl_fatal("Failed to allocate sequence");
   if ((mx      = p7_gmx_Create(hmm->M, L))          == NULL)  esl_fatal("failed to create dp matrix");
   if ((hmm->bg = p7_bg_Create(abc))                 == NULL)  esl_fatal("failed to create null model");
   if ((hmm->gm = p7_profile_Create(hmm->M, abc))    == NULL)  esl_fatal("failed to create profile");
+  if ((dsq     = malloc(sizeof(ESL_DSQ) * (L+2)))   == NULL)  esl_fatal("failed to create dsq");
 
   if (do_oldconfig) {
     if (p7_H2_ProfileConfig(hmm, hmm->gm, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
@@ -102,16 +103,15 @@ main(int argc, char **argv)
 
   for (nseq = 1; nseq <= N; nseq++) 
     {
-      /* Need a routine to generate an iid digital sequence of length L, from background model */
-      /* we're missing shuffle module in Easel - really? */
-
-      if (p7_Viterbi(dsq, L, hmm->gm, mx, tr, &sc) != eslOK) esl_fatal("viterbi failed");
+      if (esl_rnd_xfIID(r, hmm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+      if (p7_Viterbi(dsq, L, hmm->gm, mx, tr, &sc)     != eslOK) esl_fatal("viterbi failed");
+      printf("score = %6.2f bits\n", sc);
     }
 
   p7_profile_Destroy(hmm->gm);
   p7_bg_Destroy(hmm->bg);
   p7_gmx_Destroy(mx);
-  esl_sq_Destroy(sq);
+  free(dsq);
   p7_trace_Destroy(tr);
   esl_randomness_Destroy(r);
   p7_hmmfile_Close(hfp);
@@ -119,4 +119,6 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
   return eslOK;
+
+
 }
