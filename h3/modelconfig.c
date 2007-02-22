@@ -532,19 +532,20 @@ static ESL_OPTIONS options[] = {
   { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL, "-u,-M", "input HMM from file <f> instead of sampling",0 },
   { "-n",        eslARG_INT, "100000", NULL, "n>0",     NULL,      NULL,    NULL, "number of seqs to sample",                   0 },
   { "-u",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-m", "make sampled HMM ungapped",                  0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "set expected length from profile to <n>",    0 },
+  { "-L",        eslARG_INT,    "400", NULL,"n>=0",     NULL,      NULL,    NULL, "set expected length from profile to <n>",    0 },
   { "-M",        eslARG_INT,     "50", NULL, "n>0",     NULL,      NULL,    "-m", "set sampled model length to <n>",            0 },
   { "-2",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "emulate HMMER2 configuration",               0 },
   { "--ips",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output PostScript mx of i endpoints to <f>", 0 },
   { "--kps",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output PostScript mx of k endpoints to <f>", 0 },
+  { "--ibins",   eslARG_INT,    "100", NULL, "n>0",     NULL,      NULL,    NULL, "set # bins in i endpoint plot to <n>",       0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 static char usage[] = "./statprog [options]";
 
-static int ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
+static int ideal_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, int ibins,
 			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2);
-static int klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr,
+static int emitted_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr, int ibins,
 			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2);
 
 int
@@ -559,7 +560,7 @@ main(int argc, char **argv)
   ESL_SQ          *sq      = NULL;     /* sampled sequence                        */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   int              i,j;
-  int            i1,i2;
+  int              i1,i2;
   int              k1,k2;
   int              iseq;
   FILE            *fp      = NULL;
@@ -575,6 +576,7 @@ main(int argc, char **argv)
   char            *kpsfile = NULL;
   ESL_DMATRIX     *imx     = NULL;
   ESL_DMATRIX     *kmx     = NULL;
+  int              ibins;
   
   /*****************************************************************
    * Parse the command line
@@ -588,15 +590,16 @@ main(int argc, char **argv)
     esl_opt_DisplayHelp(stdout, go, 0, 2, 80); /* 0=all docgroups; 2 = indentation; 80=textwidth*/
     return eslOK;
   }
-  esl_opt_GetBooleanOption(go, "-i",    &do_ilocal);
-  esl_opt_GetStringOption (go, "-m",    &hmmfile);
-  esl_opt_GetIntegerOption(go, "-n",    &nseq);
-  esl_opt_GetBooleanOption(go, "-u",    &do_ungapped);
-  esl_opt_GetIntegerOption(go, "-L",    &L);
-  esl_opt_GetIntegerOption(go, "-M",    &M);
-  esl_opt_GetBooleanOption(go, "-2",    &do_h2);
-  esl_opt_GetStringOption (go, "--ips", &ipsfile);
-  esl_opt_GetStringOption (go, "--kps", &kpsfile);
+  esl_opt_GetBooleanOption(go, "-i",     &do_ilocal);
+  esl_opt_GetStringOption (go, "-m",     &hmmfile);
+  esl_opt_GetIntegerOption(go, "-n",     &nseq);
+  esl_opt_GetBooleanOption(go, "-u",     &do_ungapped);
+  esl_opt_GetIntegerOption(go, "-L",     &L);
+  esl_opt_GetIntegerOption(go, "-M",     &M);
+  esl_opt_GetBooleanOption(go, "-2",     &do_h2);
+  esl_opt_GetStringOption (go, "--ips",  &ipsfile);
+  esl_opt_GetStringOption (go, "--kps",  &kpsfile);
+  esl_opt_GetIntegerOption(go, "--ibins", &ibins);
 
   if (esl_opt_ArgNumber(go) != 0) {
     puts("Incorrect number of command line arguments.");
@@ -629,7 +632,7 @@ main(int argc, char **argv)
       if (do_ungapped) p7_hmm_SampleUngapped(r, M, abc, &hmm);
       else             p7_hmm_Sample        (r, M, abc, &hmm);
     }
-  imx = esl_dmatrix_Create(M, M);
+  imx = esl_dmatrix_Create(ibins, ibins);
   kmx = esl_dmatrix_Create(M, M);
   esl_dmatrix_SetZero(imx);
   esl_dmatrix_SetZero(kmx);
@@ -645,20 +648,24 @@ main(int argc, char **argv)
     hmm->gm = p7_profile_Create(hmm->M, abc);
     p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
     p7_ReconfigLength(hmm->gm, L);
-    if (p7_hmm_Validate    (hmm,     0.0001)       != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_hmm_Validate    (hmm,     0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
     if (p7_profile_Validate(hmm->gm, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
   }
 
   for (iseq = 0; iseq < nseq; iseq++)
-    {
-      if (do_ilocal) ilocal_sample(r, core,          sq, tr, &i1, &i2, &k1, &k2);
-      else           klocal_sample(r, core, hmm->gm, sq, tr, &i1, &i2, &k1, &k2);
+    {				
+      if (do_ilocal) ideal_local_endpoints  (r, core,          sq, tr, ibins, &i1, &i2, &k1, &k2);
+      else           emitted_local_endpoints(r, core, hmm->gm, sq, tr, ibins, &i1, &i2, &k1, &k2);
 
       imx->mx[i1-1][i2-1] += 1.;
       kmx->mx[k1-1][k2-1] += 1.; 
     }
 
   /* Adjust both mx's to log_2(obs/exp) ratio */
+  printf("Before normalization/log-odds:\n");
+  printf("i matrix values range from %f to %f\n", dmx_upper_min(imx), dmx_upper_max(imx));
+  printf("k matrix values range from %f to %f\n", dmx_upper_min(kmx), dmx_upper_max(kmx));
+
   dmx_upper_norm(kmx);
   esl_dmx_Scale(kmx, (double) (M*(M+1)/2));
   for (i = 0; i < kmx->m; i++)
@@ -684,6 +691,7 @@ main(int argc, char **argv)
     fclose(fp);
   }
 
+  printf("After normalization/log-odds:\n");
   printf("i matrix values range from %f to %f\n", dmx_upper_min(imx), dmx_upper_max(imx));
   printf("k matrix values range from %f to %f\n", dmx_upper_min(kmx), dmx_upper_max(kmx));
 
@@ -702,7 +710,7 @@ main(int argc, char **argv)
   return eslOK;
 }
 
-/* ilocal_sample()
+/* ideal_local_endpoints()
  * Incept:    SRE, Fri Jan 26 13:01:34 2007 [Janelia]
  *
  * Purpose:  Implementation of the "two-step" fragment sampling
@@ -717,10 +725,17 @@ main(int argc, char **argv)
  *           contain the generated (global) sequence and trace upon
  *           return.
  *           
- *           Sequence coords are normalized to 1..100, so we can
- *           collate i statistics from sampled sequences of varying L.
+ *           i endpoints are normalized/discretized to 1..<ibins>, so
+ *           we can collate i statistics from sampled sequences of
+ *           varying L. However, this introduces a binning artifact
+ *           leading to underrepresentation of j=M and
+ *           overrepresentation of i=1.  
  *           
- * Returns:  <eslOK> on success; returns normalized sequence coords in
+ *           Note that this routine is only intended for collecting
+ *           endpoint statistics (i1,i2,k1,k2); it does not generate a
+ *           local alignment trace. (xref milestone 2, STL11/115).
+ *           
+ * Returns:  <eslOK> on success; returns normalized/binned sequence coords in
  *           <*ret_i1> and <*ret_i2>, and the model entry/exit coords
  *           in <*ret_k1> and <*ret_k2>. Model coords are defined as
  *           the nodes that emitted residues <i1> and <i2>, so they
@@ -729,15 +744,13 @@ main(int argc, char **argv)
  * Xref:     STL11/142-143 
  */
 static int
-ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
-	      int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
+ideal_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, int ibins,
+		      int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
 {
   int status;
   int tpos;
   int i1, i2;
 
-
-  /* sample a complete sequence and trace */
   if ((status = p7_CoreEmit(r, hmm, sq, tr)) != eslOK) goto ERROR;
 
   /* a simple way to sample uniformly from upper triangle is by rejection */
@@ -755,8 +768,8 @@ ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr,
   /* Normalize sequence coords.
    * They're 1..L now; make them 1..M
    */
-  *ret_i1 = ((i1-1) * hmm->M / sq->n) + 1;
-  *ret_i2 = ((i2-1) * hmm->M / sq->n) + 1;
+  *ret_i1 = ((i1-1) * ibins / sq->n) + 1;
+  *ret_i2 = ((i2-1) * ibins / sq->n) + 1;
   return eslOK;
 
  ERROR:
@@ -767,7 +780,7 @@ ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr,
   return status;
 }
 
-/* klocal_sample()
+/* emitted_local_endpoints()
  * Incept:    SRE, Fri Jan 26 13:16:09 2007 [Janelia]
  *
  * Purpose:   Wrapper around <p7_ProfileEmit()>, sampling a local
@@ -779,7 +792,7 @@ ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr,
  *            To simplify the implementation, the profile must be in
  *            <p7_UNILOCAL> mode, not <p7_LOCAL> mode, so we know we
  *            only have to deal with a single hit per sampled
- *            sequence.
+ *            sequence. 
  *            
  *            The model start/end coords <k1..k2> are well-defined, as
  *            the coord of the first/last node in the trace. In
@@ -819,8 +832,8 @@ ilocal_sample(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr,
  * Xref:     STL11/142-143 
  */
 static int
-klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr,
-	      int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
+emitted_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr, int ibins,
+			int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
 {
   int i1,i2;
   int t1,t2;			/* entry/exit positions in local trace, tr */
@@ -833,6 +846,8 @@ klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TR
   int status;
   
   if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslECONTRACT, "profile must be unilocal");
+  if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((status = p7_trace_Create(256, &tr2))  != eslOK)  goto ERROR;
 
   /* sample local alignment from the implicit model */
   if (gm->h2_mode) {
@@ -848,27 +863,20 @@ klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TR
     if (tr->st[tpos] == p7_STM || tr->st[tpos] == p7_STD) { t2 = tpos; break; }
   
   /* Convert to model coords (easy) */
+  /*
   *ret_k1 = tr->k[t1];
   *ret_k2 = tr->k[t2];
+  */
 
-  /* Determine sequence coords (t1 and/or t2 might be sitting on a D) */
-  for (; t1 < tr->N; t1++) 
-    if (tr->i[t1] > 0) { i1 = tr->i[t1]; break; }
-  for (; t2 >= 0; t2--) 
-    if (tr->i[t2] > 0) { i2 = tr->i[t2]; break; }
-  if (t2 < t1) ESL_XEXCEPTION(eslEINCONCEIVABLE, "this only happens on an all-D path through profile");
-
-  /* Figure out what our sequence offset is, by rejection sampling;
-   * see comments above in preamble
+  /* Match a core trace to this local trace by rejection sampling;
+   * this lets us calculate sequence offsets; see comments above in preamble
    */
-  if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
-  if ((status = p7_trace_Create(256, &tr2))  != eslOK)  goto ERROR;
   do {
     if ((status = p7_CoreEmit(r, core, sq2, tr2)) != eslOK) goto ERROR;
     for (tpos = 0; tpos < tr2->N; tpos++)
-      if (tr2->k[tpos] == *ret_k1) { tg1 = tpos; break; }
+      if (tr2->k[tpos] == tr->k[t1]) { tg1 = tpos; break; }
     for (tpos = tr2->N-1; tpos >= 0; tpos--)
-      if (tr2->k[tpos] == *ret_k2) { tg2 = tpos; break; }
+      if (tr2->k[tpos] == tr->k[t2]) { tg2 = tpos; break; }
   }  while (tr2->st[tg1] != tr->st[t1] && tr2->st[tg2] != tr->st[t2]);
 
   for (nterm = 0, tpos = 0; tpos < tg1; tpos++) 
@@ -876,13 +884,22 @@ klocal_sample(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ *sq, P7_TR
   for (cterm = 0, tpos = tr2->N-1; tpos > tg2; tpos--)
     if (tr2->st[tpos] == p7_STM || tr2->st[tpos] == p7_STI) cterm++;
 
+  /* Now determine endpoint coords (t1 and/or t2 might be sitting on a D) */
+  for (; t1 < tr->N; t1++) 
+    if (tr->i[t1] > 0) { i1 = tr->i[t1]; *ret_k1 = tr->k[t1]; break; }
+  for (; t2 >= 0; t2--) 
+    if (tr->i[t2] > 0) { i2 = tr->i[t2]; *ret_k2 = tr->k[t2]; break; }
+  if (t2 < t1) ESL_XEXCEPTION(eslEINCONCEIVABLE, "this only happens on an all-D path through profile");
+
   /* Now, offset and normalize the coords. */
   L  = (i2-i1+1) + nterm + cterm;
   i2 = (i2-i1+1) + nterm;
   i1 = nterm+1;
-  
-  *ret_i1 = ((i1-1) * gm->M / L) + 1;
-  *ret_i2 = ((i2-1) * gm->M / L) + 1;
+  /*      printf("reconstructed global length L=%d, model length %d\n", L, gm->M); */
+    
+  /*  printf("success: L=M, %d\n", L); */
+  *ret_i1 = ((i1-1) * ibins / L) + 1;
+  *ret_i2 = ((i2-1) * ibins / L) + 1;
   p7_trace_Destroy(tr2);
   esl_sq_Destroy(sq2);
   return eslOK;

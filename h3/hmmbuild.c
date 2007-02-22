@@ -124,11 +124,15 @@ main(int argc, char **argv)
       /* For now... eventually, priors go here. */
       p7_hmm_Renormalize(hmm);
 
-      if (p7_hmm_Validate(hmm, 0.0001) != eslOK)
+      if (p7_hmm_Validate(hmm, 0.0001, NULL) != eslOK)
 	esl_fatal("HMM validation failed.");
 
       status = p7_hmmfile_Write(hmmfp, hmm); 
       if (status != eslOK) esl_fatal("Failed to write model to disk.");
+
+      /* Print some stuff about what we've done.
+       */
+      printf("Built a model of %d nodes.\n", hmm->M);
 
       p7_hmm_Destroy(hmm);
       esl_msa_Destroy(msa);

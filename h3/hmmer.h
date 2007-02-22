@@ -92,7 +92,7 @@ typedef struct p7_hmm_s {
 #define p7_RF      (1<<2)    /* #RF annotation available                        !*/
 #define p7_CS      (1<<3)    /* #CS annotation available                        !*/
 #define p7_XRAY    (1<<4)    /* obsolete (was: structural data available)       !*/
-#define p7_HASPROB (1<<5)    /* model has probabilities                         !*/
+#define p7_HASPROB (1<<5)    /* obsolete (was: model in probability form)       !*/
 #define p7_HASDNA  (1<<6)    /* obsolete (was: protein HMM->DNA seq params set) !*/
 #define p7_STATS   (1<<7)    /* obsolete (was: model has EVD stats calibrated)  !*/
 #define p7_MAP     (1<<8)    /* alignment map is available                      !*/
@@ -154,7 +154,7 @@ extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern int     p7_hmm_Sample        (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
-extern int     p7_hmm_Validate(P7_HMM *hmm, float tol);
+extern int     p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf);
 
 
 

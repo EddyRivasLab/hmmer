@@ -270,8 +270,7 @@ p7_hmm_Duplicate(P7_HMM *hmm)
 /* Function:  p7_hmm_Zero()
  * Incept:    SRE, Mon Jan  1 16:32:59 2007 [Casa de Gatos]
  *
- * Purpose:   Zeroes the counts/probabilities fields in a model;
- *            drop the p7_HASPROBS flag (probs no longer valid).
+ * Purpose:   Zeroes the counts/probabilities fields in a model.
  *
  * Returns:   <eslOK> on success.
  */
@@ -287,9 +286,6 @@ p7_hmm_Zero(P7_HMM *hmm)
       esl_vec_FSet(hmm->ins[k], hmm->abc->K, 0.);  /* ins[0] unused */
     }
   esl_vec_FSet(hmm->mat[hmm->M], hmm->abc->K, 0.);
-
-  hmm->flags  &= ~p7_HASPROB;	/* invalidates probabilities        */
-  hmm->flags  &= ~p7_HASBITS;	/* invalidates scores               */
   return eslOK;
 }
 
@@ -547,8 +543,7 @@ p7_hmm_Rescale(P7_HMM *hmm, float scale)
  * 
  * Purpose:  Take an HMM in counts form, and renormalize
  *           all probability vectors in the core probability model. Enforces
- *           Plan7 restrictions on nonexistent transitions. Raises the
- *           <p7_HASPROB> flag. 
+ *           Plan7 restrictions on nonexistent transitions.
  *
  *           Leaves other flags (stats and profile) alone, so caller
  *           needs to be wary. Renormalizing a probability model that
@@ -584,7 +579,6 @@ p7_hmm_Renormalize(P7_HMM *hmm)
   esl_vec_FSet(hmm->mat[0], hmm->abc->K, 0.); /* mat[0] */
   esl_vec_FSet(hmm->ins[0], hmm->abc->K, 0.); /* ins[0] */
 
-  hmm->flags |= p7_HASPROB;	/* set the probabilities OK flag */
   return eslOK;
 }
   
@@ -693,7 +687,6 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
 
-  hmm->flags |= p7_HASPROB;
   *ret_hmm = hmm;
   return eslOK;
   
@@ -820,60 +813,68 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
  *            Returns <eslFAIL> if something is wrong.
  */
 int
-p7_hmm_Validate(P7_HMM *hmm, float tol)
+p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
 {
+  int status;
   int k, x;
 
-  if (hmm            == NULL)       return eslFAIL;
-  if (hmm->M         <  1)          return eslFAIL;
-  if (hmm->abc       == NULL)       return eslFAIL; 
-  if (hmm->abc->type == eslUNKNOWN) return eslFAIL;
+  if (hmm            == NULL)       ESL_XFAIL(eslFAIL, errbuf, "HMM is a null pointer");
+  if (hmm->M         <  1)          ESL_XFAIL(eslFAIL, errbuf, "HMM has M < 1");
+  if (hmm->abc       == NULL)       ESL_XFAIL(eslFAIL, errbuf, "HMM has no alphabet reference");
+  if (hmm->abc->type == eslUNKNOWN) ESL_XFAIL(eslFAIL, errbuf, "HMM's alphabet is set to unknown");
   
-  if (esl_vec_FValidate(hmm->t[0], 7, tol, NULL) != eslOK) return eslFAIL;
-  if (hmm->t[0][p7_TMI] != 0.)                       return eslFAIL;
-  if (hmm->t[0][p7_TIM] != 0.)                       return eslFAIL;
-  if (hmm->t[0][p7_TII] != 0.)                       return eslFAIL;
-  if (hmm->t[0][p7_TDM] != 0.)                       return eslFAIL;
-  if (hmm->t[0][p7_TDD] != 0.)                       return eslFAIL;
+  if (esl_vec_FValidate(hmm->t[0], 7, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "begin t[0] fails pvector validation");
+  if (hmm->t[0][p7_TMI] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TMI)");
+  if (hmm->t[0][p7_TIM] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TIM)");
+  if (hmm->t[0][p7_TII] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TII)");
+  if (hmm->t[0][p7_TDM] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TDM)");
+  if (hmm->t[0][p7_TDD] != 0.) 
+
   for (x = 0; x < hmm->abc->K; x ++) {
-    if (hmm->mat[0][x] != 0.) return eslFAIL;
-    if (hmm->ins[0][x] != 0.) return eslFAIL;
+    if (hmm->mat[0][x] != 0.)       ESL_XFAIL(eslFAIL, errbuf, "nonzero match emission at M0");
+    if (hmm->ins[0][x] != 0.)       ESL_XFAIL(eslFAIL, errbuf, "nonzero insert emission at M0");
   }
   
   for (k = 1; k < hmm->M; k++)
     {
-      if (esl_vec_FValidate(hmm->mat[k], hmm->abc->K, tol, NULL) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->ins[k], hmm->abc->K, tol, NULL) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->t[k],   3,           tol, NULL) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol, NULL) != eslOK) return eslFAIL;
-      if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol, NULL) != eslOK) return eslFAIL;
+      if (esl_vec_FValidate(hmm->mat[k], hmm->abc->K, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "mat[%d] fails pvector validation", k);
+      if (esl_vec_FValidate(hmm->ins[k], hmm->abc->K, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "ins[%d] fails pvector validation", k);
+      if (esl_vec_FValidate(hmm->t[k],   3,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_M[%d] fails pvector validation", k);
+      if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_I[%d] fails pvector validation", k);
+      if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_D[%d] fails pvector validation", k);
     }
-  if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol, NULL) != eslOK) return eslFAIL;
+  if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol,NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_M[%d] fails pvector validation", hmm->M);
 
   /* Don't be strict about mandatory name, comlog, ctime for now in development */
   /*  if (hmm->name     == NULL) return eslFAIL; */
   /*  if (hmm->comlog   == NULL) return eslFAIL; */
   /*  if (hmm->ctime    == NULL) return eslFAIL;  */
-  if (hmm->nseq     <  0 )   return eslFAIL;
-  if (hmm->checksum <  0 )   return eslFAIL;
+  if (hmm->nseq     <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid nseq");
+  if (hmm->checksum <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid checksum");
 
-  if (  (hmm->flags & p7_ACC)  && hmm->acc  == NULL) return eslFAIL;
-  if (! (hmm->flags & p7_ACC)  && hmm->acc  != NULL) return eslFAIL;
-  if (  (hmm->flags & p7_DESC) && hmm->desc == NULL) return eslFAIL;
-  if (! (hmm->flags & p7_DESC) && hmm->desc != NULL) return eslFAIL;
+  if (  (hmm->flags & p7_ACC)  && hmm->acc  == NULL) ESL_XFAIL(eslFAIL, errbuf, "accession null but p7_ACC flag is up");
+  if (! (hmm->flags & p7_ACC)  && hmm->acc  != NULL) ESL_XFAIL(eslFAIL, errbuf, "accession present but p7_ACC flag is down");
+  if (  (hmm->flags & p7_DESC) && hmm->desc == NULL) ESL_XFAIL(eslFAIL, errbuf, "description null but p7_DESC flag is up");
+  if (! (hmm->flags & p7_DESC) && hmm->desc != NULL) ESL_XFAIL(eslFAIL, errbuf, "description present but p7_DESC flag is down");
   if (hmm->flags & p7_RF) {
-    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1) return eslFAIL;
-  } else { if (hmm->desc != NULL) return eslFAIL; }
+    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7_RF flag up, but rf string is invalid");
+  } else 
+    if (hmm->rf != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7_RF flag down, but rf string is present");
   if (hmm->flags & p7_CS) {
-    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1) return eslFAIL;
-  } else { if (hmm->cs != NULL) return eslFAIL; }
+    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7_CS flag up, but cs string is invalid");
+  } else 
+    if (hmm->cs != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7_CS flag down, but cs string is present");
   if (hmm->flags & p7_CA) {
-    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1) return eslFAIL;
-  } else { if (hmm->ca != NULL) return eslFAIL; }
-  if (  (hmm->flags & p7_MAP) && hmm->map == NULL) return eslFAIL;
-  if (! (hmm->flags & p7_MAP) && hmm->map != NULL) return eslFAIL;
+    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7_CA flag up, but ca string is invalid");
+  } else 
+    if (hmm->ca != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7_CA flag down, but ca string is present");
+  if (  (hmm->flags & p7_MAP) && hmm->map == NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7_MAP flag up, but map string is null");
+  if (! (hmm->flags & p7_MAP) && hmm->map != NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7_MAP flag down, but map string is present");
 
   return eslOK;
+
+ ERROR:
+  return status;
 }
 /*------------- end of debugging/development code ----------------*/
 
