@@ -781,10 +781,10 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc,
   /* Deal w/ special stuff at node 0, M, overwriting some of what we
    * just did. 
    */
-  hmm->t[k][p7_TMM] = 1.0 - tmi;
-  hmm->t[k][p7_TMD] = 0.;
-  hmm->t[k][p7_TDM] = 1.0;
-  hmm->t[k][p7_TDD] = 0.;
+  hmm->t[M][p7_TMM] = 1.0 - tmi;
+  hmm->t[M][p7_TMD] = 0.;
+  hmm->t[M][p7_TDM] = 1.0;
+  hmm->t[M][p7_TDD] = 0.;
   
   /* Add mandatory annotation
    */

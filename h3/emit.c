@@ -90,7 +90,7 @@ p7_CoreEmit(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
       switch (st) {
       case p7_STB:
       case p7_STM:
-	switch (esl_rnd_FChoose(r, hmm->t[0], 3)) {
+	switch (esl_rnd_FChoose(r, hmm->t[k], 3)) {
 	case 0:  st = p7_STM; break;
 	case 1:  st = p7_STI; break;
 	case 2:  st = p7_STD; break;
