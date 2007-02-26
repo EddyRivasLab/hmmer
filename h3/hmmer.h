@@ -31,20 +31,22 @@
 
 /* Some notes:
  *   0. The model might be either in counts or probability form.
- *   1. P7_HASPROBS flag is raised when t[][], mat[][], ins[][] contain normalized probabilities.
- *   2. t[0] is special: t[0][TMM] is the begin->M_1 entry probability, and t[0][TMD] 
- *      is the begin->D_1 entry probability. All other t[0] values are set to 0.
- *   3. Note that there is no insert state M.
- *   4. Note that there is no transition distribution t[M]; t[M][TMM] and
- *      t[M][TDM] are implicitly 1.0 to the end state E, and there is no insert
- *      state M.
+ *   1. t[0] is special: t[0][TMM,TMD,TMI] are the begin->M_1,D_1,I_0 entry probabilities,
+ *      t[0][TIM,TII] are the I_0 transitions, and delete state 0 doesn't
+ *      exist. Therefore D[0] transitions and mat[0] emissions are unused.
+ *      To simplify some code, we adopt a convention that these can be set to
+ *      any valid probability distribution. (For instance, when we sample HMMs,
+ *      we can sample t[0][TDX] and mat[0], knowing that we'll never use them.)
+ *   2. t[M] is also special: TMD and TDD are 0 because there is no next delete state;
+ *      TDM is therefore 1.0 by definition; and TMM, TDM are interpreted as the
+ *      M->E and D->E end transitions. 
  */
 typedef struct p7_hmm_s {
   /*::cexcerpt::plan7_core::begin::*/
   int     M;                    /* length of the model (# nodes)          */
-  float **t;                    /* transition prob's. t[(0),1..M-1][0..6] */
+  float **t;                    /* transition prob's. t[(0),1..M][0..6]   */
   float **mat;                  /* match emissions.  mat[1..M][0..K-1]    */ 
-  float **ins;                  /* insert emissions. ins[1..M-1][0..K-1]  */
+  float **ins;                  /* insert emissions. ins[1..M][0..K-1]    */
   /*::cexcerpt::plan7_core::end::*/
 
   /* Annotation. Everything but <name> is optional. Flags are set when
@@ -153,6 +155,8 @@ extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern int     p7_hmm_Sample        (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
+				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf);
 
@@ -248,24 +252,26 @@ extern void   p7_bg_Destroy(P7_BG *bg);
  * 4. P7_TRACE:  a traceback (alignment of seq to profile).
  *****************************************************************/
 
-/* Traceback structure for alignments of model to sequence.
+/* Traceback structure for alignment of a model to a sequence.
  *
  * A traceback only makes sense in a triplet (tr, hmm, ax|dsq),
  * for a given HMM (with nodes 1..M) and a given digital sequence 
  * (with positions 1..L).
  * 
- * A traceback is always relative to the search form of the model,
- * so they always include the S,N,B... E,C,T states. Element 0 always 
- * a p7_STS. Element N-1 always a p7_STT.
+ * A traceback may be relative to a profile (usually) or to a core
+ * model (in model construction; see build.c). You can tell the
+ * difference by looking at the first statetype, tr->st[0]; if it's a
+ * p7_STS, it's for a profile, and if it's p7_STB, it's for a core
+ * model.
  * 
- * The N,C,J states emit on transition, not on state, so a path of N
- * emits 0 residues, NN emits 1 residue, NNN emits 2 residues, and so
- * on. By convention, the trace always associates an
- * emission-on-transition with the following (destination) state, so
+ * A profile's N,C,J states emit on transition, not on state, so a
+ * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
+ * residues, and so on. By convention, the trace always associates an
+ * emission-on-transition with the trailing (destination) state, so
  * the first N, C, or J is stored in a trace as a nonemitter (i=0).
  *
- * A traceback may be relative to an aligned sequence or an unaligned
- * sequence in digital mode.
+ * A i coords in a traceback may be relative to an aligned sequence or
+ * an unaligned sequence in digital mode.
  */
 typedef struct p7_trace_s {
   int   N;		/* length of traceback                       */

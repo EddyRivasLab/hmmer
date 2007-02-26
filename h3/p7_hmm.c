@@ -136,26 +136,31 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc)
   hmm->abc    = abc;
   hmm->M      = M;
 
-  ESL_ALLOC(hmm->t,      M              * sizeof(float *));
+  ESL_ALLOC(hmm->t,      (M+1)          * sizeof(float *));
   ESL_ALLOC(hmm->mat,    (M+1)          * sizeof(float *));
-  ESL_ALLOC(hmm->ins,    M              * sizeof(float *));
-  ESL_ALLOC(hmm->t[0],   (7*M)          * sizeof(float));
+  ESL_ALLOC(hmm->ins,    (M+1)          * sizeof(float *));
+  ESL_ALLOC(hmm->t[0],   (7*(M+1))      * sizeof(float));
   ESL_ALLOC(hmm->mat[0], (abc->K*(M+1)) * sizeof(float));
-  ESL_ALLOC(hmm->ins[0], (abc->K*M)     * sizeof(float));
+  ESL_ALLOC(hmm->ins[0], (abc->K*(M+1)) * sizeof(float));
 
-  for (k = 1; k < M; k++) {
+  for (k = 1; k <= M; k++) {
     hmm->mat[k] = hmm->mat[0] + k * hmm->abc->K;
     hmm->ins[k] = hmm->ins[0] + k * hmm->abc->K;
     hmm->t[k]   = hmm->t[0]   + k * 7;
   }
-  hmm->mat[M] = hmm->mat[0] + M * hmm->abc->K;
+
+  /* Enforce conventions on unused but allocated distributions, so
+   * Compare() tests succeed unless memory was corrupted.
+   */
+  if ((status = p7_hmm_Zero(hmm)) != eslOK) goto ERROR;
+  hmm->mat[0][0]    = 1.0;
+  hmm->t[0][p7_TDM] = 1.0; 
 
   if (hmm->flags & p7_RF)  ESL_ALLOC(hmm->rf,  (M+2) * sizeof(char));
   if (hmm->flags & p7_CS)  ESL_ALLOC(hmm->cs,  (M+2) * sizeof(char));
   if (hmm->flags & p7_CA)  ESL_ALLOC(hmm->ca,  (M+2) * sizeof(char));
   if (hmm->flags & p7_MAP) ESL_ALLOC(hmm->map, (M+1) * sizeof(int));
   
-  if ((status = p7_hmm_Zero(hmm)) != eslOK) goto ERROR;
   return eslOK;
 
  ERROR:
@@ -229,12 +234,11 @@ p7_hmm_Duplicate(P7_HMM *hmm)
 
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
 
-  for (k = 0; k < hmm->M; k++) {
+  for (k = 0; k <= hmm->M; k++) {
     esl_vec_FCopy(new->t[k],   hmm->t[k],   7);
     esl_vec_FCopy(new->mat[k], hmm->mat[k], hmm->abc->K);
     esl_vec_FCopy(new->ins[k], hmm->ins[k], hmm->abc->K);
   }
-  esl_vec_FCopy(new->mat[hmm->M], hmm->mat[new->M], hmm->abc->K);
   
   if (hmm->name != NULL    && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
   if (hmm->acc  != NULL    && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
@@ -279,13 +283,11 @@ p7_hmm_Zero(P7_HMM *hmm)
 {
   int k;
 
-  for (k = 0; k < hmm->M; k++)
-    {
-      esl_vec_FSet(hmm->t[k],   7,           0.);  /* t[0] uses only TMM,TMD */
-      esl_vec_FSet(hmm->mat[k], hmm->abc->K, 0.);  /* mat[0] unused */
-      esl_vec_FSet(hmm->ins[k], hmm->abc->K, 0.);  /* ins[0] unused */
-    }
-  esl_vec_FSet(hmm->mat[hmm->M], hmm->abc->K, 0.);
+  for (k = 0; k <= hmm->M; k++) {
+    esl_vec_FSet(hmm->t[k],   7,           0.);  
+    esl_vec_FSet(hmm->mat[k], hmm->abc->K, 0.);  
+    esl_vec_FSet(hmm->ins[k], hmm->abc->K, 0.);  
+  }
   return eslOK;
 }
 
@@ -532,9 +534,11 @@ p7_hmm_Rescale(P7_HMM *hmm, float scale)
 {
   int k;
 
-  for (k = 1; k <= hmm->M; k++)  esl_vec_FScale(hmm->mat[k], hmm->abc->K, scale);
-  for (k = 1; k <  hmm->M; k++)  esl_vec_FScale(hmm->ins[k], hmm->abc->K, scale);
-  for (k = 0; k <  hmm->M; k++)  esl_vec_FScale(hmm->t[k],   7,           scale);
+  for (k = 0; k <= hmm->M; k++) {
+    esl_vec_FScale(hmm->mat[k], hmm->abc->K, scale);
+    esl_vec_FScale(hmm->ins[k], hmm->abc->K, scale);
+    esl_vec_FScale(hmm->t[k],   7,           scale);
+  }
   return eslOK;
 }
 
@@ -560,24 +564,27 @@ p7_hmm_Renormalize(P7_HMM *hmm)
 {
   int   k;			/* counter for model position */
 
-  for (k = 1; k <= hmm->M; k++) 
+  for (k = 0; k <= hmm->M; k++) {
     esl_vec_FNorm(hmm->mat[k], hmm->abc->K);
-  for (k = 1; k < hmm->M; k++)
     esl_vec_FNorm(hmm->ins[k], hmm->abc->K);
-  for (k = 1; k < hmm->M; k++) {
-      esl_vec_FNorm(hmm->t[k],   3);	/* match  */
-      esl_vec_FNorm(hmm->t[k]+3, 2);	/* insert */
-      esl_vec_FNorm(hmm->t[k]+5, 2);	/* delete */
+    esl_vec_FNorm(hmm->t[k],   3);	/* TMX */
+    esl_vec_FNorm(hmm->t[k]+3, 2);	/* TIX */
+    esl_vec_FNorm(hmm->t[k]+5, 2);	/* TDX */
   }
+  /* If t[M][TD*] distribution was all zeros, we just made TDD nonzero. Oops.
+   * Re-enforce t's on that final delete state. */
+  hmm->t[hmm->M][p7_TDM] = 1.0;
+  hmm->t[hmm->M][p7_TDD] = 0.0;
 
-  /* The t[0] is special: TM* are the begin transitions
+  /* Rare: if t[M][TM*] distribution was all zeros (all final transitions
+   * were D_M -> E) then we just made nonexistent M_M->D_M+1 transition nonzero.
+   * Fix that too.
    */
-  hmm->t[0][p7_TMI] = 0.;       /* make sure TMI = 0. */
-  esl_vec_FNorm(hmm->t[0], 3);  /* begin transitions; TMM, TMD are valid */
-  esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* t[0] insert */
-  esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* t[0] delete */
-  esl_vec_FSet(hmm->mat[0], hmm->abc->K, 0.); /* mat[0] */
-  esl_vec_FSet(hmm->ins[0], hmm->abc->K, 0.); /* ins[0] */
+  if (hmm->t[hmm->M][p7_TMD] > 0.) {
+    hmm->t[hmm->M][p7_TMD] = 0.;
+    hmm->t[hmm->M][p7_TMM] = 0.5;
+    hmm->t[hmm->M][p7_TMI] = 0.5;
+  }
 
   return eslOK;
 }
@@ -600,10 +607,8 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
   int x;			/* counter for symbols */
   int ts;			/* counter for state transitions */
   
-  fprintf(fp, "B->M1,B->D1: %5.1f %5.1f\n", hmm->t[0][p7_TMM], hmm->t[0][p7_TMD]);
-  for (k = 1; k <= hmm->M; k++)
-    {
-				/* Line 1: k, match emissions */
+  for (k = 0; k <= hmm->M; k++)
+    {				/* Line 1: k, match emissions */
       fprintf(fp, " %5d ", k);
       for (x = 0; x < hmm->abc->K; x++) 
         fprintf(fp, "%5.1f ", hmm->mat[k][x]);
@@ -611,12 +616,12 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
 				/* Line 2: insert emissions */
       fprintf(fp, "       ");
       for (x = 0; x < hmm->abc->K; x++) 
-	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->ins[k][x] : 0.);
+	fprintf(fp, "%5.1f ", hmm->ins[k][x]);
       fputs("\n", fp);
 				/* Line 3: transition probs */
       fprintf(fp, "       ");
       for (ts = 0; ts < 7; ts++)
-	fprintf(fp, "%5.1f ", (k < hmm->M) ? hmm->t[k][ts] : 0.); 
+	fprintf(fp, "%5.1f ", hmm->t[k][ts]); 
       fputs("\n", fp);
     }
   fputs("//\n", fp);
@@ -653,31 +658,22 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
   hmm = p7_hmm_Create(M, abc);
   if (hmm == NULL) { status = eslEMEM; goto ERROR; }
   
-  /* Node 0 is special; M0 = B, and I,D don't exist
-   */
-  esl_dirichlet_FSampleUniform(r, 2, hmm->t[0]);	/* samples into TMM,TMI */
-  hmm->t[0][p7_TMD] = hmm->t[0][p7_TMI];        /* but we don't want TMI, we want TMD */
-  hmm->t[0][p7_TMI] = 0.;		        /* because TMI = 0 */
-  esl_vec_FSet(hmm->t[0]+3, 2, 0.); /* insert */
-  esl_vec_FSet(hmm->t[0]+5, 2, 0.); /* delete */
-  esl_vec_FSet(hmm->mat[0], abc->K, 0.);
-  esl_vec_FSet(hmm->ins[0], abc->K, 0.);
-
-  /* The main states from 1..M-1
-   */
-  for (k = 1; k < M; k++)
+  for (k = 0; k <= M; k++)
     {
-      esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
+      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
       esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
       esl_dirichlet_FSampleUniform(r, 3,      hmm->t[k]);
       esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+3);
-      esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5);
+      if (k > 0) esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5);
     }
-
-  /* In node M, only the match state exists and only it is
-   * allocated.
+  /* Node M is special: no transitions to D, transitions to M
+   * are interpreted as transitions to E. Overwrite a little of
+   * what we did in node M.
    */
-  esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[M]);
+  esl_dirichlet_FSampleUniform(r, 2, hmm->t[M]);    /* TMM,TMI only */
+  hmm->t[M][p7_TMD] = 0.;	
+  hmm->t[M][p7_TDM] = 1.0;
+  hmm->t[M][p7_TDD] = 0.0;
   
   /* Add mandatory annotation
    */
@@ -723,9 +719,10 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_
   int     status;
 
   if ((status = p7_hmm_Sample(r, M, abc, &hmm)) != eslOK) goto ERROR;
-  for (k = 0; k < M; k++) {
-    esl_vec_FSet(hmm->t[k], 3, 0.);
+  for (k = 0; k <= M; k++) {
     hmm->t[k][p7_TMM] = 1.0;
+    hmm->t[k][p7_TMD] = 0.0;
+    hmm->t[k][p7_TMI] = 0.0;
   }
   *ret_hmm = hmm;
   return eslOK;
@@ -736,6 +733,75 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_
   return status;
 }
 
+/* Function:  p7_hmm_SampleUniform()
+ * Incept:    SRE, Thu Feb 22 10:04:19 2007 [Janelia]
+ *
+ * Purpose:   Sample a model that uses uniform transition probabilities,
+ *            determined by <tmi>, <tii>, <tmd>, and <tdd>,
+ *            the probabilistic equivalent of gap-open/gap-extend for
+ *            inserts, deletes.
+ *            
+ *            Useful for testing expected behavior on single-sequence
+ *            models, where transitions are position-independent.
+ *
+ * Returns:   <eslOK> on success, and the new hmm is returned
+ *            through <ret_hmm); caller is responsible for 
+ *            freeing this object with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *
+ * Xref:      J1/5.
+ */
+int
+p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
+		     float tmi, float tii, float tmd, float tdd,
+		     P7_HMM **ret_hmm)
+{
+  int     status;
+  P7_HMM *hmm    = NULL;
+  char   *logmsg = "[HMM with uniform transitions, random emissions]";
+  int     k;
+
+  hmm = p7_hmm_Create(M, abc);
+  if (hmm == NULL) { status = eslEMEM; goto ERROR; }
+  
+  for (k = 0; k <= M; k++)
+    {
+      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
+      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
+      hmm->t[k][p7_TMM] = 1.0 - tmi - tmd;
+      hmm->t[k][p7_TMI] = tmi;
+      hmm->t[k][p7_TMD] = tmd;
+      hmm->t[k][p7_TIM] = 1.0 - tii;
+      hmm->t[k][p7_TII] = tii;
+      hmm->t[k][p7_TDM] = 1.0 - tdd;
+      hmm->t[k][p7_TDD] = tdd;
+    }
+
+  /* Deal w/ special stuff at node 0, M, overwriting some of what we
+   * just did. 
+   */
+  hmm->t[k][p7_TMM] = 1.0 - tmi;
+  hmm->t[k][p7_TMD] = 0.;
+  hmm->t[k][p7_TDM] = 1.0;
+  hmm->t[k][p7_TDD] = 0.;
+  
+  /* Add mandatory annotation
+   */
+  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  hmm->nseq     = 0;
+  p7_hmm_SetCtime(hmm);
+  hmm->checksum = 0;
+
+  *ret_hmm = hmm;
+  return eslOK;
+  
+ ERROR:
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
 
 
 
@@ -762,13 +828,12 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (h1->M         != h2->M)         return eslFAIL;
   if (h1->flags     != h2->flags)     return eslFAIL;
   
-  for (k = 0; k < h1->M; k++)	/* (it's safe to include 0 here.) */
+  for (k = 0; k <= h1->M; k++)	/* (it's safe to include 0 here.) */
     {
       if (esl_vec_FCompare(h1->mat[k], h2->mat[k], h1->abc->K, tol) != eslOK) return eslFAIL;
       if (esl_vec_FCompare(h1->ins[k], h2->ins[k], h1->abc->K, tol) != eslOK) return eslFAIL;
       if (esl_vec_FCompare(h1->t[k],   h2->t[k],   7,          tol) != eslOK) return eslFAIL;
     }
-  if (esl_vec_FCompare(h1->mat[h1->M], h2->mat[h1->M], h1->abc->K, tol) != eslOK) return eslFAIL;
 
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
   if (strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
@@ -816,26 +881,14 @@ int
 p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
 {
   int status;
-  int k, x;
+  int k;
 
   if (hmm            == NULL)       ESL_XFAIL(eslFAIL, errbuf, "HMM is a null pointer");
   if (hmm->M         <  1)          ESL_XFAIL(eslFAIL, errbuf, "HMM has M < 1");
   if (hmm->abc       == NULL)       ESL_XFAIL(eslFAIL, errbuf, "HMM has no alphabet reference");
   if (hmm->abc->type == eslUNKNOWN) ESL_XFAIL(eslFAIL, errbuf, "HMM's alphabet is set to unknown");
   
-  if (esl_vec_FValidate(hmm->t[0], 7, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "begin t[0] fails pvector validation");
-  if (hmm->t[0][p7_TMI] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TMI)");
-  if (hmm->t[0][p7_TIM] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TIM)");
-  if (hmm->t[0][p7_TII] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TII)");
-  if (hmm->t[0][p7_TDM] != 0.)      ESL_XFAIL(eslFAIL, errbuf, "nonzero begin transition (TDM)");
-  if (hmm->t[0][p7_TDD] != 0.) 
-
-  for (x = 0; x < hmm->abc->K; x ++) {
-    if (hmm->mat[0][x] != 0.)       ESL_XFAIL(eslFAIL, errbuf, "nonzero match emission at M0");
-    if (hmm->ins[0][x] != 0.)       ESL_XFAIL(eslFAIL, errbuf, "nonzero insert emission at M0");
-  }
-  
-  for (k = 1; k < hmm->M; k++)
+  for (k = 0; k <= hmm->M; k++)
     {
       if (esl_vec_FValidate(hmm->mat[k], hmm->abc->K, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "mat[%d] fails pvector validation", k);
       if (esl_vec_FValidate(hmm->ins[k], hmm->abc->K, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "ins[%d] fails pvector validation", k);
@@ -843,7 +896,9 @@ p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
       if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_I[%d] fails pvector validation", k);
       if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_D[%d] fails pvector validation", k);
     }
-  if (esl_vec_FValidate(hmm->mat[hmm->M], hmm->abc->K,tol,NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_M[%d] fails pvector validation", hmm->M);
+  if (hmm->t[hmm->M][p7_TMD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TMD should be 0 for last node");
+  if (hmm->t[hmm->M][p7_TDM] != 1.0) ESL_XFAIL(eslFAIL, errbuf, "TDM should be 1 for last node");
+  if (hmm->t[hmm->M][p7_TDD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
 
   /* Don't be strict about mandatory name, comlog, ctime for now in development */
   /*  if (hmm->name     == NULL) return eslFAIL; */

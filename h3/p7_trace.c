@@ -14,8 +14,8 @@
 
 /* Function:  p7_trace_Create()
  *
- * Purpose:   Allocate a traceback of length <N> states (inclusive
- *            of S, T states); return it via <ret_tr>.
+ * Purpose:   Allocate a traceback of length <N> states; return it via
+ *            <ret_tr>.
  *
  * Returns:   <eslOK> on success.
  *
@@ -29,7 +29,7 @@ p7_trace_Create(int N, P7_TRACE **ret_tr)
 
   *ret_tr = NULL;
   
-  ESL_ALLOC(tr,     sizeof(P7_TRACE));
+  ESL_ALLOC(tr, sizeof(P7_TRACE));
   tr->st = NULL;
   tr->k  = NULL;
   tr->i  = NULL;
@@ -196,29 +196,38 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
  *            there to indicate the reason for the failure.
  */
 int
-p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
+p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
 {
+  int  status;
   int  tpos;			/* position in trace    */
   int  i;			/* position in sequence */
   int  k;			/* position in model */
   char prv;			/* type of the previous state */
-  int  status;
+  int  is_core;			/* TRUE if trace is a core trace, not profile */
 
-  /* Verify that N is sensible (before we start using it in loops!)
-   * Minimum is S->N->B->M_k->E->C->T, for a seq of length 1: 7 states.
+  /* minimum trace length is a core's B->Mk->E. If we don't have at least that,
+   * we're definitely in trouble
    */
-  if (tr->N < 7 || tr->N > tr->nalloc) ESL_XFAIL(eslFAIL, errbuf, "N of %d isn't sensible", tr->N);
+  if (tr->N < 3)          ESL_XFAIL(eslFAIL, errbuf, "trace is too short");
+  if (tr->N > tr->nalloc) ESL_XFAIL(eslFAIL, errbuf, "N of %d isn't sensible", tr->N);
 
-  /* Verify "sentinels", the S and T at each end of the trace
+  /* Determine if this is a core trace or a profile trace, so we can
+   * construct validation tests appropriately.
+   */
+  if      (tr->st[0] == p7_STB) is_core = TRUE;
+  else if (tr->st[0] == p7_STS) is_core = FALSE;
+  else    ESL_XFAIL(eslFAIL, errbuf, "first state neither S nor B");
+
+  /* Verify "sentinels", the final states of the trace
    * (before we start looking backwards and forwards from each state in 
    * our main validation loop)
    */
-  if (tr->st[0]       != p7_STS)   ESL_XFAIL(eslFAIL, errbuf, "first state not S");
-  if (tr->k[0]        != 0)        ESL_XFAIL(eslFAIL, errbuf, "first state shouldn't have k set");
-  if (tr->i[0]        != 0)        ESL_XFAIL(eslFAIL, errbuf, "first state shouldn't have i set");
-  if (tr->st[tr->N-1] != p7_STT)   ESL_XFAIL(eslFAIL, errbuf, "last state not N");
-  if (tr->k[tr->N-1]  != 0)        ESL_XFAIL(eslFAIL, errbuf, "last state shouldn't have k set");
-  if (tr->i[tr->N-1]  != 0)        ESL_XFAIL(eslFAIL, errbuf, "last state shouldn't have i set");
+  if (is_core  && tr->st[tr->N-1] != p7_STE) ESL_XFAIL(eslFAIL, errbuf, "last state not E");
+  if (!is_core && tr->st[tr->N-1] != p7_STT) ESL_XFAIL(eslFAIL, errbuf, "last state not T");
+  if (tr->k[0]        != 0)                  ESL_XFAIL(eslFAIL, errbuf, "first state shouldn't have k set");
+  if (tr->i[0]        != 0)                  ESL_XFAIL(eslFAIL, errbuf, "first state shouldn't have i set");
+  if (tr->k[tr->N-1]  != 0)                  ESL_XFAIL(eslFAIL, errbuf, "last state shouldn't have k set");
+  if (tr->i[tr->N-1]  != 0)                  ESL_XFAIL(eslFAIL, errbuf, "last state shouldn't have i set");
 
   /* Main validation loop.
    */
@@ -226,8 +235,8 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
   i = 1;
   for (tpos = 1; tpos < tr->N-1; tpos++)
     {
-      for (; sq[i] != eslDSQ_SENTINEL; i++) /* find next residue in sq (sq might have gaps to skip) */
-	if (esl_abc_XIsResidue(abc, sq[i])) break;
+      for (; dsq[i] != eslDSQ_SENTINEL; i++) /* find next non-gap residue in dsq */
+	if (esl_abc_XIsResidue(abc, dsq[i])) break;
 
       /* Handle missing data states: can only be one.
        * prv state might have to skip over one (but not more) missing data states
@@ -241,6 +250,7 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
 	break;
 	
       case p7_STN:
+	if (is_core)          ESL_XFAIL(eslFAIL, errbuf, "core trace can't contain N");
 	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no N should have k set");
 	if (prv == p7_STS) { /* 1st N doesn't emit */
 	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first N shouldn't have i set");
@@ -258,7 +268,7 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
 	break;
 
       case p7_STM:
-	if (prv == p7_STB) k = tr->k[tpos]; else k++; /* on a B->Mk entry, trust k; else verify */
+	if (! is_core && prv == p7_STB) k = tr->k[tpos]; else k++; /* on a B->Mk entry, trust k; else verify */
 
 	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
@@ -271,23 +281,38 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
 	k++;
 	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "D shouldn't have i set");
-	if (prv != p7_STM && prv != p7_STD)
-	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to D; expected {M,D}->D");
+	if (is_core) {
+	  if (prv != p7_STM && prv != p7_STD && prv != p7_STB)
+	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to D; expected {B,M,D}->D");
+	} else {
+	  if (prv != p7_STM && prv != p7_STD)
+	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to D; expected {M,D}->D");
+	}
 	break;
 	
       case p7_STI:
 	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
-	if (prv != p7_STM && prv != p7_STI)
-	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to I; expected {M,I}->I");
+	if (is_core) {
+	  if (prv != p7_STB && prv != p7_STM && prv != p7_STI)
+	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to I; expected {B,M,I}->I");
+	} else {
+	  if (prv != p7_STM && prv != p7_STI)
+	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to I; expected {M,I}->I");
+	}
 	i++;
 	break;
 
       case p7_STE:
 	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have k set");
 	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have i set");
-	if (prv != p7_STM)
-	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to E; expected M->E");
+	if (is_core) {
+	  if (prv != p7_STM && prv != p7_STD && prv != p7_STI)
+	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to E; expected {M,D,I}->E");
+	} else {
+	  if (prv != p7_STM && prv != p7_STD)
+	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to E; expected {M,D}->E");
+	}
 	break;
 	
       case p7_STJ:
@@ -301,6 +326,7 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
 	break;
 
       case p7_STC:
+	if (is_core)          ESL_XFAIL(eslFAIL, errbuf, "core trace can't contain C");
 	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no C should have k set");
 	if (prv == p7_STE) { /* 1st C doesn't emit */
 	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first C shouldn't have i set");
@@ -316,10 +342,10 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf)
       }
     }
 
-  /* Trace should have accounted for all residues in the sq
+  /* Trace should have accounted for all residues in the dsq
    */
-  for (; sq[i] != eslDSQ_SENTINEL; i++) 
-    if (esl_abc_XIsResidue(abc, sq[i])) 
+  for (; dsq[i] != eslDSQ_SENTINEL; i++) 
+    if (esl_abc_XIsResidue(abc, dsq[i])) 
       ESL_XFAIL(eslFAIL, errbuf, "trace didn't account for all residues in the sq");
 
   return eslOK;
@@ -513,27 +539,26 @@ p7_trace_Reverse(P7_TRACE *tr)
  * Purpose:  Count a traceback into a count-based core HMM structure.
  *           (Usually as part of a model parameter re-estimation.)
  *           
- * Note:     A traceback is relative to a profile (it does not contain
- *           B->D1 and Dm->E transitions), so we have to be careful
- *           how we translate internal/exit paths from a score profile
- *           back to the core model. Sometimes a B->M_k or M_k->E 
- *           transition is an internal entry/exit from local alignment,
- *           and sometimes it is a wing-folded B->D_1..DDM_k or
- *           M_k->DDD_M->E global alignment to the core model. 
+ *           The traceback may either be a core traceback (as in model
+ *           construction) or a profile traceback (as in model
+ *           reestimation).
  *           
- *           This is the main purpose of the special p7_STX 'missing
- *           data' state in tracebacks. Local alignment entry/exits
- *           are indicated by B->X->M_k and M_k->X->E 'missing data'
- *           paths, and direct B->M_k or M_k->E transitions in a
- *           traceback are interpreted as wing foldings.
+ *           If it is a profile traceback, we have to be careful how
+ *           we translate an internal entry path from a score profile
+ *           back to the core model. Sometimes a B->M_k transition is
+ *           an internal entry from local alignment, and sometimes it
+ *           is a wing-folded B->D_1..DDM_k alignment to the core
+ *           model.
+ *           
+ *           This is one of the purposes of the special p7_STX
+ *           'missing data' state in tracebacks. Local alignment entry
+ *           is indicated by a B->X->M_k 'missing data' path, and
+ *           direct B->M_k or M_k->E transitions in a traceback are
+ *           interpreted as wing retraction in a glocal model.
  * 
- *           In hmmbuild, sequence fragments are treated as local
- *           alignments and dealt with by converting flanking gaps to
- *           'missing data' symbols, and fake traceback construction
- *           then converts a transition from missing data to an M_k to
- *           a B->X->M_k path (or M_k to missing data to M_k -> X ->
- *           E). As a side effect, other missing data would also be
- *           converted to an X.
+ *           The STX state is also used in core traces in model
+ *           construction literally to mean missing data, in the
+ *           treatment of sequence fragments.
  *
  * Args:     hmm   - counts-based HMM to count <tr> into
  *           tr    - alignment of seq to HMM
@@ -573,14 +598,20 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
       if (st2 == p7_STX) continue; /* ignore transition to missing data */
 
       if (st == p7_STB) {
-	if (st2 != p7_STM) ESL_EXCEPTION(eslEINVAL, "can't happen: bad trace");
-
-	if (k2 == 1) hmm->t[0][p7_TMM] += wt;  /* B->M1 */
-	else {                                 /* wing-retracted B->DD->Mk path */
-	  hmm->t[0][p7_TMD] += wt;                
-	  for (ktmp = 1; ktmp < k2-1; ktmp++) 
-	    hmm->t[ktmp][p7_TDD] += wt;
-	  hmm->t[ktmp][p7_TDM] += wt;
+	if (st2 == p7_STM && k2 > 1)   /* wing-retracted B->DD->Mk path */
+	  {
+	    hmm->t[0][p7_TMD] += wt;                
+	    for (ktmp = 1; ktmp < k2-1; ktmp++) 
+	      hmm->t[ktmp][p7_TDD] += wt;
+	    hmm->t[ktmp][p7_TDM] += wt;
+	  }
+	else  {
+	  switch (st2) {
+	  case p7_STM: hmm->t[0][p7_TMM] += wt; break;
+	  case p7_STI: hmm->t[0][p7_TMI] += wt; break;
+	  case p7_STD: hmm->t[0][p7_TMD] += wt; break;
+	  default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
+	  }
 	}
       }
       else if (st == p7_STM) {
@@ -588,14 +619,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 	case p7_STM: hmm->t[k][p7_TMM] += wt; break;
 	case p7_STI: hmm->t[k][p7_TMI] += wt; break;
 	case p7_STD: hmm->t[k][p7_TMD] += wt; break;
-	case p7_STE:            /* M_M->E is a no-op, because hmm->t[M] is implicit, 1.0's to E */
-	  if (k < hmm->M) {	/* M_k->E interp'ed as wing-retracted M_k->DD->E path */
-	    hmm->t[k][p7_TMD] += wt;
-	    for (ktmp = k+1; ktmp < hmm->M; ktmp++)
-	      hmm->t[ktmp][p7_TDD] += wt;
-	    /* hmm->t[M] implicit 1.0's to E */
-	  } 
-	  break; 	
+	case p7_STE: hmm->t[k][p7_TMM] += wt; break; /* k==M. A local alignment would've been Mk->X->E. */
 	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
       }
@@ -603,6 +627,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 	switch (st2) {
 	case p7_STM: hmm->t[k][p7_TIM] += wt; break;
 	case p7_STI: hmm->t[k][p7_TII] += wt; break;
+	case p7_STE: hmm->t[k][p7_TIM] += wt; break; /* k==M. */
 	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
       }
@@ -610,7 +635,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 	switch (st2) {
 	case p7_STM: hmm->t[k][p7_TDM] += wt; break;
 	case p7_STD: hmm->t[k][p7_TDD] += wt; break;
-	case p7_STE:                          break; /* ignore; must be D_M, and p(D_M->E) is implicitly 1.0 */
+	case p7_STE: hmm->t[k][p7_TDM] += wt; break; /* k==M. A local alignment would've been Dk->X->E. */
 	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
       }

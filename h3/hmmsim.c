@@ -98,7 +98,7 @@ main(int argc, char **argv)
   } else {
     if (p7_ProfileConfig(hmm, hmm->gm, p7_LOCAL)    != eslOK) esl_fatal("failed to configure profile");
     if (p7_ReconfigLength(hmm->gm,  L)              != eslOK) esl_fatal("failed to reconfig profile L");
-    if (p7_hmm_Validate    (hmm,     0.0001)        != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_hmm_Validate    (hmm,     0.0001, NULL)  != eslOK) esl_fatal("whoops, HMM is bad!");
     if (p7_profile_Validate(hmm->gm, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
   }
 

@@ -173,11 +173,11 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
 
   /* The core model probabilities
    */
-  for (k = 1; k <= hmm->M; k++)
+  for (k = 1; k <= hmm->M; k++)	/* match emissions (0) 1..M */
     fwrite((char *) hmm->mat[k], sizeof(float), hmm->abc->K, fp);
-  for (k = 1; k < hmm->M; k++)
+  for (k = 0; k <= hmm->M; k++)	/* insert emissions 0..M */
     fwrite((char *) hmm->ins[k], sizeof(float), hmm->abc->K, fp);
-  for (k = 0; k < hmm->M; k++)	/* note: start from 0, to include B state */
+  for (k = 0; k <= hmm->M; k++)	/* note: start from 0, to include B state */
     fwrite((char *) hmm->t[k], sizeof(float), 7, fp);
 
   /* annotation section
@@ -327,9 +327,9 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   /* Core model probabilities. */
   for (k = 1; k <= hmm->M; k++)
     if (! fread((char *) hmm->mat[k], sizeof(float), hmm->abc->K, hfp->f)) {status = eslEOD; goto ERROR;}
-  for (k = 1; k < hmm->M; k++)
+  for (k = 0; k <= hmm->M; k++)
     if (! fread((char *) hmm->ins[k], sizeof(float), hmm->abc->K, hfp->f)) {status = eslEOD; goto ERROR;}
-  for (k = 0; k < hmm->M; k++)
+  for (k = 0; k <= hmm->M; k++)
     if (! fread((char *) hmm->t[k],   sizeof(float), 7,           hfp->f)) {status = eslEOD; goto ERROR;}
   
   /* Annotations. */

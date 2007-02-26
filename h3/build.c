@@ -35,7 +35,7 @@
 
 static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 static int fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr);
-static int trace_doctor(P7_TRACE *tr, int mlen, int *ret_ndi, int *ret_nid);
+static int trace_doctor(P7_TRACE *tr, int *ret_ndi, int *ret_nid);
 static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
 
 /*****************************************************************
@@ -279,18 +279,20 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
  * Purpose:  From a consensus assignment of columns to MAT/INS, construct fake
  *           tracebacks for each individual sequence.
  *           
- *           Tracebacks are always relative to the search model (with
- *           internal entry/exit, B->Mk and Mk->E).
+ *           Tracebacks here are relative to the core model. Therefore,
+ *           flanking insertions are assigned to the core model's 
+ *           I_0 and I_M states, and B->DDDM entry paths are explicitly
+ *           represented. 
+ *           
+ *           Caller has already dealt with sequence fragments, by
+ *           converting leading/trailing gaps to missing data symbols.
+ *           Missing data symbols result in STX states here;
+ *           TraceCount() will then ignore transitions involving STX
+ *           missing data states.
  *
  *           These faked tracebacks use sequence indices <i> relative
- *           to the aligned sequences in msa, not unaligned seqs as normal.
- *           
- *           Rarely, an individual traceback may be left as NULL. This
- *           happens when a sequence has no residues assigned to the
- *           model (or, more rarely, an entirely empty sequence of
- *           length 0, which is possible in many alignment formats).
- *           Plan7 models cannot emit L=0 sequences. Caller must watch
- *           out for NULL traces in the trace array.
+ *           to the aligned sequences in msa, not unaligned seqs as
+ *           normal.
  *           
  * Args:     msa       - digital alignment
  *           matassign - assignment of columns; [1..alen] 
@@ -309,131 +311,60 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
   int  idx;                     /* counter over sequences          */
   int  k;                       /* position in HMM                 */
   int  apos;                    /* position in alignment columns   */
-  int  k1,k2;			/* first, last match state used    */
-  int  c1,c2;			/* entered/exited column           */
-  int  cfirst,clast;		/* loc's of p7_{FIRST,LAST}_MATCH  */
-  int  M;
 
-  /* Allocate for nseq traces.
-   */
   ESL_ALLOC(tr, sizeof(P7_TRACE *) * msa->nseq);
   for (idx = 0; idx < msa->nseq; idx++) tr[idx] = NULL;
   
-  /* Precalculate where the first and last match columns are in matassign.
-   * We know M>0; matassign2hmm already tested for M=0 pathology.
-   */
-  cfirst = clast = M = 0;
-  for (apos = 1; apos <= msa->alen; apos++) {
-    if (matassign[apos]) { 
-      M++;
-      clast = apos;
-      if (cfirst == 0) cfirst = apos;
-    }
-  }
-
-  /* Construct traces for each sequence. A trace may end up being NULL,
-   * if it would have implied a B->E empty sequence that Plan7 can't do.
-   */
   for (idx = 0; idx < msa->nseq; idx++)
     {
-      /* Preprocess the sequence to identify position of its first
-       * match state (node k1, column c1) and last match state
-       * (node k2, column c2).
-       */
-      for (k1 = 0, c1 = cfirst; c1 <= clast; c1++) {
-	if (matassign[c1]) {
-	  k1++;
-	  if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][c1])) break;
-	}
-      }
-      for (k2 = M+1, c2 = clast; c2 >= cfirst; c2--) {
-	if (matassign[c2]) {
-	  k2--;
-	  if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][c2])) break;
-	}
-      }
-      if (c1 > clast || c2 < cfirst) continue; /* rare: empty sequence; leave trace NULL. */
-
-      /* Now build the trace from left to right in three sections 1..c1-1, c1..c2, c2+1..alen */
-      /* First section: left flank, residues assigned to N's.
-       */
-      if ((status = p7_trace_Create(msa->alen+6, &tr[idx])) != eslOK) goto ERROR; /* +6 = S,N,B,E,C,T */
-      if ((status = p7_trace_Append(tr[idx], p7_STS, 0, 0)) != eslOK) goto ERROR; /* traces start with S... */
-      if ((status = p7_trace_Append(tr[idx], p7_STN, 0, 0)) != eslOK) goto ERROR; /*...and transit to N.    */
-
-      for (apos = 1; apos < c1; apos++)
-	if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) 
-	  {
-	    if ((status = p7_trace_Append(tr[idx], p7_STN, 0, apos)) != eslOK) goto ERROR;
-	  }
-      if ((status = p7_trace_Append(tr[idx], p7_STB, 0, 0)) != eslOK) goto ERROR;
-      if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][cfirst]))
-	if ((status = p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
-      
-      /* Second section: the model itself. */
-      k = k1; /* k = index of next node to deal with */
-      for (apos = c1; apos <= c2; apos++)
+      if ((status = p7_trace_Create(msa->alen+2, &tr[idx])) != eslOK) goto ERROR; /* +2 = B,E */
+      if ((status = p7_trace_Append(tr[idx], p7_STB, 0, 0)) != eslOK) goto ERROR; 
+      for (k = 0, apos = 1; apos <= msa->alen; apos++)
 	{
-	  if (matassign[apos]) {
-	    if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
-	      { /* on c1 and c2 endpoints themselves, this must be the case, by def'n of c1/c2 */
-		if ((status = p7_trace_Append(tr[idx], p7_STM, k, apos)) != eslOK) goto ERROR;
-		k++;
-	      }
-	    else if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
-	      {
-		if ((status = p7_trace_Append(tr[idx], p7_STD, k, 0)) != eslOK) goto ERROR;
-		k++;
-	      }
-	    else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
-	      {
-		if (tr[idx]->st[tr[idx]->N-1] != p7_STX)
-		  if ((status == p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
-	      }
-	    else
-	      ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
-
-	  } else { /* else, an insert-assigned column: */
-	    if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
-	      {
-		if ((status = p7_trace_Append(tr[idx], p7_STI, k-1, apos)) != eslOK) goto ERROR;
-	      }
-	    else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
-	      {
-		if (tr[idx]->st[tr[idx]->N-1] != p7_STX)
-		  if ((status = p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
-	      }
-	    else if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
-	      ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
-	  }
+	  if (matassign[apos]) 
+	    {			/* match or delete */
+	      k++;
+	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
+		{
+		  if ((status = p7_trace_Append(tr[idx], p7_STM, k, apos)) != eslOK) goto ERROR;
+		}
+	      else if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
+		{
+		  if ((status = p7_trace_Append(tr[idx], p7_STD, k, 0)) != eslOK) goto ERROR;
+		}
+	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
+		{
+		  if (tr[idx]->st[tr[idx]->N-1] != p7_STX) /* allow only one X in a row */
+		    if ((status == p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
+		}
+	      else
+		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
+	    }
+	  else
+	    { 			/* insert or nothing */
+	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
+		{
+		  if ((status = p7_trace_Append(tr[idx], p7_STI, k, apos)) != eslOK) goto ERROR;
+		}
+	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
+		{
+		  if (tr[idx]->st[tr[idx]->N-1] != p7_STX)
+		    if ((status = p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
+		}
+	      else if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
+		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
+	    }
 	}
-
-      /* Third section: the C-terminal flank
-       */
-      if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][clast]))
-	if ((status = p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
       if ((status = p7_trace_Append(tr[idx], p7_STE, 0, 0)) != eslOK) goto ERROR;
-      if ((status = p7_trace_Append(tr[idx], p7_STC, 0, 0)) != eslOK) goto ERROR;
 
-      for (apos = c2+1; apos <= msa->alen; apos++)
-	if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) 
-	  {
-	    if ((status = p7_trace_Append(tr[idx], p7_STC, 0, apos)) != eslOK) goto ERROR;
-	  }	
-      if ((status = p7_trace_Append(tr[idx], p7_STT, 0, 0)) != eslOK) goto ERROR;
+      /* clean up: deal with DI, ID transitions and other plan7 impossibilities */
+      if ((status = trace_doctor(tr[idx], NULL, NULL)) != eslOK) goto ERROR;
 
-      /* finally, clean up: deal with DI, ID transitions and other plan7 impossibilities */
-      if ((status = trace_doctor(tr[idx], M, NULL, NULL)) != eslOK) goto ERROR;
-
-      /* Validate it.
-       */
-      /*
-      p7_trace_Dump(stdout, tr[idx], NULL, NULL); 
-      */
+      /* Validate it. */
+      /* p7_trace_Dump(stdout, tr[idx], NULL, NULL);  */
       if (p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], NULL) != eslOK) 
 	ESL_XEXCEPTION(eslFAIL, "validation failed");
     } 
-
   *ret_tr = tr;
   return eslOK;
 
@@ -458,14 +389,13 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
  *           of whether that's the best column to put it in or not.
  *           
  * Args:     tr      - [M] trace to doctor
- *           M       - length of model that traces are for 
  *           ret_ndi - optRETURN: number of DI transitions doctored
  *           ret_nid - optRETURN: number of ID transitions doctored
  * 
  * Return:   <eslOK> on success, and the trace <tr> is modified.
  */               
 static int
-trace_doctor(P7_TRACE *tr, int mlen, int *ret_ndi, int *ret_nid)
+trace_doctor(P7_TRACE *tr, int *ret_ndi, int *ret_nid)
 {
   int opos;			/* position in old trace                 */
   int npos;			/* position in new trace (<= opos)       */
@@ -648,8 +578,7 @@ main(int argc, char **argv)
 
 /* 
  * An MSA to ex{e,o}rcise past demons.
- *   1. seq2 gives an I->end transition, that construction must
- *      recognize as a C tail instead.
+ *   1. seq2 gives an I->end transition.
  *   2. seq1 contains degenerate Z,X, exercising symbol counting
  *      of degenerate residues.
  */
