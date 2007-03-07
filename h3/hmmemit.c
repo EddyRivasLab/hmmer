@@ -26,7 +26,6 @@ static ESL_OPTIONS options[] = {
   { "-p",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "sample from profile, not core model",       0 },
   { "-L",        eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",   0 },
   { "--h2",      eslARG_NONE,    NULL, NULL, NULL,      NULL,      "-p",    NULL, "configure profile in old HMMER2 style",     0 },
-  { "--kpsfile", eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output PostScript mx of k endpoints to <f>",0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -37,13 +36,8 @@ struct emitcfg_s {
   int   do_profile;		/* TRUE to emit from implicit profile model, not core model */
   int   do_oldconfig;		/* TRUE to do old-style HMMER2 entry/exit configuration */
   int   L;			/* expected length from a profile */
-  char *kpsfile;		/* postscript output matrix showing k endpoint distribution */
-  FILE *kpsfp;			/* open kpsfile */
-  ESL_DMATRIX *kmx;		/* k endpoint frequencies */
 };
 
-
-static int  collect_model_endpoints(P7_TRACE *tr, ESL_DMATRIX *D);
 
 int
 main(int argc, char **argv)
@@ -81,7 +75,6 @@ main(int argc, char **argv)
   esl_opt_GetBooleanOption(go, "-p",        &(cfg.do_profile));
   esl_opt_GetIntegerOption(go, "-L",        &(cfg.L));
   esl_opt_GetBooleanOption(go, "--h2",      &(cfg.do_oldconfig));
-  esl_opt_GetStringOption (go, "--kpsfile", &(cfg.kpsfile));
 
   if (esl_opt_ArgNumber(go) != 1) {
     puts("Incorrect number of command line arguments.");
@@ -115,12 +108,6 @@ main(int argc, char **argv)
   if (sq == NULL) sq = esl_sq_CreateDigital(abc);
   if (sq == NULL) esl_fatal("Failed to allocated sequence");
 
-  if (cfg.kpsfile != NULL) 
-    {
-      if ((cfg.kmx   = esl_dmatrix_Create(hmm->M, hmm->M)) == NULL) esl_fatal("matrix allocation failed");
-      esl_dmatrix_SetZero(cfg.kmx);
-    } 
-
   if ((hmm->bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
   if ((hmm->gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal("failed to create profile");
 
@@ -152,27 +139,6 @@ main(int argc, char **argv)
 
       status = esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);
       if (status != eslOK) esl_fatal("Failed to write sequence\n");
-
-      if (cfg.kpsfile != NULL &&
-	  collect_model_endpoints(tr, cfg.kmx) != eslOK)
-	esl_fatal("failed to collect model endpoints");
-    }
-
-  if (cfg.kpsfile != NULL)
-    {
-      int i,j;
-
-      if ((cfg.kpsfp = fopen(cfg.kpsfile, "w")) == NULL) esl_fatal("Failed to open output postscript file %s", cfg.kpsfile);
-      dmx_upper_norm(cfg.kmx);
-      esl_dmx_Scale(cfg.kmx, (double) (hmm->M*(hmm->M+1)/2));
-      for (i = 0; i < cfg.kmx->m; i++)
-	for (j = i; j < cfg.kmx->n; j++)
-	  cfg.kmx->mx[i][j] = log(cfg.kmx->mx[i][j]) / log(2.0);
-      printf("minimum element = %f\n", dmx_upper_min(cfg.kmx));
-      printf("maximum element = %f\n", dmx_upper_max(cfg.kmx));
-      dmx_Visualize(cfg.kpsfp, cfg.kmx, -4.0, 4.0);
-      /*      dmx_Visualize(cfg.kpsfp, cfg.kmx, dmx_upper_min(cfg.kmx), dmx_upper_max(cfg.kmx)); */
-      fclose(cfg.kpsfp);
     }
 
   esl_sq_Destroy(sq);
@@ -185,41 +151,4 @@ main(int argc, char **argv)
   return eslOK;
 }
 
-
-/* collect_model_endpoints
- * Incept:    SRE, Wed Jan 24 15:04:02 2007 [Janelia]
- *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
- */
-static int
-collect_model_endpoints(P7_TRACE *tr, ESL_DMATRIX *D)
-{
-  int tpos;
-  int firstk = -1;
-  int lastk  = -1;
-
-  for (tpos = 0; tpos < tr->N; tpos++)
-    {
-      if (tr->st[tpos] == p7_STM) {
-	lastk = tr->k[tpos];
-	if (firstk == -1) firstk = tr->k[tpos];
-      }
-      if (tr->st[tpos] == p7_STD) {
-	lastk = tr->k[tpos];
-      }
-      if (tr->st[tpos] == p7_STE) {
-	D->mx[firstk-1][lastk-1] += 1.;
-	firstk = -1;
-      }
-    }
-  return eslOK;
-}
 

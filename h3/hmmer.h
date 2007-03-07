@@ -297,6 +297,9 @@ extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
 extern int  p7_trace_Reverse(P7_TRACE *tr);
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 extern int  p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc);
+extern int  p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom);
+extern int  p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
+				     int *ret_k1, int *ret_k2);
 
 /*****************************************************************
  * 5. P7_HMMFILE:  an HMM save file or database, open for reading.

@@ -12,56 +12,6 @@
 #include "easel.h"
 #include "esl_dmatrix.h"
 
-double
-dmx_upper_max(ESL_DMATRIX *D)
-{
-  int    i,j;
-  double max;
-
-  max = D->mx[0][0];
-  for (i = 0; i < D->m; i++)
-    for (j = i; j < D->n; j++)
-      if (D->mx[i][j] > max) max = D->mx[i][j];
-  return max;
-}
-double
-dmx_upper_min(ESL_DMATRIX *D)
-{
-  int    i,j;
-  double min;
-
-  min = D->mx[0][0];
-  for (i = 0; i < D->m; i++)
-    for (j = i; j < D->n; j++)
-      if (D->mx[i][j] < min) min = D->mx[i][j];
-  return min;
-}
-double
-dmx_upper_element_sum(ESL_DMATRIX *D)
-{
-  int    i,j;
-  double sum = 0.;
-
-  for (i = 0; i < D->m; i++)
-    for (j = i; j < D->n; j++)
-      sum += D->mx[i][j];
-  return sum;
-} 
-void
-dmx_upper_norm(ESL_DMATRIX *D)
-{
-  int    i,j;
-  double sum = 0.;
-
-  sum = dmx_upper_element_sum(D);
-  for (i = 0; i < D->m; i++)
-    for (j = i; j < D->n; j++)
-      D->mx[i][j] /= sum;
-  return;
-} 
-
-
-
 
 /* dmx_Visualize()
  * Incept:    SRE, Wed Jan 24 11:58:21 2007 [Janelia]
@@ -131,9 +81,14 @@ dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max)
       {
 	xcoord = j * boxsize + leftmargin;
 	ycoord = (D->m-i+1) * boxsize + bottommargin;
-	bin    = (int) ceil((D->mx[i][j] - min) / w) - 1;
-	if (bin < 0)        bin = 0;
-	if (bin >= nshades) bin = nshades-1;
+
+	if      (D->mx[i][j] == -eslINFINITY) bin = 0;
+	else if (D->mx[i][j] ==  eslINFINITY) bin = nshades-1;
+	else {
+	  bin    = (int) ceil((D->mx[i][j] - min) / w) - 1;
+	  if (bin < 0)        bin = 0;
+	  if (bin >= nshades) bin = nshades-1;
+	}
 
 	fprintf(fp, "newpath\n");
 	fprintf(fp, "  %d %d moveto\n", xcoord, ycoord);

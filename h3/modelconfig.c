@@ -564,6 +564,7 @@ main(int argc, char **argv)
   int              k1,k2;
   int              iseq;
   FILE            *fp      = NULL;
+  double           expected;
 
   int              do_ilocal;
   char            *hmmfile = NULL;
@@ -686,11 +687,10 @@ main(int argc, char **argv)
   printf("   k matrix values range from %f to %f\n", dmx_upper_min(kmx), dmx_upper_max(kmx));
   printf("iref matrix values range from %f to %f\n", dmx_upper_min(iref), dmx_upper_max(iref));
 
-  dmx_upper_norm(kmx);
-  esl_dmx_Scale(kmx, (double) (M*(M+1)/2));
+  expected = (double) nseq * 2. / (double) (M*(M+1));
   for (i = 0; i < kmx->m; i++)
     for (j = i; j < kmx->n; j++)
-      kmx->mx[i][j] = log(kmx->mx[i][j]) / log(2.0);
+      kmx->mx[i][j] = log(kmx->mx[i][j] / expected) / log(2.0);
 
   for (i = 0; i < imx->m; i++)
     for (j = i; j < imx->m; j++)

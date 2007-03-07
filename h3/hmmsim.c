@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -18,13 +19,19 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",   0 },
-  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of random seqs",                  0 },
+  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL, "-u,-M", "input HMM from file <f>",                0 },
+  { "-s",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-u", "sample a uniform-transition HMM",        0 },
+  { "-u",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-s", "sample an ungapped HMM",                 0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random seqs",                  0 },
-  { "--h2",      eslARG_NONE,    NULL, NULL, NULL,      NULL,      "-p",    NULL, "configure profile in old HMMER2 style",  0 },
+  { "-M",        eslARG_INT,     "50", NULL, "n>0",     NULL,      NULL,    NULL, "length of a sampled HMM",                0 },
+  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of random seqs",                  0 },
+  { "-2",        eslARG_NONE,    NULL, NULL, NULL,      NULL,      NULL,    NULL, "configure profile in old HMMER2 style",  0 },
+  { "--ips",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output .ps heatmap of i endpoints to <f>", 0 },
+  { "--kps",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output .ps heatmap of k endpoints to <f>", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "hmmsim [-options] <hmmfile input>";
+static char usage[]  = "hmmsim [-options]";
 
 int
 main(int argc, char **argv)
@@ -33,18 +40,30 @@ main(int argc, char **argv)
   ESL_ALPHABET    *abc     = NULL;     /* sequence alphabet                       */
   ESL_GETOPTS     *go	   = NULL;     /* command line processing                 */
   ESL_RANDOMNESS  *r       = NULL;     /* source of randomness                    */
-  char            *hmmfile = NULL;     /* file to read HMM(s) from                */
-  P7_HMMFILE      *hfp     = NULL;     /* open hmmfile                            */
   P7_HMM          *hmm     = NULL;     /* HMM to emit from                        */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   P7_GMX          *mx      = NULL;     /* DP matrix                               */
   ESL_DSQ         *dsq     = NULL;     /* sampled digital sequence                */
-  int              N;		       /* number of seqs to generate              */
-  int              L;		       /* length of generated seqs                */
-  int              do_oldconfig;       /* TRUE to use H2 exit/entry configuration */
   float            sc;		       /* a Viterbi score                         */
   int              nseq;	       /* counter over sequences                  */
-  char errbuf[eslERRBUFSIZE];
+  char             errbuf[eslERRBUFSIZE];
+  ESL_DMATRIX     *imx     = NULL;
+  ESL_DMATRIX     *kmx     = NULL;
+  int              i1,i2,k1,k2;	       /* endpoints of a domain                   */
+  int              which;	       /* counter over domains                    */
+  int              ndom;	       /* total hits counted into imx, kmx        */
+  double           expect;
+  FILE            *fp;
+
+  char            *hmmfile;            /* file to read HMM(s) from                */
+  int              do_swlike;	       /* TRUE to sample a uniform-transition HMM */
+  int              do_ungapped;	       /* TRUE to sample an ungapped HMM          */
+  int              L;		       /* length of generated seqs                */
+  int              M;		       /* length of a sampled HMM                 */
+  int              N;		       /* number of seqs to generate              */
+  int              do_h2;              /* TRUE to use H2 exit/entry configuration */
+  char            *ipsfile;	       /* i endpoint heatmap file                 */
+  char            *kpsfile;	       /* k endpoint heatmap file                 */
 
   /*****************************************************************
    * Parse the command line
@@ -59,65 +78,145 @@ main(int argc, char **argv)
     return eslOK;
   }
 
-  esl_opt_GetIntegerOption(go, "-N",        &N);
-  esl_opt_GetIntegerOption(go, "-L",        &L);
-  esl_opt_GetBooleanOption(go, "--h2",      &do_oldconfig);
+  esl_opt_GetStringOption (go, "-m",     &hmmfile);
+  esl_opt_GetBooleanOption(go, "-s",     &do_swlike);
+  esl_opt_GetBooleanOption(go, "-u",     &do_ungapped);
+  esl_opt_GetIntegerOption(go, "-L",     &L);
+  esl_opt_GetIntegerOption(go, "-M",     &M);
+  esl_opt_GetIntegerOption(go, "-N",     &N);
+  esl_opt_GetBooleanOption(go, "-2",     &do_h2);
+  esl_opt_GetStringOption (go, "--ips",  &ipsfile);
+  esl_opt_GetStringOption (go, "--kps",  &kpsfile);
 
-  if (esl_opt_ArgNumber(go) != 1) {
+  if (esl_opt_ArgNumber(go) != 0) {
     puts("Incorrect number of command line arguments.");
     puts(usage);
     return eslFAIL;
   }
-  hmmfile = esl_opt_GetCmdlineArg(go, eslARG_STRING, NULL); /* NULL=no range checking */
-
 
   /*****************************************************************
    * Initializations, including opening and reading the HMM file 
    *****************************************************************/
 
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if (status == eslENOTFOUND) esl_fatal("Failed to open hmm file %s for reading.\n", hmmfile);
-  else if (status != eslOK)   esl_fatal("Unexpected error in opening hmm file %s.\n", hmmfile);
-
-  if ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslOK) {
-    if      (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
-    else if (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s", hmmfile);
-    else if (status == eslEINCOMPAT) esl_fatal("HMM file %s contains different alphabets", hmmfile);
-    else                             esl_fatal("Unexpected error in reading HMMs");
-  }
-
   if ((r       = esl_randomness_CreateTimeseeded()) == NULL)  esl_fatal("Failed to create rng");
+
+  if (hmmfile != NULL)		/* Read in an HMM from file... */
+    {
+      P7_HMMFILE      *hfp     = NULL;    
+
+      status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
+      if (status == eslENOTFOUND) esl_fatal("Failed to open hmm file %s for reading.\n", hmmfile);
+      else if (status != eslOK)   esl_fatal("Unexpected error in opening hmm file %s.\n", hmmfile);
+
+      if ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslOK) {
+	if      (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
+	else if (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s", hmmfile);
+	else if (status == eslEINCOMPAT) esl_fatal("HMM file %s contains different alphabets", hmmfile);
+	else                             esl_fatal("Unexpected error in reading HMMs");
+      }
+      M = hmm->M;
+      p7_hmmfile_Close(hfp);
+    }
+  else				/* or generate a simulated HMM. */
+    {
+      abc = esl_alphabet_Create(eslAMINO);    
+      if      (do_ungapped) p7_hmm_SampleUngapped(r, M, abc, &hmm);
+      else if (do_swlike)   p7_hmm_SampleUniform (r, M, abc, 0.05, 0.5, 0.05, 0.2, &hmm); /* tmi, tii, tmd, tdd */
+      else                  p7_hmm_Sample        (r, M, abc, &hmm);
+    }
+
+
   if ((status  = p7_trace_Create(256, &tr))         != eslOK) esl_fatal("Failed to allocate trace");
   if ((mx      = p7_gmx_Create(hmm->M, L))          == NULL)  esl_fatal("failed to create dp matrix");
   if ((hmm->bg = p7_bg_Create(abc))                 == NULL)  esl_fatal("failed to create null model");
   if ((hmm->gm = p7_profile_Create(hmm->M, abc))    == NULL)  esl_fatal("failed to create profile");
   if ((dsq     = malloc(sizeof(ESL_DSQ) * (L+2)))   == NULL)  esl_fatal("failed to create dsq");
+  if ((imx     = esl_dmatrix_CreateUpper(L))        == NULL)  esl_fatal("failed to create imx");
+  if ((kmx     = esl_dmatrix_CreateUpper(M))        == NULL)  esl_fatal("failed to create kmx");
+  esl_dmatrix_SetZero(imx);
+  esl_dmatrix_SetZero(kmx);
 
-  if (do_oldconfig) {
-    if (p7_H2_ProfileConfig(hmm, hmm->gm, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
+
+  /*****************************************************************
+   * Choose how to configure the profile, and do it.
+   *****************************************************************/
+  if (do_h2) {
+    if (p7_H2_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL) != eslOK) esl_fatal("failed to configure profile");
   } else {
-    if (p7_ProfileConfig(hmm, hmm->gm, p7_LOCAL)    != eslOK) esl_fatal("failed to configure profile");
-    if (p7_ReconfigLength(hmm->gm,  L)              != eslOK) esl_fatal("failed to reconfig profile L");
-    if (p7_hmm_Validate    (hmm,     0.0001, NULL)  != eslOK) esl_fatal("whoops, HMM is bad!");
-    if (p7_profile_Validate(hmm->gm, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
+    if (p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL)    != eslOK) esl_fatal("failed to configure profile");
+    if (p7_ReconfigLength(hmm->gm,  L)                 != eslOK) esl_fatal("failed to reconfig profile L");
+    if (p7_hmm_Validate    (hmm,     0.0001, NULL)     != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_profile_Validate(hmm->gm, 0.0001)           != eslOK) esl_fatal("whoops, profile is bad!");
   }
 
-  for (nseq = 1; nseq <= N; nseq++) 
+
+
+  /*****************************************************************
+   * Align to simulated sequences, collect statistics.
+   *****************************************************************/
+  for (ndom = 0, nseq = 1; nseq <= N; nseq++) 
     {
       if (esl_rnd_xfIID(r, hmm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
       if (p7_Viterbi(dsq, L, hmm->gm, mx, tr, &sc)     != eslOK) esl_fatal("viterbi failed");
-      /*p7_trace_Dump(stdout, tr, NULL, dsq);*/
       if (p7_trace_Validate(tr, abc, dsq, errbuf)      != eslOK) esl_fatal("trace validation failed:\n%s", errbuf);
-      printf("score = %6.2f bits\n", sc);
+      /*printf("score = %6.2f bits\n", sc);*/
+
+      for (which = 1; p7_trace_GetDomainCoords(tr, which, &i1, &i2, &k1, &k2) != eslEOD; which++)
+	{
+	  imx->mx[i1-1][i2-1] += 1.;
+	  kmx->mx[k1-1][k2-1] += 1.;
+	  ndom++;
+	  /* printf("   i: %d..%d  k: %d..%d\n", i1, i2, k1, k2); */
+	}
     }
 
-  p7_profile_Destroy(hmm->gm);
+  
+  /*****************************************************************
+   * Convert i,k mx's to log-odds relative to uniform distribution.
+   *****************************************************************/
+  
+  expect = (double) ndom * 2. / (double) (L * (L+1));
+  for (i1 = 0; i1 < L; i1++)
+    for (i2 = i1; i2 < L; i2++)
+      if (expect == 0. && imx->mx[i1][i2] == 0.) imx->mx[i1][i2] = 0.;
+      else if (expect == 0.)             	 imx->mx[i1][i2] = eslINFINITY;
+      else if (imx->mx[i1][i2] == 0.)            imx->mx[i1][i2] = -eslINFINITY;
+      else                                       imx->mx[i1][i2] = log(imx->mx[i1][i2] / expect) / log(2.0);
+
+
+  expect = (double) ndom * 2. / (double) (M * (M+1));
+  for (k1 = 0; k1 < M; k1++)
+    for (k2 = k1; k2 < M; k2++)
+      if (expect == 0. && kmx->mx[k1][k2] == 0.) kmx->mx[k1][k2] = 0.;
+      else if (expect == 0.)             	 kmx->mx[k1][k2] = eslINFINITY;
+      else if (kmx->mx[k1][k2] == 0.)            kmx->mx[k1][k2] = -eslINFINITY;
+      else                                       kmx->mx[k1][k2] = log(kmx->mx[k1][k2] / expect) / log(2.0);
+   
+  /* esl_dmatrix_Dump(stdout, kmx, NULL, NULL); */
+
+  if (kpsfile != NULL) {
+    if ((fp = fopen(kpsfile, "w")) == NULL) esl_fatal("Failed to open output postscript file %s", kpsfile);
+    dmx_Visualize(fp, kmx, -4., 5.);
+    fclose(fp);
+  }
+  if (ipsfile != NULL) {
+    if ((fp = fopen(ipsfile, "w")) == NULL) esl_fatal("Failed to open output postscript file %s", ipsfile);
+    dmx_Visualize(fp, imx, -4., 5.); 
+    fclose(fp);
+  }
+
+  /*****************************************************************
+   * Cleanup, exit.
+   *****************************************************************/
+  esl_dmatrix_Destroy(kmx);
+  esl_dmatrix_Destroy(imx);
+  free(dsq);
+  p7_profile_Destroy(hmm->gm);  
   p7_bg_Destroy(hmm->bg);
   p7_gmx_Destroy(mx);
-  free(dsq);
   p7_trace_Destroy(tr);
   esl_randomness_Destroy(r);
-  p7_hmmfile_Close(hfp);
+
   p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);

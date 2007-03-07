@@ -695,8 +695,110 @@ p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc)
 }
 
 
+/* Function:  p7_trace_GetDomainCount()
+ * Incept:    SRE, Tue Feb 27 13:11:43 2007 [Janelia]
+ *
+ * Purpose:   Determine the number of hits in the trace <tr> -- that is,
+ *            the number of times the trace traverses the model from
+ *            B...E.  Return that number in <ret_ndom>.
+ *            
+ *            Done simply by counting the number of B states used in
+ *            the trace.
+ *            
+ *            Only sensible on profile traces. Core traces have 1
+ *            domain by definition.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom)
+{
+  int z;
+  int ndom = 0;
+
+  for (z = 0; z < tr->N; z++)
+    if (tr->st[z] == p7_STB) ndom++;
+  *ret_ndom = ndom;
+  return eslOK;
+}
 
 
+/* Function:  p7_trace_GetDomainCoords()
+ * Incept:    SRE, Tue Feb 27 13:08:32 2007 [Janelia]
+ *
+ * Purpose:   Retrieve the bounds of domain alignment number <which> in
+ *            traceback <tr>. <which> starts from 1. The total number
+ *            of domains in a trace can be obtained from
+ *            <p7_trace_GetDomainCount()>, or caller can just loop
+ *            an increasing <which> count until <eslEOD> is returned.
+ *            
+ *            Start/end in the sequence are returned in <ret_i1>,
+ *            <ret_i2>. Start/end in the model are returned in <ret_k1>, 
+ *            <ret_k2>.
+ *
+ *            It only makes sense to call this function on profile
+ *            traces.
+ *            
+ *            By local alignment bounds convention, the domain
+ *            alignment is defined as bounded by match states, so <k1>
+ *            and <k2> are the coords of the first and last match
+ *            state (in range 1..M), and <i1> and <i2> are the coords
+ *            of the residues aligned to those match states. Profiles
+ *            allow a Mk->DDD->E trailer; if such a trailer occurs,
+ *            the k2 coord refers to the match state's
+ *            coordinate. Note that such trailers would only occur in
+ *            generated or sampled paths, not Viterbi paths; in
+ *            Viterbi alignments with exit probabilities of 1.0, the
+ *            direct Mk->E path will always have higher probability
+ *            than a Mk->DDD->E path.
+ *
+ * Returns:   <eslOK> on success, and the coords are returned.
+ *            <eslEOD> if the trace doesn't contain a <which>'th
+ *            domain, and the coords are all returned as 0.
+ */
+int
+p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
+			 int *ret_k1, int *ret_k2)
+{
+  int status;
+  int i1, i2, k1, k2;
+  int z;
+
+  if (which < 1) ESL_XEXCEPTION(eslECONTRACT, "bad which < 1");
+
+  /* skip z to one state past the which'th B state. */
+  for (z = 0; which > 0 && z < tr->N; z++)
+    if (tr->st[z] == p7_STB) which--;
+  if (z == tr->N) { status = eslEOD; goto ERROR; }
+  
+  /* skip to the first M state and record i1,k1: 
+   * in a profile trace, this must be the next state.
+   */
+  if (tr->st[z] != p7_STM) ESL_XEXCEPTION(eslECORRUPT, "not a profile trace?");
+  *ret_i1 = tr->i[z];
+  *ret_k1 = tr->k[z];
+
+  /* skip to the end E, then look back at the last M, record i2,k2.
+   */
+  for (; z < tr->N; z++)
+    if (tr->st[z] == p7_STE) break;
+  if (z == tr->N)          ESL_EXCEPTION(eslECORRUPT, "invalid trace: no E for a B");
+  do { z--; } while (tr->st[z] == p7_STD); /* roll back over any D trailer */
+  if (tr->st[z] != p7_STM) ESL_EXCEPTION(eslECORRUPT, "invalid trace: no M");
+  *ret_i2 = tr->i[z];
+  *ret_k2 = tr->k[z];
+  return eslOK;
+
+ ERROR:
+  *ret_i1 = 0;
+  *ret_i2 = 0;
+  *ret_k1 = 0;
+  *ret_k2 = 0;
+  return status;
+}
+			 
 
 /************************************************************
  * @LICENSE@
