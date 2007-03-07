@@ -1,10 +1,15 @@
 /* Reference implementation of the DP algorithms.
  * 
- * This implementation is intended for clarity, not speed; it is
+ * This implementation is intended for clarity, not speed. It is
  * deliberately unoptimized. It is provided as a reference
  * implementation of the computationally intensive DP algorithms of
  * HMMER, both as documentation and a regression test target for
  * developing optimized code.
+ * 
+ * Contents:
+ *     1. Viterbi and its traceback.
+ *     2. Unit tests.
+ *     3. Test driver.
  * 
  * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
  * SVN $Id$
@@ -16,8 +21,12 @@
 #include "hmmer.h"
 
 
+/*****************************************************************
+ * 1. Viterbi and its traceback.
+ *****************************************************************/
+
 /* Function: p7_Viterbi()
- * Incept:   SRE, Tue Jan 30 10:50:53 2007 [Einstein's in St. Louis]
+ * Incept:   SRE, Tue Jan 30 10:50:53 2007 [Einstein's, St. Louis]
  * 
  * Purpose:  The Viterbi dynamic programming algorithm. 
  *           
@@ -286,6 +295,93 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
   return status;
 }
 
+
+/*****************************************************************
+ * 2. Unit tests.
+ *****************************************************************/
+#ifdef p7DP_SLOW_TESTDRIVE
+
+static void
+utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, int L)
+{
+  int       status;
+  char      errbuf[p7_ERRBUFSIZE];
+  ESL_DSQ  *dsq = NULL;
+  P7_GMX   *mx  = NULL;
+  P7_TRACE *tr  = NULL;
+  int       idx;
+  int       sc1, sc2;
+  
+  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
+  if ((status = p7_trace_Create(L, &tr))        != eslOK) esl_fatal("trace creation failed");
+  if ((mx     = p7_gmx_Create(gm->M, L))        != eslOK) esl_fatal("matrix creation failed");
+
+  for (idx = 0; idx < nseq; idx++)
+    {
+      if (esl_rnd_xfIID(r, gm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+      if (p7_Viterbi(dsq, L, gm, mx, tr, &sc1)        != eslOK) esl_fatal("viterbi failed");
+      if (p7_trace_Validate(tr, abc, dsq, errbuf)     != eslOK) esl_fatal("trace invalid:\n%s", errbuf);
+      if (p7_trace_Score(tr, dsq, gm, &sc2)           != eslOK) esl_fatal("trace score failed");
+
+      if (sc1 != sc2) esl_fatal("Trace score not equal to Viterbi score");
+    }
+
+  p7_gmx_Destroy(gm);
+  p7_trace_Destroy(tr);
+  free(dsq);
+  return;
+}
+
+#endif /*p7DP_SLOW_TESTDRIVE*/
+
+
+
+
+/*****************************************************************
+ * 3. Test driver.
+ *****************************************************************/
+/* gcc -g -Wall -Dp7DP_SLOW_TESTDRIVE -I. -I../easel -L. -L../easel -o dp_slow_utest dp_slow.c -lhmmer -leasel -lm
+ */
+#ifdef p7DP_SLOW_TESTDRIVE
+#include "easel.h"
+
+#include "p7_config.h"
+#include "hmmer.h"
+
+int
+main(int argc, char **argv)
+{
+  int             status;
+  char            errbuf[p7_ERRBUFSIZE];
+  ESL_RANDOMNESS *r    = NULL;
+  ESL_ALPHABET   *abc  = NULL;
+  P7_HMM         *hmm  = NULL;
+  int             M    = 100;
+  int             L    = 200;
+  int             nseq = 20;
+
+  if ((r   = esl_randomness_CreateTimeseeded())    == NULL)  esl_fatal("failed to create rng");
+  if ((abc = esl_alphabet_Create(eslAMINO))        == NULL)  esl_fatal("failed to create alphabet");
+
+  if (p7_hmm_Sample(r, M, abc, &hmm)               != eslOK) esl_fatal("failed to sample an HMM");
+  if ((hmm->bg = p7_bg_Create(abc))                == NULL)  esl_fatal("failed to create null model");
+  if ((hmm->gm = p7_profile_Create(hmm->M, abc))   == NULL)  esl_fatal("failed to create profile");
+  if (p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL)  != eslOK) esl_fatal("failed to config profile");
+  if (p7_ReconfigLength(hmm->gm, L)                != eslOK) esl_fatal("failed to config profile length");
+  if (p7_hmm_Validate    (hmm,     0.0001, errbuf) != eslOK) esl_fatal("whoops, HMM is bad!");
+  if (p7_profile_Validate(hmm->gm, 0.0001)         != eslOK) esl_fatal("whoops, profile is bad!");
+
+  utest_viterbi(r, abc, hmm->gm, nseq, L);
+  
+  p7_profile_Destroy(hmm->gm);
+  p7_bg_Destroy(hmm->bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(r);
+  return 0;
+}
+
+#endif /*p7DP_SLOW_TESTDRIVE*/
 
 /*****************************************************************
  * @LICENSE@

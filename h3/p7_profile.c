@@ -1,7 +1,8 @@
 /* Routines for the P7_PROFILE structure - a Plan 7 search profile
  *                                         
  *    1. The P7_PROFILE object: allocation, initialization, destruction.
- *    2. Debugging and development code.
+ *    2. Access methods.
+ *    3. Debugging and development code.
  *    
  * SRE, Thu Jan 11 15:16:47 2007 [Janelia] [Sufjan Stevens, Illinois]
  * SVN $Id$
@@ -133,9 +134,132 @@ p7_profile_Destroy(P7_PROFILE *gm)
   return;
 }
 
+/*****************************************************************
+ * 2. Access methods.
+ *****************************************************************/
+
+
+/* Function:  p7_profile_GetTScore()
+ * Incept:    SRE, Wed Apr 12 14:20:18 2006 [St. Louis]
+ *
+ * Purpose:   Convenience function that looks up a transition score in
+ *            profile <gm> for a transition from state type <st1> in
+ *            node <k1> to state type <st2> in node <k2>. For unique
+ *            state types that aren't in nodes (<p7_STS>, for example), the
+ *            <k> value is ignored, though it would be customarily passed as 0.
+ *            Return the transition score in <ret_tsc>.
+ *            
+ * Returns:   <eslOK> on success, and <*ret_tsc> contains the requested
+ *            transition score.            
+ * 
+ * Throws:    <eslEINVAL> if a nonexistent transition is requested. Now
+ *            <*ret_tsc> is set to 0.
+ */
+int
+p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc)
+{
+  int status;
+  int tsc    = 0;
+
+  switch (st1) {
+  case p7_STS:  break;
+  case p7_STT:  break;
+
+  case p7_STN:
+    switch (st2) {
+    case p7_STB: tsc =  gm->xsc[p7_XTN][p7_MOVE]; 
+    case p7_STN: tsc =  gm->xsc[p7_XTN][p7_LOOP]; 
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
+				p7_hmm_DescribeStatetype(st1),
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STB:
+    switch (st2) {
+    case p7_STM: tsc = gm->bsc[k2]; 
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
+				p7_hmm_DescribeStatetype(st1),
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STM:
+    switch (st2) {
+    case p7_STM: tsc = gm->tsc[p7_TMM][k1];
+    case p7_STI: tsc = gm->tsc[p7_TMI][k1];
+    case p7_STD: tsc = gm->tsc[p7_TMD][k1];
+    case p7_STE: tsc = gm->esc[k1];
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
+				p7_hmm_DescribeStatetype(st1), k1,
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STD:
+    switch (st2) {
+    case p7_STM: tsc = gm->tsc[p7_TDM][k1]; 
+    case p7_STD: tsc = gm->tsc[p7_TDD][k1];
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
+				p7_hmm_DescribeStatetype(st1), k1,
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STI:
+    switch (st2) {
+    case p7_STM: tsc = gm->tsc[p7_TIM][k1];
+    case p7_STI: tsc = gm->tsc[p7_TII][k1];
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
+				p7_hmm_DescribeStatetype(st1), k1,
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STE:
+    switch (st2) {
+    case p7_STC: tsc = gm->xsc[p7_XTE][p7_MOVE]; 
+    case p7_STJ: tsc = gm->xsc[p7_XTE][p7_LOOP]; 
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
+				p7_hmm_DescribeStatetype(st1),
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STJ:
+    switch (st2) {
+    case p7_STB: tsc = gm->xsc[p7_XTJ][p7_MOVE]; 
+    case p7_STJ: tsc = gm->xsc[p7_XTJ][p7_LOOP]; 
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
+				p7_hmm_DescribeStatetype(st1),
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  case p7_STC:
+    switch (st2) {
+    case p7_STT:  tsc = gm->xsc[p7_XTC][p7_MOVE]; 
+    case p7_STC:  tsc = gm->xsc[p7_XTC][p7_LOOP]; 
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
+				p7_hmm_DescribeStatetype(st1),
+				p7_hmm_DescribeStatetype(st2));
+    }
+    break;
+
+  default: ESL_XEXCEPTION(eslEINVAL, "bad state type %d in traceback", st1);
+  }
+
+  *ret_tsc = tsc;
+  return eslOK;
+
+ ERROR:
+  *ret_tsc = 0;
+  return status;
+}
+
 
 /*****************************************************************
- * 2. Debugging and development code.
+ * 3. Debugging and development code.
  *****************************************************************/
 
 /* Function:  p7_profile_Validate()

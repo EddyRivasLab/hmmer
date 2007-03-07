@@ -3,7 +3,7 @@
  *    1. P7_HMM:     a core model.
  *    2. P7_PROFILE: a scoring profile, and its implicit model.
  *    3. P7_BG:      a null (background) model.
- *    4. P7_TRACE:   a traceback (alignment of seq to profile).
+ *    4. P7_TRACE:   a traceback path (alignment of seq to profile).
  *    5. P7_HMMFILE: an HMM save file or database, open for reading.
  *    6. P7_GMX:     a "generic" dynamic programming matrix
  *    7. Other routines in HMMER's exposed API.
@@ -231,7 +231,10 @@ typedef struct p7_profile_s {
 extern P7_PROFILE *p7_profile_Create(int M, ESL_ALPHABET *abc);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 
+extern int         p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, 
+				   char st2, int k2, int *ret_tsc);
 extern int         p7_profile_Validate(P7_PROFILE *gm, float tol);
+
 
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
@@ -293,7 +296,7 @@ extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq);
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
 extern int  p7_trace_Reverse(P7_TRACE *tr);
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
-
+extern int  p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc);
 
 /*****************************************************************
  * 5. P7_HMMFILE:  an HMM save file or database, open for reading.

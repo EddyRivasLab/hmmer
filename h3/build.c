@@ -537,7 +537,7 @@ static int write_test_msa(FILE *ofp);
 int
 main(int argc, char **argv)
 {  
-  char          msafile[10] = "eslXXXXXX"; /* tmpfile template */
+  char          msafile[16] = "p7tmpXXXXXX"; /* tmpfile template */
   FILE         *fp;        
   ESL_ALPHABET *abc;
   ESL_MSAFILE  *afp;

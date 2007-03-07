@@ -1,4 +1,8 @@
-/* Support for P7_TRACE, the traceback structure.
+/* P7_TRACE, the traceback structure.
+ *
+ * Contents:
+ * 
+ * Stylistic note: paths are indexed by z.
  * 
  * SRE, Tue Jan  2 2007 [Casa de Gatos] 
  * SVN $Id$
@@ -199,7 +203,7 @@ int
 p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
 {
   int  status;
-  int  tpos;			/* position in trace    */
+  int  z;			/* position in trace    */
   int  i;			/* position in sequence */
   int  k;			/* position in model */
   char prv;			/* type of the previous state */
@@ -233,7 +237,7 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
    */
   k = 0; 
   i = 1;
-  for (tpos = 1; tpos < tr->N-1; tpos++)
+  for (z = 1; z < tr->N-1; z++)
     {
       for (; dsq[i] != eslDSQ_SENTINEL; i++) /* find next non-gap residue in dsq */
 	if (esl_abc_XIsResidue(abc, dsq[i])) break;
@@ -241,37 +245,37 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
       /* Handle missing data states: can only be one.
        * prv state might have to skip over one (but not more) missing data states
        */
-      if (tr->st[tpos]   == p7_STX) continue; /* the main tests below will catch X->X cases. */
-      prv = (tr->st[tpos-1] == p7_STX)? tr->st[tpos-2] : tr->st[tpos-1];
+      if (tr->st[z]   == p7_STX) continue; /* the main tests below will catch X->X cases. */
+      prv = (tr->st[z-1] == p7_STX)? tr->st[z-2] : tr->st[z-1];
 
-      switch (tr->st[tpos]) {
+      switch (tr->st[z]) {
       case p7_STS:
 	ESL_XFAIL(eslFAIL, errbuf, "S must be first state");
 	break;
 	
       case p7_STN:
 	if (is_core)          ESL_XFAIL(eslFAIL, errbuf, "core trace can't contain N");
-	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no N should have k set");
+	if (tr->k[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "no N should have k set");
 	if (prv == p7_STS) { /* 1st N doesn't emit */
-	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first N shouldn't have i set");
+	  if (tr->i[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "first N shouldn't have i set");
 	} else if (prv == p7_STN) { /* subsequent N's do */
-	  if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
+	  if (tr->i[z] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	  i++;
 	} else ESL_XFAIL(eslFAIL, errbuf, "bad transition to N; expected {S,N}->N");
 	break;
 
       case p7_STB:
-	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "B shouldn't have k set");
-	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "B shouldn't have i set");
+	if (tr->k[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "B shouldn't have k set");
+	if (tr->i[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "B shouldn't have i set");
 	if (prv != p7_STN && prv != p7_STJ) 
 	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to B; expected {N,J}->B");
 	break;
 
       case p7_STM:
-	if (! is_core && prv == p7_STB) k = tr->k[tpos]; else k++; /* on a B->Mk entry, trust k; else verify */
+	if (! is_core && prv == p7_STB) k = tr->k[z]; else k++; /* on a B->Mk entry, trust k; else verify */
 
-	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
-	if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
+	if (tr->k[z] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
+	if (tr->i[z] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	if (prv != p7_STB && prv != p7_STM && prv != p7_STD && prv != p7_STI)
 	  ESL_XFAIL(eslFAIL, errbuf, "bad transition to M; expected {B,M,D,I}->M");
 	i++;
@@ -279,8 +283,8 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
 
       case p7_STD:
 	k++;
-	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
-	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "D shouldn't have i set");
+	if (tr->k[z] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
+	if (tr->i[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "D shouldn't have i set");
 	if (is_core) {
 	  if (prv != p7_STM && prv != p7_STD && prv != p7_STB)
 	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to D; expected {B,M,D}->D");
@@ -291,8 +295,8 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
 	break;
 	
       case p7_STI:
-	if (tr->k[tpos] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
-	if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
+	if (tr->k[z] != k) ESL_XFAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
+	if (tr->i[z] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	if (is_core) {
 	  if (prv != p7_STB && prv != p7_STM && prv != p7_STI)
 	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to I; expected {B,M,I}->I");
@@ -304,8 +308,8 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
 	break;
 
       case p7_STE:
-	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have k set");
-	if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have i set");
+	if (tr->k[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have k set");
+	if (tr->i[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "E shouldn't have i set");
 	if (is_core) {
 	  if (prv != p7_STM && prv != p7_STD && prv != p7_STI)
 	    ESL_XFAIL(eslFAIL, errbuf, "bad transition to E; expected {M,D,I}->E");
@@ -316,22 +320,22 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
 	break;
 	
       case p7_STJ:
-	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no J should have k set");
+	if (tr->k[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "no J should have k set");
 	if (prv == p7_STE) { /* 1st J doesn't emit */
-	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first J shouldn't have i set");
+	  if (tr->i[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "first J shouldn't have i set");
 	} else if (prv == p7_STJ) { /* subsequent J's do */
-	  if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
+	  if (tr->i[z] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	  i++;
 	} else ESL_XFAIL(eslFAIL, errbuf, "bad transition to J; expected {E,J}->J");
 	break;
 
       case p7_STC:
 	if (is_core)          ESL_XFAIL(eslFAIL, errbuf, "core trace can't contain C");
-	if (tr->k[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "no C should have k set");
+	if (tr->k[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "no C should have k set");
 	if (prv == p7_STE) { /* 1st C doesn't emit */
-	  if (tr->i[tpos] != 0) ESL_XFAIL(eslFAIL, errbuf, "first C shouldn't have i set");
+	  if (tr->i[z] != 0) ESL_XFAIL(eslFAIL, errbuf, "first C shouldn't have i set");
 	} else if (prv == p7_STC) { /* subsequent C's do */
-	  if (tr->i[tpos] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
+	  if (tr->i[z] != i) ESL_XFAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	  i++;
 	} else ESL_XFAIL(eslFAIL, errbuf, "bad transition to C; expected {E,C}->C");
 	break;
@@ -576,19 +580,19 @@ p7_trace_Reverse(P7_TRACE *tr)
 int
 p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 {
-  int tpos;                     /* position in tr */
+  int z;                     /* position in tr */
   int i;			/* symbol position in seq */
   int st,st2;     		/* state type (cur, nxt) */
   int k,k2,ktmp;		/* node index (cur, nxt) */
   
-  for (tpos = 0; tpos < tr->N-1; tpos++) 
+  for (z = 0; z < tr->N-1; z++) 
     {
-      if (tr->st[tpos] == p7_STX) continue; /* skip missing data */
+      if (tr->st[z] == p7_STX) continue; /* skip missing data */
 
       /* pull some info into tmp vars for notational clarity later. */
-      st  = tr->st[tpos]; st2 = tr->st[tpos+1];
-      k   = tr->k[tpos];  k2  = tr->k[tpos+1];
-      i   = tr->i[tpos];
+      st  = tr->st[z]; st2 = tr->st[z+1];
+      k   = tr->k[z];  k2  = tr->k[z+1];
+      i   = tr->i[z];
 
       /* Emission counts. */
       if      (st == p7_STM) esl_abc_FCount(hmm->abc, hmm->mat[k], dsq[i], wt);
@@ -642,6 +646,56 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
     } /* end loop over trace position */
   return eslOK;
 }
+
+/* Function:  p7_trace_Score()
+ * Incept:    SRE, Tue Mar  6 14:40:34 2007 [Janelia]
+ *
+ * Purpose:   Score path <tr> for digital target sequence <dsq> 
+ *            using profile <gm>. Return the SILO score in
+ *            <ret_sc>.
+ *
+ * Args:      tr     - traceback path to score
+ *            dsq    - digitized sequence
+ *            gm     - score profile
+ *            ret_sc - RETURN: SILO score of trace <tr>
+ *
+ * Returns:   <eslOK> on success, and <*ret_sc> contains the
+ *            SILO score for the trace.
+ *
+ * Throws:    <eslEINVAL> if something's wrong with the trace.
+ *            Now <*ret_sc> is returned as <p7_IMPOSSIBLE>.
+ */
+int 
+p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc)
+{
+  int  sc;		/* total SILO score */
+  int  z;               /* position in tr */
+  int  xi;		/* digitized symbol in dsq */
+  int  tsc;
+  int  status;
+
+  sc = 0;
+  for (z = 0; z < tr->N-1; z++) {
+    xi = dsq[tr->i[z]];
+
+    if      (tr->st[z] == p7_STM) sc += gm->msc[xi][tr->k[z]];
+    else if (tr->st[z] == p7_STI) sc += gm->isc[xi][tr->k[z]];
+
+    if ((status = p7_profile_GetT(gm, tr->st[z], tr->k[z], 
+				  tr->st[z+1], tr->k[z+1], &tsc)) != eslOK) goto ERROR;
+    sc += tsc;
+  }
+
+  *ret_sc = sc;
+  return eslOK;
+
+ ERROR:
+  *ret_sc = p7_IMPOSSIBLE;
+  return status;
+}
+
+
+
 
 
 /************************************************************
