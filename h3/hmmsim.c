@@ -44,7 +44,7 @@ main(int argc, char **argv)
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   P7_GMX          *mx      = NULL;     /* DP matrix                               */
   ESL_DSQ         *dsq     = NULL;     /* sampled digital sequence                */
-  float            sc;		       /* a Viterbi score                         */
+  int              sc;		       /* a Viterbi score (internal: SILO)        */
   int              nseq;	       /* counter over sequences                  */
   char             errbuf[eslERRBUFSIZE];
   ESL_DMATRIX     *imx     = NULL;
@@ -159,7 +159,7 @@ main(int argc, char **argv)
       if (esl_rnd_xfIID(r, hmm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
       if (p7_Viterbi(dsq, L, hmm->gm, mx, tr, &sc)     != eslOK) esl_fatal("viterbi failed");
       if (p7_trace_Validate(tr, abc, dsq, errbuf)      != eslOK) esl_fatal("trace validation failed:\n%s", errbuf);
-      /*printf("score = %6.2f bits\n", sc);*/
+      /*printf("score = %6.2f bits\n", p7_SILO2Bitscore(sc));*/
 
       for (which = 1; p7_trace_GetDomainCoords(tr, which, &i1, &i2, &k1, &k2) != eslEOD; which++)
 	{

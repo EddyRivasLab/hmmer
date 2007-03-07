@@ -357,7 +357,7 @@ extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_T
 
 /* dp_slow.c
  */
-extern int p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float *ret_sc);
+extern int p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, int *ret_sc);
 extern int p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr);
 
 /* emit.c
@@ -380,10 +380,10 @@ extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 
 /* hmmer.c
  */
-extern int   p7_Prob2Score(float p, float null);
-extern int   p7_LL2Score(float ll, float null);
-extern float p7_Score2Prob(int sc, float null);
-extern float p7_Score2Output(int sc);
+extern int   p7_Prob2SILO(float p, float null);
+extern int   p7_LL2SILO(float ll, float null);
+extern float p7_SILO2Prob(int sc, float null);
+extern float p7_SILO2Bitscore(int sc);
 extern int   p7_AminoFrequencies(float *f);
 
 /* modelconfig.c

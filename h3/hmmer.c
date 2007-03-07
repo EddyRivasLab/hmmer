@@ -1,5 +1,11 @@
 /* General routines used throughout HMMER.
  * 
+ * Internally, HMMER profiles work in scaled integer log-odds (SILO)
+ * scores.  The dynamic range of SILO scores is controlled by
+ * p7_INTSCALE at compile time (p7_INTSCALE defaults to
+ * 1000). Externally, HMMER reports real-numbered bit scores.
+ * The code refers to "SILO score" and "bit score" to differentiate.
+ * 
  * SRE, Fri Jan 12 13:19:38 2007 [Janelia] [Franz Ferdinand, eponymous]
  * SVN $Id$
  */
@@ -12,20 +18,20 @@
 #include "easel.h"
 #include "hmmer.h"
 
-/* Function: p7_Prob2Score()
+/* Function: p7_Prob2SILO()
  * 
  * Purpose:  Convert a probability to a scaled integer log odds score. 
  *           Round to nearest integer (i.e. note use of +0.5 and floor())
  *           Return the score. 
  */
 int
-p7_Prob2Score(float p, float null)
+p7_Prob2SILO(float p, float null)
 {
   if   (p == 0.0) return p7_IMPOSSIBLE;
   else            return (int) floor(0.5 + p7_INTSCALE * log(p/null));
 }
 
-/* Function:  p7_LL2Score()
+/* Function:  p7_LL2SILO()
  * Incept:    SRE, Mon May  2 08:19:36 2005 [St. Louis]
  *
  * Purpose:   Convert a log likelihood to a scaled integer log odds score,
@@ -35,7 +41,7 @@ p7_Prob2Score(float p, float null)
  *            Note that <ll> is a log(prob), but <null> is a probability.
  */
 int
-p7_LL2Score(float ll, float null)
+p7_LL2SILO(float ll, float null)
 {
   int sc;
   sc = (int) floor(0.5 + p7_INTSCALE * (ll - log(null)));
@@ -43,19 +49,19 @@ p7_LL2Score(float ll, float null)
   return sc;
 }
 
-/* Function: p7_Score2Prob()
+/* Function: p7_SILO2Prob()
  * 
  * Purpose:  Convert a scaled integer lod score back to a probability;
  *           needs the null model probability (or 1.0) to do the conversion.
  */
 float 
-p7_Score2Prob(int sc, float null)
+p7_SILO2Prob(int sc, float null)
 {
   if (sc == p7_IMPOSSIBLE) return 0.;
   else                     return (null * exp((float) sc / p7_INTSCALE));
 }
 
-/* Function:  p7_Score2Output()
+/* Function:  p7_SILO2Bitscore()
  * Incept:    SRE, Thu Feb  1 10:13:40 2007 [UA8018 St. Louis to Dulles]
  *
  * Purpose:   Convert an scaled integer lod score to a
@@ -63,7 +69,7 @@ p7_Score2Prob(int sc, float null)
  *
  */
 float 
-p7_Score2Output(int sc)
+p7_SILO2Bitscore(int sc)
 {
   return ((float) sc / p7_INTSCALE / eslCONST_LOG2);
 }

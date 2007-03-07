@@ -763,7 +763,6 @@ p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
 			 int *ret_k1, int *ret_k2)
 {
   int status;
-  int i1, i2, k1, k2;
   int z;
 
   if (which < 1) ESL_XEXCEPTION(eslECONTRACT, "bad which < 1");

@@ -1,10 +1,10 @@
 /* Reference implementation of the DP algorithms.
  * 
  * This implementation is intended for clarity, not speed. It is
- * deliberately unoptimized. It is provided as a reference
+ * deliberately not optimized. It is provided as a reference
  * implementation of the computationally intensive DP algorithms of
- * HMMER, both as documentation and a regression test target for
- * developing optimized code.
+ * HMMER. It serves both as documentation and as a regression test
+ * target for developing optimized code.
  * 
  * Contents:
  *     1. Viterbi and its traceback.
@@ -14,10 +14,9 @@
  * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
  * SVN $Id$
  */
+
 #include "p7_config.h"
-
 #include <easel.h>
-
 #include "hmmer.h"
 
 
@@ -28,7 +27,18 @@
 /* Function: p7_Viterbi()
  * Incept:   SRE, Tue Jan 30 10:50:53 2007 [Einstein's, St. Louis]
  * 
- * Purpose:  The Viterbi dynamic programming algorithm. 
+ * Purpose:  The standard Viterbi dynamic programming algorithm. 
+ *
+ *           Given a digital sequence <dsq> of length <L>, 
+ *           a profile <gm>, and DP matrix <gm> allocated for 
+ *           at least <gm->M> by <L> cells;
+ *           calculate the maximum scoring path by Viterbi;
+ *           if <tr> is provided non-<NULL>, return the path in <tr>;
+ *           return the score in <ret_sc> in its internal (SILO) 
+ *           form. 
+ *           
+ *           To convert a SILO score to units of bits, call
+ *           p7_SILO2Bitscore().
  *           
  * Args:     dsq    - sequence in digitized form, 1..L
  *           L      - length of dsq
@@ -41,7 +51,7 @@
  * Return:   <eslOK> on success.
  */
 int
-p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float *ret_sc)
+p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, int *ret_sc)
 {
   int **xmx;
   int **mmx;
@@ -99,8 +109,11 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
 	  imx[i][k] = sc;
 	if ((sc = imx[i-1][k] + gm->tsc[p7_TII][k]) > imx[i][k])
 	  imx[i][k] = sc;
-	if (gm->isc[dsq[i]][k] != p7_IMPOSSIBLE) imx[i][k] += gm->isc[dsq[i]][k];
-	else                                     imx[i][k] = p7_IMPOSSIBLE;   
+
+	if (gm->isc[dsq[i]][k] != p7_IMPOSSIBLE) 
+	  imx[i][k] += gm->isc[dsq[i]][k];
+	else
+	  imx[i][k] = p7_IMPOSSIBLE;   
       }
     }
 
@@ -144,7 +157,7 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, float 
   sc = xmx[L][p7_XMC] + gm->xsc[p7_XTC][p7_MOVE];
 
   if (tr != NULL) p7_ViterbiTrace(dsq, L, gm, mx, tr);
-  *ret_sc = p7_Score2Output(sc);  /* the total Viterbi score, in bits */
+  *ret_sc = sc;
   return eslOK;
 }
 
@@ -193,7 +206,8 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
   while (tr->st[tr->N-1] != p7_STS) {
     switch (tr->st[tr->N-1]) {
     case p7_STC:		/* C(i) comes from C(i-1) or E(i) */
-      if   (xmx[i][p7_XMC] <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
+      if   (xmx[i][p7_XMC] <= p7_IMPOSSIBLE)
+	ESL_XEXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
 
       if (xmx[i][p7_XMC] == xmx[i-1][p7_XMC] + gm->xsc[p7_XTC][p7_LOOP]) {
 	tr->i[tr->N-1]    = i--;  /* first C doesn't emit: subsequent ones do */
@@ -204,7 +218,8 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
       break;
 
     case p7_STE:		/* E connects from any M state. k set here */
-      if (xmx[i][p7_XME] <= p7_IMPOSSIBLE)  ESL_XEXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
+      if (xmx[i][p7_XME] <= p7_IMPOSSIBLE) 
+	ESL_XEXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
 
       for (k = gm->M; k >= 1; k--)
 	if (xmx[i][p7_XME] == mmx[i][k] + gm->esc[k]) {
@@ -305,7 +320,7 @@ static void
 utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, int L)
 {
   int       status;
-  char      errbuf[p7_ERRBUFSIZE];
+  char      errbuf[eslERRBUFSIZE];
   ESL_DSQ  *dsq = NULL;
   P7_GMX   *mx  = NULL;
   P7_TRACE *tr  = NULL;
@@ -314,7 +329,7 @@ utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, in
   
   if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
   if ((status = p7_trace_Create(L, &tr))        != eslOK) esl_fatal("trace creation failed");
-  if ((mx     = p7_gmx_Create(gm->M, L))        != eslOK) esl_fatal("matrix creation failed");
+  if ((mx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
 
   for (idx = 0; idx < nseq; idx++)
     {
@@ -326,7 +341,7 @@ utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, in
       if (sc1 != sc2) esl_fatal("Trace score not equal to Viterbi score");
     }
 
-  p7_gmx_Destroy(gm);
+  p7_gmx_Destroy(mx);
   p7_trace_Destroy(tr);
   free(dsq);
   return;
@@ -351,8 +366,7 @@ utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, in
 int
 main(int argc, char **argv)
 {
-  int             status;
-  char            errbuf[p7_ERRBUFSIZE];
+  char            errbuf[eslERRBUFSIZE];
   ESL_RANDOMNESS *r    = NULL;
   ESL_ALPHABET   *abc  = NULL;
   P7_HMM         *hmm  = NULL;

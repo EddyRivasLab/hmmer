@@ -45,9 +45,9 @@ p7_profile_Create(int M, ESL_ALPHABET *abc)
   gm->begin = gm->end = NULL;
   
   /* level 1 */
-  ESL_ALLOC(gm->tsc, sizeof(int *) * 7);           gm->tsc[0] = NULL;
-  ESL_ALLOC(gm->msc, sizeof(int *) * (abc->Kp-1)); gm->msc[0] = NULL;
-  ESL_ALLOC(gm->isc, sizeof(int *) * (abc->Kp-1)); gm->isc[0] = NULL;
+  ESL_ALLOC(gm->tsc, sizeof(int *) * 7);       gm->tsc[0] = NULL;
+  ESL_ALLOC(gm->msc, sizeof(int *) * abc->Kp); gm->msc[0] = NULL;
+  ESL_ALLOC(gm->isc, sizeof(int *) * abc->Kp); gm->isc[0] = NULL;
   ESL_ALLOC(gm->bsc, sizeof(int) * (M+1));      
   ESL_ALLOC(gm->esc, sizeof(int) * (M+1));      
 
@@ -60,9 +60,9 @@ p7_profile_Create(int M, ESL_ALPHABET *abc)
   
   /* level 2 */
   ESL_ALLOC(gm->tsc[0], sizeof(int) * 7*M);    
-  ESL_ALLOC(gm->msc[0], sizeof(int) * (abc->Kp-1) * (M+1));
-  ESL_ALLOC(gm->isc[0], sizeof(int) * (abc->Kp-1) * M);
-  for (x = 1; x < abc->Kp-1; x++) {
+  ESL_ALLOC(gm->msc[0], sizeof(int) * abc->Kp * (M+1));
+  ESL_ALLOC(gm->isc[0], sizeof(int) * abc->Kp * M);
+  for (x = 1; x < abc->Kp; x++) {
     gm->msc[x] = gm->msc[0] + x * (M+1);
     gm->isc[x] = gm->isc[0] + x * M;
   }
@@ -81,14 +81,17 @@ p7_profile_Create(int M, ESL_ALPHABET *abc)
   gm->tsc[p7_TDD][0] = p7_IMPOSSIBLE;
   gm->tsc[p7_TDM][1] = p7_IMPOSSIBLE; /* delete state D_1 is wing-retracted */
   gm->tsc[p7_TDD][1] = p7_IMPOSSIBLE;
-  for (x = 0; x < abc->Kp-1; x++) {   /* no emissions from nonexistent M_0, I_0 */
+  for (x = 0; x < abc->Kp; x++) {     /* no emissions from nonexistent M_0, I_0 */
     gm->msc[x][0] = p7_IMPOSSIBLE;
     gm->isc[x][0] = p7_IMPOSSIBLE;
   }
   x = esl_abc_XGetGap(abc);	      /* no emission can emit/score gap characters */
   esl_vec_ISet(gm->msc[x], M+1, p7_IMPOSSIBLE);
   esl_vec_ISet(gm->isc[x], M,   p7_IMPOSSIBLE);
-  
+  x = esl_abc_XGetMissing(abc);	      /* no emission can emit/score missing data characters */
+  esl_vec_ISet(gm->msc[x], M+1, p7_IMPOSSIBLE);
+  esl_vec_ISet(gm->isc[x], M,   p7_IMPOSSIBLE);
+
   /* Set remaining info
    */
   gm->mode        = p7_NO_MODE;
@@ -167,8 +170,8 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STN:
     switch (st2) {
-    case p7_STB: tsc =  gm->xsc[p7_XTN][p7_MOVE]; 
-    case p7_STN: tsc =  gm->xsc[p7_XTN][p7_LOOP]; 
+    case p7_STB: tsc =  gm->xsc[p7_XTN][p7_MOVE]; break;
+    case p7_STN: tsc =  gm->xsc[p7_XTN][p7_LOOP]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
 				p7_hmm_DescribeStatetype(st1),
 				p7_hmm_DescribeStatetype(st2));
@@ -177,7 +180,7 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STB:
     switch (st2) {
-    case p7_STM: tsc = gm->bsc[k2]; 
+    case p7_STM: tsc = gm->bsc[k2]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
 				p7_hmm_DescribeStatetype(st1),
 				p7_hmm_DescribeStatetype(st2));
@@ -186,10 +189,10 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STM:
     switch (st2) {
-    case p7_STM: tsc = gm->tsc[p7_TMM][k1];
-    case p7_STI: tsc = gm->tsc[p7_TMI][k1];
-    case p7_STD: tsc = gm->tsc[p7_TMD][k1];
-    case p7_STE: tsc = gm->esc[k1];
+    case p7_STM: tsc = gm->tsc[p7_TMM][k1]; break;
+    case p7_STI: tsc = gm->tsc[p7_TMI][k1]; break;
+    case p7_STD: tsc = gm->tsc[p7_TMD][k1]; break;
+    case p7_STE: tsc = gm->esc[k1];         break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
 				p7_hmm_DescribeStatetype(st1), k1,
 				p7_hmm_DescribeStatetype(st2));
@@ -198,8 +201,8 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STD:
     switch (st2) {
-    case p7_STM: tsc = gm->tsc[p7_TDM][k1]; 
-    case p7_STD: tsc = gm->tsc[p7_TDD][k1];
+    case p7_STM: tsc = gm->tsc[p7_TDM][k1]; break;
+    case p7_STD: tsc = gm->tsc[p7_TDD][k1]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
 				p7_hmm_DescribeStatetype(st1), k1,
 				p7_hmm_DescribeStatetype(st2));
@@ -208,8 +211,8 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STI:
     switch (st2) {
-    case p7_STM: tsc = gm->tsc[p7_TIM][k1];
-    case p7_STI: tsc = gm->tsc[p7_TII][k1];
+    case p7_STM: tsc = gm->tsc[p7_TIM][k1]; break;
+    case p7_STI: tsc = gm->tsc[p7_TII][k1]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
 				p7_hmm_DescribeStatetype(st1), k1,
 				p7_hmm_DescribeStatetype(st2));
@@ -218,8 +221,8 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STE:
     switch (st2) {
-    case p7_STC: tsc = gm->xsc[p7_XTE][p7_MOVE]; 
-    case p7_STJ: tsc = gm->xsc[p7_XTE][p7_LOOP]; 
+    case p7_STC: tsc = gm->xsc[p7_XTE][p7_MOVE]; break;
+    case p7_STJ: tsc = gm->xsc[p7_XTE][p7_LOOP]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
 				p7_hmm_DescribeStatetype(st1),
 				p7_hmm_DescribeStatetype(st2));
@@ -228,8 +231,8 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STJ:
     switch (st2) {
-    case p7_STB: tsc = gm->xsc[p7_XTJ][p7_MOVE]; 
-    case p7_STJ: tsc = gm->xsc[p7_XTJ][p7_LOOP]; 
+    case p7_STB: tsc = gm->xsc[p7_XTJ][p7_MOVE]; break;
+    case p7_STJ: tsc = gm->xsc[p7_XTJ][p7_LOOP]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
 				p7_hmm_DescribeStatetype(st1),
 				p7_hmm_DescribeStatetype(st2));
@@ -238,8 +241,8 @@ p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc
 
   case p7_STC:
     switch (st2) {
-    case p7_STT:  tsc = gm->xsc[p7_XTC][p7_MOVE]; 
-    case p7_STC:  tsc = gm->xsc[p7_XTC][p7_LOOP]; 
+    case p7_STT:  tsc = gm->xsc[p7_XTC][p7_MOVE]; break;
+    case p7_STC:  tsc = gm->xsc[p7_XTC][p7_LOOP]; break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
 				p7_hmm_DescribeStatetype(st1),
 				p7_hmm_DescribeStatetype(st2));

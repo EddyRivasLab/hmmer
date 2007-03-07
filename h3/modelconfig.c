@@ -189,12 +189,12 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
   gm->xt[p7_XTJ][p7_LOOP] = ploop;
 
   /* Set the N,J,C scores. (integer scaled lod scores) */
-  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTN][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTN][p7_MOVE], 1.0);
-  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTC][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTC][p7_MOVE], 1.0 - gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTJ][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTJ][p7_MOVE], 1.0);
+  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTN][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTN][p7_MOVE], 1.0);
+  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTC][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTC][p7_MOVE], 1.0 - gm->bg->p1);
+  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_MOVE], 1.0);
 
   /* Detect the "special" (actually common) case of the LOOP scores
    * having too small of a magnitude to keep track of properly.  We
@@ -263,7 +263,8 @@ calculate_occupancy(P7_HMM *hmm, float *occ)
 /* logoddsify()
  * Incept:    SRE, Mon Jan 22 08:45:57 2007 [Janelia]
  *
- * Purpose:   
+ * Purpose:   Set the "rest of the scores", that aren't dependent
+ *            on length modeling: everything but N,C,J transitions.
  *
  * Args:      
  *
@@ -283,49 +284,50 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
 
   /* Match and insert transitions, 1..M-1.  */
   for (k = 1; k < gm->M; k++) {
-    gm->tsc[p7_TMM][k] = p7_Prob2Score(hmm->t[k][p7_TMM], gm->bg->p1);
-    gm->tsc[p7_TMI][k] = p7_Prob2Score(hmm->t[k][p7_TMI], gm->bg->p1);
-    gm->tsc[p7_TMD][k] = p7_Prob2Score(hmm->t[k][p7_TMD], 1.0);
-    gm->tsc[p7_TIM][k] = p7_Prob2Score(hmm->t[k][p7_TIM], gm->bg->p1);
-    gm->tsc[p7_TII][k] = p7_Prob2Score(hmm->t[k][p7_TII], gm->bg->p1);
+    gm->tsc[p7_TMM][k] = p7_Prob2SILO(hmm->t[k][p7_TMM], gm->bg->p1);
+    gm->tsc[p7_TMI][k] = p7_Prob2SILO(hmm->t[k][p7_TMI], gm->bg->p1);
+    gm->tsc[p7_TMD][k] = p7_Prob2SILO(hmm->t[k][p7_TMD], 1.0);
+    gm->tsc[p7_TIM][k] = p7_Prob2SILO(hmm->t[k][p7_TIM], gm->bg->p1);
+    gm->tsc[p7_TII][k] = p7_Prob2SILO(hmm->t[k][p7_TII], gm->bg->p1);
   }
   /* Delete transitions, 2..M-1. */
   for (k = 2; k < gm->M; k++) {
-    gm->tsc[p7_TDM][k] = p7_Prob2Score(hmm->t[k][p7_TDM], gm->bg->p1);
-    gm->tsc[p7_TDD][k] = p7_Prob2Score(hmm->t[k][p7_TDD], 1.0);
+    gm->tsc[p7_TDM][k] = p7_Prob2SILO(hmm->t[k][p7_TDM], gm->bg->p1);
+    gm->tsc[p7_TDD][k] = p7_Prob2SILO(hmm->t[k][p7_TDD], 1.0);
   }
 
-  /* Match emissions (including degeneracies). 
+  /* Match emissions 1..M (including degeneracies). 
    * Temp sc[x] vector because of the rearranged msc[x][k] array */
-  sc[gm->abc->K] = p7_IMPOSSIBLE;
-  for (k = 1; k < gm->M; k++)  {
+  sc[gm->abc->K]    = p7_IMPOSSIBLE; /* gap symbol */
+  sc[gm->abc->Kp-1] = p7_IMPOSSIBLE; /* missing data symbol */
+  for (k = 1; k <= gm->M; k++)  {
     for (x = 0; x < gm->abc->K; x++)
-      sc[x] = p7_Prob2Score(hmm->mat[k][x], gm->bg->f[x]); /* base */
+      sc[x] = p7_Prob2SILO(hmm->mat[k][x], gm->bg->f[x]); /* base */
     esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);             /* degens */
-    for (x = 0; x < gm->abc->K; x++)
+    for (x = 0; x < gm->abc->Kp; x++)
       gm->msc[x][k] = sc[x];	
   }
   
-  /* Then the same for insert emissions */
+  /* Then the same for insert emissions 1..M-1 */
   for (k = 1; k < gm->M; k++) {
     for (x = 0; x < gm->abc->K; x++)
-      sc[x] = p7_Prob2Score(hmm->ins[k][x], gm->bg->f[x]); /* base */
+      sc[x] = p7_Prob2SILO(hmm->ins[k][x], gm->bg->f[x]); /* base */
     esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);             /* degens */
-    for (x = 0; x < gm->abc->K; x++)
+    for (x = 0; x < gm->abc->Kp; x++)
       gm->isc[x][k] = sc[x];	
   }
     
   /* B->Mk begin transitions 1..M */
   for (k = 1; k <= gm->M; k++)
-    gm->bsc[k] = p7_Prob2Score(gm->begin[k], gm->bg->p1);
+    gm->bsc[k] = p7_Prob2SILO(gm->begin[k], gm->bg->p1);
   
   /* Mk->E end transitions 1..M */
   for (k = 1; k <= gm->M; k++)
     gm->esc[k] = 0;		/* by construction */
 
   /* E state transitions (loop, move); N,C,J are done by p7_ReconfigLength() */
-  gm->xsc[p7_XTE][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTE][p7_LOOP], 1.0);
-  gm->xsc[p7_XTE][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTE][p7_MOVE], 1.0);
+  gm->xsc[p7_XTE][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTE][p7_LOOP], 1.0);
+  gm->xsc[p7_XTE][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTE][p7_MOVE], 1.0);
 
   return eslOK;
 }
@@ -404,12 +406,12 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
   }
 
   /* logoddsify the stuff that ReconfigLength would've done  */
-  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTN][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTN][p7_MOVE], 1.0);
-  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTC][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTC][p7_MOVE], 1.0 - gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2Score(gm->xt[p7_XTJ][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2Score(gm->xt[p7_XTJ][p7_MOVE], 1.0);
+  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTN][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTN][p7_MOVE], 1.0);
+  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTC][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTC][p7_MOVE], 1.0 - gm->bg->p1);
+  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_MOVE], 1.0);
 
   /* logoddsify everything else (without HMMER2's wing retraction) */
   logoddsify(hmm, gm);
