@@ -50,6 +50,7 @@ OBJS =  build.o\
 	heatmap.o\
 	hmmer.o\
 	modelconfig.o\
+	seqmodel.o\
 	p7_bg.o\
 	p7_gmx.o\
 	p7_hmm.o\

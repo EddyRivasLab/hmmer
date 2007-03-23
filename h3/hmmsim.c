@@ -36,7 +36,7 @@ static ESL_OPTIONS options[] = {
   { "-S",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-s,-u",    "sample a sequence and make HMM from it", 2 },
 
   { "-M",        eslARG_INT,     "50", NULL, "n>0",     NULL,      NULL,    "-m", "length of a sampled query HMM or seq",         3 },
-  { "-t",        eslARG_REAL,   "1.0", NULL, "x>0",     NULL,      "-S",    NULL, "branch length, for parameterizing seq-based query", 3 },
+  { "-t",        eslARG_REAL,   "2.0", NULL, "x>0",     NULL,      "-S",    NULL, "branch length, for parameterizing seq-based query", 3 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -63,6 +63,7 @@ main(int argc, char **argv)
   int              ndom;	       /* total hits counted into imx, kmx        */
   double           expect;
   FILE            *fp;
+  double           tot_ilen, tot_klen;
 
   char            *hmmfile;            /* file to read HMM(s) from                */
   int              do_swlike;	       /* TRUE to sample a uniform-transition HMM */
@@ -75,6 +76,7 @@ main(int argc, char **argv)
   int              do_h2;              /* TRUE to use H2 exit/entry configuration */
   char            *ipsfile;	       /* i endpoint heatmap file                 */
   char            *kpsfile;	       /* k endpoint heatmap file                 */
+
 
   /*****************************************************************
    * Parse the command line
@@ -136,14 +138,19 @@ main(int argc, char **argv)
     }
   else if (do_seqsample)
     {
+      double   pi[20];
       abc = esl_alphabet_Create(eslAMINO);    
       ESL_DMATRIX *Q     = esl_dmatrix_Create(abc->K,abc->K);
       ESL_DMATRIX *P     = esl_dmatrix_Create(abc->K,abc->K);
       ESL_DSQ     *query = malloc(sizeof(ESL_DSQ) * (M+2));
       P7_BG       *bg    = p7_bg_Create(abc);
-  
-      esl_rmx_SetWAG(Q, NULL);
+
+      esl_vec_F2D(bg->f, 20, pi);
+      esl_rmx_SetWAG(Q, pi);
       esl_dmx_Exp(Q, t, P);
+
+      printf("expected score   of WAG at t=%f  is %f bits\n", t, esl_rmx_ExpectedScore  (P, pi));
+      printf("relative entropy of WAG at t=%f  is %f bits\n", t, esl_rmx_RelativeEntropy(P, pi));
 
       esl_rnd_xfIID(r, bg->f, abc->K, M, query);
       p7_Seqmodel(abc, query, M, P, bg->f, 0.05, 0.5, 0.05, 0.2, &hmm); /* tmi, tii, tmd, tdd */
@@ -190,6 +197,9 @@ main(int argc, char **argv)
   /*****************************************************************
    * Align to simulated sequences, collect statistics.
    *****************************************************************/
+
+  tot_ilen = tot_klen = 0.;
+
   for (ndom = 0, nseq = 1; nseq <= N; nseq++) 
     {
       if (esl_rnd_xfIID(r, hmm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
@@ -202,6 +212,9 @@ main(int argc, char **argv)
 	  imx->mx[i1-1][i2-1] += 1.;
 	  kmx->mx[k1-1][k2-1] += 1.;
 	  ndom++;
+
+	  tot_ilen += i2-i1+1;
+	  tot_klen += k2-k1+1;
 	  /* printf("   i: %d..%d  k: %d..%d\n", i1, i2, k1, k2); */
 	}
     }
@@ -240,6 +253,12 @@ main(int argc, char **argv)
     dmx_Visualize(fp, imx, -4., 5.); 
     fclose(fp);
   }
+
+  printf("i matrix values range from %f to %f\n", esl_dmx_Min(imx), esl_dmx_Max(imx));
+  printf("k matrix values range from %f to %f\n", esl_dmx_Min(kmx), esl_dmx_Max(kmx));
+  printf("average alignment length on model: %f\n", tot_klen / (double) ndom);
+  printf("average alignment length on seq:   %f\n", tot_ilen / (double) ndom);
+	 
 
   /*****************************************************************
    * Cleanup, exit.
