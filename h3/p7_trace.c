@@ -765,7 +765,7 @@ p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
   int status;
   int z;
 
-  if (which < 1) ESL_XEXCEPTION(eslECONTRACT, "bad which < 1");
+  if (which < 1) ESL_XEXCEPTION(eslEINVAL, "bad which < 1");
 
   /* skip z to one state past the which'th B state. */
   for (z = 0; which > 0 && z < tr->N; z++)

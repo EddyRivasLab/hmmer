@@ -393,6 +393,12 @@ extern int p7_ReconfigLength(P7_PROFILE *gm, int L);
 extern int p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode);
 
 
+/* seqmodel.c
+ */
+extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P, 
+		       float *f, double tmi, double tii, double tmd, double tdd,
+		       P7_HMM **ret_hmm);
+
 #endif /*P7_HMMERH_INCLUDED*/
 
 /************************************************************

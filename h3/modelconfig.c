@@ -69,7 +69,7 @@ static int logoddsify(P7_HMM *hmm, P7_PROFILE *gm);
  *            and it contains copied reference pointers for the HMM's
  *            alphabet, null model, and the HMM itself.
  *            
- * Throws:    <eslECONTRACT> if the <hmm> doesn't have a null model assigned
+ * Throws:    <eslEINVAL> if the <hmm> doesn't have a null model assigned
  *            to it.
  */
 int
@@ -82,9 +82,9 @@ p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
 
   /* Contract checks: HMM must have null model */
   if (hmm->bg == NULL)  
-    ESL_XEXCEPTION(eslECONTRACT, "HMM needs to have a null model here");
+    ESL_XEXCEPTION(eslEINVAL, "HMM needs to have a null model here");
   if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
-    ESL_XEXCEPTION(eslECONTRACT, "I'm not ready for any mode but local modes");
+    ESL_XEXCEPTION(eslEINVAL, "I'm not ready for any mode but local modes");
 
   /* Copy some pointer references and other info across from HMM
    */
@@ -156,7 +156,7 @@ p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
  *            here. These control the target length dependence of the
  *            model. 
  *            
- * Throws:    <eslECONTRACT> if the <gm> does not contain a null model.           
+ * Throws:    <eslEINVAL> if the <gm> does not contain a null model.           
  */
 int
 p7_ReconfigLength(P7_PROFILE *gm, int L)
@@ -166,7 +166,7 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
   int   status;
 
   /* Contract checks: profile must have null model */
-  if (gm->bg == NULL) ESL_XEXCEPTION(eslECONTRACT, "profile needs to have a null model here");
+  if (gm->bg == NULL) ESL_XEXCEPTION(eslEINVAL, "profile needs to have a null model here");
 
   /* Configure p1 in the null model to an expected length of L */
   gm->bg->p1 = (float) L / (float) (L+1);
@@ -322,8 +322,13 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
     gm->bsc[k] = p7_Prob2SILO(gm->begin[k], gm->bg->p1);
   
   /* Mk->E end transitions 1..M */
+  /* Note: in H3 configurations, these are 0 by construction (log 1.0).
+   * But in H2 configurations, they aren't: so at least while we're
+   * still testing against H2, leave this as a score calculation instead
+   * of 0.
+   */
   for (k = 1; k <= gm->M; k++)
-    gm->esc[k] = 0;		/* by construction */
+    gm->esc[k] = p7_Prob2SILO(gm->end[k], 1.0);
 
   /* E state transitions (loop, move); N,C,J are done by p7_ReconfigLength() */
   gm->xsc[p7_XTE][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTE][p7_LOOP], 1.0);
@@ -352,17 +357,14 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
 int
 p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
 {
-  int   k;			/* counter over states      */
-  float basep;
-  float pentry = 0.5;
-  float pexit  = 1.0;
   int   status;
+  int   k;			/* counter over states      */
   float d;
 
   /* Contract checks: HMM must have null model */
-  if (hmm->bg == NULL)  ESL_XEXCEPTION(eslECONTRACT, "HMM needs to have a null model here");
+  if (hmm->bg == NULL)  ESL_XEXCEPTION(eslEINVAL, "HMM needs to have a null model here");
   if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
-    ESL_XEXCEPTION(eslECONTRACT, "I'm not ready for any mode but local mode");
+    ESL_XEXCEPTION(eslEINVAL, "I'm not ready for any mode but local mode");
 
   /* Copy some pointer references and other info across from HMM */
   gm->M       = hmm->M;
@@ -396,10 +398,9 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
 
   /* Configure exit, uniform exit given entry: which is 1/(M-k+1)  */
   gm->end[hmm->M] = 1.0;
-  basep = pexit / (float) (hmm->M-1);
   for (k = 1; k < hmm->M; k++)
-    gm->end[k] = basep / (1. - basep * (float) (k-1));
-  /* renormalize exits (this is Plan7RenormalizeExits from H2, inlined */
+    gm->end[k] = 1. / (float) (hmm->M - k + 1);
+  /* renormalize match transitions to include exits (this is Plan7RenormalizeExits from H2, inlined */
   for  (k = 1; k < hmm->M; k++) {
     d = esl_vec_FSum(hmm->t[k], 3);
     esl_vec_FScale(hmm->t[k], 3, 1./(d + d*gm->end[k]));
@@ -913,7 +914,7 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   P7_TRACE *tr2 = NULL;
   int failsafe  = 0;
   
-  if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslECONTRACT, "profile must be unilocal");
+  if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslEINVAL, "profile must be unilocal");
   if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
   if ((status = p7_trace_Create(256, &tr2))  != eslOK)  goto ERROR;
 

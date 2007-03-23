@@ -73,7 +73,7 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           Returns <eslENORESULT> if no consensus columns were annotated;
  *           in this case, <ret_hmm> and <ret_tr> are returned NULL.
  *           
- * Throws:   <eslEMEM> on allocation failure. <eslECONTRACT> if the <msa>
+ * Throws:   <eslEMEM> on allocation failure. <eslEINVAL> if the <msa>
  *           does not have a reference annotation line, or if it isn't
  *           in digital mode.
  */            
@@ -84,8 +84,8 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
   int       *matassign = NULL;    /* MAT state assignments if 1; 1..alen */
   int        apos;                /* counter for aligned columns         */
 
-  if (! (msa->flags & eslMSA_DIGITAL)) ESL_XEXCEPTION(eslECONTRACT, "need a digital msa");
-  if (msa->rf == NULL)                 ESL_XEXCEPTION(eslECONTRACT, "need an RF line");
+  if (! (msa->flags & eslMSA_DIGITAL)) ESL_XEXCEPTION(eslEINVAL, "need a digital msa");
+  if (msa->rf == NULL)                 ESL_XEXCEPTION(eslEINVAL, "need an RF line");
 
   ESL_ALLOC(matassign, sizeof(int) * (msa->alen+1));
  
@@ -147,7 +147,7 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
  *           Returns <eslENORESULT> if no consensus columns were annotated;
  *           in this case, <ret_hmm> and <ret_tr> are returned NULL.
  *           
- * Throws:   <eslEMEM> on allocation failure; <eslECONTRACT> if the 
+ * Throws:   <eslEMEM> on allocation failure; <eslEINVAL> if the 
  *           <msa> isn't in digital mode.
  */
 int
@@ -160,7 +160,7 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret
   float    r;		     /* weighted residue count              */
   float    totwgt;	     /* weighted residue+gap count          */
 
-  if (! (msa->flags & eslMSA_DIGITAL)) ESL_XEXCEPTION(eslECONTRACT, "need digital MSA");
+  if (! (msa->flags & eslMSA_DIGITAL)) ESL_XEXCEPTION(eslEINVAL, "need digital MSA");
 
   /* Allocations: matassign is 1..alen array of bit flags.
    */

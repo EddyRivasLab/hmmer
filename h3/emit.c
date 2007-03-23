@@ -364,7 +364,7 @@ p7_H2_ProfileEmit(ESL_RANDOMNESS *r, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr)
       case p7_STM:
 	if (k == gm->M) st = p7_STE;
 	else {
-	  esl_vec_FCopy(p, gm->hmm->t[k], 3);
+	  esl_vec_FCopy(gm->hmm->t[k], 3, p);
 	  p[3] = gm->end[k];
 	  switch (esl_rnd_FChoose(r, p, 4)) {
 	  case 0:  st = p7_STM; break;

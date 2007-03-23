@@ -235,9 +235,9 @@ p7_hmm_Duplicate(P7_HMM *hmm)
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
 
   for (k = 0; k <= hmm->M; k++) {
-    esl_vec_FCopy(new->t[k],   hmm->t[k],   7);
-    esl_vec_FCopy(new->mat[k], hmm->mat[k], hmm->abc->K);
-    esl_vec_FCopy(new->ins[k], hmm->ins[k], hmm->abc->K);
+    esl_vec_FCopy(hmm->t[k],   7,           new->t[k]);
+    esl_vec_FCopy(hmm->mat[k], hmm->abc->K, new->mat[k]);
+    esl_vec_FCopy(hmm->ins[k], hmm->abc->K, new->ins[k]);
   }
   
   if (hmm->name != NULL    && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
@@ -250,7 +250,7 @@ p7_hmm_Duplicate(P7_HMM *hmm)
   if (hmm->ctime  != NULL  && (status = esl_strdup(hmm->ctime,  -1, &(new->ctime)))  != eslOK) goto ERROR;
   if (hmm->flags & p7_MAP) {
     ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
-    esl_vec_ICopy(new->map, hmm->map, hmm->M+1);
+    esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
   }
   new->nseq     = hmm->nseq;
   new->checksum = hmm->checksum;

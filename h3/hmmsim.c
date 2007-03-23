@@ -13,21 +13,30 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_vectorops.h"
+#include "esl_dmatrix.h"
+#include "esl_ratematrix.h"
 
 #include "hmmer.h"
 
+#define MODELOPTS "-m,-u,-s,-S"
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",   0 },
-  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL, "-u,-M", "input HMM from file <f>",                0 },
-  { "-s",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-u", "sample a uniform-transition HMM",        0 },
-  { "-u",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-s", "sample an ungapped HMM",                 0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random seqs",                  0 },
-  { "-M",        eslARG_INT,     "50", NULL, "n>0",     NULL,      NULL,    NULL, "length of a sampled HMM",                0 },
-  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of random seqs",                  0 },
-  { "-2",        eslARG_NONE,    NULL, NULL, NULL,      NULL,      NULL,    NULL, "configure profile in old HMMER2 style",  0 },
-  { "--ips",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output .ps heatmap of i endpoints to <f>", 0 },
-  { "--kps",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output .ps heatmap of k endpoints to <f>", 0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",   1 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random target seqs",           1 },
+  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of random target seqs",           1 },
+  { "-2",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "configure profile in old HMMER2 style",  1 },
+  { "--ips",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output .ps heatmap of i endpoints to <f>", 1 },
+  { "--kps",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,      NULL,    NULL, "output .ps heatmap of k endpoints to <f>", 1 },
+
+  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,      NULL, "-s,-u,-M,-S", "input HMM from file <f>",                2 },
+  { "-s",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-u,-S",    "sample a uniform-transition HMM",        2 },
+  { "-u",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-s,-m,-S",    "sample an ungapped HMM",                 2 },
+  { "-S",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-m,-s,-u",    "sample a sequence and make HMM from it", 2 },
+
+  { "-M",        eslARG_INT,     "50", NULL, "n>0",     NULL,      NULL,    "-m", "length of a sampled query HMM or seq",         3 },
+  { "-t",        eslARG_REAL,   "1.0", NULL, "x>0",     NULL,      "-S",    NULL, "branch length, for parameterizing seq-based query", 3 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -58,9 +67,11 @@ main(int argc, char **argv)
   char            *hmmfile;            /* file to read HMM(s) from                */
   int              do_swlike;	       /* TRUE to sample a uniform-transition HMM */
   int              do_ungapped;	       /* TRUE to sample an ungapped HMM          */
+  int              do_seqsample;       /* TRUE to make model from random sequence */
   int              L;		       /* length of generated seqs                */
   int              M;		       /* length of a sampled HMM                 */
   int              N;		       /* number of seqs to generate              */
+  double           t;		       /* branch length for seq query model       */
   int              do_h2;              /* TRUE to use H2 exit/entry configuration */
   char            *ipsfile;	       /* i endpoint heatmap file                 */
   char            *kpsfile;	       /* k endpoint heatmap file                 */
@@ -73,18 +84,24 @@ main(int argc, char **argv)
   esl_opt_VerifyConfig(go);
   if (esl_opt_IsSet(go, "-h")) {
     puts(usage);
-    puts("\n  where options are:\n");
-    esl_opt_DisplayHelp(stdout, go, 0, 2, 80); /* 0=all docgroups; 2 = indentation; 80=textwidth*/
+    puts("\ngeneral options are:");
+    esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 2 = indentation; 80=textwidth*/
+    puts("\nalternatives for random query model :");
+    esl_opt_DisplayHelp(stdout, go, 2, 2, 80); /* 2 = indentation; 80=textwidth*/
+    puts("\ncontrolling character of random query model :");
+    esl_opt_DisplayHelp(stdout, go, 3, 2, 80); /* 2 = indentation; 80=textwidth*/
     return eslOK;
   }
 
   esl_opt_GetStringOption (go, "-m",     &hmmfile);
   esl_opt_GetBooleanOption(go, "-s",     &do_swlike);
   esl_opt_GetBooleanOption(go, "-u",     &do_ungapped);
+  esl_opt_GetBooleanOption(go, "-S",     &do_seqsample);
   esl_opt_GetIntegerOption(go, "-L",     &L);
   esl_opt_GetIntegerOption(go, "-M",     &M);
   esl_opt_GetIntegerOption(go, "-N",     &N);
   esl_opt_GetBooleanOption(go, "-2",     &do_h2);
+  esl_opt_GetDoubleOption (go, "-t",     &t);
   esl_opt_GetStringOption (go, "--ips",  &ipsfile);
   esl_opt_GetStringOption (go, "--kps",  &kpsfile);
 
@@ -116,6 +133,25 @@ main(int argc, char **argv)
       }
       M = hmm->M;
       p7_hmmfile_Close(hfp);
+    }
+  else if (do_seqsample)
+    {
+      abc = esl_alphabet_Create(eslAMINO);    
+      ESL_DMATRIX *Q     = esl_dmatrix_Create(abc->K,abc->K);
+      ESL_DMATRIX *P     = esl_dmatrix_Create(abc->K,abc->K);
+      ESL_DSQ     *query = malloc(sizeof(ESL_DSQ) * (M+2));
+      P7_BG       *bg    = p7_bg_Create(abc);
+  
+      esl_rmx_SetWAG(Q, NULL);
+      esl_dmx_Exp(Q, t, P);
+
+      esl_rnd_xfIID(r, bg->f, abc->K, M, query);
+      p7_Seqmodel(abc, query, M, P, bg->f, 0.05, 0.5, 0.05, 0.2, &hmm); /* tmi, tii, tmd, tdd */
+      
+      esl_dmatrix_Destroy(Q);
+      esl_dmatrix_Destroy(P);
+      free(dsq);
+      p7_bg_Destroy(bg);
     }
   else				/* or generate a simulated HMM. */
     {
