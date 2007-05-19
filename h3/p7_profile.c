@@ -3,6 +3,7 @@
  *    1. The P7_PROFILE object: allocation, initialization, destruction.
  *    2. Access methods.
  *    3. Debugging and development code.
+ *    4. MPI communication
  *    
  * SRE, Thu Jan 11 15:16:47 2007 [Janelia] [Sufjan Stevens, Illinois]
  * SVN $Id$
@@ -305,6 +306,104 @@ p7_profile_Validate(P7_PROFILE *gm, float tol)
 }
 
 
+/*****************************************************************
+ * 4. MPI communication
+ *****************************************************************/
+#ifdef HAVE_MPI
+#include "mpi.h"
+
+/* Function:  p7_profile_MPISend()
+ * Incept:    SRE, Fri Apr 20 13:55:47 2007 [Janelia]
+ *
+ * Purpose:   Sends profile <gm> to processor <dest>.
+ *            
+ *            If <gm> is NULL, sends a end-of-data signal to <dest>, to
+ *            tell it to shut down.
+ *            
+ */
+int
+p7_profile_MPISend(P7_PROFILE *gm, int dest)
+{
+  
+  if (gm == NULL) {
+    int eod = -1;
+    MPI_Send(&eod, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
+    return eslOK;
+  }
+
+  MPI_Send(&(gm->M), 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
+  /* receiver will now allocate storage, before reading on...*/
+  MPI_Send(&(gm->mode),                    1, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->tsc[0],               7*gm->M, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->msc[0], (gm->M+1)*gm->abc->Kp, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->isc[0],     gm->M*gm->abc->Kp, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xsc[0],                     2, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xsc[1],                     2, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xsc[2],                     2, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xsc[3],                     2, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->bsc,                  gm->M+1, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->esc,                  gm->M+1, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xt[0],                      2, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xt[1],                      2, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xt[2],                      2, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->xt[3],                      2, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->begin,                gm->M+1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(gm->end,                  gm->M+1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(&(gm->do_lcorrect),             1, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  MPI_Send(&(gm->lscore),                  1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+  MPI_Send(&(gm->h2_mode),                 1, MPI_INT,   dest, 0, MPI_COMM_WORLD);
+  return eslOK;
+}
+
+/* Function:  p7_profile_MPIRecv()
+ * Incept:    SRE, Fri Apr 20 14:19:07 2007 [Janelia]
+ *
+ * Purpose:   Receive a profile sent from the master MPI process (src=0)
+ *            on a worker MPI process. The worker must already have (and
+ *            provide) the alphabet <abc> and the background model <bg>.
+ *            
+ *            If it receives an end-of-data signal, returns <eslEOD>.
+ */
+int
+p7_profile_MPIRecv(ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE **ret_gm)
+{
+  P7_PROFILE *gm = NULL;
+  MPI_Status mpistatus;
+  int M;
+
+  MPI_Recv(&M, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &mpistatus);
+  if (M == -1) return eslEOD;
+
+  gm = p7_profile_Create(M, abc);
+  MPI_Recv(&(gm->mode),             1, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->tsc[0],            7*M, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->msc[0],  (M+1)*abc->Kp, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->isc[0],      M*abc->Kp, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->xsc[0],              2, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->xsc[1],              2, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->xsc[2],              2, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->xsc[3],              2, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->bsc,               M+1, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->esc,               M+1, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->xt[0],               2, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->xt[1],               2, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->xt[2],               2, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->xt[3],               2, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);  
+  MPI_Recv(gm->begin,             M+1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(gm->end,               M+1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(&(gm->do_lcorrect),      1, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(&(gm->lscore),           1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, &mpistatus);
+  MPI_Recv(&(gm->h2_mode),          1, MPI_INT,   0, 0, MPI_COMM_WORLD, &mpistatus);  
+  
+  gm->abc = abc;
+  gm->hmm = NULL;
+  gm->bg  = bg;
+
+  *ret_gm = gm;
+  return eslOK;
+}
+
+#endif /*HAVE_MPI*/
 
 /*****************************************************************
  * @LICENSE@

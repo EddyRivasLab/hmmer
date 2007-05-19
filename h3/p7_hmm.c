@@ -212,6 +212,35 @@ p7_hmm_Destroy(P7_HMM *hmm)
   return;
 }
 
+/* Function:  p7_hmm_CopyParameters()
+ * Incept:    SRE, Fri May  4 14:10:17 2007 [Janelia]
+ *
+ * Purpose:   Copy parameters of <src> to <dest>. The HMM <dest> must
+ *            be allocated by the caller for the same 
+ *            alphabet and M as <src>. 
+ *
+ *            No annotation is copied, only the parameters.  This is
+ *            because several annotation fields are variable-length 
+ *            strings that require individual allocations. 
+ *            The <p7_hmm_CopyParameters()> function is for cases
+ *            where we have to repeatedly reset the parameters
+ *            of a model - for example, in entropy weighting.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest)
+{
+  int k;
+
+  for (k = 0; k <= src->M; k++) {
+    esl_vec_FCopy(src->t[k],   7,           dest->t[k]);
+    esl_vec_FCopy(src->mat[k], src->abc->K, dest->mat[k]);
+    esl_vec_FCopy(src->ins[k], src->abc->K, dest->ins[k]);
+  }
+  return eslOK;
+}
+
 /* Function:  p7_hmm_Duplicate()
  * Incept:    SRE, Fri Jan 26 15:34:42 2007 [Janelia]
  *
@@ -226,19 +255,13 @@ p7_hmm_Destroy(P7_HMM *hmm)
  * Throws:    <NULL> on allocation failure.
  */
 P7_HMM *
-p7_hmm_Duplicate(P7_HMM *hmm)
+p7_hmm_Duplicate(const P7_HMM *hmm)
 {
   int     status;
-  int     k;
   P7_HMM *new = NULL;
 
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
-
-  for (k = 0; k <= hmm->M; k++) {
-    esl_vec_FCopy(hmm->t[k],   7,           new->t[k]);
-    esl_vec_FCopy(hmm->mat[k], hmm->abc->K, new->mat[k]);
-    esl_vec_FCopy(hmm->ins[k], hmm->abc->K, new->ins[k]);
-  }
+  p7_hmm_CopyParameters(hmm, new);
   
   if (hmm->name != NULL    && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
   if (hmm->acc  != NULL    && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
@@ -270,6 +293,29 @@ p7_hmm_Duplicate(P7_HMM *hmm)
   if (new != NULL) p7_hmm_Destroy(new);
   return NULL;
 }
+
+/* Function:  p7_hmm_Scale()
+ * Incept:    SRE, Fri May  4 14:19:33 2007 [Janelia]
+ *
+ * Purpose:   Given a counts-based model <hmm>, scale everything
+ *            by a multiplicative factor of <scale>. Used in
+ *            absolute sequence weighting.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_hmm_Scale(P7_HMM *hmm, double scale)
+{
+  int k;
+
+  for (k = 0; k <= hmm->M; k++) {
+    esl_vec_FScale(hmm->t[k],   7,           scale);  
+    esl_vec_FScale(hmm->mat[k], hmm->abc->K, scale);  
+    esl_vec_FScale(hmm->ins[k], hmm->abc->K, scale);  
+  }
+  return eslOK;
+}
+
 
 /* Function:  p7_hmm_Zero()
  * Incept:    SRE, Mon Jan  1 16:32:59 2007 [Casa de Gatos]
@@ -611,17 +657,17 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
     {				/* Line 1: k, match emissions */
       fprintf(fp, " %5d ", k);
       for (x = 0; x < hmm->abc->K; x++) 
-        fprintf(fp, "%5.1f ", hmm->mat[k][x]);
+        fprintf(fp, "%9.4f ", hmm->mat[k][x]);
       fputs("\n", fp);
 				/* Line 2: insert emissions */
       fprintf(fp, "       ");
       for (x = 0; x < hmm->abc->K; x++) 
-	fprintf(fp, "%5.1f ", hmm->ins[k][x]);
+	fprintf(fp, "%9.4f ", hmm->ins[k][x]);
       fputs("\n", fp);
 				/* Line 3: transition probs */
       fprintf(fp, "       ");
       for (ts = 0; ts < 7; ts++)
-	fprintf(fp, "%5.1f ", hmm->t[k][ts]); 
+	fprintf(fp, "%9.4f ", hmm->t[k][ts]); 
       fputs("\n", fp);
     }
   fputs("//\n", fp);
@@ -707,8 +753,6 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
  *
  * Throws:    <eslEMEM> on allocation error.
  *
- * Throws:    (no abnormal error conditions)
- *
  * Xref:      STL11/140
  */
 int
@@ -727,6 +771,80 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_
   *ret_hmm = hmm;
   return eslOK;
 
+ ERROR:
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
+
+/* Function:  esl_hmm_SampleEnumerable()
+ * Incept:    SRE, Wed Apr 18 09:38:09 2007 [Janelia]
+ *
+ * Purpose:   Sample a random HMM with random emission and 
+ *            transition probabilities with the exception that
+ *            all transitions to insert are zero. This makes
+ *            it possible to create a model with a finite,
+ *            easily enumerable sequence space (all seqs of
+ *            length $\leq M).
+ *            
+ *            To achieve this in the profile as well as the core HMM,
+ *            the caller must configure a unihit mode
+ *            (<p7_ProfileConfig(hmm, gm, p7_UNILOCAL)> or
+ *            <p7_UNIGLOCAL>), and a target length of zero
+ *            (<p7_ReconfigLength(gm, 0)>).
+ *            
+ *            Useful for debugging and validating Forward/Viterbi
+ *            algorithms.
+ *            
+ * Returns:   <eslOK> on success. The newly allocated hmm is returned through
+ *            <ret_hmm>. The caller is responsible for freeing this object
+ *            with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm    = NULL;
+  char   *logmsg = "[random enumerable HMM created by sampling]";
+  int     k;
+  int     status;
+
+  hmm = p7_hmm_Create(M, abc);
+  if (hmm == NULL) { status = eslEMEM; goto ERROR; }
+  
+  for (k = 0; k <= M; k++)
+    {
+      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]); /* match emission probs  */
+      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);            /* insert emission probs */
+      esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]);              /* order is M->MID; sample into MI; move I to D; set TMI=0 */
+      hmm->t[k][p7_TMD] = hmm->t[k][p7_TMI];
+      hmm->t[k][p7_TMI] = 0.;
+      hmm->t[k][p7_TIM] = 1.;                                          /* I transitions irrelevant since I's are unreached. */
+      hmm->t[k][p7_TII] = 0.;
+      if (k > 0) esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5); /* delete transitions to M,D */
+    }
+
+  /* Node M is special: no transitions to D, transitions to M
+   * are interpreted as transitions to E. Overwrite a little of
+   * what we did in node M.
+   */
+  hmm->t[M][p7_TMM] = 1.;
+  hmm->t[M][p7_TMD] = 0.;	
+  hmm->t[M][p7_TDM] = 1.;
+  hmm->t[M][p7_TDD] = 0.;
+  
+  /* Add mandatory annotation
+   */
+  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  hmm->nseq     = 0;
+  p7_hmm_SetCtime(hmm);
+  hmm->checksum = 0;
+
+  *ret_hmm = hmm;
+  return eslOK;
+  
  ERROR:
   if (hmm != NULL) p7_hmm_Destroy(hmm);
   *ret_hmm = NULL;

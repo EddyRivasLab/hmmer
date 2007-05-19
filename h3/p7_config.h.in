@@ -44,15 +44,15 @@
  *    unless you're trying to improve on our empirical data.
  *****************************************************************/
 
-/* Entropy loss defaults:
+/* Relative entropy target defaults:
  * For proteins, hmmbuild's effective sequence number calculation
- * aims to achieve a certain entropy loss relative to background null model.
- * (= average score, per match emission).
+ * aims to achieve a certain relative entropy per match emission.
+ * (= average score per match emission).
  * These are empirically tuned constants, from the work of Steve Johnson.
  */
-#define p7_ELOSS_LS_AMINO  1.30 /* bits */
-#define p7_ELOSS_FS_AMINO  0.59 /* bits */
-
+#define p7_ETARGET_AMINO  0.59 /* bits */
+#define p7_ETARGET_DNA    0.59 /* bits */
+#define p7_ETARGET_OTHER  1.0  /* bits */ /* if you define your own alphabet, set this */
 
 
 
@@ -65,13 +65,13 @@
  *****************************************************************/
 
 /* Scores are kept internally as scaled integer log-odds scores:
- *     sc_x = p7_INTSCALE * log_2 p_x / f_x, rounded off.
+ *     sc_x = p7_INTSCALE * log p_x / f_x, rounded off.
  * p7_MAX_SC_TXTLEN has to be large enough to represent a score as
  * a string, including \0 and a sign.
  * p7_IMPOSSIBLE represents -infinity; we have to be able to add
  * two -infinities together without underflow.
  */
-#define p7_INTSCALE        1000.0     
+#define p7_INTSCALE        1000.0   
 #define p7_MAX_SC_TXTLEN   11	      
 #define p7_IMPOSSIBLE     -987654321  
 
@@ -119,6 +119,7 @@
 
 /* Optional parallel implementations
  */
+#undef HAVE_MPI
 #undef HMMER_PVM
 #undef HMMER_THREADS
 #undef HAVE_PTHREAD_ATTR_SETSCOPE

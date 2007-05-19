@@ -144,19 +144,19 @@ p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
  *
  * Purpose:   Given a model already configured for scoring, in some
  *            particular algorithm mode; reset the expected length
- *            distribution of both the HMM and the null model to a
- *            mean of <L>.
+ *            distribution of the profile and the null model for a mean of <L>.
  *            
  *            Do this as quickly as possible, because the caller needs
  *            to dynamically reconfigure the model for the length of
  *            each target sequence in a database search.  
  *
  * Returns:   <eslOK> on success.
- *            p1, xt[NCJ] probabilities, and xsc[NCJ] scores are set 
+ *            xt[NCJ] probabilities and xsc[NCJ] scores are set 
  *            here. These control the target length dependence of the
  *            model. 
- *            
- * Throws:    <eslEINVAL> if the <gm> does not contain a null model.           
+ *
+ * Throws:    <eslEINVAL> if the profile doesn't have a null model
+ *            associated with it.
  */
 int
 p7_ReconfigLength(P7_PROFILE *gm, int L)
@@ -164,6 +164,8 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
   float ploop, pmove;
   float nj;
   int   status;
+  int   loopsc, movesc;
+  
 
   /* Contract checks: profile must have null model */
   if (gm->bg == NULL) ESL_XEXCEPTION(eslEINVAL, "profile needs to have a null model here");
@@ -188,13 +190,15 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
   gm->xt[p7_XTJ][p7_MOVE] = pmove;	/* note, J unused if [XTE][LOOP] = 0. */
   gm->xt[p7_XTJ][p7_LOOP] = ploop;
 
-  /* Set the N,J,C scores. (integer scaled lod scores) */
-  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTN][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTN][p7_MOVE], 1.0);
-  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTC][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTC][p7_MOVE], 1.0 - gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_MOVE], 1.0);
+  /* Set the N,J,C scores. (integer scaled lod scores) */          
+  movesc = p7_Prob2SILO(pmove, 1.0);
+  loopsc = p7_Prob2SILO(ploop, 1.0);
+  gm->xsc[p7_XTN][p7_LOOP] = loopsc;
+  gm->xsc[p7_XTN][p7_MOVE] = movesc;
+  gm->xsc[p7_XTC][p7_LOOP] = loopsc;
+  gm->xsc[p7_XTC][p7_MOVE] = movesc;
+  gm->xsc[p7_XTJ][p7_LOOP] = loopsc;
+  gm->xsc[p7_XTJ][p7_MOVE] = movesc;
 
   /* Detect the "special" (actually common) case of the LOOP scores
    * having too small of a magnitude to keep track of properly.  We
@@ -216,6 +220,11 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
    * difference.
    * (xref STL10/26)
    */
+ /* SRE: Revisit this code later. As of J1/39, we're now using profile 
+    scores that don't use the bg->p1 transition in their log odds 
+    calculations.
+  */
+#if 0
   if (abs(gm->xsc[p7_XTN][p7_LOOP]) < 10) {
     gm->do_lcorrect = TRUE;
     /* the real cost per residue, as a float: */
@@ -226,12 +235,17 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
     gm->do_lcorrect = FALSE;
     gm->lscore = 0.;
   }
-
+#endif
   return eslOK;
 
  ERROR:
   return status;
 }
+
+
+
+
+
 
 /*****************************************************************
  * 2. Private functions
@@ -284,15 +298,15 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
 
   /* Match and insert transitions, 1..M-1.  */
   for (k = 1; k < gm->M; k++) {
-    gm->tsc[p7_TMM][k] = p7_Prob2SILO(hmm->t[k][p7_TMM], gm->bg->p1);
-    gm->tsc[p7_TMI][k] = p7_Prob2SILO(hmm->t[k][p7_TMI], gm->bg->p1);
+    gm->tsc[p7_TMM][k] = p7_Prob2SILO(hmm->t[k][p7_TMM], 1.0);
+    gm->tsc[p7_TMI][k] = p7_Prob2SILO(hmm->t[k][p7_TMI], 1.0);
     gm->tsc[p7_TMD][k] = p7_Prob2SILO(hmm->t[k][p7_TMD], 1.0);
-    gm->tsc[p7_TIM][k] = p7_Prob2SILO(hmm->t[k][p7_TIM], gm->bg->p1);
-    gm->tsc[p7_TII][k] = p7_Prob2SILO(hmm->t[k][p7_TII], gm->bg->p1);
+    gm->tsc[p7_TIM][k] = p7_Prob2SILO(hmm->t[k][p7_TIM], 1.0);
+    gm->tsc[p7_TII][k] = p7_Prob2SILO(hmm->t[k][p7_TII], 1.0);
   }
   /* Delete transitions, 2..M-1. */
   for (k = 2; k < gm->M; k++) {
-    gm->tsc[p7_TDM][k] = p7_Prob2SILO(hmm->t[k][p7_TDM], gm->bg->p1);
+    gm->tsc[p7_TDM][k] = p7_Prob2SILO(hmm->t[k][p7_TDM], 1.0);
     gm->tsc[p7_TDD][k] = p7_Prob2SILO(hmm->t[k][p7_TDD], 1.0);
   }
 
@@ -319,7 +333,7 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
     
   /* B->Mk begin transitions 1..M */
   for (k = 1; k <= gm->M; k++)
-    gm->bsc[k] = p7_Prob2SILO(gm->begin[k], gm->bg->p1);
+    gm->bsc[k] = p7_Prob2SILO(gm->begin[k], 1.0);
   
   /* Mk->E end transitions 1..M */
   /* Note: in H3 configurations, these are 0 by construction (log 1.0).
@@ -390,16 +404,13 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
   gm->xt[p7_XTJ][p7_LOOP] = hmm->bg->p1;
 
   /* Configure entry. HMMER2 used (almost) uniform entry. */  
-  /* gm->begin[1] = (1. - pentry) * (1. - hmm->t[0][p7_TMD]); */
-  /* gm->begin[1] = (1. - pentry);
-     esl_vec_FSet(gm->begin+2, hmm->M-1, (pentry * (1.-hmm->t[0][p7_TMD])) / (float) (hmm->M-1));
-  */
-  esl_vec_FSet(gm->begin+1, hmm->M, 1.0 / hmm->M);
+  esl_vec_FSet(gm->begin+1, hmm->M, 1.0 / hmm->M); 
 
   /* Configure exit, uniform exit given entry: which is 1/(M-k+1)  */
-  gm->end[hmm->M] = 1.0;
   for (k = 1; k < hmm->M; k++)
-    gm->end[k] = 1. / (float) (hmm->M - k + 1);
+    gm->end[k] = 1. / (float) (hmm->M - k + 1); 
+  gm->end[hmm->M] = 1.0;
+
   /* renormalize match transitions to include exits (this is Plan7RenormalizeExits from H2, inlined */
   for  (k = 1; k < hmm->M; k++) {
     d = esl_vec_FSum(hmm->t[k], 3);
@@ -407,11 +418,11 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
   }
 
   /* logoddsify the stuff that ReconfigLength would've done  */
-  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTN][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTN][p7_LOOP], 1.0);
   gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTN][p7_MOVE], 1.0);
-  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTC][p7_LOOP], gm->bg->p1);
-  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTC][p7_MOVE], 1.0 - gm->bg->p1);
-  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_LOOP], gm->bg->p1);
+  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTC][p7_LOOP], 1.0);
+  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTC][p7_MOVE], 1.0);
+  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_LOOP], 1.0);
   gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_MOVE], 1.0);
 
   /* logoddsify everything else (without HMMER2's wing retraction) */
@@ -587,25 +598,25 @@ main(int argc, char **argv)
   /*****************************************************************
    * Parse the command line
    *****************************************************************/
-  go = esl_getopts_Create(options, usage);
-  esl_opt_ProcessCmdline(go, argc, argv);
-  esl_opt_VerifyConfig(go);
-  if (esl_opt_IsSet(go, "-h")) {
+  go = esl_getopts_Create(options);
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) esl_fatal("Failed to parse command line: %s\n", go->errbuf);
+  if (esl_opt_VerifyConfig(go)               != eslOK) esl_fatal("Failed to parse command line: %s\n", go->errbuf);
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
     puts(usage);
     puts("\n  where options are:\n");
     esl_opt_DisplayHelp(stdout, go, 0, 2, 80); /* 0=all docgroups; 2 = indentation; 80=textwidth*/
     return eslOK;
   }
-  esl_opt_GetBooleanOption(go, "-i",     &do_ilocal);
-  esl_opt_GetStringOption (go, "-m",     &hmmfile);
-  esl_opt_GetIntegerOption(go, "-n",     &nseq);
-  esl_opt_GetBooleanOption(go, "-s",     &do_swlike);
-  esl_opt_GetBooleanOption(go, "-u",     &do_ungapped);
-  esl_opt_GetIntegerOption(go, "-L",     &L);
-  esl_opt_GetIntegerOption(go, "-M",     &M);
-  esl_opt_GetBooleanOption(go, "-2",     &do_h2);
-  esl_opt_GetStringOption (go, "--ips",  &ipsfile);
-  esl_opt_GetStringOption (go, "--kps",  &kpsfile);
+  do_ilocal   = esl_opt_GetBoolean(go, "-i");
+  hmmfile     = esl_opt_GetString (go, "-m");
+  nseq        = esl_opt_GetInteger(go, "-n");
+  do_swlike   = esl_opt_GetBoolean(go, "-s");
+  do_ungapped = esl_opt_GetBoolean(go, "-u");
+  L           = esl_opt_GetInteger(go, "-L");
+  M           = esl_opt_GetInteger(go, "-M");
+  do_h2       = esl_opt_GetBoolean(go, "-2");
+  ipsfile     = esl_opt_GetString (go, "--ips");
+  kpsfile     = esl_opt_GetString (go, "--kps");
 
   if (esl_opt_ArgNumber(go) != 0) {
     puts("Incorrect number of command line arguments.");

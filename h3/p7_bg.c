@@ -2,6 +2,7 @@
  * 
  * Contents:
  *     1. The P7_BG object: allocation, initialization, destruction.
+ *     2. Simple null model scores
  * 
  * SRE, Fri Jan 12 13:31:26 2007 [Janelia] [Ravel, Bolero]
  * SVN $Id$
@@ -72,3 +73,30 @@ p7_bg_Destroy(P7_BG *bg)
   }
   return;
 }
+
+
+/*****************************************************************
+ * 2. Simple null model scores
+ *****************************************************************/
+
+/* Function:  p7_bg_NullOne()
+ * Incept:    SRE, Mon Apr 23 08:13:26 2007 [Janelia]
+ *
+ * Purpose:   Calculate the null1 score, for sequence <dsq>
+ *            of length <L> "aligned" to the base null model <bg>. 
+ * 
+ * Note:      Because the residue composition in null1 <bg> is the
+ *            same as the background used to calculate residue
+ *            scores in profiles and null models, all we have to
+ *            do here is score null model transitions.
+ */
+int
+p7_bg_NullOne(P7_BG *bg, ESL_DSQ *dsq, int L, int *ret_sc)
+{
+  float x;
+
+  x = (float) L * log(bg->p1) + log(1.-bg->p1);
+  *ret_sc = p7_LL2SILO(x, 1.);
+  return eslOK;
+}
+

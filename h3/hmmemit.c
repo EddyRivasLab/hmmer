@@ -61,27 +61,28 @@ main(int argc, char **argv)
    *****************************************************************/
   fmt = eslSQFILE_FASTA;
 
-  go = esl_getopts_Create(options, usage);
-  esl_opt_ProcessCmdline(go, argc, argv);
-  esl_opt_VerifyConfig(go);
-  if (esl_opt_IsSet(go, "-h")) {
+  go = esl_getopts_Create(options);
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) esl_fatal("Failed to parse command line: %s", go->errbuf);
+  if (esl_opt_VerifyConfig(go)               != eslOK) esl_fatal("Failed to parse command line: %s", go->errbuf);
+  if (esl_opt_GetBoolean(go, "-h")) {
     puts(usage);
     puts("\n  where options are:\n");
     esl_opt_DisplayHelp(stdout, go, 0, 2, 80); /* 0=all docgroups; 2 = indentation; 80=textwidth*/
     return eslOK;
   }
 
-  esl_opt_GetIntegerOption(go, "-n",        &(cfg.nseq));
-  esl_opt_GetBooleanOption(go, "-p",        &(cfg.do_profile));
-  esl_opt_GetIntegerOption(go, "-L",        &(cfg.L));
-  esl_opt_GetBooleanOption(go, "--h2",      &(cfg.do_oldconfig));
+  cfg.nseq         = esl_opt_GetInteger(go, "-n");
+  cfg.do_profile   = esl_opt_GetBoolean(go, "-p");
+  cfg.L            = esl_opt_GetInteger(go, "-L");
+  cfg.do_oldconfig = esl_opt_GetBoolean(go, "--h2");
 
   if (esl_opt_ArgNumber(go) != 1) {
     puts("Incorrect number of command line arguments.");
     puts(usage);
     return eslFAIL;
   }
-  hmmfile = esl_opt_GetCmdlineArg(go, eslARG_STRING, NULL); /* NULL=no range checking */
+  hmmfile = esl_opt_GetArg(go, eslARG_STRING, NULL); /* NULL=no range checking */
+  if (hmmfile == NULL) esl_fatal("failed to get <hmmfile> on cmdline: %s\n", go->errbuf);
 
   /*****************************************************************
    * Initializations, including opening the HMM file

@@ -59,7 +59,7 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           Returns both the HMM in counts form (ready for applying
  *           Dirichlet priors as the next step), and fake tracebacks
  *           for each aligned sequence. 
- *           
+ *
  *           Models must have at least one node, so if the <msa> defined 
  *           no consensus columns, a <eslENORESULT> error is returned.
  *           
@@ -71,11 +71,13 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           here, and must be free'd by caller.
  *
  *           Returns <eslENORESULT> if no consensus columns were annotated;
- *           in this case, <ret_hmm> and <ret_tr> are returned NULL.
+ *           in this case, <ret_hmm> and <ret_tr> are returned NULL. 
  *           
- * Throws:   <eslEMEM> on allocation failure. <eslEINVAL> if the <msa>
- *           does not have a reference annotation line, or if it isn't
- *           in digital mode.
+ *           Returns <eslEFORMAT> if the <msa> doesn't have a reference
+ *           annotation line.
+ *           
+ * Throws:   <eslEMEM> on allocation failure. Throws <eslEINVAL> if the <msa>
+ *           isn't in digital mode.
  */            
 int
 p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
@@ -85,7 +87,7 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
   int        apos;                /* counter for aligned columns         */
 
   if (! (msa->flags & eslMSA_DIGITAL)) ESL_XEXCEPTION(eslEINVAL, "need a digital msa");
-  if (msa->rf == NULL)                 ESL_XEXCEPTION(eslEINVAL, "need an RF line");
+  if (msa->rf == NULL)                 return eslEFORMAT;
 
   ESL_ALLOC(matassign, sizeof(int) * (msa->alen+1));
  
@@ -246,6 +248,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
     if (tr[idx] == NULL) continue; /* skip rare examples of empty sequences */
     if ((status = p7_trace_Count(hmm, msa->ax[idx], msa->wgt[idx], tr[idx])) != eslOK) goto ERROR;
   }
+  hmm->nseq = msa->nseq;
 
   /* Transfer annotation from the MSA to the new model
    */

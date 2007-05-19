@@ -6,7 +6,8 @@
  *    4. P7_TRACE:   a traceback path (alignment of seq to profile).
  *    5. P7_HMMFILE: an HMM save file or database, open for reading.
  *    6. P7_GMX:     a "generic" dynamic programming matrix
- *    7. Other routines in HMMER's exposed API.
+ *    7. P7_DPRIOR:  mixture Dirichlet prior for profile HMMs
+ *    8. Other routines in HMMER's exposed API.
  * 
  * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
  * SVN $Id$
@@ -24,6 +25,8 @@
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
 #include "esl_sqio.h"		/* ESL_SQ                */
+#include "esl_histogram.h"      /* ESL_HISTOGRAM         */
+#include "esl_dirichlet.h"	/* ESL_MIXDCHLET         */
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
@@ -31,12 +34,12 @@
 
 /* Some notes:
  *   0. The model might be either in counts or probability form.
- *   1. t[0] is special: t[0][TMM,TMD,TMI] are the begin->M_1,D_1,I_0 entry probabilities,
+ *   1. t[0] is special: t[0][TMM,TMI,TMD] are the begin->M_1,I_0,D_1 entry probabilities,
  *      t[0][TIM,TII] are the I_0 transitions, and delete state 0 doesn't
  *      exist. Therefore D[0] transitions and mat[0] emissions are unused.
- *      To simplify some code, we adopt a convention that these can be set to
- *      any valid probability distribution. (For instance, when we sample HMMs,
- *      we can sample t[0][TDX] and mat[0], knowing that we'll never use them.)
+ *      To simplify some normalization code, we adopt a convention that these are set
+ *      to valid probability distributions: 1.0 for t[0][TDM] and mat[0][0],
+ *      and 0 for the rest.
  *   2. t[M] is also special: TMD and TDD are 0 because there is no next delete state;
  *      TDM is therefore 1.0 by definition; and TMM, TDM are interpreted as the
  *      M->E and D->E end transitions. 
@@ -136,7 +139,9 @@ extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
 extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
-extern P7_HMM *p7_hmm_Duplicate(P7_HMM *hmm);
+extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
+extern P7_HMM *p7_hmm_Duplicate(const P7_HMM *hmm);
+extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
 extern char   *p7_hmm_DescribeStatetype(char st);
 
@@ -155,6 +160,7 @@ extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern int     p7_hmm_Sample        (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
 				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
@@ -235,7 +241,6 @@ extern int         p7_profile_GetT(P7_PROFILE *gm, char st1, int k1,
 				   char st2, int k2, int *ret_tsc);
 extern int         p7_profile_Validate(P7_PROFILE *gm, float tol);
 
-
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
  *****************************************************************/
@@ -249,7 +254,7 @@ typedef struct p7_bg_s {
 
 extern P7_BG *p7_bg_Create(ESL_ALPHABET *abc);
 extern void   p7_bg_Destroy(P7_BG *bg);
-
+extern int    p7_bg_NullOne(P7_BG *bg, ESL_DSQ *dsq, int L, int *ret_sc);
 
 /*****************************************************************
  * 4. P7_TRACE:  a traceback (alignment of seq to profile).
@@ -341,13 +346,28 @@ typedef struct p7_gmx_s {
   int  *dmx_mem;
 } P7_GMX;
 
-
 extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
 extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
 extern void    p7_gmx_Destroy(P7_GMX *gx);
 
 /*****************************************************************
- * 7. Other routines in HMMER's exposed API.
+ * 7. P7_DPRIOR: mixture Dirichlet prior for profile HMMs
+ *****************************************************************/
+
+typedef struct p7_dprior_s {
+  ESL_MIXDCHLET *tm;		/*  match transitions */
+  ESL_MIXDCHLET *ti;		/* insert transitions */
+  ESL_MIXDCHLET *td;		/* delete transitions */
+  ESL_MIXDCHLET *em;		/*  match emissions   */
+  ESL_MIXDCHLET *ei;		/* insert emissions   */
+} P7_DPRIOR;
+
+extern P7_DPRIOR *p7_dprior_CreateAmino(void);
+extern void       p7_dprior_Destroy(P7_DPRIOR *pri);
+extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
+
+/*****************************************************************
+ * 8. Other routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c
@@ -359,6 +379,8 @@ extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_T
  */
 extern int p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, int *ret_sc);
 extern int p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr);
+extern int p7_Forward(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, int *ret_sc);
+
 
 /* emit.c
  */
@@ -368,7 +390,12 @@ extern int p7_H2_ProfileEmit(ESL_RANDOMNESS *r, P7_PROFILE *gm,  ESL_SQ *sq, P7_
 
 /* errors.c
  */
-extern void p7_Die(char *format, ...);
+extern void p7_Die (char *format, ...);
+extern void p7_Fail(char *format, ...);
+
+/* eweight.c
+ */
+extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future)
  */
@@ -378,6 +405,10 @@ extern double dmx_upper_element_sum(ESL_DMATRIX *D);
 extern double dmx_upper_norm(ESL_DMATRIX *D);
 extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 
+/* island.c
+ */
+extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM *h);
+
 /* hmmer.c
  */
 extern int   p7_Prob2SILO(float p, float null);
@@ -385,6 +416,7 @@ extern int   p7_LL2SILO(float ll, float null);
 extern float p7_SILO2Prob(int sc, float null);
 extern float p7_SILO2Bitscore(int sc);
 extern int   p7_AminoFrequencies(float *f);
+extern int   p7_ILogsum(int s1, int s2);
 
 /* modelconfig.c
  */
@@ -392,12 +424,23 @@ extern int p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode);
 extern int p7_ReconfigLength(P7_PROFILE *gm, int L);
 extern int p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode);
 
+/* modelstats.c
+ */
+double p7_MeanMatchInfo(const P7_HMM *hmm);
+double p7_MeanMatchEntropy(const P7_HMM *hmm);
+double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm);
 
 /* seqmodel.c
  */
 extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P, 
 		       float *f, double tmi, double tii, double tmd, double tdd,
 		       P7_HMM **ret_hmm);
+
+#ifdef HAVE_MPI
+extern int p7_profile_MPISend(P7_PROFILE *gm, int dest);
+extern int p7_profile_MPIRecv(ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE **ret_gm);
+#endif /*HAVE_MPI*/
+
 
 #endif /*P7_HMMERH_INCLUDED*/
 

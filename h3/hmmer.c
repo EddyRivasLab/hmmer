@@ -121,6 +121,58 @@ p7_AminoFrequencies(float *f)
 }
 
 
+static int ilogsum_lookup[p7_LOGSUM_TBL];
+
+static void 
+init_ilogsum(void)
+{
+  int i;
+  for (i = 0; i < p7_LOGSUM_TBL; i++) 
+    ilogsum_lookup[i] = (int) ((float) p7_INTSCALE * (log(1.+exp((float) -i/ (float) p7_INTSCALE))));
+}
+
+/* Function: p7_ILogsum()
+ * 
+ * Purpose:  Return the scaled integer log probability of
+ *           the sum of two scores <s1> and <s2>, where
+ *           <s1> and <s2> are also given as scaled log probabilities.
+ *         
+ *           $\log(\exp(s_1)+\exp(s_2)) = s_1 + \log(1 + \exp(s_2-s_1))$ for $s_1 > s_2$
+ *           
+ * Note:     For speed, builds a lookup table the first time it's
+ *           called.  The table size <p7_LOGSUM_TBL> is set to 20000
+ *           by default, in <p7_config.h>.
+ *
+ *           Because of the one-time initialization, we have to
+ *           be careful in a multithreaded implementation... hence
+ *           the use of <pthread_once()>, which forces us to put
+ *           the initialization routine and the lookup table outside
+ *           <p7_ILogsum()>. (Thanks to Henry Gabb at Intel for pointing
+ *           out this problem.)
+ *           
+ * Args:     s1,s2 -- scaled integer log_2 probabilities to be summed
+ *                    in probability space.
+ *                    
+ * Return:   scaled integer log_2 probability of the sum.
+ */
+int 
+p7_ILogsum(int s1, int s2)
+{
+  int    diff;
+#ifdef HMMER_THREADS
+  static pthread_once_t firsttime = PTHREAD_ONCE_INIT;
+  pthread_once(&firsttime, init_ilogsum);
+#else
+  static int firsttime = 1;
+  if (firsttime) { init_ilogsum(); firsttime = 0; }
+#endif
+
+  diff = s1-s2;
+  if      (diff >=  p7_LOGSUM_TBL) return s1;
+  else if (diff <= -p7_LOGSUM_TBL) return s2;
+  else if (diff > 0)               return s1 + ilogsum_lookup[diff];
+  else                             return s2 + ilogsum_lookup[-diff];
+} 
 
 
 /*****************************************************************

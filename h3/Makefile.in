@@ -36,25 +36,33 @@ PVMINCDIR = @PVMINCDIR@
 PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
+MPICC     = @MPICC@
+MPILIBS   = @MPILIBS@
+MPIPROGS  = @MPIPROGS@
+
 SHELL    = /bin/sh
 MYLIBS   = -leasel
 MYLIBDIR = -L../easel
 MYINCDIR = -I../easel
 
-PROGS = hmmbuild hmmemit hmmsim
+PROGS = hmmbuild hmmsearch hmmemit hmmindex hmmsim
 
 OBJS =  build.o\
 	dp_slow.o\
 	emit.o\
 	errors.o\
+	eweight.o\
 	heatmap.o\
 	hmmer.o\
+	island.o\
 	modelconfig.o\
+	modelstats.o\
 	seqmodel.o\
 	p7_bg.o\
 	p7_gmx.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
+	p7_prior.o\
 	p7_profile.o\
 	p7_trace.o
 
@@ -68,11 +76,13 @@ HDRS =  hmmer.h\
 #################################################################
 ## Targets defining how to make HMMER executables.
 ##
-all: 	$(PROGS) libhmmer.a  ../easel/libeasel.a
+all: 	$(PROGS) $(MPIPROGS) libhmmer.a  ../easel/libeasel.a
 
 ${PROGS}: @EXEC_DEPENDENCY@ ${OBJS}   libhmmer.a ../easel/libeasel.a
 	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
 
+${MPIPROGS}: @EXEC_DEPENDENCY@ ${OBJS}   libhmmer.a ../easel/libeasel.a
+	${MPICC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
 
 #################################################################
 ## Targets used in making HMMER library for testsuite compilation.

@@ -16,7 +16,7 @@
  */
 
 #include "p7_config.h"
-#include <easel.h>
+#include "easel.h"
 #include "hmmer.h"
 
 
@@ -76,7 +76,8 @@ p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, int *r
   /* Recursion. Done as a pull.
    * Note some slightly wasteful boundary conditions:  
    *    tsc[0] = impossible for all eight transitions (no node 0)
-   *    D_M and I_M are wastefully calculated (they don't exist)
+   *    I_M is wastefully calculated (doesn't exist)
+   *    D_M is wastefully calculated (provably can't appear in a Viterbi path)
    */
   for (i = 1; i <= L; i++) {
     mmx[i][0] = imx[i][0] = dmx[i][0] = p7_IMPOSSIBLE;
@@ -311,11 +312,132 @@ p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr)
 }
 
 
+/* Function:  p7_Forward()
+ * Incept:    SRE, Mon Apr 16 13:57:35 2007 [Janelia]
+ *
+ * Purpose:  The standard Forward dynamic programming algorithm. 
+ *
+ *           Given a digital sequence <dsq> of length <L>, 
+ *           a profile <gm>, and DP matrix <gm> allocated for 
+ *           at least <gm->M> by <L> cells;
+ *           calculate the probability of the sequence given 
+ *           the model using the Forward algorithm, and
+ *           return the Forward score in <ret_sc> in its internal (SILO) 
+ *           form. 
+ *           
+ *           To convert a SILO score to units of bits, call
+ *           p7_SILO2Bitscore().
+ *           
+ * Args:     dsq    - sequence in digitized form, 1..L
+ *           L      - length of dsq
+ *           gm     - profile. Does not need to contain any
+ *                    reference pointers (alphabet, HMM, or null model)
+ *           mx     - DP matrix with room for an MxL alignment
+ *           ret_sc - RETURN: Viterbi score in bits.
+ *           
+ * Return:   <eslOK> on success.
+ */
+int
+p7_Forward(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, int *ret_sc)
+{
+  int **xmx;
+  int **mmx;
+  int **imx;
+  int **dmx;
+  int   i,k;
+  int   sc;
+
+  /* Some convenience */
+  xmx = mx->xmx;
+  mmx = mx->mmx;
+  imx = mx->imx;
+  dmx = mx->dmx;
+
+  /* Initialization of the zero row.
+   * Note that xmx[i][stN] = 0 by definition for all i,
+   *    and xmx[i][stT] = xmx[i][stC], so neither stN nor stT need
+   *    to be calculated in DP matrices.
+   */
+  xmx[0][p7_XMN] = 0;		                     /* S->N, p=1            */
+  xmx[0][p7_XMB] = gm->xsc[p7_XTN][p7_MOVE];                 /* S->N->B, no N-tail   */
+  xmx[0][p7_XME] = xmx[0][p7_XMC] = xmx[0][p7_XMJ] = p7_IMPOSSIBLE;  /* need seq to get here */
+  for (k = 0; k <= gm->M; k++)
+    mmx[0][k] = imx[0][k] = dmx[0][k] = p7_IMPOSSIBLE;      /* need seq to get here */
+
+  /* Recursion. Done as a pull.
+   * Note some slightly wasteful boundary conditions:  
+   *    tsc[0] = impossible for all eight transitions (no node 0)
+   *    I_M is wastefully calculated (doesn't exist)
+   */
+  for (i = 1; i <= L; i++) {
+    mmx[i][0] = imx[i][0] = dmx[i][0] = p7_IMPOSSIBLE;
+    
+   for (k = 1; k <= gm->M; k++)
+     {
+       /* match state */
+       mmx[i][k]  = p7_ILogsum(p7_ILogsum(mmx[i-1][k-1] + gm->tsc[p7_TMM][k-1],
+					  imx[i-1][k-1] + gm->tsc[p7_TIM][k-1]),
+			       p7_ILogsum(xmx[i-1][p7_XMB] + gm->bsc[k],
+					  dmx[i-1][k-1] + gm->tsc[p7_TDM][k-1]));
+       mmx[i][k] += gm->msc[dsq[i]][k];
+       if (mmx[i][k] < p7_IMPOSSIBLE) mmx[i][k] = p7_IMPOSSIBLE;
+
+       dmx[i][k]  = p7_ILogsum(mmx[i][k-1] + gm->tsc[p7_TMD][k-1],
+			       dmx[i][k-1] + gm->tsc[p7_TDD][k-1]);
+       if (dmx[i][k] < p7_IMPOSSIBLE) dmx[i][k] = p7_IMPOSSIBLE;
+
+       imx[i][k]  = p7_ILogsum(mmx[i-1][k] + gm->tsc[p7_TMI][k],
+			       imx[i-1][k] + gm->tsc[p7_TII][k]);
+       imx[i][k] += gm->isc[dsq[i]][k];
+       if (imx[i][k] < p7_IMPOSSIBLE) imx[i][k] = p7_IMPOSSIBLE;
+     }
+
+   /* Now the special states.
+    * remember, C and J emissions are zero score by definition
+    */
+   xmx[i][p7_XMN] = xmx[i-1][p7_XMN] + gm->xsc[p7_XTN][p7_LOOP];
+   if (xmx[i][p7_XMN] < p7_IMPOSSIBLE) xmx[i][p7_XMN] = p7_IMPOSSIBLE;
+
+   xmx[i][p7_XME] = p7_IMPOSSIBLE;
+   for (k = 1; k <= gm->M; k++)
+     xmx[i][p7_XME] = p7_ILogsum(xmx[i][p7_XME], mmx[i][k] + gm->esc[k]);
+   if (xmx[i][p7_XME] < p7_IMPOSSIBLE) xmx[i][p7_XME] = p7_IMPOSSIBLE;
+
+   xmx[i][p7_XMJ] = p7_ILogsum(xmx[i-1][p7_XMJ] + gm->xsc[p7_XTJ][p7_LOOP],
+			       xmx[i][p7_XME]   + gm->xsc[p7_XTE][p7_LOOP]);
+   if (xmx[i][p7_XMJ] < p7_IMPOSSIBLE) xmx[i][p7_XMJ] = p7_IMPOSSIBLE;
+
+   xmx[i][p7_XMB] = p7_ILogsum(xmx[i][p7_XMN] + gm->xsc[p7_XTN][p7_MOVE],
+			       xmx[i][p7_XMJ] + gm->xsc[p7_XTJ][p7_MOVE]);
+   if (xmx[i][p7_XMB] < p7_IMPOSSIBLE) xmx[i][p7_XMB] = p7_IMPOSSIBLE;
+
+   xmx[i][p7_XMC] = p7_ILogsum(xmx[i-1][p7_XMC] + gm->xsc[p7_XTC][p7_LOOP],
+			       xmx[i][p7_XME] + gm->xsc[p7_XTE][p7_MOVE]);
+   if (xmx[i][p7_XMC] < p7_IMPOSSIBLE) xmx[i][p7_XMC] = p7_IMPOSSIBLE;
+
+  }
+  
+  sc = xmx[L][p7_XMC] + gm->xsc[p7_XTC][p7_MOVE];
+  if (sc < p7_IMPOSSIBLE) sc = p7_IMPOSSIBLE;
+  *ret_sc = sc;
+  return eslOK;
+}
+
+
+
+
 /*****************************************************************
  * 2. Unit tests.
  *****************************************************************/
 #ifdef p7DP_SLOW_TESTDRIVE
 
+/* Viterbi validation is done by comparing the returned score
+ * to the score of the optimal trace. Not foolproof, but catches
+ * many kinds of errors.
+ * 
+ * Another check is that the average score should be <= 0,
+ * since the random sequences are drawn from the null model.
+ */ 
 static void
 utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, int L)
 {
@@ -326,6 +448,7 @@ utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, in
   P7_TRACE *tr  = NULL;
   int       idx;
   int       sc1, sc2;
+  double    avg_sc = 0.;
   
   if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
   if ((status = p7_trace_Create(L, &tr))        != eslOK) esl_fatal("trace creation failed");
@@ -339,12 +462,142 @@ utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, in
       if (p7_trace_Score(tr, dsq, gm, &sc2)           != eslOK) esl_fatal("trace score failed");
 
       if (sc1 != sc2) esl_fatal("Trace score not equal to Viterbi score");
+
+      /* avg_sc += p7_SILO2Bitscore(sc1); */
+      avg_sc += (((double) sc1 / p7_INTSCALE) - L * log(gm->bg->p1) - log(1.-gm->bg->p1)) / eslCONST_LOG2;
     }
+
+  avg_sc /= (double) nseq;
+  if (avg_sc > 0.) esl_fatal("Viterbi scores have positive expectation (%f bits)", avg_sc);
 
   p7_gmx_Destroy(mx);
   p7_trace_Destroy(tr);
   free(dsq);
   return;
+}
+
+/* Forward is harder to validate. 
+ * We do know that the Forward score is >= Viterbi.
+ * We also know that the expected score on random seqs is <= 0.
+ */
+static void
+utest_forward(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, int L)
+{
+  ESL_DSQ  *dsq = NULL;
+  P7_GMX   *mx  = NULL;
+  P7_TRACE *tr  = NULL;
+  int       idx;
+  int       vsc, fsc;
+  double    avg_sc = 0.;
+
+  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
+  if ((mx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
+
+  for (idx = 0; idx < nseq; idx++)
+    {
+      if (esl_rnd_xfIID(r, gm->bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+      if (p7_Viterbi(dsq, L, gm, mx, NULL, &vsc)      != eslOK) esl_fatal("viterbi failed");
+      if (p7_Forward(dsq, L, gm, mx, &fsc)            != eslOK) esl_fatal("forward failed");
+      if (fsc < vsc) esl_fatal("Forward score can't be less than Viterbi score");
+
+      /* avg_sc += p7_SILO2Bitscore(fsc);*/
+      avg_sc +=  (((double) fsc / p7_INTSCALE) - L * log(gm->bg->p1) - log(1.-gm->bg->p1)) / eslCONST_LOG2;
+    }
+
+  avg_sc /= (double) nseq;
+  if (avg_sc > 0.) esl_fatal("Forward scores have positive expectation (%f bits)", avg_sc);
+
+  p7_gmx_Destroy(mx);
+  p7_trace_Destroy(tr);
+  free(dsq);
+  return;
+}
+
+/* The "enumeration" test samples a random enumerable HMM (transitions to insert are 0,
+ * so the generated seq space only includes seqs of L<=M). 
+ *
+ * The test scores all seqs of length <=M by both Viterbi and Forward, verifies that 
+ * the two scores are identical, and verifies that the sum of all the probabilities is
+ * 1.0. It also verifies that the score of a sequence of length M+1 is indeed <P7_IMPOSSIBLE>.
+ * 
+ * Because this function is going to work in unscaled probabilities, adding them up,
+ * all P(seq) terms must be >> DBL_EPSILON.  That means M must be small; on the order 
+ * of <= 10. 
+ */
+static void
+utest_Enumeration(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
+{
+  char            errbuf[eslERRBUFSIZE];
+  P7_HMM         *hmm  = NULL;
+  ESL_DSQ        *dsq  = NULL;
+  P7_GMX         *mx   = NULL;
+  int    vsc, fsc;
+  double bg_ll;   		/* log P(seq | bg) */
+  double vp, fp;		/* P(seq,\pi | model) and P(seq | model) */
+  int L;
+  int i;
+  double total_p;
+  char   *seq;
+    
+  /* Sample an enumerable HMM & profile of length M.
+   */
+  if (p7_hmm_SampleEnumerable(r, M, abc, &hmm)     != eslOK) esl_fatal("failed to sample an enumerable HMM");
+  if ((hmm->bg = p7_bg_Create(abc))                == NULL)  esl_fatal("failed to create null model");
+  if ((hmm->gm = p7_profile_Create(hmm->M, abc))   == NULL)  esl_fatal("failed to create profile");
+  if (p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL)  != eslOK) esl_fatal("failed to config profile");
+  if (p7_ReconfigLength(hmm->gm, 0)                != eslOK) esl_fatal("failed to config profile length");
+  if (p7_hmm_Validate    (hmm,     0.0001, errbuf) != eslOK) esl_fatal("whoops, HMM is bad!");
+  if (p7_profile_Validate(hmm->gm, 0.0001)         != eslOK) esl_fatal("whoops, profile is bad!");
+
+  if (  (dsq = malloc(sizeof(ESL_DSQ) * (M+3)))    == NULL)  esl_fatal("allocation failed");
+  if (  (seq = malloc(sizeof(char)    * (M+2)))    == NULL)  esl_fatal("allocation failed");
+  if ((mx     = p7_gmx_Create(hmm->M, M+3))         == NULL)  esl_fatal("matrix creation failed");
+
+  /* Enumerate all sequences of length L <= M
+   */
+  total_p = 0;
+  for (L = 0; L <= M; L++)
+    {
+      /* Initialize dsq of length L at 0000... */
+      dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;
+      for (i = 1; i <= L; i++) dsq[i] = 0;
+
+      while (1) 		/* enumeration of seqs of length L*/
+	{
+	  if (p7_Viterbi(dsq, L, hmm->gm, mx, NULL, &vsc)      != eslOK) esl_fatal("viterbi failed");
+	  if (p7_Forward(dsq, L, hmm->gm, mx, &fsc)            != eslOK) esl_fatal("forward failed");
+ 
+	  /* calculate bg log likelihood component of the scores */
+	  for (bg_ll = 0., i = 1; i <= L; i++)  bg_ll += log(hmm->bg->f[dsq[i]]);
+	  
+	  /* convert the scores back to probabilities, adding the bg LL back to the LLR */
+	  vp =  exp ((double)(vsc / p7_INTSCALE) + bg_ll);
+	  fp =  exp ((double)(fsc / p7_INTSCALE) + bg_ll);
+
+	  /*
+	  esl_abc_Textize(abc, dsq, L, seq);
+	  printf("probability of sequence: %10s   %16g  (SILO v=%6d f=%6d)\n", seq, fp, vsc, fsc);
+	  */
+	  total_p += fp;
+
+	  /* Increment dsq like a reversed odometer */
+	  for (i = 1; i <= L; i++) 
+	    if (dsq[i] < abc->K-1) { dsq[i]++; break; } else { dsq[i] = 0; }
+	  if (i > L) break;	/* we're done enumerating sequences */
+	}
+    }
+
+  /* That sum is subject to a large amount of numerical error because of integer roundoff, etc;
+   * don't expect it to be too close.
+   */
+  if (total_p < 0.8 || total_p > 1.2) esl_fatal("Enumeration unit test failed: total Forward p isn't near 1.0 (%g)", total_p);
+  printf("total p is %g\n", total_p);
+  
+  p7_gmx_Destroy(mx);
+  p7_bg_Destroy(hmm->bg);
+  p7_profile_Destroy(hmm->gm);
+  p7_hmm_Destroy(hmm);
+  free(dsq);
 }
 
 #endif /*p7DP_SLOW_TESTDRIVE*/
@@ -385,7 +638,9 @@ main(int argc, char **argv)
   if (p7_hmm_Validate    (hmm,     0.0001, errbuf) != eslOK) esl_fatal("whoops, HMM is bad!");
   if (p7_profile_Validate(hmm->gm, 0.0001)         != eslOK) esl_fatal("whoops, profile is bad!");
 
+  utest_Enumeration(r, abc, 4);	/* can't go much higher than 5; enumeration test is cpu-intensive. */
   utest_viterbi(r, abc, hmm->gm, nseq, L);
+  utest_forward(r, abc, hmm->gm, nseq, L);
   
   p7_profile_Destroy(hmm->gm);
   p7_bg_Destroy(hmm->bg);

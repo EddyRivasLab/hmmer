@@ -22,18 +22,9 @@
 /* Function:  p7_Die()
  * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]
  *
- * Purpose:   Handle a fatal exception that 
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ * Purpose:   Handle a fatal exception (something that's the system's fault,
+ *            including memory allocation failures; or possibly our fault).
  */
-
-
 void
 p7_Die(char *format, ...)
 {
@@ -48,12 +39,17 @@ p7_Die(char *format, ...)
   exit(1);
 }
 
+/* Function:  p7_Fail()
+ * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]
+ *
+ * Purpose:   Handle a user error (something that's the user's fault).
+ */
 void
 p7_Fail(char *format, ...)
 {
   va_list  argp;
                                 /* format the error mesg */
-  fprintf(stderr, "\nFATAL: ");
+  fprintf(stderr, "\nError: ");
   va_start(argp, format);
   vfprintf(stderr, format, argp);
   va_end(argp);

@@ -154,8 +154,8 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
  * Purpose:   Writes an HMM to a file in binary format.
  *
  * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
+ *            <eslFAIL> if any writes fail (for instance,
+ *            if disk fills up, as happened during testing).
  */
 int
 p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
@@ -163,50 +163,50 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
   int k;
 
   /* ye olde magic number */
-  fwrite((char *) &(v30magic), sizeof(uint32_t), 1, fp);
+  if (fwrite((char *) &(v30magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL;
 
   /* info necessary for sizes of things
    */
-  fwrite((char *) &(hmm->flags),      sizeof(int),  1,   fp);
-  fwrite((char *) &(hmm->M),          sizeof(int),  1,   fp);
-  fwrite((char *) &(hmm->abc->type),  sizeof(int),  1,   fp);
+  if (fwrite((char *) &(hmm->flags),      sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->M),          sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->abc->type),  sizeof(int),  1,   fp) != 1) return eslFAIL;
 
   /* The core model probabilities
    */
   for (k = 1; k <= hmm->M; k++)	/* match emissions (0) 1..M */
-    fwrite((char *) hmm->mat[k], sizeof(float), hmm->abc->K, fp);
+    if (fwrite((char *) hmm->mat[k], sizeof(float), hmm->abc->K, fp) != hmm->abc->K) return eslFAIL;
   for (k = 0; k <= hmm->M; k++)	/* insert emissions 0..M */
-    fwrite((char *) hmm->ins[k], sizeof(float), hmm->abc->K, fp);
+    if (fwrite((char *) hmm->ins[k], sizeof(float), hmm->abc->K, fp) != hmm->abc->K) return eslFAIL;
   for (k = 0; k <= hmm->M; k++)	/* note: start from 0, to include B state */
-    fwrite((char *) hmm->t[k], sizeof(float), 7, fp);
+    if (fwrite((char *) hmm->t[k], sizeof(float), 7, fp)             != 7)           return eslFAIL;
 
   /* annotation section
    */
   write_bin_string(fp, hmm->name);
   if (hmm->flags & p7_ACC)  write_bin_string(fp, hmm->acc);
   if (hmm->flags & p7_DESC) write_bin_string(fp, hmm->desc);
-  if (hmm->flags & p7_RF)   fwrite((char *) hmm->rf,  sizeof(char), hmm->M+1, fp);
-  if (hmm->flags & p7_CS)   fwrite((char *) hmm->cs,  sizeof(char), hmm->M+1, fp);
-  if (hmm->flags & p7_CA)   fwrite((char *) hmm->ca,  sizeof(char), hmm->M+1, fp);
+  if ((hmm->flags & p7_RF) && (fwrite((char *) hmm->rf,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
+  if ((hmm->flags & p7_CS) && (fwrite((char *) hmm->cs,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
+  if ((hmm->flags & p7_CA) && (fwrite((char *) hmm->ca,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   write_bin_string(fp, hmm->comlog);
-  fwrite((char *) &(hmm->nseq), sizeof(int),  1,   fp);
+  if (fwrite((char *) &(hmm->nseq), sizeof(int),  1,   fp) != 1) return eslFAIL;
   write_bin_string(fp, hmm->ctime);
-  if (hmm->flags & p7_MAP)  fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp);
-  fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp);
+  if ((hmm->flags & p7_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
+  if (fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp) != 1) return eslFAIL;
 
   /* Pfam cutoffs section
    */
   if (hmm->flags & p7_GA) {
-    fwrite((char *) &(hmm->ga1), sizeof(float), 1, fp);
-    fwrite((char *) &(hmm->ga2), sizeof(float), 1, fp);
+    if (fwrite((char *) &(hmm->ga1), sizeof(float), 1, fp) != 1) return eslFAIL;
+    if (fwrite((char *) &(hmm->ga2), sizeof(float), 1, fp) != 1) return eslFAIL;
   }
   if (hmm->flags & p7_TC) {
-    fwrite((char *) &(hmm->tc1), sizeof(float), 1, fp);
-    fwrite((char *) &(hmm->tc2), sizeof(float), 1, fp);
+    if (fwrite((char *) &(hmm->tc1), sizeof(float), 1, fp) != 1) return eslFAIL;
+    if (fwrite((char *) &(hmm->tc2), sizeof(float), 1, fp) != 1) return eslFAIL;
   }
   if (hmm->flags & p7_NC) {
-    fwrite((char *) &(hmm->nc1), sizeof(float), 1, fp);
-    fwrite((char *) &(hmm->nc2), sizeof(float), 1, fp);
+    if (fwrite((char *) &(hmm->nc1), sizeof(float), 1, fp) != 1) return eslFAIL;
+    if (fwrite((char *) &(hmm->nc2), sizeof(float), 1, fp) != 1) return eslFAIL;
   }
   return eslOK;
 }
@@ -383,6 +383,10 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
  * Purpose:  Write a string in binary save format: an integer
  *           for the string length (including \0), followed by
  *           the string.
+ *           
+ * Return:   <eslOK> on success;
+ *           <eslFAIL> if a write fails due to system error, such
+ *           as a filled disk (as happened in testing).           
  */
 static int
 write_bin_string(FILE *fp, char *s)
@@ -391,13 +395,13 @@ write_bin_string(FILE *fp, char *s)
   if (s != NULL) 
     {
       len = strlen(s) + 1;
-      fwrite((char *) &len, sizeof(int),  1,   fp);
-      fwrite((char *) s,    sizeof(char), len, fp);
+      if (fwrite((char *) &len, sizeof(int),  1,   fp) != 1)   return eslFAIL;
+      if (fwrite((char *) s,    sizeof(char), len, fp) != len) return eslFAIL;
     }
   else
     {
       len = 0;
-      fwrite((char *) &len, sizeof(int), 1, fp);
+      if (fwrite((char *) &len, sizeof(int), 1, fp) != 1)      return eslFAIL;
     }
   return eslOK;
 }
