@@ -248,7 +248,8 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
     if (tr[idx] == NULL) continue; /* skip rare examples of empty sequences */
     if ((status = p7_trace_Count(hmm, msa->ax[idx], msa->wgt[idx], tr[idx])) != eslOK) goto ERROR;
   }
-  hmm->nseq = msa->nseq;
+  hmm->nseq     = msa->nseq;
+  hmm->eff_nseq = msa->nseq;
 
   /* Transfer annotation from the MSA to the new model
    */

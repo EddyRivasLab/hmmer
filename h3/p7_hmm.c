@@ -5,9 +5,10 @@
  *   2. Convenience routines for setting fields in an HMM.
  *   3. Renormalization and rescaling counts in core HMMs.
  *   4. Debugging and development code.
- *   5. Unit tests.
- *   6. Test driver. 
- *   7. Copyright and license.
+ *   5. Other routines in the API.
+ *   6. Unit tests.
+ *   7. Test driver. 
+ *   8. Copyright and license.
  * 
  * SRE, Mon Jan  1 16:20:29 2007 [Casa de Gatos] [Verdi, La Traviata]
  * SVN $Id$
@@ -51,7 +52,7 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_HMM *
-p7_hmm_Create(int M, ESL_ALPHABET *abc) 
+p7_hmm_Create(int M, const ESL_ALPHABET *abc) 
 {
   P7_HMM *hmm = NULL;
 
@@ -96,6 +97,7 @@ p7_hmm_CreateShell(void)
   hmm->ca       = NULL;
   hmm->comlog   = NULL; 
   hmm->nseq     = 0;
+  hmm->eff_nseq = 0;
   hmm->ctime    = NULL;
   hmm->map      = NULL;
   hmm->checksum = 0;
@@ -128,7 +130,7 @@ p7_hmm_CreateShell(void)
  *            is likely corrupted, and the caller should destroy it.
  */
 int
-p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc) 
+p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc) 
 {
   int k;
   int status;
@@ -276,6 +278,7 @@ p7_hmm_Duplicate(const P7_HMM *hmm)
     esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
   }
   new->nseq     = hmm->nseq;
+  new->eff_nseq = hmm->eff_nseq;
   new->checksum = hmm->checksum;
   new->ga1      = hmm->ga1;
   new->ga2      = hmm->ga2;
@@ -726,6 +729,7 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   hmm->nseq     = 0;
+  hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
 
@@ -789,7 +793,7 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_
  *            
  *            To achieve this in the profile as well as the core HMM,
  *            the caller must configure a unihit mode
- *            (<p7_ProfileConfig(hmm, gm, p7_UNILOCAL)> or
+ *            (<p7_ProfileConfig(hmm, bg, gm, p7_UNILOCAL)> or
  *            <p7_UNIGLOCAL>), and a target length of zero
  *            (<p7_ReconfigLength(gm, 0)>).
  *            
@@ -839,6 +843,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **re
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   hmm->nseq     = 0;
+  hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
 
@@ -909,6 +914,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc,
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   hmm->nseq     = 0;
+  hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
 
@@ -957,6 +963,7 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
   if (strcmp(h1->ctime,  h2->ctime)  != 0) return eslFAIL;
   if (h1->nseq     != h2->nseq)            return eslFAIL;
+  if (h1->eff_nseq != h2->eff_nseq)        return eslFAIL;
   if (h1->checksum != h2->checksum)        return eslFAIL;
 
   if ((h1->flags & p7_ACC)  && strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
@@ -1023,6 +1030,7 @@ p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
   /*  if (hmm->comlog   == NULL) return eslFAIL; */
   /*  if (hmm->ctime    == NULL) return eslFAIL;  */
   if (hmm->nseq     <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid nseq");
+  if (hmm->eff_nseq <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid eff_nseq");
   if (hmm->checksum <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid checksum");
 
   if (  (hmm->flags & p7_ACC)  && hmm->acc  == NULL) ESL_XFAIL(eslFAIL, errbuf, "accession null but p7_ACC flag is up");
@@ -1054,9 +1062,57 @@ p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
 
 
 /*****************************************************************
- * 5. Unit tests.
+ * 5. Other routines in the API.
+ *****************************************************************/
+
+/* Function:  p7_hmm_CalculateOccupancy()
+ * Incept:    SRE, Mon Jan 22 08:10:05 2007 [Janelia]
+ *
+ * Purpose:   Calculate a vector <occ[1..M]> containing probability
+ *            that each match state is used in a sampled path through
+ *            the model. Caller provides allocated space (<M+1> floats)
+ *            for <occ>.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ)
+{
+  int k;
+
+  occ[0] = 0.;			/* no M_0 state */
+  occ[1] = hmm->t[0][p7_TMM];	/* initialize w/ B->M_1 */
+  for (k = 2; k <= hmm->M; k++)
+    occ[k] = occ[k-1] * (hmm->t[k-1][p7_TMM] + hmm->t[k-1][p7_TMI]) +
+      (1.0-occ[k-1]) * hmm->t[k-1][p7_TDM];
+  return eslOK;
+}
+
+/*---------------- end of the rest of the API -------------------*/
+
+/*****************************************************************
+ * 6. Unit tests.
  *****************************************************************/
 #ifdef p7HMM_TESTDRIVE
+
+/* The occupancy test is based on the principle that
+ * the stationary match occupancy probability in a random HMM 
+ * converges to 0.6, for long enough M (STL11/138)
+ */
+static void
+utest_occupancy(P7_HMM *hmm)
+{
+  char  *msg = "modelconfig.c::calculate_occupancy() unit test failed";
+  float *occ;
+  float  x;
+
+  occ = malloc(sizeof(float) * (hmm->M+1));
+  p7_hmm_CalculateOccupancy(hmm, occ);
+  x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
+  if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
+  free(occ);
+  return;
+}
 
 static void
 utest_foo(void)
@@ -1071,7 +1127,7 @@ utest_foo(void)
 
 
 /*****************************************************************
- * 6. Test driver.
+ * 7. Test driver.
  *****************************************************************/
 
 #ifdef p7HMM_TESTDRIVE

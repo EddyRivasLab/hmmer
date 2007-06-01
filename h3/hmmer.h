@@ -64,6 +64,7 @@ typedef struct p7_hmm_s {
   char  *ca;			/* consensus accessibility line  1..M    (p7_CA)     */
   char  *comlog;		/* command line(s) that built model      (mandatory) */
   int    nseq;			/* number of training sequences          (mandatory) */
+  int    eff_nseq;		/* effective number of seqs (<= nseq)    (mandatory) */
   char  *ctime;			/* creation date                         (mandatory) */
   int   *map;			/* map of alignment cols onto model 1..M (p7_MAP)    */
   int    checksum;              /* checksum of training sequences        (mandatory) */
@@ -80,9 +81,9 @@ typedef struct p7_hmm_s {
 
   /* Things we keep references to.
    */
-  ESL_ALPHABET        *abc;	/* ptr to alphabet info (hmm->abc->K is alphabet size) */
-  struct p7_profile_s *gm;	/* generic search profile (incomplete type: P7_PROFILE declared below) */
-  struct p7_bg_s      *bg;	/* null background model  (incomplete type: P7_BG declared below)      */
+  const ESL_ALPHABET        *abc; /* ptr to alphabet info (hmm->abc->K is alphabet size) */
+  const struct p7_profile_s *gm;  /* generic search profile (incomplete type: P7_PROFILE declared below) */
+  const struct p7_bg_s      *bg;  /* null background model  (incomplete type: P7_BG declared below)      */
 
   int flags;
 } P7_HMM;
@@ -133,11 +134,12 @@ typedef struct p7_hmm_s {
 #define p7_STT   9
 #define p7_STJ   10     
 #define p7_STX   11 	/* missing data: used esp. for local entry/exits */
+#define p7_NSTATETYPES 12
 
 /* 1. The P7_HMM object: allocation, initialization, destruction. */
-extern P7_HMM *p7_hmm_Create(int M, ESL_ALPHABET *abc);
+extern P7_HMM *p7_hmm_Create(int M, const ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
-extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, ESL_ALPHABET *abc);
+extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
 extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
 extern P7_HMM *p7_hmm_Duplicate(const P7_HMM *hmm);
@@ -166,6 +168,9 @@ extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf);
 
+/* 5. Other routines in the API */
+extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ);
+
 
 
 /*****************************************************************
@@ -190,9 +195,9 @@ typedef struct p7_profile_s {
   float *end;		/* 1..M end "probabilities"                    */
 
   /* Objects we keep references to */
-  ESL_ALPHABET    *abc;	/* copy of pointer to appropriate alphabet     */
-  struct p7_hmm_s *hmm;	/* who's your daddy                            */
-  struct p7_bg_s  *bg;	/* background null model                       */
+  const ESL_ALPHABET    *abc;	/* copy of pointer to appropriate alphabet     */
+  const struct p7_hmm_s *hmm;	/* who's your daddy                            */
+  const struct p7_bg_s  *bg;	/* background null model                       */
   
   /* Numerical correction detail for long sequences */
   int           do_lcorrect;	/* TRUE to apply score correction      */
@@ -229,17 +234,17 @@ typedef struct p7_profile_s {
 /* Search modes.
  */
 #define p7_NO_MODE   0
-#define p7_LOCAL     1		/* multi-hit local:  "fs" mode   */
-#define p7_GLOCAL    2		/* multi-hit glocal: "ls" mode   */
-#define p7_UNILOCAL  3		/* one-hit local: "sw" mode      */
-#define p7_UNIGLOCAL 4		/* one-hit glocal: "s" mode      */
+#define p7_LOCAL     1		/* multihit local:  "fs" mode   */
+#define p7_GLOCAL    2		/* multihit glocal: "ls" mode   */
+#define p7_UNILOCAL  3		/* unihit local: "sw" mode      */
+#define p7_UNIGLOCAL 4		/* unihit glocal: "s" mode      */
 
-extern P7_PROFILE *p7_profile_Create(int M, ESL_ALPHABET *abc);
+extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 
-extern int         p7_profile_GetT(P7_PROFILE *gm, char st1, int k1, 
+extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
 				   char st2, int k2, int *ret_tsc);
-extern int         p7_profile_Validate(P7_PROFILE *gm, float tol);
+extern int         p7_profile_Validate(const P7_PROFILE *gm, float tol);
 
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
@@ -252,9 +257,11 @@ typedef struct p7_bg_s {
   float *f;			/* residue frequencies [0..K-1] */
 } P7_BG;
 
-extern P7_BG *p7_bg_Create(ESL_ALPHABET *abc);
+extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
+extern int    p7_bg_Dump(FILE *ofp, P7_BG *bg);
 extern void   p7_bg_Destroy(P7_BG *bg);
-extern int    p7_bg_NullOne(P7_BG *bg, ESL_DSQ *dsq, int L, int *ret_sc);
+extern int    p7_bg_SetLength(P7_BG *bg, int L);
+extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, int *ret_sc);
 
 /*****************************************************************
  * 4. P7_TRACE:  a traceback (alignment of seq to profile).
@@ -303,6 +310,7 @@ extern int  p7_trace_Reverse(P7_TRACE *tr);
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 extern int  p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc);
 extern int  p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom);
+extern int  p7_trace_StateUseCounts(const P7_TRACE *tr, int *counts);
 extern int  p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
 				     int *ret_k1, int *ret_k2);
 
@@ -375,11 +383,13 @@ extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
-/* dp_slow.c
+/* dp_generic.c
  */
-extern int p7_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr, int *ret_sc);
-extern int p7_ViterbiTrace(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, P7_TRACE *tr);
-extern int p7_Forward(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, int *ret_sc);
+extern int p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *mx, int *ret_sc);
+extern int p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *mx, int *ret_sc);
+extern int p7_GHybrid (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *mx, int *opt_fwdscore, int *opt_hybscore);
+
+extern int p7_GTrace  (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *mx, P7_TRACE *tr);
 
 
 /* emit.c
@@ -395,7 +405,7 @@ extern void p7_Fail(char *format, ...);
 
 /* eweight.c
  */
-extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
+extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future)
  */
@@ -411,6 +421,7 @@ extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, 
 
 /* hmmer.c
  */
+extern void  p7_banner(FILE *fp, char *progname, char *banner);
 extern int   p7_Prob2SILO(float p, float null);
 extern int   p7_LL2SILO(float ll, float null);
 extern float p7_SILO2Prob(int sc, float null);
@@ -420,15 +431,17 @@ extern int   p7_ILogsum(int s1, int s2);
 
 /* modelconfig.c
  */
-extern int p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode);
+extern int p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode);
 extern int p7_ReconfigLength(P7_PROFILE *gm, int L);
-extern int p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode);
+extern int p7_H2_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode);
 
 /* modelstats.c
  */
-double p7_MeanMatchInfo(const P7_HMM *hmm);
-double p7_MeanMatchEntropy(const P7_HMM *hmm);
-double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm);
+extern double p7_MeanMatchInfo           (const P7_HMM *hmm, const P7_BG *bg);
+extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);
+extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
+extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
+extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
 
 /* seqmodel.c
  */
@@ -437,8 +450,9 @@ extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P,
 		       P7_HMM **ret_hmm);
 
 #ifdef HAVE_MPI
-extern int p7_profile_MPISend(P7_PROFILE *gm, int dest);
-extern int p7_profile_MPIRecv(ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE **ret_gm);
+extern int p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, char **buf, int *nalloc);
+extern int p7_profile_MPIRecv(int source, int tag, const ESL_ALPHABET *abc, const P7_BG *bg,
+			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
 #endif /*HAVE_MPI*/
 
 

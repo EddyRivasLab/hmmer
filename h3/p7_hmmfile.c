@@ -189,7 +189,8 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
   if ((hmm->flags & p7_CS) && (fwrite((char *) hmm->cs,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   if ((hmm->flags & p7_CA) && (fwrite((char *) hmm->ca,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   write_bin_string(fp, hmm->comlog);
-  if (fwrite((char *) &(hmm->nseq), sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->nseq),     sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->eff_nseq), sizeof(int),  1,   fp) != 1) return eslFAIL;
   write_bin_string(fp, hmm->ctime);
   if ((hmm->flags & p7_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   if (fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp) != 1) return eslFAIL;
@@ -340,7 +341,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   if ((hmm->flags & p7_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if ((hmm->flags & p7_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if ((status = read_bin_string(hfp->f, &(hmm->comlog))) != eslOK)                          goto ERROR;
-  if (! fread((char *) &(hmm->nseq), sizeof(int), 1, hfp->f))                               {status = eslEOD; goto ERROR;}
+  if (! fread((char *) &(hmm->nseq),     sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}
+  if (! fread((char *) &(hmm->eff_nseq), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}  
   if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                          goto ERROR;
   if ((hmm->flags & p7_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}

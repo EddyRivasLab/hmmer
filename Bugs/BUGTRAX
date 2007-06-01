@@ -470,4 +470,16 @@ DESCRIPTION
   hmmalign segfaults when a sequence is "empty" (length 0) in 
   an input fasta file.
 //
+ID              h33
+TITLE           ExtremeValueFitHistogram() crashes on uncensored fitting
+STATUS          CLOSED (in 2.4-stable branch)
+XREF            ~/notebook/2007/0531-hmmer-bug-h32
+REPORTED_BY     Yaniv Loewenstein (lonshy@cs.huji.ac.il)
+OPENED_DATE     SRE, Thu May 31 13:49:27 2007
+CLOSED_DATE     SRE, Thu May 31 13:49:29 2007
+DESCRIPTION     
+  ExtremeValueFitHistogram() crashes with a bad malloc() if 
+  asked to fit an uncensored histogram. z is uninitialized.
+  Fix is to initialize z=0. Made this change in 2.4stable branch.
+//
 

@@ -50,6 +50,8 @@ main(int argc, char **argv)
   char            *hmmfile = NULL;     /* file to read HMM(s) from                */
   P7_HMMFILE      *hfp     = NULL;     /* open hmmfile                            */
   P7_HMM          *hmm     = NULL;     /* HMM to emit from                        */
+  P7_PROFILE      *gm      = NULL;     /* profile HMM (scores)                    */
+  P7_BG           *bg      = NULL;     /* null model                              */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   ESL_SQ          *sq      = NULL;     /* sampled digital sequence                */
   char             sqname[64];
@@ -81,7 +83,7 @@ main(int argc, char **argv)
     puts(usage);
     return eslFAIL;
   }
-  hmmfile = esl_opt_GetArg(go, eslARG_STRING, NULL); /* NULL=no range checking */
+  hmmfile = esl_opt_GetArg(go, 1); /* NULL=no range checking */
   if (hmmfile == NULL) esl_fatal("failed to get <hmmfile> on cmdline: %s\n", go->errbuf);
 
   /*****************************************************************
@@ -109,25 +111,26 @@ main(int argc, char **argv)
   if (sq == NULL) sq = esl_sq_CreateDigital(abc);
   if (sq == NULL) esl_fatal("Failed to allocated sequence");
 
-  if ((hmm->bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
-  if ((hmm->gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal("failed to create profile");
+  if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
+  if ((gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal("failed to create profile");
 
   if (cfg.do_oldconfig) {
-    if (p7_H2_ProfileConfig(hmm, hmm->gm, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
+    if (p7_H2_ProfileConfig(hmm, bg, gm, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
   } else {
-    if (p7_ProfileConfig(hmm, hmm->gm, p7_LOCAL)    != eslOK) esl_fatal("failed to configure profile");
-    if (p7_ReconfigLength(hmm->gm, cfg.L)           != eslOK) esl_fatal("failed to reconfig profile L");
-    if (p7_hmm_Validate    (hmm,     0.0001, NULL)  != eslOK) esl_fatal("whoops, HMM is bad!");
-    if (p7_profile_Validate(hmm->gm, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
+    if (p7_ProfileConfig(hmm, bg, gm, p7_LOCAL)    != eslOK) esl_fatal("failed to configure profile");
+    if (p7_ReconfigLength(gm, cfg.L)               != eslOK) esl_fatal("failed to reconfig profile length");
+    if (p7_bg_SetLength(bg, cfg.L)                 != eslOK) esl_fatal("failed to reconfig null model length");
+    if (p7_hmm_Validate    (hmm,     0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_profile_Validate(gm, 0.0001)            != eslOK) esl_fatal("whoops, profile is bad!");
   }
 
   for (nseq = 1; nseq <= cfg.nseq; nseq++) 
     {
       if (cfg.do_profile && cfg.do_oldconfig) {
-	status = p7_H2_ProfileEmit(r, hmm->gm, sq, tr);
+	status = p7_H2_ProfileEmit(r, gm, sq, tr);
 	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
       } else if (cfg.do_profile) {
-	status = p7_ProfileEmit(r, hmm->gm, sq, tr);
+	status = p7_ProfileEmit(r, gm, sq, tr);
 	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
       } else {
 	status = p7_CoreEmit(r, hmm, sq, tr);
@@ -142,6 +145,7 @@ main(int argc, char **argv)
       if (status != eslOK) esl_fatal("Failed to write sequence\n");
     }
 
+  p7_profile_Destroy(gm);
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
   esl_randomness_Destroy(r);

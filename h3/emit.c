@@ -4,7 +4,8 @@
  *    1. Exported API: sequence emission routines.
  *    2. Private functions.
  *    3. Routines emulating HMMER2, for testing.
- *    4. Copyright and license.
+ *    4. Stats driver.
+ *    5. Copyright and license.
  * 
  * SRE, Tue Jan  9 08:55:53 2007 [Janelia] [The Crystal Method, Vegas]
  * SVN $Id$
@@ -421,6 +422,82 @@ p7_H2_ProfileEmit(ESL_RANDOMNESS *r, P7_PROFILE *gm, ESL_SQ *sq, P7_TRACE *tr)
  ERROR:
   return status;
 }
+
+
+/*****************************************************************
+ * 4. Stats driver
+ *****************************************************************/
+
+/* A small driver providing a testbed for sequence-emission related development testing.
+ * 
+ * gcc -g -Wall -o stats -L. -I. -L../easel -I../easel -Dp7EMIT_STATS emit.c -lhmmer -leasel -lm
+ */
+#ifdef p7EMIT_STATS
+#include "p7_config.h"
+#include <stdio.h>
+#include <easel.h>
+#include <esl_alphabet.h>
+#include <esl_random.h>
+#include <esl_sqio.h>
+#include "hmmer.h"
+
+int
+main(int argc, char **argv)
+{
+  char            *hmmfile = argv[1];  /* name of HMM file to read one HMM from   */
+  ESL_ALPHABET    *abc     = NULL;     /* sequence alphabet                       */
+  ESL_RANDOMNESS  *r       = NULL;     /* source of randomness                    */
+  P7_HMMFILE      *hfp     = NULL;     /* open hmmfile                            */
+  P7_HMM          *hmm     = NULL;     /* HMM to emit from                        */
+  P7_PROFILE      *gm      = NULL;     /* profile HMM (scores)                    */
+  P7_BG           *bg      = NULL;     /* null model                              */
+  P7_TRACE        *tr      = NULL;     /* sampled trace                           */
+  ESL_SQ          *sq      = NULL;     /* sampled digital sequence                */
+  int              n       = 1000;
+  int              counts[p7_NSTATETYPES];
+  int              i;
+  int              sc;
+  int              nullsc;
+  double           bitscore;
+
+  r = esl_randomness_CreateTimeseeded();
+  p7_trace_Create(256, &tr);
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("failed to open %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read HMM");
+  sq = esl_sq_CreateDigital(abc);
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create(hmm->M, abc);
+
+  p7_ProfileConfig(hmm, bg, gm, p7_LOCAL);
+
+  for (i = 0; i < n; i++) 
+    {
+      p7_ProfileEmit(r, gm, sq, tr);
+      p7_trace_StateUseCounts(tr, counts);
+
+      p7_ReconfigLength(gm, sq->n);
+      p7_bg_SetLength(bg, sq->n);
+      p7_trace_Score(tr, sq->dsq, gm, &sc);
+      p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
+      bitscore = p7_SILO2Bitscore(sc - nullsc);
+
+      printf("%d  %8.2f\n",
+	     counts[p7_STM] + (counts[p7_STI] + counts[p7_STD])/2,
+	     bitscore);
+    }
+
+  p7_profile_Destroy(gm);
+  esl_sq_Destroy(sq);
+  p7_trace_Destroy(tr);
+  esl_randomness_Destroy(r);
+  esl_alphabet_Destroy(abc);
+  p7_hmmfile_Close(hfp);
+  p7_hmm_Destroy(hmm);
+  return eslOK;
+} 
+
+
+#endif /*p7EMIT_STATS*/
 
 
 

@@ -36,19 +36,17 @@ PVMINCDIR = @PVMINCDIR@
 PVMLIBS   = @PVMLIBS@
 PVMPROGS  = @PVMPROGS@
 
-MPICC     = @MPICC@
 MPILIBS   = @MPILIBS@
-MPIPROGS  = @MPIPROGS@
 
 SHELL    = /bin/sh
 MYLIBS   = -leasel
 MYLIBDIR = -L../easel
 MYINCDIR = -I../easel
 
-PROGS = hmmbuild hmmsearch hmmemit hmmindex hmmsim
+PROGS = hmmbuild hmmsearch hmmemit hmmindex hmmsim hmmstat
 
 OBJS =  build.o\
-	dp_slow.o\
+	dp_generic.o\
 	emit.o\
 	errors.o\
 	eweight.o\
@@ -76,13 +74,10 @@ HDRS =  hmmer.h\
 #################################################################
 ## Targets defining how to make HMMER executables.
 ##
-all: 	$(PROGS) $(MPIPROGS) libhmmer.a  ../easel/libeasel.a
+all: 	$(PROGS) libhmmer.a  ../easel/libeasel.a
 
 ${PROGS}: @EXEC_DEPENDENCY@ ${OBJS}   libhmmer.a ../easel/libeasel.a
-	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
-
-${MPIPROGS}: @EXEC_DEPENDENCY@ ${OBJS}   libhmmer.a ../easel/libeasel.a
-	${MPICC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${LIBS}
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
 
 #################################################################
 ## Targets used in making HMMER library for testsuite compilation.

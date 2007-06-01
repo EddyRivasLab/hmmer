@@ -724,6 +724,30 @@ p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom)
   return eslOK;
 }
 
+/* Function:  p7_trace_StateUseCounts()
+ * Incept:    SRE, Sun May 27 10:30:13 2007 [Janelia]
+ *
+ * Purpose:   Accumulate counts of each different state type in trace <tr>. 
+ *
+ *            <counts[]> is allocated for at least <p7_NSTATETYPES>
+ *            integers, indexed by statetype. Upon return,
+ *            <counts[p7_STM]> contains the number of match states
+ *            in the trace, for example.
+ */
+int
+p7_trace_StateUseCounts(const P7_TRACE *tr, int *counts)
+{
+  int x,z;
+
+  for (x = 0; x < p7_NSTATETYPES; x++) counts[x] = 0;
+
+  for (z = 0; z < tr->N; z++) {
+    x = tr->st[z];
+    if (x < 0 || x >= p7_NSTATETYPES) ESL_EXCEPTION(eslEINVAL, "bad state type");
+    counts[x]++;
+  }
+  return eslOK;
+}
 
 /* Function:  p7_trace_GetDomainCoords()
  * Incept:    SRE, Tue Feb 27 13:08:32 2007 [Janelia]

@@ -18,6 +18,63 @@
 #include "easel.h"
 #include "hmmer.h"
 
+/* Function:  p7_banner()
+ * Synopsis:  print standard HMMER application output header
+ * Incept:    SRE, Wed May 23 10:45:53 2007 [Janelia]
+ *
+ * Purpose:   Print the standard HMMER command line application banner
+ *            to <fp>, constructing it from <progname> (the name of the
+ *            program) and a short one-line description <banner>.
+ *            For example, 
+ *            <p7_banner(stdout, "hmmsim", "collect profile HMM score distributions");>
+ *            might result in:
+ *            
+ *            \begin{cchunk}
+ *            # hmmsim :: collect profile HMM score distributions
+ *            # HMMER 3.0 (May 2007)
+ *            # Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus
+ *            # Freely licensed under the Janelia Software License.
+ *            # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ *            \end{cchunk}
+ *              
+ *            <progname> would typically be an application's
+ *            <argv[0]>, rather than a fixed string. This allows the
+ *            program to be renamed, or called under different names
+ *            via symlinks. Any path in the <progname> is discarded;
+ *            for instance, if <progname> is "/usr/local/bin/hmmsim",
+ *            "hmmsim" is used as the program name.
+ *            
+ * Note:    
+ *    Needs to pick up preprocessor #define's from p7_config.h,
+ *    as set by ./configure:
+ *            
+ *    symbol          example
+ *    ------          ----------------
+ *    HMMER_VERSION   "3.0"
+ *    HMMER_DATE      "May 2007"
+ *    HMMER_COPYRIGHT "Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus"
+ *    HMMER_LICENSE   "Freely licensed under the Janelia Software License."
+ *
+ * Returns:   (void)
+ */
+void
+p7_banner(FILE *fp, char *progname, char *banner)
+{
+  char *appname = NULL;
+
+  if (esl_FileTail(progname, FALSE, &appname) != eslOK) appname = progname;
+
+  fprintf(fp, "# %s :: %s\n", appname, banner);
+  fprintf(fp, "# HMMER %s (%s)\n", HMMER_VERSION, HMMER_DATE);
+  fprintf(fp, "# %s\n", HMMER_COPYRIGHT);
+  fprintf(fp, "# %s\n", HMMER_LICENSE);
+  fprintf(fp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
+
+  if (appname != NULL) free(appname);
+  return;
+}
+
+
 /* Function: p7_Prob2SILO()
  * 
  * Purpose:  Convert a probability to a scaled integer log odds score. 

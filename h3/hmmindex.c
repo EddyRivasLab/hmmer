@@ -45,7 +45,7 @@ main(int argc, char **argv)
     esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 2 = indentation; 80=textwidth*/
     return 0;
   }
-  hmmfile = esl_opt_GetArg(go, eslARG_INFILE, NULL);
+  hmmfile = esl_opt_GetArg(go, 1);
   if (hmmfile == NULL)        esl_fatal("Failed to get <hmmfile> argument on command line.");
 
   /* Initializations, including opening the HMM file.

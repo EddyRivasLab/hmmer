@@ -1,5 +1,10 @@
-# configure.ac
-# Process this file with autoconf to produce a configure script.
+# Process this file with autoconf to produce the HMMER configure script.
+#
+# Note that this is synchronized with Easel's configure script,
+# so that HMMER configures Easel in addition to itself; this saves
+# having to do a separate ./configure in Easel. That is,
+# everything that appears in Easel's configure script must also
+# appear here. 
 #
 # reminders to save re-reading autoconf manual for the n'th time:
 #   - output variables:
@@ -35,17 +40,7 @@
 #  13. AC_OUTPUT
 
 
-
-################################################################
-# 1. autoconf requirements
-################################################################
-AC_PREREQ(2.57)
-
-
-################################################################
-# 2. AC_INIT
-################################################################
-
+AC_PREREQ(2.60)
 AC_INIT(HMMER, 3.0, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
@@ -68,20 +63,29 @@ AC_MSG_NOTICE([Configuring HMMER for your system.])
 #     HMMER_LICENSETAG  which license to bundle from Licenses/ subdirectory.
 #     HMMER_VERSION     copy of version code, e.g. "3.0"
 #     HMMER_URL         URL home for HMMER.
+# And we have to define the relevant package variables for Easel as well.
 #
-# We avoid using AC_INIT's PACKAGE_ variables, because we want to be able
+# We avoid using AC_INIT's PACKAGE_ variables anywhere, because we want to be able
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
 HMMER_RELCODE="hmmer3_0"
-HMMER_DATE="January 2007"
-HMMER_COPYRIGHT="Copyright (C) 1992-2007 HHMI/Washington University School of Medicine"
+HMMER_DATE="June 2007"
+HMMER_COPYRIGHT="Copyright (C) 1992-2007 HHMI Janelia Farm Research Campus"
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 HMMER_LICENSETAG=gnu
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"
 
-# Output variables  (AC_OUTPUT replaces @var@ in Makefiles, p7config.h)
+EASEL_RELCODE="easel0_1"
+EASEL_DATE="June 2007"
+EASEL_COPYRIGHT="Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus"
+EASEL_LICENSE="Freely distributed under the Janelia Software License."
+EASEL_LICENSETAG=jsl
+EASEL_VERSION="0.1"
+EASEL_URL="http://easel.janelia.org/"
+
+# Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
 AC_SUBST(HMMER_RELCODE)
 AC_SUBST(HMMER_DATE)
 AC_SUBST(HMMER_COPYRIGHT)
@@ -90,11 +94,24 @@ AC_SUBST(HMMER_LICENSETAG)
 AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
 
+AC_SUBST(EASEL_RELCODE)
+AC_SUBST(EASEL_DATE)
+AC_SUBST(EASEL_COPYRIGHT)
+AC_SUBST(EASEL_LICENSE)
+AC_SUBST(EASEL_LICENSETAG)
+AC_SUBST(EASEL_VERSION)
+AC_SUBST(EASEL_URL)
+
 # Preprocessor symbols (replace #undefs in p7config.h)
 AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
 AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
 AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
 AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
+
+AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
+AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
+AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
+AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
@@ -122,69 +139,15 @@ AC_CANONICAL_HOST
 if ((! test -d binaries) && test -d src); then 
 AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
-
-
-
-
-################################################################
-# 4. Checks for programs
-################################################################
-
-# Set output variable "RANLIB"
-AC_PROG_RANLIB
-
-# Set output variable "AR"
-AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
-
-# GNU make check; format of makefile dependency lines for executables.
-# original from John Darrington <j.darrington@elvis.murdoch.edu.au> 
-# w/ heavy modifications.
+# Choose the compiler
 #
-# We need this because GNU make and SYSV make use different systems
-# specifying variables for dependencies: $$@ in sysv, %: %.o in GNU.
-# Would love to hear a better way of doing this.
-# 
-# I use two different conventions in my Makefiles. Sometimes 
-# executable "foo" has a file "foo.c" - this is the HMMER convention.
-# Sometimes executable "foo" has a file "foo_main.c" - this is
-# the SQUID convention. The configure script sets the
-# EXEC_DEPENDENCY appropriately: here, HMMER style.
-#
-# This creates a function CHECK_GNU_MAKE, which we immediately call.
-# It sets an output variable EXEC_DEPENDENCY. 
-# This is used in the src/Makefile.in.
-#
-AC_DEFUN(CHECK_GNU_MAKE,[ 
-  AC_MSG_CHECKING(whether your make is GNU make)
-  foundGNUmake='nope, assuming sysv make.' ;
-  EXEC_DEPENDENCY=[\$\$\@.o] ;
-  if ( make --version nothing 2> /dev/null | grep GNU > /dev/null ) ;  then
-     foundGNUmake='yes, it is.' ;
-     EXEC_DEPENDENCY='%: %.o' ;
-  fi
-  AC_MSG_RESULT($foundGNUmake)
-  AC_SUBST(EXEC_DEPENDENCY)
-])
-CHECK_GNU_MAKE
+AC_PROG_CC
+if test "$CC" = xlc ; then	# IBM's xlc?
+  CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
+fi
 
 ################################################################
-# 5. Libraries
-################################################################
-
-################################################################
-# 6. Header files
-################################################################
-
-################################################################
-# 7. Types
-################################################################
-
-################################################################
-# 8. Structures
-################################################################
-
-################################################################
-# 9. Compiler
+# Process the ./configure command line
 ################################################################
 
 # --enable-debugging=x    - set debugging level to <x> (1-3)
@@ -199,54 +162,48 @@ AC_ARG_ENABLE(debugging,
    yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
          CFLAGS="-g -Wall"
          AC_DEFINE(p7_DEBUGLEVEL, 0)
+	 AC_DEFINE(eslDEBUGLEVEL, 0)
          ;;
      1)  AC_MSG_NOTICE([enabled debugging diagnostics level 1 (low verbosity)])
          CFLAGS="-g -Wall"
          AC_DEFINE(p7_DEBUGLEVEL, 1)
+	 AC_DEFINE(eslDEBUGLEVEL, 1)
          ;;
      2)  AC_MSG_NOTICE([enabled debugging diagnostics level 2 (moderate verbosity)])
          CFLAGS="-g -Wall"
          AC_DEFINE(p7_DEBUGLEVEL, 2)
+	 AC_DEFINE(eslDEBUGLEVEL, 2)
          ;;
      3)  AC_MSG_NOTICE([enabled debugging diagnostics level 3 (high verbosity)])
          CFLAGS="-g -Wall"
          AC_DEFINE(p7_DEBUGLEVEL, 3)
+	 AC_DEFINE(eslDEBUGLEVEL, 3)
          ;;
     no)  AC_MSG_NOTICE([debugging diagnostics disabled])
          AC_DEFINE(p7_DEBUGLEVEL, 0)
+	 AC_DEFINE(eslDEBUGLEVEL, 0)
          ;;
      *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
          ;;
 esac])
 
-# Choose the compiler
+# --enable-gcov      - compile for code coverage testing
 #
-AC_PROG_CC
-if test "$CC" = xlc ; then	# IBM's xlc?
-  CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
-fi
-
-# --enable-ccmalloc      - configure for compiling in ccmalloc memory checks
+# Replaces CC with "gcc" and CFLAGS with "-g -Wall -fprofile-arcs -ftest-coverage".
+# Running programs (notably the test suite) will then generate .gcda files,
+# which the gcov tool can read.
 #
-# The CC output variable is modified.
-# Requires ccmalloc version >= 0.4.0 because of the --no-wrapper option.
+AC_ARG_ENABLE(gcov, 
+  [  --enable-gcov           Compile with instrumentation for code coverage testing], 
+  [ 
+    AC_MSG_NOTICE([Compiling with gcov instrumentation.])
+    CC="gcc"
+    CFLAGS="-g -Wall -fprofile-arcs -ftest-coverage"
+  ])
+
+
+# --enable-impl      - choose an optimized implementation
 #
-AC_ARG_ENABLE(ccmalloc,
-[  --enable-ccmalloc       turn ccmalloc memory debugging on ],
-[case $enable_ccmalloc in
-   yes)  AC_MSG_NOTICE([enabled ccmalloc memory debugging])
-         CC="ccmalloc --no-wrapper $CC" 
-         ;;
-    no)  AC_MSG_NOTICE([ccmalloc memory debug/tracing disabled])
-         ;;
-     *)  echo "Ignoring unknown argument to --enable-ccmalloc: $enable_ccmalloc"
-	 ;;
-esac])
-
-################################################################
-# 9a. Choice of optimized implementation.
-################################################################
-
 impl_choice="fast"
 impl_cflags=""
 AC_ARG_ENABLE(impl,
@@ -301,9 +258,9 @@ if test "$impl_choice" = altivec; then
 _ACEOF
         fi
         AC_MSG_CHECKING([whether the compiler supports altivec extensions])
-################################################################
+#
 # IBM PPC xlc altivec compile test: (Yinhe Cheng, IBM)
-################################################################
+#
 	if test "$CC" = "xlc"; then  
 		AC_TRY_COMPILE([],[
 #ifndef __IBM_VACPP_altivec_h
@@ -321,9 +278,9 @@ vector signed char X;
 [instruction set, or your xlc compiler doesn't support Altivec. Rerun configure]
 [without --enable-altivec, or update your compiler.])]
 )
-############################################################################
-#### else, Apple OS/X altivec compile test: (Erik Lindahl, Stanford)
-############################################################################
+#
+# else, Apple OS/X altivec compile test: (Erik Lindahl, Stanford)
+#
 	else
 	      AC_TRY_COMPILE([],[
 #ifndef __VEC__
@@ -345,266 +302,34 @@ vector signed char X;
         fi
 fi
 
-################################################################
-# 10. Library functions
-################################################################
-# Although we configure our fixed-size integers in squid,
-# we do need some of that configuration code here, because
-# we might (on Solaris, for instance) need to include
-# -lsocket to the linker to get ntohs() and friends. These
-# define preprocessor variables HAVE_NTOHS, HAVE_NTOHL,
-# HAVE_HTONS, and HAVE_HTONL.
-#
-AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
-AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
-AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
-AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 
-
-# --enable-pvm       Enable Parallel Virtual Machine (PVM) support
+# --enable-mpi       Enable MPI parallelization
 # 
-# Sets PVMLIBDIR, PVMINCDIR, PVMPROGS, PVMLIBS output variables
-# Sets HMMER_PVM preprocessor variable.
+# Sets MPILIBS output variable
+# Sets CC to appropriate compiler wrapper for MPI (mpicc, usually)
+# Defines HAVE_MPI preprocessor variable.
 #
-AC_ARG_ENABLE(pvm, 
-[  AS_HELP_STRING([--enable-pvm],
-                  [enable PVM, Parallel Virtual Machine])],
-[case $enable_pvm in
-   yes)  AC_MSG_NOTICE([enabled optional PVM (Parallel Virtual Machine) support])
- 	 PVMLIBDIR="-L${PVM_ROOT}/lib/${PVM_ARCH}"
-	 PVMINCDIR="-I${PVM_ROOT}/include"
-	 PVMPROGS="hmmcalibrate-pvm hmmpfam-pvm hmmsearch-pvm"
-	 PVMLIBS="-lpvm3"
-	 AC_DEFINE(HMMER_PVM)
+AC_ARG_ENABLE(mpi, 
+[AS_HELP_STRING([--enable-mpi], [enable MPI parallelization])],
+[case $enable_mpi in
+   yes) ACX_MPI([
+           AC_MSG_NOTICE([enabled optional MPI parallelization])
+	   AC_DEFINE(HAVE_MPI)
+	   CC=$MPICC
+          ], [
+           AC_MSG_ERROR([MPI library not found])
+          ])
 	 ;;
-   no)   AC_MSG_NOTICE([PVM (Parallel Virtual machine) support disabled])
+   no)   AC_MSG_NOTICE([MPI parallelization disabled])
          ;;
-   *)    echo "Ignoring unknown argument to --enable-pvm: $enable_pvm"
+   *)    echo "Ignoring unknown argument to --enable-mpi: $enable_mpi"
 	 ;;
 esac])
-AC_SUBST(PVMLIBDIR)
-AC_SUBST(PVMINCDIR)
-AC_SUBST(PVMPROGS)
-AC_SUBST(PVMLIBS)
 
 
 # --enable-threads      Enable POSIX multithreading
 #
 # Uses ACX_PTHREAD macro from the GNU macro archive.
-# ****************************************************************
-# ****************************************************************
-# 
-# The ACX_PTHREAD macro.
-# Synopsis: ACX_PTHREAD([ACTION-IF-FOUND[, ACTION-IF-NOT-FOUND]]) 
-# Authors:  Steven G. Johnson <stevenj@alum.mit.edu>
-#           Alejandro Forero Cuervo <bachue@bachue.com>
-# Version:  1.9 (2004/02/23)
-# Source:   http://www.gnu.org/software/ac-archive/htmldoc/acx_pthread.html
-# Everything below is verbatim from the archive. DO NOT MODIFY IT.
-#
-dnl Available from the GNU Autoconf Macro Archive at:
-dnl http://www.gnu.org/software/ac-archive/htmldoc/acx_pthread.html
-dnl
-AC_DEFUN([ACX_PTHREAD], [
-AC_REQUIRE([AC_CANONICAL_HOST])
-AC_LANG_SAVE
-AC_LANG_C
-acx_pthread_ok=no
-
-# We used to check for pthread.h first, but this fails if pthread.h
-# requires special compiler flags (e.g. on True64 or Sequent).
-# It gets checked for in the link test anyway.
-
-# First of all, check if the user has set any of the PTHREAD_LIBS,
-# etcetera environment variables, and if threads linking works using
-# them:
-if test x"$PTHREAD_LIBS$PTHREAD_CFLAGS" != x; then
-        save_CFLAGS="$CFLAGS"
-        CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-        save_LIBS="$LIBS"
-        LIBS="$PTHREAD_LIBS $LIBS"
-        AC_MSG_CHECKING([for pthread_join in LIBS=$PTHREAD_LIBS with CFLAGS=$PTHREAD_CFLAGS])
-        AC_TRY_LINK_FUNC(pthread_join, acx_pthread_ok=yes)
-        AC_MSG_RESULT($acx_pthread_ok)
-        if test x"$acx_pthread_ok" = xno; then
-                PTHREAD_LIBS=""
-                PTHREAD_CFLAGS=""
-        fi
-        LIBS="$save_LIBS"
-        CFLAGS="$save_CFLAGS"
-fi
-
-# We must check for the threads library under a number of different
-# names; the ordering is very important because some systems
-# (e.g. DEC) have both -lpthread and -lpthreads, where one of the
-# libraries is broken (non-POSIX).
-
-# Create a list of thread flags to try.  Items starting with a "-" are
-# C compiler flags, and other items are library names, except for "none"
-# which indicates that we try without any flags at all, and "pthread-config"
-# which is a program returning the flags for the Pth emulation library.
-
-acx_pthread_flags="pthreads none -Kthread -kthread lthread -pthread -pthreads -mthreads pthread --thread-safe -mt pthread-config"
-
-# The ordering *is* (sometimes) important.  Some notes on the
-# individual items follow:
-
-# pthreads: AIX (must check this before -lpthread)
-# none: in case threads are in libc; should be tried before -Kthread and
-#       other compiler flags to prevent continual compiler warnings
-# -Kthread: Sequent (threads in libc, but -Kthread needed for pthread.h)
-# -kthread: FreeBSD kernel threads (preferred to -pthread since SMP-able)
-# lthread: LinuxThreads port on FreeBSD (also preferred to -pthread)
-# -pthread: Linux/gcc (kernel threads), BSD/gcc (userland threads)
-# -pthreads: Solaris/gcc
-# -mthreads: Mingw32/gcc, Lynx/gcc
-# -mt: Sun Workshop C (may only link SunOS threads [-lthread], but it
-#      doesn't hurt to check since this sometimes defines pthreads too;
-#      also defines -D_REENTRANT)
-# pthread: Linux, etcetera
-# --thread-safe: KAI C++
-# pthread-config: use pthread-config program (for GNU Pth library)
-
-case "${host_cpu}-${host_os}" in
-        *solaris*)
-
-        # On Solaris (at least, for some versions), libc contains stubbed
-        # (non-functional) versions of the pthreads routines, so link-based
-        # tests will erroneously succeed.  (We need to link with -pthread or
-        # -lpthread.)  (The stubs are missing pthread_cleanup_push, or rather
-        # a function called by this macro, so we could check for that, but
-        # who knows whether they'll stub that too in a future libc.)  So,
-        # we'll just look for -pthreads and -lpthread first:
-
-        acx_pthread_flags="-pthread -pthreads pthread -mt $acx_pthread_flags"
-        ;;
-esac
-
-if test x"$acx_pthread_ok" = xno; then
-for flag in $acx_pthread_flags; do
-
-        case $flag in
-                none)
-                AC_MSG_CHECKING([whether pthreads work without any flags])
-                ;;
-
-                -*)
-                AC_MSG_CHECKING([whether pthreads work with $flag])
-                PTHREAD_CFLAGS="$flag"
-                ;;
-
-		pthread-config)
-		AC_CHECK_PROG(acx_pthread_config, pthread-config, yes, no)
-		if test x"$acx_pthread_config" = xno; then continue; fi
-		PTHREAD_CFLAGS="`pthread-config --cflags`"
-		PTHREAD_LIBS="`pthread-config --ldflags` `pthread-config --libs`"
-		;;
-
-                *)
-                AC_MSG_CHECKING([for the pthreads library -l$flag])
-                PTHREAD_LIBS="-l$flag"
-                ;;
-        esac
-
-        save_LIBS="$LIBS"
-        save_CFLAGS="$CFLAGS"
-        LIBS="$PTHREAD_LIBS $LIBS"
-        CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-
-        # Check for various functions.  We must include pthread.h,
-        # since some functions may be macros.  (On the Sequent, we
-        # need a special flag -Kthread to make this header compile.)
-        # We check for pthread_join because it is in -lpthread on IRIX
-        # while pthread_create is in libc.  We check for pthread_attr_init
-        # due to DEC craziness with -lpthreads.  We check for
-        # pthread_cleanup_push because it is one of the few pthread
-        # functions on Solaris that doesn't have a non-functional libc stub.
-        # We try pthread_create on general principles.
-        AC_TRY_LINK([#include <pthread.h>],
-                    [pthread_t th; pthread_join(th, 0);
-                     pthread_attr_init(0); pthread_cleanup_push(0, 0);
-                     pthread_create(0,0,0,0); pthread_cleanup_pop(0); ],
-                    [acx_pthread_ok=yes])
-
-        LIBS="$save_LIBS"
-        CFLAGS="$save_CFLAGS"
-
-        AC_MSG_RESULT($acx_pthread_ok)
-        if test "x$acx_pthread_ok" = xyes; then
-                break;
-        fi
-
-        PTHREAD_LIBS=""
-        PTHREAD_CFLAGS=""
-done
-fi
-
-# Various other checks:
-if test "x$acx_pthread_ok" = xyes; then
-        save_LIBS="$LIBS"
-        LIBS="$PTHREAD_LIBS $LIBS"
-        save_CFLAGS="$CFLAGS"
-        CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-
-        # Detect AIX lossage: threads are created detached by default
-        # and the JOINABLE attribute has a nonstandard name (UNDETACHED).
-        AC_MSG_CHECKING([for joinable pthread attribute])
-        AC_TRY_LINK([#include <pthread.h>],
-                    [int attr=PTHREAD_CREATE_JOINABLE;],
-                    ok=PTHREAD_CREATE_JOINABLE, ok=unknown)
-        if test x"$ok" = xunknown; then
-                AC_TRY_LINK([#include <pthread.h>],
-                            [int attr=PTHREAD_CREATE_UNDETACHED;],
-                            ok=PTHREAD_CREATE_UNDETACHED, ok=unknown)
-        fi
-        if test x"$ok" != xPTHREAD_CREATE_JOINABLE; then
-                AC_DEFINE(PTHREAD_CREATE_JOINABLE, $ok,
-                          [Define to the necessary symbol if this constant
-                           uses a non-standard name on your system.])
-        fi
-        AC_MSG_RESULT(${ok})
-        if test x"$ok" = xunknown; then
-                AC_MSG_WARN([we do not know how to create joinable pthreads])
-        fi
-
-        AC_MSG_CHECKING([if more special flags are required for pthreads])
-        flag=no
-        case "${host_cpu}-${host_os}" in
-                *-aix* | *-freebsd*)     flag="-D_THREAD_SAFE";;
-                *solaris* | *-osf* | *-hpux*) flag="-D_REENTRANT";;
-        esac
-        AC_MSG_RESULT(${flag})
-        if test "x$flag" != xno; then
-                PTHREAD_CFLAGS="$flag $PTHREAD_CFLAGS"
-        fi
-
-        LIBS="$save_LIBS"
-        CFLAGS="$save_CFLAGS"
-
-        # More AIX lossage: must compile with cc_r
-        AC_CHECK_PROG(PTHREAD_CC, cc_r, cc_r, ${CC})
-else
-        PTHREAD_CC="$CC"
-fi
-
-AC_SUBST(PTHREAD_LIBS)
-AC_SUBST(PTHREAD_CFLAGS)
-AC_SUBST(PTHREAD_CC)
-
-# Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
-if test x"$acx_pthread_ok" = xyes; then
-        ifelse([$1],,AC_DEFINE(HAVE_PTHREAD,1,[Define if you have POSIX threads libraries and header files.]),[$1])
-        :
-else
-        acx_pthread_ok=no
-        $2
-fi
-AC_LANG_RESTORE
-])dnl ACX_PTHREAD
-# ACX_PTHREAD macro end.
-# ****************************************************************
-# ****************************************************************
-#
 # Back to my code to finish enabling pthreads...
 # Define these preprocessor variables:
 #     HMMER_THREADS
@@ -625,31 +350,102 @@ AC_ARG_ENABLE(threads,
 	;;
 esac])
 
-# Check for incompatible optional features
+# --with-gsl        - enable hooks into the GSL (GNU Scientific Library)
 #
-if test x"$enable_threads" = xyes; then
-  if test x"$enable_ccmalloc" = xyes; then
-    AC_MSG_ERROR([ccmalloc probably not threadsafe; do not enable both ccmalloc and threads])
-  fi
-fi
+# The (action-if-given) is blank: using --with-gsl sets $with_gsl to 'yes',
+# and --without-gsl sets $with_gsl to 'no'. If neither is given,
+# $with_gsl is set to 'check', and we'll try to use GSL anyway if we
+# can find it.
+# 
+# We interpret the $with_gsl setting later, in the "checks for libraries" section.
+AC_ARG_WITH([gsl],
+            [AS_HELP_STRING([--with-gsl],
+                           [use the GSL, GNU Scientific Library (default is no)])],
+            [if test "x$withval" != xno ; then 
+               AC_MSG_NOTICE([Enabling hooks into the GNU Scientific Library (GSL)])
+             fi
+            ],
+	    [with_gsl=no])
 
-################################################################
+
+# Checks for programs
+#
+
+# Set output variable "RANLIB"
+AC_PROG_RANLIB
+
+# Set output variable "AR"
+AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
+
+# Set the output variable EXEC_DEPENDENCY according
+# to whether we're using GNU make or a SYSV make.
+CHECK_GNU_MAKE
+
+
+
+# Checks for libraries
+#
+LIBGSL=
+AS_IF([test "x$with_gsl" != xno],
+      [AC_CHECK_LIB([gsl], [gsl_expm1], 
+           [AC_SUBST([LIBGSL], ["-lgsl -lgslcblas"])
+            AC_DEFINE([HAVE_LIBGSL], [1], [Define if you have libgsl])
+           ],
+           [if test "x$with_gsl" != xcheck; then
+             AC_MSG_FAILURE(
+               [--with-gsl was given, but GSL library was not found])
+            fi
+           ],
+           [-lgslcblas]
+        )])
+
+# Checks for headers
+#
+AC_CHECK_HEADERS([sys/types.h])
+AC_CHECK_HEADERS([unistd.h])
+AC_CHECK_HEADERS([stdint.h])
+AC_CHECK_HEADERS([inttypes.h])
+
+# Checks for types
+#
+AC_C_BIGENDIAN
+AC_TYPE_UINT8_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_OFF_T
+
+# Checks for functions, defining HAVE_FOO when foo is found
+#
+AC_CHECK_FUNCS(mkstemp)
+AC_CHECK_FUNCS(popen)
+AC_CHECK_FUNCS(strcasecmp)
+AC_CHECK_FUNCS(times)
+AC_FUNC_FSEEKO
+AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
+AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
+AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
+AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+
+#
 # 11. System services
-################################################################
-
+#
 AC_SYS_LARGEFILE
 
+# Done.
+# Config subdirs and files (except main Makefile, which we defer)
+#
 
-################################################################
-# 12. Config subdirs and files (except main Makefile, which we defer)
-################################################################
-
-AC_CONFIG_SUBDIRS(easel)
 AC_CONFIG_HEADERS(src/p7_config.h)
 AC_CONFIG_FILES(src/Makefile)
 AC_CONFIG_FILES(h3/Makefile)
 AC_CONFIG_HEADERS(h3/p7_config.h)
 AC_CONFIG_FILES(testsuite/Makefile)
+
+AC_CONFIG_HEADERS([easel/esl_config.h])
+AC_CONFIG_FILES([easel/miniapps/Makefile])
+AC_CONFIG_FILES([easel/Makefile])
+
 
 ################################################################
 # 13. AC_OUTPUT
@@ -659,9 +455,8 @@ AC_CONFIG_FILES(testsuite/Makefile)
 else
   AC_MSG_NOTICE([This is a precompiled binary distribution - using abbreviated config])
 fi
-AC_CONFIG_FILES(Makefile)
+AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
-
 
 echo "
 
@@ -669,16 +464,6 @@ HMMER configuration:
 
      DP implementation:    ${impl_choice}
 "
-
-
-
-
-
-
-
-
-
-
 
 
 

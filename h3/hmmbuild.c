@@ -46,16 +46,19 @@ static ESL_OPTIONS options[] = {
   { "--enone",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "no effective seq # weighting: just use nseq",         4},
   { "--eset",    eslARG_REAL,   NULL,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "set eff seq # for all models to <x>",                 4},
   { "--ere",     eslARG_REAL,   NULL,  NULL,"x>0",       NULL, "--eent",     NULL, "for --eent: set target relative entropy to <x>",      4},
+  { "--eX",      eslARG_REAL,  "6.0",  NULL,"x>0",       NULL, "--eent",  "--ere", "for --eent: set minimum total rel ent param to <x>",  4},
   { "--eid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--eclust",    NULL, "for --eclust: set fractional identity cutoff to <x>", 4},
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "hmmbuild [-options] <hmmfile output> <alignment file input>";
+static char banner[] = "profile HMM construction from a multiple sequence alignment";
+static char usage[]  = "[-options] <hmmfile output> <alignment file input>";
 
 static int  set_relative_weights(ESL_GETOPTS *go, ESL_MSA *msa);
 static void build_model(ESL_GETOPTS *go, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 static void set_model_name(P7_HMM *hmm, char *setname, char *msa_name, char *alifile, int nali);
-static int  set_effective_seqnumber(const ESL_GETOPTS *go, const ESL_MSA *msa, P7_HMM *hmm, const P7_DPRIOR *prior);
+static int  set_effective_seqnumber(const ESL_GETOPTS *go, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *prior);
+static double default_target_relent(const ESL_ALPHABET *abc, int M, double eX);
 
 int
 main(int argc, char **argv)
@@ -80,27 +83,38 @@ main(int argc, char **argv)
    *****************************************************************/
 
   go = esl_getopts_Create(options);
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) 
-    p7_Fail("Failed to parse command line.\n%s\n\nUsage: %s\n'%s -h' will show a list of valid options.\n", go->errbuf, usage, argv[0]);
-  if (esl_opt_VerifyConfig(go)               != eslOK) 
-    p7_Fail("Failed to parse command line:\n%s\n\nUsage: %s\n'%s -h' will show a list of valid options.\n", go->errbuf, usage, argv[0]);
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
-    puts(usage);
-    puts("\n  where options are:\n");
-    esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
-    puts("\nAdvanced options:\n");
-    puts("\n  Setting relative sequence weights:\n");
-    esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||
+      esl_opt_VerifyConfig(go)               != eslOK) 
+    {
+      printf("Failed to parse command line: %s\n", go->errbuf);
+      esl_usage(stdout, argv[0], usage);
+      printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+      exit(1);
+    }
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
+    {
+      p7_banner(stdout, argv[0], banner);
+      esl_usage(stdout, argv[0], usage);
+      puts("\n  where options are:");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
+      puts("\n  alternative model construction strategies:");
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
+      puts("\n  alternative relative sequence weighting strategies:");
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
+      puts("\n  alternate effective sequence weighting strategies:");
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
+      exit(0);
+    }
+  if (esl_opt_ArgNumber(go) != 2) 
+    {
+      puts("Incorrect number of command line arguments.");
+      esl_usage(stdout, argv[0], usage);
+      printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+      exit(1);
+    }
 
-    return eslOK;
-  }
-  if (esl_opt_ArgNumber(go) != 2) {
-    puts("Incorrect number of command line arguments.");
-    puts(usage);
-    return eslFAIL;
-  }
-  if ((hmmfile = esl_opt_GetArg(go, eslARG_STRING, NULL)) == NULL) p7_Fail("%s\nUsage: %s\n", go->errbuf, usage);
-  if ((alifile = esl_opt_GetArg(go, eslARG_STRING, NULL)) == NULL) p7_Fail("%s\nUsage: %s\n", go->errbuf, usage);
+  if ((hmmfile = esl_opt_GetArg(go, 1)) == NULL) p7_Fail("%s\nUsage: %s\n", go->errbuf, usage);
+  if ((alifile = esl_opt_GetArg(go, 2)) == NULL) p7_Fail("%s\nUsage: %s\n", go->errbuf, usage);
   fmt     = eslMSAFILE_UNKNOWN;  /* autodetect alignment format by default. */
 
   /*****************************************************************
@@ -150,7 +164,7 @@ main(int argc, char **argv)
       build_model(go, msa, &hmm, NULL);                    /* Build <hmm> containing weighted observed counts.  */
       hmm->bg = bg;
       set_model_name(hmm, NULL, msa->name, alifile, nali); /* hmm->name gets set */
-      set_effective_seqnumber(go, msa, hmm, pri);          /* rescale the total counts in the model */
+      set_effective_seqnumber(go, msa, hmm, bg, pri);      /* rescale the total counts in the model */
       p7_ParameterEstimation(hmm, pri);                    /* apply the prior; counts -> probability parameters */
 
       if (p7_hmm_Validate(hmm, 0.0001, errbuf) != eslOK)
@@ -162,7 +176,8 @@ main(int argc, char **argv)
       /* Print some stuff about what we've done.
        */
       printf("Built a model of %d nodes.\n", hmm->M);
-      printf("Mean match relative entropy:  %.2f bits\n", p7_MeanMatchRelativeEntropy(hmm));
+      printf("Mean match relative entropy:  %.2f bits\n", p7_MeanMatchRelativeEntropy(hmm, bg));
+      printf("Mean match information:       %.2f bits\n", p7_MeanMatchInfo(hmm, bg));
 
       p7_hmm_Destroy(hmm);
       esl_msa_Destroy(msa);
@@ -312,7 +327,7 @@ set_model_name(P7_HMM *hmm, char *setname, char *msa_name, char *alifile, int na
  * looking for the right relative entropy. (for --eent, the default)
  */
 static int
-set_effective_seqnumber(const ESL_GETOPTS *go, const ESL_MSA *msa, P7_HMM *hmm, const P7_DPRIOR *prior)
+set_effective_seqnumber(const ESL_GETOPTS *go, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *prior)
 {
   int    status = eslOK;
   double neff;
@@ -321,38 +336,41 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const ESL_MSA *msa, P7_HMM *hmm, 
   fflush(stdout);
 
   if      (esl_opt_GetBoolean(go, "--enone") == TRUE) 
-    neff = msa->nseq;
-
+    {
+      neff = msa->nseq;
+      printf("done. [--enone: neff=nseq=%d]\n", msa->nseq);
+    }
   else if (! esl_opt_IsDefault(go, "--eset"))
-    neff = esl_opt_GetReal(go, "--eset");
-
+    {
+      neff = esl_opt_GetReal(go, "--eset");
+      printf("done. [--eset: set to neff = %.2f]\n", neff);
+    }
   else if (esl_opt_GetBoolean(go, "--eclust") == TRUE)
     {
       int nclust;
       status = esl_msacluster_SingleLinkage(msa, esl_opt_GetReal(go, "--eid"), NULL, &nclust);
       neff = (double) nclust;
+
+      printf("done. [--eclust SLC at %.1f%%; neff = %.2f clusters]\n", 100. * esl_opt_GetReal(go, "--eid"), neff);
     }
   
   else if (esl_opt_GetBoolean(go, "--eent") == TRUE)
     {
-      double etarget;
+      double etarget; 
 
-      if      (hmm->abc->type == eslAMINO)  etarget = p7_ETARGET_AMINO;
-      else if (hmm->abc->type == eslDNA)    etarget = p7_ETARGET_DNA;
-      else if (hmm->abc->type == eslRNA)    etarget = p7_ETARGET_DNA;
-      else                                  etarget = p7_ETARGET_OTHER;
+      if (esl_opt_IsDefault(go, "--ere")) etarget = default_target_relent(hmm->abc, hmm->M, esl_opt_GetReal(go, "--eX"));
+      else                                etarget = esl_opt_GetReal(go, "--ere");
 
-      if (! esl_opt_IsDefault(go, "--ere")) etarget = esl_opt_GetReal(go, "--ere");
-
-      status = p7_EntropyWeight(hmm, prior, etarget, &neff);
+      status = p7_EntropyWeight(hmm, bg, prior, etarget, &neff);
+    
+      printf("done. [etarget %.2f bits; neff %.2f]\n", etarget, neff);
     }
     
   if (status == eslOK) {
+    hmm->eff_nseq = neff;
     p7_hmm_Scale(hmm, neff / (double) hmm->nseq);
-    printf("done. [%.2f]\n", neff);
     return eslOK;
   }
-
 
   printf("[failed]\n");
   if (status == eslEINVAL && esl_opt_GetBoolean(go, "--eclust"))
@@ -363,4 +381,35 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const ESL_MSA *msa, P7_HMM *hmm, 
   else 
     printf("unknown internal error.\n");
   exit(1);
+}
+
+
+/* default_amino_target_relent()
+ * Incept:    SRE, Fri May 25 15:14:16 2007 [Janelia]
+ *
+ * Purpose:   Implements a length-dependent calculation of the target rel entropy
+ *            per position, attempting to ensure that the information content of
+ *            the model is high enough to find local alignments; but don't set it
+ *            below a hard alphabet-dependent limit (p7_ETARGET_AMINO, etc.). See J1/67 for
+ *            notes.
+ *            
+ * Args:      M  - model length in nodes
+ *            eX - X parameter: minimum total rel entropy target
+ *
+ * Xref:      J1/67.
+ */
+static double
+default_target_relent(const ESL_ALPHABET *abc, int M, double eX)
+{
+  double etarget;
+
+  etarget = 6.* (eX + log((double) ((M * (M+1)) / 2)) / log(2.))    / (double)(2*M + 4);
+
+  switch (abc->type) {
+  case eslAMINO:  if (etarget < p7_ETARGET_AMINO)  etarget = p7_ETARGET_AMINO; break;
+  case eslDNA:    if (etarget < p7_ETARGET_DNA)    etarget = p7_ETARGET_DNA;   break;
+  case eslRNA:    if (etarget < p7_ETARGET_DNA)    etarget = p7_ETARGET_DNA;   break;
+  default:        if (etarget < p7_ETARGET_OTHER)  etarget = p7_ETARGET_OTHER; break;
+  }
+  return etarget;
 }

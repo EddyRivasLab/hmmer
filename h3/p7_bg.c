@@ -33,7 +33,7 @@
  * Xref:      STL11/125.
  */
 P7_BG *
-p7_bg_Create(ESL_ALPHABET *abc)
+p7_bg_Create(const ESL_ALPHABET *abc)
 {
   P7_BG *bg = NULL;
   int    status;
@@ -42,17 +42,36 @@ p7_bg_Create(ESL_ALPHABET *abc)
   bg->f = NULL;
 
   ESL_ALLOC(bg->f, sizeof(float) * abc->K);
-  if       (abc->type == eslAMINO && p7_AminoFrequencies(bg->f) != eslOK) goto ERROR;
-  else     esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
+  if       (abc->type == eslAMINO)
+    {
+      if (p7_AminoFrequencies(bg->f) != eslOK) goto ERROR;
+    }
+  else
+    esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
 
   bg->p1  = 350./351.;
-  bg->abc = abc;
+  bg->abc = (ESL_ALPHABET *) abc; /* safe: we're just keeping a reference */
   return bg;
 
  ERROR:
   p7_bg_Destroy(bg);
   return NULL;
 }
+
+
+/* Function:  p7_bg_Dump()
+ * Synopsis:  Outputs <P7_BG> object as text, for diagnostics.
+ * Incept:    SRE, Fri May 25 08:07:11 2007 [Janelia]
+ *
+ * Purpose:   Given a null model <bg>, dump it as text to stream <fp>.
+ */
+int
+p7_bg_Dump(FILE *ofp, P7_BG *bg)
+{
+  esl_vec_FDump(ofp, bg->f, bg->abc->K, bg->abc->sym);
+  return eslOK;
+}
+
 
 
 /* Function:  p7_bg_Destroy()
@@ -75,6 +94,15 @@ p7_bg_Destroy(P7_BG *bg)
 }
 
 
+int
+p7_bg_SetLength(P7_BG *bg, int L)
+{
+  bg->p1 = (float) L / (float) (L+1);
+  return eslOK;
+}
+
+
+
 /*****************************************************************
  * 2. Simple null model scores
  *****************************************************************/
@@ -91,7 +119,7 @@ p7_bg_Destroy(P7_BG *bg)
  *            do here is score null model transitions.
  */
 int
-p7_bg_NullOne(P7_BG *bg, ESL_DSQ *dsq, int L, int *ret_sc)
+p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, int *ret_sc)
 {
   float x;
 

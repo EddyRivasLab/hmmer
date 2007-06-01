@@ -28,11 +28,7 @@
 
 #include "hmmer.h"
 
-static int calculate_occupancy(P7_HMM *hmm, float *occ);
-static int logoddsify(P7_HMM *hmm, P7_PROFILE *gm);
-
-
-
+static int logoddsify(const P7_HMM *hmm, P7_PROFILE *gm);
 
 
 /*****************************************************************
@@ -42,11 +38,11 @@ static int logoddsify(P7_HMM *hmm, P7_PROFILE *gm);
 /* Function:  p7_ProfileConfig()
  * Incept:    SRE, Sun Sep 25 12:21:25 2005 [St. Louis]
  *
- * Purpose:   Given a model <hmm> with core probabilities set and null
- *            model probabilities set, and a desired <mode> (one of
+ * Purpose:   Given a model <hmm> with core probabilities set, and null1
+ *            model <bg>, and a desired <mode> (one of
  *            <p7_LOCAL>, <p7_GLOCAL>, <p7_UNILOCAL>, or <p7_UNIGLOCAL>);
  *            configure the profile <gm> into the appropriate search form for
- *            that algorithm mode. 
+ *            that algorithm mode, with log-odds scores relative to <bg>. 
  *
  *            Often <gm> will be the one the <hmm> holds a reference
  *            to: that is, <p7_ProfileConfig(hmm, hmm->gm...)>.
@@ -73,16 +69,14 @@ static int logoddsify(P7_HMM *hmm, P7_PROFILE *gm);
  *            to it.
  */
 int
-p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
+p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode)
 {
   int   k;			/* counter over states      */
   float *occ = NULL;
   float Z;
   int   status;
 
-  /* Contract checks: HMM must have null model */
-  if (hmm->bg == NULL)  
-    ESL_XEXCEPTION(eslEINVAL, "HMM needs to have a null model here");
+  /* Contract checks */
   if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
     ESL_XEXCEPTION(eslEINVAL, "I'm not ready for any mode but local modes");
 
@@ -91,13 +85,13 @@ p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
   gm->M    = hmm->M;
   gm->abc  = hmm->abc;
   gm->hmm  = hmm;
-  gm->bg   = hmm->bg;
+  gm->bg   = bg;
   gm->mode = mode;
 
   /* E state loop/move probabilities: nonzero for MOVE allows loops/multihits
    * N,C,J transitions are set later by length config 
    */
-  if (mode == p7_LOCAL) {
+  if (mode == p7_LOCAL || mode == p7_GLOCAL) {
     gm->xt[p7_XTE][p7_MOVE] = 0.5;  
     gm->xt[p7_XTE][p7_LOOP] = 0.5;  
   } else {
@@ -110,7 +104,7 @@ p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
    * These are only probabilistic w.r.t. the implicit model.
    */
   ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
-  if ((status = calculate_occupancy(hmm, occ)) != eslOK) goto ERROR;
+  if ((status = p7_hmm_CalculateOccupancy(hmm, occ)) != eslOK) goto ERROR;
   for (Z = 0., k = 1; k <= hmm->M; k++) 
     Z += occ[k] * (float) (hmm->M-k+1);
   for (gm->begin[0] = 0., k=1; k<=hmm->M; k++)
@@ -144,7 +138,10 @@ p7_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
  *
  * Purpose:   Given a model already configured for scoring, in some
  *            particular algorithm mode; reset the expected length
- *            distribution of the profile and the null model for a mean of <L>.
+ *            distribution of the profile for a mean of <L>.
+ *
+ *            This doesn't affect the length distribution of your null
+ *            model. See <p7_bg_SetLength()> for that.
  *            
  *            Do this as quickly as possible, because the caller needs
  *            to dynamically reconfigure the model for the length of
@@ -163,15 +160,7 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
 {
   float ploop, pmove;
   float nj;
-  int   status;
   int   loopsc, movesc;
-  
-
-  /* Contract checks: profile must have null model */
-  if (gm->bg == NULL) ESL_XEXCEPTION(eslEINVAL, "profile needs to have a null model here");
-
-  /* Configure p1 in the null model to an expected length of L */
-  gm->bg->p1 = (float) L / (float) (L+1);
   
   /* Figure out the expected number of uses of the J state.
    */
@@ -237,9 +226,6 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
   }
 #endif
   return eslOK;
-
- ERROR:
-  return status;
 }
 
 
@@ -251,28 +237,6 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
  * 2. Private functions
  *****************************************************************/
 
-/* calculate_occupancy()
- * Incept:    SRE, Mon Jan 22 08:10:05 2007 [Janelia]
- *
- * Purpose:   Calculate a vector <occ[1..M]> containing probability
- *            that each match state is used in a sampled path through
- *            the model. Caller provides allocated space (<M+1> floats)
- *            for <occ>.
- *
- * Returns:   <eslOK> on success.
- */
-static int
-calculate_occupancy(P7_HMM *hmm, float *occ)
-{
-  int k;
-
-  occ[0] = 0.;			/* no M_0 state */
-  occ[1] = hmm->t[0][p7_TMM];	/* initialize w/ B->M_1 */
-  for (k = 2; k <= hmm->M; k++)
-    occ[k] = occ[k-1] * (hmm->t[k-1][p7_TMM] + hmm->t[k-1][p7_TMI]) +
-      (1.0-occ[k-1]) * hmm->t[k-1][p7_TDM];
-  return eslOK;
-}
 
 /* logoddsify()
  * Incept:    SRE, Mon Jan 22 08:45:57 2007 [Janelia]
@@ -289,7 +253,7 @@ calculate_occupancy(P7_HMM *hmm, float *occ)
  * Xref:      
  */
 static int
-logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
+logoddsify(const P7_HMM *hmm, P7_PROFILE *gm)
 {
   int k, x;
   int sc[p7_MAXCODE];
@@ -369,14 +333,13 @@ logoddsify(P7_HMM *hmm, P7_PROFILE *gm)
  * Xref:      HMMER2.3.2 plan7.c::Plan7FSConfig()
  */
 int
-p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
+p7_H2_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode)
 {
   int   status;
   int   k;			/* counter over states      */
   float d;
 
   /* Contract checks: HMM must have null model */
-  if (hmm->bg == NULL)  ESL_XEXCEPTION(eslEINVAL, "HMM needs to have a null model here");
   if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
     ESL_XEXCEPTION(eslEINVAL, "I'm not ready for any mode but local mode");
 
@@ -384,13 +347,13 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
   gm->M       = hmm->M;
   gm->abc     = hmm->abc;
   gm->hmm     = hmm;
-  gm->bg      = hmm->bg;
+  gm->bg      = bg;
   gm->mode    = mode;
   gm->h2_mode = TRUE;
 
   /* Configure special states */
-  gm->xt[p7_XTN][p7_MOVE] = 1.0 - hmm->bg->p1;    /* allow N-terminal tail     */
-  gm->xt[p7_XTN][p7_LOOP] = hmm->bg->p1;
+  gm->xt[p7_XTN][p7_MOVE] = 1.0 - bg->p1;    /* allow N-terminal tail     */
+  gm->xt[p7_XTN][p7_LOOP] = bg->p1;
   if (mode == p7_LOCAL) {
     gm->xt[p7_XTE][p7_MOVE] = 0.5; /* multihit */
     gm->xt[p7_XTE][p7_LOOP] = 0.5;  
@@ -398,10 +361,10 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
     gm->xt[p7_XTE][p7_MOVE] = 1.0; /* singlehit */
     gm->xt[p7_XTE][p7_LOOP] = 0.0;  
   }
-  gm->xt[p7_XTC][p7_MOVE] = 1.0 - hmm->bg->p1;    /* allow C-terminal tail     */
-  gm->xt[p7_XTC][p7_LOOP] = hmm->bg->p1;
-  gm->xt[p7_XTJ][p7_MOVE] = 1.0 - hmm->bg->p1;    /* allow J junction between domains */
-  gm->xt[p7_XTJ][p7_LOOP] = hmm->bg->p1;
+  gm->xt[p7_XTC][p7_MOVE] = 1.0 - bg->p1;    /* allow C-terminal tail     */
+  gm->xt[p7_XTC][p7_LOOP] = bg->p1;
+  gm->xt[p7_XTJ][p7_MOVE] = 1.0 - bg->p1;    /* allow J junction between domains */
+  gm->xt[p7_XTJ][p7_LOOP] = bg->p1;
 
   /* Configure entry. HMMER2 used (almost) uniform entry. */  
   esl_vec_FSet(gm->begin+1, hmm->M, 1.0 / hmm->M); 
@@ -442,20 +405,20 @@ p7_H2_ProfileConfig(P7_HMM *hmm, P7_PROFILE *gm, int mode)
  * a Validate() check.
  */
 static void
-utest_Config(P7_HMM *hmm)
+utest_Config(P7_HMM *hmm, P7_BG *bg)
 {
   char       *msg = "modelconfig.c::p7_ProfileConfig() unit test failed";
   P7_PROFILE *gm  = NULL;
 
   if ((gm = p7_profile_Create(hmm->M, hmm->abc)) == NULL)   esl_fatal(msg);
-  if (p7_ProfileConfig(hmm, gm, p7_LOCAL)        != eslOK)  esl_fatal(msg);
+  if (p7_ProfileConfig(hmm, bg, gm, p7_LOCAL)    != eslOK)  esl_fatal(msg);
   if (p7_profile_Validate(gm, 0.0001)            != eslOK)  esl_fatal(msg);
   return;
 }
 
-/* The occupancy test is based on the principle that
- * the stationary match occupancy probability in a random HMM 
- * converges to 0.6, for long enough M (STL11/138)
+/* Note that calculate_occupancy has moved to p7_hmm.c, but
+ * unit tests over there aren't hooked up yet; so leave a copy of the unit test 
+ * here for now.
  */
 static void
 utest_occupancy(P7_HMM *hmm)
@@ -465,7 +428,7 @@ utest_occupancy(P7_HMM *hmm)
   float  x;
 
   occ = malloc(sizeof(float) * (hmm->M+1));
-  calculate_occupancy(hmm, occ);
+  p7_hmm_CalculateOccupancy(hmm, occ);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
   if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
   free(occ);
@@ -498,18 +461,19 @@ main(int argc, char **argv)
   ESL_ALPHABET   *abc    = NULL;
   ESL_RANDOMNESS *r      = NULL;
   P7_HMM         *hmm    = NULL;
+  P7_BG          *bg     = NULL;
   int             M      = 10000;
   
   if ((abc = esl_alphabet_Create(eslAMINO))     == NULL)  esl_fatal("failed to create amino alphabet");
   if ((r   = esl_randomness_CreateTimeseeded()) == NULL)  esl_fatal("failed to create randomness");
   if (p7_hmm_Sample(r, M, abc, &hmm)            != eslOK) esl_fatal("failed to sample random HMM");
-  if ((hmm->bg = p7_bg_Create(abc))             == NULL)  esl_fatal("failed to created null model");
+  if ((bg = p7_bg_Create(abc))                  == NULL)  esl_fatal("failed to created null model");
 
-  utest_Config(hmm);
+  utest_Config(hmm, bg);
   utest_occupancy(hmm);
 
-
   p7_hmm_Destroy(hmm);
+  p7_bg__Destroy(bg);
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
   return eslOK;
@@ -571,6 +535,7 @@ main(int argc, char **argv)
   ESL_RANDOMNESS  *r       = NULL;     /* source of randomness                    */
   P7_HMM          *hmm     = NULL;     /* sampled HMM to emit from                */
   P7_HMM          *core    = NULL;     /* safe copy of the HMM, before config     */
+  P7_BG           *bg      = NULL;     /* null model                              */
   ESL_SQ          *sq      = NULL;     /* sampled sequence                        */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   int              i,j;
@@ -659,16 +624,16 @@ main(int argc, char **argv)
   esl_dmatrix_SetZero(iref);
   esl_dmatrix_SetZero(kmx);
   p7_trace_Create(256, &tr);
-  sq = esl_sq_CreateDigital(abc);
-  hmm->bg = p7_bg_Create(abc);
-  core    = p7_hmm_Duplicate(hmm);
+  sq    = esl_sq_CreateDigital(abc);
+  bg    = p7_bg_Create(abc);
+  core  = p7_hmm_Duplicate(hmm);
 
   if (do_h2) {
     hmm->gm = p7_profile_Create(hmm->M, abc);
-    p7_H2_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
+    p7_H2_ProfileConfig(hmm, bg, hmm->gm, p7_UNILOCAL);
   } else {
     hmm->gm = p7_profile_Create(hmm->M, abc);
-    p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
+    p7_ProfileConfig(hmm, bg, hmm->gm, p7_UNILOCAL);
     p7_ReconfigLength(hmm->gm, L);
     if (p7_hmm_Validate    (hmm,     0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
     if (p7_profile_Validate(hmm->gm, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
@@ -736,7 +701,7 @@ main(int argc, char **argv)
 
   
   p7_profile_Destroy(hmm->gm);
-  p7_bg_Destroy(hmm->bg);
+  p7_bg_Destroy(bg);
   p7_hmm_Destroy(core);
   p7_hmm_Destroy(hmm);
   p7_trace_Destroy(tr);

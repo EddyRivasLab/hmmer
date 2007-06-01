@@ -142,6 +142,7 @@ bindist:
 #
 clean:
 	(cd src;       make clean)
+	(cd h3;        make clean)
 	(cd easel;     make clean)
 	(cd testsuite; make clean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
@@ -155,6 +156,7 @@ distclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm Makefile
 	(cd src;       make distclean)
+	(cd h3;        make distclean)
 	(cd easel;     make distclean)
 	(cd testsuite; make distclean)
 
@@ -163,6 +165,7 @@ distclean:
 #
 binclean:
 	(cd src;       make binclean)
+	(cd h3;        make binclean)
 	(cd easel;     make binclean)
 	(cd testsuite; make binclean)
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out

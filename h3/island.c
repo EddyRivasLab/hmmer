@@ -417,14 +417,13 @@ main(int argc, char **argv)
 
   vmx     = p7_gmx_Create(hmm->M, 4); /* 4 rows needed for island method. */
   gm      = p7_profile_Create(hmm->M, abc);
-  hmm->bg = bg;
   hmm->gm = gm;
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
 
   if (do_h2) {
-    p7_H2_ProfileConfig(hmm, gm, p7_UNILOCAL);
+    p7_H2_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
   } else {
-    p7_ProfileConfig(hmm, gm, p7_UNILOCAL);
+    p7_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
     p7_ReconfigLength(hmm->gm,  L);
   }
 

@@ -17,6 +17,7 @@
 
 struct ew_param_s {
   const P7_HMM    *hmm;		/* ptr to the original count-based HMM, which remains unchanged */
+  const P7_BG     *bg;		/* ptr to the null model */
   const P7_DPRIOR *pri;		/* Dirichlet prior used to parameterize from counts */
   P7_HMM          *h2;		/* our working space: a copy of <hmm> that we can muck with */
   double           etarget;	/* information content target, in bits */
@@ -33,7 +34,7 @@ eweight_target_f(double Neff, void *params, double *ret_fx)
   p7_hmm_CopyParameters(p->hmm, p->h2);
   p7_hmm_Scale(p->h2, Neff / (double) p->h2->nseq);
   p7_ParameterEstimation(p->h2, p->pri);
-  *ret_fx = p7_MeanMatchRelativeEntropy(p->h2) - p->etarget;
+  *ret_fx = p7_MeanMatchRelativeEntropy(p->h2, p->bg) - p->etarget;
   return eslOK;
 }
 
@@ -58,7 +59,7 @@ eweight_target_f(double Neff, void *params, double *ret_fx)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_EntropyWeight(const P7_HMM *hmm, const P7_DPRIOR *pri, double etarget, double *ret_Neff)
+p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double etarget, double *ret_Neff)
 {
   int status;
   ESL_ROOTFINDER *R = NULL;
@@ -69,6 +70,7 @@ p7_EntropyWeight(const P7_HMM *hmm, const P7_DPRIOR *pri, double etarget, double
   /* Store parameters in the structure we'll pass to the rootfinder
    */
   p.hmm = hmm;
+  p.bg  = bg;
   p.pri = pri;
   if ((p.h2  = p7_hmm_Duplicate(hmm)) == NULL) return eslEMEM;
   p.etarget = etarget;
@@ -78,7 +80,9 @@ p7_EntropyWeight(const P7_HMM *hmm, const P7_DPRIOR *pri, double etarget, double
   if (fx > 0.)
     {
       if ((R = esl_rootfinder_Create(eweight_target_f, &p)) == NULL) {status = eslEMEM; goto ERROR;}
+      esl_rootfinder_SetAbsoluteTolerance(R, 1e-3); /* getting Neff to ~3 sig digits is fine */
       if ((status = esl_root_Bisection(R, 0., (double) hmm->nseq, &Neff)) != eslOK) goto ERROR;
+
       esl_rootfinder_Destroy(R);
     }
   

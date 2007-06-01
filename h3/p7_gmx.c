@@ -99,11 +99,11 @@ p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL)
   /* must we reallocate the row pointers? */
   if (nrows > gx->nrows)
     {
-      ESL_RALLOC(gx->xmx_mem, p, sizeof(int) * nrows * 5);
-      ESL_RALLOC(gx->xmx, p, sizeof(int) * nrows);
-      ESL_RALLOC(gx->mmx, p, sizeof(int) * nrows);
-      ESL_RALLOC(gx->imx, p, sizeof(int) * nrows);
-      ESL_RALLOC(gx->dmx, p, sizeof(int) * nrows);
+      ESL_RALLOC(gx->xmx_mem, p, sizeof(int *) * nrows * 5);
+      ESL_RALLOC(gx->xmx,     p, sizeof(int *) * nrows);
+      ESL_RALLOC(gx->mmx,     p, sizeof(int *) * nrows);
+      ESL_RALLOC(gx->imx,     p, sizeof(int *) * nrows);
+      ESL_RALLOC(gx->dmx,     p, sizeof(int *) * nrows);
     }
 
   /* reset all the row pointers (even though we may not have to: if we

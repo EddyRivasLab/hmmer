@@ -30,6 +30,8 @@ main(int argc, char **argv)
   ESL_ALPHABET    *abc     = NULL;     /* sequence alphabet                       */
   ESL_GETOPTS     *go	   = NULL;     /* command line processing                 */
   P7_HMM          *hmm     = NULL;     /* query HMM                               */
+  P7_PROFILE      *gm      = NULL;     /* profile HMM                             */
+  P7_BG           *bg      = NULL;     /* null model                              */
   ESL_SQ          *sq      = NULL;     /* target sequence                         */
   ESL_DSQ         *dsq     = NULL;     /* digitized target sequence               */
   P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
@@ -63,9 +65,9 @@ main(int argc, char **argv)
     puts(usage);
     return eslFAIL;
   }
-  hmmfile = esl_opt_GetArg(go, eslARG_INFILE, NULL);
+  hmmfile = esl_opt_GetArg(go, 1);
   if (hmmfile == NULL) esl_fatal("Failed to get <hmmfile> argument on command line");
-  seqfile = esl_opt_GetArg(go, eslARG_INFILE, NULL);
+  seqfile = esl_opt_GetArg(go, 2);
   if (seqfile == NULL) esl_fatal("Failed to get <seqfile> argument on command line");
   
   /*****************************************************************
@@ -91,22 +93,24 @@ main(int argc, char **argv)
   while ( (hstatus = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK) 
     {
       /* Configure the profile (wait 'til we see sequences to config length) */
-      hmm->bg = p7_bg_Create(abc);
-      hmm->gm = p7_profile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, hmm->gm, p7_UNILOCAL);
+      bg = p7_bg_Create(abc);
+      gm = p7_profile_Create(hmm->M, abc);
+      p7_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
 
       while ( (sstatus = esl_sqio_Read(sqfp, sq)) == eslOK)
 	{
 	  esl_abc_CreateDsq(abc, sq->seq, &dsq); /* replace w/ direct digital read when it's available */
 	  p7_gmx_GrowTo(mx, hmm->M, sq->n); /* realloc DP matrix as needed */
-	  p7_ReconfigLength(hmm->gm, sq->n);
+	  p7_ReconfigLength(gm, sq->n);
+	  p7_bg_SetLength(bg, sq->n);
 
-	  p7_Viterbi(dsq, sq->n, hmm->gm, mx, tr, &vsc);
-	  p7_Forward(dsq, sq->n, hmm->gm, mx, &fsc);
+	  p7_GViterbi(dsq, sq->n, gm, mx, &vsc);
+	  p7_GTrace  (dsq, sq->n, gm, mx, tr);
+	  p7_GForward(dsq, sq->n, gm, mx, &fsc);
 
 	  printf("%15s  %6.2f   %6.2f\n", sq->name,
-		 (((double) vsc / p7_INTSCALE) - sq->n * log(hmm->bg->p1) - log(1.-hmm->bg->p1)) / eslCONST_LOG2,
-		 (((double) fsc / p7_INTSCALE) - sq->n * log(hmm->bg->p1) - log(1.-hmm->bg->p1)) / eslCONST_LOG2);
+		 (((double) vsc / p7_INTSCALE) - sq->n * log(bg->p1) - log(1.-bg->p1)) / eslCONST_LOG2,
+		 (((double) fsc / p7_INTSCALE) - sq->n * log(bg->p1) - log(1.-bg->p1)) / eslCONST_LOG2);
 
 	  free(dsq);
 	  esl_sq_Reuse(sq);
@@ -116,8 +120,8 @@ main(int argc, char **argv)
 	esl_fatal("Sequence file %s has a format problem: read failed at line %d:\n%s\n",
 		  seqfile, sqfp->linenumber, sqfp->errbuf);
 
-      p7_profile_Destroy(hmm->gm);  
-      p7_bg_Destroy(hmm->bg);
+      p7_profile_Destroy(gm);  
+      p7_bg_Destroy(bg);
       p7_hmm_Destroy(hmm);
     }
   if      (hstatus == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
