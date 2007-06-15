@@ -19,6 +19,10 @@
 
 #include <stdio.h>		/* FILE */
 
+#ifdef HAVE_MPI
+#include "mpi.h"
+#endif
+
 #include "easel.h"
 #include "esl_alphabet.h"	/* ESL_DSQ, ESL_ALPHABET */
 #include "esl_dmatrix.h"	/* ESL_DMATRIX           */
@@ -56,17 +60,17 @@ typedef struct p7_hmm_s {
    * optional values are set. All the char *'s are proper nul-terminated
    * strings, not just arrays. (hmm->map is an int array).
    */
-  char  *name;                  /* name of the model                     (mandatory) */
-  char  *acc;			/* accession number of model (Pfam)      (p7_ACC)    */
-  char  *desc;                  /* brief (1-line) description of model   (p7_DESC)   */ 
-  char  *rf;                    /* reference line from alignment 1..M    (p7_RF)     */
-  char  *cs;                    /* consensus structure line      1..M    (p7_CS)     */ 
-  char  *ca;			/* consensus accessibility line  1..M    (p7_CA)     */
-  char  *comlog;		/* command line(s) that built model      (mandatory) */
+  char  *name;                  /* name of the model                     (mandatory) */ /* String, \0-terminated */
+  char  *acc;			/* accession number of model (Pfam)      (p7_ACC)    */ /* String, \0-terminated */
+  char  *desc;                  /* brief (1-line) description of model   (p7_DESC)   */ /* String, \0-terminated */
+  char  *rf;                    /* reference line from alignment 1..M    (p7_RF)     */ /* String; 0=' ', M+1='\0' */
+  char  *cs;                    /* consensus structure line      1..M    (p7_CS)     */ /* String; 0=' ', M+1='\0' */
+  char  *ca;			/* consensus accessibility line  1..M    (p7_CA)     */ /* String; 0=' ', M+1='\0' */
+  char  *comlog;		/* command line(s) that built model      (mandatory) */ /* String, \0-terminated */
   int    nseq;			/* number of training sequences          (mandatory) */
   int    eff_nseq;		/* effective number of seqs (<= nseq)    (mandatory) */
   char  *ctime;			/* creation date                         (mandatory) */
-  int   *map;			/* map of alignment cols onto model 1..M (p7_MAP)    */
+  int   *map;			/* map of alignment cols onto model 1..M (p7_MAP)    */ /* Array; 0=0 */
   int    checksum;              /* checksum of training sequences        (mandatory) */
 
   /* Pfam-specific score cutoffs.
@@ -136,42 +140,6 @@ typedef struct p7_hmm_s {
 #define p7_STX   11 	/* missing data: used esp. for local entry/exits */
 #define p7_NSTATETYPES 12
 
-/* 1. The P7_HMM object: allocation, initialization, destruction. */
-extern P7_HMM *p7_hmm_Create(int M, const ESL_ALPHABET *abc);
-extern P7_HMM *p7_hmm_CreateShell(void);
-extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc);
-extern void    p7_hmm_Destroy(P7_HMM *hmm);
-extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
-extern P7_HMM *p7_hmm_Duplicate(const P7_HMM *hmm);
-extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
-extern int     p7_hmm_Zero(P7_HMM *hmm);
-extern char   *p7_hmm_DescribeStatetype(char st);
-
-/* 2. Convenience routines for setting fields in an HMM. */
-extern int     p7_hmm_SetName(P7_HMM *hmm, char *name);
-extern int     p7_hmm_SetAccession(P7_HMM *hmm, char *acc);
-extern int     p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
-extern int     p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv);
-extern int     p7_hmm_SetCtime(P7_HMM *hmm);
-
-/* 3. Renormalization and rescaling counts in core HMMs. */
-extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
-extern int     p7_hmm_Renormalize(P7_HMM *hmm);
-
-/* 4. Debugging and development code. */
-extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
-extern int     p7_hmm_Sample        (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
-				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
-extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
-extern int     p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf);
-
-/* 5. Other routines in the API */
-extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ);
-
-
 
 /*****************************************************************
  * 2. P7_PROFILE: a scoring profile, and its implicit model.
@@ -239,12 +207,6 @@ typedef struct p7_profile_s {
 #define p7_UNILOCAL  3		/* unihit local: "sw" mode      */
 #define p7_UNIGLOCAL 4		/* unihit glocal: "s" mode      */
 
-extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
-extern void        p7_profile_Destroy(P7_PROFILE *gm);
-
-extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
-				   char st2, int k2, int *ret_tsc);
-extern int         p7_profile_Validate(const P7_PROFILE *gm, float tol);
 
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
@@ -256,12 +218,6 @@ typedef struct p7_bg_s {
   float  p1;			/* null model's self-loop probability */
   float *f;			/* residue frequencies [0..K-1] */
 } P7_BG;
-
-extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
-extern int    p7_bg_Dump(FILE *ofp, P7_BG *bg);
-extern void   p7_bg_Destroy(P7_BG *bg);
-extern int    p7_bg_SetLength(P7_BG *bg, int L);
-extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, int *ret_sc);
 
 /*****************************************************************
  * 4. P7_TRACE:  a traceback (alignment of seq to profile).
@@ -296,23 +252,6 @@ typedef struct p7_trace_s {
   int  *i;		/* position in dsq, 1..L; 0 if none  [0..N-1]*/
 } P7_TRACE;
 
-extern int  p7_trace_Create(int N, P7_TRACE **ret_tr);
-extern int  p7_trace_Reuse(P7_TRACE *tr);
-extern int  p7_trace_Expand(P7_TRACE *tr);
-extern int  p7_trace_ExpandTo(P7_TRACE *tr, int N);
-extern void p7_trace_Destroy(P7_TRACE *tr);
-extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
-extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf);
-extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq);
-
-extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
-extern int  p7_trace_Reverse(P7_TRACE *tr);
-extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
-extern int  p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc);
-extern int  p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom);
-extern int  p7_trace_StateUseCounts(const P7_TRACE *tr, int *counts);
-extern int  p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
-				     int *ret_k1, int *ret_k2);
 
 /*****************************************************************
  * 5. P7_HMMFILE:  an HMM save file or database, open for reading.
@@ -325,11 +264,6 @@ typedef struct p7_hmmfile_s {
 } P7_HMMFILE;
 
 
-extern int  p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp);
-extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
-
-extern int  p7_hmmfile_Write(FILE *fp, P7_HMM *hmm);
-extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm);
 
 
 /*****************************************************************
@@ -354,9 +288,7 @@ typedef struct p7_gmx_s {
   int  *dmx_mem;
 } P7_GMX;
 
-extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
-extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
-extern void    p7_gmx_Destroy(P7_GMX *gx);
+
 
 /*****************************************************************
  * 7. P7_DPRIOR: mixture Dirichlet prior for profile HMMs
@@ -370,57 +302,44 @@ typedef struct p7_dprior_s {
   ESL_MIXDCHLET *ei;		/* insert emissions   */
 } P7_DPRIOR;
 
-extern P7_DPRIOR *p7_dprior_CreateAmino(void);
-extern void       p7_dprior_Destroy(P7_DPRIOR *pri);
-extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
 
 /*****************************************************************
  * 8. Other routines in HMMER's exposed API.
  *****************************************************************/
 
-/* build.c
- */
+/* build.c */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
-/* dp_generic.c
- */
+/* dp_generic.c */
 extern int p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *mx, int *ret_sc);
 extern int p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *mx, int *ret_sc);
 extern int p7_GHybrid (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *mx, int *opt_fwdscore, int *opt_hybscore);
-
 extern int p7_GTrace  (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *mx, P7_TRACE *tr);
 
-
-/* emit.c
- */
+/* emit.c */
 extern int p7_CoreEmit      (ESL_RANDOMNESS *r, P7_HMM     *hmm, ESL_SQ *sq, P7_TRACE *tr);
 extern int p7_ProfileEmit   (ESL_RANDOMNESS *r, P7_PROFILE *gm,  ESL_SQ *sq, P7_TRACE *tr);
 extern int p7_H2_ProfileEmit(ESL_RANDOMNESS *r, P7_PROFILE *gm,  ESL_SQ *sq, P7_TRACE *tr);
 
-/* errors.c
- */
+/* errors.c */
 extern void p7_Die (char *format, ...);
 extern void p7_Fail(char *format, ...);
 
-/* eweight.c
- */
+/* eweight.c */
 extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
 
-/* heatmap.c (evolving now, intend to move this to Easel in the future)
- */
+/* heatmap.c (evolving now, intend to move this to Easel in the future) */
 extern double dmx_upper_max(ESL_DMATRIX *D);
 extern double dmx_upper_min(ESL_DMATRIX *D);
 extern double dmx_upper_element_sum(ESL_DMATRIX *D);
 extern double dmx_upper_norm(ESL_DMATRIX *D);
 extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 
-/* island.c
- */
+/* island.c */
 extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM *h);
 
-/* hmmer.c
- */
+/* hmmer.c */
 extern void  p7_banner(FILE *fp, char *progname, char *banner);
 extern int   p7_Prob2SILO(float p, float null);
 extern int   p7_LL2SILO(float ll, float null);
@@ -429,32 +348,125 @@ extern float p7_SILO2Bitscore(int sc);
 extern int   p7_AminoFrequencies(float *f);
 extern int   p7_ILogsum(int s1, int s2);
 
-/* modelconfig.c
- */
+/* modelconfig.c */
 extern int p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode);
 extern int p7_ReconfigLength(P7_PROFILE *gm, int L);
 extern int p7_H2_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode);
 
-/* modelstats.c
- */
+/* modelstats.c */
 extern double p7_MeanMatchInfo           (const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);
 extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
 extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
 
-/* seqmodel.c
- */
-extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P, 
-		       float *f, double tmi, double tii, double tmd, double tdd,
-		       P7_HMM **ret_hmm);
-
+/* mpisupport.c */
 #ifdef HAVE_MPI
-extern int p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, char **buf, int *nalloc);
-extern int p7_profile_MPIRecv(int source, int tag, const ESL_ALPHABET *abc, const P7_BG *bg,
+extern int p7_hmm_MPISend(P7_HMM *hmm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
+extern int p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n);
+extern int p7_hmm_MPIPack(P7_HMM *hmm, char *buf, int n, int *position, MPI_Comm comm);
+extern int p7_hmm_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_HMM **ret_hmm);
+extern int p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_HMM **ret_hmm);
+
+extern int p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
+extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, const P7_BG *bg,
 			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
 #endif /*HAVE_MPI*/
 
+
+/* p7_bg.c */
+extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
+extern int    p7_bg_Dump(FILE *ofp, P7_BG *bg);
+extern void   p7_bg_Destroy(P7_BG *bg);
+extern int    p7_bg_SetLength(P7_BG *bg, int L);
+extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, int *ret_sc);
+
+/* p7_gmx.c */
+extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
+extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
+extern void    p7_gmx_Destroy(P7_GMX *gx);
+
+
+/* p7_hmm.c */
+/*      1. The P7_HMM object: allocation, initialization, destruction. */
+extern P7_HMM *p7_hmm_Create(int M, const ESL_ALPHABET *abc);
+extern P7_HMM *p7_hmm_CreateShell(void);
+extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc);
+extern void    p7_hmm_Destroy(P7_HMM *hmm);
+extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
+extern P7_HMM *p7_hmm_Duplicate(const P7_HMM *hmm);
+extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
+extern int     p7_hmm_Zero(P7_HMM *hmm);
+extern char   *p7_hmm_DescribeStatetype(char st);
+/*      2. Convenience routines for setting fields in an HMM. */
+extern int     p7_hmm_SetName(P7_HMM *hmm, char *name);
+extern int     p7_hmm_SetAccession(P7_HMM *hmm, char *acc);
+extern int     p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
+extern int     p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv);
+extern int     p7_hmm_SetCtime(P7_HMM *hmm);
+/*      3. Renormalization and rescaling counts in core HMMs. */
+extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
+extern int     p7_hmm_Renormalize(P7_HMM *hmm);
+/*      4. Debugging and development code. */
+extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
+extern int     p7_hmm_Sample        (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
+				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
+extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
+extern int     p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf);
+/*      5. Other routines in the API */
+extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ);
+
+
+
+/* p7_hmmfile.c */
+extern int  p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp);
+extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
+extern int  p7_hmmfile_Write(FILE *fp, P7_HMM *hmm);
+extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm);
+
+/* p7_prior.c */
+extern P7_DPRIOR *p7_dprior_CreateAmino(void);
+extern P7_DPRIOR *p7_dprior_CreateNucleic(void);
+extern void       p7_dprior_Destroy(P7_DPRIOR *pri);
+extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
+
+/* p7_profile.c */
+extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
+extern void        p7_profile_Destroy(P7_PROFILE *gm);
+
+extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
+				   char st2, int k2, int *ret_tsc);
+extern int         p7_profile_Validate(const P7_PROFILE *gm, float tol);
+
+/* p7_trace.c */
+extern int  p7_trace_Create(int N, P7_TRACE **ret_tr);
+extern int  p7_trace_Reuse(P7_TRACE *tr);
+extern int  p7_trace_Expand(P7_TRACE *tr);
+extern int  p7_trace_ExpandTo(P7_TRACE *tr, int N);
+extern void p7_trace_Destroy(P7_TRACE *tr);
+extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
+extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf);
+extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq);
+
+extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
+extern int  p7_trace_Reverse(P7_TRACE *tr);
+extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
+extern int  p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int *ret_sc);
+extern int  p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom);
+extern int  p7_trace_StateUseCounts(const P7_TRACE *tr, int *counts);
+extern int  p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
+				     int *ret_k1, int *ret_k2);
+
+
+
+
+/* seqmodel.c */
+extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P, 
+		       float *f, double tmi, double tii, double tmd, double tdd,
+		       P7_HMM **ret_hmm);
 
 #endif /*P7_HMMERH_INCLUDED*/
 

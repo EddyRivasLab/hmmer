@@ -221,10 +221,10 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
  *            
  *            Caller may or may not already know what alphabet the HMM
  *            is expected to be in.  A reference to the pointer to the
- *            current alphabet is passed in <ret_abc>. If the alphabet
- *            is unknown, this is a pointer to <NULL>, and when the
+ *            current alphabet is passed in <*ret_abc>. If the alphabet
+ *            is unknown, pass <*ret_abc = NULL>, and when the
  *            new HMM is read, an appropriate new alphabet object is
- *            allocated and passed back to the caller via <ret_abc)>.
+ *            allocated and passed back to the caller in <*ret_abc>.
  *            If the alphabet is already known, <ret_abc> points to
  *            that object ptr, and the new HMM's alphabet type is
  *            verified to agree with it. This mechanism allows an
@@ -245,7 +245,7 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
  *                            the expected magic; this isn't a HMMER file.
  *             <eslEINCOMPAT>: the alphabet type of the HMM doesn't match the alphabet type 
  *                             passed by the caller in <*ret_abc>.
- * 
+ * rm
  * Throws:    <eslEMEM> upon an allocation error.
  */
 int

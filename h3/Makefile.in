@@ -28,14 +28,6 @@ RANLIB = @RANLIB@
 PTHREAD_LIBS   = @PTHREAD_LIBS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 
-
-# Configuration for optional PVM functionality
-#
-PVMLIBDIR = @PVMLIBDIR@
-PVMINCDIR = @PVMINCDIR@
-PVMLIBS   = @PVMLIBS@
-PVMPROGS  = @PVMPROGS@
-
 MPILIBS   = @MPILIBS@
 
 SHELL    = /bin/sh
@@ -55,6 +47,7 @@ OBJS =  build.o\
 	island.o\
 	modelconfig.o\
 	modelstats.o\
+	mpisupport.o\
 	seqmodel.o\
 	p7_bg.o\
 	p7_gmx.o\

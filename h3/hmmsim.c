@@ -243,6 +243,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg, double *results)
   P7_HMM          *hmm     = NULL;      /* query HMM                                 */
   P7_HMM         **hmmlist = NULL;      /* queue of HMMs being worked on, 1..nproc-1 */
   P7_PROFILE      *gm      = NULL; 
+  char            *wbuf    = NULL; /* working buffer for sending packed profiles to workers. */
+  int              wn      = 0;
   int              have_work;
   int              nproc_working;
   int              wi;
@@ -310,7 +312,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg, double *results)
        */
       if (have_work) 
 	{
-	  p7_profile_MPISend(gm, wi);
+	  p7_profile_MPISend(gm, wi, 0, MPI_COMM_WORLD, &wbuf, &wn);
 	  hmmlist[wi] = hmm;
 	  wi++;
 	  nproc_working++;
@@ -320,11 +322,12 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg, double *results)
     }
 
   /* Tell all the workers (1..nproc-1) to shut down by sending them a NULL workunit. */
-  for (wi = 1; wi < cfg->nproc; wi++) p7_profile_MPISend(NULL, wi);	
+  for (wi = 1; wi < cfg->nproc; wi++) p7_profile_MPISend(NULL, wi, 0, MPI_COMM_WORLD, &wbuf, &wn);	
 
   /* normal execution falls through here; both normal and error cases execute same cleanup code */
  ERROR:
   if (hmmlist != NULL) free(hmmlist);
+  if (wbuf    != NULL) free(wbuf);
   return;
 }
 
@@ -336,14 +339,18 @@ static void
 mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg, double *results)
 {
   P7_PROFILE     *gm      = NULL;
+  char           *rbuf    = NULL;
+  int             rn      = 0;
 
-  while (p7_profile_MPIRecv(cfg->abc, cfg->bg, &gm) == eslOK) 
+  while (p7_profile_MPIRecv(0, 0, MPI_COMM_WORLD, cfg->abc, cfg->bg, &rbuf, &rn, &gm) == eslOK) 
     {
       process_workunit(go, cfg, gm, results);
       MPI_Send(results, 6*cfg->ntailsettings, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
 
       p7_profile_Destroy(gm);
     }
+
+  free(rbuf);
   return;
 }
 #endif /*HAVE_MPI*/

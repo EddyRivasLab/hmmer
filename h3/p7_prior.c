@@ -92,8 +92,8 @@ p7_dprior_CreateAmino(void)
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
 
   pri->tm = esl_mixdchlet_Create(1, 3);	 /* single component; 3 params */
-  pri->ti = esl_mixdchlet_Create(1, 2);	 /* single component; 3 params */
-  pri->td = esl_mixdchlet_Create(1, 2);	 /* single component; 3 params */
+  pri->ti = esl_mixdchlet_Create(1, 2);	 /* single component; 2 params */
+  pri->td = esl_mixdchlet_Create(1, 2);	 /* single component; 2 params */
   pri->em = esl_mixdchlet_Create(9, 20); /* 9 component; 20 params */
   pri->ei = esl_mixdchlet_Create(1, 20); /* single component; 20 params */
 
@@ -159,6 +159,59 @@ p7_dprior_CreateAmino(void)
   return NULL;
 }
 
+
+/* Function:  p7_dprior_CreateNucleic()
+ * Synopsis:  Creates the default DNA/RNA prior.
+ * Incept:    SRE, Tue Jun 12 11:19:53 2007 [Janelia]
+ *
+ * Purpose:   Creates the default DNA/RNA prior.
+ * 
+ *            Currently this is an uninformative plus-one
+ *            Laplace prior, for both emissions and transitions.
+ *            This should be changed to an informative prior.
+ *
+ * Returns:   a pointer to the new <P7_DPRIOR> structure.
+ */
+P7_DPRIOR *
+p7_dprior_CreateNucleic(void)
+{
+  int status;
+  P7_DPRIOR *pri = NULL;
+
+  ESL_ALLOC(pri, sizeof(P7_DPRIOR));
+  pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
+
+  pri->tm = esl_mixdchlet_Create(1, 3);	 /* single component; 3 params */
+  pri->ti = esl_mixdchlet_Create(1, 2);	 /* single component; 2 params */
+  pri->td = esl_mixdchlet_Create(1, 2);	 /* single component; 2 params */
+  pri->em = esl_mixdchlet_Create(1, 4);  /* single component; 4 params */
+  pri->ei = esl_mixdchlet_Create(1, 4);  /* single component; 4 params */
+
+  pri->tm->pq[0]       = 1.0;
+  pri->tm->alpha[0][0] = 1.0; /* TMM */
+  pri->tm->alpha[0][1] = 1.0; /* TMI */ 
+  pri->tm->alpha[0][2] = 1.0; /* TMD */ 
+
+  pri->ti->pq[0]       = 1.0;
+  pri->ti->alpha[0][0] = 1.0; /* TIM */
+  pri->ti->alpha[0][1] = 1.0; /* TII */
+
+  pri->td->pq[0]       = 1.0;
+  pri->td->alpha[0][0] = 1.0; /* TDM */
+  pri->td->alpha[0][1] = 1.0; /* TDD */
+
+  pri->em->pq[0] = 1.0;
+  esl_vec_DSet(pri->em->alpha[0], 1.0, 4);
+
+  pri->ei->pq[0] = 1.0;
+  esl_vec_DSet(pri->ei->alpha[0], 1.0, 4);
+
+  return pri;
+
+ ERROR:
+  if (pri != NULL) p7_dprior_Destroy(pri);
+  return NULL;
+}
 
 /* Function:  p7_dprior_Destroy()
  * Incept:    SRE, Sat Mar 24 09:55:09 2007 [Janelia]
