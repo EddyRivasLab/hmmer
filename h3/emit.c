@@ -460,8 +460,8 @@ main(int argc, char **argv)
   int              nullsc;
   double           bitscore;
 
-  r = esl_randomness_CreateTimeseeded();
-  p7_trace_Create(256, &tr);
+  r  = esl_randomness_CreateTimeseeded();
+  tr = p7_trace_Create(256);
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("failed to open %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read HMM");
   sq = esl_sq_CreateDigital(abc);

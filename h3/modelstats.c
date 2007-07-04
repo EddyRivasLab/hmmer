@@ -5,8 +5,10 @@
  */
 
 #include "p7_config.h"
-#include <easel.h>
-#include <esl_vectorops.h>
+
+#include "easel.h"
+#include "esl_vectorops.h"
+
 #include "hmmer.h"
 
 
@@ -18,11 +20,16 @@
  *            emission distribution, in bits:
  *            
  *            \[
- *              \frac{1}{M} \sum_{k=1}^{M} \left[ - \sum_x p_k(x) \log_2 p_k(x) + \sum_x f(x) \log_2 f(x) \right] 
+ *              \frac{1}{M} \sum_{k=1}^{M}
+ *                \left[ 
+ *                   - \sum_x p_k(x) \log_2 p_k(x) 
+ *                   + \sum_x f(x) \log_2 f(x)
+ *                \right] 
  *            \]
  *            
- *            where $p_k(x)$ is emission probability for symbol $x$ from match state $k$,
- *            and $f(x)$ is the null model's background emission probability for $x$. 
+ *            where $p_k(x)$ is emission probability for symbol $x$
+ *            from match state $k$, and $f(x)$ is the null model's
+ *            background emission probability for $x$.
  *            
  *            This statistic is used in "entropy weighting" to set the
  *            total sequence weight when model building.
@@ -171,6 +178,63 @@ p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_e
   *ret_entropy = 0.;
   return status;
 }
+
+
+/* Function:  p7_hmm_CompositionKLDist()
+ * Synopsis:  A statistic of model's composition bias.
+ * Incept:    SRE, Mon Jul  2 08:40:12 2007 [Janelia]
+ *
+ * Purpose:   Calculates the K-L distance between the average match
+ *            state residue composition in model <hmm> and a
+ *            background frequency distribution in <bg>, and
+ *            return it in <ret_KL>. 
+ *            
+ *            Optionally return the average match state residue
+ *            composition in <opt_avp>. This vector, of length
+ *            <hmm->abc->K> is allocated here and becomes the caller's
+ *            responsibility if <opt_avp> is non-<NULL>. 
+ *            
+ *            The average match composition is an occupancy-weighted
+ *            average (see <p7_hmm_CalculateOccupancy()>.
+ *            
+ *            The `K-L distance' <*ret_KL> is the symmetricized
+ *            Kullback-Leibler distance in bits (log base 2).
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp)
+{
+  int    K   = hmm->abc->K;
+  float *occ = NULL;
+  float *p   = NULL;
+  int    status;
+  int    k;
+
+  ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
+  ESL_ALLOC(p,   sizeof(float) * K);
+  p7_hmm_CalculateOccupancy(hmm, occ);
+
+  esl_vec_FSet(p, K, 0.);
+  for (k = 1; k <= hmm->M; k++)
+    esl_vec_FAddScaled(p, hmm->mat[k], occ[k], K);
+  esl_vec_FNorm(p, K);
+
+  *ret_KL = (esl_vec_FRelEntropy(p, bg->f, K) + esl_vec_FRelEntropy(bg->f, p, K)) / (2.0 * eslCONST_LOG2);
+  if (opt_avp != NULL) *opt_avp = p;  else free(p); 
+  free(occ);
+  return eslOK;
+  
+ ERROR:
+  if (occ != NULL) free(occ);
+  if (p   != NULL) free(p);
+  *ret_KL = 0.0;
+  if (opt_avp != NULL) *opt_avp = NULL;
+  return status;
+}
+
 
 /*****************************************************************
  * @LICENSE@

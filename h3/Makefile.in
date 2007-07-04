@@ -35,7 +35,7 @@ MYLIBS   = -leasel
 MYLIBDIR = -L../easel
 MYINCDIR = -I../easel
 
-PROGS = hmmbuild hmmsearch hmmemit hmmindex hmmsim hmmstat
+PROGS = hmmbuild hmmemit hmmfetch hmmsearch hmmsim hmmstat
 
 OBJS =  build.o\
 	dp_generic.o\
@@ -44,6 +44,7 @@ OBJS =  build.o\
 	eweight.o\
 	heatmap.o\
 	hmmer.o\
+	impl_fp.o\
 	island.o\
 	modelconfig.o\
 	modelstats.o\

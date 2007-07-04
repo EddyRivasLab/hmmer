@@ -18,21 +18,22 @@
 
 /* Function:  p7_trace_Create()
  *
- * Purpose:   Allocate a traceback of length <N> states; return it via
- *            <ret_tr>.
+ * Purpose:   Allocate a traceback of length <N> states. 
  *
- * Returns:   <eslOK> on success.
+ *            <N> only needs to be an initial guess. Routines that
+ *            make tracebacks will dynamically grow the trace as
+ *            needed.
  *
- * Throws:    <eslEMEM> on allocation error; <ret_tr> is returned NULL.
+ * Returns:   a pointer to the new <P7_TRACE> structure on success.
+ *
+ * Throws:    <NULL> on allocation error.
  */
-int
-p7_trace_Create(int N, P7_TRACE **ret_tr)
+P7_TRACE *
+p7_trace_Create(int N)
 {
-  int       status;
   P7_TRACE *tr = NULL;
+  int       status;
 
-  *ret_tr = NULL;
-  
   ESL_ALLOC(tr, sizeof(P7_TRACE));
   tr->st = NULL;
   tr->k  = NULL;
@@ -42,13 +43,11 @@ p7_trace_Create(int N, P7_TRACE **ret_tr)
   ESL_ALLOC(tr->i,  sizeof(int)  * N);
   tr->N      = 0;
   tr->nalloc = N;
-
-  *ret_tr = tr;
-  return eslOK;
+  return tr;
 
  ERROR:
   if (tr != NULL) p7_trace_Destroy(tr);
-  return status;
+  return NULL;
 }
 
 
@@ -74,7 +73,7 @@ p7_trace_Reuse(P7_TRACE *tr)
 
 
 
-/* Function:  p7_trace_Expand()
+/* Function:  p7_trace_Grow()
  *
  * Purpose:   Doubles the allocation in a trace structure <tr>.
  *
@@ -84,7 +83,7 @@ p7_trace_Reuse(P7_TRACE *tr)
  *            <tr> are unaffected by failure.
  */
 int
-p7_trace_Expand(P7_TRACE *tr)
+p7_trace_Grow(P7_TRACE *tr)
 {
   void *tmp;
   int   status;
@@ -99,7 +98,7 @@ p7_trace_Expand(P7_TRACE *tr)
   return status;
 }
 
-/* Function:  p7_trace_ExpandTo()
+/* Function:  p7_trace_GrowTo()
  *
  * Purpose:   Reallocates a trace structure <tr> to hold a trace
  *            of length <N> states.
@@ -110,7 +109,7 @@ p7_trace_Expand(P7_TRACE *tr)
  *            are unaffected by failure.
  */
 int
-p7_trace_ExpandTo(P7_TRACE *tr, int N)
+p7_trace_GrowTo(P7_TRACE *tr, int N)
 {
   int status;
   void *tmp;
@@ -379,64 +378,71 @@ p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *dsq, char *errbuf)
  *            output.
  */
 int
-p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq) /* replace void w/ P7_PROFILE */
+p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq) /* replace void w/ P7_PROFILE */
 {
   int j;		/* counter for trace position */
 
   if (tr == NULL) { fprintf(fp, " [ trace is NULL ]\n"); return eslOK; }
 
-  if (gm == NULL) {
-    fprintf(fp, "st   k      i   - traceback len %d\n", tr->N);
-    fprintf(fp, "--  ----   ----\n");
-    for (j = 0; j < tr->N; j++) {
-      fprintf(fp, "%1s  %4d %6d\n", 
-	      p7_hmm_DescribeStatetype(tr->st[j]),
-	      tr->k[j],
-	      tr->i[j]);
-    } 
-  } else {
-#if 0
-    sc = 0;
-    fprintf(fp, "st   k     i     transit emission - traceback len %d\n", tr->N);
-    fprintf(fp, "--  ---- ------  ------- --------\n");
-    for (j = 0; j < tr->N; j++) {
-      if (j < tr->N-1) {
-	status = p7_profile_GetTScore(gm, tr->st[j], tr->k[j],
-				      tr->st[j+1], tr->k[j+1], &tsc);
-	if (status != eslOK) return status;
-      }
-      else tsc = 0;
-
-      fprintf(fp, "%1s  %4d %6d  %7d", p7_hmm_Statetype(tr->st[j]),
-	      tr->k[j], tr->i[j], tsc);
-      sc += tsc;
-
-      if (dsq != NULL) {
-	xi = dsq[tr->i[j]];
-
-	if (tr->st[j] == p7_STM) {
-	  fprintf(fp, " %8d %c", gm->msc[xi][tr->k[j]], 
-		  gm->abc->sym[xi]);
-	  sc += gm->msc[xi][tr->k[j]];
-	} 
-	else if (tr->st[j] == p7_STI) {
-	  fprintf(fp, " %8d %c", gm->isc[xi][tr->k[j]], 
-		  (char) tolower((int) gm->abc->sym[xi]));
-	  sc += gm->isc[xi][tr->k[j]];
-	}
-	else if ((tr->st[j] == p7_STN && tr->st[j-1] == p7_STN) ||
-		 (tr->st[j] == p7_STC && tr->st[j-1] == p7_STC) ||
-		 (tr->st[j] == p7_STJ && tr->st[j-1] == p7_STJ))  {
-	  fprintf(fp, " %8d %c", 0, (char) tolower((int) gm->abc->sym[xi]));
-	}
+  if (gm == NULL) 
+    {
+      fprintf(fp, "st   k      i   - traceback len %d\n", tr->N);
+      fprintf(fp, "--  ----   ----\n");
+      for (j = 0; j < tr->N; j++) {
+	fprintf(fp, "%1s  %4d %6d\n", 
+		p7_hmm_DescribeStatetype(tr->st[j]),
+		tr->k[j],
+		tr->i[j]);
       } 
-      else fprintf(fp, " %8s %c", "-", '-');
-      fputs("\n", fp);
+    } 
+  else 
+    {
+      int status;
+      int tsc;
+      int xi;
+      int sc = 0;
+
+
+      fprintf(fp, "st   k     i     transit emission - traceback len %d\n", tr->N);
+      fprintf(fp, "--  ---- ------  ------- --------\n");
+      for (j = 0; j < tr->N; j++) 
+	{
+	  if (j < tr->N-1) 
+	    {
+	      status = p7_profile_GetT(gm, tr->st[j], tr->k[j],
+				       tr->st[j+1], tr->k[j+1], &tsc);
+	      if (status != eslOK) return status;
+	    }
+	  else tsc = 0;
+
+	  fprintf(fp, "%1s  %4d %6d  %7d", p7_hmm_DescribeStatetype(tr->st[j]),
+		  tr->k[j], tr->i[j], tsc);
+	  sc += tsc;
+	  
+	  if (dsq != NULL) {
+	    xi = dsq[tr->i[j]];
+
+	    if (tr->st[j] == p7_STM) {
+	      fprintf(fp, " %8d %c", gm->msc[xi][tr->k[j]], gm->abc->sym[xi]);
+	      sc += gm->msc[xi][tr->k[j]];
+	    } 
+	    else if (tr->st[j] == p7_STI) {
+	      fprintf(fp, " %8d %c", gm->isc[xi][tr->k[j]], 
+		      (char) tolower((int) gm->abc->sym[xi]));
+	      sc += gm->isc[xi][tr->k[j]];
+	    }
+	    else if ((tr->st[j] == p7_STN && tr->st[j-1] == p7_STN) ||
+		     (tr->st[j] == p7_STC && tr->st[j-1] == p7_STC) ||
+		     (tr->st[j] == p7_STJ && tr->st[j-1] == p7_STJ))  {
+	      fprintf(fp, " %8d %c", 0, (char) tolower((int) gm->abc->sym[xi]));
+	    }
+	  } 
+	  else fprintf(fp, " %8s %c", "-", '-');
+	  fputs("\n", fp);
+	}
+      fprintf(fp, "                 ------- --------\n");
+      fprintf(fp, "           total: %6d\n\n", sc);
     }
-    fprintf(fp, "                 ------- --------\n");
-    fprintf(fp, "           total: %6d\n\n", sc);
-#endif
-  }
 
   return eslOK;
 }
@@ -473,7 +479,7 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
   tr->k[tr->N]  = k;
   tr->i[tr->N]  = i;
   tr->N++;
-  if (tr->N == tr->nalloc) return p7_trace_Expand(tr);
+  if (tr->N == tr->nalloc) return p7_trace_Grow(tr);
   return eslOK;
 }
 

@@ -59,6 +59,35 @@ p7_bg_Create(const ESL_ALPHABET *abc)
 }
 
 
+/* Function:  p7_bg_CreateUniform()
+ * Synopsis:  Creates background model with uniform freqs.
+ * Incept:    SRE, Sat Jun 30 10:25:27 2007 [Janelia]
+ *
+ * Purpose:   Creates a background model for alphabet <abc>
+ *            with uniform residue frequencies.
+ */
+P7_BG *
+p7_bg_CreateUniform(const ESL_ALPHABET *abc)
+{
+  P7_BG *bg = NULL;
+  int    status;
+
+  ESL_ALLOC(bg, sizeof(P7_BG));
+  bg->f = NULL;
+  ESL_ALLOC(bg->f, sizeof(float) * abc->K);
+
+  esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
+
+  bg->p1  = 350./351.;
+  bg->abc = (ESL_ALPHABET *) abc; /* safe: we're just keeping a reference */
+  return bg;
+
+ ERROR:
+  p7_bg_Destroy(bg);
+  return NULL;
+}
+
+
 /* Function:  p7_bg_Dump()
  * Synopsis:  Outputs <P7_BG> object as text, for diagnostics.
  * Incept:    SRE, Fri May 25 08:07:11 2007 [Janelia]

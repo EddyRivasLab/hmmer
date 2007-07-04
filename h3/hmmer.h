@@ -68,7 +68,7 @@ typedef struct p7_hmm_s {
   char  *ca;			/* consensus accessibility line  1..M    (p7_CA)     */ /* String; 0=' ', M+1='\0' */
   char  *comlog;		/* command line(s) that built model      (mandatory) */ /* String, \0-terminated */
   int    nseq;			/* number of training sequences          (mandatory) */
-  int    eff_nseq;		/* effective number of seqs (<= nseq)    (mandatory) */
+  float  eff_nseq;		/* effective number of seqs (<= nseq)    (mandatory) */
   char  *ctime;			/* creation date                         (mandatory) */
   int   *map;			/* map of alignment cols onto model 1..M (p7_MAP)    */ /* Array; 0=0 */
   int    checksum;              /* checksum of training sequences        (mandatory) */
@@ -83,11 +83,13 @@ typedef struct p7_hmm_s {
   float  tc1, tc2;	/* per-seq/per-domain trusted cutoff (bits)       (p7_TC) */
   float  nc1, nc2;	/* per-seq/per-domain noise cutoff (bits)         (p7_NC) */
 
-  /* Things we keep references to.
-   */
+  /* Things we keep references to.  */
   const ESL_ALPHABET        *abc; /* ptr to alphabet info (hmm->abc->K is alphabet size) */
   const struct p7_profile_s *gm;  /* generic search profile (incomplete type: P7_PROFILE declared below) */
   const struct p7_bg_s      *bg;  /* null background model  (incomplete type: P7_BG declared below)      */
+
+  /* When an HMM is input from disk, remember its disk position. */
+  off_t  offset;		/* HMM record offset on disk */
 
   int flags;
 } P7_HMM;
@@ -123,6 +125,7 @@ typedef struct p7_hmm_s {
 #define p7_TII  4
 #define p7_TDM  5
 #define p7_TDD  6 
+#define p7_TBM  7		/* B->Mk transition appears in optimized profiles  */
 
 /* Plan 7 model state types (esp. used in P7_TRACE structure)
  */
@@ -259,8 +262,13 @@ typedef struct p7_trace_s {
 
 typedef struct p7_hmmfile_s {
   FILE         *f;		 /* pointer to stream for reading                */
-  ESL_ALPHABET *abc;   		 /* ptr to alphabet in use for these HMMs        */
+  char         *fname;	         /* name of the HMM file; [STDIN] if -           */
+
   int (*parser)(struct p7_hmmfile_s *, ESL_ALPHABET **, P7_HMM **);  /* parsing function */
+
+  int           do_gzip;	/* TRUE if f is "gzip -dc |" (will pclose(f))    */ 
+  int           do_stdin;       /* TRUE if f is stdin (won't close f)            */
+  ESL_SSI      *ssi;		/* open SSI index file; or NULL if none.         */
 } P7_HMMFILE;
 
 
@@ -359,6 +367,7 @@ extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);
 extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
 extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
+extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp);
 
 /* mpisupport.c */
 #ifdef HAVE_MPI
@@ -376,6 +385,7 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 
 /* p7_bg.c */
 extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
+extern P7_BG *p7_bg_CreateUniform(const ESL_ALPHABET *abc);
 extern int    p7_bg_Dump(FILE *ofp, P7_BG *bg);
 extern void   p7_bg_Destroy(P7_BG *bg);
 extern int    p7_bg_SetLength(P7_BG *bg, int L);
@@ -426,30 +436,35 @@ extern int  p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 extern int  p7_hmmfile_Write(FILE *fp, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm);
+extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 
 /* p7_prior.c */
 extern P7_DPRIOR *p7_dprior_CreateAmino(void);
 extern P7_DPRIOR *p7_dprior_CreateNucleic(void);
+extern P7_DPRIOR *p7_dprior_CreateLaplace(ESL_ALPHABET *abc);
 extern void       p7_dprior_Destroy(P7_DPRIOR *pri);
 extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
 
 /* p7_profile.c */
 extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
+extern P7_PROFILE *p7_profile_Clone(const P7_PROFILE *gm);
+extern int         p7_profile_SetNullEmissions(P7_PROFILE *gm);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 
 extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
 				   char st2, int k2, int *ret_tsc);
 extern int         p7_profile_Validate(const P7_PROFILE *gm, float tol);
+extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
 
 /* p7_trace.c */
-extern int  p7_trace_Create(int N, P7_TRACE **ret_tr);
+extern P7_TRACE *p7_trace_Create(int N);
 extern int  p7_trace_Reuse(P7_TRACE *tr);
-extern int  p7_trace_Expand(P7_TRACE *tr);
-extern int  p7_trace_ExpandTo(P7_TRACE *tr, int N);
+extern int  p7_trace_Grow(P7_TRACE *tr);
+extern int  p7_trace_GrowTo(P7_TRACE *tr, int N);
 extern void p7_trace_Destroy(P7_TRACE *tr);
 extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
 extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf);
-extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, void *gm, ESL_DSQ *dsq);
+extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
 extern int  p7_trace_Reverse(P7_TRACE *tr);

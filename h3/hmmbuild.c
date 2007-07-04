@@ -66,7 +66,8 @@ static ESL_OPTIONS options[] = {
   { "--eX",      eslARG_REAL,  "6.0",  NULL,"x>0",       NULL, "--eent",  "--ere", "for --eent: set minimum total rel ent param to <x>",  5},
   { "--eid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--eclust",    NULL, "for --eclust: set fractional identity cutoff to <x>", 5},
 /* Other options */
-  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",   6 },  
+  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                            6 },
+  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",   6 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -77,7 +78,7 @@ static ESL_OPTIONS options[] = {
  * of shared data amongst different parallel processes (threads or MPI processes).
  */
 struct cfg_s {
-  FILE         *ofp;		/* output file (default is stdin) */
+  FILE         *ofp;		/* output file (default is stdout) */
 
   char         *alifile;	/* name of the alignment file we're building HMMs from  */
   int           fmt;		/* format code for alifile */
@@ -113,7 +114,7 @@ static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
 static int process_workunit       (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
-static int output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
+static int output_result          (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
 
 static int set_relative_weights   (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
 static int build_model            (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
@@ -163,7 +164,9 @@ main(int argc, char **argv)
     {
       puts("Incorrect number of command line arguments.");
       esl_usage(stdout, argv[0], usage);
-      printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+      puts("\n  where basic options are:");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
+      printf("\nTo see more help on other available options, do %s -h\n\n", argv[0]);
       exit(1);
     }
 
@@ -309,10 +312,17 @@ init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 static int
 init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 {
-  if      (cfg->abc->type == eslAMINO) cfg->pri = p7_dprior_CreateAmino();
-  else if (cfg->abc->type == eslDNA)   cfg->pri = p7_dprior_CreateNucleic();  
-  else if (cfg->abc->type == eslRNA)   cfg->pri = p7_dprior_CreateNucleic();  
-  else    ESL_FAIL(eslEINVAL, errmsg, "invalid alphabet type");
+  if (esl_opt_GetBoolean(go, "--laplace"))
+    {
+      cfg->pri = p7_dprior_CreateLaplace(cfg->abc);
+    }
+  else 
+    {
+      if      (cfg->abc->type == eslAMINO) cfg->pri = p7_dprior_CreateAmino();
+      else if (cfg->abc->type == eslDNA)   cfg->pri = p7_dprior_CreateNucleic();  
+      else if (cfg->abc->type == eslRNA)   cfg->pri = p7_dprior_CreateNucleic();  
+      else    ESL_FAIL(eslEINVAL, errmsg, "invalid alphabet type");
+    }
 
   cfg->bg = p7_bg_Create(cfg->abc);
   
@@ -773,7 +783,7 @@ set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL
     fflush(cfg->ofp);
   }
 
-  if (esl_opt_GetBoolean(go, "--mpi") == FALSE && cfg->nali == 1)	/* first (only?) HMM in file:  */
+  if (cfg->do_mpi == FALSE && cfg->nali == 1)	/* first (only?) HMM in file:  */
     {
       if      (esl_opt_GetString(go, "-n") != NULL) p7_hmm_SetName(hmm, esl_opt_GetString(go, "-n"));
       else if (msa->name != NULL)                   p7_hmm_SetName(hmm, msa->name);

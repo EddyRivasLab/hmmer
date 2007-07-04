@@ -97,8 +97,8 @@ main(int argc, char **argv)
   if (status == eslENOTFOUND) esl_fatal("Failed to open hmm file %s for reading.\n", hmmfile);
   else if (status != eslOK)   esl_fatal("Unexpected error in opening hmm file %s.\n", hmmfile);
     
-  status = p7_trace_Create(256, &tr);
-  if (status != eslOK) esl_fatal("Failed to allocate trace\n");
+  tr = p7_trace_Create(256);
+  if (tr == NULL) esl_fatal("Failed to allocate trace\n");
 
   if ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslOK) {
     if      (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);

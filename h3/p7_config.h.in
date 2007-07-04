@@ -81,7 +81,7 @@
  * symbol alphabet size.
  */
 #define p7_MAXABET    20      /* maximum size of alphabet (4 or 20)              */
-#define p7_MAXCODE    24      /* maximum degenerate alphabet size (16 or 24)     */
+#define p7_MAXCODE    28      /* maximum degenerate alphabet size (17 or 28)     */
 
 /* Other stuff.
  */

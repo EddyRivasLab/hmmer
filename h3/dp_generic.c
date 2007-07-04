@@ -9,8 +9,9 @@
  * Contents:
  *     1. HMM alignment algorithms
  *     2. Traceback algorithms.
- *     3. Unit tests.
- *     4. Test driver.
+ *     3. Benchmark driver.
+ *     4. Unit tests.
+ *     5. Test driver.
  * 
  * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
  * SVN $Id$
@@ -35,8 +36,8 @@
  * Purpose:   The standard Viterbi dynamic programming algorithm. 
  *
  *            Given a digital sequence <dsq> of length <L>, a profile
- *            <gm>, and DP matrix <gm> allocated for at least <gm->M>
- *            by <L> cells; calculate the maximum scoring path by
+ *            <gm>, and DP matrix <gm> allocated for at least <L>
+ *            by <gm->M> cells; calculate the maximum scoring path by
  *            Viterbi; return the Viterbi score in <ret_sc>, and the
  *            Viterbi matrix is in <mx>.
  *            
@@ -498,11 +499,112 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *mx, P7_
 }
 
 
+/*****************************************************************
+ * 3. Benchmark driver.
+ *****************************************************************/
+#ifdef p7DP_GENERIC_BENCHMARK
+/* gcc -o benchmark-generic -g -O2 -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
+ * ./benchmark-generic <hmmfile>
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_stopwatch.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
+  { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { "--vv",      eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "be very verbose: dump traces",                   0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "benchmark driver for the generic implementation";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_GMX         *gx      = NULL;
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
+  int             i;
+  int             sc;
+  int             nullsc;
+  float           bitscore;
+  
+
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, L);
+
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
+  p7_ReconfigLength(gm, L);
+
+  gx = p7_gmx_Create(gm->M, L);
+
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+
+      p7_GViterbi(dsq, L, gm, gx, &sc);
+      p7_bg_NullOne(gm->bg, dsq, L, &nullsc);
+      bitscore = p7_SILO2Bitscore(sc - nullsc);
+      
+      if (esl_opt_GetBoolean(go, "-v")) printf("%.2f bits  (%d SILO)\n", bitscore, sc); 
+
+      if (esl_opt_GetBoolean(go, "--vv")) 
+	{
+	  P7_TRACE *tr = p7_trace_Create(L*2+6);
+
+	  p7_GTrace(dsq, L, gm, gx, tr);
+	  p7_trace_Dump(stdout, tr, gm, dsq);
+	  
+	  p7_trace_Destroy(tr);
+	}
+    }
+  esl_stopwatch_Stop(w);
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+
+  free(dsq);
+  p7_gmx_Destroy(gx);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7DP_GENERIC_BENCHMARK*/
+
 
 /*****************************************************************
- * 3. Unit tests.
+ * 4. Unit tests.
  *****************************************************************/
-#ifdef p7DP_SLOW_TESTDRIVE
+#ifdef p7DP_GENERIC_TESTDRIVE
 
 /* Viterbi validation is done by comparing the returned score
  * to the score of the optimal trace. Not foolproof, but catches
@@ -524,7 +626,7 @@ utest_viterbi(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE *gm, int nseq, in
   double    avg_sc = 0.;
   
   if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((status = p7_trace_Create(L, &tr))        != eslOK) esl_fatal("trace creation failed");
+  if ((tr     = p7_trace_Create(L))             == NULL)  esl_fatal("trace creation failed");
   if ((mx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
 
   for (idx = 0; idx < nseq; idx++)
@@ -675,17 +777,17 @@ utest_Enumeration(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
   free(dsq);
 }
 
-#endif /*p7DP_SLOW_TESTDRIVE*/
+#endif /*p7DP_GENERIC_TESTDRIVE*/
 
 
 
 
 /*****************************************************************
- * 3. Test driver.
+ * 5. Test driver.
  *****************************************************************/
-/* gcc -g -Wall -Dp7DP_SLOW_TESTDRIVE -I. -I../easel -L. -L../easel -o dp_slow_utest dp_slow.c -lhmmer -leasel -lm
+/* gcc -g -Wall -Dp7DP_GENERIC_TESTDRIVE -I. -I../easel -L. -L../easel -o dp_generic_utest dp_generic.c -lhmmer -leasel -lm
  */
-#ifdef p7DP_SLOW_TESTDRIVE
+#ifdef p7DP_GENERIC_TESTDRIVE
 #include "easel.h"
 
 #include "p7_config.h"
@@ -726,7 +828,7 @@ main(int argc, char **argv)
   return 0;
 }
 
-#endif /*p7DP_SLOW_TESTDRIVE*/
+#endif /*p7DP_GENERIC_TESTDRIVE*/
 
 /*****************************************************************
  * @LICENSE@

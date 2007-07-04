@@ -113,6 +113,8 @@ AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
 AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
 AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
 
+AC_DEFINE(eslLIBRARY)
+
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
 #       install.sh, config.guess, config.sub
@@ -444,6 +446,7 @@ AC_CONFIG_FILES(testsuite/Makefile)
 
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_FILES([easel/miniapps/Makefile])
+AC_CONFIG_FILES([easel/testsuite/Makefile])
 AC_CONFIG_FILES([easel/Makefile])
 
 

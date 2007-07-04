@@ -45,8 +45,8 @@ p7_gmx_Create(int allocM, int allocL)
     gx->dmx[i] = gx->dmx_mem + i * (allocM+1);
   }
 
-  gx->M      = 0;
-  gx->L      = 0;
+  gx->M      = allocM;
+  gx->L      = allocL;
   gx->ncells = (allocM+1)*(allocL+1);
   gx->nrows  = (allocL+1);
   return gx;
@@ -118,8 +118,8 @@ p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL)
     gx->dmx[i] = gx->dmx_mem + i * (allocM+1);
   }
 
-  gx->M      = 0;
-  gx->L      = 0;
+  gx->M      = allocM;
+  gx->L      = allocL;
   gx->ncells = ncells;
   gx->nrows  = nrows;
   return eslOK;

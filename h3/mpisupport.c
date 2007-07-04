@@ -837,6 +837,61 @@ utest_HMMSendRecv(int my_rank, int nproc)
   return;
 }
 
+static void
+utest_ProfileSendRecv(int my_rank, int nproc)
+{
+  ESL_RANDOMNESS *r    = esl_randomness_Create(42);
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  P7_HMM         *hmm  = NULL;
+  P7_BG          *bg   = NULL;
+  P7_PROFILE     *gm   = NULL;
+  P7_PROFILE     *gm2  = NULL;
+  int             M    = 200;
+  int             L    = 400;
+  char           *wbuf = NULL;
+  int             wn   = 0;
+  int             i;
+
+  p7_hmm_Sample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create(hmm->M, abc);
+  hmm->gm = (P7_PROFILE *) gm;
+  p7_ProfileConfig(hmm, bg, gm, p7_LOCAL);
+  p7_ReconfigLength(gm, L);
+  p7_bg_SetLength  (bg, L);
+
+  if (my_rank == 0)
+    {
+      for (i = 1; i < nproc; i++)
+	{
+	  ESL_DPRINTF1(("Master: receiving test profile\n"));
+	  p7_profile_MPIRecv(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, abc, bg, &wbuf, &wn, &gm2);
+	  ESL_DPRINTF1(("Master: test profile received\n"));
+
+	  if (p7_profile_Validate(gm2, 0.001)    != eslOK) p7_Die("profile validation failed: %s");
+	  if (p7_profile_Compare(gm, gm2, 0.001) != eslOK) p7_Die("Received profile not identical to what was sent");
+
+	  p7_profile_Destroy(gm2);
+	}
+    }
+  else 
+    {
+      ESL_DPRINTF1(("Worker %d: sending test profile\n", my_rank));
+      p7_profile_MPISend(gm, 0, 0, MPI_COMM_WORLD, &wbuf, &wn);
+      ESL_DPRINTF1(("Worker %d: test profile sent\n", my_rank));
+    }
+
+  free(wbuf);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(r);
+  return;
+}
+
+
+
 #endif /*p7MPISUPPORT_TESTDRIVE*/
 /*---------------------- end, unit tests ------------------------*/
 
@@ -881,6 +936,7 @@ main(int argc, char **argv)
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 
   utest_HMMSendRecv(my_rank, nproc);
+  utest_ProfileSendRecv(my_rank, nproc);
 
   MPI_Finalize();
   return 0;

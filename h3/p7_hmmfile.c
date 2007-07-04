@@ -96,29 +96,68 @@ static int read_bin_string (FILE *fp, char **ret_s);
 int
 p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 {
-  P7_HMMFILE *hfp = NULL;
-  int         status;
+  P7_HMMFILE *hfp     = NULL;
+  char       *ssifile = NULL;	/* constructed name of SSI index file             */
   char       *envfile = NULL;	/* full path to filename after using environment  */
+  char       *cmd     = NULL;
+  int         status;
+  int         n       = strlen(filename);
 
   ESL_ALLOC(hfp, sizeof(P7_HMMFILE));
-  hfp->f      = NULL;
-  hfp->parser = NULL;
+  hfp->f        = NULL;
+  hfp->fname    = NULL;
+  hfp->parser   = read_bin30hmm;
+  hfp->do_gzip  = FALSE;
+  hfp->do_stdin = FALSE;
+  hfp->ssi      = NULL;
 
-  if ((hfp->f = fopen(filename, "r")) != NULL) 
-    ;
-  else if (esl_FileEnvOpen(filename, env, &(hfp->f), &envfile) == eslOK)
-    ;
-  else
-    { status = eslENOTFOUND; goto ERROR; }
+  /* Reading from stdin: */
+  if (strcmp(filename, "-") == 0)
+    {
+      hfp->f        = stdin;
+      hfp->do_stdin = TRUE;
+      if ((status = esl_strdup("[STDIN]", -1, &(hfp->fname))) != eslOK) goto ERROR;
+    }
+#ifdef HAVE_POPEN
+  /* Reading .gz files from gzip -dc:  */
+  else if (n > 3 && strcmp(filename+n-3, ".gz") == 0)
+    {
+      if (! esl_FileExists(filename))	      { status = eslENOTFOUND; goto ERROR; }
+      ESL_ALLOC(cmd, sizeof(char) * (n+1+strlen("gzip -dc ")));
+      sprintf(cmd, "gzip -dc %s", filename);
+      if ((hfp->f = popen(cmd, "r")) == NULL) { status = eslENOTFOUND; goto ERROR; }
+      if ((status = esl_strdup(filename, n, &(hfp->fname))) != eslOK)  goto ERROR;
+      hfp->do_gzip  = TRUE;
+    }
+#endif /*HAVE_POPEN: gzip mode */
+  else /* normal file open: in cwd or in environment path: construct ssi index filename too. */
+    {
+      if ((hfp->f = fopen(filename, "r")) != NULL) 
+	{
+	  if ((status = esl_FileNewSuffix(filename, "ssi", &ssifile)) != eslOK) goto ERROR;
+	  if ((status = esl_strdup(filename, n, &(hfp->fname)))       != eslOK) goto ERROR;
+	}
+      else if (esl_FileEnvOpen(filename, env, &(hfp->f), &envfile) == eslOK)
+	{
+	  if ((status = esl_FileNewSuffix(envfile, "ssi", &ssifile)) != eslOK) goto ERROR;
+	  if ((status = esl_strdup(envfile, -1, &(hfp->fname)))      != eslOK) goto ERROR;
+	}
+      else
+	{ status = eslENOTFOUND; goto ERROR; }
+    }
   
-  hfp->parser = read_bin30hmm;
-
+  /* Attempt to open the ssi index file. hfp->ssi silently stays NULL if the ssifile isn't found. */
+  if (ssifile != NULL) esl_ssi_Open(ssifile, &(hfp->ssi));
+  if (cmd     != NULL) free(cmd);
   if (envfile != NULL) free(envfile);
+  if (ssifile != NULL) free(ssifile);
   *ret_hfp = hfp;
   return eslOK;
 
  ERROR:
+  if (cmd     != NULL) free(cmd);
   if (envfile != NULL) free(envfile);
+  if (ssifile != NULL) free(ssifile);
   if (hfp     != NULL) p7_hmmfile_Close(hfp);
   *ret_hfp = NULL;
   return status;
@@ -134,12 +173,15 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 void
 p7_hmmfile_Close(P7_HMMFILE *hfp)
 {
-  if (hfp != NULL)
-    {
-      if (hfp->f != NULL) fclose(hfp->f);
-    }
+  if (hfp == NULL) return;
+
+#ifdef HAVE_POPEN /* gzip functionality */
+  if (hfp->do_gzip && hfp->f != NULL)    pclose(hfp->f);
+#endif
+  if (!hfp->do_gzip && !hfp->do_stdin && hfp->f != NULL) fclose(hfp->f);
+  if (hfp->fname != NULL) free(hfp->fname);
+  if (hfp->ssi   != NULL) esl_ssi_Close(hfp->ssi);
   free(hfp);
-  return;
 }
 
 
@@ -189,8 +231,8 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
   if ((hmm->flags & p7_CS) && (fwrite((char *) hmm->cs,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   if ((hmm->flags & p7_CA) && (fwrite((char *) hmm->ca,  sizeof(char), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   write_bin_string(fp, hmm->comlog);
-  if (fwrite((char *) &(hmm->nseq),     sizeof(int),  1,   fp) != 1) return eslFAIL;
-  if (fwrite((char *) &(hmm->eff_nseq), sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->nseq),     sizeof(int),    1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->eff_nseq), sizeof(float),  1,   fp) != 1) return eslFAIL;
   write_bin_string(fp, hmm->ctime);
   if ((hmm->flags & p7_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   if (fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp) != 1) return eslFAIL;
@@ -258,6 +300,45 @@ p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm)
 
 
 
+/* Function:  p7_hmmfile_PositionByKey()
+ * Synopsis:  Use SSI to reposition file to start of named HMM.
+ * Incept:    SRE, Mon Jun 18 10:57:15 2007 [Janelia]
+ *
+ * Purpose:   Reposition <hfp> so tha next HMM we read will be the
+ *            one named (or accessioned) <key>.
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ *            Returns <eslENOTFOUND> if <key> isn't found in the index for
+ *            <hfp>.
+ *            
+ *            Returns <eslEFORMAT> is something goes wrong trying to
+ *            read the index, indicating a file format problem in the
+ *            SSI file.
+ *            
+ *            In the event of either error, the state of <hfp> is left
+ *            unchanged.
+ *
+ * Throws:    <eslEMEM> on allocation failure, or <eslESYS> on system i/o
+ *            call failure, or <eslEINVAL> if <hfp> doesn't have an SSI 
+ *            index or is not a seekable stream. 
+ */
+int
+p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
+{
+  uint16_t fh;
+  off_t    offset;
+  int      status;
+
+  if (hfp->ssi == NULL) ESL_EXCEPTION(eslEINVAL, "Need an open SSI index to call p7_hmmfile_PositionByKey()");
+  if ((status = esl_ssi_FindName(hfp->ssi, key, &fh, &offset)) != eslOK) return status;
+  if (fseeko(hfp->f, offset, SEEK_SET) != 0)    ESL_EXCEPTION(eslESYS, "fseek failed");
+  return eslOK;
+}
+
+
+
+
 /*****************************************************************
  * 3. Private functions for parsing HMM file formats.
  *****************************************************************/
@@ -282,6 +363,7 @@ p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm)
  *                            passed by the caller in <*ret_abc>.
  *                            
  * Throws:     <eslEMEM> on allocation error.
+ *             <eslESYS> if a system i/o call fails.
  *             In cases of error (including both thrown error and normal error), <*ret_abc>
  *             is left in its original state as passed by the caller, and <*ret_hmm> is
  *             returned <NULL>.
@@ -295,9 +377,13 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   int     alphabet_type;
   int     k;
   int     status;
+  off_t   offset = 0;
 
   /* Check magic. */
   if (feof(hfp->f))                                             { status = eslEOF;       goto ERROR; }
+  if ((!hfp->do_stdin) && (! hfp->do_gzip)) {
+    if ((offset = ftello(hfp->f)) < 0)                          ESL_XEXCEPTION(eslESYS, "ftello() failed");
+  }
   if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOF;       goto ERROR; }
   if (magic != v30magic)                                        { status = eslEFORMAT;   goto ERROR; }
 
@@ -306,6 +392,7 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
    * then the later CreateBody() call will allocate optional internal fields we need. 
    */
   if ((hmm = p7_hmm_CreateShell()) == NULL)                      { status = eslEMEM;     goto ERROR; }  
+  hmm->offset = offset;
 
   /* Get sizes of things */
   if (! fread((char *) &(hmm->flags),  sizeof(int), 1, hfp->f)) { status = eslEOD;       goto ERROR; }
@@ -341,8 +428,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   if ((hmm->flags & p7_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if ((hmm->flags & p7_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if ((status = read_bin_string(hfp->f, &(hmm->comlog))) != eslOK)                          goto ERROR;
-  if (! fread((char *) &(hmm->nseq),     sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}
-  if (! fread((char *) &(hmm->eff_nseq), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}  
+  if (! fread((char *) &(hmm->nseq),     sizeof(int),   1, hfp->f))                         {status = eslEOD; goto ERROR;}
+  if (! fread((char *) &(hmm->eff_nseq), sizeof(float), 1, hfp->f))                         {status = eslEOD; goto ERROR;}  
   if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                          goto ERROR;
   if ((hmm->flags & p7_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
   if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}

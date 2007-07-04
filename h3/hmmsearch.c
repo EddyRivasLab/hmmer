@@ -75,7 +75,7 @@ main(int argc, char **argv)
    *****************************************************************/
 
   abc = esl_alphabet_Create(eslAMINO);
-  p7_trace_Create(256, &tr);
+  tr =  p7_trace_Create(256);
   mx  = p7_gmx_Create(200, 400); /* initial alloc is for a DP problem M=200,L=400 */
 
   hstatus = p7_hmmfile_Open(hmmfile, NULL, &hfp);

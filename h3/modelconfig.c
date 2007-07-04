@@ -280,8 +280,8 @@ logoddsify(const P7_HMM *hmm, P7_PROFILE *gm)
   sc[gm->abc->Kp-1] = p7_IMPOSSIBLE; /* missing data symbol */
   for (k = 1; k <= gm->M; k++)  {
     for (x = 0; x < gm->abc->K; x++)
-      sc[x] = p7_Prob2SILO(hmm->mat[k][x], gm->bg->f[x]); /* base */
-    esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);             /* degens */
+      sc[x] = p7_Prob2SILO(hmm->mat[k][x], gm->bg->f[x]); /* base   */
+    esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);         /* degens */
     for (x = 0; x < gm->abc->Kp; x++)
       gm->msc[x][k] = sc[x];	
   }
@@ -289,8 +289,8 @@ logoddsify(const P7_HMM *hmm, P7_PROFILE *gm)
   /* Then the same for insert emissions 1..M-1 */
   for (k = 1; k < gm->M; k++) {
     for (x = 0; x < gm->abc->K; x++)
-      sc[x] = p7_Prob2SILO(hmm->ins[k][x], gm->bg->f[x]); /* base */
-    esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);             /* degens */
+      sc[x] = p7_Prob2SILO(hmm->ins[k][x], gm->bg->f[x]); /* base   */
+    esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);         /* degens */
     for (x = 0; x < gm->abc->Kp; x++)
       gm->isc[x][k] = sc[x];	
   }
@@ -623,7 +623,7 @@ main(int argc, char **argv)
   esl_dmatrix_SetZero(imx);
   esl_dmatrix_SetZero(iref);
   esl_dmatrix_SetZero(kmx);
-  p7_trace_Create(256, &tr);
+  tr    = p7_trace_Create(256);
   sq    = esl_sq_CreateDigital(abc);
   bg    = p7_bg_Create(abc);
   core  = p7_hmm_Duplicate(hmm);
@@ -892,7 +892,7 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   
   if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslEINVAL, "profile must be unilocal");
   if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
-  if ((status = p7_trace_Create(256, &tr2))  != eslOK)  goto ERROR;
+  if ((tr  = p7_trace_Create(256))           == NULL)   { status = eslEMEM; goto ERROR; }
 
   /* sample local alignment from the implicit model */
   if (gm->h2_mode) {

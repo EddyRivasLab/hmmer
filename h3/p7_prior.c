@@ -8,6 +8,7 @@
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -212,6 +213,42 @@ p7_dprior_CreateNucleic(void)
   if (pri != NULL) p7_dprior_Destroy(pri);
   return NULL;
 }
+
+/* Function:  p7_dprior_CreateLaplace()
+ * Synopsis:  Creates Laplace plus-one prior.
+ * Incept:    SRE, Sat Jun 30 09:48:13 2007 [Janelia]
+ *
+ * Purpose:   Create a Laplace plus-one prior for alphabet <abc>.
+ */
+P7_DPRIOR *
+p7_dprior_CreateLaplace(ESL_ALPHABET *abc)
+{
+  P7_DPRIOR *pri = NULL;
+  int        status;
+
+  ESL_ALLOC(pri, sizeof(P7_DPRIOR));
+  pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
+
+  pri->tm = esl_mixdchlet_Create(1, 3);	     /* single component; 3 params */
+  pri->ti = esl_mixdchlet_Create(1, 2);	     /* single component; 2 params */
+  pri->td = esl_mixdchlet_Create(1, 2);	     /* single component; 2 params */
+  pri->em = esl_mixdchlet_Create(1, abc->K); /* single component; K params */
+  pri->ei = esl_mixdchlet_Create(1, abc->K); /* single component; K params */
+
+  if (pri->tm == NULL || pri->ti == NULL || pri->td == NULL || pri->em == NULL || pri->ei == NULL) goto ERROR;
+
+  pri->tm->pq[0] = 1.0;   esl_vec_DSet(pri->tm->alpha[0], 3,      1.0);  /* match transitions  */
+  pri->ti->pq[0] = 1.0;   esl_vec_DSet(pri->ti->alpha[0], 2,      1.0);  /* insert transitions */
+  pri->td->pq[0] = 1.0;   esl_vec_DSet(pri->td->alpha[0], 2,      1.0);  /* delete transitions */
+  pri->em->pq[0] = 1.0;   esl_vec_DSet(pri->em->alpha[0], abc->K, 1.0);  /* match emissions    */
+  pri->ei->pq[0] = 1.0;   esl_vec_DSet(pri->ei->alpha[0], abc->K, 1.0);  /* insert emissions   */
+  return pri;
+
+ ERROR:
+  p7_dprior_Destroy(pri);
+  return NULL;
+}
+
 
 /* Function:  p7_dprior_Destroy()
  * Incept:    SRE, Sat Mar 24 09:55:09 2007 [Janelia]

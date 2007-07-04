@@ -111,6 +111,8 @@ p7_hmm_CreateShell(void)
   hmm->abc      = NULL;
   hmm->gm       = NULL;
   hmm->bg       = NULL;
+
+  hmm->offset   = 0;
   return hmm;
 
  ERROR:
@@ -289,6 +291,7 @@ p7_hmm_Duplicate(const P7_HMM *hmm)
   new->abc      = hmm->abc;
   new->gm       = hmm->gm;
   new->bg       = hmm->bg;
+  new->offset   = hmm->offset;
   new->flags    = hmm->flags;
   return new;
 
@@ -937,11 +940,6 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc,
  *            if they differ. Floating-point probabilities are 
  *            compared for equality within a fractional tolerance
  *            <tol>. 
- *
- *            Probably only useful for debugging.
- *
- * Returns:   <eslOK> if the two HMMs are identical; <eslFAIL>
- *            if they differ.
  */
 int
 p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
