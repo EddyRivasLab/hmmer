@@ -25,7 +25,6 @@ static ESL_OPTIONS options[] = {
   { "-n",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of seqs to sample",                  0 },
   { "-p",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "sample from profile, not core model",       0 },
   { "-L",        eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",   0 },
-  { "--h2",      eslARG_NONE,    NULL, NULL, NULL,      NULL,      "-p",    NULL, "configure profile in old HMMER2 style",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -34,7 +33,6 @@ static char usage[]  = "hmmemit [-options] <hmmfile (single)>";
 struct emitcfg_s {
   int   nseq;			/* how many sequences to emit */
   int   do_profile;		/* TRUE to emit from implicit profile model, not core model */
-  int   do_oldconfig;		/* TRUE to do old-style HMMER2 entry/exit configuration */
   int   L;			/* expected length from a profile */
 };
 
@@ -76,7 +74,6 @@ main(int argc, char **argv)
   cfg.nseq         = esl_opt_GetInteger(go, "-n");
   cfg.do_profile   = esl_opt_GetBoolean(go, "-p");
   cfg.L            = esl_opt_GetInteger(go, "-L");
-  cfg.do_oldconfig = esl_opt_GetBoolean(go, "--h2");
 
   if (esl_opt_ArgNumber(go) != 1) {
     puts("Incorrect number of command line arguments.");
@@ -114,23 +111,15 @@ main(int argc, char **argv)
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
   if ((gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal("failed to create profile");
 
-  if (cfg.do_oldconfig) {
-    if (p7_H2_ProfileConfig(hmm, bg, gm, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
-  } else {
-    if (p7_ProfileConfig(hmm, bg, gm, p7_LOCAL)    != eslOK) esl_fatal("failed to configure profile");
-    if (p7_ReconfigLength(gm, cfg.L)               != eslOK) esl_fatal("failed to reconfig profile length");
-    if (p7_bg_SetLength(bg, cfg.L)                 != eslOK) esl_fatal("failed to reconfig null model length");
-    if (p7_hmm_Validate    (hmm,     0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
-    if (p7_profile_Validate(gm, 0.0001)            != eslOK) esl_fatal("whoops, profile is bad!");
-  }
+  if (p7_ProfileConfig(hmm, bg, gm, cfg.L, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
+  if (p7_bg_SetLength(bg, cfg.L)                     != eslOK) esl_fatal("failed to reconfig null model length");
+  if (p7_hmm_Validate    (hmm,     0.0001, NULL)     != eslOK) esl_fatal("whoops, HMM is bad!");
+  if (p7_profile_Validate(gm, 0.0001)                != eslOK) esl_fatal("whoops, profile is bad!");
 
   for (nseq = 1; nseq <= cfg.nseq; nseq++) 
     {
-      if (cfg.do_profile && cfg.do_oldconfig) {
-	status = p7_H2_ProfileEmit(r, gm, sq, tr);
-	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
-      } else if (cfg.do_profile) {
-	status = p7_ProfileEmit(r, gm, sq, tr);
+      if (cfg.do_profile) {
+	status = p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
 	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
       } else {
 	status = p7_CoreEmit(r, hmm, sq, tr);

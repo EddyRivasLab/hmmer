@@ -7,43 +7,81 @@
 #ifndef P7_IMPL_JB_INCLUDED
 #define P7_IMPL_JB_INCLUDED
 
-/* special transition scores are reordered relative to generic profiles */
-#define p7X_NX   4
-enum p7X_xsc_e { p7X_XTE = 0, p7X_XTN = 1, p7X_XTJ = 2, p7X_XTC = 3 };
+/*****************************************************************
+ * 1. P7_OPROFILE: a scoring profile
+ *****************************************************************/
 
-#define p7X_NXT  2
-enum p7X_xmove_e { p7X_LOOP = 0, p7X_MOVE = 1 };
+/* Indices for special state types in the length model, om->xsc[x][]
+ */
+enum p7o_xstates_e {
+  p7O_E = 0,
+  p7O_N = 1, 
+  p7O_J = 2, 
+  p7O_C = 3 
+};
+#define p7O_NXSTATES  4
 
-/* transition scores reordered relative to generic profiles. */
-#define p7X_NT 8
-enum p7X_tsc_e { p7X_TMM = 0, p7X_TIM = 1, p7X_TDM = 2, 
-               p7X_TMD = 3, p7X_TDD = 4, 
-               p7X_TMI = 5, p7X_TII = 6, 
-               p7X_BSC = 7 };
+/* Indices for transitions from the length modeling scores om->xsc[][x]
+ */
+enum p7o_xtransitions_e { 
+    p7O_LOOP = 0, 
+    p7O_MOVE = 1 
+};
+#define p7O_NXTRANS  2
 
-#define p7X_NR 2
-enum p7X_rsc_e { p7X_MSC = 0, p7X_ISC = 1 };
+/* Indices for transition scores gm->tsc[k][] */
+/* order is optimized for dynamic programming */
+enum p7o_tsc_e { 
+  p7O_MM = 0,
+  p7O_IM = 1, 
+  p7O_DM = 2, 
+  p7O_MD = 3,
+  p7O_DD = 4, 
+  p7O_MI = 5, 
+  p7O_II = 6, 
+  p7O_BM = 7 
+};
+#define p7O_NTRANS 8
 
+/* Indices for residue emission score vectors
+ */
+enum p7o_rsc_e {
+  p7O_MSC = 0,
+  p7O_ISC = 1 
+};
+#define p7O_NR 2
 
 typedef struct p7_oprofile_s {
+  int     mode;
   int     M;
   int    *tsc;	/* [0.1..M-1][0..p7X_NTSC-1] */
   int   **rsc;	/* [0..Kp-1][0.1..M][p7X_NR] */
-  int     xsc[p7X_NX][p7X_NXT];
+  int     xsc[p7O_NXSTATES][p7O_NXTRANS];
 
-  const ESL_ALPHABET *abc_r;
+  const ESL_ALPHABET *abc;
 } P7_OPROFILE;
 
 
+/*****************************************************************
+ * 2. P7_OMX: a dynamic programming matrix
+ *****************************************************************/
 
+
+enum p7x_scells_e {
+  p7X_M = 0, 
+  p7X_I = 1,
+  p7X_D = 2 
+};
 #define p7X_NSCELLS 3
-enum p7X_scells_e { p7X_XMM = 0, p7X_XMI = 1, p7X_XMD = 2 };
 
+enum p7x_xcells_e { 
+  p7X_E = 0, 
+  p7X_N = 1, 
+  p7X_J = 2,
+  p7X_B = 3, 
+  p7X_C = 4 
+};
 #define p7X_NXCELLS 5
-enum p7X_xcells_e { p7X_XME = 0, p7X_XMN = 1, 
-		    p7X_XMJ = 2, p7X_XMB = 3, 
-		    p7X_XMC = 4 };
-
 
 typedef struct p7_omx_s {
   int M;
@@ -61,9 +99,11 @@ extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 extern P7_OMX      *p7_omx_Create(int allocM, int allocL);
 extern void         p7_omx_Destroy(P7_OMX *ox);
-extern int          p7_oprofile_Config(const P7_HMM *hmm, const P7_BG *bg, P7_OPROFILE *om, int mode);
-extern int          p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L);
-extern int          p7_Viterbi(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, int *ret_sc);
+extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL);
+extern int          p7_omx_Dump(FILE *ofp, P7_OMX *ox);
+extern int          p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om);
+extern int          p7_Viterbi(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int          p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
 #endif /*P7_IMPL_JB_INCLUDED*/

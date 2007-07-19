@@ -106,13 +106,9 @@ p7_hmm_CreateShell(void)
   hmm->tc1 = hmm->tc2 = 0.;
   hmm->nc1 = hmm->nc2 = 0.;
 
-  hmm->flags    = 0;
-
-  hmm->abc      = NULL;
-  hmm->gm       = NULL;
-  hmm->bg       = NULL;
-
   hmm->offset   = 0;
+  hmm->flags    = 0;
+  hmm->abc      = NULL;
   return hmm;
 
  ERROR:
@@ -137,20 +133,25 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
   int k;
   int status;
 
-  hmm->abc    = abc;
-  hmm->M      = M;
+  hmm->abc = abc;
+  hmm->M   = M;
 
-  ESL_ALLOC(hmm->t,      (M+1)          * sizeof(float *));
-  ESL_ALLOC(hmm->mat,    (M+1)          * sizeof(float *));
-  ESL_ALLOC(hmm->ins,    (M+1)          * sizeof(float *));
-  ESL_ALLOC(hmm->t[0],   (7*(M+1))      * sizeof(float));
-  ESL_ALLOC(hmm->mat[0], (abc->K*(M+1)) * sizeof(float));
-  ESL_ALLOC(hmm->ins[0], (abc->K*(M+1)) * sizeof(float));
+  /* level 1 */
+  ESL_ALLOC(hmm->t,    (M+1) * sizeof(float *));
+  ESL_ALLOC(hmm->mat,  (M+1) * sizeof(float *));
+  ESL_ALLOC(hmm->ins,  (M+1) * sizeof(float *));
+  hmm->t[0]   = NULL;
+  hmm->mat[0] = NULL;
+  hmm->ins[0] = NULL;
 
+  /* level 2 */
+  ESL_ALLOC(hmm->t[0],   (p7H_NTRANSITIONS*(M+1)) * sizeof(float));
+  ESL_ALLOC(hmm->mat[0], (abc->K*(M+1))           * sizeof(float));
+  ESL_ALLOC(hmm->ins[0], (abc->K*(M+1))           * sizeof(float));
   for (k = 1; k <= M; k++) {
     hmm->mat[k] = hmm->mat[0] + k * hmm->abc->K;
     hmm->ins[k] = hmm->ins[0] + k * hmm->abc->K;
-    hmm->t[k]   = hmm->t[0]   + k * 7;
+    hmm->t[k]   = hmm->t[0]   + k * p7H_NTRANSITIONS;
   }
 
   /* Enforce conventions on unused but allocated distributions, so
@@ -158,12 +159,13 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
    */
   if ((status = p7_hmm_Zero(hmm)) != eslOK) goto ERROR;
   hmm->mat[0][0]    = 1.0;
-  hmm->t[0][p7_TDM] = 1.0; 
+  hmm->t[0][p7H_DM] = 1.0; 
 
-  if (hmm->flags & p7_RF)  ESL_ALLOC(hmm->rf,  (M+2) * sizeof(char));
-  if (hmm->flags & p7_CS)  ESL_ALLOC(hmm->cs,  (M+2) * sizeof(char));
-  if (hmm->flags & p7_CA)  ESL_ALLOC(hmm->ca,  (M+2) * sizeof(char));
-  if (hmm->flags & p7_MAP) ESL_ALLOC(hmm->map, (M+1) * sizeof(int));
+  /* Optional allocation, status flag dependent */
+  if (hmm->flags & p7H_RF)  ESL_ALLOC(hmm->rf,  (M+2) * sizeof(char));
+  if (hmm->flags & p7H_CS)  ESL_ALLOC(hmm->cs,  (M+2) * sizeof(char));
+  if (hmm->flags & p7H_CA)  ESL_ALLOC(hmm->ca,  (M+2) * sizeof(char));
+  if (hmm->flags & p7H_MAP) ESL_ALLOC(hmm->map, (M+1) * sizeof(int));
   
   return eslOK;
 
@@ -222,13 +224,15 @@ p7_hmm_Destroy(P7_HMM *hmm)
  * Purpose:   Copy parameters of <src> to <dest>. The HMM <dest> must
  *            be allocated by the caller for the same 
  *            alphabet and M as <src>. 
+ *            
+ *            Both core and search model parameters are copied.
  *
- *            No annotation is copied, only the parameters.  This is
- *            because several annotation fields are variable-length 
- *            strings that require individual allocations. 
- *            The <p7_hmm_CopyParameters()> function is for cases
- *            where we have to repeatedly reset the parameters
- *            of a model - for example, in entropy weighting.
+ *            No annotation is copied.  This is because several
+ *            annotation fields are variable-length strings that
+ *            require individual allocations.  The
+ *            <p7_hmm_CopyParameters()> function is for cases where we
+ *            have to repeatedly reset the parameters of a model - for
+ *            example, in entropy weighting.
  *
  * Returns:   <eslOK> on success.
  */
@@ -236,11 +240,10 @@ int
 p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest)
 {
   int k;
-
   for (k = 0; k <= src->M; k++) {
-    esl_vec_FCopy(src->t[k],   7,           dest->t[k]);
-    esl_vec_FCopy(src->mat[k], src->abc->K, dest->mat[k]);
-    esl_vec_FCopy(src->ins[k], src->abc->K, dest->ins[k]);
+    esl_vec_FCopy(src->t[k],   p7H_NTRANSITIONS, dest->t[k]);
+    esl_vec_FCopy(src->mat[k], src->abc->K,      dest->mat[k]);
+    esl_vec_FCopy(src->ins[k], src->abc->K,      dest->ins[k]);
   }
   return eslOK;
 }
@@ -270,12 +273,12 @@ p7_hmm_Duplicate(const P7_HMM *hmm)
   if (hmm->name != NULL    && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
   if (hmm->acc  != NULL    && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
   if (hmm->desc != NULL    && (status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
-  if (hmm->flags & p7_RF   && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
-  if (hmm->flags & p7_CS   && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
-  if (hmm->flags & p7_CA   && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
+  if (hmm->flags & p7H_RF  && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
+  if (hmm->flags & p7H_CS  && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
+  if (hmm->flags & p7H_CA  && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
   if (hmm->comlog != NULL  && (status = esl_strdup(hmm->comlog, -1, &(new->comlog))) != eslOK) goto ERROR;
   if (hmm->ctime  != NULL  && (status = esl_strdup(hmm->ctime,  -1, &(new->ctime)))  != eslOK) goto ERROR;
-  if (hmm->flags & p7_MAP) {
+  if (hmm->flags & p7H_MAP) {
     ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
     esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
   }
@@ -288,11 +291,9 @@ p7_hmm_Duplicate(const P7_HMM *hmm)
   new->tc2      = hmm->tc2;
   new->nc1      = hmm->nc1;
   new->nc2      = hmm->nc2;
-  new->abc      = hmm->abc;
-  new->gm       = hmm->gm;
-  new->bg       = hmm->bg;
   new->offset   = hmm->offset;
   new->flags    = hmm->flags;
+  new->abc      = hmm->abc;
   return new;
 
  ERROR:
@@ -303,7 +304,7 @@ p7_hmm_Duplicate(const P7_HMM *hmm)
 /* Function:  p7_hmm_Scale()
  * Incept:    SRE, Fri May  4 14:19:33 2007 [Janelia]
  *
- * Purpose:   Given a counts-based model <hmm>, scale everything
+ * Purpose:   Given a counts-based model <hmm>, scale core
  *            by a multiplicative factor of <scale>. Used in
  *            absolute sequence weighting.
  *
@@ -326,7 +327,7 @@ p7_hmm_Scale(P7_HMM *hmm, double scale)
 /* Function:  p7_hmm_Zero()
  * Incept:    SRE, Mon Jan  1 16:32:59 2007 [Casa de Gatos]
  *
- * Purpose:   Zeroes the counts/probabilities fields in a model.
+ * Purpose:   Zeroes the counts/probabilities fields in core model.
  *
  * Returns:   <eslOK> on success.
  */
@@ -336,7 +337,7 @@ p7_hmm_Zero(P7_HMM *hmm)
   int k;
 
   for (k = 0; k <= hmm->M; k++) {
-    esl_vec_FSet(hmm->t[k],   7,           0.);  
+    esl_vec_FSet(hmm->t[k],   p7H_NTRANSITIONS, 0.);  
     esl_vec_FSet(hmm->mat[k], hmm->abc->K, 0.);  
     esl_vec_FSet(hmm->ins[k], hmm->abc->K, 0.);  
   }
@@ -349,23 +350,23 @@ p7_hmm_Zero(P7_HMM *hmm)
  * Incept:    SRE, Mon Jan  1 18:47:34 2007 [Casa de Gatos]
  *
  * Purpose:   Returns the state type in text, as a string of length 1 
- *            (2 if you count NUL). For example, <p7_Statetype(p7_STS)>
+ *            (2 if you count NUL). For example, <p7_Statetype(p7T_S)>
  *            returns "S".
  */
 char *
 p7_hmm_DescribeStatetype(char st)
 {
   switch (st) {
-  case p7_STM: return "M";
-  case p7_STD: return "D";
-  case p7_STI: return "I";
-  case p7_STS: return "S";
-  case p7_STN: return "N";
-  case p7_STB: return "B";
-  case p7_STE: return "E";
-  case p7_STC: return "C";
-  case p7_STT: return "T";
-  case p7_STJ: return "J";
+  case p7T_M: return "M";
+  case p7T_D: return "D";
+  case p7T_I: return "I";
+  case p7T_S: return "S";
+  case p7T_N: return "N";
+  case p7T_B: return "B";
+  case p7T_E: return "E";
+  case p7T_C: return "C";
+  case p7T_T: return "T";
+  case p7T_J: return "J";
   default:     return "?";
   }
 }
@@ -435,13 +436,13 @@ p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
   if (acc == NULL) {
     if (hmm->acc != NULL) free(hmm->acc); 
     hmm->acc = NULL;
-    hmm->flags &= ~p7_ACC;
+    hmm->flags &= ~p7H_ACC;
   } else {
     n = strlen(acc);
     ESL_RALLOC(hmm->acc, tmp, sizeof(char)*(n+1));
     strcpy(hmm->acc, acc);
     if ((status = esl_strchop(hmm->acc, n)) != eslOK) goto ERROR;
-    hmm->flags |= p7_ACC;
+    hmm->flags |= p7H_ACC;
   }
   return eslOK;
 
@@ -466,7 +467,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
     {
       if (hmm->desc != NULL) free(hmm->desc); 
       hmm->desc   = NULL;
-      hmm->flags &= ~p7_DESC;
+      hmm->flags &= ~p7H_DESC;
     }
   else
     {
@@ -474,7 +475,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
       ESL_RALLOC(hmm->desc, tmp, sizeof(char)*(n+1));
       strcpy(hmm->desc, desc);
       if ((status = esl_strchop(hmm->desc, n)) != eslOK) goto ERROR;
-      hmm->flags |= p7_DESC;
+      hmm->flags |= p7H_DESC;
     }
   return eslOK;
 
@@ -572,7 +573,7 @@ p7_hmm_SetCtime(P7_HMM *hmm)
  * Incept:    Steve Johnson, 3 May 2004
  *            eweights code incorp: SRE, Thu May 20 10:34:03 2004 [St. Louis]
  *
- * Purpose:   Scale a counts-based HMM by some factor, for
+ * Purpose:   Scale a counts-based core HMM by some factor, for
  *            adjusting counts to a new effective sequence number.
  *            Only affects the core probability model (<t>, <ins>, and <mat>).
  *
@@ -597,7 +598,7 @@ p7_hmm_Rescale(P7_HMM *hmm, float scale)
 /* Function: p7_hmm_Renormalize()
  * Incept:   SRE, Mon Jan  1 18:39:42 2007 [Casa de Gatos]
  * 
- * Purpose:  Take an HMM in counts form, and renormalize
+ * Purpose:  Take a core HMM in counts form, and renormalize
  *           all probability vectors in the core probability model. Enforces
  *           Plan7 restrictions on nonexistent transitions.
  *
@@ -619,23 +620,23 @@ p7_hmm_Renormalize(P7_HMM *hmm)
   for (k = 0; k <= hmm->M; k++) {
     esl_vec_FNorm(hmm->mat[k], hmm->abc->K);
     esl_vec_FNorm(hmm->ins[k], hmm->abc->K);
-    esl_vec_FNorm(hmm->t[k],   3);	/* TMX */
-    esl_vec_FNorm(hmm->t[k]+3, 2);	/* TIX */
-    esl_vec_FNorm(hmm->t[k]+5, 2);	/* TDX */
+    esl_vec_FNorm(P7H_TMAT(hmm, k), p7H_NTMAT);	/* TMX */
+    esl_vec_FNorm(P7H_TDEL(hmm, k), p7H_NTDEL);	/* TIX */
+    esl_vec_FNorm(P7H_TINS(hmm, k), p7H_NTINS);	/* TDX */
   }
   /* If t[M][TD*] distribution was all zeros, we just made TDD nonzero. Oops.
    * Re-enforce t's on that final delete state. */
-  hmm->t[hmm->M][p7_TDM] = 1.0;
-  hmm->t[hmm->M][p7_TDD] = 0.0;
+  hmm->t[hmm->M][p7H_DM] = 1.0;
+  hmm->t[hmm->M][p7H_DD] = 0.0;
 
   /* Rare: if t[M][TM*] distribution was all zeros (all final transitions
    * were D_M -> E) then we just made nonexistent M_M->D_M+1 transition nonzero.
    * Fix that too.
    */
-  if (hmm->t[hmm->M][p7_TMD] > 0.) {
-    hmm->t[hmm->M][p7_TMD] = 0.;
-    hmm->t[hmm->M][p7_TMM] = 0.5;
-    hmm->t[hmm->M][p7_TMI] = 0.5;
+  if (hmm->t[hmm->M][p7H_MD] > 0.) {
+    hmm->t[hmm->M][p7H_MD] = 0.;
+    hmm->t[hmm->M][p7H_MM] = 0.5;
+    hmm->t[hmm->M][p7H_MI] = 0.5;
   }
 
   return eslOK;
@@ -648,7 +649,7 @@ p7_hmm_Renormalize(P7_HMM *hmm)
 /* Function:  p7_hmm_Dump()
  * Incept:    SRE, Mon Jan  1 18:44:15 2007 [Casa de Gatos]
  *
- * Purpose:   Debugging: dump the probabilities (or counts) from an HMM.
+ * Purpose:   Debugging: dump the probabilities (or counts) from a core HMM.
  * 
  * Returns:   <eslOK> on success.
  */
@@ -723,9 +724,9 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
    * what we did in node M.
    */
   esl_dirichlet_FSampleUniform(r, 2, hmm->t[M]);    /* TMM,TMI only */
-  hmm->t[M][p7_TMD] = 0.;	
-  hmm->t[M][p7_TDM] = 1.0;
-  hmm->t[M][p7_TDD] = 0.0;
+  hmm->t[M][p7H_MD] = 0.;	
+  hmm->t[M][p7H_DM] = 1.0;
+  hmm->t[M][p7H_DD] = 0.0;
   
   /* Add mandatory annotation
    */
@@ -771,9 +772,9 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_
 
   if ((status = p7_hmm_Sample(r, M, abc, &hmm)) != eslOK) goto ERROR;
   for (k = 0; k <= M; k++) {
-    hmm->t[k][p7_TMM] = 1.0;
-    hmm->t[k][p7_TMD] = 0.0;
-    hmm->t[k][p7_TMI] = 0.0;
+    hmm->t[k][p7H_MM] = 1.0;
+    hmm->t[k][p7H_MD] = 0.0;
+    hmm->t[k][p7H_MI] = 0.0;
   }
   *ret_hmm = hmm;
   return eslOK;
@@ -815,20 +816,22 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **re
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random enumerable HMM created by sampling]";
   int     k;
+  float   tmp[2];
   int     status;
-
+  
   hmm = p7_hmm_Create(M, abc);
   if (hmm == NULL) { status = eslEMEM; goto ERROR; }
-  
+
   for (k = 0; k <= M; k++)
     {
       if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]); /* match emission probs  */
       esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);            /* insert emission probs */
-      esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]);              /* order is M->MID; sample into MI; move I to D; set TMI=0 */
-      hmm->t[k][p7_TMD] = hmm->t[k][p7_TMI];
-      hmm->t[k][p7_TMI] = 0.;
-      hmm->t[k][p7_TIM] = 1.;                                          /* I transitions irrelevant since I's are unreached. */
-      hmm->t[k][p7_TII] = 0.;
+      esl_dirichlet_FSampleUniform(r, 2,      tmp);       
+      hmm->t[k][p7H_MM] = tmp[0];
+      hmm->t[k][p7H_MI] = 0.;
+      hmm->t[k][p7H_MD] = tmp[1];
+      hmm->t[k][p7H_IM] = 1.;                                          /* I transitions irrelevant since I's are unreached. */
+      hmm->t[k][p7H_II] = 0.;
       if (k > 0) esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5); /* delete transitions to M,D */
     }
 
@@ -836,10 +839,10 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **re
    * are interpreted as transitions to E. Overwrite a little of
    * what we did in node M.
    */
-  hmm->t[M][p7_TMM] = 1.;
-  hmm->t[M][p7_TMD] = 0.;	
-  hmm->t[M][p7_TDM] = 1.;
-  hmm->t[M][p7_TDD] = 0.;
+  hmm->t[M][p7H_MM] = 1.;
+  hmm->t[M][p7H_MD] = 0.;	
+  hmm->t[M][p7H_DM] = 1.;
+  hmm->t[M][p7H_DD] = 0.;
   
   /* Add mandatory annotation
    */
@@ -849,6 +852,9 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **re
   hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
+
+  /* SRE DEBUGGING */
+  p7_hmm_Validate(hmm, 0.0001, NULL);
 
   *ret_hmm = hmm;
   return eslOK;
@@ -895,22 +901,22 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc,
     {
       if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
       esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
-      hmm->t[k][p7_TMM] = 1.0 - tmi - tmd;
-      hmm->t[k][p7_TMI] = tmi;
-      hmm->t[k][p7_TMD] = tmd;
-      hmm->t[k][p7_TIM] = 1.0 - tii;
-      hmm->t[k][p7_TII] = tii;
-      hmm->t[k][p7_TDM] = 1.0 - tdd;
-      hmm->t[k][p7_TDD] = tdd;
+      hmm->t[k][p7H_MM] = 1.0 - tmi - tmd;
+      hmm->t[k][p7H_MI] = tmi;
+      hmm->t[k][p7H_MD] = tmd;
+      hmm->t[k][p7H_IM] = 1.0 - tii;
+      hmm->t[k][p7H_II] = tii;
+      hmm->t[k][p7H_DM] = 1.0 - tdd;
+      hmm->t[k][p7H_DD] = tdd;
     }
 
   /* Deal w/ special stuff at node 0, M, overwriting some of what we
    * just did. 
    */
-  hmm->t[M][p7_TMM] = 1.0 - tmi;
-  hmm->t[M][p7_TMD] = 0.;
-  hmm->t[M][p7_TDM] = 1.0;
-  hmm->t[M][p7_TDD] = 0.;
+  hmm->t[M][p7H_MM] = 1.0 - tmi;
+  hmm->t[M][p7H_MD] = 0.;
+  hmm->t[M][p7H_DM] = 1.0;
+  hmm->t[M][p7H_DD] = 0.;
   
   /* Add mandatory annotation
    */
@@ -964,22 +970,22 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (h1->eff_nseq != h2->eff_nseq)        return eslFAIL;
   if (h1->checksum != h2->checksum)        return eslFAIL;
 
-  if ((h1->flags & p7_ACC)  && strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
-  if ((h1->flags & p7_DESC) && strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
-  if ((h1->flags & p7_RF)   && strcmp(h1->rf,   h2->rf)   != 0) return eslFAIL;
-  if ((h1->flags & p7_CS)   && strcmp(h1->cs,   h2->cs)   != 0) return eslFAIL;
-  if ((h1->flags & p7_CA)   && strcmp(h1->ca,   h2->ca)   != 0) return eslFAIL;
-  if ((h1->flags & p7_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
+  if ((h1->flags & p7H_ACC)  && strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
+  if ((h1->flags & p7H_DESC) && strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
+  if ((h1->flags & p7H_RF)   && strcmp(h1->rf,   h2->rf)   != 0) return eslFAIL;
+  if ((h1->flags & p7H_CS)   && strcmp(h1->cs,   h2->cs)   != 0) return eslFAIL;
+  if ((h1->flags & p7H_CA)   && strcmp(h1->ca,   h2->ca)   != 0) return eslFAIL;
+  if ((h1->flags & p7H_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
 
-  if (h1->flags & p7_GA) {
+  if (h1->flags & p7H_GA) {
     if (esl_FCompare(h1->ga1, h2->ga1, tol) != eslOK) return eslFAIL;
     if (esl_FCompare(h1->ga2, h2->ga2, tol) != eslOK) return eslFAIL;
   }
-  if (h1->flags & p7_TC) {
+  if (h1->flags & p7H_TC) {
     if (esl_FCompare(h1->tc1, h2->tc1, tol) != eslOK) return eslFAIL;
     if (esl_FCompare(h1->tc2, h2->tc2, tol) != eslOK) return eslFAIL;
   }
-  if (h1->flags & p7_NC) {
+  if (h1->flags & p7H_NC) {
     if (esl_FCompare(h1->nc1, h2->nc1, tol) != eslOK) return eslFAIL;
     if (esl_FCompare(h1->nc2, h2->nc2, tol) != eslOK) return eslFAIL;
   }
@@ -1019,9 +1025,9 @@ p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
       if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_I[%d] fails pvector validation", k);
       if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_D[%d] fails pvector validation", k);
     }
-  if (hmm->t[hmm->M][p7_TMD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TMD should be 0 for last node");
-  if (hmm->t[hmm->M][p7_TDM] != 1.0) ESL_XFAIL(eslFAIL, errbuf, "TDM should be 1 for last node");
-  if (hmm->t[hmm->M][p7_TDD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
+  if (hmm->t[hmm->M][p7H_MD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TMD should be 0 for last node");
+  if (hmm->t[hmm->M][p7H_DM] != 1.0) ESL_XFAIL(eslFAIL, errbuf, "TDM should be 1 for last node");
+  if (hmm->t[hmm->M][p7H_DD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
 
   /* Don't be strict about mandatory name, comlog, ctime for now in development */
   /*  if (hmm->name     == NULL) return eslFAIL; */
@@ -1031,24 +1037,24 @@ p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
   if (hmm->eff_nseq <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid eff_nseq");
   if (hmm->checksum <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid checksum");
 
-  if (  (hmm->flags & p7_ACC)  && hmm->acc  == NULL) ESL_XFAIL(eslFAIL, errbuf, "accession null but p7_ACC flag is up");
-  if (! (hmm->flags & p7_ACC)  && hmm->acc  != NULL) ESL_XFAIL(eslFAIL, errbuf, "accession present but p7_ACC flag is down");
-  if (  (hmm->flags & p7_DESC) && hmm->desc == NULL) ESL_XFAIL(eslFAIL, errbuf, "description null but p7_DESC flag is up");
-  if (! (hmm->flags & p7_DESC) && hmm->desc != NULL) ESL_XFAIL(eslFAIL, errbuf, "description present but p7_DESC flag is down");
-  if (hmm->flags & p7_RF) {
-    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7_RF flag up, but rf string is invalid");
+  if (  (hmm->flags & p7H_ACC)  && hmm->acc  == NULL) ESL_XFAIL(eslFAIL, errbuf, "accession null but p7H_ACC flag is up");
+  if (! (hmm->flags & p7H_ACC)  && hmm->acc  != NULL) ESL_XFAIL(eslFAIL, errbuf, "accession present but p7H_ACC flag is down");
+  if (  (hmm->flags & p7H_DESC) && hmm->desc == NULL) ESL_XFAIL(eslFAIL, errbuf, "description null but p7H_DESC flag is up");
+  if (! (hmm->flags & p7H_DESC) && hmm->desc != NULL) ESL_XFAIL(eslFAIL, errbuf, "description present but p7H_DESC flag is down");
+  if (hmm->flags & p7H_RF) {
+    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag up, but rf string is invalid");
   } else 
-    if (hmm->rf != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7_RF flag down, but rf string is present");
-  if (hmm->flags & p7_CS) {
-    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7_CS flag up, but cs string is invalid");
+    if (hmm->rf != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag down, but rf string is present");
+  if (hmm->flags & p7H_CS) {
+    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag up, but cs string is invalid");
   } else 
-    if (hmm->cs != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7_CS flag down, but cs string is present");
-  if (hmm->flags & p7_CA) {
-    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7_CA flag up, but ca string is invalid");
+    if (hmm->cs != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag down, but cs string is present");
+  if (hmm->flags & p7H_CA) {
+    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag up, but ca string is invalid");
   } else 
-    if (hmm->ca != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7_CA flag down, but ca string is present");
-  if (  (hmm->flags & p7_MAP) && hmm->map == NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7_MAP flag up, but map string is null");
-  if (! (hmm->flags & p7_MAP) && hmm->map != NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7_MAP flag down, but map string is present");
+    if (hmm->ca != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag down, but ca string is present");
+  if (  (hmm->flags & p7H_MAP) && hmm->map == NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag up, but map string is null");
+  if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
 
   return eslOK;
 
@@ -1079,11 +1085,11 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ)
 {
   int k;
 
-  occ[0] = 0.;			/* no M_0 state */
-  occ[1] = hmm->t[0][p7_TMM];	/* initialize w/ B->M_1 */
+  occ[0] = 0.;			                    /* no M_0 state */
+  occ[1] = hmm->t[0][p7H_MI] + hmm->t[0][p7H_MM];   /* initialize w/ 1 - B->D_1 */
   for (k = 2; k <= hmm->M; k++)
-    occ[k] = occ[k-1] * (hmm->t[k-1][p7_TMM] + hmm->t[k-1][p7_TMI]) +
-      (1.0-occ[k-1]) * hmm->t[k-1][p7_TDM];
+    occ[k] = occ[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
+      (1.0-occ[k-1]) * hmm->t[k-1][p7H_DM];
   return eslOK;
 }
 

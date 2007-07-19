@@ -36,7 +36,8 @@ main(int argc, char **argv)
   ESL_DSQ         *dsq     = NULL;     /* digitized target sequence               */
   P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
   P7_GMX          *mx      = NULL;     /* DP matrix                               */
-  int              vsc, fsc;	       /* Viterbi, Forward scores (SILO)          */
+  float            vsc, fsc;	       /* Viterbi, Forward scores                 */
+  float            nullsc;
   ESL_HISTOGRAM   *h       = esl_histogram_CreateFull(-50., 50., 0.5);
 
   char            *hmmfile;            /* file to read HMM(s) from                */
@@ -92,10 +93,10 @@ main(int argc, char **argv)
 
   while ( (hstatus = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK) 
     {
-      /* Configure the profile (wait 'til we see sequences to config length) */
+      /* Configure the profile (wait 'til we see sequences to reconfig length) */
       bg = p7_bg_Create(abc);
       gm = p7_profile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
+      p7_ProfileConfig(hmm, bg, gm, 350, p7_UNILOCAL);
 
       while ( (sstatus = esl_sqio_Read(sqfp, sq)) == eslOK)
 	{
@@ -105,12 +106,11 @@ main(int argc, char **argv)
 	  p7_bg_SetLength(bg, sq->n);
 
 	  p7_GViterbi(dsq, sq->n, gm, mx, &vsc);
-	  p7_GTrace  (dsq, sq->n, gm, mx, tr);
+	  /*p7_GTrace  (dsq, sq->n, gm, mx, tr);*/
 	  p7_GForward(dsq, sq->n, gm, mx, &fsc);
+	  p7_bg_NullOne(bg, dsq, sq->n, &nullsc);
 
-	  printf("%15s  %6.2f   %6.2f\n", sq->name,
-		 (((double) vsc / p7_INTSCALE) - sq->n * log(bg->p1) - log(1.-bg->p1)) / eslCONST_LOG2,
-		 (((double) fsc / p7_INTSCALE) - sq->n * log(bg->p1) - log(1.-bg->p1)) / eslCONST_LOG2);
+	  printf("%15s  %8.4f  %8.4f\n", sq->name, (vsc-nullsc) / eslCONST_LOG2, (fsc-nullsc) / eslCONST_LOG2);
 
 	  free(dsq);
 	  esl_sq_Reuse(sq);

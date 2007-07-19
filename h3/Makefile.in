@@ -44,8 +44,7 @@ OBJS =  build.o\
 	eweight.o\
 	heatmap.o\
 	hmmer.o\
-	impl_fp.o\
-	island.o\
+	logsum.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
@@ -57,6 +56,9 @@ OBJS =  build.o\
 	p7_prior.o\
 	p7_profile.o\
 	p7_trace.o
+#	impl_fp.o\
+#	island.o\
+
 
 HDRS =  hmmer.h\
 	p7_config.h

@@ -202,10 +202,10 @@ p7_dprior_CreateNucleic(void)
   pri->td->alpha[0][1] = 1.0; /* TDD */
 
   pri->em->pq[0] = 1.0;
-  esl_vec_DSet(pri->em->alpha[0], 1.0, 4);
+  esl_vec_DSet(pri->em->alpha[0], 4, 1.0);
 
   pri->ei->pq[0] = 1.0;
-  esl_vec_DSet(pri->ei->alpha[0], 1.0, 4);
+  esl_vec_DSet(pri->ei->alpha[0], 4, 1.0);
 
   return pri;
 
@@ -264,6 +264,7 @@ p7_dprior_Destroy(P7_DPRIOR *pri)
   if (pri->td != NULL) esl_mixdchlet_Destroy(pri->td);
   if (pri->em != NULL) esl_mixdchlet_Destroy(pri->em);
   if (pri->ei != NULL) esl_mixdchlet_Destroy(pri->ei);
+  free(pri);
 }
 
 
@@ -295,7 +296,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri)
     esl_mixdchlet_MPParameters(c, 3, pri->tm, mix, p);
     esl_vec_D2F(p, 3, hmm->t[k]);
   }
-  hmm->t[hmm->M][p7_TMD] = 0.0;
+  hmm->t[hmm->M][p7H_MD] = 0.0;
   esl_vec_FNorm(hmm->t[hmm->M], 3);
 
   /* Insert transitions, 0..M
@@ -315,8 +316,8 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri)
     esl_mixdchlet_MPParameters(c, 2, pri->td, mix, p);
     esl_vec_D2F(p, 2, hmm->t[k]+5);
   }
-  hmm->t[0][p7_TDM] = hmm->t[hmm->M][p7_TDM] = 1.0;
-  hmm->t[0][p7_TDD] = hmm->t[hmm->M][p7_TDD] = 0.0;
+  hmm->t[0][p7H_DM] = hmm->t[hmm->M][p7H_DM] = 1.0;
+  hmm->t[0][p7H_DD] = hmm->t[hmm->M][p7H_DD] = 0.0;
 
   /* Match emissions, 1..M
    * Convention sets mat[0] to a valid pvector: first elem 1, the rest 0.

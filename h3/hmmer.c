@@ -75,65 +75,34 @@ p7_banner(FILE *fp, char *progname, char *banner)
 }
 
 
-/* Function: p7_Prob2SILO()
- * 
- * Purpose:  Convert a probability to a scaled integer log odds score. 
- *           Round to nearest integer (i.e. note use of +0.5 and floor())
- *           Return the score. 
- */
-int
-p7_Prob2SILO(float p, float null)
-{
-  if   (p == 0.0) return p7_IMPOSSIBLE;
-  else            return (int) floor(0.5 + p7_INTSCALE * log(p/null));
-}
 
-/* Function:  p7_LL2SILO()
- * Incept:    SRE, Mon May  2 08:19:36 2005 [St. Louis]
+/* Function:  p7_SILO2Lod()
+ * Synopsis:  Convert a scaled integer score to a lod score.
+ * Incept:    SRE, Wed Jul 18 08:52:19 2007 [Janelia]
  *
- * Purpose:   Convert a log likelihood to a scaled integer log odds score,
- *            rounded to nearest integer, given a <null> probability; 
- *            return the score. 
+ * Purpose:   Convert a SILO (scaled integer log-odds) score
+ *            to a lod score.
  *            
- *            Note that <ll> is a log(prob), but <null> is a probability.
- */
-int
-p7_LL2SILO(float ll, float null)
-{
-  int sc;
-  sc = (int) floor(0.5 + p7_INTSCALE * (ll - log(null)));
-  if (sc < p7_IMPOSSIBLE) sc = p7_IMPOSSIBLE;
-  return sc;
-}
-
-/* Function: p7_SILO2Prob()
- * 
- * Purpose:  Convert a scaled integer lod score back to a probability;
- *           needs the null model probability (or 1.0) to do the conversion.
- */
-float 
-p7_SILO2Prob(int sc, float null)
-{
-  if (sc == p7_IMPOSSIBLE) return 0.;
-  else                     return (null * exp((float) sc / p7_INTSCALE));
-}
-
-/* Function:  p7_SILO2Bitscore()
- * Incept:    SRE, Thu Feb  1 10:13:40 2007 [UA8018 St. Louis to Dulles]
- *
- * Purpose:   Convert an scaled integer lod score to a
- *            standard real-valued bit score, suitable for output.
+ *            HMMER3 normally works internally in floating-point log
+ *            odds probabilities, in nats. Some alternate/optimized
+ *            implementations of alignment algorithms (Viterbi,
+ *            Forward) work in scaled integer scores called SILO
+ *            scores. These routines must convert their final answer
+ *            back to lod score form before returning it to H3.
+ *            
+ *            Beside simply descaling and casting to a float, the
+ *            conversion needs to be careful to convert the integer
+ *            <p7_IMPOSSIBLE> to $\-infty$; and indeed, anything
+ *            within shouting range of <p7_IMPOSSIBLE>, because we may
+ *            have added a positive score to an impossible value.
  *
  */
-float 
-p7_SILO2Bitscore(int sc)
+float
+p7_SILO2Lod(int silo)
 {
-  return ((float) sc / p7_INTSCALE / eslCONST_LOG2);
+  if (silo <= p7_IMPOSSIBLE + 10 * p7_INTSCALE) return -eslINFINITY; /* anything within 10 nats of impossible is impossible */
+  else return (float) silo / p7_INTSCALE;
 }
-
-
-
-
 
 
 /* Function:  p7_AminoFrequencies()
@@ -177,59 +146,6 @@ p7_AminoFrequencies(float *f)
   return eslOK;
 }
 
-
-static int ilogsum_lookup[p7_LOGSUM_TBL];
-
-static void 
-init_ilogsum(void)
-{
-  int i;
-  for (i = 0; i < p7_LOGSUM_TBL; i++) 
-    ilogsum_lookup[i] = (int) ((float) p7_INTSCALE * (log(1.+exp((float) -i/ (float) p7_INTSCALE))));
-}
-
-/* Function: p7_ILogsum()
- * 
- * Purpose:  Return the scaled integer log probability of
- *           the sum of two scores <s1> and <s2>, where
- *           <s1> and <s2> are also given as scaled log probabilities.
- *         
- *           $\log(\exp(s_1)+\exp(s_2)) = s_1 + \log(1 + \exp(s_2-s_1))$ for $s_1 > s_2$
- *           
- * Note:     For speed, builds a lookup table the first time it's
- *           called.  The table size <p7_LOGSUM_TBL> is set to 20000
- *           by default, in <p7_config.h>.
- *
- *           Because of the one-time initialization, we have to
- *           be careful in a multithreaded implementation... hence
- *           the use of <pthread_once()>, which forces us to put
- *           the initialization routine and the lookup table outside
- *           <p7_ILogsum()>. (Thanks to Henry Gabb at Intel for pointing
- *           out this problem.)
- *           
- * Args:     s1,s2 -- scaled integer log_2 probabilities to be summed
- *                    in probability space.
- *                    
- * Return:   scaled integer log_2 probability of the sum.
- */
-int 
-p7_ILogsum(int s1, int s2)
-{
-  int    diff;
-#ifdef HMMER_THREADS
-  static pthread_once_t firsttime = PTHREAD_ONCE_INIT;
-  pthread_once(&firsttime, init_ilogsum);
-#else
-  static int firsttime = 1;
-  if (firsttime) { init_ilogsum(); firsttime = 0; }
-#endif
-
-  diff = s1-s2;
-  if      (diff >=  p7_LOGSUM_TBL) return s1;
-  else if (diff <= -p7_LOGSUM_TBL) return s2;
-  else if (diff > 0)               return s1 + ilogsum_lookup[diff];
-  else                             return s2 + ilogsum_lookup[-diff];
-} 
 
 
 /*****************************************************************

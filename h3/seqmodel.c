@@ -40,22 +40,22 @@ p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P,
       /* Set inserts to background for now. This will be improved. */
       esl_vec_FCopy(f, abc->K, hmm->ins[k]);
 
-      hmm->t[k][p7_TMM] = 1.0 - tmi - tmd;
-      hmm->t[k][p7_TMI] = tmi;
-      hmm->t[k][p7_TMD] = tmd;
-      hmm->t[k][p7_TIM] = 1.0 - tii;
-      hmm->t[k][p7_TII] = tii;
-      hmm->t[k][p7_TDM] = 1.0 - tdd;
-      hmm->t[k][p7_TDD] = tdd;
+      hmm->t[k][p7H_MM] = 1.0 - tmi - tmd;
+      hmm->t[k][p7H_MI] = tmi;
+      hmm->t[k][p7H_MD] = tmd;
+      hmm->t[k][p7H_IM] = 1.0 - tii;
+      hmm->t[k][p7H_II] = tii;
+      hmm->t[k][p7H_DM] = 1.0 - tdd;
+      hmm->t[k][p7H_DD] = tdd;
     }
 
   /* Deal w/ special stuff at node 0, M, overwriting a little of what we
    * just did. 
    */
-  hmm->t[M][p7_TMM] = 1.0 - tmi;
-  hmm->t[M][p7_TMD] = 0.;
-  hmm->t[M][p7_TDM] = 1.0;
-  hmm->t[M][p7_TDD] = 0.;
+  hmm->t[M][p7H_MM] = 1.0 - tmi;
+  hmm->t[M][p7H_MD] = 0.;
+  hmm->t[M][p7H_DM] = 1.0;
+  hmm->t[M][p7H_DD] = 0.;
   
   /* Add mandatory annotation
    */

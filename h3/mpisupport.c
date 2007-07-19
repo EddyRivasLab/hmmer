@@ -129,14 +129,14 @@ p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n)
   if (MPI_Pack_size(K*(M+1), MPI_FLOAT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");   n += 2*sz; /* mat,ins */
   if ((status = esl_mpi_PackOptSize(hmm->name, -1, MPI_CHAR, comm, &sz)) != eslOK) goto ERROR;          n += sz;
 
-  if (hmm->flags & p7_ACC)  { if ((status = esl_mpi_PackOptSize(hmm->acc,         -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;  n+= sz; }
-  if (hmm->flags & p7_DESC) { if ((status = esl_mpi_PackOptSize(hmm->desc,        -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;  n+= sz; }
-  if (hmm->flags & p7_RF)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
-  if (hmm->flags & p7_CS)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
-  if (hmm->flags & p7_CA)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
+  if (hmm->flags & p7H_ACC)  { if ((status = esl_mpi_PackOptSize(hmm->acc,         -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;  n+= sz; }
+  if (hmm->flags & p7H_DESC) { if ((status = esl_mpi_PackOptSize(hmm->desc,        -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;  n+= sz; }
+  if (hmm->flags & p7H_RF)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
+  if (hmm->flags & p7H_CS)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
+  if (hmm->flags & p7H_CA)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
   if ((status = esl_mpi_PackOptSize(hmm->comlog,      -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;                              n+= sz;
   if ((status = esl_mpi_PackOptSize(hmm->ctime,       -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;                              n+= sz;
-  if (hmm->flags & p7_MAP)  { if (MPI_Pack_size(M+1,  MPI_INT,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
+  if (hmm->flags & p7H_MAP)  { if (MPI_Pack_size(M+1,  MPI_INT,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
   
   *ret_n = n;
   return eslOK;
@@ -186,16 +186,16 @@ p7_hmm_MPIPack(P7_HMM *hmm, char *buf, int n, int *pos, MPI_Comm comm)
   if (MPI_Pack(                                             hmm->mat[0], K*(M+1), MPI_FLOAT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed");
   if (MPI_Pack(                                             hmm->ins[0], K*(M+1), MPI_FLOAT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed");
   if ((status = esl_mpi_PackOpt(                            hmm->name,        -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status;
-  if (hmm->flags & p7_ACC)  { if ((status = esl_mpi_PackOpt(hmm->acc,         -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status; }
-  if (hmm->flags & p7_DESC) { if ((status = esl_mpi_PackOpt(hmm->desc,        -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status; }
-  if (hmm->flags & p7_RF)   { if (MPI_Pack(                 hmm->rf,         M+2,  MPI_CHAR, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
-  if (hmm->flags & p7_CS)   { if (MPI_Pack(                 hmm->cs,         M+2,  MPI_CHAR, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
-  if (hmm->flags & p7_CA)   { if (MPI_Pack(                 hmm->ca,         M+2,  MPI_CHAR, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
+  if (hmm->flags & p7H_ACC)  { if ((status = esl_mpi_PackOpt(hmm->acc,         -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status; }
+  if (hmm->flags & p7H_DESC) { if ((status = esl_mpi_PackOpt(hmm->desc,        -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status; }
+  if (hmm->flags & p7H_RF)   { if (MPI_Pack(                 hmm->rf,         M+2,  MPI_CHAR, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
+  if (hmm->flags & p7H_CS)   { if (MPI_Pack(                 hmm->cs,         M+2,  MPI_CHAR, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
+  if (hmm->flags & p7H_CA)   { if (MPI_Pack(                 hmm->ca,         M+2,  MPI_CHAR, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
   if ((status = esl_mpi_PackOpt(                            hmm->comlog,      -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status;
   if (MPI_Pack(                                             &(hmm->nseq),      1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed");
   if (MPI_Pack(                                             &(hmm->eff_nseq),  1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed");
   if ((status = esl_mpi_PackOpt(                            hmm->ctime,       -1,  MPI_CHAR, buf, n, pos, comm)) != eslOK) return status;
-  if (hmm->flags & p7_MAP)  { if (MPI_Pack(                 hmm->map,        M+1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
+  if (hmm->flags & p7H_MAP)  { if (MPI_Pack(                 hmm->map,        M+1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
   if (MPI_Pack(                                             &(hmm->checksum),  1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); 
   if (MPI_Pack(                                             &(hmm->ga1),       1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); 
   if (MPI_Pack(                                             &(hmm->ga2),       1,   MPI_INT, buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); 
@@ -278,16 +278,16 @@ p7_hmm_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, 
   if (MPI_Unpack(                                              buf, n, pos, hmm->mat[0], K*(M+1), MPI_FLOAT, comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   if (MPI_Unpack(                                              buf, n, pos, hmm->ins[0], K*(M+1), MPI_FLOAT, comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   if ((status = esl_mpi_UnpackOpt(                             buf, n, pos, (void**)&(hmm->name),   NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-  if (hmm->flags & p7_ACC)   { if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hmm->acc),    NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR; }
-  if (hmm->flags & p7_DESC)  { if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hmm->desc),   NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR; }
-  if (hmm->flags & p7_RF)    { if (MPI_Unpack(                 buf, n, pos, hmm->rf,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
-  if (hmm->flags & p7_CS)    { if (MPI_Unpack(                 buf, n, pos, hmm->cs,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
-  if (hmm->flags & p7_CA)    { if (MPI_Unpack(                 buf, n, pos, hmm->ca,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_ACC)   { if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hmm->acc),    NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR; }
+  if (hmm->flags & p7H_DESC)  { if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hmm->desc),   NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR; }
+  if (hmm->flags & p7H_RF)    { if (MPI_Unpack(                 buf, n, pos, hmm->rf,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_CS)    { if (MPI_Unpack(                 buf, n, pos, hmm->cs,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_CA)    { if (MPI_Unpack(                 buf, n, pos, hmm->ca,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
   if ((status = esl_mpi_UnpackOpt(                             buf, n, pos, (void**)&(hmm->comlog), NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
   if (MPI_Unpack(                                              buf, n, pos, &(hmm->nseq),      1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack(                                              buf, n, pos, &(hmm->eff_nseq),  1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if ((status = esl_mpi_UnpackOpt(                             buf, n, pos, (void**)&(hmm->ctime),  NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-  if (hmm->flags & p7_MAP)   { if (MPI_Unpack(                 buf, n, pos, hmm->map,        M+1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_MAP)   { if (MPI_Unpack(                 buf, n, pos, hmm->map,        M+1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
   if (MPI_Unpack(                                              buf, n, pos, &(hmm->checksum),  1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack(                                              buf, n, pos, &(hmm->ga1),       1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack(                                              buf, n, pos, &(hmm->ga2),       1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
@@ -449,6 +449,8 @@ p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf,
 {
   int   status;
   int   sz, n, position;
+  int   Kp = gm->abc_r->Kp;	/* alphabet size including degeneracies */
+  int   M  = gm->M;		/* model size in nodes */
 
   /* First, figure out the size of the profile */
   if (gm == NULL) { 
@@ -457,18 +459,13 @@ p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf,
     /* This will look wasteful, but the MPI spec doesn't guarantee that 
      * MPI_Pack_size(x, ...) + MPI_Pack_size(x, ... ) == MPI_Pack_size(2x, ...).
      * Indeed there are some hints in the spec that that's *not* true.
-     * So we match our Pack_size calls exactly to our Pack calls.
+     * So we assume we must match our Pack_size calls exactly to our Pack calls.
      */
     n = 0;
-    MPI_Pack_size(1,                     MPI_INT,   comm, &sz);   n += 4*sz; /* M,mode,do_lcorrect,h2_mode */
-    MPI_Pack_size(7*gm->M,               MPI_INT,   comm, &sz);   n +=   sz; /* tsc[0]    */
-    MPI_Pack_size((gm->M+1)*gm->abc->Kp, MPI_INT,   comm, &sz);   n +=   sz; /* msc[0]    */
-    MPI_Pack_size(gm->M*gm->abc->Kp,     MPI_INT,   comm, &sz);   n +=   sz; /* isc[0]    */
-    MPI_Pack_size(2,                     MPI_INT,   comm, &sz);   n += 4*sz; /* xsc[0..3] */
-    MPI_Pack_size(gm->M+1,               MPI_INT,   comm, &sz);   n += 2*sz; /* bsc, esc  */
-    MPI_Pack_size(2,                     MPI_FLOAT, comm, &sz);   n += 4*sz; /* xt[0..3]  */
-    MPI_Pack_size(gm->M+1,               MPI_FLOAT, comm, &sz);   n += 2*sz; /* begin,end */
-    MPI_Pack_size(1,                     MPI_FLOAT, comm, &sz);   n += sz;   /* lscore    */
+    MPI_Pack_size(                  1, MPI_INT,   comm, &sz);   n += sz*2;   /* M,mode    */
+    MPI_Pack_size(     p7P_NTRANS * M, MPI_INT,   comm, &sz);   n += sz;     /* tsc       */
+    MPI_Pack_size((M+1) * Kp * p7P_NR, MPI_FLOAT, comm, &sz);   n += sz;     /* rsc[0]    */
+    MPI_Pack_size(        p7P_NXTRANS, MPI_FLOAT, comm, &sz);   n += sz*p7P_NXSTATES*sz; /* xsc[0..3] */
   }
   
   /* Make sure the buffer is allocated appropriately */
@@ -483,30 +480,18 @@ p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf,
   if (gm == NULL) 
     {
       int   eod_code = -1;
-      MPI_Pack(&eod_code,                      1, MPI_INT,   *buf, n, &position,  comm);
+      MPI_Pack(&eod_code,                   1, MPI_INT,   *buf, n, &position,  comm);
     } 
   else 
     {    
-      MPI_Pack(&(gm->M),                       1, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(&(gm->mode),                    1, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->tsc[0],               7*gm->M, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->msc[0], (gm->M+1)*gm->abc->Kp, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->isc[0],     gm->M*gm->abc->Kp, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->xsc[0],                     2, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->xsc[1],                     2, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->xsc[2],                     2, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->xsc[3],                     2, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->bsc,                  gm->M+1, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->esc,                  gm->M+1, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(gm->xt[0],                      2, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(gm->xt[1],                      2, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(gm->xt[2],                      2, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(gm->xt[3],                      2, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(gm->begin,                gm->M+1, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(gm->end,                  gm->M+1, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(&(gm->do_lcorrect),             1, MPI_INT,   *buf, n, &position,  comm);
-      MPI_Pack(&(gm->lscore),                  1, MPI_FLOAT, *buf, n, &position,  comm);
-      MPI_Pack(&(gm->h2_mode),                 1, MPI_INT,   *buf, n, &position,  comm);
+      MPI_Pack(&M,                          1, MPI_INT,   *buf, n, &position,  comm);
+      MPI_Pack(&(gm->mode),                 1, MPI_INT,   *buf, n, &position,  comm);
+      MPI_Pack(gm->tsc,         p7P_NTRANS *M, MPI_FLOAT, *buf, n, &position,  comm);
+      MPI_Pack(gm->rsc[0], (M+1)* Kp * p7P_NR, MPI_FLOAT, *buf, n, &position,  comm);
+      MPI_Pack(gm->xsc[0],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm);
+      MPI_Pack(gm->xsc[1],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm);
+      MPI_Pack(gm->xsc[2],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm);
+      MPI_Pack(gm->xsc[3],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm);
     }
 
   /* Send the packed profile to destination  */
@@ -580,29 +565,17 @@ p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, 
   if (M == -1) { *ret_gm = NULL; return eslEOD; }
 
   gm = p7_profile_Create(M, abc);
-  MPI_Unpack(*buf, n, &position, &(gm->mode),             1, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, gm->tsc[0],            7*M, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, gm->msc[0],  (M+1)*abc->Kp, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, gm->isc[0],      M*abc->Kp, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, gm->xsc[0],              2, MPI_INT,   comm);  
-  MPI_Unpack(*buf, n, &position, gm->xsc[1],              2, MPI_INT,   comm);  
-  MPI_Unpack(*buf, n, &position, gm->xsc[2],              2, MPI_INT,   comm);  
-  MPI_Unpack(*buf, n, &position, gm->xsc[3],              2, MPI_INT,   comm);  
-  MPI_Unpack(*buf, n, &position, gm->bsc,               M+1, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, gm->esc,               M+1, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, gm->xt[0],               2, MPI_FLOAT, comm);  
-  MPI_Unpack(*buf, n, &position, gm->xt[1],               2, MPI_FLOAT, comm);  
-  MPI_Unpack(*buf, n, &position, gm->xt[2],               2, MPI_FLOAT, comm);  
-  MPI_Unpack(*buf, n, &position, gm->xt[3],               2, MPI_FLOAT, comm);  
-  MPI_Unpack(*buf, n, &position, gm->begin,             M+1, MPI_FLOAT, comm);
-  MPI_Unpack(*buf, n, &position, gm->end,               M+1, MPI_FLOAT, comm);
-  MPI_Unpack(*buf, n, &position, &(gm->do_lcorrect),      1, MPI_INT,   comm);
-  MPI_Unpack(*buf, n, &position, &(gm->lscore),           1, MPI_FLOAT, comm);
-  MPI_Unpack(*buf, n, &position, &(gm->h2_mode),          1, MPI_INT,   comm);  
+  MPI_Unpack(*buf, n, &position, &(gm->mode),                   1, MPI_INT,   comm);
+  MPI_Unpack(*buf, n, &position, gm->tsc,            p7P_NTRANS*M, MPI_FLOAT, comm);
+  MPI_Unpack(*buf, n, &position, gm->rsc[0], p7P_NR*(M+1)*abc->Kp, MPI_FLOAT, comm);
+  MPI_Unpack(*buf, n, &position, gm->xsc[0],          p7P_NXTRANS, MPI_FLOAT, comm);  
+  MPI_Unpack(*buf, n, &position, gm->xsc[1],          p7P_NXTRANS, MPI_FLOAT, comm);  
+  MPI_Unpack(*buf, n, &position, gm->xsc[2],          p7P_NXTRANS, MPI_FLOAT, comm);  
+  MPI_Unpack(*buf, n, &position, gm->xsc[3],          p7P_NXTRANS, MPI_FLOAT, comm);  
   
-  gm->abc = abc;
-  gm->hmm = NULL;
-  gm->bg  = bg;
+  gm->abc_r = abc;
+  gm->hmm_r = NULL;
+  gm->bg_r  = bg;
 
   *ret_gm = gm;
   return eslOK;
@@ -612,93 +585,6 @@ p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, 
   *ret_gm = NULL;
   return status;
 }
-
-
-
-#if 0
-int
-p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, char **buf, int *nalloc)
-{
-
-  if (gm == NULL) {
-    int eod = -1;
-    MPI_Send(&eod, 1, MPI_INT, dest, tag, MPI_COMM_WORLD);
-    return eslOK;
-  }
-
-  MPI_Send(&(gm->M), 1, MPI_INT, dest, tag, MPI_COMM_WORLD);
-  /* receiver will now allocate storage, before reading on...*/
-  MPI_Send(&(gm->mode),                    1, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->tsc[0],               7*gm->M, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->msc[0], (gm->M+1)*gm->abc->Kp, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->isc[0],     gm->M*gm->abc->Kp, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xsc[0],                     2, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xsc[1],                     2, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xsc[2],                     2, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xsc[3],                     2, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->bsc,                  gm->M+1, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->esc,                  gm->M+1, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xt[0],                      2, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xt[1],                      2, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xt[2],                      2, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->xt[3],                      2, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->begin,                gm->M+1, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(gm->end,                  gm->M+1, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(&(gm->do_lcorrect),             1, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  MPI_Send(&(gm->lscore),                  1, MPI_FLOAT, dest, tag, MPI_COMM_WORLD);
-  MPI_Send(&(gm->h2_mode),                 1, MPI_INT,   dest, tag, MPI_COMM_WORLD);
-  return eslOK;
-}
-
-/* Function:  p7_profile_MPIRecv()
- * Incept:    SRE, Fri Apr 20 14:19:07 2007 [Janelia]
- *
- * Purpose:   Receive a profile sent from the master MPI process (src=0)
- *            on a worker MPI process. The worker must already have (and
- *            provide) the alphabet <abc> and the background model <bg>.
- *            
- *            If it receives an end-of-data signal, returns <eslEOD>.
- */
-int
-p7_profile_MPIRecv(int source, int tag, const ESL_ALPHABET *abc, const P7_BG *bg, char **buf, int *nalloc, P7_PROFILE **ret_gm)
-{
-  P7_PROFILE *gm = NULL;
-  MPI_Status mpistatus;
-  int M;
-
-  MPI_Recv(&M, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &mpistatus);
-  if (M == -1) return eslEOD;
-
-  gm = p7_profile_Create(M, abc);
-  MPI_Recv(&(gm->mode),             1, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->tsc[0],            7*M, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->msc[0],  (M+1)*abc->Kp, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->isc[0],      M*abc->Kp, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->xsc[0],              2, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->xsc[1],              2, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->xsc[2],              2, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->xsc[3],              2, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->bsc,               M+1, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->esc,               M+1, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->xt[0],               2, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->xt[1],               2, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->xt[2],               2, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->xt[3],               2, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);  
-  MPI_Recv(gm->begin,             M+1, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(gm->end,               M+1, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(&(gm->do_lcorrect),      1, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(&(gm->lscore),           1, MPI_FLOAT, source, tag, MPI_COMM_WORLD, &mpistatus);
-  MPI_Recv(&(gm->h2_mode),          1, MPI_INT,   source, tag, MPI_COMM_WORLD, &mpistatus);  
-  
-  gm->abc = abc;
-  gm->hmm = NULL;
-  gm->bg  = bg;
-
-  *ret_gm = gm;
-  return eslOK;
-}
-#endif
-
 
 /*--------------- end, P7_PROFILE communication -----------------*/
 
@@ -855,9 +741,7 @@ utest_ProfileSendRecv(int my_rank, int nproc)
   p7_hmm_Sample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  hmm->gm = (P7_PROFILE *) gm;
-  p7_ProfileConfig(hmm, bg, gm, p7_LOCAL);
-  p7_ReconfigLength(gm, L);
+  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
   p7_bg_SetLength  (bg, L);
 
   if (my_rank == 0)
@@ -905,7 +789,7 @@ utest_ProfileSendRecv(int my_rank, int nproc)
 #ifdef p7MPISUPPORT_TESTDRIVE
 
 /* mpicc -o mpisupport_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7MPISUPPORT_TESTDRIVE mpisupport.c -lhmmer -leasel -lm
- * In an MPI environment:
+ * In an MPI environment: (qlogin -pe lam-mpi-tight 2; setenv JOB_ID <jobid>; setenv TMPDIR /tmp/<jobid>....
  *    mpirun C ./mpisupport_utest
  */
 #include "esl_getopts.h"

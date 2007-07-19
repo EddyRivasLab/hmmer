@@ -227,13 +227,13 @@ p7_oprofile_Config(const P7_HMM *hmm, const P7_BG *bg, P7_OPROFILE *om, int mode
   for (k = 1; k < om->M; k++) {
     tp = om->tsc + k * p7X_NT;
     
-    tp[p7X_TMM] = log(hmm->t[k][p7_TMM]);
-    tp[p7X_TMI] = log(hmm->t[k][p7_TMI]);
-    tp[p7X_TMD] = log(hmm->t[k][p7_TMD]);
-    tp[p7X_TIM] = log(hmm->t[k][p7_TIM]);
-    tp[p7X_TII] = log(hmm->t[k][p7_TII]);
-    tp[p7X_TDM] = log(hmm->t[k][p7_TDM]);
-    tp[p7X_TDD] = log(hmm->t[k][p7_TDD]);
+    tp[p7X_TMM] = log(hmm->t[k][p7H_MM]);
+    tp[p7X_TMI] = log(hmm->t[k][p7H_MI]);
+    tp[p7X_TMD] = log(hmm->t[k][p7H_MD]);
+    tp[p7X_TIM] = log(hmm->t[k][p7H_IM]);
+    tp[p7X_TII] = log(hmm->t[k][p7H_II]);
+    tp[p7X_TDM] = log(hmm->t[k][p7H_DM]);
+    tp[p7X_TDD] = log(hmm->t[k][p7H_DD]);
     tp[p7X_BSC] = log(occ[k+1] / Z);        /* TBM is stored specially off-by-one: [k-1][TBM] is the score for entering at Mk  */
   }
   tp = om->tsc;			/* [0][BSC] */
@@ -480,7 +480,7 @@ main(int argc, char **argv)
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
-  float           sc;
+  float           sc, nullsc;
   float           bitscore;
   double          x;
   
@@ -503,10 +503,10 @@ main(int argc, char **argv)
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
       p7_Viterbi(dsq, L, om, ox, &sc);
-      bitscore = sc - ((float) L * log(bg->p1) + log(1.-bg->p1)); /* equiv to subtracting p7_bg_NullOne, but in fp */
-      bitscore /= eslCONST_LOG2;
+      p7_bg_NullOne(bg, dsq, L, &nullsc);
+      bitscore = (sc - nullsc) / eslCONST_LOG2;
       
-      if (esl_opt_GetBoolean(go, "-v")) printf("%.2f bits  (%.2f raw)\n", bitscore, sc); 
+      if (esl_opt_GetBoolean(go, "-v")) printf("%.4f bits  (%.4f raw)\n", bitscore, sc); 
     }
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");

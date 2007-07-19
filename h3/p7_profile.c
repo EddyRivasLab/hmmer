@@ -1,4 +1,4 @@
-/* Routines for the P7_PROFILE structure - a Plan 7 search profile
+/* Routines for the P7_PROFILE structure - Plan 7's search profile
  *                                         
  *    1. The P7_PROFILE object: allocation, initialization, destruction.
  *    2. Access methods.
@@ -27,13 +27,20 @@
  *****************************************************************/
 
 /* Function:  p7_profile_Create()
+ * Synopsis:  Create a profile.
  * Incept:    SRE, Thu Jan 11 15:53:28 2007 [Janelia]
  *
  * Purpose:   Creates a profile of <M> nodes, for digital alphabet <abc>.
+ *            
+ *            Scores (and length model probabilities) are uninitialized;
+ *            the <p7_ProfileConfig()> call is what sets these.
+ *            The alignment mode is set to <p7_NO_MODE>. 
+ *            The reference pointers <gm->hmm_r> and <gm->bg_r> are set to <NULL>.
+ *            The reference pointer <gm->abc_r> is set to <abc>.
  *
  * Returns:   a pointer to the new profile.
  *
- * Throws:    NULL on allocation error.
+ * Throws:    <NULL> on allocation error.
  *
  * Xref:      STL11/125.
  */
@@ -46,70 +53,43 @@ p7_profile_Create(int M, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(gm, sizeof(P7_PROFILE));
-  gm->tsc   = gm->msc = gm->isc = NULL;
-  gm->bsc   = gm->esc = NULL;
-  gm->begin = gm->end = NULL;
+  gm->tsc   = NULL;
+  gm->rsc   = NULL;
   
   /* level 1 */
-  ESL_ALLOC(gm->tsc, sizeof(int *) * 7);       gm->tsc[0] = NULL;
-  ESL_ALLOC(gm->msc, sizeof(int *) * abc->Kp); gm->msc[0] = NULL;
-  ESL_ALLOC(gm->isc, sizeof(int *) * abc->Kp); gm->isc[0] = NULL;
-  ESL_ALLOC(gm->bsc, sizeof(int) * (M+1));      
-  ESL_ALLOC(gm->esc, sizeof(int) * (M+1));      
-
-  /* Begin, end may eventually disappear in production
-   * code, but we need them in research code for now to
-   * be able to emulate & test HMMER2 configurations.
-   */
-  ESL_ALLOC(gm->begin, sizeof(float) * (M+1));
-  ESL_ALLOC(gm->end,   sizeof(float) * (M+1));
+  ESL_ALLOC(gm->tsc,   sizeof(float)   * M * p7P_NTRANS); 
+  ESL_ALLOC(gm->rsc,   sizeof(float *) * abc->Kp);
+  gm->rsc[0] = NULL;
   
   /* level 2 */
-  ESL_ALLOC(gm->tsc[0], sizeof(int) * 7*M);    
-  ESL_ALLOC(gm->msc[0], sizeof(int) * abc->Kp * (M+1));
-  ESL_ALLOC(gm->isc[0], sizeof(int) * abc->Kp * M);
-  for (x = 1; x < abc->Kp; x++) {
-    gm->msc[x] = gm->msc[0] + x * (M+1);
-    gm->isc[x] = gm->isc[0] + x * M;
-  }
-  for (x = 0; x < 7; x++)
-    gm->tsc[x] = gm->tsc[0] + x * M;
+  ESL_ALLOC(gm->rsc[0], sizeof(float) * abc->Kp * (M+1) * p7P_NR);
+  for (x = 1; x < abc->Kp; x++) 
+    gm->rsc[x] = gm->rsc[0] + x * (M+1) * p7P_NR;
 
-  /* Initialize some pieces of memory that are never used,
-   * only there for indexing convenience.
+  /* Initialize some edge pieces of memory that are never used,
+   * and are only present for indexing convenience.
    */
-  gm->tsc[p7_TMM][0] = p7_IMPOSSIBLE; /* node 0 nonexistent, has no transitions  */
-  gm->tsc[p7_TMI][0] = p7_IMPOSSIBLE;
-  gm->tsc[p7_TMD][0] = p7_IMPOSSIBLE;
-  gm->tsc[p7_TIM][0] = p7_IMPOSSIBLE;
-  gm->tsc[p7_TII][0] = p7_IMPOSSIBLE;
-  gm->tsc[p7_TDM][0] = p7_IMPOSSIBLE;
-  gm->tsc[p7_TDD][0] = p7_IMPOSSIBLE;
-  gm->tsc[p7_TDM][1] = p7_IMPOSSIBLE; /* delete state D_1 is wing-retracted */
-  gm->tsc[p7_TDD][1] = p7_IMPOSSIBLE;
-  for (x = 0; x < abc->Kp; x++) {     /* no emissions from nonexistent M_0, I_0 */
-    gm->msc[x][0] = p7_IMPOSSIBLE;
-    gm->isc[x][0] = p7_IMPOSSIBLE;
+  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* node 0 nonexistent, has no transitions  */
+  if (M > 1) {
+    p7P_TSC(gm, 1, p7P_DM) = -eslINFINITY;             /* delete state D_1 is wing-retracted      */
+    p7P_TSC(gm, 1, p7P_DD) = -eslINFINITY;
   }
-  x = esl_abc_XGetGap(abc);	      /* no emission can emit/score gap characters */
-  esl_vec_ISet(gm->msc[x], M+1, p7_IMPOSSIBLE);
-  esl_vec_ISet(gm->isc[x], M,   p7_IMPOSSIBLE);
-  x = esl_abc_XGetMissing(abc);	      /* no emission can emit/score missing data characters */
-  esl_vec_ISet(gm->msc[x], M+1, p7_IMPOSSIBLE);
-  esl_vec_ISet(gm->isc[x], M,   p7_IMPOSSIBLE);
-  gm->bsc[0] = p7_IMPOSSIBLE;
-  gm->esc[0] = p7_IMPOSSIBLE;
+  for (x = 0; x < abc->Kp; x++) {        
+    p7P_MSC(gm, 0, x) = -eslINFINITY;                  /* no emissions from nonexistent M_0... */
+    p7P_ISC(gm, 0, x) = -eslINFINITY;                  /* or I_0... */
+    p7P_ISC(gm, M, x) = -eslINFINITY;                  /* or I_M.   */
+  }
+  x = esl_abc_XGetGap(abc);	                       /* no emission can emit/score gap characters */
+  esl_vec_FSet(gm->rsc[x], (M+1)*p7P_NR, -eslINFINITY);
+  x = esl_abc_XGetMissing(abc);	                      /* no emission can emit/score missing data characters */
+  esl_vec_FSet(gm->rsc[x], (M+1)*p7P_NR, -eslINFINITY);
 
-  /* Set remaining info
-   */
+  /* Set remaining info  */
   gm->mode        = p7_NO_MODE;
   gm->M           = M;
-  gm->abc         = abc;
-  gm->hmm         = NULL;
-  gm->bg          = NULL;
-  gm->do_lcorrect = FALSE;
-  gm->lscore      = 0.;
-  gm->h2_mode     = FALSE;
+  gm->abc_r       = abc;
+  gm->hmm_r       = NULL;
+  gm->bg_r        = NULL;
   return gm;
 
  ERROR:
@@ -130,24 +110,14 @@ p7_profile_Clone(const P7_PROFILE *gm)
   P7_PROFILE *g2 = NULL;
   int x;
 
-  if ((g2 = p7_profile_Create(gm->M, gm->abc)) == NULL) return NULL;
+  if ((g2 = p7_profile_Create(gm->M, gm->abc_r)) == NULL) return NULL;
   g2->mode        = gm->mode;
-  g2->bg          = gm->bg;
-  g2->do_lcorrect = gm->do_lcorrect;
-  g2->lscore      = gm->lscore;
-  g2->h2_mode     = gm->h2_mode;
+  g2->hmm_r       = gm->hmm_r;
+  g2->bg_r        = gm->bg_r;
 
-  for (x = 0; x < 7;           x++) esl_vec_ICopy(gm->tsc[x], gm->M,   g2->tsc[x]);
-  for (x = 0; x < gm->abc->Kp; x++) esl_vec_ICopy(gm->msc[x], gm->M+1, g2->msc[x]);
-  for (x = 0; x < gm->abc->Kp; x++) esl_vec_ICopy(gm->isc[x], gm->M,   g2->isc[x]);
-  for (x = 0; x < 2;           x++) esl_vec_ICopy(gm->xsc[x], 2,       g2->xsc[x]);
-  esl_vec_ICopy(gm->bsc, gm->M+1, g2->bsc);
-  esl_vec_ICopy(gm->esc, gm->M+1, g2->esc);
-
-  for (x = 0; x < 2;      x++) esl_vec_FCopy(gm->xt[x],  2,       g2->xt[x]);
-  esl_vec_FCopy(gm->begin, gm->M+1, g2->begin);
-  esl_vec_FCopy(gm->end,   gm->M+1, g2->end);
-
+  esl_vec_FCopy(gm->tsc, gm->M*p7P_NTRANS, g2->tsc);
+  for (x = 0; x < gm->abc_r->Kp;  x++) esl_vec_FCopy(gm->rsc[x], (gm->M+1)*p7P_NR, g2->rsc[x]);
+  for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(gm->xsc[x], p7P_NXTRANS,      g2->xsc[x]);
   return g2;
 }
 
@@ -172,23 +142,15 @@ int
 p7_profile_SetNullEmissions(P7_PROFILE *gm)
 {
   int x;
-
-  /* Canonicals */
-  for (x = 0; x <= gm->abc->K; x++) {
-    esl_vec_ISet(gm->msc[x], gm->M+1, 0);
-    esl_vec_ISet(gm->isc[x], gm->M,   0);
-  }
-  /* Noncanonicals */
-  for (x = gm->abc->K+1; x <= gm->abc->Kp-2; x++) {
-    esl_vec_ISet(gm->msc[x], gm->M+1, 0);
-    esl_vec_ISet(gm->isc[x], gm->M,   0);
-  }
+  for (x = 0; x <= gm->abc_r->K; x++)                  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* canonicals    */
+  for (x = gm->abc_r->K+1; x <= gm->abc_r->Kp-2; x++)  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* noncanonicals */
   return eslOK;
 }
 
 
 
 /* Function:  p7_profile_Destroy()
+ * Synopsis:  Frees a profile.
  * Incept:    SRE, Thu Jan 11 15:54:17 2007 [Janelia]
  *
  * Purpose:   Frees a profile <gm>.
@@ -201,24 +163,46 @@ void
 p7_profile_Destroy(P7_PROFILE *gm)
 {
   if (gm != NULL) {
-    if (gm->tsc   != NULL && gm->tsc[0] != NULL) free(gm->tsc[0]);
-    if (gm->msc   != NULL && gm->msc[0] != NULL) free(gm->msc[0]);
-    if (gm->isc   != NULL && gm->isc[0] != NULL) free(gm->isc[0]);
+    if (gm->rsc   != NULL && gm->rsc[0] != NULL) free(gm->rsc[0]);
     if (gm->tsc   != NULL) free(gm->tsc);
-    if (gm->msc   != NULL) free(gm->msc);
-    if (gm->isc   != NULL) free(gm->isc);
-    if (gm->bsc   != NULL) free(gm->bsc);
-    if (gm->esc   != NULL) free(gm->esc);
-    if (gm->begin != NULL) free(gm->begin);
-    if (gm->end   != NULL) free(gm->end);
+    if (gm->rsc   != NULL) free(gm->rsc);
+    free(gm);
   }
-  free(gm);
   return;
 }
+
 
 /*****************************************************************
  * 2. Access methods.
  *****************************************************************/
+
+/* Function:  p7_profile_IsLocal()
+ * Synopsis:  Return TRUE if profile is in a local alignment mode.
+ * Incept:    SRE, Thu Jul 12 11:57:49 2007 [Janelia]
+ *
+ * Purpose:   Return <TRUE> if profile is in a local alignment mode.
+ */
+int
+p7_profile_IsLocal(const P7_PROFILE *gm)
+{
+  if (gm->mode == p7_UNILOCAL || gm->mode == p7_LOCAL) return TRUE;
+  return FALSE;
+}
+
+/* Function:  p7_profile_IsMultihit()
+ * Synopsis:  Return TRUE if profile is in a multihit alignment mode.
+ * Incept:    SRE, Thu Jul 12 11:58:58 2007 [Janelia]
+ *
+ * Purpose:   Return <TRUE> if profile is in a multihit alignment mode.
+ */
+int
+p7_profile_IsMultihit(const P7_PROFILE *gm)
+{
+  if (gm->mode == p7_LOCAL || gm->mode == p7_GLOCAL) return TRUE;
+  return FALSE;
+}
+
+
 
 
 /* Function:  p7_profile_GetTScore()
@@ -227,7 +211,7 @@ p7_profile_Destroy(P7_PROFILE *gm)
  * Purpose:   Convenience function that looks up a transition score in
  *            profile <gm> for a transition from state type <st1> in
  *            node <k1> to state type <st2> in node <k2>. For unique
- *            state types that aren't in nodes (<p7_STS>, for example), the
+ *            state types that aren't in nodes (<p7T_S>, for example), the
  *            <k> value is ignored, though it would be customarily passed as 0.
  *            Return the transition score in <ret_tsc>.
  *            
@@ -235,97 +219,87 @@ p7_profile_Destroy(P7_PROFILE *gm)
  *            transition score.            
  * 
  * Throws:    <eslEINVAL> if a nonexistent transition is requested. Now
- *            <*ret_tsc> is set to 0.
+ *            <*ret_tsc> is set to $-\infty$.
  */
 int
-p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *ret_tsc)
+p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float *ret_tsc)
 {
-  int status;
-  int tsc    = 0;
+  int   status;
+  float tsc = 0.0f;
 
   switch (st1) {
-  case p7_STS:  break;
-  case p7_STT:  break;
+  case p7T_S:  break;
+  case p7T_T:  break;
 
-  case p7_STN:
+  case p7T_N:
     switch (st2) {
-    case p7_STB: tsc =  gm->xsc[p7_XTN][p7_MOVE]; break;
-    case p7_STN: tsc =  gm->xsc[p7_XTN][p7_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
-				p7_hmm_DescribeStatetype(st1),
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_B: tsc =  gm->xsc[p7P_N][p7P_MOVE]; break;
+    case p7T_N: tsc =  gm->xsc[p7P_N][p7P_LOOP]; break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STB:
+  case p7T_B:
     switch (st2) {
-    case p7_STM: tsc = gm->bsc[k2]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
-				p7_hmm_DescribeStatetype(st1),
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_M:  tsc = p7P_TSC(gm, k2-1, p7P_BM); break; /* remember, B->Mk is stored in [k-1][p7P_BM] */
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STM:
+  case p7T_M:
     switch (st2) {
-    case p7_STM: tsc = gm->tsc[p7_TMM][k1]; break;
-    case p7_STI: tsc = gm->tsc[p7_TMI][k1]; break;
-    case p7_STD: tsc = gm->tsc[p7_TMD][k1]; break;
-    case p7_STE: tsc = gm->esc[k1];         break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
-				p7_hmm_DescribeStatetype(st1), k1,
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_M: tsc = p7P_TSC(gm, k1, p7P_MM); break;
+    case p7T_I: tsc = p7P_TSC(gm, k1, p7P_MI); break;
+    case p7T_D: tsc = p7P_TSC(gm, k1, p7P_MD); break;
+    case p7T_E: 
+      if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (M%d of %d) in non-local model", k1, gm->M);
+      tsc = 0.0f;		/* by def'n in H3 local alignment */
+      break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DescribeStatetype(st1), k1, p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STD:
+  case p7T_D:
     switch (st2) {
-    case p7_STM: tsc = gm->tsc[p7_TDM][k1]; break;
-    case p7_STD: tsc = gm->tsc[p7_TDD][k1]; break;
-    case p7_STE: tsc = gm->esc[k1];         break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
-				p7_hmm_DescribeStatetype(st1), k1,
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_M: tsc = p7P_TSC(gm, k1, p7P_DM); break;
+    case p7T_D: tsc = p7P_TSC(gm, k1, p7P_DD); break;
+    case p7T_E: 
+      if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (D%d of %d) in non-local model", k1, gm->M);
+      tsc = 0.0f;		/* by def'n in H3 local alignment */
+      break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DescribeStatetype(st1), k1, p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STI:
+  case p7T_I:
     switch (st2) {
-    case p7_STM: tsc = gm->tsc[p7_TIM][k1]; break;
-    case p7_STI: tsc = gm->tsc[p7_TII][k1]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", 
-				p7_hmm_DescribeStatetype(st1), k1,
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_M: tsc = p7P_TSC(gm, k1, p7P_IM); break;
+    case p7T_I: tsc = p7P_TSC(gm, k1, p7P_II); break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DescribeStatetype(st1), k1, p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STE:
+  case p7T_E:
     switch (st2) {
-    case p7_STC: tsc = gm->xsc[p7_XTE][p7_MOVE]; break;
-    case p7_STJ: tsc = gm->xsc[p7_XTE][p7_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
-				p7_hmm_DescribeStatetype(st1),
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_C: tsc = gm->xsc[p7P_E][p7P_MOVE]; break;
+    case p7T_J: tsc = gm->xsc[p7P_E][p7P_LOOP]; break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STJ:
+  case p7T_J:
     switch (st2) {
-    case p7_STB: tsc = gm->xsc[p7_XTJ][p7_MOVE]; break;
-    case p7_STJ: tsc = gm->xsc[p7_XTJ][p7_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
-				p7_hmm_DescribeStatetype(st1),
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_B: tsc = gm->xsc[p7P_J][p7P_MOVE]; break;
+    case p7T_J: tsc = gm->xsc[p7P_J][p7P_LOOP]; break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
     }
     break;
 
-  case p7_STC:
+  case p7T_C:
     switch (st2) {
-    case p7_STT:  tsc = gm->xsc[p7_XTC][p7_MOVE]; break;
-    case p7_STC:  tsc = gm->xsc[p7_XTC][p7_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", 
-				p7_hmm_DescribeStatetype(st1),
-				p7_hmm_DescribeStatetype(st2));
+    case p7T_T:  tsc = gm->xsc[p7P_C][p7P_MOVE]; break;
+    case p7T_C:  tsc = gm->xsc[p7P_C][p7P_LOOP]; break;
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
     }
     break;
 
@@ -336,7 +310,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *r
   return eslOK;
 
  ERROR:
-  *ret_tsc = 0;
+  *ret_tsc = -eslINFINITY;
   return status;
 }
 
@@ -349,11 +323,9 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *r
  * Incept:    SRE, Tue Jan 23 13:58:04 2007 [Janelia]
  *
  * Purpose:   Validates the internals of the generic profile structure
- *            <gm>. Probability vectors in the implicit profile
- *            probabilistic model are validated to sum to 1.0 +/- <tol>.
+ *            <gm>.
  *            
- *            TODO: currently this function only validates the implicit
- *            model's probabilities, nothing else.
+ *            TODO: currently this function is a no-op!
  *            
  * Returns:   <eslOK> if <gm> internals look fine. Returns <eslFAIL>
  *            if something is wrong.
@@ -361,27 +333,38 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, int *r
 int
 p7_profile_Validate(const P7_PROFILE *gm, float tol)
 {
-  float sum;
-  int k,i;
+  int     status;
+  int     k;
+  double *pstart = NULL;
 
-  /* begin[k] should sum to 1.0 over the M(M+1)/2 entries in
-   * the implicit model
+  ESL_ALLOC(pstart, sizeof(double) * (gm->M+1));
+  pstart[0] = 0.0;
+
+  /* Validate the entry distribution.
+   * In a glocal model, this is an explicit probability distribution,
+   * corresponding to left wing retraction.
+   * In a local model, this is an implicit probability distribution,
+   * corresponding to the implicit local alignment model, and we have
+   * to calculate the M(M+1)/2 fragment probabilities accordingly.
    */
-  for (sum = 0., k = 1; k <= gm->M; k++)
-    sum += gm->begin[k] * (gm->M - k + 1);
-  if (esl_FCompare(sum, 1.0, tol) != eslOK) return eslFAIL;
+  if (p7_profile_IsLocal(gm))
+    {				/* the code block below is also in emit.c:sample_endpoints */
+      for (k = 1; k <= gm->M; k++)
+	pstart[k] = exp(p7P_TSC(gm, k-1, p7P_BM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
+    }
+  else
+    {
+      for (k = 1; k <= gm->M; k++)
+	pstart[k] = exp(p7P_TSC(gm, k-1, p7P_BM));
+    }
 
-  /* end[k] should all be 1.0 in the implicit model
-   */
-  for (k = 1; k <= gm->M; k++)
-    if (gm->end[k] != 1.0) return eslFAIL;
-
-  /* all four xt's should sum to 1.0
-   */
-  for (i = 0; i < 4; i++)
-    if (esl_FCompare(gm->xt[i][p7_MOVE] + gm->xt[i][p7_LOOP], 1.0, tol) != eslOK) return eslFAIL;
-
+  if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) { status = eslFAIL; goto ERROR; }
+  free(pstart);
   return eslOK;
+
+ ERROR:
+  if (pstart != NULL) free(pstart);
+  return eslFAIL;
 }
 
 /* Function:  p7_profile_Compare()
@@ -402,21 +385,13 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
   if (gm1->mode != gm2->mode) return eslFAIL;
   if (gm1->M    != gm2->M)    return eslFAIL;
 
-  for (x = 0; x < 7; x++) 
-    if (esl_vec_ICompare(gm1->tsc[x], gm2->tsc[x], gm1->M)   != eslOK) return eslFAIL;
-  for (x = 0; x < gm1->abc->Kp; x++) {
-    if (esl_vec_ICompare(gm1->msc[x], gm2->msc[x], gm1->M+1) != eslOK) return eslFAIL;
-    if (esl_vec_ICompare(gm1->isc[x], gm2->isc[x], gm1->M)   != eslOK) return eslFAIL;
-  }
-  for (x = 0; x < 4; x++)
-    if (esl_vec_ICompare(gm1->xsc[x], gm2->xsc[x], 2)        != eslOK) return eslFAIL;
-  if (esl_vec_ICompare(gm1->bsc, gm2->bsc, gm1->M+1)         != eslOK) return eslFAIL;
-  if (esl_vec_ICompare(gm1->esc, gm2->esc, gm1->M+1)         != eslOK) return eslFAIL;
+  if (esl_vec_FCompare(gm1->tsc, gm2->tsc, gm1->M*p7P_NTRANS, tol)         != eslOK) return eslFAIL;
+  for (x = 0; x < gm1->abc_r->Kp; x++) 
+    if (esl_vec_FCompare(gm1->rsc[x], gm2->rsc[x], (gm1->M+1)*p7P_NR, tol) != eslOK) return eslFAIL;
 
-  for (x = 0; x < 4; x++)
-    if (esl_vec_FCompare(gm1->xt[x], gm2->xt[x], 2, tol)     != eslOK) return eslFAIL;
-  if (esl_vec_FCompare(gm1->begin, gm2->begin, gm1->M+1, tol)!= eslOK) return eslFAIL;
-  if (esl_vec_FCompare(gm1->end,   gm2->end,   gm1->M+1, tol)!= eslOK) return eslFAIL;
+  for (x = 0; x < p7P_NXSTATES; x++)
+    if (esl_vec_FCompare(gm1->xsc[x], gm2->xsc[x], p7P_NXTRANS, tol)     != eslOK) return eslFAIL;
+
   return eslOK;
 }
 

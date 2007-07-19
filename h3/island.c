@@ -100,7 +100,7 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
   /* Initialization of the zero row.
    */
   xmx[0][p7_XMN] = 0;		                                     /* S->N, p=1            */
-  xmx[0][p7_XMB] = gm->xsc[p7_XTN][p7_MOVE];                        /* S->N->B, no N-tail   */
+  xmx[0][p7_XMB] = gm->xsc[p7P_N][p7P_MOVE];                        /* S->N->B, no N-tail   */
   xmx[0][p7_XME] = xmx[0][p7_XMC] = xmx[0][p7_XMJ] = p7_IMPOSSIBLE;  /* need seq to get here */
   for (k = 0; k <= gm->M; k++)
     mmx[0][k] = imx[0][k] = dmx[0][k] = p7_IMPOSSIBLE;               /* need seq to get here too*/
@@ -126,15 +126,15 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
     for (k = 1; k <= gm->M; k++) {
 				/* match state transitions*/
       mmx[cur][k] = p7_IMPOSSIBLE;
-      if ((sc = mmx[prv][k-1] + gm->tsc[p7_TMM][k-1]) > mmx[cur][k]) { 
+      if ((sc = mmx[prv][k-1] + gm->tsc[p7P_MM][k-1]) > mmx[cur][k]) { 
 	mmx[cur][k] = sc; 
 	mi[cur][k]  = mi[prv][k-1]; /* propagate the island tag */
       }
-      if ((sc = imx[prv][k-1] + gm->tsc[p7_TIM][k-1]) > mmx[cur][k]) {
+      if ((sc = imx[prv][k-1] + gm->tsc[p7P_IM][k-1]) > mmx[cur][k]) {
 	mmx[cur][k] = sc;
 	mi[cur][k]  = ii[prv][k-1];
       }
-      if ((sc = dmx[prv][k-1] + gm->tsc[p7_TDM][k-1]) > mmx[cur][k]) {
+      if ((sc = dmx[prv][k-1] + gm->tsc[p7P_DM][k-1]) > mmx[cur][k]) {
 	mmx[cur][k] = sc;
 	mi[cur][k]  = di[prv][k-1];
       }
@@ -163,11 +163,11 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
 
 				/* delete state */
       dmx[cur][k] = p7_IMPOSSIBLE;
-      if ((sc = mmx[cur][k-1] + gm->tsc[p7_TMD][k-1]) > dmx[cur][k]) {
+      if ((sc = mmx[cur][k-1] + gm->tsc[p7P_MD][k-1]) > dmx[cur][k]) {
 	dmx[cur][k] = sc; 
 	di[cur][k]  = mi[cur][k-1];
       }
-      if ((sc = dmx[cur][k-1] + gm->tsc[p7_TDD][k-1]) > dmx[cur][k]) {
+      if ((sc = dmx[cur][k-1] + gm->tsc[p7P_DD][k-1]) > dmx[cur][k]) {
 	dmx[cur][k] = sc; 
 	di[cur][k]  = di[cur][k-1];
       }
@@ -175,11 +175,11 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
 				/* insert state */
       if (k < gm->M) {
 	imx[cur][k] = p7_IMPOSSIBLE;
-	if ((sc = mmx[prv][k] + gm->tsc[p7_TMI][k]) > imx[cur][k]) {
+	if ((sc = mmx[prv][k] + gm->tsc[p7P_MI][k]) > imx[cur][k]) {
 	  imx[cur][k] = sc; 
 	  ii[cur][k]  = mi[prv][k];
 	}
-	if ((sc = imx[prv][k] + gm->tsc[p7_TII][k]) > imx[cur][k]) {
+	if ((sc = imx[prv][k] + gm->tsc[p7P_II][k]) > imx[cur][k]) {
 	  imx[cur][k] = sc; 
 	  ii[cur][k]  = ii[prv][k];
 	}
@@ -196,7 +196,7 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
      */
 				/* N state */
     xmx[cur][p7_XMN] = p7_IMPOSSIBLE;
-    if ((sc = xmx[prv][p7_XMN] + gm->xsc[p7_XTN][p7_LOOP]) > p7_IMPOSSIBLE)
+    if ((sc = xmx[prv][p7_XMN] + gm->xsc[p7P_N][p7P_LOOP]) > p7_IMPOSSIBLE)
       xmx[cur][p7_XMN] = sc;
 				/* E state */
     xmx[cur][p7_XME] = p7_IMPOSSIBLE;
@@ -207,39 +207,39 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
 	  xi[cur][p7_XME]  = mi[cur][k];
 	}
 	/* calculate what island sc would be, if we ended it here. */
-	sc = sc  + gm->xsc[p7_XTE][p7_MOVE] + (L-i)* gm->xsc[p7_XTC][p7_LOOP] + gm->xsc[p7_XTC][p7_MOVE];
+	sc = sc  + gm->xsc[p7P_E][p7P_MOVE] + (L-i)* gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE];
 	if (sc > I[mi[cur][k]])	  
 	  I[mi[cur][k]]  = sc;
       }
 				/* J state */
     xmx[cur][p7_XMJ] = p7_IMPOSSIBLE;
-    if ((sc = xmx[prv][p7_XMJ] + gm->xsc[p7_XTJ][p7_LOOP]) > p7_IMPOSSIBLE) {
+    if ((sc = xmx[prv][p7_XMJ] + gm->xsc[p7P_J][p7P_LOOP]) > p7_IMPOSSIBLE) {
       xmx[cur][p7_XMJ] = sc; 
       xi[cur][p7_XMJ]  = xi[prv][p7_XMJ];
     }
-    if ((sc = xmx[cur][p7_XME] + gm->xsc[p7_XTE][p7_LOOP]) > xmx[cur][p7_XMJ]) {
+    if ((sc = xmx[cur][p7_XME] + gm->xsc[p7P_E][p7P_LOOP]) > xmx[cur][p7_XMJ]) {
       xmx[cur][p7_XMJ] = sc;
       xi[cur][p7_XMJ]  = xi[cur][p7_XME];
     }
 				/* B state */
     xmx[cur][p7_XMB] = p7_IMPOSSIBLE;
-    if ((sc = xmx[cur][p7_XMN] + gm->xsc[p7_XTN][p7_MOVE]) > p7_IMPOSSIBLE) {
+    if ((sc = xmx[cur][p7_XMN] + gm->xsc[p7P_N][p7P_MOVE]) > p7_IMPOSSIBLE) {
       xmx[cur][p7_XMB] = sc; 
       xi[cur][p7_XMB]  = -1;       /* if coming from N, we are islandless */
     }
-    if ((sc = xmx[cur][p7_XMJ] + gm->xsc[p7_XTJ][p7_MOVE]) > xmx[cur][p7_XMB]) {
+    if ((sc = xmx[cur][p7_XMJ] + gm->xsc[p7P_J][p7P_MOVE]) > xmx[cur][p7_XMB]) {
       xmx[cur][p7_XMB] = sc; 
       xi[cur][p7_XMB]  = xi[cur][p7_XMJ]; /* if from J, then propagate island tag */
     }
 				/* C state */
     xmx[cur][p7_XMC] = p7_IMPOSSIBLE;
-    if ((sc = xmx[prv][p7_XMC] + gm->xsc[p7_XTC][p7_LOOP]) > p7_IMPOSSIBLE)
+    if ((sc = xmx[prv][p7_XMC] + gm->xsc[p7P_C][p7P_LOOP]) > p7_IMPOSSIBLE)
       xmx[cur][p7_XMC] = sc; 
-    if ((sc = xmx[cur][p7_XME] + gm->xsc[p7_XTE][p7_MOVE]) > xmx[cur][p7_XMC])
+    if ((sc = xmx[cur][p7_XME] + gm->xsc[p7P_E][p7P_MOVE]) > xmx[cur][p7_XMC])
       xmx[cur][p7_XMC] = sc; 
   }
 				/* T state (not stored) */
-  sc = xmx[cur][p7_XMC] + gm->xsc[p7_XTC][p7_MOVE];
+  sc = xmx[cur][p7_XMC] + gm->xsc[p7P_C][p7P_MOVE];
   /* sc is the overall optimal score, but we don't do anything with it here. */
 
 

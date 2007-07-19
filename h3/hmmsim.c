@@ -33,7 +33,7 @@
 #include "hmmer.h"
 #include "impl_fp.h"
 
-#define ALGORITHMS "--fwd,--viterbi,--island,--hybrid" /* Exclusive choice for scoring algorithms */
+#define ALGORITHMS "--fwd,--viterbi,--hybrid" /* Exclusive choice for scoring algorithms */
 #define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
 
 static ESL_OPTIONS options[] = {
@@ -61,7 +61,6 @@ static ESL_OPTIONS options[] = {
   { "--tmax",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set lower bound tail mass for fwd,island",    5 },
   { "--tstep",   eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set additive step size for tmin...tmax range",5 },
 /* Debugging options */
-  { "--oprofile",eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use experimental fp implementation",                6 },  
   { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                6 },  
   { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 6 },
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   6 },  
@@ -108,7 +107,9 @@ static void mpi_worker     (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
 static int output_result   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
 
+#ifdef HAVE_MPI
 static int minimum_mpi_working_buffer(int N, int *ret_wn);
+#endif 
 
 int
 main(int argc, char **argv)
@@ -495,11 +496,11 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   int             L   = esl_opt_GetInteger(go, "-L");
   P7_PROFILE     *gm  = NULL;
   P7_GMX         *gx  = NULL;
-  P7_OPROFILE    *om  = NULL;
-  P7_OMX         *ox  = NULL;
   ESL_DSQ        *dsq = NULL;
   int             i;
   int             status;
+  float  sc;
+  float  nullsc;
 
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
@@ -513,28 +514,12 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       esl_vec_FCopy(p, cfg->abc->K, cfg->bg->f);
     }
 
-
-  /* Prepare the score profile. */
-  if (esl_opt_GetBoolean(go, "--oprofile")) 
-    {
-      om = p7_oprofile_Create(hmm->M, cfg->abc);
-      if      (esl_opt_GetBoolean(go, "--fs"))  p7_oprofile_Config(hmm, cfg->bg, om, p7_LOCAL);
-      else if (esl_opt_GetBoolean(go, "--sw"))  p7_oprofile_Config(hmm, cfg->bg, om, p7_UNILOCAL);
-      else if (esl_opt_GetBoolean(go, "--ls"))  p7_oprofile_Config(hmm, cfg->bg, om, p7_GLOCAL);
-      else if (esl_opt_GetBoolean(go, "--s"))   p7_oprofile_Config(hmm, cfg->bg, om, p7_UNIGLOCAL);
-      p7_oprofile_ReconfigLength(om, L);
-      ox = p7_omx_Create(om->M, L);
-    }
-  else 
-    {
-      gm = p7_profile_Create(hmm->M, cfg->abc);
-      if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, cfg->bg, gm, p7_LOCAL);
-      else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, cfg->bg, gm, p7_UNILOCAL);
-      else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, cfg->bg, gm, p7_GLOCAL);
-      else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, cfg->bg, gm, p7_UNIGLOCAL);
-      p7_ReconfigLength(gm, L);
-      gx = p7_gmx_Create(gm->M, L);
-    }
+  gm = p7_profile_Create(hmm->M, cfg->abc);
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_LOCAL);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNILOCAL);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_GLOCAL);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNIGLOCAL);
+  gx = p7_gmx_Create(gm->M, L);
 
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   
@@ -543,38 +528,19 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
     {
       esl_rnd_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
 
-      if (esl_opt_GetBoolean(go, "--oprofile")) 
-	{
-	  float sc;
+      if      (esl_opt_GetBoolean(go, "--viterbi"))   p7_GViterbi(dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "--fwd"))       p7_GForward(dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "--hybrid"))    p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
 
-	  if (esl_opt_GetBoolean(go, "--viterbi"))
-	    {
-	      p7_Viterbi(dsq, L, om, ox, &sc);
-	      scores[i] = sc - ((float) L * log(cfg->bg->p1) + log(1.-cfg->bg->p1)); /* equiv to subtracting p7_bg_NullOne, but in fp */
-	      scores[i] /= eslCONST_LOG2;
-	    }
-	}
-      else 			/* normal profiles */
-	{
-	  int  sc;
-	  int  nullsc;
-
-	  if      (esl_opt_GetBoolean(go, "--viterbi"))   p7_GViterbi(dsq, L, gm, gx, &sc);
-	  else if (esl_opt_GetBoolean(go, "--fwd")) 	  p7_GForward(dsq, L, gm, gx, &sc);
-	  else if (esl_opt_GetBoolean(go, "--hybrid")) 	  p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
-
-	  p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
-	  scores[i] = p7_SILO2Bitscore(sc - nullsc);
-	}
+      p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
+      scores[i] = (sc - nullsc) / eslCONST_LOG2;
     }
 
   status = eslOK;
  ERROR:
   free(dsq);
   p7_profile_Destroy(gm);
-  p7_oprofile_Destroy(om);
   p7_gmx_Destroy(gx);
-  p7_omx_Destroy(ox);
   if (status == eslEMEM) sprintf(errbuf, "allocation failure");
   return status;
 }
@@ -662,6 +628,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 }
 
 
+#ifdef HAVE_MPI
 /* the pack send/recv buffer must be big enough to hold either an error message or a result vector.
  * it may even grow larger than that, to hold largest HMM we send.
  */
@@ -678,3 +645,4 @@ minimum_mpi_working_buffer(int N, int *ret_wn)
   *ret_wn = ncode + ESL_MAX(nresult, nerr);
   return eslOK;
 }
+#endif

@@ -1,4 +1,4 @@
-/* Various summary statistics calculated for HMMs and profiles.
+/* Miscellaneous summary statistics calculated for HMMs and profiles.
  * 
  * SRE, Fri May  4 11:43:20 2007 [Janelia]
  * SVN $Id$
@@ -111,24 +111,22 @@ p7_MeanForwardScore(const P7_HMM *hmm, const P7_BG *bg)
   P7_GMX         *gx  = p7_gmx_Create(gm->M, L);
   ESL_SQ         *sq  = esl_sq_CreateDigital(hmm->abc);
   ESL_RANDOMNESS *r   = esl_randomness_CreateTimeseeded();
-  int             fsc;
-  int             nullsc;
+  float           fsc;
+  float           nullsc;
   double          bitscore;
   double          sum = 0.;
   int             i;
 
-  if (p7_ProfileConfig (hmm, bg, gm, p7_LOCAL) != eslOK) p7_Die("failed to configure profile");
-
+  if (p7_ProfileConfig (hmm, bg, gm, L, p7_LOCAL)        != eslOK) p7_Die("failed to configure profile");
   for (i = 0; i < N; i++)
     {
       if (p7_ReconfigLength(gm, L)                        != eslOK) p7_Die("failed to reconfig profile length");
-      if (p7_ProfileEmit(r, gm, sq, NULL)                 != eslOK) p7_Die("failed to emit sequence");
-
+      if (p7_ProfileEmit(r, hmm, gm, bg, sq, NULL)        != eslOK) p7_Die("failed to emit sequence");
       if (p7_ReconfigLength(gm, sq->n)                    != eslOK) p7_Die("failed to reconfig profile length");
       if (p7_gmx_GrowTo(gx, gm->M, sq->n)                 != eslOK) p7_Die("failed to grow the matrix");
       if (p7_GForward(sq->dsq, sq->n, gm, gx, &fsc)       != eslOK) p7_Die("failed to run Forward");
       if (p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc)      != eslOK) p7_Die("failed to run bg_NullOne()");
-      bitscore = p7_SILO2Bitscore(fsc - nullsc);
+      bitscore = (fsc - nullsc) / eslCONST_LOG2;
 
       sum += bitscore;
     }
@@ -162,9 +160,9 @@ p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_e
    */
   for (tre = 0., k = 2; k <= hmm->M; k++)
     {
-      xm = mocc[k-1]*hmm->t[k-1][p7_TMM] * log(hmm->t[k-1][p7_TMM] / bg->p1);
-      xi = mocc[k-1]*hmm->t[k-1][p7_TMI] * (log(hmm->t[k-1][p7_TMM] / bg->p1) + log(hmm->t[k-1][p7_TIM] / bg->p1));
-      xd = (1.-mocc[k-1])*hmm->t[k-1][p7_TDM] * log(hmm->t[k-1][p7_TDM] / bg->p1);
+      xm = mocc[k-1]*hmm->t[k-1][p7H_MM] * log(hmm->t[k-1][p7H_MM] / bg->p1);
+      xi = mocc[k-1]*hmm->t[k-1][p7H_MI] * (log(hmm->t[k-1][p7H_MM] / bg->p1) + log(hmm->t[k-1][p7H_IM] / bg->p1));
+      xd = (1.-mocc[k-1])*hmm->t[k-1][p7H_DM] * log(hmm->t[k-1][p7H_DM] / bg->p1);
       tre += (xm+xi+xd) / eslCONST_LOG2;
     }
   tre /= esl_vec_FSum(mocc+2, hmm->M-1);

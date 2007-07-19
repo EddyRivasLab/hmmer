@@ -64,17 +64,6 @@
  *    non-biological alphabets.
  *****************************************************************/
 
-/* Scores are kept internally as scaled integer log-odds scores:
- *     sc_x = p7_INTSCALE * log p_x / f_x, rounded off.
- * p7_MAX_SC_TXTLEN has to be large enough to represent a score as
- * a string, including \0 and a sign.
- * p7_IMPOSSIBLE represents -infinity; we have to be able to add
- * two -infinities together without underflow.
- */
-#define p7_INTSCALE        1000.0   
-#define p7_MAX_SC_TXTLEN   11	      
-#define p7_IMPOSSIBLE     -987654321  
-
 /* The symbol alphabet is handled by ESL_ALPHABET objects, which
  * dynamically allocate; but sometimes HMMER uses statically-allocated
  * space, and it's useful to know a reasonable maximum for
@@ -83,10 +72,38 @@
 #define p7_MAXABET    20      /* maximum size of alphabet (4 or 20)              */
 #define p7_MAXCODE    28      /* maximum degenerate alphabet size (17 or 28)     */
 
+/* p7_MAX_SC_TXTLEN has to be large enough to represent a score as a
+ * string, including \0 and a sign.
+ */
+#define p7_MAX_SC_TXTLEN   11	      
+
+/* In Forward algorithm implementations, we use a table lookup in
+ * p7_FLogsum() to calculate summed probabilities in log
+ * space. p7_INTSCALE defines the precision of the calculation; the
+ * default of 1000.0 means rounding differences to the nearest 0.001
+ * nat. p7_LOGSUM_TBL defines the size of the lookup table; the
+ * default of 16000 means entries are calculated for differences of 0
+ * to 16.000 nats (when p7_INTSCALE is 1000.0).  e^{-p7_LOGSUM_TBL /
+ * p7_INTSCALE} should be on the order of the machine FLT_EPSILON,
+ * typically 1.2e-7.
+ */
+#define p7_INTSCALE     1000.0f
+#define p7_LOGSUM_TBL   16000
+
+/* Some implementation plugins use scaled integer log odds scores
+ * (SILO scores) instead of floating-point. (HMMER2 also used SILO
+ * scores.)  hmmer.c includes some support for SILO scores. They are
+ * calculated using the same <p7_INTSCALE> from above. We also have to
+ * define a suitable value of -infinity, immune to integer underflow
+ * if two of them are added together: that is, <p7_IMPOSSIBLE> >= -
+ * (INT_MIN / 2).
+ */
+#define  p7_IMPOSSIBLE -987654321
+
 /* Other stuff.
  */
 #define p7_MAXDCHLET  20      /* maximum # Dirichlet components in mixture prior */
-#define p7_LOGSUM_TBL 20000   /* controls precision of ILogsum()                 */
+
 
 
 

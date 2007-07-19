@@ -3,19 +3,19 @@
  * 
  * Contents:
  *     1. Routines in the exposed API.
- *     2. Private functions.
- *     3. Routines emulating HMMER2, for testing.
- *     4. Unit tests.
- *     5. Test driver.
- *     6. Statistics collection driver.
- *     7. Copyright and license
+ *     2. Unit tests.
+ *     3. Test driver.
+ *     4. Statistics collection driver.
+ *     5. Copyright and license
  * 
  * Revised May 2005: xref STL9/77-81.       (Uniform fragment distribution)
  * Again, Sept 2005: xref STL10/24-26.      (Inherent target length dependency)
  * Again, Jan 2007:  xref STL11/125,136-137 (HMMER3)
+ * Again, Jul 2007:  xref J1/103            (floating point ops)
  *
  * SRE, Mon May  2 10:55:16 2005 [St. Louis]
  * SRE, Fri Jan 12 08:06:33 2007 [Janelia] [Kate Bush, Aerial]
+ * SRE, Tue Jul 10 13:19:46 2007 [Janelia] [HHGTTG]
  * SVN $Id$
  */
 #include "p7_config.h"
@@ -28,103 +28,120 @@
 
 #include "hmmer.h"
 
-static int logoddsify(const P7_HMM *hmm, P7_PROFILE *gm);
-
 
 /*****************************************************************
  * 1. Routines in the exposed API.
  *****************************************************************/
  
 /* Function:  p7_ProfileConfig()
+ * Synopsis:  Configure a search profile.
  * Incept:    SRE, Sun Sep 25 12:21:25 2005 [St. Louis]
  *
- * Purpose:   Given a model <hmm> with core probabilities set, and null1
- *            model <bg>, and a desired <mode> (one of
- *            <p7_LOCAL>, <p7_GLOCAL>, <p7_UNILOCAL>, or <p7_UNIGLOCAL>);
- *            configure the profile <gm> into the appropriate search form for
- *            that algorithm mode, with log-odds scores relative to <bg>. 
- *
- *            Often <gm> will be the one the <hmm> holds a reference
- *            to: that is, <p7_ProfileConfig(hmm, hmm->gm...)>.
+ * Purpose:   Given a model <hmm> with core probabilities, the null1
+ *            model <bg>, a desired search <mode> (one of <p7_LOCAL>,
+ *            <p7_GLOCAL>, <p7_UNILOCAL>, or <p7_UNIGLOCAL>), and an
+ *            expected target sequence length <L>; configure the
+ *            search model in <gm> with lod scores relative to the
+ *            background frequencies in <bg>.
  *            
- *            The model is configured for a default target length of
- *            350. It needs to be set to the actual length of each
- *            target sequence by a call to <p7_ReconfigLength()>.
+ * Returns:   <eslOK> on success; the profile <gm> now contains 
+ *            scores and is ready for searching target sequences.
  *            
- *            If necessary (for numerical reasons), the <p7_LCORRECT>
- *            flag will be raised on the model. This indicates that we
- *            lack sufficient numeric precision to represent transition scores
- *            for the unaligned residues, so their contribution (a total
- *            of ~1 bit for single-hit mode, ~2 bits for default multihit 
- *            mode) must instead be added post hoc to a sequence score.
- *            This score correction is calculated as needed by a call to
- *            <p7_ScoreCorrection()>.
- *            
- * Returns:   <eslOK> on success; the profile <gm> has its scores filled
- *            in, its implicit probabilistic model probabilities filled in,
- *            and it contains copied reference pointers for the HMM's
- *            alphabet, null model, and the HMM itself.
- *            
- * Throws:    <eslEINVAL> if the <hmm> doesn't have a null model assigned
- *            to it.
+ * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode)
+p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int mode)
 {
-  int   k;			/* counter over states      */
-  float *occ = NULL;
-  float Z;
+  int   k, x;			/* counters over states, residues */
   int   status;
-
-  /* Contract checks */
-  if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
-    ESL_XEXCEPTION(eslEINVAL, "I'm not ready for any mode but local modes");
-
+  float *occ = NULL;
+  float *tp, *rp;
+  float  sc[p7_MAXCODE];
+  float  Z;
+ 
   /* Copy some pointer references and other info across from HMM
    */
-  gm->M    = hmm->M;
-  gm->abc  = hmm->abc;
-  gm->hmm  = hmm;
-  gm->bg   = bg;
-  gm->mode = mode;
+  gm->M      = hmm->M;
+  gm->abc_r  = hmm->abc;
+  gm->hmm_r  = hmm;
+  gm->bg_r   = bg;
+  gm->mode   = mode;
+
+  /* Entry scores. */
+  if (p7_profile_IsLocal(gm))
+    {
+      /* Local mode entry:  occ[k] /( \sum_i occ[i] * (M-k+1))
+       * (Reduces to uniform 2/(M(M+1)) for occupancies of 1.0)  */
+      Z = 0.;
+      ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
+      if ((status = p7_hmm_CalculateOccupancy(hmm, occ)) != eslOK) goto ERROR;
+      for (k = 1; k <= hmm->M; k++) 
+	Z += occ[k] * (float) (hmm->M-k+1);
+      for (k = 1; k <= hmm->M; k++) 
+	p7P_TSC(gm, k-1, p7P_BM) = log(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
+    }
+  else	/* glocal modes: left wing retraction; must be in log space for precision */
+    {
+      Z = log(hmm->t[0][p7H_MD]);
+      p7P_TSC(gm, 0, p7P_BM) = log(1.0 - hmm->t[0][p7H_MD]);
+      for (k = 1; k < hmm->M; k++) 
+	{
+	   p7P_TSC(gm, k, p7P_BM) = Z + log(hmm->t[k][p7H_DM]);
+	   Z += log(hmm->t[k][p7H_DD]);
+	}
+    }
 
   /* E state loop/move probabilities: nonzero for MOVE allows loops/multihits
    * N,C,J transitions are set later by length config 
    */
-  if (mode == p7_LOCAL || mode == p7_GLOCAL) {
-    gm->xt[p7_XTE][p7_MOVE] = 0.5;  
-    gm->xt[p7_XTE][p7_LOOP] = 0.5;  
+  if (p7_profile_IsMultihit(gm)) {
+    gm->xsc[p7P_E][p7P_MOVE] = log(0.5);   
+    gm->xsc[p7P_E][p7P_LOOP] = log(0.5);  
   } else {
-    gm->xt[p7_XTE][p7_MOVE] = 1.0;  
-    gm->xt[p7_XTE][p7_LOOP] = 0.0;  
+    gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
+    gm->xsc[p7P_E][p7P_LOOP] = -eslINFINITY;  
   }
-    
-  /* Begin probabilities:   occ[k] /( \sum_i occ[i] * (M-k+1))
-   * (Reduces to 2/(M(M+1)) for occupancies of 1.0)
-   * These are only probabilistic w.r.t. the implicit model.
+
+  /* Transition scores. */
+  for (k = 1; k < gm->M; k++) {
+    tp = gm->tsc + k * p7P_NTRANS;
+    tp[p7P_MM] = log(hmm->t[k][p7H_MM]);
+    tp[p7P_MI] = log(hmm->t[k][p7H_MI]);
+    tp[p7P_MD] = log(hmm->t[k][p7H_MD]);
+    tp[p7P_IM] = log(hmm->t[k][p7H_IM]);
+    tp[p7P_II] = log(hmm->t[k][p7H_II]);
+    tp[p7P_DM] = log(hmm->t[k][p7H_DM]);
+    tp[p7P_DD] = log(hmm->t[k][p7H_DD]);
+  }
+  
+  /* Match emission scores. */
+  sc[hmm->abc->K]     = -eslINFINITY; /* gap character */
+  sc[hmm->abc->Kp-1]  = -eslINFINITY; /* missing data character */
+  for (k = 1; k <= hmm->M; k++) {
+    for (x = 0; x < hmm->abc->K; x++) 
+      sc[x] = log(hmm->mat[k][x] / bg->f[x]);
+    esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
+    for (x = 0; x < hmm->abc->Kp; x++) {
+      rp = gm->rsc[x] + k * p7P_NR;
+      rp[p7P_MSC] = sc[x];
+    }
+  }
+  
+  /* Insert emission scores: relies on sc[K, Kp-1] initialization to -inf above */
+  for (k = 1; k < hmm->M; k++) {
+    for (x = 0; x < hmm->abc->K; x++) 
+      sc[x] = log(hmm->ins[k][x] / bg->f[x]); 
+    esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
+    for (x = 0; x < hmm->abc->Kp; x++) {
+      rp = gm->rsc[x] + k*p7P_NR;
+      rp[p7P_ISC] = sc[x];
+    }
+  }    
+
+  /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLength()
    */
-  ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
-  if ((status = p7_hmm_CalculateOccupancy(hmm, occ)) != eslOK) goto ERROR;
-  for (Z = 0., k = 1; k <= hmm->M; k++) 
-    Z += occ[k] * (float) (hmm->M-k+1);
-  for (gm->begin[0] = 0., k=1; k<=hmm->M; k++)
-    gm->begin[k] = occ[k] / Z;
+  if ((status = p7_ReconfigLength(gm, L)) != eslOK) goto ERROR;
   free(occ);
-
-  /* Exit probabilities: 1.0
-   * 
-   * Only probabilistic w.r.t. the implicit model.  HMMER3 will use
-   * implicit Dk->E and Mk->E exit probabilities of 1.0 but we use
-   * end[k] for the Mk->E exits, at least temporarily, for regression
-   * testing against HMMER2 configuration strategies.
-   */
-  gm->end[0] = 0.;
-  esl_vec_FSet(gm->end+1, hmm->M, 1.0);
-
-  /* Set probabilities and scores for N,C,J; then the rest of the model
-   */
-  if ((status = p7_ReconfigLength(gm, 350.))        != eslOK) goto ERROR;
-  if ((status = logoddsify(hmm, gm))                != eslOK) goto ERROR;
   return eslOK;
 
  ERROR:
@@ -134,97 +151,44 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode)
 
 
 /* Function:  p7_ReconfigLength()
+ * Synopsis:  Set the target sequence length of a model.
  * Incept:    SRE, Sun Sep 25 12:38:55 2005 [St. Louis]
  *
  * Purpose:   Given a model already configured for scoring, in some
  *            particular algorithm mode; reset the expected length
- *            distribution of the profile for a mean of <L>.
+ *            distribution of the profile for a new mean of <L>.
  *
- *            This doesn't affect the length distribution of your null
- *            model. See <p7_bg_SetLength()> for that.
+ *            This doesn't affect the length distribution of the null
+ *            model. That must also be reset, using <p7_bg_SetLength()>.
  *            
- *            Do this as quickly as possible, because the caller needs
- *            to dynamically reconfigure the model for the length of
- *            each target sequence in a database search.  
+ *            We want this routine to run as fast as possible, because
+ *            the caller needs to dynamically reconfigure the model
+ *            for the length of each target sequence in a database
+ *            search.
  *
- * Returns:   <eslOK> on success.
- *            xt[NCJ] probabilities and xsc[NCJ] scores are set 
- *            here. These control the target length dependence of the
- *            model. 
- *
- * Throws:    <eslEINVAL> if the profile doesn't have a null model
- *            associated with it.
+ * Returns:   <eslOK> on success; xsc[NCJ] scores are set here. These
+ *            control the target length dependence of the model.
  */
 int
 p7_ReconfigLength(P7_PROFILE *gm, int L)
 {
   float ploop, pmove;
   float nj;
-  int   loopsc, movesc;
   
-  /* Figure out the expected number of uses of the J state.
-   */
-  if (gm->xt[p7_XTE][p7_LOOP] == 0.) nj = 0.; /* make sure. */
-  else                               nj = gm->xt[p7_XTE][p7_LOOP] / (1. - gm->xt[p7_XTE][p7_LOOP]);
+  /* Figure out the expected number of uses of the J state. */
+  if (p7_profile_IsMultihit(gm)) {
+    ploop = exp(gm->xsc[p7P_E][p7P_LOOP]);
+    nj    = ploop / (1-ploop);
+  } else 
+    nj = 0.0f; 
 
   /* Configure N,J,C transitions so they bear L/(2+nj) of the total
    * unannotated sequence length L. 
    */
-  pmove = (2. + nj) / ((float) L + 2. + nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
-  ploop = 1. - pmove;
-  gm->xt[p7_XTN][p7_MOVE] = pmove;
-  gm->xt[p7_XTN][p7_LOOP] = ploop;
-  gm->xt[p7_XTC][p7_MOVE] = pmove;
-  gm->xt[p7_XTC][p7_LOOP] = ploop;
-  gm->xt[p7_XTJ][p7_MOVE] = pmove;	/* note, J unused if [XTE][LOOP] = 0. */
-  gm->xt[p7_XTJ][p7_LOOP] = ploop;
-
-  /* Set the N,J,C scores. (integer scaled lod scores) */          
-  movesc = p7_Prob2SILO(pmove, 1.0);
-  loopsc = p7_Prob2SILO(ploop, 1.0);
-  gm->xsc[p7_XTN][p7_LOOP] = loopsc;
-  gm->xsc[p7_XTN][p7_MOVE] = movesc;
-  gm->xsc[p7_XTC][p7_LOOP] = loopsc;
-  gm->xsc[p7_XTC][p7_MOVE] = movesc;
-  gm->xsc[p7_XTJ][p7_LOOP] = loopsc;
-  gm->xsc[p7_XTJ][p7_MOVE] = movesc;
-
-  /* Detect the "special" (actually common) case of the LOOP scores
-   * having too small of a magnitude to keep track of properly.  We
-   * will have trouble with the [NCJ][LOOP] scores for large L,
-   * because these scores will be ~ 1/L, and we can only hold scores
-   * down to 0.001 bits, if INTSCALE is at its default 1000. As a
-   * workaround, we catch the case where the absolute value of
-   * these scores would be <10. In this case, we set a PLAN7_LCORRECT
-   * flag in the hmm, and store the difference between the expected
-   * score per residue in floating pt versus integer lod scores as
-   * hmm->lscore. We can then post-hoc correct an alignment score by
-   * L' * hmm->lscore.  
-   * 
-   * This code assumes that all three scores (N,C,J)[LOOP] are equal,
-   * which is how we set them above. gm->lscore becomes a correction
-   * per unannotated residue that we add, when the do_lcorrect flag is
-   * set.  Note that the correction is "soft": we try to use what
-   * we've got as an integer score, and only add an expected
-   * difference.
-   * (xref STL10/26)
-   */
- /* SRE: Revisit this code later. As of J1/39, we're now using profile 
-    scores that don't use the bg->p1 transition in their log odds 
-    calculations.
-  */
-#if 0
-  if (abs(gm->xsc[p7_XTN][p7_LOOP]) < 10) {
-    gm->do_lcorrect = TRUE;
-    /* the real cost per residue, as a float: */
-    gm->lscore   = log(gm->xt[p7_XTN][p7_LOOP] / gm->bg->p1);
-    /* minus what we're going to imprecisely calculate, in integer scores: */
-    gm->lscore -= (float) gm->xsc[p7_XTN][p7_LOOP] / (float) p7_INTSCALE;
-  } else {
-    gm->do_lcorrect = FALSE;
-    gm->lscore = 0.;
-  }
-#endif
+  pmove = (2.0f + nj) / ((float) L + 2.0f + nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
+  ploop = 1.0f - pmove;
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = gm->xsc[p7P_J][p7P_LOOP] = log(ploop);
+  gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(pmove);
   return eslOK;
 }
 
@@ -232,172 +196,8 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
 
 
 
-
 /*****************************************************************
- * 2. Private functions
- *****************************************************************/
-
-
-/* logoddsify()
- * Incept:    SRE, Mon Jan 22 08:45:57 2007 [Janelia]
- *
- * Purpose:   Set the "rest of the scores", that aren't dependent
- *            on length modeling: everything but N,C,J transitions.
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
- */
-static int
-logoddsify(const P7_HMM *hmm, P7_PROFILE *gm)
-{
-  int k, x;
-  int sc[p7_MAXCODE];
-
-  /* p7_profile_Create() has already initialized unused memory */
-
-  /* Match and insert transitions, 1..M-1.  */
-  for (k = 1; k < gm->M; k++) {
-    gm->tsc[p7_TMM][k] = p7_Prob2SILO(hmm->t[k][p7_TMM], 1.0);
-    gm->tsc[p7_TMI][k] = p7_Prob2SILO(hmm->t[k][p7_TMI], 1.0);
-    gm->tsc[p7_TMD][k] = p7_Prob2SILO(hmm->t[k][p7_TMD], 1.0);
-    gm->tsc[p7_TIM][k] = p7_Prob2SILO(hmm->t[k][p7_TIM], 1.0);
-    gm->tsc[p7_TII][k] = p7_Prob2SILO(hmm->t[k][p7_TII], 1.0);
-  }
-  /* Delete transitions, 2..M-1. */
-  for (k = 2; k < gm->M; k++) {
-    gm->tsc[p7_TDM][k] = p7_Prob2SILO(hmm->t[k][p7_TDM], 1.0);
-    gm->tsc[p7_TDD][k] = p7_Prob2SILO(hmm->t[k][p7_TDD], 1.0);
-  }
-
-  /* Match emissions 1..M (including degeneracies). 
-   * Temp sc[x] vector because of the rearranged msc[x][k] array */
-  sc[gm->abc->K]    = p7_IMPOSSIBLE; /* gap symbol */
-  sc[gm->abc->Kp-1] = p7_IMPOSSIBLE; /* missing data symbol */
-  for (k = 1; k <= gm->M; k++)  {
-    for (x = 0; x < gm->abc->K; x++)
-      sc[x] = p7_Prob2SILO(hmm->mat[k][x], gm->bg->f[x]); /* base   */
-    esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);         /* degens */
-    for (x = 0; x < gm->abc->Kp; x++)
-      gm->msc[x][k] = sc[x];	
-  }
-  
-  /* Then the same for insert emissions 1..M-1 */
-  for (k = 1; k < gm->M; k++) {
-    for (x = 0; x < gm->abc->K; x++)
-      sc[x] = p7_Prob2SILO(hmm->ins[k][x], gm->bg->f[x]); /* base   */
-    esl_abc_IExpectScVec(gm->abc, sc, gm->bg->f);         /* degens */
-    for (x = 0; x < gm->abc->Kp; x++)
-      gm->isc[x][k] = sc[x];	
-  }
-    
-  /* B->Mk begin transitions 1..M */
-  for (k = 1; k <= gm->M; k++)
-    gm->bsc[k] = p7_Prob2SILO(gm->begin[k], 1.0);
-  
-  /* Mk->E end transitions 1..M */
-  /* Note: in H3 configurations, these are 0 by construction (log 1.0).
-   * But in H2 configurations, they aren't: so at least while we're
-   * still testing against H2, leave this as a score calculation instead
-   * of 0.
-   */
-  for (k = 1; k <= gm->M; k++)
-    gm->esc[k] = p7_Prob2SILO(gm->end[k], 1.0);
-
-  /* E state transitions (loop, move); N,C,J are done by p7_ReconfigLength() */
-  gm->xsc[p7_XTE][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTE][p7_LOOP], 1.0);
-  gm->xsc[p7_XTE][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTE][p7_MOVE], 1.0);
-
-  return eslOK;
-}
-
-/*****************************************************************
- * 3. Routines emulating HMMER2, for testing.
- *****************************************************************/
-
-/* Function:  p7_H2_ProfileConfig()
- * Incept:    SRE, Thu Jan 25 17:12:31 2007 [Janelia]
- *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      HMMER2.3.2 plan7.c::Plan7FSConfig()
- */
-int
-p7_H2_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int mode)
-{
-  int   status;
-  int   k;			/* counter over states      */
-  float d;
-
-  /* Contract checks: HMM must have null model */
-  if (mode != p7_LOCAL && mode != p7_UNILOCAL) 
-    ESL_XEXCEPTION(eslEINVAL, "I'm not ready for any mode but local mode");
-
-  /* Copy some pointer references and other info across from HMM */
-  gm->M       = hmm->M;
-  gm->abc     = hmm->abc;
-  gm->hmm     = hmm;
-  gm->bg      = bg;
-  gm->mode    = mode;
-  gm->h2_mode = TRUE;
-
-  /* Configure special states */
-  gm->xt[p7_XTN][p7_MOVE] = 1.0 - bg->p1;    /* allow N-terminal tail     */
-  gm->xt[p7_XTN][p7_LOOP] = bg->p1;
-  if (mode == p7_LOCAL) {
-    gm->xt[p7_XTE][p7_MOVE] = 0.5; /* multihit */
-    gm->xt[p7_XTE][p7_LOOP] = 0.5;  
-  } else {
-    gm->xt[p7_XTE][p7_MOVE] = 1.0; /* singlehit */
-    gm->xt[p7_XTE][p7_LOOP] = 0.0;  
-  }
-  gm->xt[p7_XTC][p7_MOVE] = 1.0 - bg->p1;    /* allow C-terminal tail     */
-  gm->xt[p7_XTC][p7_LOOP] = bg->p1;
-  gm->xt[p7_XTJ][p7_MOVE] = 1.0 - bg->p1;    /* allow J junction between domains */
-  gm->xt[p7_XTJ][p7_LOOP] = bg->p1;
-
-  /* Configure entry. HMMER2 used (almost) uniform entry. */  
-  esl_vec_FSet(gm->begin+1, hmm->M, 1.0 / hmm->M); 
-
-  /* Configure exit, uniform exit given entry: which is 1/(M-k+1)  */
-  for (k = 1; k < hmm->M; k++)
-    gm->end[k] = 1. / (float) (hmm->M - k + 1); 
-  gm->end[hmm->M] = 1.0;
-
-  /* renormalize match transitions to include exits (this is Plan7RenormalizeExits from H2, inlined */
-  for  (k = 1; k < hmm->M; k++) {
-    d = esl_vec_FSum(hmm->t[k], 3);
-    esl_vec_FScale(hmm->t[k], 3, 1./(d + d*gm->end[k]));
-  }
-
-  /* logoddsify the stuff that ReconfigLength would've done  */
-  gm->xsc[p7_XTN][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTN][p7_LOOP], 1.0);
-  gm->xsc[p7_XTN][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTN][p7_MOVE], 1.0);
-  gm->xsc[p7_XTC][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTC][p7_LOOP], 1.0);
-  gm->xsc[p7_XTC][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTC][p7_MOVE], 1.0);
-  gm->xsc[p7_XTJ][p7_LOOP] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_LOOP], 1.0);
-  gm->xsc[p7_XTJ][p7_MOVE] = p7_Prob2SILO(gm->xt[p7_XTJ][p7_MOVE], 1.0);
-
-  /* logoddsify everything else (without HMMER2's wing retraction) */
-  logoddsify(hmm, gm);
-  return eslOK;
-
- ERROR:
-  return status;
-}
-
-/*****************************************************************
- * 4. Unit tests
+ * 2. Unit tests
  *****************************************************************/
 #ifdef p7MODELCONFIG_TESTDRIVE
 
@@ -410,9 +210,9 @@ utest_Config(P7_HMM *hmm, P7_BG *bg)
   char       *msg = "modelconfig.c::p7_ProfileConfig() unit test failed";
   P7_PROFILE *gm  = NULL;
 
-  if ((gm = p7_profile_Create(hmm->M, hmm->abc)) == NULL)   esl_fatal(msg);
-  if (p7_ProfileConfig(hmm, bg, gm, p7_LOCAL)    != eslOK)  esl_fatal(msg);
-  if (p7_profile_Validate(gm, 0.0001)            != eslOK)  esl_fatal(msg);
+  if ((gm = p7_profile_Create(hmm->M, hmm->abc))    == NULL)   esl_fatal(msg);
+  if (p7_ProfileConfig(hmm, bg, gm, 350, p7_LOCAL)  != eslOK)  esl_fatal(msg);
+  if (p7_profile_Validate(gm, 0.0001)               != eslOK)  esl_fatal(msg);
   return;
 }
 
@@ -434,15 +234,12 @@ utest_occupancy(P7_HMM *hmm)
   free(occ);
   return;
 }
-
-
-
 #endif /*p7MODELCONFIG_TESTDRIVE*/
 
 
 
 /*****************************************************************
- * 5. Test driver
+ * 3. Test driver
  *****************************************************************/
 #ifdef p7MODELCONFIG_TESTDRIVE
 
@@ -483,7 +280,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Statistics collection driver.
+ * 4. Statistics collection driver.
  *****************************************************************/
 #ifdef p7MODELCONFIG_STATS
 /* gcc -g -Wall -Dp7MODELCONFIG_STATS -I. -I../easel -L. -L../easel -o statprog modelconfig.c -lhmmer -leasel -lm
@@ -538,6 +335,7 @@ main(int argc, char **argv)
   P7_BG           *bg      = NULL;     /* null model                              */
   ESL_SQ          *sq      = NULL;     /* sampled sequence                        */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
+  P7_PROFILE      *gm      = NULL;     /* profile                                 */
   int              i,j;
   int              i1,i2;
   int              k1,k2;
@@ -629,14 +427,13 @@ main(int argc, char **argv)
   core  = p7_hmm_Duplicate(hmm);
 
   if (do_h2) {
-    hmm->gm = p7_profile_Create(hmm->M, abc);
-    p7_H2_ProfileConfig(hmm, bg, hmm->gm, p7_UNILOCAL);
+    gm = p7_profile_Create(hmm->M, abc);
+    p7_H2_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
   } else {
-    hmm->gm = p7_profile_Create(hmm->M, abc);
-    p7_ProfileConfig(hmm, bg, hmm->gm, p7_UNILOCAL);
-    p7_ReconfigLength(hmm->gm, L);
-    if (p7_hmm_Validate    (hmm,     0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
-    if (p7_profile_Validate(hmm->gm, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
+    gm = p7_profile_Create(hmm->M, abc);
+    p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+    if (p7_hmm_Validate    (hmm, 0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_profile_Validate(gm,  0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
   }
 
   /* Sample endpoints.
@@ -648,8 +445,8 @@ main(int argc, char **argv)
    */
   for (iseq = 0; iseq < nseq; iseq++)
     {				
-      if (do_ilocal) ideal_local_endpoints  (r, core,          sq, tr, Lbins, &i1, &i2, &k1, &k2);
-      else           profile_local_endpoints(r, core, hmm->gm, sq, tr, Lbins, &i1, &i2, &k1, &k2);
+      if (do_ilocal) ideal_local_endpoints  (r, core,     sq, tr, Lbins, &i1, &i2, &k1, &k2);
+      else           profile_local_endpoints(r, core, gm, sq, tr, Lbins, &i1, &i2, &k1, &k2);
 
       imx->mx[i1-1][i2-1] += 1.;
       kmx->mx[k1-1][k2-1] += 1.; 
@@ -700,7 +497,7 @@ main(int argc, char **argv)
   printf("k matrix values range from %f to %f\n", dmx_upper_min(kmx), dmx_upper_max(kmx));
 
   
-  p7_profile_Destroy(hmm->gm);
+  p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(core);
   p7_hmm_Destroy(hmm);
@@ -790,8 +587,8 @@ ideal_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
      * includes no M state at all.
      */
     all_insert = FALSE;
-    for (; t1 <= t2; t1++) if (tr->st[t1] == p7_STM) break;
-    for (; t2 >= t1; t2--) if (tr->st[t2] == p7_STM) break;
+    for (; t1 <= t2; t1++) if (tr->st[t1] == p7T_M) break;
+    for (; t2 >= t1; t2--) if (tr->st[t2] == p7T_M) break;
     if (t2 < t1) all_insert = TRUE; /* sufficient to check both. */
     i1 = tr->i[t1];  i2 = tr->i[t2];
     k1 = tr->k[t1];  k2 = tr->k[t2];
@@ -891,8 +688,8 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   int failsafe  = 0;
   
   if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslEINVAL, "profile must be unilocal");
-  if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
-  if ((tr  = p7_trace_Create(256))           == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((sq2 = esl_sq_CreateDigital(gm->abc_r))  == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((tr  = p7_trace_Create(256))             == NULL)   { status = eslEMEM; goto ERROR; }
 
   /* sample local alignment from the implicit model */
   if (gm->h2_mode) {
@@ -902,8 +699,8 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   }
     
   /* Get initial trace coords */
-  for (tpos = 0;       tpos < tr->N; tpos++)  if (tr->st[tpos] == p7_STB) { t1 = tpos+1; break; }
-  for (tpos = tr->N-1; tpos >= 0;    tpos--)  if (tr->st[tpos] == p7_STE) { t2 = tpos-1; break; }
+  for (tpos = 0;       tpos < tr->N; tpos++)  if (tr->st[tpos] == p7T_B) { t1 = tpos+1; break; }
+  for (tpos = tr->N-1; tpos >= 0;    tpos--)  if (tr->st[tpos] == p7T_E) { t2 = tpos-1; break; }
   
   /* Match a core trace to this local trace by rejection sampling;
    * this is to let us calculate sequence offsets; see comments above in preamble
@@ -923,13 +720,13 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
    * A core trace can only generate residues from M or I states.
    */
   for (nterm = 0, tpos = 0; tpos < tg1; tpos++) 
-    if (tr2->st[tpos] == p7_STM || tr2->st[tpos] == p7_STI) nterm++;
+    if (tr2->st[tpos] == p7T_M || tr2->st[tpos] == p7T_I) nterm++;
   for (cterm = 0, tpos = tr2->N-1; tpos > tg2; tpos--)
-    if (tr2->st[tpos] == p7_STM || tr2->st[tpos] == p7_STI) cterm++;
+    if (tr2->st[tpos] == p7T_M || tr2->st[tpos] == p7T_I) cterm++;
 
   /* rectify the t2 endpoint, rolling back any trailing D path 
    */
-  for (; t2 >= 0; t2--) if (tr->st[t2] == p7_STM) break;
+  for (; t2 >= 0; t2--) if (tr->st[t2] == p7T_M) break;
   if (t2 < t1) ESL_XEXCEPTION(eslEINCONCEIVABLE, "this only happens on an all-D path through profile");  
   
   /* determine initial endpoint coords from t1 and t2 */

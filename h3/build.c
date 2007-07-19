@@ -323,7 +323,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
     {
       if ((tr[idx] =  p7_trace_Create(msa->alen+2)) == NULL)          goto ERROR; /* +2 = B,E */
 
-      if ((status = p7_trace_Append(tr[idx], p7_STB, 0, 0)) != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr[idx], p7T_B, 0, 0)) != eslOK) goto ERROR; 
       for (k = 0, apos = 1; apos <= msa->alen; apos++)
 	{
 	  if (matassign[apos]) 
@@ -331,16 +331,16 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 	      k++;
 	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
 		{
-		  if ((status = p7_trace_Append(tr[idx], p7_STM, k, apos)) != eslOK) goto ERROR;
+		  if ((status = p7_trace_Append(tr[idx], p7T_M, k, apos)) != eslOK) goto ERROR;
 		}
 	      else if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
 		{
-		  if ((status = p7_trace_Append(tr[idx], p7_STD, k, 0)) != eslOK) goto ERROR;
+		  if ((status = p7_trace_Append(tr[idx], p7T_D, k, 0)) != eslOK) goto ERROR;
 		}
 	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 		{
-		  if (tr[idx]->st[tr[idx]->N-1] != p7_STX) /* allow only one X in a row */
-		    if ((status == p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
+		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X) /* allow only one X in a row */
+		    if ((status == p7_trace_Append(tr[idx], p7T_X, 0, 0)) != eslOK) goto ERROR;
 		}
 	      else
 		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
@@ -349,18 +349,18 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 	    { 			/* insert or nothing */
 	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
 		{
-		  if ((status = p7_trace_Append(tr[idx], p7_STI, k, apos)) != eslOK) goto ERROR;
+		  if ((status = p7_trace_Append(tr[idx], p7T_I, k, apos)) != eslOK) goto ERROR;
 		}
 	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 		{
-		  if (tr[idx]->st[tr[idx]->N-1] != p7_STX)
-		    if ((status = p7_trace_Append(tr[idx], p7_STX, 0, 0)) != eslOK) goto ERROR;
+		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
+		    if ((status = p7_trace_Append(tr[idx], p7T_X, 0, 0)) != eslOK) goto ERROR;
 		}
 	      else if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
 		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
 	    }
 	}
-      if ((status = p7_trace_Append(tr[idx], p7_STE, 0, 0)) != eslOK) goto ERROR;
+      if ((status = p7_trace_Append(tr[idx], p7T_E, 0, 0)) != eslOK) goto ERROR;
 
       /* clean up: deal with DI, ID transitions and other plan7 impossibilities */
       if ((status = trace_doctor(tr[idx], NULL, NULL)) != eslOK) goto ERROR;
@@ -411,16 +411,16 @@ trace_doctor(P7_TRACE *tr, int *ret_ndi, int *ret_nid)
   opos = npos = 0;
   while (opos < tr->N) {
       /* fix implied D->I transitions; D transforms to M, I pulled in */
-    if (tr->st[opos] == p7_STD && tr->st[opos+1] == p7_STI) {
-      tr->st[npos] = p7_STM;
+    if (tr->st[opos] == p7T_D && tr->st[opos+1] == p7T_I) {
+      tr->st[npos] = p7T_M;
       tr->k[npos]  = tr->k[opos];     /* D transforms to M      */
       tr->i[npos]  = tr->i[opos+1];   /* insert char moves back */
       opos += 2;
       npos += 1;
       ndi++;
     } /* fix implied I->D transitions; D transforms to M, I is pushed in */
-    else if (tr->st[opos]== p7_STI && tr->st[opos+1]== p7_STD) {
-      tr->st[npos] = p7_STM;
+    else if (tr->st[opos]== p7T_I && tr->st[opos+1]== p7T_D) {
+      tr->st[npos] = p7T_M;
       tr->k[npos]  = tr->k[opos+1];    /* D transforms to M    */
       tr->i[npos]  = tr->i[opos];      /* insert char moves up */
       opos += 2;
@@ -469,7 +469,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
     for (apos = k = 1; apos <= msa->alen; apos++) 
       if (matassign[apos]) hmm->rf[k++] = msa->rf[apos-1]; /* watch off-by-one in msa's rf */
     hmm->rf[k] = '\0';
-    hmm->flags |= p7_RF;
+    hmm->flags |= p7H_RF;
   }
 
   /* Consensus structure annotation */
@@ -479,7 +479,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
     for (apos = k = 1; apos <= msa->alen; apos++)
       if (matassign[apos]) hmm->cs[k++] = msa->ss_cons[apos-1];
     hmm->cs[k] = '\0';
-    hmm->flags |= p7_CS;
+    hmm->flags |= p7H_CS;
   }
 
   /* Surface accessibility annotation */
@@ -489,7 +489,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
     for (apos = k = 1; apos <= msa->alen; apos++)
       if (matassign[apos]) hmm->ca[k++] = msa->sa_cons[apos-1];
     hmm->ca[k] = '\0';
-    hmm->flags |= p7_CA;
+    hmm->flags |= p7H_CA;
   }
 
   /* The alignment map (1..M in model, 1..alen in alignment) */
@@ -497,7 +497,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
   hmm->map[0] = 0;
   for (apos = k = 1; apos <= msa->alen; apos++)
     if (matassign[apos]) hmm->map[k++] = apos;
-  hmm->flags |= p7_MAP;
+  hmm->flags |= p7H_MAP;
 
   return eslOK;
 

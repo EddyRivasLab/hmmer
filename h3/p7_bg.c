@@ -139,7 +139,7 @@ p7_bg_SetLength(P7_BG *bg, int L)
 /* Function:  p7_bg_NullOne()
  * Incept:    SRE, Mon Apr 23 08:13:26 2007 [Janelia]
  *
- * Purpose:   Calculate the null1 score, for sequence <dsq>
+ * Purpose:   Calculate the null1 lod score, for sequence <dsq>
  *            of length <L> "aligned" to the base null model <bg>. 
  * 
  * Note:      Because the residue composition in null1 <bg> is the
@@ -148,12 +148,9 @@ p7_bg_SetLength(P7_BG *bg, int L)
  *            do here is score null model transitions.
  */
 int
-p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, int *ret_sc)
+p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 {
-  float x;
-
-  x = (float) L * log(bg->p1) + log(1.-bg->p1);
-  *ret_sc = p7_LL2SILO(x, 1.);
+  *ret_sc = (float) L * log(bg->p1) + log(1.-bg->p1);
   return eslOK;
 }
 
