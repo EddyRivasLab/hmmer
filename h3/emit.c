@@ -167,12 +167,19 @@ ERROR:
  *            
  *            Optionally return the sequence and/or its trace in <sq>
  *            and <tr>, respectively. Caller has allocated space for
- *            both of these (though they may need to be
- *            reallocated/grown here). Either can be passed as <NULL>
- *            if unneeded. 
+ *            both of these, though they may get reallocated/grown
+ *            here. Either can be passed as <NULL> if unneeded.
  *            
  *            Only the sequence field is set in the <sq>. Caller must
- *            set the name, plus any other fields it wants to set.
+ *            set the name, plus any other fields it wants to set. If
+ *            the <sq> was created in digital mode, this is the <sq->dsq>;
+ *            if the <sq> was created in text mode, this is <sq->seq>.
+ *            
+ *            <p7_ProfileEmit()> deliberately uses an <ESL_SQ> object
+ *            instead of a plain <ESL_DSQ *> or <char *> string, to
+ *            take advantage of the object's support for dynamic
+ *            reallocation of seq length, and to allow both digital and
+ *            text mode generation.
  *
  * Args:      r    - source of randomness
  *            hmm  - core probabilities of the profile

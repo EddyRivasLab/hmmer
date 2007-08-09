@@ -316,9 +316,9 @@ p7_hmm_Scale(P7_HMM *hmm, double scale)
   int k;
 
   for (k = 0; k <= hmm->M; k++) {
-    esl_vec_FScale(hmm->t[k],   7,           scale);  
-    esl_vec_FScale(hmm->mat[k], hmm->abc->K, scale);  
-    esl_vec_FScale(hmm->ins[k], hmm->abc->K, scale);  
+    esl_vec_FScale(hmm->t[k],   p7H_NTRANSITIONS, scale);  
+    esl_vec_FScale(hmm->mat[k], hmm->abc->K,      scale);  
+    esl_vec_FScale(hmm->ins[k], hmm->abc->K,      scale);  
   }
   return eslOK;
 }

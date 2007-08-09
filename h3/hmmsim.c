@@ -39,12 +39,15 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",            1 },
+  { "-a",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--viterbi", NULL, "obtain alignment length statistics too",     1 },
+  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "verbose: print scores",                           1 },
   { "-L",        eslARG_INT,    "100", NULL, "n>0",     NULL,  NULL, NULL, "length of random target seqs",                    1 },
   { "-N",        eslARG_INT,   "1000", NULL, "n>0",     NULL,  NULL, NULL, "number of random target seqs",                    1 },
 #ifdef HAVE_MPI
   { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "run as an MPI parallel program",                  1 },
 #endif
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",           2 },
+  { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",            2 },
   { "--pfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output P(S>x) plots to <f> in xy format",         2 },
   { "--xfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output bitscores as binary double vector to <f>", 2 },
 
@@ -59,12 +62,17 @@ static ESL_OPTIONS options[] = {
 
   { "--tmin",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set lower bound tail mass for fwd,island",    5 },
   { "--tmax",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set lower bound tail mass for fwd,island",    5 },
-  { "--tstep",   eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set additive step size for tmin...tmax range",5 },
-/* Debugging options */
+  { "--tpoints", eslARG_INT,      "1", NULL, NULL,      NULL,  NULL, NULL, "Set number of tail probs to try",             5 },
+  { "--tlinear", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "Use linear not log spacing of tail probs",    5 },
+
+  /* Debugging options */
   { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                6 },  
   { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 6 },
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   6 },  
   { "--seed",    eslARG_INT,     NULL, NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     6 },  
+
+  /* Experiments used in the H3 paper */
+  { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      7 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -91,6 +99,7 @@ struct cfg_s {
   FILE           *ofp;		/* output file for results (default is stdout) */
   FILE           *survfp;	/* optional output for survival plots */
   FILE           *xfp;		/* optional output for binary score vectors */
+  FILE           *alfp;		/* optional output for alignment lengths */
 };
 
 static char usage[]  = "[-options] <hmmfile>";
@@ -104,12 +113,14 @@ static void serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_master     (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_worker     (ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif 
-static int process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
-static int output_result   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
+static int process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens);
+static int output_result   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens);
 
 #ifdef HAVE_MPI
-static int minimum_mpi_working_buffer(int N, int *ret_wn);
+static int minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn);
 #endif 
+
+static int elide_length_model(P7_PROFILE *gm, P7_BG *bg);
 
 int
 main(int argc, char **argv)
@@ -145,12 +156,16 @@ main(int argc, char **argv)
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
       puts("\ndebugging :");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
+      puts("\nexperiments :");
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != 1) 
     {
       puts("Incorrect number of command line arguments.");
       esl_usage(stdout, argv[0], usage);
+      puts("\nwhere general options are:");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1=docgroup, 2 = indentation; 80=textwidth*/
       printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
       exit(1);
     }
@@ -176,6 +191,7 @@ main(int argc, char **argv)
   cfg.ofp      = NULL;
   cfg.survfp   = NULL;
   cfg.xfp      = NULL;
+  cfg.alfp     = NULL;
 
   p7_bg_SetLength(cfg.bg, esl_opt_GetInteger(go, "-L"));
 
@@ -221,6 +237,7 @@ main(int argc, char **argv)
     if (! esl_opt_IsDefault(go, "-o"))  fclose(cfg.ofp); 
     if (cfg.survfp != NULL)             fclose(cfg.survfp);
     if (cfg.xfp    != NULL)             fclose(cfg.xfp);
+    if (cfg.alfp   != NULL)             fclose(cfg.alfp);
   }
   if (cfg.bg  != NULL) p7_bg_Destroy(cfg.bg);
   if (cfg.abc != NULL) esl_alphabet_Destroy(cfg.abc);
@@ -238,6 +255,7 @@ main(int argc, char **argv)
  *    cfg->ofp     - open output steam
  *    cfg->survfp  - open xmgrace survival plot file 
  *    cfg->xfp     - open binary score file
+ *    cfg->alfp    - open alignment length file
  *
  * Error handling relies on the result pointers being initialized to
  * NULL by the caller.
@@ -279,6 +297,13 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 	ESL_FAIL(eslFAIL, errbuf, "Failed to open --xfile output file %s\n", filename);
     }
 
+  filename = esl_opt_GetString(go, "--afile");
+  if (filename != NULL) 
+    {
+      if ((cfg->alfp = fopen(filename, "w")) == NULL) 
+	ESL_FAIL(eslFAIL, errbuf, "Failed to open --afile output file %s\n", filename);
+    }
+
   return eslOK;
 }
 
@@ -289,12 +314,15 @@ static void
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   P7_HMM     *hmm = NULL;     
-  double     *xv  = NULL;
+  double     *xv  = NULL;	/* results: array of N scores */
+  int        *av  = NULL;	/* optional results: array of N alignment lengths */
   char        errbuf[eslERRBUFSIZE];
   int         status;
 
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) p7_Fail(errbuf);
   if ((xv = malloc(sizeof(double) * cfg->N)) == NULL)       p7_Fail("allocation failed");
+  if (esl_opt_GetBoolean(go, "-a") && 
+      (av = malloc(sizeof(int)    * cfg->N)) == NULL)       p7_Fail("allocation failed");
 
   while ((status = p7_hmmfile_Read(cfg->hfp, &(cfg->abc), &hmm)) != eslEOF) 
     {
@@ -303,12 +331,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);
       else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile);
 
-      if (process_workunit(go, cfg, errbuf, hmm, xv) != eslOK) p7_Fail(errbuf);
-      if (output_result   (go, cfg, errbuf, hmm, xv) != eslOK) p7_Fail(errbuf);
+      if (process_workunit(go, cfg, errbuf, hmm, xv, av) != eslOK) p7_Fail(errbuf);
+      if (output_result   (go, cfg, errbuf, hmm, xv, av) != eslOK) p7_Fail(errbuf);
 
       p7_hmm_Destroy(hmm);      
     }
   free(xv);
+  if (av != NULL) free(av);
 }
 
 
@@ -337,9 +366,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              xstatus       = eslOK; /* changes in the event of a recoverable error */
   P7_HMM          *hmm           = NULL;  /* query HMM                                 */
   P7_HMM         **hmmlist       = NULL;  /* queue of HMMs being worked on, 1..nproc-1 */
-  char            *wbuf          = NULL;  /* working buffer for sending packed profiles to workers. */
+  char            *wbuf          = NULL;  /* working buffer for sending packed profiles and receiving packed results. */
   int              wn            = 0;
-  double          *xv            = NULL;
+  double          *xv            = NULL;  /* results: array of N scores */
+  int             *av            = NULL;  /* optional results: array of N alignment lengths */
   int              have_work     = TRUE;
   int              nproc_working = 0;
   int              wi;
@@ -349,10 +379,12 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   MPI_Status       mpistatus;
 
   /* Master initialization. */
-  if (init_master_cfg(go, cfg, errbuf)        != eslOK)   p7_Fail(errbuf);
-  if (minimum_mpi_working_buffer(cfg->N, &wn) != eslOK)   p7_Fail("mpi pack sizes must have failed");
+  if (init_master_cfg(go, cfg, errbuf)            != eslOK) p7_Fail(errbuf);
+  if (minimum_mpi_working_buffer(go, cfg->N, &wn) != eslOK) p7_Fail("mpi pack sizes must have failed");
   ESL_ALLOC(wbuf,    sizeof(char)     * wn);
   ESL_ALLOC(xv,      sizeof(double)   * cfg->N);
+  if (esl_opt_GetBoolean(go, "-a"))
+    ESL_ALLOC(av,    sizeof(int)      * cfg->N);
   ESL_ALLOC(hmmlist, sizeof(P7_HMM *) * cfg->nproc);
   for (wi = 0; wi < cfg->nproc; wi++) hmmlist[wi] = NULL;
 
@@ -390,8 +422,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      if (MPI_Unpack(wbuf, wn, &pos, &xstatus, 1, MPI_INT, MPI_COMM_WORLD)     != 0)     p7_Fail("mpi unpack failed");
 	      if (xstatus == eslOK) /* worker reported success. Get the results. */
 		{
-		  if (MPI_Unpack(wbuf, wn, &pos, xv, cfg->N, MPI_DOUBLE, MPI_COMM_WORLD) != 0)     p7_Fail("score vector unpack failed");
-		  if ((status = output_result(go, cfg, errbuf, hmmlist[wi], xv))         != eslOK) xstatus = status;
+		  if (MPI_Unpack(wbuf, wn, &pos, xv, cfg->N, MPI_DOUBLE, MPI_COMM_WORLD) != 0)   p7_Fail("score vector unpack failed");
+		  if (esl_opt_GetBoolean(go, "-a") &&
+		      MPI_Unpack(wbuf, wn, &pos, av, cfg->N, MPI_INT,    MPI_COMM_WORLD) != 0)   p7_Fail("alilen vector unpack failed");
+		  if ((status = output_result(go, cfg, errbuf, hmmlist[wi], xv, av))     != eslOK) xstatus = status;
 		}
 	      else	/* worker reported a user error. Get the errbuf. */
 		{
@@ -423,6 +457,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   free(hmmlist);
   free(wbuf);
   free(xv);
+  if (av != NULL) free(av);
   if (xstatus != eslOK) p7_Fail(errbuf);
   else                  return;
 
@@ -430,6 +465,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (hmmlist != NULL) free(hmmlist);
   if (wbuf    != NULL) free(wbuf);
   if (xv      != NULL) free(xv);
+  if (av      != NULL) free(av);
   p7_Fail("Fatal error in mpi_master");
 }
 
@@ -444,30 +480,37 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int             status;
   P7_HMM         *hmm     = NULL;
   char           *wbuf    = NULL;
-  double         *xv      = NULL;
+  double         *xv      = NULL; /* result: array of N scores */
+  int            *av      = NULL; /* optional result: array of N alignment lengths */
   int             wn      = 0;
   char            errbuf[eslERRBUFSIZE];
   int             pos;
  
   /* Worker initializes */
-  if ((status = minimum_mpi_working_buffer(cfg->N, &wn)) != eslOK) xstatus = status;
+  if ((status = minimum_mpi_working_buffer(go, cfg->N, &wn)) != eslOK) xstatus = status;
   ESL_ALLOC(wbuf, wn * sizeof(char));
   ESL_ALLOC(xv,   cfg->N * sizeof(double));
+  if (esl_opt_GetBoolean(go, "-a"))
+    ESL_ALLOC(av, cfg->N * sizeof(int));
 
   /* Main worker loop */
   while (p7_hmm_MPIRecv(0, 0, MPI_COMM_WORLD, &wbuf, &wn, &(cfg->abc), &hmm) == eslOK) 
     {
-      if ((status = process_workunit(go, cfg, errbuf, hmm, xv)) != eslOK) goto CLEANERROR;
+      if ((status = process_workunit(go, cfg, errbuf, hmm, xv, av)) != eslOK) goto CLEANERROR;
 
       pos = 0;
       MPI_Pack(&status, 1,      MPI_INT,    wbuf, wn, &pos, MPI_COMM_WORLD);
       MPI_Pack(xv,      cfg->N, MPI_DOUBLE, wbuf, wn, &pos, MPI_COMM_WORLD);
+      if (esl_opt_GetBoolean(go, "-a"))
+	MPI_Pack(av,    cfg->N, MPI_INT,    wbuf, wn, &pos, MPI_COMM_WORLD);
       MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
 
       p7_hmm_Destroy(hmm);
     }
 
-  if (wbuf != NULL) free(wbuf);
+  free(wbuf);
+  free(xv);
+  if (av != NULL) free(av);
   return;
 
  CLEANERROR:
@@ -477,6 +520,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
   if (wbuf != NULL) free(wbuf);
   if (hmm  != NULL) p7_hmm_Destroy(hmm);
+  if (xv   != NULL) free(xv);
+  if (av   != NULL) free(av);
   return;
 
  ERROR:
@@ -491,14 +536,16 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
  * How those scores are generated is controlled by the application configuration in <cfg>.
  */
 static int
-process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores)
+process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens)
 {
   int             L   = esl_opt_GetInteger(go, "-L");
   P7_PROFILE     *gm  = NULL;
   P7_GMX         *gx  = NULL;
+  P7_TRACE       *tr  = NULL;
   ESL_DSQ        *dsq = NULL;
   int             i;
   int             status;
+  int    scounts[p7T_NSTATETYPES]; /* state usage counts from a trace */
   float  sc;
   float  nullsc;
 
@@ -519,9 +566,12 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNILOCAL);
   else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_GLOCAL);
   else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNIGLOCAL);
-  gx = p7_gmx_Create(gm->M, L);
 
+  if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
+
+  gx = p7_gmx_Create(gm->M, L);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
+  tr = p7_trace_Create(L*2);
   
   /* Collect scores from N random sequences of length L  */
   for (i = 0; i < cfg->N; i++)
@@ -532,22 +582,37 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       else if (esl_opt_GetBoolean(go, "--fwd"))       p7_GForward(dsq, L, gm, gx, &sc);
       else if (esl_opt_GetBoolean(go, "--hybrid"))    p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
 
+      /* Optional: get Viterbi alignment length too. */
+      if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
+	{
+	  p7_GTrace(dsq, L, gm, gx, tr);
+	  p7_trace_StateUseCounts(tr, scounts);
+
+	  /* there's various ways we could counts "alignment length". 
+	   * Here we'll use the total length of model used, in nodes: M+D states.
+           * score vs al would gives us relative entropy / model position.
+	   */
+	  /* alilens[i] = scounts[p7T_D] + scounts[p7T_I]; SRE: temporarily testing this instead */
+	  alilens[i] = scounts[p7T_M] + scounts[p7T_D] + scounts[p7T_I];
+	}
+
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
     }
 
   status = eslOK;
  ERROR:
-  free(dsq);
+  if (dsq != NULL) free(dsq);
   p7_profile_Destroy(gm);
   p7_gmx_Destroy(gx);
+  p7_trace_Destroy(tr);
   if (status == eslEMEM) sprintf(errbuf, "allocation failure");
   return status;
 }
 
 
 static int 
-output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores)
+output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens)
 {
   ESL_HISTOGRAM *h = NULL;
   int            i;
@@ -555,7 +620,15 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   double         x10;
   double         mu, lambda, E10;
   double         mufix, E10fix;
+  double         almean, alvar;	/* alignment length mean and variance (optional output) */
   int            status;
+
+
+  /* Optional output of scores/alignment lengths:
+   */
+  if (cfg->xfp)                      fwrite(scores, sizeof(double), cfg->N, cfg->xfp);
+  if (cfg->alfp)                     for (i = 0; i < cfg->N; i++) fprintf(cfg->alfp, "%d  %.3f\n", alilens[i], scores[i]);
+  if (esl_opt_GetBoolean(go, "-v"))  for (i = 0; i < cfg->N; i++) printf("%.3f\n", scores[i]);
 
   /* Count the scores into a histogram object.  */
   if ((h = esl_histogram_CreateFull(-50., 50., 0.2)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "allocation failed");
@@ -572,41 +645,49 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       esl_gumbel_FitCompleteLoc(scores, cfg->N, 0.693147, &mufix);
       E10fix = cfg->N * esl_gumbel_surv(x10, mufix, 0.693147); 
       
-      fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", hmm->name, tailp, mu, lambda, E10, mufix, E10fix);
+      fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f", hmm->name, tailp, mu, lambda, E10, mufix, E10fix);
+
+      if (esl_opt_GetBoolean(go, "-a")) {
+	esl_stats_IMean(alilens, cfg->N, &almean, &alvar);
+	fprintf(cfg->ofp, " %8.4f %8.4f\n", almean, sqrt(alvar));
+      } else 
+	fprintf(cfg->ofp, "\n");
 
       if (cfg->survfp != NULL) {
 	esl_histogram_PlotSurvival(cfg->survfp, h);
 	esl_gumbel_Plot(cfg->survfp, mu,    lambda,   esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
 	esl_gumbel_Plot(cfg->survfp, mufix, 0.693147, esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
       }
-      
-      if (cfg->xfp) 
-	fwrite(scores, sizeof(double), cfg->N, cfg->xfp);
     }
 
   /* For Forward, fit tail to exponential tails, for a range of tail mass choices. */
   else if (esl_opt_GetBoolean(go, "--fwd"))
     {
-      double  tmin  = esl_opt_GetReal(go, "--tmin");
-      double  tmax  = esl_opt_GetReal(go, "--tmax");
-      double  tstep = esl_opt_GetReal(go, "--tstep");
+      double  tmin      = esl_opt_GetReal(go, "--tmin");
+      double  tmax      = esl_opt_GetReal(go, "--tmax");
+      double  tpoints   = (double) esl_opt_GetInteger(go, "--tpoints");
+      int     do_linear = esl_opt_GetBoolean(go, "--tlinear");
       double *xv;
       int     n;
 
       esl_histogram_GetRank(h, 10, &x10);
 
-      for (tailp = tmin; tailp <= tmax+1e-7; tailp += tstep)
-	{
-	  esl_histogram_GetTailByMass(h, tailp, &xv, &n, NULL);
+      tailp = tmin;
+      do {
+	if (tailp > 1.0)       tailp = 1.0;
+	esl_histogram_GetTailByMass(h, tailp, &xv, &n, NULL);
+	
+	esl_exp_FitComplete(xv, n, &mu, &lambda);
+	E10    = cfg->N * tailp * esl_exp_surv(x10, mu, lambda);
+	mufix  = mu;
+	E10fix = cfg->N * tailp * esl_exp_surv(x10, mu, 0.693147);
+	
+	fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", hmm->name, tailp, mu, lambda, E10, mufix, E10fix);
 
-	  esl_exp_FitComplete(xv, n, &mu, &lambda);
-	  E10    = cfg->N * tailp * esl_exp_surv(x10, mu, lambda);
-	  mufix  = mu;
-	  E10fix = cfg->N * tailp * esl_exp_surv(x10, mu, 0.693147);
-
-	  printf("%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", hmm->name, tailp, mu, lambda, E10, mufix, E10fix);
-
-	}
+	if      (tpoints == 1) break;
+	else if (do_linear)    tailp += (tmax-tmin) / (tpoints-1);
+	else                   tailp *= exp(log(tmax/tmin) / (tpoints-1));
+      } while (tailp <= tmax+1e-7);
 
       if (cfg->survfp) 
 	{
@@ -614,9 +695,6 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	  esl_exp_Plot(cfg->survfp, mu,    lambda,     esl_exp_surv, mu, h->xmax + 5., 0.1);
 	  esl_exp_Plot(cfg->survfp, mu,    0.693147,   esl_exp_surv, mu, h->xmax + 5., 0.1);
 	}
-
-      if (cfg->xfp) 
-	fwrite(xv, sizeof(double), cfg->N, cfg->xfp);
     }
 
 
@@ -633,16 +711,45 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
  * it may even grow larger than that, to hold largest HMM we send.
  */
 static int
-minimum_mpi_working_buffer(int N, int *ret_wn)
+minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn)
 {
-  int ncode, nerr, nresult;
+  int ncode, nerr, nresult, nalen;
 
   *ret_wn = 0;
   if (MPI_Pack_size(1,             MPI_INT,    MPI_COMM_WORLD, &ncode)    != 0) return eslESYS;
   if (MPI_Pack_size(N,             MPI_DOUBLE, MPI_COMM_WORLD, &nresult)  != 0) return eslESYS;
+  if (esl_opt_GetBoolean(go, "-a"))
+    if (MPI_Pack_size(N,           MPI_INT,    MPI_COMM_WORLD, &nalen)    != 0) return eslESYS;
   if (MPI_Pack_size(eslERRBUFSIZE, MPI_CHAR,   MPI_COMM_WORLD, &nerr)     != 0) return eslESYS;
 
-  *ret_wn = ncode + ESL_MAX(nresult, nerr);
+  *ret_wn = ncode + ESL_MAX((nresult+nalen), nerr);
   return eslOK;
 }
 #endif
+
+
+/* elide_length_model()
+ * 
+ * Fix bg->p1 to 350/351, 
+ * then make the N, C, J transition probabilities p1;
+ * this removes H3's length model, and emulates H2 instead.
+ * 
+ * This makes the NN, CC, JJ transitions score 0, and
+ * makes the NB, CE, and JB transitions a fixed penalty
+ * of log(1/351).
+ * 
+ * In general this isn't a good idea. This code is only for
+ * experimental purposes, demonstrating the difference between
+ * H3's improved statistics and the old way.
+ */
+static int 
+elide_length_model(P7_PROFILE *gm, P7_BG *bg)
+{
+  bg->p1 = 350./351.;
+
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = gm->xsc[p7P_J][p7P_LOOP] = log(bg->p1);
+  gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(1.0 - bg->p1);
+  return eslOK;
+}
+
+

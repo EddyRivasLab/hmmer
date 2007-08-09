@@ -369,7 +369,8 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  *           matrix. Because H3 uses floating point scores, and we
  *           can't compare floats for equality, we have to compare
  *           floats for near-equality and therefore, formally, we can
- *           only guarantee a near-optimal traceback. However, the
+ *           only guarantee a near-optimal traceback. However, even in
+ *           the unlikely event that a suboptimal is returned, the
  *           score difference from true optimal will be negligible.
  *           
  * Args:     dsq    - sequence aligned to (digital form) 1..L 
@@ -381,6 +382,12 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  * Return:   <eslOK> on success.
  *           <eslFAIL> if even the optimal path has zero probability;
  *           in this case, the trace is set blank (<tr->N = 0>).
+ *
+ * Note:     Care is taken to evaluate the prev+tsc+emission
+ *           calculations in exactly the same order that Viterbi did
+ *           them, lest you get numerical problems with
+ *           a+b+c = d; d-c != a+b because d,c are nearly equal.
+ *           (This bug appeared in dev: xref J1/121.)
  */
 int
 p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr)
@@ -436,14 +443,13 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
       break;
 
     case p7T_M:			/* M connects from i-1,k-1, or B */
-      sc = MMX(i,k) - MSC(k);
-      if (sc == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
-
-      if      (esl_FCompare(sc, XMX(i-1,p7G_B) + TSC(p7P_BM, k-1), tol) == eslOK) status = p7_trace_Append(tr, p7T_B, 0,   0);
-      else if (esl_FCompare(sc, MMX(i-1,k-1)   + TSC(p7P_MM, k-1), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k-1, i-1);
-      else if (esl_FCompare(sc, IMX(i-1,k-1)   + TSC(p7P_IM, k-1), tol) == eslOK) status = p7_trace_Append(tr, p7T_I, k-1, i-1);
-      else if (esl_FCompare(sc, DMX(i-1,k-1)   + TSC(p7P_DM, k-1), tol) == eslOK) status = p7_trace_Append(tr, p7T_D, k-1, 0);
+      if (MMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
+      if      (esl_FCompare(MMX(i,k), XMX(i-1,p7G_B) + TSC(p7P_BM, k-1) + MSC(k), tol) == eslOK) status = p7_trace_Append(tr, p7T_B, 0,   0);
+      else if (esl_FCompare(MMX(i,k), MMX(i-1,k-1)   + TSC(p7P_MM, k-1) + MSC(k), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k-1, i-1);
+      else if (esl_FCompare(MMX(i,k), IMX(i-1,k-1)   + TSC(p7P_IM, k-1) + MSC(k), tol) == eslOK) status = p7_trace_Append(tr, p7T_I, k-1, i-1);
+      else if (esl_FCompare(MMX(i,k), DMX(i-1,k-1)   + TSC(p7P_DM, k-1) + MSC(k), tol) == eslOK) status = p7_trace_Append(tr, p7T_D, k-1, 0);
       else ESL_XEXCEPTION(eslFAIL, "M at k=%d,i=%d couldn't be traced", k,i);
+
       if (status != eslOK) goto ERROR;
       k--; 
       i--;
@@ -460,11 +466,10 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
       break;
 
     case p7T_I:			/* I connects from M,I at i-1,k*/
-      sc = IMX(i,k) - ISC(k);
-      if (sc == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
+      if (IMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(sc, MMX(i-1,k) + TSC(p7P_MI, k), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k, i-1);
-      else if (esl_FCompare(sc, IMX(i-1,k) + TSC(p7P_II, k), tol) == eslOK) status = p7_trace_Append(tr, p7T_I, k, i-1);
+      if      (esl_FCompare(IMX(i,k), MMX(i-1,k) + TSC(p7P_MI, k) + ISC(k), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k, i-1);
+      else if (esl_FCompare(IMX(i,k), IMX(i-1,k) + TSC(p7P_II, k) + ISC(k), tol) == eslOK) status = p7_trace_Append(tr, p7T_I, k, i-1);
       else ESL_XEXCEPTION(eslFAIL, "I at k=%d,i=%d couldn't be traced", k,i);
       if (status != eslOK) goto ERROR;
       i--;
@@ -519,6 +524,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
 
 
 
+
 /*****************************************************************
  * 3. Benchmark driver.
  *****************************************************************/
@@ -547,6 +553,7 @@ static ESL_OPTIONS options[] = {
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
+  { "--vitscore",eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Viterbi score-only algorithm",           0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -587,15 +594,17 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
 
-  gx = p7_gmx_Create(gm->M, L);
+  if (esl_opt_GetBoolean(go, "--vitscore"))   gx = p7_gmx_Create(gm->M, 2);
+  else                                        gx = p7_gmx_Create(gm->M, L);
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
-      if (esl_opt_GetBoolean(go, "-f")) p7_GForward(dsq, L, gm, gx, &sc);
-      else                              p7_GViterbi(dsq, L, gm, gx, &sc);
+      if      (esl_opt_GetBoolean(go, "-f"))           p7_GForward     (dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "--vitscore"))   p7_GViterbiScore(dsq, L, gm, gx, &sc);
+      else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
 
       p7_bg_NullOne(bg, dsq, L, &nullsc);
       bitscore = (sc - nullsc) / eslCONST_LOG2;

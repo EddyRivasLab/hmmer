@@ -164,11 +164,11 @@ enum p7p_tsc_e {
   p7P_MM = 0, 
   p7P_IM = 1, 
   p7P_DM = 2, 
-  p7P_MD = 3, 
-  p7P_DD = 4, 
-  p7P_MI = 5, 
-  p7P_II = 6, 
-  p7P_BM = 7, 
+  p7P_BM = 3, 
+  p7P_MD = 4, 
+  p7P_DD = 5, 
+  p7P_MI = 6, 
+  p7P_II = 7, 
 };
 #define p7P_NTRANS 8
 
@@ -344,10 +344,11 @@ extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_T
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
 /* dp_generic.c */
-extern int p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
-extern int p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
-extern int p7_GHybrid (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
-extern int p7_GTrace  (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GForward     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
+extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+extern int p7_GViterbiScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 
 /* emit.c */
 extern int p7_CoreEmit   (ESL_RANDOMNESS *r, const P7_HMM *hmm,                                        ESL_SQ *sq, P7_TRACE *tr);

@@ -10,8 +10,8 @@
 
 #include "p7_config.h"
 
-#include <easel.h>
-#include <esl_rootfinder.h>
+#include "easel.h"
+#include "esl_rootfinder.h"
 
 #include "hmmer.h"
 
