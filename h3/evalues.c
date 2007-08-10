@@ -52,10 +52,8 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
 }
 
 
-
-
-/* Function:  p7_Mu()
- * Synopsis:  Determines the local Gumbel mu parameter for a model.
+/* Function:  p7_VMu()
+ * Synopsis:  Determines the local Viterbi Gumbel mu parameter for a model.
  * Incept:    SRE, Mon Aug  6 13:00:57 2007 [Janelia]
  *
  * Purpose:   Given model <gm> configured for local alignment (typically
@@ -90,7 +88,7 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            eventually - need to be sure that fix applies here too.
  */
 int
-p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double *ret_mu)
+p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double *ret_mu)
 {
   P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	 /* DP matrix: L (rows) will grow as needed */
   ESL_DSQ *dsq     = NULL;
@@ -130,9 +128,9 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
 }
 
 
-/* Function:  p7_FVOffset()
- * Synopsis:  Determine Forward-Viterbi score tail offset by brief simulation.
- * Incept:    SRE, Wed Aug  8 11:41:39 2007 [Janelia]
+/* Function:  p7_FMu()
+ * Synopsis:  Determine Forward mu by brief simulation.
+ * Incept:    SRE, Thu Aug  9 15:08:39 2007 [Janelia]
  *
  * Purpose:   Determine the offset of the high scoring tails of Viterbi
  *            and Forward score distributions by a brief
@@ -158,53 +156,18 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
  *
  * Throws:    <eslEMEM> on allocation error, and <*ret_fv> is 0.
  */
-#if 0
 int
-p7_FVOffset(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_HMM *hmm, P7_BG *bg, int L, int N, double *ret_fv)
+p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double tailp, double *ret_fmu)
 {
-  P7_GMX  *gx      = p7_gmx_Create(gm->M, L*2);	     /* DP matrix: L (rows) will grow as needed */
-  ESL_SQ  *sq      = esl_sq_CreateDigital(hmm->abc); /* sampled digital sequence object: will grow as needed */
-  float    fsc, vsc;		                     /* Viterbi, Forward scores         */
-  double   sum = 0.;
-  int      status;
-  int      i;
-  
-  if (sq == NULL || gx == NULL) { status = eslEMEM; goto ERROR; }
-
-  for (i = 0; i < N; i++)
-    {
-      if ((status = p7_ReconfigLength(gm, L))                  != eslOK) goto ERROR; /* configure for generating about L        */
-      if ((status = p7_ProfileEmit(r, hmm, gm, bg, sq, NULL))  != eslOK) goto ERROR; /* NULL=unwanted trace. sq->dsq now set.   */
-      if ((status = p7_gmx_GrowTo(gx, gm->M, sq->n))           != eslOK) goto ERROR;
-      if ((status = p7_ReconfigLength(gm, sq->n))              != eslOK) goto ERROR; /* configure for scoring this seq length n */
-      if ((status = p7_GViterbi(sq->dsq, sq->n, gm, gx, &vsc)) != eslOK) goto ERROR;
-      if ((status = p7_GForward(sq->dsq, sq->n, gm, gx, &fsc)) != eslOK) goto ERROR;
-      sum += fsc-vsc;
-      /*printf("# %.4f %.4f  %.4f\n", fsc/eslCONST_LOG2, vsc/eslCONST_LOG2, (fsc-vsc)/eslCONST_LOG2);*/
-    }
-
-  *ret_fv = (sum / (double) N) / eslCONST_LOG2;
-  esl_sq_Destroy(sq);
-  p7_gmx_Destroy(gx);
-  return eslOK;
-
- ERROR:
-  *ret_fv = 0.;
-  if (sq != NULL) esl_sq_Destroy(sq);
-  if (gx != NULL) p7_gmx_Destroy(gx);
-  return status;
-}
-#endif
-int
-p7_FVOffset(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_HMM *hmm, P7_BG *bg, int L, int N, double *ret_fv)
-{
-  P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	  
+  P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	     /* DP matrix: L (rows) will grow as needed */
   ESL_DSQ *dsq     = NULL;
-  float    fsc, vsc, nullsc;		                  
-  double   sum = 0.;
+  double  *xv      = NULL;
+  float    fsc, nullsc;		                  
+  double   gmu, glam;
   int      status;
   int      i;
 
+  ESL_ALLOC(xv,  sizeof(double)  * N);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   if (gx == NULL) { status = eslEMEM; goto ERROR; }
 
@@ -214,24 +177,22 @@ p7_FVOffset(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_HMM *hmm, P7_BG *bg, int L, in
   for (i = 0; i < N; i++)
     {
       if ((status = esl_rnd_xfIID(r, bg->f, gm->abc_r->K, L, dsq)) != eslOK) goto ERROR;
-      if ((status = p7_GViterbi(dsq, L, gm, gx, &vsc))             != eslOK) goto ERROR;
       if ((status = p7_GForward(dsq, L, gm, gx, &fsc))             != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))            != eslOK) goto ERROR;   
-
-
-      fsc  = (fsc - nullsc) / eslCONST_LOG2;
-      vsc  = (vsc - nullsc) / eslCONST_LOG2;
-      sum += fsc-vsc;
-      printf("# %.4f %.4f %.4f\n", fsc, vsc, fsc-vsc);
+      xv[i] = (fsc - nullsc) / eslCONST_LOG2;
     }
 
-  *ret_fv = (sum / (double) N);
+  if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
+  *ret_fmu = esl_gumbel_invcdf(1.0-tailp, gmu, glam);
+  
+  free(xv);
   free(dsq);
   p7_gmx_Destroy(gx);
   return eslOK;
 
  ERROR:
-  *ret_fv = 0.;
+  *ret_fmu = 0.;
+  if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
   if (gx  != NULL) p7_gmx_Destroy(gx);
   return status;
@@ -243,7 +204,7 @@ p7_FVOffset(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_HMM *hmm, P7_BG *bg, int L, in
  *****************************************************************/
 
 #ifdef p7EVALUES_STATS
-/* mpicc -o stats -g -O2 -I. -L. -I../easel -L../easel -Dp7EVALUES_STATS evalues.c -lhmmer -leasel -lm
+/* gcc -o stats -g -O2 -I. -L. -I../easel -L../easel -Dp7EVALUES_STATS evalues.c -lhmmer -leasel -lm
  * ./stats <hmmfile>
  */
 #include "p7_config.h"
@@ -259,6 +220,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
   { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
+  { "-t",        eslARG_REAL,  "0.05", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -278,11 +240,12 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   double          lambda;
-  double          mu;
-  double          fv_offset;
+  double          vmu;
+  double          fmu;
+  double          tailp = esl_opt_GetReal(go, "-t");
+  int             L     = esl_opt_GetInteger(go, "-L");
+  int             N     = esl_opt_GetInteger(go, "-N");
   int             status;
-  int             L = esl_opt_GetInteger(go, "-L");
-  int             N = esl_opt_GetInteger(go, "-N");
 
   if (esl_opt_IsDefault(go, "-s"))  r = esl_randomness_CreateTimeseeded();
   else                              r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -295,15 +258,14 @@ main(int argc, char **argv)
       p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
 
       p7_Lambda(hmm, bg, &lambda);
-      p7_Mu(r, gm, bg, L, N, lambda, &mu);
-      p7_FVOffset(r, gm, hmm, bg, L, N, &fv_offset);
+      p7_VMu(r, gm, bg, L, N, lambda, &vmu);
+      p7_FMu(r, gm, bg, L, N, tailp,  &fmu);
       
-      printf("%s %.4f %.4f %.4f\n", hmm->name, lambda, mu, fv_offset);
+      printf("%s %.4f %.4f %.4f\n", hmm->name, lambda, vmu, fmu);
 
       p7_hmm_Destroy(hmm);      
       p7_profile_Destroy(gm);
     }
-
 
   p7_hmmfile_Close(hfp);
   p7_bg_Destroy(bg);
