@@ -9,6 +9,7 @@
 #include "easel.h"
 #include "esl_gumbel.h"
 #include "esl_random.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
@@ -16,9 +17,10 @@
  * Synopsis:  Determines length-corrected local lambda parameter.
  * Incept:    SRE, Wed Aug  8 17:54:55 2007 [Janelia]
  *
- * Purpose:   Determine the effective scale parameter $\hat{\lambda}$ 
- *            for model <hmm>, applying both to Gumbel distributions and
- *            exponential tails.
+ * Purpose:   Determine the effective scale parameter $\hat{\lambda}$ to
+ *            use for model <hmm>. This will be applied both to
+ *            Viterbi Gumbel distributions and Forward exponential
+ *            tails.
  *            
  *            The 'true' $\lambda$ is always $\log 2 = 0.693$. The effective
  *            lambda is corrected for edge effect, using the equation
@@ -32,7 +34,9 @@
  *            approximated by the average relative entropy of match
  *            emission distributions.  The 1.44 is an empirically
  *            determined fudge factor [J1/125]. This edge-effect
- *            correction is based largely on \citep{Altschul01}.
+ *            correction is based largely on \citep{Altschul01},
+ *            except for the fudge factor, which we don't understand
+ *            and can't theoretically justify.
  *            
  * Args:      hmm        : model to calculate corrected lambda for
  *            bg         : null model (source of background frequencies)
@@ -57,16 +61,18 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  * Incept:    SRE, Mon Aug  6 13:00:57 2007 [Janelia]
  *
  * Purpose:   Given model <gm> configured for local alignment (typically
- *            multihit, but may be unihit), determine the Gumbel location
- *            parameter $\mu$ by brief simulation. The simulation
- *            generates <N> random sequences of
- *            length <L> using background frequencies in the null
- *            model <bg> and the random number generator <r>; scores
- *            them with <gm> and <bg> with the Viterbi algorithm; and
- *            fitting the resulting distribution to a Gumbel of known
- *            <lambda>.
+ *            multihit, but may be unihit), determine the Gumbel
+ *            location parameter $\mu$ by brief simulation. The
+ *            simulation generates <N> random sequences of length <L>
+ *            using background frequencies in the null model <bg> and
+ *            the random number generator <r>; scores them with <gm>
+ *            and <bg> with the Viterbi algorithm; and fitting the
+ *            resulting distribution to a Gumbel of known <lambda>.
  *            
- *            ... TODO: insert typical N,L and accuracy here...
+ *            Typical default choices are L=100, N=200, which gives
+ *            $\hat{\mu}$ estimates with precision (standard
+ *            deviation) of $\pm$ 0.1 bits, corresponding to an error
+ *            of $\pm$ 8\% in E-value estimates. [J1/135].
  *            
  * Args:      r      :  source of random numbers
  *            gm     :  score profile
@@ -111,8 +117,8 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))            != eslOK) goto ERROR;   
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
     }
-  if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_mu))  != eslOK) goto ERROR;
 
+  if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_mu))  != eslOK) goto ERROR;
   p7_gmx_Destroy(gx);
   free(xv);
   free(dsq);
@@ -143,13 +149,29 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
  *            the simulated sequences, and <N> sequences are sampled,
  *            using <r> as the source of randomness.
  *            
+ *            Typical choices are L=100, N=200, tailp=0.03, which
+ *            typically yield estimates $\hat{\mu}$ with a precision
+ *            (standard deviation) of $\pm$ 0.2 bits, corresponding to
+ *            a $\pm$ 15\% error in E-values. See [J1/135].
+ *            
+ *            The use of Gumbel fitting to a small number of $N$
+ *            samples and the extrapolation of $\hat{\mu}$ from the
+ *            estimated location of the 0.03 tail mass are both
+ *            empirical and carefully optimized against several
+ *            tradeoffs. Most importantly, around this choice of tail
+ *            probability, systematic error introduced by the use of
+ *            the Gumbel is being cancelled by systematic error
+ *            introduced by the use of a higher tail probability than
+ *            the regime in which the exponential tail is a valid
+ *            approximation. See [J1/135] for discussion.
+ *            
  * Args:      r      : source of randomness
  *            gm     : configured profile to sample sequences from
- *            hmm    : core model probabilities for profile
  *            bg     : null model (for background residue frequencies)
  *            L      : mean length model for seq emission from profile
  *            N      : number of sequences to generate
- *            ret_fv : RETURN: mean Forward-Viterbi score difference (in bits)
+ *            tailp  : tail mass from which we will extrapolate mu
+ *            ret_mu : RETURN: estimate for the Forward mu (base of exponential tail)
  *
  * Returns:   <eslOK> on success, and <*ret_fv> is the score difference
  *            in bits.
@@ -181,7 +203,6 @@ p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double tailp,
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))            != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
     }
-
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
   *ret_fmu = esl_gumbel_invcdf(1.0-tailp, gmu, glam);
   
@@ -200,7 +221,7 @@ p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double tailp,
 
 
 /*****************************************************************
- * 
+ * 2. Experiment code.
  *****************************************************************/
 
 #ifdef p7EVALUES_STATS
@@ -275,3 +296,85 @@ main(int argc, char **argv)
   return eslOK;
 }
 #endif /*p7EVALUES_STATS*/
+
+
+#ifdef p7EXP_J1_135
+/* Determining precision and accuracy of mu estimates. [xref J1/135]
+ * gcc -o exp -g -O2 -I. -L. -I../easel -L../easel -Dp7EXP_J1_135 evalues.c -lhmmer -leasel -lm
+ * ./exp <hmmfile>
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_alphabet.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-f",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "fit the Forward mu, not Viterbi mu",             0 },
+  { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
+  { "-l",        eslARG_REAL,"0.6931", NULL, NULL, NULL,  NULL,  NULL, "set lambda param to <x>",                        0 },
+  { "-t",        eslARG_REAL,  "0.05", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
+  { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
+  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
+  { "-Z",        eslARG_INT,   "1000", NULL, NULL,  NULL,  NULL, NULL, "set number of iterations to <n>",                0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "collect test statistics for E-value calculations";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_RANDOMNESS *r       = NULL;
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  double          lambda  = esl_opt_GetReal   (go, "-l");
+  double          tailp   = esl_opt_GetReal   (go, "-t");
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  int             Z       = esl_opt_GetInteger(go, "-Z");
+  double          mu;
+  int             i;
+
+
+  if (esl_opt_IsDefault(go, "-s"))  r = esl_randomness_CreateTimeseeded();
+  else                              r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM from %s", hmmfile);
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+
+  for (i = 0; i < Z; i++)
+    {
+      if (esl_opt_GetBoolean(go, "-f")) p7_FMu(r, gm, bg, L, N, tailp,  &mu);
+      else                              p7_VMu(r, gm, bg, L, N, lambda, &mu);
+      printf("%.4f\n", mu);
+    }
+
+  p7_hmm_Destroy(hmm);      
+  p7_profile_Destroy(gm);
+  p7_hmmfile_Close(hfp);
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return eslOK;
+}
+#endif /*p7EXP_J1_135*/
+
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/

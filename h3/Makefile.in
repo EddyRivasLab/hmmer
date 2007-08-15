@@ -41,6 +41,7 @@ OBJS =  build.o\
 	dp_generic.o\
 	emit.o\
 	errors.o\
+	evalues.o\
 	eweight.o\
 	heatmap.o\
 	hmmer.o\
