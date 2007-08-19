@@ -74,6 +74,11 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            deviation) of $\pm$ 0.1 bits, corresponding to an error
  *            of $\pm$ 8\% in E-value estimates. [J1/135].
  *            
+ *            This function changes the length configuration of both
+ *            <gm> and <bg>. The caller must remember to reconfigure
+ *            both of their length models appropriately for any
+ *            subsequent alignments.
+ *            
  * Args:      r      :  source of random numbers
  *            gm     :  score profile
  *            bg     :  null model
@@ -164,6 +169,11 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
  *            introduced by the use of a higher tail probability than
  *            the regime in which the exponential tail is a valid
  *            approximation. See [J1/135] for discussion.
+ *            
+ *            This function changes the length configuration of both
+ *            <gm> and <bg>. The caller must remember to reconfigure
+ *            both of their length models appropriately for any
+ *            subsequent alignments.
  *            
  * Args:      r      : source of randomness
  *            gm     : configured profile to sample sequences from

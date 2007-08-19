@@ -197,7 +197,8 @@ main(int argc, char **argv)
   cfg.xfp      = NULL;
   cfg.alfp     = NULL;
 
-  p7_bg_SetLength(cfg.bg, esl_opt_GetInteger(go, "-L"));
+  p7_bg_SetLength(cfg.bg, esl_opt_GetInteger(go, "-L"));  /* set the null model background length in both master and workers. */
+
 
   /* This is our stall point, if we need to wait until we get a
    * debugger attached to this process for debugging (especially
@@ -604,7 +605,12 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   p7_Lambda(hmm, cfg->bg, &lambda);
   if      (esl_opt_GetBoolean(go, "--viterbi"))   p7_VMu(cfg->r, gm, cfg->bg, simL, simN, lambda, &mu);
   else if (esl_opt_GetBoolean(go, "--fwd"))       p7_FMu(cfg->r, gm, cfg->bg, simL, simN, simt,   &mu);
-  else if (esl_opt_GetBoolean(go, "--hybrid"))    p7_VMu(cfg->r, gm, cfg->bg, simL, simN, lambda, &mu);
+  else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
+
+  /* The mu determination has changed the length config of <gm> and <bg>; reset them.
+   */
+  p7_ReconfigLength(gm,      L);
+  p7_bg_SetLength  (cfg->bg, L);
 
   /* Collect scores from N random sequences of length L  */
   for (i = 0; i < cfg->N; i++)
