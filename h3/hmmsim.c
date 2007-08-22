@@ -1,8 +1,7 @@
-/* main() for scoring profile HMMs against simulated sequences
+/* hmmsim: scoring profile HMMs against simulated sequences.
  * 
- * Example:
- *  ./hmmbuild Pfam /misc/data0/databases/Pfam/Pfam-A.seed                
- *  qsub -N testrun -j y -R y -b y -cwd -V -pe lam-mpi-tight 32 'mpirun C ./mpi-hmmsim -N 10000 ./Pfam > foo.out'
+ * This program is the main testbed for exploring the statistical
+ * behavior of HMMER3 scores on random sequences.
  * 
  * SRE, Fri Apr 20 14:56:26 2007 [Janelia]
  * SVN $Id$
@@ -34,47 +33,51 @@
 #include "hmmer.h"
 #include "impl_fp.h"
 
-#define ALGORITHMS "--fwd,--viterbi,--hybrid" /* Exclusive choice for scoring algorithms */
+#define ALGORITHMS "--fwd,--vit,--hyb"          /* Exclusive choice for scoring algorithms */
 #define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",            1 },
-  { "-a",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--viterbi", NULL, "obtain alignment length statistics too",     1 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "verbose: print scores",                           1 },
-  { "-L",        eslARG_INT,    "100", NULL, "n>0",     NULL,  NULL, NULL, "length of random target seqs",                    1 },
-  { "-N",        eslARG_INT,   "1000", NULL, "n>0",     NULL,  NULL, NULL, "number of random target seqs",                    1 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",              1 },
+  { "-a",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--vit",NULL, "obtain alignment length statistics too",            1 },
+  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "verbose: print scores",                             1 },
+  { "-L",        eslARG_INT,    "100", NULL, "n>0",     NULL,  NULL, NULL, "length of random target seqs",                      1 },
+  { "-N",        eslARG_INT,   "1000", NULL, "n>0",     NULL,  NULL, NULL, "number of random target seqs",                      1 },
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "run as an MPI parallel program",                  1 },
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "run as an MPI parallel program",                    1 },
 #endif
-  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",           2 },
-  { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",            2 },
-  { "--efile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output E vs. E plots to <f> in xy format",        2 },
-  { "--pfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output P(S>x) plots to <f> in xy format",         2 },
-  { "--xfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output bitscores as binary double vector to <f>", 2 },
+  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             2 },
+  { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",              2 },
+  { "--efile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output E vs. E plots to <f> in xy format",          2 },
+  { "--pfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output P(S>x) plots to <f> in xy format",           2 },
+  { "--xfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output bitscores as binary double vector to <f>",   2 },
 
-  { "--fs",      eslARG_NONE,"default",NULL, NULL,    STYLES,  NULL, NULL, "multihit local alignment",                    3 },
-  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit local alignment",                      3 },
-  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "multihit glocal alignment",                   3 },
-  { "--s",       eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit glocal alignment",                     3 },
+  { "--fs",      eslARG_NONE,"default",NULL, NULL,    STYLES,  NULL, NULL, "multihit local alignment",                          3 },
+  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit local alignment",                            3 },
+  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "multihit glocal alignment",                         3 },
+  { "--s",       eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit glocal alignment",                           3 },
 
-  { "--viterbi", eslARG_NONE,"default",NULL, NULL, ALGORITHMS, NULL, NULL, "Score seqs with the Viterbi algorithm",       4 },
-  { "--fwd",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "Score seqs with the Forward algorithm",       4 },
-  { "--hybrid",  eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "Score seqs with the Hybrid algorithm",        4 },
+  { "--vit",     eslARG_NONE,"default",NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Viterbi algorithm",             4 },
+  { "--fwd",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Forward algorithm",             4 },
+  { "--hyb",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Hybrid algorithm",              4 },
 
-  { "--tmin",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set lower bound tail mass for fwd,island",    5 },
-  { "--tmax",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "Set lower bound tail mass for fwd,island",    5 },
-  { "--tpoints", eslARG_INT,      "1", NULL, NULL,      NULL,  NULL, NULL, "Set number of tail probs to try",             5 },
-  { "--tlinear", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "Use linear not log spacing of tail probs",    5 },
+  { "--tmin",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          5 },
+  { "--tmax",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          5 },
+  { "--tpoints", eslARG_INT,      "1", NULL, NULL,      NULL,  NULL, NULL, "set number of tail probs to try",                   5 },
+  { "--tlinear", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use linear not log spacing of tail probs",          5 },
 
-  /* Debugging options */
-  { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                6 },  
-  { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 6 },
-  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   6 },  
-  { "--seed",    eslARG_INT,     NULL, NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     6 },  
+  { "--evL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Viterbi Gumbel mu fit",     6 },   
+  { "--evN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Viterbi Gumbel mu fit",     6 },   
+  { "--efL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Forward exp tail mu fit",   6 },   
+  { "--efN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Forward exp tail mu fit",   6 },   
+  { "--eft",    eslARG_REAL,   "0.03", NULL, NULL,      NULL,  NULL, NULL, "tail mass for Forward exponential tail mu fit",     6 },   
 
-  /* Experiments used in the H3 paper */
-  { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      7 },
+  { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                7 },  
+  { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 7 },
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   7 },  
+  { "--seed",    eslARG_INT,     NULL, NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
+
+  { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -128,9 +131,10 @@ static int elide_length_model(P7_PROFILE *gm, P7_BG *bg);
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS     *go	   = NULL;      /* command line processing                   */
+  ESL_GETOPTS     *go	   = NULL;   
   ESL_STOPWATCH   *w       = esl_stopwatch_Create();
   struct cfg_s     cfg;
+
 
   /* Process command line options.
    */
@@ -157,10 +161,12 @@ main(int argc, char **argv)
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
       puts("\ncontrolling range of fitted tail masses :");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
-      puts("\ndebugging :");
+      puts("\ncontrolling E-value calibration :");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
-      puts("\nexperiments :");
+      puts("\ndebugging :");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
+      puts("\nexperiments :");
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != 1) 
@@ -172,6 +178,7 @@ main(int argc, char **argv)
       printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
       exit(1);
     }
+
 
   /* Initialize configuration shared across all kinds of masters
    * and workers in this .c file.
@@ -206,15 +213,20 @@ main(int argc, char **argv)
    */
   while (cfg.do_stall); 
 
+
   /* Start timing. */
   esl_stopwatch_Start(w);
 
-  /* Initialize MPI, figure out who we are, and whether we're running
-   * this show (proc 0) or working in it (procs >0)
+
+  /* Main body:
+   * Handed off to serial version or MPI masters and workers as appropriate.
    */
 #ifdef HAVE_MPI
   if (esl_opt_GetBoolean(go, "--mpi")) 
     {
+      /* Initialize MPI, figure out who we are, and whether we're running
+       * this show (proc 0) or working in it (procs >0).
+       */
       cfg.do_mpi = TRUE;
       MPI_Init(&argc, &argv);
       MPI_Comm_rank(MPI_COMM_WORLD, &(cfg.my_rank));
@@ -230,13 +242,19 @@ main(int argc, char **argv)
     }
   else
 #endif /*HAVE_MPI*/
-    {				/*  we're the serial master */
+    {		
+      /* No MPI? Then we're just the serial master. */
       serial_master(go, &cfg);
       esl_stopwatch_Stop(w);
     }      
 
+
+  /* Stop timing. */
   if (cfg.my_rank == 0) esl_stopwatch_Display(stdout, w, "# CPU time: ");
 
+
+
+  /* Clean up and exit. */
   if (cfg.my_rank == 0) {
     if (cfg.hfp    != NULL)             p7_hmmfile_Close(cfg.hfp);
     if (! esl_opt_IsDefault(go, "-o"))  fclose(cfg.ofp); 
@@ -253,7 +271,7 @@ main(int argc, char **argv)
 }
 
 /* init_master_cfg()
- * Called by masters, mpi or serial.
+ * Called by either master version, mpi or serial.
  * Already set:
  *    cfg->hmmfile - command line arg 
  * Sets:
@@ -553,7 +571,11 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif /*HAVE_MPI*/
 
 
-/* A work unit consists of one HMM, <hmm>.
+/* process_workunit()
+ *
+ * This is the routine that actually does the work.
+ *
+ * A work unit consists of one HMM, <hmm>.
  * The result is the <scores> array, which contains an array of N scores;
  * caller provides this memory.
  * How those scores are generated is controlled by the application configuration in <cfg>.
@@ -572,9 +594,11 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   float  sc;
   float  nullsc;
   double mu, lambda;
-  int    simL = 100;
-  int    simN = 200;
-  double simt = 0.03;
+  int    evL          = esl_opt_GetInteger(go, "--evL");
+  int    evN          = esl_opt_GetInteger(go, "--evN");
+  int    efL          = esl_opt_GetInteger(go, "--efL");
+  int    efN          = esl_opt_GetInteger(go, "--efN");
+  double eft          = esl_opt_GetReal   (go, "--eft");
 
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
@@ -603,8 +627,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   /* Determine E-value parameters 
    */
   p7_Lambda(hmm, cfg->bg, &lambda);
-  if      (esl_opt_GetBoolean(go, "--viterbi"))   p7_VMu(cfg->r, gm, cfg->bg, simL, simN, lambda, &mu);
-  else if (esl_opt_GetBoolean(go, "--fwd"))       p7_FMu(cfg->r, gm, cfg->bg, simL, simN, simt,   &mu);
+  if      (esl_opt_GetBoolean(go, "--vit"))  p7_VMu(cfg->r, gm, cfg->bg, evL, evN, lambda, &mu);
+  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_FMu(cfg->r, gm, cfg->bg, efL, efN, eft,    &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* The mu determination has changed the length config of <gm> and <bg>; reset them.
@@ -617,9 +641,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
     {
       esl_rnd_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
 
-      if      (esl_opt_GetBoolean(go, "--viterbi"))   p7_GViterbi(dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "--fwd"))       p7_GForward(dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "--hybrid"))    p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
+      if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "--hyb")) p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
 
       /* Optional: get Viterbi alignment length too. */
       if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
@@ -677,7 +701,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   for (i = 0; i < cfg->N; i++) esl_histogram_Add(h, scores[i]);
 
   /* For viterbi and hybrid, fit data to a Gumbel, either with known lambda or estimated lambda. */
-  if (esl_opt_GetBoolean(go, "--viterbi") || esl_opt_GetBoolean(go, "--hybrid"))
+  if (esl_opt_GetBoolean(go, "--vit") || esl_opt_GetBoolean(go, "--hyb"))
     {
       esl_histogram_GetRank(h, 10, &x10);
 
