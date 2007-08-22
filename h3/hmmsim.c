@@ -783,7 +783,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	fprintf(cfg->efp, "# %s\n", hmm->name);
 	for (i = 1; i <= 1000 && i <= cfg->N; i++) {
 	  esl_histogram_GetRank(h, i, &x);
-	  fprintf(cfg->efp, "%d %g\n", i, cfg->N * 0.03 * esl_exp_surv(x, pmu, plambda));
+	  fprintf(cfg->efp, "%d %g\n", i, cfg->N * esl_exp_surv(x, pmu, plambda));
 	}
 	fprintf(cfg->efp, "&\n");
       }
