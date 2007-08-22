@@ -627,8 +627,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   /* Determine E-value parameters 
    */
   p7_Lambda(hmm, cfg->bg, &lambda);
-  if      (esl_opt_GetBoolean(go, "--vit"))  p7_VMu(cfg->r, gm, cfg->bg, evL, evN, lambda, &mu);
-  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_FMu(cfg->r, gm, cfg->bg, efL, efN, eft,    &mu);
+  if      (esl_opt_GetBoolean(go, "--vit"))  p7_VMu(cfg->r, gm, cfg->bg, evL, evN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_FMu(cfg->r, gm, cfg->bg, efL, efN, lambda, eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* The mu determination has changed the length config of <gm> and <bg>; reset them.
@@ -760,7 +760,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	E10    = cfg->N * tailp * esl_exp_surv(x10, mu,  lambda);
 	mufix  = mu;
 	E10fix = cfg->N * tailp * esl_exp_surv(x10, mu,  0.693147);
-	E10p   = cfg->N * 0.03 * esl_exp_surv(x10, pmu, plambda);
+	E10p   = cfg->N * esl_exp_surv(x10, pmu, plambda); /* the pmu is relative to a P=1.0 tail origin. */
 	
 	fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", 
 		hmm->name, tailp, mu, lambda, E10, mufix, E10fix, pmu, plambda, E10p);

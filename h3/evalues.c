@@ -143,29 +143,38 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
  * Synopsis:  Determine Forward mu by brief simulation.
  * Incept:    SRE, Thu Aug  9 15:08:39 2007 [Janelia]
  *
- * Purpose:   Determine the offset of the high scoring tails of Viterbi
- *            and Forward score distributions by a brief
- *            simulation. Sequences are generated from the profile
- *            <gm>, which the caller should have already configured in
- *            unilocal or multilocal mode, accompanied by core model
- *            probabilities in <hmm> and background model
- *            probabilities in <bg>. The profile's length model 
- *            is set to mean length <L> for the purposes of generating
- *            the simulated sequences, and <N> sequences are sampled,
- *            using <r> as the source of randomness.
+ * Purpose:   Determine the <mu> parameter for an exponential tail fit
+ *            to the Forward score distribution for model <gm>, on
+ *            random sequences with the composition of the background
+ *            model <bg>. This <mu> parameter is for an exponential
+ *            distribution anchored from $P=1.0$, so it's not really a
+ *            tail per se; but it's only an accurate fit in the tail
+ *            of the Forward score distribution, from about $P=0.001$
+ *            or so.
  *            
- *            Typical choices are L=100, N=200, tailp=0.03, which
+ *            The determination of <mu> is done by a brief simulation
+ *            in which we fit a Gumbel distribution to a small number
+ *            of Forward scores of random sequences, and use that to
+ *            predict the location of the tail at probability <tailp>.
+ *            
+ *            The Gumbel is of course inaccurate, but we can use it
+ *            here solely as an empirical distribution to determine
+ *            the location of a reasonable <mu> more accurately on a
+ *            smaller number of samples than we could do with raw
+ *            order statistics. 
+ *            
+ *            Typical choices are L=100, N=200, tailp=0.04, which
  *            typically yield estimates $\hat{\mu}$ with a precision
  *            (standard deviation) of $\pm$ 0.2 bits, corresponding to
  *            a $\pm$ 15\% error in E-values. See [J1/135].
  *            
  *            The use of Gumbel fitting to a small number of $N$
  *            samples and the extrapolation of $\hat{\mu}$ from the
- *            estimated location of the 0.03 tail mass are both
+ *            estimated location of the 0.04 tail mass are both
  *            empirical and carefully optimized against several
  *            tradeoffs. Most importantly, around this choice of tail
- *            probability, systematic error introduced by the use of
- *            the Gumbel is being cancelled by systematic error
+ *            probability, a systematic error introduced by the use of
+ *            the Gumbel fit is being cancelled by systematic error
  *            introduced by the use of a higher tail probability than
  *            the regime in which the exponential tail is a valid
  *            approximation. See [J1/135] for discussion.
@@ -180,6 +189,7 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
  *            bg     : null model (for background residue frequencies)
  *            L      : mean length model for seq emission from profile
  *            N      : number of sequences to generate
+ *            lambda : expected slope of the exponential tail (from p7_Lambda())
  *            tailp  : tail mass from which we will extrapolate mu
  *            ret_mu : RETURN: estimate for the Forward mu (base of exponential tail)
  *
@@ -189,7 +199,7 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
  * Throws:    <eslEMEM> on allocation error, and <*ret_fv> is 0.
  */
 int
-p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double tailp, double *ret_fmu)
+p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_fmu)
 {
   P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	     /* DP matrix: L (rows) will grow as needed */
   ESL_DSQ *dsq     = NULL;
@@ -214,7 +224,13 @@ p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double tailp,
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
     }
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
-  *ret_fmu = esl_gumbel_invcdf(1.0-tailp, gmu, glam);
+
+  /* Explanation of the eqn below: first find the x at which the Gumbel tail
+   * mass is predicted to be equal to tailp. Then back up from that x
+   * by log(tailp)/lambda to set the origin of the exponential tail to 1.0
+   * instead of tailp.
+   */
+  *ret_fmu =  esl_gumbel_invcdf(1.0-tailp, gmu, glam) + (log(tailp) / lambda);
   
   free(xv);
   free(dsq);
@@ -327,7 +343,7 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
   { "-f",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "fit the Forward mu, not Viterbi mu",             0 },
   { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
-  { "-l",        eslARG_REAL,"0.6931", NULL, NULL, NULL,  NULL,  NULL, "set lambda param to <x>",                        0 },
+  { "-l",        eslARG_REAL,"0.6931", NULL, NULL,  NULL,  NULL, NULL, "set lambda param to <x>",                        0 },
   { "-t",        eslARG_REAL,  "0.05", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },

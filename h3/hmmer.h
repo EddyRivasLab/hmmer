@@ -358,6 +358,11 @@ extern int p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE
 extern void p7_Die (char *format, ...);
 extern void p7_Fail(char *format, ...);
 
+/* evalues.c */
+extern int p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda);
+extern int p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,               double *ret_vmu);
+extern int p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_fmu);
+
 /* eweight.c */
 extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
 
