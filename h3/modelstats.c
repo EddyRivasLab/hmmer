@@ -139,6 +139,30 @@ p7_MeanForwardScore(const P7_HMM *hmm, const P7_BG *bg)
 }
 
 
+/* Function:  p7_MeanPositionRelativeEntropy()
+ * Synopsis:  Calculate the mean score per match position, including gap cost.
+ * Incept:    SRE, Thu Sep  6 10:26:14 2007 [Janelia]
+ *
+ * Purpose:   Calculate the mean score (relative entropy) in bits per 
+ *            match (consensus) position in model <hmm>, given background
+ *            model <bg>.
+ *            
+ *            More specifically: the mean bitscore is weighted by
+ *            match state occupancy (match states that aren't used
+ *            much are downweighted), and the log transitions into
+ *            that match state from the previous M, D, or I are
+ *            counted against it, weighted by their probability.
+ *            
+ *            This isn't a complete accounting of the average score
+ *            per model position nor per aligned residue; most
+ *            notably, it doesn't include the contribution of
+ *            entry/exit probabilities. So don't expect to approximate
+ *            average scores by multiplying <*ret_entropy> by <M>.
+ *
+ * Returns:   <eslOK> on success, and <*ret_entropy> is the result.
+ *
+ * Throws:    <eslEMEM> on allocation failure, and <*ret_entropy> is 0.
+ */
 int
 p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy)
 {
@@ -151,7 +175,7 @@ p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_e
   ESL_ALLOC(mocc, sizeof(float) * (hmm->M+1));
   if ((status = p7_hmm_CalculateOccupancy(hmm, mocc)) != eslOK) goto ERROR;
   
-  /* The weighted relative entropy per match emission */
+  /* mre = the weighted relative entropy per match emission */
   for (mre = 0., k = 1; k <= hmm->M; k++)
     mre += mocc[k] * esl_vec_FRelEntropy(hmm->mat[k], bg->f, hmm->abc->K);
   mre /= esl_vec_FSum(mocc+1, hmm->M);

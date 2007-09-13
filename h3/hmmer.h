@@ -512,8 +512,8 @@ extern int  p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *
 
 
 /* seqmodel.c */
-extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, ESL_DMATRIX *P, 
-		       float *f, double tmi, double tii, double tmd, double tdd,
+extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
+		       ESL_DMATRIX *P, float *f, double popen, double pextend,
 		       P7_HMM **ret_hmm);
 
 #endif /*P7_HMMERH_INCLUDED*/

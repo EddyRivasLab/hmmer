@@ -396,7 +396,6 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
   int     i;			/* position in seq (1..L) */
   int     k;			/* position in model (1..M) */
   int     M   = gm->M;
-  float   sc;
   float **dp  = gx->dp;
   float  *xmx = gx->xmx;
   float   tol = 1e-5;
