@@ -128,10 +128,10 @@ p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL, NULL, "use substitution score matrix file from <f>",    0 },
-  { "-q",        eslARG_REAL,   "0.1", NULL, "0<=x<1",NULL,  NULL, NULL, "gap open probability",                           0 },
-  { "-r",        eslARG_REAL,   "0.4", NULL, "0<=x<1",NULL,  NULL, NULL, "gap extend probability",                         0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL, NULL, "use substitution score matrix file from <f>",    0 },
+  { "-q",        eslARG_REAL,   "0.1", NULL, "0<=x<0.5",NULL,  NULL, NULL, "gap open probability",                           0 },
+  { "-r",        eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL, "gap extend probability",                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 

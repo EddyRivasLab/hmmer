@@ -141,12 +141,13 @@ AC_CANONICAL_HOST
 if ((! test -d binaries) && test -d src); then 
 AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
-# Choose the compiler
+# Choose the compiler, and get it in ISO ANSI C (C99) mode.
 #
 AC_PROG_CC
 if test "$CC" = xlc ; then	# IBM's xlc?
   CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
 fi
+AC_PROG_CC_C99
 
 ################################################################
 # Process the ./configure command line
