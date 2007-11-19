@@ -70,7 +70,7 @@ AC_MSG_NOTICE([Configuring HMMER for your system.])
 ################################################################
 
 HMMER_RELCODE="hmmer3_0"
-HMMER_DATE="June 2007"
+HMMER_DATE="November 2007"
 HMMER_COPYRIGHT="Copyright (C) 1992-2007 HHMI Janelia Farm Research Campus"
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPL)"
 HMMER_LICENSETAG=gnu
@@ -78,10 +78,10 @@ HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"
 
 EASEL_RELCODE="easel0_1"
-EASEL_DATE="June 2007"
+EASEL_DATE="November 2007"
 EASEL_COPYRIGHT="Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus"
 EASEL_LICENSE="Freely distributed under the Janelia Software License."
-EASEL_LICENSETAG=jsl
+EASEL_LICENSETAG=gnu
 EASEL_VERSION="0.1"
 EASEL_URL="http://easel.janelia.org/"
 
@@ -138,7 +138,7 @@ AC_CANONICAL_HOST
 #
 # Implements a sneaky if statement that wraps most of the configure.ac M4 code.
 #
-if ((! test -d binaries) && test -d src); then 
+if ((! test -d binaries) && test -d h3); then 
 AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
 # Choose the compiler, and get it in ISO ANSI C (C99) mode.
