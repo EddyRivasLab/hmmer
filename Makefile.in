@@ -1,10 +1,7 @@
 ################################################################# 
 # Makefile for HMMER: Main project directory: installation, documentation
-# CVS $Id$
-###########
-# @LICENSE@
-###########
-
+# SVN $Id$
+#
 # On most Unices, you can build the package without modifying anything 
 #   by just typing "./configure; make".
 #
@@ -88,8 +85,9 @@ all:
 	  echo "binaries/ subdirectory."; \
 	else\
 	  (cd easel;     ${MAKE});\
-	  (cd src;       ${MAKE}; ${MAKE} module);\
-	  (cd testsuite; ${MAKE});\
+	  (cd h3;        ${MAKE});\
+#	  (cd src;       ${MAKE}; ${MAKE} module);\
+#	  (cd testsuite; ${MAKE});\
 	fi
 
 # check: compiles and runs test suite in testsuite/
@@ -314,3 +312,8 @@ optcheck:
 	   ssdk/checkoptions.pl src/$$prog documentation/man/$$prog.man testsuite/exercises.sqc testsuite/exercises-threaded.sqc testsuite/exercises-pvm.sqc;\
 	done
 
+
+
+###########
+# @LICENSE@
+###########

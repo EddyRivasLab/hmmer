@@ -438,16 +438,13 @@ AC_SYS_LARGEFILE
 # Done.
 # Config subdirs and files (except main Makefile, which we defer)
 #
-
-AC_CONFIG_HEADERS(src/p7_config.h)
-AC_CONFIG_FILES(src/Makefile)
 AC_CONFIG_FILES(h3/Makefile)
 AC_CONFIG_HEADERS(h3/p7_config.h)
-AC_CONFIG_FILES(testsuite/Makefile)
+#AC_CONFIG_FILES(testsuite/Makefile)
 
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_FILES([easel/miniapps/Makefile])
-AC_CONFIG_FILES([easel/testsuite/Makefile])
+#AC_CONFIG_FILES([easel/testsuite/Makefile])
 AC_CONFIG_FILES([easel/Makefile])
 
 
