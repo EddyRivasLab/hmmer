@@ -7,28 +7,6 @@
  * 
  *   1. The P7_OPROFILE structure: a score profile.
  *   2. The P7_OMX structure: a dynamic programming matrix.
- *   
- *   
- *-----------------------------------------------------------------------
- * 
- * Note on pointer alignment: many SSE calls require __m128 values to
- * to be aligned on 16-byte boundaries. I believe (but am not sure)
- * that ISO C malloc() must return a pointer properly aligned for the
- * largest legal type, and since __m128t is a legal type, malloc()
- * should return us pointers allocated on 16-byte boundaries. (This is
- * certainly true on my development machine.) Moreover, because we
- * malloc() vectors for SSE ops as arrays of __m128 (rather than, say,
- * loading our __m128 registers from float arrays that might be
- * unaligned), malloc() should *definitely* be returning us pointers
- * aligned on 16-byte boundaries. Nonetheless, to be Extra Double
- * Sure, we manually align all our malloc()'ed pointers anyway: you'll
- * see the idiom of
- *     p_mem = malloc();
- *     p     = (MYTYPE *) (((size_t) p + 15) & (~0xf))
- *     ...
- *     free(p_mem);
- * even though this is almost certainly overkill.
- *-----------------------------------------------------------------------
  * 
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
  * SVN $Id$
@@ -48,7 +26,6 @@
 
 #include "hmmer.h"
 #include "impl_sse.h"
-
 
 
 /*****************************************************************
@@ -194,6 +171,11 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   om->xsc[p7O_C][p7O_MOVE] = gm->xsc[p7P_C][p7P_MOVE];
   om->xsc[p7O_J][p7O_LOOP] = gm->xsc[p7P_J][p7P_LOOP];
   om->xsc[p7O_J][p7O_MOVE] = gm->xsc[p7P_J][p7P_MOVE];
+
+  /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
+  om->dd_bound = -eslINFINITY;	
+  for (k = 2; k < M-1; k++)
+    om->dd_bound = ESL_MAX(p7P_TSC(gm, k, p7P_DD) + p7P_TSC(gm, k+1, p7P_DM) - p7P_TSC(gm, k+1, p7P_BM), om->dd_bound);
 
   om->M    = M;
   om->mode = gm->mode;
@@ -453,11 +435,11 @@ ERROR:
  * 3. The p7_ViterbiFilter() DP implementation.
  *****************************************************************/
 
-/* Return TRUE if any a[i] != b[i]; from Apple's Altivec/SSE migration guide */
+/* Return TRUE if any a[i] > b[i]; from Apple's Altivec/SSE migration guide */
 static int 
-sse_any_neq(__m128 a, __m128 b)
+sse_any_gt(__m128 a, __m128 b)
 {
-  __m128 mask     = _mm_cmpneq_ps(a,b);
+  __m128 mask    = _mm_cmpgt_ps(a,b);
   int   maskbits = _mm_movemask_ps( mask );
   return maskbits != 0;
 }
@@ -492,25 +474,30 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   register __m128 dcv;		   /* delayed storage of D(i,q+1) */
   register __m128 xEv;		   /* E state: keeps max for Mk->E as we go */
   register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128 Dmaxv;           /* keeps track of maximum D cell on row */
   __m128  infv;			   /* -eslINFINITY in a vector */
   float    xE, xB, xC, xJ;	   /* special states */
+  float    Dmax;		   /* maximum D cell on row */
   int i;			   /* counter over sequence positions 1..L */
   int q;			   /* counter over quads 1..nq */
   int z;
-  int nq      = p7O_NQ(om->M);	   /* segment length: # of quads */
+  int Q       = p7O_NQ(om->M);	   /* segment length: # of quads */
   __m128 *dp  = ox->dp;
   __m128 *rsc;			   /* will point at om->rsc[x] for residue x[i] */
   __m128 *tsc;			   /* will point into (and step thru) om->tsc   */
 
+  int   q0;
+
+
   /* Check that the DP matrix is ok for us. */
-  if (nq > ox->allocQ) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  if (Q > ox->allocQ) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M = om->M;
-  ox->Q = nq;
+  ox->Q = Q;
 
   /* Initialization.
    */
   infv = _mm_set1_ps(-eslINFINITY);
-  for (q = 0; q < nq; q++)
+  for (q = 0; q < Q; q++)
     MMX(q) = IMX(q) = DMX(q) = infv;
   xB   = om->xsc[p7O_N][p7O_MOVE];
   xJ   = -eslINFINITY;
@@ -519,19 +506,20 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   for (i = 1; i <= L; i++)
     {
-      rsc  = om->rsc[dsq[i]];
-      tsc  = om->tsc;
-      dcv  = infv;
-      xEv  = infv;
-      xBv  = _mm_set1_ps(xB);
+      rsc   = om->rsc[dsq[i]];
+      tsc   = om->tsc;
+      dcv   = infv;
+      xEv   = infv;
+      Dmaxv = infv;
+      xBv   = _mm_set1_ps(xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. 
        */
-      mpv = MMX(nq-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
-      dpv = DMX(nq-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
-      ipv = IMX(nq-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
+      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
+      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
+      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
       
-      for (q = 0; q < nq; q++)
+      for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
 	  sv   =                _mm_add_ps(xBv, *tsc);  tsc++;
@@ -555,7 +543,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv = _mm_add_ps(sv, *tsc); tsc++;
+	  dcv   = _mm_add_ps(sv, *tsc); tsc++;
+	  Dmaxv = _mm_max_ps(dcv, Dmaxv);
 
 	  /* Calculate and store I(i,q) */
 	  sv     =                _mm_add_ps(mpv, *tsc);  tsc++;
@@ -563,41 +552,90 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  IMX(q) = _mm_add_ps(sv, *rsc);                  rsc++;
 	}	  
 
-      /* Now the "lazy F" loop (sensu [Farrar07]), evaluating the D->D
-       * path.  The dependencies within the current row make this a
-       * pain to parallelize. The hope is that lazy F only requires one
-       * pass; worst case, it requires 4, amounting to serialization.
-       */
-      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-      dcv = _mm_move_ss(dcv, infv);
-      for (z = 0; z < 4; z++)
-      /*      while (sse_any_neq(dcv, DMX(0))) */
-	{
-	  tsc = om->tsc + 7*nq;	/* set tsc to start of the DD's */
-	  for (q = 0; q < nq; q++)
-	    {
-	      DMX(q) = _mm_max_ps(dcv, DMX(q));	/* delayed max! */
-	      dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
-	    }
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
-	}
-
-      
-      /* Now the "special" states */
+      /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation takes the max of xEv's elements  */
       xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
       xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
       _mm_store_ss(&xE, xEv);
 
-      xJ = ESL_MAX(xJ + om->xsc[p7O_J][p7O_LOOP],  xE + om->xsc[p7O_E][p7O_LOOP]);
       xC = ESL_MAX(xC + om->xsc[p7O_C][p7O_LOOP],  xE + om->xsc[p7O_E][p7O_MOVE]);
+      xJ = ESL_MAX(xJ + om->xsc[p7O_J][p7O_LOOP],  xE + om->xsc[p7O_E][p7O_LOOP]);
       xB = ESL_MAX(xJ + om->xsc[p7O_J][p7O_MOVE],
 		   i * om->xsc[p7O_N][p7O_LOOP] + om->xsc[p7O_N][p7O_MOVE]);
-      /* and now xB carries over into next i, and xC carries over after i=L */
+      /* and now xB will carry over into next i, and xC carries over after i=L */
+
+      /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
+       * prove that we don't need to evaluate any D->D paths at all.
+       *
+       * The observation is that if we can show that on the next row,
+       * B->M(i+1,k) paths always dominate M->D->...->D->M(i+1,k) paths
+       * for all k, then we don't need any D->D calculations.
+       * 
+       * The test condition is:
+       *      max_k D(i,k) + max_k ( TDD(k-2) + TDM(k-1) - TBM(k) ) < xB(i)
+       * So:
+       *   max_k (TDD(k-2) + TDM(k-1) - TBM(k)) is precalc'ed in om->dd_bound;
+       *   max_k D(i,k) is why we tracked Dmaxv;
+       *   xB(i) was just calculated above.
+       */
+      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(0, 3, 2, 1)));
+      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(1, 0, 3, 2)));
+      _mm_store_ss(&Dmax, Dmaxv);
+      if (Dmax + om->dd_bound > xB) 
+	{
+	  int z;
+
+	  /* Now we're obligated to do at least one complete DD path to be sure. */
+	  /* dcv has carried through from end of q loop above */
+	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	  dcv = _mm_move_ss(dcv, infv);
+	  tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
+	  for (q = 0; q < Q; q++) 
+	    {
+	      DMX(q) = _mm_max_ps(dcv, DMX(q));	
+	      dcv    = _mm_add_ps(DMX(q), *tsc); tsc++;
+	    }
+
+	  /* We may have to do up to three more passes; the check
+	   * is for whether crossing a segment boundary can improve
+	   * our score. 
+	   */
+	  do {
+	    dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	    dcv = _mm_move_ss(dcv, infv);
+	    tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
+	    for (q = 0; q < Q; q++) 
+	      {
+		if (! sse_any_gt(dcv, DMX(q))) break;
+		DMX(q) = _mm_max_ps(dcv, DMX(q));	
+		dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
+	      }	    
+	  } while (q == Q);
+	}
 
       /* p7_omx_Dump(stdout, ox, i); */
     } /* end loop over sequence residues 1..L */
+
+
+#if 0
+	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	  dcv = _mm_move_ss(dcv, infv);
+	  tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
+
+	  for (z = 0; z < 3; z++)
+	    {
+	      tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
+	      for (q = 0; q < Q; q++)
+		{
+		  DMX(q) = _mm_max_ps(dcv, DMX(q));	/* delayed max! */
+		  dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
+		}
+	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      dcv = _mm_move_ss(dcv, infv);
+	    }
+	}
+#endif
+
 
   /* finally C->T */
   *ret_sc = xC + om->xsc[p7O_C][p7O_MOVE];
@@ -638,6 +676,7 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
   int             L       = 400;
+  int             k;
 
   /* Read a test HMM in, make a local profile out of it */
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -758,6 +797,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7IMPL_SSE_BENCHMARK
 /* gcc -o benchmark-sse -g -O3 -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm
+ * /usr/local/intel/cc/10.0.026/bin/icc -o benchmark-sse -g -O3 -static -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
  * ./benchmark-sse <hmmfile>
  */
 /* As of Tue Jul 17 13:14:43 2007
@@ -829,10 +869,11 @@ main(int argc, char **argv)
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
       
-      /* p7_ViterbiFilter(dsq, L, om, ox, &sc1);  */
-      /* p7_GViterbi     (dsq, L, gm, gx, &sc2); */
-
-      /* printf("sc1= %.4f  sc2 = %.4f\n", sc1, sc2); */
+      p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
+#if 0
+      p7_GViterbi     (dsq, L, gm, gx, &sc2); 
+      printf("%.4f %.4f\n", sc1, sc2);  
+#endif
 
     }
   esl_stopwatch_Stop(w);

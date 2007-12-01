@@ -7,6 +7,8 @@
 #ifndef P7_IMPL_SSE_INCLUDED
 #define P7_IMPL_SSE_INCLUDED
 
+#include <esl_alphabet.h>
+
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 
@@ -78,6 +80,8 @@ typedef struct p7_oprofile_s {
   int mode;
   int M;
   int allocQ;			/* number of quad blocks we're allocated for */
+
+  float dd_bound;
 } P7_OPROFILE;
 
 
@@ -103,7 +107,6 @@ typedef struct p7_omx_s {
   int     Q;			/* when omx is in use: how many quads are valid (= p7O_NQ(M))*/
   int     allocQ;		/* total quads allocated */
 } P7_OMX;
-
 
 
 
