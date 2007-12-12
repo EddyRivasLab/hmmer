@@ -184,7 +184,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
 
 
 /* Function:  p7_oprofile_Dump()
- * Synopsis:  Dump the internals of a P7_OPROFILE
+ * Synopsis:  Dump internals of a <P7_OPROFILE>
  * Incept:    SRE, Mon Nov 26 09:09:30 2007 [Janelia]
  *
  * Purpose:   Dump the internals of <P7_OPROFILE> structure <om>
@@ -209,7 +209,7 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
   int t;
   int M  = om->M;		/* length of the profile */
   int nq = p7O_NQ(M);	        /* segment length; total # of striped quads */
-  float tmp[4];
+  float tmp[p7O_QWIDTH];
 
   /* Residue emissions
    */
@@ -424,8 +424,8 @@ p7_omx_Dump(FILE *ofp, P7_OMX *ox, int rowi)
   return eslOK;
 
 ERROR:
+  free(v);
   return status;
-
 }
 
 
@@ -612,30 +612,15 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      }	    
 	  } while (q == Q);
 	}
+      else
+	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
+	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	  dcv = _mm_move_ss(dcv, infv);
+	  DMX(0) = dcv;
+	}
 
       /* p7_omx_Dump(stdout, ox, i); */
     } /* end loop over sequence residues 1..L */
-
-
-#if 0
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
-	  tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
-
-	  for (z = 0; z < 3; z++)
-	    {
-	      tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
-	      for (q = 0; q < Q; q++)
-		{
-		  DMX(q) = _mm_max_ps(dcv, DMX(q));	/* delayed max! */
-		  dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
-		}
-	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	      dcv = _mm_move_ss(dcv, infv);
-	    }
-	}
-#endif
-
 
   /* finally C->T */
   *ret_sc = xC + om->xsc[p7O_C][p7O_MOVE];
@@ -649,7 +634,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
 #ifdef p7IMPL_SSE_EXAM
 /* Examining internals of a converted optimized profile
-   gcc -msse2 -g -Wall -I. -L. -I../easel -L../easel -o exam -Dp7IMPL_SSE_EXAM impl_sse.c -lhmmer -leasel -lm
+   gcc -msse2 -g -Wall -I. -L. -I../easel -L../easel -o exam-impl-sse -Dp7IMPL_SSE_EXAM impl_sse.c -lhmmer -leasel -lm
    ./exam <hmmfile>
    Pfam 22.0 Bombesin is a good small example (M=14)
  */ 
@@ -799,10 +784,6 @@ main(int argc, char **argv)
 /* gcc -o benchmark-sse -g -O3 -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm
  * /usr/local/intel/cc/10.0.026/bin/icc -o benchmark-sse -g -O3 -static -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
  * ./benchmark-sse <hmmfile>
- */
-/* As of Tue Jul 17 13:14:43 2007
- * 61 Mc/s for Viterbi, 8.6 Mc/s for Forward.
- * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
 #include "p7_config.h"
 

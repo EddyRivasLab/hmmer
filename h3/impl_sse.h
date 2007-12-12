@@ -12,7 +12,15 @@
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 
-#define p7O_NTRANS    8
+#define p7O_QWIDTH  4		/* each _m128 holds four 32-bit IEEE754 floats */
+#define p7O_NQ(M)   ( (((M)-1) / p7O_QWIDTH) + 1)
+
+
+/*****************************************************************
+ * 1. P7_OPROFILE: an optimized score profile
+ *****************************************************************/
+
+ #define p7O_NTRANS    8
 
 enum p7o_xstates_e {  p7O_E = 0,  p7O_N = 1,   p7O_J = 2,   p7O_C = 3 };
 #define p7O_NXSTATES  4
@@ -34,9 +42,6 @@ enum p7o_tsc_e {
   p7O_DD = 7
 };
 #define p7O_NTRANS 8
-
-#define p7O_QWIDTH  4		/* each _m128 holds four 32-bit IEEE754 floats */
-#define p7O_NQ(M)   ( (((M)-1) / p7O_QWIDTH) + 1)
 
 /* 
  * Examples of the layout of the profile, for an M=14 model (xref J2/46):

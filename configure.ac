@@ -156,7 +156,8 @@ AC_PROG_CC_C99
 # --enable-debugging=x    - set debugging level to <x> (1-3)
 #
 # At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
-# Sets the p7_DEBUGLEVEL preprocessor symbol to <x>
+# Sets p7_DEBUGGING preprocessor symbol, which compiles in debugging support.
+# Also sets eslDEBUGLEVEL level, 0-3.
 #
 AC_ARG_ENABLE(debugging,
 [  --enable-debugging      set CFLAGS for debugging
@@ -164,26 +165,26 @@ AC_ARG_ENABLE(debugging,
 [ case $enable_debugging in
    yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
          CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGLEVEL, 0)
+         AC_DEFINE(p7_DEBUGGING,  1)
 	 AC_DEFINE(eslDEBUGLEVEL, 0)
          ;;
      1)  AC_MSG_NOTICE([enabled debugging diagnostics level 1 (low verbosity)])
          CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGLEVEL, 1)
+         AC_DEFINE(p7_DEBUGGING,  1)
 	 AC_DEFINE(eslDEBUGLEVEL, 1)
          ;;
      2)  AC_MSG_NOTICE([enabled debugging diagnostics level 2 (moderate verbosity)])
          CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGLEVEL, 2)
+         AC_DEFINE(p7_DEBUGGING,  1)
 	 AC_DEFINE(eslDEBUGLEVEL, 2)
          ;;
      3)  AC_MSG_NOTICE([enabled debugging diagnostics level 3 (high verbosity)])
          CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGLEVEL, 3)
+         AC_DEFINE(p7_DEBUGGING,  1)
 	 AC_DEFINE(eslDEBUGLEVEL, 3)
          ;;
     no)  AC_MSG_NOTICE([debugging diagnostics disabled])
-         AC_DEFINE(p7_DEBUGLEVEL, 0)
+         AC_DEFINE(p7_DEBUGGING,  0)
 	 AC_DEFINE(eslDEBUGLEVEL, 0)
          ;;
      *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"

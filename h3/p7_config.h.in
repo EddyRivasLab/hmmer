@@ -145,7 +145,7 @@
 
 /* Debugging hooks
  */
-#undef p7_DEBUGLEVEL
+#undef p7_DEBUGGING
 
 #endif /*P7_CONFIGH_INCLUDED*/
 /*****************************************************************

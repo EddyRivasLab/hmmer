@@ -182,9 +182,9 @@ enum p7p_rsc_e {
 
 /* Accessing transition, emission scores */
 /* _BM is specially stored off-by-one: [k-1][p7P_BM] is score for entering at Mk */
-#define p7P_TSC(gm, k, s) (gm->tsc[(k) * p7P_NTRANS + (s)])
-#define p7P_MSC(gm, k, x) (gm->rsc[x][(k) * p7P_NR + p7P_MSC])
-#define p7P_ISC(gm, k, x) (gm->rsc[x][(k) * p7P_NR + p7P_ISC])
+#define p7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
+#define p7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_MSC])
+#define p7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_ISC])
 
 
 typedef struct p7_profile_s {
