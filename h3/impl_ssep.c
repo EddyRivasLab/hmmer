@@ -1,16 +1,9 @@
-/* SSE implementation of Viterbi filter.
+/* SSE implementation of Forward filter
  * 
- * A filter module provides a standard API to the p7_ViterbiFilter()
- * call. The API requires that the module implement support for two
- * objects, a P7_OPROFILE optimized score profile and a P7_OMX
- * optimized dynamic programming matrix.
- * 
- *   1. The P7_OPROFILE structure: a score profile.
- *   2. The P7_OMX structure: a dynamic programming matrix.
- * 
- * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
+ * SRE, Thu Dec 13 08:42:56 2007 [Janelia]
  * SVN $Id$
  */
+
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -25,7 +18,7 @@
 #include "esl_alphabet.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_ssep.h"
 
 
 /*****************************************************************
@@ -34,7 +27,7 @@
 
 /* Function:  p7_oprofile_Create()
  * Synopsis:  Allocate an optimized profile structure.
- * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
+ * Incept:    SRE, Thu Dec 13 08:49:04 2007 [Janelia]
  *
  * Purpose:   Create a profile of <M> nodes for digital alphabet <abc>.
  *
@@ -50,25 +43,24 @@ p7_oprofile_Create(int M, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(om, sizeof(P7_OPROFILE));
-  om->tsc     = NULL;
-  om->rsc     = NULL;
+  om->tp     = NULL;
+  om->rp     = NULL;
 
   /* level 1 */
-  ESL_ALLOC(om->tsc, sizeof(__m128) * nq  * p7O_NTRANS);    
-  ESL_ALLOC(om->rsc, sizeof(__m128 *) * abc->Kp); 
-  om->rsc[0] = NULL;
+  ESL_ALLOC(om->tp, sizeof(__m128) * nq  * p7O_NTRANS);    
+  ESL_ALLOC(om->rp, sizeof(__m128 *) * abc->Kp); 
+  om->rp[0] = NULL;
 
   /* level 2 */
-  ESL_ALLOC(om->rsc[0], sizeof(__m128) * nq  * p7O_NR * abc->Kp);                     
+  ESL_ALLOC(om->rp[0], sizeof(__m128) * nq  * p7O_NR * abc->Kp);                     
   for (x = 1; x < abc->Kp; x++)
-    om->rsc[x] = om->rsc[0] + (x * nq * p7O_NR);
+    om->rp[x] = om->rp[0] + (x * nq * p7O_NR);
 
   /* remaining initializations */
   om->mode   = p7_NO_MODE;
   om->M      = M;
   om->abc    = abc;
   om->allocQ = nq;		/* remember how big our alloc is: allows future reuse */
-  om->dd_bound = 0.;
   return om;
 
  ERROR:
@@ -79,18 +71,18 @@ p7_oprofile_Create(int M, const ESL_ALPHABET *abc)
 
 /* Function:  p7_oprofile_Destroy()
  * Synopsis:  Frees an optimized profile structure.
- * Incept:    SRE, Sun Nov 25 12:22:21 2007 [Casa de Gatos]
+ * Incept:    SRE, Thu Dec 13 08:49:13 2007 [Janelia]
  */
 void
 p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->tsc != NULL) free(om->tsc);
-  if (om->rsc != NULL) 
+  if (om->tp != NULL) free(om->tp);
+  if (om->rp != NULL) 
     {
-      if (om->rsc[0] != NULL) free(om->rsc[0]);
-      free(om->rsc);
+      if (om->rp[0] != NULL) free(om->rp[0]);
+      free(om->rp);
     }
   free(om);
 }
@@ -98,7 +90,7 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 
 /* Function:  p7_oprofile_Convert()
  * Synopsis:  Converts standard profile to an optimized one.
- * Incept:    SRE, Mon Nov 26 07:38:57 2007 [Janelia]
+ * Incept:    SRE, Thu Dec 13 08:49:21 2007 [Janelia]
  */
 int
 p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
@@ -121,15 +113,15 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   for (x = 0; x < gm->abc_r->Kp; x++)
     for (j = 0, k = 1, q = 0; q < nq; q++, k++)
       {
-	om->rsc[x][j++] = _mm_setr_ps((k+0*nq <= M) ? p7P_MSC(gm, k,      x) : -eslINFINITY,
-				      (k+1*nq <= M) ? p7P_MSC(gm, k+nq,   x) : -eslINFINITY,
-				      (k+2*nq <= M) ? p7P_MSC(gm, k+2*nq, x) : -eslINFINITY,
-				      (k+3*nq <= M) ? p7P_MSC(gm, k+3*nq, x) : -eslINFINITY);
+	om->rp[x][j++] = _mm_setr_ps((k+0*nq <= M) ? exp(p7P_MSC(gm, k,      x)) : 0.,
+				     (k+1*nq <= M) ? exp(p7P_MSC(gm, k+nq,   x)) : 0.,
+				     (k+2*nq <= M) ? exp(p7P_MSC(gm, k+2*nq, x)) : 0.,
+				     (k+3*nq <= M) ? exp(p7P_MSC(gm, k+3*nq, x)) : 0.);
 
-	om->rsc[x][j++] = _mm_setr_ps((k+0*nq <= M) ? p7P_ISC(gm, k,      x) : -eslINFINITY,
-				      (k+1*nq <= M) ? p7P_ISC(gm, k+nq,   x) : -eslINFINITY,
-				      (k+2*nq <= M) ? p7P_ISC(gm, k+2*nq, x) : -eslINFINITY,
-				      (k+3*nq <= M) ? p7P_ISC(gm, k+3*nq, x) : -eslINFINITY);
+	om->rp[x][j++] = _mm_setr_ps((k+0*nq <= M) ? exp(p7P_ISC(gm, k,      x)) : 0.,
+				     (k+1*nq <= M) ? exp(p7P_ISC(gm, k+nq,   x)) : 0.,
+				     (k+2*nq <= M) ? exp(p7P_ISC(gm, k+2*nq, x)) : 0.,
+				     (k+3*nq <= M) ? exp(p7P_ISC(gm, k+3*nq, x)) : 0.);
       }
 
   /* Transition scores, all but the DD's. */
@@ -147,46 +139,40 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
 	  case p7O_II: tg = p7P_II;  kb = k;   break; 
 	  }
 
-	  om->tsc[j++] = _mm_setr_ps((kb      < M) ? p7P_TSC(gm, kb,      tg) : -eslINFINITY,
-	                             (kb+1*nq < M) ? p7P_TSC(gm, kb+nq,   tg) : -eslINFINITY,
-				     (kb+2*nq < M) ? p7P_TSC(gm, kb+2*nq, tg) : -eslINFINITY,
-				     (kb+3*nq < M) ? p7P_TSC(gm, kb+3*nq, tg) : -eslINFINITY);
+	  om->tp[j++] = _mm_setr_ps((kb      < M) ? exp(p7P_TSC(gm, kb,      tg)) : 0.,
+				    (kb+1*nq < M) ? exp(p7P_TSC(gm, kb+nq,   tg)) : 0.,
+				    (kb+2*nq < M) ? exp(p7P_TSC(gm, kb+2*nq, tg)) : 0.,
+				    (kb+3*nq < M) ? exp(p7P_TSC(gm, kb+3*nq, tg)) : 0.);
 	}
     }
 
   /* And finally the DD's, which are at the end of the optimized tsc vector; (j is already there) */
   for (k = 1, q = 0; q < nq; q++, k++)
-    om->tsc[j++] = _mm_setr_ps((k+0*nq < M) ? p7P_TSC(gm, k,      p7P_DD) : -eslINFINITY,
-			       (k+1*nq < M) ? p7P_TSC(gm, k+nq,   p7P_DD) : -eslINFINITY,
-			       (k+2*nq < M) ? p7P_TSC(gm, k+2*nq, p7P_DD) : -eslINFINITY,
-			       (k+3*nq < M) ? p7P_TSC(gm, k+3*nq, p7P_DD) : -eslINFINITY);
+    om->tp[j++] = _mm_setr_ps((k+0*nq < M) ? exp(p7P_TSC(gm, k,      p7P_DD)) : 0.,
+			      (k+1*nq < M) ? exp(p7P_TSC(gm, k+nq,   p7P_DD)) : 0.,
+			      (k+2*nq < M) ? exp(p7P_TSC(gm, k+2*nq, p7P_DD)) : 0.,
+			      (k+3*nq < M) ? exp(p7P_TSC(gm, k+3*nq, p7P_DD)) : 0.);
 
   /* Specials. (These are actually in exactly the same order in om and
    *  gm, but we copy in general form anyway.)
    */
-  om->xsc[p7O_E][p7O_LOOP] = gm->xsc[p7P_E][p7P_LOOP];  
-  om->xsc[p7O_E][p7O_MOVE] = gm->xsc[p7P_E][p7P_MOVE];
-  om->xsc[p7O_N][p7O_LOOP] = gm->xsc[p7P_N][p7P_LOOP];
-  om->xsc[p7O_N][p7O_MOVE] = gm->xsc[p7P_N][p7P_MOVE];
-  om->xsc[p7O_C][p7O_LOOP] = gm->xsc[p7P_C][p7P_LOOP];
-  om->xsc[p7O_C][p7O_MOVE] = gm->xsc[p7P_C][p7P_MOVE];
-  om->xsc[p7O_J][p7O_LOOP] = gm->xsc[p7P_J][p7P_LOOP];
-  om->xsc[p7O_J][p7O_MOVE] = gm->xsc[p7P_J][p7P_MOVE];
+  om->xp[p7O_E][p7O_LOOP] = exp(gm->xsc[p7P_E][p7P_LOOP]);  
+  om->xp[p7O_E][p7O_MOVE] = exp(gm->xsc[p7P_E][p7P_MOVE]);
+  om->xp[p7O_N][p7O_LOOP] = exp(gm->xsc[p7P_N][p7P_LOOP]);
+  om->xp[p7O_N][p7O_MOVE] = exp(gm->xsc[p7P_N][p7P_MOVE]);
+  om->xp[p7O_C][p7O_LOOP] = exp(gm->xsc[p7P_C][p7P_LOOP]);
+  om->xp[p7O_C][p7O_MOVE] = exp(gm->xsc[p7P_C][p7P_MOVE]);
+  om->xp[p7O_J][p7O_LOOP] = exp(gm->xsc[p7P_J][p7P_LOOP]);
+  om->xp[p7O_J][p7O_MOVE] = exp(gm->xsc[p7P_J][p7P_MOVE]);
 
-  /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
-  om->dd_bound = -eslINFINITY;	
-  for (k = 2; k < M-1; k++)
-    om->dd_bound = ESL_MAX(p7P_TSC(gm, k, p7P_DD) + p7P_TSC(gm, k+1, p7P_DM) - p7P_TSC(gm, k+1, p7P_BM), om->dd_bound);
-
-  om->M    = M;
   om->mode = gm->mode;
+  om->M    = M;
   return eslOK;
 }
 
-
 /* Function:  p7_oprofile_Dump()
  * Synopsis:  Dump internals of a <P7_OPROFILE>
- * Incept:    SRE, Mon Nov 26 09:09:30 2007 [Janelia]
+ * Incept:    SRE, Thu Dec 13 08:49:30 2007 [Janelia]
  *
  * Purpose:   Dump the internals of <P7_OPROFILE> structure <om>
  *            to stream <fp>; generally for testing or debugging
@@ -205,12 +191,13 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
   int x;			/* counter over residues */
   int q;			/* q counts over total # of striped quads, always 1.. p7O_NQ */
   int j;			/* j counts over position of quads in some particular memory arrangement */
+  int z;
   int k;			/* the usual counter over model nodes 1..M */
   int kb;
   int t;
   int M  = om->M;		/* length of the profile */
   int nq = p7O_NQ(M);	        /* segment length; total # of striped quads */
-  float tmp[p7O_QWIDTH];
+  union { __m128 v; float x[p7O_QWIDTH]; } tmp;
 
   /* Residue emissions
    */
@@ -219,23 +206,29 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
       fprintf(fp, "(%c): ", om->abc->sym[x]); 
       for (k =1, q = 0; q < nq; q++, k++)
 	{
-	  fprintf(fp, "[ %5d %5d %5d ", k, k+nq, k+2*nq);
-	  if (k+3*nq <= M) fprintf(fp, "%5d ] ", k+3*nq);
-	  else             fprintf(fp, "%5s ] ", "xx");
+	  fprintf(fp, "[ ");
+	  for (z = 0; z < p7O_QWIDTH; z++) 
+	    if (k+z*nq <= M) fprintf(fp, "%8d ", k+z*nq);
+	    else             fprintf(fp, "%8s ", "xx");
+	  fprintf(fp, "]");
 	}
 
       fprintf(fp, "\nmat: ");
       for (j = 0, q = 0; q < nq; q++, j+=2)
 	{
-	  _mm_store_ps(tmp, om->rsc[x][j]);
-	  fprintf(fp, "[ %5.2f %5.2f %5.2f %5.2f ] ", tmp[0], tmp[1], tmp[2], tmp[3]);
+	  fprintf(fp, "[ ");
+	  tmp.v = om->rp[x][j];
+	  for (z = 0; z < p7O_QWIDTH; z++) fprintf(fp, "%8.5f ", tmp.x[z]);
+	  fprintf(fp, "]");
 	}
 
       fprintf(fp, "\nins: ");
       for (j = 1, q = 0; q < nq; q++, j+=2)
 	{
-	  _mm_store_ps(tmp, om->rsc[x][j]);
-	  fprintf(fp, "[ %5.2f %5.2f %5.2f %5.2f ] ", tmp[0], tmp[1], tmp[2], tmp[3]);
+	  fprintf(fp, "[ ");
+	  tmp.v = om->rp[x][j];
+	  for (z = 0; z < p7O_QWIDTH; z++) fprintf(fp, "%8.5f ", tmp.x[z]);
+	  fprintf(fp, "]");
 	}
       fprintf(fp, "\n\n");
     }
@@ -264,15 +257,19 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
 	  case p7O_MI: kb = k;                 break; 
 	  case p7O_II: kb = k;                 break; 
 	  }
-	  fprintf(fp, "[ %5d %5d %5d ", kb, kb+nq, kb+2*nq);
-	  if (kb+3*nq <= M) fprintf(fp, "%5d ] ", kb+3*nq);
-	  else              fprintf(fp, "%5s ] ", "xx");
+	  fprintf(fp, "[ ");
+	  for (z = 0; z < p7O_QWIDTH; z++) 
+	    if (kb+z*nq <= M) fprintf(fp, "%8d ", kb+z*nq);
+	    else              fprintf(fp, "%8s ", "xx");
+	  fprintf(fp, "]");
 	}
       fprintf(fp, "\n     ");	  
       for (q = 0; q < nq; q++)
 	{
-	  _mm_store_ps(tmp, om->tsc[q*7 + t]);
-	  fprintf(fp, "[ %5.2f %5.2f %5.2f %5.2f ] ", tmp[0], tmp[1], tmp[2], tmp[3]);
+	  fprintf(fp, "[ ");
+	  tmp.v = om->tp[q*7 + t];
+	  for (z = 0; z < p7O_QWIDTH; z++) fprintf(fp, "%8.5f ", tmp.x[z]);
+	  fprintf(fp, "]");
 	}
       fprintf(fp, "\n");	  
     }
@@ -281,20 +278,34 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
   fprintf(fp, "\ntDD: ");
   for (k =1, q = 0; q < nq; q++, k++)
     {
-      fprintf(fp, "[ %5d %5d %5d ", k, k+nq, k+2*nq);
-      if (k+3*nq <= M) fprintf(fp, "%5d ] ", k+3*nq);
-      else             fprintf(fp, "%5s ] ", "xx");
+      fprintf(fp, "[ ");
+      for (z = 0; z < p7O_QWIDTH; z++) 
+	if (k+z*nq <= M) fprintf(fp, "%8d ", k+z*nq);
+	else             fprintf(fp, "%8s ", "xx");
+      fprintf(fp, "]");
     }
   fprintf(fp, "\n     ");	  
   for (j = nq*7, q = 0; q < nq; q++, j++)
     {
-      _mm_store_ps(tmp, om->tsc[j]);
-      fprintf(fp, "[ %5.2f %5.2f %5.2f %5.2f ] ", tmp[0], tmp[1], tmp[2], tmp[3]);
+      fprintf(fp, "[ ");
+      tmp.v = om->tp[j];
+      for (z = 0; z < p7O_QWIDTH; z++) fprintf(fp, "%8.5f ", tmp.x[z]);
+      fprintf(fp, "]");
     }
   fprintf(fp, "\n");	  
   
+  /* Specials */
+  fprintf(fp, "E->C: %8.5f    E->J: %8.5f\n", om->xp[p7O_E][p7O_MOVE], om->xp[p7O_E][p7O_LOOP]);
+  fprintf(fp, "N->B: %8.5f    N->N: %8.5f\n", om->xp[p7O_N][p7O_MOVE], om->xp[p7O_N][p7O_LOOP]);
+  fprintf(fp, "J->B: %8.5f    J->J: %8.5f\n", om->xp[p7O_J][p7O_MOVE], om->xp[p7O_J][p7O_LOOP]);
+  fprintf(fp, "C->T: %8.5f    C->C: %8.5f\n", om->xp[p7O_C][p7O_MOVE], om->xp[p7O_C][p7O_LOOP]);
+
+  fprintf(fp, "Q:     %d\n",   nq);  
+  fprintf(fp, "M:     %d\n",   M);  
   return eslOK;
 }
+
+
 
 
 /*****************************************************************
@@ -303,7 +314,7 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
 
 /* Function:  p7_omx_Create()
  * Synopsis:  Create an optimized dynamic programming matrix.
- * Incept:    SRE, Tue Nov 27 08:48:20 2007 [Janelia]
+ * Incept:    SRE, Thu Dec 13 08:52:46 2007 [Janelia]
  *
  * Purpose:   Allocates a reusable, resizeable <P7_OMX> for models up to
  *            size <allocM>.
@@ -326,6 +337,10 @@ p7_omx_Create(int allocM)
   ox->M      = 0;
   ox->Q      = 0;
   ox->allocQ = nq;
+#ifdef p7_DEBUGGING
+  ox->debugging = FALSE;
+  ox->dfp       = NULL;
+#endif
   return ox;
 
  ERROR:
@@ -336,7 +351,7 @@ p7_omx_Create(int allocM)
 
 /* Function:  p7_omx_Destroy()
  * Synopsis:  Frees an optimized DP matrix.
- * Incept:    SRE, Tue Nov 27 09:11:42 2007 [Janelia]
+ * Incept:    SRE, Thu Dec 13 08:52:53 2007 [Janelia]
  *
  * Purpose:   Frees optimized DP matrix <ox>.
  *
@@ -351,30 +366,59 @@ p7_omx_Destroy(P7_OMX *ox)
   return;
 }
 
-
-/* Function:  p7_omx_Dump()
- * Synopsis:  Dump an optimized DP matrix for debugging.
- * Incept:    SRE, Wed Nov 28 09:00:38 2007 [Janelia]
+/* Function:  p7_omx_SetDumpMode()
+ * Synopsis:  Set an optimized DP matrix to be dumped for debugging.
+ * Incept:    SRE, Thu Dec 13 10:24:38 2007 [Janelia]
  *
- * Purpose:   Dump DP matrix <ox> to stream <fp> for diagnostics.  The
- *            matrix contains values for one current row <rowi>.
- *
- *            If <rowi> is 0, it prints a header first too.
- * 
- *            Because the SSE implementation uses a one-row matrix,
- *            this routine is generally going to be called (during
- *            code development) from within <p7_ViterbiFilter()>,
- *            after each new row <rowi> is completed.
+ * Purpose:   Whenever a dynamic programming calculation is run, 
+ *            dump DP matrix <ox> to stream <fp> for diagnostics. 
  *            
- *            The output format is coordinated with <p7_gmx_Dump()> to
- *            facilitate comparison to a known answer.
+ *            When the dump mode is on, the DP routine itself actually
+ *            does the dumping, because it has to dump after every row
+ *            is calculated. (We're doing an optimized one-row
+ *            calculation.)
+ *            
+ *            If the code has not been compiled with the
+ *            <p7_DEBUGGING> flag up, this function is a no-op.
+ *
+ * Args:      fp   - output stream for diagnostics (stdout, perhaps)
+ *            ox   - DP matrix to set to debugging mode
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      J2/62.
+ */
+int
+p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox)
+{
+#if p7_DEBUGGING
+  ox->debugging = TRUE;
+  ox->dfp       = fp;
+#endif
+  return eslOK;
+}
+
+#ifdef p7_DEBUGGING
+/* omx_dump_row()
+ * Dump current row of optimized DP matrix for debugging.
+ * SRE, Thu Dec 13 08:53:01 2007 [Janelia]
+ *
+ * Dump DP matrix <ox> current row for diagnostics The matrix contains
+ * values for one current row <rowi>, and this is used as a row label.
+ * 
+ * If <rowi> is 0, it prints a header first too.
+ * 
+ * The output format is coordinated with <p7_gmx_Dump()> to
+ * facilitate comparison to a known answer.
  *
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on allocation failure.
  */
-int
-p7_omx_Dump(FILE *ofp, P7_OMX *ox, int rowi)
+static int
+omx_dump_row(P7_OMX *ox, int rowi, float xE, float xN, float xJ, float xB, float xC)
 {
   int     q,z,k;
   float  *v;
@@ -385,13 +429,16 @@ p7_omx_Dump(FILE *ofp, P7_OMX *ox, int rowi)
   int     status;
 
   ESL_ALLOC(v, sizeof(float) * ((Q*4)+1));
-  v[0] = -eslINFINITY;
+  v[0] = 0.;
 
   if (rowi == 0)
     {
-      fprintf(ofp, "     ");
-      for (k = 0; k <= M;  k++) fprintf(ofp, "%8d ", k);
-      fprintf(ofp, "\n");
+      fprintf(ox->dfp, "      ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%8d ", k);
+      fprintf(ox->dfp, "%8s %8s %8s %8s %8s\n", "E", "N", "J", "B", "C");
+      fprintf(ox->dfp, "      ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%8s ", "--------");
+      fprintf(ox->dfp, "\n");
     }
 
   /* Unpack, unstripe, then print M's. */
@@ -399,27 +446,34 @@ p7_omx_Dump(FILE *ofp, P7_OMX *ox, int rowi)
     _mm_store_ps(tmp, MMX(q));
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp[z];
   }
-  fprintf(ofp, "%3d M ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ofp, "%8.4f ", v[k]);
-  fprintf(ofp, "\n");
+  fprintf(ox->dfp, "%3d M ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%8.5f ", v[k] == 0. ? -eslINFINITY : log(v[k]));
+
+ /* The specials */
+  fprintf(ox->dfp, "%8.5f %8.5f %8.5f %8.5f %8.5f\n",
+	  xE == 0. ? -eslINFINITY : log(xE),
+	  xN == 0. ? -eslINFINITY : log(xN),
+	  xJ == 0. ? -eslINFINITY : log(xJ),
+	  xB == 0. ? -eslINFINITY : log(xB), 
+	  xC == 0. ? -eslINFINITY : log(xC));
 
   /* Unpack, unstripe, then print I's. */
   for (q = 0; q < Q; q++) {
     _mm_store_ps(tmp, IMX(q));
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp[z];
   }
-  fprintf(ofp, "%3d I ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ofp, "%8.4f ", v[k]);
-  fprintf(ofp, "\n");
+  fprintf(ox->dfp, "%3d I ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%8.5f ", v[k] == 0. ? -eslINFINITY : log(v[k]));
+  fprintf(ox->dfp, "\n");
 
   /* Unpack, unstripe, then print D's. */
   for (q = 0; q < Q; q++) {
     _mm_store_ps(tmp, DMX(q));
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp[z];
   }
-  fprintf(ofp, "%3d D ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ofp, "%8.4f ", v[k]);
-  fprintf(ofp, "\n\n");
+  fprintf(ox->dfp, "%3d D ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%8.5f ", v[k] == 0. ? -eslINFINITY : log(v[k]));
+  fprintf(ox->dfp, "\n\n");
 
   free(v);
   return eslOK;
@@ -428,27 +482,18 @@ ERROR:
   free(v);
   return status;
 }
-
-
+#endif /*p7_DEBUGGING*/
 
 
 /*****************************************************************
- * 3. The p7_ViterbiFilter() DP implementation.
+ * 3. The p7_ForwardFilter() DP implementation.
  *****************************************************************/
 
-/* Return TRUE if any a[i] > b[i]; from Apple's Altivec/SSE migration guide */
-static int 
-sse_any_gt(__m128 a, __m128 b)
-{
-  __m128 mask    = _mm_cmpgt_ps(a,b);
-  int   maskbits = _mm_movemask_ps( mask );
-  return maskbits != 0;
-}
 
 
-/* Function:  p7_ViterbiFilter()
- * Synopsis:  Calculates Viterbi score, insanely fast.
- * Incept:    SRE, Tue Nov 27 09:15:24 2007 [Janelia]
+/* Function:  p7_ForwardFilter()
+ * Synopsis:  Calculates Forward score, insanely fast.
+ * Incept:    SRE, Thu Dec 13 08:54:07 2007 [Janelia]
  *
  * Purpose:   
  *
@@ -468,26 +513,22 @@ sse_any_gt(__m128 a, __m128 b)
  *            width) instead of one, as Lindahl did in the H2 Altivec code.  
  */
 int
-p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
   register __m128 mpv, dpv, ipv;   /* previous row values */
   register __m128 sv;		   /* temp storage of 1 curr row value in progress */
   register __m128 dcv;		   /* delayed storage of D(i,q+1) */
   register __m128 xEv;		   /* E state: keeps max for Mk->E as we go */
   register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128 Dmaxv;           /* keeps track of maximum D cell on row */
-  __m128  infv;			   /* -eslINFINITY in a vector */
-  float    xE, xB, xC, xJ;	   /* special states */
-  float    Dmax;		   /* maximum D cell on row */
+  __m128   zerov;
+  float    xN, xE, xB, xC, xJ;	   /* special states */
   int i;			   /* counter over sequence positions 1..L */
   int q;			   /* counter over quads 1..nq */
   int z;
-  int Q       = p7O_NQ(om->M);	   /* segment length: # of quads */
+  int Q       = p7O_NQ(om->M);	   /* segment length: # of vectors */
   __m128 *dp  = ox->dp;
-  __m128 *rsc;			   /* will point at om->rsc[x] for residue x[i] */
-  __m128 *tsc;			   /* will point into (and step thru) om->tsc   */
-
-  int   q0;
+  __m128 *rp;			   /* will point at om->rp[x] for residue x[i] */
+  __m128 *tp;			   /* will point into (and step thru) om->tp   */
 
 
   /* Check that the DP matrix is ok for us. */
@@ -497,38 +538,43 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* Initialization.
    */
-  infv = _mm_set1_ps(-eslINFINITY);
+  zerov = _mm_setzero_ps();
   for (q = 0; q < Q; q++)
-    MMX(q) = IMX(q) = DMX(q) = infv;
-  xB   = om->xsc[p7O_N][p7O_MOVE];
-  xJ   = -eslINFINITY;
-  xC   = -eslINFINITY;
-  /* p7_omx_Dump(stdout, ox, i); */
+    MMX(q) = IMX(q) = DMX(q) = zerov;
+  xE    = 0.;
+  xN    = 1.;
+  xJ    = 0.;
+  xB    = om->xp[p7O_N][p7O_MOVE];
+  xC    = 0.;
+
+
+#if p7_DEBUGGING
+  if (ox->debugging) omx_dump_row(ox, 0, xE, xN, xJ, xB, xC);   
+#endif
 
   for (i = 1; i <= L; i++)
     {
-      rsc   = om->rsc[dsq[i]];
-      tsc   = om->tsc;
-      dcv   = infv;
-      xEv   = infv;
-      Dmaxv = infv;
+      rp    = om->rp[dsq[i]];
+      tp    = om->tp;
+      dcv   = _mm_setzero_ps();
+      xEv   = _mm_setzero_ps();
       xBv   = _mm_set1_ps(xB);
 
-      /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. 
+      /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
        */
-      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
-      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
-      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
+      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
+      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
+      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
       
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =                _mm_add_ps(xBv, *tsc);  tsc++;
-	  sv   = _mm_max_ps(sv, _mm_add_ps(mpv, *tsc)); tsc++;
-	  sv   = _mm_max_ps(sv, _mm_add_ps(ipv, *tsc)); tsc++;
-	  sv   = _mm_max_ps(sv, _mm_add_ps(dpv, *tsc)); tsc++;
-	  sv   = _mm_add_ps(sv, *rsc);                  rsc++;
-	  xEv  = _mm_max_ps(xEv, sv);
+	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
+	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
+	  sv   = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
+	  sv   = _mm_add_ps(sv, _mm_mul_ps(dpv, *tp)); tp++;
+	  sv   = _mm_mul_ps(sv, *rp);                  rp++;
+	  xEv  = _mm_add_ps(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
@@ -544,87 +590,103 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = _mm_add_ps(sv, *tsc); tsc++;
-	  Dmaxv = _mm_max_ps(dcv, Dmaxv);
+	  dcv   = _mm_mul_ps(sv, *tp); tp++;
 
 	  /* Calculate and store I(i,q) */
-	  sv     =                _mm_add_ps(mpv, *tsc);  tsc++;
-	  sv     = _mm_max_ps(sv, _mm_add_ps(ipv, *tsc)); tsc++;
-	  IMX(q) = _mm_add_ps(sv, *rsc);                  rsc++;
+	  sv     =                _mm_mul_ps(mpv, *tp);  tp++;
+	  sv     = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
+	  IMX(q) = _mm_mul_ps(sv, *rp);                  rp++;
 	}	  
 
-      /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      /* The following incantation takes the max of xEv's elements  */
-      xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
-      xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
+      /* Now the DD paths. We would rather not serialize them but 
+       * in an accurate Forward calculation, we have few options.
+       */
+      /* dcv has carried through from end of q loop above; store it 
+       * in first pass, we add M->D and D->D path into DMX
+       */
+      /* We're almost certainly're obligated to do at least one complete 
+       * DD path to be sure: 
+       */
+      dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+      dcv    = _mm_move_ss(dcv, zerov);
+      DMX(0) = zerov;
+      tp     = om->tp + 7*Q;	/* set tp to start of the DD's */
+      for (q = 0; q < Q; q++) 
+	{
+	  DMX(q) = _mm_add_ps(dcv, DMX(q));	
+	  dcv    = _mm_mul_ps(DMX(q), *tp); tp++; /* extend DMX(q), so we include M->D and D->D paths */
+	}
+
+      /* now. on small models, it seems best (empirically) to just go
+       * ahead and serialize. on large models, we can do a bit better,
+       * by testing for when dcv (DD path) accrued to DMX(q) is below
+       * machine epsilon for all q, in which case we know DMX(q) are all
+       * at their final values. The tradeoff point is (empirically) somewhere around M=100,
+       * at least on my desktop. We don't worry about the conditional here;
+       * it's outside any inner loops.
+       */
+      if (om->M < 100)
+	{			/* Fully serialized version */
+	  for (z = 1; z < 4; z++)
+	    {
+	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      dcv = _mm_move_ss(dcv, zerov);
+	      tp = om->tp + 7*Q;	/* set tp to start of the DD's */
+	      for (q = 0; q < Q; q++) 
+		{
+		  DMX(q) = _mm_add_ps(dcv, DMX(q));	
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
+		}	    
+	    }
+	} 
+      else
+	{			/* Slightly parallelized version, but which incurs some overhead */
+	  for (z = 1; z < 4; z++)
+	    {
+	      register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
+
+	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      dcv = _mm_move_ss(dcv, zerov);
+	      tp  = om->tp + 7*Q;	/* set tp to start of the DD's */
+	      cv  = zerov;
+	      for (q = 0; q < Q; q++) 
+		{
+		  sv     = _mm_add_ps(dcv, DMX(q));	
+		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
+		  DMX(q) = sv;	                            /* store new DMX(q) */
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;        /* note, extend dcv, not DMX(q); only adding DD paths now */
+		}	    
+	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
+	    }
+	}
+
+      /* Add D's to xEv */
+      for (q = 0; q < Q; q++) 
+	xEv = _mm_add_ps(DMX(q), xEv);
+
+      /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
+      /* The following incantation is a horizontal sum of xEv's elements  */
+      /* These must follow DD calculations, because D's contribute to E in Forward
+       * (as opposed to Viterbi)
+       */
+      xEv = _mm_add_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
+      xEv = _mm_add_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
       _mm_store_ss(&xE, xEv);
 
-      xC = ESL_MAX(xC + om->xsc[p7O_C][p7O_LOOP],  xE + om->xsc[p7O_E][p7O_MOVE]);
-      xJ = ESL_MAX(xJ + om->xsc[p7O_J][p7O_LOOP],  xE + om->xsc[p7O_E][p7O_LOOP]);
-      xB = ESL_MAX(xJ + om->xsc[p7O_J][p7O_MOVE],
-		   i * om->xsc[p7O_N][p7O_LOOP] + om->xsc[p7O_N][p7O_MOVE]);
+      xN = xN * om->xp[p7O_N][p7O_LOOP];
+      xC = (xC * om->xp[p7O_C][p7O_LOOP]) +  (xE * om->xp[p7O_E][p7O_MOVE]);
+      xJ = (xJ * om->xp[p7O_J][p7O_LOOP]) +  (xE * om->xp[p7O_E][p7O_LOOP]);
+      xB = (xJ * om->xp[p7O_J][p7O_MOVE]) +  (xN * om->xp[p7O_N][p7O_MOVE]);
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
-      /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
-       * prove that we don't need to evaluate any D->D paths at all.
-       *
-       * The observation is that if we can show that on the next row,
-       * B->M(i+1,k) paths always dominate M->D->...->D->M(i+1,k) paths
-       * for all k, then we don't need any D->D calculations.
-       * 
-       * The test condition is:
-       *      max_k D(i,k) + max_k ( TDD(k-2) + TDM(k-1) - TBM(k) ) < xB(i)
-       * So:
-       *   max_k (TDD(k-2) + TDM(k-1) - TBM(k)) is precalc'ed in om->dd_bound;
-       *   max_k D(i,k) is why we tracked Dmaxv;
-       *   xB(i) was just calculated above.
-       */
-      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(0, 3, 2, 1)));
-      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(1, 0, 3, 2)));
-      _mm_store_ss(&Dmax, Dmaxv);
-      if (Dmax + om->dd_bound > xB) 
-	{
-	  int z;
 
-	  /* Now we're obligated to do at least one complete DD path to be sure. */
-	  /* dcv has carried through from end of q loop above */
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
-	  tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
-	  for (q = 0; q < Q; q++) 
-	    {
-	      DMX(q) = _mm_max_ps(dcv, DMX(q));	
-	      dcv    = _mm_add_ps(DMX(q), *tsc); tsc++;
-	    }
-
-	  /* We may have to do up to three more passes; the check
-	   * is for whether crossing a segment boundary can improve
-	   * our score. 
-	   */
-	  do {
-	    dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	    dcv = _mm_move_ss(dcv, infv);
-	    tsc = om->tsc + 7*Q;	/* set tsc to start of the DD's */
-	    for (q = 0; q < Q; q++) 
-	      {
-		if (! sse_any_gt(dcv, DMX(q))) break;
-		DMX(q) = _mm_max_ps(dcv, DMX(q));	
-		dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
-	      }	    
-	  } while (q == Q);
-	}
-      else
-	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
-	  DMX(0) = dcv;
-	}
-
-      /* p7_omx_Dump(stdout, ox, i); */
+#if p7_DEBUGGING
+      if (ox->debugging) omx_dump_row(ox, i, xE, xN, xJ, xB, xC);   
+#endif
     } /* end loop over sequence residues 1..L */
 
-  /* finally C->T */
-  *ret_sc = xC + om->xsc[p7O_C][p7O_MOVE];
+  /* finally C->T, and flip back to log space */
+  *ret_sc  = log(xC * om->xp[p7O_C][p7O_MOVE]);
   return eslOK;
 }
 
@@ -633,9 +695,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  * Exam drivers.
  *****************************************************************/
 
-#ifdef p7IMPL_SSE_EXAM
+#ifdef p7IMPL_SSEP_EXAM
 /* Examining internals of a converted optimized profile
-   gcc -msse2 -g -Wall -I. -L. -I../easel -L../easel -o exam-impl-sse -Dp7IMPL_SSE_EXAM impl_sse.c -lhmmer -leasel -lm
+   gcc -msse2 -g -Wall -I. -L. -I../easel -L../easel -o exam-impl-ssep -Dp7IMPL_SSEP_EXAM impl_ssep.c -lhmmer -leasel -lm
    ./exam <hmmfile>
    Pfam 22.0 Bombesin is a good small example (M=14)
  */ 
@@ -662,7 +724,6 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
   int             L       = 400;
-  int             k;
 
   /* Read a test HMM in, make a local profile out of it */
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -686,29 +747,29 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return eslOK;
 }
-#endif /*p7IMPL_SSE_EXAM*/
+#endif /*p7IMPL_SSEP_EXAM*/
 
 
-#ifdef p7IMPL_SSE_EXAM2
+#ifdef p7IMPL_SSEP_EXAM2
 /* Comparing internals of small DP matrices
-   gcc -msse2 -g -Wall -I. -L. -I../easel -L../easel -o exam -Dp7IMPL_SSE_EXAM2 impl_sse.c -lhmmer -leasel -lm
+   gcc -msse2 -g -Wall -I. -L. -I../easel -L../easel -o exam -Dp7IMPL_SSEP_EXAM2 impl_ssep.c -lhmmer -leasel -lm
    ./exam <hmmfile> <seqfile>
 
    Example alignment: 
-   # STOCKHOLM 1.0
-   foo1  GAATTC
-   foo2  GAATTC
-   //
+# STOCKHOLM 1.0
+foo1  GAATTC
+foo2  GAATTC
+//
    Example sequence:
-   >foo3
-   GAATTC
+>foo3
+GAATTC
  */ 
 #include "esl_getopts.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",          0 },
+ {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
 static char banner[] = "output internals of dp_generic vs. SSE DP matrices for debugging";
@@ -751,12 +812,14 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
+  p7_oprofile_Dump(stdout, om);
+ 
   ox = p7_omx_Create(gm->M);
   gx = p7_gmx_Create(gm->M, sq->n);
+  p7_omx_SetDumpMode(stdout, ox);
 
-  p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &sc1); 
-
-  p7_GViterbi     (sq->dsq, sq->n, gm, gx, &sc2);
+  p7_ForwardFilter(sq->dsq, sq->n, om, ox, &sc1); 
+  p7_GForward     (sq->dsq, sq->n, gm, gx, &sc2);
   p7_gmx_Dump(stdout, gx);
 
   printf("raw score from SSE:        %f\n", sc1);
@@ -775,16 +838,21 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7IMPL_SSE_EXAM2*/
+#endif /*p7IMPL_SSEP_EXAM2*/
+
 
 
 /*****************************************************************
  * Benchmark driver.
  *****************************************************************/
-#ifdef p7IMPL_SSE_BENCHMARK
-/* gcc -o benchmark-sse -g -O3 -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm
- * /usr/local/intel/cc/10.0.026/bin/icc -o benchmark-sse -g -O3 -static -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
- * ./benchmark-sse <hmmfile>
+#ifdef p7IMPL_SSEP_BENCHMARK
+/* gcc -o benchmark-ssep -g -O3 -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSEP_BENCHMARK impl_ssep.c -lhmmer -leasel -lm
+ * icc -o benchmark-ssep -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSEP_BENCHMARK impl_ssep.c -lhmmer -leasel -lm 
+ * icc -o benchmark-ssep -g -Wall -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSEP_BENCHMARK impl_ssep.c -lhmmer -leasel -lm 
+ * 
+ *   ./benchmark-ssep <hmmfile>         runs benchmark
+ *   ./benchmark-ssep -b <hmmfile>      gets baseline time to subtract: just random seq generation
+ *   ./benchmark-ssep -c <hmmfile>      compare scores of SSE to generic impl
  */
 #include "p7_config.h"
 
@@ -798,12 +866,15 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
-  { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",               0 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
+  { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "compare scores of generic, SSE DP        (debug)", 0 }, 
+  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
+  { "-g",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "time the generic (serial) version",                0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -850,16 +921,20 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
-      
-      p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
-#if 0
-      p7_GViterbi     (dsq, L, gm, gx, &sc2); 
-      printf("%.4f %.4f\n", sc1, sc2);  
-#endif
 
+      if (! esl_opt_GetBoolean(go, "-b")) {
+	if (esl_opt_GetBoolean(go, "-g")) p7_GForward     (dsq, L, gm, gx, &sc1);   
+	else                              p7_ForwardFilter(dsq, L, om, ox, &sc1);   
+
+	if (esl_opt_GetBoolean(go, "-c")) {
+	  p7_GForward     (dsq, L, gm, gx, &sc2); 
+	  printf("%.4f %.4f\n", sc1, sc2);  
+	}
+      }
     }
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("# M = %d\n", gm->M);
 
   free(dsq);
   p7_omx_Destroy(ox);
@@ -875,5 +950,4 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7DP_GENERIC_BENCHMARK*/
-
+#endif 

@@ -77,9 +77,13 @@ p7_FLogsumInit(void)
 float
 p7_FLogsum(float s1, float s2)
 {
+#if 0
+  return (log(exp(s1) + exp(s2))); /* SRE: While debugging SSE impl. Remember to remove! */
+#endif
   const float max = ESL_MAX(s1, s2);
   const float min = ESL_MIN(s1, s2);
   return  (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
+
 } 
 
 

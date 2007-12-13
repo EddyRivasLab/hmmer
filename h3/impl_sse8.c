@@ -462,10 +462,10 @@ p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox)
  * Dump current row of optimized DP matrix for debugging.
  * SRE, Sun Dec  9 15:36:04 2007 [Janelia]
  *
- * Dump DP matrix row <rowi> in <ox> to stream <fp> for diagnostics. 
+ * Dump DP matrix row <rowi> in <ox> for diagnostics. 
  *
  * If <rowi> is 0, it prints a header first too.
- *            
+ *             
  * The output format is coordinated with <p7_gmx_Dump()> to
  * facilitate comparison to a known answer.
  */
