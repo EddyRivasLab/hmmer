@@ -952,8 +952,9 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * Benchmark driver.
+ * Benchmark drivers.
  *****************************************************************/
+
 #ifdef p7IMPL_SSE8_BENCHMARK
 /* gcc -o benchmark-sse8 -g -O3 -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE8_BENCHMARK impl_sse8.c -lhmmer -leasel -lm
  * icc -o benchmark-sse8 -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE8_BENCHMARK impl_sse8.c -lhmmer -leasel -lm 
@@ -1039,8 +1040,11 @@ main(int argc, char **argv)
 
 	if (esl_opt_GetBoolean(go, "-c")) {
 	  p7_GViterbi     (dsq, L, gm, gx, &sc2); 
-	  if (esl_opt_GetBoolean(go, "-x")) sc2 /= om->scale;
-	  
+	  if (esl_opt_GetBoolean(go, "-x")) {
+	    sc2 /= om->scale;
+	    if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
+	    else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+	  }	
 	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
       }
@@ -1064,3 +1068,76 @@ main(int argc, char **argv)
   return 0;
 }
 #endif 
+
+
+#ifdef p7IMPL_SSE8_BENCHMARK2
+/* The second benchmark times the profile conversion process, which we
+ * need to know for making design decisions about hmmpfam.
+ * 
+ * gcc -o benchmark-sse8 -g -O2 -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE8_BENCHMARK2 impl_sse8.c -lhmmer -leasel -lm
+ * ./benchmark-sse8 <hmmfile>         runs benchmark
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_stopwatch.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-L",        eslARG_INT,    "400", NULL, NULL,  NULL,  NULL, NULL, "length of target sequence",                        0 },
+  { "-N",        eslARG_INT, "100000", NULL, NULL,  NULL,  NULL, NULL, "number of conversions to time",                    0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "benchmark driver for the generic implementation";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  int             i;
+
+
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, L);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  om = p7_oprofile_Create(gm->M, abc);
+
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    p7_oprofile_Convert(gm, om);
+  esl_stopwatch_Stop(w);
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("# M = %d\n", gm->M);
+
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7IMPL_SSE8_BENCHMARK2*/

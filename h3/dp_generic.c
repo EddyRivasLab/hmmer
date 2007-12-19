@@ -552,7 +552,6 @@ static ESL_OPTIONS options[] = {
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
-  { "--vitscore",eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Viterbi score-only algorithm",           0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -593,8 +592,7 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
 
-  if (esl_opt_GetBoolean(go, "--vitscore"))   gx = p7_gmx_Create(gm->M, 2);
-  else                                        gx = p7_gmx_Create(gm->M, L);
+  gx = p7_gmx_Create(gm->M, L);
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
@@ -602,7 +600,6 @@ main(int argc, char **argv)
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
       if      (esl_opt_GetBoolean(go, "-f"))           p7_GForward     (dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "--vitscore"))   p7_GViterbiScore(dsq, L, gm, gx, &sc);
       else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
 
       p7_bg_NullOne(bg, dsq, L, &nullsc);
