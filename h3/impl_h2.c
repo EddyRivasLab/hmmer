@@ -1044,8 +1044,8 @@ main(int argc, char **argv)
   if ((om = p7_oprofile_Create(hmm->M, abc))        == NULL)  esl_fatal("failed to create oprofile");
   if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL) != eslOK) esl_fatal("failed to config profile");
   if (p7_oprofile_Convert(gm, om)                   != eslOK) esl_fatal("failed to convert profile");
-  if (p7_hmm_Validate    (hmm,     0.0001, errbuf)  != eslOK) esl_fatal("whoops, HMM is bad!");
-  if (p7_profile_Validate(gm, 0.0001)               != eslOK) esl_fatal("whoops, profile is bad!");
+  if (p7_hmm_Validate    (hmm,  errbuf, 0.0001)     != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
+  if (p7_profile_Validate(gm,   errbuf, 0.0001)     != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
   utest_viterbi(r, abc, bg, gm, nseq, L);
   utest_forward(r, abc, bg, gm, nseq, L);

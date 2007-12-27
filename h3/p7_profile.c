@@ -346,10 +346,11 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
  *            validates the entry distribution.
  *            
  * Returns:   <eslOK> if <gm> internals look fine. Returns <eslFAIL>
- *            if something is wrong.
+ *            if something is wrong, and leaves an error message in
+ *            <errbuf> if caller passed it non-<NULL>.
  */
 int
-p7_profile_Validate(const P7_PROFILE *gm, float tol)
+p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
 {
   int     status;
   int     k;
@@ -376,7 +377,7 @@ p7_profile_Validate(const P7_PROFILE *gm, float tol)
 	pstart[k] = exp(p7P_TSC(gm, k-1, p7P_BM));
     }
 
-  if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) { status = eslFAIL; goto ERROR; }
+  if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "profile entry distribution is not normalized properly");
   free(pstart);
   return eslOK;
 

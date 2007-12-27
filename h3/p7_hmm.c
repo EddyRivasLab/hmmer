@@ -853,7 +853,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **re
   hmm->checksum = 0;
 
   /* SRE DEBUGGING */
-  p7_hmm_Validate(hmm, 0.0001, NULL);
+  p7_hmm_Validate(hmm, NULL, 0.0001);
 
   *ret_hmm = hmm;
   return eslOK;
@@ -1012,7 +1012,7 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
  *            Returns <eslFAIL> if something is wrong.
  */
 int
-p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
+p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
 {
   int status;
   int k;

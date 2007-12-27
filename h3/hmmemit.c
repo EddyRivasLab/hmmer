@@ -113,8 +113,8 @@ main(int argc, char **argv)
 
   if (p7_ProfileConfig(hmm, bg, gm, cfg.L, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
   if (p7_bg_SetLength(bg, cfg.L)                     != eslOK) esl_fatal("failed to reconfig null model length");
-  if (p7_hmm_Validate    (hmm,     0.0001, NULL)     != eslOK) esl_fatal("whoops, HMM is bad!");
-  if (p7_profile_Validate(gm, 0.0001)                != eslOK) esl_fatal("whoops, profile is bad!");
+  if (p7_hmm_Validate    (hmm, NULL, 0.0001)         != eslOK) esl_fatal("whoops, HMM is bad!");
+  if (p7_profile_Validate(gm,  NULL, 0.0001)         != eslOK) esl_fatal("whoops, profile is bad!");
 
   for (nseq = 1; nseq <= cfg.nseq; nseq++) 
     {

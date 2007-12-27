@@ -200,7 +200,7 @@ main(int argc, char **argv)
   while ((status = esl_sqio_Read(qfp, qsq)) == eslOK)
     {
       p7_Seqmodel(abc, qsq->dsq, qsq->n, qsq->name, Q, bg->f, popen, pextend, &hmm);
-      if ( p7_hmm_Validate(hmm, 1e-5, errbuf) != eslOK) esl_fatal("HMM validation failed: %s\n", errbuf);
+      if ( p7_hmm_Validate(hmm, errbuf, 1e-5) != eslOK) esl_fatal("HMM validation failed: %s\n", errbuf);
       if ( p7_hmmfile_Write(hmmfp, hmm)       != eslOK) esl_fatal("HMM save failed");
 
       p7_hmm_Destroy(hmm);

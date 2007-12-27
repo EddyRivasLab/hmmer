@@ -2297,8 +2297,8 @@ make_random_profile(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
   if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
-  if (p7_hmm_Validate    (hmm,     0.0001, NULL)    != eslOK) esl_fatal("whoops, HMM is bad!");
-  if (p7_profile_Validate(gm, 0.0001)               != eslOK) esl_fatal("whoops, profile is bad!");
+  if (p7_hmm_Validate    (hmm, NULL, 0.0001)        != eslOK) esl_fatal("whoops, HMM is bad!");
+  if (p7_profile_Validate(gm,  NULL, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
   if ((om = p7_oprofile_Create(M, abc))             == NULL)  esl_fatal("failed to create optimized profile");
   if (p7_oprofile_Convert(gm, om)                   != eslOK) esl_fatal("failed to convert profile to optimized form");
   if (p7_oprofile_ReconfigLength(om, L)             != eslOK) esl_fatal("failed to config length of oprofile");

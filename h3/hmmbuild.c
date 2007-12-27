@@ -680,7 +680,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
       return eslOK;
     }
 
-  if ((status = p7_hmm_Validate(hmm, 0.0001, errbuf))  != eslOK) return status;
+  if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))  != eslOK) return status;
   if ((status = p7_hmmfile_Write(cfg->hmmfp, hmm))     != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
   if (! cfg->be_verbose)	/* tabular output */

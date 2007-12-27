@@ -473,7 +473,7 @@ extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *a
 extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
 				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
-extern int     p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf);
+extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
 extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ);
 
@@ -502,7 +502,7 @@ extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
 extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
 extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
 				   char st2, int k2, float *ret_tsc);
-extern int         p7_profile_Validate(const P7_PROFILE *gm, float tol);
+extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
 
 /* p7_trace.c */

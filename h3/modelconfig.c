@@ -216,7 +216,7 @@ utest_Config(P7_HMM *hmm, P7_BG *bg)
 
   if ((gm = p7_profile_Create(hmm->M, hmm->abc))    == NULL)   esl_fatal(msg);
   if (p7_ProfileConfig(hmm, bg, gm, 350, p7_LOCAL)  != eslOK)  esl_fatal(msg);
-  if (p7_profile_Validate(gm, 0.0001)               != eslOK)  esl_fatal(msg);
+  if (p7_profile_Validate(gm, NULL, 0.0001)         != eslOK)  esl_fatal(msg);
   return;
 }
 
@@ -436,8 +436,8 @@ main(int argc, char **argv)
   } else {
     gm = p7_profile_Create(hmm->M, abc);
     p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
-    if (p7_hmm_Validate    (hmm, 0.0001, NULL) != eslOK) esl_fatal("whoops, HMM is bad!");
-    if (p7_profile_Validate(gm,  0.0001)       != eslOK) esl_fatal("whoops, profile is bad!");
+    if (p7_hmm_Validate    (hmm, NULL, 0.0001) != eslOK) esl_fatal("whoops, HMM is bad!");
+    if (p7_profile_Validate(gm,  NULL, 0.0001) != eslOK) esl_fatal("whoops, profile is bad!");
   }
 
   /* Sample endpoints.
