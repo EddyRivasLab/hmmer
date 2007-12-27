@@ -376,3 +376,184 @@ AC_LANG_RESTORE
 # ****************************************************************
 # ****************************************************************
 
+
+
+#################################################################
+# Macro: AX_CHECK_COMPILER_FLAGS
+# Usage: AX_CHECK_COMPILER_FLAGS(FLAGS, [ACTION-SUCCESS], [ACTION-FAILURE])
+# Authors:  Copyright (C) 2007 Steven G. Johnson <stevenj@alum.mit.edu>
+#           Copyright (C) 2007 Matteo Frigo.
+# Version:  2007-07-29
+# Source:   http://autoconf-archive.cryp.to/ax_check_compiler_flags.html
+#
+# Check whether the given compiler FLAGS work with the current language's compiler, 
+# or whether they give an error. (Warnings, however, are ignored.)
+# ACTION-SUCCESS/ACTION-FAILURE are shell commands to execute on success/failure.
+# 
+# Everything below is verbatim from the archive. DO NOT MODIFY IT.
+#
+AC_DEFUN([AX_CHECK_COMPILER_FLAGS],
+[AC_PREREQ(2.59) dnl for _AC_LANG_PREFIX
+AC_MSG_CHECKING([whether _AC_LANG compiler accepts $1])
+dnl Some hackery here since AC_CACHE_VAL can't handle a non-literal varname:
+AS_LITERAL_IF([$1],
+  [AC_CACHE_VAL(AS_TR_SH(ax_cv_[]_AC_LANG_ABBREV[]_flags_$1), [
+      ax_save_FLAGS=$[]_AC_LANG_PREFIX[]FLAGS
+      _AC_LANG_PREFIX[]FLAGS="$1"
+      AC_COMPILE_IFELSE([AC_LANG_PROGRAM()],
+        AS_TR_SH(ax_cv_[]_AC_LANG_ABBREV[]_flags_$1)=yes,
+        AS_TR_SH(ax_cv_[]_AC_LANG_ABBREV[]_flags_$1)=no)
+      _AC_LANG_PREFIX[]FLAGS=$ax_save_FLAGS])],
+  [ax_save_FLAGS=$[]_AC_LANG_PREFIX[]FLAGS
+   _AC_LANG_PREFIX[]FLAGS="$1"
+   AC_COMPILE_IFELSE([AC_LANG_PROGRAM()],
+     eval AS_TR_SH(ax_cv_[]_AC_LANG_ABBREV[]_flags_$1)=yes,
+     eval AS_TR_SH(ax_cv_[]_AC_LANG_ABBREV[]_flags_$1)=no)
+   _AC_LANG_PREFIX[]FLAGS=$ax_save_FLAGS])
+eval ax_check_compiler_flags=$AS_TR_SH(ax_cv_[]_AC_LANG_ABBREV[]_flags_$1)
+AC_MSG_RESULT($ax_check_compiler_flags)
+if test "x$ax_check_compiler_flags" = xyes; then
+        m4_default([$2], :)
+else
+        m4_default([$3], :)
+fi
+])dnl AX_CHECK_COMPILER_FLAGS
+#
+# AX_CHECK_COMPILER_FLAGS macro end.
+# ****************************************************************
+# ****************************************************************
+
+
+
+
+#################################################################
+# Macro: AX_GCC_X86_CPUID
+# Usage: AX_GCC_X86_CPUID(OP)
+# Authors:  Copyright (C) 2007 Steven G. Johnson <stevenj@alum.mit.edu>
+#           Copyright (C) 2007 Matteo Frigo
+# Version:  2007-07-29
+# Source:   http://autoconf-archive.cryp.to/ax_gcc_x86_cpuid.html
+#
+# Runs 'cpuid' with opcode 'OP'. 
+# Sets cache variable ax_cv_gcc_x86_cpuid_OP to "eax:ebx:ecx:edx"
+# where these are the registers set by 'cpuid'.
+# If cpuid fails, variable is set to the string "unknown".
+# This macro is required by AX_EXT; see below.
+#
+# Everything below is verbatim from the archive. DO NOT MODIFY IT.
+#
+AC_DEFUN([AX_GCC_X86_CPUID],
+[AC_REQUIRE([AC_PROG_CC])
+AC_LANG_PUSH([C])
+AC_CACHE_CHECK(for x86 cpuid $1 output, ax_cv_gcc_x86_cpuid_$1,
+ [AC_RUN_IFELSE([AC_LANG_PROGRAM([#include <stdio.h>], [
+     int op = $1, eax, ebx, ecx, edx;
+     FILE *f;
+      __asm__("cpuid"
+        : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
+        : "a" (op));
+     f = fopen("conftest_cpuid", "w"); if (!f) return 1;
+     fprintf(f, "%x:%x:%x:%x\n", eax, ebx, ecx, edx);
+     fclose(f);
+     return 0;
+])],
+     [ax_cv_gcc_x86_cpuid_$1=`cat conftest_cpuid`; rm -f conftest_cpuid],
+     [ax_cv_gcc_x86_cpuid_$1=unknown; rm -f conftest_cpuid],
+     [ax_cv_gcc_x86_cpuid_$1=unknown])])
+AC_LANG_POP([C])
+])
+
+
+
+#################################################################
+# Macro: AX_EXT
+# Usage: AX_EXT
+# Author:   Copyright (C) 2007 Christophe Tournayre <turn3r@users.sourceforge.net>
+# Version:  2007-11-28
+# Source:   http://autoconf-archive.cryp.to/ax_ext.html
+# Calls:    AC_SUBST(SIMD_FLAGS)
+# Defines:  HAVE_MMX / HAVE_SSE / HAVE_SSE2 / HAVE_SSE3 / HAVE_SSSE3          
+#
+# I commented out the bits that would define 
+# HAVE_MMX / HAVE_SSE / HAVE_SSE3 / HAVE_SSSE3          
+# and would have added -mmmx, etc to the SIMD_FLAGS. 
+# We only need -msse2
+#
+AC_DEFUN([AX_EXT],
+[
+  AC_REQUIRE([AX_GCC_X86_CPUID])
+
+  AX_GCC_X86_CPUID(0x00000001)
+  ecx=`echo $ax_cv_gcc_x86_cpuid_0x00000001 | cut -d ":" -f 3`
+  edx=`echo $ax_cv_gcc_x86_cpuid_0x00000001 | cut -d ":" -f 4`
+
+ AC_CACHE_CHECK([whether mmx is supported], [ax_have_mmx_ext],
+  [
+    ax_have_mmx_ext=no
+    if test "$((0x$edx>>23&0x01))" = 1; then
+      ax_have_mmx_ext=yes
+    fi
+  ])
+
+ AC_CACHE_CHECK([whether sse is supported], [ax_have_sse_ext],
+  [
+    ax_have_sse_ext=no
+    if test "$((0x$edx>>25&0x01))" = 1; then
+      ax_have_sse_ext=yes
+    fi
+  ])
+
+ AC_CACHE_CHECK([whether sse2 is supported], [ax_have_sse2_ext],
+  [
+    ax_have_sse2_ext=no
+    if test "$((0x$edx>>26&0x01))" = 1; then
+      ax_have_sse2_ext=yes
+    fi
+  ])
+
+ AC_CACHE_CHECK([whether sse3 is supported], [ax_have_sse3_ext],
+  [
+    ax_have_sse3_ext=no
+    if test "$((0x$ecx&0x01))" = 1; then
+      ax_have_sse3_ext=yes
+    fi
+  ])
+
+ AC_CACHE_CHECK([whether ssse3 is supported], [ax_have_ssse3_ext],
+  [
+    ax_have_ssse3_ext=no
+    if test "$((0x$ecx>>9&0x01))" = 1; then
+      ax_have_ssse3_ext=yes
+    fi
+  ])
+
+#   if test "$ax_have_mmx_ext" = yes; then
+#     AC_DEFINE(HAVE_MMX,,[Support mmx instructions])
+#     AX_CHECK_COMPILER_FLAGS(-mmmx, SIMD_FLAGS="$SIMD_FLAGS -mmmx", [])
+#   fi
+
+#   if test "$ax_have_sse_ext" = yes; then
+#     AC_DEFINE(HAVE_SSE,,[Support SSE (Streaming SIMD Extensions) instructions])
+#     AX_CHECK_COMPILER_FLAGS(-msse, SIMD_FLAGS="$SIMD_FLAGS -msse", [])
+#   fi
+
+  if test "$ax_have_sse2_ext" = yes; then
+    AC_DEFINE(HAVE_SSE2,,[Support SSE2 (Streaming SIMD Extensions 2) instructions])
+    AX_CHECK_COMPILER_FLAGS(-msse2, SIMD_FLAGS="$SIMD_FLAGS -msse2", [])
+  fi
+
+#   if test "$ax_have_sse3_ext" = yes; then
+#     AC_DEFINE(HAVE_SSE3,,[Support SSE3 (Streaming SIMD Extensions 3) instructions])
+#     AX_CHECK_COMPILER_FLAGS(-msse3, SIMD_FLAGS="$SIMD_FLAGS -msse3", [])
+#   fi
+
+#   if test "$ax_have_ssse3_ext" = yes; then
+#     AC_DEFINE(HAVE_SSSE3,,[Support SSSE3 (Supplemental Streaming SIMD Extensions 3) instructions])
+#   fi
+
+  AC_SUBST(SIMD_FLAGS)
+])
+#
+# AX_EXT macro end.
+# ****************************************************************
+# ****************************************************************

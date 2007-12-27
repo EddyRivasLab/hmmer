@@ -147,7 +147,12 @@ AC_PROG_CC
 if test "$CC" = xlc ; then	# IBM's xlc?
   CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
 fi
-AC_PROG_CC_C99
+# Work around a known bug in autoconf's AC_PROG_CC_C99's handling of icc
+if test "$CC" != icc; then 
+  AC_PROG_CC_C99
+else
+  CFLAGS=$CFLAGS" -std=c99"
+fi
 
 ################################################################
 # Process the ./configure command line
@@ -206,50 +211,22 @@ AC_ARG_ENABLE(gcov,
   ])
 
 
-# --enable-impl      - choose an optimized implementation
-#
-impl_choice="fast"
-impl_cflags=""
-AC_ARG_ENABLE(impl,
-              [AS_HELP_STRING([--enable-impl],
-                [enable an optimized DP implementation (default=fast)]) ],
-              [ $impl_choice=$enable_impl])
 
-case $impl_choice in
-reference) AC_MSG_NOTICE([Using reference (unoptimized) DP implementation])
-           AC_DEFINE(p7_IMPL_REFERENCE)
-           ;;
-
-fast)      AC_MSG_NOTICE([Using standard (optimized) DP implementation])
-           AC_DEFINE(p7_IMPL_FAST)
-           ;;
-
-altivec)   AC_MSG_NOTICE([Using Altivec DP implementation for PowerPC (Erik Lindahl)])
-           AC_DEFINE(p7_IMPL_ALTIVEC)
-	   if test "$CC" != xlc; then 
-	     if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then 
-  	       impl_cflags="-maltivec -mabi=altivec"      # IBM gcc
-  	     else
-	       impl_cflags="-faltivec -mcpu=G5 -mtune=G5" # Apple cc
-	     fi
- 	   else
-	     impl_cflags="-qaltivec"  # IBM xlc
- 	   fi
-	   ;;
-
-buhler)    AC_MSG_NOTICE([Using optimized DP implementation from Jeremy Buhler])
-           AC_DEFINE(p7_IMPL_BUHLER)
-           ;;
-
-sse)       AC_MSG_NOTICE([Using SSE2 DP implementation for Intel (contrib by Apple)])
-           AC_DEFINE(p7_IMPL_SSE)
-           ;;
-
-*)         AC_MSG_NOTICE([Ignoring unknown argument to --enable-imp: $impl_choice])
-           ;;
-esac
-
-CFLAGS="$CFLAGS $impl_cflags"
+# Dead code here:
+# for altivec, where we used to have --enable-impl=altivec.
+dnl altivec)   AC_MSG_NOTICE([Using Altivec DP implementation for PowerPC (Erik Lindahl)])
+dnl            AC_DEFINE(p7_IMPL_ALTIVEC)
+dnl 	   if test "$CC" != xlc; then 
+dnl 	     if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then 
+dnl   	       impl_cflags="-maltivec -mabi=altivec"      # IBM gcc
+dnl   	     else
+dnl 	       impl_cflags="-faltivec -mcpu=G5 -mtune=G5" # Apple cc
+dnl 	     fi
+dnl  	   else
+dnl 	     impl_cflags="-qaltivec"  # IBM xlc
+dnl  	   fi
+dnl 	   ;;
+dnl CFLAGS="$CFLAGS $impl_cflags"
 
 # For Altivec: test that the compiler is really going to support this.
 # (M4 code from Erik Lindahl, Stanford University; 
@@ -331,6 +308,37 @@ AC_ARG_ENABLE(mpi,
 esac])
 
 
+# --enable-sse      Force SSE2 SIMD optimization on
+# --disable-sse     Force SSE2 SIMD optimization off
+#                   Default is to have SSE2 on, if it's detected.
+#
+# This sets @SIMD_FLAGS@ output variable, defines HAVE_SSE2, and
+# if SSE is chosen, sets impl_choice to "sse".
+AC_ARG_ENABLE(sse,
+   [AS_HELP_STRING([--enable-sse],  [ enable SSE SIMD parallelization (default)]) ],
+   [
+     if test "x$withval" != xno ; then
+        # icc is going to generate SSE code anyway, and it'll complain about -msse2 flag
+       if test "$CC" != icc; then 
+         AC_DEFINE(HAVE_SSE2, 1)
+         AX_EXT
+       else 
+         impl_choice="sse"
+       fi
+     else
+       AC_DEFINE(HAVE_SSE2, 0)
+     fi
+   ],
+   [
+     AX_EXT
+   ])
+if test "$ax_have_sse2_ext" = yes; then
+  impl_choice="sse"
+else
+  AC_MSG_NOTICE([no SSE detected])
+fi
+
+
 # --enable-threads      Enable POSIX multithreading
 #
 # Uses ACX_PTHREAD macro from the GNU macro archive.
@@ -371,6 +379,24 @@ AC_ARG_WITH([gsl],
             ],
 	    [with_gsl=no])
 
+
+
+# Now, after all --enable's are done, we choose which fast
+# implementation we're going to use; there can only be one.
+#
+case $impl_choice in 
+sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
+      IMPL_OBJ="impl_sse.o"
+      IMPL_HEADER="impl_sse.h"
+      ;;
+
+*)    AC_MSG_NOTICE([No optimized DP implementation available])
+      IMPL_OBJ=""
+      IMPL_HEADER=""
+      ;;
+esac
+AC_SUBST(IMPL_OBJ)
+AC_SUBST(IMPL_HEADER)
 
 # Checks for programs
 #
@@ -464,6 +490,7 @@ echo "
 
 HMMER configuration:
 
+     compiler:             ${CC} ${CFLAGS} ${SIMD_FLAGS}
      DP implementation:    ${impl_choice}
 "
 
