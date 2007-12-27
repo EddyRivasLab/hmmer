@@ -59,7 +59,7 @@
 #define p7H_XRAY    (1<<4)    /* obsolete (was: structural data available)       !*/
 #define p7H_HASPROB (1<<5)    /* obsolete (was: model in probability form)       !*/
 #define p7H_HASDNA  (1<<6)    /* obsolete (was: protein HMM->DNA seq params set) !*/
-#define p7H_STATS   (1<<7)    /* obsolete (was: model has EVD stats calibrated)  !*/
+#define p7H_STATS   (1<<7)    /* model has EVD stats calibrated                  !*/
 #define p7H_MAP     (1<<8)    /* alignment map is available                      !*/
 #define p7H_ACC     (1<<9)    /* accession number is available                   !*/
 #define p7H_GA      (1<<10)   /* gathering thresholds available                  !*/
@@ -69,7 +69,7 @@
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][]
  */
-enum p7p_transitions_e {
+enum p7h_transitions_e {
   p7H_MM = 0,
   p7H_MI = 1,
   p7H_MD = 2,
@@ -88,6 +88,7 @@ enum p7p_transitions_e {
 #define p7H_NTMAT 3
 #define p7H_NTDEL 2
 #define p7H_NTINS 2
+
 
 /* Some notes:
  *   0. The model might be either in counts or probability form.
@@ -126,9 +127,9 @@ typedef struct p7_hmm_s {
   int   *map;			/* map of alignment cols onto model 1..M (p7H_MAP)   */ /* Array; 0=0 */
   int    checksum;              /* checksum of training sequences        (mandatory) */
 
-  float  ga1, ga2;	      /* per-seq/per-domain gathering thresholds (bits) (p7H_GA) */
-  float  tc1, tc2;            /* per-seq/per-domain trusted cutoff (bits)       (p7H_TC) */
-  float  nc1, nc2;	      /* per-seq/per-domain noise cutoff (bits)         (p7H_NC) */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                        */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs       */
+
   off_t  offset;              /* HMM record offset on disk */
   int    flags;               /* status flags */
   const ESL_ALPHABET *abc;    /* ptr to alphabet info (hmm->abc->K is alphabet size) */
@@ -188,16 +189,21 @@ enum p7p_rsc_e {
 
 
 typedef struct p7_profile_s {
-  int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)              */ 
-  int     M;		/* number of nodes in the model                            */
   float  *tsc;          /* transitions  [0.1..M-1][0..p7P_NTRANS-1], hand-indexed  */
   float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed       */
   float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [NECJ][LOOP,MOVE] */
 
-  /* Objects we keep references to */
-  const ESL_ALPHABET    *abc_r;	/* copy of pointer to appropriate alphabet     */
-  const struct p7_hmm_s *hmm_r;	/* who's your daddy                            */
-  const struct p7_bg_s  *bg_r;	/* background null model                       */
+  int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */ 
+  int     allocM;	/* max # of nodes allocated in this structure              */
+  int     M;		/* number of nodes in the model                            */
+
+  float   nj;		/* expected # of uses of J; precalculated from loop config */
+
+  /* Info copied/duplicated from parent HMM:                                            */
+  char  *name;			/* unique name of model                                 */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                  */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs */
+  const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet              */
 } P7_PROFILE;
 
 
@@ -336,6 +342,15 @@ typedef struct p7_dprior_s {
 
 
 /*****************************************************************
+ * The optimized implementation.
+ */
+#ifdef HAVE_SSE2
+#include "impl_sse.h"
+#endif
+
+
+
+/*****************************************************************
  * 8. Other routines in HMMER's exposed API.
  *****************************************************************/
 
@@ -347,6 +362,7 @@ extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_T
 extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GForward     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
+extern int p7_GMSP         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 extern int p7_GViterbiScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 
@@ -360,8 +376,8 @@ extern void p7_Fail(char *format, ...);
 
 /* evalues.c */
 extern int p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda);
-extern int p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,               double *ret_vmu);
-extern int p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_fmu);
+extern int p7_Mu (ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,               double *ret_mu);
+extern int p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau);
 
 /* eweight.c */
 extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
@@ -436,7 +452,7 @@ extern P7_HMM *p7_hmm_CreateShell(void);
 extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
 extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
-extern P7_HMM *p7_hmm_Duplicate(const P7_HMM *hmm);
+extern P7_HMM *p7_hmm_Clone(const P7_HMM *hmm);
 extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
 extern char   *p7_hmm_DescribeStatetype(char st);

@@ -69,6 +69,7 @@ p7_gmx_Create(int allocM, int allocL)
 }
 
 /* Function:  p7_gmx_GrowTo()
+ * Synopsis:  Assure that DP matrix is big enough.
  * Incept:    SRE, Tue Jan 30 11:31:23 2007 [Olin Library, St. Louis]
  *
  * Purpose:   Assures that a DP matrix <gx> is allocated

@@ -358,8 +358,8 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   int  k, x;
 
   /* Contract checks */
-  if (gm->M           != om->M)         ESL_EXCEPTION(eslEINVAL, "profile sizes don't match");
-  if (gm->abc_r->type != om->abc->type) ESL_EXCEPTION(eslEINVAL, "alphabet types don't match");
+  if (gm->M           != om->M)       ESL_EXCEPTION(eslEINVAL, "profile sizes don't match");
+  if (gm->abc->type != om->abc->type) ESL_EXCEPTION(eslEINVAL, "alphabet types don't match");
   
   /* Transition scores */
   for (k = 1 ; k < M; k++) {
@@ -380,7 +380,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   om->esc[M] = 0;
 
   /* Match, insert scores */
-  for (x = 0; x < gm->abc_r->Kp; x++) {
+  for (x = 0; x < gm->abc->Kp; x++) {
     for (k = 1; k < M; k++) {
       om->msc[x][k] = convert_lodscore(p7P_MSC(gm, k, x));
       om->isc[x][k] = convert_lodscore(p7P_ISC(gm, k, x));

@@ -237,20 +237,10 @@ p7_hmmfile_Write(FILE *fp, P7_HMM *hmm)
   if ((hmm->flags & p7H_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
   if (fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp) != 1) return eslFAIL;
 
-  /* Pfam cutoffs section
-   */
-  if (hmm->flags & p7H_GA) {
-    if (fwrite((char *) &(hmm->ga1), sizeof(float), 1, fp) != 1) return eslFAIL;
-    if (fwrite((char *) &(hmm->ga2), sizeof(float), 1, fp) != 1) return eslFAIL;
-  }
-  if (hmm->flags & p7H_TC) {
-    if (fwrite((char *) &(hmm->tc1), sizeof(float), 1, fp) != 1) return eslFAIL;
-    if (fwrite((char *) &(hmm->tc2), sizeof(float), 1, fp) != 1) return eslFAIL;
-  }
-  if (hmm->flags & p7H_NC) {
-    if (fwrite((char *) &(hmm->nc1), sizeof(float), 1, fp) != 1) return eslFAIL;
-    if (fwrite((char *) &(hmm->nc2), sizeof(float), 1, fp) != 1) return eslFAIL;
-  }
+  /* E-value parameters and Pfam cutoffs */
+  if (fwrite((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, fp) != p7_NEVPARAM) return eslFAIL;
+  if (fwrite((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, fp) != p7_NCUTOFFS) return eslFAIL;
+  
   return eslOK;
 }
 
@@ -431,22 +421,12 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **ret_hmm)
   if (! fread((char *) &(hmm->nseq),     sizeof(int),   1, hfp->f))                         {status = eslEOD; goto ERROR;}
   if (! fread((char *) &(hmm->eff_nseq), sizeof(float), 1, hfp->f))                         {status = eslEOD; goto ERROR;}  
   if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                          goto ERROR;
-  if ((hmm->flags & p7H_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))  {status = eslEOD; goto ERROR;}
+  if ((hmm->flags & p7H_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f)) {status = eslEOD; goto ERROR;}
   if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                           {status = eslEOD; goto ERROR;}
 
-  /* Pfam cutoffs */
-  if (hmm->flags & p7H_GA) {
-    if (! fread((char *) &(hmm->ga1), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
-    if (! fread((char *) &(hmm->ga2), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
-  }
-  if (hmm->flags & p7H_TC) {
-    if (! fread((char *) &(hmm->tc1), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
-    if (! fread((char *) &(hmm->tc2), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
-  }
-  if (hmm->flags & p7H_NC) {
-    if (! fread((char *) &(hmm->nc1), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
-    if (! fread((char *) &(hmm->nc2), sizeof(float), 1, hfp->f)) {status = eslEOD; goto ERROR; }
-  }
+  /* E-value parameters and Pfam cutoffs */
+  if (! fread((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, hfp->f)) { status = eslEOD; goto ERROR; }
+  if (! fread((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, hfp->f)) { status = eslEOD; goto ERROR; }
   
   if (*ret_abc == NULL) *ret_abc = abc;	/* pass our new alphabet back to caller, if caller didn't know it already */
   *ret_hmm = hmm;

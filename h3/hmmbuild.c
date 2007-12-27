@@ -65,9 +65,16 @@ static ESL_OPTIONS options[] = {
   { "--ere",     eslARG_REAL,   NULL,  NULL,"x>0",       NULL, "--eent",     NULL, "for --eent: set target relative entropy to <x>",      5},
   { "--eX",      eslARG_REAL,  "6.0",  NULL,"x>0",       NULL, "--eent",  "--ere", "for --eent: set minimum total rel ent param to <x>",  5},
   { "--eid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--eclust",    NULL, "for --eclust: set fractional identity cutoff to <x>", 5},
+/* Control of E-value calibration */
+  { "--Es",      eslARG_INT,    NULL,  NULL,"n>0",       NULL,    NULL,      NULL, "set random number seed to <n>",                     6},
+  { "--EvL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Viterbi Gumbel mu fit",     6},   
+  { "--EvN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Viterbi Gumbel mu fit",     6},   
+  { "--EfL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Forward exp tail mu fit",   6},   
+  { "--EfN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Forward exp tail mu fit",   6},   
+  { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail mu fit",     6},   
 /* Other options */
-  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                            6 },
-  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",   6 },  
+  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                            7},
+  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",   7},  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -121,6 +128,7 @@ static int build_model            (const ESL_GETOPTS *go, const struct cfg_s *cf
 static int set_model_name         (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM *hmm);
 static int set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *prior);
 static int parameterize           (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_DPRIOR *prior);
+static int calibrate              (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm);
 
 static double default_target_relent(const ESL_ALPHABET *abc, int M, double eX);
 
@@ -133,7 +141,7 @@ main(int argc, char **argv)
 
   /* Parse the command line
    */
-  go = esl_getopts_Create(options);
+  if ((go = esl_getopts_Create(options)) == NULL) esl_fatal("problem with options structure");
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||
       esl_opt_VerifyConfig(go)               != eslOK) 
     {
@@ -156,8 +164,10 @@ main(int argc, char **argv)
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
       puts("\n  alternate effective sequence weighting strategies:");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
-      puts("\n  other (rarely used) options:");
+      puts("\n  control of E-value calibration:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
+      puts("\n  other (rarely used) options:");
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != 2) 
@@ -639,6 +649,7 @@ process_workunit(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, E
   if ((status =  set_model_name         (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
   if ((status =  set_effective_seqnumber(go, cfg, errbuf, msa, hmm, cfg->bg, cfg->pri)) != eslOK) goto ERROR;
   if ((status =  parameterize           (go, cfg, errbuf, hmm, cfg->pri))               != eslOK) goto ERROR;
+  if ((status =  calibrate              (go, cfg, errbuf, hmm))                         != eslOK) goto ERROR;
 
   *ret_hmm = hmm;
   return eslOK;
@@ -885,18 +896,65 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
 static int
 parameterize(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_DPRIOR *prior)
 {
+  int status;
 
-  if (cfg->be_verbose){
-    fprintf(cfg->ofp, "%-40s ... ", "Parameterizing");
-    fflush(cfg->ofp);
-  }
+  if (cfg->be_verbose){ fprintf(cfg->ofp, "%-40s ... ", "Parameterizing"); fflush(cfg->ofp); }
 
-  p7_ParameterEstimation(hmm, prior);        
+  if ((status = p7_ParameterEstimation(hmm, prior)) != eslOK) ESL_XFAIL(status, errbuf, "parameter estimation failed");
 
   if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
   return eslOK;
+
+ ERROR:
+  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  return status;
 }
 
+/* calibrate()
+ * 
+ * Sets the E value parameters of the model with two short simulations.
+ */
+static int
+calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
+{
+  ESL_RANDOMNESS *r  = NULL;
+  P7_PROFILE     *gm = NULL;
+  int             vL = esl_opt_GetInteger(go, "--EvL");	/* length of random seqs for Viterbi mu sim */
+  int             vN = esl_opt_GetInteger(go, "--EvN");	/* number of random seqs for Viterbi mu sim */
+  int             fL = esl_opt_GetInteger(go, "--EfL");	/* length of random seqs for Forward mu sim */
+  int             fN = esl_opt_GetInteger(go, "--EfN");	/* number of random seqs for Forward mu sim */
+  double          ft = esl_opt_GetReal   (go, "--Eft");	/* tail mass for Forward mu sim             */
+  double lambda, mu, tau;
+  int    status;
+
+  if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Calibrating");    fflush(cfg->ofp); }
+
+  if (esl_opt_IsDefault(go, "--Es"))  r = esl_randomness_CreateTimeseeded();
+  else                                r = esl_randomness_Create(esl_opt_GetInteger(go, "--Es"));
+  if (r == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create random number generator");
+
+  if ((gm     = p7_profile_Create(hmm->M, cfg->abc))                  == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
+  if ((status = p7_ProfileConfig(hmm, cfg->bg, gm, vL, p7_LOCAL))    != eslOK) ESL_XFAIL(status,  errbuf, "failed to configure profile");
+  if ((status = p7_Lambda(hmm, cfg->bg, &lambda))                    != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine lambda");
+  if ((status = p7_Mu    (r, gm, cfg->bg, vL, vN, lambda, &mu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine mu");
+  if ((status = p7_Tau   (r, gm, cfg->bg, fL, fN, lambda, ft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine tau");
+
+  hmm->evparam[p7_LAMBDA] = lambda;
+  hmm->evparam[p7_MU]     = mu;
+  hmm->evparam[p7_TAU]    = tau;
+  hmm->flags             |= p7H_STATS;
+
+  p7_profile_Destroy(gm);
+  esl_randomness_Destroy(r);
+  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  return eslOK;
+
+ ERROR:
+  esl_randomness_Destroy(r);
+  p7_profile_Destroy(gm);
+  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  return status;
+}
 
 
 /* default_amino_target_relent()

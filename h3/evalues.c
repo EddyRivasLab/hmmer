@@ -56,7 +56,7 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
 }
 
 
-/* Function:  p7_VMu()
+/* Function:  p7_Mu()
  * Synopsis:  Determines the local Viterbi Gumbel mu parameter for a model.
  * Incept:    SRE, Mon Aug  6 13:00:57 2007 [Janelia]
  *
@@ -99,7 +99,7 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            eventually - need to be sure that fix applies here too.
  */
 int
-p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double *ret_mu)
+p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double *ret_mu)
 {
   P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	 /* DP matrix: L (rows) will grow as needed */
   ESL_DSQ *dsq     = NULL;
@@ -117,9 +117,9 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rnd_xfIID(r, bg->f, gm->abc_r->K, L, dsq)) != eslOK) goto ERROR;
-      if ((status = p7_GViterbi(dsq, L, gm, gx, &sc))              != eslOK) goto ERROR;
-      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))            != eslOK) goto ERROR;   
+      if ((status = esl_rnd_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
+      if ((status = p7_GViterbi(dsq, L, gm, gx, &sc))            != eslOK) goto ERROR;
+      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
     }
 
@@ -139,7 +139,7 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
 }
 
 
-/* Function:  p7_FMu()
+/* Function:  p7_Tau()
  * Synopsis:  Determine Forward mu by brief simulation.
  * Incept:    SRE, Thu Aug  9 15:08:39 2007 [Janelia]
  *
@@ -199,7 +199,7 @@ p7_VMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
  * Throws:    <eslEMEM> on allocation error, and <*ret_fv> is 0.
  */
 int
-p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_fmu)
+p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
 {
   P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	     /* DP matrix: L (rows) will grow as needed */
   ESL_DSQ *dsq     = NULL;
@@ -218,9 +218,9 @@ p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rnd_xfIID(r, bg->f, gm->abc_r->K, L, dsq)) != eslOK) goto ERROR;
-      if ((status = p7_GForward(dsq, L, gm, gx, &fsc))             != eslOK) goto ERROR;
-      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))            != eslOK) goto ERROR;   
+      if ((status = esl_rnd_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
+      if ((status = p7_GForward(dsq, L, gm, gx, &fsc))           != eslOK) goto ERROR;
+      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
     }
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
@@ -230,7 +230,7 @@ p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
    * by log(tailp)/lambda to set the origin of the exponential tail to 1.0
    * instead of tailp.
    */
-  *ret_fmu =  esl_gumbel_invcdf(1.0-tailp, gmu, glam) + (log(tailp) / lambda);
+  *ret_tau =  esl_gumbel_invcdf(1.0-tailp, gmu, glam) + (log(tailp) / lambda);
   
   free(xv);
   free(dsq);
@@ -238,7 +238,7 @@ p7_FMu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
   return eslOK;
 
  ERROR:
-  *ret_fmu = 0.;
+  *ret_tau = 0.;
   if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
   if (gx  != NULL) p7_gmx_Destroy(gx);
@@ -305,8 +305,8 @@ main(int argc, char **argv)
       p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
 
       p7_Lambda(hmm, bg, &lambda);
-      p7_VMu(r, gm, bg, L, N, lambda, &vmu);
-      p7_FMu(r, gm, bg, L, N, tailp,  &fmu);
+      p7_Mu(r, gm, bg, L, N, lambda, &vmu);
+      p7_Tau(r, gm, bg, L, N, tailp,  &fmu);
       
       printf("%s %.4f %.4f %.4f\n", hmm->name, lambda, vmu, fmu);
 
@@ -384,8 +384,8 @@ main(int argc, char **argv)
 
   for (i = 0; i < Z; i++)
     {
-      if (esl_opt_GetBoolean(go, "-f")) p7_FMu(r, gm, bg, L, N, tailp,  &mu);
-      else                              p7_VMu(r, gm, bg, L, N, lambda, &mu);
+      if (esl_opt_GetBoolean(go, "-f")) p7_Tau(r, gm, bg, L, N, tailp,  &mu);
+      else                              p7_Mu(r, gm, bg, L, N, lambda, &mu);
       printf("%.4f\n", mu);
     }
 

@@ -52,7 +52,7 @@
 int
 p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int mode)
 {
-  int   k, x;			/* counters over states, residues */
+  int   k, x, z;	/* counters over states, residues, annotation */
   int   status;
   float *occ = NULL;
   float *tp, *rp;
@@ -62,10 +62,13 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   /* Copy some pointer references and other info across from HMM
    */
   gm->M      = hmm->M;
-  gm->abc_r  = hmm->abc;
-  gm->hmm_r  = hmm;
-  gm->bg_r   = bg;
+  gm->abc    = hmm->abc;
   gm->mode   = mode;
+
+  if (gm->name != NULL) { free(gm->name); gm->name = NULL; }
+  if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
+  for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
+  for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
 
   /* Entry scores. */
   if (p7_profile_IsLocal(gm))
@@ -97,9 +100,11 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   if (p7_profile_IsMultihit(gm)) {
     gm->xsc[p7P_E][p7P_MOVE] = log(0.5);   
     gm->xsc[p7P_E][p7P_LOOP] = log(0.5);  
+    gm->nj                   = 1.0f;
   } else {
     gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
     gm->xsc[p7P_E][p7P_LOOP] = -eslINFINITY;  
+    gm->nj                   = 0.0f;
   }
 
   /* Transition scores. */
@@ -137,11 +142,15 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
       rp[p7P_ISC] = sc[x];
     }
   }    
+  for (x = 0; x < hmm->abc->Kp; x++)
+    p7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
+
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLength()
    */
   if ((status = p7_ReconfigLength(gm, L)) != eslOK) goto ERROR;
   free(occ);
+
   return eslOK;
 
  ERROR:
@@ -164,7 +173,10 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
  *            We want this routine to run as fast as possible, because
  *            the caller needs to dynamically reconfigure the model
  *            for the length of each target sequence in a database
- *            search.
+ *            search. The profile has precalculated <gm->nj>, 
+ *            the number of times the J state is expected to be used,
+ *            based on the E state loop transition in the current
+ *            configuration.
  *
  * Returns:   <eslOK> on success; xsc[NCJ] scores are set here. These
  *            control the target length dependence of the model.
@@ -173,19 +185,11 @@ int
 p7_ReconfigLength(P7_PROFILE *gm, int L)
 {
   float ploop, pmove;
-  float nj;
   
-  /* Figure out the expected number of uses of the J state. */
-  if (p7_profile_IsMultihit(gm)) {
-    ploop = exp(gm->xsc[p7P_E][p7P_LOOP]);
-    nj    = ploop / (1-ploop);
-  } else 
-    nj = 0.0f; 
-
   /* Configure N,J,C transitions so they bear L/(2+nj) of the total
    * unannotated sequence length L. 
    */
-  pmove = (2.0f + nj) / ((float) L + 2.0f + nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
+  pmove = (2.0f + gm->nj) / ((float) L + 2.0f + gm->nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
   ploop = 1.0f - pmove;
   gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = gm->xsc[p7P_J][p7P_LOOP] = log(ploop);
   gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(pmove);
@@ -424,7 +428,7 @@ main(int argc, char **argv)
   tr    = p7_trace_Create(256);
   sq    = esl_sq_CreateDigital(abc);
   bg    = p7_bg_Create(abc);
-  core  = p7_hmm_Duplicate(hmm);
+  core  = p7_hmm_Clone(hmm);
 
   if (do_h2) {
     gm = p7_profile_Create(hmm->M, abc);
@@ -688,8 +692,8 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   int failsafe  = 0;
   
   if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslEINVAL, "profile must be unilocal");
-  if ((sq2 = esl_sq_CreateDigital(gm->abc_r))  == NULL)   { status = eslEMEM; goto ERROR; }
-  if ((tr  = p7_trace_Create(256))             == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((tr  = p7_trace_Create(256))           == NULL)   { status = eslEMEM; goto ERROR; }
 
   /* sample local alignment from the implicit model */
   if (gm->h2_mode) {

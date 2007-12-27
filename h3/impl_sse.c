@@ -11,14 +11,15 @@
  *   3. Debugging dumps of P7_OPROFILE structures
  *   4. Debugging dumps of P7_OMX structures
  *   5. Conversions into P7_OPROFILE format
- *   6. Viterbi filter DP implementation
- *   7. Forward filter DP implementation
- *   8. Viterbi score DP implementation
- *   9. Benchmark drivers
- *  10. Unit tests
- *  11. Test driver
- *  12. Example
- *  13. Copyright and license information
+ *   6. MSP filter implementation
+ *   7. Viterbi filter DP implementation
+ *   8. Forward filter DP implementation
+ *   9. Viterbi score DP implementation
+ *  10. Benchmark drivers
+ *  11. Unit tests
+ *  12. Test driver
+ *  13. Example
+ *  14. Copyright and license information
  * 
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
  * SVN $Id$
@@ -42,6 +43,12 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
+/* ?MX(q) access macros work for either uchar or float, so long as you
+ * init your "dp" to point to the appropriate array.
+ */
+#define MMX(q) (dp[(q) * p7X_NSCELLS + p7X_M])
+#define DMX(q) (dp[(q) * p7X_NSCELLS + p7X_D])
+#define IMX(q) (dp[(q) * p7X_NSCELLS + p7X_I])
 
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
@@ -51,17 +58,17 @@
  * Synopsis:  Allocate an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
- * Purpose:   Allocate for profiles of up to <M> nodes for digital alphabet <abc>.
+ * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
  *
  * Throws:    <NULL> on allocation error.
  */
 P7_OPROFILE *
-p7_oprofile_Create(int M, const ESL_ALPHABET *abc)
+p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 {
   int          status;
   P7_OPROFILE *om  = NULL;
-  int          nqu = p7O_NQU(M); /* # of uchar vectors needed for query */
-  int          nqf = p7O_NQF(M); /* # of float vectors needed for query */
+  int          nqu = p7O_NQU(allocM); /* # of uchar vectors needed for query */
+  int          nqf = p7O_NQF(allocM); /* # of float vectors needed for query */
   int          x;
 
   /* level 0 */
@@ -75,31 +82,42 @@ p7_oprofile_Create(int M, const ESL_ALPHABET *abc)
   ESL_ALLOC(om->tu, sizeof(__m128i)   * nqu  * p7O_NTRANS);    
   ESL_ALLOC(om->tf, sizeof(__m128)    * nqf  * p7O_NTRANS);    
   ESL_ALLOC(om->ru, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om->rm, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om->rf, sizeof(__m128 *)  * abc->Kp); 
   om->ru[0] = NULL;
   om->rf[0] = NULL;
 
   /* level 2 */
   ESL_ALLOC(om->ru[0], sizeof(__m128i) * nqu  * p7O_NR * abc->Kp);                     
+  ESL_ALLOC(om->rm[0], sizeof(__m128i) * nqu           * abc->Kp);                     
   ESL_ALLOC(om->rf[0], sizeof(__m128i) * nqf  * p7O_NR * abc->Kp);                     
   for (x = 1; x < abc->Kp; x++) {
     om->ru[x] = om->ru[0] + (x * nqu * p7O_NR);
+    om->rm[x] = om->rm[0] + (x * nqu);
     om->rf[x] = om->rf[0] + (x * nqf * p7O_NR);
   }
+  om->allocQ16  = nqu;
+  om->allocQ4   = nqf;
 
   /* Remaining initializations */
+  om->tbm       = 0;
+  om->tec       = 0;
+  om->tjb       = 0;
+
   om->ddbound_u = 0;
-  om->scale     = 0.0;
+  om->scale     = 0.0f;
   om->base      = 0;
   om->bias      = 0;
 
-  om->ddbound_f = 0.;
+  om->ddbound_f = 0.0f;
+  om->lspace_f  = FALSE;
 
-  om->allocQ16  = nqu;
-  om->allocQ4   = nqf;
-  om->abc       = abc;
+  om->name      = NULL;
+  om->nj        = 0.0f;
   om->mode      = p7_NO_MODE;
-  om->M         = M;
+  om->allocM    = allocM;
+  om->M         = 0;
+  om->abc       = abc;
   return om;
 
  ERROR:
@@ -117,10 +135,12 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->tu != NULL) free(om->tu);
-  if (om->tf != NULL) free(om->tf);
+  if (om->name != NULL) free(om->name);
+  if (om->tu   != NULL) free(om->tu);
+  if (om->tf   != NULL) free(om->tf);
 
   if (om->ru != NULL) { if (om->ru[0] != NULL) free(om->ru[0]);  free(om->ru); }
+  if (om->rm != NULL) { if (om->rm[0] != NULL) free(om->rm[0]);  free(om->rm); }
   if (om->rf != NULL) { if (om->rf[0] != NULL) free(om->rf[0]);  free(om->rf); }
   free(om);
 }
@@ -156,7 +176,7 @@ p7_omx_Create(int allocM)
   ox->dpu = NULL;
   ox->dpf = NULL;
 
-  ESL_ALLOC(ox->dpu,  sizeof(__m128i) * p7X_NSCELLS * nqu);
+  ESL_ALLOC(ox->dpu,  sizeof(__m128i) * p7X_NSCELLS * nqu); 
   ox->allocQ16  = nqu;
   ox->Q16       = 0;
 
@@ -164,6 +184,7 @@ p7_omx_Create(int allocM)
   ox->allocQ4   = nqf;
   ox->Q4        = 0;
 
+  ox->allocM    = allocM;
   ox->M         = 0;
 #ifdef p7_DEBUGGING
   ox->debugging = FALSE;
@@ -175,6 +196,51 @@ p7_omx_Create(int allocM)
   p7_omx_Destroy(ox);
   return NULL;
 }
+
+
+/* Function:  p7_omx_GrowTo()
+ * Synopsis:  Assure that a DP matrix is big enough.
+ * Incept:    SRE, Thu Dec 20 09:27:07 2007 [Janelia]
+ *
+ * Purpose:   Assures that an optimized DP matrix <ox> is allocated for
+ *            a model up to <allocM> in length; if not, reallocate to
+ *            make it so.
+ *            
+ *            Because the optimized matrix is one-row, only the model
+ *            length matters; the target sequence length isn't
+ *            relevant.
+ *
+ * Returns:   <eslOK> on success, and <gx> may be reallocated upon
+ *            return; any data that may have been in <gx> must be 
+ *            assumed to be invalidated.
+ *
+ * Throws:    <eslEMEM> on allocation failure, and any data that may
+ *            have been in <gx> must be assumed to be invalidated.
+ */
+int
+p7_omx_GrowTo(P7_OMX *ox, int allocM)
+{
+  if (allocM <= ox->allocM) return eslOK;
+
+  void *p;
+  int   nqf = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
+  int   nqu = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
+  int   status;
+ 
+  ESL_RALLOC(ox->dpu, p, sizeof(__m128i) * p7X_NSCELLS * nqu);
+  ox->allocQ16 = nqu;
+
+  ESL_RALLOC(ox->dpf, p, sizeof(__m128)  * p7X_NSCELLS * nqf);
+  ox->allocQ4  = nqf;
+
+  ox->allocM = allocM;
+  ox->M      = 0; 
+  return     eslOK;
+
+ ERROR:
+  return status;
+}  
+
 
 
 /* Function:  p7_omx_Destroy()
@@ -796,7 +862,7 @@ lspace_uchar_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
    * We could implement a more smooth func for determining om->scale below,  
    * and squeaking more precision out; [xref J2/66] for considerations.
    */
-  for (x = 0; x < gm->abc_r->K; x++)
+  for (x = 0; x < gm->abc->K; x++)
     max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (M+1)*2));
   if (gm->M <=800)  om->scale = 3.0 / eslCONST_LOG2;    /* scores in units of third-bits for most models [xref J2/66]     */
   else              om->scale = 2.0 / eslCONST_LOG2;    /* scores in units of half-bits for large models                  */
@@ -804,11 +870,13 @@ lspace_uchar_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
   om->bias  = -1 * unbiased_charify(om, max);           /* match, insert emission costs all negative, by subtracting bias */
 
   /* striped and interleaved match, insert emission costs: start at k=1.  */
-  for (x = 0; x < gm->abc_r->Kp; x++)
+  for (x = 0; x < gm->abc->Kp; x++)
     for (j = 0, k = 1, q = 0; q < nq; q++, k++)
       {
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_charify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
-	om->ru[x][j++] = tmp.v;	/* or do we have to _mm_load_si128() these? */
+	om->ru[x][j++] = tmp.v;
+
+	om->rm[x][q]   = tmp.v;	/* MSPFilter's Mk scores are stored directly, not interleaved. */
 
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_charify(om, p7P_ISC(gm, k+z*nq, x)) : 255);
 	om->ru[x][j++] = tmp.v;
@@ -892,7 +960,7 @@ lspace_float_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
   if (nq > om->allocQ4) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
   /* striped and interleaved match, insert emission scores: start at k=1 */
-  for (x = 0; x < gm->abc_r->Kp; x++)
+  for (x = 0; x < gm->abc->Kp; x++)
     for (j = 0, k = 1, q = 0; q < nq; q++, k++)
       {
 	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
@@ -946,8 +1014,9 @@ lspace_float_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
   for (k = 2; k < M-1; k++)
     om->ddbound_f = ESL_MAX(p7P_TSC(gm, k, p7P_DD) + p7P_TSC(gm, k+1, p7P_DM) - p7P_TSC(gm, k+1, p7P_BM), om->ddbound_f);
 
-  om->mode = gm->mode;
-  om->M    = M;
+  om->lspace_f = TRUE;
+  om->mode     = gm->mode;
+  om->M        = M;
   return eslOK;
 }
 
@@ -979,6 +1048,7 @@ pspace_to_lspace_float(P7_OPROFILE *om)
   om->xf[p7O_C][p7O_MOVE] = logf(om->xf[p7O_C][p7O_MOVE]);
   om->xf[p7O_J][p7O_LOOP] = logf(om->xf[p7O_J][p7O_LOOP]);
   om->xf[p7O_J][p7O_MOVE] = logf(om->xf[p7O_J][p7O_MOVE]);
+  om->lspace_f = TRUE;
   return eslOK;
 }
 
@@ -1011,6 +1081,7 @@ lspace_to_pspace_float(P7_OPROFILE *om)
   om->xf[p7O_C][p7O_MOVE] = expf(om->xf[p7O_C][p7O_MOVE]);
   om->xf[p7O_J][p7O_LOOP] = expf(om->xf[p7O_J][p7O_LOOP]);
   om->xf[p7O_J][p7O_MOVE] = expf(om->xf[p7O_J][p7O_MOVE]);
+  om->lspace_f = FALSE;
   return eslOK;
 }
 
@@ -1044,37 +1115,13 @@ pspace_float_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
   /* Then exponentiate them all quickly and in stride (using SSE) */
   if ((status = lspace_to_pspace_float(om))      != eslOK) return status;
 
-  om->mode = gm->mode;
-  om->M    = gm->M;
+  om->lspace_f = FALSE;
+  om->mode     = gm->mode;
+  om->M        = gm->M;
   return eslOK;
 }
 
 
-/* Round all the scores in a generic P7_PROFILE in exactly the same
- * way that the scores in a lspace uchar P7_OPROFILE were rounded.  Then the
- * two profiles should give identical internal scores.
- */
-static void
-round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
-{
-  int k;
-  int x;
-
-  /* Transitions */
-  /* <= -eslINFINITY test is used solely to silence compiler. really testing == -eslINFINITY */
-  for (x = 0; x < gm->M*p7P_NTRANS; x++)
-      gm->tsc[x] = (gm->tsc[x] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->tsc[x]);
-  
-  /* Emissions */
-  for (x = 0; x < gm->abc_r->Kp; x++)
-    for (k = 0; k <= p7P_NR*gm->M; k++)
-      gm->rsc[x][k] = (gm->rsc[x][k] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->rsc[x][k]);
-
-  /* Specials */
-  for (k = 0; k < p7P_NXSTATES; k++)
-    for (x = 0; x < p7P_NXTRANS; x++)
-      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->xsc[k][x]);
-}
 
 
 
@@ -1085,13 +1132,70 @@ round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
 int
 p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  int status;
+  int status, z;
 
-  if (gm->abc_r->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
+  if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
 
   if ((status =  lspace_uchar_conversion(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
   if ((status =  pspace_float_conversion(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
 
+  if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
+  for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
+  for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
+
+  /* MSPFilter's constants */
+  om->tbm  = unbiased_charify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
+  om->tec  = unbiased_charify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
+  /* tjb is length dependent; see ReconfigLength() for setting, below */
+
+  om->nj   = gm->nj;
+  om->mode = gm->mode;
+  om->M    = gm->M;
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+/* Function:  p7_oprofile_ReconfigLength()
+ * Synopsis:  Set the target sequence length of a model.
+ * Incept:    SRE, Thu Dec 20 09:56:40 2007 [Janelia]
+ *
+ * Purpose:   Given an already configured model <om>, quickly reset its
+ *            expected length distribution for a new mean target sequence
+ *            length of <L>. 
+ *            
+ *            This doesn't affect the length distribution of the null
+ *            model. That must also be reset, using <p7_bg_SetLength()>.
+ *            
+ *            We want this routine to run as fast as possible, because
+ *            this call is in the critical path: it must be called at
+ *            each new target sequence in a database search.
+ *
+ * Returns:   <eslOK> on success. Costs/scores for N,C,J transitions are set
+ *            here.
+ */
+int
+p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
+{
+  float pmove, ploop;
+  
+  pmove = (2.0f + om->nj) / ((float) L + 2.0f + om->nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
+  ploop = 1.0f - pmove;
+
+  if (om->lspace_f) {  /* ViterbiScore(): lspace floats */
+    om->xf[p7O_N][p7O_LOOP] =  om->xf[p7O_C][p7O_LOOP] = om->xf[p7O_J][p7O_LOOP] = logf(ploop);
+    om->xf[p7O_N][p7O_MOVE] =  om->xf[p7O_C][p7O_MOVE] = om->xf[p7O_J][p7O_MOVE] = logf(pmove);
+  } else {   /* ForwardFilter() parameters: pspace floats */
+    om->xf[p7O_N][p7O_LOOP] =  om->xf[p7O_C][p7O_LOOP] = om->xf[p7O_J][p7O_LOOP] = ploop;
+    om->xf[p7O_N][p7O_MOVE] =  om->xf[p7O_C][p7O_MOVE] = om->xf[p7O_J][p7O_MOVE] = pmove;
+  }
+  
+  /* MSPFilter() */
+  om->tjb = unbiased_charify(om, logf(3.0f / (float) (L+3)));
+
+  /* ViterbiFilter() parameters: lspace uchars; the LOOP costs are zero  */
+  om->xu[p7O_N][p7O_MOVE] =  om->xu[p7O_C][p7O_MOVE] = om->xu[p7O_J][p7O_MOVE] = unbiased_charify(om, logf(pmove));
   return eslOK;
 }
 /*------------ end, conversions to P7_OPROFILE ------------------*/
@@ -1101,7 +1205,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
 
 
 /*****************************************************************
- * 6. The p7_ViterbiFilter() DP implementation.
+ * 6. The p7_MSPFilter() DP implementation.
  *****************************************************************/
 
 /* Returns TRUE if any a[z] > b[z] .
@@ -1130,6 +1234,118 @@ sse_hmax_epu8(__m128i a)
   return tmp.i[15];
 }
 
+
+
+/* Function:  p7_MSPFilter()
+ * Synopsis:  Calculates MSP score, vewy vewy fast, in limited precision.
+ * Incept:    SRE, Wed Dec 26 15:12:25 2007 [Janelia]
+ *
+ * Purpose:   Calculates an approximation of the MSP score for sequence
+ *            <dsq> of length <L> residues, using optimized profile <om>,
+ *            and a preallocated one-row DP matrix <ox>. Return the 
+ *            estimated MSP score (in nats) in <ret_sc>.
+ *            
+ *            Score may overflow (and will, on high-scoring
+ *            sequences), but will not underflow. 
+ *            
+ *            The model may be in any mode, because only its match
+ *            emission scores will be used. The MSP filter inherently
+ *            assumes a multihit local mode, and uses its own special
+ *            state transition scores, not the scores in the profile.
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues          
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            ret_sc  - RETURN: Viterbi score (in nats)          
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+  register __m128i mpv;            /* previous row values                                       */
+  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m128i biasv;	   /* emission bias in a vector                                 */
+  uint8_t  xE, xB, xC;             /* special states' scores                                    */
+  int i;			   /* counter over sequence positions 1..L                      */
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  ox->M   = om->M;
+  ox->Q16 = Q;
+
+  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
+   */
+  biasv = _mm_set1_epi8((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
+  for (q = 0; q < Q; q++)
+    dp[q] = _mm_setzero_si128();
+  xB   = om->base - om->tjb;                /* remember, all values are costs to be subtracted. */
+  xC   = 0;
+
+#if p7_DEBUGGING
+  if (ox->debugging) omx_dump_uchar_row(ox, 0, 0, 0, xC, xB, xC);
+#endif
+
+  for (i = 1; i <= L; i++)
+    {
+      rsc = om->rm[dsq[i]];
+      xEv = _mm_setzero_si128();      
+      xBv = _mm_set1_epi8((int8_t) (xB - om->tbm));
+
+      /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
+       * Because ia32 is littlendian, this means a left bit shift.
+       * Zeros shift on automatically, which is our -infinity.
+       */
+      mpv = _mm_slli_si128(dp[Q-1], 1);   
+      for (q = 0; q < Q; q++)
+	{
+	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
+	  sv   = _mm_max_epu8(mpv, xBv);
+	  sv   = _mm_adds_epu8(sv, biasv);     
+	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+	  xEv  = _mm_max_epu8(xEv, sv);	
+
+	  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
+	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
+	}	  
+
+      /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
+      xE = sse_hmax_epu8(xEv);
+      if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslOK; }	/* immediately detect overflow */
+
+      xC = ESL_MAX(xC,        xE  - om->tec);
+      xB = ESL_MAX(om->base,  xC) - om->tjb;
+	  
+#if p7_DEBUGGING
+      if (ox->debugging) omx_dump_uchar_row(ox, i, xE, 0, xC, xB, xC);   
+#endif
+    } /* end loop over sequence residues 1..L */
+
+  /* finally C->T, and add our missing precision on the NN,CC,JJ back */
+  *ret_sc = ((float) (xC - om->tjb) - (float) om->base);
+  *ret_sc /= om->scale;
+  *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+  return eslOK;
+}
+/*------------------ end, p7_MSPFilter() ------------------------*/
+
+
+
+
+
+
+/*****************************************************************
+ * 7. The p7_ViterbiFilter() DP implementation.
+ *****************************************************************/
 
 /* Function:  p7_ViterbiFilter()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
@@ -1263,8 +1479,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       xE = sse_hmax_epu8(xEv);
-      xC = ESL_MAX(xC - om->xu[p7O_C][p7O_LOOP],        xE - om->xu[p7O_E][p7O_MOVE]);
-      xJ = ESL_MAX(xJ - om->xu[p7O_J][p7O_LOOP],        xE - om->xu[p7O_E][p7O_LOOP]);
+      if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslOK; }	/* immediately detect overflow */
+      xC = ESL_MAX(xC, xE - om->xu[p7O_E][p7O_MOVE]);
+      xJ = ESL_MAX(xJ, xE - om->xu[p7O_E][p7O_LOOP]);
       xB = ESL_MAX(xJ - om->xu[p7O_J][p7O_MOVE],  om->base - om->xu[p7O_N][p7O_MOVE]);
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
@@ -1330,7 +1547,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
 
 /*****************************************************************
- * 7. The p7_ForwardFilter() DP implementation.
+ * 8. The p7_ForwardFilter() DP implementation.
  *****************************************************************/
 
 
@@ -1504,16 +1721,15 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 		{
 		  sv     = _mm_add_ps(dcv, DMX(q));	
 		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
-		  DMX(q) = sv;	                            /* store new DMX(q) */
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;        /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  DMX(q) = sv;	                                    /* store new DMX(q) */
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
 		}	    
 	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
 	    }
 	}
 
       /* Add D's to xEv */
-      for (q = 0; q < Q; q++) 
-	xEv = _mm_add_ps(DMX(q), xEv);
+      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMX(q), xEv);
 
       /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation is a horizontal sum of xEv's elements  */
@@ -1536,7 +1752,14 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
     } /* end loop over sequence residues 1..L */
 
   /* finally C->T, and flip back to log space (nats) */
-  *ret_sc  = log(xC * om->xf[p7O_C][p7O_MOVE]);
+  /* On overflow, xC is inf or nan (nan arises because inf*0 = nan). */
+  /* On an underflow (which shouldn't happen), we counterintuitively return infinity:
+   * the effect of this is to force the caller to rescore us with full range.
+   */
+  if       (isnan(xC))      *ret_sc = eslINFINITY;
+  else if  (xC == 0.0)      *ret_sc = eslINFINITY; /* on underflow, force caller to rescore us! */
+  else if  (isinf(xC) == 1) *ret_sc = eslINFINITY;
+  else                      *ret_sc = log(xC * om->xf[p7O_C][p7O_MOVE]);
   return eslOK;
 }
 /*------------------ end, p7_ForwardFilter() --------------------*/
@@ -1544,7 +1767,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
 
 /*****************************************************************
- * 8. Viterbi score DP implementation
+ * 9. Viterbi score DP implementation
  *****************************************************************/
 
 /* Return TRUE if any a[i] > b[i]; from Apple's Altivec/SSE migration guide */
@@ -1749,8 +1972,73 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 
 
 /*****************************************************************
- * 9. Benchmark drivers.
+ * 10. Benchmark drivers.
  *****************************************************************/
+
+#if defined(p7IMPL_SSE_BENCHMARK) || defined(p7IMPL_SSE_TESTDRIVE)
+/* Here's a couple of useful debugging functions, used in both the
+ * benchmark and testdriver. (They're used in the benchmark for
+ * additional manual testing purposes.)
+ */
+
+/* round_profile()
+ * Round all the scores in a generic (lspace) P7_PROFILE in exactly the same
+ * way that the scores in a lspace uchar P7_OPROFILE were rounded.  Then the
+ * two profiles should give identical internal scores.
+ */
+static void
+round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
+{
+  int k;
+  int x;
+
+  /* Transitions */
+  /* <= -eslINFINITY test is used solely to silence compiler. really testing == -eslINFINITY */
+  for (x = 0; x < gm->M*p7P_NTRANS; x++)
+      gm->tsc[x] = (gm->tsc[x] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->tsc[x]);
+  
+  /* Emissions */
+  for (x = 0; x < gm->abc->Kp; x++)
+    for (k = 0; k <= p7P_NR*gm->M; k++)
+      gm->rsc[x][k] = (gm->rsc[x][k] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->rsc[x][k]);
+
+  /* Specials */
+  for (k = 0; k < p7P_NXSTATES; k++)
+    for (x = 0; x < p7P_NXTRANS; x++)
+      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->xsc[k][x]);
+}
+
+
+
+/* simulate_msp_in_generic_profile()
+ * Set a generic profile's scores so that the normal dp_generic DP 
+ * algorithms will give the same score as MSPFilter():
+ *   1. All t_MM scores = 0
+ *   2. All other core transitions = -inf
+ *   3. multihit local mode
+ *   4. All t_BMk entries uniformly log 2/(M(M+1))
+ *   5. tCC, tNN, tJJ scores 0; total approximated later as -3
+ *   6. rounded in the same way as the 8-bit limited precision.
+ * 
+ * Scores in model <gm> are modified accordingly.
+ * xref J2/79
+ */
+static void
+simulate_msp_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
+{
+  int    k;
+
+  esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
+  for (k = 1; k <  gm->M; k++) p7P_TSC(gm, k, p7P_MM) = 0.0f;
+  for (k = 0; k <  gm->M; k++) p7P_TSC(gm, k, p7P_BM) = log(2.0f / ((float) gm->M * (float) (gm->M+1)));
+  
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0;
+
+  round_profile(om, gm);
+}
+#endif
+
+
 
 /* There are two benchmark drivers.  The first benches DP algorithms,
  * the main optimization target; the second benches profile
@@ -1774,9 +2062,11 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
    gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
    icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
 
-   ./benchmark-sse <hmmfile>       runs benchmark
+   ./benchmark-sse <hmmfile>       runs benchmark on ViterbiFilter() (-M for MSPFilter; -F for ForwardFilter, -S for ViterbiScore)
    ./benchmark-sse -b <hmmfile>    gets baseline time to subtract: just random seq generation
    ./benchmark-sse -c <hmmfile>    compare scores of SSE to generic impl
+
+   ./benchmark-sse -Mx -N100 <hmmfile>     test that MSPFilter scores match Viterbi
  */
 #include "p7_config.h"
 
@@ -1794,14 +2084,15 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "compare scores of generic, SSE DP        (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",               0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "round generic profile, make scores match (debug)", 0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "compare scores of generic, SSE DP        (debug)", 0 }, 
-  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "round generic profile, make scores match (debug)", 0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
+  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_MSPFilter()",                         0 },
   { "-V",        eslARG_NONE,"default",NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ViterbiFilter()",                     0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ForwardFilter()",                     0 },
   { "-S",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ViterbiScore()",                      0 },
@@ -1844,7 +2135,11 @@ main(int argc, char **argv)
   p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
-  if (esl_opt_GetBoolean(go, "-x")) round_profile(om, gm);
+  p7_oprofile_ReconfigLength(om, L);
+  if (esl_opt_GetBoolean(go, "-x")) {
+    if (esl_opt_GetBoolean(go, "-M")) simulate_msp_in_generic_profile(gm, om, L);
+    else                              round_profile(om, gm);
+  }
   if (esl_opt_GetBoolean(go, "-S")) pspace_to_lspace_float(om);
 
   ox = p7_omx_Create(gm->M);
@@ -1856,22 +2151,30 @@ main(int argc, char **argv)
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
       if (! esl_opt_GetBoolean(go, "-b")) {
-	if      (esl_opt_GetBoolean(go, "-F")) p7_ForwardFilter(dsq, L, om, ox, &sc1);   
+	if      (esl_opt_GetBoolean(go, "-M")) p7_MSPFilter    (dsq, L, om, ox, &sc1);   
+	else if (esl_opt_GetBoolean(go, "-F")) p7_ForwardFilter(dsq, L, om, ox, &sc1);   
 	else if (esl_opt_GetBoolean(go, "-S")) p7_ViterbiScore (dsq, L, om, ox, &sc1);   
 	else                                   p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
 
-	if (esl_opt_GetBoolean(go, "-c")) {
-	  if (esl_opt_GetBoolean(go, "-F"))   
-	    p7_GForward(dsq, L, gm, gx, &sc2); 
-	  else
-	    {
-	      p7_GViterbi     (dsq, L, gm, gx, &sc2); 
-	      if (esl_opt_GetBoolean(go, "-x")) {
-		sc2 /= om->scale;
-		if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
-		else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-	      }
-	    }
+	/* -c option: compare generic to fast score */
+	if (esl_opt_GetBoolean(go, "-c")) 
+	  {
+	    if       (esl_opt_GetBoolean(go, "-F"))    p7_GForward(dsq, L, gm, gx, &sc2); 
+	    else if  (esl_opt_GetBoolean(go, "-M"))    p7_GMSP    (dsq, L, gm, gx, &sc2); 
+	    else                                       p7_GViterbi(dsq, L, gm, gx, &sc2); 
+
+	    printf("%.4f %.4f\n", sc1, sc2);  
+	  }
+
+	/* -x option: compare generic to fast score in a way that should give exactly the same result */
+	if (esl_opt_GetBoolean(go, "-x")) {
+	  if       (esl_opt_GetBoolean(go, "-F")) p7_GForward(dsq, L, gm, gx, &sc2); 
+	  else {
+	    p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	    sc2 /= om->scale;
+	    if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
+	    else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+	  }
 	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
       }
@@ -1975,7 +2278,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 10. Unit tests
+ * 11. Unit tests
  *****************************************************************/
 
 #ifdef p7IMPL_SSE_TESTDRIVE
@@ -1998,10 +2301,53 @@ make_random_profile(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
   if (p7_profile_Validate(gm, 0.0001)               != eslOK) esl_fatal("whoops, profile is bad!");
   if ((om = p7_oprofile_Create(M, abc))             == NULL)  esl_fatal("failed to create optimized profile");
   if (p7_oprofile_Convert(gm, om)                   != eslOK) esl_fatal("failed to convert profile to optimized form");
+  if (p7_oprofile_ReconfigLength(om, L)             != eslOK) esl_fatal("failed to config length of oprofile");
 
   *ret_hmm = hmm;
   *ret_gm  = gm;
   *ret_om  = om;
+}
+
+/* MSPFilter() unit test
+ * 
+ * We can check that scores are identical (within machine error) to
+ * scores of generic DP with scores rounded the same way.  Do this for
+ * a random model of length <M>, for <N> test sequences of length <L>.
+ * 
+ * We assume that we don't accidentally generate a high-scoring random
+ * sequence that overflows MSPFilter()'s limited range.
+ * 
+ */
+static void
+utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  P7_HMM      *hmm = NULL;
+  P7_PROFILE  *gm  = NULL;
+  P7_OPROFILE *om  = NULL;
+  ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_OMX      *ox  = p7_omx_Create(M);
+  P7_GMX      *gx  = p7_gmx_Create(M, L);
+  float sc1, sc2;
+
+  make_random_profile(r, abc, bg, M, L, &hmm, &gm, &om);
+  simulate_msp_in_generic_profile(gm, om, L);
+  while (N--)
+    {
+      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+
+      p7_MSPFilter(dsq, L, om, ox, &sc1);
+      p7_GViterbi (dsq, L, gm, gx, &sc2);
+
+      sc2 = sc2 / om->scale - 3.0f;
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("msp filter unit test failed: scores differ");
+    }
+
+  free(dsq);
+  p7_hmm_Destroy(hmm);
+  p7_omx_Destroy(ox);
+  p7_gmx_Destroy(gx);
+  p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
 }
 
 
@@ -2127,7 +2473,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
 #endif /*p7IMPL_SSE_TESTDRIVE*/
 
 /*****************************************************************
- * 11. Test driver
+ * 12. Test driver
  *****************************************************************/
 #ifdef p7IMPL_SSE_TESTDRIVE
 /* 
@@ -2175,9 +2521,13 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  utest_viterbi_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+  utest_msp_filter(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_msp_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_msp_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+
+  utest_viterbi_filter(r, abc, bg, M, L, N);   
+  utest_viterbi_filter(r, abc, bg, 1, L, 10);  
+  utest_viterbi_filter(r, abc, bg, M, 1, 10);  
 
   utest_forward_filter(r, abc, bg, M, L, N);   
   utest_forward_filter(r, abc, bg, 1, L, 10);  
@@ -2194,9 +2544,13 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  utest_viterbi_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+  utest_msp_filter(r, abc, bg, M, L, N);   
+  utest_msp_filter(r, abc, bg, 1, L, 10);  
+  utest_msp_filter(r, abc, bg, M, 1, 10);  
+
+  utest_viterbi_filter(r, abc, bg, M, L, N); 
+  utest_viterbi_filter(r, abc, bg, 1, L, 10);
+  utest_viterbi_filter(r, abc, bg, M, 1, 10);
 
   utest_forward_filter(r, abc, bg, M, L, N);   
   utest_forward_filter(r, abc, bg, 1, L, 10);  
@@ -2216,7 +2570,7 @@ main(int argc, char **argv)
 #endif /*IMPL_SSE_TESTDRIVE*/
 
 /*****************************************************************
- * 12. Example
+ * 13. Example
  *****************************************************************/
 
 #ifdef p7IMPL_SSE_EXAMPLE
@@ -2283,9 +2637,13 @@ main(int argc, char **argv)
      p7_oprofile_Dump(stdout, om);      dumps the optimized profile
      p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
-   */
+     simulate_msp_in_generic_profile(gm, om, L);
+  */
+
+  simulate_msp_in_generic_profile(gm, om, sq->n);
 
   /* take your pick: */
+  p7_MSPFilter    (sq->dsq, sq->n, om, ox, &sc);  printf("msp filter score:     %.2f nats\n", sc);
   p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi filter score: %.2f nats\n", sc);
   p7_ForwardFilter(sq->dsq, sq->n, om, ox, &sc);  printf("forward filter score: %.2f nats\n", sc);
   p7_GViterbi     (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);

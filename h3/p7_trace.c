@@ -421,17 +421,17 @@ p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq) /* replace v
 	    xi = dsq[tr->i[j]];
 
 	    if (tr->st[j] == p7T_M) {
-	      fprintf(fp, " %8.4f %c", p7P_MSC(gm, tr->k[j], xi), gm->abc_r->sym[xi]);
+	      fprintf(fp, " %8.4f %c", p7P_MSC(gm, tr->k[j], xi), gm->abc->sym[xi]);
 	      sc += p7P_MSC(gm, tr->k[j], xi);
 	    } 
 	    else if (tr->st[j] == p7T_I) {
-	      fprintf(fp, " %8.4f %c", p7P_ISC(gm, tr->k[j], xi), (char) tolower((int) gm->abc_r->sym[xi]));
+	      fprintf(fp, " %8.4f %c", p7P_ISC(gm, tr->k[j], xi), (char) tolower((int) gm->abc->sym[xi]));
 	      sc += p7P_ISC(gm, tr->k[j], xi);
 	    }
 	    else if ((tr->st[j] == p7T_N && tr->st[j-1] == p7T_N) ||
 		     (tr->st[j] == p7T_C && tr->st[j-1] == p7T_C) ||
 		     (tr->st[j] == p7T_J && tr->st[j-1] == p7T_J))  {
-	      fprintf(fp, " %8d %c", 0, (char) tolower((int) gm->abc_r->sym[xi]));
+	      fprintf(fp, " %8d %c", 0, (char) tolower((int) gm->abc->sym[xi]));
 	    }
 	  } 
 	  else fprintf(fp, " %8s %c", "-", '-');

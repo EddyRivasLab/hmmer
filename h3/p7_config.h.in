@@ -54,7 +54,8 @@
 #define p7_ETARGET_DNA    0.59 /* bits */
 #define p7_ETARGET_OTHER  1.0  /* bits */ /* if you define your own alphabet, set this */
 
-
+#define p7_SEQDBENV          "BLASTDB"
+#define p7_HMMDBENV          "PFAMDB"
 
 /*****************************************************************
  * 3. The next section probably shouldn't be edited at all, unless
@@ -104,7 +105,11 @@
  */
 #define p7_MAXDCHLET  20      /* maximum # Dirichlet components in mixture prior */
 
+enum p7_evparams_e { p7_LAMBDA = 0, p7_MU = 1, p7_TAU = 2 };
+#define p7_NEVPARAM 3
 
+enum p7_cutoffs_e { p7_GA1 = 0, p7_GA2 = 1, p7_TC1 = 2, p7_TC2 = 3, p7_NC1 = 4, p7_NC2 = 5 };
+#define p7_NCUTOFFS 6
 
 
 

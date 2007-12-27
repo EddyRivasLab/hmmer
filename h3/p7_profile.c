@@ -27,16 +27,20 @@
  *****************************************************************/
 
 /* Function:  p7_profile_Create()
- * Synopsis:  Create a profile.
+ * Synopsis:  Allocates a profile.
  * Incept:    SRE, Thu Jan 11 15:53:28 2007 [Janelia]
  *
- * Purpose:   Creates a profile of <M> nodes, for digital alphabet <abc>.
+ * Purpose:   Allocates for a profile of up to <M> nodes, for digital
+ *            alphabet <abc>.
  *            
- *            Scores (and length model probabilities) are uninitialized;
- *            the <p7_ProfileConfig()> call is what sets these.
- *            The alignment mode is set to <p7_NO_MODE>. 
- *            The reference pointers <gm->hmm_r> and <gm->bg_r> are set to <NULL>.
- *            The reference pointer <gm->abc_r> is set to <abc>.
+ *            Because this function might be in the critical path (in
+ *            hmmpfam, for example), we leave much of the model
+ *            unintialized, including scores and length model
+ *            probabilities. The <p7_ProfileConfig()> call is what
+ *            sets these. 
+ *            
+ *            The alignment mode is set to <p7_NO_MODE>.  The
+ *            reference pointer <gm->abc> is set to <abc>.
  *
  * Returns:   a pointer to the new profile.
  *
@@ -45,7 +49,7 @@
  * Xref:      STL11/125.
  */
 P7_PROFILE *
-p7_profile_Create(int M, const ESL_ALPHABET *abc)
+p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
 {
   P7_PROFILE *gm = NULL;
   int         x;
@@ -57,39 +61,40 @@ p7_profile_Create(int M, const ESL_ALPHABET *abc)
   gm->rsc   = NULL;
   
   /* level 1 */
-  ESL_ALLOC(gm->tsc,   sizeof(float)   * M * p7P_NTRANS); 
+  ESL_ALLOC(gm->tsc,   sizeof(float)   * allocM * p7P_NTRANS); 
   ESL_ALLOC(gm->rsc,   sizeof(float *) * abc->Kp);
   gm->rsc[0] = NULL;
   
   /* level 2 */
-  ESL_ALLOC(gm->rsc[0], sizeof(float) * abc->Kp * (M+1) * p7P_NR);
+  ESL_ALLOC(gm->rsc[0], sizeof(float) * abc->Kp * (allocM+1) * p7P_NR);
   for (x = 1; x < abc->Kp; x++) 
-    gm->rsc[x] = gm->rsc[0] + x * (M+1) * p7P_NR;
+    gm->rsc[x] = gm->rsc[0] + x * (allocM+1) * p7P_NR;
 
   /* Initialize some edge pieces of memory that are never used,
    * and are only present for indexing convenience.
    */
   esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* node 0 nonexistent, has no transitions  */
-  if (M > 1) {
+  if (allocM > 1) {
     p7P_TSC(gm, 1, p7P_DM) = -eslINFINITY;             /* delete state D_1 is wing-retracted      */
     p7P_TSC(gm, 1, p7P_DD) = -eslINFINITY;
   }
   for (x = 0; x < abc->Kp; x++) {        
-    p7P_MSC(gm, 0, x) = -eslINFINITY;                  /* no emissions from nonexistent M_0... */
-    p7P_ISC(gm, 0, x) = -eslINFINITY;                  /* or I_0... */
-    p7P_ISC(gm, M, x) = -eslINFINITY;                  /* or I_M.   */
+    p7P_MSC(gm, 0,      x) = -eslINFINITY;             /* no emissions from nonexistent M_0... */
+    p7P_ISC(gm, 0,      x) = -eslINFINITY;             /* or I_0... */
+    /* I_M is initialized in profile config, when we know actual M, not just allocated max M   */
   }
   x = esl_abc_XGetGap(abc);	                       /* no emission can emit/score gap characters */
-  esl_vec_FSet(gm->rsc[x], (M+1)*p7P_NR, -eslINFINITY);
+  esl_vec_FSet(gm->rsc[x], (allocM+1)*p7P_NR, -eslINFINITY);
   x = esl_abc_XGetMissing(abc);	                      /* no emission can emit/score missing data characters */
-  esl_vec_FSet(gm->rsc[x], (M+1)*p7P_NR, -eslINFINITY);
+  esl_vec_FSet(gm->rsc[x], (allocM+1)*p7P_NR, -eslINFINITY);
 
   /* Set remaining info  */
   gm->mode        = p7_NO_MODE;
-  gm->M           = M;
-  gm->abc_r       = abc;
-  gm->hmm_r       = NULL;
-  gm->bg_r        = NULL;
+  gm->allocM      = allocM;
+  gm->M           = 0;
+  gm->nj          = 0.0f;
+  gm->name        = NULL;
+  gm->abc         = abc;
   return gm;
 
  ERROR:
@@ -108,17 +113,28 @@ P7_PROFILE *
 p7_profile_Clone(const P7_PROFILE *gm)
 {
   P7_PROFILE *g2 = NULL;
-  int x;
+  int x,z;
+  int status;
 
-  if ((g2 = p7_profile_Create(gm->M, gm->abc_r)) == NULL) return NULL;
-  g2->mode        = gm->mode;
-  g2->hmm_r       = gm->hmm_r;
-  g2->bg_r        = gm->bg_r;
+  if ((g2 = p7_profile_Create(gm->allocM, gm->abc)) == NULL) return NULL;
 
   esl_vec_FCopy(gm->tsc, gm->M*p7P_NTRANS, g2->tsc);
-  for (x = 0; x < gm->abc_r->Kp;  x++) esl_vec_FCopy(gm->rsc[x], (gm->M+1)*p7P_NR, g2->rsc[x]);
+  for (x = 0; x < gm->abc->Kp;    x++) esl_vec_FCopy(gm->rsc[x], (gm->M+1)*p7P_NR, g2->rsc[x]);
   for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(gm->xsc[x], p7P_NXTRANS,      g2->xsc[x]);
+  
+  g2->mode        = gm->mode;
+  g2->allocM      = gm->allocM;
+  g2->M           = gm->M;
+  g2->nj          = gm->nj;
+  
+  if ((status = esl_strdup(gm->name, -1, &(g2->name))) != eslOK) goto ERROR;
+  for (z = 0; z < p7_NEVPARAM; z++) g2->evparam[z] = gm->evparam[z];
+  for (z = 0; z < p7_NCUTOFFS; z++) g2->cutoff[z]  = gm->cutoff[z];
   return g2;
+  
+ ERROR:
+  p7_profile_Destroy(g2);
+  return NULL;
 }
 
 
@@ -142,8 +158,8 @@ int
 p7_profile_SetNullEmissions(P7_PROFILE *gm)
 {
   int x;
-  for (x = 0; x <= gm->abc_r->K; x++)                  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* canonicals    */
-  for (x = gm->abc_r->K+1; x <= gm->abc_r->Kp-2; x++)  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* noncanonicals */
+  for (x = 0; x <= gm->abc->K; x++)                esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* canonicals    */
+  for (x = gm->abc->K+1; x <= gm->abc->Kp-2; x++)  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* noncanonicals */
   return eslOK;
 }
 
@@ -163,6 +179,7 @@ void
 p7_profile_Destroy(P7_PROFILE *gm)
 {
   if (gm != NULL) {
+    if (gm->name  != NULL) free(gm->name);
     if (gm->rsc   != NULL && gm->rsc[0] != NULL) free(gm->rsc[0]);
     if (gm->tsc   != NULL) free(gm->tsc);
     if (gm->rsc   != NULL) free(gm->rsc);
@@ -325,7 +342,8 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
  * Purpose:   Validates the internals of the generic profile structure
  *            <gm>.
  *            
- *            TODO: currently this function is a no-op!
+ *            TODO: currently this function is incomplete, and only
+ *            validates the entry distribution.
  *            
  * Returns:   <eslOK> if <gm> internals look fine. Returns <eslFAIL>
  *            if something is wrong.
@@ -375,7 +393,8 @@ p7_profile_Validate(const P7_PROFILE *gm, float tol)
  *            Return <eslOK> if they're identical, and <eslFAIL> if
  *            they differ. Floating-point probabilities are 
  *            compared for equality within a fractional tolerance
- *            <tol>. 
+ *            <tol>.  Only compares the scores, not any annotation
+ *            on the profiles.
  */
 int
 p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
@@ -386,11 +405,11 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
   if (gm1->M    != gm2->M)    return eslFAIL;
 
   if (esl_vec_FCompare(gm1->tsc, gm2->tsc, gm1->M*p7P_NTRANS, tol)         != eslOK) return eslFAIL;
-  for (x = 0; x < gm1->abc_r->Kp; x++) 
+  for (x = 0; x < gm1->abc->Kp; x++) 
     if (esl_vec_FCompare(gm1->rsc[x], gm2->rsc[x], (gm1->M+1)*p7P_NR, tol) != eslOK) return eslFAIL;
 
   for (x = 0; x < p7P_NXSTATES; x++)
-    if (esl_vec_FCompare(gm1->xsc[x], gm2->xsc[x], p7P_NXTRANS, tol)     != eslOK) return eslFAIL;
+    if (esl_vec_FCompare(gm1->xsc[x], gm2->xsc[x], p7P_NXTRANS, tol)       != eslOK) return eslFAIL;
 
   return eslOK;
 }

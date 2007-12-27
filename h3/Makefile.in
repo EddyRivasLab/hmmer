@@ -57,12 +57,14 @@ OBJS =  build.o\
 	p7_prior.o\
 	p7_profile.o\
 	p7_trace.o
-#	impl_fp.o\
 #	island.o\
 
+IMPL_OBJ = @IMPL_OBJ@
 
 HDRS =  hmmer.h\
 	p7_config.h
+
+IMPL_HEADER = @IMPL_HEADER@
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
@@ -71,18 +73,18 @@ HDRS =  hmmer.h\
 #################################################################
 ## Targets defining how to make HMMER executables.
 ##
-all: 	$(PROGS) libhmmer.a  ../easel/libeasel.a
+all: 	${PROGS} libhmmer.a  ../easel/libeasel.a
 
-${PROGS}: @EXEC_DEPENDENCY@ ${OBJS}   libhmmer.a ../easel/libeasel.a
-	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
+${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} ${IMPL_OBJ}  libhmmer.a ../easel/libeasel.a
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -static -o $@ $@.o ${OBJS} ${IMPL_OBJ} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
 
 #################################################################
 ## Targets used in making HMMER library for testsuite compilation.
 ##
 module: libhmmer.a
 
-libhmmer.a: $(OBJS) 
-	$(AR) libhmmer.a $(OBJS) 
+libhmmer.a: ${OBJS} ${IMPL_OBJ}
+	$(AR) libhmmer.a ${OBJS}
 	$(RANLIB) libhmmer.a
 	chmod 644 libhmmer.a
 
@@ -99,7 +101,7 @@ distclean:
 	-rm -f Makefile p7_config.h
 
 clean:
-	-rm -f *.o *~ Makefile.bak core $(PROGS) TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a

@@ -336,7 +336,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   }
   
   /* Match scores */
-  for (x = 0; x < gm->abc_r->Kp; x++)
+  for (x = 0; x < gm->abc->Kp; x++)
     for (k = 1; k <= gm->M; k++)
       {
 	int *rsc = om->rsc[x] + k*p7O_NR;
@@ -344,7 +344,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
       }
 
   /* Insert scores */
-  for (x = 0; x < gm->abc_r->Kp; x++)
+  for (x = 0; x < gm->abc->Kp; x++)
     for (k = 1; k < gm->M; k++)
       {
 	int *rsc = om->rsc[x] + k*p7O_NR;
@@ -361,7 +361,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   om->xsc[p7O_J][p7O_MOVE] = convert_lodscore(gm->xsc[p7P_J][p7P_MOVE]);
 
   om->mode  = gm->mode;
-  om->abc   = gm->abc_r;
+  om->abc   = gm->abc;
   return eslOK;
 }
 

@@ -72,7 +72,7 @@ p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, doubl
   p.hmm = hmm;
   p.bg  = bg;
   p.pri = pri;
-  if ((p.h2  = p7_hmm_Duplicate(hmm)) == NULL) return eslEMEM;
+  if ((p.h2  = p7_hmm_Clone(hmm)) == NULL) return eslEMEM;
   p.etarget = etarget;
   
   Neff = (double) hmm->nseq;

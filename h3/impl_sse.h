@@ -119,7 +119,13 @@ typedef struct p7_oprofile_s {
   uint8_t   xu[p7O_NXSTATES][p7O_NXTRANS];
   int       allocQ16;		/* how many uchar vectors                      */
 
-  /* Other info for the ViterbiFilter() implementation                         */
+  /* info for the MSPFilter() implementation                                   */
+  __m128i **rm;     		/* [x][q]:  m16 array and m16[0] are allocated */
+  uint8_t   tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
+  uint8_t   tec;		/* constant E->C  cost: scaled log 0.5         */
+  uint8_t   tjb;		/* constant J->B  cost: scaled log 3/(L+3)     */
+
+  /* info for the ViterbiFilter() implementation                               */
   int       ddbound_u;	        /* used for lazy DD. it must be signed!        */
   float     scale;		/* typically (2,3)*log(2): half or third bits  */
   uint8_t   base;  	        /* typically +127: offset of uchar scores      */
@@ -132,12 +138,18 @@ typedef struct p7_oprofile_s {
   int      allocQ4;		/* how many float vectors                      */
 
   /* Info specific to the optional ViterbiScore() implementation               */
-  float    ddbound_f;
+  float    ddbound_f;		/* full precision bound for lazy DD            */
+  int      lspace_f;		/* TRUE if tf,rf are in lspace for Score()     */
 
-  /* Shared information */
-  const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information         */
-  int mode;			/* p7_LOCAL, for example                       */
-  int M;			/* model length                                */
+  /* Information copied from parent profile:                                       */
+  char  *name;			/* unique name of model                            */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values             */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gather, trust, noise cutoffs */
+  float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit     */
+  int    mode;			/* p7_LOCAL, for example                           */
+  int    allocM;		/* maximum model length currently allocated for    */
+  int    M;			/* model length                                    */
+  const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information             */
 } P7_OPROFILE;
 
 
@@ -148,13 +160,6 @@ typedef struct p7_oprofile_s {
 enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 #define p7X_NSCELLS 3
 
-/* The ?MX(q) macros work for either uchar or float, so long as you
- * init your "dp" to point to the appropriate array.
- */
-#define MMX(q) (dp[(q) * p7X_NSCELLS + p7X_M])
-#define DMX(q) (dp[(q) * p7X_NSCELLS + p7X_D])
-#define IMX(q) (dp[(q) * p7X_NSCELLS + p7X_I])
-
 typedef struct p7_omx_s {
   __m128i *dpu;			/* one row of a striped DP matrix for [0..q-1][MDI] for uchars */
   int     allocQ16;		/* total uchar vectors allocated                               */
@@ -164,6 +169,7 @@ typedef struct p7_omx_s {
   int     allocQ4;		/* total float vectors allocated                               */
   int     Q4;			/* when omx is in use: how many quads are valid (= p7O_NQF(M)) */
 
+  int     allocM;		/* current allocation size (redundant with Q16 and Q4, really) */
   int     M;			/* when omx is in use: how big is the query                    */
 #ifdef p7_DEBUGGING  
   int     debugging;		/* TRUE if we're in debugging mode                             */
@@ -180,13 +186,16 @@ extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
 extern P7_OMX      *p7_omx_Create(int allocM);
+extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
 extern int          p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om);
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
 
 extern int          p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om);
+extern int          p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L);
 
+extern int p7_MSPFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

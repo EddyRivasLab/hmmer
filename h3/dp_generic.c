@@ -68,8 +68,7 @@
  *           
  * Args:      dsq    - sequence in digitized form, 1..L
  *            L      - length of dsq
- *            gm     - profile. Does not need to contain any
- *                     reference pointers (alphabet, HMM, or null model)
+ *            gm     - profile. 
  *            gx     - DP matrix with room for an MxL alignment
  *            ret_sc - RETURN: Viterbi lod score in nats
  *           
@@ -196,8 +195,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  *           
  * Args:      dsq    - sequence in digitized form, 1..L
  *            L      - length of dsq
- *            gm     - profile. Does not need to contain any
- *                     reference pointers (alphabet, HMM, or null model)
+ *            gm     - profile. 
  *            mx     - DP matrix with room for an MxL alignment
  *            ret_sc - RETURN: Forward lod score in nats
  *           
@@ -321,8 +319,7 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  *           
  * Args:      dsq          - sequence in digitized form, 1..L
  *            L            - length of dsq
- *            gm           - profile. Does not need to contain any
- *                           reference pointers (alphabet, HMM, or null model)
+ *            gm           - profile. 
  *            gx           - DP matrix with room for an MxL alignment
  *            opt_fwdscore - optRETURN: Forward lod score in nats.
  *            opt_hybscore - optRETURN: Hybrid lod score in nats.
@@ -353,6 +350,75 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
   if (opt_hybscore != NULL) *opt_hybscore = 0;
   return status;
 }
+
+
+/* Function:  p7_GMSP()
+ * Synopsis:  The MSP score algorithm.
+ * Incept:    SRE, Thu Dec 27 08:33:39 2007 [Janelia]
+ *
+ * Purpose:   Calculates the maximal score of ungapped local segment
+ *            pair alignments, taking advantage of the fact that this
+ *            is simply equivalent to setting all MM transitions to 1.0
+ *            in a multihit local profile.
+ *            
+ * Args:      dsq          - sequence in digitized form, 1..L
+ *            L            - length of dsq
+ *            gm           - profile (can be in any mode)
+ *            gx           - DP matrix with room for an MxL alignment
+ *            ret_mspscore - RETURN: MSP lod score in nats.
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ * Note:      This is written deliberately as a modified p7_GViterbi
+ *            routine. It could be faster -- we don't need the
+ *            interleaved dp matrix or residue scores, since we aren't
+ *            calculating D or I states, for example, and we could do
+ *            without some of the special states -- but speed is the
+ *            job of the optimized implementations. Rather, the goal
+ *            here is to establish a stable, probabilistically correct
+ *            reference calculation. (Thus, the CC, NN, JJ transitions
+ *            are real scores here, not fixed to 0 as in the optimized
+ *            versions.)  
+ */            
+int
+p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc)
+{
+  float      **dp    = gx->dp;
+  float       *xmx   = gx->xmx;
+  float        tloop = logf((float) L / (float) (L+3));
+  float        tmove = logf(     3.0f / (float) (L+3));
+  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+  float        tec   = logf(0.5f);
+  int          i,k;
+
+  XMX(0,p7G_N) = 0;
+  XMX(0,p7G_B) = tmove;                                      /* S->N->B, no N-tail   */
+  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) =-eslINFINITY;  /* need seq to get here */
+  for (k = 0; k <= gm->M; k++)
+    MMX(0,k) = -eslINFINITY;                                 /* need seq to get here */
+
+  for (i = 1; i <= L; i++) 
+    {
+      float const *rsc = gm->rsc[dsq[i]];
+
+      MMX(i,0)     = -eslINFINITY;
+      XMX(i,p7G_E) = -eslINFINITY;
+    
+      for (k = 1; k <= gm->M; k++) 
+	{
+	  MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
+	  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
+	}
+   
+      XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) + tloop,     XMX(i-1,p7G_E) + tec);
+      XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) + tloop,     XMX(i,  p7G_E) + tec);
+      XMX(i,p7G_N) =          XMX(i-1,p7G_N) + tloop;
+      XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i,  p7G_J) + tmove);
+    }
+  *ret_sc = XMX(L,p7G_C) + tmove;
+  return eslOK;
+}
+
 
 /*****************************************************************
  * 2. Traceback
@@ -528,8 +594,10 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
  * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7DP_GENERIC_BENCHMARK
-/* gcc -o benchmark-generic -g -O2 -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
- * ./benchmark-generic <hmmfile>
+/*
+   gcc -o benchmark-generic -g -O2 -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
+   icc -O3 -static -o benchmark-generic -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
+   ./benchmark-generic <hmmfile>
  */
 /* As of Tue Jul 17 13:14:43 2007
  * 61 Mc/s for Viterbi, 8.6 Mc/s for Forward.
@@ -548,7 +616,9 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-f",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Forward algorithm",                      0 },
+  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't do DP",                   0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Forward algorithm",                      0 },
+  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the MSP algorithm",                          0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
@@ -598,8 +668,10 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      if (esl_opt_GetBoolean(go, "-b")) continue;
 
-      if      (esl_opt_GetBoolean(go, "-f"))           p7_GForward     (dsq, L, gm, gx, &sc);
+      if      (esl_opt_GetBoolean(go, "-F"))           p7_GForward     (dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "-M"))           p7_GMSP         (dsq, L, gm, gx, &sc);
       else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
 
       p7_bg_NullOne(bg, dsq, L, &nullsc);
@@ -634,6 +706,7 @@ main(int argc, char **argv)
 #include "esl_getopts.h"
 #include "esl_alphabet.h"
 #include "esl_msa.h"
+#include "esl_vectorops.h"
 
 /* The "basic" utest is a minimal driver for making a small DNA profile and a small DNA sequence,
  * then running Viterbi and Forward. It's useful for dumping DP matrices and profiles for debugging.
@@ -787,6 +860,47 @@ utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   free(dsq);
   return;
 }
+
+
+/* The MSP score can be validated against Viterbi (provided we trust
+ * Viterbi), by creating a multihit local profile in which:
+ *   1. All t_MM scores = 0
+ *   2. All other core transitions = -inf
+ *   3. All t_BMk entries uniformly log 2/(M(M+1))
+ */
+static void
+utest_msp(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
+{
+  P7_PROFILE *g2 = NULL;
+  ESL_DSQ   *dsq = NULL;
+  P7_GMX    *gx  = NULL;
+  float     sc1, sc2;
+  int       k, idx;
+
+  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
+  if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
+  if ((g2     = p7_profile_Clone(gm))           == NULL)  esl_fatal("profile clone failed");
+
+  /* Make g2's scores appropriate for simulating the MSP algorithm in Viterbi */
+  esl_vec_FSet(g2->tsc, p7P_NTRANS * g2->M, -eslINFINITY);
+  for (k = 1; k <  g2->M; k++) p7P_TSC(g2, k, p7P_MM) = 0.0f;
+  for (k = 0; k <  g2->M; k++) p7P_TSC(g2, k, p7P_BM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
+
+  for (idx = 0; idx < nseq; idx++)
+    {
+      if (esl_rnd_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+
+      if (p7_GMSP    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSP failed");
+      if (p7_GViterbi(dsq, L, g2, gx, &sc2)       != eslOK) esl_fatal("viterbi failed");
+      if (fabs(sc1-sc2) > 0.0001) esl_fatal("MSP score not equal to Viterbi score");
+    }
+
+  p7_gmx_Destroy(gx);
+  p7_profile_Destroy(g2);
+  free(dsq);
+  return;
+}
+
 
 /* The "generation" test scores sequences generated by the same profile.
  * Each Viterbi and Forward score should be >= the trace score of the emitted seq.
@@ -974,12 +1088,13 @@ main(int argc, char **argv)
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL) != eslOK) esl_fatal("failed to config profile");
+  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
   if (p7_hmm_Validate    (hmm,     0.0001, errbuf)  != eslOK) esl_fatal("whoops, HMM is bad!");
   if (p7_profile_Validate(gm, 0.0001)               != eslOK) esl_fatal("whoops, profile is bad!");
 
   utest_viterbi    (go, r, abc, bg, gm, nseq, L);
   utest_forward    (go, r, abc, bg, gm, nseq, L);
+  utest_msp        (go, r, abc, bg, gm, nseq, L);
   utest_generation (go, r, abc, gm, hmm, bg, nseq);
   utest_enumeration(go, r, abc, 4);	/* can't go much higher than 5; enumeration test is cpu-intensive. */
   

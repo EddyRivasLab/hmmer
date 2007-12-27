@@ -81,6 +81,7 @@ P7_HMM *
 p7_hmm_CreateShell(void) 
 {
   P7_HMM *hmm = NULL;
+  int     z;
   int     status;
 
   ESL_ALLOC(hmm, sizeof(P7_HMM));
@@ -102,9 +103,8 @@ p7_hmm_CreateShell(void)
   hmm->map      = NULL;
   hmm->checksum = 0;
 
-  hmm->ga1 = hmm->ga2 = 0.;
-  hmm->tc1 = hmm->tc2 = 0.;
-  hmm->nc1 = hmm->nc2 = 0.;
+  for (z = 0; z < p7_NCUTOFFS; z++) hmm->cutoff[z]  = 0.0f;
+  for (z = 0; z < p7_NEVPARAM; z++) hmm->evparam[z] = 0.0f;
 
   hmm->offset   = 0;
   hmm->flags    = 0;
@@ -248,7 +248,7 @@ p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest)
   return eslOK;
 }
 
-/* Function:  p7_hmm_Duplicate()
+/* Function:  p7_hmm_Clone()
  * Incept:    SRE, Fri Jan 26 15:34:42 2007 [Janelia]
  *
  * Purpose:   Duplicates an hmm.
@@ -262,10 +262,11 @@ p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest)
  * Throws:    <NULL> on allocation failure.
  */
 P7_HMM *
-p7_hmm_Duplicate(const P7_HMM *hmm)
+p7_hmm_Clone(const P7_HMM *hmm)
 {
   int     status;
   P7_HMM *new = NULL;
+  int     z;
 
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
   p7_hmm_CopyParameters(hmm, new);
@@ -285,12 +286,10 @@ p7_hmm_Duplicate(const P7_HMM *hmm)
   new->nseq     = hmm->nseq;
   new->eff_nseq = hmm->eff_nseq;
   new->checksum = hmm->checksum;
-  new->ga1      = hmm->ga1;
-  new->ga2      = hmm->ga2;
-  new->tc1      = hmm->tc1;
-  new->tc2      = hmm->tc2;
-  new->nc1      = hmm->nc1;
-  new->nc2      = hmm->nc2;
+
+  for (z = 0; z < p7_NEVPARAM; z++) new->evparam[z] = hmm->evparam[z];
+  for (z = 0; z < p7_NCUTOFFS; z++) new->cutoff[z]  = hmm->cutoff[z];
+
   new->offset   = hmm->offset;
   new->flags    = hmm->flags;
   new->abc      = hmm->abc;
@@ -950,7 +949,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc,
 int
 p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
 {
-  int k;
+  int k, z;
   
   if (h1->abc->type != h2->abc->type) return eslFAIL;
   if (h1->M         != h2->M)         return eslFAIL;
@@ -978,17 +977,23 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if ((h1->flags & p7H_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
 
   if (h1->flags & p7H_GA) {
-    if (esl_FCompare(h1->ga1, h2->ga1, tol) != eslOK) return eslFAIL;
-    if (esl_FCompare(h1->ga2, h2->ga2, tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->cutoff[p7_GA1], h2->cutoff[p7_GA1], tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->cutoff[p7_GA2], h2->cutoff[p7_GA2], tol) != eslOK) return eslFAIL;
   }
   if (h1->flags & p7H_TC) {
-    if (esl_FCompare(h1->tc1, h2->tc1, tol) != eslOK) return eslFAIL;
-    if (esl_FCompare(h1->tc2, h2->tc2, tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->cutoff[p7_TC1], h2->cutoff[p7_TC1], tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->cutoff[p7_TC2], h2->cutoff[p7_TC2], tol) != eslOK) return eslFAIL;
   }
   if (h1->flags & p7H_NC) {
-    if (esl_FCompare(h1->nc1, h2->nc1, tol) != eslOK) return eslFAIL;
-    if (esl_FCompare(h1->nc2, h2->nc2, tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->cutoff[p7_NC1], h2->cutoff[p7_NC1], tol) != eslOK) return eslFAIL;
+    if (esl_FCompare(h1->cutoff[p7_NC2], h2->cutoff[p7_NC2], tol) != eslOK) return eslFAIL;
   }
+
+  if (h1->flags & p7H_STATS) {
+    for (z = 0; z < p7_NEVPARAM; z++)
+      if (esl_FCompare(h1->evparam[z], h2->evparam[z], tol) != eslOK) return eslFAIL;
+  }
+
   return eslOK;
 }
 
@@ -1055,6 +1060,10 @@ p7_hmm_Validate(P7_HMM *hmm, float tol, char *errbuf)
     if (hmm->ca != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag down, but ca string is present");
   if (  (hmm->flags & p7H_MAP) && hmm->map == NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag up, but map string is null");
   if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
+
+  if (hmm->flags & p7H_STATS) {
+    if (hmm->evparam[p7_LAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
+  }
 
   return eslOK;
 
