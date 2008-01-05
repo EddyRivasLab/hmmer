@@ -83,7 +83,6 @@ p7_FLogsum(float s1, float s2)
   const float max = ESL_MAX(s1, s2);
   const float min = ESL_MIN(s1, s2);
   return  (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
-
 } 
 
 

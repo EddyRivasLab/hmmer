@@ -1,13 +1,17 @@
 /* The all-encompassing include file for HMMER.
  *
- *    1. P7_HMM:     a core model.
- *    2. P7_PROFILE: a scoring profile, and its implicit model.
- *    3. P7_BG:      a null (background) model.
- *    4. P7_TRACE:   a traceback path (alignment of seq to profile).
- *    5. P7_HMMFILE: an HMM save file or database, open for reading.
- *    6. P7_GMX:     a "generic" dynamic programming matrix
- *    7. P7_DPRIOR:  mixture Dirichlet prior for profile HMMs
- *    8. Other routines in HMMER's exposed API.
+ *    1. P7_HMM:         a core model.
+ *    2. P7_PROFILE:     a scoring profile, and its implicit model.
+ *    3. P7_BG:          a null (background) model.
+ *    4. P7_TRACE:       a traceback path (alignment of seq to profile).
+ *    5. P7_HMMFILE:     an HMM save file or database, open for reading.
+ *    6. P7_GMX:         a "generic" dynamic programming matrix
+ *    7. P7_DPRIOR:      mixture Dirichlet prior for profile HMMs
+ *    8. P7_ALIDISPLAY:  an alignment formatted for printing
+ *    9. P7_TOPHITS:     ranking lists of top-scoring hits
+ *   10. Inclusion of the architecture-specific optimized implementation.
+ *   11. Declaration of functions in HMMER's exposed API.
+ *   12. Copyright and license information.
  * 
  * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
  * SVN $Id$
@@ -196,14 +200,18 @@ typedef struct p7_profile_s {
   int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */ 
   int     allocM;	/* max # of nodes allocated in this structure              */
   int     M;		/* number of nodes in the model                            */
-
   float   nj;		/* expected # of uses of J; precalculated from loop config */
 
-  /* Info copied/duplicated from parent HMM:                                            */
-  char  *name;			/* unique name of model                                 */
-  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                  */
-  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs */
-  const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet              */
+  /* Info, most of which is a copy from parent HMM:                                       */
+  char  *name;			/* unique name of model                                   */
+  char  *acc;			/* unique accession of model, or NULL                     */
+  char  *desc;                  /* brief (1-line) description of model, or NULL           */
+  char  *rf;                    /* reference line from alignment 1..M; *rf=0 means unused */
+  char  *cs;                    /* consensus structure line      1..M, *cs=0 means unused */
+  char  *consensus;		/* consensus residues to display in alignments, 1..M      */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                    */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs   */
+  const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet                */
 } P7_PROFILE;
 
 
@@ -224,8 +232,31 @@ typedef struct p7_bg_s {
  * 4. P7_TRACE:  a traceback (alignment of seq to profile).
  *****************************************************************/
 
-/* State types
+/* Traceback structure for alignment of a model to a sequence.
+ *
+ * A traceback only makes sense in a triplet (tr, gm, dsq), for a
+ * given profile or HMM (with nodes 1..M) and a given digital sequence
+ * (with positions 1..L).
+ * 
+ * A traceback may be relative to a profile (usually) or to a core
+ * model (as a special case in model construction; see build.c). You
+ * can tell the difference by looking at the first statetype,
+ * tr->st[0]; if it's a p7T_S, it's for a profile, and if it's p7T_B,
+ * it's for a core model.
+ * 
+ * A profile's N,C,J states emit on transition, not on state, so a
+ * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
+ * residues, and so on. By convention, the trace always associates an
+ * emission-on-transition with the trailing (destination) state, so
+ * the first N, C, or J is stored in a trace as a nonemitter (i=0).
+ *
+ * A i coords in a traceback are usually 1..L with respect to an
+ * unaligned digital target sequence, but in the special case of
+ * traces faked from existing MSAs (as in hmmbuild), the coords may
+ * be 1..alen relative to an MSA's columns.
  */
+
+/* State types */
 enum p7t_statetype_e {
   p7T_BOGUS =  0,
   p7T_M     =  1,
@@ -242,34 +273,20 @@ enum p7t_statetype_e {
 };
 #define p7T_NSTATETYPES 12
 
-
-/* Traceback structure for alignment of a model to a sequence.
- *
- * A traceback only makes sense in a triplet (tr, hmm, ax|dsq),
- * for a given HMM (with nodes 1..M) and a given digital sequence 
- * (with positions 1..L).
- * 
- * A traceback may be relative to a profile (usually) or to a core
- * model (in model construction; see build.c). You can tell the
- * difference by looking at the first statetype, tr->st[0]; if it's a
- * p7T_S, it's for a profile, and if it's p7T_B, it's for a core
- * model.
- * 
- * A profile's N,C,J states emit on transition, not on state, so a
- * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
- * residues, and so on. By convention, the trace always associates an
- * emission-on-transition with the trailing (destination) state, so
- * the first N, C, or J is stored in a trace as a nonemitter (i=0).
- *
- * A i coords in a traceback may be relative to an aligned sequence or
- * an unaligned sequence in digital mode.
- */
 typedef struct p7_trace_s {
   int   N;		/* length of traceback                       */
-  int   nalloc;		/* allocated length of traceback             */
-  char *st;		/* state type code                   [0..N-1]*/
-  int  *k;		/* node index; 1..M if M,D,I; else 0 [0..N-1]*/
-  int  *i;		/* position in dsq, 1..L; 0 if none  [0..N-1]*/
+  int   nalloc;	        /* allocated length of traceback             */
+  char  *st;		/* state type code                   [0..N-1]*/
+  int   *k;		/* node index; 1..M if M,D,I; else 0 [0..N-1]*/
+  int   *i;		/* position in dsq, 1..L; 0 if none  [0..N-1]*/
+
+  /* The following section is data generated by "indexing" a trace's domains */
+  int   ndom;		/* number of domains in trace (= # of B or E states) */
+  int  *tfrom,   *tto;	/* locations of B/E states in trace (0..tr->N-1)     */
+  int  *sqfrom,  *sqto;	/* first/last M-emitted residue on sequence (1..L)   */
+  int  *hmmfrom, *hmmto;/* first/last M state on model (1..M)                */
+  int   ndomalloc;	/* current allocated size of these stacks            */
+
 } P7_TRACE;
 
 
@@ -341,17 +358,100 @@ typedef struct p7_dprior_s {
 } P7_DPRIOR;
 
 
+
 /*****************************************************************
- * The optimized implementation.
+ * 8. P7_ALIDISPLAY: an alignment formatted for printing
+ *****************************************************************/
+
+/* Structure: P7_ALIDISPLAY
+ * 
+ * Alignment of a sequence domain to an HMM, formatted for printing.
+ * 
+ * For an alignment of L residues and names C chars long, requires
+ * 5L + 2C + 30 bytes; for typical case of L=100,C=10, that's
+ * 0.5 Kb.
  */
+typedef struct p7_alidisplay_s {
+  char *rfline;                 /* reference coord info                 */
+  char *csline;                 /* consensus structure info             */
+  char *model;                  /* aligned query consensus sequence     */
+  char *mline;                  /* "identities", conservation +'s, etc. */
+  char *aseq;                   /* aligned target sequence              */
+  int   N;			/* length of strings                    */
+  char *hmmname;		/* name of HMM                          */
+  char *hmmacc;			/* accession of HMM                     */
+  char *hmmdesc;		/* description of HMM                   */
+  int   hmmfrom;		/* start position on HMM (1..M, or -1)  */
+  int   hmmto;			/* end position on HMM (1..M, or -1)    */
+  char *sqname;			/* name of target sequence              */
+  char *sqacc;			/* accession of target sequence         */
+  char *sqdesc;			/* description of target sequence       */
+  long  sqfrom;			/* start position on sequence (1..L)    */
+  long  sqto;		        /* end position on sequence   (1..L)    */
+
+  char *mem;			/* memory used for the char data above  */
+} P7_ALIDISPLAY;
+
+
+/*****************************************************************
+ * 9. P7_TOPHITS: ranking lists of top-scoring hits
+ *****************************************************************/
+
+/* Structure: P7_HIT
+ * 
+ * Info about a high-scoring database hit, kept so we can output a
+ * sorted list of high hits at the end.
+ *
+ * sqfrom and sqto are the coordinates that will be shown
+ * in the results, not coords in arrays... therefore, reverse
+ * complements have sqfrom > sqto
+ */
+typedef struct p7_hit_s {
+  char   *name;			/* name of the target               */
+  char   *acc;			/* accession of the target          */
+  char   *desc;			/* description of the target        */
+  double sortkey;		/* number to sort by; big is better */
+  float  score;			/* score of the hit                 */
+  double pvalue;		/* P-value of the hit               */
+  float  mothersc;		/* score of whole sequence          */
+  double motherp;		/* P-value of whole sequence        */
+  long   sqfrom;		/* start position in seq (1..N)     */
+  long   sqto;			/* end position in seq (1..N)       */
+  long   sqlen;			/* length of sequence (N)           */
+  int    hmmfrom;		/* start position in HMM (1..M)     */
+  int    hmmto;			/* end position in HMM (1..M)       */
+  int    hmmlen;		/* length of HMM (M)                */
+  int    domidx;		/* index of this domain             */
+  int    ndom;			/* total # of domains in this seq   */
+  P7_ALIDISPLAY *ali;       	/* ptr to optional alignment info   */
+} P7_HIT;
+
+
+/* Structure: P7_TOPHITS
+ * 
+ * Array of high scoring hits, suitable for efficient sorting and
+ * merging when we prepare to output results. "hit" list is NULL and
+ * unavailable until after we do a sort.  
+ */
+typedef struct p7_tophits_s {
+  P7_HIT **hit;         /* sorted pointer array                     */
+  P7_HIT  *unsrt;	/* unsorted data storage                    */
+  int      Nalloc;	/* current allocation size                  */
+  int      N;		/* number of hits in list now               */
+  int      is_sorted;	/* TRUE when h->hit valid for all N hits    */
+} P7_TOPHITS;
+
+
+/*****************************************************************
+ * 10. The optimized implementation.
+ *****************************************************************/
 #ifdef HAVE_SSE2
 #include "impl_sse.h"
 #endif
 
 
-
 /*****************************************************************
- * 8. Other routines in HMMER's exposed API.
+ * 11. Other routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -364,6 +464,7 @@ extern int p7_GForward     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
 extern int p7_GMSP         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+extern int p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 extern int p7_GViterbiScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 
 /* emit.c */
@@ -429,6 +530,11 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
 #endif /*HAVE_MPI*/
 
+
+/* p7_alidisplay.c */
+extern P7_ALIDISPLAY *p7_alidisplay_Create(P7_TRACE *tr, int which, P7_PROFILE *gm, ESL_SQ *sq);
+extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth);
 
 /* p7_bg.c */
 extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
@@ -497,6 +603,7 @@ extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
 extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
 extern P7_PROFILE *p7_profile_Clone(const P7_PROFILE *gm);
 extern int         p7_profile_SetNullEmissions(P7_PROFILE *gm);
+extern int         p7_profile_Reuse(P7_PROFILE *gm);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
 extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
@@ -505,11 +612,31 @@ extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1,
 extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
 
+/* p7_tophits.c */
+extern P7_TOPHITS *p7_tophits_Create(void);
+extern int         p7_tophits_Grow(P7_TOPHITS *h);
+extern int         p7_tophits_Add(P7_TOPHITS *h,
+				  char *name, char *acc, char *desc, 
+				  double sortkey, 
+				  float score,    double pvalue, 
+				  float mothersc, double motherp,
+				  int sqfrom, int sqto, int sqlen,
+				  int hmmfrom, int hmmto, int hmmlen, 
+				  int domidx, int ndom,
+				  P7_ALIDISPLAY *ali);
+extern int         p7_tophits_Sort(P7_TOPHITS *h);
+extern int         p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2);
+extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
+extern void        p7_tophits_Destroy(P7_TOPHITS *h);
+
+
 /* p7_trace.c */
-extern P7_TRACE *p7_trace_Create(int N);
+extern P7_TRACE *p7_trace_Create(void);
 extern int  p7_trace_Reuse(P7_TRACE *tr);
 extern int  p7_trace_Grow(P7_TRACE *tr);
+extern int  p7_trace_GrowIndex(P7_TRACE *tr);
 extern int  p7_trace_GrowTo(P7_TRACE *tr, int N);
+extern int  p7_trace_GrowIndexTo(P7_TRACE *tr, int ndom);
 extern void p7_trace_Destroy(P7_TRACE *tr);
 extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
 extern int  p7_trace_Validate(P7_TRACE *tr, ESL_ALPHABET *abc, ESL_DSQ *sq, char *errbuf);
@@ -517,6 +644,7 @@ extern int  p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
 extern int  p7_trace_Reverse(P7_TRACE *tr);
+extern int  p7_trace_Index(P7_TRACE *tr);
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 extern int  p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc);
 extern int  p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom);

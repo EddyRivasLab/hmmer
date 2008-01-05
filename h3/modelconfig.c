@@ -22,6 +22,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <ctype.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -57,18 +58,38 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   float *occ = NULL;
   float *tp, *rp;
   float  sc[p7_MAXCODE];
+  float  mthresh;
   float  Z;
  
-  /* Copy some pointer references and other info across from HMM
-   */
-  gm->M      = hmm->M;
-  gm->abc    = hmm->abc;
-  gm->mode   = mode;
+  /* Contract checks */
+  if (gm->abc->type != hmm->abc->type) ESL_XEXCEPTION(eslEINVAL, "HMM and profile alphabet don't match");
+  if (hmm->M > gm->allocM)             ESL_XEXCEPTION(eslEINVAL, "profile too small to hold HMM");
 
-  if (gm->name != NULL) { free(gm->name); gm->name = NULL; }
+  /* Copy some pointer references and other info across from HMM  */
+  gm->M      = hmm->M;
+  gm->mode   = mode;
   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) goto ERROR;
+  /* HMM and profile use different conventions to signal "unused" optional annotations */
+  if ((hmm->flags & p7H_RF) && ((status = esl_strdup(hmm->rf,   -1, &(gm->rf))) != eslOK)) goto ERROR;
+  if ((hmm->flags & p7H_CS) && ((status = esl_strdup(hmm->cs,   -1, &(gm->cs))) != eslOK)) goto ERROR;
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
+
+  /* Determine the "consensus" residue for each match position.
+   * This is only used for alignment displays, not in any calculations.
+   */
+  if      (hmm->abc->type == eslAMINO) mthresh = 0.5;
+  else if (hmm->abc->type == eslDNA)   mthresh = 0.9;
+  else if (hmm->abc->type == eslRNA)   mthresh = 0.9;
+  else                                 mthresh = 0.5;
+  gm->consensus[0] = ' ';
+  for (k = 1; k <= hmm->M; k++) {
+    x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
+    gm->consensus[k] = ((hmm->mat[k][x] > mthresh) ? toupper(hmm->abc->sym[x]) : tolower(hmm->abc->sym[x]));
+  }
+  gm->consensus[hmm->M+1] = '\0';
 
   /* Entry scores. */
   if (p7_profile_IsLocal(gm))
@@ -425,7 +446,7 @@ main(int argc, char **argv)
   esl_dmatrix_SetZero(imx);
   esl_dmatrix_SetZero(iref);
   esl_dmatrix_SetZero(kmx);
-  tr    = p7_trace_Create(256);
+  tr    = p7_trace_Create();
   sq    = esl_sq_CreateDigital(abc);
   bg    = p7_bg_Create(abc);
   core  = p7_hmm_Clone(hmm);
@@ -693,7 +714,7 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   
   if (gm->mode != p7_UNILOCAL) ESL_XEXCEPTION(eslEINVAL, "profile must be unilocal");
   if ((sq2 = esl_sq_CreateDigital(gm->abc))  == NULL)   { status = eslEMEM; goto ERROR; }
-  if ((tr  = p7_trace_Create(256))           == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((tr  = p7_trace_Create())              == NULL)   { status = eslEMEM; goto ERROR; }
 
   /* sample local alignment from the implicit model */
   if (gm->h2_mode) {

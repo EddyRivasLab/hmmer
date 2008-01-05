@@ -321,7 +321,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
   
   for (idx = 0; idx < msa->nseq; idx++)
     {
-      if ((tr[idx] =  p7_trace_Create(msa->alen+2)) == NULL)          goto ERROR; /* +2 = B,E */
+      if ((tr[idx] =  p7_trace_Create()) == NULL)          goto ERROR; /* +2 = B,E */
 
       if ((status = p7_trace_Append(tr[idx], p7T_B, 0, 0)) != eslOK) goto ERROR; 
       for (k = 0, apos = 1; apos <= msa->alen; apos++)

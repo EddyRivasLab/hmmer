@@ -1,6 +1,8 @@
 /* P7_TRACE, the traceback structure.
  *
  * Contents:
+ *   1. The P7_TRACE structure and API
+ *   2. Copyright and license information.
  * 
  * Stylistic note: paths are indexed by z.
  * 
@@ -17,32 +19,54 @@
 #include "hmmer.h"
 
 /* Function:  p7_trace_Create()
+ * Synopsis:  Allocates a (growable, reusable) traceback.
  *
- * Purpose:   Allocate a traceback of length <N> states. 
- *
- *            <N> only needs to be an initial guess. Routines that
- *            make tracebacks will dynamically grow the trace as
- *            needed.
+ * Purpose:   Allocates a traceback. 
+ *  
+ *            Tracebacks are growable. A reasonable initial internal
+ *            allocation is made here, and routines that generate
+ *            tracebacks will dynamically grow the trace as needed.
+ *            
+ *            Tracebacks are reusable. Usually a routine only
+ *            allocates one, and reuses its memory over and over as
+ *            new target sequences are aligned.
  *
  * Returns:   a pointer to the new <P7_TRACE> structure on success.
  *
  * Throws:    <NULL> on allocation error.
  */
 P7_TRACE *
-p7_trace_Create(int N)
+p7_trace_Create(void)
 {
-  P7_TRACE *tr = NULL;
+  P7_TRACE *tr                = NULL;
+  int       initial_nalloc    = 256;
+  int       initial_ndomalloc = 16;
   int       status;
 
   ESL_ALLOC(tr, sizeof(P7_TRACE));
   tr->st = NULL;
   tr->k  = NULL;
   tr->i  = NULL;
-  ESL_ALLOC(tr->st, sizeof(char) * N);
-  ESL_ALLOC(tr->k,  sizeof(int)  * N);
-  ESL_ALLOC(tr->i,  sizeof(int)  * N);
+  tr->tfrom   = tr->tto   = NULL;
+  tr->sqfrom  = tr->sqto  = NULL;
+  tr->hmmfrom = tr->hmmto = NULL;
+
+  /* The trace data itself */
+  ESL_ALLOC(tr->st, sizeof(char) * initial_nalloc);
+  ESL_ALLOC(tr->k,  sizeof(int)  * initial_nalloc);
+  ESL_ALLOC(tr->i,  sizeof(int)  * initial_nalloc);
   tr->N      = 0;
-  tr->nalloc = N;
+  tr->nalloc = initial_nalloc;
+
+  /* The trace's index: table of domain start/stop coords */
+  ESL_ALLOC(tr->tfrom,   sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->tto,     sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->sqfrom,  sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->sqto,    sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->hmmfrom, sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->hmmto,   sizeof(int) * initial_ndomalloc);
+  tr->ndom      = 0;
+  tr->ndomalloc = initial_ndomalloc;
   return tr;
 
  ERROR:
@@ -52,6 +76,7 @@ p7_trace_Create(int N)
 
 
 /* Function:  p7_trace_Reuse()
+ * Synopsis:  Prepare a trace for reuse.
  * Incept:    SRE, Tue Jan  9 13:02:34 2007 [Janelia]
  *
  * Purpose:   Reinitializes an existing trace object, reusing its
@@ -66,21 +91,25 @@ p7_trace_Create(int N)
 int
 p7_trace_Reuse(P7_TRACE *tr)
 {
-  /* At least right now, reusing a trace is as simple as: */
-  tr->N = 0;
+  tr->N    = 0;
+  tr->ndom = 0;
   return eslOK;
 }
 
-
-
 /* Function:  p7_trace_Grow()
+ * Synopsis:  Grow the allocation for trace data.
  *
- * Purpose:   Doubles the allocation in a trace structure <tr>.
+ * Purpose:   If <tr> can't fit another state, double its allocation for
+ *            traceback data.
+ *            
+ *            This doesn't reallocate the domain index; see
+ *            <p7_trace_GrowIndex()> or <p7_trace_GrowIndexTo()> for
+ *            that.
  *
  * Returns:   <eslOK> on success.
  *
- * Throws:    <eslEMEM> on allocation failure; the data in
- *            <tr> are unaffected by failure.
+ * Throws:    <eslEMEM> on allocation failure; in this case, the data in
+ *            <tr> are unaffected.
  */
 int
 p7_trace_Grow(P7_TRACE *tr)
@@ -88,6 +117,8 @@ p7_trace_Grow(P7_TRACE *tr)
   void *tmp;
   int   status;
   
+  if (tr->N < tr->nalloc) return eslOK;
+
   ESL_RALLOC(tr->st, tmp, sizeof(char) *2*tr->nalloc);
   ESL_RALLOC(tr->k,  tmp, sizeof(int)  *2*tr->nalloc);
   ESL_RALLOC(tr->i,  tmp, sizeof(int)  *2*tr->nalloc);
@@ -98,10 +129,45 @@ p7_trace_Grow(P7_TRACE *tr)
   return status;
 }
 
+/* Function:  p7_trace_GrowIndex()
+ * Synopsis:  Grows the allocation of the trace's domain index.
+ * Incept:    SRE, Fri Jan  4 10:40:02 2008 [Janelia]
+ *
+ * Purpose:   If <tr> can't fit another domain in its index,
+ *            double the allocation of the index in <tr>.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure; in this case, the 
+ *            data in <tr> are unaffected.
+ */
+int
+p7_trace_GrowIndex(P7_TRACE *tr)
+{
+  void *p;
+  int   status;
+
+  if (tr->ndom < tr->ndomalloc) return eslOK;
+
+  ESL_RALLOC(tr->tfrom,   p, sizeof(int)*2*tr->ndomalloc);
+  ESL_RALLOC(tr->tto,     p, sizeof(int)*2*tr->ndomalloc);
+  ESL_RALLOC(tr->sqfrom,  p, sizeof(int)*2*tr->ndomalloc);
+  ESL_RALLOC(tr->sqto,    p, sizeof(int)*2*tr->ndomalloc);
+  ESL_RALLOC(tr->hmmfrom, p, sizeof(int)*2*tr->ndomalloc);
+  ESL_RALLOC(tr->hmmto,   p, sizeof(int)*2*tr->ndomalloc);
+  tr->ndomalloc *= 2;
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
 /* Function:  p7_trace_GrowTo()
+ * Synopsis:  Reallocates trace to a given minimum size.
  *
  * Purpose:   Reallocates a trace structure <tr> to hold a trace
- *            of length <N> states.
+ *            of at least length <N> states.
  *
  * Returns:   <eslOK> on success.
  *
@@ -127,7 +193,42 @@ p7_trace_GrowTo(P7_TRACE *tr, int N)
 }
 
 
+/* Function:  p7_trace_GrowIndexTo()
+ * Synopsis:  Reallocates domain index for a given minimum number.
+ * Incept:    SRE, Fri Jan  4 10:47:43 2008 [Janelia]
+ *
+ * Purpose:   Reallocates the domain index in <tr> to index
+ *            at least <ndom> domains.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure, in which case
+ *            the data in <tr> are unaffected.
+ */
+int
+p7_trace_GrowIndexTo(P7_TRACE *tr, int ndom)
+{
+  void *p;
+  int   status;
+
+  if (ndom < tr->ndomalloc) return eslOK;
+
+  ESL_RALLOC(tr->tfrom,   p, sizeof(int)*ndom);
+  ESL_RALLOC(tr->tto,     p, sizeof(int)*ndom);
+  ESL_RALLOC(tr->sqfrom,  p, sizeof(int)*ndom);
+  ESL_RALLOC(tr->sqto,    p, sizeof(int)*ndom);
+  ESL_RALLOC(tr->hmmfrom, p, sizeof(int)*ndom);
+  ESL_RALLOC(tr->hmmto,   p, sizeof(int)*ndom);
+  tr->ndomalloc = ndom;
+  return eslOK;
+  
+ ERROR:
+  return status;
+}
+
+
 /* Function:  p7_trace_Destroy()
+ * Synopsis:  Frees a trace.
  *
  * Purpose:   Frees a trace structure <tr>.
  *
@@ -137,9 +238,15 @@ void
 p7_trace_Destroy(P7_TRACE *tr)
 {
   if (tr == NULL) return;
-  if (tr->st != NULL) free(tr->st);
-  if (tr->k  != NULL) free(tr->k);
-  if (tr->i  != NULL) free(tr->i);
+  if (tr->st      != NULL) free(tr->st);
+  if (tr->k       != NULL) free(tr->k);
+  if (tr->i       != NULL) free(tr->i);
+  if (tr->tfrom   != NULL) free(tr->tfrom);
+  if (tr->tto     != NULL) free(tr->tto);
+  if (tr->sqfrom  != NULL) free(tr->sqfrom);
+  if (tr->sqto    != NULL) free(tr->sqto);
+  if (tr->hmmfrom != NULL) free(tr->hmmfrom);
+  if (tr->hmmto   != NULL) free(tr->hmmto);
   free(tr);
   return;
 }
@@ -446,6 +553,7 @@ p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq) /* replace v
 
 
 /* Function:  p7_trace_Append()
+ * Synopsis:  Add an element (state/residue) to a growing trace.
  *
  * Purpose:   Adds an element to a trace <tr> that is growing
  *            left-to-right. The element is defined by a state type
@@ -470,74 +578,102 @@ p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq) /* replace v
 int
 p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
 {
-  if (tr->N >= tr->nalloc) ESL_EXCEPTION(eslEINVAL, "no space in trace");
-
+  p7_trace_Grow(tr);
   tr->st[tr->N] = st;
   tr->k[tr->N]  = k;
   tr->i[tr->N]  = i;
   tr->N++;
-  if (tr->N == tr->nalloc) return p7_trace_Grow(tr);
   return eslOK;
 }
 
 
 /* Function: p7_trace_Reverse()
+ * Synopsis: Reverse the arrays in a traceback structure.
  * 
  * Purpose:  Reverse the arrays in a traceback structure.  Tracebacks
- *           from DP algorithms are collected backwards, and call this
+ *           from DP algorithms are collected backwards, and they call this
  *           function when they're done.
  *           
- *           It's possible to reverse the arrays in place more
- *           efficiently; but the realloc/copy strategy has the
- *           advantage of reallocating the trace into the right size of
- *           memory. (Tracebacks overallocate.)
+ *           At least for now, this invalidates any domain index
+ *           table, if it exists. The expectd order of invocation is
+ *           to create the traceback backwards, <Reverse()> it, then
+ *           <IndexDomains()> it.
  *           
  * Args:     tr - the traceback to reverse. tr->N must be set.
  *                
  * Return:   <eslOK> on success; <tr> is modified.
- * 
- * Throws:   <eslEMEM> on allocation failure; in which case, <tr>
- *           is left unmodified, but you're probably already in trouble.
  */                
 int
 p7_trace_Reverse(P7_TRACE *tr)
 {
-  int    status;
-  char  *st = NULL;
-  int   *k  = NULL;
-  int   *i  = NULL;
-  int    op, np;
+  int    z;
+  int    tmp;
 
-  /* Allocate
-   */
-  ESL_ALLOC(st, sizeof(char)* tr->N);
-  ESL_ALLOC(k,  sizeof(int) * tr->N);
-  ESL_ALLOC(i,  sizeof(int) * tr->N);
-  
-  /* Reverse the trace.
-   */
-  for (op = tr->N-1, np = 0; np < tr->N; np++, op--)
+  for (z = 0; z < tr->N/2; z++)
     {
-      st[np] = tr->st[op];
-      k[np]  = tr->k[op];
-      i[np]  = tr->i[op];
+      tmp = tr->st[tr->N-z-1];  tr->st[tr->N-z-1] = tr->st[z];   tr->st[z] = tmp;
+      tmp = tr->k[tr->N-z-1];   tr->k[tr->N-z-1]  = tr->k[z];    tr->k[z]  = tmp;
+      tmp = tr->i[tr->N-z-1];   tr->i[tr->N-z-1]  = tr->i[z];    tr->i[z]  = tmp;
     }
-
-  /* Swap old, new arrays.
-   */
-  free(tr->st); tr->st = st;
-  free(tr->k);  tr->k  = k;
-  free(tr->i);  tr->i  = i;
-  tr->nalloc = tr->N;
+  /* don't worry about the middle residue in odd-length N, since we're in-place  */
   return eslOK;
-
- ERROR:
-  if (st != NULL) free(st);
-  if (k  != NULL) free(k);
-  if (i  != NULL) free(i);
-  return status;
 }
 
+
+/* Function:  p7_trace_Index()
+ * Synopsis:  Internally index the domains in a trace.
+ * Incept:    SRE, Fri Jan  4 11:12:24 2008 [Janelia]
+ *
+ * Purpose:   Create an internal index of the domains in <tr>.
+ *            This makes calls to <GetDomainCount()> and 
+ *            <GetDomainCoords()> more efficient, and it is
+ *            a necessary prerequisite for creating alignments
+ *            of any individual domains in a multidomain trace with
+ *            <p7_alidisplay_Create()>.
+ *
+ * Returns:   <eslOK> on success. 
+ *
+ * Throws:    <eslEMEM> on allocation failure, in which case the
+ *            data in the trace is still fine, but the domain index
+ *            table isn't constructed.
+ */
+int
+p7_trace_Index(P7_TRACE *tr)
+{
+  int z;
+  int ndom = 0;
+  int status;
+
+  for (z = 0; z < tr->N; z++)
+    {
+      switch (tr->st[z]) {
+      case p7T_B:
+	if ((status = p7_trace_GrowIndex(tr)) != eslOK) goto ERROR;
+	tr->tfrom[ndom]   = z;
+	tr->sqfrom[ndom]  = 0;
+	tr->hmmfrom[ndom] = 0;
+	break;
+
+      case p7T_M:
+	if (tr->sqfrom[ndom]  == 0) tr->sqfrom[ndom]  = tr->i[z];
+	if (tr->hmmfrom[ndom] == 0) tr->hmmfrom[ndom] = tr->k[z];
+	tr->sqto[ndom]  = tr->i[z];
+	tr->hmmto[ndom] = tr->k[z];
+	break;
+
+      case p7T_E:
+	tr->tto[ndom]   = z;
+	ndom++;
+	break;
+      }
+    }
+  tr->ndom = ndom;
+  return eslOK;
+  
+ ERROR:
+  tr->ndom = 0;
+  return status;
+}
 
 
 
@@ -721,8 +857,12 @@ p7_trace_GetDomainCount(P7_TRACE *tr, int *ret_ndom)
   int z;
   int ndom = 0;
 
-  for (z = 0; z < tr->N; z++)
-    if (tr->st[z] == p7T_B) ndom++;
+  if (tr->ndom > 0) 
+    ndom = tr->ndom; /* if we already indexed the domains, we know the answer */
+  else {
+    for (z = 0; z < tr->N; z++)
+      if (tr->st[z] == p7T_B) ndom++;
+  }
   *ret_ndom = ndom;
   return eslOK;
 }
@@ -756,7 +896,7 @@ p7_trace_StateUseCounts(const P7_TRACE *tr, int *counts)
  * Incept:    SRE, Tue Feb 27 13:08:32 2007 [Janelia]
  *
  * Purpose:   Retrieve the bounds of domain alignment number <which> in
- *            traceback <tr>. <which> starts from 1. The total number
+ *            traceback <tr>. <which> starts from 0. The total number
  *            of domains in a trace can be obtained from
  *            <p7_trace_GetDomainCount()>, or caller can just loop
  *            an increasing <which> count until <eslEOD> is returned.
@@ -773,29 +913,44 @@ p7_trace_StateUseCounts(const P7_TRACE *tr, int *counts)
  *            and <k2> are the coords of the first and last match
  *            state (in range 1..M), and <i1> and <i2> are the coords
  *            of the residues aligned to those match states. Profiles
- *            allow a Mk->DDD->E trailer; if such a trailer occurs,
- *            the k2 coord refers to the match state's
- *            coordinate. Note that such trailers would only occur in
- *            generated or sampled paths, not Viterbi paths; in
- *            Viterbi alignments with exit probabilities of 1.0, the
- *            direct Mk->E path will always have higher probability
- *            than a Mk->DDD->E path.
+ *            do allow a Mk->DDD->E trailer; nonetheless, if such a
+ *            trailer occurs, the k2 coord still refers to the last
+ *            match state's coordinate. Note that such trailers would
+ *            only occur in generated or sampled paths, not Viterbi
+ *            paths; in Viterbi alignments with exit probabilities of
+ *            1.0, the direct Mk->E path will always have higher
+ *            probability than a Mk->DDD->E path.
  *
  * Returns:   <eslOK> on success, and the coords are returned.
  *            <eslEOD> if the trace doesn't contain a <which>'th
  *            domain, and the coords are all returned as 0.
+ *            
+ * Throws:    <eslEINVAL> if you stupidly pass a <which> less than 0;
+ *            <eslECORRUPT> if something is grievously wrong with <tr>.           
  */
 int
-p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
-			 int *ret_k1, int *ret_k2)
+p7_trace_GetDomainCoords(P7_TRACE *tr, int which,
+			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
 {
   int status;
   int z;
 
-  if (which < 1) ESL_XEXCEPTION(eslEINVAL, "bad which < 1");
+  if (which < 0) ESL_XEXCEPTION(eslEINVAL, "bad which < 0");
 
-  /* skip z to one state past the which'th B state. */
-  for (z = 0; which > 0 && z < tr->N; z++)
+  if (tr->ndom) 		/* do we have an index? then this'll be easy */
+    {
+      if (which >= tr->ndom) { status = eslEOD; goto ERROR; }
+      *ret_i1 = tr->sqfrom[which];
+      *ret_i2 = tr->sqto[which];
+      *ret_k1 = tr->hmmfrom[which];
+      *ret_k2 = tr->hmmto[which];
+      return eslOK;
+    }
+
+  /* else, the hard way.
+   * skip z to one state past the which'th B state. 
+   */
+  for (z = 0; which >= 0 && z < tr->N; z++)
     if (tr->st[z] == p7T_B) which--;
   if (z == tr->N) { status = eslEOD; goto ERROR; }
   
@@ -810,7 +965,7 @@ p7_trace_GetDomainCoords(P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
    */
   for (; z < tr->N; z++)
     if (tr->st[z] == p7T_E) break;
-  if (z == tr->N)          ESL_EXCEPTION(eslECORRUPT, "invalid trace: no E for a B");
+  if (z == tr->N)         ESL_EXCEPTION(eslECORRUPT, "invalid trace: no E for a B");
   do { z--; } while (tr->st[z] == p7T_D); /* roll back over any D trailer */
   if (tr->st[z] != p7T_M) ESL_EXCEPTION(eslECORRUPT, "invalid trace: no M");
   *ret_i2 = tr->i[z];

@@ -967,7 +967,7 @@ utest_basic(ESL_GETOPTS *go)
   if (esl_abc_CreateDsq(abc, targ, &dsq)           != eslOK) esl_fatal("failed to create GAATTC digital sequence");
   if ((gx = p7_gmx_Create(gm->M, L))               == NULL)  esl_fatal("failed to create DP matrix, generic form");
   if ((ox = p7_omx_Create(gm->M, L))               == NULL)  esl_fatal("failed to create DP matrix, optimized form");
-  if ((tr = p7_trace_Create(L))                    == NULL)  esl_fatal("trace creation failed");
+  if ((tr = p7_trace_Create())                     == NULL)  esl_fatal("trace creation failed");
 
   p7_Viterbi   (dsq, L, om, ox, &vsc);
   p7_GViterbi  (dsq, L, gm, gx, &vsc2);

@@ -12,6 +12,7 @@
 
 #include "p7_config.h"
 
+#include <string.h>
 #ifdef HAVE_MPI
 #include <mpi.h>
 #endif
@@ -57,12 +58,18 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(gm, sizeof(P7_PROFILE));
-  gm->tsc   = NULL;
-  gm->rsc   = NULL;
-  
+  gm->tsc       = NULL;
+  gm->rsc       = NULL;
+  gm->rf        = NULL;
+  gm->cs        = NULL;
+  gm->consensus = NULL;
+
   /* level 1 */
-  ESL_ALLOC(gm->tsc,   sizeof(float)   * allocM * p7P_NTRANS); 
-  ESL_ALLOC(gm->rsc,   sizeof(float *) * abc->Kp);
+  ESL_ALLOC(gm->tsc,       sizeof(float)   * allocM * p7P_NTRANS); 
+  ESL_ALLOC(gm->rsc,       sizeof(float *) * abc->Kp);
+  ESL_ALLOC(gm->rf,        sizeof(char)    * (allocM+2)); /* yes, +2: each is (0)1..M, +trailing \0  */
+  ESL_ALLOC(gm->cs,        sizeof(char)    * (allocM+2));
+  ESL_ALLOC(gm->consensus, sizeof(char)    * (allocM+2));
   gm->rsc[0] = NULL;
   
   /* level 2 */
@@ -94,6 +101,10 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   gm->M           = 0;
   gm->nj          = 0.0f;
   gm->name        = NULL;
+  gm->acc         = NULL;
+  gm->desc        = NULL;
+  gm->rf[0]       = 0;     /* RF line is optional annotation; this flags that it's not set yet */
+  gm->cs[0]       = 0;     /* likewise for CS annotation line */
   gm->abc         = abc;
   return gm;
 
@@ -101,6 +112,9 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   p7_profile_Destroy(gm);
   return NULL;
 }
+
+
+
 
 /* Function:  p7_profile_Clone()
  * Synopsis:  Duplicates a profile.
@@ -127,7 +141,14 @@ p7_profile_Clone(const P7_PROFILE *gm)
   g2->M           = gm->M;
   g2->nj          = gm->nj;
   
-  if ((status = esl_strdup(gm->name, -1, &(g2->name))) != eslOK) goto ERROR;
+  if ((status = esl_strdup(gm->name,      -1, &(g2->name)))      != eslOK) goto ERROR;
+  if ((status = esl_strdup(gm->acc,       -1, &(g2->acc)))       != eslOK) goto ERROR;
+  if ((status = esl_strdup(gm->desc,      -1, &(g2->desc)))      != eslOK) goto ERROR;
+
+  strcpy(g2->rf,        gm->rf);         /* RF is optional: if it's not set, *rf=0, and strcpy still works fine */
+  strcpy(g2->cs,        gm->cs);         /* CS is also optional annotation */
+  strcpy(g2->consensus, gm->consensus);  /* consensus though is always present on a valid profile */
+
   for (z = 0; z < p7_NEVPARAM; z++) g2->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) g2->cutoff[z]  = gm->cutoff[z];
   return g2;
@@ -164,6 +185,34 @@ p7_profile_SetNullEmissions(P7_PROFILE *gm)
 }
 
 
+/* Function:  p7_profile_Reuse()
+ * Synopsis:  Prepare profile to be re-used for a new HMM.
+ * Incept:    SRE, Wed Jan  2 17:32:36 2008 [Janelia]
+ *
+ * Purpose:   Prepare profile <gm>'s memory to be re-used
+ *            for a new HMM.
+ */
+int
+p7_profile_Reuse(P7_PROFILE *gm)
+{
+  /* name, acc, desc annotation is dynamically allocated for each HMM */
+  if (gm->name != NULL) { free(gm->name); gm->name = NULL; }
+  if (gm->acc  != NULL) { free(gm->acc);  gm->acc  = NULL; }
+  if (gm->desc != NULL) { free(gm->desc); gm->desc = NULL; }
+
+  /* set annotations to empty strings */
+  gm->rf[0]        = 0;
+  gm->cs[0]        = 0;
+  gm->consensus[0] = 0;
+      
+  /* reset some other things, but leave the rest alone. */
+  gm->mode = p7_NO_MODE;
+  gm->M    = 0;
+  gm->nj   = 0.0;
+
+  return eslOK;
+}
+
 
 /* Function:  p7_profile_Destroy()
  * Synopsis:  Frees a profile.
@@ -179,10 +228,15 @@ void
 p7_profile_Destroy(P7_PROFILE *gm)
 {
   if (gm != NULL) {
-    if (gm->name  != NULL) free(gm->name);
     if (gm->rsc   != NULL && gm->rsc[0] != NULL) free(gm->rsc[0]);
-    if (gm->tsc   != NULL) free(gm->tsc);
-    if (gm->rsc   != NULL) free(gm->rsc);
+    if (gm->tsc       != NULL) free(gm->tsc);
+    if (gm->rsc       != NULL) free(gm->rsc);
+    if (gm->name      != NULL) free(gm->name);
+    if (gm->acc       != NULL) free(gm->acc);
+    if (gm->desc      != NULL) free(gm->desc);
+    if (gm->rf        != NULL) free(gm->rf);
+    if (gm->cs        != NULL) free(gm->cs);
+    if (gm->consensus != NULL) free(gm->consensus);
     free(gm);
   }
   return;
@@ -439,8 +493,8 @@ utest_Compare(void)
   bg  = p7_bg_Create(abc);
   gm  = p7_profile_Create(hmm->M, abc);
   gm2 = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm,  p7_LOCAL);
-  p7_ProfileConfig(hmm, bg, gm2, p7_LOCAL);
+  p7_ProfileConfig(hmm, bg, gm,  400, p7_LOCAL);
+  p7_ProfileConfig(hmm, bg, gm2, 400, p7_LOCAL);
   p7_ReconfigLength(gm,  L);
   p7_ReconfigLength(gm2, L);
 

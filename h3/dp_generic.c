@@ -29,6 +29,8 @@
 
 #include <easel.h>
 #include <esl_alphabet.h>
+#include <esl_random.h>		/* when StochasticTrace() moves, don't need random or vectorops here */
+#include <esl_vectorops.h>
 
 #include "hmmer.h"
 
@@ -184,10 +186,10 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  * Purpose:   The Forward dynamic programming algorithm. 
  *
  *            Given a digital sequence <dsq> of length <L>, a profile
- *            <gm>, and DP matrix <gm> allocated for at least <gm->M>
+ *            <gm>, and DP matrix <gx> allocated for at least <gm->M>
  *            by <L> cells; calculate the probability of the sequence
  *            given the model using the Forward algorithm; return the
- *            Forward matrix in <mx>, and the Forward score in <ret_sc>.
+ *            Forward matrix in <gx>, and the Forward score in <ret_sc>.
  *           
  *            The Forward score is in lod score form.  To convert to a
  *            bitscore, the caller needs to subtract a null model lod
@@ -196,7 +198,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  * Args:      dsq    - sequence in digitized form, 1..L
  *            L      - length of dsq
  *            gm     - profile. 
- *            mx     - DP matrix with room for an MxL alignment
+ *            gx     - DP matrix with room for an MxL alignment
  *            ret_sc - RETURN: Forward lod score in nats
  *           
  * Return:    <eslOK> on success.
@@ -290,6 +292,106 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
   *ret_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
+
+
+/* Function:  p7_GBackward()
+ * Synopsis:  The Backward algorithm.
+ * Incept:    SRE, Fri Dec 28 14:31:58 2007 [Janelia]
+ *
+ * Purpose:   The Backward dynamic programming algorithm.
+ * 
+ *            Given a digital sequence <dsq> of length <L>, a profile
+ *            <gm>, and DP matrix <gx> allocated for at least <gm->M>
+ *            by <L> cells; calculate the probability of the sequence
+ *            given the model using the Backward algorithm; return the
+ *            Backward matrix in <gx>, and the Backward score in <ret_sc>.
+ *           
+ *            The Backward score is in lod score form. To convert to a
+ *            bitscore, the caller needs to subtract a null model lod
+ *            score, then convert to bits.
+ *
+ * Args:      dsq    - sequence in digitized form, 1..L
+ *            L      - length of dsq
+ *            gm     - profile 
+ *            gx     - DP matrix with room for an MxL alignment
+ *            ret_sc - RETURN: Backward lod score in nats
+ *           
+ * Return:    <eslOK> on success.
+ */
+int
+p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc)
+{
+  float const *tsc  = gm->tsc;
+  float      **dp   = gx->dp;
+  float       *xmx  = gx->xmx; 			    
+  int          M    = gm->M;
+  int          i, k;  
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+
+  p7_FLogsumInit();
+
+  /* Note: backward calculates the probability we can get *out* of
+   * cell i,k; exclusive of emitting residue x_i.
+   */
+
+  /* Initialize the L row.  */
+  XMX(L,p7G_J) = XMX(L,p7G_B) = XMX(L,p7G_N) = -eslINFINITY;
+  XMX(L,p7G_C) = gm->xsc[p7P_C][p7P_MOVE];                 /* C<-T          */
+  XMX(L,p7G_E) = XMX(L,p7G_C) + gm->xsc[p7P_E][p7P_MOVE];  /* E<-C, no tail */
+  
+  MMX(L,M) = DMX(L,M) = XMX(L,p7G_E); /* M_M <- E (prob 1.0) */
+  IMX(L,M) = -eslINFINITY;	      /* no I_M state        */
+  for (k = M-1; k >= 1; k--) {
+    MMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
+			   DMX(L, k+1)  + TSC(p7P_MD,k));
+    DMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
+			   DMX(L, k+1)  + TSC(p7P_DD,k));
+    IMX(L,k) = -eslINFINITY;
+  }
+  
+  /* Main recursion */
+  for (i = L-1; i >= 0; i--)
+    {
+      float const *rsc = gm->rsc[dsq[i+1]];
+
+      XMX(i,p7G_B) = MMX(i+1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+      for (k = 2; k <= M; k++)
+	XMX(i,p7G_B) = p7_FLogsum(XMX(i, p7G_B), MMX(i+1,k) + TSC(p7P_BM,k-1) + MSC(k));
+
+      XMX(i,p7G_J) = p7_FLogsum( XMX(i+1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP],
+				 XMX(i,  p7G_B) + gm->xsc[p7P_J][p7P_MOVE]);
+      
+      XMX(i,p7G_C) = XMX(i+1,p7G_C) + gm->xsc[p7P_C][p7P_LOOP];
+      
+      XMX(i,p7G_E) = p7_FLogsum( XMX(i, p7G_J)  + gm->xsc[p7P_E][p7P_LOOP],
+				 XMX(i, p7G_C)  + gm->xsc[p7P_E][p7P_MOVE]);
+      
+      XMX(i,p7G_N) = p7_FLogsum( XMX(i+1,p7G_N) + gm->xsc[p7P_N][p7P_LOOP],
+				 XMX(i,  p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
+      
+      
+      MMX(i,M) = DMX(i,M) = XMX(i,p7G_E);
+      IMX(i,M) = -eslINFINITY;
+      for (k = M-1; k >= 1; k--)
+	{
+	  MMX(i,k) = p7_FLogsum( p7_FLogsum(MMX(i+1,k+1) + TSC(p7P_MM,k) + MSC(k+1),
+					    IMX(i+1,k)   + TSC(p7P_MI,k) + ISC(k)),
+				 p7_FLogsum(XMX(i,p7G_E) + esc,
+					    DMX(i,  k+1) + TSC(p7P_MD,k)));
+      
+	  IMX(i,k) = p7_FLogsum( MMX(i+1,k+1) + TSC(p7P_IM,k) + MSC(k+1),
+				 IMX(i+1,k)   + TSC(p7P_II,k) + ISC(k));
+	  
+	  DMX(i,k) = p7_FLogsum( MMX(i+1,k+1) + TSC(p7P_DM,k) + MSC(k+1),
+				 p7_FLogsum( DMX(i,  k+1)  + TSC(p7P_DD,k),
+					     XMX(i, p7G_E) + esc));
+	}
+    }
+
+  *ret_sc = XMX(0,p7G_N);
+  return eslOK;
+}
+
 
 
 /* Function:  p7_GHybrid()
@@ -439,10 +541,10 @@ p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_
  *           the unlikely event that a suboptimal is returned, the
  *           score difference from true optimal will be negligible.
  *           
- * Args:     dsq    - sequence aligned to (digital form) 1..L 
- *           L      - length of dsq gm    
- *           gm     - profile model; does not need any ref ptrs
- *           mx     - the matrix to trace, L x M
+ * Args:     dsq    - digital sequence aligned to, 1..L 
+ *           L      - length of <dsq>
+ *           gm     - profile
+ *           mx     - Viterbi matrix to trace, L x M
  *           tr     - storage for the recovered traceback.
  *           
  * Return:   <eslOK> on success.
@@ -543,13 +645,13 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     case p7T_N:			/* N connects from S, N */
       if (XMX(i, p7G_N) <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible N reached at i=%d", i);
 
-      if      (i == 0 && esl_FCompare(XMX(i, p7G_N), 0.0f, tol) == eslOK)
-	status = p7_trace_Append(tr, p7T_S, 0, 0);
-      else if (i > 0  && esl_FCompare(XMX(i,p7G_N), XMX(i-1, p7G_N) + gm->xsc[p7P_N][p7P_LOOP], tol) == eslOK) {
-	tr->i[tr->N-1] = i--;
-	status = p7_trace_Append(tr, p7T_N, 0, 0);
-      } else ESL_XEXCEPTION(eslFAIL, "N at i=%d couldn't be traced", i);
-      if (status != eslOK) goto ERROR;
+      if (i == 0) status = p7_trace_Append(tr, p7T_S, 0, 0);
+      else if (esl_FCompare(XMX(i,p7G_N), XMX(i-1, p7G_N) + gm->xsc[p7P_N][p7P_LOOP], tol) == eslOK)
+	{
+	  tr->i[tr->N-1] = i--;
+	  status = p7_trace_Append(tr, p7T_N, 0, 0);
+	} 
+      else ESL_XEXCEPTION(eslFAIL, "N at i=%d couldn't be traced", i);
       break;
 
     case p7T_B:			/* B connects from N, J */
@@ -587,6 +689,201 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
 }
 
 
+/* Function:  p7_StochasticTrace()
+ * Synopsis:  Stochastic traceback of a Forward matrix.
+ * Incept:    SRE, Thu Jan  3 15:39:20 2008 [Janelia]
+ *
+ * Purpose:   Stochastic traceback of Forward matrix <gx> to
+ *            sample an alignment of digital sequence <dsq>
+ *            (of length <L>) to the profile <gm>. 
+ *            
+ *            The sampled traceback is returned in <tr>, which the
+ *            caller must have at least made an initial allocation of
+ *            (the <tr> will be grown as needed here).
+ *
+ * Args:      r      - source of random numbers
+ *            dsq    - digital sequence aligned to, 1..L 
+ *            L      - length of dsq
+ *            gm     - profile
+ *            mx     - Forward matrix to trace, L x M
+ *            tr     - storage for the recovered traceback.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr)
+{
+  int     status;
+  int     i;			/* position in seq (1..L) */
+  int     k;			/* position in model (1..M) */
+  int     M   = gm->M;
+  float **dp  = gx->dp;
+  float  *xmx = gx->xmx;
+  float const *tsc  = gm->tsc;
+  float  *sc;			/* scores of possible choices: up to 2M-1, in the case of exits to E  */
+  int     z;
+
+  /* we'll index M states as 1..M, and D states as 2..M = M+2..2M: M0, D1 are impossibles. */
+  ESL_ALLOC(sc, sizeof(float) * (2*M+1)); 
+
+  /* Initialization.
+   * (back to front. ReverseTrace() called later.)
+   */
+  if ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) goto ERROR;
+  if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) goto ERROR;
+  i    = L;			/* next position to explain in seq */
+
+ /* Traceback */
+  while (tr->st[tr->N-1] != p7T_S) 
+    {
+      switch (tr->st[tr->N-1]) {
+      /* C(i) comes from C(i-1) or E(i) */
+      case p7T_C:		
+	if   (XMX(i,p7G_C) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
+
+	sc[0] = XMX(i-1, p7G_C) + gm->xsc[p7P_C][p7P_LOOP];
+	sc[1] = XMX(i,   p7G_E) + gm->xsc[p7P_E][p7P_MOVE];
+	esl_vec_FLogNorm(sc, 2); /* now sc is a prob vector */
+	z = esl_rnd_FChoose(r, sc, 2);
+	
+	if (z == 0) {
+	  tr->i[tr->N-1]    = i--;  /* first C doesn't emit: subsequent ones do */
+	  status = p7_trace_Append(tr, p7T_C, 0, 0);
+	} else {
+	  status = p7_trace_Append(tr, p7T_E, 0, 0);
+	}
+	break;
+
+      /* E connects from any M or D state. k set here */
+      case p7T_E:	
+	if (XMX(i, p7G_E) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
+	
+	if (p7_profile_IsLocal(gm)) { /* local models come from any M, D */
+	  sc[0] = sc[M+1] = -eslINFINITY;
+	  for (k = 1; k <= M; k++) sc[k]   = MMX(i,k);
+	  for (k = 2; k <= M; k++) sc[k+M] = DMX(i,k);
+	  esl_vec_FLogNorm(sc, 2*M+1); /* now sc is a prob vector */
+	  k = esl_rnd_FChoose(r, sc, 2*M+1);
+	  if (k <= M) {	/* back to one of the match states */
+	    status = p7_trace_Append(tr, p7T_M, k, i);
+	  } else { /* back to one of the deletes */
+	    k -= M;
+	    status = p7_trace_Append(tr, p7T_D, k, i);
+	  }
+	} else { 		/* glocal models come from M_M or D_M  */
+	  k     = M;
+	  sc[0] = MMX(i,M);
+	  sc[1] = DMX(i,M);
+	  esl_vec_FLogNorm(sc, 2); /* now sc is a prob vector */
+	  z = esl_rnd_FChoose(r, sc, 2);
+
+	  if (z == 0) { status = p7_trace_Append(tr, p7T_M, k, i); }
+	  else        { status = p7_trace_Append(tr, p7T_D, k, i); }
+	}
+	break;
+
+      /* M connects from {MDI} i-1,k-1, or B */
+      case p7T_M:
+	if (MMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
+	
+	sc[0] = XMX(i-1,p7G_B) + TSC(p7P_BM, k-1);
+	sc[1] = MMX(i-1,k-1)   + TSC(p7P_MM, k-1);
+	sc[2] = IMX(i-1,k-1)   + TSC(p7P_IM, k-1);
+	sc[3] = DMX(i-1,k-1)   + TSC(p7P_DM, k-1);
+	esl_vec_FLogNorm(sc, 4); 
+	z = esl_rnd_FChoose(r, sc, 4);
+
+	switch (z) {
+	case 0: status = p7_trace_Append(tr, p7T_B, 0,   0);   break;
+	case 1: status = p7_trace_Append(tr, p7T_M, k-1, i-1); break;
+	case 2: status = p7_trace_Append(tr, p7T_I, k-1, i-1); break;
+	case 3: status = p7_trace_Append(tr, p7T_D, k-1, 0);   break;
+	}
+	k--; 
+	i--;
+	break;
+
+      /* D connects from M,D at i,k-1 */
+      case p7T_D:
+	if (DMX(i, k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible D reached at k=%d,i=%d", k,i);
+
+	sc[0] = MMX(i, k-1) + TSC(p7P_MD, k-1);
+	sc[1] = DMX(i, k-1) + TSC(p7P_DD, k-1);
+	esl_vec_FLogNorm(sc, 2); 
+	z = esl_rnd_FChoose(r, sc, 2);
+	if (z == 0) status = p7_trace_Append(tr, p7T_M, k-1, i);
+	else        status = p7_trace_Append(tr, p7T_D, k-1, 0);
+	k--;
+	break;
+
+      /* I connects from M,I at i-1,k */
+      case p7T_I:
+	if (IMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
+	
+	sc[0] = MMX(i-1,k) + TSC(p7P_MI, k);
+	sc[1] = IMX(i-1,k) + TSC(p7P_II, k);
+	esl_vec_FLogNorm(sc, 2); 
+	z = esl_rnd_FChoose(r, sc, 2);
+
+	if (z == 0) status = p7_trace_Append(tr, p7T_M, k, i-1);
+	else        status = p7_trace_Append(tr, p7T_I, k, i-1);
+	i--;
+	break;
+
+      /* N connects from S, N */
+      case p7T_N:
+	if (XMX(i, p7G_N) <= p7_IMPOSSIBLE) ESL_XEXCEPTION(eslFAIL, "impossible N reached at i=%d", i);
+
+	if (i == 0) status = p7_trace_Append(tr, p7T_S, 0, 0);
+	else {
+	  tr->i[tr->N-1] = i--;
+	  status = p7_trace_Append(tr, p7T_N, 0, 0);
+	} 
+	break;
+
+      /* B connects from N, J */
+      case p7T_B:			
+	if (XMX(i,p7G_B) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible B reached at i=%d", i);
+
+	sc[0] = XMX(i, p7G_N) + gm->xsc[p7P_N][p7P_MOVE];
+	sc[1] = XMX(i, p7G_J) + gm->xsc[p7P_J][p7P_MOVE];
+	esl_vec_FLogNorm(sc, 2); 
+	z = esl_rnd_FChoose(r, sc, 2);
+
+	if (z == 0) { status = p7_trace_Append(tr, p7T_N, 0, 0); }
+	else        { status = p7_trace_Append(tr, p7T_J, 0, 0); }
+	break;
+
+      /* J connects from E(i) or J(i-1) */
+      case p7T_J:	
+	if (XMX(i,p7G_J) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible J reached at i=%d", i);
+	
+	sc[0] = XMX(i-1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP];
+	sc[1] = XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_LOOP];
+	esl_vec_FLogNorm(sc, 2); 
+	z = esl_rnd_FChoose(r, sc, 2);
+	if (z == 0) { 
+	  tr->i[tr->N-1] = i--;
+	  status = p7_trace_Append(tr, p7T_J, 0, 0);
+	} else {
+	  status = p7_trace_Append(tr, p7T_E, 0, 0);
+	}
+	break;
+
+      default: ESL_XEXCEPTION(eslFAIL, "bogus state in traceback");
+      } /* end switch over statetype[tpos-1] */
+      
+      if (status != eslOK) goto ERROR;
+    } /* end traceback, at S state */
+
+  if ((status = p7_trace_Reverse(tr)) != eslOK) goto ERROR;
+  free(sc);
+  return eslOK;
+
+ ERROR:
+  if (sc != NULL) free(sc);
+  return status;
+}
 
 
 
@@ -599,8 +896,11 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
    icc -O3 -static -o benchmark-generic -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
    ./benchmark-generic <hmmfile>
  */
-/* As of Tue Jul 17 13:14:43 2007
- * 61 Mc/s for Viterbi, 8.6 Mc/s for Forward.
+/* As of Fri Dec 28 14:48:39 2007
+ *    Viterbi  = 61.8 Mc/s
+ *    Forward  =  8.6 Mc/s
+ *   Backward  =  7.1 Mc/s
+ *        MSP  = 55.9 Mc/s
  * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
 #include "p7_config.h"
@@ -617,6 +917,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't do DP",                   0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Backward algorithm",                     0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Forward algorithm",                      0 },
   { "-M",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the MSP algorithm",                          0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
@@ -671,6 +972,7 @@ main(int argc, char **argv)
       if (esl_opt_GetBoolean(go, "-b")) continue;
 
       if      (esl_opt_GetBoolean(go, "-F"))           p7_GForward     (dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "-B"))           p7_GBackward    (dsq, L, gm, gx, &sc);
       else if (esl_opt_GetBoolean(go, "-M"))           p7_GMSP         (dsq, L, gm, gx, &sc);
       else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
 
@@ -741,7 +1043,7 @@ utest_basic(ESL_GETOPTS *go)
   if (p7_profile_Validate(gm, NULL, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
   if (esl_abc_CreateDsq(abc, targ, &dsq)           != eslOK) esl_fatal("failed to create GAATTC digital sequence");
   if ((gx = p7_gmx_Create(gm->M, L))               == NULL)  esl_fatal("failed to create DP matrix");
-  if ((tr = p7_trace_Create(L))                    == NULL)  esl_fatal("trace creation failed");
+  if ((tr = p7_trace_Create())                     == NULL)  esl_fatal("trace creation failed");
 
   p7_GViterbi   (dsq, L, gm, gx, &vsc);
   if (esl_opt_GetBoolean(go, "-v")) printf("Viterbi score: %.4f\n", vsc);
@@ -788,7 +1090,7 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   float     sc1, sc2;
 
   if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((tr     = p7_trace_Create(L))             == NULL)  esl_fatal("trace creation failed");
+  if ((tr     = p7_trace_Create())              == NULL)  esl_fatal("trace creation failed");
   if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
 
   for (idx = 0; idx < nseq; idx++)
@@ -912,7 +1214,7 @@ utest_generation(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc,
 {
   ESL_SQ   *sq = esl_sq_CreateDigital(abc);
   P7_GMX   *gx = p7_gmx_Create(gm->M, 100);
-  P7_TRACE *tr = p7_trace_Create(256);
+  P7_TRACE *tr = p7_trace_Create();
   float     vsc, fsc, nullsc, tracesc;
   float     avg_fsc;
   int       idx;
@@ -1108,6 +1410,145 @@ main(int argc, char **argv)
 }
 
 #endif /*p7DP_GENERIC_TESTDRIVE*/
+
+/*****************************************************************
+ * 6. Example
+ *****************************************************************/
+#ifdef p7DP_GENERIC_EXAMPLE
+/* 
+   gcc -g -O2 -Dp7DP_GENERIC_EXAMPLE -I. -I../easel -L. -L../easel -o example dp_generic.c -lhmmer -leasel -lm
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_dmatrix.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of a forward/backward posterior probability heat map";
+
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_GMX         *fwd     = NULL;
+  P7_GMX         *bck     = NULL;
+  ESL_DMATRIX    *pp      = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  P7_TRACE       *tr      = NULL;
+  P7_ALIDISPLAY  *ad      = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  float           sc;
+  int             i,d,k;
+  int             status;
+
+  /* Read in one HMM */
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+ 
+  /* Read in one sequence */
+  sq     = esl_sq_CreateDigital(abc);
+  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) p7_Fail("No such file.");
+  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
+  esl_sqfile_Close(sqfp);
+ 
+  /* Configure a profile from the HMM */
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, sq->n);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  
+  /* allocate DP matrices for forward and backward */
+  fwd = p7_gmx_Create(gm->M, sq->n);
+  bck = p7_gmx_Create(gm->M, sq->n);
+
+  /* run Forward, Backward */
+  tr = p7_trace_Create();
+
+  p7_GViterbi (sq->dsq, sq->n, gm, fwd, &sc);
+  p7_GTrace   (sq->dsq, sq->n, gm, fwd, tr);
+  p7_trace_Index(tr);
+  printf("# Viterbi: %d domains : ", tr->ndom);
+  for (d = 0; d < tr->ndom; d++) printf("%6d %6d %6d %6d  ", tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d]);
+  printf("\n");
+  p7_trace_Reuse(tr);
+
+  p7_GForward (sq->dsq, sq->n, gm, fwd, &sc);
+  p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);
+
+  for (i = 0; i < 1000; i++)
+    {
+      p7_StochasticTrace(r, sq->dsq, sq->n, gm, fwd, tr);
+      p7_trace_Index(tr);
+      /* printf("%3d  ", tr->ndom); */
+
+      for (d = 0; d < tr->ndom; d++) printf("%6d %6d %6d %6d %6d %6d\n", 
+					    tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d], 
+					    tr->sqfrom[d]-tr->hmmfrom[d], tr->sqto[d]-tr->hmmto[d]);
+	
+#if 0
+      for (d = 0; d < tr->ndom; d++) {
+	printf("domain %d of %d\n", d+1, tr->ndom);
+	ad = p7_alidisplay_Create(tr, d, gm, sq);
+	p7_alidisplay_Print(stdout, ad, 40, 80);
+	p7_alidisplay_Destroy(ad);
+      }
+#endif
+      p7_trace_Reuse(tr);
+    }
+  p7_trace_Destroy(tr);
+  
+#if 0
+  /* construct a LxM matrix holding posterior probs for each Match state emitting residue i */
+  pp = esl_dmatrix_Create(sq->n, gm->M);
+  for (i = 1; i <= sq->n; i++)
+    for (k = 1; k <= gm->M; k++)
+      pp->mx[i-1][k-1] = fwd->dp[i][k*3] + bck->dp[i][k*3] - sc;
+
+  /* output a heatmap */
+  dmx_Visualize(stdout, pp, -8.0, 0.0);
+#endif
+
+#if 0
+  printf("min = %g\n",       esl_dmx_Min(pp));
+  printf("max = %g\n",       esl_dmx_Max(pp));
+  printf("sc  = %g nats\n",  sc);
+#endif
+
+  esl_dmatrix_Destroy(pp);
+  p7_gmx_Destroy(fwd);
+  p7_gmx_Destroy(bck);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7DP_GENERIC_EXAMPLE*/
+
 
 /*****************************************************************
  * @LICENSE@

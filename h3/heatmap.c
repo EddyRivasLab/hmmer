@@ -73,14 +73,16 @@ dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max)
   /* Determine some working parameters 
    */
   w = (max-min) / (double) nshades; /* w = bin size for assigning values->colors*/
-  boxsize = ESL_MIN( (792 - bottommargin) / D->m, 
-		     (612 - leftmargin)   / D->n);
+  boxsize = ESL_MIN( (792 - bottommargin) / D->n, 
+		     (612 - leftmargin)   / D->m);
   
-  for (i = 0; i < D->m; i++)
-    for (j = i; j < D->n; j++)
+  /* or start from j=i, to do diagonals */
+
+  for (i = 0; i < D->n; i++)
+    for (j = 0; j < D->m; j++)
       {
 	xcoord = j * boxsize + leftmargin;
-	ycoord = (D->m-i+1) * boxsize + bottommargin;
+	ycoord = (D->n-i+1) * boxsize + bottommargin;
 
 	if      (D->mx[i][j] == -eslINFINITY) bin = 0;
 	else if (D->mx[i][j] ==  eslINFINITY) bin = nshades-1;

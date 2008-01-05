@@ -29,7 +29,7 @@ static int sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_ks
 /* Function:  p7_CoreEmit()
  * Incept:    SRE, Tue Jan  9 10:20:51 2007 [Janelia]
  *
- * Purpose:   Generate (sample) a sequence from a core profile HMM <hmm>.
+ * Purpose:   Generate (sample) a sequence from a core HMM <hmm>.
  *            
  *            Optionally return the sequence and/or its trace in <sq>
  *            and <tr>, respectively, which the caller has
@@ -229,10 +229,11 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
 	  }
 	else
 	  { /* glocal mode: treat B as M_0, use its transitions to MID. */
+	    /* FIXME: this is wrong. It should sample from B->Mk distribution! */
 	    switch (esl_rnd_FChoose(r, P7H_TMAT(hmm, 0), p7H_NTMAT)) {
-	    case 0:  st = p7T_M; break;
-	    case 1:  st = p7T_I; break;
-	    case 2:  st = p7T_D; break;
+	    case 0:  st = p7T_M; k = 1; break;
+	    case 1:  st = p7T_I; k = 0; break;
+	    case 2:  st = p7T_D; k = 1; break;
 	    default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
 	    }
 	  }
@@ -391,7 +392,7 @@ main(int argc, char **argv)
   double           bitscore;
 
   r  = esl_randomness_CreateTimeseeded();
-  tr = p7_trace_Create(256);
+  tr = p7_trace_Create();
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("failed to open %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read HMM");
   sq = esl_sq_CreateDigital(abc);

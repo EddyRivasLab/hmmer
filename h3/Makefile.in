@@ -50,12 +50,14 @@ OBJS =  build.o\
 	modelstats.o\
 	mpisupport.o\
 	seqmodel.o\
+	p7_alidisplay.o\
 	p7_bg.o\
 	p7_gmx.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
 	p7_prior.o\
 	p7_profile.o\
+	p7_tophits.o\
 	p7_trace.o
 #	island.o\
 
@@ -76,7 +78,7 @@ IMPL_HEADER = @IMPL_HEADER@
 all: 	${PROGS} libhmmer.a  ../easel/libeasel.a
 
 ${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} ${IMPL_OBJ}  libhmmer.a ../easel/libeasel.a
-	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -static -o $@ $@.o ${OBJS} ${IMPL_OBJ} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${IMPL_OBJ} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
 
 #################################################################
 ## Targets used in making HMMER library for testsuite compilation.

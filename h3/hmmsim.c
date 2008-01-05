@@ -623,7 +623,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
   gx = p7_gmx_Create(gm->M, L);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
-  tr = p7_trace_Create(L*2);
+  tr = p7_trace_Create();
 
   /* Create optimized model and DP matrix */
   if (esl_opt_GetBoolean(go, "--fast")) {
@@ -651,16 +651,20 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
     {
       esl_rnd_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
 
-      if (esl_opt_GetBoolean(go, "--fast")) {
-	if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
-	else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardFilter(dsq, L, om, ox, &sc);
-	else if (esl_opt_GetBoolean(go, "--msp")) p7_MSPFilter    (dsq, L, om, ox, &sc);
-      } else {
-	if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx, &sc);
-	else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx, &sc);
-	else if (esl_opt_GetBoolean(go, "--hyb")) p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
-	else if (esl_opt_GetBoolean(go, "--msp")) p7_GMSP    (dsq, L, gm, gx, &sc);
-      }
+      if (esl_opt_GetBoolean(go, "--fast")) 
+	{
+	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
+	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardFilter(dsq, L, om, ox, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msp")) p7_MSPFilter    (dsq, L, om, ox, &sc);
+	} 
+
+      if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a filter overflows, failover to slow versions */
+	{
+	  if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx, &sc);
+	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx, &sc);
+	  else if (esl_opt_GetBoolean(go, "--hyb")) p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msp")) p7_GMSP    (dsq, L, gm, gx, &sc);
+	}
 
       /* Optional: get Viterbi alignment length too. */
       if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
@@ -720,6 +724,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   for (i = 0; i < cfg->N; i++) esl_histogram_Add(h, scores[i]);
 
   /* header */
+#if 0
   fprintf(cfg->ofp, "# %18s  %8s %26s %17s %26s\n", "", "", 
 	  "-------- ML lambda -------", 
 	  "-- lambda fixed--",
@@ -729,6 +734,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	  "mu", "lambda", "E@10", 
 	  "mu", "E@10", 
 	  "mu", "lambda", "E@10");
+#endif
 
   /* For viterbi, MSP, and hybrid, fit data to a Gumbel, either with known lambda or estimated lambda. */
   if (esl_opt_GetBoolean(go, "--vit") || esl_opt_GetBoolean(go, "--hyb") || esl_opt_GetBoolean(go, "--msp"))
