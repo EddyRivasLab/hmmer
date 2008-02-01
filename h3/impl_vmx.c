@@ -38,6 +38,8 @@
 #include "esl_alphabet.h"
 #include "esl_vectorops.h"
 // #include "esl_sse.h"  need to track down what's in here...  need an esl_vmx.h?
+// esl_sse_logf()
+// esl_sse_expf()
 
 #include "hmmer.h"
 #include "impl_vmx.h"
@@ -1231,10 +1233,10 @@ vmx_hmax_vecuchar(vector unsigned char a)
 {
   union { vector unsigned char v; uint8_t i[16]; } tmp;
   
-  tmp.v = vec_max(a    , vec_slo(a    , (vector unsigned char) (1 << 4)));
-  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 4)));
-  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 4)));
-  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 4)));
+  tmp.v = vec_max(a    , vec_slo(a    , (vector unsigned char) (1 << 3)));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 3)));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 3)));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 3)));
   return tmp.i[0];
 }
 
@@ -1310,7 +1312,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
        * Zeros shift on automatically, which is our -infinity.
        */
       //mpv = _mm_slli_si128(dp[Q-1], 1);   
-      mpv = vec_sro(dp[Q-1], (vector unsigned char) (1 << 4));
+      mpv = vec_sro(dp[Q-1], (vector unsigned char) (1 << 3));
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
@@ -1446,9 +1448,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       //mpv = MMX(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
       //dpv = DMX(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
       //ipv = IMX(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
-      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (1 << 4));  
-      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (1 << 4));  
-      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (1 << 4));  
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (1 << 3));  
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (1 << 3));  
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (1 << 3));  
 
       for (q = 0; q < Q; q++)
 	{
@@ -1486,7 +1488,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      xE = sse_hmax_epu8(xEv);
+      xE = vmx_hmax_vecuchar(xEv);
       if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslOK; }	/* immediately detect overflow */
       xC = ESL_MAX(xC, xE - om->xu[p7O_E][p7O_MOVE]);
       xJ = ESL_MAX(xJ, xE - om->xu[p7O_E][p7O_LOOP]);
@@ -1507,13 +1509,13 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      Dmax = sse_hmax_epu8(Dmaxv);
+      Dmax = vmx_hmax_vecuchar(Dmaxv);
       if ((int) Dmax + om->ddbound_u > (int) xB) 
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  //dcv = _mm_slli_si128(dcv, 1);
-          dcv = vec_sro(dcv, (vector unsigned char) (1 << 4));
+          dcv = vec_sro(dcv, (vector unsigned char) (1 << 3));
 	  tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -1527,7 +1529,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   */
 	  do {
 	    //dcv = _mm_slli_si128(dcv, 1);
-            dcv = vec_sro(dcv, (vector unsigned char) (1 << 4));
+            dcv = vec_sro(dcv, (vector unsigned char) (1 << 3));
 	    tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -1539,7 +1541,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	//DMX(0) = _mm_slli_si128(dcv, 1);
-        DMX(0) = vec_sro(dcv, (vector unsigned char) (1 << 4));
+        DMX(0) = vec_sro(dcv, (vector unsigned char) (1 << 3));
 	  
 #if p7_DEBUGGING
       if (ox->debugging) omx_dump_uchar_row(ox, i, xE, 0, xJ, xB, xC);   
@@ -1641,9 +1643,14 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
        */
-      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
-      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
-      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
+      /* No, your OTHER right!  Literally, the SSE code shifts the vector left
+         so the VMX code should _actually_ go right ... I think.  Maybe. */
+      //mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
+      //dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
+      //ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (4 << 3));
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (4 << 3));
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (4 << 3)); 
       
       for (q = 0; q < Q; q++)
 	{
@@ -1686,8 +1693,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       /* We're almost certainly're obligated to do at least one complete 
        * DD path to be sure: 
        */
-      dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-      dcv    = _mm_move_ss(dcv, zerov);
+      //dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+      //dcv    = _mm_move_ss(dcv, zerov);
+      dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
       DMX(0) = zerov;
       tp     = om->tf + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
@@ -1708,8 +1716,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	{			/* Fully serialized version */
 	  for (j = 1; j < 4; j++)
 	    {
-	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	      dcv = _mm_move_ss(dcv, zerov);
+	      //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      //dcv = _mm_move_ss(dcv, zerov);
+              dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
 	      tp = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{
@@ -1724,8 +1733,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	    {
 	      register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
 
-	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	      dcv = _mm_move_ss(dcv, zerov);
+	      //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      //dcv = _mm_move_ss(dcv, zerov);
+              dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
 	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
@@ -1735,21 +1745,24 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 		  DMX(q) = sv;	                                    /* store new DMX(q) */
 		  dcv    = vec_madd(dcv, *tp, -0.0f);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
 		}	    
-	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
+              // FIXME?  not sure about this one...
+	      //if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
+              if (! vec_any_lt(cv, (vector float) (0.0))) break;
 	    }
 	}
 
       /* Add D's to xEv */
-      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMX(q), xEv);
+      for (q = 0; q < Q; q++) xEv = vec_add(DMX(q), xEv);
 
       /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation is a horizontal sum of xEv's elements  */
       /* These must follow DD calculations, because D's contribute to E in Forward
        * (as opposed to Viterbi)
        */
-      xEv = _mm_add_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
-      xEv = _mm_add_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
-      _mm_store_ss(&xE, xEv);
+      xEv = vec_add(xEv, vec_perm(xEv, xEv, (vector unsigned char) (0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      xEv = vec_add(xEv, vec_perm(xEv, xEv, (vector unsigned char) (1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      //_mm_store_ss(&xE, xEv);
+      vec_ste(xEv, &xE, 0);
 
       xN =  xN * om->xf[p7O_N][p7O_LOOP];
       xC = (xC * om->xf[p7O_C][p7O_LOOP]) +  (xE * om->xf[p7O_E][p7O_MOVE]);
@@ -2230,7 +2243,7 @@ main(int argc, char **argv)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_vmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
