@@ -1310,7 +1310,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
        * Zeros shift on automatically, which is our -infinity.
        */
       //mpv = _mm_slli_si128(dp[Q-1], 1);   
-      mpv = vec_sro(dp[Q-1], 1*4);
+      mpv = vec_sro(dp[Q-1], (vector unsigned char) (1 << 4));
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
@@ -1512,7 +1512,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
-	  dcv = _mm_slli_si128(dcv, 1);
+	  //dcv = _mm_slli_si128(dcv, 1);
+          dcv = vec_sro(dcv, (vector unsigned char) (1 << 4));
 	  tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -1525,7 +1526,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   * our score. 
 	   */
 	  do {
-	    dcv = _mm_slli_si128(dcv, 1);
+	    //dcv = _mm_slli_si128(dcv, 1);
+            dcv = vec_sro(dcv, (vector unsigned char) (1 << 4));
 	    tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -1819,21 +1821,21 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 int
 p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  register __m128 mpv, dpv, ipv;   /* previous row values                                       */
-  register __m128 sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128 dcv;		   /* delayed storage of D(i,q+1)                               */
-  register __m128 xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128 Dmaxv;           /* keeps track of maximum D cell on row                      */
-  __m128  infv;			   /* -eslINFINITY in a vector                                  */
-  float    xN, xE, xB, xC, xJ;	   /* special states' scores                                    */
-  float    Dmax;		   /* maximum D cell on row                                     */
-  int i;			   /* counter over sequence positions 1..L                      */
-  int q;			   /* counter over vectors 0..nq-1                              */
-  int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
-  __m128 *dp  = ox->dpf;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
-  __m128 *rsc;			   /* will point at om->rf[x] for residue x[i]                  */
-  __m128 *tsc;			   /* will point into (and step thru) om->tf                    */
+  register vector float mpv, dpv, ipv;   /* previous row values                                       */
+  register vector float sv;		 /* temp storage of 1 curr row value in progress              */
+  register vector float dcv;		 /* delayed storage of D(i,q+1)                               */
+  register vector float xEv;		 /* E state: keeps max for Mk->E as we go                     */
+  register vector float xBv;		 /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register vector float Dmaxv;           /* keeps track of maximum D cell on row                      */
+  vector float  infv;			 /* -eslINFINITY in a vector                                  */
+  float    xN, xE, xB, xC, xJ;	   	 /* special states' scores                                    */
+  float    Dmax;		   	 /* maximum D cell on row                                     */
+  int i;			   	 /* counter over sequence positions 1..L                      */
+  int q;			   	 /* counter over vectors 0..nq-1                              */
+  int Q       = p7O_NQF(om->M);	   	 /* segment length: # of vectors                              */
+  vector float *dp  = ox->dpf;	   	 /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  vector float *rsc;			 /* will point at om->rf[x] for residue x[i]                  */
+  vector float *tsc;			 /* will point into (and step thru) om->tf                    */
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ4) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -1841,7 +1843,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   ox->Q4 = Q;
 
   /* Initialization. */
-  infv = _mm_set1_ps(-eslINFINITY);
+  infv = (vector float) (-eslINFINITY);
   for (q = 0; q < Q; q++)
     MMX(q) = IMX(q) = DMX(q) = infv;
   xN   = 0.;
@@ -1861,7 +1863,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
       dcv   = infv;
       xEv   = infv;
       Dmaxv = infv;
-      xBv   = _mm_set1_ps(xB);
+      xBv   = (vector float) (xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. 
        */
@@ -1872,12 +1874,12 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =                _mm_add_ps(xBv, *tsc);  tsc++;
-	  sv   = _mm_max_ps(sv, _mm_add_ps(mpv, *tsc)); tsc++;
-	  sv   = _mm_max_ps(sv, _mm_add_ps(ipv, *tsc)); tsc++;
-	  sv   = _mm_max_ps(sv, _mm_add_ps(dpv, *tsc)); tsc++;
-	  sv   = _mm_add_ps(sv, *rsc);                  rsc++;
-	  xEv  = _mm_max_ps(xEv, sv);
+	  sv   =             vec_add(xBv, *tsc);  tsc++;
+	  sv   = vec_max(sv, vec_add(mpv, *tsc)); tsc++;
+	  sv   = vec_max(sv, vec_add(ipv, *tsc)); tsc++;
+	  sv   = vec_max(sv, vec_add(dpv, *tsc)); tsc++;
+	  sv   = vec_add(sv, *rsc);               rsc++;
+	  xEv  = vec_max(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
@@ -1893,13 +1895,13 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = _mm_add_ps(sv, *tsc); tsc++;
-	  Dmaxv = _mm_max_ps(dcv, Dmaxv);
+	  dcv   = vec_add(sv, *tsc); tsc++;
+	  Dmaxv = vec_max(dcv, Dmaxv);
 
 	  /* Calculate and store I(i,q) */
-	  sv     =                _mm_add_ps(mpv, *tsc);  tsc++;
-	  sv     = _mm_max_ps(sv, _mm_add_ps(ipv, *tsc)); tsc++;
-	  IMX(q) = _mm_add_ps(sv, *rsc);                  rsc++;
+	  sv     =             vec_add(mpv, *tsc);  tsc++;
+	  sv     = vec_max(sv, vec_add(ipv, *tsc)); tsc++;
+	  IMX(q) = vec_add(sv, *rsc);               rsc++;
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
@@ -1941,8 +1943,8 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
-	      DMX(q) = _mm_max_ps(dcv, DMX(q));	
-	      dcv    = _mm_add_ps(DMX(q), *tsc); tsc++;
+	      DMX(q) = vec_max(dcv, DMX(q));	
+	      dcv    = vec_add(DMX(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -1956,8 +1958,8 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	    for (q = 0; q < Q; q++) 
 	      {
 		if (! vec_any_gt(dcv, DMX(q))) break;
-		DMX(q) = _mm_max_ps(dcv, DMX(q));	
-		dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
+		DMX(q) = vec_max(dcv, DMX(q));	
+		dcv    = vec_add(DMX(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}
@@ -1985,7 +1987,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
  * 10. Benchmark drivers.
  *****************************************************************/
 
-#if defined(p7IMPL_SSE_BENCHMARK) || defined(p7IMPL_SSE_TESTDRIVE)
+#if defined(p7IMPL_VMX_BENCHMARK) || defined(p7IMPL_VNX_TESTDRIVE)
 /* Here's a couple of useful debugging functions, used in both the
  * benchmark and testdriver. (They're used in the benchmark for
  * additional manual testing purposes.)
@@ -2067,7 +2069,7 @@ simulate_msp_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
  *      rather than using its lookup table, otherwise you'll see
  *      differences caused by lack of precision in p7_FLogsum().
  */
-#ifdef p7IMPL_SSE_BENCHMARK
+#ifdef p7IMPL_VMX_BENCHMARK
 /* 
    gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
    icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
@@ -2087,7 +2089,7 @@ simulate_msp_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_vmx.h"
 
 #define ALGOPTS "-V,-F,-S"
 
@@ -2095,7 +2097,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "compare scores of generic, SSE DP        (debug)", 0 }, 
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "compare scores of generic, VMX DP        (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",               0 },
@@ -2109,7 +2111,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the SSE DP implementations";
+static char banner[] = "benchmark driver for the VMX DP implementations";
 
 
 int 
@@ -2207,12 +2209,12 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7IMPL_SSE_BENCHMARK*/
+#endif /*p7IMPL_VNX_BENCHMARK*/
 
 
 
 
-#ifdef p7IMPL_SSE_BENCHMARK2
+#ifdef p7IMPL_VNX_BENCHMARK2
 /* The second benchmark driver is for timing profile conversion.
    gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK2 impl_sse.c -lhmmer -leasel -lm 
    icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK2 impl_sse.c -lhmmer -leasel -lm 
@@ -2283,7 +2285,7 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7IMPL_SSE_BENCHMARK2*/
+#endif /*p7IMPL_VMX_BENCHMARK2*/
 
 
 
@@ -2291,7 +2293,7 @@ main(int argc, char **argv)
  * 11. Unit tests
  *****************************************************************/
 
-#ifdef p7IMPL_SSE_TESTDRIVE
+#ifdef p7IMPL_VMX_TESTDRIVE
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
@@ -2480,12 +2482,12 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
 }
-#endif /*p7IMPL_SSE_TESTDRIVE*/
+#endif /*p7IMPL_VMX_TESTDRIVE*/
 
 /*****************************************************************
  * 12. Test driver
  *****************************************************************/
-#ifdef p7IMPL_SSE_TESTDRIVE
+#ifdef p7IMPL_VMX_TESTDRIVE
 /* 
    gcc -g -Wall -msse2 -std=gnu99 -I. -L. -I../easel -L../easel -o impl_sse_utest -Dp7IMPL_SSE_TESTDRIVE impl_sse.c -lhmmer -leasel -lm
    ./impl_sse_utest
@@ -2497,7 +2499,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_vmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -2511,7 +2513,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE implementation";
+static char banner[] = "test driver for the VMX implementation";
 
 int
 main(int argc, char **argv)
@@ -2577,13 +2579,13 @@ main(int argc, char **argv)
   esl_randomness_Destroy(r);
   return eslOK;
 }
-#endif /*IMPL_SSE_TESTDRIVE*/
+#endif /*IMPL_VMX_TESTDRIVE*/
 
 /*****************************************************************
  * 13. Example
  *****************************************************************/
 
-#ifdef p7IMPL_SSE_EXAMPLE
+#ifdef p7IMPL_VMX_EXAMPLE
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
@@ -2597,7 +2599,7 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_vmx.h"
 
 int 
 main(int argc, char **argv)
@@ -2662,7 +2664,7 @@ main(int argc, char **argv)
   /* Viterbi score requires a special config of the optimized profile.
    * This isn't the final design of our API: the pspace_ call is an internal function. */
   pspace_to_lspace_float(om);
-  p7_ViterbiScore (sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (SSE):  %.2f nats\n", sc);
+  p7_ViterbiScore (sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (VMX):  %.2f nats\n", sc);
 
   /* now in a real app, you'd need to convert raw nat scores to final bit
    * scores, by subtracting the null model score and rescaling.
@@ -2681,9 +2683,9 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   return 0;
 }
-#endif /*p7IMPL_SSE_EXAMPLE*/
+#endif /*p7IMPL_VMX_EXAMPLE*/
 
-#endif /*HAVE_SSE2*/
+#endif /*HAVE_VMX*/
 
 /*****************************************************************
  * @LICENSE@
