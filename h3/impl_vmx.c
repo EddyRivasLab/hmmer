@@ -1880,9 +1880,13 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. 
        */
-      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
-      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
-      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
+      //mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
+      //dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
+      //ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (4 << 3));
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (4 << 3));
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (4 << 3));
+
       
       for (q = 0; q < Q; q++)
 	{
@@ -1919,9 +1923,10 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation takes the max of xEv's elements  */
-      xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
-      xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
-      _mm_store_ss(&xE, xEv);
+      xEv = vec_max(xEv, vec_perm(xEv, xEv, (vector unsigned char) (0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      xEv = vec_max(xEv, vec_perm(xEv, xEv, (vector unsigned char) (1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      //_mm_store_ss(&xE, xEv);
+      vec_ste(xEv, &xE, 0);
 
       xN = xN +  om->xf[p7O_N][p7O_LOOP];
       xC = ESL_MAX(xC + om->xf[p7O_C][p7O_LOOP],  xE + om->xf[p7O_E][p7O_MOVE]);
@@ -1944,15 +1949,17 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(0, 3, 2, 1)));
-      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(1, 0, 3, 2)));
-      _mm_store_ss(&Dmax, Dmaxv);
+      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, (vector unsigned char) (0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, (vector unsigned char) (1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      //_mm_store_ss(&Dmax, Dmaxv);
+      vec_ste(Dmaxv, &Dmax, 0);
       if (Dmax + om->ddbound_f > xB) 
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
+	  //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	  //dcv = _mm_move_ss(dcv, infv);
+          dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
 	  tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -1965,8 +1972,9 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	   * our score. 
 	   */
 	  do {
-	    dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	    dcv = _mm_move_ss(dcv, infv);
+	    //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	    //dcv = _mm_move_ss(dcv, infv);
+            dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
 	    tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -1978,8 +1986,9 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	}
       else
 	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
+	  //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	  //dcv = _mm_move_ss(dcv, infv);
+          dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
 	  DMX(0) = dcv;
 	}
 
