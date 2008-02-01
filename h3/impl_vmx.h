@@ -1,3 +1,5 @@
+/* :%s/SSE/VMX/g ... in theory */
+
 /* SSE implementation of optimized Viterbi and Forward routines:
  * structures, declarations, and macros.
  * 
@@ -45,14 +47,13 @@
  * SRE, Sun Nov 25 11:23:02 2007
  * SVN $Id$
  */
-#ifndef P7_IMPL_SSE_INCLUDED
-#define P7_IMPL_SSE_INCLUDED
+#ifndef P7_IMPL_VMX_INCLUDED
+#define P7_IMPL_VMX_INCLUDED
 #include "p7_config.h"
 
 #include <esl_alphabet.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#include <altivec.h>
 
 /* In calculating Q, the number of vectors we need in a row, we have
  * to make sure there's at least 2, or a striped implementation fails.
@@ -114,16 +115,16 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
  */
 typedef struct p7_oprofile_s {
   /* tu, ru, xu are for ViterbiFilter(): lspace uchars, 16x vectors            */
-  __m128i  *tu;	        	/* transition score blocks                     */
-  __m128i **ru;     		/* [x][q]:  r16 array and r16[0] are allocated */
-  uint8_t   xu[p7O_NXSTATES][p7O_NXTRANS];
-  int       allocQ16;		/* how many uchar vectors                      */
+  vector unsigned char *tu;	        	/* transition score blocks                     */
+  vector unsigned char **ru;     		/* [x][q]:  r16 array and r16[0] are allocated */
+  uint8_t                xu[p7O_NXSTATES][p7O_NXTRANS];
+  int                    allocQ16;		/* how many uchar vectors                      */
 
   /* info for the MSPFilter() implementation                                   */
-  __m128i **rm;     		/* [x][q]:  m16 array and m16[0] are allocated */
-  uint8_t   tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
-  uint8_t   tec;		/* constant E->C  cost: scaled log 0.5         */
-  uint8_t   tjb;		/* constant J->B  cost: scaled log 3/(L+3)     */
+  vector unsigned char **rm;     		/* [x][q]:  m16 array and m16[0] are allocated */
+  uint8_t                tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
+  uint8_t                tec;		/* constant E->C  cost: scaled log 0.5         */
+  uint8_t                tjb;		/* constant J->B  cost: scaled log 3/(L+3)     */
 
   /* info for the ViterbiFilter() implementation                               */
   int       ddbound_u;	        /* used for lazy DD. it must be signed!        */
@@ -132,10 +133,10 @@ typedef struct p7_oprofile_s {
   uint8_t   bias;	        /* positive bias for emission scores           */
 
   /* tf, rf, xf are for ForwardFilter():    pspace floats, 4x vectors          */
-  __m128  *tf;	    		/* transition probability blocks               */
-  __m128 **rf;     		/* [x][q]:  rf array and rf[0] are allocated   */
-  float    xf[p7O_NXSTATES][p7O_NXTRANS];
-  int      allocQ4;		/* how many float vectors                      */
+  vector float  *tf;	    		/* transition probability blocks               */
+  vector float **rf;     		/* [x][q]:  rf array and rf[0] are allocated   */
+  float          xf[p7O_NXSTATES][p7O_NXTRANS];
+  int            allocQ4;		/* how many float vectors                      */
 
   /* Info specific to the optional ViterbiScore() implementation               */
   float    ddbound_f;		/* full precision bound for lazy DD            */
@@ -161,13 +162,13 @@ enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 #define p7X_NSCELLS 3
 
 typedef struct p7_omx_s {
-  __m128i *dpu;			/* one row of a striped DP matrix for [0..q-1][MDI] for uchars */
-  int     allocQ16;		/* total uchar vectors allocated                               */
-  int     Q16;			/* when omx is in use: how many quads are valid (= p7O_NQU(M)) */
+  vector unsigned char *dpu;			/* one row of a striped DP matrix for [0..q-1][MDI] for uchars */
+  int                   allocQ16;		/* total uchar vectors allocated                               */
+  int                   Q16;			/* when omx is in use: how many quads are valid (= p7O_NQU(M)) */
 
-  __m128 *dpf;			/* one row of a striped DP matrix for floats                   */
-  int     allocQ4;		/* total float vectors allocated                               */
-  int     Q4;			/* when omx is in use: how many quads are valid (= p7O_NQF(M)) */
+  vector float *dpf;			/* one row of a striped DP matrix for floats                   */
+  int           allocQ4;		/* total float vectors allocated                               */
+  int           Q4;			/* when omx is in use: how many quads are valid (= p7O_NQF(M)) */
 
   int     allocM;		/* current allocation size (redundant with Q16 and Q4, really) */
   int     M;			/* when omx is in use: how big is the query                    */
@@ -201,7 +202,7 @@ extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
-#endif /* P7_IMPL_SSE_INCLUDED */
+#endif /* P7_IMPL_VMX_INCLUDED */
 
 /*****************************************************************
  * @LICENSE@

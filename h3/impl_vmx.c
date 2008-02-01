@@ -25,23 +25,22 @@
  * SVN $Id$
  */
 #include "p7_config.h"
-#ifdef HAVE_SSE2
+#ifdef HAVE_VMX
 
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
 #include <assert.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#include <altivec.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_vectorops.h"
-#include "esl_sse.h"
+// #include "esl_sse.h"  need to track down what's in here...  need an esl_vmx.h?
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_vmx.h"
 
 /* ?MX(q) access macros work for either uchar or float, so long as you
  * init your "dp" to point to the appropriate array.
@@ -307,7 +306,8 @@ oprofile_dump_uchar(FILE *fp, P7_OPROFILE *om)
       for (j = 0, q = 0; q < nq; q++, j+=2)
 	{
 	  fprintf(fp, "[ ");
-	  _mm_store_si128(&tmp.v, om->ru[x][j]);
+	  //_mm_store_si128(&tmp.v, om->ru[x][j]);
+          vec_st(om->ru[x][j],0,&tmp.v);
 	  for (z = 0; z < 16; z++) fprintf(fp, "%4d ", tmp.i[z]);
 	  fprintf(fp, "]");
 	}
@@ -316,7 +316,8 @@ oprofile_dump_uchar(FILE *fp, P7_OPROFILE *om)
       for (j = 1, q = 0; q < nq; q++, j+=2)
 	{
 	  fprintf(fp, "[ ");
-	  _mm_store_si128(&tmp.v, om->ru[x][j]);
+	  //_mm_store_si128(&tmp.v, om->ru[x][j]);
+          vec_st(om->ru[x][j],0,&tmp.v);
 	  for (z = 0; z < 16; z++) fprintf(fp, "%4d ", tmp.i[z]);
 	  fprintf(fp, "]");
 	}
@@ -357,7 +358,8 @@ oprofile_dump_uchar(FILE *fp, P7_OPROFILE *om)
       for (q = 0; q < nq; q++)
 	{
 	  fprintf(fp, "[ ");
-	  _mm_store_si128(&tmp.v, om->tu[q*7 + t]);
+	  //_mm_store_si128(&tmp.v, om->tu[q*7 + t]);
+          vec_st(om->tu[q*7 + t],0,&tmp.v);
 	  for (z = 0; z < 16; z++) fprintf(fp, "%4d ", tmp.i[z]);
 	  fprintf(fp, "]");
 	}
@@ -378,7 +380,8 @@ oprofile_dump_uchar(FILE *fp, P7_OPROFILE *om)
   for (j = nq*7, q = 0; q < nq; q++, j++)
     {
       fprintf(fp, "[ ");
-      _mm_store_si128(&tmp.v, om->tu[j]);
+      //_mm_store_si128(&tmp.v, om->tu[j]);
+      vec_st(om->tu[j],0,&tmp.v);
       for (z = 0; z < 16; z++) fprintf(fp, "%4d ", tmp.i[z]);
       fprintf(fp, "]");
     }
@@ -1213,25 +1216,26 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
  * Note that cmpeq_epi8 works fine for unsigned ints (there is no 
  * cmpeq_epu8 instruction either). 
  */
-static int 
-sse_any_gt_epu8(__m128i a, __m128i b)
-{
-  __m128i mask    = _mm_cmpeq_epi8(_mm_max_epu8(a,b), b); /* anywhere a>b, mask[z] = 0x0; elsewhere 0xff */
-  int   maskbits  = _mm_movemask_epi8(_mm_xor_si128(mask,  _mm_cmpeq_epi8(mask, mask)));
-  return maskbits != 0;
-}
+//static int 
+//sse_any_gt_epu8(__m128i a, __m128i b)
+//{
+//  __m128i mask    = _mm_cmpeq_epi8(_mm_max_epu8(a,b), b); /* anywhere a>b, mask[z] = 0x0; elsewhere 0xff */
+//  int   maskbits  = _mm_movemask_epi8(_mm_xor_si128(mask,  _mm_cmpeq_epi8(mask, mask)));
+//  return maskbits != 0;
+//}
+// should be replaced by Altivec predicate vec_any_gt()
 
 /* Returns maximum element \max_z a[z] in epu8 vector */
 static unsigned char
-sse_hmax_epu8(__m128i a)
+vmx_hmax_vecuchar(vector unsigned char a)
 {
-  union { __m128i v; uint8_t i[16]; } tmp;
+  union { vector unsigned char v; uint8_t i[16]; } tmp;
   
-  tmp.v = _mm_max_epu8(a,     _mm_slli_si128(a,     1));
-  tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 2));
-  tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 4));
-  tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 8));
-  return tmp.i[15];
+  tmp.v = vec_max(a    , vec_slo(a    , (vector unsigned char) (1 << 4)));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 4)));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 4)));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 4)));
+  return tmp.i[0];
 }
 
 
@@ -1266,17 +1270,17 @@ sse_hmax_epu8(__m128i a)
 int
 p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  register __m128i mpv;            /* previous row values                                       */
-  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128i biasv;	   /* emission bias in a vector                                 */
-  uint8_t  xE, xB, xC;             /* special states' scores                                    */
-  int i;			   /* counter over sequence positions 1..L                      */
-  int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
-  __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
+  register vector unsigned char mpv;       /* previous row values                                       */
+  register vector unsigned char xEv;	   /* E state: keeps max for Mk->E as we go                     */
+  register vector unsigned char xBv;	   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register vector unsigned char sv;	   /* temp storage of 1 curr row value in progress              */
+  register vector unsigned char biasv;	   /* emission bias in a vector                                 */
+  uint8_t  xE, xB, xC;             	   /* special states' scores                                    */
+  int i;			   	   /* counter over sequence positions 1..L                      */
+  int q;			   	   /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQU(om->M);   	   /* segment length: # of vectors                              */
+  vector unsigned char *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  vector unsigned char *rsc;		   /* will point at om->ru[x] for residue x[i]                  */
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -1285,9 +1289,9 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
-  biasv = _mm_set1_epi8((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
+  biasv = (vector unsigned char) ((int8_t) om->bias);
   for (q = 0; q < Q; q++)
-    dp[q] = _mm_setzero_si128();
+    dp[q] = (vector unsigned char) (0);
   xB   = om->base - om->tjb;                /* remember, all values are costs to be subtracted. */
   xC   = 0;
 
@@ -1298,28 +1302,29 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   for (i = 1; i <= L; i++)
     {
       rsc = om->rm[dsq[i]];
-      xEv = _mm_setzero_si128();      
-      xBv = _mm_set1_epi8((int8_t) (xB - om->tbm));
+      xEv = (vector unsigned char) (0);      
+      xBv = (vector unsigned char) ((int8_t) (xB - om->tbm));
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
-      mpv = _mm_slli_si128(dp[Q-1], 1);   
+      //mpv = _mm_slli_si128(dp[Q-1], 1);   
+      mpv = vec_sro(dp[Q-1], 1*4);
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   = _mm_max_epu8(mpv, xBv);
-	  sv   = _mm_adds_epu8(sv, biasv);     
-	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
-	  xEv  = _mm_max_epu8(xEv, sv);	
+          sv   = vec_max(mpv, xBv);
+          sv   = vec_adds(sv, biasv);
+          sv   = vec_subs(sv, *rsc); rsc++;
+          xEv  = vec_max(xEv, sv);
 
 	  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
 	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      xE = sse_hmax_epu8(xEv);
+      xE = vmx_hmax_vecuchar(xEv);
       if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslOK; }	/* immediately detect overflow */
 
       xC = ESL_MAX(xC,        xE  - om->tec);
@@ -1389,21 +1394,21 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 int
 p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  register __m128i mpv, dpv, ipv;  /* previous row values                                       */
-  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128i dcv;		   /* delayed storage of D(i,q+1)                               */
-  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128i Dmaxv;          /* keeps track of maximum D cell on row                      */
-  __m128i  biasv;		   /* emission bias in a vector                                 */
+  register vector unsigned char mpv, dpv, ipv;  /* previous row values                                       */
+  register vector unsigned char sv;		   /* temp storage of 1 curr row value in progress              */
+  register vector unsigned char dcv;		   /* delayed storage of D(i,q+1)                               */
+  register vector unsigned char xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register vector unsigned char xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register vector unsigned char Dmaxv;          /* keeps track of maximum D cell on row                      */
+  vector unsigned char  biasv;		   /* emission bias in a vector                                 */
   uint8_t  xE, xB, xC, xJ;	   /* special states' scores                                    */
   uint8_t  Dmax;		   /* maximum D cell score on row                               */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
-  __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
-  __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
+  vector unsigned char *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  vector unsigned char *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
+  vector unsigned char *tsc;			   /* will point into (and step thru) om->tu                    */
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)                                ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -1413,9 +1418,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
-  biasv = _mm_set1_epi8((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
+  biasv = (vector unsigned char) ((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++)
-    MMX(q) = IMX(q) = DMX(q) = _mm_setzero_si128();
+    MMX(q) = IMX(q) = DMX(q) = (vector unsigned char) (0);
   xB   = om->base - om->xu[p7O_N][p7O_MOVE]; /* remember, all values are costs to be subtracted. */
   xJ   = 0;
   xC   = 0;
@@ -1429,29 +1434,32 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
     {
       rsc   = om->ru[dsq[i]];
       tsc   = om->tu;
-      dcv   = _mm_setzero_si128();      /* "-infinity" */
-      xEv   = _mm_setzero_si128();     
-      Dmaxv = _mm_setzero_si128();     
-      xBv   = _mm_set1_epi8((char) xB);
+      dcv   = (vector unsigned char) (0);      /* "-infinity" */
+      xEv   = (vector unsigned char) (0);     
+      Dmaxv = (vector unsigned char) (0);     
+      xBv   = (vector unsigned char) ((char) xB);
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
-      mpv = MMX(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
-      dpv = DMX(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
-      ipv = IMX(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
+      //mpv = MMX(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
+      //dpv = DMX(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
+      //ipv = IMX(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (1 << 4));  
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (1 << 4));  
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (1 << 4));  
 
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =                   _mm_subs_epu8(xBv, *tsc);  tsc++;
-	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(mpv, *tsc)); tsc++;
-	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(ipv, *tsc)); tsc++;
-	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(dpv, *tsc)); tsc++;
-	  sv   = _mm_adds_epu8(sv, biasv);     
-	  sv   = _mm_subs_epu8(sv, *rsc);                     rsc++;
-	  xEv  = _mm_max_epu8(xEv, sv);
+	  sv   =                   vec_subs(xBv, *tsc);  tsc++;
+	  sv   = vec_max (sv, vec_subs(mpv, *tsc)); tsc++;
+	  sv   = vec_max (sv, vec_subs(ipv, *tsc)); tsc++;
+	  sv   = vec_max (sv, vec_subs(dpv, *tsc)); tsc++;
+	  sv   = vec_adds(sv, biasv);     
+	  sv   = vec_subs(sv, *rsc);                     rsc++;
+	  xEv  = vec_max(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
@@ -1467,14 +1475,14 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = _mm_subs_epu8(sv, *tsc);  tsc++;
-	  Dmaxv = _mm_max_epu8(dcv, Dmaxv);
+	  dcv   = vec_subs(sv, *tsc);  tsc++;
+	  Dmaxv = vec_max(dcv, Dmaxv);
 
 	  /* Calculate and store I(i,q) */
-	  sv     =                   _mm_subs_epu8(mpv, *tsc);  tsc++;
-	  sv     = _mm_max_epu8 (sv, _mm_subs_epu8(ipv, *tsc)); tsc++;
-	  sv     = _mm_adds_epu8(sv, biasv);
-	  IMX(q) = _mm_subs_epu8(sv, *rsc);                     rsc++;
+	  sv     =                   vec_subs(mpv, *tsc);  tsc++;
+	  sv     = vec_max (sv, vec_subs(ipv, *tsc)); tsc++;
+	  sv     = vec_adds(sv, biasv);
+	  IMX(q) = vec_subs(sv, *rsc);                     rsc++;
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
@@ -1508,8 +1516,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
-	      DMX(q) = _mm_max_epu8(dcv, DMX(q));	
-	      dcv    = _mm_subs_epu8(DMX(q), *tsc); tsc++;
+	      DMX(q) = vec_max(dcv, DMX(q));	
+	      dcv    = vec_subs(DMX(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -1521,14 +1529,15 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	    tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
-		if (! sse_any_gt_epu8(dcv, DMX(q))) break;
-		DMX(q) = _mm_max_epu8(dcv, DMX(q));	
-		dcv    = _mm_subs_epu8(DMX(q), *tsc);   tsc++;
+		if (! vec_any_gt(dcv, DMX(q))) break;
+		DMX(q) = vec_max(dcv, DMX(q));	
+		dcv    = vec_subs(DMX(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
-	DMX(0) = _mm_slli_si128(dcv, 1);
+	//DMX(0) = _mm_slli_si128(dcv, 1);
+        DMX(0) = vec_sro(dcv, (vector unsigned char) (1 << 4));
 	  
 #if p7_DEBUGGING
       if (ox->debugging) omx_dump_uchar_row(ox, i, xE, 0, xJ, xB, xC);   
@@ -1583,20 +1592,20 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 int
 p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  register __m128 mpv, dpv, ipv;   /* previous row values                                       */
-  register __m128 sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128 dcv;		   /* delayed storage of D(i,q+1)                               */
-  register __m128 xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  __m128   zerov;		   /* splatted 0.0's in a vector                                */
+  register vector float mpv, dpv, ipv;   /* previous row values                                       */
+  register vector float sv;		   /* temp storage of 1 curr row value in progress              */
+  register vector float dcv;		   /* delayed storage of D(i,q+1)                               */
+  register vector float xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register vector float xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  vector float   zerov;		   /* splatted 0.0's in a vector                                */
   float    xN, xE, xB, xC, xJ;	   /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over quads 0..nq-1                                */
   int j;			   /* counter over DD iterations (4 is full serialization)      */
   int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
-  __m128 *dp  = ox->dpf;           /* using {MDI}MX(q) macro requires initialization of <dp>    */
-  __m128 *rp;			   /* will point at om->rf[x] for residue x[i]                  */
-  __m128 *tp;			   /* will point into (and step thru) om->tf                    */
+  vector float *dp  = ox->dpf;           /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  vector float *rp;			   /* will point at om->rf[x] for residue x[i]                  */
+  vector float *tp;			   /* will point into (and step thru) om->tf                    */
 
 
   /* Check that the DP matrix is ok for us. */
@@ -1607,7 +1616,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* Initialization.
    */
-  zerov = _mm_setzero_ps();
+  zerov = (vector float) (0.0);
   for (q = 0; q < Q; q++)
     MMX(q) = IMX(q) = DMX(q) = zerov;
   xE    = 0.;
@@ -1624,9 +1633,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
     {
       rp    = om->rf[dsq[i]];
       tp    = om->tf;
-      dcv   = _mm_setzero_ps();
-      xEv   = _mm_setzero_ps();
-      xBv   = _mm_set1_ps(xB);
+      dcv   = (vector float) (0.0);
+      xEv   = (vector float) (0.0);
+      xBv   = (vector float) (xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
        */
@@ -1637,12 +1646,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
-	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
-	  sv   = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	  sv   = _mm_add_ps(sv, _mm_mul_ps(dpv, *tp)); tp++;
-	  sv   = _mm_mul_ps(sv, *rp);                  rp++;
-	  xEv  = _mm_add_ps(xEv, sv);
+	  sv   =             vec_madd(xBv, *tp, -0.0f);  tp++;
+	  sv   = vec_add(sv, vec_madd(mpv, *tp, -0.0f)); tp++;
+	  sv   = vec_add(sv, vec_madd(ipv, *tp, -0.0f)); tp++;
+	  sv   = vec_add(sv, vec_madd(dpv, *tp, -0.0f)); tp++;
+	  sv   = vec_madd(sv, *rp, -0.0f);               rp++;
+	  xEv  = vec_add(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
@@ -1658,12 +1667,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = _mm_mul_ps(sv, *tp); tp++;
+	  dcv   = vec_madd(sv, *tp, -0.0f); tp++;
 
 	  /* Calculate and store I(i,q) */
-	  sv     =                _mm_mul_ps(mpv, *tp);  tp++;
-	  sv     = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	  IMX(q) = _mm_mul_ps(sv, *rp);                  rp++;
+	  sv     =             vec_madd(mpv, *tp, -0.0f);  tp++;
+	  sv     = vec_add(sv, vec_madd(ipv, *tp, -0.0f)); tp++;
+	  IMX(q) = vec_madd(sv, *rp, -0.0f);               rp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
@@ -1681,8 +1690,8 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       tp     = om->tf + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
 	{
-	  DMX(q) = _mm_add_ps(dcv, DMX(q));	
-	  dcv    = _mm_mul_ps(DMX(q), *tp); tp++; /* extend DMX(q), so we include M->D and D->D paths */
+	  DMX(q) = vec_add(dcv, DMX(q));	
+	  dcv    = vec_madd(DMX(q), *tp, -0.0f); tp++; /* extend DMX(q), so we include M->D and D->D paths */
 	}
 
       /* now. on small models, it seems best (empirically) to just go
@@ -1702,8 +1711,8 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      tp = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{
-		  DMX(q) = _mm_add_ps(dcv, DMX(q));	
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  DMX(q) = vec_add(dcv, DMX(q));	
+		  dcv    = vec_madd(dcv, *tp, -0.0f);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
 		}	    
 	    }
 	} 
@@ -1719,10 +1728,10 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
 		{
-		  sv     = _mm_add_ps(dcv, DMX(q));	
-		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
+		  sv     = vec_add(dcv, DMX(q));	
+		  cv     = vec_or(cv, vec_cmpgt(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
 		  DMX(q) = sv;	                                    /* store new DMX(q) */
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  dcv    = vec_madd(dcv, *tp, -0.0f);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
 		}	    
 	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
 	    }
@@ -1771,13 +1780,14 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  *****************************************************************/
 
 /* Return TRUE if any a[i] > b[i]; from Apple's Altivec/SSE migration guide */
-static int 
-sse_any_gt_ps(__m128 a, __m128 b)
-{
-  __m128 mask    = _mm_cmpgt_ps(a,b);
-  int   maskbits = _mm_movemask_ps( mask );
-  return maskbits != 0;
-}
+//static int 
+//sse_any_gt_ps(__m128 a, __m128 b)
+//{
+//  __m128 mask    = _mm_cmpgt_ps(a,b);
+//  int   maskbits = _mm_movemask_ps( mask );
+//  return maskbits != 0;
+//}
+// Replace with VMX internal vec_any_gt()
 
 /* Function:  p7_ViterbiScore()
  * Synopsis:  Calculates Viterbi score, correctly, and vewy vewy fast.
@@ -1945,7 +1955,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	    tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
-		if (! sse_any_gt_ps(dcv, DMX(q))) break;
+		if (! vec_any_gt(dcv, DMX(q))) break;
 		DMX(q) = _mm_max_ps(dcv, DMX(q));	
 		dcv    = _mm_add_ps(DMX(q), *tsc);   tsc++;
 	      }	    
