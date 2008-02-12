@@ -317,19 +317,23 @@ esac])
 AC_ARG_ENABLE(sse,
    [AS_HELP_STRING([--enable-sse],  [ enable SSE SIMD parallelization (default)]) ],
    [
-     if test "x$withval" != xno ; then
-        # icc is going to generate SSE code anyway, and it'll complain about -msse2 flag
-       if test "$CC" != icc; then 
-         AC_DEFINE(HAVE_SSE2, 1)
-         AX_EXT
-       else 
-         impl_choice="sse"
-       fi
-     else
-       AC_DEFINE(HAVE_SSE2, 0)
-     fi
+     case $enable_sse in 
+     yes) if test "$CC" != icc; then 
+            AX_EXT
+          else 
+            AC_DEFINE(HAVE_SSE2, 1)
+            impl_choice="sse"
+          fi
+          ;;
+
+     no) AC_MSG_NOTICE([SSE vectorization disabled])
+         ;;
+
+     *)  AC_MSG_NOTICE([Ignoring unknown argument to --enable-sse: $enable_sse])
+         ;;
+     esac
    ],
-   [
+   [  
      AX_EXT
    ])
 if test "$ax_have_sse2_ext" = yes; then

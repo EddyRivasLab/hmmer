@@ -22,6 +22,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <string.h>
 #include <ctype.h>
 
 #include "easel.h"
@@ -71,9 +72,8 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) goto ERROR;
-  /* HMM and profile use different conventions to signal "unused" optional annotations */
-  if ((hmm->flags & p7H_RF) && ((status = esl_strdup(hmm->rf,   -1, &(gm->rf))) != eslOK)) goto ERROR;
-  if ((hmm->flags & p7H_CS) && ((status = esl_strdup(hmm->cs,   -1, &(gm->cs))) != eslOK)) goto ERROR;
+  if (hmm->flags & p7H_RF) strcpy(gm->rf, hmm->rf);
+  if (hmm->flags & p7H_CS) strcpy(gm->cs, hmm->cs);
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
 

@@ -32,7 +32,6 @@ P7_TOPHITS *
 p7_tophits_Create(void)
 {
   P7_TOPHITS *h = NULL;
-  int         i;
   int         default_nalloc = 256;
   int         status;
 

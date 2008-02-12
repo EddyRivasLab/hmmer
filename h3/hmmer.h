@@ -7,11 +7,12 @@
  *    5. P7_HMMFILE:     an HMM save file or database, open for reading.
  *    6. P7_GMX:         a "generic" dynamic programming matrix
  *    7. P7_DPRIOR:      mixture Dirichlet prior for profile HMMs
- *    8. P7_ALIDISPLAY:  an alignment formatted for printing
- *    9. P7_TOPHITS:     ranking lists of top-scoring hits
- *   10. Inclusion of the architecture-specific optimized implementation.
- *   11. Declaration of functions in HMMER's exposed API.
- *   12. Copyright and license information.
+ *    8. P7_SPENSEMBLE:  segment pair ensembles for domain locations
+ *    9. P7_ALIDISPLAY:  an alignment formatted for printing
+ *   10. P7_TOPHITS:     ranking lists of top-scoring hits
+ *   11. Inclusion of the architecture-specific optimized implementation.
+ *   12. Declaration of functions in HMMER's exposed API.
+ *   13. Copyright and license information.
  * 
  * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
  * SVN $Id$
@@ -336,8 +337,8 @@ typedef struct p7_gmx_s {
   size_t ncells;	/* current cell allocation limit: >= (M+1)*(L+1) */
   size_t nrows;    	/* current row allocation limit:  >= L+1  */
 
-  float **dp;           /*  [0.1..L][0.1..M][0..p7G_NSCELLS-1] */
-  float  *xmx;          /*  [0.1..L][0..p7G_NXCELLS-1]         */
+  float **dp;           /* logically [0.1..L][0.1..M][0..p7G_NSCELLS-1]; indexed [i][k*p7G_NSCELLS+s] */
+  float  *xmx;          /* logically [0.1..L][0..p7G_NXCELLS-1]; indexed [i*p7G_NXCELLS+s]            */
 
   float  *xmx_mem;	
   float  *dp_mem;
@@ -360,7 +361,52 @@ typedef struct p7_dprior_s {
 
 
 /*****************************************************************
- * 8. P7_ALIDISPLAY: an alignment formatted for printing
+ * 8. P7_SPENSEMBLE: segment pair ensembles for domain locations
+ *****************************************************************/
+
+/* struct p7_spcoord_s:
+ *    a coord quad defining a segment pair. 
+ */
+struct p7_spcoord_s { 
+  int idx; 	/* backreference index: which trace a seg came from, or which cluster a domain came from */
+  int i, j;	/* start,end in a target sequence (1..L)  */
+  int k, m;     /* start,end in a query model (1..M)      */
+};
+
+/* Structure: P7_SPENSEMBLE
+ *
+ * Collection and clustering of an ensemble of sampled segment pairs,
+ * in order to define domain locations using their posterior
+ * probability distribution (as opposed to Viterbi MAP tracebacks).
+ */
+typedef struct p7_spensemble_s {
+  /* Section 1: a collected ensemble of segment pairs                                       */
+  int                  nsamples;    /* number of sampled traces                             */
+  struct p7_spcoord_s *sp;	    /* array of sampled seg pairs; [0..n-1]                 */
+  int                  nalloc;	    /* allocated size of <sp>                               */
+  int                  n;	    /* number of seg pairs in <sp>                          */
+
+  /* Section 2: then the ensemble is clustered by single-linkage clustering                 */
+  int *workspace;                   /* temp space for Easel SLC algorithm: 2*n              */
+  int *assignment;                  /* each seg pair's cluster index: [0..n-1] = (0..nc-1)  */
+  int  nc;	                    /* number of different clusters                         */
+
+  /* Section 3: then endpoint distribution is examined within each large cluster            */
+  int *epc;	                    /* array counting frequency of each endpoint            */
+  int  epc_alloc;	            /* allocated width of <epc>                             */
+  
+  /* Section 4: finally each large cluster is resolved into domain coords                   */
+  struct p7_spcoord_s *sigc;	    /* array of coords for each domain, [0..nsigc-1]        */
+  float               *prob;	    /* posterior probability of each domain [0..nsigc-1]    */
+  int                  nsigc;	    /* number of "significant" clusters, domains            */
+  int                  nsigc_alloc; /* current allocated max for nsigc                      */
+} P7_SPENSEMBLE;
+
+
+
+
+/*****************************************************************
+ * 9. P7_ALIDISPLAY: an alignment formatted for printing
  *****************************************************************/
 
 /* Structure: P7_ALIDISPLAY
@@ -394,7 +440,7 @@ typedef struct p7_alidisplay_s {
 
 
 /*****************************************************************
- * 9. P7_TOPHITS: ranking lists of top-scoring hits
+ * 10. P7_TOPHITS: ranking lists of top-scoring hits
  *****************************************************************/
 
 /* Structure: P7_HIT
@@ -443,7 +489,63 @@ typedef struct p7_tophits_s {
 
 
 /*****************************************************************
- * 10. The optimized implementation.
+ * 11. P7_DOMAINDEF: reusably managing workflow in defining domains
+ *****************************************************************/
+
+/* Structure: P7_DOMAINDEF
+ * 
+ * This is a container for all the necessary information for domain
+ * definition procedures in <p7_domaindef.c>, including a bunch of
+ * heuristic thresholds. The structure is reusable to minimize the
+ * number of allocation/free cycles that need to be done when
+ * processing a large number of sequences. You create the structure
+ * with <p7_domaindef_Create()>; after you're done with defining
+ * domains on a sequence, you call <p7_domaindef_Reuse()> before using
+ * it on the next sequence; and when you're completely done, you free
+ * it with <p7_domaindef_Destroy()>. All memory management is handled
+ * internally; you don't need to reallocate anything yourself.
+ */
+typedef struct p7_domaindef_s {
+  /* for posteriors of being in a domain, B, E */
+  float *mocc;			/* mocc[i=1..L] = prob that i is emitted by core model (is in a domain)       */
+  float *btot; 			/* btot[i=1..L] = cumulative expected times that domain starts at or before i */
+  float *etot;			/* etot[i=1..L] = cumulative expected times that domain ends at or before i   */
+  int    L;
+  int    Lalloc;
+
+  /* rng and reusable memory for stochastic tracebacks */
+  ESL_RANDOMNESS *r;
+  P7_SPENSEMBLE  *sp;
+  P7_TRACE       *tr;		/* reusable space for a trace of a domain                  */
+  P7_TRACE       *gtr;		/* reusable space for a traceback of the entire target seq */
+
+  /* storage of the results (domain locations and scores) */
+  struct p7_dom_s { int i; int j; float sc; P7_ALIDISPLAY *ad; } *dcl;
+  int            ndom;
+  int            nalloc;
+
+  /* Heuristic thresholds that control the region definition process */
+  /* "rt" = "region threshold", for lack of better term  */
+  float  rt1;   	/* controls when regions are called. mocc[i] post prob >= dt1 : triggers a region around i */
+  float  rt2;		/* controls extent of regions. regions extended until mocc[i]-{b,e}occ[i] < dt2            */
+  float  rt3;		/* controls when regions are flagged for split: if expected # of E preceding B is >= dt3   */
+  
+  /* Heuristic thresholds that control the stochastic traceback/clustering process */
+  int    nsamples;	/* collect ensemble of this many stochastic traces */
+  float  min_overlap;	/* 0.8 means >= 80% overlap of (smaller/larger) segment to link, both in seq and hmm            */
+  int    of_smaller;	/* see above; TRUE means overlap denom is calc'ed wrt smaller segment; FALSE means larger       */
+  int    max_diagdiff;	/* 4 means either start or endpoints of two segments must be within <=4 diagonals of each other */
+  float  min_posterior;	/* 0.25 means a cluster must have >= 25% posterior prob in the sample to be reported            */
+  float  min_endpointp;	/* 0.02 means choose widest endpoint with post prob of at least 2%                              */
+
+} P7_DOMAINDEF;
+
+
+
+
+
+/*****************************************************************
+ * 11. The optimized implementation.
  *****************************************************************/
 #ifdef HAVE_SSE2
 #include "impl_sse.h"
@@ -451,7 +553,7 @@ typedef struct p7_tophits_s {
 
 
 /*****************************************************************
- * 11. Other routines in HMMER's exposed API.
+ * 12. Other routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -461,11 +563,18 @@ extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_T
 /* dp_generic.c */
 extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GForward     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GBackward    (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
 extern int p7_GMSP         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 extern int p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 extern int p7_GViterbiScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+
+/* dp_optaccuracy.c */
+extern int p7_PostProb         (int L, const P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp);
+extern int p7_OptimalAccuracyDP(int L, const P7_PROFILE *gm, const P7_GMX *pp,       P7_GMX *gx, float *ret_e);
+extern int p7_OATrace          (int L, const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx, P7_TRACE *tr);
+
 
 /* emit.c */
 extern int p7_CoreEmit   (ESL_RANDOMNESS *r, const P7_HMM *hmm,                                        ESL_SQ *sq, P7_TRACE *tr);
@@ -544,6 +653,16 @@ extern void   p7_bg_Destroy(P7_BG *bg);
 extern int    p7_bg_SetLength(P7_BG *bg, int L);
 extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc);
 
+/* p7_domaindef.c */
+extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
+extern int           p7_domaindef_Fetch  (P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY *opt_ad);
+extern int           p7_domaindef_Reuse  (P7_DOMAINDEF *ddef);
+extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
+
+extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
+extern int p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
+
+
 /* p7_gmx.c */
 extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
 extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
@@ -611,6 +730,18 @@ extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1,
 				   char st2, int k2, float *ret_tsc);
 extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
+
+/* p7_spensemble.c */
+P7_SPENSEMBLE *p7_spensemble_Create(int init_n, int init_epc, int init_sigc);
+extern int     p7_spensemble_Reuse(P7_SPENSEMBLE *sp);
+extern int     p7_spensemble_Add(P7_SPENSEMBLE *sp, int sampleidx, int i, int j, int k, int m);
+extern int     p7_spensemble_Cluster(P7_SPENSEMBLE *sp, 
+				     float min_overlap, int of_smaller, int max_diagdiff, 
+				     float min_posterior, float min_endpointp,
+				     int *ret_nclusters);
+extern int     p7_spensemble_GetClusterCoords(P7_SPENSEMBLE *sp, int which,
+					      int *ret_i, int *ret_j, int *ret_k, int *ret_m, float *ret_p);
+extern void    p7_spensemble_Destroy(P7_SPENSEMBLE *sp);
 
 /* p7_tophits.c */
 extern P7_TOPHITS *p7_tophits_Create(void);

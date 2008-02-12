@@ -93,20 +93,13 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
   for (k = 0; k <= gm->M; k++)
     MMX(0,k) = IMX(0,k) = DMX(0,k) = -eslINFINITY;            /* need seq to get here */
 
-
-  /* Recursion. Done as a pull.
-   * Note some slightly wasteful boundary conditions:  
-   *    tsc[0] = impossible for all eight transitions (no node 0)
-   *    I_M is wastefully calculated (doesn't exist)
-   *    D_M is wastefully calculated (provably can't appear in a Viterbi path)
-   */
+  /* DP recursion */
   for (i = 1; i <= L; i++) 
     {
       float const *rsc = gm->rsc[dsq[i]];
       float sc;
 
       MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
-      DMX(i,M) = -eslINFINITY;	/* for Viterbi (not Forward) paths thru D_M can't win */
       XMX(i,p7G_E) = -eslINFINITY;
     
       for (k = 1; k < gm->M; k++) 
@@ -152,7 +145,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
       sc  =          ESL_MAX(XMX(i,p7G_E), MMX(i,M));
       XMX(i,p7G_E) = ESL_MAX(sc,           DMX(i,M));
    
-      /* Now the special states. Order is important here.
+      /* Now the special states. E must already be done, and B must follow N,J.
        * remember, N, C and J emissions are zero score by definition.
        */
       /* J state */

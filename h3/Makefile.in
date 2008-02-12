@@ -39,6 +39,7 @@ PROGS = hmmbuild hmmemit hmmfetch hmmsearch hmmsim hmmstat
 
 OBJS =  build.o\
 	dp_generic.o\
+	dp_optaccuracy.o\
 	emit.o\
 	errors.o\
 	evalues.o\
@@ -57,6 +58,7 @@ OBJS =  build.o\
 	p7_hmmfile.o\
 	p7_prior.o\
 	p7_profile.o\
+	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o
 #	island.o\
