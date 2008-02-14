@@ -80,18 +80,18 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->rf = NULL;
 
   /* level 1 */
-  ESL_ALLOC(om->tu, sizeof(__m128i)   * nqu  * p7O_NTRANS);    
-  ESL_ALLOC(om->tf, sizeof(__m128)    * nqf  * p7O_NTRANS);    
-  ESL_ALLOC(om->ru, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->rm, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->rf, sizeof(__m128 *)  * abc->Kp); 
+  ESL_ALLOC(om->tu, sizeof(vector signed int)   * nqu  * p7O_NTRANS);    
+  ESL_ALLOC(om->tf, sizeof(vector float)        * nqf  * p7O_NTRANS);    
+  ESL_ALLOC(om->ru, sizeof(vector signed int *) * abc->Kp); 
+  ESL_ALLOC(om->rm, sizeof(vector signed int *) * abc->Kp); 
+  ESL_ALLOC(om->rf, sizeof(vector float *)      * abc->Kp); 
   om->ru[0] = NULL;
   om->rf[0] = NULL;
 
   /* level 2 */
-  ESL_ALLOC(om->ru[0], sizeof(__m128i) * nqu  * p7O_NR * abc->Kp);                     
-  ESL_ALLOC(om->rm[0], sizeof(__m128i) * nqu           * abc->Kp);                     
-  ESL_ALLOC(om->rf[0], sizeof(__m128i) * nqf  * p7O_NR * abc->Kp);                     
+  ESL_ALLOC(om->ru[0], sizeof(vector signed int) * nqu  * p7O_NR * abc->Kp);                     
+  ESL_ALLOC(om->rm[0], sizeof(vector signed int) * nqu           * abc->Kp);                     
+  ESL_ALLOC(om->rf[0], sizeof(vector signed int) * nqf  * p7O_NR * abc->Kp);                     
   for (x = 1; x < abc->Kp; x++) {
     om->ru[x] = om->ru[0] + (x * nqu * p7O_NR);
     om->rm[x] = om->rm[0] + (x * nqu);
@@ -177,11 +177,11 @@ p7_omx_Create(int allocM)
   ox->dpu = NULL;
   ox->dpf = NULL;
 
-  ESL_ALLOC(ox->dpu,  sizeof(__m128i) * p7X_NSCELLS * nqu); 
+  ESL_ALLOC(ox->dpu,  sizeof(vector signed int) * p7X_NSCELLS * nqu); 
   ox->allocQ16  = nqu;
   ox->Q16       = 0;
 
-  ESL_ALLOC(ox->dpf,  sizeof(__m128)  * p7X_NSCELLS * nqf);
+  ESL_ALLOC(ox->dpf,  sizeof(vector float)      * p7X_NSCELLS * nqf);
   ox->allocQ4   = nqf;
   ox->Q4        = 0;
 
@@ -228,10 +228,10 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM)
   int   nqu = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
   int   status;
  
-  ESL_RALLOC(ox->dpu, p, sizeof(__m128i) * p7X_NSCELLS * nqu);
+  ESL_RALLOC(ox->dpu, p, sizeof(vector signed int) * p7X_NSCELLS * nqu);
   ox->allocQ16 = nqu;
 
-  ESL_RALLOC(ox->dpf, p, sizeof(__m128)  * p7X_NSCELLS * nqf);
+  ESL_RALLOC(ox->dpf, p, sizeof(vector float)      * p7X_NSCELLS * nqf);
   ox->allocQ4  = nqf;
 
   ox->allocM = allocM;
@@ -286,7 +286,7 @@ oprofile_dump_uchar(FILE *fp, P7_OPROFILE *om)
   int     z;			/* counter within elements of one SIMD minivector               */
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
-  union { __m128i v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
+  union { vector unsigned char v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
 
   /* Table of residue emissions */
   for (x = 0; x < om->abc->Kp; x++)
@@ -423,7 +423,7 @@ oprofile_dump_float(FILE *fp, P7_OPROFILE *om, int width, int precision)
   int     z;			/* counter within elements of one SIMD minivector               */
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
-  union { __m128 v; float x[4]; } tmp; /* used to align and read simd minivectors               */
+  union { vector float v; float x[4]; } tmp; /* used to align and read simd minivectors               */
 
   /* Residue emissions */
   for (x = 0; x < om->abc->Kp; x++)
@@ -859,7 +859,7 @@ lspace_uchar_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
   int     tg;			/* transition index in gm                                       */
   int     j;			/* counter in interleaved vector arrays in the profile          */
   int     ddtmp;		/* used in finding worst DD transition bound                    */
-  union { __m128i v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
+  union { vector unsigned char v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
 
   if (nq > om->allocQ16) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
@@ -960,7 +960,7 @@ lspace_float_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     tg;			/* transition index in gm                                       */
   int     j;			/* counter in interleaved vector arrays in the profile          */
-  union { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
+  union { vector float v; float x[4]; } tmp; /* used to align and load simd minivectors               */
 
   if (nq > om->allocQ4) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
@@ -1038,12 +1038,21 @@ pspace_to_lspace_float(P7_OPROFILE *om)
   int x;
   int j;
 
+  static float ln_2 = 0.6931471805599453;
+  vector float ln2 = {ln_2, ln_2, ln_2, ln_2};
+
   for (x = 0; x < om->abc->Kp; x++)
     for (j = 0; j < nq*2; j++)
-      om->rf[x][j] = esl_sse_logf(om->rf[x][j]);
+    {
+      om->rf[x][j] = vec_loge(om->rf[x][j]);
+      om->rf[x][j] = vec_madd(om->rf[x][j], ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
+    }
 
   for (j = 0; j < nq*p7O_NTRANS; j++)
-    om->tf[j] = esl_sse_logf(om->tf[j]);
+  {
+    om->tf[j] = vec_loge(om->tf[j]);
+    om->tf[j] = vec_madd(om->tf[j], ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
+  }
 
   om->xf[p7O_E][p7O_LOOP] = logf(om->xf[p7O_E][p7O_LOOP]);  
   om->xf[p7O_E][p7O_MOVE] = logf(om->xf[p7O_E][p7O_MOVE]);
@@ -1071,12 +1080,21 @@ lspace_to_pspace_float(P7_OPROFILE *om)
   int x;
   int j;
 
+  static float inv_ln_2 = 1.442695040888963;
+  vector float inv_ln2 = {inv_ln_2, inv_ln_2, inv_ln_2, inv_ln_2};
+
   for (x = 0; x < om->abc->Kp; x++)
     for (j = 0; j < nq*2; j++)
-      om->rf[x][j] = esl_sse_expf(om->rf[x][j]);
+    {
+      om->rf[x][j] = vec_madd(om->rf[x][j], inv_ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
+      om->rf[x][j] = vec_expte(om->rf[x][j]);
+    }
 
   for (j = 0; j < nq*p7O_NTRANS; j++)
-    om->tf[j] = esl_sse_expf(om->tf[j]);
+  {
+    om->tf[j] = vec_madd(om->tf[j], inv_ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
+    om->tf[j] = vec_expte(om->tf[j]);
+  }
 
   om->xf[p7O_E][p7O_LOOP] = expf(om->xf[p7O_E][p7O_LOOP]);  
   om->xf[p7O_E][p7O_MOVE] = expf(om->xf[p7O_E][p7O_MOVE]);
@@ -1232,11 +1250,14 @@ static unsigned char
 vmx_hmax_vecuchar(vector unsigned char a)
 {
   union { vector unsigned char v; uint8_t i[16]; } tmp;
+
+  vector unsigned char shiftvec = {1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3,
+                                   1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3};
   
-  tmp.v = vec_max(a    , vec_slo(a    , (vector unsigned char) (1 << 3)));
-  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 3)));
-  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 3)));
-  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, (vector unsigned char) (1 << 3)));
+  tmp.v = vec_max(a    , vec_slo(a    , shiftvec));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, shiftvec));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, shiftvec));
+  tmp.v = vec_max(tmp.v, vec_slo(tmp.v, shiftvec));
   return tmp.i[0];
 }
 
@@ -1284,6 +1305,9 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   vector unsigned char *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
   vector unsigned char *rsc;		   /* will point at om->ru[x] for residue x[i]                  */
 
+  vector unsigned char shiftvec = {1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3,
+                                   1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3};
+
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M   = om->M;
@@ -1291,9 +1315,12 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
-  biasv = (vector unsigned char) ((int8_t) om->bias);
+  biasv = (vector unsigned char) {(int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias,
+                                  (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias,
+                                  (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias,
+                                  (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias};
   for (q = 0; q < Q; q++)
-    dp[q] = (vector unsigned char) (0);
+    dp[q] = (vector unsigned char) {0};
   xB   = om->base - om->tjb;                /* remember, all values are costs to be subtracted. */
   xC   = 0;
 
@@ -1304,15 +1331,18 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   for (i = 1; i <= L; i++)
     {
       rsc = om->rm[dsq[i]];
-      xEv = (vector unsigned char) (0);      
-      xBv = (vector unsigned char) ((int8_t) (xB - om->tbm));
+      xEv = (vector unsigned char) {0};      
+      xBv = (vector unsigned char) {(int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm),
+                                    (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm),
+                                    (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm),
+                                    (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm), (int8_t) (xB - om->tbm)};
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
       //mpv = _mm_slli_si128(dp[Q-1], 1);   
-      mpv = vec_sro(dp[Q-1], (vector unsigned char) (1 << 3));
+      mpv = vec_sro(dp[Q-1], shiftvec);
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
@@ -1412,6 +1442,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   vector unsigned char *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   vector unsigned char *tsc;			   /* will point into (and step thru) om->tu                    */
 
+  vector unsigned char shiftvec = { 1 << 3,  1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3,
+                                    1 << 3,  1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3};
+
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)                                ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
@@ -1420,9 +1453,12 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
-  biasv = (vector unsigned char) ((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
+  biasv = (vector unsigned char) {(int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias,
+                                  (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias,
+                                  (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias,
+                                  (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias, (int8_t) om->bias};
   for (q = 0; q < Q; q++)
-    MMX(q) = IMX(q) = DMX(q) = (vector unsigned char) (0);
+    MMX(q) = IMX(q) = DMX(q) = (vector unsigned char) {0};
   xB   = om->base - om->xu[p7O_N][p7O_MOVE]; /* remember, all values are costs to be subtracted. */
   xJ   = 0;
   xC   = 0;
@@ -1436,10 +1472,11 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
     {
       rsc   = om->ru[dsq[i]];
       tsc   = om->tu;
-      dcv   = (vector unsigned char) (0);      /* "-infinity" */
-      xEv   = (vector unsigned char) (0);     
-      Dmaxv = (vector unsigned char) (0);     
-      xBv   = (vector unsigned char) ((char) xB);
+      dcv   = (vector unsigned char) {0};      /* "-infinity" */
+      xEv   = (vector unsigned char) {0};     
+      Dmaxv = (vector unsigned char) {0};     
+      xBv   = (vector unsigned char) {(char) xB, (char) xB, (char) xB, (char) xB, (char) xB, (char) xB, (char) xB, (char) xB,
+                                      (char) xB, (char) xB, (char) xB, (char) xB, (char) xB, (char) xB, (char) xB, (char) xB};
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
@@ -1448,14 +1485,14 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       //mpv = MMX(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
       //dpv = DMX(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
       //ipv = IMX(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
-      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (1 << 3));  
-      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (1 << 3));  
-      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (1 << 3));  
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, shiftvec);  
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, shiftvec);  
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, shiftvec);  
 
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =                   vec_subs(xBv, *tsc);  tsc++;
+	  sv   =              vec_subs(xBv, *tsc);  tsc++;
 	  sv   = vec_max (sv, vec_subs(mpv, *tsc)); tsc++;
 	  sv   = vec_max (sv, vec_subs(ipv, *tsc)); tsc++;
 	  sv   = vec_max (sv, vec_subs(dpv, *tsc)); tsc++;
@@ -1515,7 +1552,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  //dcv = _mm_slli_si128(dcv, 1);
-          dcv = vec_sro(dcv, (vector unsigned char) (1 << 3));
+          dcv = vec_sro(dcv, shiftvec);
 	  tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -1529,7 +1566,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   */
 	  do {
 	    //dcv = _mm_slli_si128(dcv, 1);
-            dcv = vec_sro(dcv, (vector unsigned char) (1 << 3));
+            dcv = vec_sro(dcv, shiftvec);
 	    tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -1541,7 +1578,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	//DMX(0) = _mm_slli_si128(dcv, 1);
-        DMX(0) = vec_sro(dcv, (vector unsigned char) (1 << 3));
+        DMX(0) = vec_sro(dcv, shiftvec);
 	  
 #if p7_DEBUGGING
       if (ox->debugging) omx_dump_uchar_row(ox, i, xE, 0, xJ, xB, xC);   
@@ -1611,8 +1648,11 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   vector float *rp;			   /* will point at om->rf[x] for residue x[i]                  */
   vector float *tp;			   /* will point into (and step thru) om->tf                    */
 
+  vector unsigned char shiftvec = { 4 << 3,  4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3,
+                                    4 << 3,  4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3};
 
-  /* Check that the DP matrix is ok for us. */
+
+/* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ4)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
   ox->M  = om->M;
@@ -1620,7 +1660,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* Initialization.
    */
-  zerov = (vector float) (0.0);
+  zerov = (vector float) {0.0};
   for (q = 0; q < Q; q++)
     MMX(q) = IMX(q) = DMX(q) = zerov;
   xE    = 0.;
@@ -1637,9 +1677,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
     {
       rp    = om->rf[dsq[i]];
       tp    = om->tf;
-      dcv   = (vector float) (0.0);
-      xEv   = (vector float) (0.0);
-      xBv   = (vector float) (xB);
+      dcv   = (vector float) {0.0};
+      xEv   = (vector float) {0.0};
+      xBv   = (vector float) {xB, xB, xB, xB};
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
        */
@@ -1648,18 +1688,18 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       //mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
       //dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
       //ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
-      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (4 << 3));
-      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (4 << 3));
-      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (4 << 3)); 
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, shiftvec);
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, shiftvec);
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, shiftvec); 
       
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =             vec_madd(xBv, *tp, -0.0f);  tp++;
-	  sv   = vec_add(sv, vec_madd(mpv, *tp, -0.0f)); tp++;
-	  sv   = vec_add(sv, vec_madd(ipv, *tp, -0.0f)); tp++;
-	  sv   = vec_add(sv, vec_madd(dpv, *tp, -0.0f)); tp++;
-	  sv   = vec_madd(sv, *rp, -0.0f);               rp++;
+	  sv   =             vec_madd(xBv, *tp, zerov);  tp++;
+	  sv   = vec_add(sv, vec_madd(mpv, *tp, zerov)); tp++;
+	  sv   = vec_add(sv, vec_madd(ipv, *tp, zerov)); tp++;
+	  sv   = vec_add(sv, vec_madd(dpv, *tp, zerov)); tp++;
+	  sv   = vec_madd(sv, *rp, zerov);               rp++;
 	  xEv  = vec_add(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
@@ -1676,12 +1716,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = vec_madd(sv, *tp, -0.0f); tp++;
+	  dcv   = vec_madd(sv, *tp, zerov); tp++;
 
 	  /* Calculate and store I(i,q) */
-	  sv     =             vec_madd(mpv, *tp, -0.0f);  tp++;
-	  sv     = vec_add(sv, vec_madd(ipv, *tp, -0.0f)); tp++;
-	  IMX(q) = vec_madd(sv, *rp, -0.0f);               rp++;
+	  sv     =             vec_madd(mpv, *tp, zerov);  tp++;
+	  sv     = vec_add(sv, vec_madd(ipv, *tp, zerov)); tp++;
+	  IMX(q) = vec_madd(sv, *rp, zerov);               rp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
@@ -1695,13 +1735,13 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        */
       //dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
       //dcv    = _mm_move_ss(dcv, zerov);
-      dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
+      dcv = vec_sro(dcv, shiftvec);
       DMX(0) = zerov;
       tp     = om->tf + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
 	{
 	  DMX(q) = vec_add(dcv, DMX(q));	
-	  dcv    = vec_madd(DMX(q), *tp, -0.0f); tp++; /* extend DMX(q), so we include M->D and D->D paths */
+	  dcv    = vec_madd(DMX(q), *tp, zerov); tp++; /* extend DMX(q), so we include M->D and D->D paths */
 	}
 
       /* now. on small models, it seems best (empirically) to just go
@@ -1718,12 +1758,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	    {
 	      //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	      //dcv = _mm_move_ss(dcv, zerov);
-              dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
+              dcv = vec_sro(dcv, shiftvec);
 	      tp = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{
 		  DMX(q) = vec_add(dcv, DMX(q));	
-		  dcv    = vec_madd(dcv, *tp, -0.0f);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  dcv    = vec_madd(dcv, *tp, zerov);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
 		}	    
 	    }
 	} 
@@ -1731,11 +1771,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	{			/* Slightly parallelized version, but which incurs some overhead */
 	  for (j = 1; j < 4; j++)
 	    {
-	      register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
+	      //register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
+              register vector float cv;
 
 	      //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	      //dcv = _mm_move_ss(dcv, zerov);
-              dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
+              dcv = vec_sro(dcv, shiftvec);
 	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
@@ -1743,11 +1784,11 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 		  sv     = vec_add(dcv, DMX(q));	
 		  cv     = vec_or(cv, vec_cmpgt(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
 		  DMX(q) = sv;	                                    /* store new DMX(q) */
-		  dcv    = vec_madd(dcv, *tp, -0.0f);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  dcv    = vec_madd(dcv, *tp, zerov);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
 		}	    
               // FIXME?  not sure about this one...
 	      //if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
-              if (! vec_any_lt(cv, (vector float) (0.0))) break;
+              if (! vec_any_lt(cv, (vector float) {0.0})) break;
 	    }
 	}
 
@@ -1759,10 +1800,10 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       /* These must follow DD calculations, because D's contribute to E in Forward
        * (as opposed to Viterbi)
        */
-      xEv = vec_add(xEv, vec_perm(xEv, xEv, (vector unsigned char) (0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
-      xEv = vec_add(xEv, vec_perm(xEv, xEv, (vector unsigned char) (1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      xEv = vec_add(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      xEv = vec_add(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
       //_mm_store_ss(&xE, xEv);
-      vec_ste(xEv, &xE, 0);
+      vec_ste(xEv, 0, &xE);
 
       xN =  xN * om->xf[p7O_N][p7O_LOOP];
       xC = (xC * om->xf[p7O_C][p7O_LOOP]) +  (xE * om->xf[p7O_E][p7O_MOVE]);
@@ -1850,13 +1891,16 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   vector float *rsc;			 /* will point at om->rf[x] for residue x[i]                  */
   vector float *tsc;			 /* will point into (and step thru) om->tf                    */
 
+  vector unsigned char shiftvec = { 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3,
+                                    4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3};
+
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ4) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M  = om->M;
   ox->Q4 = Q;
 
   /* Initialization. */
-  infv = (vector float) (-eslINFINITY);
+  infv = (vector float) {-eslINFINITY, -eslINFINITY, -eslINFINITY, -eslINFINITY};
   for (q = 0; q < Q; q++)
     MMX(q) = IMX(q) = DMX(q) = infv;
   xN   = 0.;
@@ -1876,16 +1920,16 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
       dcv   = infv;
       xEv   = infv;
       Dmaxv = infv;
-      xBv   = (vector float) (xB);
+      xBv   = (vector float) {xB, xB, xB, xB};
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. 
        */
       //mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
       //dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
       //ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
-      mpv = MMX(Q-1);  mpv = vec_sro(mpv, (vector unsigned char) (4 << 3));
-      dpv = DMX(Q-1);  dpv = vec_sro(dpv, (vector unsigned char) (4 << 3));
-      ipv = IMX(Q-1);  ipv = vec_sro(ipv, (vector unsigned char) (4 << 3));
+      mpv = MMX(Q-1);  mpv = vec_sro(mpv, shiftvec);
+      dpv = DMX(Q-1);  dpv = vec_sro(dpv, shiftvec);
+      ipv = IMX(Q-1);  ipv = vec_sro(ipv, shiftvec);
 
       
       for (q = 0; q < Q; q++)
@@ -1923,10 +1967,10 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation takes the max of xEv's elements  */
-      xEv = vec_max(xEv, vec_perm(xEv, xEv, (vector unsigned char) (0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
-      xEv = vec_max(xEv, vec_perm(xEv, xEv, (vector unsigned char) (1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
       //_mm_store_ss(&xE, xEv);
-      vec_ste(xEv, &xE, 0);
+      vec_ste(xEv, 0, &xE);
 
       xN = xN +  om->xf[p7O_N][p7O_LOOP];
       xC = ESL_MAX(xC + om->xf[p7O_C][p7O_LOOP],  xE + om->xf[p7O_E][p7O_MOVE]);
@@ -1949,17 +1993,17 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, (vector unsigned char) (0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
-      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, (vector unsigned char) (1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0)));
+      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
       //_mm_store_ss(&Dmax, Dmaxv);
-      vec_ste(Dmaxv, &Dmax, 0);
+      vec_ste(Dmaxv, 0, &Dmax);
       if (Dmax + om->ddbound_f > xB) 
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	  //dcv = _mm_move_ss(dcv, infv);
-          dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
+          dcv = vec_sro(dcv, shiftvec);
 	  tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -1974,7 +2018,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  do {
 	    //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	    //dcv = _mm_move_ss(dcv, infv);
-            dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
+            dcv = vec_sro(dcv, shiftvec);
 	    tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -1988,7 +2032,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
 	  //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	  //dcv = _mm_move_ss(dcv, infv);
-          dcv = vec_sro(dcv, (vector unsigned char) (4 << 3));
+          dcv = vec_sro(dcv, shiftvec);
 	  DMX(0) = dcv;
 	}
 
