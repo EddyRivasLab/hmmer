@@ -342,6 +342,21 @@ else
   AC_MSG_NOTICE([no SSE detected])
 fi
 
+# preliminary support for altivec/vmx
+# might want to wrap both this and the SSE check 
+# in an if/else cpu check, since you need exactly one
+# default would become whichever you could find
+AC_ARG_ENABLE(altivec,
+   [AS_HELP_STRING([--enable-altivec], [ enable Altivec SIMD parallelization]) ],
+   [
+     AC_CHECK_HEADERS([altivec.h])
+     AX_CHECK_COMPILER_FLAGS(-maltivec, SIMD_FLAGS="$SIMD_FLAGS -maltivec", [])
+     impl_choice="vmx"
+   ],
+   [
+     AC_MSG_NOTICE([ALTIVEC not enabled])
+   ])
+
 
 # --enable-threads      Enable POSIX multithreading
 #
@@ -392,6 +407,11 @@ case $impl_choice in
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
       IMPL_OBJ="impl_sse.o"
       IMPL_HEADER="impl_sse.h"
+      ;;
+
+vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
+      IMPL_OBJ="impl_vmx.o"
+      IMPL_HEADER="impl_vmx.h"
       ;;
 
 *)    AC_MSG_NOTICE([No optimized DP implementation available])
