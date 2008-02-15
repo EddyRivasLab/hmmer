@@ -169,10 +169,12 @@ enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 #define p7X_NSCELLS 3
 
 typedef struct p7_omx_s {
+  vector unsigned char *dpu_mem;
   vector unsigned char *dpu;			/* one row of a striped DP matrix for [0..q-1][MDI] for uchars */
   int                   allocQ16;		/* total uchar vectors allocated                               */
   int                   Q16;			/* when omx is in use: how many quads are valid (= p7O_NQU(M)) */
 
+  vector float *dpf_mem;
   vector float *dpf;			/* one row of a striped DP matrix for floats                   */
   int           allocQ4;		/* total float vectors allocated                               */
   int           Q4;			/* when omx is in use: how many quads are valid (= p7O_NQF(M)) */

@@ -183,11 +183,13 @@ p7_omx_Create(int allocM)
   ox->dpu = NULL;
   ox->dpf = NULL;
 
-  ESL_ALLOC(ox->dpu,  sizeof(vector signed int) * p7X_NSCELLS * nqu); 
+  ESL_ALLOC(ox->dpu_mem,  sizeof(vector signed int) * p7X_NSCELLS * nqu + 15); 
+  ox->dpu = (vector unsigned char *) ((((size_t) ox->dpu_mem) + 15) & (~0xf));
   ox->allocQ16  = nqu;
   ox->Q16       = 0;
 
-  ESL_ALLOC(ox->dpf,  sizeof(vector float)      * p7X_NSCELLS * nqf);
+  ESL_ALLOC(ox->dpf_mem,  sizeof(vector float)      * p7X_NSCELLS * nqf + 15);
+  ox->dpf = (vector float *) ((((size_t) ox->dpf_mem) + 15) & (~0xf));
   ox->allocQ4   = nqf;
   ox->Q4        = 0;
 
@@ -234,10 +236,12 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM)
   int   nqu = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
   int   status;
  
-  ESL_RALLOC(ox->dpu, p, sizeof(vector signed int) * p7X_NSCELLS * nqu);
+  ESL_RALLOC(ox->dpu_mem, p, sizeof(vector signed int) * p7X_NSCELLS * nqu + 15);
+  ox->dpu = (vector unsigned char *) ((((size_t) ox->dpu_mem) + 15) & (~0xf));
   ox->allocQ16 = nqu;
 
-  ESL_RALLOC(ox->dpf, p, sizeof(vector float)      * p7X_NSCELLS * nqf);
+  ESL_RALLOC(ox->dpf_mem, p, sizeof(vector float)      * p7X_NSCELLS * nqf + 15);
+  ox->dpf = (vector float *) ((((size_t) ox->dpf_mem) + 15) & (~0xf));
   ox->allocQ4  = nqf;
 
   ox->allocM = allocM;
@@ -262,8 +266,8 @@ void
 p7_omx_Destroy(P7_OMX *ox)
 {
   if (ox == NULL) return;
-  if (ox->dpu != NULL) free(ox->dpu);
-  if (ox->dpf != NULL) free(ox->dpf);
+  if (ox->dpu_mem != NULL) free(ox->dpu_mem);
+  if (ox->dpf_mem != NULL) free(ox->dpf_mem);
   free(ox);
   return;
 }
