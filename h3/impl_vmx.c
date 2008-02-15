@@ -80,18 +80,24 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->rf = NULL;
 
   /* level 1 */
-  ESL_ALLOC(om->tu, sizeof(vector signed int)   * nqu  * p7O_NTRANS);    
-  ESL_ALLOC(om->tf, sizeof(vector float)        * nqf  * p7O_NTRANS);    
-  ESL_ALLOC(om->ru, sizeof(vector signed int *) * abc->Kp); 
-  ESL_ALLOC(om->rm, sizeof(vector signed int *) * abc->Kp); 
-  ESL_ALLOC(om->rf, sizeof(vector float *)      * abc->Kp); 
+  ESL_ALLOC(om->tu_mem, sizeof(vector unsigned char)   * nqu  * p7O_NTRANS + 15);    
+  ESL_ALLOC(om->tf_mem, sizeof(vector float)           * nqf  * p7O_NTRANS + 15);    
+  ESL_ALLOC(om->ru, sizeof(vector unsigned char *) * abc->Kp); 
+  ESL_ALLOC(om->rm, sizeof(vector unsigned char *) * abc->Kp); 
+  ESL_ALLOC(om->rf, sizeof(vector float *)         * abc->Kp); 
+  om->tu = (vector unsigned char *) ((((size_t) om->tu_mem) + 15) & (~0xf));
+  om->tf = (vector float         *) ((((size_t) om->tf_mem) + 15) & (~0xf));
   om->ru[0] = NULL;
+  om->rm[0] = NULL;
   om->rf[0] = NULL;
 
   /* level 2 */
-  ESL_ALLOC(om->ru[0], sizeof(vector signed int) * nqu  * p7O_NR * abc->Kp);                     
-  ESL_ALLOC(om->rm[0], sizeof(vector signed int) * nqu           * abc->Kp);                     
-  ESL_ALLOC(om->rf[0], sizeof(vector signed int) * nqf  * p7O_NR * abc->Kp);                     
+  ESL_ALLOC(om->ru_mem, sizeof(vector unsigned char) * nqu  * p7O_NR * abc->Kp + 15);                     
+  ESL_ALLOC(om->rm_mem, sizeof(vector unsigned char) * nqu           * abc->Kp + 15);                     
+  ESL_ALLOC(om->rf_mem, sizeof(vector float)         * nqf  * p7O_NR * abc->Kp + 15);                     
+  om->ru[0] = (vector unsigned char *) ((((size_t) om->ru_mem) + 15) & (~0xf));
+  om->rm[0] = (vector unsigned char *) ((((size_t) om->rm_mem) + 15) & (~0xf));
+  om->rf[0] = (vector float         *) ((((size_t) om->rf_mem) + 15) & (~0xf));
   for (x = 1; x < abc->Kp; x++) {
     om->ru[x] = om->ru[0] + (x * nqu * p7O_NR);
     om->rm[x] = om->rm[0] + (x * nqu);
@@ -136,13 +142,13 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->name != NULL) free(om->name);
-  if (om->tu   != NULL) free(om->tu);
-  if (om->tf   != NULL) free(om->tf);
+  if (om->name   != NULL) free(om->name);
+  if (om->tu_mem != NULL) free(om->tu_mem);
+  if (om->tf_mem != NULL) free(om->tf_mem);
 
-  if (om->ru != NULL) { if (om->ru[0] != NULL) free(om->ru[0]);  free(om->ru); }
-  if (om->rm != NULL) { if (om->rm[0] != NULL) free(om->rm[0]);  free(om->rm); }
-  if (om->rf != NULL) { if (om->rf[0] != NULL) free(om->rf[0]);  free(om->rf); }
+  if (om->ru != NULL) { if (om->ru_mem != NULL) free(om->ru_mem);  free(om->ru); }
+  if (om->rm != NULL) { if (om->rm_mem != NULL) free(om->rm_mem);  free(om->rm); }
+  if (om->rf != NULL) { if (om->rf_mem != NULL) free(om->rf_mem);  free(om->rf); }
   free(om);
 }
 /*----------------- end, P7_OPROFILE structure ------------------*/

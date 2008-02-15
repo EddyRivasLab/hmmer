@@ -114,8 +114,15 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
  *        
  */
 typedef struct p7_oprofile_s {
+  /* Memory pointers with oversized allocations so we can force boundaries */
+  vector unsigned char *tu_mem;
+  vector unsigned char *ru_mem;
+  vector unsigned char *rm_mem;
+  vector float         *tf_mem;
+  vector float         *rf_mem;
+
   /* tu, ru, xu are for ViterbiFilter(): lspace uchars, 16x vectors            */
-  vector unsigned char *tu;	        	/* transition score blocks                     */
+  vector unsigned char  *tu;	        	/* transition score blocks                     */
   vector unsigned char **ru;     		/* [x][q]:  r16 array and r16[0] are allocated */
   uint8_t                xu[p7O_NXSTATES][p7O_NXTRANS];
   int                    allocQ16;		/* how many uchar vectors                      */
