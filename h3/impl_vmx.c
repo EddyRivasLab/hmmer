@@ -25,7 +25,7 @@
  * SVN $Id$
  */
 #include "p7_config.h"
-#ifdef HAVE_VMX
+#ifdef HAVE_ALTIVEC_H
 
 #include <stdio.h>
 #include <math.h>
@@ -2053,7 +2053,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
  * 10. Benchmark drivers.
  *****************************************************************/
 
-#if defined(p7IMPL_VMX_BENCHMARK) || defined(p7IMPL_VNX_TESTDRIVE)
+#if defined(p7IMPL_VMX_BENCHMARK) || defined(p7IMPL_VMX_TESTDRIVE)
 /* Here's a couple of useful debugging functions, used in both the
  * benchmark and testdriver. (They're used in the benchmark for
  * additional manual testing purposes.)
@@ -2751,7 +2751,7 @@ main(int argc, char **argv)
 }
 #endif /*p7IMPL_VMX_EXAMPLE*/
 
-#endif /*HAVE_VMX*/
+#endif /*HAVE_ALTIVEC_H*/
 
 /*****************************************************************
  * @LICENSE@
