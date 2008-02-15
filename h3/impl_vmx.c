@@ -654,12 +654,12 @@ p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse)
 static int
 omx_dump_uchar_row(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-  __m128i *dp = ox->dpu;	/* must set <dp> before using {MDI}MX macros */
+  vector unsigned char *dp = ox->dpu;	/* must set <dp> before using {MDI}MX macros */
   int      Q  = ox->Q16;
   int      M  = ox->M;
   uint8_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
   int      q,z,k;
-  union { __m128i v; uint8_t i[16]; } tmp;
+  union { vector unsigned char v; uint8_t i[16]; } tmp;
   int      status;
 
   ESL_ALLOC(v, sizeof(unsigned char) * ((Q*16)+1));
@@ -739,12 +739,12 @@ ERROR:
 static int
 omx_dump_float_row(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
 {
-  __m128 *dp  = ox->dpf;	/* must set <dp> before using {MDI}MX macros */
+  vector float *dp  = ox->dpf;	/* must set <dp> before using {MDI}MX macros */
   int      Q  = ox->Q4;
   int      M  = ox->M;
   float   *v  = NULL;		/* array of uninterleaved, unstriped scores  */
   int      q,z,k;
-  union { __m128 v; float x[16]; } tmp;
+  union { vector float v; float x[16]; } tmp;
   int      status;
 
   ESL_ALLOC(v, sizeof(float) * ((Q*4)+1));
@@ -2063,7 +2063,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
  * 10. Benchmark drivers.
  *****************************************************************/
 
-#if defined(p7IMPL_VMX_BENCHMARK) || defined(p7IMPL_VMX_TESTDRIVE)
+#if defined(p7IMPL_VMX_BENCHMARK) || defined(p7IMPL_VMX_TESTDRIVE) || defined(p7IMPL_VMX_EXAMPLE)
 /* Here's a couple of useful debugging functions, used in both the
  * benchmark and testdriver. (They're used in the benchmark for
  * additional manual testing purposes.)
@@ -2423,6 +2423,13 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
+#ifdef p7_DEBUGGING
+      p7_oprofile_Dump(stdout, om);      //dumps the optimized profile
+      p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
+      p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
+      simulate_msp_in_generic_profile(gm, om, L);
+#endif
+
       p7_MSPFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
 
@@ -2721,12 +2728,14 @@ main(int argc, char **argv)
   ox = p7_omx_Create(gm->M);
   gx = p7_gmx_Create(gm->M, sq->n);
 
-  /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);      dumps the optimized profile
-     p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
-     p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
+  /* Useful to place and compile in for debugging:  */
+#ifdef p7_DEBUGGING
+     p7_oprofile_Dump(stdout, om);      //dumps the optimized profile
+     p7_omx_SetDumpMode(stdout,ox, TRUE);      //makes the fast DP algorithms dump their matrices
+     p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
      simulate_msp_in_generic_profile(gm, om, L);
-  */
+#endif
+  /**/
 
   simulate_msp_in_generic_profile(gm, om, sq->n);
 
