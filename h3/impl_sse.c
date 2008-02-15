@@ -2335,6 +2335,13 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
+#ifdef p7_DEBUGGING
+      p7_oprofile_Dump(stdout, om);      //dumps the optimized profile
+      p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
+      p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
+      simulate_msp_in_generic_profile(gm, om, L);
+#endif
+
       p7_MSPFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
 
