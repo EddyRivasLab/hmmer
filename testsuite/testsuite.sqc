@@ -1,0 +1,48 @@
+# HMMER's test suite, in sqc command format
+#
+# See the ../easel/devkit/sqc script for documentation
+# of how sqc works.
+#
+# SRE, Sat Feb 16 10:38:21 2008 [Janelia]
+# SVN $Id$
+
+
+
+################################################################
+# Unit test drivers for each .c file
+################################################################
+
+1 exercise build_utest        @build_utest@
+1 exercise dp_generic_utest   @dp_generic_utest@
+1 exercise impl_sse_utest     @impl_sse_utest@
+1 exercise modelconfig_utest  @modelconfig_utest@
+1 exercise p7_hmm_utest       @p7_hmm_utest@
+1 exercise p7_hmmfile_utest   @p7_hmmfile_utest@
+1 exercise p7_profile_utest   @p7_profile_utest@
+1 exercise p7_tophits_utest   @p7_tophits_utest@
+
+
+# Still to come, unit tests for
+#   dp_optaccuracy.c
+#   emit.c
+#   errors.c
+#   evalues.c
+#   eweight.c
+#   heatmap.c
+#   hmmer.c
+#   impl_fp.c
+#   impl_h2.c
+#   impl_jb.c
+#   impl_vmx.c
+#   island.c
+#   logsum.c
+#   modelstats.c
+#   mpisupport.c     (MPI testing needs to be handled specially)
+#   p7_alidisplay.c
+#   p7_bg.c
+#   p7_domaindef.c
+#   p7_gmx.c
+#   p7_prior.c
+#   p7_spensemble.c
+#   p7_trace.c
+#   seqmodel.c

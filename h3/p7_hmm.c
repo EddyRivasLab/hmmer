@@ -1131,14 +1131,6 @@ utest_occupancy(P7_HMM *hmm)
   return;
 }
 
-static void
-utest_foo(void)
-{
-
-  return;
-}
-
-
 #endif /*p7HMM_TESTDRIVE*/
 /*---------------------- end of unit tests -----------------------*/
 
@@ -1149,13 +1141,27 @@ utest_foo(void)
 
 #ifdef p7HMM_TESTDRIVE
 
-#include <p7_config.h>
-#include <hmmer.h>
+#include "p7_config.h"
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_random.h"
+#include "hmmer.h"
 
 int
 main(int argc, char **argv)
 {
-  utest_foo();
+  ESL_RANDOMNESS *r    = esl_randomness_Create(42);
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  P7_HMM         *hmm  = NULL;
+  int             M    = 100;
+
+  p7_hmm_Sample(r, M, abc, &hmm);
+
+  utest_occupancy(hmm);
+
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(r);
   exit(0); /* success */
 }
 

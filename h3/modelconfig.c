@@ -268,8 +268,8 @@ utest_occupancy(P7_HMM *hmm)
  *****************************************************************/
 #ifdef p7MODELCONFIG_TESTDRIVE
 
-/* gcc -g -Wall -Dp7MODELCONFIG_TESTDRIVE -I. -I../easel -L. -L../easel -o testprog modelconfig.c -lhmmer -leasel -lm
- * ./testprog
+/* gcc -g -Wall -Dp7MODELCONFIG_TESTDRIVE -I. -I../easel -L. -L../easel -o modelconfig_utest modelconfig.c -lhmmer -leasel -lm
+ * ./modelconfig_utest
  */
 #include "easel.h"
 
@@ -295,7 +295,7 @@ main(int argc, char **argv)
   utest_occupancy(hmm);
 
   p7_hmm_Destroy(hmm);
-  p7_bg__Destroy(bg);
+  p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
   return eslOK;

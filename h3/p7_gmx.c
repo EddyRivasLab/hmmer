@@ -164,32 +164,31 @@ int
 p7_gmx_Dump(FILE *ofp, P7_GMX *gx)
 {
   int i, k, x;
+  int width     = 9;
+  int precision = 4;
 
   /* Header */
   fprintf(ofp, "     ");
-  for (k = 0; k <= gx->M;  k++) fprintf(ofp, "%8d ", k);
-  fprintf(ofp, "%8s ", "E");
-  fprintf(ofp, "%8s ", "N");
-  fprintf(ofp, "%8s ", "J");
-  fprintf(ofp, "%8s ", "B");
-  fprintf(ofp, "%8s\n","C");
-  for (k = 0; k <= gx->M+5; k++) fprintf(ofp, "%8s ", "--------");
+  for (k = 0; k <= gx->M;  k++) fprintf(ofp, "%*d ", width, k);
+  fprintf(ofp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
+  fprintf(ofp, "      ");
+  for (k = 0; k <= gx->M+5; k++) fprintf(ofp, "%*.*s ", width, width, "----------");
   fprintf(ofp, "\n");
   
   /* DP matrix data */
   for (i = 0; i <= gx->L; i++)
     {
       fprintf(ofp, "%3d M ", i);
-      for (k = 0; k <= gx->M;       k++) fprintf(ofp, "%8.4f ", gx->dp[i][k * p7G_NSCELLS + p7G_M]);
-      for (x = 0; x <  p7G_NXCELLS; x++) fprintf(ofp, "%8.4f ", gx->xmx[  i * p7G_NXCELLS + x]);
+      for (k = 0; k <= gx->M;       k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_M]);
+      for (x = 0; x <  p7G_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, gx->xmx[  i * p7G_NXCELLS + x]);
       fprintf(ofp, "\n");
 
       fprintf(ofp, "%3d I ", i);
-      for (k = 0; k <= gx->M;       k++) fprintf(ofp, "%8.4f ", gx->dp[i][k * p7G_NSCELLS + p7G_I]);
+      for (k = 0; k <= gx->M;       k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_I]);
       fprintf(ofp, "\n");
 
       fprintf(ofp, "%3d D ", i);
-      for (k = 0; k <= gx->M;       k++) fprintf(ofp, "%8.4f ", gx->dp[i][k * p7G_NSCELLS + p7G_D]);
+      for (k = 0; k <= gx->M;       k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_D]);
       fprintf(ofp, "\n\n");
     }
   return eslOK;
