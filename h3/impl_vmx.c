@@ -1888,8 +1888,8 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       /* These must follow DD calculations, because D's contribute to E in Forward
        * (as opposed to Viterbi)
        */
-      xEv = vec_add(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
-      xEv = vec_add(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      xEv = vec_add(xEv, vec_perm(xEv, xEv, ((vector unsigned char) { 4, 5, 6, 7,  8, 9,10,11, 12,13,14,15,  0, 1, 2, 3})));
+      xEv = vec_add(xEv, vec_perm(xEv, xEv, ((vector unsigned char) { 8, 9,10,11, 12,13,14,15,  0, 1, 2, 3,  4, 5, 6, 7})));
       //_mm_store_ss(&xE, xEv);
       vec_ste(xEv, 0, &xE);
 
@@ -2617,7 +2617,7 @@ utest_forward_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
       p7_ForwardFilter(dsq, L, om, ox, &sc1);
       p7_GForward     (dsq, L, gm, gx, &sc2);
 
-      if (fabs(sc1-sc2) > 1.0) esl_fatal("forward filter unit test failed: scores differ");
+      if (fabs(sc1-sc2) > 1.0) esl_fatal("forward filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
   free(dsq);
