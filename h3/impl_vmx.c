@@ -25,7 +25,7 @@
  * SVN $Id$
  */
 #include "p7_config.h"
-#ifdef HAVE_ALTIVEC_H
+#if defined (HAVE_ALTIVEC_H)
 
 #include <stdio.h>
 #include <math.h>
@@ -565,10 +565,13 @@ p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om)
 {
   int status;
 
+  fprintf(fp, "Dump of a <P7_OPROFILE> ::\n");
   /* Dump float part, ForwardFilter pspace scores, in %8.5 float format */
+  fprintf(fp, "  -- float part, odds for ForwardFilter():\n");
   if ((status = oprofile_dump_float(fp, om, 8, 5)) != eslOK) return status;
 
   /* Dump uchar part, ViterbiFilter lspace scores */
+  fprintf(fp, "  -- uchar part, log odds for ViterbiFilter(): \n");
   if ((status = oprofile_dump_uchar(fp, om))       != eslOK) return status;
 
   return eslOK;
@@ -753,7 +756,7 @@ omx_dump_float_row(P7_OMX *ox, int logify, int rowi, int width, int precision, f
   if (rowi == 0)
     {
       fprintf(ox->dfp, "      ");
-      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%8d ", k);
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%*d ", width, k);
       fprintf(ox->dfp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
       fprintf(ox->dfp, "      ");
       for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%*s ", width, "--------");
@@ -807,6 +810,78 @@ ERROR:
   free(v);
   return status;
 }
+
+/* omx_dump_msp_row()
+ *
+ * Dump current row of uchar part of DP matrix <ox> for diagnostics,
+ * and include the values of specials <xE>, etc. The index <rowi> for
+ * the current row is used as a row label. This routine has to be
+ * specialized for the layout of the MSPFilter() row, because it's
+ * all match scores dp[0..q..Q-1], rather than triplets of M,D,I.
+ *
+* If <rowi> is 0, print a header first too.
+ *
+ * The output format is coordinated with <p7_gmx_Dump()> to
+ * facilitate comparison to a known answer.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+static int
+omx_dump_msp_row(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+{
+   vector unsigned char *dp = ox->dpu;
+   int      Q  = ox->Q16;
+   int      M  = ox->M;
+   uint8_t *v  = NULL;          /* array of unstriped scores  */
+   int      q,z,k;
+   union { vector unsigned char v; uint8_t i[16]; } tmp;
+   int      status;
+ 
+   ESL_ALLOC(v, sizeof(unsigned char) * ((Q*16)+1));
+   v[0] = 0;
+ 
+   /* Header (if we're on the 0th row)
+    */
+   if (rowi == 0)
+     {
+       fprintf(ox->dfp, "       ");
+       for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%3d ", k);
+       fprintf(ox->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
+       fprintf(ox->dfp, "       ");
+       for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%3s ", "---");
+       fprintf(ox->dfp, "\n");
+     }
+ 
+   /* Unpack and unstripe, then print M's. */
+   for (q = 0; q < Q; q++) {
+     tmp.v = dp[q];
+     for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
+   }
+   fprintf(ox->dfp, "%4d M ", rowi);
+   for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", v[k]);
+ 
+   /* The specials */
+   fprintf(ox->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
+ 
+   /* I's are all 0's; print just to facilitate comparison. */
+   fprintf(ox->dfp, "%4d I ", rowi);
+   for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+   fprintf(ox->dfp, "\n");
+ 
+   /* D's are all 0's too */
+   fprintf(ox->dfp, "%4d D ", rowi);
+   for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+   fprintf(ox->dfp, "\n\n");
+ 
+   free(v);
+   return eslOK;
+ 
+ERROR:
+   free(v);
+   return status;
+}
 #endif /*p7_DEBUGGING*/
 /*------------- end, debugging dumps of P7_OMX ------------------*/
 
@@ -829,9 +904,8 @@ biased_charify(P7_OPROFILE *om, float sc)
 {
   uint8_t b;
 
-  sc  = -1.0f * roundf(om->scale * sc);        	/* ugh. sc is now an integer cost represented in a float...    */
-  b   = (sc > 255.) ? 255 : (uint8_t) sc;	/* and now we cast and saturate it to an unsigned char cost... */
-  b  += om->bias;		                /* and now we add the bias to it.                              */
+  sc  = -1.0f * roundf(om->scale * sc);        	        /* ugh. sc is now an integer cost represented in a float...    */
+  b   = (sc > 255.) ? 255 : (uint8_t) sc + om->bias;	/* and now we cast and saturate it to an unsigned char cost... */
   return b;
 }
  
@@ -1261,12 +1335,16 @@ vmx_hmax_vecuchar(vector unsigned char a)
 {
   union { vector unsigned char v; uint8_t i[16]; } tmp;
 
+  vector unsigned char   onevec = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   vector unsigned char shiftvec = {1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3,
                                    1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3};
   
   tmp.v = vec_max(a    , vec_slo(a    , shiftvec));
+  shiftvec = vec_sl(shiftvec, onevec);
   tmp.v = vec_max(tmp.v, vec_slo(tmp.v, shiftvec));
+  shiftvec = vec_sl(shiftvec, onevec);
   tmp.v = vec_max(tmp.v, vec_slo(tmp.v, shiftvec));
+  shiftvec = vec_sl(shiftvec, onevec);
   tmp.v = vec_max(tmp.v, vec_slo(tmp.v, shiftvec));
   return tmp.i[0];
 }
@@ -1312,7 +1390,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   int i;			   	   /* counter over sequence positions 1..L                      */
   int q;			   	   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQU(om->M);   	   /* segment length: # of vectors                              */
-  vector unsigned char *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  vector unsigned char *dp  = ox->dpu;	   /* we're going to use dp[0..q..Q-1], not {MDI}MX(q) macros   */
   vector unsigned char *rsc;		   /* will point at om->ru[x] for residue x[i]                  */
 
   vector unsigned char shiftvec = {1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3, 1 << 3,
@@ -1335,7 +1413,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   xC   = 0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) omx_dump_uchar_row(ox, 0, 0, 0, xC, xB, xC);
+  if (ox->debugging) omx_dump_msp_row(ox, 0, 0, 0, xC, xB, xC);
 #endif
 
   for (i = 1; i <= L; i++)
@@ -1373,7 +1451,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xB = ESL_MAX(om->base,  xC) - om->tjb;
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) omx_dump_uchar_row(ox, i, xE, 0, xC, xB, xC);   
+      if (ox->debugging) omx_dump_msp_row(ox, i, xE, 0, xC, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -1680,7 +1758,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   xC    = 0.;
 
 #if p7_DEBUGGING
-  if (ox->debugging) omx_dump_float_row(ox, TRUE, 0, 8, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
+  if (ox->debugging) omx_dump_float_row(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
   for (i = 1; i <= L; i++)
@@ -1822,7 +1900,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
 #if p7_DEBUGGING
-      if (ox->debugging) omx_dump_float_row(ox, TRUE, i, 8, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
+      if (ox->debugging) omx_dump_float_row(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -2073,6 +2151,8 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
  * Round all the scores in a generic (lspace) P7_PROFILE in exactly the same
  * way that the scores in a lspace uchar P7_OPROFILE were rounded.  Then the
  * two profiles should give identical internal scores.
+ *
+ * Do not call this  more than once on any given <gm>!
  */
 static void
 round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
@@ -2094,6 +2174,11 @@ round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
   for (k = 0; k < p7P_NXSTATES; k++)
     for (x = 0; x < p7P_NXTRANS; x++)
       gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -255 : roundf(om->scale * gm->xsc[k][x]);
+
+  /* NN, CC, JJ are hardcoded 0 in uchar limited precision */
+  gm->xsc[p7P_N][p7P_LOOP] = 0;
+  gm->xsc[p7P_C][p7P_LOOP] = 0;
+  gm->xsc[p7P_J][p7P_LOOP] = 0;
 }
 
 
@@ -2109,6 +2194,8 @@ round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
  *   6. rounded in the same way as the 8-bit limited precision.
  * 
  * Scores in model <gm> are modified accordingly.
+ *
+ * Do not call this more than once on any given <gm>!
  * xref J2/79
  */
 static void
@@ -2419,22 +2506,25 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 
   make_random_profile(r, abc, bg, M, L, &hmm, &gm, &om);
   simulate_msp_in_generic_profile(gm, om, L);
+
+#ifdef p7_DEBUGGING
+  p7_oprofile_Dump(stdout, om);              //dumps the optimized profile
+  p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
+#endif
+
   while (N--)
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
 
-#ifdef p7_DEBUGGING
-      p7_oprofile_Dump(stdout, om);      //dumps the optimized profile
-      p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
-      p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
-      simulate_msp_in_generic_profile(gm, om, L);
-#endif
-
       p7_MSPFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
 
+#ifdef p7_DEBUGGING
+      p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
+#endif
+
       sc2 = sc2 / om->scale - 3.0f;
-      if (fabs(sc1-sc2) > 0.001) esl_fatal("msp filter unit test failed: scores differ");
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("msp filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
   free(dsq);
@@ -2469,6 +2559,12 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
 
   make_random_profile(r, abc, bg, M, L, &hmm, &gm, &om);
   round_profile(om, gm);	/* round and scale the scores in <gm> the same as in <om> */
+
+#ifdef p7_DEBUGGING
+  p7_oprofile_Dump(stdout, om);              // dumps the optimized profile
+  p7_omx_SetDumpMode(stdout, ox, TRUE);      // makes the fast DP algorithms dump their matrices
+#endif
+
   while (N--)
     {
       esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
@@ -2476,11 +2572,15 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
       p7_ViterbiFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi     (dsq, L, gm, gx, &sc2);
 
+#ifdef p7_DEBUGGING
+      p7_gmx_Dump(stdout, gx);              // dumps a generic DP matrix
+#endif
+
       sc2 /= om->scale;
       if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
       else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 
-      if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ");
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
   free(dsq);
@@ -2616,18 +2716,22 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, DNA\n");
   utest_msp_filter(r, abc, bg, M, L, N);   /* normal sized models */
   utest_msp_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
   utest_msp_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, DNA\n");
   utest_viterbi_filter(r, abc, bg, M, L, N);   
   utest_viterbi_filter(r, abc, bg, 1, L, 10);  
   utest_viterbi_filter(r, abc, bg, M, 1, 10);  
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("ForwardFilter() tests, DNA\n");
   utest_forward_filter(r, abc, bg, M, L, N);   
   utest_forward_filter(r, abc, bg, 1, L, 10);  
   utest_forward_filter(r, abc, bg, M, 1, 10);  
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiScore() tests, DNA\n");
   utest_viterbi_score(r, abc, bg, M, L, N);   
   utest_viterbi_score(r, abc, bg, 1, L, 10);  
   utest_viterbi_score(r, abc, bg, M, 1, 10);  
@@ -2639,18 +2743,22 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, protein\n");
   utest_msp_filter(r, abc, bg, M, L, N);   
   utest_msp_filter(r, abc, bg, 1, L, 10);  
   utest_msp_filter(r, abc, bg, M, 1, 10);  
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, protein\n");
   utest_viterbi_filter(r, abc, bg, M, L, N); 
   utest_viterbi_filter(r, abc, bg, 1, L, 10);
   utest_viterbi_filter(r, abc, bg, M, 1, 10);
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("ForwardFilter() tests, protein\n");
   utest_forward_filter(r, abc, bg, M, L, N);   
   utest_forward_filter(r, abc, bg, 1, L, 10);  
   utest_forward_filter(r, abc, bg, M, 1, 10);  
 
+  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiScore() tests, protein\n");
   utest_viterbi_score(r, abc, bg, M, L, N);   
   utest_viterbi_score(r, abc, bg, 1, L, 10);  
   utest_viterbi_score(r, abc, bg, M, 1, 10);  
@@ -2733,7 +2841,6 @@ main(int argc, char **argv)
      p7_oprofile_Dump(stdout, om);      //dumps the optimized profile
      p7_omx_SetDumpMode(stdout,ox, TRUE);      //makes the fast DP algorithms dump their matrices
      p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
-     simulate_msp_in_generic_profile(gm, om, L);
 #endif
   /**/
 
@@ -2769,6 +2876,18 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7IMPL_VMX_EXAMPLE*/
+
+#else /*! HAVE_SSE2*/
+/* The remainder of the file is just bookkeeping, for what to do when
+ * we aren't compiling with SSE instructions.
+ */
+
+/*
+ * Provide a successful unit test on platforms where we don't have SSE instructions.
+ */
+#ifdef p7IMPL_SSE_TESTDRIVE
+int main(void) { return 0; }
+#endif
 
 #endif /*HAVE_ALTIVEC_H*/
 
