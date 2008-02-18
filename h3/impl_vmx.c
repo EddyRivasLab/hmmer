@@ -37,9 +37,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_vectorops.h"
-// #include "esl_sse.h"  need to track down what's in here...  need an esl_vmx.h?
-// esl_sse_logf()
-// esl_sse_expf()
+#include "esl_vmx.h" 
 
 #include "hmmer.h"
 #include "impl_vmx.h"
@@ -1122,21 +1120,12 @@ pspace_to_lspace_float(P7_OPROFILE *om)
   int x;
   int j;
 
-  static float ln_2 = 0.6931471805599453;
-  vector float ln2 = {ln_2, ln_2, ln_2, ln_2};
-
   for (x = 0; x < om->abc->Kp; x++)
     for (j = 0; j < nq*2; j++)
-    {
-      om->rf[x][j] = vec_loge(om->rf[x][j]);
-      om->rf[x][j] = vec_madd(om->rf[x][j], ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
-    }
+      om->rf[x][j] = esl_vmx_logf(om->rf[x][j]);
 
   for (j = 0; j < nq*p7O_NTRANS; j++)
-  {
-    om->tf[j] = vec_loge(om->tf[j]);
-    om->tf[j] = vec_madd(om->tf[j], ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
-  }
+    om->tf[j] = esl_vmx_logf(om->tf[j]);
 
   om->xf[p7O_E][p7O_LOOP] = logf(om->xf[p7O_E][p7O_LOOP]);  
   om->xf[p7O_E][p7O_MOVE] = logf(om->xf[p7O_E][p7O_MOVE]);
@@ -1164,21 +1153,12 @@ lspace_to_pspace_float(P7_OPROFILE *om)
   int x;
   int j;
 
-  static float inv_ln_2 = 1.442695040888963;
-  vector float inv_ln2 = {inv_ln_2, inv_ln_2, inv_ln_2, inv_ln_2};
-
   for (x = 0; x < om->abc->Kp; x++)
     for (j = 0; j < nq*2; j++)
-    {
-      om->rf[x][j] = vec_madd(om->rf[x][j], inv_ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
-      om->rf[x][j] = vec_expte(om->rf[x][j]);
-    }
+      om->rf[x][j] = esl_vmx_expf(om->rf[x][j]);
 
   for (j = 0; j < nq*p7O_NTRANS; j++)
-  {
-    om->tf[j] = vec_madd(om->tf[j], inv_ln2, ((vector float) {0.0, 0.0, 0.0, 0.0}));
-    om->tf[j] = vec_expte(om->tf[j]);
-  }
+    om->tf[j] = esl_vmx_expf(om->tf[j]);
 
   om->xf[p7O_E][p7O_LOOP] = expf(om->xf[p7O_E][p7O_LOOP]);  
   om->xf[p7O_E][p7O_MOVE] = expf(om->xf[p7O_E][p7O_MOVE]);
@@ -1979,8 +1959,10 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   vector float *rsc;			 /* will point at om->rf[x] for residue x[i]                  */
   vector float *tsc;			 /* will point into (and step thru) om->tf                    */
 
-  vector unsigned char shiftvec = { 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3,
-                                    4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3};
+  //vector unsigned char shiftvec = { 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3,
+  //                                  4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3, 4 << 3};
+  vector unsigned char selectvec= { 0x10, 0x11, 0x12, 0x13,  0x00, 0x01, 0x02, 0x03,
+                                    0x04, 0x05, 0x06, 0x07,  0x08, 0x09, 0x0A, 0x0B};
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ4) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -2015,9 +1997,9 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
       //mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
       //dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
       //ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
-      mpv = MMX(Q-1);  mpv = vec_sro(mpv, shiftvec);
-      dpv = DMX(Q-1);  dpv = vec_sro(dpv, shiftvec);
-      ipv = IMX(Q-1);  ipv = vec_sro(ipv, shiftvec);
+      mpv = MMX(Q-1);  mpv = vec_perm(mpv, infv, selectvec);
+      dpv = DMX(Q-1);  dpv = vec_perm(dpv, infv, selectvec);
+      ipv = IMX(Q-1);  ipv = vec_perm(ipv, infv, selectvec);
 
       
       for (q = 0; q < Q; q++)
@@ -2055,8 +2037,10 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation takes the max of xEv's elements  */
-      xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
-      xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      //xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      //xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) { 4, 5, 6, 7,  8, 9,10,11, 12,13,14,15,  0, 1, 2, 3})));
+      xEv = vec_max(xEv, vec_perm(xEv, xEv, ((vector unsigned char) { 8, 9,10,11, 12,13,14,15,  0, 1, 2, 3,  4, 5, 6, 7})));
       //_mm_store_ss(&xE, xEv);
       vec_ste(xEv, 0, &xE);
 
@@ -2081,8 +2065,10 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
-      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      //Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) {0, 3, 2, 1, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      //Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) {1, 0, 3, 2, 0,0,0,0, 0,0,0,0, 0,0,0,0})));
+      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) { 4, 5, 6, 7,  8, 9,10,11, 12,13,14,15,  0, 1, 2, 3})));
+      Dmaxv = vec_max(Dmaxv, vec_perm(Dmaxv, Dmaxv, ((vector unsigned char) { 8, 9,10,11, 12,13,14,15,  0, 1, 2, 3,  4, 5, 6, 7})));
       //_mm_store_ss(&Dmax, Dmaxv);
       vec_ste(Dmaxv, 0, &Dmax);
       if (Dmax + om->ddbound_f > xB) 
@@ -2091,7 +2077,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  /* dcv has carried through from end of q loop above */
 	  //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	  //dcv = _mm_move_ss(dcv, infv);
-          dcv = vec_sro(dcv, shiftvec);
+          dcv = vec_perm(dcv, infv, selectvec);
 	  tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -2106,7 +2092,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  do {
 	    //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	    //dcv = _mm_move_ss(dcv, infv);
-            dcv = vec_sro(dcv, shiftvec);
+            dcv = vec_perm(dcv, infv, selectvec);
 	    tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -2120,7 +2106,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
 	  //dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	  //dcv = _mm_move_ss(dcv, infv);
-          dcv = vec_sro(dcv, shiftvec);
+          dcv = vec_perm(dcv, infv, selectvec);
 	  DMX(0) = dcv;
 	}
 
@@ -2655,7 +2641,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
       p7_ViterbiScore(dsq, L, om, ox, &sc1);
       p7_GViterbi    (dsq, L, gm, gx, &sc2);
 
-      if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi score unit test failed: scores differ");
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi score unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
   free(dsq);
