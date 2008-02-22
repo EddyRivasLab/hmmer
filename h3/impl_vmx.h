@@ -47,6 +47,7 @@
  * SRE, Sun Nov 25 11:23:02 2007
  * SVN $Id$
  */
+#ifdef  p7_IMPL_VMX
 #ifndef P7_IMPL_VMX_INCLUDED
 #define P7_IMPL_VMX_INCLUDED
 #include "p7_config.h"
@@ -212,6 +213,7 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 #endif /* P7_IMPL_VMX_INCLUDED */
+#endif /* p7_IMPL_VMX*/
 
 /*****************************************************************
  * @LICENSE@

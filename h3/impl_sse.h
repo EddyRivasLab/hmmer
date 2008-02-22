@@ -45,8 +45,10 @@
  * SRE, Sun Nov 25 11:23:02 2007
  * SVN $Id$
  */
+#ifdef  p7_IMPL_SSE
 #ifndef P7_IMPL_SSE_INCLUDED
 #define P7_IMPL_SSE_INCLUDED
+
 #include "p7_config.h"
 
 #include <esl_alphabet.h>
@@ -202,6 +204,7 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 #endif /* P7_IMPL_SSE_INCLUDED */
+#endif /* p7_IMPL_SSE */
 
 /*****************************************************************
  * @LICENSE@

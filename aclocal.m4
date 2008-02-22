@@ -471,12 +471,12 @@ AC_LANG_POP([C])
 # Author:   Copyright (C) 2007 Christophe Tournayre <turn3r@users.sourceforge.net>
 # Version:  2007-11-28
 # Source:   http://autoconf-archive.cryp.to/ax_ext.html
-# Calls:    AC_SUBST(SIMD_FLAGS)
+# Calls:    AC_SUBST(SIMD_CFLAGS)
 # Defines:  HAVE_MMX / HAVE_SSE / HAVE_SSE2 / HAVE_SSE3 / HAVE_SSSE3          
 #
 # I commented out the bits that would define 
 # HAVE_MMX / HAVE_SSE / HAVE_SSE3 / HAVE_SSSE3          
-# and would have added -mmmx, etc to the SIMD_FLAGS. 
+# and would have added -mmmx, etc to the SIMD_CFLAGS. 
 # We only need -msse2
 #
 AC_DEFUN([AX_EXT],
@@ -529,31 +529,403 @@ AC_DEFUN([AX_EXT],
 
 #   if test "$ax_have_mmx_ext" = yes; then
 #     AC_DEFINE(HAVE_MMX,,[Support mmx instructions])
-#     AX_CHECK_COMPILER_FLAGS(-mmmx, SIMD_FLAGS="$SIMD_FLAGS -mmmx", [])
+#     AX_CHECK_COMPILER_FLAGS(-mmmx, SIMD_CFLAGS="$SIMD_CFLAGS -mmmx", [])
 #   fi
 
 #   if test "$ax_have_sse_ext" = yes; then
 #     AC_DEFINE(HAVE_SSE,,[Support SSE (Streaming SIMD Extensions) instructions])
-#     AX_CHECK_COMPILER_FLAGS(-msse, SIMD_FLAGS="$SIMD_FLAGS -msse", [])
+#     AX_CHECK_COMPILER_FLAGS(-msse, SIMD_CFLAGS="$SIMD_CFLAGS -msse", [])
 #   fi
 
   if test "$ax_have_sse2_ext" = yes; then
     AC_DEFINE(HAVE_SSE2,,[Support SSE2 (Streaming SIMD Extensions 2) instructions])
-    AX_CHECK_COMPILER_FLAGS(-msse2, SIMD_FLAGS="$SIMD_FLAGS -msse2", [])
+    AX_CHECK_COMPILER_FLAGS(-msse2, SIMD_CFLAGS="$SIMD_CFLAGS -msse2", [])
   fi
 
 #   if test "$ax_have_sse3_ext" = yes; then
 #     AC_DEFINE(HAVE_SSE3,,[Support SSE3 (Streaming SIMD Extensions 3) instructions])
-#     AX_CHECK_COMPILER_FLAGS(-msse3, SIMD_FLAGS="$SIMD_FLAGS -msse3", [])
+#     AX_CHECK_COMPILER_FLAGS(-msse3, SIMD_CFLAGS="$SIMD_CFLAGS -msse3", [])
 #   fi
 
 #   if test "$ax_have_ssse3_ext" = yes; then
 #     AC_DEFINE(HAVE_SSSE3,,[Support SSSE3 (Supplemental Streaming SIMD Extensions 3) instructions])
 #   fi
 
-  AC_SUBST(SIMD_FLAGS)
+  AC_SUBST(SIMD_CFLAGS)
 ])
 #
 # AX_EXT macro end.
+# ****************************************************************
+# ****************************************************************
+
+
+
+#################################################################
+# Macro: AX_COMPILER_VENDOR
+# Usage: AX_COMPILER_VENDOR
+# Authors:  Copyright (C) 2007 Steven G. Johnson <stevenj@alum.mit.edu>
+#           Copyright (C) 2007 Matteo Frigo
+# Version:  2007-08-01
+# Source:   http://autoconf-archive.cryp.to/ax_compiler_vendor.html
+#
+# Sets $ax_cv_c_compiler_vendor to gnu, intel, ibm, sun, hp, borland,
+# comeau, dec, cray, kai, lcc, metrowerks, sgi, microsoft, watcom, etc.
+#
+# Everything below is verbatim from the archive. DO NOT MODIFY IT.
+AC_DEFUN([AX_COMPILER_VENDOR],
+[
+AC_CACHE_CHECK([for _AC_LANG compiler vendor], ax_cv_[]_AC_LANG_ABBREV[]_compiler_vendor,
+ [ax_cv_[]_AC_LANG_ABBREV[]_compiler_vendor=unknown
+  # note: don't check for gcc first since some other compilers define __GNUC__
+  for ventest in intel:__ICC,__ECC,__INTEL_COMPILER ibm:__xlc__,__xlC__,__IBMC__,__IBMCPP__ pathscale:__PATHCC__,__PATHSCALE__ gnu:__GNUC__ sun:__SUNPRO_C,__SUNPRO_CC hp:__HP_cc,__HP_aCC dec:__DECC,__DECCXX,__DECC_VER,__DECCXX_VER borland:__BORLANDC__,__TURBOC__ comeau:__COMO__ cray:_CRAYC kai:__KCC lcc:__LCC__ metrowerks:__MWERKS__ sgi:__sgi,sgi microsoft:_MSC_VER watcom:__WATCOMC__ portland:__PGI; do
+    vencpp="defined("`echo $ventest | cut -d: -f2 | sed 's/,/) || defined(/g'`")"
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[
+#if !($vencpp)
+      thisisanerror;
+#endif
+])], [ax_cv_]_AC_LANG_ABBREV[_compiler_vendor=`echo $ventest | cut -d: -f1`; break])
+  done
+ ])
+])
+#
+# AX_COMPILER_VENDOR macro end.
+# ****************************************************************
+# ****************************************************************
+
+
+
+#################################################################
+# Macro: AX_GCC_ARCHFLAG
+# Usage: AX_GCC_ARCHFLAG([PORTABLE?], [ACTION-SUCCESS], [ACTION-FAILURE])
+# Authors:  Copyright (C) 2007 Steven G. Johnson <stevenj@alum.mit.edu>
+#           Copyright (C) 2007 Matteo Frigo
+# Version:  2007-07-29
+# Source:   http://autoconf-archive.cryp.to/ax_gcc_archflag.html
+#
+# This macro tries to guess the "native" arch corresponding to the
+# target architecture for use with gcc's -march=arch or -mtune=arch
+# flags. If found, the cache variable $ax_cv_gcc_archflag is set to this
+# flag and ACTION-SUCCESS is executed; otherwise $ax_cv_gcc_archflag is
+# is set to "unknown" and ACTION-FAILURE is executed. The default
+# ACTION-SUCCESS is to add $ax_cv_gcc_archflag to the end of $CFLAGS.
+#
+# PORTABLE? should be either [yes] (default) or [no]. In the former
+# case, the flag is set to -mtune (or equivalent) so that the
+# architecture is only used for tuning, but the instruction set used is
+# still portable. In the latter case, the flag is set to -march (or
+# equivalent) so that architecture-specific instructions are enabled.
+#
+# The user can specify --with-gcc-arch=<arch> in order to override the
+# macro's choice of architecture, or --without-gcc-arch to disable this.
+#
+# When cross-compiling, or if $CC is not gcc, then ACTION-FAILURE is
+# called unless the user specified --with-gcc-arch manually.
+#
+# Everything below is verbatim from the archive. DO NOT MODIFY IT.
+#
+AC_DEFUN([AX_GCC_ARCHFLAG],
+[AC_REQUIRE([AC_PROG_CC])
+AC_REQUIRE([AC_CANONICAL_HOST])
+
+AC_ARG_WITH(gcc-arch, [AC_HELP_STRING([--with-gcc-arch=<arch>], [use architecture <arch> for gcc -march/-mtune, instead of guessing])],
+        ax_gcc_arch=$withval, ax_gcc_arch=yes)
+
+AC_MSG_CHECKING([for gcc architecture flag])
+AC_MSG_RESULT([])
+AC_CACHE_VAL(ax_cv_gcc_archflag,
+[
+ax_cv_gcc_archflag="unknown"
+
+if test "$GCC" = yes; then
+
+if test "x$ax_gcc_arch" = xyes; then
+ax_gcc_arch=""
+if test "$cross_compiling" = no; then
+case $host_cpu in
+  i[[3456]]86*|x86_64*) # use cpuid codes, in part from x86info-1.7 by D. Jones
+     AX_GCC_X86_CPUID(0)
+     AX_GCC_X86_CPUID(1)
+     case $ax_cv_gcc_x86_cpuid_0 in
+       *:756e6547:*:*) # Intel
+          case $ax_cv_gcc_x86_cpuid_1 in
+            *5[[48]]?:*:*:*) ax_gcc_arch="pentium-mmx pentium" ;;
+            *5??:*:*:*) ax_gcc_arch=pentium ;;
+            *6[[3456]]?:*:*:*) ax_gcc_arch="pentium2 pentiumpro" ;;
+            *6a?:*[[01]]:*:*) ax_gcc_arch="pentium2 pentiumpro" ;;
+            *6a?:*[[234]]:*:*) ax_gcc_arch="pentium3 pentiumpro" ;;
+            *6[[9d]]?:*:*:*) ax_gcc_arch="pentium-m pentium3 pentiumpro" ;;
+            *6[[78b]]?:*:*:*) ax_gcc_arch="pentium3 pentiumpro" ;;
+            *6??:*:*:*) ax_gcc_arch=pentiumpro ;;
+            *f3[[347]]:*:*:*|*f4[1347]:*:*:*)
+                case $host_cpu in
+                  x86_64*) ax_gcc_arch="nocona pentium4 pentiumpro" ;;
+                  *) ax_gcc_arch="prescott pentium4 pentiumpro" ;;
+                esac ;;
+            *f??:*:*:*) ax_gcc_arch="pentium4 pentiumpro";;
+          esac ;;
+       *:68747541:*:*) # AMD
+          case $ax_cv_gcc_x86_cpuid_1 in
+            *5[[67]]?:*:*:*) ax_gcc_arch=k6 ;;
+            *5[[8d]]?:*:*:*) ax_gcc_arch="k6-2 k6" ;;
+            *5[[9]]?:*:*:*) ax_gcc_arch="k6-3 k6" ;;
+            *60?:*:*:*) ax_gcc_arch=k7 ;;
+            *6[[12]]?:*:*:*) ax_gcc_arch="athlon k7" ;;
+            *6[[34]]?:*:*:*) ax_gcc_arch="athlon-tbird k7" ;;
+            *67?:*:*:*) ax_gcc_arch="athlon-4 athlon k7" ;;
+            *6[[68a]]?:*:*:*)
+               AX_GCC_X86_CPUID(0x80000006) # L2 cache size
+               case $ax_cv_gcc_x86_cpuid_0x80000006 in
+                 *:*:*[[1-9a-f]]??????:*) # (L2 = ecx >> 16) >= 256
+                        ax_gcc_arch="athlon-xp athlon-4 athlon k7" ;;
+                 *) ax_gcc_arch="athlon-4 athlon k7" ;;
+               esac ;;
+            *f[[4cef8b]]?:*:*:*) ax_gcc_arch="athlon64 k8" ;;
+            *f5?:*:*:*) ax_gcc_arch="opteron k8" ;;
+            *f7?:*:*:*) ax_gcc_arch="athlon-fx opteron k8" ;;
+            *f??:*:*:*) ax_gcc_arch="k8" ;;
+          esac ;;
+        *:746e6543:*:*) # IDT
+           case $ax_cv_gcc_x86_cpuid_1 in
+             *54?:*:*:*) ax_gcc_arch=winchip-c6 ;;
+             *58?:*:*:*) ax_gcc_arch=winchip2 ;;
+             *6[[78]]?:*:*:*) ax_gcc_arch=c3 ;;
+             *69?:*:*:*) ax_gcc_arch="c3-2 c3" ;;
+           esac ;;
+     esac
+     if test x"$ax_gcc_arch" = x; then # fallback
+        case $host_cpu in
+          i586*) ax_gcc_arch=pentium ;;
+          i686*) ax_gcc_arch=pentiumpro ;;
+        esac
+     fi
+     ;;
+
+  sparc*)
+     AC_PATH_PROG([PRTDIAG], [prtdiag], [prtdiag], [$PATH:/usr/platform/`uname -i`/sbin/:/usr/platform/`uname -m`/sbin/])
+     cputype=`(((grep cpu /proc/cpuinfo | cut -d: -f2) ; ($PRTDIAG -v |grep -i sparc) ; grep -i cpu /var/run/dmesg.boot ) | head -n 1) 2> /dev/null`
+     cputype=`echo "$cputype" | tr -d ' -' |tr $as_cr_LETTERS $as_cr_letters`
+     case $cputype in
+         *ultrasparciv*) ax_gcc_arch="ultrasparc4 ultrasparc3 ultrasparc v9" ;;
+         *ultrasparciii*) ax_gcc_arch="ultrasparc3 ultrasparc v9" ;;
+         *ultrasparc*) ax_gcc_arch="ultrasparc v9" ;;
+         *supersparc*|*tms390z5[[05]]*) ax_gcc_arch="supersparc v8" ;;
+         *hypersparc*|*rt62[[056]]*) ax_gcc_arch="hypersparc v8" ;;
+         *cypress*) ax_gcc_arch=cypress ;;
+     esac ;;
+
+  alphaev5) ax_gcc_arch=ev5 ;;
+  alphaev56) ax_gcc_arch=ev56 ;;
+  alphapca56) ax_gcc_arch="pca56 ev56" ;;
+  alphapca57) ax_gcc_arch="pca57 pca56 ev56" ;;
+  alphaev6) ax_gcc_arch=ev6 ;;
+  alphaev67) ax_gcc_arch=ev67 ;;
+  alphaev68) ax_gcc_arch="ev68 ev67" ;;
+  alphaev69) ax_gcc_arch="ev69 ev68 ev67" ;;
+  alphaev7) ax_gcc_arch="ev7 ev69 ev68 ev67" ;;
+  alphaev79) ax_gcc_arch="ev79 ev7 ev69 ev68 ev67" ;;
+
+  powerpc*)
+     cputype=`((grep cpu /proc/cpuinfo | head -n 1 | cut -d: -f2 | cut -d, -f1 | sed 's/ //g') ; /usr/bin/machine ; /bin/machine; grep CPU /var/run/dmesg.boot | head -n 1 | cut -d" " -f2) 2> /dev/null`
+     cputype=`echo $cputype | sed -e 's/ppc//g;s/ *//g'`
+     case $cputype in
+       *750*) ax_gcc_arch="750 G3" ;;
+       *740[[0-9]]*) ax_gcc_arch="$cputype 7400 G4" ;;
+       *74[[4-5]][[0-9]]*) ax_gcc_arch="$cputype 7450 G4" ;;
+       *74[[0-9]][[0-9]]*) ax_gcc_arch="$cputype G4" ;;
+       *970*) ax_gcc_arch="970 G5 power4";;
+       *POWER4*|*power4*|*gq*) ax_gcc_arch="power4 970";;
+       *POWER5*|*power5*|*gr*|*gs*) ax_gcc_arch="power5 power4 970";;
+       603ev|8240) ax_gcc_arch="$cputype 603e 603";;
+       *) ax_gcc_arch=$cputype ;;
+     esac
+     ax_gcc_arch="$ax_gcc_arch powerpc"
+     ;;
+esac
+fi # not cross-compiling
+fi # guess arch
+
+if test "x$ax_gcc_arch" != x -a "x$ax_gcc_arch" != xno; then
+for arch in $ax_gcc_arch; do
+  if test "x[]m4_default([$1],yes)" = xyes; then # if we require portable code
+    flags="-mtune=$arch"
+    # -mcpu=$arch and m$arch generate nonportable code on every arch except
+    # x86.  And some other arches (e.g. Alpha) don't accept -mtune.  Grrr.
+    case $host_cpu in i*86|x86_64*) flags="$flags -mcpu=$arch -m$arch";; esac
+  else
+    flags="-march=$arch -mcpu=$arch -m$arch"
+  fi
+  for flag in $flags; do
+    AX_CHECK_COMPILER_FLAGS($flag, [ax_cv_gcc_archflag=$flag; break])
+  done
+  test "x$ax_cv_gcc_archflag" = xunknown || break
+done
+fi
+
+fi # $GCC=yes
+])
+AC_MSG_CHECKING([for gcc architecture flag])
+AC_MSG_RESULT($ax_cv_gcc_archflag)
+if test "x$ax_cv_gcc_archflag" = xunknown; then
+  m4_default([$3],:)
+else
+  m4_default([$2], [CFLAGS="$CFLAGS $ax_cv_gcc_archflag"])
+fi
+])
+#
+# AX_GCC_ARCHFLAG macro end.
+# ****************************************************************
+# ****************************************************************
+
+
+#################################################################
+# Macro: AX_CC_MAXOPT
+# Usage: AX_CC_MAXOPT
+# Authors:  Copyright (C) 2007 Steven G. Johnson <stevenj@alum.mit.edu>
+#           Copyright (C) 2007 Matteo Frigo
+# Version:  2007-07-29
+# Source:   http://autoconf-archive.cryp.to/ax_cc_maxopt.html
+#
+# Try to turn on "good" C optimization flags for various compilers and
+# architectures, for some definition of "good". 
+#
+# The user can override the flags by setting the CFLAGS environment
+# variable.  The user can also specify --enable-portable-binary in
+# order to disable any optimization flags that might result in a
+# binary that only runs on the host architecture.
+#
+# Note also that the flags assume that ANSI C aliasing rules are
+# followed by the code (e.g. for gcc's -fstrict-aliasing), and that
+# floating-point computations can be re-ordered as needed.
+#
+# SRE: I've made modifications as follows.
+#  - HMMER relies on IEEE754-compliant math. Don't enable
+#    any options that break compliance; for example, gcc -ffast-math
+#
+AC_DEFUN([AX_CC_MAXOPT],
+[
+AC_REQUIRE([AC_PROG_CC])
+AC_REQUIRE([AX_COMPILER_VENDOR])
+AC_REQUIRE([AC_CANONICAL_HOST])
+
+AC_ARG_ENABLE(portable-binary, [AC_HELP_STRING([--enable-portable-binary], [disable compiler optimizations that would produce unportable binaries])],
+        acx_maxopt_portable=$withval, acx_maxopt_portable=no)
+
+# Try to determine "good" native compiler flags if none specified via CFLAGS
+if test "$ac_test_CFLAGS" != "set"; then
+  CFLAGS=""
+  case $ax_cv_c_compiler_vendor in
+    dec) CFLAGS="-newc -w0 -O5 -ansi_alias -ansi_args -tune host"
+#        CFLAGS="-newc -w0 -O5 -ansi_alias -ansi_args -fp_reorder -tune host"
+         if test "x$acx_maxopt_portable" = xno; then
+           CFLAGS="$CFLAGS -arch host"
+         fi;;
+
+    sun) CFLAGS="-native -xO5 -dalign"
+#        CFLAGS="-native -fast -xO5 -dalign"
+         if test "x$acx_maxopt_portable" = xyes; then
+           CFLAGS="$CFLAGS -xarch=generic"
+         fi;;
+
+    hp)  CFLAGS="+Oall +Optrs_ansi +DSnative"
+         if test "x$acx_maxopt_portable" = xyes; then
+           CFLAGS="$CFLAGS +DAportable"
+         fi;;
+
+    ibm) if test "x$acx_maxopt_portable" = xno; then
+           xlc_opt="-qarch=auto -qtune=auto"
+         else
+           xlc_opt="-qtune=auto"
+         fi
+         AX_CHECK_COMPILER_FLAGS($xlc_opt,
+                CFLAGS="-O3 -qansialias -w $xlc_opt",
+               [CFLAGS="-O3 -qansialias -w"
+                echo "******************************************************"
+                echo "*  You seem to have the IBM  C compiler.  It is      *"
+                echo "*  recommended for best performance that you use:    *"
+                echo "*                                                    *"
+                echo "*    CFLAGS=-O3 -qarch=xxx -qtune=xxx -qansialias -w *"
+                echo "*                      ^^^        ^^^                *"
+                echo "*  where xxx is pwr2, pwr3, 604, or whatever kind of *"
+                echo "*  CPU you have.  (Set the CFLAGS environment var.   *"
+                echo "*  and re-run configure.)  For more info, man cc.    *"
+                echo "******************************************************"])
+         ;;
+
+    intel) CFLAGS="-O3 -ansi_alias"
+        if test "x$acx_maxopt_portable" = xno; then
+          icc_archflag=unknown
+          icc_flags=""
+          case $host_cpu in
+            i686*|x86_64*)
+              # icc accepts gcc assembly syntax, so these should work:
+              AX_GCC_X86_CPUID(0)
+              AX_GCC_X86_CPUID(1)
+              case $ax_cv_gcc_x86_cpuid_0 in # see AX_GCC_ARCHFLAG
+                *:756e6547:*:*) # Intel
+                  case $ax_cv_gcc_x86_cpuid_1 in
+                    *6a?:*[[234]]:*:*|*6[[789b]]?:*:*:*) icc_flags="-xK";;
+                    *f3[[347]]:*:*:*|*f4[1347]:*:*:*) icc_flags="-xP -xN -xW -xK";;
+                    *f??:*:*:*) icc_flags="-xN -xW -xK";;
+                  esac ;;
+              esac ;;
+          esac
+          if test "x$icc_flags" != x; then
+            for flag in $icc_flags; do
+              AX_CHECK_COMPILER_FLAGS($flag, [icc_archflag=$flag; break])
+            done
+          fi
+          AC_MSG_CHECKING([for icc architecture flag])
+          AC_MSG_RESULT($icc_archflag)
+          if test "x$icc_archflag" != xunknown; then
+            CFLAGS="$CFLAGS $icc_archflag"
+          fi
+        fi
+        ;;
+
+    gnu)
+     # default optimization flags for gcc on all systems
+     CFLAGS="-O3 -fomit-frame-pointer"
+
+     # -malign-double for x86 systems
+     AX_CHECK_COMPILER_FLAGS(-malign-double, CFLAGS="$CFLAGS -malign-double")
+
+     #  -fstrict-aliasing for gcc-2.95+
+     AX_CHECK_COMPILER_FLAGS(-fstrict-aliasing,
+        CFLAGS="$CFLAGS -fstrict-aliasing")
+
+     # note that we enable "unsafe" fp optimization with other compilers, too
+     # SRE: no, that's a bad idea, don't use this
+#     AX_CHECK_COMPILER_FLAGS(-ffast-math, CFLAGS="$CFLAGS -ffast-math")
+
+     AX_GCC_ARCHFLAG($acx_maxopt_portable)
+     ;;
+  esac
+
+  if test -z "$CFLAGS"; then
+        echo ""
+        echo "********************************************************"
+        echo "* WARNING: Don't know the best CFLAGS for this system  *"
+        echo "* Use ./configure CFLAGS=... to specify your own flags *"
+        echo "* (otherwise, a default of CFLAGS=-O3 will be used)    *"
+        echo "********************************************************"
+        echo ""
+        CFLAGS="-O3"
+  fi
+
+  AX_CHECK_COMPILER_FLAGS($CFLAGS, [], [
+        echo ""
+        echo "********************************************************"
+        echo "* WARNING: The guessed CFLAGS don't seem to work with  *"
+        echo "* your compiler.                                       *"
+        echo "* Use ./configure CFLAGS=... to specify your own flags *"
+        echo "********************************************************"
+        echo ""
+        CFLAGS=""
+  ])
+
+fi
+])
+#
+# AX_CC_MAXOPT macro end.
 # ****************************************************************
 # ****************************************************************

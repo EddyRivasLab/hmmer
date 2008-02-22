@@ -5,7 +5,7 @@
  * implement support for two objects, a P7_OPROFILE optimized score
  * profile and a P7_OMX optimized dynamic programming matrix.
  * 
- * Table of contents:
+ * Contents:
  *   1. The P7_OPROFILE structure: a score profile
  *   2. The P7_OMX structure: a dynamic programming matrix
  *   3. Debugging dumps of P7_OPROFILE structures
@@ -25,7 +25,7 @@
  * SVN $Id$
  */
 #include "p7_config.h"
-#if defined (HAVE_SSE2)
+#if defined (p7_IMPL_SSE)
 
 #include <stdio.h>
 #include <math.h>
@@ -2798,7 +2798,7 @@ main(int argc, char **argv)
  *****************************************************************/
 
 
-#else /*! HAVE_SSE2*/
+#else /*! p7_IMPL_SSE*/
 /* The remainder of the file is just bookkeeping, for what to do when
  * we aren't compiling with SSE instructions.
  */
@@ -2810,5 +2810,5 @@ main(int argc, char **argv)
 int main(void) { return 0; }
 #endif
 
-#endif /* HAVE_SSE2 or not*/
+#endif /* p7_IMPL_SSE or not*/
 

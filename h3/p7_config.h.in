@@ -131,13 +131,11 @@ enum p7_cutoffs_e { p7_GA1 = 0, p7_GA2 = 1, p7_TC1 = 2, p7_TC2 = 3, p7_NC1 = 4, 
 #undef _LARGE_FILES
 #undef _LARGEFILE_SOURCE
 
-/* Choice of optimized implementation
+/* Choice of optimized implementation (one and only one must be set)
  */
-#undef p7_IMPL_REFERENCE 
-#undef p7_IMPL_FAST      
-#undef p7_IMPL_ALTIVEC	 
-#undef p7_IMPL_BUHLER    
-#undef p7_IMPL_SSE	 
+#undef p7_IMPL_SSE
+#undef p7_IMPL_VMX
+#undef p7_IMPL_DUMMY
 
 /* Optional parallel implementations
  */

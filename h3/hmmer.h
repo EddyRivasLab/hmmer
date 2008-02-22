@@ -547,10 +547,13 @@ typedef struct p7_domaindef_s {
 /*****************************************************************
  * 11. The optimized implementation.
  *****************************************************************/
-#ifdef HAVE_SSE2
+#if   defined (p7_IMPL_SSE)
 #include "impl_sse.h"
+#elif defined (p7_IMPL_VMX)
+#include "impl_vmx.h"
+#else
+#include "impl_dummy.h"
 #endif
-
 
 /*****************************************************************
  * 12. Other routines in HMMER's exposed API.
@@ -721,6 +724,7 @@ extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri);
 /* p7_profile.c */
 extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
 extern P7_PROFILE *p7_profile_Clone(const P7_PROFILE *gm);
+extern int         p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst);
 extern int         p7_profile_SetNullEmissions(P7_PROFILE *gm);
 extern int         p7_profile_Reuse(P7_PROFILE *gm);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);

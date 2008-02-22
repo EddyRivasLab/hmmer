@@ -11,7 +11,7 @@ CC       = @CC@
 CFLAGS   = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
-SIMDFLAGS= @SIMD_FLAGS@
+SIMDFLAGS= @SIMD_CFLAGS@
 DEFS     = @DEFS@
 LIBS     = @LIBS@ -lm
 MPILIBS  = @MPILIBS@
@@ -76,5 +76,5 @@ clean:
 	-rm -f ${UNIT_TESTS}
 
 distclean:
-	-rm -f Makefile
 	make clean
+	-rm -f Makefile

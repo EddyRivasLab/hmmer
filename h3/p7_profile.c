@@ -114,6 +114,51 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
 }
 
 
+/* Function:  p7_profile_Copy()
+ * Synopsis:  Copy a profile.
+ * Incept:    SRE, Sun Feb 17 10:27:37 2008 [Janelia]
+ *
+ * Purpose:   Copies profile <src> to profile <dst>, where <dst>
+ *            has already been allocated to be of sufficient size.
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ * Throws:    <eslEMEM> on allocation error; <eslEINVAL> if <dst> is too small 
+ *            to fit <src>.
+ */
+int
+p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
+{
+  int x,z;
+  int status;
+
+  if (src->M > dst->allocM) ESL_EXCEPTION(eslEINVAL, "destination profile is too small to hold a copy of source profile");
+
+  esl_vec_FCopy(src->tsc, src->M*p7P_NTRANS, dst->tsc);
+  for (x = 0; x < src->abc->Kp;   x++) esl_vec_FCopy(src->rsc[x], (src->M+1)*p7P_NR, dst->rsc[x]);
+  for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(src->xsc[x], p7P_NXTRANS,       dst->xsc[x]);
+
+  dst->mode        = src->mode;
+  dst->allocM      = src->allocM;
+  dst->M           = src->M;
+  dst->nj          = src->nj;
+
+  if (dst->name != NULL) free(dst->name);
+  if (dst->acc  != NULL) free(dst->acc);
+  if (dst->desc != NULL) free(dst->desc);
+
+  if ((status = esl_strdup(src->name,      -1, &(dst->name)))      != eslOK) return status;
+  if ((status = esl_strdup(src->acc,       -1, &(dst->acc)))       != eslOK) return status;
+  if ((status = esl_strdup(src->desc,      -1, &(dst->desc)))      != eslOK) return status;
+
+  strcpy(dst->rf,        src->rf);         /* RF is optional: if it's not set, *rf=0, and strcpy still works fine */
+  strcpy(dst->cs,        src->cs);         /* CS is also optional annotation */
+  strcpy(dst->consensus, src->consensus);  /* consensus though is always present on a valid profile */
+
+  for (z = 0; z < p7_NEVPARAM; z++) dst->evparam[z] = src->evparam[z];
+  for (z = 0; z < p7_NCUTOFFS; z++) dst->cutoff[z]  = src->cutoff[z];
+  return eslOK;
+}
 
 
 /* Function:  p7_profile_Clone()
@@ -127,30 +172,10 @@ P7_PROFILE *
 p7_profile_Clone(const P7_PROFILE *gm)
 {
   P7_PROFILE *g2 = NULL;
-  int x,z;
-  int status;
+  int         status;
 
   if ((g2 = p7_profile_Create(gm->allocM, gm->abc)) == NULL) return NULL;
-
-  esl_vec_FCopy(gm->tsc, gm->M*p7P_NTRANS, g2->tsc);
-  for (x = 0; x < gm->abc->Kp;    x++) esl_vec_FCopy(gm->rsc[x], (gm->M+1)*p7P_NR, g2->rsc[x]);
-  for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(gm->xsc[x], p7P_NXTRANS,      g2->xsc[x]);
-  
-  g2->mode        = gm->mode;
-  g2->allocM      = gm->allocM;
-  g2->M           = gm->M;
-  g2->nj          = gm->nj;
-  
-  if ((status = esl_strdup(gm->name,      -1, &(g2->name)))      != eslOK) goto ERROR;
-  if ((status = esl_strdup(gm->acc,       -1, &(g2->acc)))       != eslOK) goto ERROR;
-  if ((status = esl_strdup(gm->desc,      -1, &(g2->desc)))      != eslOK) goto ERROR;
-
-  strcpy(g2->rf,        gm->rf);         /* RF is optional: if it's not set, *rf=0, and strcpy still works fine */
-  strcpy(g2->cs,        gm->cs);         /* CS is also optional annotation */
-  strcpy(g2->consensus, gm->consensus);  /* consensus though is always present on a valid profile */
-
-  for (z = 0; z < p7_NEVPARAM; z++) g2->evparam[z] = gm->evparam[z];
-  for (z = 0; z < p7_NCUTOFFS; z++) g2->cutoff[z]  = gm->cutoff[z];
+  if ((status = p7_profile_Copy(gm, g2)) != eslOK) goto ERROR;
   return g2;
   
  ERROR:

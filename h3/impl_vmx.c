@@ -25,7 +25,7 @@
  * SVN $Id$
  */
 #include "p7_config.h"
-#if defined (HAVE_ALTIVEC_H)
+#if defined (p7_IMPL_VMX)
 
 #include <stdio.h>
 #include <math.h>
@@ -2863,19 +2863,19 @@ main(int argc, char **argv)
 }
 #endif /*p7IMPL_VMX_EXAMPLE*/
 
-#else /*! HAVE_SSE2*/
+#else /*! p7_IMPL_VMX*/
 /* The remainder of the file is just bookkeeping, for what to do when
- * we aren't compiling with SSE instructions.
+ * we aren't compiling with VMX/Altivec instructions.
  */
 
 /*
- * Provide a successful unit test on platforms where we don't have SSE instructions.
+ * Provide a successful unit test on platforms where we don't have VMX instructions.
  */
-#ifdef p7IMPL_SSE_TESTDRIVE
+#ifdef p7IMPL_VMX_TESTDRIVE
 int main(void) { return 0; }
 #endif
 
-#endif /*HAVE_ALTIVEC_H*/
+#endif /*p7_IMPL_VMX or not*/
 
 /*****************************************************************
  * @LICENSE@

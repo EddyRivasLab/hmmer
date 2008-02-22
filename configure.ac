@@ -44,6 +44,11 @@ AC_PREREQ(2.60)
 AC_INIT(HMMER, 3.0, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
+# remember if the user is overriding CFLAGS
+if test x"$CFLAGS" = x; then 
+  sre_cflags_env_set=no
+fi
+
 
 ################################################################
 # 3. Info on the package
@@ -123,10 +128,6 @@ AC_DEFINE(eslLIBRARY)
 #       host_cpu        example: i686
 #       host_vendor     example: pc
 #       host_os         example: linux-gnu
-#
-# These are used later in the configure by the ACX_PTHREAD macro to determine
-# system-specific details of threads libraries.
-#
 AC_CANONICAL_HOST
 
 # Check if we're a binary distribution. 
@@ -141,23 +142,13 @@ AC_CANONICAL_HOST
 if ((! test -d binaries) && test -d h3); then 
 AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
-# Choose the compiler, and get it in ISO ANSI C (C99) mode.
-#
-AC_PROG_CC
-if test "$CC" = xlc ; then	# IBM's xlc?
-  CFLAGS=$CFLAGS" -O3 -qarch=auto -qtune=auto"
-fi
-# Work around a known bug in autoconf's AC_PROG_CC_C99's handling of icc
-if test "$CC" != icc; then 
-  AC_PROG_CC_C99
-else
-  CFLAGS=$CFLAGS" -std=c99"
-fi
+
 
 ################################################################
 # Process the ./configure command line
 ################################################################
 
+# --enable-debugging      - set basic debugging (level 0)
 # --enable-debugging=x    - set debugging level to <x> (1-3)
 #
 # At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
@@ -165,36 +156,19 @@ fi
 # Also sets eslDEBUGLEVEL level, 0-3.
 #
 AC_ARG_ENABLE(debugging,
-[  --enable-debugging      set CFLAGS for debugging
-  --enable-debugging=x    also set diagnostics level to <x> (1-3) (3 = most verbose)],
-[ case $enable_debugging in
-   yes)  AC_MSG_NOTICE([enabled debugging diagnostics level 0 (CFLAGS only, no verbosity)])
-         CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGGING,  1)
-	 AC_DEFINE(eslDEBUGLEVEL, 0)
-         ;;
-     1)  AC_MSG_NOTICE([enabled debugging diagnostics level 1 (low verbosity)])
-         CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGGING,  1)
-	 AC_DEFINE(eslDEBUGLEVEL, 1)
-         ;;
-     2)  AC_MSG_NOTICE([enabled debugging diagnostics level 2 (moderate verbosity)])
-         CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGGING,  1)
-	 AC_DEFINE(eslDEBUGLEVEL, 2)
-         ;;
-     3)  AC_MSG_NOTICE([enabled debugging diagnostics level 3 (high verbosity)])
-         CFLAGS="-g -Wall"
-         AC_DEFINE(p7_DEBUGGING,  1)
-	 AC_DEFINE(eslDEBUGLEVEL, 3)
-         ;;
-    no)  AC_MSG_NOTICE([debugging diagnostics disabled])
-         AC_DEFINE(p7_DEBUGGING,  0)
-	 AC_DEFINE(eslDEBUGLEVEL, 0)
-         ;;
-     *)  echo "Ignoring unknown argument to --enable-debugging: $enable_debugging"
-         ;;
-esac])
+[AS_HELP_STRING([--enable-debugging],[include debugging code])
+AS_HELP_STRING([--enable-debugging=x],[also set diagnostics verbosity level to <x> (1-3)])],
+enable_debugging=$enableval, enable_debugging=no)
+
+case $enable_debugging in
+   yes)  AC_DEFINE(eslDEBUGLEVEL, 0);;
+     1)  AC_DEFINE(eslDEBUGLEVEL, 1);;
+     2)  AC_DEFINE(eslDEBUGLEVEL, 2);;
+     3)  AC_DEFINE(eslDEBUGLEVEL, 3);;
+    no)  AC_DEFINE(eslDEBUGLEVEL, 0);;
+     *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
+esac
+
 
 # --enable-gcov      - compile for code coverage testing
 #
@@ -202,160 +176,46 @@ esac])
 # Running programs (notably the test suite) will then generate .gcda files,
 # which the gcov tool can read.
 #
-AC_ARG_ENABLE(gcov, 
-  [  --enable-gcov           Compile with instrumentation for code coverage testing], 
-  [ 
-    AC_MSG_NOTICE([Compiling with gcov instrumentation.])
-    CC="gcc"
-    CFLAGS="-g -Wall -fprofile-arcs -ftest-coverage"
-  ])
+AC_ARG_ENABLE(gcov,[AS_HELP_STRING([--enable-gcov],[compile for code coverage testing])], ok=$enableval, ok=no)
+if test "$ok" = "yes"; then
+  AC_MSG_NOTICE([Compiling with gcov instrumentation.])
+  CC="gcc"
+  CFLAGS="-g -Wall -fprofile-arcs -ftest-coverage"
+  sre_cflags_env_set=yes
+fi
 
 
-
-# Dead code here:
-# for altivec, where we used to have --enable-impl=altivec.
-dnl altivec)   AC_MSG_NOTICE([Using Altivec DP implementation for PowerPC (Erik Lindahl)])
-dnl            AC_DEFINE(p7_IMPL_ALTIVEC)
-dnl 	   if test "$CC" != xlc; then 
-dnl 	     if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then 
-dnl   	       impl_cflags="-maltivec -mabi=altivec"      # IBM gcc
-dnl   	     else
-dnl 	       impl_cflags="-faltivec -mcpu=G5 -mtune=G5" # Apple cc
-dnl 	     fi
-dnl  	   else
-dnl 	     impl_cflags="-qaltivec"  # IBM xlc
-dnl  	   fi
-dnl 	   ;;
-dnl CFLAGS="$CFLAGS $impl_cflags"
-
-# For Altivec: test that the compiler is really going to support this.
-# (M4 code from Erik Lindahl, Stanford University; 
-#  modified for IBM PowerPC xlc tests by Yinhe Cheng, IBM).
+# --enable-sse    Enable the SSE implementation.
+# --enable-vmx    Enable the Altivec/VMX implementation.
+# --enable-dummy  Enable the portable implementation.
 #
-if test "$impl_choice" = altivec; then
-	if test "$ac_cv_build" = powerpc64-unknown-linux-gnu; then
-	   cat >> confdefs.h << \_ACEOF
-#include "altivec.h"
-_ACEOF
-        fi
-        AC_MSG_CHECKING([whether the compiler supports altivec extensions])
+# These set $impl_choice to one of sse, vmx, dummy, or none.
 #
-# IBM PPC xlc altivec compile test: (Yinhe Cheng, IBM)
-#
-	if test "$CC" = "xlc"; then  
-		AC_TRY_COMPILE([],[
-#ifndef __IBM_VACPP_altivec_h
-choke_me
-#endif
-vector signed char X;
-	      ],[
-	      AC_MSG_RESULT([yes])
-	      AC_MSG_NOTICE([Altivec optimization successfully enabled.])
-	      ],[
-	      AC_MSG_RESULT([no])
-	      AC_MSG_ERROR([altivec not supported on this platform]
-[]
-[(xlc/altivec): Either you aren't on a platform that supports the Altivec]
-[instruction set, or your xlc compiler doesn't support Altivec. Rerun configure]
-[without --enable-altivec, or update your compiler.])]
-)
-#
-# else, Apple OS/X altivec compile test: (Erik Lindahl, Stanford)
-#
-	else
-	      AC_TRY_COMPILE([],[
-#ifndef __VEC__
-choke_me
-#endif
-vector signed char X;
-              ],[
-              AC_MSG_RESULT([yes])
-              AC_MSG_NOTICE([Altivec optimization successfully enabled.])
-              ],[
-              AC_MSG_RESULT([no])
-              AC_MSG_ERROR([altivec not supported on this platform]
-[]
-[Either you aren't on a PowerPC platform that supports Altivec instructions, or your]
-[compiler doesn't support Altivec. Rerun configure without the --enable-altivec]
-[flag, or update to a recent compiler like gcc-3.1 (included in the latest Apple]
-[developer tools).])]
-        )                       
-        fi
+AC_ARG_ENABLE(sse,[AS_HELP_STRING([--enable-sse],[enable SSE implementation])],          enable_sse=$enableval,   enable_sse=no)
+AC_ARG_ENABLE(vmx,[AS_HELP_STRING([--enable-vmx],[enable Altivec/VMX implementation])],  enable_vmx=$enableval,   enable_vmx=no)
+AC_ARG_ENABLE(dummy,[AS_HELP_STRING([--enable-dummy],[enable portable implementation])], enable_dummy=$enableval, enable_dummy=no)
+if test "$enable_sse" = "yes"; then
+   if test "$enable_vmx" = "yes" || test "$enable_dummy" = "yes"; then
+      AC_MSG_ERROR([Select only one implementation of sse, vmx, or dummy])
+   fi
+   impl_choice=sse
+elif test "$enable_vmx" = "yes"; then
+   if test "$enable_sse" = "yes" || test "$enable_dummy" = "yes"; then
+      AC_MSG_ERROR([Select only one implementation of sse, vmx, or dummy])
+   fi
+   impl_choice=vmx
+elif test "$enable_dummy" = "yes"; then
+   if test "$enable_sse" = "yes" || test "$enable_vmx" = "yes"; then
+      AC_MSG_ERROR([Select only one implementation of sse, vmx, or dummy])
+   fi
+   impl_choice=dummy
+else
+   impl_choice=none   	
 fi
 
 
 # --enable-mpi       Enable MPI parallelization
-# 
-# Sets MPILIBS output variable
-# Sets CC to appropriate compiler wrapper for MPI (mpicc, usually)
-# Defines HAVE_MPI preprocessor variable.
-#
-AC_ARG_ENABLE(mpi, 
-[AS_HELP_STRING([--enable-mpi], [enable MPI parallelization])],
-[case $enable_mpi in
-   yes) ACX_MPI([
-           AC_MSG_NOTICE([enabled optional MPI parallelization])
-	   AC_DEFINE(HAVE_MPI)
-	   CC=$MPICC
-          ], [
-           AC_MSG_ERROR([MPI library not found])
-          ])
-	 ;;
-   no)   AC_MSG_NOTICE([MPI parallelization disabled])
-         ;;
-   *)    echo "Ignoring unknown argument to --enable-mpi: $enable_mpi"
-	 ;;
-esac])
-
-
-# --enable-sse      Force SSE2 SIMD optimization on
-# --disable-sse     Force SSE2 SIMD optimization off
-#                   Default is to have SSE2 on, if it's detected.
-#
-# This sets @SIMD_FLAGS@ output variable, defines HAVE_SSE2, and
-# if SSE is chosen, sets impl_choice to "sse".
-AC_ARG_ENABLE(sse,
-   [AS_HELP_STRING([--enable-sse],  [ enable SSE SIMD parallelization (default)]) ],
-   [
-     case $enable_sse in 
-     yes) if test "$CC" != icc; then 
-            AX_EXT
-          else 
-            AC_DEFINE(HAVE_SSE2, 1)
-            impl_choice="sse"
-          fi
-          ;;
-
-     no) AC_MSG_NOTICE([SSE vectorization disabled])
-         ;;
-
-     *)  AC_MSG_NOTICE([Ignoring unknown argument to --enable-sse: $enable_sse])
-         ;;
-     esac
-   ],
-   [  
-     AX_EXT
-   ])
-if test "$ax_have_sse2_ext" = yes; then
-  impl_choice="sse"
-else
-  AC_MSG_NOTICE([no SSE detected])
-fi
-
-# preliminary support for altivec/vmx
-# might want to wrap both this and the SSE check 
-# in an if/else cpu check, since you need exactly one
-# default would become whichever you could find
-AC_ARG_ENABLE(altivec,
-   [AS_HELP_STRING([--enable-altivec], [ enable Altivec SIMD parallelization]) ],
-   [
-     AC_CHECK_HEADERS([altivec.h])
-     AX_CHECK_COMPILER_FLAGS(-maltivec, SIMD_FLAGS="$SIMD_FLAGS -maltivec", [])
-     impl_choice="vmx"
-   ],
-   [
-     AC_MSG_NOTICE([ALTIVEC not enabled])
-   ])
+AC_ARG_ENABLE(mpi,[AS_HELP_STRING([--enable-mpi],[enable MPI parallelization])], enable_mpi=$enableval, enable_mpi=no)
 
 
 # --enable-threads      Enable POSIX multithreading
@@ -399,42 +259,111 @@ AC_ARG_WITH([gsl],
 	    [with_gsl=no])
 
 
+# If the user didn't force an implementation on us, select a default
+if test "$impl_choice" = "none"; then
+  case $host in 
+    i?86-*-*)      impl_choice=sse;;
+    x86*-*-*)      impl_choice=sse;;
+    powerpc*-*-*)  impl_choice=vmx;;
+    *)             impl_choice=dummy;;
+  esac
+fi
 
-# Now, after all --enable's are done, we choose which fast
-# implementation we're going to use; there can only be one.
+################################################################
+# Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
 #
-case $impl_choice in 
+AC_PROG_CC
+AX_COMPILER_VENDOR
+# AC_PROG_CC_STDC wants to append -c99 to icc; icc doesn't like this.
+if test "$ax_cv_c_compiler_vendor" != "intel"; then
+  AC_PROG_CC_STDC
+fi
+AC_PROG_RANLIB
+AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
+CHECK_GNU_MAKE
+
+# Select our optimization level in CFLAGS.
+if test "$enable_debugging" != "no"; then
+   AC_DEFINE(p7_DEBUGGING,  1)
+   if test "$GCC" = "yes" && test "$ac_test_CFLAGS" != "set"; then 
+      CFLAGS="-g -Wall"
+   fi
+else
+   sre_save_ac_test_cflags="$ac_test_CFLAGS"
+   if test "$sre_cflags_env_set" = "no"; then
+     ac_test_CFLAGS=""
+   fi
+   AX_CC_MAXOPT
+   ac_test_CFLAGS="$sre_save_ac_test_cflags"
+   # That was a workaround. AX_CC_MAXOPT apparently thinks that
+   # $ac_test_CFLAGS only gets set if ${CFLAGS} was set by the
+   # user (in the environment), but that's not so; it gets set
+   # by AC_PROG_CC. Instead of rewriting AX_CC_MAXOPT, we fool
+   # it.
+fi
+
+# MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
+if test "$enable_mpi" = "yes"; then
+   ACX_MPI([],AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+fi
+
+# If we're using SSE, figure out our @SIMD_CFLAGS@
+if test "$impl_choice" = "sse" && test "x$SIMD_CFLAGS" = x; then
+   case $ax_cv_c_compiler_vendor in
+   gnu)   AX_CHECK_COMPILER_FLAGS(-msse2,[SIMD_CFLAGS="-msse2"],[impl_choice=dummy]);;
+   intel) ;;
+   *)     ;;
+   esac
+fi
+if test "$enable_sse" = "yes" && test "$impl_choice" = dummy; then
+   AC_MSG_ERROR([SSE instructions are apparently not available; --enable-sse failed])
+fi
+
+# If we're using VMX/Altivec, figure out our @SIMD_CFLAGS@
+if test "$impl_choice" = "vmx"; then
+   if test "x$SIMD_CFLAGS" = x; then
+      if test "$GCC" = "yes"; then
+       	# -DFAKE__VEC__ is a workaround because gcc-3.3 does not
+	# #define __VEC__ with -maltivec.
+        AX_CHECK_COMPILER_FLAGS(-faltivec, [SIMD_CFLAGS="-faltivec"],
+	    [AX_CHECK_COMPILER_FLAGS(-maltivec -mabi=altivec,
+		[SIMD_CFLAGS="-maltivec -mabi=altivec"],
+#		[SIMD_CFLAGS="-maltivec -mabi=altivec -DFAKE__VEC__"],
+	        [AX_CHECK_COMPILER_FLAGS(-fvec, [SIMD_CFLAGS="-fvec"],
+		   [AC_MSG_ERROR([Need a version of gcc with -maltivec])])])])
+      elif test "${ax_cv_c_compiler_vendor}" = "ibm"; then
+        AX_CHECK_COMPILER_FLAGS(-qaltivec, [SIMD_CFLAGS="-qaltivec"],[])
+      else
+        AX_CHECK_COMPILER_FLAGS(-faltivec, [SIMD_CFLAGS="-faltivec"],[])
+      fi
+   fi
+fi
+
+# Now, we can enable the appropriate optimized implementation.
+case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
+      AC_DEFINE([HAVE_SSE2])
+      AC_DEFINE([p7_IMPL_SSE])
       IMPL_OBJ="impl_sse.o"
       IMPL_HEADER="impl_sse.h"
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
+      AC_DEFINE([HAVE_VMX])
+      AC_DEFINE([p7_IMPL_VMX])
       IMPL_OBJ="impl_vmx.o"
       IMPL_HEADER="impl_vmx.h"
       ;;
 
 *)    AC_MSG_NOTICE([No optimized DP implementation available])
-      IMPL_OBJ=""
-      IMPL_HEADER=""
+      AC_DEFINE([p7_IMPL_DUMMY])
+      IMPL_OBJ="impl_dummy.o"
+      IMPL_HEADER="impl_dummy.h"
       ;;
 esac
 AC_SUBST(IMPL_OBJ)
 AC_SUBST(IMPL_HEADER)
-
-# Checks for programs
-#
-
-# Set output variable "RANLIB"
-AC_PROG_RANLIB
-
-# Set output variable "AR"
-AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
-
-# Set the output variable EXEC_DEPENDENCY according
-# to whether we're using GNU make or a SYSV make.
-CHECK_GNU_MAKE
-
+AC_SUBST(SIMD_CFLAGS)
 
 
 # Checks for libraries
@@ -455,10 +384,19 @@ AS_IF([test "x$with_gsl" != xno],
 
 # Checks for headers
 #
-AC_CHECK_HEADERS([sys/types.h])
-AC_CHECK_HEADERS([unistd.h])
-AC_CHECK_HEADERS([stdint.h])
-AC_CHECK_HEADERS([inttypes.h])
+AC_CHECK_HEADERS([sys/types.h unistd.h stdint.h inttypes.h])
+
+# altivec.h requires the simd cflags
+# For reasons I don't understand, this needs to come after any other CHECK_HEADERS().
+if test "$impl_choice" = "vmx"; then
+   sre_save_CFLAGS="$CFLAGS"
+   sre_save_CPPFLAGS="$CPPFLAGS"
+   CFLAGS="$CFLAGS $SIMD_CFLAGS"
+   CPPFLAGS="$CPPFLAGS $SIMD_CFLAGS"
+   AC_CHECK_HEADERS([altivec.h])
+   CFLAGS="$sre_save_CFLAGS"
+   CPPFLAGS="$sre_save_CPPFLAGS"
+fi
 
 # Checks for types
 #
@@ -514,7 +452,7 @@ echo "
 
 HMMER configuration:
 
-     compiler:             ${CC} ${CFLAGS} ${SIMD_FLAGS}
+     compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS}
      DP implementation:    ${impl_choice}
 "
 

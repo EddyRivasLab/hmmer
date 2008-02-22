@@ -10,6 +10,7 @@
 #
 CC       = @CC@
 CFLAGS   = @CFLAGS@
+SIMDFLAGS= @SIMD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
 DEFS     = @DEFS@
@@ -71,7 +72,7 @@ HDRS =  hmmer.h\
 IMPL_HEADER = @IMPL_HEADER@
 
 .c.o:
-	${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
 
 
 #################################################################
@@ -106,6 +107,7 @@ distclean:
 
 clean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
+	-rm -f *.gcno
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
