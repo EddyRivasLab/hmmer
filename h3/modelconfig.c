@@ -119,8 +119,8 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
    * N,C,J transitions are set later by length config 
    */
   if (p7_profile_IsMultihit(gm)) {
-    gm->xsc[p7P_E][p7P_MOVE] = log(0.5);   
-    gm->xsc[p7P_E][p7P_LOOP] = log(0.5);  
+    gm->xsc[p7P_E][p7P_MOVE] = -eslCONST_LOG2;   
+    gm->xsc[p7P_E][p7P_LOOP] = -eslCONST_LOG2;   
     gm->nj                   = 1.0f;
   } else {
     gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
@@ -214,11 +214,59 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
   ploop = 1.0f - pmove;
   gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = gm->xsc[p7P_J][p7P_LOOP] = log(ploop);
   gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(pmove);
+  gm->L = L;
   return eslOK;
 }
 
+/* Function:  p7_ReconfigMultihit()
+ * Synopsis:  Quickly reconfig model into multihit mode for target length <L>.
+ * Incept:    SRE, Sat Feb 23 09:16:01 2008 [Janelia]
+ *
+ * Purpose:   Given a profile <gm> that's already been configured once,
+ *            quickly reconfigure it into a multihit mode for target 
+ *            length <L>. 
+ *            
+ *            This gets called in domain definition, when we need to
+ *            flip the model in and out of unihit <L=0> mode to
+ *            process individual domains.
+ *            
+ * Note:      You can't just flip uni/multi mode alone, because that
+ *            parameterization also affects target length
+ *            modeling. You need to make sure uni vs. multi choice is
+ *            made before the length model is set, and you need to
+ *            make sure the length model is recalculated if you change
+ *            the uni/multi mode. Hence, these functions call
+ *            <p7_ReconfigLength()>.
+ */
+int
+p7_ReconfigMultihit(P7_PROFILE *gm, int L)
+{
+  gm->xsc[p7P_E][p7P_MOVE] = -eslCONST_LOG2;   
+  gm->xsc[p7P_E][p7P_LOOP] = -eslCONST_LOG2;   
+  gm->nj                   = 1.0f;
+  return p7_ReconfigLength(gm, L);
+}
 
-
+/* Function:  p7_ReconfigUnihit()
+ * Synopsis:  Quickly reconfig model into unihit mode for target length <L>.
+ * Incept:    SRE, Sat Feb 23 09:19:42 2008 [Janelia]
+ *
+ * Purpose:   Given a profile <gm> that's already been configured once,
+ *            quickly reconfigure it into a unihit mode for target 
+ *            length <L>. 
+ *            
+ *            This gets called in domain definition, when we need to
+ *            flip the model in and out of unihit <L=0> mode to
+ *            process individual domains.
+ */
+int
+p7_ReconfigUnihit(P7_PROFILE *gm, int L)
+{
+  gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
+  gm->xsc[p7P_E][p7P_LOOP] = -eslINFINITY;  
+  gm->nj                   = 0.0f;
+  return p7_ReconfigLength(gm, L);
+}
 
 
 /*****************************************************************

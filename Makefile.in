@@ -179,6 +179,7 @@ binclean:
 doc:
 	(cd documentation/userguide; make)
 
+
 # dist: build a new distribution directory in hmmer-$RELEASE
 #       Exports from the CVS repository.
 #       tags RCS files with $(RELCODE) for later reconstruction

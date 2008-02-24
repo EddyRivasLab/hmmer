@@ -285,7 +285,7 @@ CHECK_GNU_MAKE
 # Select our optimization level in CFLAGS.
 if test "$enable_debugging" != "no"; then
    AC_DEFINE(p7_DEBUGGING,  1)
-   if test "$GCC" = "yes" && test "$ac_test_CFLAGS" != "set"; then 
+   if test "$GCC" = "yes" && test "$sre_cflags_env_set" = "no"; then
       CFLAGS="-g -Wall"
    fi
 else

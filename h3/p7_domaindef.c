@@ -49,7 +49,8 @@
 #include "hmmer.h"
 
 static int calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
-static int is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j);
+static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
+static int region_trace_ensemble  (P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc);
 static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, int i, int j, 
 				   P7_ALIDISPLAY **ret_ad, float *ret_sc);
 
@@ -191,10 +192,10 @@ p7_domaindef_Add(P7_DOMAINDEF *ddef, int i, int j, float sc, P7_ALIDISPLAY *ad)
     ddef->nalloc *= 2;    
   }
 
-  ddef->dcl[ddef->n].i  = i;
-  ddef->dcl[ddef->n].j  = j;
-  ddef->dcl[ddef->n].sc = sc;
-  ddef->dcl[ddef->n].ad = ad;
+  ddef->dcl[ddef->ndom].i  = i;
+  ddef->dcl[ddef->ndom].j  = j;
+  ddef->dcl[ddef->ndom].sc = sc;
+  ddef->dcl[ddef->ndom].ad = ad;
   ddef->ndom++;
   return eslOK;
   
@@ -209,9 +210,7 @@ p7_domaindef_Add(P7_DOMAINDEF *ddef, int i, int j, float sc, P7_ALIDISPLAY *ad)
  *
  * Purpose:   Retrieve domain number <which> from domain definitions in <ddef>.
  *            <which> is numbered <0..ndomains-1>. The number of domains
- *            was returned by <p7_domaindef_ByPosteriorHeuristics()> (or 
- *            some other domain-defining function); alternatively, it may
- *            also be accessed as <ddef->ndom>.
+ *            is in <ddef->ndom>.
  *            
  *            The information is retrieved in <opt_i> (start position
  *            of domain, <1..L>), <opt_j> (end position), <opt_sc>
@@ -237,11 +236,11 @@ p7_domaindef_Add(P7_DOMAINDEF *ddef, int i, int j, float sc, P7_ALIDISPLAY *ad)
  * Returns:   <eslOK> on success.
  */
 int
-p7_domaindef_Fetch(P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY *opt_ad)
+p7_domaindef_Fetch(P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY **opt_ad)
 {
   if (opt_i  != NULL) *opt_i  = ddef->dcl[which].i;
   if (opt_j  != NULL) *opt_j  = ddef->dcl[which].j;
-  if (opt_sc != NULL) *opt_j  = ddef->dcl[which].sc;
+  if (opt_sc != NULL) *opt_sc = ddef->dcl[which].sc;
   if (opt_ad != NULL) *opt_ad = ddef->dcl[which].ad; else { p7_alidisplay_Destroy(ddef->dcl[which].ad); }
   ddef->dcl[which].ad = NULL;
   return eslOK;
@@ -269,12 +268,12 @@ p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
 {
   int d;
 
-  ddef->ndom = 0;
-  ddef->L    = 0;
   for (d = 0; d < ddef->ndom; d++) {
     p7_alidisplay_Destroy(ddef->dcl[d].ad);
     ddef->dcl[d].ad = NULL;
   }
+  ddef->ndom = 0;
+  ddef->L    = 0;
 
   p7_spensemble_Reuse(ddef->sp);
   p7_trace_Reuse(ddef->tr);	/* probable overkill; should already have been called */
@@ -302,7 +301,7 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
 
   if (ddef->dcl  != NULL) {
     for (d = 0; d < ddef->ndom; d++)
-      p7_alidisplay_Destroy(ddef->dcl[d]->ad);
+      p7_alidisplay_Destroy(ddef->dcl[d].ad);
     free(ddef->dcl);
   }
 
@@ -337,78 +336,105 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
  * Returns:   <eslOK> on success.
  */
 int
-p7_domaindef_ByViterbi(P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef) 
+p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef) 
 {
   P7_ALIDISPLAY *ad;
   float          dsc;
-  float          vsc;
   int            d;
-  int            status;
+  int            saveL = gm->L;
 
   p7_domaindef_GrowTo(ddef, sq->n);
   p7_GTrace  (sq->dsq, sq->n, gm, gx1, ddef->gtr);
   p7_trace_Index(ddef->gtr);
   
+  p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
+
   for (d = 0; d < ddef->gtr->ndom; d++)
     {
       rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], &ad, &dsc);
       p7_domaindef_Add(ddef, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], dsc, ad);
     }
+
+  p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
   return eslOK;
 }
 
 
+/* Function:  p7_domaindef_ByPosteriorHeuristics()
+ * Synopsis:  Define domains in a sequence using posterior probs.
+ * Incept:    SRE, Sat Feb 23 08:17:44 2008 [Janelia]
+ *
+ * Purpose:   Given a sequence <sq> and model <gm> for which we have 
+ *            already calculated a Forward and Backward matrix
+ *            <fwd> and <bck>; use posterior probability heuristics
+ *            to determine an annotated domain structure. Caller
+ *            provides a new or reused <ddef> object to hold these
+ *            results.
+ *            
+ *            Upon return, <ddef> contains the definitions of all the
+ *            domains: their bounds, their null-corrected Forward
+ *            scores, and their optimal posterior accuracy alignments.
+ *            Caller can cycle over <ddef->ndom> domains and retrieve
+ *            info on each one by <p7_domain_Fetch()>.
+ *            
+ * Returns:   <eslOK> on success.           
+ */
 int
-p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef)
+p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef)
 {
   P7_ALIDISPLAY *ad;
   float          dsc;
-  int i;
-  int lasti, j;
+  int i, j;
   int triggered;
   int d;
   int i2,j2;
-  float prob;
+  int saveL = gm->L;
+  int  nc;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
   calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
+  p7_ReconfigUnihit(gm, 0);	                   /* process each domain in unihit L=0 mode                         */
 
   /* That's all we need the original fwd, bck matrices for. 
    * Now we're free to reuse them for subsequent domain calculations.
    */
 
-  lasti     = -1;
+  i     = -1;
   triggered = FALSE;
-  for (i = 1; i <= sq->n; i++)
+  for (j = 1; j <= sq->n; j++)
     {
       if (! triggered) 
-	{
-	  if       (ddef->mocc[i] - (ddef->btot[i] - ddef->btot[i-1]) <  ddef->rt2) lasti = -1;
-	  else if  (lasti == -1)                        lasti = i;
-	  if       (ddef->mocc[i]                                     >= ddef->rt1) triggered = TRUE;  
+	{			/* xref J2/101 for what the logic below is: */
+	  if       (ddef->mocc[j] - (ddef->btot[j] - ddef->btot[j-1]) <  ddef->rt2) i = j;
+	  else if  (i == -1)                                                        i = j;
+	  if       (ddef->mocc[j]                                     >= ddef->rt1) triggered = TRUE;  
 	} 
-      else if (ddef->mocc[i] - (ddef->etot[i] - ddef->etot[i-1])  <  ddef->rt2) 
+      else if (ddef->mocc[j] - (ddef->etot[j] - ddef->etot[j-1])  <  ddef->rt2) 
 	{
-
 	  if (is_multidomain_region(ddef, i, j))
 	    {
-	      region_trace_ensemble(ddef, gm, sq, fwd, &nc);
+	      p7_ReconfigMultihit(gm, saveL);
+	      region_trace_ensemble(ddef, gm, sq, i, j, fwd, &nc);
+	      p7_ReconfigUnihit(gm, 0);
 	      for (d = 0; d < nc; d++) {
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
 		rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, &ad, &dsc);
 		p7_domaindef_Add(ddef, i2, j2, dsc, ad);
 	      }
+	      p7_spensemble_Reuse(ddef->sp);
+	      p7_trace_Reuse(ddef->tr);
 	    }
 	  else 
 	    {
-	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, lasti, i, &ad, &dsc);
-	      p7_domaindef_Add(ddef, lasti, i, dsc, ad);
+	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, &ad, &dsc);
+	      p7_domaindef_Add(ddef, i, j, dsc, ad);
 	    }
-
-	  lasti     = -1;
+	  i     = -1;
 	  triggered = FALSE;
 	}
     }
+
+  p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
   return eslOK;
 }
 
@@ -416,7 +442,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *fwd, P7_G
 
 /*****************************************************************
  * 3. Internal routines 
- ***************************************************************** 
+ *****************************************************************/
 
 /* calculate_domain_posteriors()
  * SRE, Fri Feb  8 10:44:30 2008 [Janelia]
@@ -487,13 +513,13 @@ calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAIND
 
   for (i = 1; i <= L; i++)
     {
-      ddef->btot[i] = d->btot[i-1] + exp(fwd->xmx[(i-1)*p7G_NXCELLS+p7G_B] + bck->xmx[(i-1)*p7G_NXCELLS+p7G_B] - overall_logp);
-      ddef->etot[i] = d->etot[i-1] + exp(fwd->xmx[i    *p7G_NXCELLS+p7G_E] + bck->xmx[i    *p7G_NXCELLS+p7G_E] - overall_logp);
+      ddef->btot[i] = ddef->btot[i-1] + exp(fwd->xmx[(i-1)*p7G_NXCELLS+p7G_B] + bck->xmx[(i-1)*p7G_NXCELLS+p7G_B] - overall_logp);
+      ddef->etot[i] = ddef->etot[i-1] + exp(fwd->xmx[i    *p7G_NXCELLS+p7G_E] + bck->xmx[i    *p7G_NXCELLS+p7G_E] - overall_logp);
 
-      njc           = expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_N] + bck->xmx[p7G_NXCELLS*i + p7G_N] + gm->xsc[p7P_N][p7P_LOOP] - overall_logp);
-      njc          += expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_J] + bck->xmx[p7G_NXCELLS*i + p7G_J] + gm->xsc[p7P_J][p7P_LOOP] - overall_logp);
-      njc          += expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_C] + bck->xmx[p7G_NXCELLS*i + p7G_C] + gm->xsc[p7P_C][p7P_LOOP] - overall_logp);
-      ddef->mocc[i] = 1. - njc;
+      njcp  = expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_N] + bck->xmx[p7G_NXCELLS*i + p7G_N] + gm->xsc[p7P_N][p7P_LOOP] - overall_logp);
+      njcp += expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_J] + bck->xmx[p7G_NXCELLS*i + p7G_J] + gm->xsc[p7P_J][p7P_LOOP] - overall_logp);
+      njcp += expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_C] + bck->xmx[p7G_NXCELLS*i + p7G_C] + gm->xsc[p7P_C][p7P_LOOP] - overall_logp);
+      ddef->mocc[i] = 1. - njcp;
     }
   ddef->L = gm->L;
   return eslOK;
@@ -517,11 +543,10 @@ calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAIND
  * 
  * More precisely: return TRUE if  \max_z [ \min (B(z), E(z)) ]  >= rt3
  * where
- *   E(z) = expected number of E states occurring in region after z is emitted
- *        = \sum_{y=z}^{j} eocc[i]  =  etot[j] - etot[z-1]
- *
- *   B(z) = expected number of B states occurring in region before z is emitted
- *        = \sum_{y=i}^{z} bocc[i]  =  btot[z] - btot[i-1]               
+ *   E(z) = expected number of E states occurring in region before z is emitted
+ *        = \sum_{y=i}^{z} eocc[i]  =  etot[z] - etot[i-1]
+ *   B(z) = expected number of B states occurring in region after z is emitted
+ *        = \sum_{y=z}^{j} bocc[i]  =  btot[j] - btot[z-1]               
  *        
  *        
  * Because this relies on the <ddef->etot> and <ddef->btot> arrays,
@@ -539,7 +564,7 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
   max = -1.0;
   for (z = i; z <= j; z++)
     {
-      expected_n = ESL_MIN( (ddef->etot[j] - ddef->etot[z-1]), (ddef->btot[z] - ddef->btot[i-1]));
+      expected_n = ESL_MIN( (ddef->etot[z] - ddef->etot[i-1]), (ddef->btot[j] - ddef->btot[z-1]));
       max        = ESL_MAX(max, expected_n);
     }
 
@@ -560,17 +585,18 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
  * means we need the caller to provide the model <gm> and allocated
  * space for the Forward DP matrix in <gx>. 
  * 
- * The model will be reconfigured into multihit mode, with its target
- * length distribution set to <sq->n>: i.e., presumably identical to
- * the model configuration used to score the complete sequence (if it
- * weren't multihit, we wouldn't be worried about multiple domains).
- * (This also is potentially wasteful - see future optimizations notes
- * - and it's also a fracked up API, because we're changing the model
- * config and potentially confusing the caller.)
+ * The caller provides model <gm> configured in multihit mode, with
+ * its target length distribution set to <sq->n>: i.e., the model
+ * configuration used to score the complete sequence (if it weren't
+ * multihit, we wouldn't be worried about multiple domains).
  * 
- * Caller also provides <ddef>, which defines heuristic parameters
- * that control the clustering, and provides working space for the
- * calculation and the answers.
+ * Caller provides <ddef>, which defines heuristic parameters that
+ * control the clustering, and provides working space for the
+ * calculation and the answers. The <ddef->sp> object must have been
+ * reused (i.e., it needs to be fresh; we're going to use it here);
+ * the caller needs to Reuse() it specifically, because it can't just
+ * Reuse() the whole <ddef>, when it's in the process of analyzing
+ * regions.
  * 
  * Upon return, <*ret_nc> contains the number of clusters that were
  * defined.
@@ -582,40 +608,32 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
  * Other information on what's happened in working memory:
  * 
  * <ddef->sp> gets filled in, and upon return, it's holding the answers 
- *    (the cluster definitions). After the caller retrieves those answers,
- *    it needs to 
+ *    (the cluster definitions). When the caller is done retrieving those
+ *    answers, it needs to <esl_spensemble_Reuse()> it before calling
+ *    <region_trace_ensemble()> again.
+ *    
+ * <ddef->tr> is used as working memory for sampled traces.
+ *    
+ * <gm> gets reconfigured into multihit <L> mode!
  * 
+ * <gx> is used for a Forward matrix on the domain <i..j>.
  * 
- * 
- * 
- * 
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
  */
-
 static int
-region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc)
+region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc)
 {
   float sc;
   int   t, d;
 
-  p7_ReconfigLength(gm, L);
-  p7_ReconfigMultihit(gm);
-  p7_GForward(dsq, L, gm, gx, &sc);
+  p7_GForward(sq->dsq+i-1, j-i+1, gm, gx, &sc);
 
   for (t = 0; t < ddef->nsamples; t++)
     {
-      p7_StochasticTrace(ddef->r, dsq, L, gm, gx, ddef->tr);
+      p7_StochasticTrace(ddef->r, sq->dsq+i-1, j-i+1, gm, gx, ddef->tr);
       p7_trace_Index(ddef->tr);
 
       for (d = 0; d < ddef->tr->ndom; d++)
-	p7_spensemble_Add(ddef->sp, t, ddef->tr->sqfrom[d], ddef->tr->sqto[d], ddef->tr->hmmfrom[d], ddef->tr->hmmto[d]);
+	p7_spensemble_Add(ddef->sp, t, ddef->tr->sqfrom[d]+i-1, ddef->tr->sqto[d]+i-1, ddef->tr->hmmfrom[d], ddef->tr->hmmto[d]);
 
       p7_trace_Reuse(ddef->tr);        
     }
@@ -635,10 +653,10 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, ESL_SQ *sq, int i, int
  * seq into a new per-seq score, to compare to the original per-seq
  * score).
  *  
- * The score is a Forward score for model <gm> configured in unihit
- * lobal mode (local wrt model, global wrt sequence). Lobal mode
- * forces the complete domain sequence from <i> to <j> into one
- * consistent alignment against the model.
+ * The caller provides model <gm> configured in unihit lobal mode
+ * (i.e. local, with target length <L=0>; local wrt model, global wrt
+ * sequence). Lobal mode forces the complete domain sequence from <i>
+ * to <j> into one consistent alignment against the model.
  * 
  * The alignment is an optimal accuracy alignment (sensu IH Holmes),
  * also obtained in lobal mode.
@@ -684,14 +702,12 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7
   P7_ALIDISPLAY *ad = NULL;
   int             L = j-i+1;
   float           fsc, sc;
+  int             z;
 
-  p7_ReconfigLength(gm, 0);
-  p7_ReconfigUnihit(gm);
+  p7_GForward (sq->dsq + i-1, L, gm, gx1, &fsc);
+  p7_GBackward(sq->dsq + i-1, L, gm, gx2, &sc);
 
-  p7_GForward (sq->dsq + i, L, gm, gx1, &fsc);
-  p7_GBackward(sq->dsq + i, L, gm, gx2, &sc);
-
-  p7_PostProb(L, gm, gx1, gx2, fwd);          /* <gx1> is now overwritten with posterior probabilities */
+  p7_PostProb(L, gm, gx1, gx2, gx1);          /* <gx1> is now overwritten with posterior probabilities */
 
   /* This is the info we need for a post-prob-oriented null2 correction,
    * and this is where the null2 correction call will go in the near future
@@ -700,13 +716,267 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7
   p7_OptimalAccuracyDP(L, gm, gx1, gx2, &sc); /* <gx2> is now overwritten with OA scores */
   p7_OATrace(L, gm, gx1, gx2, ddef->tr);      /* <tr>'s seq coords are all offset by i-1 now, relative to original dsq  */
   
-  ad = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
-  ad->sqfrom += i-1;
-  ad->sqto   += i-1;
+  for (z = 0; z < ddef->tr->N; z++)
+    if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1; /* that hacks the trace's sq coords to be correct w.r.t. original dsq */
 
+  ad = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
+
+  p7_trace_Reuse(ddef->tr);
   *ret_ad = ad;
   *ret_sc = fsc;
   return eslOK;
 }
   
     
+/*****************************************************************
+ * Example driver.
+ *****************************************************************/
+
+#ifdef p7DOMAINDEF_EXAMPLE
+
+/* gcc -o domaindef_example -g -Wall -I../easel -L../easel -I. -L. -Dp7DOMAINDEF_EXAMPLE p7_domaindef.c -lhmmer -leasel -lm
+ * ./domaindef_example <hmmfile> <seqfile>
+ */
+
+
+#include "p7_config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_alphabet.h"
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of domain definition by posterior sampling";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  int             format  = eslSQFILE_UNKNOWN;
+  ESL_SQFILE     *sqfp    = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_ALPHABET   *abc     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_GMX         *fwd     = NULL;
+  P7_GMX         *bck     = NULL;
+  P7_DOMAINDEF   *ddef    = NULL;
+  P7_ALIDISPLAY  *ad      = NULL;
+  float           overall_sc, sc;
+  int             d;
+  int             i,j;
+  int             status;
+
+  /* Read in one HMM */
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  /* Read in one sequence */
+  sq     = esl_sq_CreateDigital(abc);
+  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) p7_Fail("No such file.");
+  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
+  esl_sqfile_Close(sqfp);
+
+  /* Configure a profile from the HMM */
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, sq->n);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+
+  /* allocate the domain definition object */
+  ddef = p7_domaindef_Create(r);
+
+  /* allocate DP matrices for forward and backward */
+  fwd = p7_gmx_Create(gm->M, sq->n);
+  bck = p7_gmx_Create(gm->M, sq->n);
+
+  /* run Forward and Backward */
+  p7_FLogsumInit();
+  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
+  p7_GBackward(sq->dsq, sq->n, gm, bck, &sc); 
+
+  printf("Overall raw likelihood score: %.2f bits\n", overall_sc);
+
+  /* define domain structure */
+  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
+
+  /* retrieve and display results */
+  for (d = 0; d < ddef->ndom; d++)
+    {
+      p7_domaindef_Fetch(ddef, d, &i, &j, &sc, &ad);
+      printf("domain %-4d : %4d %4d  %6.2f\n", d+1, i, j, sc);
+      p7_alidisplay_Print(stdout, ad, 50, 120);
+      p7_alidisplay_Destroy(ad);
+    }
+
+  p7_domaindef_Destroy(ddef);
+  p7_gmx_Destroy(fwd);
+  p7_gmx_Destroy(bck);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_sq_Destroy(sq);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7DOMAINDEF_EXAMPLE*/
+
+
+#ifdef p7DOMAINDEF_EXAMPLE2
+/* gcc -o domaindef_example2 -g -Wall -I../easel -L../easel -I. -L. -Dp7DOMAINDEF_EXAMPLE2 p7_domaindef.c -lhmmer -leasel -lm
+ * ./domaindef_example2 <hmmfile> 
+ */
+#include "p7_config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_alphabet.h"
+#include "esl_stopwatch.h"
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-N",        eslARG_INT,   "1000", NULL, NULL,  NULL,  NULL, NULL, "number of sampled sequences",                      0 },
+  { "-L",        eslARG_INT,    "400", NULL, NULL,  NULL,  NULL, NULL, "length config for the profile",                    0 },
+  { "-V",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "find domains by Viterbi parsing",                  0 },
+  { "-b",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "baseline timing - no domain processing",           0 },
+  { "-v",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "be more verbose (show per sequence results)",      0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of domain definition by posterior sampling";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_ALPHABET   *abc     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_TRACE       *tr      = NULL;
+  P7_GMX         *fwd     = NULL;
+  P7_GMX         *bck     = NULL;
+  P7_DOMAINDEF   *ddef    = NULL;
+  int   N           = esl_opt_GetInteger(go, "-N");
+  int   L0          = esl_opt_GetInteger(go, "-L");
+  int   do_vit      = esl_opt_GetBoolean(go, "-V");
+  int   do_baseline = esl_opt_GetBoolean(go, "-b");
+  int   be_verbose  = esl_opt_GetBoolean(go, "-v");
+  float           overall_sc, sc;
+  int             idx;
+  int             tot_true, tot_found;
+
+  /* Read in one HMM */
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  /* Configure a profile from the HMM */
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, L0);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, L0, p7_LOCAL);
+
+  /* Other initial allocations */
+  sq   = esl_sq_CreateDigital(abc);
+  ddef = p7_domaindef_Create(r);
+  fwd  = p7_gmx_Create(gm->M, L0);
+  bck  = p7_gmx_Create(gm->M, L0);
+  tr   = p7_trace_Create();
+  p7_FLogsumInit();
+
+  tot_true = tot_found = 0;
+  esl_stopwatch_Start(w);
+  for (idx = 0; idx < N; idx++)
+    {
+      p7_ReconfigLength(gm, L0);
+      p7_bg_SetLength(bg, L0);
+      p7_ProfileEmit(r, hmm, gm, bg, sq, tr); /* sample a sequence from the profile */
+      p7_trace_Index(tr);                      /* tr->ndom is the "true" domain number emitted */
+      tot_true += tr->ndom;
+
+      p7_ReconfigLength(gm, sq->n);
+      p7_bg_SetLength(bg, sq->n);
+      p7_gmx_GrowTo(fwd, gm->M, sq->n);
+      p7_gmx_GrowTo(bck, gm->M, sq->n);
+
+      if (do_vit) 
+	{
+	  p7_GViterbi (sq->dsq, sq->n, gm, fwd, &overall_sc); 
+	  if (! do_baseline)
+	    p7_domaindef_ByViterbi(gm, sq, fwd, bck, ddef);
+	}
+      else
+	{
+	  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
+	  if (! do_baseline) {
+	    p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
+	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
+	  }
+	}
+
+      tot_found += ddef->ndom;
+      if (be_verbose) 
+	printf("true: %d   found: %d\n", tr->ndom, ddef->ndom);
+
+      p7_trace_Reuse(tr);
+      p7_domaindef_Reuse(ddef);
+    }
+  esl_stopwatch_Stop(w);
+
+  printf("Total domains: %d\n", tot_true);
+  printf("Total found:   %d\n", tot_found);
+  printf("Accuracy:      %.2f%%\n", 100. * (double) tot_found / (double) tot_true);
+  esl_stopwatch_Display(stdout, w, "CPU time:   ");
+
+  p7_domaindef_Destroy(ddef);
+  p7_gmx_Destroy(fwd);
+  p7_gmx_Destroy(bck);
+  p7_profile_Destroy(gm);
+  p7_trace_Destroy(tr);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_sq_Destroy(sq);
+  esl_stopwatch_Destroy(w);
+  esl_randomness_Destroy(r);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7DOMAINDEF_EXAMPLE2*/
+

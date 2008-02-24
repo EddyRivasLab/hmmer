@@ -1,4 +1,4 @@
-/* HMMER's standard implementation of the DP algorithms.
+/* HMMER's standard implementation of the DPdp algorithms.
  * 
  * This implementation is modified from an optimized implementation
  * contributed by Jeremy D. Buhler (Washington University in

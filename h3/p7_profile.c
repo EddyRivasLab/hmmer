@@ -97,6 +97,7 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* Set remaining info  */
   gm->mode        = p7_NO_MODE;
+  gm->L           = 0;
   gm->allocM      = allocM;
   gm->M           = 0;
   gm->nj          = 0.0f;
@@ -139,6 +140,7 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(src->xsc[x], p7P_NXTRANS,       dst->xsc[x]);
 
   dst->mode        = src->mode;
+  dst->L           = src->L;
   dst->allocM      = src->allocM;
   dst->M           = src->M;
   dst->nj          = src->nj;
@@ -232,8 +234,9 @@ p7_profile_Reuse(P7_PROFILE *gm)
       
   /* reset some other things, but leave the rest alone. */
   gm->mode = p7_NO_MODE;
+  gm->L    = 0;
   gm->M    = 0;
-  gm->nj   = 0.0;
+  gm->nj   = 0.0f;
 
   return eslOK;
 }

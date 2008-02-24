@@ -415,6 +415,7 @@ p7_spensemble_Destroy(P7_SPENSEMBLE *sp)
   if (sp->assignment != NULL) free(sp->assignment);
   if (sp->epc        != NULL) free(sp->epc);
   if (sp->sigc       != NULL) free(sp->sigc);
+  if (sp->prob       != NULL) free(sp->prob);
   free(sp);
 }  
 

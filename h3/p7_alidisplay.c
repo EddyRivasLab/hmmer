@@ -46,7 +46,7 @@
  *            in the data.
  */
 P7_ALIDISPLAY *
-p7_alidisplay_Create(P7_TRACE *tr, int which, P7_PROFILE *gm, ESL_SQ *sq)
+p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq)
 {
   P7_ALIDISPLAY *ad       = NULL;
   char          *Alphabet = gm->abc->sym;

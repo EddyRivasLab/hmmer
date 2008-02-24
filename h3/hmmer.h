@@ -10,9 +10,10 @@
  *    8. P7_SPENSEMBLE:  segment pair ensembles for domain locations
  *    9. P7_ALIDISPLAY:  an alignment formatted for printing
  *   10. P7_TOPHITS:     ranking lists of top-scoring hits
- *   11. Inclusion of the architecture-specific optimized implementation.
- *   12. Declaration of functions in HMMER's exposed API.
- *   13. Copyright and license information.
+ *   11. P7_DOMAINDEF:   reusably managing workflow in annotating domains
+ *   12. Inclusion of the architecture-specific optimized implementation.
+ *   13. Declaration of functions in HMMER's exposed API.
+ *   14. Copyright and license information.
  * 
  * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
  * SVN $Id$
@@ -46,6 +47,7 @@
 #define p7_UNIGLOCAL 4		/* unihit glocal: "s" mode      */
 
 #define p7_IsLocal(mode)  (mode == p7_LOCAL || mode == p7_UNILOCAL)
+#define p7_IsMulti(mode)  (mode == p7_LOCAL || mode == p7_GLOCAL)
 
 
 /*****************************************************************
@@ -199,6 +201,7 @@ typedef struct p7_profile_s {
   float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [NECJ][LOOP,MOVE] */
 
   int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */ 
+  int     L;		/* current configured target seq length                    */
   int     allocM;	/* max # of nodes allocated in this structure              */
   int     M;		/* number of nodes in the model                            */
   float   nj;		/* expected # of uses of J; precalculated from loop config */
@@ -545,7 +548,7 @@ typedef struct p7_domaindef_s {
 
 
 /*****************************************************************
- * 11. The optimized implementation.
+ * 12. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
 #include "impl_sse.h"
@@ -556,7 +559,7 @@ typedef struct p7_domaindef_s {
 #endif
 
 /*****************************************************************
- * 12. Other routines in HMMER's exposed API.
+ * 13. Other routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -619,7 +622,9 @@ extern int   p7_ILogsum(int s1, int s2);
 
 /* modelconfig.c */
 extern int p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int mode);
-extern int p7_ReconfigLength(P7_PROFILE *gm, int L);
+extern int p7_ReconfigLength  (P7_PROFILE *gm, int L);
+extern int p7_ReconfigMultihit(P7_PROFILE *gm, int L);
+extern int p7_ReconfigUnihit  (P7_PROFILE *gm, int L);
 
 /* modelstats.c */
 extern double p7_MeanMatchInfo           (const P7_HMM *hmm, const P7_BG *bg);
@@ -644,7 +649,7 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 
 
 /* p7_alidisplay.c */
-extern P7_ALIDISPLAY *p7_alidisplay_Create(P7_TRACE *tr, int which, P7_PROFILE *gm, ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth);
 
@@ -658,12 +663,12 @@ extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *r
 
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
-extern int           p7_domaindef_Fetch  (P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY *opt_ad);
+extern int           p7_domaindef_Fetch  (P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY **opt_ad);
 extern int           p7_domaindef_Reuse  (P7_DOMAINDEF *ddef);
 extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
-extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
-extern int p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
+extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
+extern int p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
 
 
 /* p7_gmx.c */
