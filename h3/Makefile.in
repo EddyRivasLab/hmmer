@@ -51,6 +51,7 @@ OBJS =  build.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
+	null2.o\
 	seqmodel.o\
 	p7_alidisplay.o\
 	p7_bg.o\

@@ -577,9 +577,9 @@ extern int p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, cons
 extern int p7_GViterbiScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 
 /* dp_optaccuracy.c */
-extern int p7_PostProb         (int L, const P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp);
-extern int p7_OptimalAccuracyDP(int L, const P7_PROFILE *gm, const P7_GMX *pp,       P7_GMX *gx, float *ret_e);
-extern int p7_OATrace          (int L, const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx, P7_TRACE *tr);
+extern int p7_PosteriorDecoding(int L, const P7_PROFILE *gm, const P7_GMX *fwd,      P7_GMX *bck, P7_GMX *pp);
+extern int p7_OptimalAccuracyDP(int L, const P7_PROFILE *gm, const P7_GMX *pp,       P7_GMX *gx,  float *ret_e);
+extern int p7_OATrace          (int L, const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx,  P7_TRACE *tr);
 
 
 /* emit.c */
@@ -648,6 +648,10 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 #endif /*HAVE_MPI*/
 
 
+/* null2.c */
+extern int p7_Null2(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int L, const P7_GMX *fwd, const P7_GMX *bck);
+
+
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
@@ -665,6 +669,7 @@ extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *r
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
 extern int           p7_domaindef_Fetch  (P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY **opt_ad);
 extern int           p7_domaindef_Reuse  (P7_DOMAINDEF *ddef);
+extern int           p7_domaindef_DumpPosteriors(FILE *ofp, P7_DOMAINDEF *ddef);
 extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
 extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);

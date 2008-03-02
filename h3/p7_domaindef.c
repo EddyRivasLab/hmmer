@@ -282,6 +282,52 @@ p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
 }
 
 
+/* Function:  p7_domaindef_DumpPosteriors()
+ * Synopsis:  Output posteriors that define domain structure to a stream.
+ * Incept:    SRE, Fri Feb 29 08:32:14 2008 [Janelia]
+ *
+ * Purpose:   Output the posterior distributions from <ddef> that are used to
+ *            define domain structure to a stream <ofp>, in xmgrace format.
+ *            
+ *            There are three distributions. The first set is
+ *            <mocc[1..i..L]>, the probability that residue <i> is
+ *            emitted by the core model (is in a domain). The second
+ *            set is <btot[1..i..L]>, the cumulative expected number
+ *            of times that a domain uses a B state (starts) at or
+ *            before position <i>. The third set is <etot[1..i..L]>,
+ *            the cumulative expected number of times that a domain
+ *            uses an E state (ends) at or before position <i>. 
+ *            
+ *            These three fields will only be available after a call
+ *            to domain definition by
+ *            <p7_domaindef_ByPosteriorHeuristics()>.
+ *
+ * Returns:   <eslOK> on success
+ *            
+ * Xref:      J2/126
+ */
+int
+p7_domaindef_DumpPosteriors(FILE *ofp, P7_DOMAINDEF *ddef)
+{
+  int i;
+
+  for (i = 1; i <= ddef->L; i++)
+    fprintf(ofp, "%d %f\n", i, ddef->mocc[i]);
+  fprintf(ofp, "&\n");
+
+  for (i = 1; i <= ddef->L; i++)
+    fprintf(ofp, "%d %f\n", i, ddef->btot[i]);
+  fprintf(ofp, "&\n");
+
+  for (i = 1; i <= ddef->L; i++)
+    fprintf(ofp, "%d %f\n", i, ddef->etot[i]);
+  fprintf(ofp, "&\n");
+
+  return eslOK;
+}
+
+
+
 /* Function:  p7_domaindef_Destroy()
  * Synopsis:  Destroys a <P7_DOMAINDEF>.
  * Incept:    SRE, Fri Jan 25 13:52:46 2008 [Janelia]
@@ -393,7 +439,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
   calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
-  p7_ReconfigUnihit(gm, 0);	                   /* process each domain in unihit L=0 mode                         */
+  p7_ReconfigUnihit(gm, saveL);	                   /* process each domain in unilocal mode                           */
 
   /* That's all we need the original fwd, bck matrices for. 
    * Now we're free to reuse them for subsequent domain calculations.
@@ -415,7 +461,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	    {
 	      p7_ReconfigMultihit(gm, saveL);
 	      region_trace_ensemble(ddef, gm, sq, i, j, fwd, &nc);
-	      p7_ReconfigUnihit(gm, 0);
+	      p7_ReconfigUnihit(gm, saveL);
 	      for (d = 0; d < nc; d++) {
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
 		rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, &ad, &dsc);
@@ -686,14 +732,14 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  * <gm>  : we've reconfigured it to lobal mode, and it's still in
  *         that mode upon return! watch out, caller.
  *            
- * <gx1> : happens to be holding a posterior probability matrix
+ * <gx1> : happens to be holding OA score matrix for the domain
+ *         upon return, but that's not part of the spec; officially
+ *         its contents are "undefined".
+ *
+ * <gx2> : happens to be holding a posterior probability matrix
  *         for the domain upon return, but we're not making that
  *         part of the spec, so caller shouldn't rely on this;
  *         spec just makes its contents "undefined".
- *         
- * <gx2> : happens to be holding OA score matrix for the domain
- *         upon return, but that's not part of the spec; officially
- *         its contents are "undefined".
  */
 static int
 rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, int i, int j, 
@@ -707,14 +753,16 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7
   p7_GForward (sq->dsq + i-1, L, gm, gx1, &fsc);
   p7_GBackward(sq->dsq + i-1, L, gm, gx2, &sc);
 
-  p7_PostProb(L, gm, gx1, gx2, gx1);          /* <gx1> is now overwritten with posterior probabilities */
+  p7_Null2(gm, sq->dsq + i-1, L, ddef->L, gx1, gx2);
+
+  p7_PosteriorDecoding(L, gm, gx1, gx2, gx2);          /* <gx2> is now overwritten with posterior probabilities */
 
   /* This is the info we need for a post-prob-oriented null2 correction,
    * and this is where the null2 correction call will go in the near future
    */
 
-  p7_OptimalAccuracyDP(L, gm, gx1, gx2, &sc); /* <gx2> is now overwritten with OA scores */
-  p7_OATrace(L, gm, gx1, gx2, ddef->tr);      /* <tr>'s seq coords are all offset by i-1 now, relative to original dsq  */
+  p7_OptimalAccuracyDP(L, gm, gx2, gx1, &sc); /* <gx1> is now overwritten with OA scores */
+  p7_OATrace(L, gm, gx2, gx1, ddef->tr);      /* <tr>'s seq coords are all offset by i-1 now, relative to original dsq  */
   
   for (z = 0; z < ddef->tr->N; z++)
     if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1; /* that hacks the trace's sq coords to be correct w.r.t. original dsq */
@@ -753,6 +801,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--occp",    eslARG_OUTFILE, NULL, NULL, NULL,  NULL,  NULL, NULL, "output posterior occupancies for xmgrace to <f>",  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -778,6 +827,8 @@ main(int argc, char **argv)
   P7_GMX         *bck     = NULL;
   P7_DOMAINDEF   *ddef    = NULL;
   P7_ALIDISPLAY  *ad      = NULL;
+  char           *ofile   = NULL;
+  FILE           *ofp     = NULL;
   float           overall_sc, sc;
   int             d;
   int             i,j;
@@ -816,7 +867,7 @@ main(int argc, char **argv)
   p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
   p7_GBackward(sq->dsq, sq->n, gm, bck, &sc); 
 
-  printf("Overall raw likelihood score: %.2f bits\n", overall_sc);
+  printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
 
   /* define domain structure */
   p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
@@ -826,8 +877,16 @@ main(int argc, char **argv)
     {
       p7_domaindef_Fetch(ddef, d, &i, &j, &sc, &ad);
       printf("domain %-4d : %4d %4d  %6.2f\n", d+1, i, j, sc);
+
       p7_alidisplay_Print(stdout, ad, 50, 120);
       p7_alidisplay_Destroy(ad);
+    }
+
+  if ((ofile = esl_opt_GetString(go, "--occp")) != NULL) 
+    {
+      if ((ofp = fopen(ofile, "w")) == NULL) p7_Fail("Failed to open output file %s\n", ofile);
+      p7_domaindef_DumpPosteriors(ofp, ddef);
+      fclose(ofp);
     }
 
   p7_domaindef_Destroy(ddef);

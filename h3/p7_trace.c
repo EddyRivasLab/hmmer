@@ -641,37 +641,35 @@ int
 p7_trace_Index(P7_TRACE *tr)
 {
   int z;
-  int ndom = 0;
   int status;
 
+  tr->ndom = 0;
   for (z = 0; z < tr->N; z++)
     {
       switch (tr->st[z]) {
       case p7T_B:
 	if ((status = p7_trace_GrowIndex(tr)) != eslOK) goto ERROR;
-	tr->tfrom[ndom]   = z;
-	tr->sqfrom[ndom]  = 0;
-	tr->hmmfrom[ndom] = 0;
+	tr->tfrom[tr->ndom]   = z;
+	tr->sqfrom[tr->ndom]  = 0;
+	tr->hmmfrom[tr->ndom] = 0;
 	break;
 
       case p7T_M:
-	if (tr->sqfrom[ndom]  == 0) tr->sqfrom[ndom]  = tr->i[z];
-	if (tr->hmmfrom[ndom] == 0) tr->hmmfrom[ndom] = tr->k[z];
-	tr->sqto[ndom]  = tr->i[z];
-	tr->hmmto[ndom] = tr->k[z];
+	if (tr->sqfrom[tr->ndom]  == 0) tr->sqfrom[tr->ndom]  = tr->i[z];
+	if (tr->hmmfrom[tr->ndom] == 0) tr->hmmfrom[tr->ndom] = tr->k[z];
+	tr->sqto[tr->ndom]  = tr->i[z];
+	tr->hmmto[tr->ndom] = tr->k[z];
 	break;
 
       case p7T_E:
-	tr->tto[ndom]   = z;
-	ndom++;
+	tr->tto[tr->ndom]   = z;
+	tr->ndom++;
 	break;
       }
     }
-  tr->ndom = ndom;
   return eslOK;
   
  ERROR:
-  tr->ndom = 0;
   return status;
 }
 
