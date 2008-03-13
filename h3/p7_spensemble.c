@@ -289,8 +289,14 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
   if ((status = esl_cluster_SingleLinkage(sp->sp, sp->n, sizeof(struct p7_spcoord_s), link_spsamples, (void *) &param,
 					  sp->workspace, sp->assignment, &(sp->nc))) != eslOK) goto ERROR;
 
+  /* Look at each cluster in turn; most will be too small to worry about. */
   for (c = 0; c < sp->nc; c++)
     {
+      /* Calculate posterior probability of each cluster. 
+       * The extra wrinkle here is that this probability is w.r.t the number of sampled traces;
+       * but the clusters might contain more than one seg pair from a given trace.
+       * That's what the idx_of_last logic is doing, avoiding double-counting.
+       */
       idx_of_last = -1;
       for (ninc = 0, h = 0; h < sp->n; h++) {
 	if (sp->assignment[h] == c) {
@@ -298,8 +304,10 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
 	  idx_of_last = sp->sp[h].idx;
 	}
       }
+      /* Reject low probability clusters: */
       if ((float) ninc / (float) sp->nsamples < min_posterior) continue;
 
+      /* Find the maximum extent of all seg pairs in this cluster in i,j k,m */
       for (imin = 0, h = 0; h < sp->n; h++) 
 	if (sp->assignment[h] == c) 
 	  {
@@ -316,6 +324,7 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
 	    }
 	  }
       
+      /* Set up a window in which we can examine the end point distributions for i,j,k,m in turn, independently */
       cwindow_width = ESL_MAX(ESL_MAX(imax-imin+1, jmax-jmin+1),
 			      ESL_MAX(kmax-kmin+1, mmax-mmin+1));
       if (cwindow_width > sp->epc_alloc) {
@@ -326,21 +335,25 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
 	      
       epc_threshold = (int) ceilf((float) ninc * min_endpointp); /* round up.  freq of >= epc_threshold means we're >= min_p */
 
+      /* Identify the leftmost i that has enough endpoints. */
       esl_vec_ISet(sp->epc, imax-imin+1, 0);
       for (h = 0; h < sp->n; h++) if (sp->assignment[h] == c) sp->epc[sp->sp[h].i-imin]++;
       for (best_i = imin; best_i <= imax; best_i++) if (sp->epc[best_i-imin] >= epc_threshold) break;
       if (best_i > imax) best_i = imin + esl_vec_IArgMax(sp->epc, imax-imin+1);
 
+      /* Identify the leftmost k that has enough endpoints */
       esl_vec_ISet(sp->epc, kmax-kmin+1, 0);
       for (h = 0; h < sp->n; h++) if (sp->assignment[h] == c) sp->epc[sp->sp[h].k-kmin]++;
       for (best_k = kmin; best_k <= kmax; best_k++) if (sp->epc[best_k-kmin] >= epc_threshold) break;
       if (best_k > kmax) best_k = kmin + esl_vec_IArgMax(sp->epc, kmax-kmin+1);
 
+      /* Identify the rightmost j that has enough endpoints. */
       esl_vec_ISet(sp->epc, jmax-jmin+1, 0);
       for (h = 0; h < sp->n; h++) if (sp->assignment[h] == c) sp->epc[sp->sp[h].j-jmin]++;
       for (best_j = jmax; best_j >= jmin; best_j--) if (sp->epc[best_j-jmin] >= epc_threshold) break;
       if (best_j < jmin) best_j = jmin + esl_vec_IArgMax(sp->epc, jmax-jmin+1);
 
+      /* Identify the rightmost m that has enough endpoints. */
       esl_vec_ISet(sp->epc, mmax-mmin+1, 0);
       for (h = 0; h < sp->n; h++) if (sp->assignment[h] == c) sp->epc[sp->sp[h].m-mmin]++;
       for (best_m = mmax; best_m >= mmin; best_m--) if (sp->epc[best_m-mmin] >= epc_threshold) break;

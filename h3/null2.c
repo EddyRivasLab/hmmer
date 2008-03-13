@@ -85,13 +85,14 @@ p7_Null2(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int L, const P7_GMX *
   omega = 1.0f / 256.0f;
   nsc   = -1. * p7_FLogsum( log (1. - omega), log(omega) + nsc);
 
-  printf("nsc = %.2f    (the null2 correction; i.e. after logsum)\n\n", nsc);
+  /* printf("nsc = %.2f    (the null2 correction; i.e. after logsum)\n\n", nsc); */
 
   /* Add in the corrections to s_d, the per-domain score */
   nsc += log (3.0 / ((float) L + 3.));          /* or N->B score, if <gm> were in L=L mode */
   nsc -= eslCONST_LOG2;		                /* or E->J/E->C score, if <gm> were in multihit mode */
   nsc -= (float) Ld * log( (float) L / (float) (L+3)); /* or Ld * NN/CC/JJ score, if <gm> were in L=L mode */
 
-  printf("total correction to raw domain score: %.2f\n\n", nsc);
+  /* printf("total correction to raw domain score: %.2f\n\n", nsc); */
+  return eslOK;
 }
 

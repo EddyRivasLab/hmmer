@@ -100,6 +100,12 @@ p7_domaindef_Create(ESL_RANDOMNESS *r)
   ddef->nalloc = nalloc;
   ddef->ndom   = 0;
 
+  ddef->nexpected  = 0.0;
+  ddef->nregions   = 0;
+  ddef->nclustered = 0;
+  ddef->noverlaps  = 0;
+  ddef->nenvelopes = 0;
+
   /* default thresholds */
   ddef->rt1           = 0.25;
   ddef->rt2           = 0.10;
@@ -275,6 +281,12 @@ p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
   ddef->ndom = 0;
   ddef->L    = 0;
 
+  ddef->nexpected  = 0.0;
+  ddef->nregions   = 0;
+  ddef->nclustered = 0;
+  ddef->noverlaps  = 0;
+  ddef->nenvelopes = 0;
+
   p7_spensemble_Reuse(ddef->sp);
   p7_trace_Reuse(ddef->tr);	/* probable overkill; should already have been called */
   p7_trace_Reuse(ddef->gtr);	/* likewise */
@@ -434,17 +446,19 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
   int triggered;
   int d;
   int i2,j2;
+  int last_j2;
   int saveL = gm->L;
   int  nc;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
   calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
-  p7_ReconfigUnihit(gm, saveL);	                   /* process each domain in unilocal mode                           */
+  ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
   /* That's all we need the original fwd, bck matrices for. 
    * Now we're free to reuse them for subsequent domain calculations.
    */
 
+  p7_ReconfigUnihit(gm, saveL);	                   /* process each domain in unilocal mode                           */
   i     = -1;
   triggered = FALSE;
   for (j = 1; j <= sq->n; j++)
@@ -457,13 +471,27 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	} 
       else if (ddef->mocc[j] - (ddef->etot[j] - ddef->etot[j-1])  <  ddef->rt2) 
 	{
+	  /* We have a region i..j to evaluate. */
+	  ddef->nregions++;
+
 	  if (is_multidomain_region(ddef, i, j))
 	    {
+	      /* This region appears to contain more than one domain, so we have to 
+               * resolve it by cluster analysis of posterior trace samples, to define
+               * one or more domain envelopes.
+	       */
+	      ddef->nclustered++;
+
 	      p7_ReconfigMultihit(gm, saveL);
 	      region_trace_ensemble(ddef, gm, sq, i, j, fwd, &nc);
 	      p7_ReconfigUnihit(gm, saveL);
+	      last_j2 = 0;
 	      for (d = 0; d < nc; d++) {
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
+		if (i2 <= last_j2) ddef->noverlaps++;
+		last_j2 = j2;
+
+		ddef->nenvelopes++;
 		rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, &ad, &dsc);
 		p7_domaindef_Add(ddef, i2, j2, dsc, ad);
 	      }
@@ -472,6 +500,8 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	    }
 	  else 
 	    {
+	      /* The region looks simple, single domain; convert the region to an envelope. */
+	      ddef->nenvelopes++;
 	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, &ad, &dsc);
 	      p7_domaindef_Add(ddef, i, j, dsc, ad);
 	    }
@@ -691,9 +721,9 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
 /* rescore_isolated_domain()
  * SRE, Fri Feb  8 09:18:33 2008 [Janelia]
  *
- * We have isolated a single domain from <i>..<j> in sequence <sq>,
- * and we want to score it in isolation and obtain an alignment
- * display for it.
+ * We have isolated a single domain's envelope from <i>..<j> in
+ * sequence <sq>, and now we want to score it in isolation and obtain
+ * an alignment display for it.
  * 
  * (Later, we can add up all the individual domain scores from this
  * seq into a new per-seq score, to compare to the original per-seq

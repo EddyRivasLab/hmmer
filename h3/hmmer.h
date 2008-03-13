@@ -462,23 +462,19 @@ typedef struct p7_hit_s {
   double sortkey;		/* number to sort by; big is better */
   float  score;			/* score of the hit                 */
   double pvalue;		/* P-value of the hit               */
-  float  mothersc;		/* score of whole sequence          */
-  double motherp;		/* P-value of whole sequence        */
-  long   sqfrom;		/* start position in seq (1..N)     */
-  long   sqto;			/* end position in seq (1..N)       */
-  long   sqlen;			/* length of sequence (N)           */
-  int    hmmfrom;		/* start position in HMM (1..M)     */
-  int    hmmto;			/* end position in HMM (1..M)       */
-  int    hmmlen;		/* length of HMM (M)                */
-  int    domidx;		/* index of this domain             */
-  int    ndom;			/* total # of domains in this seq   */
-  P7_ALIDISPLAY *ali;       	/* ptr to optional alignment info   */
+
+  int    ndom;		/* total # of domains in this seq   */
+  float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
+  int    nregions;	/* number of regions evaluated */
+  int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */
+  int    noverlaps;	/* number of envelopes defined in ensemble clustering that overlap w/ prev envelope */
+  int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
 } P7_HIT;
 
 
 /* Structure: P7_TOPHITS
  * 
- * Array of high scoring hits, suitable for efficient sorting and
+
  * merging when we prepare to output results. "hit" list is NULL and
  * unavailable until after we do a sort.  
  */
@@ -522,11 +518,6 @@ typedef struct p7_domaindef_s {
   P7_TRACE       *tr;		/* reusable space for a trace of a domain                  */
   P7_TRACE       *gtr;		/* reusable space for a traceback of the entire target seq */
 
-  /* storage of the results (domain locations and scores) */
-  struct p7_dom_s { int i; int j; float sc; P7_ALIDISPLAY *ad; } *dcl;
-  int            ndom;
-  int            nalloc;
-
   /* Heuristic thresholds that control the region definition process */
   /* "rt" = "region threshold", for lack of better term  */
   float  rt1;   	/* controls when regions are called. mocc[i] post prob >= dt1 : triggers a region around i */
@@ -540,6 +531,18 @@ typedef struct p7_domaindef_s {
   int    max_diagdiff;	/* 4 means either start or endpoints of two segments must be within <=4 diagonals of each other */
   float  min_posterior;	/* 0.25 means a cluster must have >= 25% posterior prob in the sample to be reported            */
   float  min_endpointp;	/* 0.02 means choose widest endpoint with post prob of at least 2%                              */
+
+  /* storage of the results (domain locations and scores) */
+  struct p7_dom_s { int i; int j; float sc; P7_ALIDISPLAY *ad; } *dcl;
+  int    ndom;		/* number of domains defined, in the end.         */
+  int    nalloc;        /* number of domain structures allocated in <dcl> */
+
+  /* Additional results storage */
+  float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
+  int    nregions;	/* number of regions evaluated */
+  int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */
+  int    noverlaps;	/* number of envelopes defined in ensemble clustering that overlap w/ prev envelope */
+  int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
 
 } P7_DOMAINDEF;
 
@@ -760,6 +763,7 @@ extern void    p7_spensemble_Destroy(P7_SPENSEMBLE *sp);
 /* p7_tophits.c */
 extern P7_TOPHITS *p7_tophits_Create(void);
 extern int         p7_tophits_Grow(P7_TOPHITS *h);
+extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
 extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  char *name, char *acc, char *desc, 
 				  double sortkey, 

@@ -1,0 +1,13 @@
+
+When you check HMMER out from Subversion for the first time , there's
+some additional stuff you need to do one-time-only in your new working
+directory:
+
+   autoconf
+   (cd easel; autoconf)
+   ln -s easel/aclocal.m4 aclocal.m4
+
+
+
+
+

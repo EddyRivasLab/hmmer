@@ -34,7 +34,6 @@ static ESL_OPTIONS options[] = {
   { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSP filter threshold: promote hits w/ P < F1",      2 },
   { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit filter threshold: promote hits w/ P < F2",      2 },
   { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd filter threshold: promote hits w/ P < F3",      2 },
-  { "--FX",      eslARG_REAL, "1e-12", NULL, NULL,      NULL,  NULL,  NULL, "Fwd/Vit choice threshold: hits w/ P < FX go to V",  2 },
 
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",              3 },
   { "--textw",   eslARG_INT,    "120", NULL, NULL,      NULL,  NULL,  NULL, "sets maximum ASCII text output line length",         3 },
@@ -65,6 +64,10 @@ struct cfg_s {
   int              my_rank;
   int              nproc;
   int              do_stall;
+
+  /* Workers only */
+  ESL_RANDOMNESS  *r;		/* RNG is used for traceback sampling */
+  P7_DOMAINDEF    *ddef;	/* a domain definition workbook       */
 
   /* Master only (i/o streams)                                          */
   P7_HMMFILE      *hfp;     /* open HMM file                            */  
@@ -211,6 +214,10 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->nproc    = 0;
   cfg->do_stall = esl_opt_GetBoolean(go, "--stall");
 
+  /* These are initialized later in the workers only: */
+  cfg->r        = NULL;
+  cfg->ddef     = NULL;
+
   /* These are initialized later in the master only: */
   cfg->hfp      = NULL;
   cfg->sqfp     = NULL;
@@ -258,6 +265,24 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 }
 
 
+/* init_worker_cfg()
+ * 
+ * As with the init_master_cfg, we may be within MPI now, so we
+ * can't handle errors by dumping a message and exiting; 
+ * we have to delay shutdown until we get MPI cleaned up. 
+ * So, errors return via the ESL_FAIL mechanism.
+ */
+static int
+init_worker_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
+{
+  if ((cfg->r    = esl_randomness_Create(42))   == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
+  if ((cfg->ddef = p7_domaindef_Create(cfg->r)) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
+  return eslOK;
+}
+
+
+
+
 static void
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
@@ -266,12 +291,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_OPROFILE     *om      = NULL;     /* optimized profiile                      */
   ESL_SQ          *sq      = NULL;      /* target sequence                        */
   P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
-  P7_GMX          *gx      = NULL;     /* DP matrix                               */
+  P7_GMX          *fwd     = NULL;     /* DP matrix                               */
+  P7_GMX          *bck     = NULL;     /* DP matrix                               */
   P7_OMX          *ox      = NULL;     /* optimized DP matrix                     */
+  P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   double           F1      = esl_opt_GetReal(go, "--F1"); /* MSPFilter threshold: must be < F1 to go on */
   double           F2      = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold */
   double           F3      = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold */
-  double           FF      = esl_opt_GetReal(go, "--FX"); /* Viterbi/Forward postprocessing threshold */
   float            usc, vfsc, ffsc;    /* filter scores                           */
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
@@ -279,11 +305,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
 
-  tr = p7_trace_Create();
-  gx = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
-  ox = p7_omx_Create(200);
+  tr  = p7_trace_Create();
+  fwd = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
+  bck = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
+  ox  = p7_omx_Create(200);
   
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
+  if ((status = init_worker_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
  
   while ((hstatus = p7_hmmfile_Read(cfg->hfp, &(cfg->abc), &hmm)) == eslOK) 
     {
@@ -331,26 +359,35 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    }
 
 	  /* We're past the filters. Everything remaining is almost certainly a hit */
-	  p7_gmx_GrowTo(gx, hmm->M, sq->n); /* realloc DP matrix as needed */
+	  p7_gmx_GrowTo(fwd, hmm->M, sq->n); /* realloc DP matrices as needed */
+	  p7_gmx_GrowTo(bck, hmm->M, sq->n); 
 	  p7_ReconfigLength(gm, sq->n);
-	  if (P >= FF) {
-	    p7_GForward(sq->dsq, sq->n, gm, gx, &final_sc);         
-	    final_sc = ( final_sc-nullsc) / eslCONST_LOG2;
-	    P  = esl_exp_surv (final_sc,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-	  } else {
-	    p7_GViterbi(sq->dsq, sq->n, gm, gx, &final_sc);         
-	    final_sc = ( final_sc-nullsc) / eslCONST_LOG2;
-	    P  = esl_gumbel_surv (final_sc,  hmm->evparam[p7_MU], hmm->evparam[p7_LAMBDA]);
-	  }
+	  
+	  p7_GForward(sq->dsq, sq->n, gm, fwd, &final_sc);         
+	  final_sc = ( final_sc-nullsc) / eslCONST_LOG2;
+	  P  = esl_exp_surv (final_sc,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 
-	  /* Register the hit, for later sorting and output. */
-	  p7_tophits_Add(cfg->hitlist,
-			 sq->name, sq->acc, sq->desc,
-			 -log(P), final_sc, P, final_sc, P, 
-			 0, 0, 0,
-			 0, 0, 0,
-			 0, 0, NULL);
+	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
+	  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, cfg->ddef);
+
+
+	  /* Store the per-seq hit output information */
+	  p7_tophits_CreateNextHit(cfg->hitlist, &hit);
+	  if ((status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
+	  if ((status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+	  if ((status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+	  hit->sortkey    = -log(P);
+	  hit->score      = final_sc;
+	  hit->pvalue     = P;
+	  hit->ndom       = cfg->ddef->ndom;
+	  hit->nexpected  = cfg->ddef->nexpected;
+	  hit->nregions   = cfg->ddef->nregions;
+	  hit->nclustered = cfg->ddef->nclustered;
+	  hit->noverlaps  = cfg->ddef->noverlaps;
+	  hit->nenvelopes = cfg->ddef->nenvelopes;
+
 	  esl_sq_Reuse(sq);
+	  p7_domaindef_Reuse(cfg->ddef);
 	}
       if (sstatus != eslEOF) p7_Fail("Sequence file %s has a format problem: read failed at line %d:\n%s\n",
 				     cfg->seqfile, cfg->sqfp->linenumber, cfg->sqfp->errbuf);     
@@ -367,7 +404,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile);
 
-  p7_gmx_Destroy(gx);
+  p7_gmx_Destroy(fwd);
+  p7_gmx_Destroy(bck);
   p7_omx_Destroy(ox);
   p7_trace_Destroy(tr);
   esl_sq_Destroy(sq);
@@ -389,19 +427,25 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 
   fprintf(cfg->ofp, "Scores for complete sequences (score includes all domains):\n");
 
-  fprintf(cfg->ofp, "%-*s %-*s %7s %10s %3s\n", namew, "Sequence", descw, "Description", "Score", "E-value", " N ");
-  fprintf(cfg->ofp, "%-*s %-*s %7s %10s %3s\n", namew, "--------", descw, "-----------", "-----", "-------", "---");
+  fprintf(cfg->ofp, "%7s %10s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "Score", "E-value", " N ", " exp ", "reg", "clu", " ov", "env", namew, "Sequence", descw, "Description");
+  fprintf(cfg->ofp, "%7s %10s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "-----", "-------", "---", "-----", "---", "---", "---", "---", namew, "--------", descw, "-----------");
 
   for (h = 0; h < hitlist->N; h++)
     {
       E = (double) cfg->nseq * hitlist->hit[h]->pvalue;
 
-      fprintf(cfg->ofp, "%-*s %-*.*s %7.1f %10.2g %3d\n",
-	      namew,        hitlist->hit[h]->name,
-	      descw, descw, hitlist->hit[h]->desc,
+      fprintf(cfg->ofp, "%7.1f %10.2g %3d %5.1f %3d %3d %3d %3d %-*s %-*.*s\n",
 	      hitlist->hit[h]->score,
 	      hitlist->hit[h]->pvalue * (double) cfg->nseq,
-	      hitlist->hit[h]->ndom);
+	      hitlist->hit[h]->ndom,
+	      hitlist->hit[h]->nexpected,
+	      hitlist->hit[h]->nregions,
+	      hitlist->hit[h]->nclustered,
+	      hitlist->hit[h]->noverlaps,
+	      hitlist->hit[h]->nenvelopes,
+	      namew,        hitlist->hit[h]->name,
+	      descw, descw, hitlist->hit[h]->desc);
+
     }
   return eslOK;
 }

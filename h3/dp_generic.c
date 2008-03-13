@@ -72,12 +72,12 @@
  *            L      - length of dsq
  *            gm     - profile. 
  *            gx     - DP matrix with room for an MxL alignment
- *            ret_sc - RETURN: Viterbi lod score in nats
+ *            opt_sc - optRETURN: Viterbi lod score in nats
  *           
  * Return:   <eslOK> on success.
  */
 int
-p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc)
+p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
 {
   float const *tsc  = gm->tsc;
   float      **dp   = gx->dp;
@@ -165,7 +165,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
     }
   
   /* T state (not stored) */
-  *ret_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
 
@@ -192,12 +192,12 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  *            L      - length of dsq
  *            gm     - profile. 
  *            gx     - DP matrix with room for an MxL alignment
- *            ret_sc - RETURN: Forward lod score in nats
+ *            opt_sc - optRETURN: Forward lod score in nats
  *           
  * Return:    <eslOK> on success.
  */
 int
-p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc)
+p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
 {
   float const *tsc  = gm->tsc;
   float      **dp   = gx->dp;
@@ -282,7 +282,7 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 				XMX(i,  p7G_J) + gm->xsc[p7P_J][p7P_MOVE]);
     }
 
-  *ret_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
 
@@ -307,12 +307,12 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  *            L      - length of dsq
  *            gm     - profile 
  *            gx     - DP matrix with room for an MxL alignment
- *            ret_sc - RETURN: Backward lod score in nats
+ *            opt_sc - optRETURN: Backward lod score in nats
  *           
  * Return:    <eslOK> on success.
  */
 int
-p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc)
+p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
 {
   float const *tsc  = gm->tsc;
   float      **dp   = gx->dp;
@@ -381,7 +381,7 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
 	}
     }
 
-  *ret_sc = XMX(0,p7G_N);
+  if (opt_sc != NULL) *opt_sc = XMX(0,p7G_N);
   return eslOK;
 }
 
@@ -460,7 +460,7 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  *            L            - length of dsq
  *            gm           - profile (can be in any mode)
  *            gx           - DP matrix with room for an MxL alignment
- *            ret_mspscore - RETURN: MSP lod score in nats.
+ *            opt_sc       - optRETURN: MSP lod score in nats.
  *
  * Returns:   <eslOK> on success.
  * 
@@ -476,7 +476,7 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  *            versions.)  
  */            
 int
-p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc)
+p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
 {
   float      **dp    = gx->dp;
   float       *xmx   = gx->xmx;
@@ -510,7 +510,7 @@ p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_
       XMX(i,p7G_N) =          XMX(i-1,p7G_N) + tloop;
       XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i,  p7G_J) + tmove);
     }
-  *ret_sc = XMX(L,p7G_C) + tmove;
+  if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + tmove;
   return eslOK;
 }
 

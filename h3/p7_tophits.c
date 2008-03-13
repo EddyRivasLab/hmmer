@@ -96,6 +96,52 @@ p7_tophits_Grow(P7_TOPHITS *h)
 }
 
 
+/* Function:  
+ * Synopsis:  
+ * Incept:    SRE, Tue Mar 11 08:44:53 2008 [Janelia]
+ *
+ * Purpose:   
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+int
+p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
+{
+  P7_HIT *hit;
+  int     status;
+
+  if ((status = p7_tophits_Grow(h)) != eslOK) return status;
+  
+  hit = &(h->unsrt[h->N]);
+  h->N++;
+  if (h->N >= 2) h->is_sorted = FALSE;
+
+  hit->name       = NULL;
+  hit->acc        = NULL;
+  hit->desc       = NULL;
+  hit->sortkey    = 0.0;
+  hit->score      = 0.0;
+  hit->pvalue     = 0.0;
+
+  hit->ndom       = 0;
+  hit->nexpected  = 0.0;
+  hit->nregions   = 0;
+  hit->nclustered = 0;
+  hit->noverlaps  = 0;
+  hit->nenvelopes = 0;
+
+  *ret_hit = hit;
+  return eslOK;
+}
+
+
+
 /* Function:  p7_tophits_Add()
  * Synopsis:  Add a hit to the top hits list.
  * Incept:    SRE, Fri Dec 28 08:26:11 2007 [Janelia]
@@ -152,17 +198,6 @@ p7_tophits_Add(P7_TOPHITS *h,
   h->unsrt[h->N].sortkey  = sortkey;
   h->unsrt[h->N].score    = score;
   h->unsrt[h->N].pvalue   = pvalue;
-  h->unsrt[h->N].mothersc = mothersc;
-  h->unsrt[h->N].motherp  = motherp;
-  h->unsrt[h->N].sqfrom   = sqfrom;
-  h->unsrt[h->N].sqto     = sqto;
-  h->unsrt[h->N].sqlen    = sqlen;
-  h->unsrt[h->N].hmmfrom  = hmmfrom;
-  h->unsrt[h->N].hmmto    = hmmto;
-  h->unsrt[h->N].hmmlen   = hmmlen;
-  h->unsrt[h->N].domidx   = domidx;
-  h->unsrt[h->N].ndom     = ndom;
-  h->unsrt[h->N].ali      = ali;
   h->N++;
 
   if (h->N >= 2) h->is_sorted = FALSE;

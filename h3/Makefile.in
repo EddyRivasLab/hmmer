@@ -55,6 +55,7 @@ OBJS =  build.o\
 	seqmodel.o\
 	p7_alidisplay.o\
 	p7_bg.o\
+	p7_domaindef.o\
 	p7_gmx.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
