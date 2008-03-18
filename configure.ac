@@ -7,18 +7,18 @@
 # appear here. 
 #
 # reminders to save re-reading autoconf manual for the n'th time:
-#   - output variables:
-#        are defined here as normal shell variables, e.g. FOO="my string"
-#        are made into output variables by calling AC_SUBST(FOO)
-#        any occurrence of @FOO@ in an output file is then substituted
-#        I think this only happens in files we assign w/ AC_CONFIG_FILES;
-#        that's the Makefile.in's.
+#    output variables:
+#      -  are defined here as normal shell variables, e.g. FOO="my string"
+#      -  are made into output variables by calling AC_SUBST(FOO)
+#      -  any occurrence of @FOO@ in an output file is then substituted
+#         I think this only happens in files we assign w/ AC_CONFIG_FILES;
+#         that's the Makefile.in's.
 #
-#   - C preprocessor symbols:
-#        are defined here by calling AC_DEFINE(FOO) or AC_DEFINE(FOO, [42])
-#        then #undef FOO lines in easel.h.in become #define FOO or #define FOO 42
-#        I think this only happens in header files that we assign
-#        w/ AC_CONFIG_HEADERS -- which means, easel.h.in
+#   C preprocessor symbols:
+#      -  are defined here by calling AC_DEFINE(FOO) or AC_DEFINE(FOO, [42])
+#      -  then #undef FOO lines in easel.h.in become #define FOO or #define FOO 42
+#         I think this only happens in header files that we assign
+#         w/ AC_CONFIG_HEADERS -- which means, easel.h.in
 #
 # SRE, Mon Oct  5 14:55:45 1998
 # SVN $Id$

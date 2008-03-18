@@ -106,4 +106,5 @@ extern int          p7_Viterbi(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,
 extern int          p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
+
 #endif /*P7_IMPL_JB_INCLUDED*/

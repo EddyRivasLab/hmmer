@@ -121,18 +121,18 @@ typedef struct p7_hmm_s {
    * optional values are set. All the char *'s are proper nul-terminated
    * strings, not just arrays. (hmm->map is an int array).
    */
-  char  *name;                  /* name of the model                     (mandatory) */ /* String, \0-terminated */
-  char  *acc;			/* accession number of model (Pfam)      (p7H_ACC)   */ /* String, \0-terminated */
-  char  *desc;                  /* brief (1-line) description of model   (p7H_DESC)  */ /* String, \0-terminated */
-  char  *rf;                    /* reference line from alignment 1..M    (p7H_RF)    */ /* String; 0=' ', M+1='\0' */
-  char  *cs;                    /* consensus structure line      1..M    (p7H_CS)    */ /* String; 0=' ', M+1='\0' */
-  char  *ca;			/* consensus accessibility line  1..M    (p7H_CA)    */ /* String; 0=' ', M+1='\0' */
-  char  *comlog;		/* command line(s) that built model      (mandatory) */ /* String, \0-terminated */
-  int    nseq;			/* number of training sequences          (mandatory) */
-  float  eff_nseq;		/* effective number of seqs (<= nseq)    (mandatory) */
-  char  *ctime;			/* creation date                         (mandatory) */
-  int   *map;			/* map of alignment cols onto model 1..M (p7H_MAP)   */ /* Array; 0=0 */
-  int    checksum;              /* checksum of training sequences        (mandatory) */
+  char  *name;       /* name of the model                     (mandatory) */ /* String, \0-terminated */
+  char  *acc;	     /* accession number of model (Pfam)      (p7_ACC)    */ /* String, \0-terminated */
+  char  *desc;       /* brief (1-line) description of model   (p7_DESC)   */ /* String, \0-terminated */
+  char  *rf;         /* reference line from alignment 1..M    (p7_RF)     */ /* String; 0=' ', M+1='\0' */
+  char  *cs;         /* consensus structure line      1..M    (p7_CS)     */ /* String; 0=' ', M+1='\0' */
+  char  *ca;	     /* consensus accessibility line  1..M    (p7_CA)     */ /* String; 0=' ', M+1='\0' */
+  char  *comlog;     /* command line(s) that built model      (mandatory) */ /* String, \0-terminated */
+  int    nseq;	     /* number of training sequences          (mandatory) */
+  float  eff_nseq;   /* effective number of seqs (<= nseq)    (mandatory) */
+  char  *ctime;	     /* creation date                         (mandatory) */
+  int   *map;	     /* map of alignment cols onto model 1..M (p7_MAP)    */ /* Array; 0=0 */
+  int    checksum;   /* checksum of training sequences        (mandatory) */
 
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                        */
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs       */
@@ -491,6 +491,15 @@ typedef struct p7_tophits_s {
  * 11. P7_DOMAINDEF: reusably managing workflow in defining domains
  *****************************************************************/
 
+typedef struct p7_dom_s { 
+  int            ienv, jenv;
+  int            iali, jali;
+  float          envsc;  
+  float          seqcorrection;
+  float          domcorrection;
+  P7_ALIDISPLAY *ad; 
+} P7_DOMAIN;
+
 /* Structure: P7_DOMAINDEF
  * 
  * This is a container for all the necessary information for domain
@@ -532,10 +541,10 @@ typedef struct p7_domaindef_s {
   float  min_posterior;	/* 0.25 means a cluster must have >= 25% posterior prob in the sample to be reported            */
   float  min_endpointp;	/* 0.02 means choose widest endpoint with post prob of at least 2%                              */
 
-  /* storage of the results (domain locations and scores) */
-  struct p7_dom_s { int i; int j; float sc; P7_ALIDISPLAY *ad; } *dcl;
-  int    ndom;		/* number of domains defined, in the end.         */
-  int    nalloc;        /* number of domain structures allocated in <dcl> */
+  /* storage of the results (domain locations, scores, alignments) */
+  P7_DOMAIN *dcl;
+  int        ndom;	 /* number of domains defined, in the end.         */
+  int        nalloc;     /* number of domain structures allocated in <dcl> */
 
   /* Additional results storage */
   float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
@@ -652,8 +661,9 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 
 
 /* null2.c */
-extern int p7_Null2(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int L, const P7_GMX *fwd, const P7_GMX *bck);
-
+extern int p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverlap, 
+			       const P7_GMX *fwd, const P7_GMX *bck, 
+			       float *opt_domcorrection, float *opt_seqcorrection);
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);

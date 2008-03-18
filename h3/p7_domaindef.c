@@ -51,7 +51,8 @@
 static int calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, int i, int j, 
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, 
+				   int i, int j, int noverlap,
 				   P7_ALIDISPLAY **ret_ad, float *ret_sc);
 
 
@@ -96,7 +97,7 @@ p7_domaindef_Create(ESL_RANDOMNESS *r)
   ddef->L       = 0;
 
   /* level 2 alloc: results storage */
-  ESL_ALLOC(ddef->dcl, sizeof(struct p7_dom_s) * nalloc);
+  ESL_ALLOC(ddef->dcl, sizeof(P7_DOMAIN) * nalloc);
   ddef->nalloc = nalloc;
   ddef->ndom   = 0;
 
@@ -165,49 +166,6 @@ p7_domaindef_GrowTo(P7_DOMAINDEF *ddef, int L)
   return status;
 }
 
-/* p7_domaindef_Add()
- * Synopsis:  Define a new domain.
- * Incept:    SRE, Fri Jan 25 13:31:12 2008 [Janelia]
- *
- * Purpose:   Define a new domain with start position <i>, end position <j>,
- *            score <sc>, and display alignment <ad>; store this information
- *            in <ddef> for future retrieval by the caller.
- *            
- *            <i>,<j> are in the <1..L> coordinate frame of the
- *            original <dsq> being analyzed. Likewise for the
- *            coordinates in the <ad> (and indeed, <ad->sqfrom = i>,
- *            <ad->sqto = j>).
- *            
- *            Once a non-<NULL> <ad> is passed into the <P7_DOMAINDEF>
- *            object, the object becomes responsible for <ad>'s
- *            memory. 
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation error. In this case, the domain
- *            is not added; the original data in <ddef> are unchanged.
- */
-static int
-p7_domaindef_Add(P7_DOMAINDEF *ddef, int i, int j, float sc, P7_ALIDISPLAY *ad)
-{
-  int   status;
-
-  if (ddef->ndom == ddef->nalloc) {
-    void *p;
-    ESL_RALLOC(ddef->dcl, p, sizeof(struct p7_dom_s) * (ddef->nalloc*2));
-    ddef->nalloc *= 2;    
-  }
-
-  ddef->dcl[ddef->ndom].i  = i;
-  ddef->dcl[ddef->ndom].j  = j;
-  ddef->dcl[ddef->ndom].sc = sc;
-  ddef->dcl[ddef->ndom].ad = ad;
-  ddef->ndom++;
-  return eslOK;
-  
- ERROR:
-  return status;
-}
 
 
 /* Function:  p7_domaindef_Fetch()
@@ -408,11 +366,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    {
-      rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], &ad, &dsc);
-      p7_domaindef_Add(ddef, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], dsc, ad);
-    }
-
+    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], 0, &ad, &dsc);
   p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
   return eslOK;
 }
@@ -448,7 +402,8 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
   int i2,j2;
   int last_j2;
   int saveL = gm->L;
-  int  nc;
+  int nc;
+  int noverlap;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
   calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
@@ -491,9 +446,10 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 		if (i2 <= last_j2) ddef->noverlaps++;
 		last_j2 = j2;
 
+		noverlap = (last_j2 >= i ? last_j2-i+1 : 0);
+
 		ddef->nenvelopes++;
-		rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, &ad, &dsc);
-		p7_domaindef_Add(ddef, i2, j2, dsc, ad);
+		rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, noverlap, &ad, &dsc);
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
 	      p7_trace_Reuse(ddef->tr);
@@ -502,8 +458,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	    {
 	      /* The region looks simple, single domain; convert the region to an envelope. */
 	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, &ad, &dsc);
-	      p7_domaindef_Add(ddef, i, j, dsc, ad);
+	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, 0, &ad, &dsc);
 	    }
 	  i     = -1;
 	  triggered = FALSE;
@@ -729,10 +684,9 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  * seq into a new per-seq score, to compare to the original per-seq
  * score).
  *  
- * The caller provides model <gm> configured in unihit lobal mode
- * (i.e. local, with target length <L=0>; local wrt model, global wrt
- * sequence). Lobal mode forces the complete domain sequence from <i>
- * to <j> into one consistent alignment against the model.
+ * The caller provides model <gm> configured in unilocal mode; by
+ * using unilocal (as opposed to multilocal), we're going to force the
+ * identification of a single domain in this envelope now.
  * 
  * The alignment is an optimal accuracy alignment (sensu IH Holmes),
  * also obtained in lobal mode.
@@ -745,6 +699,13 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  * (efficiently, we trust) managing any necessary temporary working
  * space and heuristic thresholds.
  * 
+ * The caller also passes us <noverlap>, the number of residues in
+ * this domain envelope that overlap with a previously defined
+ * envelope. (Overlapping envelopes may arise when stochastic
+ * traceback clustering is used to define them.) We use <noverlap>
+ * to make sure that per-seq null2 correction doesn't doublecount
+ * any residues.
+ *
  * It isn't implemented yet, but this is eventually where null2
  * correction will go, since we obtain a posterior probability matrix
  * here; then the returned score will become a null2-corrected Forward
@@ -772,32 +733,47 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, int i, int j, 
+rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, 
+			P7_GMX *gx1, P7_GMX *gx2, int i, int j, int noverlap,
 			P7_ALIDISPLAY **ret_ad, float *ret_sc)
 {
-  P7_ALIDISPLAY *ad = NULL;
-  int             L = j-i+1;
-  float           fsc, sc;
-  int             z;
+  P7_DOMAIN     *dom = NULL;
+  int            Ld = j-i+1;
+  float          envsc, oasc;
+  int            z;
+  float          domcorrection, seqcorrection;
 
-  p7_GForward (sq->dsq + i-1, L, gm, gx1, &fsc);
-  p7_GBackward(sq->dsq + i-1, L, gm, gx2, &sc);
 
-  p7_Null2(gm, sq->dsq + i-1, L, ddef->L, gx1, gx2);
+  p7_GForward (sq->dsq + i-1, Ld, gm, gx1, &envsc);
+  p7_GBackward(sq->dsq + i-1, Ld, gm, gx2, NULL);
 
-  p7_PosteriorDecoding(L, gm, gx1, gx2, gx2);          /* <gx2> is now overwritten with posterior probabilities */
+  p7_Null2Corrections(gm, sq->dsq + i-1, Ld, noverlap, gx1, gx2, &domcorrection, &seqcorrection);
 
-  /* This is the info we need for a post-prob-oriented null2 correction,
-   * and this is where the null2 correction call will go in the near future
-   */
-
-  p7_OptimalAccuracyDP(L, gm, gx2, gx1, &sc); /* <gx1> is now overwritten with OA scores */
-  p7_OATrace(L, gm, gx2, gx1, ddef->tr);      /* <tr>'s seq coords are all offset by i-1 now, relative to original dsq  */
+  /* Find an optimal accuracy alignment */
+  p7_PosteriorDecoding(Ld, gm, gx1, gx2, gx2);   /* <gx2> is now overwritten with post probabilities     */
+  p7_OptimalAccuracyDP(Ld, gm, gx2, gx1, &oasc); /* <gx1> is now overwritten with OA scores              */
+  p7_OATrace(Ld, gm, gx2, gx1, ddef->tr);        /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
   
+  /* hack the trace's sq coords to be correct w.r.t. original dsq */
   for (z = 0; z < ddef->tr->N; z++)
-    if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1; /* that hacks the trace's sq coords to be correct w.r.t. original dsq */
+    if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1;
 
-  ad = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
+  /* get ptr to next empty domain structure in domaindef's results */
+  if (ddef->ndom == ddef->nalloc) {
+    void *p;
+    ESL_RALLOC(ddef->dcl, p, sizeof(P7_DOMAIN) * (ddef->nalloc*2));
+    ddef->nalloc *= 2;    
+  }
+  dom = &(ddef->dcl[ddef->ndom]);
+
+  /* store the results in it */
+  dom->ienv          = i;
+  dom->jenv          = j;
+  dom->envsc         = fsc;
+  dom->seqcorrection = seqcorrection;
+  dom->domcorrection = domcorrection;
+  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
+  ddef->ndom++;
 
   p7_trace_Reuse(ddef->tr);
   *ret_ad = ad;
