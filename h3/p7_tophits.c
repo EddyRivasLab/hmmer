@@ -126,8 +126,14 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->acc        = NULL;
   hit->desc       = NULL;
   hit->sortkey    = 0.0;
+
   hit->score      = 0.0;
+  hit->pre_score  = 0.0;
+  hit->sum_score  = 0.0;
+
   hit->pvalue     = 0.0;
+  hit->pre_pvalue = 0.0;
+  hit->sum_pvalue = 0.0;
 
   hit->ndom       = 0;
   hit->nexpected  = 0.0;

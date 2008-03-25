@@ -28,10 +28,6 @@
  * total per-sequence score derived by a sum of individual domain
  * scores (in <ret_sc>).
  * 
- * You can then use <p7_domaindef_Fetch()> to retrieve the start
- * position, end position, score, and display-ready alignment for each
- * domain, one at a time. 
- * 
  * The <P7_DOMAINDEF> structure is a reusable container that manages
  * all the necessary working memory and heuristic thresholds.
  *   
@@ -50,11 +46,9 @@
 
 static int calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
-static int region_trace_ensemble  (P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, 
-				   int i, int j, int noverlap,
-				   P7_ALIDISPLAY **ret_ad, float *ret_sc);
-
+static int region_trace_ensemble  (P7_DOMAINDEF *ddef,       P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc);
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, 
+				   int i, int j, int noverlap);
 
 
 /*****************************************************************
@@ -164,50 +158,6 @@ p7_domaindef_GrowTo(P7_DOMAINDEF *ddef, int L)
 
  ERROR:
   return status;
-}
-
-
-
-/* Function:  p7_domaindef_Fetch()
- * Synopsis:  Retrieve one domain from a <P7_DOMAINDEF> object.
- * Incept:    SRE, Fri Jan 25 13:37:18 2008 [Janelia]
- *
- * Purpose:   Retrieve domain number <which> from domain definitions in <ddef>.
- *            <which> is numbered <0..ndomains-1>. The number of domains
- *            is in <ddef->ndom>.
- *            
- *            The information is retrieved in <opt_i> (start position
- *            of domain, <1..L>), <opt_j> (end position), <opt_sc>
- *            (score), and <opt_ad> (a pointer to the displayable
- *            alignment). All of these are optional; pass <NULL> for
- *            any that you aren't interested in retrieving.
- *            
- *            When you retrieve a <opt_ad> pointer, you become
- *            responsible for its memory; the <P7_DOMAINDEF> releases
- *            responsibility to you, and deletes its hold on the
- *            <ad>. You free alidisplays with
- *            <p7_alidisplay_Destroy()>. If you retrieve a domain
- *            coords and/or score without its <ad> -- i.e.\ passing
- *            <NULL> for <opt_ad> -- the <ad> is internally destroyed.
- *            
- *            A consequence of this memory management strategy for the
- *            <ad> is that although you may retrieve domain coords and
- *            scores more than once from the same <ddef>, you may only
- *            retrieve the <ad> for domain <which> once. If you need
- *            the <ad> for domain <which>, make sure you retrieve it
- *            the first time you ask for info on domain <which>.
- *            
- * Returns:   <eslOK> on success.
- */
-int
-p7_domaindef_Fetch(P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY **opt_ad)
-{
-  if (opt_i  != NULL) *opt_i  = ddef->dcl[which].i;
-  if (opt_j  != NULL) *opt_j  = ddef->dcl[which].j;
-  if (opt_sc != NULL) *opt_sc = ddef->dcl[which].sc;
-  if (opt_ad != NULL) *opt_ad = ddef->dcl[which].ad; else { p7_alidisplay_Destroy(ddef->dcl[which].ad); }
-  ddef->dcl[which].ad = NULL;
-  return eslOK;
 }
 
 
@@ -345,17 +295,13 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
  *            Upon return, <ddef> contains definitions of all the
  *            domains, bounds defined by Viterbi parse, individually
  *            scored by null2-corrected Forward, and aligned by
- *            optimal posterior accuracy. Caller can cycle over
- *            <ddef->ndom> domains and retrieve info on each one
- *            by <p7_domaindef_Fetch()>.
+ *            optimal posterior accuracy.
  *            
  * Returns:   <eslOK> on success.
  */
 int
 p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef) 
 {
-  P7_ALIDISPLAY *ad;
-  float          dsc;
   int            d;
   int            saveL = gm->L;
 
@@ -366,7 +312,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], 0, &ad, &dsc);
+    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], 0);
   p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
   return eslOK;
 }
@@ -386,16 +332,12 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
  *            scores, and their optimal posterior accuracy alignments.
- *            Caller can cycle over <ddef->ndom> domains and retrieve
- *            info on each one by <p7_domain_Fetch()>.
  *            
  * Returns:   <eslOK> on success.           
  */
 int
 p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef)
 {
-  P7_ALIDISPLAY *ad;
-  float          dsc;
   int i, j;
   int triggered;
   int d;
@@ -404,6 +346,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
   int saveL = gm->L;
   int nc;
   int noverlap;
+  int status;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
   calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
@@ -444,12 +387,12 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	      for (d = 0; d < nc; d++) {
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
 		if (i2 <= last_j2) ddef->noverlaps++;
-		last_j2 = j2;
 
-		noverlap = (last_j2 >= i ? last_j2-i+1 : 0);
+		noverlap = (last_j2 >= i2 ? last_j2-i2+1 : 0);
 
 		ddef->nenvelopes++;
-		rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, noverlap, &ad, &dsc);
+		status = rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, noverlap);
+		if (status == eslOK) last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
 	      p7_trace_Reuse(ddef->tr);
@@ -458,7 +401,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	    {
 	      /* The region looks simple, single domain; convert the region to an envelope. */
 	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, 0, &ad, &dsc);
+	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, 0);
 	    }
 	  i     = -1;
 	  triggered = FALSE;
@@ -711,8 +654,9 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  * here; then the returned score will become a null2-corrected Forward
  * score.
  * 
- * Upon return, the <P7_ALIDISPLAY> <*ret_ad> has been newly created,
- * and the caller becomes responsible for freeing it. 
+ * Returns <eslOK> if a domain was successfully identified, scored,
+ * and aligned in the envelope; if so, the per-domain information is
+ * registered in <ddef>, in <ddef->dcl>.
  * 
  * And here's what's happened to our working memory:
  * 
@@ -720,9 +664,6 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  *         the OA trace of the domain. Before exit, we called
  *         <Reuse()> on it.
  * 
- * <gm>  : we've reconfigured it to lobal mode, and it's still in
- *         that mode upon return! watch out, caller.
- *            
  * <gx1> : happens to be holding OA score matrix for the domain
  *         upon return, but that's not part of the spec; officially
  *         its contents are "undefined".
@@ -733,24 +674,23 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, 
-			P7_GMX *gx1, P7_GMX *gx2, int i, int j, int noverlap,
-			P7_ALIDISPLAY **ret_ad, float *ret_sc)
+rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *sq, 
+			P7_GMX *gx1, P7_GMX *gx2, int i, int j, int noverlap)
 {
   P7_DOMAIN     *dom = NULL;
   int            Ld = j-i+1;
   float          envsc, oasc;
   int            z;
   float          domcorrection, seqcorrection;
-
+  int            status;
 
   p7_GForward (sq->dsq + i-1, Ld, gm, gx1, &envsc);
   p7_GBackward(sq->dsq + i-1, Ld, gm, gx2, NULL);
+  p7_PosteriorDecoding(Ld, gm, gx1, gx2, gx2);      /* <gx2> is now overwritten with post probabilities     */
 
-  p7_Null2Corrections(gm, sq->dsq + i-1, Ld, noverlap, gx1, gx2, &domcorrection, &seqcorrection);
+  p7_Null2Corrections(gm, sq->dsq + i-1, Ld, noverlap, gx2, gx1, NULL, &domcorrection, &seqcorrection);	/* gx1 used as tmp workspace */
 
   /* Find an optimal accuracy alignment */
-  p7_PosteriorDecoding(Ld, gm, gx1, gx2, gx2);   /* <gx2> is now overwritten with post probabilities     */
   p7_OptimalAccuracyDP(Ld, gm, gx2, gx1, &oasc); /* <gx1> is now overwritten with OA scores              */
   p7_OATrace(Ld, gm, gx2, gx1, ddef->tr);        /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
   
@@ -769,16 +709,18 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq,
   /* store the results in it */
   dom->ienv          = i;
   dom->jenv          = j;
-  dom->envsc         = fsc;
+  dom->envsc         = envsc;
   dom->seqcorrection = seqcorrection;
   dom->domcorrection = domcorrection;
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
   ddef->ndom++;
 
   p7_trace_Reuse(ddef->tr);
-  *ret_ad = ad;
-  *ret_sc = fsc;
   return eslOK;
+
+ ERROR:
+  p7_trace_Reuse(ddef->tr);
+  return status;
 }
   
     
@@ -832,12 +774,10 @@ main(int argc, char **argv)
   P7_GMX         *fwd     = NULL;
   P7_GMX         *bck     = NULL;
   P7_DOMAINDEF   *ddef    = NULL;
-  P7_ALIDISPLAY  *ad      = NULL;
   char           *ofile   = NULL;
   FILE           *ofp     = NULL;
   float           overall_sc, sc;
   int             d;
-  int             i,j;
   int             status;
 
   /* Read in one HMM */
@@ -881,11 +821,14 @@ main(int argc, char **argv)
   /* retrieve and display results */
   for (d = 0; d < ddef->ndom; d++)
     {
-      p7_domaindef_Fetch(ddef, d, &i, &j, &sc, &ad);
-      printf("domain %-4d : %4d %4d  %6.2f\n", d+1, i, j, sc);
+      printf("domain %-4d : %4d %4d  %6.2f  %6.2f  %6.2f\n", d+1, 
+	     ddef->dcl[d].ienv,
+	     ddef->dcl[d].jenv,
+	     ddef->dcl[d].envsc,
+	     ddef->dcl[d].seqcorrection,
+	     ddef->dcl[d].domcorrection);
 
-      p7_alidisplay_Print(stdout, ad, 50, 120);
-      p7_alidisplay_Destroy(ad);
+      p7_alidisplay_Print(stdout, ddef->dcl[d].ad, 50, 120);
     }
 
   if ((ofile = esl_opt_GetString(go, "--occp")) != NULL) 

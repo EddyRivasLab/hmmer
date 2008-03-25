@@ -1,0 +1,103 @@
+Checklist for a HMMER release
+SRE, Tue Mar 25 14:34:33 2008
+--------------------------------------------------------
+When editing this 00CHECKLIST, edit it in the trunk, not in a release
+branch; it isn't included in releases anyway.
+
+Subversion repository:  https://svn.janelia.org/eddylab/eddys/src/hmmer
+
+HMMER follows an 'unstable trunk' policy.
+Each major release goes onto a stable branch.
+Every release (even minor ones) is tagged.
+
+Release types: major releases, minor releases, and snapshots. A major
+release gets its own branch. A minor release puts bug fixes into a
+major branch. A snapshot is from the development trunk.
+
+Version naming:                                        example
+major    <lineage>.<major-release>                      3.0
+minor    <lineage>.<major-release>.<minor-release>      3.0.1
+alpha    <lineage>.<major-release>a<n>                  3.0a1 
+beta     <lineage>.<major-release>b<n>                  3.0b1 
+snapshot <lineage>.<major-release>.snap<yyyymmdd>       3.0.snap20080325
+
+
+
+1. Announce intent to release to all developers. 
+   Commit working copies on all machines.
+   Check for stray uncommitted files:
+	 ./configure
+         make distclean
+         svn update
+	 svn status
+   Clean up any stray files identified by 'svn status'.
+   'svn add' and 'svn commit' as needed to commit new or modified files.
+
+
+================================================================
+= Creating a new major release branch
+================================================================
+
+For major releases (3.0, 3.1): we create a Subversion branch, so we
+can continue support (with bugfixes) without disrupting development of
+the next main release.
+
+*  First test the development trunk.
+   Compile should be entirely clean when compiled -Wall.
+   'make check' should be clean.
+   '(cd documentation; make)' should work
+
+   When trunk is clean, 
+   svn commit
+   We're (usually) next going to move out of the trunk to the release branch.
+
+*  Create stable release branch from the trunk.
+   All subsequent bugfix releases will happen in this branch, while trunk keeps moving.
+
+   svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk\
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
+            -m "created 3.0 release branch"          
+
+================================================================
+= Creating a distribution
+================================================================
+${RELEASE} tag should match @HMMER_RELEASE@ in configure.ac, Makefile
+
+   setenv RELEASE 2.3.2
+
+   cd ~/releases
+* Delete any old releases of the same number
+   rm -rf hmmer-${RELEASE}
+
+* Export a snapshot, alpha, beta, or release candidate from the development trunk: 
+   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${RELEASE}
+* Export a major or minor release from its permanent tag
+   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${RELEASE} hmmer-${RELEASE}
+
+   cd hmmer-${RELEASE}
+   autoconf
+   (cd easel; autoconf)
+   ./configure
+* Set file permissions
+   find . -type f -exec chmod +r {} \;
+   chmod +x easel/devkit/sqc
+   chmod +x easel/devkit/autodoc
+* license
+   find . -type f -exec easel/devkit/sedition-pp LICENSE LICENSE.tag {} \;
+* compile documentation
+   (cd documentation/userguide; make)
+   mv documentation/userguide/Userguide.pdf .
+* clean up files that don't belong in the distro
+
+   make distclean
+
+* package
+   cd ..
+   tar cvf hmmer-${RELEASE}.tar hmmer-${RELEASE}
+   
+
+
+
+
+   
+   

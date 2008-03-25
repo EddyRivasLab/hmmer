@@ -302,8 +302,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
   double           P;		       /* P-value of a hit */
+  int              Ld;		       /* # of residues in envelopes */
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
+  int              d;
 
   tr  = p7_trace_Create();
   fwd = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
@@ -364,27 +366,42 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_ReconfigLength(gm, sq->n);
 	  
 	  p7_GForward(sq->dsq, sq->n, gm, fwd, &final_sc);         
-	  final_sc = ( final_sc-nullsc) / eslCONST_LOG2;
-	  P  = esl_exp_surv (final_sc,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-
 	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
 	  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, cfg->ddef);
 
-
-	  /* Store the per-seq hit output information */
+	  /* Calculate and store the per-seq hit output information */
 	  p7_tophits_CreateNextHit(cfg->hitlist, &hit);
 	  if ((status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
 	  if ((status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
 	  if ((status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
-	  hit->sortkey    = -log(P);
-	  hit->score      = final_sc;
-	  hit->pvalue     = P;
 	  hit->ndom       = cfg->ddef->ndom;
 	  hit->nexpected  = cfg->ddef->nexpected;
 	  hit->nregions   = cfg->ddef->nregions;
 	  hit->nclustered = cfg->ddef->nclustered;
 	  hit->noverlaps  = cfg->ddef->noverlaps;
 	  hit->nenvelopes = cfg->ddef->nenvelopes;
+
+	  hit->pre_score  = ( final_sc-nullsc) / eslCONST_LOG2;
+	  hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+
+	  /* Add the null2 corrections to the null score */
+	  for (d = 0; d < cfg->ddef->ndom; d++)
+	    nullsc += cfg->ddef->dcl[d].seqcorrection;
+	  hit->score      = ( final_sc-nullsc) / eslCONST_LOG2;
+	  hit->pvalue     = esl_exp_surv (hit->score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+	  hit->sortkey    = -log(hit->pvalue);
+
+	  /* Calculate the "reconstruction score": estimated per-sequence score as sum of the domains */
+	  hit->sum_score = 0.0f;
+	  Ld             = 0;
+	  for (d = 0; d < cfg->ddef->ndom; d++) 
+	    {
+	      hit->sum_score += cfg->ddef->dcl[d].envsc;
+	      Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
+	    }
+	  hit->sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+	  hit->sum_score  = (hit->sum_score-nullsc) / eslCONST_LOG2;
+	  hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 
 	  esl_sq_Reuse(sq);
 	  p7_domaindef_Reuse(cfg->ddef);
@@ -427,16 +444,19 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 
   fprintf(cfg->ofp, "Scores for complete sequences (score includes all domains):\n");
 
-  fprintf(cfg->ofp, "%7s %10s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "Score", "E-value", " N ", " exp ", "reg", "clu", " ov", "env", namew, "Sequence", descw, "Description");
-  fprintf(cfg->ofp, "%7s %10s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "-----", "-------", "---", "-----", "---", "---", "---", "---", namew, "--------", descw, "-----------");
+  fprintf(cfg->ofp, "%7s %10s %7s %10s %7s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "Score", "E-value", "pre-sc",  "pre-Evalue", "corr", " N ", " exp ", "reg", "clu", " ov", "env", namew, "Sequence", descw, "Description");
+  fprintf(cfg->ofp, "%7s %10s %7s %10s %7s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "-----", "-------", "-------", "----------", "----", "---", "-----", "---", "---", "---", "---", namew, "--------", descw, "-----------");
 
   for (h = 0; h < hitlist->N; h++)
     {
       E = (double) cfg->nseq * hitlist->hit[h]->pvalue;
 
-      fprintf(cfg->ofp, "%7.1f %10.2g %3d %5.1f %3d %3d %3d %3d %-*s %-*.*s\n",
+      fprintf(cfg->ofp, "%7.1f %10.2g %7.1f %10.2g %7.1f %3d %5.1f %3d %3d %3d %3d %-*s %-*.*s\n",
 	      hitlist->hit[h]->score,
 	      hitlist->hit[h]->pvalue * (double) cfg->nseq,
+	      hitlist->hit[h]->pre_score,
+	      hitlist->hit[h]->pre_pvalue * (double) cfg->nseq,
+	      hitlist->hit[h]->pre_score - hitlist->hit[h]->score,
 	      hitlist->hit[h]->ndom,
 	      hitlist->hit[h]->nexpected,
 	      hitlist->hit[h]->nregions,

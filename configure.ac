@@ -74,19 +74,17 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_RELCODE="hmmer3_0"
-HMMER_DATE="November 2007"
-HMMER_COPYRIGHT="Copyright (C) 1992-2007 HHMI Janelia Farm Research Campus"
-HMMER_LICENSE="Freely distributed under the GNU General Public License (GPL)"
-HMMER_LICENSETAG=gnu
+HMMER_RELCODE="hmmer3_a0"
+HMMER_DATE="March 2008"
+HMMER_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute"
+HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)"
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"
 
 EASEL_RELCODE="easel0_1"
-EASEL_DATE="November 2007"
-EASEL_COPYRIGHT="Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus"
-EASEL_LICENSE="Freely distributed under the Janelia Software License."
-EASEL_LICENSETAG=gnu
+EASEL_DATE="March 2008"
+EASEL_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute"
+EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="0.1"
 EASEL_URL="http://easel.janelia.org/"
 
@@ -95,7 +93,6 @@ AC_SUBST(HMMER_RELCODE)
 AC_SUBST(HMMER_DATE)
 AC_SUBST(HMMER_COPYRIGHT)
 AC_SUBST(HMMER_LICENSE)
-AC_SUBST(HMMER_LICENSETAG)
 AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
 
@@ -103,7 +100,6 @@ AC_SUBST(EASEL_RELCODE)
 AC_SUBST(EASEL_DATE)
 AC_SUBST(EASEL_COPYRIGHT)
 AC_SUBST(EASEL_LICENSE)
-AC_SUBST(EASEL_LICENSETAG)
 AC_SUBST(EASEL_VERSION)
 AC_SUBST(EASEL_URL)
 

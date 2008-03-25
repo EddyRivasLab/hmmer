@@ -459,9 +459,15 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               */
   char   *acc;			/* accession of the target          */
   char   *desc;			/* description of the target        */
-  double sortkey;		/* number to sort by; big is better */
-  float  score;			/* score of the hit                 */
-  double pvalue;		/* P-value of the hit               */
+  double sortkey;		/* number to sort by; big is better    */
+
+  float  score;			/* bit score of the hit                        */
+  float  pre_score;		/* bit score before null2 correction           */
+  float  sum_score;		/* bit score reconstructed from sum of domains */
+
+  double pvalue;		/* P-value of the score               */
+  double pre_pvalue;		/* P-value of the pre_score           */
+  double sum_pvalue;		/* P-value of the sum_score           */
 
   int    ndom;		/* total # of domains in this seq   */
   float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
@@ -662,8 +668,8 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 
 /* null2.c */
 extern int p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverlap, 
-			       const P7_GMX *fwd, const P7_GMX *bck, 
-			       float *opt_domcorrection, float *opt_seqcorrection);
+			       const P7_GMX *pp, P7_GMX *wrk, 
+			       float *opt_null2, float *opt_domcorrection, float *opt_seqcorrection);
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);
