@@ -1,15 +1,15 @@
 Brief installation instructions 
-HMMER @RELEASE@
+HMMER @HMMER_VERSION@
 SRE, Mon Mar 24 09:29:34 2008
 ------------------------------------------
 
 These are quick installation instructions. For complete documentation,
 see the Installation chapter in the HMMER User's Guide (Userguide.pdf).
 
-Starting from a source distribution, hmmer-@RELEASE@.tar.gz:
- Uncompress:                uncompress hmmer-@RELEASE@.tar.gz  
- Unpack:                    tar xf hmmer-@RELEASE@.tar
- Move into new directory:   cd hmmer-@RELEASE@
+Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
+ Uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
+ Unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
+ Move into new directory:   cd hmmer-@HMMER_VERSION@
  Configure:                 ./configure
  Build:                     make
  Automated tests:           make check

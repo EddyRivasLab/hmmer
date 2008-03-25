@@ -41,14 +41,13 @@
 
 
 AC_PREREQ(2.60)
-AC_INIT(HMMER, 3.0, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, 3.0.snap20080325, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
 if test x"$CFLAGS" = x; then 
   sre_cflags_env_set=no
 fi
-
 
 ################################################################
 # 3. Info on the package
@@ -61,7 +60,6 @@ fi
 # From them, it derives one more:
 #     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
 # We also define additional variables:
-#     HMMER_RELCODE     unique CVS tag without .'s: e.g. "hmmer3_0"
 #     HMMER_DATE        release date: e.g. "January 2007"
 #     HMMER_COPYRIGHT   one-line copyright string
 #     HMMER_LICENSE     one-line license string
@@ -74,29 +72,25 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_RELCODE="hmmer3_a0"
 HMMER_DATE="March 2008"
-HMMER_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute"
-HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)"
+HMMER_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute. All rights reserved."
+HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"
 
-EASEL_RELCODE="easel0_1"
 EASEL_DATE="March 2008"
-EASEL_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute"
+EASEL_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute. All rights reserved."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
-EASEL_VERSION="0.1"
+EASEL_VERSION="h$PACKAGE_VERSION"
 EASEL_URL="http://easel.janelia.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
-AC_SUBST(HMMER_RELCODE)
 AC_SUBST(HMMER_DATE)
 AC_SUBST(HMMER_COPYRIGHT)
 AC_SUBST(HMMER_LICENSE)
 AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
 
-AC_SUBST(EASEL_RELCODE)
 AC_SUBST(EASEL_DATE)
 AC_SUBST(EASEL_COPYRIGHT)
 AC_SUBST(EASEL_LICENSE)
@@ -423,6 +417,7 @@ AC_SYS_LARGEFILE
 # Done.
 # Config subdirs and files (except main Makefile, which we defer)
 #
+AC_CONFIG_FILES(LICENSE.csh)
 AC_CONFIG_FILES(h3/Makefile)
 AC_CONFIG_FILES(testsuite/Makefile)
 AC_CONFIG_HEADERS(h3/p7_config.h)

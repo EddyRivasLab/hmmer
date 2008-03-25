@@ -1,7 +1,7 @@
 HMMER - profile hidden Markov models for biological sequence analysis
 http://hmmer.janelia.org/
-Version @RELEASE@ (@RELEASEDATE@)
-@COPYRIGHT@
+Version @HMMER_VERSION@; @HMMER_DATE@
+@HMMER_COPYRIGHT@
 ------------------------------------------------------------------
 
 HMMER searches biological sequence databases for homologous sequences,

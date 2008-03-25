@@ -50,13 +50,6 @@ CFLAGS = @CFLAGS@
 ## St. Louis)
 #######
 SHELL       = /bin/sh
-PACKAGE     = @PACKAGE_NAME@
-BASENAME    = @PACKAGE_TARNAME@
-RELEASE     = @HMMER_VERSION@
-RELEASEDATE = "@HMMER_DATE@"
-COPYRIGHT   = "@HMMER_COPYRIGHT@"
-LICENSELINE = "@HMMER_LICENSE@"
-COMPRESS    = gzip
 
 # The program lists below for HMMER are not necessarily
 # a complete manifest. They are the list of stable programs that the
@@ -156,6 +149,7 @@ distclean:
 	(cd h3;        make distclean)
 	(cd easel;     make distclean)
 	(cd testsuite; make distclean)
+	-rm LICENSE.csh
 	-rm Makefile
 
 # "make binclean" is special: it cleans up and leaves only a binary

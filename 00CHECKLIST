@@ -61,39 +61,58 @@ the next main release.
 ================================================================
 = Creating a distribution
 ================================================================
-${RELEASE} tag should match @HMMER_RELEASE@ in configure.ac, Makefile
-
-   setenv RELEASE 2.3.2
+${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
+   setenv HMMER_VERSION  3.0.snap20080325
 
    cd ~/releases
 * Delete any old releases of the same number
-   rm -rf hmmer-${RELEASE}
+   rm -rf hmmer-${HMMER_VERSION}
 
 * Export a snapshot, alpha, beta, or release candidate from the development trunk: 
-   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${RELEASE}
+   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${HMMER_VERSION}
 * Export a major or minor release from its permanent tag
-   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${RELEASE} hmmer-${RELEASE}
-
-   cd hmmer-${RELEASE}
-   autoconf
-   (cd easel; autoconf)
+   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION} hmmer-${HMMER_VERSION}
+   cd hmmer-${HMMER_VERSION}
+* Edit configure.ac: set version, date, copyright info
+   emacs configure.ac
+   ln -s easel/aclocal.m4 .
+   autoconf; (cd easel; autoconf)
    ./configure
+   source LICENSE.csh
+
 * Set file permissions
    find . -type f -exec chmod +r {} \;
-   chmod +x easel/devkit/sqc
    chmod +x easel/devkit/autodoc
-* license
-   find . -type f -exec easel/devkit/sedition-pp LICENSE LICENSE.tag {} \;
+   chmod +x easel/devkit/sqc
+* versioning, dating, licensing (these are originally set in configure.ac)
+* must do Easel first
+   easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE ${EASEL_DATE} EASEL_COPYRIGHT ${EASEL_COPYRIGHT} easel/00README
+   easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE ${EASEL_DATE} EASEL_COPYRIGHT ${EASEL_COPYRIGHT} easel/COPYRIGHT
+   easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE ${EASEL_DATE} EASEL_COPYRIGHT ${EASEL_COPYRIGHT} easel/INSTALL
+   easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE ${EASEL_DATE} EASEL_COPYRIGHT ${EASEL_COPYRIGHT} LICENSE.tag
+   find easel -type f -exec easel/devkit/sedition-pp LICENSE easel/LICENSE.tag {} \;   
+
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE ${HMMER_DATE} HMMER_COPYRIGHT ${HMMER_COPYRIGHT} 00README
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE ${HMMER_DATE} HMMER_COPYRIGHT ${HMMER_COPYRIGHT} COPYRIGHT
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE ${HMMER_DATE} HMMER_COPYRIGHT ${HMMER_COPYRIGHT} INSTALL
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE ${HMMER_DATE} HMMER_COPYRIGHT ${HMMER_COPYRIGHT} LICENSE.tag
+   find .     -type f -exec easel/devkit/sedition-pp LICENSE       LICENSE.tag {} \;
+
 * compile documentation
    (cd documentation/userguide; make)
    mv documentation/userguide/Userguide.pdf .
 * clean up files that don't belong in the distro
-
+   rm -f  00CHECKLIST CHECKLIST 00README-FIRSTTIME-DEVELOPER
+   rm -f  MAILING_LIST LICENSE.tag
+   rm -rf Bugs Internal-Notes Release-Notes
+   rm -rf src ssdk old-testsuite
+   rm -rf documentation
+   rm -rf tutorial
    make distclean
 
 * package
    cd ..
-   tar cvf hmmer-${RELEASE}.tar hmmer-${RELEASE}
+   tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    
 
 
