@@ -72,8 +72,11 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${HMMER_VERSION}
 * Export a major or minor release from its permanent tag
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION} hmmer-${HMMER_VERSION}
-   cd hmmer-${HMMER_VERSION}
+
+
+
 * Edit configure.ac: set version, date, copyright info
+   cd hmmer-${HMMER_VERSION}
    emacs configure.ac
    ln -s easel/aclocal.m4 .
    autoconf; (cd easel; autoconf)
