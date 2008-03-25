@@ -417,7 +417,9 @@ AC_SYS_LARGEFILE
 # Done.
 # Config subdirs and files (except main Makefile, which we defer)
 #
-AC_CONFIG_FILES(LICENSE.csh)
+if test -e "LICENSE.csh.in"; then
+  AC_CONFIG_FILES(LICENSE.csh)
+fi
 AC_CONFIG_FILES(h3/Makefile)
 AC_CONFIG_FILES(testsuite/Makefile)
 AC_CONFIG_HEADERS(h3/p7_config.h)
