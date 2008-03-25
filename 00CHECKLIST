@@ -107,6 +107,8 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    (cd documentation/userguide; make)
    mv documentation/userguide/Userguide.pdf .
 * clean up files that don't belong in the distro
+   make distclean
+
    rm -f  00CHECKLIST CHECKLIST 00README-FIRSTTIME-DEVELOPER
    rm -f  MAILING_LIST LICENSE.tag LICENSE.csh.in
    rm -rf Bugs Internal-Notes Release-Notes
@@ -119,7 +121,7 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    rm -rf documentation
    cd ..
 
-   make distclean
+
 
 * package
    cd ..
