@@ -80,6 +80,7 @@ static void init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf);
 static void serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist);
+static int  output_per_domain_hitlist  (ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist);
 
 int
 main(int argc, char **argv)
@@ -301,6 +302,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   float            usc, vfsc, ffsc;    /* filter scores                           */
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
+  float            tot_seqcorrection;
   double           P;		       /* P-value of a hit */
   int              Ld;		       /* # of residues in envelopes */
   char             errbuf[eslERRBUFSIZE];
@@ -385,9 +387,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 
 	  /* Add the null2 corrections to the null score */
+	  tot_seqcorrection = 0.0f;
 	  for (d = 0; d < cfg->ddef->ndom; d++)
-	    nullsc += cfg->ddef->dcl[d].seqcorrection;
-	  hit->score      = ( final_sc-nullsc) / eslCONST_LOG2;
+	    tot_seqcorrection += cfg->ddef->dcl[d].seqcorrection;
+	  hit->score      = ( final_sc - (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
 	  hit->pvalue     = esl_exp_surv (hit->score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 	  hit->sortkey    = -log(hit->pvalue);
 
@@ -400,8 +403,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
 	    }
 	  hit->sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	  hit->sum_score  = (hit->sum_score-nullsc) / eslCONST_LOG2;
+	  hit->sum_score  = (hit->sum_score- (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
 	  hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+
+	  /* Transfer the domain coordinates and alignment display to the hit list */
+	  hit->dcl       = cfg->ddef->dcl;
+	  cfg->ddef->dcl = NULL;
+	  for (d = 0; d < hit->ndom; d++)
+	    {
+	      Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
+	      hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+	      hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].domcorrection)) / eslCONST_LOG2;
+	      hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+	    }
 
 	  esl_sq_Reuse(sq);
 	  p7_domaindef_Reuse(cfg->ddef);
@@ -410,8 +424,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 				     cfg->seqfile, cfg->sqfp->linenumber, cfg->sqfp->errbuf);     
 
 
+      p7_tophits_Sort(cfg->hitlist);
       output_per_sequence_hitlist(go, cfg, cfg->hitlist);
-
+      fprintf(cfg->ofp, "\n");
+      output_per_domain_hitlist  (go, cfg, cfg->hitlist);
+      fprintf(cfg->ofp, "\n");
 
       p7_profile_Destroy(gm);
       p7_oprofile_Destroy(om);
@@ -440,8 +457,6 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
   int descw = textw - namew - 24;         /* 7.1f score, 10.2g Eval, 3d ndom, 4 spaces betw 5 fields: 24 char  */
   double E;
   
-  p7_tophits_Sort(hitlist);
-
   fprintf(cfg->ofp, "Scores for complete sequences (score includes all domains):\n");
 
   fprintf(cfg->ofp, "%7s %10s %7s %10s %7s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "Score", "E-value", "pre-sc",  "pre-Evalue", "corr", " N ", " exp ", "reg", "clu", " ov", "env", namew, "Sequence", descw, "Description");
@@ -466,6 +481,37 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 	      namew,        hitlist->hit[h]->name,
 	      descw, descw, hitlist->hit[h]->desc);
 
+    }
+  return eslOK;
+}
+
+
+static int
+output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
+{
+  int h, d;
+  int textw = esl_opt_GetInteger(go, "--textw");
+  int namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
+  double E;
+  
+  fprintf(cfg->ofp, "Scores for individual domains (scored as if only this domain occurred):\n");
+
+  fprintf(cfg->ofp, "%-*s %10s %7s %6s %6s %7s %10s\n", namew, "Sequence", "E-value", " Domain", "sqfrom", "sqto",     "score", "E-value");
+  fprintf(cfg->ofp, "%-*s %10s %7s %6s %6s %7s %10s\n", namew, "--------", "-------", "-------", "------", "------", "-------", "----------");
+
+  for (h = 0; h < hitlist->N; h++)
+    {
+      for (d = 0; d < hitlist->hit[h]->ndom; d++)
+	{
+	  fprintf(cfg->ofp, "%-*s %10.2g %3d/%-3d %6d %6d %7.1f %10.2g\n", 
+		  namew, hitlist->hit[h]->name, 
+		  hitlist->hit[h]->pvalue * cfg->nseq,
+		  d+1, hitlist->hit[h]->ndom,
+		  hitlist->hit[h]->dcl[d].ienv,
+		  hitlist->hit[h]->dcl[d].jenv,
+		  hitlist->hit[h]->dcl[d].bitscore,
+		  hitlist->hit[h]->dcl[d].pvalue * cfg->nseq);
+	}
     }
   return eslOK;
 }

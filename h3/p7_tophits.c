@@ -142,6 +142,8 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->noverlaps  = 0;
   hit->nenvelopes = 0;
 
+  hit->dcl        = NULL;
+
   *ret_hit = hit;
   return eslOK;
 }

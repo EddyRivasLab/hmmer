@@ -9,8 +9,8 @@
  *    7. P7_DPRIOR:      mixture Dirichlet prior for profile HMMs
  *    8. P7_SPENSEMBLE:  segment pair ensembles for domain locations
  *    9. P7_ALIDISPLAY:  an alignment formatted for printing
- *   10. P7_TOPHITS:     ranking lists of top-scoring hits
- *   11. P7_DOMAINDEF:   reusably managing workflow in annotating domains
+ *   10. P7_DOMAINDEF:   reusably managing workflow in annotating domains
+ *   11. P7_TOPHITS:     ranking lists of top-scoring hits
  *   12. Inclusion of the architecture-specific optimized implementation.
  *   13. Declaration of functions in HMMER's exposed API.
  *   14. Copyright and license information.
@@ -406,8 +406,6 @@ typedef struct p7_spensemble_s {
 } P7_SPENSEMBLE;
 
 
-
-
 /*****************************************************************
  * 9. P7_ALIDISPLAY: an alignment formatted for printing
  *****************************************************************/
@@ -443,66 +441,17 @@ typedef struct p7_alidisplay_s {
 
 
 /*****************************************************************
- * 10. P7_TOPHITS: ranking lists of top-scoring hits
- *****************************************************************/
-
-/* Structure: P7_HIT
- * 
- * Info about a high-scoring database hit, kept so we can output a
- * sorted list of high hits at the end.
- *
- * sqfrom and sqto are the coordinates that will be shown
- * in the results, not coords in arrays... therefore, reverse
- * complements have sqfrom > sqto
- */
-typedef struct p7_hit_s {
-  char   *name;			/* name of the target               */
-  char   *acc;			/* accession of the target          */
-  char   *desc;			/* description of the target        */
-  double sortkey;		/* number to sort by; big is better    */
-
-  float  score;			/* bit score of the hit                        */
-  float  pre_score;		/* bit score before null2 correction           */
-  float  sum_score;		/* bit score reconstructed from sum of domains */
-
-  double pvalue;		/* P-value of the score               */
-  double pre_pvalue;		/* P-value of the pre_score           */
-  double sum_pvalue;		/* P-value of the sum_score           */
-
-  int    ndom;		/* total # of domains in this seq   */
-  float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
-  int    nregions;	/* number of regions evaluated */
-  int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */
-  int    noverlaps;	/* number of envelopes defined in ensemble clustering that overlap w/ prev envelope */
-  int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
-} P7_HIT;
-
-
-/* Structure: P7_TOPHITS
- * 
-
- * merging when we prepare to output results. "hit" list is NULL and
- * unavailable until after we do a sort.  
- */
-typedef struct p7_tophits_s {
-  P7_HIT **hit;         /* sorted pointer array                     */
-  P7_HIT  *unsrt;	/* unsorted data storage                    */
-  int      Nalloc;	/* current allocation size                  */
-  int      N;		/* number of hits in list now               */
-  int      is_sorted;	/* TRUE when h->hit valid for all N hits    */
-} P7_TOPHITS;
-
-
-/*****************************************************************
- * 11. P7_DOMAINDEF: reusably managing workflow in defining domains
+ * 10. P7_DOMAINDEF: reusably managing workflow in defining domains
  *****************************************************************/
 
 typedef struct p7_dom_s { 
   int            ienv, jenv;
   int            iali, jali;
-  float          envsc;  
-  float          seqcorrection;
-  float          domcorrection;
+  float          envsc;  	/* Forward score in envelope ienv..jenv; without null2 correction */
+  float          seqcorrection;	/* null2 correction to add to per-seq null score for this domain  */
+  float          domcorrection;	/* null2 correction to add null score when calculating a per-domain score */
+  float          bitscore;	/* overall score in bits, null corrected, if this were the only domain in seq */
+  float          pvalue;	/* P-value of the bitscore */
   P7_ALIDISPLAY *ad; 
 } P7_DOMAIN;
 
@@ -561,6 +510,58 @@ typedef struct p7_domaindef_s {
 
 } P7_DOMAINDEF;
 
+
+/*****************************************************************
+ * 11. P7_TOPHITS: ranking lists of top-scoring hits
+ *****************************************************************/
+
+/* Structure: P7_HIT
+ * 
+ * Info about a high-scoring database hit, kept so we can output a
+ * sorted list of high hits at the end.
+ *
+ * sqfrom and sqto are the coordinates that will be shown
+ * in the results, not coords in arrays... therefore, reverse
+ * complements have sqfrom > sqto
+ */
+typedef struct p7_hit_s {
+  char   *name;			/* name of the target               */
+  char   *acc;			/* accession of the target          */
+  char   *desc;			/* description of the target        */
+  double sortkey;		/* number to sort by; big is better    */
+
+  float  score;			/* bit score of the hit                        */
+  float  pre_score;		/* bit score before null2 correction           */
+  float  sum_score;		/* bit score reconstructed from sum of domains */
+
+  double pvalue;		/* P-value of the score               */
+  double pre_pvalue;		/* P-value of the pre_score           */
+  double sum_pvalue;		/* P-value of the sum_score           */
+
+  int    ndom;		/* total # of domains in this seq   */
+  float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
+  int    nregions;	/* number of regions evaluated */
+  int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */
+  int    noverlaps;	/* number of envelopes defined in ensemble clustering that overlap w/ prev envelope */
+  int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
+
+  P7_DOMAIN *dcl;		/* domain coordinate list and alignment display */
+} P7_HIT;
+
+
+/* Structure: P7_TOPHITS
+ * 
+
+ * merging when we prepare to output results. "hit" list is NULL and
+ * unavailable until after we do a sort.  
+ */
+typedef struct p7_tophits_s {
+  P7_HIT **hit;         /* sorted pointer array                     */
+  P7_HIT  *unsrt;	/* unsorted data storage                    */
+  int      Nalloc;	/* current allocation size                  */
+  int      N;		/* number of hits in list now               */
+  int      is_sorted;	/* TRUE when h->hit valid for all N hits    */
+} P7_TOPHITS;
 
 
 

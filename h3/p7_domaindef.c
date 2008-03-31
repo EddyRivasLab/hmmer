@@ -180,12 +180,23 @@ p7_domaindef_GrowTo(P7_DOMAINDEF *ddef, int L)
 int
 p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
 {
+  int status;
   int d;
 
-  for (d = 0; d < ddef->ndom; d++) {
-    p7_alidisplay_Destroy(ddef->dcl[d].ad);
-    ddef->dcl[d].ad = NULL;
-  }
+  /* If ddef->dcl is NULL, we turned the domain list over to a P7_HIT
+   * for permanent storage, and we need to allocate a new one;
+   * else, reuse the one we've got.
+   */
+  if (ddef->dcl == NULL) 
+    ESL_ALLOC(ddef->dcl, sizeof(P7_DOMAIN) * ddef->nalloc);
+  else
+    {
+      for (d = 0; d < ddef->ndom; d++) {
+	p7_alidisplay_Destroy(ddef->dcl[d].ad);
+	ddef->dcl[d].ad = NULL;
+      }
+
+    }
   ddef->ndom = 0;
   ddef->L    = 0;
 
@@ -199,6 +210,9 @@ p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
   p7_trace_Reuse(ddef->tr);	/* probable overkill; should already have been called */
   p7_trace_Reuse(ddef->gtr);	/* likewise */
   return eslOK;
+
+ ERROR:
+  return status;
 }
 
 
