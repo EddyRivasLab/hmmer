@@ -115,7 +115,7 @@ binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
 
 TAGS:
-	etags -t *.c *.h Makefile.in
+	etags  *.c *.h Makefile.in
 
 ###########
 # @LICENSE@

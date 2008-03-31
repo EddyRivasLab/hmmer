@@ -182,6 +182,10 @@ optcheck:
 	done
 
 
+tags:
+	etags h3/*.c h3/*.h Makefile.in
+	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
+
 
 ###########
 # @LICENSE@

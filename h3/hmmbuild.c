@@ -860,7 +860,7 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
     {
       int nclust;
 
-      status = esl_msacluster_SingleLinkage(msa, esl_opt_GetReal(go, "--eid"), NULL, &nclust);
+      status = esl_msacluster_SingleLinkage(msa, esl_opt_GetReal(go, "--eid"), NULL, NULL, &nclust);
       if      (status == eslEMEM) ESL_XFAIL(status, errbuf, "memory allocation failed");
       else if (status != eslOK)   ESL_XFAIL(status, errbuf, "single linkage clustering algorithm (at %d%% id) failed", (int)(100 * esl_opt_GetReal(go, "--eid")));
 
