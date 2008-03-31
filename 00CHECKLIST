@@ -107,8 +107,8 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    (cd documentation/userguide; make)
    mv documentation/userguide/Userguide.pdf .
 * clean up files that don't belong in the distro
-   make distclean
 
+   make distclean
    rm -f  00CHECKLIST CHECKLIST 00README-FIRSTTIME-DEVELOPER
    rm -f  MAILING_LIST LICENSE.tag LICENSE.csh.in
    rm -rf Bugs Internal-Notes Release-Notes
@@ -121,15 +121,26 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    rm -rf documentation
    cd ..
 
-
-
 * package
    cd ..
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
 
+* copy to ftp site
 
-
+  To make snapshots privately available:
+   scp hmmer-${HMMER_VERSION}.tar.gz selab:/opt/www/ftp/pub/pickup/ 
+   echo ftp://selab.janelia.org/pub/pickup/hmmer-${HMMER_VERSION}.tar.gz
    
    
+   
+   
+Release history
+---------------
+
+Release           Date            SVN (HMMER/Easel)
+----------------  -------------   -----------------
+3.0.snap20080325  25 March 2008     r2370/r236
+
+
