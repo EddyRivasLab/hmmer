@@ -120,6 +120,7 @@ p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 #include "esl_getopts.h"
 #include "esl_random.h"
 #include "esl_alphabet.h"
+#include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_dmatrix.h"
 #include "esl_scorematrix.h"

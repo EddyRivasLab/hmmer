@@ -79,7 +79,7 @@ all:
 	  echo "binaries/ subdirectory."; \
 	else\
 	  (cd easel;     ${MAKE});\
-	  (cd h3;        ${MAKE});\
+	  (cd src;       ${MAKE});\
 	fi
 
 
@@ -133,7 +133,7 @@ bindist:
 #
 #	(cd src;       make clean)
 clean:
-	if test -d h3;        then (cd h3;        make clean); fi
+	if test -d src;       then (cd src;       make clean); fi
 	if test -d easel;     then (cd easel;     make clean); fi
 	if test -d testsuite; then (cd testsuite; make clean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
@@ -146,7 +146,7 @@ distclean:
 	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	if test -d h3;        then (cd h3;        make distclean); fi
+	if test -d src;       then (cd src;       make distclean); fi
 	if test -d easel;     then (cd easel;     make distclean); fi
 	if test -d testsuite; then (cd testsuite; make distclean); fi
 	-rm LICENSE.csh
@@ -157,7 +157,7 @@ distclean:
 #
 #	(cd src;       make binclean)
 binclean:
-	if test -d h3;        then (cd h3;        make binclean); fi
+	if test -d src;       then (cd src;       make binclean); fi
 	if test -d easel;     then (cd easel;     make binclean); fi
 	if test -d testsuite; then (cd testsuite; make binclean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
@@ -183,7 +183,7 @@ optcheck:
 
 
 tags:
-	etags h3/*.c h3/*.h Makefile.in
+	etags src/*.c src/*.h Makefile.in
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 

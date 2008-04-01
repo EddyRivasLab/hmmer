@@ -23,8 +23,8 @@
 
 #include "p7_config.h"
 
-#include <easel.h>
-#include <esl_histogram.h>
+#include "easel.h"
+#include "esl_histogram.h"
 
 #include "hmmer.h"
 
@@ -281,7 +281,6 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
 #include "esl_random.h"
 #include "esl_histogram.h"
 #include "esl_getopts.h"
-#include "esl_sqio.h"
 #include "esl_vectorops.h"
 #include "esl_dmatrix.h"
 #include "esl_ratematrix.h"

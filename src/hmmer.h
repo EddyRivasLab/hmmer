@@ -34,7 +34,7 @@
 #include "esl_dmatrix.h"	/* ESL_DMATRIX           */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
-#include "esl_sqio.h"		/* ESL_SQ                */
+#include "esl_sq.h"		/* ESL_SQ                */
 #include "esl_histogram.h"      /* ESL_HISTOGRAM         */
 #include "esl_dirichlet.h"	/* ESL_MIXDCHLET         */
 

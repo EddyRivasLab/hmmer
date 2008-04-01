@@ -14,7 +14,7 @@
 
 #include "easel.h"
 #include "esl_random.h"
-#include "esl_sqio.h"
+#include "esl_sq.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -365,11 +365,13 @@ sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_kstart, int *
  */
 #ifdef p7EMIT_STATS
 #include "p7_config.h"
+
 #include <stdio.h>
-#include <easel.h>
-#include <esl_alphabet.h>
-#include <esl_random.h>
-#include <esl_sqio.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_random.h"
+#include "esl_sq.h"
 #include "hmmer.h"
 
 int
@@ -399,11 +401,11 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
 
-  p7_ProfileConfig(hmm, bg, gm, p7_LOCAL);
+  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
 
   for (i = 0; i < n; i++) 
     {
-      p7_ProfileEmit(r, gm, sq, tr);
+      p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
       p7_trace_StateUseCounts(tr, counts);
 
       p7_ReconfigLength(gm, sq->n);

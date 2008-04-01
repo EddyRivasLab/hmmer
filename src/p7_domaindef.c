@@ -40,7 +40,7 @@
 
 #include "easel.h"
 #include "esl_random.h"
-#include "esl_sqio.h"
+#include "esl_sq.h"
 
 #include "hmmer.h"
 
@@ -758,6 +758,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *
 #include "esl_getopts.h"
 #include "esl_random.h"
 #include "esl_alphabet.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {

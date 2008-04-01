@@ -14,6 +14,7 @@
 #include "esl_dmatrix.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
+#include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_vectorops.h"
 

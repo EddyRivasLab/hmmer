@@ -27,10 +27,10 @@
 
 #include "p7_config.h"
 
-#include <easel.h>
-#include <esl_alphabet.h>
-#include <esl_random.h>		/* when StochasticTrace() moves, don't need random or vectorops here */
-#include <esl_vectorops.h>
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_random.h"		/* when StochasticTrace() moves, don't need random or vectorops here */
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 

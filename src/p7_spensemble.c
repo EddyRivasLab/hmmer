@@ -452,6 +452,7 @@ p7_spensemble_Destroy(P7_SPENSEMBLE *sp)
 #include "esl_random.h"
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"
+#include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_cluster.h"
 #include "esl_vectorops.h"

@@ -16,7 +16,7 @@
 #
 #   C preprocessor symbols:
 #      -  are defined here by calling AC_DEFINE(FOO) or AC_DEFINE(FOO, [42])
-#      -  then #undef FOO lines in easel.h.in become #define FOO or #define FOO 42
+#      -  then #undef FOO in easel.h.in becomes #define FOO, #define FOO 42
 #         I think this only happens in header files that we assign
 #         w/ AC_CONFIG_HEADERS -- which means, easel.h.in
 #
@@ -41,7 +41,7 @@
 
 
 AC_PREREQ(2.60)
-AC_INIT(HMMER, 3.0.snap20080325, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, 3.0.dev, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -129,7 +129,7 @@ AC_CANONICAL_HOST
 #
 # Implements a sneaky if statement that wraps most of the configure.ac M4 code.
 #
-if ((! test -d binaries) && test -d h3); then 
+if ((! test -d binaries) && test -d src); then 
 AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
 
@@ -420,9 +420,8 @@ AC_SYS_LARGEFILE
 if test -e "LICENSE.csh.in"; then
   AC_CONFIG_FILES(LICENSE.csh)
 fi
-AC_CONFIG_FILES(h3/Makefile)
-AC_CONFIG_FILES(testsuite/Makefile)
-AC_CONFIG_HEADERS(h3/p7_config.h)
+AC_CONFIG_FILES([src/Makefile  testsuite/Makefile profmark/Makefile])
+AC_CONFIG_HEADERS(src/p7_config.h)
 
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_FILES([easel/miniapps/Makefile])

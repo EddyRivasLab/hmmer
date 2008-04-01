@@ -16,7 +16,7 @@ DEFS     = @DEFS@
 LIBS     = @LIBS@ -lm
 MPILIBS  = @MPILIBS@
 
-SRCDIR   = ../h3
+SRCDIR   = ../src
 ESLDIR   = ../easel
 
 AR      = @AR@ rcv

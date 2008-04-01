@@ -14,8 +14,8 @@
 #include <string.h>
 #include <math.h>
 
-#include <easel.h>
-#include <esl_getopts.h>
+#include "easel.h"
+#include "esl_getopts.h"
 
 #include "hmmer.h"
 
