@@ -1,0 +1,29 @@
+# Makefile for HMMER profmark benchmark generation tools
+# The Makefile is generated from Makefile.in by autoconf
+# DO NOT EDIT Makefile; only edit Makefile.in
+#
+# SRE, Mon Mar 31 09:12:28 2008 [Janelia]
+# SVN $Id$
+
+CC       = @CC@
+CFLAGS   = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+LDFLAGS  = @LDFLAGS@
+SIMDFLAGS= @SIMD_CFLAGS@
+DEFS     = @DEFS@
+LIBS     = @LIBS@ -lm
+MPILIBS  = @MPILIBS@
+
+SRCDIR   = ../src
+ESLDIR   = ../easel
+
+PROGS    = concatdb
+
+all: ${PROGS} 
+
+.c.o: 
+	${CC} -I ${ESLDIR} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
+
+${PROGS}: @EXEC_DEPENDENCY@  ${SRCDIR}/libhmmer.a ${ESLDIR}/libeasel.a
+	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -I ${ESLDIR} -L ${ESLDIR} -o $@ $@.o ${ESLDIR}/libeasel.a ${LIBS}
+
