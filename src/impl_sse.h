@@ -1,22 +1,24 @@
 /* SSE implementation of optimized Viterbi and Forward routines:
  * structures, declarations, and macros.
  * 
- * Currently (this remains in flux as of 14 Dec 07) an optimized
- * implementation is required to provide a ViterbiFilter() and a
- * ForwardFilter() implementation. A call to p7_oprofile_Convert()
- * makes an optimized profile that works for both filters.
+ * Currently (and this remains in flux as of 14 Dec 07) an optimized
+ * implementation is required to provide an MSPFilter(),
+ * ViterbiFilter() and a ForwardFilter() implementation. A call to
+ * p7_oprofile_Convert() makes an optimized profile that works for
+ * all filters.
  * 
- * A "Filter" returns a score may be an approximation (with
+ * Any "Filter" returns a score may be an approximation (with
  * characterized or at least characterizable error), and which may
  * have limited upper range, such that high scores are returned as
- * eslINFINITY. Additionally, Filters may only work on local alignment
- * modes, because they are allowed to make assumptions about the range
- * of scores.
+ * eslINFINITY. Additionally, Filters might only work on local
+ * alignment modes, because they are allowed to make assumptions about
+ * the range of scores.
  * 
- * Here, ViterbiFilter() is a 8-bit lspace implementation with limited
- * precision and limited range (max 20 bits); ForwardFilter() is a
- * pspace float implementation with correct precision and limited
- * range (max ~127 bits). Both require local mode models.
+ * Here, MSPFilter() and ViterbiFilter() are 8-bit lspace
+ * implementations with limited precision and limited range (max 20
+ * bits); ForwardFilter() is a pspace float implementation with
+ * correct precision and limited range (max ~127 bits). Both require
+ * local mode models.
  * 
  * An optimized implementation may also provide other optimized
  * routines. It provides specialized Convert*() functions for these,
@@ -41,6 +43,18 @@
  * shorthand of "lspace uchar" means log-odds scores stored as
  * unsigned chars, for example; "pspace float" means odds ratios
  * stored as floats.
+ * 
+ * A note on memory alignment: malloc() is required to return a
+ * pointer "suitably aligned so that it may be aligned to a pointer of
+ * any type of object" (C99 7.20.3). __m128 vectors are 128-bits wide,
+ * so malloc() ought to return a pointer aligned on a 16-byte
+ * boundary.  However, this is not the case for glibc, and apparently
+ * other system libraries. Google turns up threads of arguments
+ * between glibc and gcc developers over whose problem this is; this
+ * argument has apparently not been resolved, and is of no help.
+ * Here, we manually align the relevant pointers by overallocating in
+ * *_mem with malloc, then arithmetically manipulating the address to
+ * mask off (~0xf).
  * 
  * SRE, Sun Nov 25 11:23:02 2007
  * SVN $Id$
@@ -143,6 +157,13 @@ typedef struct p7_oprofile_s {
   float    ddbound_f;		/* full precision bound for lazy DD            */
   int      lspace_f;		/* TRUE if tf,rf are in lspace for Score()     */
 
+  /* Our actual vector mallocs, before we align the memory                     */
+  __m128i  *tu_mem;
+  __m128i  *ru_mem;
+  __m128i  *rm_mem;
+  __m128   *tf_mem;
+  __m128   *rf_mem;
+
   /* Information copied from parent profile:                                       */
   char  *name;			/* unique name of model                            */
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values             */
@@ -164,15 +185,18 @@ enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 
 typedef struct p7_omx_s {
   __m128i *dpu;			/* one row of a striped DP matrix for [0..q-1][MDI] for uchars */
+  __m128i *dpu_mem;		/* allocation of dpu, before aligning the pointer              */
   int     allocQ16;		/* total uchar vectors allocated                               */
   int     Q16;			/* when omx is in use: how many quads are valid (= p7O_NQU(M)) */
 
   __m128 *dpf;			/* one row of a striped DP matrix for floats                   */
+  __m128 *dpf_mem;		/* allocation of dpf, before aligning the pointer              */
   int     allocQ4;		/* total float vectors allocated                               */
   int     Q4;			/* when omx is in use: how many quads are valid (= p7O_NQF(M)) */
 
   int     allocM;		/* current allocation size (redundant with Q16 and Q4, really) */
   int     M;			/* when omx is in use: how big is the query                    */
+
 #ifdef p7_DEBUGGING  
   int     debugging;		/* TRUE if we're in debugging mode                             */
   FILE   *dfp;			/* output stream for diagnostics                               */

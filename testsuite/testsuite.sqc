@@ -15,6 +15,7 @@
 1 exercise build_utest        @build_utest@
 1 exercise dp_generic_utest   @dp_generic_utest@
 1 exercise impl_sse_utest     @impl_sse_utest@
+1 exercise logsum_utest       @logsum_utest@
 1 exercise modelconfig_utest  @modelconfig_utest@
 1 exercise p7_hmm_utest       @p7_hmm_utest@
 1 exercise p7_hmmfile_utest   @p7_hmmfile_utest@
@@ -35,7 +36,6 @@
 #   impl_jb.c
 #   impl_vmx.c
 #   island.c
-#   logsum.c
 #   modelstats.c
 #   mpisupport.c     (MPI testing needs to be handled specially)
 #   p7_alidisplay.c

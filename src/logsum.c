@@ -1,5 +1,13 @@
-/* The p7_FLogsum() function used in the Forward() algorithm.
+/* p7_FLogsum() function used in the Forward() algorithm.
  * 
+ * Contents:
+ *    1. Floating point log sum.
+ *    2. Scaled integer log sum.
+ *    3. Benchmark driver.
+ *    4. Unit tests.
+ *    5. Test driver.
+ *    6. Copyright and license information.
+ *
  * Exegesis:
  * 
  * Internally, HMMER3 profile scores are in nats: floating point
@@ -44,73 +52,113 @@
 static float flogsum_lookup[p7_LOGSUM_TBL];
 static int   ilogsum_lookup[p7_LOGSUM_TBL];
 
-void
+/*****************************************************************
+ *= 1. floating point log sum
+ *****************************************************************/
+
+/* Function:  p7_FLogsumInit()
+ * Synopsis:  Initialize the p7_Logsum() function.
+ * Incept:    SRE, Thu Apr 10 08:46:23 2008 [Janelia]
+ *
+ * Purpose:   Initialize the lookup table for <p7_FLogsum()>. 
+ *            This function must be called once before any
+ *            call to <p7_FLogsum()>.
+ *            
+ *            The precision of the lookup table is determined
+ *            by the compile-time <p7_INTSCALE> constant.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
 p7_FLogsumInit(void)
 {
   static int firsttime = TRUE;
-  if (!firsttime) return;
+  if (!firsttime) return eslOK;
   firsttime = FALSE;
 
   int i;
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
     flogsum_lookup[i] = log(1. + exp((double) -i / p7_INTSCALE));
-  return;
+  return eslOK;
 }
 
-/* Function:  
- * Synopsis:  
+/* Function:  p7_FLogsum()
+ * Synopsis:  Approximate $\log(e^a + e^b)$.
  * Incept:    SRE, Fri Jul 13 15:30:39 2007 [Janelia]
  *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ * Purpose:   Returns a fast table-driven approximation to
+ *            $\log(e^a + e^b)$.
+ *            
+ *            Return value is undefined if either <a> or
+ *            <b> is <NaN>.
  *
  * Note:      This function is a critical optimization target, because
  *            it's in the inner loop of Forward() algorithms.
  */
 float
-p7_FLogsum(float s1, float s2)
+p7_FLogsum(float a, float b)
 {
 #if 0
-  return (log(exp(s1) + exp(s2))); /* SRE: While debugging SSE impl. Remember to remove! */
+  return (log(exp(a) + exp(b))); /* SRE: While debugging SSE impl. Remember to remove! */
 #endif
-  const float max = ESL_MAX(s1, s2);
-  const float min = ESL_MIN(s1, s2);
+  const float max = ESL_MAX(a, b);
+  const float min = ESL_MIN(a, b);
   return  (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
 } 
 
+/*****************************************************************
+ *= 2. scaled integer version
+ *****************************************************************/
 
-void 
+
+/* Function:  p7_ILogsumInit()
+ * Synopsis:  Initialize the p7_ILogsum() function.
+ * Incept:    SRE, Thu Apr 10 08:54:24 2008 [Janelia]
+ *
+ * Purpose:   One-time initialization of the lookup table for
+ *            <p7_ILogsum()>.  This must be done once before any call
+ *            to <p7_ILogsum()>.
+ *            
+ *            The precision of both the lookup table and the scaled
+ *            integers that will be logsummed is determined by the
+ *            compile-time <p7_INTSCALE> constant.
+ *
+ * Returns:   <eslOK> on success
+ */
+int
 p7_ILogsumInit(void)
 {
   static int firsttime = TRUE;
-  if (!firsttime)  return;
+  if (!firsttime)  return eslOK;
   firsttime = FALSE;
     
   int i;
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
     ilogsum_lookup[i] = rint(p7_INTSCALE * (log(1.+exp((double) -i/p7_INTSCALE))));
+  return eslOK;
+
 }
 
-
+/* Function:  p7_ILogsum()
+ * Synopsis:  Approximate scaled integer log of $(e^a + e^b)$
+ * Incept:    SRE, Thu Apr 10 08:58:42 2008 [Janelia]
+ *
+ * Purpose:   Returns the scaled integer logarithm of 
+ *            $e^a + e^b$ where $a,b$ are both scaled integer
+ *            logarithms, using the <p7_INTSCALE> compile-time
+ *            constant.
+ */
 int 
-p7_ILogsum(int s1, int s2)
+p7_ILogsum(int a, int b)
 {
-  const int max = ESL_MAX(p7_IMPOSSIBLE, ESL_MAX(s1, s2));
-  const int min = ESL_MIN(s1, s2);
+  const int max = ESL_MAX(p7_IMPOSSIBLE, ESL_MAX(a, b));
+  const int min = ESL_MIN(a, b);
   return  (min <= p7_IMPOSSIBLE || (max-min) >= p7_LOGSUM_TBL) ? max : max + ilogsum_lookup[max-min];
 } 
 
 
-
 /*****************************************************************
- * Benchmark driver.
+ * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7LOGSUM_BENCHMARK
 /* gcc -o benchmark -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_BENCHMARK logsum.c -leasel -lm
@@ -221,6 +269,157 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7LOGSUM_BENCHMARK*/
+/*-------------------- end, benchmark ---------------------------*/
 
+
+/*****************************************************************
+ * 4. Unit tests
+ *****************************************************************/
+#ifdef p7LOGSUM_TESTDRIVE
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+static void
+utest_FLogsumError(ESL_GETOPTS *go, ESL_RANDOMNESS *r)
+{
+  int     N          = esl_opt_GetInteger(go, "-N");
+  float   maxval     = esl_opt_GetReal(go, "-S");
+  int     be_verbose = esl_opt_GetBoolean(go, "-v");
+  float   maxerr = 0.0;
+  float   avgerr = 0.0;
+  int     i;
+  float   a,b,result,exact,err;
+
+  for (i = 0; i < N; i++)
+    {
+      a = (esl_random(r) - 0.5) * maxval * 2.; /* uniform draws on -maxval..maxval */
+      b = (esl_random(r) - 0.5) * maxval * 2.; 
+
+      exact  = log(exp(a) + exp(b));
+      result = p7_FLogsum(a,b);
+      err    = fabs(exact-result) / maxval;
+
+      avgerr += err;
+      maxerr = ESL_MAX(maxerr, err);
+
+      if (be_verbose)
+	printf("%8.4f %8.4f %8.4f %8.4f %8.4f\n", a, b, exact, result, err);
+    }
+  avgerr /= (float) N;
+
+  if (be_verbose) {
+    printf("average error = %f\n", avgerr);
+    printf("max error     = %f\n", maxerr);
+  }
+
+  if (maxerr > 0.0001) esl_fatal("maximum error of %f is too high: logsum unit test fails", maxerr);
+  if (avgerr > 0.0001) esl_fatal("average error of %f is too high: logsum unit test fails", avgerr);
+}
+
+static void
+utest_FLogsumSpecials(void)
+{
+  char *msg = "logsum specials unit test failed";
+
+  if (p7_FLogsum(0.0,          -eslINFINITY) !=          0.0) esl_fatal(msg);
+  if (p7_FLogsum(-eslINFINITY,          0.0) !=          0.0) esl_fatal(msg);
+  if (p7_FLogsum(-eslINFINITY, -eslINFINITY) != -eslINFINITY) esl_fatal(msg);
+
+  if (p7_FLogsum(0.0,           eslINFINITY) !=  eslINFINITY) esl_fatal(msg);
+  if (p7_FLogsum(eslINFINITY,           0.0) !=  eslINFINITY) esl_fatal(msg);
+  if (p7_FLogsum(eslINFINITY,   eslINFINITY) !=  eslINFINITY) esl_fatal(msg);
+}
+#endif /*p7LOGSUM_TESTDRIVE*/
+/*------------------- end, unit tests ---------------------------*/
+
+/*****************************************************************
+ * 5. Test driver.
+ *****************************************************************/
+#ifdef p7LOGSUM_TESTDRIVE
+/*
+  gcc -o logsum_utest -msse2 -g -Wall -I. -L. -I../easel -L../easel -Dp7LOGSUM_TESTDRIVE logsum.c -leasel -lm
+  ./logsum_utest
+ */
+#include "p7_config.h"
+
+#include <stdio.h>
+#include <math.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0},
+  {"-N",  eslARG_INT,    "1000", NULL, "n>0",NULL, NULL, NULL, "number of samples",                 0},
+  {"-S",  eslARG_REAL,   "20.0", NULL, "x>0",NULL, NULL, NULL, "maximum operand value",             0},
+  {"-r",  eslARG_NONE,     NULL, NULL, NULL, NULL, NULL, NULL, "use arbitrary random number seed",  0},
+  {"-s",  eslARG_INT,      "42", NULL, "n>0",NULL, NULL, NULL, "random number seed",                0},
+  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose output",               0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for logsum.c";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go     = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r      = NULL;
+
+  if (esl_opt_GetBoolean(go, "-r")) r = esl_randomness_CreateTimeseeded();
+  else                              r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+
+  p7_FLogsumInit();
+
+  utest_FLogsumError(go, r);
+  utest_FLogsumSpecials();
+
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return eslOK;
+}
+#endif /*p7LOGSUM_TESTDRIVE*/
+/*------------------ end, test driver ---------------------------*/
+
+
+/*****************************************************************
+ * 5. Example.
+ *****************************************************************/
+#ifdef p7LOGSUM_EXAMPLE
+/* gcc -o example -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_EXAMPLE logsum.c -leasel -lm
+ * ./example
+ */
+#include "p7_config.h"
+#include "easel.h"
+#include "hmmer.h"
+
+int
+main(void)
+{
+  float a = -eslINFINITY;
+  float b = 0.;
+  float result;
+
+  p7_FLogsumInit();
+  result = p7_FLogsum(a, b);
+  printf("p7_FLogsum(%f,%f) = %f\n", a, b, result);
+
+  result = log(exp(a) + exp(b));
+  printf("log(e^%f + e^%f) = %f\n", a, b, result);
+  return eslOK;
+}
+#endif /*p7LOGSUM_EXAMPLE*/
+
+/*--------------------- end, example ----------------------------*/
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
 
 

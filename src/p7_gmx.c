@@ -57,10 +57,11 @@ p7_gmx_Create(int allocM, int allocL)
       gx->dp[i][allocM * p7G_NSCELLS + p7G_I] = -eslINFINITY; /* I_M */
     }
 
-  gx->M      = allocM;
-  gx->L      = allocL;
-  gx->ncells = (allocM+1)*(allocL+1);
-  gx->nrows  = (allocL+1);
+  gx->M      = 0;
+  gx->L      = 0;
+  gx->allocM = allocM;
+  gx->allocL = allocL;
+  gx->ncells = (uint64_t) (allocM+1)* (uint64_t) (allocL+1);
   return gx;
 
  ERROR:
@@ -90,44 +91,52 @@ p7_gmx_Create(int allocM, int allocL)
 int
 p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL)
 {
-  int     status;
-  void   *p;
-  int     i;
-  size_t  ncells, nrows;
+  int      status;
+  void    *p;
+  int      i;
+  uint64_t ncells;
+  int      do_reset = FALSE;
 
-  ncells = (allocM+1)*(allocL+1);
-  nrows  = allocL+1;
-  if (ncells <= gx->ncells && nrows <= gx->nrows) { gx->M = allocM; gx->L = allocL; return eslOK; }
-
+  if (allocM <= gx->allocM && allocL <= gx->allocL) return eslOK;
+  
   /* must we realloc the 2D matrices? (or can we get away with just
    * jiggering the row pointers, if we are growing in one dimension
    * while shrinking in another?)
    */
+  ncells = (uint64_t) (allocM+1) * (uint64_t) (allocL+1);
   if (ncells > gx->ncells) 
     {
       ESL_RALLOC(gx->dp_mem, p, sizeof(float) * ncells * p7G_NSCELLS);
       gx->ncells = ncells;
+      do_reset   = TRUE;
     }
 
   /* must we reallocate the row pointers? */
-  if (nrows > gx->nrows)
+  if (allocL > gx->allocL)
     {
-      ESL_RALLOC(gx->xmx_mem, p, sizeof(float)   * nrows * p7G_NXCELLS);
-      ESL_RALLOC(gx->dp,      p, sizeof(float *) * nrows);
-      gx->nrows  = nrows;
+      ESL_RALLOC(gx->xmx_mem, p, sizeof(float)   * (allocL+1) * p7G_NXCELLS);
+      ESL_RALLOC(gx->dp,      p, sizeof(float *) * (allocL+1));
+      gx->allocL = allocL;
+      do_reset   = TRUE;
     }
 
-  /* reset all the row pointers (even though we may not have to: if we
-   * increased allocL without reallocating cells or changing M,
-   * there's some wasted cycles here - but I'm not sure this case
-   * arises, and I'm not sure it's worth thinking hard about. )
-   */
-  gx->xmx = gx->xmx_mem;
-  for (i = 0; i <= allocL; i++) 
-    gx->dp[i] = gx->dp_mem + i * (allocM+1) * p7G_NSCELLS;
+  /* must we widen the rows? */
+  if (allocM > gx->allocM)
+    {
+      gx->allocM = allocM;
+      do_reset   = TRUE;
+    }
 
-  gx->M      = allocM;
-  gx->L      = allocL;
+  /* reset all the row pointers.*/
+  if (do_reset)
+    {
+      gx->xmx = gx->xmx_mem;
+      for (i = 0; i <= allocL; i++) 
+	gx->dp[i] = gx->dp_mem + i * (allocM+1) * p7G_NSCELLS;
+    }
+
+  gx->M      = 0;
+  gx->L      = 0;
   return eslOK;
 
  ERROR:

@@ -73,24 +73,33 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(om, sizeof(P7_OPROFILE));
-  om->tu = NULL;
-  om->ru = NULL;
-  om->tf = NULL;
-  om->rf = NULL;
+  om->tu_mem = NULL;
+  om->tf_mem = NULL;
+  om->ru_mem = NULL;
+  om->rm_mem = NULL;
+  om->rf_mem = NULL;
+  om->ru     = NULL;
+  om->tf     = NULL;
+  om->rf     = NULL;
 
   /* level 1 */
-  ESL_ALLOC(om->tu, sizeof(__m128i)   * nqu  * p7O_NTRANS);    
-  ESL_ALLOC(om->tf, sizeof(__m128)    * nqf  * p7O_NTRANS);    
+  ESL_ALLOC(om->tu_mem, sizeof(__m128i) * nqu  * p7O_NTRANS       +15);   
+  ESL_ALLOC(om->tf_mem, sizeof(__m128)  * nqf  * p7O_NTRANS       +15);    
+  ESL_ALLOC(om->ru_mem, sizeof(__m128i) * nqu  * p7O_NR * abc->Kp +15);                     
+  ESL_ALLOC(om->rm_mem, sizeof(__m128i) * nqu           * abc->Kp +15);                     
+  ESL_ALLOC(om->rf_mem, sizeof(__m128i) * nqf  * p7O_NR * abc->Kp +15);                     
   ESL_ALLOC(om->ru, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om->rm, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om->rf, sizeof(__m128 *)  * abc->Kp); 
-  om->ru[0] = NULL;
-  om->rf[0] = NULL;
 
-  /* level 2 */
-  ESL_ALLOC(om->ru[0], sizeof(__m128i) * nqu  * p7O_NR * abc->Kp);                     
-  ESL_ALLOC(om->rm[0], sizeof(__m128i) * nqu           * abc->Kp);                     
-  ESL_ALLOC(om->rf[0], sizeof(__m128i) * nqf  * p7O_NR * abc->Kp);                     
+  /* memory alignment */
+  om->tu    = (__m128i *) (((unsigned long int) om->tu_mem + 15) & (~0xf));
+  om->tf    = (__m128  *) (((unsigned long int) om->tf_mem + 15) & (~0xf));
+  om->ru[0] = (__m128i *) (((unsigned long int) om->ru_mem + 15) & (~0xf));
+  om->rm[0] = (__m128i *) (((unsigned long int) om->rm_mem + 15) & (~0xf));
+  om->rf[0] = (__m128  *) (((unsigned long int) om->rf_mem + 15) & (~0xf));
+
+  /* the rest of the row pointers */
   for (x = 1; x < abc->Kp; x++) {
     om->ru[x] = om->ru[0] + (x * nqu * p7O_NR);
     om->rm[x] = om->rm[0] + (x * nqu);
@@ -135,13 +144,15 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->name != NULL) free(om->name);
-  if (om->tu   != NULL) free(om->tu);
-  if (om->tf   != NULL) free(om->tf);
-
-  if (om->ru != NULL) { if (om->ru[0] != NULL) free(om->ru[0]);  free(om->ru); }
-  if (om->rm != NULL) { if (om->rm[0] != NULL) free(om->rm[0]);  free(om->rm); }
-  if (om->rf != NULL) { if (om->rf[0] != NULL) free(om->rf[0]);  free(om->rf); }
+  if (om->name   != NULL) free(om->name);
+  if (om->tu_mem != NULL) free(om->tu_mem);
+  if (om->ru_mem != NULL) free(om->ru_mem);
+  if (om->rm_mem != NULL) free(om->rm_mem);
+  if (om->tf_mem != NULL) free(om->tf_mem);
+  if (om->rf_mem != NULL) free(om->rf_mem);
+  if (om->ru     != NULL) free(om->ru);
+  if (om->rm     != NULL) free(om->rm);
+  if (om->rf     != NULL) free(om->rf);
   free(om);
 }
 /*----------------- end, P7_OPROFILE structure ------------------*/
@@ -173,14 +184,16 @@ p7_omx_Create(int allocM)
   int      status;
 
   ESL_ALLOC(ox, sizeof(P7_OMX));
-  ox->dpu = NULL;
-  ox->dpf = NULL;
+  ox->dpu_mem = NULL;
+  ox->dpf_mem = NULL;
 
-  ESL_ALLOC(ox->dpu,  sizeof(__m128i) * p7X_NSCELLS * nqu); 
+  ESL_ALLOC(ox->dpu_mem,  sizeof(__m128i) * p7X_NSCELLS * nqu + 15); 
+  ox->dpu       = (__m128i *) (((unsigned long int) ox->dpu_mem + 15) & (~0xf));
   ox->allocQ16  = nqu;
   ox->Q16       = 0;
 
-  ESL_ALLOC(ox->dpf,  sizeof(__m128)  * p7X_NSCELLS * nqf);
+  ESL_ALLOC(ox->dpf_mem,  sizeof(__m128)  * p7X_NSCELLS * nqf + 15);
+  ox->dpf       = (__m128 *) (((unsigned long int) ox->dpf_mem + 15) & (~0xf));
   ox->allocQ4   = nqf;
   ox->Q4        = 0;
 
@@ -227,10 +240,12 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM)
   int   nqu = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
   int   status;
  
-  ESL_RALLOC(ox->dpu, p, sizeof(__m128i) * p7X_NSCELLS * nqu);
+  ESL_RALLOC(ox->dpu_mem, p, sizeof(__m128i) * p7X_NSCELLS * nqu + 15);
+  ox->dpu       = (__m128i *) (((unsigned long int) ox->dpu_mem + 15) & (~0xf));  
   ox->allocQ16 = nqu;
 
-  ESL_RALLOC(ox->dpf, p, sizeof(__m128)  * p7X_NSCELLS * nqf);
+  ESL_RALLOC(ox->dpf_mem, p, sizeof(__m128)  * p7X_NSCELLS * nqf + 15);
+  ox->dpf       = (__m128 *) (((unsigned long int) ox->dpf_mem + 15) & (~0xf));
   ox->allocQ4  = nqf;
 
   ox->allocM = allocM;
@@ -255,8 +270,8 @@ void
 p7_omx_Destroy(P7_OMX *ox)
 {
   if (ox == NULL) return;
-  if (ox->dpu != NULL) free(ox->dpu);
-  if (ox->dpf != NULL) free(ox->dpf);
+  if (ox->dpu_mem != NULL) free(ox->dpu_mem);
+  if (ox->dpf_mem != NULL) free(ox->dpf_mem);
   free(ox);
   return;
 }

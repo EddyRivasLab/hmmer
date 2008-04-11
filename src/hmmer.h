@@ -337,8 +337,9 @@ typedef struct p7_gmx_s {
   int  M;		/* actual model dimension (model 1..M)    */
   int  L;		/* actual sequence dimension (seq 1..L)   */
   
-  size_t ncells;	/* current cell allocation limit: >= (M+1)*(L+1) */
-  size_t nrows;    	/* current row allocation limit:  >= L+1  */
+  int      allocL;      /* current allocated number of rows (nrows=allocL+1; L<=allocL) */
+  int      allocM;	/* current set row width (ncells per row=allocM+1;   M<=allocM) */
+  uint64_t ncells;	/* total # of allocated cells: (allocL+1)(allocM+1)             */
 
   float **dp;           /* logically [0.1..L][0.1..M][0..p7G_NSCELLS-1]; indexed [i][k*p7G_NSCELLS+s] */
   float  *xmx;          /* logically [0.1..L][0..p7G_NXCELLS-1]; indexed [i*p7G_NXCELLS+s]            */
@@ -633,9 +634,9 @@ extern float p7_SILO2Lod(int silo);
 extern int   p7_AminoFrequencies(float *f);
 
 /* logsum.c */
-extern void  p7_FLogsumInit(void);
-extern float p7_FLogsum(float s1, float s2);
-extern void  p7_ILogsumInit(void);
+extern int   p7_FLogsumInit(void);
+extern float p7_FLogsum(float a, float b);
+extern int   p7_ILogsumInit(void);
 extern int   p7_ILogsum(int s1, int s2);
 
 

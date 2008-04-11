@@ -166,6 +166,8 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
   
   /* T state (not stored) */
   if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  gx->M = gm->M;
+  gx->L = L;
   return eslOK;
 }
 
@@ -283,6 +285,8 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
     }
 
   if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  gx->M = M;
+  gx->L = L;
   return eslOK;
 }
 
@@ -382,6 +386,8 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
     }
 
   if (opt_sc != NULL) *opt_sc = XMX(0,p7G_N);
+  gx->M = M;
+  gx->L = L;
   return eslOK;
 }
 
@@ -436,6 +442,8 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
     for (k = 1 ; k <= gm->M; k++)
       H = ESL_MAX(H, MMX(i,k));
   
+  gx->M = gm->M;
+  gx->L = L;
   if (opt_fwdscore != NULL) *opt_fwdscore = F;
   if (opt_hybscore != NULL) *opt_hybscore = H;
   return eslOK;
@@ -510,6 +518,8 @@ p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_
       XMX(i,p7G_N) =          XMX(i-1,p7G_N) + tloop;
       XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i,  p7G_J) + tmove);
     }
+  gx->M = gm->M;
+  gx->L = L;
   if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + tmove;
   return eslOK;
 }
