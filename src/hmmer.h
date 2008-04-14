@@ -337,14 +337,14 @@ typedef struct p7_gmx_s {
   int  M;		/* actual model dimension (model 1..M)    */
   int  L;		/* actual sequence dimension (seq 1..L)   */
   
-  int      allocL;      /* current allocated number of rows (nrows=allocL+1; L<=allocL) */
-  int      allocM;	/* current set row width (ncells per row=allocM+1;   M<=allocM) */
-  uint64_t ncells;	/* total # of allocated cells: (allocL+1)(allocM+1)             */
+  int      allocR;      /* current allocated # of rows : L+1 <= validR <= allocR                */
+  int      validR;	/* # of rows actually pointing at DP memory                             */
+  int      allocW;	/* current set row width :  M+1 <= allocW                               */
+  uint64_t ncells;	/* total # of allocated cells in 2D matrix : ncells >= (validR)(allocW) */
 
   float **dp;           /* logically [0.1..L][0.1..M][0..p7G_NSCELLS-1]; indexed [i][k*p7G_NSCELLS+s] */
   float  *xmx;          /* logically [0.1..L][0..p7G_NXCELLS-1]; indexed [i*p7G_NXCELLS+s]            */
 
-  float  *xmx_mem;	
   float  *dp_mem;
 } P7_GMX;
 
@@ -702,6 +702,7 @@ extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
 extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
 extern void    p7_gmx_Destroy(P7_GMX *gx);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx);
+extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
 
 
 /* p7_hmm.c */

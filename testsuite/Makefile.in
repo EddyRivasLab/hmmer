@@ -28,6 +28,7 @@ UNIT_TESTS = \
 	impl_sse_utest\
 	logsum_utest\
 	modelconfig_utest\
+	p7_gmx_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
 	p7_profile_utest\

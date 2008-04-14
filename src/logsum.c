@@ -89,8 +89,8 @@ p7_FLogsumInit(void)
  * Purpose:   Returns a fast table-driven approximation to
  *            $\log(e^a + e^b)$.
  *            
- *            Return value is undefined if either <a> or
- *            <b> is <NaN>.
+ *            Either <a> or <b> (or both) may be $-\infty$,
+ *            but neither may be $+\infty$ or <NaN>.
  *
  * Note:      This function is a critical optimization target, because
  *            it's in the inner loop of Forward() algorithms.
@@ -326,10 +326,6 @@ utest_FLogsumSpecials(void)
   if (p7_FLogsum(0.0,          -eslINFINITY) !=          0.0) esl_fatal(msg);
   if (p7_FLogsum(-eslINFINITY,          0.0) !=          0.0) esl_fatal(msg);
   if (p7_FLogsum(-eslINFINITY, -eslINFINITY) != -eslINFINITY) esl_fatal(msg);
-
-  if (p7_FLogsum(0.0,           eslINFINITY) !=  eslINFINITY) esl_fatal(msg);
-  if (p7_FLogsum(eslINFINITY,           0.0) !=  eslINFINITY) esl_fatal(msg);
-  if (p7_FLogsum(eslINFINITY,   eslINFINITY) !=  eslINFINITY) esl_fatal(msg);
 }
 #endif /*p7LOGSUM_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
