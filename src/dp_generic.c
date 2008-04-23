@@ -1103,7 +1103,7 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
       if (p7_GTrace  (dsq, L, gm, gx, tr)         != eslOK) esl_fatal("trace failed");
       if (p7_trace_Validate(tr, abc, dsq, errbuf) != eslOK) esl_fatal("trace invalid:\n%s", errbuf);
       if (p7_trace_Score(tr, dsq, gm, &sc2)       != eslOK) esl_fatal("trace score failed");
-      if (sc1 != sc2) esl_fatal("Trace score not equal to Viterbi score");
+      if (esl_FCompare(sc1, sc2, 1e-6)            != eslOK) esl_fatal("Trace score != Viterbi score"); 
       if (p7_bg_NullOne(bg, dsq, L, &sc2)         != eslOK) esl_fatal("null score failed");
 
       avg_sc += (sc1 - sc2);
