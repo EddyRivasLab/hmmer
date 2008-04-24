@@ -340,7 +340,7 @@ sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_kstart, int *
   for (k = 1; k <= gm->M; k++)
     pstart[k] = exp(p7P_TSC(gm, k-1, p7P_BM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
   kstart = esl_rnd_FChoose(r, pstart, gm->M+1);          	 /* sample the starting position from that distribution */
-  kend   = kstart + esl_rnd_Choose(r, gm->M-kstart+1);           /* and the exit uniformly from possible exits for it */
+  kend   = kstart + esl_rnd_Roll(r, gm->M-kstart+1);           /* and the exit uniformly from possible exits for it */
 
   free(pstart);
   *ret_kstart = kstart;

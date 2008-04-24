@@ -2235,6 +2235,7 @@ simulate_msp_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
@@ -2309,7 +2310,7 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       if (! esl_opt_GetBoolean(go, "-b")) {
 	if      (esl_opt_GetBoolean(go, "-M")) p7_MSPFilter    (dsq, L, om, ox, &sc1);   
@@ -2363,10 +2364,10 @@ main(int argc, char **argv)
 
 
 
-#ifdef p7IMPL_VNX_BENCHMARK2
+#ifdef p7IMPL_VMX_BENCHMARK2
 /* The second benchmark driver is for timing profile conversion.
-   gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK2 impl_sse.c -lhmmer -leasel -lm 
-   icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK2 impl_sse.c -lhmmer -leasel -lm 
+   gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_VMX_BENCHMARK2 impl_sse.c -lhmmer -leasel -lm 
+   icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_VMX_BENCHMARK2 impl_sse.c -lhmmer -leasel -lm 
 
    ./benchmark-sse <hmmfile>         runs benchmark
  */
@@ -2446,6 +2447,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 
 static void
 make_random_profile(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
@@ -2500,7 +2502,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 
   while (N--)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       p7_MSPFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
@@ -2553,7 +2555,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
 
   while (N--)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       p7_ViterbiFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi     (dsq, L, gm, gx, &sc2);
@@ -2598,7 +2600,7 @@ utest_forward_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
   make_random_profile(r, abc, bg, M, L, &hmm, &gm, &om);
   while (N--)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       p7_ForwardFilter(dsq, L, om, ox, &sc1);
       p7_GForward     (dsq, L, gm, gx, &sc2);
@@ -2636,7 +2638,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
   pspace_to_lspace_float(om);
   while (N--)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       p7_ViterbiScore(dsq, L, om, ox, &sc1);
       p7_GViterbi    (dsq, L, gm, gx, &sc2);

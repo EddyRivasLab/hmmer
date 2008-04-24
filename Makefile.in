@@ -135,6 +135,7 @@ bindist:
 clean:
 	if test -d src;       then (cd src;       make clean); fi
 	if test -d easel;     then (cd easel;     make clean); fi
+	if test -d profmark;  then (cd profmark;  make clean); fi
 	if test -d testsuite; then (cd testsuite; make clean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
@@ -148,6 +149,7 @@ distclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	if test -d src;       then (cd src;       make distclean); fi
 	if test -d easel;     then (cd easel;     make distclean); fi
+	if test -d profmark;  then (cd profmark;  make distclean); fi
 	if test -d testsuite; then (cd testsuite; make distclean); fi
 	-rm LICENSE.csh
 	-rm Makefile
@@ -159,6 +161,7 @@ distclean:
 binclean:
 	if test -d src;       then (cd src;       make binclean); fi
 	if test -d easel;     then (cd easel;     make binclean); fi
+	if test -d profmark;  then (cd profmark;  make binclean); fi
 	if test -d testsuite; then (cd testsuite; make binclean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm config.log config.status

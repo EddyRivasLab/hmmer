@@ -452,7 +452,7 @@ typedef struct p7_dom_s {
   float          seqcorrection;	/* null2 correction to add to per-seq null score for this domain  */
   float          domcorrection;	/* null2 correction to add null score when calculating a per-domain score */
   float          bitscore;	/* overall score in bits, null corrected, if this were the only domain in seq */
-  float          pvalue;	/* P-value of the bitscore */
+  double         pvalue;	/* P-value of the bitscore */
   P7_ALIDISPLAY *ad; 
 } P7_DOMAIN;
 

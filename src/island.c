@@ -278,13 +278,14 @@ p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_random.h"
-#include "esl_histogram.h"
-#include "esl_getopts.h"
-#include "esl_vectorops.h"
 #include "esl_dmatrix.h"
-#include "esl_ratematrix.h"
 #include "esl_exponential.h"
+#include "esl_getopts.h"
+#include "esl_histogram.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
+#include "esl_ratematrix.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
@@ -397,7 +398,7 @@ main(int argc, char **argv)
       printf("expected score   of WAG at t=%f  is %f bits\n", t, esl_rmx_ExpectedScore  (P, pi));
       printf("relative entropy of WAG at t=%f  is %f bits\n", t, esl_rmx_RelativeEntropy(P, pi));
 
-      esl_rnd_xfIID(r, bg->f, abc->K, M, query);
+      esl_rsq_xfIID(r, bg->f, abc->K, M, query);
       p7_Seqmodel(abc, query, M, P, bg->f, 0.05, 0.5, 0.05, 0.2, &hmm); /* tmi, tii, tmd, tdd */
       
       esl_dmatrix_Destroy(Q);
@@ -432,7 +433,7 @@ main(int argc, char **argv)
 
   for (nseq = 1; nseq <= N; nseq++) 
     {
-      esl_rnd_xfIID(r, hmm->bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, hmm->bg->f, abc->K, L, dsq);
       p7_island_Viterbi(dsq, L, gm, vmx, h);
     }
   

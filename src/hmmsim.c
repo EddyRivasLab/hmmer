@@ -26,6 +26,8 @@
 #include "esl_gumbel.h"
 #include "esl_histogram.h"
 #include "esl_mpi.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_ratematrix.h"
 #include "esl_stopwatch.h"
 #include "esl_vectorops.h"
@@ -649,7 +651,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   /* Collect scores from N random sequences of length L  */
   for (i = 0; i < cfg->N; i++)
     {
-      esl_rnd_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
+      esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
 
       if (esl_opt_GetBoolean(go, "--fast")) 
 	{

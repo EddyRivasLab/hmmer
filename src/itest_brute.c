@@ -255,9 +255,9 @@ static void
 sample_zeropeppered_probvector(ESL_RANDOMNESS *r, double *p, int n)
 {
   esl_dirichlet_DSampleUniform(r, n, p);
-  if (esl_rnd_Choose(r, 2))	/* coin flip */
+  if (esl_rnd_Roll(r, 2))	/* coin flip */
     {
-      p[esl_rnd_Choose(r, n)] == 0.0;
+      p[esl_rnd_Roll(r, n)] == 0.0;
       esl_vec_DNorm(p, n);
     }
 }

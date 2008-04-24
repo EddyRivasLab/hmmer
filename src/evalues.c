@@ -9,6 +9,7 @@
 #include "easel.h"
 #include "esl_gumbel.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -117,7 +118,7 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rnd_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
+      if ((status = esl_rsq_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
       if ((status = p7_GViterbi(dsq, L, gm, gx, &sc))            != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
@@ -218,7 +219,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rnd_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
+      if ((status = esl_rsq_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
       if ((status = p7_GForward(dsq, L, gm, gx, &fsc))           != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;

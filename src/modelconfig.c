@@ -641,8 +641,8 @@ ideal_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
      * this do/while cannot infinite loop, doesn't need failsafe 
      */
     do {
-      i1 = 1 + esl_rnd_Choose(r, sq->n);
-      i2 = 1 + esl_rnd_Choose(r, sq->n);
+      i1 = 1 + esl_rnd_Roll(r, sq->n);
+      i2 = 1 + esl_rnd_Roll(r, sq->n);
     } while (i1 > i2);
 
     /* Get initial k1,k2 coords: this step must work in a core model, 

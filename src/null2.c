@@ -206,6 +206,7 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_alphabet.h"
 #include "esl_stopwatch.h"
 #include "hmmer.h"
@@ -268,7 +269,7 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (idx = 0; idx < N; idx++)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq); /* sample a random digital seq of length L */
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq); /* sample a random digital seq of length L */
 
       p7_GForward (dsq, L, gm, fwd, NULL); 
       p7_GBackward(dsq, L, gm, bck, NULL);       
@@ -309,7 +310,7 @@ utest_correct_normalization(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, ESL_DS
   float sum;
   int   x;
 
-  esl_rnd_xfIID(r, bg->f, gm->abc->K, L, dsq); /* sample a random digital seq of length L */
+  esl_rsq_xfIID(r, bg->f, gm->abc->K, L, dsq); /* sample a random digital seq of length L */
 
   p7_GForward (dsq, L, gm, fwd, NULL); 
   p7_GBackward(dsq, L, gm, bck, NULL);       

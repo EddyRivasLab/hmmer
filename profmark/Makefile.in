@@ -17,7 +17,7 @@ MPILIBS  = @MPILIBS@
 SRCDIR   = ../src
 ESLDIR   = ../easel
 
-PROGS    = concatdb
+PROGS    = create-profmark
 
 all: ${PROGS} 
 
@@ -26,4 +26,12 @@ all: ${PROGS}
 
 ${PROGS}: @EXEC_DEPENDENCY@  ${SRCDIR}/libhmmer.a ${ESLDIR}/libeasel.a
 	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -I ${ESLDIR} -L ${ESLDIR} -o $@ $@.o ${ESLDIR}/libeasel.a ${LIBS}
+
+distclean:
+	make clean
+	-rm -f Makefile
+
+clean:
+	-rm -f *.o *~  ${PROGS} TAGS
+	-rm -f *.gcno
 

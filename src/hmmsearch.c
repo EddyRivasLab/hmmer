@@ -58,7 +58,14 @@ struct cfg_s {
   P7_BG           *bg;          /* null model                               */
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
-  int              nseq;	/* number of sequences searched             */
+
+  uint64_t         nseq;	/* number of sequences searched             */
+  uint64_t         nmodels;	/* number of models searched                */
+  uint64_t         nres;	/* # of residues searched                   */
+  uint64_t         nnodes;	/* # of model nodes searched                */
+  uint64_t         n_past_msp;	/* # of seqs that pass the MSPFilter()      */
+  uint64_t         n_past_vit;	/* # of seqs that pass the ViterbiFilter()  */
+  uint64_t         n_past_fwd;	/* # of seqs that pass the ForwardFilter()  */
 
   /* Shared configuration for MPI */
   int              do_mpi;
@@ -80,8 +87,10 @@ static void process_commandline(int argc, char **argv, struct cfg_s *cfg, ESL_GE
 static void init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf);
 static void serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  output_header  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist);
 static int  output_per_domain_hitlist  (ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist);
+static int  output_search_statistics   (ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w);
 
 int
 main(int argc, char **argv)
@@ -131,8 +140,8 @@ main(int argc, char **argv)
       esl_stopwatch_Stop(w);
     }      
 
-  /* Stop timing. */
-  if (cfg.my_rank == 0) esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  output_search_statistics   (go, &cfg, w);            
+  fprintf(cfg.ofp, "\n"); 
 
   /* Clean up and exit */
   if (cfg.my_rank == 0) {
@@ -203,8 +212,14 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
    * in MPI, workers assemble partial hitlists, send to master, 
    * master accumulates in its main hitlist. 
    */
-  cfg->hitlist  = p7_tophits_Create();
-  cfg->nseq     = 0;
+  cfg->hitlist    = p7_tophits_Create();
+  cfg->nseq       = 0;
+  cfg->nmodels    = 0;
+  cfg->nres       = 0;
+  cfg->nnodes     = 0;
+  cfg->n_past_msp = 0;
+  cfg->n_past_vit = 0;
+  cfg->n_past_fwd = 0;
 
   /* These will be initialized when we read first HMM and know our alphabet: */
   cfg->abc      = NULL;		        
@@ -318,6 +333,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
   if ((status = init_worker_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
  
+  output_header(go, cfg);
+
   while ((hstatus = p7_hmmfile_Read(cfg->hfp, &(cfg->abc), &hmm)) == eslOK) 
     {
       /* One time only initializations after abc becomes known: */
@@ -330,9 +347,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);
       p7_omx_GrowTo(ox, om->M);
 
+      fprintf(cfg->ofp, "Query: %s %s\n", hmm->name, hmm->desc != NULL ? hmm->desc : "");
+      cfg->nmodels++;
+      cfg->nnodes += om->M;
+
       while ( (sstatus = esl_sqio_Read(cfg->sqfp, sq)) == eslOK)
 	{
 	  cfg->nseq++;
+	  cfg->nres += sq->n;
 	  p7_oprofile_ReconfigLength(om, sq->n);
 
 	  /* Null model score for this sequence.  */
@@ -344,15 +366,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  usc = (usc - nullsc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	  if (P >= F1) { esl_sq_Reuse(sq); continue; } 
+	  cfg->n_past_msp++;
 
 	  /* Second level filter: ViterbiFilter() */
-	  if (P >= F3) 
+	  if (P >= F2) 		
 	    {
 	      p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &vfsc);  
 	      vfsc = (vfsc-nullsc) / eslCONST_LOG2;
 	      P  = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	      if (P >= F2) { esl_sq_Reuse(sq); continue; } /* this also should be settable */
 	    }
+	  cfg->n_past_vit++;
 	  
 	  /* Third filter: ForwardFilter() */
 	  if (P >= F3) 
@@ -362,6 +386,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      P = esl_exp_surv   (ffsc, hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 	      if (P >= F3) { esl_sq_Reuse(sq); continue; } /* this also should be settable */
 	    }
+	  cfg->n_past_fwd++;
 
 	  /* We're past the filters. Everything remaining is almost certainly a hit */
 	  p7_gmx_GrowTo(fwd, hmm->M, sq->n); /* realloc DP matrices as needed */
@@ -424,12 +449,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (sstatus != eslEOF) p7_Fail("Sequence file %s has a format problem: read failed at line %d:\n%s\n",
 				     cfg->seqfile, cfg->sqfp->linenumber, cfg->sqfp->errbuf);     
 
-
+      /* Format the output. */
       p7_tophits_Sort(cfg->hitlist);
-      output_per_sequence_hitlist(go, cfg, cfg->hitlist);
-      fprintf(cfg->ofp, "\n");
-      output_per_domain_hitlist  (go, cfg, cfg->hitlist);
-      fprintf(cfg->ofp, "\n");
+      output_per_sequence_hitlist(go, cfg, cfg->hitlist);  fprintf(cfg->ofp, "\n");
+      output_per_domain_hitlist  (go, cfg, cfg->hitlist);  fprintf(cfg->ofp, "\n");
 
       p7_profile_Destroy(gm);
       p7_oprofile_Destroy(om);
@@ -488,31 +511,61 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 
 
 static int
+output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
+{
+  if (cfg->my_rank > 0) return eslOK;
+  p7_banner(cfg->ofp, go->argv[0], banner);
+  return eslOK;
+}
+
+static int
 output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 {
   int h, d;
-  int textw = esl_opt_GetInteger(go, "--textw");
   int namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
-  double E;
   
   fprintf(cfg->ofp, "Scores for individual domains (scored as if only this domain occurred):\n");
 
-  fprintf(cfg->ofp, "%-*s %10s %7s %6s %6s %7s %10s\n", namew, "Sequence", "E-value", " Domain", "sqfrom", "sqto",     "score", "E-value");
-  fprintf(cfg->ofp, "%-*s %10s %7s %6s %6s %7s %10s\n", namew, "--------", "-------", "-------", "------", "------", "-------", "----------");
+  fprintf(cfg->ofp, "%-*s %10s %7s %6s %6s %7s %10s %10s\n", namew, "Sequence", " seq E-val", " Domain", "sqfrom", "sqto",     "score", " ind E-val", " dom E-val");
+  fprintf(cfg->ofp, "%-*s %10s %7s %6s %6s %7s %10s %10s\n", namew, "--------", "----------", "-------", "------", "------", "-------", "----------", "----------");
 
   for (h = 0; h < hitlist->N; h++)
     {
       for (d = 0; d < hitlist->hit[h]->ndom; d++)
 	{
-	  fprintf(cfg->ofp, "%-*s %10.2g %3d/%-3d %6d %6d %7.1f %10.2g\n", 
+	  fprintf(cfg->ofp, "%-*s %10.2g %3d/%-3d %6d %6d %7.1f %10.2g %10.2g\n", 
 		  namew, hitlist->hit[h]->name, 
-		  hitlist->hit[h]->pvalue * cfg->nseq,
+		  hitlist->hit[h]->pvalue * (double) cfg->nseq,
 		  d+1, hitlist->hit[h]->ndom,
 		  hitlist->hit[h]->dcl[d].ienv,
 		  hitlist->hit[h]->dcl[d].jenv,
 		  hitlist->hit[h]->dcl[d].bitscore,
-		  hitlist->hit[h]->dcl[d].pvalue * cfg->nseq);
+		  hitlist->hit[h]->dcl[d].pvalue * (double) cfg->nseq,  /* E-value if this were the only domain in the seq          */
+		  hitlist->hit[h]->dcl[d].pvalue * (double) (h+1));     /* E-value conditional on all seqs to this point being true */
 	}
     }
+  return eslOK;
+}
+
+
+static int 
+output_search_statistics(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w)
+{
+  fprintf(cfg->ofp, "Internal statistics summary:\n");
+  fprintf(cfg->ofp, "----------------------------\n");
+  fprintf(cfg->ofp, "Query HMMs(s):     %ld  (%ld nodes)\n",    cfg->nmodels, cfg->nnodes);
+  fprintf(cfg->ofp, "Target sequences:  %ld  (%ld residues)\n", cfg->nseq,    cfg->nres);
+
+  fprintf(cfg->ofp, "Passed MSP filter: %ld  (%.3f; expected %.3f)\n", 
+	  cfg->n_past_msp, (double) cfg->n_past_msp / (double) cfg->nseq, esl_opt_GetReal(go, "--F1"));
+  fprintf(cfg->ofp, "Passed Vit filter: %ld  (%.4f; expected %.4f)\n",   
+	  cfg->n_past_vit, (double) cfg->n_past_vit / (double) cfg->nseq, esl_opt_GetReal(go, "--F2"));
+  fprintf(cfg->ofp, "Passed Fwd filter: %ld  (%.2g; expected %.2g)\n",         
+	  cfg->n_past_fwd, (double) cfg->n_past_fwd / (double) cfg->nseq, esl_opt_GetReal(go, "--F3"));
+
+  fprintf(cfg->ofp, "Mc/sec:            %.2f\n", 
+	  (double) cfg->nres * (double) cfg->nnodes / (w->elapsed * 1.0e6));
+  esl_stopwatch_Display(cfg->ofp, w, "# CPU time: ");
+
   return eslOK;
 }

@@ -837,6 +837,7 @@ p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, 
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
@@ -892,7 +893,7 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       if (esl_opt_GetBoolean(go, "-f"))  p7_Forward(dsq, L, om, ox, &sc);
       else                               p7_Viterbi(dsq, L, om, ox, &sc);

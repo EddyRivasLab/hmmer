@@ -912,6 +912,7 @@ p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFIL
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
@@ -971,7 +972,7 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      esl_rnd_xfIID(r, bg->f, abc->K, L, dsq);
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       if (esl_opt_GetBoolean(go, "-b")) continue;
 
       if      (esl_opt_GetBoolean(go, "-F"))           p7_GForward     (dsq, L, gm, gx, &sc);
@@ -1011,7 +1012,9 @@ main(int argc, char **argv)
 #include "esl_getopts.h"
 #include "esl_alphabet.h"
 #include "esl_msa.h"
+#include "esl_randomseq.h"
 #include "esl_vectorops.h"
+
 
 /* The "basic" utest is a minimal driver for making a small DNA profile and a small DNA sequence,
  * then running Viterbi and Forward. It's useful for dumping DP matrices and profiles for debugging.
@@ -1098,7 +1101,7 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
 
   for (idx = 0; idx < nseq; idx++)
     {
-      if (esl_rnd_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
       if (p7_GViterbi(dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("viterbi failed");
       if (p7_GTrace  (dsq, L, gm, gx, tr)         != eslOK) esl_fatal("trace failed");
       if (p7_trace_Validate(tr, abc, dsq, errbuf) != eslOK) esl_fatal("trace invalid:\n%s", errbuf);
@@ -1145,7 +1148,7 @@ utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   avg_sc = 0.;
   for (idx = 0; idx < nseq; idx++)
     {
-      if (esl_rnd_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
       if (p7_GViterbi(dsq, L, gm, gx, &vsc)       != eslOK) esl_fatal("viterbi failed");
       if (p7_GForward(dsq, L, gm, gx, &fsc)       != eslOK) esl_fatal("forward failed");
       if (fsc < vsc) esl_fatal("Forward score can't be less than Viterbi score");
@@ -1193,7 +1196,7 @@ utest_msp(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_P
 
   for (idx = 0; idx < nseq; idx++)
     {
-      if (esl_rnd_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
+      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
 
       if (p7_GMSP    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSP failed");
       if (p7_GViterbi(dsq, L, g2, gx, &sc2)       != eslOK) esl_fatal("viterbi failed");

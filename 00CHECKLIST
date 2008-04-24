@@ -62,7 +62,7 @@ the next main release.
 = Creating a distribution
 ================================================================
 ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
-   setenv HMMER_VERSION  3.0.snap20080325
+   setenv HMMER_VERSION  3.0.snap20080419
 
    cd ~/releases
 * Delete any old releases of the same number
@@ -104,15 +104,21 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    find .     -type f -exec easel/devkit/sedition-pp LICENSE       LICENSE.tag {} \;
 
 * compile documentation
-   (cd documentation/userguide; make)
-   mv documentation/userguide/Userguide.pdf .
+   cd documentation/userguide
+   ln -s plan7-core.ai plan7-core.pdf
+   ln -s plan7-search.ai  plan7-search.pdf
+   make
+   pdflatex main
+   mv Userguide.pdf ../../
+   cd ../..	 
+
 * clean up files that don't belong in the distro
 
    make distclean
    rm -f  00CHECKLIST CHECKLIST 00README-FIRSTTIME-DEVELOPER
    rm -f  MAILING_LIST LICENSE.tag LICENSE.csh.in
    rm -rf Bugs Internal-Notes Release-Notes
-   rm -rf src ssdk old-testsuite
+   rm -rf old-src ssdk old-testsuite
    rm -rf documentation
    rm -rf tutorial
 
@@ -126,6 +132,15 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
+
+* test
+   cd hmmer-${HMMER_VERSION}
+   ./configure
+   make
+   make check
+   cd easel
+   make check
+   cd ../..
 
 * copy to ftp site
 
@@ -142,5 +157,5 @@ Release history
 Release           Date            SVN (HMMER/Easel)
 ----------------  -------------   -----------------
 3.0.snap20080325  25 March 2008     r2370/r236
-
+3.0.snap20080419  19 April 2008     r2398/r247
 
