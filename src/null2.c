@@ -101,7 +101,7 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
   int      M   = gm->M;
   float  **dp  = wrk->dp;
   float   *xmx = wrk->xmx;
-  float    my_null2[p7_MAXABET];
+  float    my_null2[p7_MAXCODE];
   float   *null2  = NULL;
   float    domsc, seqsc;
   float    omega;
@@ -162,6 +162,13 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
    * for this envelope.
    */
 
+ /* make sure it has valid scores for all degeneracies;
+  * this is averaging the log odds scores; maybe it should be averaging the probs;
+  * but it won't make much difference, degeneracies are rare, we're
+  * really just avoiding complete cockup on degenerate residues
+  */
+  esl_abc_FAvgScVec(gm->abc, null2);
+
   /* Tote up the null2 path scores for the envelope */
   noverlap = (noverlap > Ld ? Ld : noverlap); /* just checking. */
   domsc = seqsc = 0.0;
@@ -176,6 +183,98 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
   return eslOK;
 }
 
+
+
+
+int
+p7_null2_MultihitRegion(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx)
+{
+  float  sc;
+  int    t, d;
+  float *suse     = NULL;	/* 0 = any I state; 1..M = indexed M states */
+  float  null2[p7_MAXCODE];	/* a null2 model frequency vector, 0..Kp-1   */
+  int    x, k, z, pos;
+  float *nsc      = NULL;	/* null scores assigned to each residue i..j; indexed 0..Lr-1  */
+  float *tot_nsc  = NULL;	/* overall null scores, averaged over sampled traces; indexed 0..Lr-1 */
+  int    Lr       = j-i+1;      /* length of the region in residues */
+  float  domsc;
+  int    status;
+ 
+  ESL_ALLOC(suse,     sizeof(float) * (gm->M+1));
+  ESL_ALLOC(nsc,      sizeof(float) * Lr);
+  ESL_ALLOC(tot_nsc,  sizeof(float) * Lr);
+
+  p7_GForward(sq->dsq+i-1, Lr, gm, gx, &sc);
+
+  esl_vec_FSet(tot_nsc, Lr, 0.);
+  for (t = 0; t < ddef->nsamples; t++)
+    {
+      esl_vec_FSet(nsc, Lr, 0.);
+
+      p7_StochasticTrace(ddef->r, sq->dsq+i-1, Lr, gm, gx, ddef->tr);
+      p7_trace_Index(ddef->tr);
+
+      pos = 1;
+      for (d = 0; d < ddef->tr->ndom; d++)
+	{
+	  
+	  /* For this segment: calculate emitting state usage. */
+	  esl_vec_FSet(suse, gm->M+1, 0.);
+	  for (z = ddef->tr->tfrom[d]; z <= ddef->tr->tto[d]; z++)
+	    {
+	      if      (ddef->tr->st[z] == p7T_M) suse[ddef->tr->k[z]] += 1.0;
+	      else if (ddef->tr->st[z] == p7T_I) suse[0] += 1.0;
+	    }
+	  esl_vec_FScale(suse, gm->M+1, 1.0 / (ddef->tr->sqto[d] - ddef->tr->sqfrom[d] + 1)); /* now suse[] are frequencies */
+	  
+	  /* from those state usages, calculate null2 emission probs
+	   * as posterior weighted sum over all emission vectors used
+	   * in path segment 
+	   */
+	  esl_vec_FSet(null2, gm->abc->K, 0.);
+	  for (x = 0; x < gm->abc->K; x++)
+	    for (k = 1; k <= gm->M; k++)
+	      if (suse[k] > 0.) null2[x] +=  exp(p7P_MSC(gm, k, x)) * suse[k];
+	  if (suse[0] > 0.)	/* nasty gotcha potential here: watch out for M=1 models with no insert states at all */
+	    for (x = 0; x < gm->abc->K; x++)
+	      null2[x] += exp(p7P_ISC(gm, 1, x)) * suse[0];    /* uses I1 only: assumes all I emissions are identical */
+	  /* null2[x] is now f'(x) / f(x) ratio */
+
+	  esl_abc_FAvgScVec(gm->abc, null2); /* make sure it has valid scores for all degeneracies: averaged probs */
+
+	  /* Residues outside domains get bumped +1: f'(x) = f(x), so f'(x)/f(x) = 1 in these segments */
+	  for (; pos < ddef->tr->sqfrom[d]; pos++) nsc[pos-1] += 1.0;
+	  
+	  /* Residues inside domains get bumped by null2 ratio */
+	  for (; pos <= ddef->tr->sqto[d]; pos++)  nsc[pos-1] += null2[sq->dsq[i+pos-1]];
+	}
+      /* the remaining residues in the region */
+      for (; pos <= Lr; pos++) nsc[pos-1] += 1.0;	  
+
+      esl_vec_FAdd(tot_nsc, nsc, Lr);
+
+      /* Convert the nsc[0..Lr-1] ratios to log odds scores */
+      for (pos = 0; pos < Lr; pos++) nsc[pos] = log(nsc[pos]);
+    }	  
+
+  /* Convert the tot_nsc[0..Lr-1] ratios to log odds scores */
+  for (pos = 0; pos < Lr; pos++) tot_nsc[pos] = log(tot_nsc[pos] / (float) ddef->nsamples);
+
+  for (pos = 0, domsc = 0.; pos < Lr; pos++) domsc += tot_nsc[pos];
+  printf("total null2 for %d..%d = %.2f\n", i, j, domsc);
+
+  float omega = 1.0f / 256.0f;
+  domsc = p7_FLogsum( log (1. - omega), log(omega) + domsc);
+  printf("null2 correction for %d..%d = %.2f\n", i, j, domsc);
+
+  free(suse);
+  free(nsc);
+  free(tot_nsc);
+  return eslOK;
+
+ ERROR:
+  return status;
+}
 
 
 

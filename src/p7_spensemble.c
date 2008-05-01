@@ -218,6 +218,22 @@ link_spsamples(const void *v1, const void *v2, const void *prm, int *ret_link)
   return eslOK;
 }
 
+/* cluster_orderer()
+ * is the routine that gets passed to qsort() to sort
+ * the significant clusters by order of occurrence on
+ * the target sequence
+ */
+static int
+cluster_orderer(const void *v1, const void *v2)
+{
+  struct p7_spcoord_s   *h1    = (struct p7_spcoord_s *)   v1;
+  struct p7_spcoord_s   *h2    = (struct p7_spcoord_s *)   v2;
+
+  if      (h1->i < h2->i) return -1;
+  else if (h1->i > h2->i) return 1;
+  else                    return 0;
+}
+
 /* Function:  p7_spensemble_Cluster()
  * Synopsis:  Cluster a seg pair ensemble and define domains.
  * Incept:    SRE, Wed Jan  9 11:04:07 2008 [Janelia]
@@ -273,7 +289,7 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
   int c;
   int h;
   int idx_of_last;
-  int ninc;
+  int *ninc = NULL;
   int cwindow_width;
   int epc_threshold;
   int imin, jmin, kmin, mmin;
@@ -289,6 +305,8 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
   if ((status = esl_cluster_SingleLinkage(sp->sp, sp->n, sizeof(struct p7_spcoord_s), link_spsamples, (void *) &param,
 					  sp->workspace, sp->assignment, &(sp->nc))) != eslOK) goto ERROR;
 
+  ESL_ALLOC(ninc, sizeof(int) * sp->nc);
+
   /* Look at each cluster in turn; most will be too small to worry about. */
   for (c = 0; c < sp->nc; c++)
     {
@@ -298,14 +316,14 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
        * That's what the idx_of_last logic is doing, avoiding double-counting.
        */
       idx_of_last = -1;
-      for (ninc = 0, h = 0; h < sp->n; h++) {
+      for (ninc[c] = 0, h = 0; h < sp->n; h++) {
 	if (sp->assignment[h] == c) {
-	  if (sp->sp[h].idx != idx_of_last) ninc++;
+	  if (sp->sp[h].idx != idx_of_last) ninc[c]++;
 	  idx_of_last = sp->sp[h].idx;
 	}
       }
       /* Reject low probability clusters: */
-      if ((float) ninc / (float) sp->nsamples < min_posterior) continue;
+      if ((float) ninc[c] / (float) sp->nsamples < min_posterior) continue;
 
       /* Find the maximum extent of all seg pairs in this cluster in i,j k,m */
       for (imin = 0, h = 0; h < sp->n; h++) 
@@ -333,7 +351,7 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
 	sp->epc_alloc = cwindow_width;
       }
 	      
-      epc_threshold = (int) ceilf((float) ninc * min_endpointp); /* round up.  freq of >= epc_threshold means we're >= min_p */
+      epc_threshold = (int) ceilf((float) ninc[c] * min_endpointp); /* round up.  freq of >= epc_threshold means we're >= min_p */
 
       /* Identify the leftmost i that has enough endpoints. */
       esl_vec_ISet(sp->epc, imax-imin+1, 0);
@@ -376,13 +394,24 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
       sp->sigc[sp->nsigc].k   = best_k;
       sp->sigc[sp->nsigc].m   = best_m;
       sp->sigc[sp->nsigc].idx = c;
-      sp->prob[sp->nsigc]     = (float) ninc / (float) sp->nsamples;
       sp->nsigc++;
     }
+
+  /* Now we need to make sure those domains are ordered by start point,
+   * because later we're going to calculate overlaps by i_cur - j_prv
+   */
+  qsort((void *) sp->sigc, sp->nsigc, sizeof(struct p7_spcoord_s), cluster_orderer);
+
+  /* Now that they're in order, assign posterior prob to each cluster   */
+  for (c = 0; c < sp->nsigc; c++)
+    sp->prob[c] = (float) ninc[sp->sigc[c].idx] / (float) sp->nsamples;
+
+  free(ninc);
   *ret_nclusters = sp->nsigc;
   return eslOK;
 
  ERROR:
+  if (ninc != NULL) free(ninc);
   *ret_nclusters = 0;
   return status;
 }

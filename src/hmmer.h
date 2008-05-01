@@ -497,7 +497,7 @@ typedef struct p7_domaindef_s {
   float  min_posterior;	/* 0.25 means a cluster must have >= 25% posterior prob in the sample to be reported            */
   float  min_endpointp;	/* 0.02 means choose widest endpoint with post prob of at least 2%                              */
 
-  /* storage of the results (domain locations, scores, alignments) */
+  /* storage of the results; domain locations, scores, alignments          */
   P7_DOMAIN *dcl;
   int        ndom;	 /* number of domains defined, in the end.         */
   int        nalloc;     /* number of domain structures allocated in <dcl> */
@@ -672,6 +672,9 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 extern int p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverlap, 
 			       const P7_GMX *pp, P7_GMX *wrk, 
 			       float *opt_null2, float *opt_domcorrection, float *opt_seqcorrection);
+
+extern int p7_null2_MultihitRegion(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx);
+
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);

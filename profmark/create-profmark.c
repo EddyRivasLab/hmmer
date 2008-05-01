@@ -1,11 +1,16 @@
 /* Construct a training alignment/test sequences set from an MSA.
  *
-   gcc -g -Wall -I ../src -I ../easel -L ../src -L ../easel -o create-profmark create-profmark.c -lhmmer -leasel -lm
-   ./create_profmark <msa Stockholm file> <FASTA db>
+     gcc -g -Wall -I ../src -I ../easel -L ../src -L ../easel -o create-profmark create-profmark.c -lhmmer -leasel -lm
+     ./create-profmark <basename> <msa Stockholm file> <FASTA db>
+   For example:
+     ./create-profmark pmark /misc/data0/databases/Pfam/Pfam-A.seed /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta
  *
- * 
- * This procedure is used in constructing our internal RMARK and PMARK
- * benchmarks.
+ * This generates five output files:
+ *   <basename>.tbl  - table summarizing the benchmark
+ *   <basename>.msa  - MSA queries, stockholm format
+ *   <basename>.fa   - sequence targets, fasta format
+ *   <basename>.pos  - table summarizing positive test set
+ *   <basename>.neg  - table summarizing negative test set                
  * 
  * SRE, Thu Mar 27 11:05:38 2008 [Janelia]
  * SVN $Id$
@@ -22,6 +27,7 @@
 #include "esl_msa.h"
 #include "esl_msacluster.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stack.h"
@@ -29,7 +35,7 @@
 
 
 static char banner[] = "construct a benchmark profile training/test set";
-static char usage[]  = "[options] <msafile> <seqdb>\n";
+static char usage[]  = "[options] <basename> <msafile> <seqdb>\n";
 
 static ESL_OPTIONS options[] = {
   /* name       type        default env   range togs  reqs  incomp      help                                                   docgroup */
@@ -38,6 +44,7 @@ static ESL_OPTIONS options[] = {
   { "-2",       eslARG_REAL, "0.50", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to each other",      0 },
   { "-F",       eslARG_REAL, "0.70", NULL,"0<x<=1.0",NULL,NULL,NULL,         "filter out seqs <x*average length",                       0 },
   { "-N",       eslARG_INT,"200000", NULL, NULL, NULL, NULL, NULL,           "number of negative test seqs",                            0 },
+  { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                 0 },
   { "--amino",  eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--dna,--rna",    "<msafile> contains protein alignments",                   0 },
   { "--dna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--rna",  "<msafile> contains DNA alignments",                       0 },
   { "--rna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--dna",  "<msafile> contains RNA alignments",                       0 },
@@ -64,7 +71,7 @@ struct cfg_s {
   FILE           *out_seqfp;	/* output: test sequences */
   FILE           *possummfp;    /* output: summary table of the positive test set */
   FILE           *negsummfp;	/* output: summary table of the negative test set */
-  FILE           *trainsummfp;	/* output: summary table of the training set alignments */
+  FILE           *tblfp;	/* output: summary table of the training set alignments */
 
   int            *db_lens;	/* array of sequence lengths from db  [0..db_nseq]         */
   int             db_maxL;	/* maximum seq length in db_lens                           */
@@ -81,9 +88,9 @@ struct cfg_s {
 static int process_dbfile      (struct cfg_s *cfg, char *dbfile, int dbfmt);
 static int remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int *ret_nfrags);
 static int separate_sets       (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
-static int synthesize_positives(struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
-static int synthesize_negatives(struct cfg_s *cfg, int nneg);
-static int set_random_segment  (struct cfg_s *cfg, ESL_DSQ *dsq, int L);
+static int synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
+static int synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
+static int set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, ESL_DSQ *dsq, int L);
 
 static void
 cmdline_failure(char *argv0, char *format, ...)
@@ -113,8 +120,10 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS  *go      = NULL;	/* command line configuration      */
   struct cfg_s  cfg;     	/* application configuration       */
+  char         *basename= NULL;	/* base of the output file names   */
   char         *alifile = NULL;	/* alignment file name             */
   char         *dbfile  = NULL;	/* name of seq db file             */
+  char          outfile[256];	/* name of an output file          */
   int           alifmt;		/* format code for alifile         */
   int           dbfmt;		/* format code for dbfile          */
   ESL_MSAFILE  *afp     = NULL;	/* open alignment file             */
@@ -129,16 +138,18 @@ main(int argc, char **argv)
   int           nali;		/* number of alignments read       */
   double        avgid;
   
+  
   /* Parse command line */
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in app configuration:   %s\n", go->errbuf);
   if (esl_opt_GetBoolean(go, "-h"))                    cmdline_help(argv[0], go);
-  if (esl_opt_ArgNumber(go)                  != 2)     cmdline_failure(argv[0], "Incorrect number of command line arguments\n");
-  alifile = esl_opt_GetArg(go, 1);
-  dbfile  = esl_opt_GetArg(go, 2);
-  alifmt  = eslMSAFILE_STOCKHOLM;
-  dbfmt   = eslSQFILE_FASTA;
+  if (esl_opt_ArgNumber(go)                  != 3)     cmdline_failure(argv[0], "Incorrect number of command line arguments\n");
+  basename = esl_opt_GetArg(go, 1); 
+  alifile  = esl_opt_GetArg(go, 2);
+  dbfile   = esl_opt_GetArg(go, 3);
+  alifmt   = eslMSAFILE_STOCKHOLM;
+  dbfmt    = eslSQFILE_FASTA;
 
   /* Set up the configuration structure shared amongst functions here */
   cfg.r         = esl_randomness_Create(42);
@@ -149,12 +160,17 @@ main(int argc, char **argv)
   cfg.test_lens = NULL;
   cfg.ntest     = 0;
 
-  /* Open the output files */
-  if ((cfg.out_msafp   = fopen("profmark.msa",   "w")) == NULL) esl_fatal("Failed to open MSA output file %s\n",           "profmark.msa");
-  if ((cfg.out_seqfp   = fopen("profmark.fa",    "w")) == NULL) esl_fatal("Failed to open FASTA output file %s\n",         "profmark.fa");
-  if ((cfg.possummfp   = fopen("profmark.pos",   "w")) == NULL) esl_fatal("Failed to open positive test set summary %s\n", "profmark.pos");
-  if ((cfg.negsummfp   = fopen("profmark.neg",   "w")) == NULL) esl_fatal("Failed to open negative test set summary %s\n", "profmark.neg");
-  if ((cfg.trainsummfp = fopen("profmark.train", "w")) == NULL) esl_fatal("Failed to open training set summary file %s\n", "profmark.train");
+  /* Open the output files */ 
+  if (snprintf(outfile, 256, "%s.msa", basename) >= 256)  esl_fatal("Failed to construct output MSA file name");
+  if ((cfg.out_msafp = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open MSA output file %s\n", outfile);
+  if (snprintf(outfile, 256, "%s.fa",  basename) >= 256)  esl_fatal("Failed to construct output FASTA file name");
+  if ((cfg.out_seqfp = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open FASTA output file %s\n", outfile);
+  if (snprintf(outfile, 256, "%s.pos", basename) >= 256)  esl_fatal("Failed to construct pos test set summary file name");
+  if ((cfg.possummfp = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open pos test set summary file %s\n", outfile);
+  if (snprintf(outfile, 256, "%s.neg", basename) >= 256)  esl_fatal("Failed to construct neg test set summary file name");
+  if ((cfg.negsummfp = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open neg test set summary file %s\n", outfile);
+  if (snprintf(outfile, 256, "%s.tbl", basename) >= 256)  esl_fatal("Failed to construct benchmark table file name");
+  if ((cfg.tblfp     = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open benchmark table file %s\n", outfile);
 
   /* Open the MSA file; determine alphabet */
   status = esl_msafile_Open(alifile, alifmt, NULL, &afp);
@@ -189,13 +205,13 @@ main(int argc, char **argv)
       if (ntestdom >= 2) 
 	{
 	  esl_stack_Shuffle(cfg.r, teststack);
-	  synthesize_positives(&cfg, msa->name, teststack, &ntest);
+	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
 	  esl_msa_MinimGaps(trainmsa, NULL);
 	  esl_msa_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
 	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid);
-	  fprintf(cfg.trainsummfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
+	  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
 	  nali++;
 	}
 
@@ -209,7 +225,7 @@ main(int argc, char **argv)
   else if (nali   == 0)           esl_fatal("No alignments found in file %s\n", alifile);
 
   if (nali > 0)
-    synthesize_negatives(&cfg, esl_opt_GetInteger(go, "-N"));
+    synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
 
   free(cfg.db_dsq);
   free(cfg.db_lens);
@@ -217,7 +233,7 @@ main(int argc, char **argv)
   fclose(cfg.out_seqfp);
   fclose(cfg.possummfp);
   fclose(cfg.negsummfp);
-  fclose(cfg.trainsummfp);
+  fclose(cfg.tblfp);
   esl_randomness_Destroy(cfg.r);
   esl_alphabet_Destroy(cfg.abc);
   esl_msafile_Close(afp);
@@ -370,7 +386,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   if ((status = esl_msacluster_SingleLinkage(test_msa, cfg->idthresh2, &assignment, &nin, &nc)) != eslOK) goto ERROR;
   for (c = 0; c < nc; c++)
     {
-      nskip = esl_rnd_Choose(cfg->r, nin[c]); /* pick a random seq in this cluster to be the test. */
+      nskip = esl_rnd_Roll(cfg->r, nin[c]); /* pick a random seq in this cluster to be the test. */
       for (i=0; i < test_msa->nseq; i++)
 	if (assignment[i] == c) {
 	  if (nskip == 0) {
@@ -407,7 +423,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
 /* Each test sequence will contain two domains.
  */
 static int
-synthesize_positives(struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest)
+synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest)
 {
   ESL_SQ *domain1, *domain2;
   ESL_SQ *sq;
@@ -432,7 +448,7 @@ synthesize_positives(struct cfg_s *cfg, char *testname, ESL_STACK *teststack, in
       /* Select a random total sequence length */
       if (d1n+d2n > cfg->db_maxL) esl_fatal("can't construct test seq; no db seq >= %d residues\n", d1n+d2n);
       do {
-	L = cfg->db_lens[esl_rnd_Choose(cfg->r, cfg->db_nseq)];
+	L = cfg->db_lens[esl_rnd_Roll(cfg->r, cfg->db_nseq)];
       } while (L <= d1n+d2n);
 
       /* Select random lengths of three flanking domains;
@@ -440,8 +456,8 @@ synthesize_positives(struct cfg_s *cfg, char *testname, ESL_STACK *teststack, in
        * L' = L-d1n-d2n (the total length of nonhomologous test seq)
        */
       do {
-	i = esl_rnd_Choose(cfg->r, L - d1n - d2n + 1 ); /* i = 0..L' */
-	j = esl_rnd_Choose(cfg->r, L - d1n - d2n + 1 ); /* j = 0..L' */
+	i = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* i = 0..L' */
+	j = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* j = 0..L' */
       } while (i > j);
 
       /* now 1           .. i         = random region 1 (if i==0, there's none); 
@@ -460,9 +476,9 @@ synthesize_positives(struct cfg_s *cfg, char *testname, ESL_STACK *teststack, in
       esl_sq_SetDesc(sq, "domains: %s %s", domain1->name, domain2->name);
 
       sq->dsq[0] = sq->dsq[L+1] = eslDSQ_SENTINEL;
-      set_random_segment(cfg, sq->dsq+1,           L1);
-      set_random_segment(cfg, sq->dsq+i+d1n+1,     L2);
-      set_random_segment(cfg, sq->dsq+j+d1n+d2n+1, L3);
+      set_random_segment(go, cfg, sq->dsq+1,           L1);
+      set_random_segment(go, cfg, sq->dsq+i+d1n+1,     L2);
+      set_random_segment(go, cfg, sq->dsq+j+d1n+d2n+1, L3);
       memcpy(sq->dsq+i+1,     domain1->dsq+1, sizeof(ESL_DSQ) * d1n);
       memcpy(sq->dsq+j+d1n+1, domain2->dsq+1, sizeof(ESL_DSQ) * d2n);
       sq->n = L;
@@ -498,7 +514,7 @@ synthesize_positives(struct cfg_s *cfg, char *testname, ESL_STACK *teststack, in
 }
 
 static int
-synthesize_negatives(struct cfg_s *cfg, int nneg)
+synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
 {
   ESL_SQ *sq = esl_sq_CreateDigital(cfg->abc);
   int     a;
@@ -508,7 +524,7 @@ synthesize_negatives(struct cfg_s *cfg, int nneg)
   for (i = 0; i < nneg; i++)
     {
       /* Select a random test seq, to use its same segments */
-      a = esl_rnd_Choose(cfg->r, cfg->ntest);
+      a = esl_rnd_Roll(cfg->r, cfg->ntest);
 
       L1  = cfg->test_lens[a].L1;
       L2  = cfg->test_lens[a].L2;
@@ -522,11 +538,11 @@ synthesize_negatives(struct cfg_s *cfg, int nneg)
       esl_sq_SetDesc(sq, "L=%d in segments: %d/%d/%d/%d/%d", cfg->test_lens[a].L, L1, d1n, L2, d2n, L3);
 
       sq->dsq[0] = sq->dsq[cfg->test_lens[a].L+1] = eslDSQ_SENTINEL;
-      set_random_segment(cfg, sq->dsq+1,               L1);
-      set_random_segment(cfg, sq->dsq+1+L1,            d1n);
-      set_random_segment(cfg, sq->dsq+1+L1+d1n,        L2);
-      set_random_segment(cfg, sq->dsq+1+L1+d1n+L2,     d2n);
-      set_random_segment(cfg, sq->dsq+1+L1+d1n+L2+d2n, L3);
+      set_random_segment(go, cfg, sq->dsq+1,               L1);
+      set_random_segment(go, cfg, sq->dsq+1+L1,            d1n);
+      set_random_segment(go, cfg, sq->dsq+1+L1+d1n,        L2);
+      set_random_segment(go, cfg, sq->dsq+1+L1+d1n+L2,     d2n);
+      set_random_segment(go, cfg, sq->dsq+1+L1+d1n+L2+d2n, L3);
       sq->n = cfg->test_lens[a].L;
   
       esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA);
@@ -548,9 +564,10 @@ synthesize_negatives(struct cfg_s *cfg, int nneg)
  * shuffle it by diresidue composition.
  */
 static int
-set_random_segment(struct cfg_s *cfg, ESL_DSQ *dsq, int L)
+set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_DSQ *dsq, int L)
 {
   char    *tmp_dsq = NULL;
+  int      minDPL  = esl_opt_GetInteger(go, "--minDPL");
   int      i;
   int      status;
 
@@ -560,10 +577,12 @@ set_random_segment(struct cfg_s *cfg, ESL_DSQ *dsq, int L)
   ESL_ALLOC(tmp_dsq, sizeof(ESL_DSQ) * (L+2));
   tmp_dsq[0] = tmp_dsq[L+1] = eslDSQ_SENTINEL;
 
-  i = esl_rnd_Choose(cfg->r, cfg->db_nres-L);
+  i = esl_rnd_Roll(cfg->r, cfg->db_nres-L);
   memcpy(tmp_dsq+1, cfg->db_dsq+i+1, sizeof(ESL_DSQ) * L);
 
-  if (esl_rnd_XShuffleDP(cfg->r, tmp_dsq, L, cfg->abc->Kp, tmp_dsq) != eslOK) esl_fatal("esl's DP shuffle failed");
+  if (L < minDPL) status = esl_rsq_XShuffle  (cfg->r, tmp_dsq, L, tmp_dsq);
+  else            status = esl_rsq_XShuffleDP(cfg->r, tmp_dsq, L, cfg->abc->Kp, tmp_dsq);
+  if (status != eslOK) esl_fatal("esl's shuffling failed");
 
   memcpy(dsq, tmp_dsq+1, sizeof(ESL_DSQ) * L);
   free(tmp_dsq);

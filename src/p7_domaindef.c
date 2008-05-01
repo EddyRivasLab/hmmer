@@ -386,6 +386,8 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	  /* We have a region i..j to evaluate. */
 	  ddef->nregions++;
 
+	  printf("region %d..%d :  expected domains: %.1f\n", i, j, ddef->btot[j] - ddef->btot[i-1]);
+
 	  if (is_multidomain_region(ddef, i, j))
 	    {
 	      /* This region appears to contain more than one domain, so we have to 
@@ -396,6 +398,9 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 
 	      p7_ReconfigMultihit(gm, saveL);
 	      region_trace_ensemble(ddef, gm, sq, i, j, fwd, &nc);
+
+	      p7_null2_MultihitRegion(ddef, gm, sq, i, j, fwd);
+
 	      p7_ReconfigUnihit(gm, saveL);
 	      last_j2 = 0;
 	      for (d = 0; d < nc; d++) {
@@ -765,6 +770,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-V",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "find domains by Viterbi parsing",                  0 },
   { "--occp",    eslARG_OUTFILE, NULL, NULL, NULL,  NULL,  NULL, NULL, "output posterior occupancies for xmgrace to <f>",  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -824,15 +830,22 @@ main(int argc, char **argv)
   fwd = p7_gmx_Create(gm->M, sq->n);
   bck = p7_gmx_Create(gm->M, sq->n);
 
-  /* run Forward and Backward */
+  /* define domain structure */
   p7_FLogsumInit();
-  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
-  p7_GBackward(sq->dsq, sq->n, gm, bck, &sc); 
+
+  if (esl_opt_GetBoolean(go, "-V"))
+    {
+      p7_GViterbi (sq->dsq, sq->n, gm, fwd, &overall_sc); 
+      p7_domaindef_ByViterbi(gm, sq, fwd, bck, ddef);
+    }
+  else
+    {
+      p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
+      p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
+      p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
+    }
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
-
-  /* define domain structure */
-  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
 
   /* retrieve and display results */
   for (d = 0; d < ddef->ndom; d++)

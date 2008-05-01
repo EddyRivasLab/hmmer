@@ -29,17 +29,20 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles  reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "show brief help on version and usage",              1 },
-#ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                    1 },
-#endif
+  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",             1 },
+  { "-E",        eslARG_REAL,  "10.0", NULL,"x>0",      NULL,  NULL,  NULL, "E-value cutoff for sequences",                      1 },
+
   { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSP filter threshold: promote hits w/ P < F1",      2 },
   { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit filter threshold: promote hits w/ P < F2",      2 },
   { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd filter threshold: promote hits w/ P < F3",      2 },
 
-  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",              3 },
+
   { "--textw",   eslARG_INT,    "120", NULL, NULL,      NULL,  NULL,  NULL, "sets maximum ASCII text output line length",         3 },
+  { "--seed",    eslARG_INT,    NULL,  NULL, NULL,      NULL,  NULL,  NULL, "random number generator seed",                       3 },  
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",    3 },  
- 
+#ifdef HAVE_MPI
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                     3 },
+#endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -292,7 +295,10 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 static int
 init_worker_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 {
-  if ((cfg->r    = esl_randomness_Create(42))   == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
+  if (esl_opt_IsDefault(go, "--seed")) cfg->r = esl_randomness_CreateTimeseeded();
+  else                                 cfg->r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  if (cfg->r == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
+
   if ((cfg->ddef = p7_domaindef_Create(cfg->r)) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
   return eslOK;
 }
@@ -312,14 +318,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_GMX          *bck     = NULL;     /* DP matrix                               */
   P7_OMX          *ox      = NULL;     /* optimized DP matrix                     */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
-  double           F1      = esl_opt_GetReal(go, "--F1"); /* MSPFilter threshold: must be < F1 to go on */
-  double           F2      = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold */
-  double           F3      = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold */
+  double F1                = esl_opt_GetReal(go, "--F1"); /* MSPFilter threshold: must be < F1 to go on */
+  double F2                = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold                    */
+  double F3                = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold                    */
+  double Evalue_threshold  = esl_opt_GetReal(go, "-E");	  /* per-seq E-value threshold                  */
   float            usc, vfsc, ffsc;    /* filter scores                           */
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
-  float            tot_seqcorrection;
+  float            tot_seqcorrection;  
+  float            seq_score;          /* the per-seq bit score */
   double           P;		       /* P-value of a hit */
+
   int              Ld;		       /* # of residues in envelopes */
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
@@ -347,7 +356,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);
       p7_omx_GrowTo(ox, om->M);
 
-      fprintf(cfg->ofp, "Query: %s %s\n", hmm->name, hmm->desc != NULL ? hmm->desc : "");
+      fprintf(cfg->ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
+      if (hmm->acc  != NULL) fprintf(cfg->ofp, "Accession:   %s\n", hmm->acc);
+      if (hmm->desc != NULL) fprintf(cfg->ofp, "Description: %s\n", hmm->desc);
       cfg->nmodels++;
       cfg->nnodes += om->M;
 
@@ -397,50 +408,57 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
 	  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, cfg->ddef);
 
-	  /* Calculate and store the per-seq hit output information */
-	  p7_tophits_CreateNextHit(cfg->hitlist, &hit);
-	  if ((status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
-	  if ((status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
-	  if ((status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
-	  hit->ndom       = cfg->ddef->ndom;
-	  hit->nexpected  = cfg->ddef->nexpected;
-	  hit->nregions   = cfg->ddef->nregions;
-	  hit->nclustered = cfg->ddef->nclustered;
-	  hit->noverlaps  = cfg->ddef->noverlaps;
-	  hit->nenvelopes = cfg->ddef->nenvelopes;
-
-	  hit->pre_score  = ( final_sc-nullsc) / eslCONST_LOG2;
-	  hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-
-	  /* Add the null2 corrections to the null score */
+	  /* Figure out the sum of null2 corrections to be added to the null score */
 	  tot_seqcorrection = 0.0f;
 	  for (d = 0; d < cfg->ddef->ndom; d++)
 	    tot_seqcorrection += cfg->ddef->dcl[d].seqcorrection;
-	  hit->score      = ( final_sc - (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
-	  hit->pvalue     = esl_exp_surv (hit->score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-	  hit->sortkey    = -log(hit->pvalue);
 
-	  /* Calculate the "reconstruction score": estimated per-sequence score as sum of the domains */
-	  hit->sum_score = 0.0f;
-	  Ld             = 0;
-	  for (d = 0; d < cfg->ddef->ndom; d++) 
+	  /* What's the per-seq score, and is it significant enough to be reported? */
+	  seq_score =  (final_sc - (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
+	  P         =  esl_exp_surv (seq_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+	  if (P * (double) cfg->nseq <= Evalue_threshold) /* P*current nseq is only a bound on the E-value */
 	    {
-	      hit->sum_score += cfg->ddef->dcl[d].envsc;
-	      Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
-	    }
-	  hit->sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	  hit->sum_score  = (hit->sum_score- (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
-	  hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+	      /* Calculate and store the per-seq hit output information */
+	      p7_tophits_CreateNextHit(cfg->hitlist, &hit);
+	      if ((status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
+	      if ((status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+	      if ((status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+	      hit->ndom       = cfg->ddef->ndom;
+	      hit->nexpected  = cfg->ddef->nexpected;
+	      hit->nregions   = cfg->ddef->nregions;
+	      hit->nclustered = cfg->ddef->nclustered;
+	      hit->noverlaps  = cfg->ddef->noverlaps;
+	      hit->nenvelopes = cfg->ddef->nenvelopes;
 
-	  /* Transfer the domain coordinates and alignment display to the hit list */
-	  hit->dcl       = cfg->ddef->dcl;
-	  cfg->ddef->dcl = NULL;
-	  for (d = 0; d < hit->ndom; d++)
-	    {
-	      Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
-	      hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	      hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].domcorrection)) / eslCONST_LOG2;
-	      hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+	      hit->pre_score  = ( final_sc-nullsc) / eslCONST_LOG2;
+	      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+
+	      hit->score      = seq_score;
+	      hit->pvalue     = P;
+	      hit->sortkey    = -log(P);
+
+	      /* Calculate the "reconstruction score": estimated per-sequence score as sum of the domains */
+	      hit->sum_score = 0.0f;
+	      Ld             = 0;
+	      for (d = 0; d < cfg->ddef->ndom; d++) 
+		{
+		  hit->sum_score += cfg->ddef->dcl[d].envsc;
+		  Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
+		}
+	      hit->sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+	      hit->sum_score  = (hit->sum_score- (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
+	      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+
+	      /* Transfer the domain coordinates and alignment display to the hit list */
+	      hit->dcl       = cfg->ddef->dcl;
+	      cfg->ddef->dcl = NULL;
+	      for (d = 0; d < hit->ndom; d++)
+		{
+		  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
+		  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+		  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].domcorrection)) / eslCONST_LOG2;
+		  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+		}
 	    }
 
 	  esl_sq_Reuse(sq);
@@ -453,6 +471,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Sort(cfg->hitlist);
       output_per_sequence_hitlist(go, cfg, cfg->hitlist);  fprintf(cfg->ofp, "\n");
       output_per_domain_hitlist  (go, cfg, cfg->hitlist);  fprintf(cfg->ofp, "\n");
+      fprintf(cfg->ofp, "//\n");
 
       p7_profile_Destroy(gm);
       p7_oprofile_Destroy(om);
@@ -473,56 +492,72 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 static int
+output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
+{
+  if (cfg->my_rank > 0) return eslOK;
+  p7_banner(cfg->ofp, go->argv[0], banner);
+  
+  fprintf(cfg->ofp, "query HMM file:             %s\n", cfg->hmmfile);
+  fprintf(cfg->ofp, "target sequence database:   %s\n", cfg->seqfile);
+  if (! esl_opt_IsDefault(go, "-o"))     fprintf(cfg->ofp, "output directed to file:    %s\n",    esl_opt_GetReal(go, "-o"));
+  if (! esl_opt_IsDefault(go, "-E"))     fprintf(cfg->ofp, "sequence E-value threshold: <= %g\n", esl_opt_GetReal(go, "-E"));
+  if (! esl_opt_IsDefault(go, "--F1"))   fprintf(cfg->ofp, "MSP filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
+  if (! esl_opt_IsDefault(go, "--F2"))   fprintf(cfg->ofp, "Vit filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F2"));
+  if (! esl_opt_IsDefault(go, "--F3"))   fprintf(cfg->ofp, "Fwd filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F3"));
+  if (! esl_opt_IsDefault(go, "--seed")) fprintf(cfg->ofp, "Random generator seed:      %d\n",    esl_opt_GetInteger(go, "--seed"));
+  fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  return eslOK;
+}
+
+
+static int
 output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 {
-  int h;
-  int textw = esl_opt_GetInteger(go, "--textw");
-  int namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
-  int descw = textw - namew - 24;         /* 7.1f score, 10.2g Eval, 3d ndom, 4 spaces betw 5 fields: 24 char  */
+  int    h;
+  int    textw            = esl_opt_GetInteger(go, "--textw");
+  int    namew            = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
+  int    descw            = textw - namew - 24;         /* 7.1f score, 10.2g Eval, 3d ndom, 4 spaces betw 5 fields: 24 char  */
+  double Evalue_threshold = esl_opt_GetReal(go, "-E");
   double E;
   
   fprintf(cfg->ofp, "Scores for complete sequences (score includes all domains):\n");
 
-  fprintf(cfg->ofp, "%7s %10s %7s %10s %7s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "Score", "E-value", "pre-sc",  "pre-Evalue", "corr", " N ", " exp ", "reg", "clu", " ov", "env", namew, "Sequence", descw, "Description");
-  fprintf(cfg->ofp, "%7s %10s %7s %10s %7s %3s %5s %3s %3s %3s %3s %-*s %-*s \n", "-----", "-------", "-------", "----------", "----", "---", "-----", "---", "---", "---", "---", namew, "--------", descw, "-----------");
+  fprintf(cfg->ofp, "%7s %10s %7s %7s %10s %3s %5s %3s %3s %3s %3s %-*s %s\n", "Score", "E-value", "  bias ", " Sum sc", " Sum E-val", " N ", " exp ", "reg", "clu", " ov", "env", namew, "Sequence", "Description");
+  fprintf(cfg->ofp, "%7s %10s %7s %7s %10s %3s %5s %3s %3s %3s %3s %-*s %s\n", "-----", "-------", "-------", "-------", "----------", "---", "-----", "---", "---", "---", "---", namew, "--------", "-----------");
 
   for (h = 0; h < hitlist->N; h++)
     {
       E = (double) cfg->nseq * hitlist->hit[h]->pvalue;
 
-      fprintf(cfg->ofp, "%7.1f %10.2g %7.1f %10.2g %7.1f %3d %5.1f %3d %3d %3d %3d %-*s %-*.*s\n",
-	      hitlist->hit[h]->score,
-	      hitlist->hit[h]->pvalue * (double) cfg->nseq,
-	      hitlist->hit[h]->pre_score,
-	      hitlist->hit[h]->pre_pvalue * (double) cfg->nseq,
-	      hitlist->hit[h]->pre_score - hitlist->hit[h]->score,
-	      hitlist->hit[h]->ndom,
-	      hitlist->hit[h]->nexpected,
-	      hitlist->hit[h]->nregions,
-	      hitlist->hit[h]->nclustered,
-	      hitlist->hit[h]->noverlaps,
-	      hitlist->hit[h]->nenvelopes,
-	      namew,        hitlist->hit[h]->name,
-	      descw, descw, hitlist->hit[h]->desc);
-
+      if (E <= Evalue_threshold) 
+	{
+	  fprintf(cfg->ofp, "%7.1f %10.2g %7.1f %7.1f %10.2g %3d %5.1f %3d %3d %3d %3d %-*s %-.*s\n",
+		  hitlist->hit[h]->score,
+		  hitlist->hit[h]->pvalue * (double) cfg->nseq,
+		  hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+		  hitlist->hit[h]->sum_score,
+		  hitlist->hit[h]->sum_pvalue * (double) cfg->nseq,
+		  hitlist->hit[h]->ndom,
+		  hitlist->hit[h]->nexpected,
+		  hitlist->hit[h]->nregions,
+		  hitlist->hit[h]->nclustered,
+		  hitlist->hit[h]->noverlaps,
+		  hitlist->hit[h]->nenvelopes,
+		  namew, hitlist->hit[h]->name,
+		  descw, hitlist->hit[h]->desc);
+	}
     }
   return eslOK;
 }
 
 
 static int
-output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
-{
-  if (cfg->my_rank > 0) return eslOK;
-  p7_banner(cfg->ofp, go->argv[0], banner);
-  return eslOK;
-}
-
-static int
 output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 {
   int h, d;
-  int namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
+  int namew               = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
+  double Evalue_threshold = esl_opt_GetReal(go, "-E");
+  double seqE;
   
   fprintf(cfg->ofp, "Scores for individual domains (scored as if only this domain occurred):\n");
 
@@ -531,17 +566,21 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 
   for (h = 0; h < hitlist->N; h++)
     {
-      for (d = 0; d < hitlist->hit[h]->ndom; d++)
+      seqE = hitlist->hit[h]->pvalue * (double) cfg->nseq;
+      if (seqE <= Evalue_threshold) 
 	{
-	  fprintf(cfg->ofp, "%-*s %10.2g %3d/%-3d %6d %6d %7.1f %10.2g %10.2g\n", 
-		  namew, hitlist->hit[h]->name, 
-		  hitlist->hit[h]->pvalue * (double) cfg->nseq,
-		  d+1, hitlist->hit[h]->ndom,
-		  hitlist->hit[h]->dcl[d].ienv,
-		  hitlist->hit[h]->dcl[d].jenv,
-		  hitlist->hit[h]->dcl[d].bitscore,
-		  hitlist->hit[h]->dcl[d].pvalue * (double) cfg->nseq,  /* E-value if this were the only domain in the seq          */
-		  hitlist->hit[h]->dcl[d].pvalue * (double) (h+1));     /* E-value conditional on all seqs to this point being true */
+	  for (d = 0; d < hitlist->hit[h]->ndom; d++)
+	    {
+	      fprintf(cfg->ofp, "%-*s %10.2g %3d/%-3d %6d %6d %7.1f %10.2g %10.2g\n", 
+		      namew, hitlist->hit[h]->name, 
+		      seqE,
+		      d+1, hitlist->hit[h]->ndom,
+		      hitlist->hit[h]->dcl[d].ienv,
+		      hitlist->hit[h]->dcl[d].jenv,
+		      hitlist->hit[h]->dcl[d].bitscore,
+		      hitlist->hit[h]->dcl[d].pvalue * (double) cfg->nseq,  /* E-value if this were the only domain in the seq          */
+		      hitlist->hit[h]->dcl[d].pvalue * (double) (h+1));     /* E-value conditional on all seqs to this point being true */
+	    }
 	}
     }
   return eslOK;
