@@ -37,17 +37,33 @@
 static char banner[] = "construct a benchmark profile training/test set";
 static char usage[]  = "[options] <basename> <msafile> <seqdb>\n";
 
+#define SHUF_OPTS "--mono,--di,--markov0,--markov1,--reverse"   /* toggle group, seq shuffling options          */
+
 static ESL_OPTIONS options[] = {
   /* name       type        default env   range togs  reqs  incomp      help                                                   docgroup */
-  { "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL,            "help; show brief info on version and usage",              0 },
-  { "-1",       eslARG_REAL, "0.25", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to training",        0 },
-  { "-2",       eslARG_REAL, "0.50", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to each other",      0 },
-  { "-F",       eslARG_REAL, "0.70", NULL,"0<x<=1.0",NULL,NULL,NULL,         "filter out seqs <x*average length",                       0 },
-  { "-N",       eslARG_INT,"200000", NULL, NULL, NULL, NULL, NULL,           "number of negative test seqs",                            0 },
-  { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                 0 },
-  { "--amino",  eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--dna,--rna",    "<msafile> contains protein alignments",                   0 },
-  { "--dna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--rna",  "<msafile> contains DNA alignments",                       0 },
-  { "--rna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--dna",  "<msafile> contains RNA alignments",                       0 },
+  { "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL,            "help; show brief info on version and usage",              1 },
+  { "-1",       eslARG_REAL, "0.25", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to training",        1 },
+  { "-2",       eslARG_REAL, "0.50", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to each other",      1 },
+  { "-F",       eslARG_REAL, "0.70", NULL,"0<x<=1.0",NULL,NULL,NULL,         "filter out seqs <x*average length",                       1 },
+  { "-N",       eslARG_INT,"200000", NULL, NULL, NULL, NULL, NULL,           "number of negative test seqs",                            1 },
+
+  /* Options controlling negative segment randomization method  */
+  { "--mono",    eslARG_NONE,"default", NULL, NULL, SHUF_OPTS, NULL, NULL, "shuffle preserving monoresidue composition",          2 },
+  { "--di",      eslARG_NONE,    FALSE, NULL, NULL, SHUF_OPTS, NULL, NULL, "shuffle preserving mono- and di-residue composition", 2 },
+  { "--markov0", eslARG_NONE,    FALSE, NULL, NULL, SHUF_OPTS, NULL, NULL, "generate with 0th order Markov properties per input", 2 },
+  { "--markov1", eslARG_NONE,    FALSE, NULL, NULL, SHUF_OPTS, NULL, NULL, "generate with 1st order Markov properties per input", 2 },
+  { "--reverse", eslARG_NONE,    FALSE, NULL, NULL, SHUF_OPTS, NULL, NULL, "reverse each input",                                  2 },
+  { "--iid",     eslARG_NONE,    FALSE, NULL, NULL, SHUF_OPTS, NULL, NULL, "generate random iid sequence for negatives",          2 },
+
+  /* Options forcing which alphabet we're working in (normally autodetected) */
+  { "--amino",  eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--dna,--rna",    "<msafile> contains protein alignments",                   3 },
+  { "--dna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--rna",  "<msafile> contains DNA alignments",                       3 },
+  { "--rna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--dna",  "<msafile> contains RNA alignments",                       3 },
+
+  /* Other options */
+  { "--single", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "embed one, not two domains in each positive",             4 },
+  { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                 4 },
+
   { 0,0,0,0,0,0,0,0,0,0 },
 };
 
@@ -73,6 +89,8 @@ struct cfg_s {
   FILE           *negsummfp;	/* output: summary table of the negative test set */
   FILE           *tblfp;	/* output: summary table of the training set alignments */
 
+  char          **db_names;	/* array of sequence names from db                         */
+  int            *db_starts;	/* array of start positions in db_dsq; [1..db_nres]        */
   int            *db_lens;	/* array of sequence lengths from db  [0..db_nseq]         */
   int             db_maxL;	/* maximum seq length in db_lens                           */
   ESL_DSQ        *db_dsq;	/* concatenated digitized sequences from db [1..db_nres]   */
@@ -80,7 +98,10 @@ struct cfg_s {
   int             db_nseq;	/* # of sequences in the db                                */
 
   struct testseq_s *test_lens;	/* array of length info about positive test seqs */
-  int             ntest;	/* number of positive test seqs                  */
+  int               ntest;	/* number of positive test seqs                  */
+
+  double          fq[20];	/* background frequency distribution, if we're making iid negatives */
+
 };
 
 
@@ -90,7 +111,7 @@ static int remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_f
 static int separate_sets       (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
 static int synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
 static int synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
-static int set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, ESL_DSQ *dsq, int L);
+static int set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L);
 
 static void
 cmdline_failure(char *argv0, char *format, ...)
@@ -110,7 +131,13 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   esl_banner(stdout, argv0, banner);
   esl_usage (stdout, argv0, usage);
   puts("\n where general options are:");
-  esl_opt_DisplayHelp(stdout, go, 0, 2, 80);
+  esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
+  puts("\n options controlling segment randomization method:");
+  esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
+  puts("\n options declaring a particular alphabet:");
+  esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
+  puts("\n other options:");
+  esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
   exit(0);
 }
 
@@ -192,10 +219,14 @@ main(int argc, char **argv)
   }
   esl_msafile_SetDigital(afp, cfg.abc);
 
+  if (cfg.abc->type == eslAMINO) esl_composition_SW34(cfg.fq);
+  else                           esl_vec_DSet(cfg.fq, cfg.abc->K, 1.0 / (double) cfg.abc->K);
+
   /* Suck the whole dbfile into memory; make sure it's in the same alphabet */
   process_dbfile(&cfg, dbfile, dbfmt);
 
   /* Read and process MSAs one at a time  */
+  nali = 0;
   while ((status = esl_msa_Read(afp, &origmsa)) == eslOK)
     {
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
@@ -255,7 +286,6 @@ process_dbfile(struct cfg_s *cfg, char *dbfile, int dbfmt)
   int         i;
   int         status;
   
-
   /* Open the sequence file in digital mode */
   status = esl_sqfile_Open(dbfile, dbfmt, NULL, &dbfp);
   if      (status == eslENOTFOUND) esl_fatal("No such file %s", dbfile);
@@ -265,23 +295,28 @@ process_dbfile(struct cfg_s *cfg, char *dbfile, int dbfmt)
 
   sq  = esl_sq_CreateDigital(cfg->abc);
 
-  cfg->db_dsq  = NULL;
-  cfg->db_lens = NULL;
-  cfg->db_nres = 0;
-  cfg->db_nseq = 0;
-  cfg->db_maxL = 0;
+  cfg->db_names  = NULL;
+  cfg->db_starts = NULL;
+  cfg->db_dsq    = NULL;
+  cfg->db_lens   = NULL;
+  cfg->db_nres   = 0;
+  cfg->db_nseq   = 0;
+  cfg->db_maxL   = 0;
 
   /* Read each sequence; output digital to dbfp. */
   while ((status = esl_sqio_Read(dbfp, sq)) == eslOK)
     {
-      ESL_RALLOC(cfg->db_dsq,  p, sizeof(ESL_DSQ) * (sq->n + cfg->db_nres)+2);
-      ESL_RALLOC(cfg->db_lens, p, sizeof(int) * (cfg->db_nseq+1));
+      ESL_RALLOC(cfg->db_dsq,    p, sizeof(ESL_DSQ) * (sq->n + cfg->db_nres)+2);
+      ESL_RALLOC(cfg->db_lens,   p, sizeof(int)     * (cfg->db_nseq+1));
+      ESL_RALLOC(cfg->db_names,  p, sizeof(char *)  * (cfg->db_nseq+1));
+      ESL_RALLOC(cfg->db_starts, p, sizeof(int)     * (cfg->db_nseq+1));
 
+      esl_strdup(sq->name, -1, &(cfg->db_names[cfg->db_nseq]));
+      cfg->db_starts[cfg->db_nseq] = cfg->db_nres+1;
+      cfg->db_lens  [cfg->db_nseq] = sq->n;
       memcpy(cfg->db_dsq+cfg->db_nres+1, sq->dsq+1, sizeof(ESL_DSQ) * sq->n);
-      cfg->db_lens[cfg->db_nseq] = sq->n;
       
       if (sq->n > cfg->db_maxL) cfg->db_maxL = sq->n;
-
       cfg->db_nres += sq->n;
       cfg->db_nseq++;
 
@@ -420,7 +455,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
 }
 
 
-/* Each test sequence will contain two domains.
+/* Each test sequence will contain one or two domains, depending on whether --single is set.
  */
 static int
 synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest)
@@ -433,17 +468,29 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
   int     L1,L2,L3;		/* lengths of three random regions    */
   int     i,j;
   int     ntest = 0;
+  int     ndomains = ( (esl_opt_GetBoolean(go, "--single") == TRUE) ? 1 : 2);
   int     status;
-  
-  while (esl_stack_ObjectCount(teststack) >= 2)
+
+  while (esl_stack_ObjectCount(teststack) >= ndomains)
     {
       ESL_RALLOC(cfg->test_lens, p, (cfg->ntest+1) * sizeof(struct testseq_s));
 
-      /* Pop our two test domains off the stack */
-      esl_stack_PPop(teststack, &p);  domain1 = p;
-      esl_stack_PPop(teststack, &p);  domain2 = p;
-      d1n = domain1->n;
-      d2n = domain2->n;
+      /* Pop our one or two test domains off the stack */
+      esl_stack_PPop(teststack, &p);   
+      domain1 = p; 
+      d1n     = domain1->n;
+
+      if (ndomains == 2)
+	{
+	  esl_stack_PPop(teststack, &p); 
+	  domain2 = p;
+	  d2n = domain2->n;
+	}
+      else
+	{
+	  domain2 = NULL;
+	  d2n     = 0;
+	}
 
       /* Select a random total sequence length */
       if (d1n+d2n > cfg->db_maxL) esl_fatal("can't construct test seq; no db seq >= %d residues\n", d1n+d2n);
@@ -451,37 +498,69 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
 	L = cfg->db_lens[esl_rnd_Roll(cfg->r, cfg->db_nseq)];
       } while (L <= d1n+d2n);
 
-      /* Select random lengths of three flanking domains;
-       * Imagine picking two "insert after" points i,j in sequence 1..L', for
-       * L' = L-d1n-d2n (the total length of nonhomologous test seq)
-       */
-      do {
-	i = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* i = 0..L' */
-	j = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* j = 0..L' */
-      } while (i > j);
+      /* Now figure out the embedding */
+      if (ndomains == 2) 
+	{
+	  /* Select random lengths of three flanking domains;
+	   * Imagine picking two "insert after" points i,j in sequence 1..L', for
+	   * L' = L-d1n-d2n (the total length of nonhomologous test seq)
+	   */
+	  do {
+	    i = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* i = 0..L' */
+	    j = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* j = 0..L' */
+	  } while (i > j);
 
-      /* now 1           .. i         = random region 1 (if i==0, there's none); 
-       *     i+1         .. i+d1n     = domain 1
-       *     i+d1n+1     .. j+d1n     = random region 2 (if i==j, there's none);
-       *     j+d1n+1     .. j+d1n+d2n = domain 2
-       *     j+d1n+d2n+1 .. L         = random region 3 (if j == L-d1n-d2n, there's none);
-       */
-      L1 = i;			
-      L2 = j-i;
-      L3 = L - d1n - d2n - j;
+	  /* now 1           .. i         = random region 1 (if i==0, there's none); 
+	   *     i+1         .. i+d1n     = domain 1
+	   *     i+d1n+1     .. j+d1n     = random region 2 (if i==j, there's none);
+	   *     j+d1n+1     .. j+d1n+d2n = domain 2
+	   *     j+d1n+d2n+1 .. L         = random region 3 (if j == L-d1n-d2n, there's none);
+	   */
+	  L1 = i;			
+	  L2 = j-i;
+	  L3 = L - d1n - d2n - j;
+	}
+      else 
+	{ /* embedding one domain */
+	  i = esl_rnd_Roll(cfg->r, L - d1n + 1 ); /* i = 0..L' */
+	  /* now 1           .. i         = random region 1 (if i==0, there's none); 
+	   *     i+1         .. i+d1n     = domain 1
+	   *     i+d1n+1     .. L         = random region 2 (if i==j, there's none);
+	   */
+	  L1 = i;			
+	  L2 = L - d1n - L1;
+	  L3 = 0;
+	}
       
       sq = esl_sq_CreateDigital(cfg->abc);
       esl_sq_GrowTo(sq, L);
-      esl_sq_SetName(sq, "%s/%d-%d/%d-%d", testname, i+1, i+d1n, j+d1n+1, j+d1n+d2n);
-      esl_sq_SetDesc(sq, "domains: %s %s", domain1->name, domain2->name);
+      sq->n = L;
+      if (ndomains == 2) 
+	{
+	  esl_sq_SetName(sq, "%s/%d/%d-%d/%d-%d", testname, cfg->ntest, i+1, i+d1n, j+d1n+1, j+d1n+d2n);
+	  esl_sq_SetDesc(sq, "domains: %s %s", domain1->name, domain2->name);
+	}
+      else
+	{
+	  esl_sq_SetName(sq, "%s/%d/%d-%d",   testname, cfg->ntest, i+1, i+d1n);
+	  esl_sq_SetDesc(sq, "domain: %s", domain1->name);
+	}
+
+      fprintf(cfg->possummfp, "%-35s %5d %5d %5d %5d %5d %5d", sq->name, sq->n, L1, d1n, L2, d2n, L3);
+
 
       sq->dsq[0] = sq->dsq[L+1] = eslDSQ_SENTINEL;
-      set_random_segment(go, cfg, sq->dsq+1,           L1);
-      set_random_segment(go, cfg, sq->dsq+i+d1n+1,     L2);
-      set_random_segment(go, cfg, sq->dsq+j+d1n+d2n+1, L3);
+      set_random_segment(go, cfg, cfg->possummfp, sq->dsq+1,           L1);
       memcpy(sq->dsq+i+1,     domain1->dsq+1, sizeof(ESL_DSQ) * d1n);
-      memcpy(sq->dsq+j+d1n+1, domain2->dsq+1, sizeof(ESL_DSQ) * d2n);
-      sq->n = L;
+      fprintf(cfg->possummfp, " %-24s %5d %5d", domain1->name, 1, d1n);
+      set_random_segment(go, cfg, cfg->possummfp, sq->dsq+i+d1n+1,     L2);
+      if (ndomains == 2) 
+	{
+	  memcpy(sq->dsq+j+d1n+1, domain2->dsq+1, sizeof(ESL_DSQ) * d2n);
+	  fprintf(cfg->possummfp, " %-24s %5d %5d", domain2->name, 1, d2n);
+	  set_random_segment(go, cfg, cfg->possummfp, sq->dsq+j+d1n+d2n+1, L3);
+	}
+      fprintf(cfg->possummfp, "\n");
 
       cfg->test_lens[cfg->ntest].L   = L;
       cfg->test_lens[cfg->ntest].L1  = L1;
@@ -494,14 +573,8 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
 
       esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA);
 
-      fprintf(cfg->possummfp, "%-35s %5d %24s %5d %5d %24s %5d %5d %5d %5d %5d\n", 
-	      sq->name, sq->n,
-	      domain1->name, i+1, i+d1n,
-	      domain2->name, j+d1n+1, j+d1n+d2n,
-	      L1, L2, L3);
-      
       esl_sq_Destroy(domain1);
-      esl_sq_Destroy(domain2);
+      if (ndomains == 2) esl_sq_Destroy(domain2);
       esl_sq_Destroy(sq);
     }
 
@@ -512,6 +585,7 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
   esl_fatal("Failure in synthesize_positives");
   return status;
 }
+
 
 static int
 synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
@@ -536,20 +610,22 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
 
       esl_sq_SetName(sq, "decoy%d", i+1);
       esl_sq_SetDesc(sq, "L=%d in segments: %d/%d/%d/%d/%d", cfg->test_lens[a].L, L1, d1n, L2, d2n, L3);
-
-      sq->dsq[0] = sq->dsq[cfg->test_lens[a].L+1] = eslDSQ_SENTINEL;
-      set_random_segment(go, cfg, sq->dsq+1,               L1);
-      set_random_segment(go, cfg, sq->dsq+1+L1,            d1n);
-      set_random_segment(go, cfg, sq->dsq+1+L1+d1n,        L2);
-      set_random_segment(go, cfg, sq->dsq+1+L1+d1n+L2,     d2n);
-      set_random_segment(go, cfg, sq->dsq+1+L1+d1n+L2+d2n, L3);
       sq->n = cfg->test_lens[a].L;
-  
-      esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA);
 
-      fprintf(cfg->negsummfp, "%-15s %5d %5d %5d %5d %5d %5d\n", 
+      fprintf(cfg->negsummfp, "%-15s %5d %5d %5d %5d %5d %5d", 
 	      sq->name, sq->n,
 	      L1, d1n, L2, d2n, L3);
+
+      sq->dsq[0] = sq->dsq[cfg->test_lens[a].L+1] = eslDSQ_SENTINEL;
+      set_random_segment(go, cfg, cfg->negsummfp, sq->dsq+1,               L1);
+      set_random_segment(go, cfg, cfg->negsummfp, sq->dsq+1+L1,            d1n);
+      set_random_segment(go, cfg, cfg->negsummfp, sq->dsq+1+L1+d1n,        L2);
+      set_random_segment(go, cfg, cfg->negsummfp, sq->dsq+1+L1+d1n+L2,     d2n);
+      set_random_segment(go, cfg, cfg->negsummfp, sq->dsq+1+L1+d1n+L2+d2n, L3);
+
+      fprintf(cfg->negsummfp, "\n");
+  
+      esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA);
 
       esl_sq_Reuse(sq);
     }
@@ -558,30 +634,79 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
   return eslOK;
 }
 
-/* Fetch in a random sequence of length <L> from the
- * the pre-digitized concatenated
- * sequence database, select a random subseq, then 
- * shuffle it by diresidue composition.
+/* Fetch in a random sequence of length <L> from the the pre-digitized
+ * concatenated sequence database, select a random subseq, shuffle it
+ * by the chosen algorithm; set dsq[1..L] to the resulting randomized
+ * segment.
+ * 
+ * If <logfp> is non-NULL, append one or more "<sqname> <from> <to>"
+ * fields to current line, to record where the random segment was
+ * selected from. This is useful in cases where we want to track back
+ * the origin of a high-scoring segment, in case the randomization
+ * wasn't good enough to obscure the identity of a segment.
+ * 
  */
 static int
-set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_DSQ *dsq, int L)
+set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L)
 {
   char    *tmp_dsq = NULL;
   int      minDPL  = esl_opt_GetInteger(go, "--minDPL");
   int      i;
+  int      db_dependent;
   int      status;
 
   if (L==0) return eslOK;
   if (L> cfg->db_nres) esl_fatal("can't fetch a segment of length %d; database is only %d\n", L, cfg->db_nres);
 
+  db_dependent = TRUE;
+  if (esl_opt_GetBoolean(go, "--iid") == TRUE) db_dependent = FALSE;
+
+
   ESL_ALLOC(tmp_dsq, sizeof(ESL_DSQ) * (L+2));
   tmp_dsq[0] = tmp_dsq[L+1] = eslDSQ_SENTINEL;
 
-  i = esl_rnd_Roll(cfg->r, cfg->db_nres-L);
-  memcpy(tmp_dsq+1, cfg->db_dsq+i+1, sizeof(ESL_DSQ) * L);
+  if (db_dependent) {
+    i = 1 + esl_rnd_Roll(cfg->r, cfg->db_nres-L);
+    memcpy(tmp_dsq+1, cfg->db_dsq+i, sizeof(ESL_DSQ) * L);
+  }
 
-  if (L < minDPL) status = esl_rsq_XShuffle  (cfg->r, tmp_dsq, L, tmp_dsq);
-  else            status = esl_rsq_XShuffleDP(cfg->r, tmp_dsq, L, cfg->abc->Kp, tmp_dsq);
+  /* This inefficient chunk of code looks up which sequence(s) this segment came from,
+   * and appends data fields to the current line of the output summary file
+   */
+  if (logfp != NULL || db_dependent) 
+    {
+      int L_remaining = L;
+      int start, end;
+      int idx;
+
+      for (idx = 0; cfg->db_starts[idx] + cfg->db_lens[idx] - 1 < i; idx++) ; /* ouch, that's inefficient */
+      while (L_remaining > 0) 
+	{
+	  start = i - cfg->db_starts[idx] + 1;              /* start position in db_names[idx] */
+	  end   = i - cfg->db_starts[idx] + L_remaining;    /* tentative end position in that seq */
+	  if (end > cfg->db_lens[idx]) {                    /* ... unless it runs off the end... */
+	    i           =  cfg->db_starts[idx+1];           /* in which case we'll come 'round again, for i=start of next seq */
+	    L_remaining =  L_remaining - (cfg->db_lens[idx] - start + 1);
+	    end         =  cfg->db_lens[idx];
+	  } else {
+	    L_remaining = 0;
+	  }
+	  
+	  fprintf(logfp, " %-15s %5d %5d", cfg->db_names[idx], start, end); /* append this seq to the log file */
+	  idx++;
+	}
+    }
+
+  /* Now apply the appropriate randomization algorithm */
+  if      (esl_opt_GetBoolean(go, "--mono"))    status = esl_rsq_XShuffle  (cfg->r, tmp_dsq, L, tmp_dsq);
+  else if (esl_opt_GetBoolean(go, "--di")) {
+    if (L < minDPL)                             status = esl_rsq_XShuffle  (cfg->r, tmp_dsq, L, tmp_dsq);
+    else                                        status = esl_rsq_XShuffleDP(cfg->r, tmp_dsq, L, cfg->abc->Kp, tmp_dsq);
+  } 
+  else if (esl_opt_GetBoolean(go, "--markov0")) status = esl_rsq_XMarkov0  (cfg->r, tmp_dsq, L, cfg->abc->Kp, tmp_dsq);
+  else if (esl_opt_GetBoolean(go, "--markov1")) status = esl_rsq_XMarkov1  (cfg->r, tmp_dsq, L, cfg->abc->Kp, tmp_dsq);
+  else if (esl_opt_GetBoolean(go, "--reverse")) status = esl_rsq_XReverse  (tmp_dsq, L, tmp_dsq);
+  else if (esl_opt_GetBoolean(go, "--iid"))     status = esl_rsq_xIID      (cfg->r, cfg->fq, cfg->abc->K, L, tmp_dsq);
   if (status != eslOK) esl_fatal("esl's shuffling failed");
 
   memcpy(dsq, tmp_dsq+1, sizeof(ESL_DSQ) * L);

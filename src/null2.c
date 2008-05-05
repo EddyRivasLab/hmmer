@@ -18,7 +18,7 @@
 #define XMX(i,s)      (xmx[(i) * p7G_NXCELLS + (s)])
 
 
-/* Function:  p7_Null2Corrections()
+/* Function:  p7_null2_ByExpectation()
  * Synopsis:  Calculate biased composition corrections
  * Incept:    SRE, Thu Feb 28 09:52:28 2008 [Janelia]
  *
@@ -28,83 +28,61 @@
  *            passing a <dsq> pointer to residue $i-1$, and an
  *            envelope length <Ld>, where <Ld> $ = j-i+1$.
  *            
- *            (Why not pass the original full-length <dsq> and $i,j$
- *            envelope coords, instead of the offset <dsq> pointer?
- *            Because our caller has already calculated small Forward
- *            and Backward matrices and posterior probabilities for
- *            the offset <dsq>, so we want to work within this offset
- *            coordinate frame.)
+ *            The expectation method is applied to envelopes in
+ *            simple, well resolved regions (regions containing just a
+ *            single envelope, where no stochastic traceback
+ *            clustering was required).
+ *            
+ *            Watch out for some offset coord issues in passing
+ *            arguments. <dsq> is the original full length sequence,
+ *            <1..L>, and <ienv,jenv> are the $i..j$ boundaries of the
+ *            envelope. However, the posterior probability matrix <pp>
+ *            has been calculated by the caller for only the envelope,
+ *            so its rows are numbered <1..Ld>, for envelope
+ *            <ienv..jenv> of length <Ld=jenv-ienv+1>.
  *            
  *            Caller provides a calculated matrix of posterior
  *            probabilities for each residue in <pp>, for the chunk of
- *            digital sequence in the envelope: e.g. the same offset
- *            <dsq+i-1> pointer, over length <Ld>. The null2
- *            correction uses these to calculate a log odds emission
- *            score vector as the posterior weighted average over all
- *            emission vectors used in alignments (inclusive of N,C,J)
- *            in the envelope <i>..<j>.
- *            
- *            The caller provides <noverlap>, the number of residues
- *            that overlap with a previous envelope. This is used to
- *            avoid overcounting null2 corrections against the
- *            per-sequence score. If no preceding envelope overlaps
- *            <i>..<j>, <noverlap> is 0.
+ *            digital sequence in the envelope: e.g. for an offset
+ *            <dsq+i-1> over length <Ld>. The null2 correction uses
+ *            these to calculate a log odds emission score vector as
+ *            the posterior weighted average over all emission vectors
+ *            used in alignments (inclusive of N,C,J) in the envelope
+ *            <i>..<j>, and this null2 is applied to the entire
+ *            envelope.
  *            
  *            Caller also provides a workspace DP matrix <wrk> which
  *            contains at least two rows.
  *
- *            The calculation optionally returns the null2 log odds
- *            scores, and two corrections. The null2 score vector
- *            <opt_null2> is a <0..K-1> array containing $\log
- *            \frac{f_d{x}}{f{x}}$ scores; caller provides allocated
- *            space for this score vector, if it wants to see it. The
- *            per-domain correction <*opt_domcorrection> is the score
- *            (in nats) that the caller should subtract from the
- *            domain envelope score for <i>..<j>). The per-sequence
- *            correction <*opt_seqcorrection> is the score (in nats)
- *            that the caller should subtract from the overall
- *            per-sequence score, in addition to the null1 score.
- *            
- *            If the envelope <i..j> is independent (nonoverlapping)
- *            with any previous domain, these two corrections are the
- *            same number; when the envelope overlaps with a previous
- *            envelope, the per-seq correction only accounts for the
- *            last <Ld - noverlap> residues of the envelope, even
- *            though the null model is calculated over the entire
- *            envelope. This isn't well principled; it's just a way of
- *            making sure each residue only gets corrected once in the
- *            per-sequence score.
+ *            The calculation can optionally return the null2 log odds
+ *            scores in <opt_null2> as a <0..Kp-1> array containing
+ *            $\log \frac{f'{x}}{f{x}}$ scores; caller provides
+ *            allocated space for this score vector, if it wants to
+ *            see it.
  *
- * Args:      gm                - profile, in any mode, target length model set to <L>
- *            dsq               - offset digital seq being scored; <dsq+i-1>; <1..Ld>
- *            Ld                - length of domain envelope
- *            noverlap          - number of residues that overlap with a previous envelope
- *            pp                - posterior prob matrix, for <gm> against domain envelope in <dsq>
+ * Args:      ddef              - where the n2sc null2 score vector is
+ *            gm                - profile, in any mode, target length model set to <L>
+ *            dsq               - digital seq being scored; <1..L>
+ *            ienv              - start of envelope being scored
+ *            jenv              - end of envelope being scored                    
+ *            pp                - posterior prob matrix, for <gm> against domain envelope <dsq+i-1> (offset)
  *            wrk               - workspace, a DP matrix with at least two rows.
- *            opt_null2         - optRETURN: null2 log odds scores; <0..K-1>; caller allocated space
- *            opt_domcorrection - optRETURN: per-domain score correction (in nats) to subtract
- *            opt_seqcorrection - optRETURN: per-seq score correction (in nats) to subtract
+ *            opt_null2         - optRETURN: null2 log odds scores; <0..Kp-1>; caller allocated space
  *
- * Returns:   <eslOK> on success; <opt_null2> contains the null2 scores;
- *            <*opt_domcorrection>, <*opt_seqcorrection> contain
- *            the corrections.
+ * Returns:   <eslOK> on success; <opt_null2> contains the null2 scores.
  *
  * Throws:    (no abnormal error conditions)
- *
- * Xref:      
  */
 int
-p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverlap,
-		    const P7_GMX *pp, P7_GMX *wrk,
-		    float *opt_null2, float *opt_domcorrection, float *opt_seqcorrection)
+p7_null2_ByExpectation(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_DSQ *dsq, int ienv, int jenv,
+		       const P7_GMX *pp, P7_GMX *wrk, float *opt_null2)
 {
-  int      M   = gm->M;
-  float  **dp  = wrk->dp;
-  float   *xmx = wrk->xmx;
-  float    my_null2[p7_MAXCODE];
+  int      M      = gm->M;
+  int      Ld     = jenv-ienv+1;
   float   *null2  = NULL;
-  float    domsc, seqsc;
-  float    omega;
+  float  **dp     = wrk->dp;
+  float   *xmx    = wrk->xmx;
+  float    my_null2[p7_MAXCODE];
   float    xfactor;
   int      x;			/* over symbols 0..K-1                       */
   int      i;			/* over offset envelope dsq positions 1..Ld  */
@@ -119,31 +97,30 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
    * The 0 row in <wrk> is used to hold these numbers.
    */
   esl_vec_FCopy(pp->dp[1],            (M+1)*p7G_NSCELLS, wrk->dp[0]); 
-  esl_vec_FCopy(pp->xmx+p7G_NXCELLS,  p7G_NXCELLS,       wrk->xmx);  
+  esl_vec_FCopy(pp->xmx+p7G_NXCELLS,  p7G_NXCELLS,       wrk->xmx);   
   for (i = 2; i <= Ld; i++)
     {
       esl_vec_FAdd(wrk->dp[0], pp->dp[i],             (M+1)*p7G_NSCELLS);
-      esl_vec_FAdd(wrk->xmx,   pp->xmx+i*p7G_NXCELLS, p7G_NXCELLS);
+      esl_vec_FAdd(wrk->xmx,   pp->xmx+i*p7G_NXCELLS, p7G_NXCELLS); 
     }
   
   /* Convert those expected #'s to log frequencies; these we'll use as
    * the log posterior weights.
    */
   esl_vec_FLog(wrk->dp[0], (M+1)*p7G_NSCELLS);
-  esl_vec_FLog(wrk->xmx,   p7G_NXCELLS);
+  esl_vec_FLog(wrk->xmx,   p7G_NXCELLS);  
 
   esl_vec_FIncrement(wrk->dp[0], (M+1)*p7G_NSCELLS, -log((float)Ld));
-  esl_vec_FIncrement(wrk->xmx,   p7G_NXCELLS,       -log((float)Ld));
+  esl_vec_FIncrement(wrk->xmx,   p7G_NXCELLS,       -log((float)Ld)); 
 
   /* Calculate null2's log odds emission probabilities, by taking
    * posterior weighted sum over all emission vectors used in paths
-   * explaining the domain.  This is dog-slow; a point for future
-   * optimization
+   * explaining the domain.
+   * This is dog-slow; a point for future optimization.
    */
   xfactor = XMX(0,p7G_N);
   xfactor = p7_FLogsum(xfactor, XMX(0,p7G_C));
   xfactor = p7_FLogsum(xfactor, XMX(0,p7G_J));
-
   for (x = 0; x < gm->abc->K; x++)
     { 
       esl_vec_FCopy(wrk->dp[0], (M+1)*p7G_NSCELLS, wrk->dp[1]);
@@ -155,7 +132,7 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
       MMX(1,M) += p7P_MSC(gm, k, x);
 
       null2[x] = esl_vec_FLogSum(wrk->dp[1], (M+1)*p7G_NSCELLS);
-      null2[x] = p7_FLogsum(null2[x], xfactor);
+      null2[x] = p7_FLogsum(null2[x], xfactor); 
     }
   /* now null2[x] = \log \frac{f_d(x)}{f_0(x)} for all x in alphabet,
    * 0..K-1, where f_d(x) are the ad hoc "null2" residue frequencies
@@ -169,63 +146,80 @@ p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverl
   */
   esl_abc_FAvgScVec(gm->abc, null2);
 
-  /* Tote up the null2 path scores for the envelope */
-  noverlap = (noverlap > Ld ? Ld : noverlap); /* just checking. */
-  domsc = seqsc = 0.0;
-  for (i = 1; i <= noverlap; i++) domsc += null2[dsq[i]];
-  for ( ;     i <= Ld;       i++) seqsc += null2[dsq[i]];
-  domsc += seqsc;
+  /* Now assign the null2 scores to residues i..j in the envelope */
+  for (i = ienv; i <= jenv; i++)
+    ddef->n2sc[i] = null2[dsq[i]];
 
-  /* Sum over the null1, null2 paths for this domain */
-  omega = 1.0f / 256.0f;
-  if (opt_domcorrection != NULL) *opt_domcorrection = p7_FLogsum( log (1. - omega), log(omega) + domsc);
-  if (opt_seqcorrection != NULL) *opt_seqcorrection = p7_FLogsum( log (1. - omega), log(omega) + seqsc);
+  /* ta-da */
   return eslOK;
 }
 
 
-
-
+/* Function:  p7_null2_BySampling()
+ * Synopsis:  Assign null2 scores to an envelope by the sampling method.
+ * Incept:    SRE, Thu May  1 10:00:43 2008 [Janelia]
+ *
+ * Purpose:   Assign null2 scores to the region <ireg..jreg> in the
+ *            domain definition object <ddef> by the stochastic traceback
+ *            sampling method: construct position-specific null2
+ *            scores for each residue in the region by integrating 
+ *            over many multidomain null2 models, sampled by
+ *            stochastic traceback; each stochastic traceback defines
+ *            one or more domains in the region, and a null2 model is
+ *            assigned to each individual domains by averaging the
+ *            emission distributions of states used in that domain.
+ *            
+ *            <gm> is the profile; <dsq> is the complete sequence
+ *            <1..L>; <gx> is a matrix allocated for enough size that
+ *            we can use it for a Forward calculation of <gm> against
+ *            a region of length <Lr=jreg-ireg+1>.
+ *
+ * Args:      
+ *
+ * Returns:   <eslOK> on success, and the <ddef->n2sc> scores are set
+ *            for region <i..j>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
 int
-p7_null2_MultihitRegion(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx)
+p7_null2_BySampling(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_DSQ *dsq, int ireg, int jreg, P7_GMX *gx)
 {
+  float *suse     = NULL;	/* state usage. suse[0] = any I state; suse[1..M] = indexed M states  */
+  float *nsc      = NULL;	/* null scores assigned to each residue i..j; indexed 0..Lr-1         */
+  int    Lr       = jreg-ireg+1;/* length of the whole region in residues */
+  int    Ld;			/* length of a particular domain, as defined in a sampled trace       */
   float  sc;
   int    t, d;
-  float *suse     = NULL;	/* 0 = any I state; 1..M = indexed M states */
   float  null2[p7_MAXCODE];	/* a null2 model frequency vector, 0..Kp-1   */
   int    x, k, z, pos;
-  float *nsc      = NULL;	/* null scores assigned to each residue i..j; indexed 0..Lr-1  */
-  float *tot_nsc  = NULL;	/* overall null scores, averaged over sampled traces; indexed 0..Lr-1 */
-  int    Lr       = j-i+1;      /* length of the region in residues */
   float  domsc;
   int    status;
  
   ESL_ALLOC(suse,     sizeof(float) * (gm->M+1));
   ESL_ALLOC(nsc,      sizeof(float) * Lr);
-  ESL_ALLOC(tot_nsc,  sizeof(float) * Lr);
 
-  p7_GForward(sq->dsq+i-1, Lr, gm, gx, &sc);
+  p7_GForward(dsq+ireg-1, Lr, gm, gx, &sc); /* this call will disappear, merged into domain definition */
 
-  esl_vec_FSet(tot_nsc, Lr, 0.);
   for (t = 0; t < ddef->nsamples; t++)
     {
       esl_vec_FSet(nsc, Lr, 0.);
 
-      p7_StochasticTrace(ddef->r, sq->dsq+i-1, Lr, gm, gx, ddef->tr);
+      p7_StochasticTrace(ddef->r, dsq+ireg-1, Lr, gm, gx, ddef->tr);
       p7_trace_Index(ddef->tr);
 
       pos = 1;
-      for (d = 0; d < ddef->tr->ndom; d++)
+      for (d = 0; d < ddef->tr->ndom; d++) /* For each segment (domain) in this sampled trace: */
 	{
+	  Ld = ddef->tr->sqto[d] - ddef->tr->sqfrom[d] + 1;
 	  
-	  /* For this segment: calculate emitting state usage. */
+	  /* Calculate emitting state usage in this particular segment: */
 	  esl_vec_FSet(suse, gm->M+1, 0.);
-	  for (z = ddef->tr->tfrom[d]; z <= ddef->tr->tto[d]; z++)
+	  for (z = ddef->tr->tfrom[d]; z <= ddef->tr->tto[d]; z++) 
 	    {
 	      if      (ddef->tr->st[z] == p7T_M) suse[ddef->tr->k[z]] += 1.0;
 	      else if (ddef->tr->st[z] == p7T_I) suse[0] += 1.0;
 	    }
-	  esl_vec_FScale(suse, gm->M+1, 1.0 / (ddef->tr->sqto[d] - ddef->tr->sqfrom[d] + 1)); /* now suse[] are frequencies */
+	  esl_vec_FScale(suse, gm->M+1, 1.0 / (float) Ld); /* now suse[] are usage frequencies */
 	  
 	  /* from those state usages, calculate null2 emission probs
 	   * as posterior weighted sum over all emission vectors used
@@ -238,41 +232,42 @@ p7_null2_MultihitRegion(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, in
 	  if (suse[0] > 0.)	/* nasty gotcha potential here: watch out for M=1 models with no insert states at all */
 	    for (x = 0; x < gm->abc->K; x++)
 	      null2[x] += exp(p7P_ISC(gm, 1, x)) * suse[0];    /* uses I1 only: assumes all I emissions are identical */
-	  /* null2[x] is now f'(x) / f(x) ratio */
+	  /* null2[x] is now f'(x) / f(x) ratio (not log) */
 
 	  esl_abc_FAvgScVec(gm->abc, null2); /* make sure it has valid scores for all degeneracies: averaged probs */
+	  /* note an inconsistency: in ByExpectation, we averaged the log scores; here we avg the ratios; it doesn't
+           * seem worth reconciling this small issue, degenerate residues are rare */
 
-	  /* Residues outside domains get bumped +1: f'(x) = f(x), so f'(x)/f(x) = 1 in these segments */
+	  /* residues outside domains get bumped +1: because f'(x) = f(x), so f'(x)/f(x) = 1 in these segments */
 	  for (; pos < ddef->tr->sqfrom[d]; pos++) nsc[pos-1] += 1.0;
 	  
-	  /* Residues inside domains get bumped by null2 ratio */
-	  for (; pos <= ddef->tr->sqto[d]; pos++)  nsc[pos-1] += null2[sq->dsq[i+pos-1]];
+	  /* Residues inside domains get bumped by their null2 ratio */
+	  for (; pos <= ddef->tr->sqto[d]; pos++)  nsc[pos-1] += null2[dsq[ireg+pos-1]];
 	}
-      /* the remaining residues in the region */
+      /* the remaining residues in the region outside any domains get +1 */
       for (; pos <= Lr; pos++) nsc[pos-1] += 1.0;	  
 
-      esl_vec_FAdd(tot_nsc, nsc, Lr);
 
-      /* Convert the nsc[0..Lr-1] ratios to log odds scores */
-      for (pos = 0; pos < Lr; pos++) nsc[pos] = log(nsc[pos]);
+      /* increment the position-specific null2 scores in the region by this nsc sample; 
+       * note offset -- nsc is 0..Lr-1 for ireg..jreg 
+       */
+      esl_vec_FAdd(ddef->n2sc+ireg, nsc, Lr);
+
+      /* get ready to take another sample. */
+      p7_trace_Reuse(ddef->tr);
     }	  
 
-  /* Convert the tot_nsc[0..Lr-1] ratios to log odds scores */
-  for (pos = 0; pos < Lr; pos++) tot_nsc[pos] = log(tot_nsc[pos] / (float) ddef->nsamples);
-
-  for (pos = 0, domsc = 0.; pos < Lr; pos++) domsc += tot_nsc[pos];
-  printf("total null2 for %d..%d = %.2f\n", i, j, domsc);
-
-  float omega = 1.0f / 256.0f;
-  domsc = p7_FLogsum( log (1. - omega), log(omega) + domsc);
-  printf("null2 correction for %d..%d = %.2f\n", i, j, domsc);
+  /* Convert the tot_nsc[0..Lr-1] ratios to log odds scores for the region */
+  for (pos = ireg; pos <= jreg; pos++) 
+    ddef->n2sc[pos] = log(ddef->n2sc[pos] / (float) ddef->nsamples);
 
   free(suse);
   free(nsc);
-  free(tot_nsc);
   return eslOK;
 
  ERROR:
+  if (suse != NULL) free(suse);
+  if (nsc  != NULL) free(nsc);
   return status;
 }
 

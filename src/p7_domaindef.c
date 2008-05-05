@@ -41,6 +41,7 @@
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_sq.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
@@ -48,7 +49,7 @@ static int calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck,
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef,       P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc);
 static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, 
-				   int i, int j, int noverlap);
+				   int i, int j, int null2_is_done);
 
 
 /*****************************************************************
@@ -78,15 +79,18 @@ p7_domaindef_Create(ESL_RANDOMNESS *r)
   /* level 1 alloc */
   ESL_ALLOC(ddef, sizeof(P7_DOMAINDEF));
   ddef->mocc = ddef->btot = ddef->etot = NULL;
-  ddef->sp  = NULL;
-  ddef->tr  = NULL;
-  ddef->dcl = NULL;
+  ddef->n2sc = NULL;
+  ddef->sp   = NULL;
+  ddef->tr   = NULL;
+  ddef->dcl  = NULL;
 
   /* level 2 alloc: posterior prob arrays */
   ESL_ALLOC(ddef->mocc, sizeof(float) * (Lalloc+1));
   ESL_ALLOC(ddef->btot, sizeof(float) * (Lalloc+1));
   ESL_ALLOC(ddef->etot, sizeof(float) * (Lalloc+1));
+  ESL_ALLOC(ddef->n2sc, sizeof(float) * (Lalloc+1));
   ddef->mocc[0] = ddef->etot[0] = ddef->btot[0] = 0.;
+  ddef->n2sc[0] = 0.;
   ddef->Lalloc  = Lalloc;
   ddef->L       = 0;
 
@@ -153,6 +157,7 @@ p7_domaindef_GrowTo(P7_DOMAINDEF *ddef, int L)
   ESL_RALLOC(ddef->mocc, p, sizeof(float) * (L+1));
   ESL_RALLOC(ddef->btot, p, sizeof(float) * (L+1));
   ESL_RALLOC(ddef->etot, p, sizeof(float) * (L+1));
+  ESL_RALLOC(ddef->n2sc, p, sizeof(float) * (L+1));
   ddef->Lalloc = L;
   return eslOK;
 
@@ -220,17 +225,20 @@ p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
  * Synopsis:  Output posteriors that define domain structure to a stream.
  * Incept:    SRE, Fri Feb 29 08:32:14 2008 [Janelia]
  *
- * Purpose:   Output the posterior distributions from <ddef> that are used to
+ * Purpose:   Output the vectors from <ddef> that are used to
  *            define domain structure to a stream <ofp>, in xmgrace format.
  *            
- *            There are three distributions. The first set is
+ *            There are four vectors. The first set is
  *            <mocc[1..i..L]>, the probability that residue <i> is
  *            emitted by the core model (is in a domain). The second
  *            set is <btot[1..i..L]>, the cumulative expected number
  *            of times that a domain uses a B state (starts) at or
  *            before position <i>. The third set is <etot[1..i..L]>,
  *            the cumulative expected number of times that a domain
- *            uses an E state (ends) at or before position <i>. 
+ *            uses an E state (ends) at or before position <i>. The
+ *            fourth set is <n2sc[1..i..L]>, the score of residue i
+ *            under the ad hoc null2 model; this is a measure of local
+ *            biased composition.
  *            
  *            These three fields will only be available after a call
  *            to domain definition by
@@ -257,6 +265,10 @@ p7_domaindef_DumpPosteriors(FILE *ofp, P7_DOMAINDEF *ddef)
     fprintf(ofp, "%d %f\n", i, ddef->etot[i]);
   fprintf(ofp, "&\n");
 
+  for (i = 1; i <= ddef->L; i++)
+    fprintf(ofp, "%d %f\n", i, ddef->n2sc[i]);
+  fprintf(ofp, "&\n");
+
   return eslOK;
 }
 
@@ -278,6 +290,7 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
   if (ddef->mocc != NULL) free(ddef->mocc);
   if (ddef->btot != NULL) free(ddef->btot);
   if (ddef->etot != NULL) free(ddef->etot);
+  if (ddef->n2sc != NULL) free(ddef->n2sc);
 
   if (ddef->dcl  != NULL) {
     for (d = 0; d < ddef->ndom; d++)
@@ -326,7 +339,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], 0);
+    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE);
   p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
   return eslOK;
 }
@@ -359,17 +372,16 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
   int last_j2;
   int saveL = gm->L;
   int nc;
-  int noverlap;
   int status;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
   calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
+  esl_vec_FSet(ddef->n2sc, sq->n+1, 0.0);          /* ddef->n2sc null2 scores are initialized                        */
   ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
   /* That's all we need the original fwd, bck matrices for. 
    * Now we're free to reuse them for subsequent domain calculations.
    */
-
   p7_ReconfigUnihit(gm, saveL);	                   /* process each domain in unilocal mode                           */
   i     = -1;
   triggered = FALSE;
@@ -385,9 +397,6 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	{
 	  /* We have a region i..j to evaluate. */
 	  ddef->nregions++;
-
-	  printf("region %d..%d :  expected domains: %.1f\n", i, j, ddef->btot[j] - ddef->btot[i-1]);
-
 	  if (is_multidomain_region(ddef, i, j))
 	    {
 	      /* This region appears to contain more than one domain, so we have to 
@@ -396,21 +405,25 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	       */
 	      ddef->nclustered++;
 
+	      /* Resolve the region into domains by stochastic trace
+	       * clustering; assign position-specific null2 model by
+	       * stochastic trace clustering; there is redundancy
+	       * here; we will consolidate later if null2 strategy
+	       * works
+	       */
 	      p7_ReconfigMultihit(gm, saveL);
 	      region_trace_ensemble(ddef, gm, sq, i, j, fwd, &nc);
-
-	      p7_null2_MultihitRegion(ddef, gm, sq, i, j, fwd);
-
+	      p7_null2_BySampling(ddef, gm, sq->dsq, i, j, fwd);
 	      p7_ReconfigUnihit(gm, saveL);
+	      /* ddef->n2sc is now set on i..j by the traceback-dependent method */
+
 	      last_j2 = 0;
 	      for (d = 0; d < nc; d++) {
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
 		if (i2 <= last_j2) ddef->noverlaps++;
 
-		noverlap = (last_j2 >= i2 ? last_j2-i2+1 : 0);
-
 		ddef->nenvelopes++;
-		status = rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, noverlap);
+		status = rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, TRUE);
 		if (status == eslOK) last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
@@ -420,7 +433,7 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 	    {
 	      /* The region looks simple, single domain; convert the region to an envelope. */
 	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, 0);
+	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, FALSE);
 	    }
 	  i     = -1;
 	  triggered = FALSE;
@@ -661,18 +674,6 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  * (efficiently, we trust) managing any necessary temporary working
  * space and heuristic thresholds.
  * 
- * The caller also passes us <noverlap>, the number of residues in
- * this domain envelope that overlap with a previously defined
- * envelope. (Overlapping envelopes may arise when stochastic
- * traceback clustering is used to define them.) We use <noverlap>
- * to make sure that per-seq null2 correction doesn't doublecount
- * any residues.
- *
- * It isn't implemented yet, but this is eventually where null2
- * correction will go, since we obtain a posterior probability matrix
- * here; then the returned score will become a null2-corrected Forward
- * score.
- * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
  * registered in <ddef>, in <ddef->dcl>.
@@ -694,20 +695,29 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  */
 static int
 rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *sq, 
-			P7_GMX *gx1, P7_GMX *gx2, int i, int j, int noverlap)
+			P7_GMX *gx1, P7_GMX *gx2, int i, int j, int null2_is_done)
 {
-  P7_DOMAIN     *dom = NULL;
-  int            Ld = j-i+1;
+  P7_DOMAIN     *dom           = NULL;
+  int            Ld            = j-i+1;
+  float          domcorrection = 0.0;
   float          envsc, oasc;
   int            z;
-  float          domcorrection, seqcorrection;
+
+  int            pos;
   int            status;
 
   p7_GForward (sq->dsq + i-1, Ld, gm, gx1, &envsc);
   p7_GBackward(sq->dsq + i-1, Ld, gm, gx2, NULL);
   p7_PosteriorDecoding(Ld, gm, gx1, gx2, gx2);      /* <gx2> is now overwritten with post probabilities     */
 
-  p7_Null2Corrections(gm, sq->dsq + i-1, Ld, noverlap, gx2, gx1, NULL, &domcorrection, &seqcorrection);	/* gx1 used as tmp workspace */
+  /* Is null2 set already for this i..j? (It is, if we're in a domain that
+   * was defined by stochastic traceback clustering in a multidomain region;
+   * it isn't yet, if we're in a simple one-domain region). If it isn't,
+   * do it now, by the expectation (posterior decoding) method.
+   */
+  if (! null2_is_done) p7_null2_ByExpectation(ddef, gm, sq->dsq, i, j, gx2, gx1, NULL);
+
+  for (pos = i; pos <= j; pos++) domcorrection += ddef->n2sc[pos];
 
   /* Find an optimal accuracy alignment */
   p7_OptimalAccuracyDP(Ld, gm, gx2, gx1, &oasc); /* <gx1> is now overwritten with OA scores              */
@@ -729,7 +739,6 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *
   dom->ienv          = i;
   dom->jenv          = j;
   dom->envsc         = envsc;
-  dom->seqcorrection = seqcorrection;
   dom->domcorrection = domcorrection;
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
   ddef->ndom++;
@@ -801,6 +810,7 @@ main(int argc, char **argv)
   float           overall_sc, sc;
   int             d;
   int             status;
+  int             k,x;
 
   /* Read in one HMM */
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -850,11 +860,10 @@ main(int argc, char **argv)
   /* retrieve and display results */
   for (d = 0; d < ddef->ndom; d++)
     {
-      printf("domain %-4d : %4d %4d  %6.2f  %6.2f  %6.2f\n", d+1, 
+      printf("domain %-4d : %4d %4d  %6.2f  %6.2f\n", d+1, 
 	     ddef->dcl[d].ienv,
 	     ddef->dcl[d].jenv,
 	     ddef->dcl[d].envsc,
-	     ddef->dcl[d].seqcorrection,
 	     ddef->dcl[d].domcorrection);
 
       p7_alidisplay_Print(stdout, ddef->dcl[d].ad, 50, 120);

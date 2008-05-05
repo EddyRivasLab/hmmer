@@ -22,6 +22,7 @@
 #include "esl_stopwatch.h"
 #include "esl_gumbel.h"
 #include "esl_exponential.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
@@ -102,7 +103,6 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w       = esl_stopwatch_Create();  /* timing                   */
   struct cfg_s     cfg;
 
-
   /* Initializations */
   process_commandline(argc, argv, &cfg, &go);    
   init_shared_cfg(go, &cfg);                        
@@ -160,7 +160,7 @@ main(int argc, char **argv)
 }
 
 
-/* process_commandline_and_help()
+/* process_commandline()
  * 
  * Processes the commandline, filling in fields in <cfg> and creating and returning
  * an <ESL_GETOPTS> options structure. The help page (hmmsearch -h) is formatted
@@ -325,7 +325,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   float            usc, vfsc, ffsc;    /* filter scores                           */
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
-  float            tot_seqcorrection;  
+  float            omega  = 1.0f/256.0f;
+  float            seqbias;  
   float            seq_score;          /* the per-seq bit score */
   double           P;		       /* P-value of a hit */
 
@@ -333,6 +334,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
   int              d;
+  int              k,x;
 
   tr  = p7_trace_Create();
   fwd = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
@@ -353,6 +355,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
       p7_ProfileConfig(hmm, cfg->bg, gm, 100, cfg->mode); /* 100 is a dummy length for now */
+
+      /* Experimental: shut the inserts off. */
+      for (k = 1; k < hmm->M; k++)
+	for (x = 0; x < gm->abc->Kp; x++)
+	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
+
       p7_oprofile_Convert(gm, om);
       p7_omx_GrowTo(ox, om->M);
 
@@ -409,12 +417,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, cfg->ddef);
 
 	  /* Figure out the sum of null2 corrections to be added to the null score */
-	  tot_seqcorrection = 0.0f;
-	  for (d = 0; d < cfg->ddef->ndom; d++)
-	    tot_seqcorrection += cfg->ddef->dcl[d].seqcorrection;
+	  seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
+	  seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
+
 
 	  /* What's the per-seq score, and is it significant enough to be reported? */
-	  seq_score =  (final_sc - (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
+	  seq_score =  (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
 	  P         =  esl_exp_surv (seq_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 	  if (P * (double) cfg->nseq <= Evalue_threshold) /* P*current nseq is only a bound on the E-value */
 	    {
@@ -440,14 +448,32 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      /* Calculate the "reconstruction score": estimated per-sequence score as sum of the domains */
 	      hit->sum_score = 0.0f;
 	      Ld             = 0;
+	      final_sc       = 0.0;
+	      seqbias        = 0.0f;
+	      
 	      for (d = 0; d < cfg->ddef->ndom; d++) 
 		{
-		  hit->sum_score += cfg->ddef->dcl[d].envsc;
-		  Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
+		  if (cfg->ddef->dcl[d].envsc - cfg->ddef->dcl[d].domcorrection > 0.0) 
+		    {
+		      final_sc       += cfg->ddef->dcl[d].envsc;
+		      seqbias        += cfg->ddef->dcl[d].domcorrection;
+		      Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
+		    }
 		}
-	      hit->sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	      hit->sum_score  = (hit->sum_score- (nullsc + tot_seqcorrection)) / eslCONST_LOG2;
+	      final_sc       += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+	      seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
+	      hit->sum_score  = (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
 	      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+
+	      /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
+	      if (Ld > 0 && hit->sum_score > seq_score)
+		{
+		  hit->score     = hit->sum_score;
+		  hit->pvalue    = hit->sum_pvalue;
+		  hit->sortkey   = -log(hit->sum_pvalue);
+		  hit->pre_score = ( final_sc-nullsc) / eslCONST_LOG2;
+		  hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
+		}
 
 	      /* Transfer the domain coordinates and alignment display to the hit list */
 	      hit->dcl       = cfg->ddef->dcl;
@@ -456,7 +482,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		{
 		  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
 		  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-		  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].domcorrection)) / eslCONST_LOG2;
+		  seqbias              = p7_FLogsum(0.0, log(omega) + hit->dcl[d].domcorrection);
+		  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + seqbias)) / eslCONST_LOG2;
 		  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 		}
 	    }
@@ -499,7 +526,7 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   
   fprintf(cfg->ofp, "query HMM file:             %s\n", cfg->hmmfile);
   fprintf(cfg->ofp, "target sequence database:   %s\n", cfg->seqfile);
-  if (! esl_opt_IsDefault(go, "-o"))     fprintf(cfg->ofp, "output directed to file:    %s\n",    esl_opt_GetReal(go, "-o"));
+  if (! esl_opt_IsDefault(go, "-o"))     fprintf(cfg->ofp, "output directed to file:    %s\n",    esl_opt_GetString(go, "-o"));
   if (! esl_opt_IsDefault(go, "-E"))     fprintf(cfg->ofp, "sequence E-value threshold: <= %g\n", esl_opt_GetReal(go, "-E"));
   if (! esl_opt_IsDefault(go, "--F1"))   fprintf(cfg->ofp, "MSP filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
   if (! esl_opt_IsDefault(go, "--F2"))   fprintf(cfg->ofp, "Vit filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F2"));

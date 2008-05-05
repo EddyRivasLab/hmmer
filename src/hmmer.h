@@ -449,7 +449,6 @@ typedef struct p7_dom_s {
   int            ienv, jenv;
   int            iali, jali;
   float          envsc;  	/* Forward score in envelope ienv..jenv; without null2 correction */
-  float          seqcorrection;	/* null2 correction to add to per-seq null score for this domain  */
   float          domcorrection;	/* null2 correction to add null score when calculating a per-domain score */
   float          bitscore;	/* overall score in bits, null corrected, if this were the only domain in seq */
   double         pvalue;	/* P-value of the bitscore */
@@ -476,6 +475,9 @@ typedef struct p7_domaindef_s {
   float *etot;			/* etot[i=1..L] = cumulative expected times that domain ends at or before i   */
   int    L;
   int    Lalloc;
+
+  /* the ad hoc null2 model: 1..L nat scores for each residue, log f'(x_i) / f(x_i) */
+  float *n2sc;
 
   /* rng and reusable memory for stochastic tracebacks */
   ESL_RANDOMNESS *r;
@@ -669,11 +671,9 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 
 
 /* null2.c */
-extern int p7_Null2Corrections(const P7_PROFILE *gm, const ESL_DSQ *dsq, int Ld, int noverlap, 
-			       const P7_GMX *pp, P7_GMX *wrk, 
-			       float *opt_null2, float *opt_domcorrection, float *opt_seqcorrection);
-
-extern int p7_null2_MultihitRegion(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx);
+extern int p7_null2_ByExpectation(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_DSQ *dsq, int ienv, int jenv,
+				  const P7_GMX *pp, P7_GMX *wrk, float *opt_null2);
+extern int p7_null2_BySampling   (P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_DSQ *dsq, int ireg, int jreg, P7_GMX *gx);
 
 
 /* p7_alidisplay.c */
