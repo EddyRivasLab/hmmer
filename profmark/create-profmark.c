@@ -63,6 +63,7 @@ static ESL_OPTIONS options[] = {
   /* Other options */
   { "--single", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "embed one, not two domains in each positive",             4 },
   { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                 4 },
+  { "--seed",   eslARG_INT,    "42", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                    4 },
 
   { 0,0,0,0,0,0,0,0,0,0 },
 };
@@ -179,7 +180,8 @@ main(int argc, char **argv)
   dbfmt    = eslSQFILE_FASTA;
 
   /* Set up the configuration structure shared amongst functions here */
-  cfg.r         = esl_randomness_Create(42);
+  if (esl_opt_IsDefault(go, "--seed"))   cfg.r = esl_randomness_CreateTimeseeded();
+  else                                   cfg.r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
   cfg.abc       = NULL;		          /* until we open the MSA file, below */
   cfg.fragfrac  = esl_opt_GetReal(go, "-F");
   cfg.idthresh1 = esl_opt_GetReal(go, "-1");

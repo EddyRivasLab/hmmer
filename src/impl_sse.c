@@ -1313,6 +1313,7 @@ sse_any_gt_epu8(__m128i a, __m128i b)
 }
 
 /* Returns maximum element \max_z a[z] in epu8 vector */
+#if 0
 static unsigned char
 sse_hmax_epu8(__m128i a)
 {
@@ -1324,7 +1325,16 @@ sse_hmax_epu8(__m128i a)
   tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 8));
   return tmp.i[15];
 }
-
+#endif
+static unsigned char
+sse_hmax_epu8(__m128i a)
+{
+  a = _mm_max_epu8(a, _mm_srli_si128(a, 8));
+  a = _mm_max_epu8(a, _mm_srli_si128(a, 4));
+  a = _mm_max_epu8(a, _mm_srli_si128(a, 2));
+  a = _mm_max_epu8(a, _mm_srli_si128(a, 1));
+  return (unsigned char) _mm_extract_epi16(a, 0);
+}
 
 
 /* Function:  p7_MSPFilter()

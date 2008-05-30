@@ -321,7 +321,7 @@ p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
   int      status;
 
   if (hfp->ssi == NULL) ESL_EXCEPTION(eslEINVAL, "Need an open SSI index to call p7_hmmfile_PositionByKey()");
-  if ((status = esl_ssi_FindName(hfp->ssi, key, &fh, &offset)) != eslOK) return status;
+  if ((status = esl_ssi_FindName(hfp->ssi, key, &fh, &offset, NULL, NULL)) != eslOK) return status;
   if (fseeko(hfp->f, offset, SEEK_SET) != 0)    ESL_EXCEPTION(eslESYS, "fseek failed");
   return eslOK;
 }
