@@ -62,7 +62,6 @@ p7_spensemble_Create(int init_n, int init_epc, int init_sigc)
   ESL_ALLOC(sp->assignment, sizeof(int)                 * sp->nalloc);
   ESL_ALLOC(sp->epc,        sizeof(int)                 * sp->epc_alloc);
   ESL_ALLOC(sp->sigc,       sizeof(struct p7_spcoord_s) * sp->nsigc_alloc);
-  ESL_ALLOC(sp->prob,       sizeof(float)               * sp->nsigc_alloc);
   sp->nsamples  = 0;
   sp->n         = 0;
   sp->nc        = 0;
@@ -199,7 +198,7 @@ link_spsamples(const void *v1, const void *v2, const void *prm, int *ret_link)
   int  d1, d2;
   
   /* seq overlap test */
-  nov = ESL_MIN(h1->j, h2->j) - ESL_MAX(h1->i, h2->i);      /* overlap  */
+  nov = ESL_MIN(h1->j, h2->j) - ESL_MAX(h1->i, h2->i) + 1;      /* overlap  */
   n = (param->of_smaller ? ESL_MIN(h1->j - h1->i + 1,  h2->j - h2->i + 1) :     /* min length of the two hits */
                            ESL_MAX(h1->j - h1->i + 1,  h2->j - h2->i + 1));      /* max length of the two hits */
   if ((float) nov / (float) n  < param->min_overlap) { *ret_link = FALSE; return eslOK; }  
@@ -385,15 +384,15 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
       if (sp->nsigc >= sp->nsigc_alloc) {
 	void *p;
 	ESL_RALLOC(sp->sigc, p, sizeof(struct p7_spcoord_s) * sp->nsigc_alloc * 2);
-	ESL_RALLOC(sp->prob, p, sizeof(float)               * sp->nsigc_alloc * 2);
 	sp->nsigc_alloc *= 2;
       }
       
-      sp->sigc[sp->nsigc].i   = best_i;
-      sp->sigc[sp->nsigc].j   = best_j;
-      sp->sigc[sp->nsigc].k   = best_k;
-      sp->sigc[sp->nsigc].m   = best_m;
-      sp->sigc[sp->nsigc].idx = c;
+      sp->sigc[sp->nsigc].i    = best_i;
+      sp->sigc[sp->nsigc].j    = best_j;
+      sp->sigc[sp->nsigc].k    = best_k;
+      sp->sigc[sp->nsigc].m    = best_m;
+      sp->sigc[sp->nsigc].idx  = c;
+      sp->sigc[sp->nsigc].prob = (float) ninc[c] / (float) sp->nsamples;
       sp->nsigc++;
     }
 
@@ -401,10 +400,6 @@ p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
    * because later we're going to calculate overlaps by i_cur - j_prv
    */
   qsort((void *) sp->sigc, sp->nsigc, sizeof(struct p7_spcoord_s), cluster_orderer);
-
-  /* Now that they're in order, assign posterior prob to each cluster   */
-  for (c = 0; c < sp->nsigc; c++)
-    sp->prob[c] = (float) ninc[sp->sigc[c].idx] / (float) sp->nsamples;
 
   free(ninc);
   *ret_nclusters = sp->nsigc;
@@ -437,7 +432,7 @@ p7_spensemble_GetClusterCoords(P7_SPENSEMBLE *sp, int which, int *opt_i, int *op
   if (opt_j != NULL) *opt_j = sp->sigc[which].j;
   if (opt_k != NULL) *opt_k = sp->sigc[which].k;
   if (opt_m != NULL) *opt_m = sp->sigc[which].m;
-  if (opt_p != NULL) *opt_p = sp->prob[which];
+  if (opt_p != NULL) *opt_p = sp->sigc[which].prob;
   return eslOK;
 }
 
@@ -457,7 +452,6 @@ p7_spensemble_Destroy(P7_SPENSEMBLE *sp)
   if (sp->assignment != NULL) free(sp->assignment);
   if (sp->epc        != NULL) free(sp->epc);
   if (sp->sigc       != NULL) free(sp->sigc);
-  if (sp->prob       != NULL) free(sp->prob);
   free(sp);
 }  
 

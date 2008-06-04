@@ -375,6 +375,7 @@ struct p7_spcoord_s {
   int idx; 	/* backreference index: which trace a seg came from, or which cluster a domain came from */
   int i, j;	/* start,end in a target sequence (1..L)  */
   int k, m;     /* start,end in a query model (1..M)      */
+  float prob;	/* posterior probability of segment       */
 };
 
 /* Structure: P7_SPENSEMBLE
@@ -401,7 +402,6 @@ typedef struct p7_spensemble_s {
   
   /* Section 4: finally each large cluster is resolved into domain coords                   */
   struct p7_spcoord_s *sigc;	    /* array of coords for each domain, [0..nsigc-1]        */
-  float               *prob;	    /* posterior probability of each domain [0..nsigc-1]    */
   int                  nsigc;	    /* number of "significant" clusters, domains            */
   int                  nsigc_alloc; /* current allocated max for nsigc                      */
 } P7_SPENSEMBLE;

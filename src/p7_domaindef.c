@@ -37,6 +37,7 @@
 #include "p7_config.h"
 
 #include <math.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -422,6 +423,14 @@ p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
 		if (i2 <= last_j2) ddef->noverlaps++;
 
+		/* Note that k..m coords on model are available, but we're currently ignoring them. 
+		   This leads to a rare clustering bug that we eventually need to fix [xref J3/32]:
+		   two different regions in one profile HMM might have hit same seq domain,
+		   and when we now go to calculate an OA trace, nothing constrains us to find the
+                   two different alignments to the HMM; in fact, because OA is optimal, we'll 
+                   find one and the *same* alignment, leading to an apparent duplicate alignment 
+		   in the output.
+		 */
 		ddef->nenvelopes++;
 		status = rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, TRUE);
 		if (status == eslOK) last_j2 = j2;
@@ -629,7 +638,9 @@ static int
 region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc)
 {
   float sc;
-  int   t, d;
+  int   t, d, d2;
+  int   nov, n;
+  int   nc;
 
   p7_GForward(sq->dsq+i-1, j-i+1, gm, gx, &sc);
 
@@ -643,10 +654,42 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
 
       p7_trace_Reuse(ddef->tr);        
     }
-  p7_spensemble_Cluster(ddef->sp, ddef->min_overlap, ddef->of_smaller, ddef->max_diagdiff, ddef->min_posterior, ddef->min_endpointp, ret_nc);
+  p7_spensemble_Cluster(ddef->sp, ddef->min_overlap, ddef->of_smaller, ddef->max_diagdiff, ddef->min_posterior, ddef->min_endpointp, &nc);
+
+  /* A little hacky now. Remove "dominated" domains relative to seq coords. */
+  for (d = 0; d < nc; d++) 
+    ddef->sp->assignment[d] = 0; /* overload <assignment> to flag that a domain is dominated */
+
+  /* who dominates who? (by post prob) */
+  for (d = 0; d < nc; d++)
+    {
+      for (d2 = d+1; d2 < nc; d2++)
+	{
+	  nov = ESL_MIN(ddef->sp->sigc[d].j, ddef->sp->sigc[d2].j) - ESL_MAX(ddef->sp->sigc[d].i, ddef->sp->sigc[d2].i) + 1;
+	  if (nov == 0) break;
+	  n   = ESL_MIN(ddef->sp->sigc[d].j - ddef->sp->sigc[d].i + 1,  ddef->sp->sigc[d].j - ddef->sp->sigc[d].i + 1);
+	  if ((float) nov / (float) n >= 0.8) /* overlap */
+	    {
+	      if (ddef->sp->sigc[d].prob > ddef->sp->sigc[d2].prob) ddef->sp->assignment[d2] = 1;
+	      else                                                  ddef->sp->assignment[d]  = 1;
+	    }
+	}
+    }
+      
+  /* shrink the sigc list, removing dominated domains */
+  d = 0;
+  for (d2 = 0; d2 < nc; d2++)
+    {
+      if (ddef->sp->assignment[d2]) continue; /* skip domain d2, it's dominated. */
+      if (d != d2) {
+	memcpy(ddef->sp->sigc + d, ddef->sp->sigc + d2, sizeof(struct p7_spcoord_s));
+	d++;
+      }
+    }
+  ddef->sp->nc = d;
+  *ret_nc = d;
   return eslOK;
 }
-
 
 /* rescore_isolated_domain()
  * SRE, Fri Feb  8 09:18:33 2008 [Janelia]

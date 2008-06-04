@@ -37,12 +37,13 @@ static ESL_OPTIONS options[] = {
   { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit filter threshold: promote hits w/ P < F2",      2 },
   { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd filter threshold: promote hits w/ P < F3",      2 },
 
+  { "--unilocal",eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "do unilocal (Smith/Waterman) alignment",            3 },
 
-  { "--textw",   eslARG_INT,    "120", NULL, NULL,      NULL,  NULL,  NULL, "sets maximum ASCII text output line length",         3 },
-  { "--seed",    eslARG_INT,    NULL,  NULL, NULL,      NULL,  NULL,  NULL, "random number generator seed",                       3 },  
-  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",    3 },  
+  { "--textw",   eslARG_INT,    "120", NULL, NULL,      NULL,  NULL,  NULL, "sets maximum ASCII text output line length",         4 },
+  { "--seed",    eslARG_INT,    NULL,  NULL, NULL,      NULL,  NULL,  NULL, "random number generator seed",                       4 },  
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",    4 },  
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                     3 },
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                     4 },
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -184,6 +185,7 @@ process_commandline(int argc, char **argv, struct cfg_s *cfg, ESL_GETOPTS **ret_
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); /* 2= group; 2 = indentation; 80=textwidth*/
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); /* 3= group; 2 = indentation; 80=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); /* 3= group; 2 = indentation; 80=textwidth*/
       exit(0);
     }
 
@@ -209,7 +211,6 @@ static void
 init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   cfg->format   = eslSQFILE_UNKNOWN;    /* eventually, allow options to set this            */
-  cfg->mode     = p7_LOCAL;
 
   /* in serial, master has the hitlists, of course; 
    * in MPI, workers assemble partial hitlists, send to master, 
@@ -354,15 +355,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
-      p7_ProfileConfig(hmm, cfg->bg, gm, 100, cfg->mode); /* 100 is a dummy length for now */
+      p7_ProfileConfig(hmm, cfg->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; MSPFilter requires local mode */
 
       /* Experimental: shut the inserts off. */
       for (k = 1; k < hmm->M; k++)
 	for (x = 0; x < gm->abc->Kp; x++)
 	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
 
-      p7_oprofile_Convert(gm, om);
+      p7_oprofile_Convert(gm, om); /* <om> is now p7_LOCAL, multihit */
       p7_omx_GrowTo(ox, om->M);
+
+      if (esl_opt_GetBoolean(go, "--unilocal"))
+	p7_ReconfigUnihit(gm, 100); /* now <gm> is either local or unilocal mode */
 
       fprintf(cfg->ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
       if (hmm->acc  != NULL) fprintf(cfg->ofp, "Accession:   %s\n", hmm->acc);
@@ -380,14 +384,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_bg_SetLength(cfg->bg, sq->n);
 	  p7_bg_NullOne(cfg->bg, sq->dsq, sq->n, &nullsc);
 
-	  /* First level filter: the MSP filter. */
+	  /* First level filter: the MSP filter, multihit with <om> */
 	  p7_MSPFilter(sq->dsq, sq->n, om, ox, &usc);
 	  usc = (usc - nullsc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	  if (P >= F1) { esl_sq_Reuse(sq); continue; } 
 	  cfg->n_past_msp++;
 
-	  /* Second level filter: ViterbiFilter() */
+	  /* Second level filter: ViterbiFilter(), multihit with <om> */
 	  if (P >= F2) 		
 	    {
 	      p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &vfsc);  
@@ -397,7 +401,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    }
 	  cfg->n_past_vit++;
 	  
-	  /* Third filter: ForwardFilter() */
+	  /* Third filter: ForwardFilter(), multihit with <om> */
 	  if (P >= F3) 
 	    {
 	      p7_ForwardFilter(sq->dsq, sq->n, om, ox, &ffsc);  
@@ -410,7 +414,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* We're past the filters. Everything remaining is almost certainly a hit */
 	  p7_gmx_GrowTo(fwd, hmm->M, sq->n); /* realloc DP matrices as needed */
 	  p7_gmx_GrowTo(bck, hmm->M, sq->n); 
-	  p7_ReconfigLength(gm, sq->n);
+	  p7_ReconfigLength(gm, sq->n);	/* <gm> is either unihit or multihit, from above */
 	  
 	  p7_GForward(sq->dsq, sq->n, gm, fwd, &final_sc);         
 	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
@@ -419,7 +423,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Figure out the sum of null2 corrections to be added to the null score */
 	  seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
 	  seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
-
 
 	  /* What's the per-seq score, and is it significant enough to be reported? */
 	  seq_score =  (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
