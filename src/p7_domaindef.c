@@ -681,10 +681,8 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
   for (d2 = 0; d2 < nc; d2++)
     {
       if (ddef->sp->assignment[d2]) continue; /* skip domain d2, it's dominated. */
-      if (d != d2) {
-	memcpy(ddef->sp->sigc + d, ddef->sp->sigc + d2, sizeof(struct p7_spcoord_s));
-	d++;
-      }
+      if (d != d2) memcpy(ddef->sp->sigc + d, ddef->sp->sigc + d2, sizeof(struct p7_spcoord_s));
+      d++;
     }
   ddef->sp->nc = d;
   *ret_nc = d;
@@ -853,7 +851,6 @@ main(int argc, char **argv)
   float           overall_sc, sc;
   int             d;
   int             status;
-  int             k,x;
 
   /* Read in one HMM */
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

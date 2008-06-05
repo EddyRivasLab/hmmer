@@ -42,6 +42,7 @@ static ESL_OPTIONS options[] = {
   { "--textw",   eslARG_INT,    "120", NULL, NULL,      NULL,  NULL,  NULL, "sets maximum ASCII text output line length",         4 },
   { "--seed",    eslARG_INT,    NULL,  NULL, NULL,      NULL,  NULL,  NULL, "random number generator seed",                       4 },  
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",    4 },  
+  { "--best1",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "make per-seq the best single domain score",          4 },  
 #ifdef HAVE_MPI
   { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                     4 },
 #endif 
@@ -420,12 +421,26 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
 	  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, cfg->ddef);
 
-	  /* Figure out the sum of null2 corrections to be added to the null score */
-	  seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
-	  seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
+	  if (esl_opt_GetBoolean(go, "--best1")) 
+	    {
+	      seq_score = -9999.0;
+	      for (d = 0; d < cfg->ddef->ndom; d++) 
+		{
+		  Ld       = cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
+		  final_sc = cfg->ddef->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+		  final_sc = (final_sc - (nullsc +  p7_FLogsum(0.0, log(omega) + cfg->ddef->dcl[d].domcorrection))) / eslCONST_LOG2;
+		  if (final_sc > seq_score) seq_score = final_sc;
+		}
+	    }
+	  else
+	    {
+	      /* What's the per-seq score, and is it significant enough to be reported? */
+	      /* Figure out the sum of null2 corrections to be added to the null score */
+	      seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
+	      seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
+	      seq_score =  (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
+	    }
 
-	  /* What's the per-seq score, and is it significant enough to be reported? */
-	  seq_score =  (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
 	  P         =  esl_exp_surv (seq_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 	  if (P * (double) cfg->nseq <= Evalue_threshold) /* P*current nseq is only a bound on the E-value */
 	    {
@@ -469,7 +484,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 
 	      /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
-	      if (Ld > 0 && hit->sum_score > seq_score)
+	      if (Ld > 0 && hit->sum_score > seq_score && ! esl_opt_GetBoolean(go, "--best1"))
 		{
 		  hit->score     = hit->sum_score;
 		  hit->pvalue    = hit->sum_pvalue;
