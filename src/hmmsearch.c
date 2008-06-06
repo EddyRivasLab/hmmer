@@ -366,9 +366,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om); /* <om> is now p7_LOCAL, multihit */
       p7_omx_GrowTo(ox, om->M);
 
-      if (esl_opt_GetBoolean(go, "--unilocal"))
-	p7_ReconfigUnihit(gm, 100); /* now <gm> is either local or unilocal mode */
-
       fprintf(cfg->ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
       if (hmm->acc  != NULL) fprintf(cfg->ofp, "Accession:   %s\n", hmm->acc);
       if (hmm->desc != NULL) fprintf(cfg->ofp, "Description: %s\n", hmm->desc);
@@ -415,7 +412,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* We're past the filters. Everything remaining is almost certainly a hit */
 	  p7_gmx_GrowTo(fwd, hmm->M, sq->n); /* realloc DP matrices as needed */
 	  p7_gmx_GrowTo(bck, hmm->M, sq->n); 
-	  p7_ReconfigLength(gm, sq->n);	/* <gm> is either unihit or multihit, from above */
+
+	  if (esl_opt_GetBoolean(go, "--unilocal"))  p7_ReconfigUnihit(gm, sq->n);
+	  else                              	     p7_ReconfigLength(gm, sq->n);
 	  
 	  p7_GForward(sq->dsq, sq->n, gm, fwd, &final_sc);         
 	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
