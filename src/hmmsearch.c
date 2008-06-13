@@ -149,11 +149,19 @@ main(int argc, char **argv)
   fprintf(cfg.ofp, "\n"); 
 
   /* Clean up and exit */
-  if (cfg.my_rank == 0) {
-    if (cfg.hfp  != NULL)               p7_hmmfile_Close(cfg.hfp);
-    if (cfg.sqfp != NULL)               esl_sqfile_Close(cfg.sqfp);
-    if (! esl_opt_IsDefault(go, "-o"))  fclose(cfg.ofp);
-  }
+  if (cfg.my_rank == 0) 
+    {	/* cleanup of master-only cfg */
+      if (cfg.hfp  != NULL)               p7_hmmfile_Close(cfg.hfp);
+      if (cfg.sqfp != NULL)               esl_sqfile_Close(cfg.sqfp);
+      if (! esl_opt_IsDefault(go, "-o"))  fclose(cfg.ofp);
+    }
+
+  if (! cfg.do_mpi || cfg.my_rank > 0)
+    {			/* cleanup of worker-only cfg */
+      if (cfg.r    != NULL) esl_randomness_Destroy(cfg.r);
+      if (cfg.ddef != NULL) p7_domaindef_Destroy(cfg.ddef);
+    }
+  p7_tophits_Destroy(cfg.hitlist);
   p7_bg_Destroy(cfg.bg);
   esl_alphabet_Destroy(cfg.abc);
   esl_getopts_Destroy(go);
@@ -517,6 +525,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       output_per_domain_hitlist  (go, cfg, cfg->hitlist);  fprintf(cfg->ofp, "\n");
       fprintf(cfg->ofp, "//\n");
 
+      p7_hmm_Destroy(hmm);
       p7_profile_Destroy(gm);
       p7_oprofile_Destroy(om);
     }

@@ -345,6 +345,41 @@ p7_tophits_GetMaxNameLength(P7_TOPHITS *h)
   return max;
 }
 
+/* Function:  p7_tophits_Reuse()
+ * Synopsis:  Reuse a hit list, freeing internals.
+ * Incept:    SRE, Fri Jun  6 15:39:05 2008 [Janelia]
+ *
+ * Purpose:   Reuse the tophits list <h>; save as 
+ *            many malloc/free cycles as possible,
+ *            as opposed to <Destroy()>'ing it and
+ *            <Create>'ing a new one.
+ */
+int
+p7_tophits_Reuse(P7_TOPHITS *h)
+{
+  int i, j;
+
+  if (h == NULL) return eslOK;
+  if (h->unsrt != NULL) 
+    {
+      for (i = 0; i < h->N; i++)
+	{
+	  if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
+	  if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
+	  if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
+	  if (h->unsrt[i].dcl  != NULL) {
+	    for (j = 0; j < h->unsrt[i].ndom; j++)
+	      if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
+	    free(h->unsrt[i].dcl);
+	  }
+	}
+    }
+  h->N         = 0;
+  h->is_sorted = TRUE;
+  h->hit[0]    = h->unsrt;
+  return eslOK;
+}
+
 /* Function:  p7_tophits_Destroy()
  * Synopsis:  Frees a hit list.
  * Incept:    SRE, Fri Dec 28 07:33:21 2007 [Janelia]
@@ -352,7 +387,7 @@ p7_tophits_GetMaxNameLength(P7_TOPHITS *h)
 void
 p7_tophits_Destroy(P7_TOPHITS *h)
 {
-  int i;
+  int i,j;
   if (h == NULL) return;
   if (h->hit   != NULL) free(h->hit);
   if (h->unsrt != NULL) 
@@ -362,6 +397,11 @@ p7_tophits_Destroy(P7_TOPHITS *h)
 	  if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
 	  if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
 	  if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
+	  if (h->unsrt[i].dcl  != NULL) {
+	    for (j = 0; j < h->unsrt[i].ndom; j++)
+	      if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
+	    free(h->unsrt[i].dcl);
+	  }
 	}
       free(h->unsrt);
     }

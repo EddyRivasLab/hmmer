@@ -33,7 +33,7 @@
 #include "hmmer.h"
 
 
-static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr);
 static int trace_doctor(P7_TRACE *tr, int *ret_ndi, int *ret_nid);
 static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
@@ -65,13 +65,13 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           
  * Args:     msa     - multiple sequence alignment          
  *           ret_hmm - RETURN: counts-form HMM
- *           ret_tr  - optRETURN: array of tracebacks for aseq's
+ *           opt_tr  - optRETURN: array of tracebacks for aseq's
  *           
- * Return:   <eslOK> on success. <ret_hmm> and <ret_tr> are allocated 
+ * Return:   <eslOK> on success. <ret_hmm> and <opt_tr> are allocated 
  *           here, and must be free'd by caller.
  *
  *           Returns <eslENORESULT> if no consensus columns were annotated;
- *           in this case, <ret_hmm> and <ret_tr> are returned NULL. 
+ *           in this case, <ret_hmm> and <opt_tr> are returned NULL. 
  *           
  *           Returns <eslEFORMAT> if the <msa> doesn't have a reference
  *           annotation line.
@@ -80,7 +80,7 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           isn't in digital mode.
  */            
 int
-p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
+p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 {
   int        status;
   int       *matassign = NULL;    /* MAT state assignments if 1; 1..alen */
@@ -95,8 +95,8 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
   for (apos = 1; apos <= msa->alen; apos++)
     matassign[apos] = (esl_abc_CIsGap(msa->abc, msa->rf[apos-1])? FALSE : TRUE);
 
-  /* matassign2hmm leaves ret_hmm, ret_tr in their proper state: */
-  if ((status = matassign2hmm(msa, matassign, ret_hmm, ret_tr)) != eslOK) goto ERROR;
+  /* matassign2hmm leaves ret_hmm, opt_tr in their proper state: */
+  if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) goto ERROR;
 
   free(matassign);
   return eslOK;
@@ -140,20 +140,20 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
  * Args:     msa       - multiple sequence alignment
  *           symfrac   - threshold for residue occupancy; >= assigns MATCH
  *           ret_hmm   - RETURN: counts-form HMM
- *           ret_tr    - optRETURN: array of tracebacks for aseq's
+ *           opt_tr    - optRETURN: array of tracebacks for aseq's
  *           
- * Return:   <eslOK> on success. ret_hmm and ret_tr allocated here,
+ * Return:   <eslOK> on success. ret_hmm and opt_tr allocated here,
  *           and must be free'd by the caller (FreeTrace(tr[i]), free(tr),
  *           FreeHMM(hmm)).       
  *
  *           Returns <eslENORESULT> if no consensus columns were annotated;
- *           in this case, <ret_hmm> and <ret_tr> are returned NULL.
+ *           in this case, <ret_hmm> and <opt_tr> are returned NULL.
  *           
  * Throws:   <eslEMEM> on allocation failure; <eslEINVAL> if the 
  *           <msa> isn't in digital mode.
  */
 int
-p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
+p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 {
   int      status;	     /* return status flag                  */
   int     *matassign = NULL; /* MAT state assignments if 1; 1..alen */
@@ -185,9 +185,9 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret
 
   /* Once we have matassign calculated, modelmakers behave
    * the same; matassign2hmm() does this stuff (traceback construction,
-   * trace counting) and sets up ret_hmm and ret_tr.
+   * trace counting) and sets up ret_hmm and opt_tr.
    */
-  if ((status = matassign2hmm(msa, matassign, ret_hmm, ret_tr)) != eslOK) goto ERROR;
+  if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) goto ERROR;
 
   free(matassign);
   return eslOK;
@@ -216,15 +216,15 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret
  * Args:     msa       - multiple sequence alignment
  *           matassign - 1..alen bit flags for column assignments
  *           ret_hmm   - RETURN: counts-form HMM
- *           ret_tr    - optRETURN: array of tracebacks for aseq's
+ *           opt_tr    - optRETURN: array of tracebacks for aseq's
  *                         
  * Return:   <eslOK> on success.
  *           <eslENORESULT> if no consensus columns are identified.
  *
- *           ret_hmm and ret_tr alloc'ed here.
+ *           ret_hmm and opt_tr alloc'ed here.
  */
 static int
-matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr)
+matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 {
   int        status;		/* return status                       */
   P7_HMM    *hmm = NULL;        /* RETURN: new hmm                     */
@@ -264,7 +264,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
     msa->rf[apos-1] = matassign[apos] ? 'x' : '.';
   msa->rf[msa->alen] = '\0';
 
-  if (ret_tr  != NULL) *ret_tr  = tr; 
+  if (opt_tr  != NULL) *opt_tr  = tr; 
   else                  p7_trace_DestroyArray(tr, msa->nseq);
   *ret_hmm = hmm;
   return eslOK;
@@ -272,7 +272,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***ret_tr
  ERROR:
   if (tr     != NULL) p7_trace_DestroyArray(tr, msa->nseq);
   if (hmm    != NULL) p7_hmm_Destroy(hmm);
-  if (ret_tr != NULL) *ret_tr = NULL;
+  if (opt_tr != NULL) *opt_tr = NULL;
   *ret_hmm = NULL;
   return status;
 }

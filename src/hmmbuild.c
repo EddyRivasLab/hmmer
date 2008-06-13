@@ -371,7 +371,7 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 	if (msa->name != NULL) fprintf(cfg->ofp, "Alignment:           %s\n",  msa->name);
 	else                   fprintf(cfg->ofp, "Alignment:           #%d\n", cfg->nali);
 	fprintf                       (cfg->ofp, "Number of sequences: %d\n",  msa->nseq);
-	fprintf                       (cfg->ofp, "Number of columns:   %d\n",  msa->alen);
+	fprintf                       (cfg->ofp, "Number of columns:   %" PRId64 "\n",  msa->alen);
 	fputs("", cfg->ofp);
 	fflush(stdout);
       }
@@ -685,7 +685,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
   
   if (! cfg->be_verbose)	/* tabular output */
     {                    /* #   name nseq alen M */
-      fprintf(cfg->ofp, "%-5d %-20s %5d %5d %5d\n",
+      fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d\n",
 	      msaidx,
 	      (msa->name != NULL) ? msa->name : "",
 	      msa->nseq,

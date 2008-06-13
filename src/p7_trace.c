@@ -267,10 +267,7 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
   for (idx = 0; idx < N; idx++)
     {
       if (tr[idx] == NULL) continue;
-      if (tr[idx]->st != NULL) free(tr[idx]->st);
-      if (tr[idx]->k  != NULL) free(tr[idx]->k);
-      if (tr[idx]->i  != NULL) free(tr[idx]->i);
-      free(tr[idx]);
+      p7_trace_Destroy(tr[idx]);
     }
   free(tr);
   return;

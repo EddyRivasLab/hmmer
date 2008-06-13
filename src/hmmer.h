@@ -553,8 +553,6 @@ typedef struct p7_hit_s {
 
 
 /* Structure: P7_TOPHITS
- * 
-
  * merging when we prepare to output results. "hit" list is NULL and
  * unavailable until after we do a sort.  
  */

@@ -192,7 +192,6 @@ p7_null2_BySampling(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_DSQ *dsq
   int    t, d;
   float  null2[p7_MAXCODE];	/* a null2 model frequency vector, 0..Kp-1   */
   int    x, k, z, pos;
-  float  domsc;
   int    status;
  
   ESL_ALLOC(suse,     sizeof(float) * (gm->M+1));
