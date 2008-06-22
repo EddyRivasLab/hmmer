@@ -263,6 +263,7 @@ fi
 # Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
 #
 AC_PROG_CC
+AC_PROG_CPP
 AX_COMPILER_VENDOR
 # AC_PROG_CC_STDC wants to append -c99 to icc; icc doesn't like this.
 if test "$ax_cv_c_compiler_vendor" != "intel"; then
@@ -294,7 +295,7 @@ fi
 
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
-   ACX_MPI([],AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+   ACX_MPI([CC="$MPICC"],AC_MSG_ERROR([MPI library not found for --enable-mpi]))
 fi
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@

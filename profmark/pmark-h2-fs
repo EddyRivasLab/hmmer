@@ -1,0 +1,36 @@
+#! /usr/bin/perl
+
+# Usage: pmark-h2 <dir> <index-table> <msafile> <seqfile> <outfile>
+
+# output: the .out file contains lines of <evalue> <score> <target> <querymodel>
+
+$hmmbuild       = "/usr/local/hmmer/bin/hmmbuild -f";
+$hmmcalibrate   = "/usr/local/hmmer/bin/hmmcalibrate --cpu 1";
+$hmmsearch      = "/usr/local/hmmer/bin/hmmsearch --cpu 1 -E 10000";
+
+$dir        = shift;
+$table      = shift;
+$msafile    = shift;
+$seqfile    = shift;
+$outfile    = shift;
+
+open(TABLE, "$table") || die "failed to open $table";
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    system("esl-afetch -o $dir/$msaname.sto $msafile $msaname        >  /dev/null");
+    system("$hmmbuild      $dir/$msaname.hmm $dir/$msaname.sto       >  /dev/null");
+    system("$hmmcalibrate  $dir/$msaname.hmm                         >  /dev/null");
+    system("$hmmsearch     $dir/$msaname.hmm $seqfile | ./h2extract >> $outfile");
+    unlink "$dir/$msaname.hmm";
+    unlink "$dir/$msaname.sto";
+}
+close TABLE;
+
+
+    
+
+    
+    
+
