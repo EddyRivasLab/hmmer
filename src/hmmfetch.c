@@ -133,19 +133,22 @@ main(int argc, char **argv)
 static void
 create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
 {
-  int         status;
-  ESL_NEWSSI *ns      = esl_newssi_Create();
-  ESL_ALPHABET *abc   = NULL;
-  P7_HMM     *hmm     = NULL;
-  int         nhmm    = 0;
-  char       *ssifile = NULL;
-  FILE       *sfp     = NULL;
-  uint16_t    fh;
+  ESL_NEWSSI   *ns      = NULL;
+  ESL_ALPHABET *abc     = NULL;
+  P7_HMM       *hmm     = NULL;
+  int           nhmm    = 0;
+  char         *ssifile = NULL;
+  uint16_t      fh;
+  int           status;
 
   if (esl_FileNewSuffix(hfp->fname, "ssi", &ssifile) != eslOK)
     esl_fatal("Failed to name SSI file for %s\n", hfp->fname);
-  if ((sfp = fopen(ssifile, "wb")) == NULL)
-    esl_fatal("Failed to open SSI file %s\n", ssifile);
+
+  status = esl_newssi_Open(ssifile, FALSE, &ns);
+  if      (status == eslENOTFOUND)   esl_fatal("failed to open SSI index %s", ssifile);
+  else if (status == eslEOVERWRITE)  esl_fatal("SSI index %s already exists; delete or rename it", ssifile);
+  else if (status != eslOK)          esl_fatal("failed to create a new SSI index");
+
   if (esl_newssi_AddFile(ns, hfp->fname, 0, &fh) != eslOK) /* 0 = format code (HMMs don't have any yet) */
     esl_fatal("Failed to add HMM file %s to new SSI index\n", hfp->fname);
 
@@ -172,7 +175,7 @@ create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
       p7_hmm_Destroy(hmm);
     }
   
-  if (esl_newssi_Write(sfp, ns) != eslOK) 
+  if (esl_newssi_Write(ns) != eslOK) 
     p7_Fail("Failed to write keys to ssi file %s\n", ssifile);
 
   printf("done.\n");
@@ -182,10 +185,9 @@ create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
     printf("Indexed %d HMMs (%ld names).\n", nhmm, (long) ns->nprimary);
   printf("SSI index written to file %s\n", ssifile);
 
-  fclose(sfp);
   free(ssifile);
   esl_alphabet_Destroy(abc);
-  esl_newssi_Destroy(ns);
+  esl_newssi_Close(ns);
   return;
 }  
 

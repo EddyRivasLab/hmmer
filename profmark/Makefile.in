@@ -17,7 +17,8 @@ MPILIBS  = @MPILIBS@
 SRCDIR   = ../src
 ESLDIR   = ../easel
 
-PROGS    = create-profmark
+PROGS    = create-profmark\
+	   rocplot
 
 all: ${PROGS} 
 

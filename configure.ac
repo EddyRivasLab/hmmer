@@ -295,7 +295,8 @@ fi
 
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
-   ACX_MPI([CC="$MPICC"],AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+   ACX_MPI(,AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+   CC=$MPICC
 fi
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
