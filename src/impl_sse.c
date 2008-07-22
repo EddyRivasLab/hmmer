@@ -169,36 +169,70 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
  * Incept:    SRE, Tue Nov 27 08:48:20 2007 [Janelia]
  *
  * Purpose:   Allocates a reusable, resizeable <P7_OMX> for models up to
- *            size <allocM>.
+ *            size <allocM> and target sequences up to length
+ *            <allocL/allocXL>, for use by any of the various optimized
+ *            DP routines.
+ *            
+ *            To allocate the very memory-efficient one-row matrix
+ *            used by *Filter() and *Score() functions that only
+ *            calculate scores, <allocM=M>, <allocL=0>, and
+ *            <allocXL=0>.
+ *            
+ *            To allocate the reasonably memory-efficient linear
+ *            arrays used by *Parser() functions that only keep
+ *            special (X) state scores, <allocM=M>, <allocL=0>,
+ *            and <allocXL=L>.
+ *            
+ *            To allocate a complete matrix suitable for functions
+ *            that need the whole DP matrix for traceback, sampling,
+ *            posterior decoding, or reestimation, <allocM=M> and
+ *            <allocL=allocXL=L>.
  *
  * Returns:   a pointer to the new <P7_OMX>.
  *
  * Throws:    <NULL> on allocation failure.
  */
 P7_OMX *
-p7_omx_Create(int allocM)
+p7_omx_Create(int allocM, int allocL, int allocXL)
 {
   P7_OMX  *ox  = NULL;
-  int      nqf = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
-  int      nqu = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
+  int      nqu = p7O_NQU(allocM); /* segment length; total # of striped vectors for uchar */
+  int      nqf = p7O_NQF(allocM); /* ditto, for float */
+  int      i;
   int      status;
 
   ESL_ALLOC(ox, sizeof(P7_OMX));
-  ox->dpu_mem = NULL;
-  ox->dpf_mem = NULL;
+  ox->dp_mem = NULL;
+  ox->dpu    = NULL;
+  ox->dpf    = NULL;
+  ox->x_mem  = NULL;
+  ox->xmx    = NULL;
 
-  ESL_ALLOC(ox->dpu_mem,  sizeof(__m128i) * p7X_NSCELLS * nqu + 15); 
-  ox->dpu       = (__m128i *) (((unsigned long int) ox->dpu_mem + 15) & (~0xf));
-  ox->allocQ16  = nqu;
-  ox->Q16       = 0;
+  ESL_ALLOC(ox->dpu,    sizeof(__m128i *) * (allocL+1)); /* +1 is for the 0 row */
+  ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * (allocL+1));
+  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
+  ESL_ALLOC(ox->x_mem,  sizeof(__m128) * (allocXL+1) * 2 + 15); 
+  
+  /* alignment of all vector arrays on 16-byte boundaries */
+  ox->dpu[0] = (__m128i *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
+  ox->dpf[0] = (__m128  *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
+  ox->xmx    = (__m128  *) ( ( (unsigned long int) (ox->x_mem  + 15) & (~0xf)));
 
-  ESL_ALLOC(ox->dpf_mem,  sizeof(__m128)  * p7X_NSCELLS * nqf + 15);
-  ox->dpf       = (__m128 *) (((unsigned long int) ox->dpf_mem + 15) & (~0xf));
-  ox->allocQ4   = nqf;
-  ox->Q4        = 0;
+  for (i = 1; i <= allocL; i++)
+    {
+      ox->dpu[i] = ox->dpu[0] + i * nqu * p7X_NSCELLS;
+      ox->dpf[i] = ox->dpf[0] + i * nqf * p7X_NSCELLS;
+    }
 
-  ox->allocM    = allocM;
-  ox->M         = 0;
+  ox->M        = 0;
+  ox->L        = 0;
+  ox->nmem     = sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15;
+  ox->allocR   = allocL+1;
+  ox->validR   = allocL+1;
+  ox->allocQ4  = nqf;
+  ox->allocQ16 = nqu;
+  ox->allocX   = allocXL+1;
+
 #ifdef p7_DEBUGGING
   ox->debugging = FALSE;
   ox->dfp       = NULL;
@@ -209,7 +243,6 @@ p7_omx_Create(int allocM)
   p7_omx_Destroy(ox);
   return NULL;
 }
-
 
 /* Function:  p7_omx_GrowTo()
  * Synopsis:  Assure that a DP matrix is big enough.
@@ -231,15 +264,23 @@ p7_omx_Create(int allocM)
  *            have been in <gx> must be assumed to be invalidated.
  */
 int
-p7_omx_GrowTo(P7_OMX *ox, int allocM)
+p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 {
-  if (allocM <= ox->allocM) return eslOK;
+  if (allocM <= ox->allocM && allocL <= ox->allocL && allocXL <= ox->allocXL) return eslOK;
 
-  void *p;
-  int   nqf = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
-  int   nqu = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
-  int   status;
+  void  *p;
+  int    nqf  = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
+  int    nqu  = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
+  size_t nmem = sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15;
+  int    status;
  
+  if (nmem > ox->nmem)
+    {
+      ESL_RALLOC(ox->dp_mem, p, nmem);
+      
+
+  
+
   ESL_RALLOC(ox->dpu_mem, p, sizeof(__m128i) * p7X_NSCELLS * nqu + 15);
   ox->dpu       = (__m128i *) (((unsigned long int) ox->dpu_mem + 15) & (~0xf));  
   ox->allocQ16 = nqu;
@@ -270,8 +311,10 @@ void
 p7_omx_Destroy(P7_OMX *ox)
 {
   if (ox == NULL) return;
-  if (ox->dpu_mem != NULL) free(ox->dpu_mem);
-  if (ox->dpf_mem != NULL) free(ox->dpf_mem);
+  if (ox->x_mem   != NULL) free(ox->x_mem);
+  if (ox->dp_mem  != NULL) free(ox->dp_mem);
+  if (ox->dpf     != NULL) free(ox->dpf);
+  if (ox->dpu     != NULL) free(ox->dpu);
   free(ox);
   return;
 }

@@ -645,7 +645,7 @@ output_search_statistics(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w)
 {
   fprintf(cfg->ofp, "Internal statistics summary:\n");
   fprintf(cfg->ofp, "----------------------------\n");
-  fprintf(cfg->ofp, "Query HMMs(s):     %ld  (%ld nodes)\n",    cfg->nmodels, cfg->nnodes);
+  fprintf(cfg->ofp, "Query HMM(s):      %ld  (%ld nodes)\n",    cfg->nmodels, cfg->nnodes);
   fprintf(cfg->ofp, "Target sequences:  %ld  (%ld residues)\n", cfg->nseq,    cfg->nres);
 
   fprintf(cfg->ofp, "Passed MSP filter: %ld  (%.3f; expected %.3f)\n", 
@@ -656,7 +656,7 @@ output_search_statistics(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w)
 	  cfg->n_past_fwd, (double) cfg->n_past_fwd / (double) cfg->nseq, esl_opt_GetReal(go, "--F3"));
 
   fprintf(cfg->ofp, "Mc/sec:            %.2f\n", 
-	  (double) cfg->nres * (double) cfg->nnodes / (w->elapsed * 1.0e6));
+	  (double) cfg->nres * (double) cfg->nnodes / (w->user * 1.0e6));
   esl_stopwatch_Display(cfg->ofp, w, "# CPU time: ");
 
   return eslOK;

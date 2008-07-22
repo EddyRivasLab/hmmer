@@ -75,6 +75,7 @@
  */
 #define p7O_NQU(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars */
 #define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /* 4 floats  */
+#define p7O_NQD(M)   ( ESL_MAX(2, ((((M)-1) / 2)  + 1)))   /* 2 doubles */
 
 
 /*****************************************************************
@@ -184,20 +185,28 @@ enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 #define p7X_NSCELLS 3
 
 typedef struct p7_omx_s {
-  __m128i *dpu;			/* one row of a striped DP matrix for [0..q-1][MDI] for uchars */
-  __m128i *dpu_mem;		/* allocation of dpu, before aligning the pointer              */
-  int     allocQ16;		/* total uchar vectors allocated                               */
-  int     Q16;			/* when omx is in use: how many quads are valid (= p7O_NQU(M)) */
+  int       M;			/* current actual model dimension       */
+  int       L;			/* current actual sequence dimension    */
 
-  __m128 *dpf;			/* one row of a striped DP matrix for floats                   */
-  __m128 *dpf_mem;		/* allocation of dpf, before aligning the pointer              */
-  int     allocQ4;		/* total float vectors allocated                               */
-  int     Q4;			/* when omx is in use: how many quads are valid (= p7O_NQF(M)) */
+  /* The main dynamic programming matrix (for full; or one row, for parser/scorer */
+  void     *dp_mem;		/* DP memory shared by <dpu>, <dpf>               */
+  size_t    nmem;		/* current allocation size of <dp_mem>, in bytes */
+  __m128i **dpu;		/* striped DP matrix for [0,1..L][0..q-1][MDI], uchar vectors  */
+  __m128  **dpf;		/* striped DP matrix for [0,1..L][0..q-1][MDI], float vectors  */
+  int       allocR;		/* current allocated # of rows. L+1 <= validR <= allocR */
+  int       validR;		/* # of rows actually pointing at DP memory             */
+  int       allocQ4;		/* current set row width in <dpf>: M+1 <= allocQ4*4     */
+  int       allocQ16;		/* current set row width in <dpu>: M+1 <= allocQ16*16   */
 
-  int     allocM;		/* current allocation size (redundant with Q16 and Q4, really) */
-  int     M;			/* when omx is in use: how big is the query                    */
+  /* The X states (for full,parser; or NULL, for scorer */
+  __m128   *xmx;		/* logically [0.1..L][EB/NJC]; 2 vectors per row */
+  void     *x_mem;		/* X memory before vector alignment */
+  int       allocX;		/* number of rows allocated in xmx; L+1 <= allocX */
 
 #ifdef p7_DEBUGGING  
+  /* Parsers,scorers only hold a row at a time, so to get them to dump full matrix, it
+   * must be done during a DP calculation, after each row is calculated 
+   */
   int     debugging;		/* TRUE if we're in debugging mode                             */
   FILE   *dfp;			/* output stream for diagnostics                               */
 #endif
