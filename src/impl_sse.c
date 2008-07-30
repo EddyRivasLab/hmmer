@@ -195,9 +195,7 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 P7_OMX *
 p7_omx_Create(int allocM, int allocL, int allocXL)
 {
-  P7_OMX  *ox  = NULL;
-  int      nqu = p7O_NQU(allocM); /* segment length; total # of striped vectors for uchar */
-  int      nqf = p7O_NQF(allocM); /* ditto, for float */
+  P7_OMX  *ox     = NULL;
   int      i;
   int      status;
 
@@ -206,33 +204,35 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->dpu    = NULL;
   ox->dpf    = NULL;
   ox->x_mem  = NULL;
-  ox->xmx    = NULL;
 
-  ESL_ALLOC(ox->dpu,    sizeof(__m128i *) * (allocL+1)); /* +1 is for the 0 row */
-  ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * (allocL+1));
-  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
-  ESL_ALLOC(ox->x_mem,  sizeof(__m128) * (allocXL+1) * 2 + 15); 
-  
-  /* alignment of all vector arrays on 16-byte boundaries */
+  /* DP matrix will be allocated for allocL+1 rows 0,1..L; allocQ4*p7X_NSCELLS columns */
+  ox->allocR   = allocL+1;
+  ox->validR   = ox->allocR;
+  ox->allocQ4  = p7O_NQF(allocM);
+  ox->allocQ16 = p7O_NQU(allocM);
+  ox->ncells   = ox->allocR * ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
+
+  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * ox->allocR * ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
+  ESL_ALLOC(ox->dpu,    sizeof(__m128i *) * ox->allocR);
+  ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
+
   ox->dpu[0] = (__m128i *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
   ox->dpf[0] = (__m128  *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
-  ox->xmx    = (__m128  *) ( ( (unsigned long int) (ox->x_mem  + 15) & (~0xf)));
 
-  for (i = 1; i <= allocL; i++)
-    {
-      ox->dpu[i] = ox->dpu[0] + i * nqu * p7X_NSCELLS;
-      ox->dpf[i] = ox->dpf[0] + i * nqf * p7X_NSCELLS;
-    }
+  for (i = 1; i <= allocL; i++) {
+    ox->dpf[i] = ox->dpf[0] + i * ox->allocQ4  * p7X_NSCELLS;
+    ox->dpu[i] = ox->dpu[0] + i * ox->allocQ16 * p7X_NSCELLS;
+  }
+
+  /* X matrix is allocated one row of quads for each of five special states, for xmx[][0,1..L] */
+  ox->allocXRQ = (allocXL/4)+1;
+  ESL_ALLOC(ox->x_mem,  sizeof(float) * ox->allocXRQ * 4 * p7X_NXCELLS + 15); 
+  ox->xmx[0] = (float *) ( ( (unsigned long int) (ox->x_mem  + 15) & (~0xf)));
+  for (i = 1; i < p7X_NXCELLS; i++)
+    ox->xmx[i] = ox->xmx[0] + i * ox->allocXRQ * 4;
 
   ox->M        = 0;
   ox->L        = 0;
-  ox->nmem     = sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15;
-  ox->allocR   = allocL+1;
-  ox->validR   = allocL+1;
-  ox->allocQ4  = nqf;
-  ox->allocQ16 = nqu;
-  ox->allocX   = allocXL+1;
-
 #ifdef p7_DEBUGGING
   ox->debugging = FALSE;
   ox->dfp       = NULL;
@@ -266,32 +266,71 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
 int
 p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 {
-  if (allocM <= ox->allocM && allocL <= ox->allocL && allocXL <= ox->allocXL) return eslOK;
-
   void  *p;
   int    nqf  = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
   int    nqu  = p7O_NQU(allocM);	       /* segment length; total # of striped vectors for float */
-  size_t nmem = sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15;
+  size_t ncells = (allocL+1) * nqf * 4;
+  int    reset_row_pointers = FALSE;
+  int    i;
   int    status;
  
-  if (nmem > ox->nmem)
+  /* If all possible dimensions are already satisfied, the matrix is fine */
+  if (ox->allocQ4*4 >= allocM && ox->validR > allocL && ox->allocXRQ*4 >= allocXL+1) return eslOK;
+
+  /* If the main matrix is too small in cells, reallocate it; 
+   * and we'll need to realign/reset the row pointers later.
+   */
+  if (ncells > ox->ncells)
     {
-      ESL_RALLOC(ox->dp_mem, p, nmem);
-      
+      ESL_RALLOC(ox->dp_mem, p, ncells * sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15);
+      ox->ncells = ncells;
+      reset_row_pointers = TRUE;
+    }
 
+  /* If the X beams are too small, reallocate them. */
+  if (allocXL+1 >= ox->allocXRQ*4)
+    {
+      ESL_RALLOC(ox->x_mem, p, sizeof(float) * ((allocXL/4)+1) * 4 * p7X_NXCELLS + 15); 
+      ox->allocXRQ = (allocXL/4)+1;
+      ox->xmx[0] = (float *) ( ( (unsigned long int) (ox->x_mem  + 15) & (~0xf)));
+      for (i = 1; i < p7X_NXCELLS; i++) ox->xmx[i] = ox->xmx[0] + i * ox->allocXRQ * 4;
+    }
+
+  /* If there aren't enough rows, reallocate the row pointers; we'll
+   * realign and reset them later.
+   */
+  if (allocL > ox->allocR)
+    {
+      ESL_RALLOC(ox->dpu, p, sizeof(__m128i *) * (allocL+1));
+      ESL_RALLOC(ox->dpf, p, sizeof(__m128  *) * (allocL+1));
+      ox->allocR         = allocL+1;
+      reset_row_pointers = TRUE;
+    }
+
+  /* must we widen the rows? */
+  if (allocM > ox->allocQ4*4)
+    reset_row_pointers = TRUE;
+
+  /* now reset the row pointers, if needed */
+  if (reset_row_pointers)
+    {
+      ox->dpu[0] = (__m128i *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
+      ox->dpf[0] = (__m128  *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
+
+      ox->validR = ESL_MIN( ox->ncells / (nqf * 4), ox->allocR);
+      for (i = 1; i < ox->validR; i++)
+	{
+	  ox->dpu[i] = ox->dpu[0] + i * nqu * p7X_NSCELLS;
+	  ox->dpf[i] = ox->dpf[0] + i * nqf * p7X_NSCELLS;
+	}
+
+      ox->allocQ4  = nqf;
+      ox->allocQ16 = nqu;
+    }
   
-
-  ESL_RALLOC(ox->dpu_mem, p, sizeof(__m128i) * p7X_NSCELLS * nqu + 15);
-  ox->dpu       = (__m128i *) (((unsigned long int) ox->dpu_mem + 15) & (~0xf));  
-  ox->allocQ16 = nqu;
-
-  ESL_RALLOC(ox->dpf_mem, p, sizeof(__m128)  * p7X_NSCELLS * nqf + 15);
-  ox->dpf       = (__m128 *) (((unsigned long int) ox->dpf_mem + 15) & (~0xf));
-  ox->allocQ4  = nqf;
-
-  ox->allocM = allocM;
-  ox->M      = 0; 
-  return     eslOK;
+  ox->M = 0;
+  ox->L = 0;
+  return eslOK;
 
  ERROR:
   return status;
@@ -700,9 +739,9 @@ p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse)
 static int
 omx_dump_uchar_row(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-  __m128i *dp = ox->dpu;	/* must set <dp> before using {MDI}MX macros */
-  int      Q  = ox->Q16;
+  __m128i *dp = ox->dpu[0];	/* must set <dp> before using {MDI}MX macros */
   int      M  = ox->M;
+  int      Q  = p7O_NQU(M);
   uint8_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
   int      q,z,k;
   union { __m128i v; uint8_t i[16]; } tmp;
@@ -785,9 +824,9 @@ ERROR:
 static int
 omx_dump_float_row(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
 {
-  __m128 *dp  = ox->dpf;	/* must set <dp> before using {MDI}MX macros */
-  int      Q  = ox->Q4;
+  __m128 *dp  = ox->dpf[0];	/* must set <dp> before using {MDI}MX macros */
   int      M  = ox->M;
+  int      Q  = p7O_NQF(M);
   float   *v  = NULL;		/* array of uninterleaved, unstriped scores  */
   int      q,z,k;
   union { __m128 v; float x[16]; } tmp;
@@ -875,9 +914,9 @@ ERROR:
 static int
 omx_dump_msp_row(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-  __m128i *dp = ox->dpu;	
-  int      Q  = ox->Q16;
+  __m128i *dp = ox->dpu[0];	
   int      M  = ox->M;
+  int      Q  = p7O_NQU(M);
   uint8_t *v  = NULL;		/* array of unstriped scores  */
   int      q,z,k;
   union { __m128i v; uint8_t i[16]; } tmp;
@@ -1355,20 +1394,6 @@ sse_any_gt_epu8(__m128i a, __m128i b)
   return maskbits != 0;
 }
 
-/* Returns maximum element \max_z a[z] in epu8 vector */
-#if 0
-static unsigned char
-sse_hmax_epu8(__m128i a)
-{
-  union { __m128i v; uint8_t i[16]; } tmp;
-  
-  tmp.v = _mm_max_epu8(a,     _mm_slli_si128(a,     1));
-  tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 2));
-  tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 4));
-  tmp.v = _mm_max_epu8(tmp.v, _mm_slli_si128(tmp.v, 8));
-  return tmp.i[15];
-}
-#endif
 static unsigned char
 sse_hmax_epu8(__m128i a)
 {
@@ -1426,13 +1451,12 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpu;	   /* we're going to use dp[0..q..Q-1], not  {MDI}MX(q) macros  */
+  __m128i *dp  = ox->dpu[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M   = om->M;
-  ox->Q16 = Q;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -1552,7 +1576,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpu;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128i *dp  = ox->dpu[0];	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
 
@@ -1560,7 +1584,6 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   if (Q > ox->allocQ16)                                ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
   ox->M   = om->M;
-  ox->Q16 = Q;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -1745,7 +1768,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   int q;			   /* counter over quads 0..nq-1                                */
   int j;			   /* counter over DD iterations (4 is full serialization)      */
   int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
-  __m128 *dp  = ox->dpf;           /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128 *dp  = ox->dpf[0];        /* using {MDI}MX(q) macro requires initialization of <dp>    */
   __m128 *rp;			   /* will point at om->rf[x] for residue x[i]                  */
   __m128 *tp;			   /* will point into (and step thru) om->tf                    */
 
@@ -1754,7 +1777,6 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   if (Q > ox->allocQ4)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
   ox->M  = om->M;
-  ox->Q4 = Q;
 
   /* Initialization.
    */
@@ -1972,14 +1994,13 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
-  __m128 *dp  = ox->dpf;	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128 *dp  = ox->dpf[0];	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
   __m128 *rsc;			   /* will point at om->rf[x] for residue x[i]                  */
   __m128 *tsc;			   /* will point into (and step thru) om->tf                    */
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ4) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M  = om->M;
-  ox->Q4 = Q;
 
   /* Initialization. */
   infv = _mm_set1_ps(-eslINFINITY);
@@ -2119,6 +2140,440 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   return eslOK;
 }
 /*------------------ end, p7_ViterbiScore() ---------------------*/
+
+
+/*****************************************************************
+ * xx. Parser implementations
+ *****************************************************************/
+
+/* Function:  p7_ForwardParserS()
+ * Synopsis:  Calculates Forward score and X beams in single-precision probability.
+ * Incept:    SRE, Thu Dec 13 08:54:07 2007 [Janelia]
+ *
+ * Purpose:   Calculates the Forward score and X beams for sequence
+ *            <dsq> of length <L> residues, using optimized profile
+ *            <om>, and a preallocated DP matrix <ox>, in linear
+ *            memory $O(M+L)$. Return the Forward score (in nats) in
+ *            <ret_sc>, and <ox->xmx[][0,1..L]> contain the DP matrix
+ *            in single-precision probability for all special X states
+ *            (BENCJ).
+ *            
+ *            The caller must provide a suitably allocated <ox>, with
+ *            one DP row to fit <om->M> states, and X beams to fit <L>
+ *            residues: for instance by calling <ox = p7_omx_Create(M, 0,
+ *            L)> or <p7_omx_GrowTo(ox, M, 0, L)>.
+ *            
+ *            The Forward score may overflow -- and will, on
+ *            high-scoring sequences. Range is limited to -88 to +88
+ *            nats (-127 to 127 bits). Scores will not underflow, for
+ *            models configured in local mode, within HMMER's design
+ *            limits ($L \leq 10^5$; $M \leq 10^4$). On overflow,
+ *            <ret_sc> is <eslINFINITY>.
+ *            
+ *            The model must be in a local mode; other modes cannot
+ *            guarantee that we will not underflow.
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues          
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            ret_sc  - RETURN: Forward score (in nats)          
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
+ *            isn't in local alignment mode.
+ */
+int
+p7_ForwardParserS(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+  register __m128 mpv, dpv, ipv;   /* previous row values                                       */
+  register __m128 sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m128 dcv;		   /* delayed storage of D(i,q+1)                               */
+  register __m128 xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  __m128   zerov;		   /* splatted 0.0's in a vector                                */
+  float    xN, xE, xB, xC, xJ;	   /* special states' scores                                    */
+  int i;			   /* counter over sequence positions 1..L                      */
+  int q;			   /* counter over quads 0..nq-1                                */
+  int j;			   /* counter over DD iterations (4 is full serialization)      */
+  int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
+  __m128 *dp  = ox->dpf[0];        /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128 *rp;			   /* will point at om->rf[x] for residue x[i]                  */
+  __m128 *tp;			   /* will point into (and step thru) om->tf                    */
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ4)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  if (ox->allocXRQ*4 <= L)                             ESL_EXCEPTION(eslEINVAL, "DP matrix X beams allocated too small");
+  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
+  ox->M  = om->M;
+  ox->L  = L;
+
+  /* Initialization.
+   */
+  zerov = _mm_setzero_ps();
+  for (q = 0; q < Q; q++)
+    MMX(q) = IMX(q) = DMX(q) = zerov;
+  xE    = ox->xmx[p7X_E][0] = 0.;
+  xN    = ox->xmx[p7X_N][0] = 1.;
+  xJ    = ox->xmx[p7X_J][0] = 0.;
+  xB    = ox->xmx[p7X_B][0] = om->xf[p7O_N][p7O_MOVE];
+  xC    = ox->xmx[p7X_C][0] = 0.;
+
+#if p7_DEBUGGING
+  if (ox->debugging) omx_dump_float_row(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
+#endif
+
+  for (i = 1; i <= L; i++)
+    {
+      rp    = om->rf[dsq[i]];
+      tp    = om->tf;
+      dcv   = _mm_setzero_ps();
+      xEv   = _mm_setzero_ps();
+      xBv   = _mm_set1_ps(xB);
+
+      /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
+       */
+      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
+      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
+      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
+      
+      for (q = 0; q < Q; q++)
+	{
+	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
+	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
+	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
+	  sv   = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
+	  sv   = _mm_add_ps(sv, _mm_mul_ps(dpv, *tp)); tp++;
+	  sv   = _mm_mul_ps(sv, *rp);                  rp++;
+	  xEv  = _mm_add_ps(xEv, sv);
+	  
+	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
+	   * {MDI}MX(q) is then the current, not the prev row
+	   */
+	  mpv = MMX(q);
+	  dpv = DMX(q);
+	  ipv = IMX(q);
+
+	  /* Do the delayed stores of {MD}(i,q) now that memory is usable */
+	  MMX(q) = sv;
+	  DMX(q) = dcv;
+
+	  /* Calculate the next D(i,q+1) partially: M->D only;
+           * delay storage, holding it in dcv
+	   */
+	  dcv   = _mm_mul_ps(sv, *tp); tp++;
+
+	  /* Calculate and store I(i,q) */
+	  sv     =                _mm_mul_ps(mpv, *tp);  tp++;
+	  sv     = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
+	  IMX(q) = _mm_mul_ps(sv, *rp);                  rp++;
+	}	  
+
+      /* Now the DD paths. We would rather not serialize them but 
+       * in an accurate Forward calculation, we have few options.
+       */
+      /* dcv has carried through from end of q loop above; store it 
+       * in first pass, we add M->D and D->D path into DMX
+       */
+      /* We're almost certainly're obligated to do at least one complete 
+       * DD path to be sure: 
+       */
+      dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+      dcv    = _mm_move_ss(dcv, zerov);
+      DMX(0) = zerov;
+      tp     = om->tf + 7*Q;	/* set tp to start of the DD's */
+      for (q = 0; q < Q; q++) 
+	{
+	  DMX(q) = _mm_add_ps(dcv, DMX(q));	
+	  dcv    = _mm_mul_ps(DMX(q), *tp); tp++; /* extend DMX(q), so we include M->D and D->D paths */
+	}
+
+      /* now. on small models, it seems best (empirically) to just go
+       * ahead and serialize. on large models, we can do a bit better,
+       * by testing for when dcv (DD path) accrued to DMX(q) is below
+       * machine epsilon for all q, in which case we know DMX(q) are all
+       * at their final values. The tradeoff point is (empirically) somewhere around M=100,
+       * at least on my desktop. We don't worry about the conditional here;
+       * it's outside any inner loops.
+       */
+      if (om->M < 100)
+	{			/* Fully serialized version */
+	  for (j = 1; j < 4; j++)
+	    {
+	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      dcv = _mm_move_ss(dcv, zerov);
+	      tp = om->tf + 7*Q;	/* set tp to start of the DD's */
+	      for (q = 0; q < Q; q++) 
+		{
+		  DMX(q) = _mm_add_ps(dcv, DMX(q));	
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
+		}	    
+	    }
+	} 
+      else
+	{			/* Slightly parallelized version, but which incurs some overhead */
+	  for (j = 1; j < 4; j++)
+	    {
+	      register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
+
+	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	      dcv = _mm_move_ss(dcv, zerov);
+	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
+	      cv  = zerov;
+	      for (q = 0; q < Q; q++) 
+		{
+		  sv     = _mm_add_ps(dcv, DMX(q));	
+		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
+		  DMX(q) = sv;	                                    /* store new DMX(q) */
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
+		}	    
+	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
+	    }
+	}
+
+      /* Add D's to xEv */
+      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMX(q), xEv);
+
+      /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
+      /* The following incantation is a horizontal sum of xEv's elements  */
+      /* These must follow DD calculations, because D's contribute to E in Forward
+       * (as opposed to Viterbi)
+       */
+      xEv = _mm_add_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
+      xEv = _mm_add_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
+      _mm_store_ss(&xE, xEv);
+
+      xN =  xN * om->xf[p7O_N][p7O_LOOP];
+      xC = (xC * om->xf[p7O_C][p7O_LOOP]) +  (xE * om->xf[p7O_E][p7O_MOVE]);
+      xJ = (xJ * om->xf[p7O_J][p7O_LOOP]) +  (xE * om->xf[p7O_E][p7O_LOOP]);
+      xB = (xJ * om->xf[p7O_J][p7O_MOVE]) +  (xN * om->xf[p7O_N][p7O_MOVE]);
+      /* and now xB will carry over into next i, and xC carries over after i=L */
+
+      ox->xmx[p7X_E][i] = xE;
+      ox->xmx[p7X_N][i] = xN;
+      ox->xmx[p7X_J][i] = xJ;
+      ox->xmx[p7X_B][i] = xB;
+      ox->xmx[p7X_C][i] = xC;
+
+#if p7_DEBUGGING
+      if (ox->debugging) omx_dump_float_row(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
+#endif
+    } /* end loop over sequence residues 1..L */
+
+  /* finally C->T, and flip back to log space (nats) */
+  /* On overflow, xC is inf or nan (nan arises because inf*0 = nan). */
+  /* On an underflow (which shouldn't happen), we counterintuitively return infinity:
+   * the effect of this is to force the caller to rescore us with full range.
+   */
+  if       (isnan(xC))      *ret_sc = eslINFINITY;
+  else if  (xC == 0.0)      *ret_sc = eslINFINITY; /* on underflow, force caller to rescore us! */
+  else if  (isinf(xC) == 1) *ret_sc = eslINFINITY;
+  else                      *ret_sc = log(xC * om->xf[p7O_C][p7O_MOVE]);
+  return eslOK;
+}
+
+
+int 
+p7_BackwardParserS(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+  register __m128 mpv, ipv;           /* previous row values                                       */
+  register __m128 mcv, dcv;           /* current row values                                        */
+  register __m128 tmmv, timv, tdmv;   /* tmp vars for accessing rotated transition scores          */
+  register __m128 xBv;		      /* collects B->Mk components of B(i)                         */
+  register __m128 xEv;	              /* splatted E(i)                                             */
+  __m128   zerov;		      /* splatted 0.0's in a vector                                */
+  float    xN, xE, xB, xC, xJ;	      /* special states' scores                                    */
+  int      i;			      /* counter over sequence positions 0,1..L                    */
+  int      q;			      /* counter over quads 0..Q-1                                 */
+  int      Q       = p7O_NQF(om->M);  /* segment length: # of vectors                              */
+  int      j;			      /* DD segment iteration counter (4 = full serialization)     */
+  __m128  *dp      = ox->dpf[0];      /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128  *rp;			      /* will point into om->rf[x] for residue x[i+1]              */
+  __m128  *tp;		              /* will point into (and step thru) om->tf transition scores  */
+
+
+ /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ4)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  if (ox->allocXRQ*4 <= L)                             ESL_EXCEPTION(eslEINVAL, "DP matrix X beams allocated too small");
+  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "This function makes assumptions that only apply to local alignment");
+  ox->M  = om->M;
+  ox->L  = L;
+
+  /* initialize the L row. */
+  xJ = ox->xmx[p7X_J][L] = 0.0;
+  xB = ox->xmx[p7X_B][L] = 0.0;
+  xN = ox->xmx[p7X_N][L] = 0.0;
+  xC = ox->xmx[p7X_C][L] = om->xf[p7O_E][p7O_MOVE];      /* C<-T */
+  xE = ox->xmx[p7X_E][L] = xC * om->xf[p7O_E][p7O_MOVE]; /* E<-C, no tail */
+
+  xEv   = _mm_set1_ps(xE);   for (q = 0; q < Q; q++) MMX(q) = DMX(q) = xEv;
+  zerov = _mm_setzero_ps();  for (q = 0; q < Q; q++) IMX(q) = zerov;
+
+  /* init row L's DD paths, 1) first segment includes xE, from DMX(q) */
+  tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
+  dcv = _mm_shuffle_ps(DMX(0), DMX(0), _MM_SHUFFLE(2, 1, 0, 0));
+  dcv = _mm_move_ss(dcv, zerov); /* now dcv contains [5 9 13 x] shifted D(i,k+1) partial */
+  for (q = Q-1; q >= 0; q--)
+    {
+      dcv    = _mm_mul_ps(dcv, *tp); tp--;
+      dcv    = _mm_add_ps(DMX(q), dcv);
+      DMX(q) = dcv;
+    }
+  /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMX(q)) */
+  for (j = 1; j < 4; j++)
+    {
+      tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
+      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+      dcv = _mm_move_ss(dcv, zerov);
+      for (q = Q-1; q >= 0; q--)
+	{
+	  dcv    = _mm_mul_ps(dcv, *tp); tp--;
+	  DMX(q) = _mm_add_ps(DMX(q), dcv);
+	}
+    }
+  /* now MD init */
+  dcv =  _mm_shuffle_ps(DMX(0), DMX(0), _MM_SHUFFLE(2, 1, 0, 0));
+  dcv = _mm_move_ss(dcv, zerov);
+  tp  = om->tf + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
+  for (q = Q-1; q >= 0; q--)
+    {
+      MMX(q) = _mm_add_ps(MMX(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
+      dcv    = DMX(q);
+    }
+  
+  /* main recursion */
+  for (i = L-1; i >= 1; i--)	/* backwards stride */
+    {
+      /* phase 1. B(i) collected. Old row destroyed, new row contains
+       *    complete I(i,k), partial {MD}(i,k) w/ no {MD}->{DE} paths yet.
+       */
+      rp    = om->rf[dsq[i+1]] + 2*Q-1; /* <*rp> is now the [4 8 12 x] insert emission quad */
+      tp    = om->tf + 7*Q - 1;	        /* <*tp> is now the [4 8 12 x] TII transition quad  */
+
+      tmmv  = om->tf[1];  	/* because OPROFILE's X->M transition scores are rotated, */
+      timv  = om->tf[2];        /* we use tmp variables to access them in stride          */
+      tdmv  = om->tf[3];
+
+      mpv = _mm_mul_ps(MMX(0), om->rf[dsq[i+1]][0]); /* precalc M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+      mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));
+      mpv = _mm_move_ss(mpv, zerov); /* now mpv contains [5 9 13 x] shifted result */
+
+      xBv = zerov;
+      for (q = Q-1; q >= 0; q--)     /* backwards stride */
+	{
+	  ipv = _mm_mul_ps(IMX(q), *rp);   rp--;  /* precalc I(i+1,k) * e_(I_k, x_{i+1}); i+1's IMX(q) now free */
+
+	  IMX(q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
+	  DMX(q) =                                  _mm_mul_ps(mpv, tdmv); 
+	  mcv    = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
+	  
+	  mpv    = _mm_mul_ps(MMX(q), *rp);  rp--;  /* obtain mpv for next q. i+1's MMX(q) is freed  */
+	  MMX(q) = mcv;
+
+	  tdmv   = *tp;   tp--;
+	  timv   = *tp;   tp--;
+	  tmmv   = *tp;   tp--;
+
+	  xBv  = _mm_add_ps(xBv, _mm_mul_ps(mpv, *tp)); tp--;
+	}
+
+
+      /* phase 2: now that we have accumulated the B->Mk transitions in xBv, we can do the specials */
+
+      /* this incantation is a horiz sum of xBv elements: (_mm_hadd_ps() would require SSE3) */
+      xBv = _mm_add_ps(xBv, _mm_shuffle_ps(xBv, xBv, _MM_SHUFFLE(0, 3, 2, 1)));
+      xBv = _mm_add_ps(xBv, _mm_shuffle_ps(xBv, xBv, _MM_SHUFFLE(1, 0, 3, 2)));
+      _mm_store_ss(&xB, xBv);
+
+      xC =  xC * om->xf[p7O_C][p7O_LOOP];
+      xJ = (xB * om->xf[p7O_J][p7O_MOVE]) + (xJ * om->xf[p7O_J][p7O_LOOP]); /* must come after xB */
+      xN = (xB * om->xf[p7O_N][p7O_MOVE]) + (xN * om->xf[p7O_N][p7O_LOOP]); /* must come after xB */
+      xE = (xC * om->xf[p7O_E][p7O_MOVE]) + (xJ * om->xf[p7O_E][p7O_LOOP]); /* must come after xJ, xC */
+
+      xEv = _mm_set1_ps(xE);	/* splat */
+
+      /* Stores are separate only for pedagogical reasons: easy to
+       * turn this into a more memory efficient version just by
+       * deleting the stores.
+       */
+      ox->xmx[p7X_E][i] = xE;
+      ox->xmx[p7X_N][i] = xN;
+      ox->xmx[p7X_J][i] = xJ;
+      ox->xmx[p7X_B][i] = xB;
+      ox->xmx[p7X_C][i] = xC;
+
+      /* phase 3: {MD}->E paths and one step of the D->D paths */
+      tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
+      dcv = _mm_add_ps(DMX(0), xEv);
+      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+      dcv = _mm_move_ss(dcv, zerov); /* now dcv contains [5 9 13 x] shifted D(i,k+1) partial */
+      for (q = Q-1; q >= 0; q--)
+	{
+	  dcv    = _mm_mul_ps(dcv, *tp); tp--;
+	  dcv    = _mm_add_ps(DMX(q), _mm_add_ps(dcv, xEv));
+	  DMX(q) = dcv;
+	  MMX(q) = _mm_add_ps(MMX(q), xEv);
+	}
+      
+      /* phase 4: finish extending the DD paths */
+      /* fully serialized for now */
+      for (j = 1; j < 4; j++)	/* three passes: we've already done 1 segment, we need 4 total */
+	{
+	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
+	  dcv = _mm_move_ss(dcv, zerov);
+	  tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
+	  for (q = Q-1; q >= 0; q--)
+	    {
+	      dcv    = _mm_mul_ps(dcv, *tp); tp--;
+	      DMX(q) = _mm_add_ps(DMX(q), dcv);
+	    }
+	}
+
+      /* phase 5: add M->D paths */
+      dcv = _mm_shuffle_ps(DMX(0), DMX(0), _MM_SHUFFLE(2, 1, 0, 0));
+      dcv = _mm_move_ss(dcv, zerov);
+      tp  = om->tf + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
+      for (q = Q-1; q >= 0; q--)
+	{
+	  MMX(q) = _mm_add_ps(MMX(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
+	  dcv    = DMX(q);
+	}
+
+    } /* thus ends the loop over sequence positions i */
+
+  /* Termination at i=0, where we can only reach N,B states. */
+  tp  = om->tf;	        /* <*tp> is now the [1 5 9 13] TBMk transition quad  */
+  rp  = om->rf[dsq[1]];	/* <*rp> is now the [1 5 9 13] match emission quad   */
+  xBv = zerov;
+  for (q = 0; q < Q; q++)
+    {
+      mpv = _mm_mul_ps(MMX(q), *rp);  rp += 2;
+      mpv = _mm_mul_ps(mpv,    *tp);  tp += 7;
+      xBv = _mm_add_ps(xBv,    mpv);
+    }
+  /* horizontal sum of xBv */
+  xBv = _mm_add_ps(xBv, _mm_shuffle_ps(xBv, xBv, _MM_SHUFFLE(0, 3, 2, 1)));
+  xBv = _mm_add_ps(xBv, _mm_shuffle_ps(xBv, xBv, _MM_SHUFFLE(1, 0, 3, 2)));
+  _mm_store_ss(&xB, xBv);
+
+  ox->xmx[p7X_B][0] = xB;
+  ox->xmx[p7X_C][0] = 0.0;
+  ox->xmx[p7X_J][0] = 0.0;
+  ox->xmx[p7X_N][0] = (xB * om->xf[p7O_N][p7O_MOVE]) + (xN * om->xf[p7O_N][p7O_LOOP]); 
+  ox->xmx[p7X_E][0] = 0.0;
+
+  if       (isnan(xN))      *ret_sc = eslINFINITY;
+  else if  (xN == 0.0)      *ret_sc = eslINFINITY; /* on underflow, force caller to rescore us! */
+  else if  (isinf(xN) == 1) *ret_sc = eslINFINITY;
+  else                      *ret_sc = log(xN);
+  return eslOK;
+}
+
+
+
+
+/*------------------ end, p7_ForwardParserS() --------------------*/
 
 
 
@@ -2487,7 +2942,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M);
+  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
   P7_GMX      *gx  = p7_gmx_Create(M, L);
   float sc1, sc2;
 
@@ -2540,7 +2995,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M);
+  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
   P7_GMX      *gx  = p7_gmx_Create(M, L);
   float sc1, sc2;
 
@@ -2592,7 +3047,7 @@ utest_forward_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M);
+  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
   P7_GMX      *gx  = p7_gmx_Create(M, L);
   float sc1, sc2;
 
@@ -2629,7 +3084,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M);
+  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
   P7_GMX      *gx  = p7_gmx_Create(M, L);
   float sc1, sc2;
 
@@ -2821,7 +3276,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
 
   /* allocate DP matrices, both a generic and an optimized one */
-  ox = p7_omx_Create(gm->M);
+  ox = p7_omx_Create(gm->M, 0, sq->n);
   gx = p7_gmx_Create(gm->M, sq->n);
 
   /* Useful to place and compile in for debugging: 
@@ -2831,14 +3286,14 @@ main(int argc, char **argv)
      simulate_msp_in_generic_profile(gm, om, L);
   */
 
-  simulate_msp_in_generic_profile(gm, om, sq->n);
-
   /* take your pick: */
-  p7_MSPFilter    (sq->dsq, sq->n, om, ox, &sc);  printf("msp filter score:     %.2f nats\n", sc);
-  p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi filter score: %.2f nats\n", sc);
-  p7_ForwardFilter(sq->dsq, sq->n, om, ox, &sc);  printf("forward filter score: %.2f nats\n", sc);
-  p7_GViterbi     (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);
-  p7_GForward     (sq->dsq, sq->n, gm, gx, &sc);  printf("forward (generic):    %.2f nats\n", sc);
+  p7_MSPFilter      (sq->dsq, sq->n, om, ox, &sc);  printf("msp filter score:     %.2f nats\n", sc);
+  p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &sc);  printf("viterbi filter score: %.2f nats\n", sc);
+  p7_ForwardFilter  (sq->dsq, sq->n, om, ox, &sc);  printf("forward filter score: %.2f nats\n", sc);
+  p7_GViterbi       (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);
+  p7_GForward       (sq->dsq, sq->n, gm, gx, &sc);  printf("forward (generic):    %.2f nats\n", sc);
+  p7_ForwardParserS (sq->dsq, sq->n, om, ox, &sc);  printf("forward parser:       %.2f nats\n", sc);
+  p7_BackwardParserS(sq->dsq, sq->n, om, ox, &sc);  printf("backward parser:      %.2f nats\n", sc);
 
   /* Viterbi score requires a special config of the optimized profile.
    * This isn't the final design of our API: the pspace_ call is an internal function. */

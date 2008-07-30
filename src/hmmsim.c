@@ -632,7 +632,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
     om = p7_oprofile_Create(gm->M, cfg->abc);
     p7_oprofile_Convert(gm, om);
     p7_oprofile_ReconfigLength(om, L);
-    ox = p7_omx_Create(gm->M);
+    ox = p7_omx_Create(gm->M, 0, 0);
   }
 
   /* Determine E-value parameters 

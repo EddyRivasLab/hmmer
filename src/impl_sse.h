@@ -75,7 +75,6 @@
  */
 #define p7O_NQU(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars */
 #define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /* 4 floats  */
-#define p7O_NQD(M)   ( ESL_MAX(2, ((((M)-1) / 2)  + 1)))   /* 2 doubles */
 
 
 /*****************************************************************
@@ -184,24 +183,37 @@ typedef struct p7_oprofile_s {
 enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 #define p7X_NSCELLS 3
 
+enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4 }; 
+#define p7X_NXCELLS 5
+
+/* 
+ * 
+ * dpf[][] 
+ *    dpf[i] is  / [M1 M2 M3 M4] [D1 D2 D3 D4] [I1 I2 I3 I4] / [M5 M6 M7 M8] ...
+ *    to access M(i,k) for i=0,1..L; k=1..M:  dpf[i][(k-1)/4 + p7X_M].element[(k-1)%4]
+ * 
+ * xmx[] arrays for individual special states:
+ *    xmx[ENJBC] = [0 1 2 3][4 5 6 7]..[L-2 L-1 L x]     XRQ >= (L/4)+1
+ *    to access B[i] for example, for i=0..L:   xmx[B][i/4].x[i%4]  (quad i/4; element i%4).
+ */  
 typedef struct p7_omx_s {
-  int       M;			/* current actual model dimension       */
-  int       L;			/* current actual sequence dimension    */
+  int       M;			/* current actual model dimension                              */
+  int       L;			/* current actual sequence dimension                           */
 
-  /* The main dynamic programming matrix (for full; or one row, for parser/scorer */
-  void     *dp_mem;		/* DP memory shared by <dpu>, <dpf>               */
-  size_t    nmem;		/* current allocation size of <dp_mem>, in bytes */
-  __m128i **dpu;		/* striped DP matrix for [0,1..L][0..q-1][MDI], uchar vectors  */
-  __m128  **dpf;		/* striped DP matrix for [0,1..L][0..q-1][MDI], float vectors  */
-  int       allocR;		/* current allocated # of rows. L+1 <= validR <= allocR */
-  int       validR;		/* # of rows actually pointing at DP memory             */
-  int       allocQ4;		/* current set row width in <dpf>: M+1 <= allocQ4*4     */
-  int       allocQ16;		/* current set row width in <dpu>: M+1 <= allocQ16*16   */
+  /* The main dynamic programming matrix for M,D,I states                                      */
+  __m128  **dpf;		/* striped DP matrix for [0,1..L][0..Q-1][MDI], float vectors  */
+  __m128i **dpu;		/* striped DP matrix for [0,1..L][0..Q-1][MDI], uchar vectors  */
+  void     *dp_mem;		/* DP memory shared by <dpu>, <dpf>                            */
+  int       allocR;		/* current allocated # rows in dp{uf}. allocR >= validR >= L+1 */
+  int       validR;		/* current # of rows actually pointing at DP memory            */
+  int       allocQ4;		/* current set row width in <dpf> quads:   allocQ4*4 >= M      */
+  int       allocQ16;		/* current set row width in <dpu> 16-mers: allocQ16*16 >= M    */
+  size_t    ncells;		/* current allocation size of <dp_mem>, in accessible cells    */
 
-  /* The X states (for full,parser; or NULL, for scorer */
-  __m128   *xmx;		/* logically [0.1..L][EB/NJC]; 2 vectors per row */
-  void     *x_mem;		/* X memory before vector alignment */
-  int       allocX;		/* number of rows allocated in xmx; L+1 <= allocX */
+  /* The X states (for full,parser; or NULL, for scorer                                        */
+  float    *xmx[p7X_NXCELLS];	/* [ENJBC][0..(allocXRQ*4)-1]                                  */
+  void     *x_mem;		/* X memory before 16-byte alignment                           */
+  int       allocXRQ;		/* # of quads allocated in each xmx[] array; XRQ*4 >= L+1      */
 
 #ifdef p7_DEBUGGING  
   /* Parsers,scorers only hold a row at a time, so to get them to dump full matrix, it
@@ -220,8 +232,8 @@ typedef struct p7_omx_s {
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
-extern P7_OMX      *p7_omx_Create(int allocM);
-extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM);
+extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
+extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
 extern int          p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om);

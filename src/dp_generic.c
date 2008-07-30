@@ -325,18 +325,17 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
   int          i, k;  
   float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
 
-  p7_FLogsumInit();
-
   /* Note: backward calculates the probability we can get *out* of
    * cell i,k; exclusive of emitting residue x_i.
    */
+  p7_FLogsumInit();
 
   /* Initialize the L row.  */
   XMX(L,p7G_J) = XMX(L,p7G_B) = XMX(L,p7G_N) = -eslINFINITY;
   XMX(L,p7G_C) = gm->xsc[p7P_C][p7P_MOVE];                 /* C<-T          */
   XMX(L,p7G_E) = XMX(L,p7G_C) + gm->xsc[p7P_E][p7P_MOVE];  /* E<-C, no tail */
   
-  MMX(L,M) = DMX(L,M) = XMX(L,p7G_E); /* M_M <- E (prob 1.0) */
+  MMX(L,M) = DMX(L,M) = XMX(L,p7G_E); /* {MD}_M <- E (prob 1.0) */
   IMX(L,M) = -eslINFINITY;	      /* no I_M state        */
   for (k = M-1; k >= 1; k--) {
     MMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
@@ -1240,7 +1239,7 @@ utest_generation(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc,
       if (fsc < tracesc) esl_fatal("forward score is less than trace");
 
       if (esl_opt_GetBoolean(go, "--vv")) 
-	printf("generated:  len=%d v=%8.4f  f=%8.4f  t=%8.4f\n", sq->n, vsc, fsc, tracesc);
+	printf("generated:  len=%d v=%8.4f  f=%8.4f  t=%8.4f\n", (int) sq->n, vsc, fsc, tracesc);
       
       avg_fsc += (fsc - nullsc);
     }

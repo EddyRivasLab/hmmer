@@ -349,7 +349,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   tr  = p7_trace_Create();
   fwd = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
   bck = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
-  ox  = p7_omx_Create(200);
+  ox  = p7_omx_Create(200, 0, 0);       /* ox is a one-row matrix for M=200 */
   
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
   if ((status = init_worker_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
@@ -372,7 +372,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
 
       p7_oprofile_Convert(gm, om); /* <om> is now p7_LOCAL, multihit */
-      p7_omx_GrowTo(ox, om->M);
+      p7_omx_GrowTo(ox, om->M, 0, 0); /* expand the one-row omx if needed */
 
       fprintf(cfg->ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
       if (hmm->acc  != NULL) fprintf(cfg->ofp, "Accession:   %s\n", hmm->acc);
