@@ -1763,11 +1763,11 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
-	  sv   =             vec_madd(xBv, *tp, zerov);  tp++;
-	  sv   = vec_add(sv, vec_madd(mpv, *tp, zerov)); tp++;
-	  sv   = vec_add(sv, vec_madd(ipv, *tp, zerov)); tp++;
-	  sv   = vec_add(sv, vec_madd(dpv, *tp, zerov)); tp++;
-	  sv   = vec_madd(sv, *rp, zerov);               rp++;
+	  sv   = vec_madd(xBv, *tp, zerov); tp++;
+	  sv   = vec_madd(mpv, *tp,    sv); tp++;
+	  sv   = vec_madd(ipv, *tp,    sv); tp++;
+	  sv   = vec_madd(dpv, *tp,    sv); tp++;
+	  sv   = vec_madd( sv, *rp, zerov); rp++;
 	  xEv  = vec_add(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
@@ -1787,9 +1787,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  dcv   = vec_madd(sv, *tp, zerov); tp++;
 
 	  /* Calculate and store I(i,q) */
-	  sv     =             vec_madd(mpv, *tp, zerov);  tp++;
-	  sv     = vec_add(sv, vec_madd(ipv, *tp, zerov)); tp++;
-	  IMX(q) = vec_madd(sv, *rp, zerov);               rp++;
+	  sv     = vec_madd(mpv, *tp, zerov); tp++;
+	  sv     = vec_madd(ipv, *tp,    sv); tp++;
+	  IMX(q) = vec_madd( sv, *rp, zerov); rp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
