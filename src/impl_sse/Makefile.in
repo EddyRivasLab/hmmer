@@ -1,0 +1,49 @@
+################################################################
+# HMMER SSE optimized implementation
+#
+# SRE, Wed Jul 30 10:49:13 2008 [Janelia]
+# SVN $Id$
+
+CC             = @CC@
+CFLAGS         = @CFLAGS@
+SIMDFLAGS      = @SIMD_CFLAGS@
+CPPFLAGS       = @CPPFLAGS@
+DEFS           = @DEFS@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+SHELL          = /bin/sh
+MYINCDIRS      = -I../../easel -I..
+
+OBJS =  mspfilter.o\
+	p7_omx.o\
+	p7_oprofile.o
+
+HDRS =  impl_sse.h
+
+.c.o:
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
+
+#################################################################
+## The main target:
+##
+all: 	${OBJS}
+
+#################################################################
+## Miscellaneous targets.
+##
+distclean:
+	make clean
+	-rm -f Makefile 
+
+clean:
+	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out 
+	-rm -f *.gcno
+
+binclean:
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
+
+TAGS:
+	etags  *.c *.h Makefile.in
+
+###########
+# @LICENSE@
+###########

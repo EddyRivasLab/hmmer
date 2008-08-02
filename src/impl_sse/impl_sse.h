@@ -59,13 +59,13 @@
  * SRE, Sun Nov 25 11:23:02 2007
  * SVN $Id$
  */
-#ifdef  p7_IMPL_SSE
 #ifndef P7_IMPL_SSE_INCLUDED
 #define P7_IMPL_SSE_INCLUDED
 
 #include "p7_config.h"
 
-#include <esl_alphabet.h>
+#include "esl_alphabet.h"
+#include "esl_random.h"
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
@@ -224,32 +224,55 @@ typedef struct p7_omx_s {
 #endif
 } P7_OMX;
 
+/* ?MX(q) access macros work for either uchar or float, so long as you
+ * init your "dp" to point to the appropriate array.
+ */
+#define MMX(q) (dp[(q) * p7X_NSCELLS + p7X_M])
+#define DMX(q) (dp[(q) * p7X_NSCELLS + p7X_D])
+#define IMX(q) (dp[(q) * p7X_NSCELLS + p7X_I])
+
 
 /*****************************************************************
  * 3. Declarations of the external API.
  *****************************************************************/
 
-extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
-extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
-
+/* p7_omx.c */
 extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
 extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
-extern int          p7_oprofile_Dump(FILE *fp, P7_OPROFILE *om);
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
+extern int          p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
+extern int          p7_omx_DumpMSPRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 
-extern int          p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om);
+/* p7_oprofile.c */
+extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
+extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
+
+extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
 extern int          p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L);
 
-extern int p7_MSPFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
+				       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
+extern int          p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *gm);
+extern int          p7_oprofile_SameMSP(const P7_OPROFILE *om, P7_PROFILE *gm);
+extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
+
+/* fwdfilter.c */
 extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+
+/* mspfilter.c */
+extern int p7_MSPFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+
+/* vitfilter.c */
+extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+
+/* vitscore.c */
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
 #endif /* P7_IMPL_SSE_INCLUDED */
-#endif /* p7_IMPL_SSE */
 
 /*****************************************************************
  * @LICENSE@

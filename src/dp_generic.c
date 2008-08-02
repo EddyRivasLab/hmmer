@@ -319,6 +319,7 @@ int
 p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
 {
   float const *tsc  = gm->tsc;
+  float const *rsc  = NULL;
   float      **dp   = gx->dp;
   float       *xmx  = gx->xmx; 			    
   int          M    = gm->M;
@@ -346,9 +347,9 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
   }
   
   /* Main recursion */
-  for (i = L-1; i >= 0; i--)
+  for (i = L-1; i >= 1; i--)
     {
-      float const *rsc = gm->rsc[dsq[i+1]];
+      rsc = gm->rsc[dsq[i+1]];
 
       XMX(i,p7G_B) = MMX(i+1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
       for (k = 2; k <= M; k++)
@@ -383,6 +384,20 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
 					     XMX(i, p7G_E) + esc));
 	}
     }
+
+  /* At i=0, only N,B states are reachable. */
+  rsc = gm->rsc[dsq[1]];
+  XMX(0,p7G_B) = MMX(1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+  for (k = 2; k <= M; k++)
+    XMX(0,p7G_B) = p7_FLogsum(XMX(0, p7G_B), MMX(1,k) + TSC(p7P_BM,k-1) + MSC(k));
+  XMX(i,p7G_J) = -eslINFINITY;
+  XMX(i,p7G_C) = -eslINFINITY;
+  XMX(i,p7G_E) = -eslINFINITY;
+  XMX(i,p7G_N) = p7_FLogsum( XMX(1, p7G_N) + gm->xsc[p7P_N][p7P_LOOP],
+			     XMX(0, p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
+  for (k = M; k >= 1; k--)
+    MMX(i,M) = IMX(i,M) = DMX(i,M) = -eslINFINITY;
+
 
   if (opt_sc != NULL) *opt_sc = XMX(0,p7G_N);
   gx->M = M;

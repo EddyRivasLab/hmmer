@@ -571,11 +571,11 @@ typedef struct p7_tophits_s {
  * 12. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
-#include "impl_sse.h"
+#include "impl_sse/impl_sse.h"
 #elif defined (p7_IMPL_VMX)
-#include "impl_vmx.h"
+#include "impl_vmx/impl_vmx.h"
 #else
-#include "impl_dummy.h"
+#include "impl_dummy/impl_dummy.h"
 #endif
 
 /*****************************************************************
@@ -728,10 +728,10 @@ extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 /*      4. Debugging and development code. */
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
-extern int     p7_hmm_Sample        (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUniform (ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
+extern int     p7_hmm_Sample          (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUngapped  (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUniform   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
 				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);

@@ -700,7 +700,7 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random HMM created by sampling]";
@@ -763,7 +763,7 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
  * Xref:      STL11/140
  */
 int
-p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   int     k;
@@ -810,7 +810,7 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random enumerable HMM created by sampling]";
@@ -884,7 +884,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, P7_HMM **re
  * Xref:      J1/5.
  */
 int
-p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, ESL_ALPHABET *abc, 
+p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
 		     float tmi, float tii, float tmd, float tdd,
 		     P7_HMM **ret_hmm)
 {

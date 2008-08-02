@@ -34,7 +34,7 @@ MPILIBS   = @MPILIBS@
 SHELL    = /bin/sh
 MYLIBS   = -leasel
 MYLIBDIR = -L../easel
-MYINCDIR = -I../easel
+MYINCDIR = -I. -I../easel
 
 PROGS = hmmbuild hmmemit hmmfetch hmmsearch hmmsim hmmstat
 
@@ -66,12 +66,16 @@ OBJS =  build.o\
 	p7_trace.o
 #	island.o\
 
-IMPL_OBJ = @IMPL_OBJ@
-
 HDRS =  hmmer.h\
 	p7_config.h
 
-IMPL_HEADER = @IMPL_HEADER@
+IMPLDIR  = impl_@IMPL_CHOICE@
+
+IMPL_OBJ =\
+	${IMPLDIR}/p7_omx.o\
+	${IMPLDIR}/p7_oprofile.o
+
+IMPL_HEADER = ${IMPLDIR}/impl_${IMPL_CHOICE}.h
 
 .c.o:
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
@@ -82,6 +86,9 @@ IMPL_HEADER = @IMPL_HEADER@
 ##
 all: 	${PROGS} libhmmer.a  ../easel/libeasel.a
 
+${IMPL_OBJ}: 
+	cd ${IMPLDIR}; make
+
 ${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} ${IMPL_OBJ}  libhmmer.a ../easel/libeasel.a
 	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${IMPL_OBJ} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
 
@@ -91,10 +98,9 @@ ${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} ${IMPL_OBJ}  libhmmer.a ../easel/libeasel.a
 module: libhmmer.a
 
 libhmmer.a: ${OBJS} ${IMPL_OBJ}
-	$(AR) libhmmer.a ${OBJS}
+	$(AR) libhmmer.a ${OBJS} ${IMPL_OBJ}
 	$(RANLIB) libhmmer.a
 	chmod 644 libhmmer.a
-
 
 
 #################################################################
@@ -104,18 +110,27 @@ check:
 	(cd testsuite; ./sqc 2 testsuite.sqc .)
 
 distclean:
-	make clean
+	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
+	-rm -f *.gcno
 	-rm -f Makefile p7_config.h
+	cd impl_sse; make distclean
+	cd impl_vmx; make distclean
 
 clean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
 	-rm -f *.gcno
+	cd impl_sse; make clean
+	cd impl_vmx; make clean
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
+	cd impl_sse; make binclean
+	cd impl_vmx; make binclean
 
 TAGS:
 	etags  *.c *.h Makefile.in
+	etags -a impl_sse/*.c impl_sse/*.h impl_sse/Makefile.in
+	etags -a impl_vmx/*.c impl_vmx/*.h impl_vmx/Makefile.in
 
 ###########
 # @LICENSE@
