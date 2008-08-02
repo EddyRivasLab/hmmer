@@ -470,7 +470,7 @@ void
 EVDBasicFit(struct histogram_s *h)
 {
   float *d;            /* distribution P(S < x)          */
-  float *x;            /* x-axis of P(S<x) for Linefit() */
+  float *x;            /* x-axis of P(S<x) for FLinefit() */
   int    hsize;
   int    sum;
   int    sc, idx;		/* loop indices for score or score-h->min   */
@@ -509,7 +509,7 @@ EVDBasicFit(struct histogram_s *h)
     d[sc - h->lowscore] = log(-1. * log(d[sc - h->lowscore]));
 
 				/* do the linear regression */
-  Linefit(x, d, hsize-1, &intercept, &slope, &corr);
+  FLinefit(x, d, hsize-1, &intercept, &slope, &corr);
 				/* calc mu, lambda */
   lambda = -1. * slope;
   mu     = intercept / lambda;

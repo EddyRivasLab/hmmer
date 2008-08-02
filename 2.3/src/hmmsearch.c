@@ -510,9 +510,9 @@ main(int argc, char **argv)
    */
   printf("\nTotal sequences searched: %d\n", nseq);
   printf("\nWhole sequence top hits:\n");
-  TophitsReport(ghit, thresh.globE, nseq);
+  TophitsReport(ghit, thresh.globE, thresh.Z);
   printf("\nDomain top hits:\n");
-  TophitsReport(dhit, thresh.domE, nseq);
+  TophitsReport(dhit, thresh.domE, thresh.Z);
 
   /*********************************************** 
    * Clean-up and exit.
