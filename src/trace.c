@@ -532,12 +532,20 @@ P7Traces2Alignment(unsigned char **dsq, SQINFO *sqinfo, float *wgt, int nseq, in
 	MSASetSeqDescription(msa, idx, sqinfo[idx].desc);
 
       if (sqinfo[idx].flags & SQINFO_SS) {
-	if (msa->ss == NULL) msa->ss = MallocOrDie(sizeof(char *) * nseq);
+	if (msa->ss == NULL) {
+	  int idx2;
+	  msa->ss = MallocOrDie(sizeof(char *) * nseq);
+	  for (idx2 = 0; idx2 < nseq; idx2++) msa->ss[idx2] = NULL;
+	}
 	MakeAlignedString(msa->aseq[idx], alen, 
 			  sqinfo[idx].ss, &(msa->ss[idx]));
       }
       if (sqinfo[idx].flags & SQINFO_SA) {
-	if (msa->sa == NULL) msa->sa = MallocOrDie(sizeof(char *) * nseq);
+	if (msa->sa == NULL) {
+	  int idx2;
+	  msa->sa = MallocOrDie(sizeof(char *) * nseq);
+	  for (idx2 = 0; idx2 < nseq; idx2++) msa->sa[idx2] = NULL;
+	}
 	MakeAlignedString(msa->aseq[idx], alen, 
 			  sqinfo[idx].sa, &(msa->sa[idx]));
       }
