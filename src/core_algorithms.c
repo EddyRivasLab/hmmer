@@ -328,6 +328,8 @@ P7ViterbiSpaceOK(int L, int M, struct dpmatrix_s *mx)
   int newM;
   int newN;
 
+  if (M <= mx->maxM && L <= mx->maxN) return TRUE;
+
   if (M > mx->maxM) newM = M + mx->padM; else newM = mx->maxM;
   if (L > mx->maxN) newN = L + mx->padN; else newN = mx->maxN;
 
@@ -989,6 +991,18 @@ P7SmallViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct dpmatrix_s
 			hmm->M, sqlen));
 	  P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, mx, &(tarr[i]));
 	}
+      else if (sqlen == 1)
+	{			/* xref bug#h30. P7WeeViterbi() can't take L=1. This
+				   is a hack to work around the problem, which is rare. 
+				   Attempts to use our main dp mx will violate our 
+				   RAMLIMIT guarantee, so allocate a tiny linear one. */
+	  struct dpmatrix_s *tiny;
+	  SQD_DPRINTF1(("      -- using P7Viterbi on %dx%d subproblem that P7WeeV should get\n",
+			hmm->M, sqlen));
+	  tiny = CreatePlan7Matrix(1, hmm->M, 0, 0);
+	  P7Viterbi(dsq + ctr->pos[i*2+1], sqlen, hmm, tiny, &(tarr[i]));
+	  FreePlan7Matrix(tiny);
+	}
       else
 	{
 	  SQD_DPRINTF1(("      -- using P7WeeViterbi on an %dx%d subproblem\n",
@@ -1309,9 +1323,12 @@ P7ParsingViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_
  *           could get around this but haven't explored it.)
  *           This is implemented by ignoring transitions
  *           to/from J state.
+ *           
+ *           Will not work (in current implementation) for sequences
+ *           of length 1. (xref bug #h30).
  *
  * Args:     dsq    - sequence in digitized form
- *           L      - length of dsq
+ *           L      - length of dsq; must be L > 1!
  *           hmm    - the model
  *           ret_tr - RETURN: traceback.
  *
@@ -1334,6 +1351,10 @@ P7WeeViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **
   int          tlen;		/* length needed for trace */
   int          i, k, tpos;	/* index in sequence, model, trace */
 
+  /* Someday, reexamine impl of get_wee_midpoint, and remove this 
+   * L>1 limitation. (xref bug #h30).
+   */
+  if (L==1) Die("P7WeeViterbi() cannot accept L=1 subsequence.\n");
 
   /* Initialize.
    */
@@ -1362,6 +1383,7 @@ P7WeeViterbi(unsigned char *dsq, int L, struct plan7_s *hmm, struct p7trace_s **
       k3 = kassign[s3];
       t3 = tassign[s3];
       lpos--;
+
 				/* find optimal midpoint of segment */
       sc = get_wee_midpt(hmm, dsq, L, k1, t1, s1, k3, t3, s3, &k2, &t2, &s2);
       kassign[s2] = k2;
