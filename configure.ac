@@ -336,25 +336,21 @@ case "$impl_choice" in
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
       AC_DEFINE([HAVE_SSE2])
       AC_DEFINE([p7_IMPL_SSE])
-      IMPL_OBJ="impl_sse.o"
-      IMPL_HEADER="impl_sse.h"
+      IMPL_CHOICE="sse"
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
       AC_DEFINE([HAVE_VMX])
       AC_DEFINE([p7_IMPL_VMX])
-      IMPL_OBJ="impl_vmx.o"
-      IMPL_HEADER="impl_vmx.h"
+      IMPL_CHOICE="vmx"
       ;;
 
 *)    AC_MSG_NOTICE([No optimized DP implementation available])
       AC_DEFINE([p7_IMPL_DUMMY])
-      IMPL_OBJ="impl_dummy.o"
-      IMPL_HEADER="impl_dummy.h"
+      IMPL_CHOICE="dummy"
       ;;
 esac
-AC_SUBST(IMPL_OBJ)
-AC_SUBST(IMPL_HEADER)
+AC_SUBST(IMPL_CHOICE)
 AC_SUBST(SIMD_CFLAGS)
 
 
@@ -423,6 +419,7 @@ if test -e "LICENSE.csh.in"; then
   AC_CONFIG_FILES(LICENSE.csh)
 fi
 AC_CONFIG_FILES([src/Makefile  testsuite/Makefile profmark/Makefile])
+AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
 AC_CONFIG_HEADERS(src/p7_config.h)
 
 AC_CONFIG_HEADERS([easel/esl_config.h])

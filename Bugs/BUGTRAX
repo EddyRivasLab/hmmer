@@ -482,4 +482,17 @@ DESCRIPTION
   asked to fit an uncensored histogram. z is uninitialized.
   Fix is to initialize z=0. Made this change in 2.4stable branch.
 //
+ID              h34
+TITLE           hmmbuild -o crashes if alignment has #=GR SS or #=GR SA lines
+STATUS          CLOSED in 2.3 branch
+XREF            ~/notebook/2008/0802-hmmer-bug-h34  [J3/87]
+REPORTED_BY     "Bernd Brandt" <bernd.brandt@gmail.com>
+OPENED_DATE     SRE, Sat Aug  2 11:49:40 2008
+CLOSED_DATE     SRE, Sat Aug  2 11:57:37 2008: SVN r2518
+DESCRIPTION     
+  hmmbuild -o foo segfaults when trying to re-save an alignment if
+  the alignment contains #=GR SS or SA annotation. 
+  trace.c:P7Traces2Alignment() wasn't initializing these optional
+  fields correctly to NULL after allocating them.
+//
 
