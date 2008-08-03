@@ -187,6 +187,8 @@ optcheck:
 
 tags:
 	etags src/*.c src/*.h Makefile.in
+	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in
+	etags -a src/impl_vmx/*.c src/impl_vmx/*.h src/impl_vmx/Makefile.in
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 

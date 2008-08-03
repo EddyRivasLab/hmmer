@@ -128,7 +128,7 @@ typedef struct p7_oprofile_s {
   uint8_t                xu[p7O_NXSTATES][p7O_NXTRANS];
   int                    allocQ16;		/* how many uchar vectors                      */
 
-  /* info for the MSPFilter() implementation                                   */
+  /* info for the MSVFilter() implementation                                   */
   vector unsigned char **rm;     		/* [x][q]:  m16 array and m16[0] are allocated */
   uint8_t                tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
   uint8_t                tec;		/* constant E->C  cost: scaled log 0.5         */
@@ -206,7 +206,7 @@ extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
 extern int          p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om);
 extern int          p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L);
 
-extern int p7_MSPFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

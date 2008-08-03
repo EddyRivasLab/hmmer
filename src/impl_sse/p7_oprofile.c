@@ -147,8 +147,6 @@ static uint8_t biased_charify  (P7_OPROFILE *om, float sc);
 static uint8_t unbiased_charify(P7_OPROFILE *om, float sc);
 static int     lspace_uchar_conversion(const P7_PROFILE *gm, P7_OPROFILE *om);
 static int     lspace_float_conversion(const P7_PROFILE *gm, P7_OPROFILE *om);
-/* static int     pspace_to_lspace_float(P7_OPROFILE *om); */
-static int     lspace_to_pspace_float(P7_OPROFILE *om);
 static int     pspace_float_conversion(const P7_PROFILE *gm, P7_OPROFILE *om);
 
 
@@ -183,7 +181,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
 
-  /* MSPFilter's constants */
+  /* MSVFilter's constants */
   om->tbm  = unbiased_charify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
   om->tec  = unbiased_charify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
   /* tjb is length dependent; see ReconfigLength() for setting, below */
@@ -231,13 +229,95 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
     om->xf[p7O_N][p7O_MOVE] =  om->xf[p7O_C][p7O_MOVE] = om->xf[p7O_J][p7O_MOVE] = pmove;
   }
   
-  /* MSPFilter() */
+  /* MSVFilter() */
   om->tjb = unbiased_charify(om, logf(3.0f / (float) (L+3)));
 
   /* ViterbiFilter() parameters: lspace uchars; the LOOP costs are zero  */
   om->xu[p7O_N][p7O_MOVE] =  om->xu[p7O_C][p7O_MOVE] = om->xu[p7O_J][p7O_MOVE] = unbiased_charify(om, logf(pmove));
   return eslOK;
 }
+
+/* Function:  p7_oprofile_Logify()
+ * Synopsis:  Convert existing model's float scores to lspace.
+ * Incept:    SRE, Sun Aug  3 13:24:38 2008 [St. Louis]
+ *
+ * Purpose:   Convert a model <om> that currently has its float scores
+ *            (<om->tf>, <om->rf>, <om->xf>) in probability space (the
+ *            default) to one in which these scores are in log 
+ *            probability space, suitable for a <p7_ViterbiScore()>
+ *            call. This means just taking the log of all the
+ *            floating-point scores.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_oprofile_Logify(P7_OPROFILE *om)
+{
+  int nq  = p7O_NQF(om->M);   /* segment length; total # of striped vectors needed            */
+  int x;
+  int j;
+
+  if (om->lspace_f == TRUE) return eslOK;
+
+  for (x = 0; x < om->abc->Kp; x++)
+    for (j = 0; j < nq*2; j++)
+      om->rf[x][j] = esl_sse_logf(om->rf[x][j]);
+
+  for (j = 0; j < nq*p7O_NTRANS; j++)
+    om->tf[j] = esl_sse_logf(om->tf[j]);
+
+  om->xf[p7O_E][p7O_LOOP] = logf(om->xf[p7O_E][p7O_LOOP]);  
+  om->xf[p7O_E][p7O_MOVE] = logf(om->xf[p7O_E][p7O_MOVE]);
+  om->xf[p7O_N][p7O_LOOP] = logf(om->xf[p7O_N][p7O_LOOP]);
+  om->xf[p7O_N][p7O_MOVE] = logf(om->xf[p7O_N][p7O_MOVE]);
+  om->xf[p7O_C][p7O_LOOP] = logf(om->xf[p7O_C][p7O_LOOP]);
+  om->xf[p7O_C][p7O_MOVE] = logf(om->xf[p7O_C][p7O_MOVE]);
+  om->xf[p7O_J][p7O_LOOP] = logf(om->xf[p7O_J][p7O_LOOP]);
+  om->xf[p7O_J][p7O_MOVE] = logf(om->xf[p7O_J][p7O_MOVE]);
+  om->lspace_f = TRUE;
+  return eslOK;
+}
+
+/* Function:  p7_oprofile_Probify()
+ * Synopsis:  Convert existing model's float scores to pspace.
+ * Incept:    SRE, Sun Aug  3 13:24:38 2008 [St. Louis]
+ *
+ * Purpose:   Convert a model <om> that currently has its float scores
+ *            (<om->tf>, <om->rf>, <om->xf>) in log probability space 
+ *            back to the default probability space, by exponentiating
+ *            each individual score.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_oprofile_Probify(P7_OPROFILE *om)
+{
+  int nq  = p7O_NQF(om->M);   /* segment length; total # of striped vectors needed            */
+  int x;
+  int j;
+
+  if (om->lspace_f == FALSE) return eslOK;
+
+  for (x = 0; x < om->abc->Kp; x++)
+    for (j = 0; j < nq*2; j++)
+      om->rf[x][j] = esl_sse_expf(om->rf[x][j]);
+
+  for (j = 0; j < nq*p7O_NTRANS; j++)
+    om->tf[j] = esl_sse_expf(om->tf[j]);
+
+  om->xf[p7O_E][p7O_LOOP] = expf(om->xf[p7O_E][p7O_LOOP]);  
+  om->xf[p7O_E][p7O_MOVE] = expf(om->xf[p7O_E][p7O_MOVE]);
+  om->xf[p7O_N][p7O_LOOP] = expf(om->xf[p7O_N][p7O_LOOP]);
+  om->xf[p7O_N][p7O_MOVE] = expf(om->xf[p7O_N][p7O_MOVE]);
+  om->xf[p7O_C][p7O_LOOP] = expf(om->xf[p7O_C][p7O_LOOP]);
+  om->xf[p7O_C][p7O_MOVE] = expf(om->xf[p7O_C][p7O_MOVE]);
+  om->xf[p7O_J][p7O_LOOP] = expf(om->xf[p7O_J][p7O_LOOP]);
+  om->xf[p7O_J][p7O_MOVE] = expf(om->xf[p7O_J][p7O_MOVE]);
+  om->lspace_f = FALSE;
+  return eslOK;
+}
+
+
 
 /* biased_charify()
  * converts a log-odds residue score to a rounded biased uchar cost.
@@ -312,7 +392,7 @@ lspace_uchar_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_charify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
 	om->ru[x][j++] = tmp.v;
 
-	om->rm[x][q]   = tmp.v;	/* MSPFilter's Mk scores are stored directly, not interleaved. */
+	om->rm[x][q]   = tmp.v;	/* MSVFilter's Mk scores are stored directly, not interleaved. */
 
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_charify(om, p7P_ISC(gm, k+z*nq, x)) : 255);
 	om->ru[x][j++] = tmp.v;
@@ -456,73 +536,6 @@ lspace_float_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   return eslOK;
 }
 
-#if 0
-/* pspace_to_lspace_float() 
- * 
- * Take the log of all the scores. 
- * This is needed to convert a ForwardFilter() model into
- * one that can call ViterbiScore(), for example.
- */
-static int
-pspace_to_lspace_float(P7_OPROFILE *om)
-{
-  int nq  = p7O_NQF(om->M);   /* segment length; total # of striped vectors needed            */
-  int x;
-  int j;
-
-  for (x = 0; x < om->abc->Kp; x++)
-    for (j = 0; j < nq*2; j++)
-      om->rf[x][j] = esl_sse_logf(om->rf[x][j]);
-
-  for (j = 0; j < nq*p7O_NTRANS; j++)
-    om->tf[j] = esl_sse_logf(om->tf[j]);
-
-  om->xf[p7O_E][p7O_LOOP] = logf(om->xf[p7O_E][p7O_LOOP]);  
-  om->xf[p7O_E][p7O_MOVE] = logf(om->xf[p7O_E][p7O_MOVE]);
-  om->xf[p7O_N][p7O_LOOP] = logf(om->xf[p7O_N][p7O_LOOP]);
-  om->xf[p7O_N][p7O_MOVE] = logf(om->xf[p7O_N][p7O_MOVE]);
-  om->xf[p7O_C][p7O_LOOP] = logf(om->xf[p7O_C][p7O_LOOP]);
-  om->xf[p7O_C][p7O_MOVE] = logf(om->xf[p7O_C][p7O_MOVE]);
-  om->xf[p7O_J][p7O_LOOP] = logf(om->xf[p7O_J][p7O_LOOP]);
-  om->xf[p7O_J][p7O_MOVE] = logf(om->xf[p7O_J][p7O_MOVE]);
-  om->lspace_f = TRUE;
-  return eslOK;
-}
-#endif
-
-/* lspace_to_pspace_float() 
- * 
- * Exponentiate all the scores. 
- * This is needed to convert a ViterbiScore() model
- * back to one that can be used in ForwardFilter(),
- * for example.
- */
-static int
-lspace_to_pspace_float(P7_OPROFILE *om)
-{
-  int nq  = p7O_NQF(om->M);   /* segment length; total # of striped vectors needed            */
-  int x;
-  int j;
-
-  for (x = 0; x < om->abc->Kp; x++)
-    for (j = 0; j < nq*2; j++)
-      om->rf[x][j] = esl_sse_expf(om->rf[x][j]);
-
-  for (j = 0; j < nq*p7O_NTRANS; j++)
-    om->tf[j] = esl_sse_expf(om->tf[j]);
-
-  om->xf[p7O_E][p7O_LOOP] = expf(om->xf[p7O_E][p7O_LOOP]);  
-  om->xf[p7O_E][p7O_MOVE] = expf(om->xf[p7O_E][p7O_MOVE]);
-  om->xf[p7O_N][p7O_LOOP] = expf(om->xf[p7O_N][p7O_LOOP]);
-  om->xf[p7O_N][p7O_MOVE] = expf(om->xf[p7O_N][p7O_MOVE]);
-  om->xf[p7O_C][p7O_LOOP] = expf(om->xf[p7O_C][p7O_LOOP]);
-  om->xf[p7O_C][p7O_MOVE] = expf(om->xf[p7O_C][p7O_MOVE]);
-  om->xf[p7O_J][p7O_LOOP] = expf(om->xf[p7O_J][p7O_LOOP]);
-  om->xf[p7O_J][p7O_MOVE] = expf(om->xf[p7O_J][p7O_MOVE]);
-  om->lspace_f = FALSE;
-  return eslOK;
-}
-
 
 /* pspace_float_conversion()
  * 
@@ -551,9 +564,8 @@ pspace_float_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   if ((status = lspace_float_conversion(gm, om)) != eslOK) return status;
 
   /* Then exponentiate them all quickly and in stride (using SSE) */
-  if ((status = lspace_to_pspace_float(om))      != eslOK) return status;
+  if ((status = p7_oprofile_Probify(om))         != eslOK) return status;
 
-  om->lspace_f = FALSE;
   om->mode     = gm->mode;
   om->M        = gm->M;
   return eslOK;
@@ -672,12 +684,12 @@ p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *gm)
   return eslOK;
 }
 
-/* Function:  p7_oprofile_SameMSP()
- * Synopsis:  Set a generic profile's scores to give MSP scores.
+/* Function:  p7_oprofile_SameMSV()
+ * Synopsis:  Set a generic profile's scores to give MSV scores.
  * Incept:    SRE, Wed Jul 30 13:42:49 2008 [Janelia]
  *
  * Purpose:   Set a generic profile's scores so that the normal <dp_generic> DP 
- *            algorithms will give the same score as <p7_MSPFilter()>:
+ *            algorithms will give the same score as <p7_MSVFilter()>:
  *            all t_MM scores = 0; all other core transitions = -inf;
  *            multihit local mode; all <t_BMk> entries uniformly <log 2/(M(M+1))>;
  *            <tCC, tNN, tJJ> scores 0; total approximated later as -3;
@@ -686,7 +698,7 @@ p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *gm)
  * Returns:   <eslOK> on success.
  */
 int
-p7_oprofile_SameMSP(const P7_OPROFILE *om, P7_PROFILE *gm)
+p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm)
 {
   int    k;
 

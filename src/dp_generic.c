@@ -469,8 +469,8 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
 }
 
 
-/* Function:  p7_GMSP()
- * Synopsis:  The MSP score algorithm.
+/* Function:  p7_GMSV()
+ * Synopsis:  The MSV score algorithm.
  * Incept:    SRE, Thu Dec 27 08:33:39 2007 [Janelia]
  *
  * Purpose:   Calculates the maximal score of ungapped local segment
@@ -482,7 +482,7 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  *            L            - length of dsq
  *            gm           - profile (can be in any mode)
  *            gx           - DP matrix with room for an MxL alignment
- *            opt_sc       - optRETURN: MSP lod score in nats.
+ *            opt_sc       - optRETURN: MSV lod score in nats.
  *
  * Returns:   <eslOK> on success.
  * 
@@ -498,7 +498,7 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  *            versions.)  
  */            
 int
-p7_GMSP(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
+p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
 {
   float      **dp    = gx->dp;
   float       *xmx   = gx->xmx;
@@ -917,7 +917,7 @@ p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFIL
  *    Viterbi  = 61.8 Mc/s
  *    Forward  =  8.6 Mc/s
  *   Backward  =  7.1 Mc/s
- *        MSP  = 55.9 Mc/s
+ *        MSV  = 55.9 Mc/s
  * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
 #include "p7_config.h"
@@ -937,7 +937,7 @@ static ESL_OPTIONS options[] = {
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't do DP",                   0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Backward algorithm",                     0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Forward algorithm",                      0 },
-  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the MSP algorithm",                          0 },
+  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the MSV algorithm",                          0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
@@ -991,7 +991,7 @@ main(int argc, char **argv)
 
       if      (esl_opt_GetBoolean(go, "-F"))           p7_GForward     (dsq, L, gm, gx, &sc);
       else if (esl_opt_GetBoolean(go, "-B"))           p7_GBackward    (dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "-M"))           p7_GMSP         (dsq, L, gm, gx, &sc);
+      else if (esl_opt_GetBoolean(go, "-M"))           p7_GMSV         (dsq, L, gm, gx, &sc);
       else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
 
       p7_bg_NullOne(bg, dsq, L, &nullsc);
@@ -1184,14 +1184,14 @@ utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
 }
 
 
-/* The MSP score can be validated against Viterbi (provided we trust
+/* The MSV score can be validated against Viterbi (provided we trust
  * Viterbi), by creating a multihit local profile in which:
  *   1. All t_MM scores = 0
  *   2. All other core transitions = -inf
  *   3. All t_BMk entries uniformly log 2/(M(M+1))
  */
 static void
-utest_msp(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
+utest_msv(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
 {
   P7_PROFILE *g2 = NULL;
   ESL_DSQ   *dsq = NULL;
@@ -1203,7 +1203,7 @@ utest_msp(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_P
   if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
   if ((g2     = p7_profile_Clone(gm))           == NULL)  esl_fatal("profile clone failed");
 
-  /* Make g2's scores appropriate for simulating the MSP algorithm in Viterbi */
+  /* Make g2's scores appropriate for simulating the MSV algorithm in Viterbi */
   esl_vec_FSet(g2->tsc, p7P_NTRANS * g2->M, -eslINFINITY);
   for (k = 1; k <  g2->M; k++) p7P_TSC(g2, k, p7P_MM) = 0.0f;
   for (k = 0; k <  g2->M; k++) p7P_TSC(g2, k, p7P_BM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
@@ -1212,9 +1212,9 @@ utest_msp(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_P
     {
       if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
 
-      if (p7_GMSP    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSP failed");
+      if (p7_GMSV    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSV failed");
       if (p7_GViterbi(dsq, L, g2, gx, &sc2)       != eslOK) esl_fatal("viterbi failed");
-      if (fabs(sc1-sc2) > 0.0001) esl_fatal("MSP score not equal to Viterbi score");
+      if (fabs(sc1-sc2) > 0.0001) esl_fatal("MSV score not equal to Viterbi score");
     }
 
   p7_gmx_Destroy(gx);
@@ -1416,7 +1416,7 @@ main(int argc, char **argv)
 
   utest_viterbi    (go, r, abc, bg, gm, nseq, L);
   utest_forward    (go, r, abc, bg, gm, nseq, L);
-  utest_msp        (go, r, abc, bg, gm, nseq, L);
+  utest_msv        (go, r, abc, bg, gm, nseq, L);
   utest_generation (go, r, abc, gm, hmm, bg, nseq);
   utest_enumeration(go, r, abc, 4);	/* can't go much higher than 5; enumeration test is cpu-intensive. */
   

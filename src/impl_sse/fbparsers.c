@@ -1,5 +1,5 @@
 /* SSE implementation of Forward/Backward "parsers".
- * 
+ *
  * These are O(M+L) linear memory Forward/Backward implementations
  * that keep only one row of DP memory for the main states, and one
  * column 0..L of DP memory for the special states B,E,N,C,J. This
@@ -112,7 +112,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
    */
   zerov = _mm_setzero_ps();
   for (q = 0; q < Q; q++)
-    MMX(q) = IMX(q) = DMX(q) = zerov;
+    MMXo(q) = IMXo(q) = DMXo(q) = zerov;
   xE    = ox->xmx[p7X_E][0] = 0.;
   xN    = ox->xmx[p7X_N][0] = 1.;
   xJ    = ox->xmx[p7X_J][0] = 0.;
@@ -133,13 +133,13 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
        */
-      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
-      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
-      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
+      mpv = MMXo(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
+      dpv = DMXo(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
+      ipv = IMXo(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
       
       for (q = 0; q < Q; q++)
 	{
-	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
 	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
@@ -150,13 +150,13 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
 	   */
-	  mpv = MMX(q);
-	  dpv = DMX(q);
-	  ipv = IMX(q);
+	  mpv = MMXo(q);
+	  dpv = DMXo(q);
+	  ipv = IMXo(q);
 
 	  /* Do the delayed stores of {MD}(i,q) now that memory is usable */
-	  MMX(q) = sv;
-	  DMX(q) = dcv;
+	  MMXo(q) = sv;
+	  DMXo(q) = dcv;
 
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
@@ -166,7 +166,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate and store I(i,q) */
 	  sv     =                _mm_mul_ps(mpv, *tp);  tp++;
 	  sv     = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	  IMX(q) = _mm_mul_ps(sv, *rp);                  rp++;
+	  IMXo(q) = _mm_mul_ps(sv, *rp);                  rp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
@@ -180,18 +180,18 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        */
       dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
       dcv    = _mm_move_ss(dcv, zerov);
-      DMX(0) = zerov;
+      DMXo(0) = zerov;
       tp     = om->tf + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
 	{
-	  DMX(q) = _mm_add_ps(dcv, DMX(q));	
-	  dcv    = _mm_mul_ps(DMX(q), *tp); tp++; /* extend DMX(q), so we include M->D and D->D paths */
+	  DMXo(q) = _mm_add_ps(dcv, DMXo(q));	
+	  dcv    = _mm_mul_ps(DMXo(q), *tp); tp++; /* extend DMXo(q), so we include M->D and D->D paths */
 	}
 
       /* now. on small models, it seems best (empirically) to just go
        * ahead and serialize. on large models, we can do a bit better,
-       * by testing for when dcv (DD path) accrued to DMX(q) is below
-       * machine epsilon for all q, in which case we know DMX(q) are all
+       * by testing for when dcv (DD path) accrued to DMXo(q) is below
+       * machine epsilon for all q, in which case we know DMXo(q) are all
        * at their final values. The tradeoff point is (empirically) somewhere around M=100,
        * at least on my desktop. We don't worry about the conditional here;
        * it's outside any inner loops.
@@ -205,8 +205,8 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      tp = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{
-		  DMX(q) = _mm_add_ps(dcv, DMX(q));	
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  DMXo(q) = _mm_add_ps(dcv, DMXo(q));	
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMXo(q); only adding DD paths now */
 		}	    
 	    }
 	} 
@@ -214,7 +214,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	{			/* Slightly parallelized version, but which incurs some overhead */
 	  for (j = 1; j < 4; j++)
 	    {
-	      register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
+	      register __m128 cv;	/* keeps track of whether any DD's change DMXo(q) */
 
 	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	      dcv = _mm_move_ss(dcv, zerov);
@@ -222,17 +222,17 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
 		{
-		  sv     = _mm_add_ps(dcv, DMX(q));	
-		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
-		  DMX(q) = sv;	                                    /* store new DMX(q) */
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  sv     = _mm_add_ps(dcv, DMXo(q));	
+		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMXo(q))); /* remember if DD paths changed any DMXo(q): *without* conditional branch */
+		  DMXo(q) = sv;	                                    /* store new DMXo(q) */
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMXo(q); only adding DD paths now */
 		}	    
-	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
+	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMXo(q)? Then we're done, break out. */
 	    }
 	}
 
       /* Add D's to xEv */
-      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMX(q), xEv);
+      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMXo(q), xEv);
 
       /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation is a horizontal sum of xEv's elements  */
@@ -347,20 +347,20 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
   xC = ox->xmx[p7X_C][L] = om->xf[p7O_C][p7O_MOVE];      /* C<-T */
   xE = ox->xmx[p7X_E][L] = xC * om->xf[p7O_E][p7O_MOVE]; /* E<-C, no tail */
 
-  xEv   = _mm_set1_ps(xE);   for (q = 0; q < Q; q++) MMX(q) = DMX(q) = xEv;
-  zerov = _mm_setzero_ps();  for (q = 0; q < Q; q++) IMX(q) = zerov;
+  xEv   = _mm_set1_ps(xE);   for (q = 0; q < Q; q++) MMXo(q) = DMXo(q) = xEv;
+  zerov = _mm_setzero_ps();  for (q = 0; q < Q; q++) IMXo(q) = zerov;
   dcv   = zerov;		/* solely to silence a compiler warning */
 
-  /* init row L's DD paths, 1) first segment includes xE, from DMX(q) */
+  /* init row L's DD paths, 1) first segment includes xE, from DMXo(q) */
   tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
   dpv = esl_sse_leftshift_ps(xEv, zerov);  /* leftshift: [1 5 9 13] becomes [5 9 13 x] with x=0.0 */
   for (q = Q-1; q >= 0; q--)
     {
       dcv    = _mm_mul_ps(dpv, *tp); tp--;
-      DMX(q) = _mm_add_ps(DMX(q), dcv);
-      dpv    = DMX(q);
+      DMXo(q) = _mm_add_ps(DMXo(q), dcv);
+      dpv    = DMXo(q);
     }
-  /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMX(q)) */
+  /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMXo(q)) */
   for (j = 1; j < 4; j++)
     {
       tp  = om->tf + 8*Q - 1;	              /* <*tp> now the [4 8 12 x] TDD quad */
@@ -368,16 +368,16 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
       for (q = Q-1; q >= 0; q--)
 	{
 	  dcv    = _mm_mul_ps(dcv, *tp); tp--;
-	  DMX(q) = _mm_add_ps(DMX(q), dcv);
+	  DMXo(q) = _mm_add_ps(DMXo(q), dcv);
 	}
     }
   /* now MD init */
   tp  = om->tf + 7*Q - 3;	              /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad */
-  dcv = esl_sse_leftshift_ps(DMX(0), zerov);  /* [1 5 9 13] -> [5 9 13 x]. */
+  dcv = esl_sse_leftshift_ps(DMXo(0), zerov);  /* [1 5 9 13] -> [5 9 13 x]. */
   for (q = Q-1; q >= 0; q--)
     {
-      MMX(q) = _mm_add_ps(MMX(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
-      dcv    = DMX(q);
+      MMXo(q) = _mm_add_ps(MMXo(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
+      dcv    = DMXo(q);
     }
 
 #if p7_DEBUGGING
@@ -397,19 +397,19 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
       timv  = esl_sse_leftshift_ps(om->tf[2], zerov);   /* we use tmp variables to access them in stride          */
       tdmv  = esl_sse_leftshift_ps(om->tf[3], zerov);
 
-      mpv = _mm_mul_ps(MMX(0), om->rf[dsq[i+1]][0]); /* precalc M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+      mpv = _mm_mul_ps(MMXo(0), om->rf[dsq[i+1]][0]); /* precalc M(i+1,k+1) * e(M_k+1, x_{i+1}) */
       mpv = esl_sse_leftshift_ps(mpv, zerov);
       xBv = zerov;
       for (q = Q-1; q >= 0; q--)     /* backwards stride */
 	{
-	  ipv = _mm_mul_ps(IMX(q), *rp);   rp--;  /* precalc I(i+1,k) * e_(I_k, x_{i+1}); i+1's IMX(q) now free */
+	  ipv = _mm_mul_ps(IMXo(q), *rp);   rp--;  /* precalc I(i+1,k) * e_(I_k, x_{i+1}); i+1's IMXo(q) now free */
 
-	  IMX(q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
-	  DMX(q) =                                  _mm_mul_ps(mpv, tdmv); 
+	  IMXo(q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
+	  DMXo(q) =                                  _mm_mul_ps(mpv, tdmv); 
 	  mcv    = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
 	  
-	  mpv    = _mm_mul_ps(MMX(q), *rp);  rp--;  /* obtain mpv for next q. i+1's MMX(q) is freed  */
-	  MMX(q) = mcv;
+	  mpv    = _mm_mul_ps(MMXo(q), *rp);  rp--;  /* obtain mpv for next q. i+1's MMXo(q) is freed  */
+	  MMXo(q) = mcv;
 
 	  tdmv   = *tp;   tp--;
 	  timv   = *tp;   tp--;
@@ -445,14 +445,14 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
 
       /* phase 3: {MD}->E paths and one step of the D->D paths */
       tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
-      dpv = _mm_add_ps(DMX(0), xEv);
+      dpv = _mm_add_ps(DMXo(0), xEv);
       dpv = esl_sse_leftshift_ps(dpv, zerov);                   
       for (q = Q-1; q >= 0; q--)
 	{
 	  dcv    = _mm_mul_ps(dpv, *tp); tp--;
-	  DMX(q) = _mm_add_ps(DMX(q), _mm_add_ps(dcv, xEv));
-	  dpv    = DMX(q);
-	  MMX(q) = _mm_add_ps(MMX(q), xEv);
+	  DMXo(q) = _mm_add_ps(DMXo(q), _mm_add_ps(dcv, xEv));
+	  dpv    = DMXo(q);
+	  MMXo(q) = _mm_add_ps(MMXo(q), xEv);
 	}
       
       /* phase 4: finish extending the DD paths */
@@ -464,17 +464,17 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
 	  for (q = Q-1; q >= 0; q--)
 	    {
 	      dcv    = _mm_mul_ps(dcv, *tp); tp--;
-	      DMX(q) = _mm_add_ps(DMX(q), dcv);
+	      DMXo(q) = _mm_add_ps(DMXo(q), dcv);
 	    }
 	}
 
       /* phase 5: add M->D paths */
-      dcv = esl_sse_leftshift_ps(DMX(0), zerov);
+      dcv = esl_sse_leftshift_ps(DMXo(0), zerov);
       tp  = om->tf + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
       for (q = Q-1; q >= 0; q--)
 	{
-	  MMX(q) = _mm_add_ps(MMX(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
-	  dcv    = DMX(q);
+	  MMXo(q) = _mm_add_ps(MMXo(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
+	  dcv    = DMXo(q);
 	}
 
 #if p7_DEBUGGING
@@ -488,7 +488,7 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
   xBv = zerov;
   for (q = 0; q < Q; q++)
     {
-      mpv = _mm_mul_ps(MMX(q), *rp);  rp += 2;
+      mpv = _mm_mul_ps(MMXo(q), *rp);  rp += 2;
       mpv = _mm_mul_ps(mpv,    *tp);  tp += 7;
       xBv = _mm_add_ps(xBv,    mpv);
     }
@@ -506,7 +506,7 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
 
 #if p7_DEBUGGING    /* Not strictly necessary: */
   for (q = 0; q < Q; q++)
-    MMX(q) = DMX(q) = IMX(q) = zerov;
+    MMXo(q) = DMXo(q) = IMXo(q) = zerov;
 #endif
 
 #if p7_DEBUGGING
@@ -529,12 +529,16 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, 
  * 2. Benchmark driver.
  *****************************************************************/
 #ifdef p7FBPARSERS_BENCHMARK
+/* -c, -x options are for debugging and testing: see fwdfilter.c for explanation */
 /* 
    gcc -o benchmark-fbparsers -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
+   gcc -o benchmark-fbparsers -std=gnu99 -O2 -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
    icc -o benchmark-fbparsers -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
 
    ./benchmark-fbparsers <hmmfile>           runs benchmark on both Forward and Backward parser
    ./benchmark-fbparsers -b <hmmfile>        gets baseline time to subtract: just random seq generation
+   ./benchmark-fbparsers -c -N100 <hmmfile>  compare scores of SSE to generic impl
+   ./benchmark-fbparsers -x -N100 <hmmfile>  test that scores match trusted implementation.
  */
 #include "p7_config.h"
 
@@ -552,8 +556,10 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-B", "only benchmark the ForwardParser()",               0 },
@@ -576,6 +582,7 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
+  P7_GMX         *gx      = NULL;
   P7_OMX         *fwd     = NULL;
   P7_OMX         *bck     = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
@@ -583,6 +590,9 @@ main(int argc, char **argv)
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           fsc, bsc;
+  float           fsc2, bsc2;
+  
+  p7_FLogsumInit();
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -598,8 +608,12 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
+  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+    p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
+
   fwd = p7_omx_Create(gm->M, 0, L);
   bck = p7_omx_Create(gm->M, 0, L);
+  gx  = p7_gmx_Create(gm->M, L);
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
@@ -609,6 +623,13 @@ main(int argc, char **argv)
 	{
 	  if (! esl_opt_GetBoolean(go, "-B"))  p7_ForwardParser (dsq, L, om, fwd, &fsc);
 	  if (! esl_opt_GetBoolean(go, "-F"))  p7_BackwardParser(dsq, L, om, bck, &bsc);
+
+	  if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
+	    {
+	      p7_GForward (dsq, L, gm, gx, &fsc2); 
+	      p7_GBackward(dsq, L, gm, gx, &bsc2); 
+	      printf("%.4f %.4f %.4f %.4f\n", fsc, bsc, fsc2, bsc2);  
+	    }
 	}
     }
   esl_stopwatch_Stop(w);
@@ -618,6 +639,7 @@ main(int argc, char **argv)
   free(dsq);
   p7_omx_Destroy(bck);
   p7_omx_Destroy(fwd);
+  p7_gmx_Destroy(gx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
@@ -630,15 +652,78 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7FBPARSERS_BENCHMARK*/
+/*------------------- end, benchmark driver ---------------------*/
+
+/*****************************************************************
+ * 3. Unit tests.
+ *****************************************************************/
+#ifdef p7FBPARSERS_TESTDRIVE
+#include "esl_random.h"
+#include "esl_randomseq.h"
+
+/* unit test for scores.
+ * compare to GForward() scores and ForwardFilter() scores.
+ */
+static void
+utest_fbparser_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  char        *msg = "forward/backward parser score unit test failed";
+  P7_HMM      *hmm = NULL;
+  P7_PROFILE  *gm  = NULL;
+  P7_OPROFILE *om  = NULL;
+  ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_OMX      *fwd = p7_omx_Create(M, 0, L);
+  P7_OMX      *bck = p7_omx_Create(M, 0, L);
+  P7_GMX      *gx  = p7_gmx_Create(M, L);
+  float tolerance;
+  float fsc1, fsc2, fsc3;
+  float bsc1;
+
+  p7_FLogsumInit();
+  if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test against GForward()   */
+  else tolerance = 0.0001;   /* stronger test: FLogsum() is in slow exact mode. */
+
+  p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
+  while (N--)
+    {
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+
+      p7_ForwardFilter (dsq, L, om, fwd, &fsc3);
+      p7_GForward      (dsq, L, gm, gx,  &fsc2);
+      p7_ForwardParser (dsq, L, om, fwd, &fsc1);
+      p7_BackwardParser(dsq, L, om, bck, &bsc1);
+
+      /* Forward and Backward parser scores should agree with high tolerance */
+      if (fabs(fsc1-bsc1) > 0.0001)    esl_fatal(msg);
+
+      /* they should agree with ForwardFilter with high tolerance */
+      if (fabs(fsc1-fsc3) > 0.0001)    esl_fatal(msg);
+
+      /* GForward scores should approximate ForwardParser scores, 
+       * with tolerance that depends on how logsum.c was compiled
+       */
+      if (fabs(fsc1-fsc2) > tolerance) esl_fatal(msg);
+    }
+
+  free(dsq);
+  p7_hmm_Destroy(hmm);
+  p7_omx_Destroy(bck);
+  p7_omx_Destroy(fwd);
+  p7_gmx_Destroy(gx);
+  p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
+}
+#endif /*p7FBPARSERS_TESTDRIVE*/
+/*---------------------- end, unit tests ------------------------*/
 
 
 /*****************************************************************
- * 12. Test driver
+ * 4. Test driver
  *****************************************************************/
-#ifdef p7IMPL_SSE_TESTDRIVE
+#ifdef p7FBPARSERS_TESTDRIVE
 /* 
-   gcc -g -Wall -msse2 -std=gnu99 -I. -L. -I../easel -L../easel -o impl_sse_utest -Dp7IMPL_SSE_TESTDRIVE impl_sse.c -lhmmer -leasel -lm
-   ./impl_sse_utest
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o fbparsers_utest -Dp7FBPARSERS_TESTDRIVE fbparsers.c -lhmmer -leasel -lm
+   ./fbparsers_utest
  */
 #include "p7_config.h"
 
@@ -654,7 +739,6 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
   { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
@@ -681,25 +765,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, DNA\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_msp_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_msp_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, DNA\n");
-  utest_viterbi_filter(r, abc, bg, M, L, N);   
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);  
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ForwardFilter() tests, DNA\n");
-  utest_forward_filter(r, abc, bg, M, L, N);   
-  utest_forward_filter(r, abc, bg, 1, L, 10);  
-  utest_forward_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiScore() tests, DNA\n");
-  utest_viterbi_score(r, abc, bg, M, L, N);   
-  utest_viterbi_score(r, abc, bg, 1, L, 10);  
-  utest_viterbi_score(r, abc, bg, M, 1, 10);  
+  utest_fbparser_scores(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_fbparser_scores(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_fbparser_scores(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -708,25 +776,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, protein\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   
-  utest_msp_filter(r, abc, bg, 1, L, 10);  
-  utest_msp_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, protein\n");
-  utest_viterbi_filter(r, abc, bg, M, L, N); 
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ForwardFilter() tests, protein\n");
-  utest_forward_filter(r, abc, bg, M, L, N);   
-  utest_forward_filter(r, abc, bg, 1, L, 10);  
-  utest_forward_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiScore() tests, protein\n");
-  utest_viterbi_score(r, abc, bg, M, L, N);   
-  utest_viterbi_score(r, abc, bg, 1, L, 10);  
-  utest_viterbi_score(r, abc, bg, M, 1, 10);  
+  utest_fbparser_scores(r, abc, bg, M, L, N);   
+  utest_fbparser_scores(r, abc, bg, 1, L, 10);  
+  utest_fbparser_scores(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -735,7 +787,10 @@ main(int argc, char **argv)
   esl_randomness_Destroy(r);
   return eslOK;
 }
-#endif /*IMPL_SSE_TESTDRIVE*/
+#endif /*FBPARSERS_TESTDRIVE*/
+/*--------------------- end, test driver ------------------------*/
+
+
 
 /*****************************************************************
  * 5. Example

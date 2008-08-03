@@ -2,7 +2,7 @@
  * structures, declarations, and macros.
  * 
  * Currently (and this remains in flux as of 14 Dec 07) an optimized
- * implementation is required to provide an MSPFilter(),
+ * implementation is required to provide an MSVFilter(),
  * ViterbiFilter() and a ForwardFilter() implementation. A call to
  * p7_oprofile_Convert() makes an optimized profile that works for
  * all filters.
@@ -14,7 +14,7 @@
  * alignment modes, because they are allowed to make assumptions about
  * the range of scores.
  * 
- * Here, MSPFilter() and ViterbiFilter() are 8-bit lspace
+ * Here, MSVFilter() and ViterbiFilter() are 8-bit lspace
  * implementations with limited precision and limited range (max 20
  * bits); ForwardFilter() is a pspace float implementation with
  * correct precision and limited range (max ~127 bits). Both require
@@ -135,7 +135,7 @@ typedef struct p7_oprofile_s {
   uint8_t   xu[p7O_NXSTATES][p7O_NXTRANS];
   int       allocQ16;		/* how many uchar vectors                      */
 
-  /* info for the MSPFilter() implementation                                   */
+  /* info for the MSVFilter() implementation                                   */
   __m128i **rm;     		/* [x][q]:  m16 array and m16[0] are allocated */
   uint8_t   tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
   uint8_t   tec;		/* constant E->C  cost: scaled log 0.5         */
@@ -224,12 +224,12 @@ typedef struct p7_omx_s {
 #endif
 } P7_OMX;
 
-/* ?MX(q) access macros work for either uchar or float, so long as you
+/* ?MXo(q) access macros work for either uchar or float, so long as you
  * init your "dp" to point to the appropriate array.
  */
-#define MMX(q) (dp[(q) * p7X_NSCELLS + p7X_M])
-#define DMX(q) (dp[(q) * p7X_NSCELLS + p7X_D])
-#define IMX(q) (dp[(q) * p7X_NSCELLS + p7X_I])
+#define MMXo(q) (dp[(q) * p7X_NSCELLS + p7X_M])
+#define DMXo(q) (dp[(q) * p7X_NSCELLS + p7X_D])
+#define IMXo(q) (dp[(q) * p7X_NSCELLS + p7X_I])
 
 
 /*****************************************************************
@@ -244,7 +244,7 @@ extern void         p7_omx_Destroy(P7_OMX *ox);
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
 extern int          p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 extern int          p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
-extern int          p7_omx_DumpMSPRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpMSVRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 
 /* p7_oprofile.c */
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
@@ -252,18 +252,23 @@ extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
 extern int          p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L);
-
+extern int          p7_oprofile_Logify(P7_OPROFILE *om);
+extern int          p7_oprofile_Probify(P7_OPROFILE *om);
 extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
 				       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
 extern int          p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *gm);
-extern int          p7_oprofile_SameMSP(const P7_OPROFILE *om, P7_PROFILE *gm);
+extern int          p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
+
+/* fbparsers.c */
+extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 /* fwdfilter.c */
 extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
-/* mspfilter.c */
-extern int p7_MSPFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+/* msvfilter.c */
+extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 /* vitfilter.c */
 extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

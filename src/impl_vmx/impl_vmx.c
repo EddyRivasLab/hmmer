@@ -11,7 +11,7 @@
  *   3. Debugging dumps of P7_OPROFILE structures
  *   4. Debugging dumps of P7_OMX structures
  *   5. Conversions into P7_OPROFILE format
- *   6. MSP filter implementation
+ *   6. MSV filter implementation
  *   7. Viterbi filter DP implementation
  *   8. Forward filter DP implementation
  *   9. Viterbi score DP implementation
@@ -809,12 +809,12 @@ ERROR:
   return status;
 }
 
-/* omx_dump_msp_row()
+/* omx_dump_msv_row()
  *
  * Dump current row of uchar part of DP matrix <ox> for diagnostics,
  * and include the values of specials <xE>, etc. The index <rowi> for
  * the current row is used as a row label. This routine has to be
- * specialized for the layout of the MSPFilter() row, because it's
+ * specialized for the layout of the MSVFilter() row, because it's
  * all match scores dp[0..q..Q-1], rather than triplets of M,D,I.
  *
 * If <rowi> is 0, print a header first too.
@@ -827,7 +827,7 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure.
  */
 static int
-omx_dump_msp_row(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+omx_dump_msv_row(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
    vector unsigned char *dp = ox->dpu;
    int      Q  = ox->Q16;
@@ -963,7 +963,7 @@ lspace_uchar_conversion(P7_PROFILE *gm, P7_OPROFILE *om)
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_charify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
 	om->ru[x][j++] = tmp.v;
 
-	om->rm[x][q]   = tmp.v;	/* MSPFilter's Mk scores are stored directly, not interleaved. */
+	om->rm[x][q]   = tmp.v;	/* MSVFilter's Mk scores are stored directly, not interleaved. */
 
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_charify(om, p7P_ISC(gm, k+z*nq, x)) : 255);
 	om->ru[x][j++] = tmp.v;
@@ -1230,7 +1230,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
 
-  /* MSPFilter's constants */
+  /* MSVFilter's constants */
   om->tbm  = unbiased_charify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
   om->tec  = unbiased_charify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
   /* tjb is length dependent; see ReconfigLength() for setting, below */
@@ -1278,7 +1278,7 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
     om->xf[p7O_N][p7O_MOVE] =  om->xf[p7O_C][p7O_MOVE] = om->xf[p7O_J][p7O_MOVE] = pmove;
   }
   
-  /* MSPFilter() */
+  /* MSVFilter() */
   om->tjb = unbiased_charify(om, logf(3.0f / (float) (L+3)));
 
   /* ViterbiFilter() parameters: lspace uchars; the LOOP costs are zero  */
@@ -1292,7 +1292,7 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 
 
 /*****************************************************************
- * 6. The p7_MSPFilter() DP implementation.
+ * 6. The p7_MSVFilter() DP implementation.
  *****************************************************************/
 
 /* Returns TRUE if any a[z] > b[z] .
@@ -1331,20 +1331,20 @@ vmx_hmax_vecuchar(vector unsigned char a)
 
 
 
-/* Function:  p7_MSPFilter()
- * Synopsis:  Calculates MSP score, vewy vewy fast, in limited precision.
+/* Function:  p7_MSVFilter()
+ * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  * Incept:    SRE, Wed Dec 26 15:12:25 2007 [Janelia]
  *
- * Purpose:   Calculates an approximation of the MSP score for sequence
+ * Purpose:   Calculates an approximation of the MSV score for sequence
  *            <dsq> of length <L> residues, using optimized profile <om>,
  *            and a preallocated one-row DP matrix <ox>. Return the 
- *            estimated MSP score (in nats) in <ret_sc>.
+ *            estimated MSV score (in nats) in <ret_sc>.
  *            
  *            Score may overflow (and will, on high-scoring
  *            sequences), but will not underflow. 
  *            
  *            The model may be in any mode, because only its match
- *            emission scores will be used. The MSP filter inherently
+ *            emission scores will be used. The MSV filter inherently
  *            assumes a multihit local mode, and uses its own special
  *            state transition scores, not the scores in the profile.
  *
@@ -1359,7 +1359,7 @@ vmx_hmax_vecuchar(vector unsigned char a)
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
   register vector unsigned char mpv;       /* previous row values                                       */
   register vector unsigned char xEv;	   /* E state: keeps max for Mk->E as we go                     */
@@ -1393,7 +1393,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   xC   = 0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) omx_dump_msp_row(ox, 0, 0, 0, xC, xB, xC);
+  if (ox->debugging) omx_dump_msv_row(ox, 0, 0, 0, xC, xB, xC);
 #endif
 
   for (i = 1; i <= L; i++)
@@ -1431,7 +1431,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xB = ESL_MAX(om->base,  xC) - om->tjb;
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) omx_dump_msp_row(ox, i, xE, 0, xC, xB, xC);   
+      if (ox->debugging) omx_dump_msv_row(ox, i, xE, 0, xC, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -1441,7 +1441,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
   return eslOK;
 }
-/*------------------ end, p7_MSPFilter() ------------------------*/
+/*------------------ end, p7_MSVFilter() ------------------------*/
 
 
 
@@ -2169,9 +2169,9 @@ round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
 
 
 
-/* simulate_msp_in_generic_profile()
+/* simulate_msv_in_generic_profile()
  * Set a generic profile's scores so that the normal dp_generic DP 
- * algorithms will give the same score as MSPFilter():
+ * algorithms will give the same score as MSVFilter():
  *   1. All t_MM scores = 0
  *   2. All other core transitions = -inf
  *   3. multihit local mode
@@ -2185,7 +2185,7 @@ round_profile(P7_OPROFILE *om, P7_PROFILE *gm)
  * xref J2/79
  */
 static void
-simulate_msp_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
+simulate_msv_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
 {
   int    k;
 
@@ -2223,11 +2223,11 @@ simulate_msp_in_generic_profile(P7_PROFILE *gm, P7_OPROFILE *om, int L)
    gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
    icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
 
-   ./benchmark-sse <hmmfile>       runs benchmark on ViterbiFilter() (-M for MSPFilter; -F for ForwardFilter, -S for ViterbiScore)
+   ./benchmark-sse <hmmfile>       runs benchmark on ViterbiFilter() (-M for MSVFilter; -F for ForwardFilter, -S for ViterbiScore)
    ./benchmark-sse -b <hmmfile>    gets baseline time to subtract: just random seq generation
    ./benchmark-sse -c <hmmfile>    compare scores of SSE to generic impl
 
-   ./benchmark-sse -Mx -N100 <hmmfile>     test that MSPFilter scores match Viterbi
+   ./benchmark-sse -Mx -N100 <hmmfile>     test that MSVFilter scores match Viterbi
  */
 #include "p7_config.h"
 
@@ -2254,7 +2254,7 @@ static ESL_OPTIONS options[] = {
   { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "round generic profile, make scores match (debug)", 0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
-  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_MSPFilter()",                         0 },
+  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_MSVFilter()",                         0 },
   { "-V",        eslARG_NONE,"default",NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ViterbiFilter()",                     0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ForwardFilter()",                     0 },
   { "-S",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ViterbiScore()",                      0 },
@@ -2299,7 +2299,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
   if (esl_opt_GetBoolean(go, "-x")) {
-    if (esl_opt_GetBoolean(go, "-M")) simulate_msp_in_generic_profile(gm, om, L);
+    if (esl_opt_GetBoolean(go, "-M")) simulate_msv_in_generic_profile(gm, om, L);
     else                              round_profile(om, gm);
   }
   if (esl_opt_GetBoolean(go, "-S")) pspace_to_lspace_float(om);
@@ -2313,7 +2313,7 @@ main(int argc, char **argv)
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       if (! esl_opt_GetBoolean(go, "-b")) {
-	if      (esl_opt_GetBoolean(go, "-M")) p7_MSPFilter    (dsq, L, om, ox, &sc1);   
+	if      (esl_opt_GetBoolean(go, "-M")) p7_MSVFilter    (dsq, L, om, ox, &sc1);   
 	else if (esl_opt_GetBoolean(go, "-F")) p7_ForwardFilter(dsq, L, om, ox, &sc1);   
 	else if (esl_opt_GetBoolean(go, "-S")) p7_ViterbiScore (dsq, L, om, ox, &sc1);   
 	else                                   p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
@@ -2322,7 +2322,7 @@ main(int argc, char **argv)
 	if (esl_opt_GetBoolean(go, "-c")) 
 	  {
 	    if       (esl_opt_GetBoolean(go, "-F"))    p7_GForward(dsq, L, gm, gx, &sc2); 
-	    else if  (esl_opt_GetBoolean(go, "-M"))    p7_GMSP    (dsq, L, gm, gx, &sc2); 
+	    else if  (esl_opt_GetBoolean(go, "-M"))    p7_GMSV    (dsq, L, gm, gx, &sc2); 
 	    else                                       p7_GViterbi(dsq, L, gm, gx, &sc2); 
 
 	    printf("%.4f %.4f\n", sc1, sc2);  
@@ -2471,18 +2471,18 @@ make_random_profile(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
   *ret_om  = om;
 }
 
-/* MSPFilter() unit test
+/* MSVFilter() unit test
  * 
  * We can check that scores are identical (within machine error) to
  * scores of generic DP with scores rounded the same way.  Do this for
  * a random model of length <M>, for <N> test sequences of length <L>.
  * 
  * We assume that we don't accidentally generate a high-scoring random
- * sequence that overflows MSPFilter()'s limited range.
+ * sequence that overflows MSVFilter()'s limited range.
  * 
  */
 static void
-utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
@@ -2493,7 +2493,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   float sc1, sc2;
 
   make_random_profile(r, abc, bg, M, L, &hmm, &gm, &om);
-  simulate_msp_in_generic_profile(gm, om, L);
+  simulate_msv_in_generic_profile(gm, om, L);
 
 #ifdef p7_DEBUGGING
   p7_oprofile_Dump(stdout, om);              //dumps the optimized profile
@@ -2504,7 +2504,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
-      p7_MSPFilter(dsq, L, om, ox, &sc1);
+      p7_MSVFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
 
 #ifdef p7_DEBUGGING
@@ -2512,7 +2512,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 #endif
 
       sc2 = sc2 / om->scale - 3.0f;
-      if (fabs(sc1-sc2) > 0.001) esl_fatal("msp filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("msv filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
   free(dsq);
@@ -2704,10 +2704,10 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, DNA\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_msp_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_msp_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+  if (esl_opt_GetBoolean(go, "-v")) printf("MSVFilter() tests, DNA\n");
+  utest_msv_filter(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_msv_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_msv_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
 
   if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, DNA\n");
   utest_viterbi_filter(r, abc, bg, M, L, N);   
@@ -2731,10 +2731,10 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, protein\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   
-  utest_msp_filter(r, abc, bg, 1, L, 10);  
-  utest_msp_filter(r, abc, bg, M, 1, 10);  
+  if (esl_opt_GetBoolean(go, "-v")) printf("MSVFilter() tests, protein\n");
+  utest_msv_filter(r, abc, bg, M, L, N);   
+  utest_msv_filter(r, abc, bg, 1, L, 10);  
+  utest_msv_filter(r, abc, bg, M, 1, 10);  
 
   if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, protein\n");
   utest_viterbi_filter(r, abc, bg, M, L, N); 
@@ -2833,10 +2833,10 @@ main(int argc, char **argv)
 #endif
   /**/
 
-  simulate_msp_in_generic_profile(gm, om, sq->n);
+  simulate_msv_in_generic_profile(gm, om, sq->n);
 
   /* take your pick: */
-  p7_MSPFilter    (sq->dsq, sq->n, om, ox, &sc);  printf("msp filter score:     %.2f nats\n", sc);
+  p7_MSVFilter    (sq->dsq, sq->n, om, ox, &sc);  printf("msv filter score:     %.2f nats\n", sc);
   p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi filter score: %.2f nats\n", sc);
   p7_ForwardFilter(sq->dsq, sq->n, om, ox, &sc);  printf("forward filter score: %.2f nats\n", sc);
   p7_GViterbi     (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);

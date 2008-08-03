@@ -6,7 +6,8 @@
  *    3. Benchmark driver.
  *    4. Unit tests.
  *    5. Test driver.
- *    6. Copyright and license information.
+ *    6. Example.
+ *    7. Copyright and license information.
  *
  * Exegesis:
  * 
@@ -38,15 +39,11 @@
  * + table_lookup(s2-s1). This is what HMMER's p7_FLogsum() function
  * does.
  * 
- * Contents:      
- * 
  * SRE, Wed Jul 11 11:00:57 2007 [Janelia]
  * SVN $Id$
  */
 #include "p7_config.h"
-
 #include <math.h>
-
 #include "hmmer.h"
 
 static float flogsum_lookup[p7_LOGSUM_TBL];
@@ -65,7 +62,7 @@ static int   ilogsum_lookup[p7_LOGSUM_TBL];
  *            call to <p7_FLogsum()>.
  *            
  *            The precision of the lookup table is determined
- *            by the compile-time <p7_INTSCALE> constant.
+ *            by the compile-time <p7_LOGSUM_TBL> constant.
  *
  * Returns:   <eslOK> on success.
  */
@@ -105,6 +102,32 @@ p7_FLogsum(float a, float b)
   const float min = ESL_MIN(a, b);
   return  (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
 } 
+
+/* Function:  p7_FLogsumError()
+ * Synopsis:  Compute absolute error in probability from Logsum.
+ * Incept:    SRE, Sun Aug  3 10:22:18 2008 [Janelia]
+ *
+ * Purpose:   Compute the absolute error in probability space
+ *            resulting from <p7_FLogsum()>'s table lookup 
+ *            approximation: approximation result - exact result.
+ *                                                  
+ *            This is of course computable analytically for
+ *            any <a,b> given <p7_LOGSUM_TBL>; but the function
+ *            is useful for some routines that want to determine
+ *            if <p7_FLogsum()> has been compiled in its
+ *            exact slow mode for debugging purposes. Testing
+ *            <p7_FLogsumError(-0.4, -0.5) > 0.0001>
+ *            for example, suffices to detect that the function
+ *            is compiled in its fast approximation mode given
+ *            the defaults. 
+ */
+float
+p7_FLogsumError(float a, float b)
+{
+  float approx = p7_FLogsum(a,b);
+  float exact  = log(exp(a) + exp(b));
+  return (exp(approx) - exp(exact));
+}
 
 /*****************************************************************
  *= 2. scaled integer version
@@ -385,21 +408,21 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example.
+ * 6. Example.
  *****************************************************************/
 #ifdef p7LOGSUM_EXAMPLE
 /* gcc -o example -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_EXAMPLE logsum.c -leasel -lm
- * ./example
+ * ./example -0.5 -0.5
  */
 #include "p7_config.h"
 #include "easel.h"
 #include "hmmer.h"
 
 int
-main(void)
+main(int argc, char **argv)
 {
-  float a = -eslINFINITY;
-  float b = 0.;
+  float a = atof(argv[1]);
+  float b = atof(argv[2]);
   float result;
 
   p7_FLogsumInit();
@@ -408,10 +431,11 @@ main(void)
 
   result = log(exp(a) + exp(b));
   printf("log(e^%f + e^%f) = %f\n", a, b, result);
+
+  printf("Absolute error in probability: %f\n", p7_FLogsumError(a,b));
   return eslOK;
 }
 #endif /*p7LOGSUM_EXAMPLE*/
-
 /*--------------------- end, example ----------------------------*/
 
 /*****************************************************************

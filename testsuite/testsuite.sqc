@@ -14,13 +14,18 @@
 
 1 exercise build_utest        @build_utest@
 1 exercise dp_generic_utest   @dp_generic_utest@
-1 exercise impl_sse_utest     @impl_sse_utest@
 1 exercise logsum_utest       @logsum_utest@
 1 exercise modelconfig_utest  @modelconfig_utest@
 1 exercise p7_hmm_utest       @p7_hmm_utest@
 1 exercise p7_hmmfile_utest   @p7_hmmfile_utest@
 1 exercise p7_profile_utest   @p7_profile_utest@
 1 exercise p7_tophits_utest   @p7_tophits_utest@
+
+1 exercise fbparsers_utest    @fbparsers_utest@
+1 exercise fwdfilter_utest    @fwdfilter_utest@
+1 exercise msvfilter_utest    @msvfilter_utest@
+1 exercise vitfilter_utest    @vitfilter_utest@
+1 exercise vitscore_utest     @vitscore_utest@
 
 
 # Still to come, unit tests for

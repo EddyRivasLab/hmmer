@@ -65,9 +65,9 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 }
 
 int
-p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  return p7_GMSP(dsq, L, (const P7_PROFILE *) om, (P7_GMX *) ox, ret_sc);
+  return p7_GMSV(dsq, L, (const P7_PROFILE *) om, (P7_GMX *) ox, ret_sc);
 }
 
 

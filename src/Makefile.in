@@ -72,6 +72,11 @@ HDRS =  hmmer.h\
 IMPLDIR  = impl_@IMPL_CHOICE@
 
 IMPL_OBJ =\
+	${IMPLDIR}/fbparsers.o\
+	${IMPLDIR}/fwdfilter.o\
+	${IMPLDIR}/msvfilter.o\
+	${IMPLDIR}/vitfilter.o\
+	${IMPLDIR}/vitscore.o\
 	${IMPLDIR}/p7_omx.o\
 	${IMPLDIR}/p7_oprofile.o
 
@@ -113,21 +118,18 @@ distclean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
 	-rm -f *.gcno
 	-rm -f Makefile p7_config.h
-	cd impl_sse; make distclean
-	cd impl_vmx; make distclean
+	cd  ${IMPLDIR}; make distclean
 
 clean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
 	-rm -f *.gcno
-	cd impl_sse; make clean
-	cd impl_vmx; make clean
+	cd ${IMPLDIR}; make clean
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
-	cd impl_sse; make binclean
-	cd impl_vmx; make binclean
+	cd ${IMPLDIR}; make binclean
 
-TAGS:
+tags:
 	etags  *.c *.h Makefile.in
 	etags -a impl_sse/*.c impl_sse/*.h impl_sse/Makefile.in
 	etags -a impl_vmx/*.c impl_vmx/*.h impl_vmx/Makefile.in

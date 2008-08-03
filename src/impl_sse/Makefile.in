@@ -6,26 +6,87 @@
 
 CC             = @CC@
 CFLAGS         = @CFLAGS@
-SIMDFLAGS      = @SIMD_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
+LDFLAGS        = @LDFLAGS@
+SIMDFLAGS      = @SIMD_CFLAGS@
 DEFS           = @DEFS@
-PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 SHELL          = /bin/sh
+
+MYLIBS         = -lhmmer -leasel -lm
+MYLIBDIRS      = -L../../easel -L..
 MYINCDIRS      = -I../../easel -I..
 
-OBJS =  mspfilter.o\
+OBJS =  fbparsers.o\
+	fwdfilter.o\
+	msvfilter.o\
+	vitfilter.o\
+	vitscore.o\
 	p7_omx.o\
 	p7_oprofile.o
 
 HDRS =  impl_sse.h
 
+UTESTS = \
+	fbparsers_utest\
+	fwdfilter_utest\
+	msvfilter_utest\
+	vitfilter_utest\
+	vitscore_utest
+
+BENCHMARKS =\
+	fbparsers_benchmark\
+	fwdfilter_benchmark\
+	msvfilter_benchmark\
+	vitfilter_benchmark\
+	vitscore_benchmark
+
+EXAMPLES =\
+	fbparsers_example\
+	fwdfilter_example\
+	msvfilter_example\
+	vitfilter_example\
+	vitscore_example
+
+all: 	   objfiles drivers
+
+check:     ${UTESTS}
+
+objfiles:  ${OBJS} ${HDRS}
+
+drivers:   ../libhmmer.a ../../easel/libeasel.a ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
+
+../libhmmer.a:
+	cd ..; ${MAKE} libhmmer.a
+
+../../easel/libeasel.a:
+	cd ../../easel/; ${MAKE} libeasel.a
+
 .c.o:
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
-#################################################################
-## The main target:
-##
-all: 	${OBJS}
+
+${UTESTS}: ${OBJS} ${HDRS}
+	BASENAME=`echo $@ | sed -e 's/_utest//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
+	DFILE=$${BASENAME}.c ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+
+${BENCHMARKS}: ${OBJS} ${HDRS}
+	BASENAME=`echo $@ | sed -e 's/_benchmark//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_BENCHMARK ;\
+	DFILE=$${BASENAME}.c ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+
+${EXAMPLES}: ${OBJS} ${HDRS}
+	BASENAME=`echo $@ | sed -e 's/_example//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_EXAMPLE ;\
+	DFILE=$${BASENAME}.c ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+
+
 
 #################################################################
 ## Miscellaneous targets.
@@ -35,13 +96,16 @@ distclean:
 	-rm -f Makefile 
 
 clean:
-	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out 
+	-rm -f ${UTESTS}
+	-rm -f ${BENCHMARKS}
+	-rm -f ${EXAMPLES}
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
 	-rm -f *.gcno
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
 
-TAGS:
+tags:
 	etags  *.c *.h Makefile.in
 
 ###########

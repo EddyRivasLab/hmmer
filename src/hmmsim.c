@@ -34,7 +34,7 @@
 
 #include "hmmer.h"
 
-#define ALGORITHMS "--fwd,--vit,--hyb,--msp"           /* Exclusive choice for scoring algorithms */
+#define ALGORITHMS "--fwd,--vit,--hyb,--msv"           /* Exclusive choice for scoring algorithms */
 #define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
 
 static ESL_OPTIONS options[] = {
@@ -61,7 +61,7 @@ static ESL_OPTIONS options[] = {
   { "--vit",     eslARG_NONE,"default",NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Viterbi algorithm",             4 },
   { "--fwd",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Forward algorithm",             4 },
   { "--hyb",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Hybrid algorithm",              4 },
-  { "--msp",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the MSP algorithm",                 4 },
+  { "--msv",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the MSV algorithm",                 4 },
   { "--fast",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use the optimized versions of the above",           4 },
 
   { "--tmin",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          5 },
@@ -639,7 +639,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
    */
   p7_Lambda(hmm, cfg->bg, &lambda);
   if      (esl_opt_GetBoolean(go, "--vit"))  p7_Mu (cfg->r, gm, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--msp"))  p7_Mu (cfg->r, gm, cfg->bg, evL, evN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--msv"))  p7_Mu (cfg->r, gm, cfg->bg, evL, evN, lambda,      &mu);
   else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau(cfg->r, gm, cfg->bg, efL, efN, lambda, eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
@@ -657,7 +657,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	{
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardFilter(dsq, L, om, ox, &sc);
-	  else if (esl_opt_GetBoolean(go, "--msp")) p7_MSPFilter    (dsq, L, om, ox, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
 	} 
 
       if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a filter overflows, failover to slow versions */
@@ -665,7 +665,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx, &sc);
 	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx, &sc);
 	  else if (esl_opt_GetBoolean(go, "--hyb")) p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
-	  else if (esl_opt_GetBoolean(go, "--msp")) p7_GMSP    (dsq, L, gm, gx, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msv")) p7_GMSV    (dsq, L, gm, gx, &sc);
 	}
 
       /* Optional: get Viterbi alignment length too. */
@@ -738,8 +738,8 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	  "mu", "lambda", "E@10");
 #endif
 
-  /* For viterbi, MSP, and hybrid, fit data to a Gumbel, either with known lambda or estimated lambda. */
-  if (esl_opt_GetBoolean(go, "--vit") || esl_opt_GetBoolean(go, "--hyb") || esl_opt_GetBoolean(go, "--msp"))
+  /* For viterbi, MSV, and hybrid, fit data to a Gumbel, either with known lambda or estimated lambda. */
+  if (esl_opt_GetBoolean(go, "--vit") || esl_opt_GetBoolean(go, "--hyb") || esl_opt_GetBoolean(go, "--msv"))
     {
       esl_histogram_GetRank(h, 10, &x10);
 

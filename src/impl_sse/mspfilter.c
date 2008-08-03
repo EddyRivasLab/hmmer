@@ -1,4 +1,4 @@
-/* The MSP filter implementation; SSE version.
+/* The MSV filter implementation; SSE version.
  * 
  * A "filter" is a one-row, O(M), DP implementation that calculates
  * an approximated nat score (i.e. in limited precision - uchar, for 
@@ -7,7 +7,7 @@
  * will have to obtain the score by another (probably slower) method.
  * 
  * Contents:
- *   1. p7_MSPFilter() implementation.
+ *   1. p7_MSVFilter() implementation.
  *   2. Benchmark driver.
  *   3. Unit tests
  *   4. Test driver
@@ -32,23 +32,23 @@
 #include "impl_sse.h"
 
 /*****************************************************************
- * 1. The p7_MSPFilter() DP implementation.
+ * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
 
-/* Function:  p7_MSPFilter()
- * Synopsis:  Calculates MSP score, vewy vewy fast, in limited precision.
+/* Function:  p7_MSVFilter()
+ * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  * Incept:    SRE, Wed Dec 26 15:12:25 2007 [Janelia]
  *
- * Purpose:   Calculates an approximation of the MSP score for sequence
+ * Purpose:   Calculates an approximation of the MSV score for sequence
  *            <dsq> of length <L> residues, using optimized profile <om>,
  *            and a preallocated one-row DP matrix <ox>. Return the 
- *            estimated MSP score (in nats) in <ret_sc>.
+ *            estimated MSV score (in nats) in <ret_sc>.
  *            
  *            Score may overflow (and will, on high-scoring
  *            sequences), but will not underflow. 
  *            
  *            The model may be in any mode, because only its match
- *            emission scores will be used. The MSP filter inherently
+ *            emission scores will be used. The MSV filter inherently
  *            assumes a multihit local mode, and uses its own special
  *            state transition scores, not the scores in the profile.
  *
@@ -56,14 +56,14 @@
  *            L       - length of dsq in residues          
  *            om      - optimized profile
  *            ox      - DP matrix
- *            ret_sc  - RETURN: MSP score (in nats)          
+ *            ret_sc  - RETURN: MSV score (in nats)          
  *                      
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than
  *            in triplets via <{MDI}MX(q)> macros, since we only need
  *            to store M state values. We know that if <ox> was big
  *            enough for normal DP calculations, it must be big enough
- *            to hold the MSPFilter calculation.
+ *            to hold the MSVFilter calculation.
  *
  * Returns:   <eslOK> on success.
  *            <eslERANGE> if the score overflows the limited range; in
@@ -72,7 +72,7 @@
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
@@ -99,7 +99,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   xC   = 0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpMSPRow(ox, 0, 0, 0, xC, xB, xC);
+  if (ox->debugging) p7_omx_DumpMSVRow(ox, 0, 0, 0, xC, xB, xC);
 #endif
 
   for (i = 1; i <= L; i++)
@@ -115,7 +115,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       mpv = _mm_slli_si128(dp[Q-1], 1);   
       for (q = 0; q < Q; q++)
 	{
-	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
 	  sv   = _mm_max_epu8(mpv, xBv);
 	  sv   = _mm_adds_epu8(sv, biasv);     
 	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
@@ -133,7 +133,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xB = ESL_MAX(om->base,  xC) - om->tjb;
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpMSPRow(ox, i, xE, 0, xC, xB, xC);   
+      if (ox->debugging) p7_omx_DumpMSVRow(ox, i, xE, 0, xC, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -144,7 +144,7 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   return eslOK;
 }
-/*------------------ end, p7_MSPFilter() ------------------------*/
+/*------------------ end, p7_MSVFilter() ------------------------*/
 
 
 
@@ -153,35 +153,35 @@ p7_MSPFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * 2. Benchmark driver.
  *****************************************************************/
 /* The benchmark driver has some additional non-benchmarking options
- * to facilitate small-scale (by-eye) comparison of MSP scores against
+ * to facilitate small-scale (by-eye) comparison of MSV scores against
  * other implementations, for debugging purposes.
  * 
- * The -c option compares against p7_GMSP() scores. This allows
+ * The -c option compares against p7_GMSV() scores. This allows
  * measuring the error inherent in the SSE implementation's reduced
- * precision (p7_MSPFilter() runs in uint8_t; p7_GMSP() uses floats).
+ * precision (p7_MSVFilter() runs in uint8_t; p7_GMSV() uses floats).
  * 
  * The -x option compares against an emulation that should give
  * exactly the same scores. The emulation is achieved by jiggering the
  * fp scores in a generic profile to disallow gaps, have the same
- * rounding and precision as the uint8_t's MSPFilter() is using, and
+ * rounding and precision as the uint8_t's MSVFilter() is using, and
  * to make the same post-hoc corrections for the NN, CC, JJ
  * contributions to the final nat score; under these contrived
  * circumstances, p7_GViterbi() gives the same scores as
- * p7_MSPFilter().
+ * p7_MSVFilter().
  * 
  * For using either -c or -x, you probably also want to limit the
  * number of generated target sequences, using -N10 or -N100 for
  * example.
  */
-#ifdef p7MSPFILTER_BENCHMARK
+#ifdef p7MSVFILTER_BENCHMARK
 /* 
-   gcc -o benchmark-mspfilter -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSPFILTER_BENCHMARK mspfilter.c -lhmmer -leasel -lm 
-   icc -o benchmark-mspfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSPFILTER_BENCHMARK mspfilter.c -lhmmer -leasel -lm 
+   gcc -o benchmark-msvfilter -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
+   icc -o benchmark-msvfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
 
-   ./benchmark-mspfilter <hmmfile>            runs benchmark 
-   ./benchmark-mspfilter -b <hmmfile>         gets baseline time to subtract: just random seq generation
-   ./benchmark-mspfilter -N100 -c <hmmfile>   compare scores of SSE to generic impl    - differences reflect lack of MSP precision 
-   ./benchmark-mspfilter -N100 -x <hmmfile>   compare scores of SSE to exact emulation - should exactly match
+   ./benchmark-msvfilter <hmmfile>            runs benchmark 
+   ./benchmark-msvfilter -b <hmmfile>         gets baseline time to subtract: just random seq generation
+   ./benchmark-msvfilter -N100 -c <hmmfile>   compare scores to generic impl
+   ./benchmark-msvfilter -N100 -x <hmmfile>   compare scores to exact emulation
  */
 #include "p7_config.h"
 
@@ -199,16 +199,16 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores of generic vs. SSE version (debug)",0 }, 
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "test against exact emulation (debug)",             0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for MSPFilter() implementation";
+static char banner[] = "benchmark driver for MSVFilter() implementation";
 
 int 
 main(int argc, char **argv)
@@ -244,7 +244,9 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
-  if (esl_opt_GetBoolean(go, "-x")) p7_oprofile_SameMSP(om, gm);
+
+  if (esl_opt_GetBoolean(go, "-x")) p7_oprofile_SameMSV(om, gm);
+
   ox = p7_omx_Create(gm->M, 0, 0);
   gx = p7_gmx_Create(gm->M, L);
 
@@ -255,12 +257,12 @@ main(int argc, char **argv)
 
       if (! esl_opt_GetBoolean(go, "-b")) 
 	{
-	  p7_MSPFilter    (dsq, L, om, ox, &sc1);   
+	  p7_MSVFilter    (dsq, L, om, ox, &sc1);   
 
 	  /* -c option: compare generic to fast score */
 	  if (esl_opt_GetBoolean(go, "-c")) 
 	    {
-	      p7_GMSP    (dsq, L, gm, gx, &sc2); 
+	      p7_GMSV    (dsq, L, gm, gx, &sc2); 
 	      printf("%.4f %.4f\n", sc1, sc2);  
 	    }
 
@@ -293,7 +295,7 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7MSPFILTER_BENCHMARK*/
+#endif /*p7MSVFILTER_BENCHMARK*/
 /*------------------ end, benchmark driver ----------------------*/
 
 
@@ -302,7 +304,7 @@ main(int argc, char **argv)
 /*****************************************************************
  * 3. Unit tests
  *****************************************************************/
-#ifdef p7MSPFILTER_TESTDRIVE
+#ifdef p7MSVFILTER_TESTDRIVE
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
@@ -312,11 +314,11 @@ main(int argc, char **argv)
  * a random model of length <M>, for <N> test sequences of length <L>.
  * 
  * We assume that we don't accidentally generate a high-scoring random
- * sequence that overflows MSPFilter()'s limited range.
+ * sequence that overflows MSVFilter()'s limited range.
  * 
  */
 static void
-utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
@@ -327,7 +329,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
-  p7_oprofile_SameMSP(om, gm);
+  p7_oprofile_SameMSV(om, gm);
 #if 0
   p7_oprofile_Dump(stdout, om);              //dumps the optimized profile
   p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
@@ -336,14 +338,14 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   while (N--)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_MSPFilter(dsq, L, om, ox, &sc1);
+      p7_MSVFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
 #if 0
       p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
 #endif
 
       sc2 = sc2 / om->scale - 3.0f;
-      if (fabs(sc1-sc2) > 0.001) esl_fatal("msp filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("msv filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
   free(dsq);
@@ -353,7 +355,7 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
 }
-#endif /*p7MSPFILTER_TESTDRIVE*/
+#endif /*p7MSVFILTER_TESTDRIVE*/
 /*-------------------- end, unit tests --------------------------*/
 
 
@@ -362,10 +364,10 @@ utest_msp_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 /*****************************************************************
  * 4. Test driver
  *****************************************************************/
-#ifdef p7MSPFILTER_TESTDRIVE
+#ifdef p7MSVFILTER_TESTDRIVE
 /* 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o mspfilter_utest -Dp7MSPFILTER_TESTDRIVE mspfilter.c -lhmmer -leasel -lm
-   ./mspfilter_utest
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o msvfilter_utest -Dp7MSVFILTER_TESTDRIVE msvfilter.c -lhmmer -leasel -lm
+   ./msvfilter_utest
  */
 #include "p7_config.h"
 
@@ -388,7 +390,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE MSPFilter() implementation";
+static char banner[] = "test driver for the SSE MSVFilter() implementation";
 
 int
 main(int argc, char **argv)
@@ -408,10 +410,10 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, DNA\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_msp_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_msp_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+  if (esl_opt_GetBoolean(go, "-v")) printf("MSVFilter() tests, DNA\n");
+  utest_msv_filter(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_msv_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_msv_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -419,10 +421,10 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, protein\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   
-  utest_msp_filter(r, abc, bg, 1, L, 10);  
-  utest_msp_filter(r, abc, bg, M, 1, 10);  
+  if (esl_opt_GetBoolean(go, "-v")) printf("MSVFilter() tests, protein\n");
+  utest_msv_filter(r, abc, bg, M, L, N);   
+  utest_msv_filter(r, abc, bg, 1, L, 10);  
+  utest_msv_filter(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -439,11 +441,11 @@ main(int argc, char **argv)
  * 5. Example
  *****************************************************************/
 
-#ifdef p7MSPFILTER_EXAMPLE
+#ifdef p7MSVFILTER_EXAMPLE
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7MSPFILTER_EXAMPLE mspfilter.c -lhmmer -leasel -lm
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7MSVFILTER_EXAMPLE msvfilter.c -lhmmer -leasel -lm
    ./example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
@@ -504,11 +506,11 @@ main(int argc, char **argv)
      p7_oprofile_Dump(stdout, om);      dumps the optimized profile
      p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
-     p7_oprofile_SameMSP(om, gm);
+     p7_oprofile_SameMSV(om, gm);
   */
 
-  p7_MSPFilter      (sq->dsq, sq->n, om, ox, &sc);  
-  printf("msp filter score:     %.2f nats\n", sc);
+  p7_MSVFilter      (sq->dsq, sq->n, om, ox, &sc);  
+  printf("msv filter score:     %.2f nats\n", sc);
 
   /* now in a real app, you'd need to convert raw nat scores to final bit
    * scores, by subtracting the null model score and rescaling.
@@ -527,7 +529,7 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   return 0;
 }
-#endif /*p7MSPFILTER_EXAMPLE*/
+#endif /*p7MSVFILTER_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
 
 

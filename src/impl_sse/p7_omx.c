@@ -333,7 +333,7 @@ p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uin
 
   /* Unpack and unstripe, then print M's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = MMX(q);
+    tmp.v = MMXo(q);
     for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
   }
   fprintf(ox->dfp, "%4d M ", rowi);
@@ -344,7 +344,7 @@ p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uin
 
   /* Unpack and unstripe, then print I's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = IMX(q);
+    tmp.v = IMXo(q);
     for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
   }
   fprintf(ox->dfp, "%4d I ", rowi);
@@ -353,7 +353,7 @@ p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uin
 
   /* Unpack, unstripe, then print D's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = DMX(q);
+    tmp.v = DMXo(q);
     for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
   }
   fprintf(ox->dfp, "%4d D ", rowi);
@@ -418,7 +418,7 @@ p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, 
 
   /* Unpack, unstripe, then print M's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = MMX(q);
+    tmp.v = MMXo(q);
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp.x[z];
   }
   fprintf(ox->dfp, "%3d M ", rowi);
@@ -438,7 +438,7 @@ p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, 
 
   /* Unpack, unstripe, then print I's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = IMX(q);
+    tmp.v = IMXo(q);
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp.x[z];
   }
   fprintf(ox->dfp, "%3d I ", rowi);
@@ -448,7 +448,7 @@ p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, 
 
   /* Unpack, unstripe, then print D's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = DMX(q);
+    tmp.v = DMXo(q);
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp.x[z];
   }
   fprintf(ox->dfp, "%3d D ", rowi);
@@ -464,14 +464,14 @@ ERROR:
   return status;
 }
            
-/* Function:  p7_omx_DumpMSPRow()
- * Synopsis:  Dump one row from MSP uchar version of a DP matrix.
+/* Function:  p7_omx_DumpMSVRow()
+ * Synopsis:  Dump one row from MSV uchar version of a DP matrix.
  * Incept:    SRE, Wed Jul 30 16:47:26 2008 [Janelia]
  *
  * Purpose:   Dump current row of uchar part of DP matrix <ox> for diagnostics,
  *            and include the values of specials <xE>, etc. The index <rowi> for
  *            the current row is used as a row label. This routine has to be 
- *            specialized for the layout of the MSPFilter() row, because it's
+ *            specialized for the layout of the MSVFilter() row, because it's
  *            all match scores dp[0..q..Q-1], rather than triplets of M,D,I.
  * 
  *            If <rowi> is 0, print a header first too.
@@ -484,7 +484,7 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure. * Args:      
  */
 int
-p7_omx_DumpMSPRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_omx_DumpMSVRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
   __m128i *dp = ox->dpu[0];	
   int      M  = ox->M;

@@ -33,7 +33,7 @@ static ESL_OPTIONS options[] = {
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",             1 },
   { "-E",        eslARG_REAL,  "10.0", NULL,"x>0",      NULL,  NULL,  NULL, "E-value cutoff for sequences",                      1 },
 
-  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSP filter threshold: promote hits w/ P < F1",      2 },
+  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSV filter threshold: promote hits w/ P < F1",      2 },
   { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit filter threshold: promote hits w/ P < F2",      2 },
   { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd filter threshold: promote hits w/ P < F3",      2 },
 
@@ -69,7 +69,7 @@ struct cfg_s {
   uint64_t         nmodels;	/* number of models searched                */
   uint64_t         nres;	/* # of residues searched                   */
   uint64_t         nnodes;	/* # of model nodes searched                */
-  uint64_t         n_past_msp;	/* # of seqs that pass the MSPFilter()      */
+  uint64_t         n_past_msv;	/* # of seqs that pass the MSVFilter()      */
   uint64_t         n_past_vit;	/* # of seqs that pass the ViterbiFilter()  */
   uint64_t         n_past_fwd;	/* # of seqs that pass the ForwardFilter()  */
 
@@ -230,7 +230,7 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->nmodels    = 0;
   cfg->nres       = 0;
   cfg->nnodes     = 0;
-  cfg->n_past_msp = 0;
+  cfg->n_past_msv = 0;
   cfg->n_past_vit = 0;
   cfg->n_past_fwd = 0;
 
@@ -328,7 +328,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_GMX          *bck     = NULL;     /* DP matrix                               */
   P7_OMX          *ox      = NULL;     /* optimized DP matrix                     */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
-  double F1                = esl_opt_GetReal(go, "--F1"); /* MSPFilter threshold: must be < F1 to go on */
+  double F1                = esl_opt_GetReal(go, "--F1"); /* MSVFilter threshold: must be < F1 to go on */
   double F2                = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold                    */
   double F3                = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold                    */
   double Evalue_threshold  = esl_opt_GetReal(go, "-E");	  /* per-seq E-value threshold                  */
@@ -364,7 +364,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
-      p7_ProfileConfig(hmm, cfg->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; MSPFilter requires local mode */
+      p7_ProfileConfig(hmm, cfg->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; MSVFilter requires local mode */
 
       /* Experimental: shut the inserts off. */
       for (k = 1; k < hmm->M; k++)
@@ -390,12 +390,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_bg_SetLength(cfg->bg, sq->n);
 	  p7_bg_NullOne(cfg->bg, sq->dsq, sq->n, &nullsc);
 
-	  /* First level filter: the MSP filter, multihit with <om> */
-	  p7_MSPFilter(sq->dsq, sq->n, om, ox, &usc);
+	  /* First level filter: the MSV filter, multihit with <om> */
+	  p7_MSVFilter(sq->dsq, sq->n, om, ox, &usc);
 	  usc = (usc - nullsc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	  if (P >= F1) { esl_sq_Reuse(sq); continue; } 
-	  cfg->n_past_msp++;
+	  cfg->n_past_msv++;
 
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
 	  if (P >= F2) 		
@@ -554,7 +554,7 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   fprintf(cfg->ofp, "target sequence database:   %s\n", cfg->seqfile);
   if (! esl_opt_IsDefault(go, "-o"))     fprintf(cfg->ofp, "output directed to file:    %s\n",    esl_opt_GetString(go, "-o"));
   if (! esl_opt_IsDefault(go, "-E"))     fprintf(cfg->ofp, "sequence E-value threshold: <= %g\n", esl_opt_GetReal(go, "-E"));
-  if (! esl_opt_IsDefault(go, "--F1"))   fprintf(cfg->ofp, "MSP filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
+  if (! esl_opt_IsDefault(go, "--F1"))   fprintf(cfg->ofp, "MSV filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
   if (! esl_opt_IsDefault(go, "--F2"))   fprintf(cfg->ofp, "Vit filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F2"));
   if (! esl_opt_IsDefault(go, "--F3"))   fprintf(cfg->ofp, "Fwd filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F3"));
   if (! esl_opt_IsDefault(go, "--seed")) fprintf(cfg->ofp, "Random generator seed:      %d\n",    esl_opt_GetInteger(go, "--seed"));
@@ -648,8 +648,8 @@ output_search_statistics(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w)
   fprintf(cfg->ofp, "Query HMM(s):      %ld  (%ld nodes)\n",    cfg->nmodels, cfg->nnodes);
   fprintf(cfg->ofp, "Target sequences:  %ld  (%ld residues)\n", cfg->nseq,    cfg->nres);
 
-  fprintf(cfg->ofp, "Passed MSP filter: %ld  (%.3f; expected %.3f)\n", 
-	  cfg->n_past_msp, (double) cfg->n_past_msp / (double) cfg->nseq, esl_opt_GetReal(go, "--F1"));
+  fprintf(cfg->ofp, "Passed MSV filter: %ld  (%.3f; expected %.3f)\n", 
+	  cfg->n_past_msv, (double) cfg->n_past_msv / (double) cfg->nseq, esl_opt_GetReal(go, "--F1"));
   fprintf(cfg->ofp, "Passed Vit filter: %ld  (%.4f; expected %.4f)\n",   
 	  cfg->n_past_vit, (double) cfg->n_past_vit / (double) cfg->nseq, esl_opt_GetReal(go, "--F2"));
   fprintf(cfg->ofp, "Passed Fwd filter: %ld  (%.2g; expected %.2g)\n",         

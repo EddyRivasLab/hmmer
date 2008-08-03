@@ -1,8 +1,42 @@
+/* The Forward filter implementation; SSE version.
+ * 
+ * SIMD vectorized, striped, interleaved, one-row O(M),
+ * probability-space single precision implementation of
+ * the Forward algorithm.
+ * 
+ * Calculates the Forward score in limited range (-127..128 bits).
+ * Will not underflow for local alignment, but may overflow
+ * on high-scoring target sequences.
+ * 
+ * Contents:
+ *   1. Forward filter implementation.
+ *   2. Benchmark driver.
+ *   3. Unit tests.
+ *   4. Test driver.
+ *   5. Example.
+ *   6. Copyright and license information.
+ *   
+ * SRE, Sun Aug  3 09:24:12 2008 [waiting out a thunderstorm, Einstein's, St. Louis]
+ * SVN $Id$
+ */
+#include "p7_config.h"
+
+#include <stdio.h>
+#include <math.h>
+
+#include <xmmintrin.h>		/* SSE  */
+#include <emmintrin.h>		/* SSE2 */
+
+#include "easel.h"
+#include "esl_sse.h"
+
+#include "hmmer.h"
+#include "impl_sse.h"
+
 
 /*****************************************************************
- * 8. The p7_ForwardFilter() DP implementation.
+ * 1. The p7_ForwardFilter() DP implementation.
  *****************************************************************/
-
 
 /* Function:  p7_ForwardFilter()
  * Synopsis:  Calculates Forward score, vewy vewy fast, with limited upper range.
@@ -28,7 +62,10 @@
  *            ox      - DP matrix
  *            ret_sc  - RETURN: Forward score (in nats)          
  *
- * Returns:   <eslOK> on success.
+ * Returns:   <eslOK> on success;
+ *            <eslERANGE> if the score overflows, in which case
+ *            <*ret_sc> is also set <eslINFINITY>, and the sequence
+ *            may be treated as a high-scoring hit.
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
  *            isn't in local alignment mode.
@@ -61,7 +98,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
    */
   zerov = _mm_setzero_ps();
   for (q = 0; q < Q; q++)
-    MMX(q) = IMX(q) = DMX(q) = zerov;
+    MMXo(q) = IMXo(q) = DMXo(q) = zerov;
   xE    = 0.;
   xN    = 1.;
   xJ    = 0.;
@@ -69,7 +106,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   xC    = 0.;
 
 #if p7_DEBUGGING
-  if (ox->debugging) omx_dump_float_row(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
+  if (ox->debugging) p7_omx_DumpFloatRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
   for (i = 1; i <= L; i++)
@@ -82,13 +119,13 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on.
        */
-      mpv = MMX(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
-      dpv = DMX(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
-      ipv = IMX(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
+      mpv = MMXo(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, zerov);
+      dpv = DMXo(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, zerov);
+      ipv = IMXo(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, zerov);
       
       for (q = 0; q < Q; q++)
 	{
-	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
 	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
@@ -99,13 +136,13 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
 	   */
-	  mpv = MMX(q);
-	  dpv = DMX(q);
-	  ipv = IMX(q);
+	  mpv = MMXo(q);
+	  dpv = DMXo(q);
+	  ipv = IMXo(q);
 
 	  /* Do the delayed stores of {MD}(i,q) now that memory is usable */
-	  MMX(q) = sv;
-	  DMX(q) = dcv;
+	  MMXo(q) = sv;
+	  DMXo(q) = dcv;
 
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
@@ -115,7 +152,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate and store I(i,q) */
 	  sv     =                _mm_mul_ps(mpv, *tp);  tp++;
 	  sv     = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	  IMX(q) = _mm_mul_ps(sv, *rp);                  rp++;
+	  IMXo(q) = _mm_mul_ps(sv, *rp);                  rp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
@@ -129,18 +166,18 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        */
       dcv    = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
       dcv    = _mm_move_ss(dcv, zerov);
-      DMX(0) = zerov;
+      DMXo(0) = zerov;
       tp     = om->tf + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
 	{
-	  DMX(q) = _mm_add_ps(dcv, DMX(q));	
-	  dcv    = _mm_mul_ps(DMX(q), *tp); tp++; /* extend DMX(q), so we include M->D and D->D paths */
+	  DMXo(q) = _mm_add_ps(dcv, DMXo(q));	
+	  dcv    = _mm_mul_ps(DMXo(q), *tp); tp++; /* extend DMXo(q), so we include M->D and D->D paths */
 	}
 
       /* now. on small models, it seems best (empirically) to just go
        * ahead and serialize. on large models, we can do a bit better,
-       * by testing for when dcv (DD path) accrued to DMX(q) is below
-       * machine epsilon for all q, in which case we know DMX(q) are all
+       * by testing for when dcv (DD path) accrued to DMXo(q) is below
+       * machine epsilon for all q, in which case we know DMXo(q) are all
        * at their final values. The tradeoff point is (empirically) somewhere around M=100,
        * at least on my desktop. We don't worry about the conditional here;
        * it's outside any inner loops.
@@ -154,8 +191,8 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      tp = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{
-		  DMX(q) = _mm_add_ps(dcv, DMX(q));	
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  DMXo(q) = _mm_add_ps(dcv, DMXo(q));	
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++; /* note, extend dcv, not DMXo(q); only adding DD paths now */
 		}	    
 	    }
 	} 
@@ -163,7 +200,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	{			/* Slightly parallelized version, but which incurs some overhead */
 	  for (j = 1; j < 4; j++)
 	    {
-	      register __m128 cv;	/* keeps track of whether any DD's change DMX(q) */
+	      register __m128 cv;	/* keeps track of whether any DD's change DMXo(q) */
 
 	      dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
 	      dcv = _mm_move_ss(dcv, zerov);
@@ -171,17 +208,17 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
 		{
-		  sv     = _mm_add_ps(dcv, DMX(q));	
-		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMX(q))); /* remember if DD paths changed any DMX(q): *without* conditional branch */
-		  DMX(q) = sv;	                                    /* store new DMX(q) */
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMX(q); only adding DD paths now */
+		  sv     = _mm_add_ps(dcv, DMXo(q));	
+		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMXo(q))); /* remember if DD paths changed any DMXo(q): *without* conditional branch */
+		  DMXo(q) = sv;	                                    /* store new DMXo(q) */
+		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMXo(q); only adding DD paths now */
 		}	    
-	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMX(q)? Then we're done, break out. */
+	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMXo(q)? Then we're done, break out. */
 	    }
 	}
 
       /* Add D's to xEv */
-      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMX(q), xEv);
+      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMXo(q), xEv);
 
       /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation is a horizontal sum of xEv's elements  */
@@ -199,7 +236,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
 #if p7_DEBUGGING
-      if (ox->debugging) omx_dump_float_row(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
+      if (ox->debugging) p7_omx_DumpFloatRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -208,41 +245,46 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   /* On an underflow (which shouldn't happen), we counterintuitively return infinity:
    * the effect of this is to force the caller to rescore us with full range.
    */
-  if       (isnan(xC))      *ret_sc = eslINFINITY;
-  else if  (xC == 0.0)      *ret_sc = eslINFINITY; /* on underflow, force caller to rescore us! */
-  else if  (isinf(xC) == 1) *ret_sc = eslINFINITY;
+  if       (isnan(xC))      { *ret_sc = eslINFINITY; return eslERANGE; }
+  else if  (xC == 0.0)      { *ret_sc = eslINFINITY; return eslERANGE; } /* on underflow, force caller to rescore us! */
+  else if  (isinf(xC) == 1) { *ret_sc = eslINFINITY; return eslERANGE; }
   else                      *ret_sc = log(xC * om->xf[p7O_C][p7O_MOVE]);
   return eslOK;
 }
 /*------------------ end, p7_ForwardFilter() --------------------*/
 
-/* There are two benchmark drivers.  The first benches DP algorithms,
- * the main optimization target; the second benches profile
- * conversion, which becomes part of the critical path in hmmpfam.
+
+/*****************************************************************
+ * 2. Benchmark driver.
+ *****************************************************************/
+#ifdef p7FWDFILTER_BENCHMARK
+/* -c and -x options are useful for debugging and characterization
+ * of precision and range. For all the optimized implementations,
+ * -c compares to the "generic" implementation of the same scoring
+ * algorithm (MSV, Viterbi, Forward). -x compares to a well-trusted
+ * implementation that achieves exactly the same scores, possibly
+ * by some sort of emulation mode.
  * 
- * The -c option is useful in debugging, for comparing to known
- * (extensively tested) answers from the GViterbi() and GForward()
- * algorithms. However, watch out:
- *    - for testing ViterbiFilter(), you want to use -cx; the -x option
- *      rounds the scores in a generic profile the same way used
- *      in the optimized profile. Otherwise, you'll see the
- *      differences expected from the lack of precision in uchars.
- *      
- *    - for testing ForwardFilter(), you need to go over to 
- *      logsum.c::p7_FLogsum() and have it calculate log(exp(s1) + exp(s2),
- *      rather than using its lookup table, otherwise you'll see
- *      differences caused by lack of precision in p7_FLogsum().
+ * Here, for ForwardFilter, -c compares to GForward()
+ * scores. p7_ForwardFilter() calculates "exact" scores in probability
+ * space, whereas p7_GForward() uses a table-driven log-sum
+ * approximation; comparison of the two scores reveals the imprecision
+ * in p7_GForward()'s approximation.
+ * 
+ * -x also compares to GForward() scores, but requires that you first
+ * go over to logsum.c::p7_FLogsum(), uncomment to have it calculate
+ * log(exp(s1) + exp(s2) (slow but exact), and recompile the driver.
+ * (If you don't do this, the driver will exit with a warning.)
  */
-#ifdef p7IMPL_SSE_BENCHMARK
+
 /* 
-   gcc -o benchmark-sse -std=gnu99 -g -Wall -msse2 -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
-   icc -o benchmark-sse -O3 -static -I. -L. -I../easel -L../easel -Dp7IMPL_SSE_BENCHMARK impl_sse.c -lhmmer -leasel -lm 
+   gcc -o benchmark-fwdfilter -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7FWDFILTER_BENCHMARK fwdfilter.c -lhmmer -leasel -lm 
+   icc -o benchmark-fwdfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7FWDFILTER_BENCHMARK fwdfilter.c -lhmmer -leasel -lm 
 
-   ./benchmark-sse <hmmfile>       runs benchmark on ViterbiFilter() (-M for MSPFilter; -F for ForwardFilter, -S for ViterbiScore)
-   ./benchmark-sse -b <hmmfile>    gets baseline time to subtract: just random seq generation
-   ./benchmark-sse -c <hmmfile>    compare scores of SSE to generic impl
-
-   ./benchmark-sse -Mx -N100 <hmmfile>     test that MSPFilter scores match Viterbi
+   ./benchmark-fwdfilter <hmmfile>             runs benchmark
+   ./benchmark-fwdfilter -b <hmmfile>          gets baseline time to subtract: just random seq generation
+   ./benchmark-fwdfilter -c -N100 <hmmfile>    compare scores of SSE to generic impl
+   ./benchmark-fwdfilter -x -N100 <hmmfile>    test that scores match trusted implementation.
  */
 #include "p7_config.h"
 
@@ -256,28 +298,20 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define ALGOPTS "-V,-F,-S"
-
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "compare scores of generic, SSE DP        (debug)", 0 }, 
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",               0 },
-  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "round generic profile, make scores match (debug)", 0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
-  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_MSPFilter()",                         0 },
-  { "-V",        eslARG_NONE,"default",NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ViterbiFilter()",                     0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ForwardFilter()",                     0 },
-  { "-S",        eslARG_NONE,   FALSE, NULL, NULL,ALGOPTS, NULL, NULL, "benchmark p7_ViterbiScore()",                      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the SSE DP implementations";
-
+static char banner[] = "benchmark driver for SSE ForwardFilter implementation";
 
 int 
 main(int argc, char **argv)
@@ -300,6 +334,8 @@ main(int argc, char **argv)
   int             i;
   float           sc1, sc2;
 
+  p7_FLogsumInit();
+
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
@@ -313,13 +349,11 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
-  if (esl_opt_GetBoolean(go, "-x")) {
-    if (esl_opt_GetBoolean(go, "-M")) simulate_msp_in_generic_profile(gm, om, L);
-    else                              round_profile(om, gm);
-  }
-  if (esl_opt_GetBoolean(go, "-S")) pspace_to_lspace_float(om);
 
-  ox = p7_omx_Create(gm->M);
+  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+    p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
+
+  ox = p7_omx_Create(gm->M, 0, 0); /* a one-row matrix */
   gx = p7_gmx_Create(gm->M, L);
 
   esl_stopwatch_Start(w);
@@ -327,34 +361,16 @@ main(int argc, char **argv)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
-      if (! esl_opt_GetBoolean(go, "-b")) {
-	if      (esl_opt_GetBoolean(go, "-M")) p7_MSPFilter    (dsq, L, om, ox, &sc1);   
-	else if (esl_opt_GetBoolean(go, "-F")) p7_ForwardFilter(dsq, L, om, ox, &sc1);   
-	else if (esl_opt_GetBoolean(go, "-S")) p7_ViterbiScore (dsq, L, om, ox, &sc1);   
-	else                                   p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
+      if (! esl_opt_GetBoolean(go, "-b")) 
+	{
+	  p7_ForwardFilter(dsq, L, om, ox, &sc1);   
 
-	/* -c option: compare generic to fast score */
-	if (esl_opt_GetBoolean(go, "-c")) 
+	  if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
 	  {
-	    if       (esl_opt_GetBoolean(go, "-F"))    p7_GForward(dsq, L, gm, gx, &sc2); 
-	    else if  (esl_opt_GetBoolean(go, "-M"))    p7_GMSP    (dsq, L, gm, gx, &sc2); 
-	    else                                       p7_GViterbi(dsq, L, gm, gx, &sc2); 
-
+	    p7_GForward(dsq, L, gm, gx, &sc2); 
 	    printf("%.4f %.4f\n", sc1, sc2);  
 	  }
-
-	/* -x option: compare generic to fast score in a way that should give exactly the same result */
-	if (esl_opt_GetBoolean(go, "-x")) {
-	  if       (esl_opt_GetBoolean(go, "-F")) p7_GForward(dsq, L, gm, gx, &sc2); 
-	  else {
-	    p7_GViterbi(dsq, L, gm, gx, &sc2); 
-	    sc2 /= om->scale;
-	    if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
-	    else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-	  }
-	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
-      }
     }
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
@@ -374,14 +390,21 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7IMPL_SSE_BENCHMARK*/
+#endif /*p7FWDFILTER_BENCHMARK*/
+/*--------------------- end, benchmark driver -------------------*/
 
-/* ForwardFilter() unit test
- * 
- * The generic Forward() implementation uses FLogsum(), which incurs a
- * certain amount of discretization error from its lookup table, so we
- * can't compare scores too closely. (If we had a way of replacing
- * FLogsum() with a slow but accurate log(exp+exp) version, we could.)
+
+
+
+/*****************************************************************
+ * 3. Unit tests.
+ *****************************************************************/
+#ifdef p7FWDFILTER_TESTDRIVE
+#include "esl_random.h"
+#include "esl_randomseq.h"
+
+/* ForwardFilter() unit test:
+ * compare to GForward() scores and ForwardParser() scores.
  */
 static void
 utest_forward_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
@@ -390,19 +413,27 @@ utest_forward_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
+  P7_OMX      *ox  = p7_omx_Create(M, 0, L);
   P7_GMX      *gx  = p7_gmx_Create(M, L);
-  float sc1, sc2;
+  float tolerance;
+  float sc1, sc2, sc3;
 
-  make_random_profile(r, abc, bg, M, L, &hmm, &gm, &om);
+  if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test.   */
+  else tolerance = 0.0001;   /* stronger test: FLogsum() is in slow exact mode. */
+
+  p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   while (N--)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
       p7_ForwardFilter(dsq, L, om, ox, &sc1);
       p7_GForward     (dsq, L, gm, gx, &sc2);
+      p7_ForwardParser(dsq, L, om, ox, &sc3);
 
-      if (fabs(sc1-sc2) > 1.0) esl_fatal("forward filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+      if (fabs(sc1-sc2) > tolerance)
+	esl_fatal("ForwardFilter unit test failed: GForward differs (%.2f, %.2f)", sc1, sc2);
+      if (fabs(sc1-sc3) > 0.0001)
+	esl_fatal("ForwardFilter unit test failed: ForwardParser differs (%.2f, %.2f)", sc1, sc3);
     }
 
   free(dsq);
@@ -412,15 +443,16 @@ utest_forward_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
 }
-
+#endif /*p7FWDFILTER_TESTDRIVE*/
+/*------------------- end, unit tests ---------------------------*/
 
 /*****************************************************************
- * 12. Test driver
+ * 4. Test driver
  *****************************************************************/
-#ifdef p7IMPL_SSE_TESTDRIVE
+#ifdef p7FWDFILTER_TESTDRIVE
 /* 
-   gcc -g -Wall -msse2 -std=gnu99 -I. -L. -I../easel -L../easel -o impl_sse_utest -Dp7IMPL_SSE_TESTDRIVE impl_sse.c -lhmmer -leasel -lm
-   ./impl_sse_utest
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o fwdfilter_utest -Dp7FWDFILTER_TESTDRIVE fwdfilter.c -lhmmer -leasel -lm
+   ./fwdfilter_utest
  */
 #include "p7_config.h"
 
@@ -456,6 +488,8 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
+  p7_FLogsumInit();
+
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
@@ -463,25 +497,10 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, DNA\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_msp_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_msp_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, DNA\n");
-  utest_viterbi_filter(r, abc, bg, M, L, N);   
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);  
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);  
-
   if (esl_opt_GetBoolean(go, "-v")) printf("ForwardFilter() tests, DNA\n");
   utest_forward_filter(r, abc, bg, M, L, N);   
   utest_forward_filter(r, abc, bg, 1, L, 10);  
   utest_forward_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiScore() tests, DNA\n");
-  utest_viterbi_score(r, abc, bg, M, L, N);   
-  utest_viterbi_score(r, abc, bg, 1, L, 10);  
-  utest_viterbi_score(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -490,25 +509,10 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("MSPFilter() tests, protein\n");
-  utest_msp_filter(r, abc, bg, M, L, N);   
-  utest_msp_filter(r, abc, bg, 1, L, 10);  
-  utest_msp_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, protein\n");
-  utest_viterbi_filter(r, abc, bg, M, L, N); 
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);
-
   if (esl_opt_GetBoolean(go, "-v")) printf("ForwardFilter() tests, protein\n");
   utest_forward_filter(r, abc, bg, M, L, N);   
   utest_forward_filter(r, abc, bg, 1, L, 10);  
   utest_forward_filter(r, abc, bg, M, 1, 10);  
-
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiScore() tests, protein\n");
-  utest_viterbi_score(r, abc, bg, M, L, N);   
-  utest_viterbi_score(r, abc, bg, 1, L, 10);  
-  utest_viterbi_score(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -517,17 +521,17 @@ main(int argc, char **argv)
   esl_randomness_Destroy(r);
   return eslOK;
 }
-#endif /*IMPL_SSE_TESTDRIVE*/
+#endif /*p7FWDFILTER_TESTDRIVE*/
+/*--------------------- end, test driver ------------------------*/
 
 /*****************************************************************
- * 13. Example
+ * 5. Example
  *****************************************************************/
-
-#ifdef p7IMPL_SSE_EXAMPLE
+#ifdef p7FWDFILTER_EXAMPLE
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I. -L. -I../easel -L../easel -o example -Dp7IMPL_SSE_EXAMPLE impl_sse.c -lhmmer -leasel -lm
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7FWDFILTER_EXAMPLE fwdfilter.c -lhmmer -leasel -lm
    ./example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
@@ -588,22 +592,11 @@ main(int argc, char **argv)
      p7_oprofile_Dump(stdout, om);      dumps the optimized profile
      p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
-     simulate_msp_in_generic_profile(gm, om, L);
   */
 
-  /* take your pick: */
-  p7_MSPFilter      (sq->dsq, sq->n, om, ox, &sc);  printf("msp filter score:     %.2f nats\n", sc);
-  p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &sc);  printf("viterbi filter score: %.2f nats\n", sc);
-  p7_ForwardFilter  (sq->dsq, sq->n, om, ox, &sc);  printf("forward filter score: %.2f nats\n", sc);
-  p7_GViterbi       (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);
-  p7_GForward       (sq->dsq, sq->n, gm, gx, &sc);  printf("forward (generic):    %.2f nats\n", sc);
-  p7_ForwardParserS (sq->dsq, sq->n, om, ox, &sc);  printf("forward parser:       %.2f nats\n", sc);
-  p7_BackwardParserS(sq->dsq, sq->n, om, ox, &sc);  printf("backward parser:      %.2f nats\n", sc);
-
-  /* Viterbi score requires a special config of the optimized profile.
-   * This isn't the final design of our API: the pspace_ call is an internal function. */
-  pspace_to_lspace_float(om);
-  p7_ViterbiScore (sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (SSE):  %.2f nats\n", sc);
+  p7_ForwardFilter(sq->dsq, sq->n, om, ox, &sc);  printf("forward filter score: %.2f nats\n", sc);
+  p7_GForward     (sq->dsq, sq->n, gm, gx, &sc);  printf("forward (generic):    %.2f nats\n", sc);
+  p7_ForwardParser(sq->dsq, sq->n, om, ox, &sc);  printf("forward parser:       %.2f nats\n", sc);
 
   /* now in a real app, you'd need to convert raw nat scores to final bit
    * scores, by subtracting the null model score and rescaling.
@@ -622,7 +615,11 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   return 0;
 }
-#endif /*p7IMPL_SSE_EXAMPLE*/
+#endif /*p7FWDFILTER_EXAMPLE*/
+/*-------------------- end, example -----------------------------*/
+
+
+
 
 /*****************************************************************
  * @LICENSE@

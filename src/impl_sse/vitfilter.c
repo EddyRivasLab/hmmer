@@ -12,9 +12,9 @@
  * Contents:
  *   1. Viterbi filter implementation.
  *   2. Benchmark driver.
- *   3. Unit tests
- *   4. Test driver
- *   5. Example
+ *   3. Unit tests.
+ *   4. Test driver.
+ *   5. Example.
  *   6. Copyright and license information
  * 
  * SRE, Thu Jul 31 20:32:25 2008 [Casa de Gatos]
@@ -109,14 +109,14 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
    */
   biasv = _mm_set1_epi8((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++)
-    MMX(q) = IMX(q) = DMX(q) = _mm_setzero_si128();
+    MMXo(q) = IMXo(q) = DMXo(q) = _mm_setzero_si128();
   xB   = om->base - om->xu[p7O_N][p7O_MOVE]; /* remember, all values are costs to be subtracted. */
   xJ   = 0;
   xC   = 0;
   xE   = 0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpUcharRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
+  if (ox->debugging) p7_omx_DumpCharRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
   for (i = 1; i <= L; i++)
@@ -132,13 +132,13 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
-      mpv = MMX(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
-      dpv = DMX(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
-      ipv = IMX(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
+      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
+      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
+      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
 
       for (q = 0; q < Q; q++)
 	{
-	  /* Calculate new MMX(i,q); don't store it yet, hold it in sv. */
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
 	  sv   =                   _mm_subs_epu8(xBv, *tsc);  tsc++;
 	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(mpv, *tsc)); tsc++;
 	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(ipv, *tsc)); tsc++;
@@ -150,13 +150,13 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
 	   */
-	  mpv = MMX(q);
-	  dpv = DMX(q);
-	  ipv = IMX(q);
+	  mpv = MMXo(q);
+	  dpv = DMXo(q);
+	  ipv = IMXo(q);
 
 	  /* Do the delayed stores of {MD}(i,q) now that memory is usable */
-	  MMX(q) = sv;
-	  DMX(q) = dcv;
+	  MMXo(q) = sv;
+	  DMXo(q) = dcv;
 
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
@@ -168,7 +168,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  sv     =                   _mm_subs_epu8(mpv, *tsc);  tsc++;
 	  sv     = _mm_max_epu8 (sv, _mm_subs_epu8(ipv, *tsc)); tsc++;
 	  sv     = _mm_adds_epu8(sv, biasv);
-	  IMX(q) = _mm_subs_epu8(sv, *rsc);                     rsc++;
+	  IMXo(q) = _mm_subs_epu8(sv, *rsc);                     rsc++;
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
@@ -202,8 +202,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
-	      DMX(q) = _mm_max_epu8(dcv, DMX(q));	
-	      dcv    = _mm_subs_epu8(DMX(q), *tsc); tsc++;
+	      DMXo(q) = _mm_max_epu8(dcv, DMXo(q));	
+	      dcv    = _mm_subs_epu8(DMXo(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -215,17 +215,17 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	    tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
-		if (! esl_sse_any_gt_epu8(dcv, DMX(q))) break;
-		DMX(q) = _mm_max_epu8(dcv, DMX(q));	
-		dcv    = _mm_subs_epu8(DMX(q), *tsc);   tsc++;
+		if (! esl_sse_any_gt_epu8(dcv, DMXo(q))) break;
+		DMXo(q) = _mm_max_epu8(dcv, DMXo(q));	
+		dcv    = _mm_subs_epu8(DMXo(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
-	DMX(0) = _mm_slli_si128(dcv, 1);
+	DMXo(0) = _mm_slli_si128(dcv, 1);
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpUcharRow(ox, i, xE, 0, xJ, xB, xC);   
+      if (ox->debugging) p7_omx_DumpCharRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -246,13 +246,16 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  * 2. Benchmark driver.
  *****************************************************************/
 #ifdef p7VITFILTER_BENCHMARK
+/* -c, -x are used for debugging, testing; see msvfilter.c for explanation */
+
 /* 
    gcc -o benchmark-vitfilter -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
    icc -o benchmark-vitfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
 
-   ./benchmark-vitfilter <hmmfile>       runs benchmark 
-   ./benchmark-vitfilter <hmmfile>       gets baseline time to subtract: just random seq generation
-   ./benchmark-vitfilter -c <hmmfile>    compare scores of SSE to generic impl
+   ./benchmark-vitfilter <hmmfile>          runs benchmark 
+   ./benchmark-vitfilter <hmmfile>          gets baseline time to subtract: just random seq generation
+   ./benchmark-vitfilter -N100 -c <hmmfile> compare scores to generic impl
+   ./benchmark-vitfilter -N100 -x <hmmfile> compare scores to exact emulation
  */
 #include "p7_config.h"
 
@@ -266,14 +269,14 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define ALGOPTS "-V,-F,-S"
-
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -296,11 +299,12 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
   P7_OMX         *ox      = NULL;
+  P7_GMX         *gx      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
-  float           sc1;
+  float           sc1, sc2;
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -316,14 +320,34 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
+  if (esl_opt_GetBoolean(go, "-x")) p7_oprofile_SameRounding(om, gm);
+
   ox = p7_omx_Create(gm->M, 0, 0);
+  gx = p7_gmx_Create(gm->M, L);
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       if (! esl_opt_GetBoolean(go, "-b")) 
-	p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
+	{
+	  p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
+
+	  if (esl_opt_GetBoolean(go, "-c")) 
+	    {
+	      p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	      printf("%.4f %.4f\n", sc1, sc2);  
+	    }
+
+	  if (esl_opt_GetBoolean(go, "-x"))
+	    {
+	      p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	      sc2 /= om->scale;
+	      if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
+	      else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+	      printf("%.4f %.4f\n", sc1, sc2);  
+	    }
+	}
     }
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
@@ -331,6 +355,7 @@ main(int argc, char **argv)
 
   free(dsq);
   p7_omx_Destroy(ox);
+  p7_gmx_Destroy(gx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

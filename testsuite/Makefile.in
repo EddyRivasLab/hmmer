@@ -16,6 +16,8 @@ DEFS     = @DEFS@
 LIBS     = @LIBS@ -lm
 MPILIBS  = @MPILIBS@
 
+IMPLDIR  = impl_@IMPL_CHOICE@
+
 SRCDIR   = ../src
 ESLDIR   = ../easel
 
@@ -25,7 +27,6 @@ RANLIB  = @RANLIB@
 UNIT_TESTS = \
 	build_utest\
 	dp_generic_utest\
-	impl_sse_utest\
 	logsum_utest\
 	modelconfig_utest\
 	p7_gmx_utest\
@@ -37,10 +38,11 @@ UNIT_TESTS = \
 all:  ${UNIT_TESTS}
 
 check:  ${UNIT_TESTS}
+	(cd ../src/${IMPLDIR}; make check)
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${ESLDIR}/devkit/sqc 2 testsuite.sqc .
+	@${ESLDIR}/devkit/sqc 2 testsuite.sqc . ../src/${IMPLDIR}
 
 .c.o:
 	${CC} -I ${EASELLIB} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
