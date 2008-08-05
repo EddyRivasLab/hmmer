@@ -101,6 +101,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
 
   ox->M        = 0;
   ox->L        = 0;
+  ox->totscale = 0.0;
 #ifdef p7_DEBUGGING
   ox->debugging = FALSE;
   ox->dfp       = NULL;
@@ -228,6 +229,27 @@ p7_omx_Destroy(P7_OMX *ox)
 /*------------------- end, P7_OMX structure ---------------------*/
 
 
+
+int
+p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef)
+{
+  int   L         = oxf->L;
+  int   Q         = (L/4)+1;
+  float overall_p = oxf->xmx[p7X_C][L] * om->xf[p7O_C][p7O_MOVE];
+  int   q;
+
+  for (q = 0; q < Q; q++)
+    {
+      fBv = _mm_load_ps(oxf->xmx[p7X_B][0]+q);
+      bBv = _mm_load_ps(oxb->xmx[p7X_B][0]+q);
+
+
+
+    }
+  
+
+
+}
 
 
 

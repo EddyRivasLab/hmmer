@@ -364,7 +364,9 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  * Returns:   <eslOK> on success.           
  */
 int
-p7_domaindef_ByPosteriorHeuristics(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef)
+p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE *om, 
+				   P7_OMX *oxf, P7_OMX *oxb, P7_GMX *fwd, P7_GMX *bck, 
+				   P7_DOMAINDEF *ddef)
 {
   int i, j;
   int triggered;

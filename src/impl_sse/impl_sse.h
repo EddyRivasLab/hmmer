@@ -105,10 +105,11 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
  * 
  * tsc:  grouped in order of accession in DP for 7 transition scores;
  *       starting at q=0 for all but the three transitions to M, which
- *       are rotated by -1. DD's follow separately, starting at q=0.
+ *       are rotated by -1 and rightshifted. DD's follow separately, 
+ *       starting at q=0.
  *
- *        {     1     1     1     1      1     1     1 }
- *        {  1593   482x  482x  482x  1593  1593  1593 }    
+ *        {     1      1     1     1     1     1     1 }
+ *        {  1593   x482  x482  x482  1593  1593  1593 }    
  *        { [tBMk] [tMM] [tIM] [tDM] [tMD] [tMI] [tII] }
  * 
  *        {    11      1     1     1    11    11    11 }
@@ -183,8 +184,9 @@ typedef struct p7_oprofile_s {
 enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 #define p7X_NSCELLS 3
 
-enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4 }; 
-#define p7X_NXCELLS 5
+/* Besides ENJBC states, we may also store a rescaling factor on each row  */
+enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4, p7X_SCALE = 5 }; 
+#define p7X_NXCELLS 6
 
 /* 
  * 
@@ -214,6 +216,7 @@ typedef struct p7_omx_s {
   float    *xmx[p7X_NXCELLS];	/* [ENJBC][0..(allocXRQ*4)-1]                                  */
   void     *x_mem;		/* X memory before 16-byte alignment                           */
   int       allocXRQ;		/* # of quads allocated in each xmx[] array; XRQ*4 >= L+1      */
+  float     totscale;		/* log of the product of all scale factors (0.0 if unscaled)   */
 
 #ifdef p7_DEBUGGING  
   /* Parsers,scorers only hold a row at a time, so to get them to dump full matrix, it
@@ -261,8 +264,8 @@ extern int          p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
 
 /* fbparsers.c */
-extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *ret_sc);
+extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *ret_sc);
 
 /* fwdfilter.c */
 extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

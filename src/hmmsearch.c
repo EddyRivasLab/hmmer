@@ -326,7 +326,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
   P7_GMX          *fwd     = NULL;     /* DP matrix                               */
   P7_GMX          *bck     = NULL;     /* DP matrix                               */
-  P7_OMX          *ox      = NULL;     /* optimized DP matrix                     */
+  P7_OMX          *oxf     = NULL;     /* optimized DP matrix for Forward         */
+  P7_OMX          *oxb     = NULL;     /* optimized DP matrix for Backward        */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   double F1                = esl_opt_GetReal(go, "--F1"); /* MSVFilter threshold: must be < F1 to go on */
   double F2                = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold                    */
@@ -347,9 +348,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              k,x;
 
   tr  = p7_trace_Create();
-  fwd = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
-  bck = p7_gmx_Create(200, 400);	/* initial alloc is for M=200, L=400; will grow as needed */
-  ox  = p7_omx_Create(200, 0, 0);       /* ox is a one-row matrix for M=200 */
+  fwd = p7_gmx_Create(200, 400);    /* initial alloc is for M=200, L=400; will grow as needed */
+  bck = p7_gmx_Create(200, 400);	
+  oxf = p7_omx_Create(200, 0, 400); /* one-row parsing matrix, O(M+L) */
+  oxb = p7_omx_Create(200, 0, 400);     
   
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
   if ((status = init_worker_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
@@ -371,8 +373,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	for (x = 0; x < gm->abc->Kp; x++)
 	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
 
-      p7_oprofile_Convert(gm, om); /* <om> is now p7_LOCAL, multihit */
-      p7_omx_GrowTo(ox, om->M, 0, 0); /* expand the one-row omx if needed */
+      p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
+      p7_omx_GrowTo(oxf, om->M, 0, 0); /* expand the one-row omx if needed */
 
       fprintf(cfg->ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
       if (hmm->acc  != NULL) fprintf(cfg->ofp, "Accession:   %s\n", hmm->acc);
@@ -391,7 +393,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_bg_NullOne(cfg->bg, sq->dsq, sq->n, &nullsc);
 
 	  /* First level filter: the MSV filter, multihit with <om> */
-	  p7_MSVFilter(sq->dsq, sq->n, om, ox, &usc);
+	  p7_MSVFilter(sq->dsq, sq->n, om, oxf, &usc);
 	  usc = (usc - nullsc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	  if (P >= F1) { esl_sq_Reuse(sq); continue; } 
@@ -400,33 +402,30 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
 	  if (P >= F2) 		
 	    {
-	      p7_ViterbiFilter(sq->dsq, sq->n, om, ox, &vfsc);  
+	      p7_ViterbiFilter(sq->dsq, sq->n, om, oxf, &vfsc);  
 	      vfsc = (vfsc-nullsc) / eslCONST_LOG2;
 	      P  = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
-	      if (P >= F2) { esl_sq_Reuse(sq); continue; } /* this also should be settable */
+	      if (P >= F2) { esl_sq_Reuse(sq); continue; } 
 	    }
 	  cfg->n_past_vit++;
 	  
-	  /* Third filter: ForwardFilter(), multihit with <om> */
-	  if (P >= F3) 
-	    {
-	      p7_ForwardFilter(sq->dsq, sq->n, om, ox, &ffsc);  
-	      ffsc = (ffsc-nullsc) / eslCONST_LOG2;
-	      P = esl_exp_surv   (ffsc, hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-	      if (P >= F3) { esl_sq_Reuse(sq); continue; } /* this also should be settable */
-	    }
+	  /* Parse it with Forward and obtain its real Forward score. */
+	  p7_omx_GrowTo(oxf, hmm->M, 0, sq->n); 
+	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &final_sc);
+	  final_sc = (final_sc-nullsc) / eslCONST_LOG2;
+	  P = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	  if (P >= F3) { esl_sq_Reuse(sq); continue; }
 	  cfg->n_past_fwd++;
 
-	  /* We're past the filters. Everything remaining is almost certainly a hit */
-	  p7_gmx_GrowTo(fwd, hmm->M, sq->n); /* realloc DP matrices as needed */
-	  p7_gmx_GrowTo(bck, hmm->M, sq->n); 
 
-	  if (esl_opt_GetBoolean(go, "--unilocal"))  p7_ReconfigUnihit(gm, sq->n);
-	  else                              	     p7_ReconfigLength(gm, sq->n);
-	  
-	  p7_GForward(sq->dsq, sq->n, gm, fwd, &final_sc);         
-	  p7_GBackward(sq->dsq, sq->n, gm, bck, NULL);         
-	  p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, cfg->ddef);
+	  /* ok, it's for real; do the Backwards parser pass and hand
+	   * it off to domain definition logic. 
+	   */
+	  p7_ReconfigLength(gm, sq->n);
+	  p7_omx_GrowTo(oxb, hmm->M, 0, sq->n);
+	  p7_BackwardParser(sq->dsq, sq->n, om, oxf, oxb, NULL);
+	  p7_domaindef_ByPosteriorHeuristics(sq, gm, om, oxf, oxb, fwd, bck, cfg->ddef);
+
 
 	  if (esl_opt_GetBoolean(go, "--best1")) 
 	    {
