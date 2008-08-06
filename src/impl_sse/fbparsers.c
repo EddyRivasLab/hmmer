@@ -309,7 +309,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  * Purpose:   Calculates the Backward score and X columns for sequence
  *            <dsq> of length <L> residues, using optimized profile
  *            <om>, and a preallocated DP matrix <ox>, in linear
- *            memory $O(M+L)$. Return the Backward score (in nats) in
+ *            memory $O(M+L)$. Optionally return the Backward score (in nats) in
  *            <ret_sc>, and <ox->xmx[][0,1..L]> contain the DP matrix
  *            in single-precision probability for all special X states
  *            (BENCJ).
@@ -334,7 +334,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  *            L       - length of dsq in residues          
  *            om      - optimized profile
  *            ox      - DP matrix
- *            ret_sc  - RETURN: Backward score (in nats)          
+ *            opt_sc  - optRETURN: Backward score (in nats)          
  *
  * Returns:   <eslOK> on success; 
  *            <eslERANGE> if the score overflows the limited range of
@@ -346,7 +346,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  */
 int 
 p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, 
-		  P7_OMX *bck, float *ret_sc)
+		  P7_OMX *bck, float *opt_sc)
 {
   register __m128 mpv, ipv, dpv;      /* previous row values                                       */
   register __m128 mcv, dcv;           /* current row values                                        */
@@ -534,6 +534,7 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
       /* Sparse rescaling: same scale factors as fwd matrix */
       if (fwd->xmx[p7X_SCALE][i] > 1.0)
 	{
+	  xE  = xE / fwd->xmx[p7X_SCALE][i];
 	  xN  = xN / fwd->xmx[p7X_SCALE][i];
 	  xC  = xC / fwd->xmx[p7X_SCALE][i];
 	  xJ  = xJ / fwd->xmx[p7X_SCALE][i];
@@ -544,7 +545,7 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
 	    DMXo(q) = _mm_mul_ps(DMXo(q), xEv);
 	    IMXo(q) = _mm_mul_ps(IMXo(q), xEv);
 	  }
-	  xE = 1.0;
+
 	}
       bck->xmx[p7X_SCALE][i] = fwd->xmx[p7X_SCALE][i];
 
@@ -595,11 +596,11 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
   if (bck->debugging) p7_omx_DumpFloatRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E][0], bck->xmx[p7X_N][0],  bck->xmx[p7X_J][0], bck->xmx[p7X_B][0],  bck->xmx[p7X_C][0]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
 #endif
 
-  if       (isnan(xN))      { *ret_sc = eslINFINITY; return eslERANGE; }
-  else if  (xN == 0.0)      { *ret_sc = eslINFINITY; return eslERANGE; } /* underflow "can't happen", actually */
-  else if  (isinf(xN) == 1) { *ret_sc = eslINFINITY; return eslERANGE; }
+  if       (isnan(xN))      { if (opt_sc != NULL) *opt_sc = eslINFINITY; return eslERANGE; }
+  else if  (xN == 0.0)      { if (opt_sc != NULL) *opt_sc = eslINFINITY; return eslERANGE; } /* underflow "can't happen", actually */
+  else if  (isinf(xN) == 1) { if (opt_sc != NULL) *opt_sc = eslINFINITY; return eslERANGE; }
 
-  *ret_sc = bck->totscale + log(xN);
+  if (opt_sc != NULL) *opt_sc = bck->totscale + log(xN);
   return eslOK;
 }
 /*---------------------- end, parsers ---------------------------*/

@@ -378,13 +378,10 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
   int status;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
-  calculate_domain_posteriors(gm, fwd, bck, ddef); /* now ddef->{btot,etot,mocc} are made.                           */
+  p7_omx_DomainPosteriors(om, oxf, oxb, ddef);     /* now ddef->{btot,etot,mocc} are made.                           */
   esl_vec_FSet(ddef->n2sc, sq->n+1, 0.0);          /* ddef->n2sc null2 scores are initialized                        */
   ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
-  /* That's all we need the original fwd, bck matrices for. 
-   * Now we're free to reuse them for subsequent domain calculations.
-   */
   p7_ReconfigUnihit(gm, saveL);	                   /* process each domain in unilocal mode                           */
   i     = -1;
   triggered = FALSE;
@@ -399,6 +396,8 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
       else if (ddef->mocc[j] - (ddef->etot[j] - ddef->etot[j-1])  <  ddef->rt2) 
 	{
 	  /* We have a region i..j to evaluate. */
+	  p7_gmx_GrowTo(fwd, gm->M, j-i+1);
+	  p7_gmx_GrowTo(bck, gm->M, j-i+1);
 	  ddef->nregions++;
 	  if (is_multidomain_region(ddef, i, j))
 	    {

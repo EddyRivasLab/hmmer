@@ -243,6 +243,7 @@ typedef struct p7_omx_s {
 extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
 extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
 extern void         p7_omx_Destroy(P7_OMX *ox);
+extern int          p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef);
 
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
 extern int          p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);

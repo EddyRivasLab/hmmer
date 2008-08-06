@@ -340,7 +340,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   float            seqbias;  
   float            seq_score;          /* the per-seq bit score */
   double           P;		       /* P-value of a hit */
-
   int              Ld;		       /* # of residues in envelopes */
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
@@ -408,15 +407,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      if (P >= F2) { esl_sq_Reuse(sq); continue; } 
 	    }
 	  cfg->n_past_vit++;
-	  
+
 	  /* Parse it with Forward and obtain its real Forward score. */
 	  p7_omx_GrowTo(oxf, hmm->M, 0, sq->n); 
 	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &final_sc);
 	  final_sc = (final_sc-nullsc) / eslCONST_LOG2;
-	  P = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	  P = esl_exp_surv(final_sc,  hmm->evparam[p7_TAU],  hmm->evparam[p7_LAMBDA]);
 	  if (P >= F3) { esl_sq_Reuse(sq); continue; }
 	  cfg->n_past_fwd++;
-
 
 	  /* ok, it's for real; do the Backwards parser pass and hand
 	   * it off to domain definition logic. 
@@ -425,7 +423,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_omx_GrowTo(oxb, hmm->M, 0, sq->n);
 	  p7_BackwardParser(sq->dsq, sq->n, om, oxf, oxb, NULL);
 	  p7_domaindef_ByPosteriorHeuristics(sq, gm, om, oxf, oxb, fwd, bck, cfg->ddef);
-
 
 	  if (esl_opt_GetBoolean(go, "--best1")) 
 	    {
@@ -535,7 +532,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   p7_gmx_Destroy(fwd);
   p7_gmx_Destroy(bck);
-  p7_omx_Destroy(ox);
+  p7_omx_Destroy(oxf);
+  p7_omx_Destroy(oxb);
   p7_trace_Destroy(tr);
   esl_sq_Destroy(sq);
   return;

@@ -113,12 +113,9 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
       Dmaxv = infv;
       xBv   = _mm_set1_ps(xB);
 
-      /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. 
-       */
-      mpv = MMXo(Q-1);  mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(2, 1, 0, 0));   mpv = _mm_move_ss(mpv, infv);
-      dpv = DMXo(Q-1);  dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(2, 1, 0, 0));   dpv = _mm_move_ss(dpv, infv);
-      ipv = IMXo(Q-1);  ipv = _mm_shuffle_ps(ipv, ipv, _MM_SHUFFLE(2, 1, 0, 0));   ipv = _mm_move_ss(ipv, infv);
-      
+      mpv = esl_sse_rightshift_ps(MMXo(Q-1), infv);  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
+      dpv = esl_sse_rightshift_ps(DMXo(Q-1), infv);
+      ipv = esl_sse_rightshift_ps(IMXo(Q-1), infv);
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
@@ -153,17 +150,12 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      /* The following incantation takes the max of xEv's elements  */
-      xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(0, 3, 2, 1)));
-      xEv = _mm_max_ps(xEv, _mm_shuffle_ps(xEv, xEv, _MM_SHUFFLE(1, 0, 3, 2)));
-      _mm_store_ss(&xE, xEv);
-
+      esl_sse_hmax_ps(xEv, &xE);
       xN = xN +  om->xf[p7O_N][p7O_LOOP];
       xC = ESL_MAX(xC + om->xf[p7O_C][p7O_LOOP],  xE + om->xf[p7O_E][p7O_MOVE]);
       xJ = ESL_MAX(xJ + om->xf[p7O_J][p7O_LOOP],  xE + om->xf[p7O_E][p7O_LOOP]);
       xB = ESL_MAX(xJ + om->xf[p7O_J][p7O_MOVE],  xN + om->xf[p7O_N][p7O_MOVE]);
       /* and now xB will carry over into next i, and xC carries over after i=L */
-
 
       /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
        * prove that we don't need to evaluate any D->D paths at all.
@@ -179,20 +171,17 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(0, 3, 2, 1)));
-      Dmaxv = _mm_max_ps(Dmaxv, _mm_shuffle_ps(Dmaxv, Dmaxv, _MM_SHUFFLE(1, 0, 3, 2)));
-      _mm_store_ss(&Dmax, Dmaxv);
+      esl_sse_hmax_ps(Dmaxv, &Dmax);
       if (Dmax + om->ddbound_f > xB) 
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
+	  dcv = esl_sse_rightshift_ps(dcv, infv);
 	  tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
 	      DMXo(q) = _mm_max_ps(dcv, DMXo(q));	
-	      dcv    = _mm_add_ps(DMXo(q), *tsc); tsc++;
+	      dcv     = _mm_add_ps(DMXo(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -200,21 +189,19 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	   * our score. 
 	   */
 	  do {
-	    dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	    dcv = _mm_move_ss(dcv, infv);
+	    dcv = esl_sse_rightshift_ps(dcv, infv);
 	    tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
 		if (! esl_sse_any_gt_ps(dcv, DMXo(q))) break;
 		DMXo(q) = _mm_max_ps(dcv, DMXo(q));	
-		dcv    = _mm_add_ps(DMXo(q), *tsc);   tsc++;
+		dcv     = _mm_add_ps(DMXo(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}
       else
 	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
-	  dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));
-	  dcv = _mm_move_ss(dcv, infv);
+	  dcv     = esl_sse_rightshift_ps(dcv, infv);
 	  DMXo(0) = dcv;
 	}
 
@@ -244,7 +231,6 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   icc -o benchmark-vitscore -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITSCORE_BENCHMARK vitscore.c -lhmmer -leasel -lm 
 
   ./benchmark-vitscore <hmmfile>            runs benchmark 
-  ./benchmark-vitscore -b <hmmfile>         gets baseline time to subtract: just random seq generation
   ./benchmark-vitscore -N100 -c <hmmfile>   compare scores to generic impl
   ./benchmark-vitscore -N100 -x <hmmfile>   equate scores to exact emulation
  */
@@ -263,7 +249,6 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
   { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
@@ -295,6 +280,7 @@ main(int argc, char **argv)
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc1, sc2;
+  double          base_time, bench_time, Mcs;
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -314,25 +300,33 @@ main(int argc, char **argv)
   ox = p7_omx_Create(gm->M, 0, 0);
   gx = p7_gmx_Create(gm->M, L);
 
+  /* Get a baseline time: how long it takes just to generate the sequences */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
+
+  /* Run the benchmark */
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+      p7_ViterbiScore (dsq, L, om, ox, &sc1);   
 
-      if (! esl_opt_GetBoolean(go, "-b")) 
+      if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
 	{
-	  p7_ViterbiScore (dsq, L, om, ox, &sc1);   
-
-	  if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
-	    {
-	      p7_GViterbi(dsq, L, gm, gx, &sc2); 
-	      printf("%.4f %.4f\n", sc1, sc2);  
-	    }
+	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
     }
   esl_stopwatch_Stop(w);
+  bench_time = w->user - base_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
+
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n",   gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
   p7_omx_Destroy(ox);
