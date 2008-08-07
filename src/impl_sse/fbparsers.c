@@ -619,7 +619,6 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
    icc -o benchmark-fbparsers -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
 
    ./benchmark-fbparsers <hmmfile>           runs benchmark on both Forward and Backward parser
-   ./benchmark-fbparsers -b <hmmfile>        gets baseline time to subtract: just random seq generation
    ./benchmark-fbparsers -c -N100 <hmmfile>  compare scores of SSE to generic impl
    ./benchmark-fbparsers -x -N100 <hmmfile>  test that scores match trusted implementation.
  */
@@ -638,7 +637,6 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
   { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
@@ -674,7 +672,8 @@ main(int argc, char **argv)
   int             i;
   float           fsc, bsc;
   float           fsc2, bsc2;
-  
+  double          base_time, bench_time, Mcs;
+
   p7_FLogsumInit();
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
@@ -698,26 +697,33 @@ main(int argc, char **argv)
   bck = p7_omx_Create(gm->M, 0, L);
   gx  = p7_gmx_Create(gm->M, L);
 
+  /* Get a baseline time: how long it takes just to generate the sequences */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
+
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      if (! esl_opt_GetBoolean(go, "-b")) 
-	{
-	  if (! esl_opt_GetBoolean(go, "-B"))  p7_ForwardParser (dsq, L, om,      fwd, &fsc);
-	  if (! esl_opt_GetBoolean(go, "-F"))  p7_BackwardParser(dsq, L, om, fwd, bck, &bsc);
+      if (! esl_opt_GetBoolean(go, "-B"))  p7_ForwardParser (dsq, L, om,      fwd, &fsc);
+      if (! esl_opt_GetBoolean(go, "-F"))  p7_BackwardParser(dsq, L, om, fwd, bck, &bsc);
 
-	  if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
-	    {
-	      p7_GForward (dsq, L, gm, gx, &fsc2); 
-	      p7_GBackward(dsq, L, gm, gx, &bsc2); 
-	      printf("%.4f %.4f %.4f %.4f\n", fsc, bsc, fsc2, bsc2);  
-	    }
+      if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
+	{
+	  p7_GForward (dsq, L, gm, gx, &fsc2); 
+	  p7_GBackward(dsq, L, gm, gx, &bsc2); 
+	  printf("%.4f %.4f %.4f %.4f\n", fsc, bsc, fsc2, bsc2);  
 	}
     }
   esl_stopwatch_Stop(w);
+  bench_time = w->user - base_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n",   gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
   p7_omx_Destroy(bck);

@@ -282,7 +282,6 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
    icc -o benchmark-fwdfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7FWDFILTER_BENCHMARK fwdfilter.c -lhmmer -leasel -lm 
 
    ./benchmark-fwdfilter <hmmfile>             runs benchmark
-   ./benchmark-fwdfilter -b <hmmfile>          gets baseline time to subtract: just random seq generation
    ./benchmark-fwdfilter -c -N100 <hmmfile>    compare scores of SSE to generic impl
    ./benchmark-fwdfilter -x -N100 <hmmfile>    test that scores match trusted implementation.
  */
@@ -301,7 +300,6 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
   { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
@@ -333,6 +331,7 @@ main(int argc, char **argv)
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc1, sc2;
+  double          base_time, bench_time, Mcs;
 
   p7_FLogsumInit();
 
@@ -356,25 +355,31 @@ main(int argc, char **argv)
   ox = p7_omx_Create(gm->M, 0, 0); /* a one-row matrix */
   gx = p7_gmx_Create(gm->M, L);
 
+   /* Get a baseline time: how long it takes just to generate the sequences */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
+
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+      p7_ForwardFilter(dsq, L, om, ox, &sc1);   
 
-      if (! esl_opt_GetBoolean(go, "-b")) 
+      if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
 	{
-	  p7_ForwardFilter(dsq, L, om, ox, &sc1);   
-
-	  if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
-	  {
-	    p7_GForward(dsq, L, gm, gx, &sc2); 
-	    printf("%.4f %.4f\n", sc1, sc2);  
-	  }
+	  p7_GForward(dsq, L, gm, gx, &sc2); 
+	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
     }
   esl_stopwatch_Stop(w);
+  bench_time = w->user - base_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n",   gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
   p7_omx_Destroy(ox);

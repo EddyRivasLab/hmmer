@@ -323,7 +323,6 @@ main(int argc, char **argv)
   esl_stopwatch_Stop(w);
   bench_time = w->user - base_time;
   Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
-
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n",   gm->M);
   printf("# %.1f Mc/s\n", Mcs);

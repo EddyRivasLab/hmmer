@@ -179,7 +179,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
    icc -o benchmark-msvfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
 
    ./benchmark-msvfilter <hmmfile>            runs benchmark 
-   ./benchmark-msvfilter -b <hmmfile>         gets baseline time to subtract: just random seq generation
    ./benchmark-msvfilter -N100 -c <hmmfile>   compare scores to generic impl
    ./benchmark-msvfilter -N100 -x <hmmfile>   compare scores to exact emulation
  */
@@ -198,7 +197,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't run DP at all",             0 },
   { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
@@ -230,6 +228,7 @@ main(int argc, char **argv)
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc1, sc2;
+  double          base_time, bench_time, Mcs;
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -250,36 +249,42 @@ main(int argc, char **argv)
   ox = p7_omx_Create(gm->M, 0, 0);
   gx = p7_gmx_Create(gm->M, L);
 
+  /* Get a baseline time: how long it takes just to generate the sequences */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
+
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+      p7_MSVFilter    (dsq, L, om, ox, &sc1);   
 
-      if (! esl_opt_GetBoolean(go, "-b")) 
+      /* -c option: compare generic to fast score */
+      if (esl_opt_GetBoolean(go, "-c")) 
 	{
-	  p7_MSVFilter    (dsq, L, om, ox, &sc1);   
+	  p7_GMSV    (dsq, L, gm, gx, &sc2); 
+	  printf("%.4f %.4f\n", sc1, sc2);  
+	}
 
-	  /* -c option: compare generic to fast score */
-	  if (esl_opt_GetBoolean(go, "-c")) 
-	    {
-	      p7_GMSV    (dsq, L, gm, gx, &sc2); 
-	      printf("%.4f %.4f\n", sc1, sc2);  
-	    }
-
-	/* -x option: compare generic to fast score in a way that should give exactly the same result */
-	  if (esl_opt_GetBoolean(go, "-x"))
-	    {
-	      p7_GViterbi(dsq, L, gm, gx, &sc2); 
-	      sc2 /= om->scale;
-	      if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
-	      else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-	      printf("%.4f %.4f\n", sc1, sc2);  
-	    }
+      /* -x option: compare generic to fast score in a way that should give exactly the same result */
+      if (esl_opt_GetBoolean(go, "-x"))
+	{
+	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	  sc2 /= om->scale;
+	  if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
+	  else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
     }
   esl_stopwatch_Stop(w);
+  bench_time = w->user - base_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n",   gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
   p7_omx_Destroy(ox);
