@@ -229,49 +229,6 @@ p7_omx_Destroy(P7_OMX *ox)
 /*------------------- end, P7_OMX structure ---------------------*/
 
 
-/* Function:  p7_omx_DomainPosteriors()
- * Synopsis:  
- * Incept:    SRE, Tue Aug  5 08:39:07 2008 [Janelia]
- *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
- */
-int
-p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef)
-{
-  int   L               = oxf->L;
-  float totp_reciprocal = 1.0 / (oxf->xmx[p7X_C][L] * om->xf[p7O_C][p7O_MOVE]);
-  float njcp;
-  int   i;
-
-  ddef->btot[0] = 0.0;
-  ddef->etot[0] = 0.0;
-  ddef->mocc[0] = 0.0;
-  for (i = 1; i <= L; i++)
-    {
-      ddef->btot[i] = ddef->btot[i-1] +
-	(oxf->xmx[p7X_B][i-1] * oxb->xmx[p7X_B][i-1] * oxf->xmx[p7X_SCALE][i-1] * totp_reciprocal);
-      ddef->etot[i] = ddef->etot[i-1] +
-	(oxf->xmx[p7X_E][i]   * oxb->xmx[p7X_E][i]   * oxf->xmx[p7X_SCALE][i]   * totp_reciprocal);
-
-      njcp  = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * totp_reciprocal;
-      njcp += oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * totp_reciprocal;
-      njcp += oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * totp_reciprocal;
-      ddef->mocc[i] = 1. - njcp;
-    }
-  ddef->L = oxf->L;
-  return eslOK;
-}
-
-
-
 
 /*****************************************************************
  * 2. Debugging dumps of P7_OMX structures

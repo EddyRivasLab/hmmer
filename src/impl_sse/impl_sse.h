@@ -1,60 +1,5 @@
-/* SSE implementation of optimized Viterbi and Forward routines:
- * structures, declarations, and macros.
- * 
- * Currently (and this remains in flux as of 14 Dec 07) an optimized
- * implementation is required to provide an MSVFilter(),
- * ViterbiFilter() and a ForwardFilter() implementation. A call to
- * p7_oprofile_Convert() makes an optimized profile that works for
- * all filters.
- * 
- * Any "Filter" returns a score may be an approximation (with
- * characterized or at least characterizable error), and which may
- * have limited upper range, such that high scores are returned as
- * eslINFINITY. Additionally, Filters might only work on local
- * alignment modes, because they are allowed to make assumptions about
- * the range of scores.
- * 
- * Here, MSVFilter() and ViterbiFilter() are 8-bit lspace
- * implementations with limited precision and limited range (max 20
- * bits); ForwardFilter() is a pspace float implementation with
- * correct precision and limited range (max ~127 bits). Both require
- * local mode models.
- * 
- * An optimized implementation may also provide other optimized
- * routines. It provides specialized Convert*() functions for these,
- * which may no-op (if the OPROFILE already suffices), or may
- * overwrite parts of the OPROFILE that Filters or other routines
- * might need. Therefore, after using a "bonus" function, a fresh
- * Convert() will be needed before a Filter() is called again. This
- * API is tentative.
- * 
- * For example, here, ViterbiScore() is a 32-bit lspace float SSE
- * implementation of the Viterbi algorithm.
- *
- * A "Score" function might be an additional target for optimization,
- * for example. A "Score" function returns a correct score with full
- * floating-point precision and range, and works for any mode model.
- * 
- * In the generic implementation, profile scores are 32-bit floating
- * point log-odds scores. In an optimized implementation, internally,
- * profile scores can be of any type, and may be in log space (lspace)
- * or probability space (pspace). (Calculations in probability space
- * are useful in the Forward algorithm, but always limit range.)  A
- * shorthand of "lspace uchar" means log-odds scores stored as
- * unsigned chars, for example; "pspace float" means odds ratios
- * stored as floats.
- * 
- * A note on memory alignment: malloc() is required to return a
- * pointer "suitably aligned so that it may be aligned to a pointer of
- * any type of object" (C99 7.20.3). __m128 vectors are 128-bits wide,
- * so malloc() ought to return a pointer aligned on a 16-byte
- * boundary.  However, this is not the case for glibc, and apparently
- * other system libraries. Google turns up threads of arguments
- * between glibc and gcc developers over whose problem this is; this
- * argument has apparently not been resolved, and is of no help.
- * Here, we manually align the relevant pointers by overallocating in
- * *_mem with malloc, then arithmetically manipulating the address to
- * mask off (~0xf).
+/* SSE optimized implementation of various MSV, Viterbi, and Forward
+ * routines: structures, declarations, and macros.
  * 
  * SRE, Sun Nov 25 11:23:02 2007
  * SVN $Id$
@@ -75,7 +20,6 @@
  */
 #define p7O_NQU(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars */
 #define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /* 4 floats  */
-
 
 /*****************************************************************
  * 1. P7_OPROFILE: an optimized score profile
@@ -191,7 +135,6 @@ enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4, p7X_S
 /* 
  * 
  * dpf[][] 
- *    dpf[i] is  / [M1 M2 M3 M4] [D1 D2 D3 D4] [I1 I2 I3 I4] / [M5 M6 M7 M8] ...
  *    to access M(i,k) for i=0,1..L; k=1..M:  dpf[i][(k-1)/4 + p7X_M].element[(k-1)%4]
  * 
  * xmx[] arrays for individual special states:
@@ -286,3 +229,60 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 /*****************************************************************
  * @LICENSE@
  *****************************************************************/
+
+/* 
+ * Currently (and this remains in flux as of 14 Dec 07) an optimized
+ * implementation is required to provide an MSVFilter(),
+ * ViterbiFilter() and a ForwardFilter() implementation. A call to
+ * p7_oprofile_Convert() makes an optimized profile that works for
+ * all filters.
+ * 
+ * Any "Filter" returns a score may be an approximation (with
+ * characterized or at least characterizable error), and which may
+ * have limited upper range, such that high scores are returned as
+ * eslINFINITY. Additionally, Filters might only work on local
+ * alignment modes, because they are allowed to make assumptions about
+ * the range of scores.
+ * 
+ * Here, MSVFilter() and ViterbiFilter() are 8-bit lspace
+ * implementations with limited precision and limited range (max 20
+ * bits); ForwardFilter() is a pspace float implementation with
+ * correct precision and limited range (max ~127 bits). Both require
+ * local mode models.
+ * 
+ * An optimized implementation may also provide other optimized
+ * routines. It provides specialized Convert*() functions for these,
+ * which may no-op (if the OPROFILE already suffices), or may
+ * overwrite parts of the OPROFILE that Filters or other routines
+ * might need. Therefore, after using a "bonus" function, a fresh
+ * Convert() will be needed before a Filter() is called again. This
+ * API is tentative.
+ * 
+ * For example, here, ViterbiScore() is a 32-bit lspace float SSE
+ * implementation of the Viterbi algorithm.
+ *
+ * A "Score" function might be an additional target for optimization,
+ * for example. A "Score" function returns a correct score with full
+ * floating-point precision and range, and works for any mode model.
+ * 
+ * In the generic implementation, profile scores are 32-bit floating
+ * point log-odds scores. In an optimized implementation, internally,
+ * profile scores can be of any type, and may be in log space (lspace)
+ * or probability space (pspace). (Calculations in probability space
+ * are useful in the Forward algorithm, but always limit range.)  A
+ * shorthand of "lspace uchar" means log-odds scores stored as
+ * unsigned chars, for example; "pspace float" means odds ratios
+ * stored as floats.
+ * 
+ * A note on memory alignment: malloc() is required to return a
+ * pointer "suitably aligned so that it may be aligned to a pointer of
+ * any type of object" (C99 7.20.3). __m128 vectors are 128-bits wide,
+ * so malloc() ought to return a pointer aligned on a 16-byte
+ * boundary.  However, this is not the case for glibc, and apparently
+ * other system libraries. Google turns up threads of arguments
+ * between glibc and gcc developers over whose problem this is; this
+ * argument has apparently not been resolved, and is of no help.
+ * Here, we manually align the relevant pointers by overallocating in
+ * *_mem with malloc, then arithmetically manipulating the address to
+ * mask off (~0xf).
+ */
