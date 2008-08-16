@@ -203,7 +203,7 @@ p7_null2_BySampling(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_DSQ *dsq
     {
       esl_vec_FSet(nsc, Lr, 0.);
 
-      p7_StochasticTrace(ddef->r, dsq+ireg-1, Lr, gm, gx, ddef->tr);
+      p7_GStochasticTrace(ddef->r, dsq+ireg-1, Lr, gm, gx, ddef->tr);
       p7_trace_Index(ddef->tr);
 
       pos = 1;

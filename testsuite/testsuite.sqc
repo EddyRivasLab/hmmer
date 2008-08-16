@@ -12,20 +12,23 @@
 # Unit test drivers for each .c file
 ################################################################
 
-1 exercise build_utest        @build_utest@
-1 exercise dp_generic_utest   @dp_generic_utest@
-1 exercise logsum_utest       @logsum_utest@
-1 exercise modelconfig_utest  @modelconfig_utest@
-1 exercise p7_hmm_utest       @p7_hmm_utest@
-1 exercise p7_hmmfile_utest   @p7_hmmfile_utest@
-1 exercise p7_profile_utest   @p7_profile_utest@
-1 exercise p7_tophits_utest   @p7_tophits_utest@
+1 exercise build              @build_utest@
+1 exercise generic_fwdback    @generic_fwdback_utest@
+1 exercise generic_msv        @generic_msv_utest@
+1 exercise generic_stotrace   @generic_stotrace_utest@
+1 exercise generic_viterbi    @generic_viterbi_utest@
 
-1 exercise fbparsers_utest    @fbparsers_utest@
-1 exercise fwdfilter_utest    @fwdfilter_utest@
-1 exercise msvfilter_utest    @msvfilter_utest@
-1 exercise vitfilter_utest    @vitfilter_utest@
-1 exercise vitscore_utest     @vitscore_utest@
+1 exercise logsum             @logsum_utest@
+1 exercise modelconfig        @modelconfig_utest@
+1 exercise p7_hmm             @p7_hmm_utest@
+1 exercise p7_hmmfile         @p7_hmmfile_utest@
+1 exercise p7_profile         @p7_profile_utest@
+1 exercise p7_tophits         @p7_tophits_utest@
+
+1 exercise fwdback            @fwdback_utest@
+1 exercise msvfilter          @msvfilter_utest@
+1 exercise vitfilter          @vitfilter_utest@
+1 exercise vitscore           @vitscore_utest@
 
 
 # Still to come, unit tests for
@@ -34,6 +37,7 @@
 #   errors.c
 #   evalues.c
 #   eweight.c
+# 1 exercise generic_vtrace     @generic_vtrace_utest@
 #   heatmap.c
 #   hmmer.c
 #   impl_fp.c

@@ -656,7 +656,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       if (esl_opt_GetBoolean(go, "--fast")) 
 	{
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
-	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardFilter(dsq, L, om, ox, &sc);
+	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardParser(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
 	} 
 

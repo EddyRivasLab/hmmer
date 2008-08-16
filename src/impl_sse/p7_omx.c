@@ -393,13 +393,15 @@ ERROR:
 int
 p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
 {
-  __m128 *dp  = ox->dpf[0];	/* must set <dp> before using {MDI}MX macros */
+  __m128 *dp;
   int      M  = ox->M;
   int      Q  = p7O_NQF(M);
   float   *v  = NULL;		/* array of uninterleaved, unstriped scores  */
   int      q,z,k;
   union { __m128 v; float x[16]; } tmp;
   int      status;
+
+  dp = (ox->allocR == 1) ? ox->dpf[0] :	ox->dpf[rowi];	  /* must set <dp> before using {MDI}MX macros */
 
   ESL_ALLOC(v, sizeof(float) * ((Q*4)+1));
   v[0] = 0.;

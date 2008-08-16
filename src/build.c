@@ -335,12 +335,12 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 		}
 	      else if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
 		{
-		  if ((status = p7_trace_Append(tr[idx], p7T_D, k, 0)) != eslOK) goto ERROR;
+		  if ((status = p7_trace_Append(tr[idx], p7T_D, k, apos)) != eslOK) goto ERROR;
 		}
 	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 		{
 		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X) /* allow only one X in a row */
-		    if ((status == p7_trace_Append(tr[idx], p7T_X, 0, 0)) != eslOK) goto ERROR;
+		    if ((status == p7_trace_Append(tr[idx], p7T_X, k, apos)) != eslOK) goto ERROR;
 		}
 	      else
 		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
@@ -354,7 +354,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 		{
 		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
-		    if ((status = p7_trace_Append(tr[idx], p7T_X, 0, 0)) != eslOK) goto ERROR;
+		    if ((status = p7_trace_Append(tr[idx], p7T_X, k, apos)) != eslOK) goto ERROR;
 		}
 	      else if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
 		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");

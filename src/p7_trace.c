@@ -558,6 +558,10 @@ p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq) /* replace v
  *            M,D,I main states; else 0); and a dsq position <i> (1..L
  *            for emitters, else 0).
  *            
+ *            For CNJ states, which emit on transition, by convention
+ *            we associate the emission with the downstream state; therefore
+ *            the first state in any run of CNJ states has i=0. 
+ *            
  *            Reallocates the trace (by doubling) if necessary.
  *            
  *            Caller can grow a trace right-to-left too, if it
@@ -575,10 +579,30 @@ p7_trace_Dump(FILE *fp, P7_TRACE *tr, P7_PROFILE *gm, ESL_DSQ *dsq) /* replace v
 int
 p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
 {
-  p7_trace_Grow(tr);
+  int status;
+
+  if ((status = p7_trace_Grow(tr)) != eslOK) return status;
+
+  switch (st) {
+    /* Emit-on-transition states: */
+  case p7T_N: 
+  case p7T_C: 
+  case p7T_J: if (tr->st[tr->N-1] == st) tr->i[tr->N-1] = i; tr->i[tr->N] = 0; tr->k[tr->N] = 0; break;
+    /* Nonemitting states, outside main model: */
+  case p7T_X:
+  case p7T_S:
+  case p7T_B:
+  case p7T_E:
+  case p7T_T: tr->i[tr->N] = 0; tr->k[tr->N] = 0; break;
+    /* Nonemitting, but in main model (k valid) */
+  case p7T_D: tr->i[tr->N] = 0; tr->k[tr->N] = k; break;
+    /* Emitting states, with valid k position in model: */
+  case p7T_M: 
+  case p7T_I: tr->i[tr->N] = i; tr->k[tr->N] = k; break;
+  default:    ESL_EXCEPTION(eslEINVAL, "no such state; can't append");
+  }
+
   tr->st[tr->N] = st;
-  tr->k[tr->N]  = k;
-  tr->i[tr->N]  = i;
   tr->N++;
   return eslOK;
 }
@@ -606,6 +630,24 @@ p7_trace_Reverse(P7_TRACE *tr)
   int    z;
   int    tmp;
 
+  /* In runs of CCCCC, NNNNN, JJJJJ, the first one doesn't emit (i=0),
+   * and the rest do. Reassign if needed, so after reversal they'll be
+   * as they should be.
+   */
+  for (z = 0; z < tr->N; z++)
+    {
+      if ( (tr->st[z] == p7T_N && tr->st[z+1] == p7T_N) ||
+	   (tr->st[z] == p7T_C && tr->st[z+1] == p7T_C) ||
+	   (tr->st[z] == p7T_J && tr->st[z+1] == p7T_J))
+	{
+	  if (tr->i[z] == 0 && tr->i[z+1] > 0) 
+	    { 
+	      tr->i[z] = tr->i[z+1]; tr->i[z+1] = 0; 
+	    }
+	}
+    }
+
+  /* Reverse the trace in place. */
   for (z = 0; z < tr->N/2; z++)
     {
       tmp = tr->st[tr->N-z-1];  tr->st[tr->N-z-1] = tr->st[z];   tr->st[z] = tmp;

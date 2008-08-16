@@ -1,52 +1,334 @@
-/* HMMER's standard implementation of the DP algorithms.
- * 
- * This implementation is modified from an optimized implementation
- * contributed by Jeremy D. Buhler (Washington University in
- * St. Louis).
- * 
- * Relative to the implementation in HMMER2, Jeremy rearranged data
- * structures to reduce the number of registers needed in the inner
- * loop; eliminated branches from the inner loop by unrolling the Mth
- * iteration in Viterbi and by replacing a bunch of "if" tests with
- * MAX; and exposed opportunities for hoisting and strength reduction
- * to the compiler. (The preceding sentence is nearly verbatim from
- * Jeremy's notes.) I then uplifted the JB code to H3, most notably 
- * involving conversion from H2's scaled integers to H3's floating
- * point calculations.
+/* Forward/Backward algorithms; generic (non-SIMD) versions.
  * 
  * Contents:
- *     1. HMM alignment algorithms.
- *     2. Traceback algorithms. 
- *     3. Benchmark driver.
- *     4. Unit tests.
- *     5. Test driver.
- *     6. Copyright and license information.
- * 
+ *   1. Forward, Backward, Hybrid implementations.  
+ *   2. Benchmark driver.
+ *   3. Unit tests.
+ *   4. Test driver.
+ *   5. Example.
+ *   6. Copyright and license information.
+ *   
  * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
- * SVN $Id$
+ * SVN $Id$  
  */
 
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_random.h"		/* when StochasticTrace() moves, don't need random or vectorops here */
-#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
+/*****************************************************************
+ * 1. Forward, Backward, Hybrid implementations.
+ *****************************************************************/
+
+/* Function:  p7_GForward()
+ * Synopsis:  The Forward algorithm.
+ * Incept:    SRE, Mon Apr 16 13:57:35 2007 [Janelia]
+ *
+ * Purpose:   The Forward dynamic programming algorithm. 
+ *
+ *            Given a digital sequence <dsq> of length <L>, a profile
+ *            <gm>, and DP matrix <gx> allocated for at least <gm->M>
+ *            by <L> cells; calculate the probability of the sequence
+ *            given the model using the Forward algorithm; return the
+ *            Forward matrix in <gx>, and the Forward score in <ret_sc>.
+ *           
+ *            The Forward score is in lod score form.  To convert to a
+ *            bitscore, the caller needs to subtract a null model lod
+ *            score, then convert to bits.
+ *           
+ * Args:      dsq    - sequence in digitized form, 1..L
+ *            L      - length of dsq
+ *            gm     - profile. 
+ *            gx     - DP matrix with room for an MxL alignment
+ *            opt_sc - optRETURN: Forward lod score in nats
+ *           
+ * Return:    <eslOK> on success.
+ */
+int
+p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
+{
+  float const *tsc  = gm->tsc;
+  float      **dp   = gx->dp;
+  float       *xmx  = gx->xmx; 			    
+  int          M    = gm->M;
+  int          i, k;  
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+
+  /* Initialization of the zero row, and the lookup table of the log
+   * sum routine.
+   */
+  XMX(0,p7G_N) = 0;                                           /* S->N, p=1            */
+  XMX(0,p7G_B) = gm->xsc[p7P_N][p7P_MOVE];                    /* S->N->B, no N-tail   */
+  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) = -eslINFINITY;  /* need seq to get here */
+  for (k = 0; k <= M; k++)
+    MMX(0,k) = IMX(0,k) = DMX(0,k) = -eslINFINITY;            /* need seq to get here */
+  p7_FLogsumInit();
+
+  /* Recursion. Done as a pull.
+   * Note some slightly wasteful boundary conditions:  
+   *    tsc[0] = impossible for all eight transitions (no node 0)
+   *    D_1 is wastefully calculated (doesn't exist)
+   */
+  for (i = 1; i <= L; i++) 
+    {
+      float const *rsc = gm->rsc[dsq[i]];
+      float sc;
+
+      MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
+      XMX(i, p7G_E) = -eslINFINITY;
+
+      for (k = 1; k < M; k++)
+	{
+	  /* match state */
+	  sc = p7_FLogsum(p7_FLogsum(MMX(i-1,k-1)   + TSC(p7P_MM,k-1), 
+				     IMX(i-1,k-1)   + TSC(p7P_IM,k-1)),
+			  p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,k-1),
+				     DMX(i-1,k-1)   + TSC(p7P_DM,k-1)));
+	  MMX(i,k) = sc + MSC(k);
+
+	  /* insert state */
+	  sc = p7_FLogsum(MMX(i-1,k) + TSC(p7P_MI,k),
+			  IMX(i-1,k) + TSC(p7P_II,k));
+	  IMX(i,k) = sc + ISC(k);
+
+	  /* delete state */
+	  DMX(i,k) = p7_FLogsum(MMX(i,k-1) + TSC(p7P_MD,k-1),
+				DMX(i,k-1) + TSC(p7P_DD,k-1));
+
+	  /* E state update */
+	  XMX(i,p7G_E) = p7_FLogsum(p7_FLogsum(MMX(i,k) + esc,
+					       DMX(i,k) + esc),
+				               XMX(i,p7G_E));
+	}
+      /* unrolled match state M_M */
+      sc = p7_FLogsum(p7_FLogsum(MMX(i-1,M-1)   + TSC(p7P_MM,M-1), 
+				 IMX(i-1,M-1)   + TSC(p7P_IM,M-1)),
+		      p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,M-1),
+				 DMX(i-1,M-1)   + TSC(p7P_DM,M-1)));
+      MMX(i,M) = sc + MSC(M);
+
+      /* unrolled delete state D_M */
+      DMX(i,M) = p7_FLogsum(MMX(i,M-1) + TSC(p7P_MD,M-1),
+			    DMX(i,M-1) + TSC(p7P_DD,M-1));
+
+      /* unrolled E state update */
+      XMX(i,p7G_E) = p7_FLogsum(p7_FLogsum(MMX(i,M),
+					   DMX(i,M)),
+					   XMX(i,p7G_E));
+
+      /* J state */
+      XMX(i,p7G_J) = p7_FLogsum(XMX(i-1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP],
+				XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_LOOP]);
+      /* C state */
+      XMX(i,p7G_C) = p7_FLogsum(XMX(i-1,p7G_C) + gm->xsc[p7P_C][p7P_LOOP],
+				XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_MOVE]);
+      /* N state */
+      XMX(i,p7G_N) = XMX(i-1,p7G_N) + gm->xsc[p7P_N][p7P_LOOP];
+
+      /* B state */
+      XMX(i,p7G_B) = p7_FLogsum(XMX(i,  p7G_N) + gm->xsc[p7P_N][p7P_MOVE],
+				XMX(i,  p7G_J) + gm->xsc[p7P_J][p7P_MOVE]);
+    }
+
+  if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  gx->M = M;
+  gx->L = L;
+  return eslOK;
+}
+
+
+/* Function:  p7_GBackward()
+ * Synopsis:  The Backward algorithm.
+ * Incept:    SRE, Fri Dec 28 14:31:58 2007 [Janelia]
+ *
+ * Purpose:   The Backward dynamic programming algorithm.
+ * 
+ *            Given a digital sequence <dsq> of length <L>, a profile
+ *            <gm>, and DP matrix <gx> allocated for at least <gm->M>
+ *            by <L> cells; calculate the probability of the sequence
+ *            given the model using the Backward algorithm; return the
+ *            Backward matrix in <gx>, and the Backward score in <ret_sc>.
+ *           
+ *            The Backward score is in lod score form. To convert to a
+ *            bitscore, the caller needs to subtract a null model lod
+ *            score, then convert to bits.
+ *
+ * Args:      dsq    - sequence in digitized form, 1..L
+ *            L      - length of dsq
+ *            gm     - profile 
+ *            gx     - DP matrix with room for an MxL alignment
+ *            opt_sc - optRETURN: Backward lod score in nats
+ *           
+ * Return:    <eslOK> on success.
+ */
+int
+p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
+{
+  float const *tsc  = gm->tsc;
+  float const *rsc  = NULL;
+  float      **dp   = gx->dp;
+  float       *xmx  = gx->xmx; 			    
+  int          M    = gm->M;
+  int          i, k;  
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+
+  /* Note: backward calculates the probability we can get *out* of
+   * cell i,k; exclusive of emitting residue x_i.
+   */
+  p7_FLogsumInit();
+
+  /* Initialize the L row.  */
+  XMX(L,p7G_J) = XMX(L,p7G_B) = XMX(L,p7G_N) = -eslINFINITY;
+  XMX(L,p7G_C) = gm->xsc[p7P_C][p7P_MOVE];                 /* C<-T          */
+  XMX(L,p7G_E) = XMX(L,p7G_C) + gm->xsc[p7P_E][p7P_MOVE];  /* E<-C, no tail */
+  
+  MMX(L,M) = DMX(L,M) = XMX(L,p7G_E); /* {MD}_M <- E (prob 1.0) */
+  IMX(L,M) = -eslINFINITY;	      /* no I_M state        */
+  for (k = M-1; k >= 1; k--) {
+    MMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
+			   DMX(L, k+1)  + TSC(p7P_MD,k));
+    DMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
+			   DMX(L, k+1)  + TSC(p7P_DD,k));
+    IMX(L,k) = -eslINFINITY;
+  }
+  
+  /* Main recursion */
+  for (i = L-1; i >= 1; i--)
+    {
+      rsc = gm->rsc[dsq[i+1]];
+
+      XMX(i,p7G_B) = MMX(i+1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+      for (k = 2; k <= M; k++)
+	XMX(i,p7G_B) = p7_FLogsum(XMX(i, p7G_B), MMX(i+1,k) + TSC(p7P_BM,k-1) + MSC(k));
+
+      XMX(i,p7G_J) = p7_FLogsum( XMX(i+1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP],
+				 XMX(i,  p7G_B) + gm->xsc[p7P_J][p7P_MOVE]);
+      
+      XMX(i,p7G_C) = XMX(i+1,p7G_C) + gm->xsc[p7P_C][p7P_LOOP];
+      
+      XMX(i,p7G_E) = p7_FLogsum( XMX(i, p7G_J)  + gm->xsc[p7P_E][p7P_LOOP],
+				 XMX(i, p7G_C)  + gm->xsc[p7P_E][p7P_MOVE]);
+      
+      XMX(i,p7G_N) = p7_FLogsum( XMX(i+1,p7G_N) + gm->xsc[p7P_N][p7P_LOOP],
+				 XMX(i,  p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
+      
+      
+      MMX(i,M) = DMX(i,M) = XMX(i,p7G_E);
+      IMX(i,M) = -eslINFINITY;
+      for (k = M-1; k >= 1; k--)
+	{
+	  MMX(i,k) = p7_FLogsum( p7_FLogsum(MMX(i+1,k+1) + TSC(p7P_MM,k) + MSC(k+1),
+					    IMX(i+1,k)   + TSC(p7P_MI,k) + ISC(k)),
+				 p7_FLogsum(XMX(i,p7G_E) + esc,
+					    DMX(i,  k+1) + TSC(p7P_MD,k)));
+      
+	  IMX(i,k) = p7_FLogsum( MMX(i+1,k+1) + TSC(p7P_IM,k) + MSC(k+1),
+				 IMX(i+1,k)   + TSC(p7P_II,k) + ISC(k));
+	  
+	  DMX(i,k) = p7_FLogsum( MMX(i+1,k+1) + TSC(p7P_DM,k) + MSC(k+1),
+				 p7_FLogsum( DMX(i,  k+1)  + TSC(p7P_DD,k),
+					     XMX(i, p7G_E) + esc));
+	}
+    }
+
+  /* At i=0, only N,B states are reachable. */
+  rsc = gm->rsc[dsq[1]];
+  XMX(0,p7G_B) = MMX(1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+  for (k = 2; k <= M; k++)
+    XMX(0,p7G_B) = p7_FLogsum(XMX(0, p7G_B), MMX(1,k) + TSC(p7P_BM,k-1) + MSC(k));
+  XMX(i,p7G_J) = -eslINFINITY;
+  XMX(i,p7G_C) = -eslINFINITY;
+  XMX(i,p7G_E) = -eslINFINITY;
+  XMX(i,p7G_N) = p7_FLogsum( XMX(1, p7G_N) + gm->xsc[p7P_N][p7P_LOOP],
+			     XMX(0, p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
+  for (k = M; k >= 1; k--)
+    MMX(i,M) = IMX(i,M) = DMX(i,M) = -eslINFINITY;
+
+
+  if (opt_sc != NULL) *opt_sc = XMX(0,p7G_N);
+  gx->M = M;
+  gx->L = L;
+  return eslOK;
+}
+
+
+
+/* Function:  p7_GHybrid()
+ * Synopsis:  The "hybrid" algorithm.
+ * Incept:    SRE, Sat May 19 10:01:46 2007 [Janelia]
+ *
+ * Purpose:   The profile HMM version of the Hwa "hybrid" alignment
+ *            algorithm \citep{YuHwa02}. The "hybrid" score is the
+ *            maximum score in the Forward matrix. 
+ *            
+ *            Given a digital sequence <dsq> of length <L>, a profile
+ *            <gm>, and DP matrix <mx> allocated for at least <gm->M>
+ *            by <L> cells; calculate the probability of the sequence
+ *            given the model using the Forward algorithm; return
+ *            the calculated Forward matrix in <mx>, and optionally
+ *            return the Forward score in <opt_fwdscore> and/or the
+ *            Hybrid score in <opt_hybscore>.
+ *           
+ *            This is implemented as a wrapper around <p7_GForward()>.
+ *            The Forward matrix and the Forward score obtained from
+ *            this routine are identical to what <p7_GForward()> would
+ *            return.
+ *           
+ *            The scores are returned in lod form.  To convert to a
+ *            bitscore, the caller needs to subtract a null model lod
+ *            score, then convert to bits.
+ *           
+ * Args:      dsq          - sequence in digitized form, 1..L
+ *            L            - length of dsq
+ *            gm           - profile. 
+ *            gx           - DP matrix with room for an MxL alignment
+ *            opt_fwdscore - optRETURN: Forward lod score in nats.
+ *            opt_hybscore - optRETURN: Hybrid lod score in nats.
+ *
+ * Returns:   <eslOK> on success, and results are in <mx>, <opt_fwdscore>,
+ *            and <opt_hybscore>.
+ */
+int
+p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore)
+{
+  float   F    = -eslINFINITY;
+  float   H    = -eslINFINITY;
+  float **dp   = gx->dp;
+  int     i,k;
+  int     status;
+
+  if ((status = p7_GForward(dsq, L, gm, gx, &F)) != eslOK)  goto ERROR;
+  for (i = 1; i <= L; i++)
+    for (k = 1 ; k <= gm->M; k++)
+      H = ESL_MAX(H, MMX(i,k));
+  
+  gx->M = gm->M;
+  gx->L = L;
+  if (opt_fwdscore != NULL) *opt_fwdscore = F;
+  if (opt_hybscore != NULL) *opt_hybscore = H;
+  return eslOK;
+
+ ERROR:
+  if (opt_fwdscore != NULL) *opt_fwdscore = 0;
+  if (opt_hybscore != NULL) *opt_hybscore = 0;
+  return status;
+}
+/*------------- end: forward, backward, hybrid ------------------*/
 
 
 
 
 /*****************************************************************
- * 3. Benchmark driver.
+ * 2. Benchmark driver.
  *****************************************************************/
-#ifdef p7DP_GENERIC_BENCHMARK
+#ifdef p7GENERIC_FWDBACK_BENCHMARK
 /*
-   gcc -o benchmark-generic -g -O2 -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
-   icc -O3 -static -o benchmark-generic -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
-   ./benchmark-generic <hmmfile>
+   gcc -g -O2      -o generic_fwdback_benchmark -I. -L. -I../easel -L../easel -Dp7GENERIC_FWDBACK_BENCHMARK generic_fwdback.c -lhmmer -leasel -lm
+   icc -O3 -static -o generic_fwdback_benchmark -I. -L. -I../easel -L../easel -Dp7GENERIC_FWDBACK_BENCHMARK generic_fwdback.c -lhmmer -leasel -lm
+   ./benchmark-generic-fwdback <hmmfile>
  */
 /* As of Fri Dec 28 14:48:39 2007
  *    Viterbi  = 61.8 Mc/s
@@ -69,19 +351,16 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't do DP",                   0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Backward algorithm",                     0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Forward algorithm",                      0 },
-  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the MSV algorithm",                          0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark GBackward()",                     0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark GForward()",                      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the generic implementation";
+static char banner[] = "benchmark driver for generic Forward/Backward";
 
 int 
 main(int argc, char **argv)
@@ -95,14 +374,14 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
-  P7_GMX         *gx      = NULL;
+  P7_GMX         *fwd     = NULL;
+  P7_GMX         *bck     = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc;
-  float           nullsc;
-  float           bitscore;
+  double          base_time, bench_time, Mcs;
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -112,33 +391,35 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
-
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  fwd = p7_gmx_Create(gm->M, L);
+  bck = p7_gmx_Create(gm->M, L);
 
-  gx = p7_gmx_Create(gm->M, L);
+  /* Baseline time. */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++) esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
 
+  /* Benchmark time. */
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      if (esl_opt_GetBoolean(go, "-b")) continue;
-
-      if      (esl_opt_GetBoolean(go, "-F"))           p7_GForward     (dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "-B"))           p7_GBackward    (dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "-M"))           p7_GMSV         (dsq, L, gm, gx, &sc);
-      else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
-
-      p7_bg_NullOne(bg, dsq, L, &nullsc);
-      bitscore = (sc - nullsc) / eslCONST_LOG2;
-      
-      if (esl_opt_GetBoolean(go, "-v")) printf("%.4f bits  (%.4f raw)\n", bitscore, sc); 
+      if (! esl_opt_GetBoolean(go, "-B"))  p7_GForward (dsq, L, gm, fwd, &sc);
+      if (! esl_opt_GetBoolean(go, "-F"))  p7_GBackward(dsq, L, gm, bck, NULL);
     }
   esl_stopwatch_Stop(w);
+  bench_time = w->user - base_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("# M    = %d\n",   gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
-  p7_gmx_Destroy(gx);
+  p7_gmx_Destroy(bck);
+  p7_gmx_Destroy(fwd);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -149,132 +430,22 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7DP_GENERIC_BENCHMARK*/
+#endif /*p7GENERIC_FWDBACK_BENCHMARK*/
+/*----------------- end, benchmark ------------------------------*/
+
+
 
 
 /*****************************************************************
- * 4. Unit tests.
+ * 3. Unit tests
  *****************************************************************/
-#ifdef p7DP_GENERIC_TESTDRIVE
+#ifdef p7GENERIC_FWDBACK_TESTDRIVE
 #include <string.h>
-
 #include "esl_getopts.h"
-#include "esl_alphabet.h"
-#include "esl_msa.h"
+#include "esl_random.h"
 #include "esl_randomseq.h"
-#include "esl_vectorops.h"
 
-
-/* The "basic" utest is a minimal driver for making a small DNA profile and a small DNA sequence,
- * then running Viterbi and Forward. It's useful for dumping DP matrices and profiles for debugging.
- */
-static void
-utest_basic(ESL_GETOPTS *go)
-{
-  char           *query= "# STOCKHOLM 1.0\n\nseq1 GAATTC\nseq2 GAATTC\n//\n";
-  int             fmt  = eslMSAFILE_STOCKHOLM;
-  char           *targ = "GAATTC";
-  ESL_ALPHABET   *abc  = NULL;
-  ESL_MSA        *msa  = NULL;
-  P7_HMM         *hmm  = NULL;
-  P7_PROFILE     *gm   = NULL;
-  P7_BG          *bg   = NULL;
-  P7_DPRIOR      *pri  = NULL;	
-  ESL_DSQ        *dsq  = NULL;
-  P7_GMX         *gx   = NULL;
-  P7_TRACE        *tr  = NULL;
-  int             L    = strlen(targ);
-  float           vsc, vsc2, fsc;
-
-  if ((abc = esl_alphabet_Create(eslDNA))          == NULL)  esl_fatal("failed to create alphabet");
-  if ((pri = p7_dprior_CreateNucleic())            == NULL)  esl_fatal("failed to create prior");
-  if ((msa = esl_msa_CreateFromString(query, fmt)) == NULL)  esl_fatal("failed to create MSA");
-  if (esl_msa_Digitize(abc, msa)                   != eslOK) esl_fatal("failed to digitize MSA");
-  if (p7_Fastmodelmaker(msa, 0.5, &hmm, NULL)      != eslOK) esl_fatal("failed to create GAATTC model");
-  if (p7_ParameterEstimation(hmm, pri)             != eslOK) esl_fatal("failed to parameterize GAATTC model");
-  if ((bg = p7_bg_Create(abc))                     == NULL)  esl_fatal("failed to create DNA null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))        == NULL)  esl_fatal("failed to create GAATTC profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL)!= eslOK) esl_fatal("failed to config profile");
-  if (p7_profile_Validate(gm, NULL, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
-  if (esl_abc_CreateDsq(abc, targ, &dsq)           != eslOK) esl_fatal("failed to create GAATTC digital sequence");
-  if ((gx = p7_gmx_Create(gm->M, L))               == NULL)  esl_fatal("failed to create DP matrix");
-  if ((tr = p7_trace_Create())                     == NULL)  esl_fatal("trace creation failed");
-
-  p7_GViterbi   (dsq, L, gm, gx, &vsc);
-  if (esl_opt_GetBoolean(go, "-v")) printf("Viterbi score: %.4f\n", vsc);
-  if (esl_opt_GetBoolean(go, "-v")) p7_gmx_Dump(stdout, gx);
-
-  p7_GTrace     (dsq, L, gm, gx, tr);
-  p7_trace_Score(tr, dsq, gm, &vsc2);
-  if (esl_opt_GetBoolean(go, "-v")) p7_trace_Dump(stdout, tr, gm, dsq);
-  
-  if (esl_FCompare(vsc, vsc2, 1e-5) != eslOK)  esl_fatal("trace score and Viterbi score don't agree.");
-
-  p7_GForward   (dsq, L, gm, gx, &fsc);
-  if (esl_opt_GetBoolean(go, "-v")) printf("Forward score: %.4f\n", fsc);
-  if (esl_opt_GetBoolean(go, "-v")) p7_gmx_Dump(stdout, gx);
-
-  p7_trace_Destroy(tr);
-  p7_gmx_Destroy(gx);
-  free(dsq);
-  p7_profile_Destroy(gm);
-  p7_bg_Destroy(bg);
-  p7_hmm_Destroy(hmm);
-  esl_msa_Destroy(msa);
-  p7_dprior_Destroy(pri);
-  esl_alphabet_Destroy(abc);
-  return;
-}
-
-/* Viterbi validation is done by comparing the returned score
- * to the score of the optimal trace. Not foolproof, but catches
- * many kinds of errors.
- * 
- * Another check is that the average score should be <= 0,
- * since the random sequences are drawn from the null model.
- */ 
-static void
-utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
-{
-  float     avg_sc = 0.;
-  char      errbuf[eslERRBUFSIZE];
-  ESL_DSQ  *dsq = NULL;
-  P7_GMX   *gx  = NULL;
-  P7_TRACE *tr  = NULL;
-  int       idx;
-  float     sc1, sc2;
-
-  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((tr     = p7_trace_Create())              == NULL)  esl_fatal("trace creation failed");
-  if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
-
-  for (idx = 0; idx < nseq; idx++)
-    {
-      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
-      if (p7_GViterbi(dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("viterbi failed");
-      if (p7_GTrace  (dsq, L, gm, gx, tr)         != eslOK) esl_fatal("trace failed");
-      if (p7_trace_Validate(tr, abc, dsq, errbuf) != eslOK) esl_fatal("trace invalid:\n%s", errbuf);
-      if (p7_trace_Score(tr, dsq, gm, &sc2)       != eslOK) esl_fatal("trace score failed");
-      if (esl_FCompare(sc1, sc2, 1e-6)            != eslOK) esl_fatal("Trace score != Viterbi score"); 
-      if (p7_bg_NullOne(bg, dsq, L, &sc2)         != eslOK) esl_fatal("null score failed");
-
-      avg_sc += (sc1 - sc2);
-
-      if (esl_opt_GetBoolean(go, "--vv"))       
-	printf("utest_viterbi: Viterbi score: %.4f (null %.4f) (total so far: %.4f)\n", sc1, sc2, avg_sc);
-    }
-
-  avg_sc /= (float) nseq;
-  if (avg_sc > 0.) esl_fatal("Viterbi scores have positive expectation (%f nats)", avg_sc);
-
-  p7_gmx_Destroy(gx);
-  p7_trace_Destroy(tr);
-  free(dsq);
-  return;
-}
-
-
-/* Forward is harder to validate. 
+/* Forward is hard to validate. 
  * We do know that the Forward score is >= Viterbi.
  * We also know that the expected score on random seqs is <= 0 (not
  * exactly - we'd have to sample the random length from the background
@@ -287,7 +458,6 @@ utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   float     avg_sc;
   ESL_DSQ  *dsq = NULL;
   P7_GMX   *gx  = NULL;
-  P7_TRACE *tr  = NULL;
   int       idx;
   float     vsc, fsc, nullsc;
 
@@ -313,51 +483,9 @@ utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   if (avg_sc > 0.) esl_fatal("Forward scores have positive expectation (%f nats)", avg_sc);
 
   p7_gmx_Destroy(gx);
-  p7_trace_Destroy(tr);
   free(dsq);
   return;
 }
-
-
-/* The MSV score can be validated against Viterbi (provided we trust
- * Viterbi), by creating a multihit local profile in which:
- *   1. All t_MM scores = 0
- *   2. All other core transitions = -inf
- *   3. All t_BMk entries uniformly log 2/(M(M+1))
- */
-static void
-utest_msv(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
-{
-  P7_PROFILE *g2 = NULL;
-  ESL_DSQ   *dsq = NULL;
-  P7_GMX    *gx  = NULL;
-  float     sc1, sc2;
-  int       k, idx;
-
-  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
-  if ((g2     = p7_profile_Clone(gm))           == NULL)  esl_fatal("profile clone failed");
-
-  /* Make g2's scores appropriate for simulating the MSV algorithm in Viterbi */
-  esl_vec_FSet(g2->tsc, p7P_NTRANS * g2->M, -eslINFINITY);
-  for (k = 1; k <  g2->M; k++) p7P_TSC(g2, k, p7P_MM) = 0.0f;
-  for (k = 0; k <  g2->M; k++) p7P_TSC(g2, k, p7P_BM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
-
-  for (idx = 0; idx < nseq; idx++)
-    {
-      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
-
-      if (p7_GMSV    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSV failed");
-      if (p7_GViterbi(dsq, L, g2, gx, &sc2)       != eslOK) esl_fatal("viterbi failed");
-      if (fabs(sc1-sc2) > 0.0001) esl_fatal("MSV score not equal to Viterbi score");
-    }
-
-  p7_gmx_Destroy(gx);
-  p7_profile_Destroy(g2);
-  free(dsq);
-  return;
-}
-
 
 /* The "generation" test scores sequences generated by the same profile.
  * Each Viterbi and Forward score should be >= the trace score of the emitted seq.
@@ -387,6 +515,7 @@ utest_generation(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc,
 
       if (vsc < tracesc) esl_fatal("viterbi score is less than trace");
       if (fsc < tracesc) esl_fatal("forward score is less than trace");
+      if (vsc > fsc)     esl_fatal("viterbi score is greater than forward");
 
       if (esl_opt_GetBoolean(go, "--vv")) 
 	printf("generated:  len=%d v=%8.4f  f=%8.4f  t=%8.4f\n", (int) sq->n, vsc, fsc, tracesc);
@@ -401,6 +530,7 @@ utest_generation(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc,
   p7_trace_Destroy(tr);
   esl_sq_Destroy(sq);
 }
+
 
 /* The "enumeration" test samples a random enumerable HMM (transitions to insert are 0,
  * so the generated seq space only includes seqs of L<=M). 
@@ -492,17 +622,16 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
   free(dsq);
   free(seq);
 }
-#endif /*p7DP_GENERIC_TESTDRIVE*/
-
-
-
+#endif /*p7GENERIC_FWDBACK_TESTDRIVE*/
+/*------------------------- end, unit tests ---------------------*/
 
 /*****************************************************************
- * 5. Test driver.
+ * 4. Test driver.
  *****************************************************************/
-/* gcc -g -Wall -Dp7DP_GENERIC_TESTDRIVE -I. -I../easel -L. -L../easel -o dp_generic_utest dp_generic.c -lhmmer -leasel -lm
+
+/* gcc -g -Wall -Dp7GENERIC_FWDBACK_TESTDRIVE -I. -I../easel -L. -L../easel -o generic_fwdback_utest generic_fwdback.c -lhmmer -leasel -lm
  */
-#ifdef p7DP_GENERIC_TESTDRIVE
+#ifdef p7GENERIC_FWDBACK_TESTDRIVE
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_msa.h"
@@ -519,8 +648,8 @@ static ESL_OPTIONS options[] = {
   { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the generic implementation";
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for the generic Forward/Backward implementation";
 
 int
 main(int argc, char **argv)
@@ -539,8 +668,6 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
-  utest_basic(go);
-  
   if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
@@ -549,12 +676,10 @@ main(int argc, char **argv)
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
-  utest_viterbi    (go, r, abc, bg, gm, nseq, L);
   utest_forward    (go, r, abc, bg, gm, nseq, L);
-  utest_msv        (go, r, abc, bg, gm, nseq, L);
   utest_generation (go, r, abc, gm, hmm, bg, nseq);
   utest_enumeration(go, r, abc, 4);	/* can't go much higher than 5; enumeration test is cpu-intensive. */
-  
+
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -563,21 +688,22 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
+#endif /*p7GENERIC_FWDBACK_TESTDRIVE*/
+/*-------------------- end, test driver -------------------------*/
 
-#endif /*p7DP_GENERIC_TESTDRIVE*/
 
 /*****************************************************************
- * 6. Example
+ * 5. Example
  *****************************************************************/
-#ifdef p7DP_GENERIC_EXAMPLE
+#ifdef p7GENERIC_FWDBACK_EXAMPLE
 /* 
-   gcc -g -O2 -Dp7DP_GENERIC_EXAMPLE -I. -I../easel -L. -L../easel -o example dp_generic.c -lhmmer -leasel -lm
+   gcc -g -O2 -Dp7GENERIC_FWDBACK_EXAMPLE -I. -I../easel -L. -L../easel -o example generic_fwdback.c -lhmmer -leasel -lm
  */
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_getopts.h"
-#include "esl_dmatrix.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
@@ -589,14 +715,12 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of a forward/backward posterior probability heat map";
-
+static char banner[] = "example of generic Forward/Backward";
 
 int 
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -606,14 +730,10 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_GMX         *fwd     = NULL;
   P7_GMX         *bck     = NULL;
-  ESL_DMATRIX    *pp      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
-  P7_TRACE       *tr      = NULL;
-  P7_ALIDISPLAY  *ad      = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           sc;
-  int             i,d,k;
+  float           fsc, bsc;
   int             status;
 
   /* Read in one HMM */
@@ -637,64 +757,19 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
   
-  /* allocate DP matrices for forward and backward */
+  /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, sq->n);
   bck = p7_gmx_Create(gm->M, sq->n);
 
-  /* run Forward, Backward */
-  tr = p7_trace_Create();
+  /* Run Forward, Backward */
+  p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
+  p7_GBackward(sq->dsq, sq->n, gm, bck, &bsc);
 
-  p7_GViterbi (sq->dsq, sq->n, gm, fwd, &sc);
-  p7_GTrace   (sq->dsq, sq->n, gm, fwd, tr);
-  p7_trace_Index(tr);
-  printf("# Viterbi: %d domains : ", tr->ndom);
-  for (d = 0; d < tr->ndom; d++) printf("%6d %6d %6d %6d  ", tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d]);
-  printf("\n");
-  p7_trace_Reuse(tr);
+  printf("fwd = %.4f nats\n", fsc);
+  printf("bck = %.4f nats\n", bsc);
 
-  p7_GForward (sq->dsq, sq->n, gm, fwd, &sc);
-  p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);
-
-  for (i = 0; i < 1000; i++)
-    {
-      p7_GStochasticTrace(r, sq->dsq, sq->n, gm, fwd, tr);
-      p7_trace_Index(tr);
-      /* printf("%3d  ", tr->ndom); */
-
-      for (d = 0; d < tr->ndom; d++) printf("%6d %6d %6d %6d %6d %6d\n", 
-					    tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d], 
-					    tr->sqfrom[d]-tr->hmmfrom[d], tr->sqto[d]-tr->hmmto[d]);
-	
-#if 0
-      for (d = 0; d < tr->ndom; d++) {
-	printf("domain %d of %d\n", d+1, tr->ndom);
-	ad = p7_alidisplay_Create(tr, d, gm, sq);
-	p7_alidisplay_Print(stdout, ad, 40, 80);
-	p7_alidisplay_Destroy(ad);
-      }
-#endif
-      p7_trace_Reuse(tr);
-    }
-  p7_trace_Destroy(tr);
-  
-#if 0
-  /* construct a LxM matrix holding posterior probs for each Match state emitting residue i */
-  pp = esl_dmatrix_Create(sq->n, gm->M);
-  for (i = 1; i <= sq->n; i++)
-    for (k = 1; k <= gm->M; k++)
-      pp->mx[i-1][k-1] = fwd->dp[i][k*3] + bck->dp[i][k*3] - sc;
-
-  /* output a heatmap */
-  dmx_Visualize(stdout, pp, -8.0, 0.0);
-#endif
-
-#if 0
-  printf("min = %g\n",       esl_dmx_Min(pp));
-  printf("max = %g\n",       esl_dmx_Max(pp));
-  printf("sc  = %g nats\n",  sc);
-#endif
-
-  esl_dmatrix_Destroy(pp);
+  /* Cleanup */
+  esl_sq_Destroy(sq);
   p7_gmx_Destroy(fwd);
   p7_gmx_Destroy(bck);
   p7_profile_Destroy(gm);
@@ -704,8 +779,8 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7DP_GENERIC_EXAMPLE*/
-
+#endif /*p7GENERIC_FWDBACK_EXAMPLE*/
+/*-------------------- end, example -----------------------------*/
 
 /*****************************************************************
  * @LICENSE@

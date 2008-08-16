@@ -348,6 +348,14 @@ typedef struct p7_gmx_s {
   float  *dp_mem;
 } P7_GMX;
 
+#define MMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_M])
+#define IMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_I])
+#define DMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_D])
+#define XMX(i,s) (xmx[(i) * p7G_NXCELLS + (s)])
+
+#define TSC(s,k) (tsc[(k) * p7P_NTRANS + (s)])
+#define MSC(k)   (rsc[(k) * p7P_NR     + p7P_MSC])
+#define ISC(k)   (rsc[(k) * p7P_NR     + p7P_ISC])
 
 
 /*****************************************************************
@@ -586,18 +594,9 @@ typedef struct p7_tophits_s {
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
-/* dp_generic.c */
-extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
-extern int p7_GForward     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
-extern int p7_GBackward    (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
-extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
-extern int p7_GMSV         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
-extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
-extern int p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
-extern int p7_GViterbiScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
 
 /* dp_optaccuracy.c */
-extern int p7_PosteriorDecoding(int L, const P7_PROFILE *gm, const P7_GMX *fwd,      P7_GMX *bck, P7_GMX *pp);
+extern int p7_GPosteriorDecoding(int L, const P7_PROFILE *gm, const P7_GMX *fwd,      P7_GMX *bck, P7_GMX *pp);
 extern int p7_OptimalAccuracyDP(int L, const P7_PROFILE *gm, const P7_GMX *pp,       P7_GMX *gx,  float *ret_e);
 extern int p7_OATrace          (int L, const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx,  P7_TRACE *tr);
 
@@ -617,6 +616,24 @@ extern int p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, do
 
 /* eweight.c */
 extern int  p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double infotarget, double *ret_Neff);
+
+/* generic_fwdback.c */
+extern int p7_GForward     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GBackward    (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
+
+/* generic_msv.c */
+extern int p7_GMSV         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+
+/* generic_stotrace.c */
+extern int p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+
+/* generic_viterbi.c */
+extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+
+/* generic_vtrace.c */
+extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future) */
 extern double dmx_upper_max(ESL_DMATRIX *D);

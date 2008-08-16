@@ -28,23 +28,35 @@ RANLIB = @RANLIB@
 #
 PTHREAD_LIBS   = @PTHREAD_LIBS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+MPILIBS        = @MPILIBS@
 
-MPILIBS   = @MPILIBS@
+SHELL     = /bin/sh
+MYLIBS    = -lhmmer -leasel 
+MYLIBDIRS = -L../easel -L.
+MYINCDIRS = -I../easel -I.
+IMPLDIR   = impl_@IMPL_CHOICE@
 
-SHELL    = /bin/sh
-MYLIBS   = -leasel
-MYLIBDIR = -L../easel
-MYINCDIR = -I. -I../easel
+PROGS = hmmbuild\
+	hmmemit\
+	hmmfetch\
+	hmmsearch\
+	hmmsim\
+	hmmstat
 
-PROGS = hmmbuild hmmemit hmmfetch hmmsearch hmmsim hmmstat
+HDRS =  hmmer.h\
+	p7_config.h
 
 OBJS =  build.o\
-	dp_generic.o\
 	dp_optaccuracy.o\
 	emit.o\
 	errors.o\
 	evalues.o\
 	eweight.o\
+	generic_fwdback.o\
+	generic_msv.o\
+	generic_stotrace.o\
+	generic_viterbi.o\
+	generic_vtrace.o\
 	heatmap.o\
 	hmmer.o\
 	logsum.o\
@@ -66,15 +78,10 @@ OBJS =  build.o\
 	p7_trace.o
 #	island.o\
 
-HDRS =  hmmer.h\
-	p7_config.h
-
-IMPLDIR  = impl_@IMPL_CHOICE@
-
 IMPL_OBJ =\
-	${IMPLDIR}/fbparsers.o\
-	${IMPLDIR}/fwdfilter.o\
+	${IMPLDIR}/fwdback.o\
 	${IMPLDIR}/msvfilter.o\
+	${IMPLDIR}/stotrace.o\
 	${IMPLDIR}/vitfilter.o\
 	${IMPLDIR}/vitscore.o\
 	${IMPLDIR}/p7_omx.o\
@@ -82,46 +89,108 @@ IMPL_OBJ =\
 
 IMPL_HEADER = ${IMPLDIR}/impl_${IMPL_CHOICE}.h
 
-.c.o:
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIR} ${PVMINCDIR} -c $<
+UTESTS =\
+	build_utest\
+	generic_fwdback_utest\
+	generic_msv_utest\
+	generic_stotrace_utest\
+	generic_viterbi_utest\
+	logsum_utest\
+	modelconfig_utest\
+	p7_hmm_utest\
+	p7_hmmfile_utest\
+	p7_profile_utest\
+	p7_tophits_utest
+
+BENCHMARKS = \
+	generic_fwdback_benchmark\
+	generic_msv_benchmark\
+	generic_stotrace_benchmark\
+	generic_viterbi_benchmark
+
+EXAMPLES = \
+	generic_fwdback_example\
+	generic_msv_example\
+	generic_stotrace_example\
+	generic_viterbi_example\
+	generic_vtrace_example
 
 
-#################################################################
-## Targets defining how to make HMMER executables.
-##
-all: 	${PROGS} libhmmer.a  ../easel/libeasel.a
+all: 	${PROGS}
 
-${IMPL_OBJ}: 
-	cd ${IMPLDIR}; make
+check:  ${PROGS} ${UTESTS}
 
-${PROGS}: @EXEC_DEPENDENCY@ ${OBJS} ${IMPL_OBJ}  libhmmer.a ../easel/libeasel.a
-	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIR} ${PVMLIBDIR} -o $@ $@.o ${OBJS} ${IMPL_OBJ} ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
+dev:    ${PROGS} ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
+	cd ${IMPLDIR}; ${MAKE} dev
 
-#################################################################
-## Targets used in making HMMER library for testsuite compilation.
-##
-module: libhmmer.a
+${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../easel/libeasel.a
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} ${PVMLIBDIR} -o $@ $@.o ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
 
-libhmmer.a: ${OBJS} ${IMPL_OBJ}
+${UTESTS}: libhmmer.a ../easel/libeasel.a
+	@ echo "Compiling $@ ..."
+	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
+	if test -e p7_$${BASENAME}.c; then \
+           DFILE=p7_$${BASENAME}.c ;\
+        else \
+           DFILE=$${BASENAME}.c ;\
+	fi;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
+
+${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
+	@ echo "Compiling $@ ..."
+	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_BENCHMARK ;\
+	if test -e p7_$${BASENAME}.c; then \
+           DFILE=p7_$${BASENAME}.c ;\
+        else \
+           DFILE=$${BASENAME}.c ;\
+	fi;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
+
+${EXAMPLES}: libhmmer.a ../easel/libeasel.a
+	@ echo "Compiling $@ ..."
+	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_EXAMPLE ;\
+	if test -e p7_$${BASENAME}.c; then \
+           DFILE=p7_$${BASENAME}.c ;\
+        else \
+           DFILE=$${BASENAME}.c ;\
+	fi;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
+
+libhmmer.a: ${HDRS} ${OBJS} ${IMPL_OBJ}
 	$(AR) libhmmer.a ${OBJS} ${IMPL_OBJ}
 	$(RANLIB) libhmmer.a
 	chmod 644 libhmmer.a
 
+../easel/libeasel.a: 
+	cd ../easel; ${MAKE} libeasel.a
 
-#################################################################
-## Miscellaneous targets.
-##
-check:
-	(cd testsuite; ./sqc 2 testsuite.sqc .)
+${IMPL_OBJ}: 
+	cd ${IMPLDIR}; make
+
+.c.o:
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} ${PVMINCDIR} -c $<
+
 
 distclean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
+	-rm -f ${UTESTS}
+	-rm -f ${BENCHMARKS}
+	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f Makefile p7_config.h
 	cd  ${IMPLDIR}; make distclean
 
 clean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
+	-rm -f ${UTESTS}
+	-rm -f ${BENCHMARKS}
+	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	cd ${IMPLDIR}; make clean
 

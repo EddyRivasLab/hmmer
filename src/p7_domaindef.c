@@ -647,7 +647,7 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
 
   for (t = 0; t < ddef->nsamples; t++)
     {
-      p7_StochasticTrace(ddef->r, sq->dsq+i-1, j-i+1, gm, gx, ddef->tr);
+      p7_GStochasticTrace(ddef->r, sq->dsq+i-1, j-i+1, gm, gx, ddef->tr);
       p7_trace_Index(ddef->tr);
 
       for (d = 0; d < ddef->tr->ndom; d++)
@@ -750,7 +750,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *
 
   p7_GForward (sq->dsq + i-1, Ld, gm, gx1, &envsc);
   p7_GBackward(sq->dsq + i-1, Ld, gm, gx2, NULL);
-  p7_PosteriorDecoding(Ld, gm, gx1, gx2, gx2);      /* <gx2> is now overwritten with post probabilities     */
+  p7_GPosteriorDecoding(Ld, gm, gx1, gx2, gx2);      /* <gx2> is now overwritten with post probabilities     */
 
   /* Is null2 set already for this i..j? (It is, if we're in a domain that
    * was defined by stochastic traceback clustering in a multidomain region;

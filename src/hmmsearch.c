@@ -333,7 +333,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   double F2                = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold                    */
   double F3                = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold                    */
   double Evalue_threshold  = esl_opt_GetReal(go, "-E");	  /* per-seq E-value threshold                  */
-  float            usc, vfsc, ffsc;    /* filter scores                           */
+  float            usc, vfsc;          /* filter scores                           */
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
   float            omega  = 1.0f/256.0f;

@@ -7,77 +7,22 @@
 # SVN $Id$
 #
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@
-CPPFLAGS = @CPPFLAGS@
-LDFLAGS  = @LDFLAGS@
-SIMDFLAGS= @SIMD_CFLAGS@
-DEFS     = @DEFS@
-LIBS     = @LIBS@ -lm
-MPILIBS  = @MPILIBS@
-
 IMPLDIR  = impl_@IMPL_CHOICE@
-
-SRCDIR   = ../src
 ESLDIR   = ../easel
 
-AR      = @AR@ rcv
-RANLIB  = @RANLIB@
+all:  
 
-UNIT_TESTS = \
-	build_utest\
-	dp_generic_utest\
-	logsum_utest\
-	modelconfig_utest\
-	p7_gmx_utest\
-	p7_hmm_utest\
-	p7_hmmfile_utest\
-	p7_profile_utest\
-	p7_tophits_utest
-
-all:  ${UNIT_TESTS}
-
-check:  ${UNIT_TESTS}
-	(cd ../src/${IMPLDIR}; make check)
+check: 
+	@cd ../src/;           ${MAKE} check
+	@cd ../src/${IMPLDIR}; ${MAKE} check
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${ESLDIR}/devkit/sqc 2 testsuite.sqc . ../src/${IMPLDIR}
-
-.c.o:
-	${CC} -I ${EASELLIB} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
-
-FORCE:
-
-
-# Unit test compilation:
-# 
-# To compile unit tests, we need to construct a command line
-# from module basename, module's testdriver flag, and module's
-# C file. This is accomplished via a complex-looking shell incantation;
-# xref J1/81.
-#   $@           =  driver name            p7_tophits_utest
-#   $${BASENAME} =  base module name       tophits
-#   $${DFLAG}    =  driver flag            p7TOPHITS_TESTDRIVE
-#   $${DFILE}    =  driver's C file        p7_tophits.c
-#
-$(UNIT_TESTS): FORCE
-	@echo Compiling $@ ...
-	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
-	if test -e ${SRCDIR}/p7_$${BASENAME}.c; then \
-           DFILE=p7_$${BASENAME}.c ;\
-        else \
-           DFILE=$${BASENAME}.c ;\
-        fi;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} -o $@ -I${SRCDIR} -I${ESLDIR} -L${SRCDIR} -L${ESLDIR} -D$${DFLAG} ${SRCDIR}/$${DFILE} ${MPILIBS} -lhmmer -leasel ${LIBS}
-
+	@${ESLDIR}/devkit/sqc 2 testsuite.sqc . ../src/ ../src/${IMPLDIR}
 
 clean:
 	-rm -f *.gcno *.gcda *.gcov
 	-rm -f *.o *~ 
-	-rm -f ${UNIT_TESTS}
 
 distclean:
 	make clean

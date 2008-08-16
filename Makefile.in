@@ -83,6 +83,10 @@ all:
 	fi
 
 
+dev:
+	cd easel; ${MAKE}
+	cd src;   ${MAKE} dev
+
 # check: compiles and runs test suite in testsuite/
 #       These are public tests, distributed with the package.
 #
@@ -90,7 +94,7 @@ check:
 	(cd testsuite; make check)
 
 src/libhmmer.a: 
-	(cd src;   make; make module)
+	cd src; ${MAKE} libhmmer.a
 
 
 # install: installs the binaries in BINDIR/

@@ -115,6 +115,18 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   return NULL;
 }
 
+/* Function:  p7_oprofile_IsLocal()
+ * Synopsis:  Returns TRUE if profile is in local alignment mode.
+ * Incept:    SRE, Sat Aug 16 08:46:00 2008 [Janelia]
+ */
+int
+p7_oprofile_IsLocal(const P7_OPROFILE *om)
+{
+  if (om->mode == p7_LOCAL || om->mode == p7_UNILOCAL) return TRUE;
+  return FALSE;
+}
+
+
 
 /* Function:  p7_oprofile_Destroy()
  * Synopsis:  Frees an optimized profile structure.

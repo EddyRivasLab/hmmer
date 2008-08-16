@@ -1,4 +1,4 @@
-/* HMMER's standard implementation of the DP algorithms.
+/* Viterbi algorithm; generic (non-SIMD) version.
  * 
  * This implementation is modified from an optimized implementation
  * contributed by Jeremy D. Buhler (Washington University in
@@ -15,38 +15,162 @@
  * point calculations.
  * 
  * Contents:
- *     1. HMM alignment algorithms.
- *     2. Traceback algorithms. 
- *     3. Benchmark driver.
- *     4. Unit tests.
- *     5. Test driver.
- *     6. Copyright and license information.
+ *    1. Viterbi implementation.
+ *    2. Benchmark driver.
+ *    3. Unit tests.
+ *    4. Test driver.
+ *    5. Example.
+ *    6. Copyright and license information.
  * 
  * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
- * SVN $Id$
+ * SVN $Id: dp_generic.c 2521 2008-08-03 23:27:42Z eddys $
  */
-
+ 
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_random.h"		/* when StochasticTrace() moves, don't need random or vectorops here */
-#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
+/*****************************************************************
+ * 1. Viterbi implementation.
+ *****************************************************************/
+
+/* Function:  p7_GViterbi()
+ * Synopsis:  The Viterbi algorithm.
+ * Incept:    SRE, Tue Jan 30 10:50:53 2007 [Einstein's, St. Louis]
+ * 
+ * Purpose:   The standard Viterbi dynamic programming algorithm. 
+ *
+ *            Given a digital sequence <dsq> of length <L>, a profile
+ *            <gm>, and DP matrix <gx> allocated for at least <L>
+ *            by <gm->M> cells; calculate the maximum scoring path by
+ *            Viterbi; return the Viterbi score in <ret_sc>, and the
+ *            Viterbi matrix is in <gx>.
+ *            
+ *            The caller may then retrieve the Viterbi path by calling
+ *            <p7_GTrace()>.
+ *           
+ *            The Viterbi lod score is returned in nats. The caller
+ *            needs to subtract a null model lod score, then convert
+ *            to bits.
+ *           
+ * Args:      dsq    - sequence in digitized form, 1..L
+ *            L      - length of dsq
+ *            gm     - profile. 
+ *            gx     - DP matrix with room for an MxL alignment
+ *            opt_sc - optRETURN: Viterbi lod score in nats
+ *           
+ * Return:   <eslOK> on success.
+ */
+int
+p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
+{
+  float const *tsc  = gm->tsc;
+  float      **dp   = gx->dp;
+  float       *xmx  = gx->xmx;
+  int          M    = gm->M;
+  int          i,k;
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+
+  /* Initialization of the zero row.  */
+  XMX(0,p7G_N) = 0;                                           /* S->N, p=1            */
+  XMX(0,p7G_B) = gm->xsc[p7P_N][p7P_MOVE];                    /* S->N->B, no N-tail   */
+  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) = -eslINFINITY;  /* need seq to get here */
+  for (k = 0; k <= gm->M; k++)
+    MMX(0,k) = IMX(0,k) = DMX(0,k) = -eslINFINITY;            /* need seq to get here */
+
+  /* DP recursion */
+  for (i = 1; i <= L; i++) 
+    {
+      float const *rsc = gm->rsc[dsq[i]];
+      float sc;
+
+      MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
+      XMX(i,p7G_E) = -eslINFINITY;
+    
+      for (k = 1; k < gm->M; k++) 
+	{
+  	  /* match state */
+	  sc       = ESL_MAX(    MMX(i-1,k-1)   + TSC(p7P_MM,k-1), 
+				 IMX(i-1,k-1)   + TSC(p7P_IM,k-1));
+	  sc       = ESL_MAX(sc, DMX(i-1,k-1)   + TSC(p7P_DM,k-1));
+	  sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,k-1));
+	  MMX(i,k) = sc + MSC(k);
+
+	  /* E state update */
+	  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k) + esc);
+	  /* in Viterbi alignments, Dk->E can't win in local mode (and
+	   * isn't possible in glocal mode), so don't bother
+	   * looking. */
+
+	  /* insert state */
+	  sc = ESL_MAX(MMX(i-1,k) + TSC(p7P_MI,k),
+		       IMX(i-1,k) + TSC(p7P_II,k));
+	  IMX(i,k) = sc + ISC(k);
+	  
+	  /* delete state */
+	  DMX(i,k) =  ESL_MAX(MMX(i,k-1) + TSC(p7P_MD,k-1),
+			      DMX(i,k-1) + TSC(p7P_DD,k-1));
+	}
+
+      /* Unrolled match state M. */
+      sc       = ESL_MAX(    MMX(i-1,M-1)   + TSC(p7P_MM,M-1),
+			     IMX(i-1,M-1)   + TSC(p7P_IM,M-1));
+      sc       = ESL_MAX(sc, DMX(i-1,M-1 )  + TSC(p7P_DM,M-1));
+      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,M-1));
+      MMX(i,M) = sc + MSC(M);
+      
+      /* Unrolled delete state D_M 
+       * (Unlike internal Dk->E transitions that can never appear in 
+       * Viterbi alignments, D_M->E is possible in glocal mode.)
+       */
+      DMX(i,M) = ESL_MAX(MMX(i,M-1) + TSC(p7P_MD,M-1),
+			 DMX(i,M-1) + TSC(p7P_DD,M-1));
+
+      /* E state update; transition from M_M scores 0 by def'n */
+      sc  =          ESL_MAX(XMX(i,p7G_E), MMX(i,M));
+      XMX(i,p7G_E) = ESL_MAX(sc,           DMX(i,M));
+   
+      /* Now the special states. E must already be done, and B must follow N,J.
+       * remember, N, C and J emissions are zero score by definition.
+       */
+      /* J state */
+      sc           =             XMX(i-1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP];   /* J->J */
+      XMX(i,p7G_J) = ESL_MAX(sc, XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_LOOP]);  /* E->J is E's "loop" */
+      
+      /* C state */
+      sc           =             XMX(i-1,p7G_C) + gm->xsc[p7P_C][p7P_LOOP];
+      XMX(i,p7G_C) = ESL_MAX(sc, XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_MOVE]);
+      
+      /* N state */
+      XMX(i,p7G_N) = XMX(i-1,p7G_N) + gm->xsc[p7P_N][p7P_LOOP];
+      
+      /* B state */
+      sc           =             XMX(i,p7G_N) + gm->xsc[p7P_N][p7P_MOVE];   /* N->B is N's move */
+      XMX(i,p7G_B) = ESL_MAX(sc, XMX(i,p7G_J) + gm->xsc[p7P_J][p7P_MOVE]);  /* J->B is J's move */
+    }
+  
+  /* T state (not stored) */
+  if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  gx->M = gm->M;
+  gx->L = L;
+  return eslOK;
+}
 
 
+/*-------------------- end, viterbi -----------------------------*/
 
 
 /*****************************************************************
- * 3. Benchmark driver.
+ * 2. Benchmark driver.
  *****************************************************************/
-#ifdef p7DP_GENERIC_BENCHMARK
+#ifdef p7GENERIC_VITERBI_BENCHMARK
 /*
-   gcc -o benchmark-generic -g -O2 -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
-   icc -O3 -static -o benchmark-generic -I. -L. -I../easel -L../easel -Dp7DP_GENERIC_BENCHMARK dp_generic.c -lhmmer -leasel -lm
-   ./benchmark-generic <hmmfile>
+   gcc -g -O2      -o generic_viterbi_benchmark -I. -L. -I../easel -L../easel -Dp7GENERIC_VITERBI_BENCHMARK generic_viterbi.c -lhmmer -leasel -lm
+   icc -O3 -static -o generic_viterbi_benchmark -I. -L. -I../easel -L../easel -Dp7GENERIC_VITERBI_BENCHMARK generic_viterbi.c -lhmmer -leasel -lm
+   ./benchmark-generic-viterbi <hmmfile>
  */
 /* As of Fri Dec 28 14:48:39 2007
  *    Viterbi  = 61.8 Mc/s
@@ -69,19 +193,14 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't do DP",                   0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Backward algorithm",                     0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the Forward algorithm",                      0 },
-  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "use the MSV algorithm",                          0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual scores",             0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the generic implementation";
+static char banner[] = "benchmark driver for generic Viterbi";
 
 int 
 main(int argc, char **argv)
@@ -101,8 +220,7 @@ main(int argc, char **argv)
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc;
-  float           nullsc;
-  float           bitscore;
+  double          base_time, bench_time, Mcs;
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
@@ -112,30 +230,30 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
-
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
-
   gx = p7_gmx_Create(gm->M, L);
 
+  /* Baseline time. */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++) esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
+
+  /* Benchmark time. */
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      if (esl_opt_GetBoolean(go, "-b")) continue;
-
-      if      (esl_opt_GetBoolean(go, "-F"))           p7_GForward     (dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "-B"))           p7_GBackward    (dsq, L, gm, gx, &sc);
-      else if (esl_opt_GetBoolean(go, "-M"))           p7_GMSV         (dsq, L, gm, gx, &sc);
-      else                                             p7_GViterbi     (dsq, L, gm, gx, &sc);
-
-      p7_bg_NullOne(bg, dsq, L, &nullsc);
-      bitscore = (sc - nullsc) / eslCONST_LOG2;
-      
-      if (esl_opt_GetBoolean(go, "-v")) printf("%.4f bits  (%.4f raw)\n", bitscore, sc); 
+      p7_GViterbi     (dsq, L, gm, gx, &sc);
     }
   esl_stopwatch_Stop(w);
+  bench_time = w->user - base_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("# M    = %d\n",   gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
+
 
   free(dsq);
   p7_gmx_Destroy(gx);
@@ -149,21 +267,19 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7DP_GENERIC_BENCHMARK*/
+#endif /*p7GENERIC_VITERBI_BENCHMARK*/
+/*----------------- end, benchmark ------------------------------*/
+
 
 
 /*****************************************************************
- * 4. Unit tests.
+ * 3. Unit tests
  *****************************************************************/
-#ifdef p7DP_GENERIC_TESTDRIVE
+#ifdef p7GENERIC_VITERBI_TESTDRIVE
 #include <string.h>
-
 #include "esl_getopts.h"
-#include "esl_alphabet.h"
-#include "esl_msa.h"
+#include "esl_random.h"
 #include "esl_randomseq.h"
-#include "esl_vectorops.h"
-
 
 /* The "basic" utest is a minimal driver for making a small DNA profile and a small DNA sequence,
  * then running Viterbi and Forward. It's useful for dumping DP matrices and profiles for debugging.
@@ -273,236 +389,16 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   return;
 }
 
-
-/* Forward is harder to validate. 
- * We do know that the Forward score is >= Viterbi.
- * We also know that the expected score on random seqs is <= 0 (not
- * exactly - we'd have to sample the random length from the background
- * model too, not just use a fixed L - but it's close enough to
- * being true to be a useful test.)
- */
-static void
-utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
-{
-  float     avg_sc;
-  ESL_DSQ  *dsq = NULL;
-  P7_GMX   *gx  = NULL;
-  P7_TRACE *tr  = NULL;
-  int       idx;
-  float     vsc, fsc, nullsc;
-
-  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
-
-  avg_sc = 0.;
-  for (idx = 0; idx < nseq; idx++)
-    {
-      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
-      if (p7_GViterbi(dsq, L, gm, gx, &vsc)       != eslOK) esl_fatal("viterbi failed");
-      if (p7_GForward(dsq, L, gm, gx, &fsc)       != eslOK) esl_fatal("forward failed");
-      if (fsc < vsc) esl_fatal("Forward score can't be less than Viterbi score");
-      if (p7_bg_NullOne(bg, dsq, L, &nullsc)      != eslOK) esl_fatal("null score failed");
-
-      avg_sc += fsc - nullsc;
-
-      if (esl_opt_GetBoolean(go, "--vv")) 
-	printf("utest_forward: Forward score: %.4f (total so far: %.4f)\n", fsc, avg_sc);
-    }
-
-  avg_sc /= (float) nseq;
-  if (avg_sc > 0.) esl_fatal("Forward scores have positive expectation (%f nats)", avg_sc);
-
-  p7_gmx_Destroy(gx);
-  p7_trace_Destroy(tr);
-  free(dsq);
-  return;
-}
-
-
-/* The MSV score can be validated against Viterbi (provided we trust
- * Viterbi), by creating a multihit local profile in which:
- *   1. All t_MM scores = 0
- *   2. All other core transitions = -inf
- *   3. All t_BMk entries uniformly log 2/(M(M+1))
- */
-static void
-utest_msv(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
-{
-  P7_PROFILE *g2 = NULL;
-  ESL_DSQ   *dsq = NULL;
-  P7_GMX    *gx  = NULL;
-  float     sc1, sc2;
-  int       k, idx;
-
-  if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
-  if ((g2     = p7_profile_Clone(gm))           == NULL)  esl_fatal("profile clone failed");
-
-  /* Make g2's scores appropriate for simulating the MSV algorithm in Viterbi */
-  esl_vec_FSet(g2->tsc, p7P_NTRANS * g2->M, -eslINFINITY);
-  for (k = 1; k <  g2->M; k++) p7P_TSC(g2, k, p7P_MM) = 0.0f;
-  for (k = 0; k <  g2->M; k++) p7P_TSC(g2, k, p7P_BM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
-
-  for (idx = 0; idx < nseq; idx++)
-    {
-      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
-
-      if (p7_GMSV    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSV failed");
-      if (p7_GViterbi(dsq, L, g2, gx, &sc2)       != eslOK) esl_fatal("viterbi failed");
-      if (fabs(sc1-sc2) > 0.0001) esl_fatal("MSV score not equal to Viterbi score");
-    }
-
-  p7_gmx_Destroy(gx);
-  p7_profile_Destroy(g2);
-  free(dsq);
-  return;
-}
-
-
-/* The "generation" test scores sequences generated by the same profile.
- * Each Viterbi and Forward score should be >= the trace score of the emitted seq.
- * The expectation of Forward scores should be positive.
- */
-static void
-utest_generation(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc,
-		 P7_PROFILE *gm, P7_HMM *hmm, P7_BG *bg, int nseq)
-{
-  ESL_SQ   *sq = esl_sq_CreateDigital(abc);
-  P7_GMX   *gx = p7_gmx_Create(gm->M, 100);
-  P7_TRACE *tr = p7_trace_Create();
-  float     vsc, fsc, nullsc, tracesc;
-  float     avg_fsc;
-  int       idx;
-
-  avg_fsc = 0.0;
-  for (idx = 0; idx < nseq; idx++)
-    {
-      if (p7_ProfileEmit(r, hmm, gm, bg, sq, tr)     != eslOK) esl_fatal("profile emission failed");
-
-      if (p7_gmx_GrowTo(gx, gm->M, sq->n)            != eslOK) esl_fatal("failed to reallocate gmx");
-      if (p7_GViterbi(sq->dsq, sq->n, gm, gx, &vsc)  != eslOK) esl_fatal("viterbi failed");
-      if (p7_GForward(sq->dsq, sq->n, gm, gx, &fsc)  != eslOK) esl_fatal("forward failed");
-      if (p7_trace_Score(tr, sq->dsq, gm, &tracesc)  != eslOK) esl_fatal("trace score failed");
-      if (p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc) != eslOK) esl_fatal("null score failed");
-
-      if (vsc < tracesc) esl_fatal("viterbi score is less than trace");
-      if (fsc < tracesc) esl_fatal("forward score is less than trace");
-
-      if (esl_opt_GetBoolean(go, "--vv")) 
-	printf("generated:  len=%d v=%8.4f  f=%8.4f  t=%8.4f\n", (int) sq->n, vsc, fsc, tracesc);
-      
-      avg_fsc += (fsc - nullsc);
-    }
-  
-  avg_fsc /= (float) nseq;
-  if (avg_fsc < 0.) esl_fatal("generation: Forward scores have negative expectation (%f nats)", avg_fsc);
-
-  p7_gmx_Destroy(gx);
-  p7_trace_Destroy(tr);
-  esl_sq_Destroy(sq);
-}
-
-/* The "enumeration" test samples a random enumerable HMM (transitions to insert are 0,
- * so the generated seq space only includes seqs of L<=M). 
- *
- * The test scores all seqs of length <=M by both Viterbi and Forward, verifies that 
- * the two scores are identical, and verifies that the sum of all the probabilities is
- * 1.0. It also verifies that the score of a sequence of length M+1 is indeed -infinity.
- * 
- * Because this function is going to work in unscaled probabilities, adding them up,
- * all P(seq) terms must be >> DBL_EPSILON.  That means M must be small; on the order 
- * of <= 10. 
- */
-static void
-utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
-{
-  char            errbuf[eslERRBUFSIZE];
-  P7_HMM         *hmm  = NULL;
-  P7_PROFILE     *gm   = NULL;
-  P7_BG          *bg   = NULL;
-  ESL_DSQ        *dsq  = NULL;
-  P7_GMX         *gx   = NULL;
-  float  vsc, fsc;
-  float  bg_ll;   		/* log P(seq | bg) */
-  double vp, fp;		/* P(seq,\pi | model) and P(seq | model) */
-  int L;
-  int i;
-  double total_p;
-  char   *seq;
-    
-  /* Sample an enumerable HMM & profile of length M.
-   */
-  if (p7_hmm_SampleEnumerable(r, M, abc, &hmm)      != eslOK) esl_fatal("failed to sample an enumerable HMM");
-  if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, 0, p7_UNILOCAL) != eslOK) esl_fatal("failed to config profile");
-  if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
-  if (p7_profile_Validate(gm, errbuf, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
-
-  if (  (dsq = malloc(sizeof(ESL_DSQ) * (M+3)))     == NULL)  esl_fatal("allocation failed");
-  if (  (seq = malloc(sizeof(char)    * (M+2)))     == NULL)  esl_fatal("allocation failed");
-  if ((gx     = p7_gmx_Create(hmm->M, M+3))         == NULL)  esl_fatal("matrix creation failed");
-
-  /* Enumerate all sequences of length L <= M
-   */
-  total_p = 0;
-  for (L = 0; L <= M; L++)
-    {
-      /* Initialize dsq of length L at 0000... */
-      dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;
-      for (i = 1; i <= L; i++) dsq[i] = 0;
-
-      while (1) 		/* enumeration of seqs of length L*/
-	{
-	  if (p7_GViterbi(dsq, L, gm, gx, &vsc)  != eslOK) esl_fatal("viterbi failed");
-	  if (p7_GForward(dsq, L, gm, gx, &fsc)  != eslOK) esl_fatal("forward failed");
- 
-	  /* calculate bg log likelihood component of the scores */
-	  for (bg_ll = 0., i = 1; i <= L; i++)  bg_ll += log(bg->f[dsq[i]]);
-	  
-	  /* convert to probabilities, adding the bg LL back to the LLR */
-	  vp =  exp(vsc + bg_ll);
-	  fp =  exp(fsc + bg_ll);
-
-	  if (esl_opt_GetBoolean(go, "--vv")) {
-	    esl_abc_Textize(abc, dsq, L, seq);
-	    printf("probability of sequence: %10s   %16g  (lod v=%8.4f f=%8.4f)\n", seq, fp, vsc, fsc);
-	  }
-	  total_p += fp;
-
-	  /* Increment dsq like a reversed odometer */
-	  for (i = 1; i <= L; i++) 
-	    if (dsq[i] < abc->K-1) { dsq[i]++; break; } else { dsq[i] = 0; }
-	  if (i > L) break;	/* we're done enumerating sequences */
-	}
-    }
-
-  /* That sum is subject to significant numerical error because of
-   * discretization error in FLogsum(); don't expect it to be too close.
-   */
-  if (total_p < 0.999 || total_p > 1.001) esl_fatal("Enumeration unit test failed: total Forward p isn't near 1.0 (%g)", total_p);
-  if (esl_opt_GetBoolean(go, "-v")) {
-    printf("enumeration test: total p is %g\n", total_p);
-  }
-  
-  p7_gmx_Destroy(gx);
-  p7_bg_Destroy(bg);
-  p7_profile_Destroy(gm);
-  p7_hmm_Destroy(hmm);
-  free(dsq);
-  free(seq);
-}
-#endif /*p7DP_GENERIC_TESTDRIVE*/
-
-
+#endif /*p7GENERIC_VITERBI_TESTDRIVE*/
+/*----------------- end, unit tests -----------------------------*/
 
 
 /*****************************************************************
- * 5. Test driver.
+ * 4. Test driver.
  *****************************************************************/
-/* gcc -g -Wall -Dp7DP_GENERIC_TESTDRIVE -I. -I../easel -L. -L../easel -o dp_generic_utest dp_generic.c -lhmmer -leasel -lm
+/* gcc -g -Wall -Dp7GENERIC_VITERBI_TESTDRIVE -I. -I../easel -L. -L../easel -o generic_viterbi_utest generic_viterbi.c -lhmmer -leasel -lm
  */
-#ifdef p7DP_GENERIC_TESTDRIVE
+#ifdef p7GENERIC_VITERBI_TESTDRIVE
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_msa.h"
@@ -519,8 +415,8 @@ static ESL_OPTIONS options[] = {
   { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the generic implementation";
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for the generic Viterbi implementation";
 
 int
 main(int argc, char **argv)
@@ -539,8 +435,6 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
   else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
-  utest_basic(go);
-  
   if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
@@ -549,12 +443,9 @@ main(int argc, char **argv)
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
-  utest_viterbi    (go, r, abc, bg, gm, nseq, L);
-  utest_forward    (go, r, abc, bg, gm, nseq, L);
-  utest_msv        (go, r, abc, bg, gm, nseq, L);
-  utest_generation (go, r, abc, gm, hmm, bg, nseq);
-  utest_enumeration(go, r, abc, 4);	/* can't go much higher than 5; enumeration test is cpu-intensive. */
-  
+  utest_basic  (go);
+  utest_viterbi(go, r, abc, bg, gm, nseq, L);
+
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -563,21 +454,25 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
+#endif /*p7GENERIC_VITERBI_TESTDRIVE*/
+/*-------------------- end, test driver -------------------------*/
 
-#endif /*p7DP_GENERIC_TESTDRIVE*/
+
+
 
 /*****************************************************************
- * 6. Example
+ * 5. Example
  *****************************************************************/
-#ifdef p7DP_GENERIC_EXAMPLE
+/* This is essentially identical to the vtrace example. */
+#ifdef p7GENERIC_VITERBI_EXAMPLE
 /* 
-   gcc -g -O2 -Dp7DP_GENERIC_EXAMPLE -I. -I../easel -L. -L../easel -o example dp_generic.c -lhmmer -leasel -lm
+   gcc -g -O2 -Dp7GENERIC_VITERBI_EXAMPLE -I. -I../easel -L. -L../easel -o generic_viterbi_example generic_viterbi.c -lhmmer -leasel -lm
  */
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_getopts.h"
-#include "esl_dmatrix.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
@@ -589,14 +484,13 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of a forward/backward posterior probability heat map";
+static char banner[] = "example of generic Viterbi";
 
 
 int 
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -605,15 +499,13 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_GMX         *fwd     = NULL;
-  P7_GMX         *bck     = NULL;
-  ESL_DMATRIX    *pp      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   P7_TRACE       *tr      = NULL;
-  P7_ALIDISPLAY  *ad      = NULL;
   int             format  = eslSQFILE_UNKNOWN;
+  char            errbuf[eslERRBUFSIZE];
   float           sc;
-  int             i,d,k;
+  int             i,d;
   int             status;
 
   /* Read in one HMM */
@@ -637,75 +529,37 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
   
-  /* allocate DP matrices for forward and backward */
+  /* Allocate matrix and a trace */
   fwd = p7_gmx_Create(gm->M, sq->n);
-  bck = p7_gmx_Create(gm->M, sq->n);
+  tr  = p7_trace_Create();
 
-  /* run Forward, Backward */
-  tr = p7_trace_Create();
-
+  /* Run Viterbi; do traceback */
   p7_GViterbi (sq->dsq, sq->n, gm, fwd, &sc);
   p7_GTrace   (sq->dsq, sq->n, gm, fwd, tr);
+
+  /* Dump and validate the trace. */
+  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace %d fails validation:\n%s\n", i, errbuf);
+
+  /* Domain info in the trace. */
   p7_trace_Index(tr);
   printf("# Viterbi: %d domains : ", tr->ndom);
   for (d = 0; d < tr->ndom; d++) printf("%6d %6d %6d %6d  ", tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d]);
   printf("\n");
-  p7_trace_Reuse(tr);
 
-  p7_GForward (sq->dsq, sq->n, gm, fwd, &sc);
-  p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);
-
-  for (i = 0; i < 1000; i++)
-    {
-      p7_GStochasticTrace(r, sq->dsq, sq->n, gm, fwd, tr);
-      p7_trace_Index(tr);
-      /* printf("%3d  ", tr->ndom); */
-
-      for (d = 0; d < tr->ndom; d++) printf("%6d %6d %6d %6d %6d %6d\n", 
-					    tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d], 
-					    tr->sqfrom[d]-tr->hmmfrom[d], tr->sqto[d]-tr->hmmto[d]);
-	
-#if 0
-      for (d = 0; d < tr->ndom; d++) {
-	printf("domain %d of %d\n", d+1, tr->ndom);
-	ad = p7_alidisplay_Create(tr, d, gm, sq);
-	p7_alidisplay_Print(stdout, ad, 40, 80);
-	p7_alidisplay_Destroy(ad);
-      }
-#endif
-      p7_trace_Reuse(tr);
-    }
+  /* Cleanup */
   p7_trace_Destroy(tr);
-  
-#if 0
-  /* construct a LxM matrix holding posterior probs for each Match state emitting residue i */
-  pp = esl_dmatrix_Create(sq->n, gm->M);
-  for (i = 1; i <= sq->n; i++)
-    for (k = 1; k <= gm->M; k++)
-      pp->mx[i-1][k-1] = fwd->dp[i][k*3] + bck->dp[i][k*3] - sc;
-
-  /* output a heatmap */
-  dmx_Visualize(stdout, pp, -8.0, 0.0);
-#endif
-
-#if 0
-  printf("min = %g\n",       esl_dmx_Min(pp));
-  printf("max = %g\n",       esl_dmx_Max(pp));
-  printf("sc  = %g nats\n",  sc);
-#endif
-
-  esl_dmatrix_Destroy(pp);
   p7_gmx_Destroy(fwd);
-  p7_gmx_Destroy(bck);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
+  esl_sq_Destroy(sq);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7DP_GENERIC_EXAMPLE*/
-
+#endif /*p7GENERIC_VITERBI_EXAMPLE*/
+/*-------------------- end, example -----------------------------*/
 
 /*****************************************************************
  * @LICENSE@

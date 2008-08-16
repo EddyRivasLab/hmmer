@@ -35,7 +35,7 @@
  */
 
 
-/* Function:  p7_PosteriorDecoding()
+/* Function:  p7_GPosteriorDecoding()
  * Synopsis:  Calculate posterior decoding probabilities, using forward/backward.
  * Incept:    SRE, Fri Feb 29 10:16:21 2008 [Janelia]
  *
@@ -73,7 +73,7 @@
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_PosteriorDecoding(int L, const P7_PROFILE *gm, const P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp)
+p7_GPosteriorDecoding(int L, const P7_PROFILE *gm, const P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp)
 {
   float      **dp   = pp->dp;
   float       *xmx  = pp->xmx;
@@ -247,133 +247,115 @@ p7_OptimalAccuracyDP(int L, const P7_PROFILE *gm, const P7_GMX *pp, P7_GMX *gx, 
 int
 p7_OATrace(int L, const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx, P7_TRACE *tr)
 {
-  int     status;
-  int     i;			/* position in seq (1..L) */
-  int     k;			/* position in model (1..M) */
+  int           i   = L;			/* position in seq (1..L) */
+  int           k   = 0;			/* position in model (1..M) */
   int           M   = gm->M;
   float      **dp   = gx->dp;
   float       *xmx  = gx->xmx;
   float const *tsc  = gm->tsc;
   float   tol = 1e-4;
   float   t1, t2;
+  int     s;
+  int     status;
 
-  if ((status = p7_trace_Reuse(tr)) != eslOK) goto ERROR;
+  if ((status = p7_trace_Reuse(tr)) != eslOK) return status;
 
-  /* Initialization. (back to front. ReverseTrace() called later.)  */
-  if ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) goto ERROR;
-  if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) goto ERROR;
-  i    = L;			/* next position to explain in seq */
-
-  /* Traceback  */
+  if ((status = p7_trace_Append(tr, p7T_T, k, i)) != eslOK) return status;
+  if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) return status;
   while (tr->st[tr->N-1] != p7T_S) {
 
     switch (tr->st[tr->N-1]) {
     case p7T_C:		/* C(i) comes from C(i-1) or E(i) */
-      if   (XMX(i,p7G_C) < 0.0f) ESL_XEXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
+      if   (XMX(i,p7G_C) < 0.0f) ESL_EXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
       t1 = ( (gm->xsc[p7P_C][p7P_LOOP] == -eslINFINITY) ? FLT_MIN : 1.0);
       t2 = ( (gm->xsc[p7P_E][p7P_MOVE] == -eslINFINITY) ? FLT_MIN : 1.0);
 
       if (esl_FCompare(XMX(i, p7G_C), t1 * (XMX(i-1, p7G_C) + pp->xmx[i*p7G_NXCELLS + p7G_C]), tol) == eslOK) {
-	tr->i[tr->N-1]    = i--;  /* first C doesn't emit: subsequent ones do */
-	status = p7_trace_Append(tr, p7T_C, 0, 0);
+	i--;  /* first C doesn't emit: subsequent ones do */
+	s = p7T_C; 
       } else if (esl_FCompare(XMX(i, p7G_C), t2 * XMX(i, p7G_E), tol) == eslOK) 
-	status = p7_trace_Append(tr, p7T_E, 0, 0);
-      else ESL_XEXCEPTION(eslFAIL, "C at i=%d couldn't be traced", i);
+	s = p7T_E;
+      else ESL_EXCEPTION(eslFAIL, "C at i=%d couldn't be traced", i);
       break;
 
     case p7T_E:		/* E connects from any M state, or D_M. k set here */
-      if (XMX(i, p7G_E) < 0.0) ESL_XEXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
+      if (XMX(i, p7G_E) < 0.0) ESL_EXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
       
-      if      (esl_FCompare(XMX(i, p7G_E), MMX(i,M), tol) == eslOK) { k = M; status = p7_trace_Append(tr, p7T_M, M, i); }
-      else if (esl_FCompare(XMX(i, p7G_E), DMX(i,M), tol) == eslOK) { k = M; status = p7_trace_Append(tr, p7T_D, M, i); }
+      if      (esl_FCompare(XMX(i, p7G_E), MMX(i,M), tol) == eslOK) { k = M; s = p7T_M; }
+      else if (esl_FCompare(XMX(i, p7G_E), DMX(i,M), tol) == eslOK) { k = M; s = p7T_D; }
       else if (p7_profile_IsLocal(gm)) /* local exits allowed? */
 	{
 	  for (k = M-1; k >= 1; k--)
-	    if (esl_FCompare(XMX(i, p7G_E), MMX(i,k), tol) == eslOK) { status = p7_trace_Append(tr, p7T_M, k, i); break; }
-	  if (k <= 0) ESL_XEXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
+	    if (esl_FCompare(XMX(i, p7G_E), MMX(i,k), tol) == eslOK) { s = p7T_M; break; }
+	  if (k <= 0) ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
       }
-      else ESL_XEXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
+      else ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
       break;
 
     case p7T_M:			/* M connects from i-1,k-1, or B */
-      if (MMX(i,k) < 0.0) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
+      if (MMX(i,k) < 0.0) ESL_EXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(MMX(i,k), TSCDELTA(p7P_MM, k-1) * (MMX(i-1,k-1)   + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k-1, i-1);
-      else if (esl_FCompare(MMX(i,k), TSCDELTA(p7P_IM, k-1) * (IMX(i-1,k-1)   + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) status = p7_trace_Append(tr, p7T_I, k-1, i-1);
-      else if (esl_FCompare(MMX(i,k), TSCDELTA(p7P_DM, k-1) * (DMX(i-1,k-1)   + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) status = p7_trace_Append(tr, p7T_D, k-1, 0);
-      else if (esl_FCompare(MMX(i,k), TSCDELTA(p7P_BM, k-1) * (XMX(i-1,p7G_B) + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) status = p7_trace_Append(tr, p7T_B, 0,   0);
-      else ESL_XEXCEPTION(eslFAIL, "M at k=%d,i=%d couldn't be traced", k,i);
-
-      if (status != eslOK) goto ERROR;
+      if      (esl_FCompare(MMX(i,k), TSCDELTA(p7P_MM, k-1) * (MMX(i-1,k-1)   + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) s = p7T_M;
+      else if (esl_FCompare(MMX(i,k), TSCDELTA(p7P_IM, k-1) * (IMX(i-1,k-1)   + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) s = p7T_I;
+      else if (esl_FCompare(MMX(i,k), TSCDELTA(p7P_DM, k-1) * (DMX(i-1,k-1)   + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) s = p7T_D;
+      else if (esl_FCompare(MMX(i,k), TSCDELTA(p7P_BM, k-1) * (XMX(i-1,p7G_B) + pp->dp[i][k*p7G_NSCELLS + p7G_M]), tol) == eslOK) s = p7T_B;
+      else ESL_EXCEPTION(eslFAIL, "M at k=%d,i=%d couldn't be traced", k,i);
       k--; i--;
       break;
 
     case p7T_D:			/* D connects from M,D at i,k-1 */
-      if (DMX(i, k) < 0.0) ESL_XEXCEPTION(eslFAIL, "impossible D reached at k=%d,i=%d", k,i);
+      if (DMX(i, k) < 0.0) ESL_EXCEPTION(eslFAIL, "impossible D reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(DMX(i,k), TSCDELTA(p7P_MD, k-1) * MMX(i, k-1), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k-1, i);
-      else if (esl_FCompare(DMX(i,k), TSCDELTA(p7P_DD, k-1) * DMX(i, k-1), tol) == eslOK) status = p7_trace_Append(tr, p7T_D, k-1, 0);
-      else ESL_XEXCEPTION(eslFAIL, "D at k=%d,i=%d couldn't be traced", k,i);
-      if (status != eslOK) goto ERROR;
+      if      (esl_FCompare(DMX(i,k), TSCDELTA(p7P_MD, k-1) * MMX(i, k-1), tol) == eslOK) s = p7T_M;
+      else if (esl_FCompare(DMX(i,k), TSCDELTA(p7P_DD, k-1) * DMX(i, k-1), tol) == eslOK) s = p7T_D;
+      else ESL_EXCEPTION(eslFAIL, "D at k=%d,i=%d couldn't be traced", k,i);
       k--;
       break;
 
     case p7T_I:			/* I connects from M,I at i-1,k*/
-      if (IMX(i,k) < 0.0) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
+      if (IMX(i,k) < 0.0) ESL_EXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(IMX(i,k), TSCDELTA(p7P_MI, k) * (MMX(i-1,k) + pp->dp[i][k*p7G_NSCELLS + p7G_I]), tol) == eslOK) status = p7_trace_Append(tr, p7T_M, k, i-1);
-      else if (esl_FCompare(IMX(i,k), TSCDELTA(p7P_II, k) * (IMX(i-1,k) + pp->dp[i][k*p7G_NSCELLS + p7G_I]), tol) == eslOK) status = p7_trace_Append(tr, p7T_I, k, i-1);
-      else ESL_XEXCEPTION(eslFAIL, "I at k=%d,i=%d couldn't be traced", k,i);
-      if (status != eslOK) goto ERROR;
+      if      (esl_FCompare(IMX(i,k), TSCDELTA(p7P_MI, k) * (MMX(i-1,k) + pp->dp[i][k*p7G_NSCELLS + p7G_I]), tol) == eslOK) s = p7T_M;
+      else if (esl_FCompare(IMX(i,k), TSCDELTA(p7P_II, k) * (IMX(i-1,k) + pp->dp[i][k*p7G_NSCELLS + p7G_I]), tol) == eslOK) s = p7T_I;
+      else ESL_EXCEPTION(eslFAIL, "I at k=%d,i=%d couldn't be traced", k,i);
       i--;
       break;
 
     case p7T_N:			/* N connects from S, N */
       t1 = ( (gm->xsc[p7P_N][p7P_LOOP] == -eslINFINITY) ? FLT_MIN : 1.0);
 
-      if (i == 0) status = p7_trace_Append(tr, p7T_S, 0, 0);
-      else if (esl_FCompare(XMX(i,p7G_N), t1 * (XMX(i-1, p7G_N) + pp->xmx[i*p7G_NXCELLS + p7G_N]), tol) == eslOK)
-	{
-	  tr->i[tr->N-1] = i--;
-	  status = p7_trace_Append(tr, p7T_N, 0, 0);
-	} 
-      else ESL_XEXCEPTION(eslFAIL, "N at i=%d couldn't be traced", i);
+      if (i == 0) s = p7T_S;
+      else { i--; s = p7T_N; }
       break;
 
     case p7T_B:			/* B connects from N, J */
-      if (XMX(i,p7G_B) < 0.0) ESL_XEXCEPTION(eslFAIL, "impossible B reached at i=%d", i);
+      if (XMX(i,p7G_B) < 0.0) ESL_EXCEPTION(eslFAIL, "impossible B reached at i=%d", i);
 
       t1 = ( (gm->xsc[p7P_N][p7P_MOVE] == -eslINFINITY) ? FLT_MIN : 1.0);
       t2 = ( (gm->xsc[p7P_J][p7P_MOVE] == -eslINFINITY) ? FLT_MIN : 1.0);
 
-      if      (esl_FCompare(XMX(i,p7G_B), t1 * XMX(i, p7G_N), tol) == eslOK) status = p7_trace_Append(tr, p7T_N, 0, 0);
-      else if (esl_FCompare(XMX(i,p7G_B), t2 * XMX(i, p7G_J), tol) == eslOK) status = p7_trace_Append(tr, p7T_J, 0, 0);
-      else    ESL_XEXCEPTION(eslFAIL, "B at i=%d couldn't be traced", i);
+      if      (esl_FCompare(XMX(i,p7G_B), t1 * XMX(i, p7G_N), tol) == eslOK) s = p7T_N;
+      else if (esl_FCompare(XMX(i,p7G_B), t2 * XMX(i, p7G_J), tol) == eslOK) s = p7T_J;
+      else    ESL_EXCEPTION(eslFAIL, "B at i=%d couldn't be traced", i);
       break;
 
     case p7T_J:			/* J connects from E(i) or J(i-1) */
-      if (XMX(i,p7G_J) < 0.0) ESL_XEXCEPTION(eslFAIL, "impossible J reached at i=%d", i);
+      if (XMX(i,p7G_J) < 0.0) ESL_EXCEPTION(eslFAIL, "impossible J reached at i=%d", i);
 
       t1 = ( (gm->xsc[p7P_J][p7P_LOOP] == -eslINFINITY) ? FLT_MIN : 1.0);
       t2 = ( (gm->xsc[p7P_E][p7P_LOOP] == -eslINFINITY) ? FLT_MIN : 1.0);
 
-      if (esl_FCompare(XMX(i,p7G_J), t1 * (XMX(i-1,p7G_J) + pp->xmx[i*p7G_NXCELLS + p7G_J]), tol) == eslOK) {
-	tr->i[tr->N-1] = i--;
-	status = p7_trace_Append(tr, p7T_J, 0, 0);
-      } else if (esl_FCompare(XMX(i,p7G_J), t2 * XMX(i,p7G_E), tol) == eslOK) 
-	status = p7_trace_Append(tr, p7T_E, 0, 0);
-      else  ESL_XEXCEPTION(eslFAIL, "J at i=%d couldn't be traced", i);
+      if      (esl_FCompare(XMX(i,p7G_J), t1 * (XMX(i-1,p7G_J) + pp->xmx[i*p7G_NXCELLS + p7G_J]), tol) == eslOK) { i--; s = p7T_J; }
+      else if (esl_FCompare(XMX(i,p7G_J), t2 * XMX(i,p7G_E),                                      tol) == eslOK) {      s = p7T_E; }
+      else  ESL_EXCEPTION(eslFAIL, "J at i=%d couldn't be traced", i);
       break;
 
-    default: ESL_XEXCEPTION(eslFAIL, "bogus state in traceback");
+    default: ESL_EXCEPTION(eslFAIL, "bogus state in traceback");
     } /* end switch over statetype[tpos-1] */
 
-    if (status != eslOK) goto ERROR;
+    if ((status = p7_trace_Append(tr, s, k, i)) != eslOK) return status;
   } /* end traceback, at S state */
 
-  if ((status = p7_trace_Reverse(tr)) != eslOK) goto ERROR;
+  if ((status = p7_trace_Reverse(tr)) != eslOK) return status;
   return eslOK;
-
- ERROR:
-  return status;
 }

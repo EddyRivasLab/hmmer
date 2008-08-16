@@ -70,20 +70,17 @@ static int sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_ks
 int
 p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 {
-  char      st;			/* state type */
-  int       k;			/* position in model nodes 1..M */
-  int       i;			/* position in sequence 1..L */
+  int       k   = 0;		/* position in model nodes 1..M */
+  int       i   = 0;		/* position in sequence 1..L */
+  char      st  = p7T_B;	/* state type */
   int       x;			/* sampled residue */
   int       status;
 
   if (sq != NULL) esl_sq_Reuse(sq);    
   if (tr != NULL) {
     if ((status = p7_trace_Reuse(tr))                != eslOK) goto ERROR;
-    if ((status = p7_trace_Append(tr, p7T_B, 0, 0)) != eslOK) goto ERROR;
+    if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
   }
-  st    = p7T_B;
-  k     = 0;
-  i     = 0;
   while (st != p7T_E)
     {
       /* Sample next state type, given current state type (and current k) */
@@ -134,13 +131,8 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 
       /* Add state to trace */
       if (tr != NULL) {
-	if (x == eslDSQ_SENTINEL) {
-	  if ((status = p7_trace_Append(tr, st, k, 0)) != eslOK) goto ERROR;
-	} else {
-	  if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
-	}
+	if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
       }
-
       /* Add x to sequence */
       if (sq != NULL && x != eslDSQ_SENTINEL) 
 	if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
@@ -193,8 +185,8 @@ int
 p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const P7_BG *bg, ESL_SQ *sq, P7_TRACE *tr)
 {
   char      prv, st;		/* prev, current state type */
-  int       k;		        /* position in model nodes 1..M */
-  int       i;			/* position in sequence 1..L */
+  int       k = 0;	        /* position in model nodes 1..M */
+  int       i = 0;		/* position in sequence 1..L */
   int       x;			/* sampled residue */
   int       kend = hmm->M;      /* predestined end node */
   int       status;
@@ -208,12 +200,10 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
   if (sq != NULL) esl_sq_Reuse(sq);    
   if (tr != NULL) {
     if ((status = p7_trace_Reuse(tr))               != eslOK) goto ERROR;
-    if ((status = p7_trace_Append(tr, p7T_S, 0, 0)) != eslOK) goto ERROR;
-    if ((status = p7_trace_Append(tr, p7T_N, 0, 0)) != eslOK) goto ERROR;
+    if ((status = p7_trace_Append(tr, p7T_S, k, i)) != eslOK) goto ERROR;
+    if ((status = p7_trace_Append(tr, p7T_N, k, i)) != eslOK) goto ERROR;
   }
   st    = p7T_N;
-  k     = 0;
-  i     = 0;
   while (st != p7T_T)
     {
       /* Sample a state transition. After this section, prv and st (prev->current state) are set;
@@ -280,14 +270,10 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
       /* Add residue (if any) to sequence */
       if (sq != NULL && x != eslDSQ_SENTINEL && (status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
 
-      /* Add state to trace; distinguish emitting position (pass i=i) from non (pass i=0) */
+      /* Add state to trace. */
       if (tr != NULL) {
-	if (x == eslDSQ_SENTINEL) {
-	  if ((status = p7_trace_Append(tr, st, k, 0)) != eslOK) goto ERROR;
-	} else {
-	  if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
-	}
-      }
+	if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
+      } 
     }
   /* Terminate the sequence (if we're generating one) */
   if (sq != NULL && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;

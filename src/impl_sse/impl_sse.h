@@ -15,6 +15,11 @@
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 
+#include "hmmer.h"
+
+#define p7_SIMD_NF 4
+#define p7_SIMD_NU 16
+
 /* In calculating Q, the number of vectors we need in a row, we have
  * to make sure there's at least 2, or a striped implementation fails.
  */
@@ -76,12 +81,12 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
 typedef struct p7_oprofile_s {
   /* tu, ru, xu are for ViterbiFilter(): lspace uchars, 16x vectors            */
   __m128i  *tu;	        	/* transition score blocks                     */
-  __m128i **ru;     		/* [x][q]:  r16 array and r16[0] are allocated */
+  __m128i **ru;     		/* [x][q]:  ru, ru[0] are allocated            */
   uint8_t   xu[p7O_NXSTATES][p7O_NXTRANS];
   int       allocQ16;		/* how many uchar vectors                      */
 
   /* info for the MSVFilter() implementation                                   */
-  __m128i **rm;     		/* [x][q]:  m16 array and m16[0] are allocated */
+  __m128i **rm;     		/* [x][q]:  rm, rm[0] are allocated            */
   uint8_t   tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
   uint8_t   tec;		/* constant E->C  cost: scaled log 0.5         */
   uint8_t   tjb;		/* constant J->B  cost: scaled log 3/(L+3)     */
@@ -94,7 +99,7 @@ typedef struct p7_oprofile_s {
 
   /* tf, rf, xf are for ForwardFilter():    pspace floats, 4x vectors          */
   __m128  *tf;	    		/* transition probability blocks               */
-  __m128 **rf;     		/* [x][q]:  rf array and rf[0] are allocated   */
+  __m128 **rf;     		/* [x][q]:  rf, rf[0] are allocated            */
   float    xf[p7O_NXSTATES][p7O_NXTRANS];
   int      allocQ4;		/* how many float vectors                      */
 
@@ -119,6 +124,7 @@ typedef struct p7_oprofile_s {
   int    M;			/* model length                                    */
   const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information             */
 } P7_OPROFILE;
+
 
 
 /*****************************************************************
@@ -177,6 +183,23 @@ typedef struct p7_omx_s {
 #define DMXo(q) (dp[(q) * p7X_NSCELLS + p7X_D])
 #define IMXo(q) (dp[(q) * p7X_NSCELLS + p7X_I])
 
+/* and this version works with a ptr to the approp DP row. */
+#define MMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_M])
+#define DMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_D])
+#define IMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
+
+static inline float
+p7_omx_FGetMDI(P7_OMX *ox, int s, int i, int k)
+{
+  union { __m128 v; float p[4]; } u;
+  int   Q = p7O_NQF(ox->M);
+  int   q = p7X_NSCELLS * ((k-1) % Q) + s;
+  int   r = (k-1)/Q;
+  u.v = ox->dpf[i][q];
+  return u.p[r];
+}
+
+
 
 /*****************************************************************
  * 3. Declarations of the external API.
@@ -195,6 +218,7 @@ extern int          p7_omx_DumpMSVRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t 
 
 /* p7_oprofile.c */
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
+extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
@@ -207,12 +231,14 @@ extern int          p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *
 extern int          p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
 
-/* fbparsers.c */
-extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *ret_sc);
-extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *ret_sc);
+/* fwdback.c */
+extern int p7_Forward       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
+extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
+extern int p7_Backward      (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 
-/* fwdfilter.c */
-extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_PosteriorDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp);
+extern int p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

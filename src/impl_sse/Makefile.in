@@ -16,9 +16,9 @@ MYLIBS         = -lhmmer -leasel -lm
 MYLIBDIRS      = -L../../easel -L..
 MYINCDIRS      = -I../../easel -I..
 
-OBJS =  fbparsers.o\
-	fwdfilter.o\
+OBJS =  fwdback.o\
 	msvfilter.o\
+	stotrace.o\
 	vitfilter.o\
 	vitscore.o\
 	p7_omx.o\
@@ -27,35 +27,57 @@ OBJS =  fbparsers.o\
 HDRS =  impl_sse.h
 
 UTESTS = \
-	fbparsers_utest\
-	fwdfilter_utest\
+	fwdback_utest\
 	msvfilter_utest\
+	stotrace_utest\
 	vitfilter_utest\
 	vitscore_utest
 
 BENCHMARKS =\
-	fbparsers_benchmark\
-	fwdfilter_benchmark\
+	fwdback_benchmark\
 	msvfilter_benchmark\
+	stotrace_benchmark\
 	vitfilter_benchmark\
 	vitscore_benchmark
 
 EXAMPLES =\
-	fbparsers_example\
-	fwdfilter_example\
+	fwdback_example\
 	msvfilter_example\
+	stotrace_example\
 	vitfilter_example\
 	vitscore_example
 
-all: 	   objfiles drivers
+all: 	   ${HDRS} ${OBJS}
 
 check:     ${UTESTS}
 
-objfiles:  ${OBJS} ${HDRS}
+dev:       ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
 
-drivers:   ../libhmmer.a ../../easel/libeasel.a ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
+${UTESTS}: ../libhmmer.a ../../easel/libeasel.a 
+	@ echo "Compiling $@"
+	@BASENAME=`echo $@ | sed -e 's/_utest//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
+	DFILE=$${BASENAME}.c ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
-../libhmmer.a:
+${BENCHMARKS}: ../libhmmer.a ../../easel/libeasel.a
+	@ echo "Compiling $@"
+	@BASENAME=`echo $@ | sed -e 's/_benchmark//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_BENCHMARK ;\
+	DFILE=$${BASENAME}.c ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+
+${EXAMPLES}: ../libhmmer.a ../../easel/libeasel.a 
+	@ echo "Compiling $@"
+	@BASENAME=`echo $@ | sed -e 's/_example//'` ;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_EXAMPLE ;\
+	DFILE=$${BASENAME}.c ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+
+../libhmmer.a:  ${HDRS} ${OBJS}
 	cd ..; ${MAKE} libhmmer.a
 
 ../../easel/libeasel.a:
@@ -65,32 +87,6 @@ drivers:   ../libhmmer.a ../../easel/libeasel.a ${UTESTS} ${BENCHMARKS} ${EXAMPL
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
 
-${UTESTS}: ${OBJS} ${HDRS}
-	BASENAME=`echo $@ | sed -e 's/_utest//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
-	DFILE=$${BASENAME}.c ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
-
-${BENCHMARKS}: ${OBJS} ${HDRS}
-	BASENAME=`echo $@ | sed -e 's/_benchmark//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_BENCHMARK ;\
-	DFILE=$${BASENAME}.c ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
-
-${EXAMPLES}: ${OBJS} ${HDRS}
-	BASENAME=`echo $@ | sed -e 's/_example//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_EXAMPLE ;\
-	DFILE=$${BASENAME}.c ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
-
-
-
-#################################################################
-## Miscellaneous targets.
-##
 distclean:
 	make clean
 	-rm -f Makefile 

@@ -2,12 +2,12 @@
  *
  * Both profile and DP matrix are striped and interleaved, for fast
  * SIMD vector operations. Calculations are in probability space
- * scaled odds ratios, actually) rather than log probabilities,
+ * (scaled odds ratios, actually) rather than log probabilities,
  * allowing fast multiply/add operations rather than slow Logsum()
  * calculations. Sparse rescaling is used to achieve full dynamic
  * range of scores.
  * 
- * The p7_Forward() and p7_Backward() routines may be used either in a
+ * The Forward and Backward implementations may be used either in a
  * full O(ML) mode that keeps an entire DP matrix, or in a O(M+L)
  * linear memory "parsing" mode that only keeps one row of memory for
  * the main MDI states and one column 0..L for the special states
@@ -20,9 +20,9 @@
  * domain structure of a target sequence.
  * 
  * Contents:
- *   1. Forward/Backward implementations.
- *   2. Posterior decoding.
- *   3. Stochastic traceback.
+ *   1. Forward/Backward wrapper API
+ *   2. Forward and Backward engine implementations
+ *   3. Posterior decoding.
  *   4. Benchmark driver.
  *   5. Unit tests.
  *   6. Test driver.
@@ -46,33 +46,126 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
+static int forward_engine (int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
+static int backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+
+
 /*****************************************************************
- * 1. Forward/Backward implementations
+ * 1. Forward/Backward API.
  *****************************************************************/
 
 /* Function:  p7_Forward()
- * Synopsis:  The Forward algorithm.
- * Incept:    SRE, Thu Jul 31 09:30:31 2008 [Janelia]
+ * Synopsis:  The Forward algorithm, full matrix fill version.
+ * Incept:    SRE, Fri Aug 15 18:59:43 2008 [Casa de Gatos]
  *
  * Purpose:   Calculates the Forward algorithm for sequence <dsq> of
  *            length <L> residues, using optimized profile <om>, and a
- *            preallocated DP matrix <ox>.  Return the Forward score
- *            (in nats) in <ret_sc>.
+ *            preallocated DP matrix <ox>. Upon successful return, <ox>
+ *            contains the filled Forward matrix, and <*opt_sc>
+ *            optionally contains the raw Forward score in nats.
  *            
- *            If the <do_full> flag is <TRUE>, then the standard
- *            Forward calculation is done, in $O(ML)$ memory, keeping
- *            the entire DP matrix. The caller must provide a suitably
- *            allocated full <ox> by calling <ox = p7_omx_Create(M, L,
- *            L)> or <p7_omx_GrowTo(ox, M, L, L)>.
+ *            This calculation requires $O(ML)$ memory and time.
+ *            The caller must provide a suitably allocated full <ox>
+ *            by calling <ox = p7_omx_Create(M, L, L)> or
+ *            <p7_omx_GrowTo(ox, M, L, L)>.
  *
- *            If <do_full> is <FALSE>, then a linear-memory "parsing"
- *            calculation is done in $O(M+L)$ memory, keeping only one
- *            row of the main MDI matrix. Upon return,
- *            <ox->xmx[][0,1..L]> contain the DP matrix in
- *            single-precision probability for all special X states
- *            (BENCJ). The caller must provide a suitably allocated
- *            "parsing" <ox> by calling <ox = p7_omx_Create(M, 0, L)>
- *            or <p7_omx_GrowTo(ox, M, 0, L)>.
+ *            The model <om> must be configured in local alignment
+ *            mode. The sparse rescaling method used to keep
+ *            probability values within single-precision floating
+ *            point dynamic range cannot be safely applied to models in
+ *            glocal or global mode.
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues          
+ *            om      - optimized profile
+ *            ox      - RETURN: Forward DP matrix
+ *            opt_sc  - RETURN: Forward score (in nats)          
+ *
+ * Returns:   <eslOK> on success. 
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
+ *            isn't in local alignment mode.
+ *            <eslERANGE> if the score exceeds the limited range of
+ *            a probability-space odds ratio.
+ *            In either case, <*opt_sc> is undefined.
+ */
+int
+p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+{
+#ifdef p7_DEBUGGING		
+  if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (L     >= ox->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
+  if (L     >= ox->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#endif
+
+  return forward_engine(TRUE, dsq, L, om, ox, opt_sc);
+}
+
+/* Function:  p7_ForwardParser()
+ * Synopsis:  The Forward algorithm, linear memory parsing version.
+ * Incept:    SRE, Fri Aug 15 19:05:26 2008 [Casa de Gatos]
+ *
+ * Purpose:   Same as <p7_Forward() except that the full matrix isn't
+ *            kept. Instead, a linear $O(M+L)$ memory algorithm is
+ *            used, keeping only the DP matrix values for the special
+ *            (BENCJ) states. These are sufficient to do posterior
+ *            decoding to identify high-probability regions where
+ *            domains are.
+ * 
+ *            The caller must provide a suitably allocated "parsing"
+ *            <ox> by calling <ox = p7_omx_Create(M, 0, L)> or
+ *            <p7_omx_GrowTo(ox, M, 0, L)>.
+ *            
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues          
+ *            om      - optimized profile
+ *            ox      - RETURN: Forward DP matrix
+ *            ret_sc  - RETURN: Forward score (in nats)          
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
+ *            isn't in local alignment mode.
+ *            <eslERANGE> if the score exceeds the limited range of
+ *            a probability-space odds ratio.
+ *            In either case, <*opt_sc> is undefined.
+ */
+int
+p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+{
+#ifdef p7_DEBUGGING		
+  if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (ox->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
+  if (L     >= ox->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#endif
+
+  return forward_engine(FALSE, dsq, L, om, ox, opt_sc);
+}
+
+
+
+/* Function:  p7_Backward()
+ * Synopsis:  The Backward algorithm; full matrix fill version.
+ * Incept:    SRE, Sat Aug 16 08:34:22 2008 [Janelia]
+ *
+ * Purpose:   Calculates the Backward algorithm for sequence <dsq> of
+ *            length <L> residues, using optimized profile <om>, and a
+ *            preallocated DP matrix <bck>. A filled Forward matrix
+ *            must also be provided in <fwd>, because we need to use
+ *            the same sparse scaling factors that Forward used. The
+ *            <bck> matrix is filled in, and the Backward score (in
+ *            nats) is optionally returned in <opt_sc>.
+ *            
+ *            This calculation requires $O(ML)$ memory and time. The
+ *            caller must provide a suitably allocated full <bck> by
+ *            calling <bck = p7_omx_Create(M, L, L)> or
+ *            <p7_omx_GrowTo(bck, M, L, L)>.
+ *            
+ *            Because only the sparse scaling factors are needed from
+ *            the <fwd> matrix, the caller may have this matrix
+ *            calculated either in full or parsing mode.
  *            
  *            The model <om> must be configured in local alignment
  *            mode. The sparse rescaling method used to keep
@@ -83,11 +176,12 @@
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of dsq in residues          
  *            om      - optimized profile
- *            ox      - DP matrix
+ *            fwd     - filled Forward DP matrix, for scale factors
  *            do_full - TRUE=full matrix; FALSE=linear memory parse mode
- *            ret_sc  - RETURN: Forward score (in nats)          
+ *            bck     - RETURN: filled Backward matrix
+ *            opt_sc  - optRETURN: Backward score (in nats)          
  *
- * Returns:   <eslOK> on success; 
+ * Returns:   <eslOK> on success. 
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
  *            isn't in local alignment mode.
@@ -95,8 +189,74 @@
  *            a probability-space odds ratio.
  *            In either case, <*opt_sc> is undefined.
  */
-int
-p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, int do_full, float *ret_sc)
+int 
+p7_Backward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+{
+#ifdef p7_DEBUGGING		
+  if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (L     >= bck->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
+  if (L     >= bck->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
+  if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#endif
+
+ return backward_engine(TRUE, dsq, L, om, fwd, bck, opt_sc);
+}
+
+
+
+/* Function:  p7_BackwardParser()
+ * Synopsis:  The Backward algorithm, linear memory parsing version.
+ * Incept:    SRE, Sat Aug 16 08:34:13 2008 [Janelia]
+ *
+ * Purpose:   Same as <p7_Backward()> except that the full matrix isn't
+ *            kept. Instead, a linear $O(M+L)$ memory algorithm is
+ *            used, keeping only the DP matrix values for the special
+ *            (BENCJ) states. These are sufficient to do posterior
+ *            decoding to identify high-probability regions where
+ *            domains are.
+ *       
+ *            The caller must provide a suitably allocated "parsing"
+ *            <bck> by calling <bck = p7_omx_Create(M, 0, L)> or
+ *            <p7_omx_GrowTo(bck, M, 0, L)>.
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues          
+ *            om      - optimized profile
+ *            fwd     - filled Forward DP matrix, for scale factors
+ *            bck     - RETURN: filled Backward matrix
+ *            opt_sc  - optRETURN: Backward score (in nats)          
+ *
+ * Returns:   <eslOK> on success. 
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
+ *            isn't in local alignment mode.
+ *            <eslERANGE> if the score exceeds the limited range of
+ *            a probability-space odds ratio.
+ *            In either case, <*opt_sc> is undefined.
+ */
+int 
+p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+{
+#ifdef p7_DEBUGGING		
+  if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (bck->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
+  if (L     >= bck->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
+  if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#endif
+
+  return backward_engine(FALSE, dsq, L, om, fwd, bck, opt_sc);
+}
+
+
+
+/*****************************************************************
+ * 2. Forward/Backward engine implementations (called thru API)
+ *****************************************************************/
+
+static int
+forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
 {
   register __m128 mpv, dpv, ipv;   /* previous row values                                       */
   register __m128 sv;		   /* temp storage of 1 curr row value in progress              */
@@ -109,22 +269,17 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
   int q;			   /* counter over quads 0..nq-1                                */
   int j;			   /* counter over DD iterations (4 is full serialization)      */
   int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
-  __m128 *dp  = ox->dpf[0];        /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128 *dpc = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
+  __m128 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
   __m128 *rp;			   /* will point at om->rf[x] for residue x[i]                  */
   __m128 *tp;			   /* will point into (and step thru) om->tf                    */
 
-  /* Check that the DP matrix is ok for us. */
-  if (Q > ox->allocQ4)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-  if (ox->allocXRQ*4 <= L)                             ESL_EXCEPTION(eslEINVAL, "DP matrix X beams allocated too small");
-  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
+  /* Initialization. */
   ox->M  = om->M;
   ox->L  = L;
-
-  /* Initialization.
-   */
-  zerov = _mm_setzero_ps();
+  zerov  = _mm_setzero_ps();
   for (q = 0; q < Q; q++)
-    MMXo(q) = IMXo(q) = DMXo(q) = zerov;
+    MMO(dpc,q) = IMO(dpc,q) = DMO(dpc,q) = zerov;
   xE    = ox->xmx[p7X_E][0] = 0.;
   xN    = ox->xmx[p7X_N][0] = 1.;
   xJ    = ox->xmx[p7X_J][0] = 0.;
@@ -140,7 +295,8 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
 
   for (i = 1; i <= L; i++)
     {
-      dp    = ox->dpf[do_full * i]; /* avoid conditional, use do_full as kronecker delta */
+      dpp   = dpc;                      
+      dpc   = ox->dpf[do_full * i];     /* avoid conditional, use do_full as kronecker delta */
       rp    = om->rf[dsq[i]];
       tp    = om->tf;
       dcv   = _mm_setzero_ps();
@@ -148,13 +304,13 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
       xBv   = _mm_set1_ps(xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on. */
-      mpv   = esl_sse_rightshift_ps(MMXo(Q-1), zerov);
-      dpv   = esl_sse_rightshift_ps(DMXo(Q-1), zerov);
-      ipv   = esl_sse_rightshift_ps(IMXo(Q-1), zerov);
+      mpv   = esl_sse_rightshift_ps(MMO(dpp,Q-1), zerov);
+      dpv   = esl_sse_rightshift_ps(DMO(dpp,Q-1), zerov);
+      ipv   = esl_sse_rightshift_ps(IMO(dpp,Q-1), zerov);
       
       for (q = 0; q < Q; q++)
 	{
-	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+	  /* Calculate new MMO(i,q); don't store it yet, hold it in sv. */
 	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
@@ -165,13 +321,13 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
 	   */
-	  mpv = MMXo(q);
-	  dpv = DMXo(q);
-	  ipv = IMXo(q);
+	  mpv = MMO(dpp,q);
+	  dpv = DMO(dpp,q);
+	  ipv = IMO(dpp,q);
 
 	  /* Do the delayed stores of {MD}(i,q) now that memory is usable */
-	  MMXo(q) = sv;
-	  DMXo(q) = dcv;
+	  MMO(dpc,q) = sv;
+	  DMO(dpc,q) = dcv;
 
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
@@ -179,9 +335,9 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
 	  dcv   = _mm_mul_ps(sv, *tp); tp++;
 
 	  /* Calculate and store I(i,q) */
-	  sv      =                _mm_mul_ps(mpv, *tp);  tp++;
-	  sv      = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	  IMXo(q) = _mm_mul_ps(sv, *rp);                  rp++;
+	  sv         =                _mm_mul_ps(mpv, *tp);  tp++;
+	  sv         = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
+	  IMO(dpc,q) = _mm_mul_ps(sv, *rp);                  rp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
@@ -193,19 +349,19 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
       /* We're almost certainly're obligated to do at least one complete 
        * DD path to be sure: 
        */
-      dcv     = esl_sse_rightshift_ps(dcv, zerov);
-      DMXo(0) = zerov;
-      tp      = om->tf + 7*Q;	/* set tp to start of the DD's */
+      dcv        = esl_sse_rightshift_ps(dcv, zerov);
+      DMO(dpc,0) = zerov;
+      tp         = om->tf + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
 	{
-	  DMXo(q) = _mm_add_ps(dcv, DMXo(q));	
-	  dcv     = _mm_mul_ps(DMXo(q), *tp); tp++; /* extend DMXo(q), so we include M->D and D->D paths */
+	  DMO(dpc,q) = _mm_add_ps(dcv, DMO(dpc,q));	
+	  dcv        = _mm_mul_ps(DMO(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
 	}
 
       /* now. on small models, it seems best (empirically) to just go
        * ahead and serialize. on large models, we can do a bit better,
-       * by testing for when dcv (DD path) accrued to DMXo(q) is below
-       * machine epsilon for all q, in which case we know DMXo(q) are all
+       * by testing for when dcv (DD path) accrued to DMO(q) is below
+       * machine epsilon for all q, in which case we know DMO(q) are all
        * at their final values. The tradeoff point is (empirically) somewhere around M=100,
        * at least on my desktop. We don't worry about the conditional here;
        * it's outside any inner loops.
@@ -217,9 +373,9 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
 	      dcv = esl_sse_rightshift_ps(dcv, zerov);
 	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
-		{ /* note, extend dcv, not DMXo(q); only adding DD paths now */
-		  DMXo(q) = _mm_add_ps(dcv, DMXo(q));	
-		  dcv     = _mm_mul_ps(dcv, *tp);   tp++; 
+		{ /* note, extend dcv, not DMO(q); only adding DD paths now */
+		  DMO(dpc,q) = _mm_add_ps(dcv, DMO(dpc,q));	
+		  dcv        = _mm_mul_ps(dcv, *tp);   tp++; 
 		}	    
 	    }
 	} 
@@ -227,24 +383,24 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
 	{			/* Slightly parallelized version, but which incurs some overhead */
 	  for (j = 1; j < 4; j++)
 	    {
-	      register __m128 cv;	/* keeps track of whether any DD's change DMXo(q) */
+	      register __m128 cv;	/* keeps track of whether any DD's change DMO(q) */
 
 	      dcv = esl_sse_rightshift_ps(dcv, zerov);
 	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
-		{ /* using cmpgt below tests if DD changed any DMXo(q) *without* conditional branch */
-		  sv     = _mm_add_ps(dcv, DMXo(q));	
-		  cv     = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMXo(q))); 
-		  DMXo(q) = sv;	                                    /* store new DMXo(q) */
-		  dcv    = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMXo(q) */
+		{ /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
+		  sv         = _mm_add_ps(dcv, DMO(dpc,q));	
+		  cv         = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMO(dpc,q))); 
+		  DMO(dpc,q) = sv;	                                    /* store new DMO(q) */
+		  dcv        = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMO(q) */
 		}	    
-	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMXo(q)? Then done, break out. */
+	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMO(q)? Then done, break out. */
 	    }
 	}
 
       /* Add D's to xEv */
-      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMXo(q), xEv);
+      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMO(dpc,q), xEv);
 
       /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation is a horizontal sum of xEv's elements  */
@@ -261,10 +417,8 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
       xB = (xJ * om->xf[p7O_J][p7O_MOVE]) +  (xN * om->xf[p7O_N][p7O_MOVE]);
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
-      /* Sparse rescaling.
-       * If xE is above threshold, trigger a rescaling event. 
-       */
-      if (xE > 1.0e4)		/* that's a little less than e^10, ~10% of our dynamic range */
+      /* Sparse rescaling. xE above threshold? trigger a rescaling event.            */
+      if (xE > 1.0e4)	/* that's a little less than e^10, ~10% of our dynamic range */
 	{
 	  xN  = xN / xE;
 	  xC  = xC / xE;
@@ -273,9 +427,9 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
 	  xEv = _mm_set1_ps(1.0 / xE);
 	  for (q = 0; q < Q; q++)
 	    {
-	      MMXo(q) = _mm_mul_ps(MMXo(q), xEv);
-	      DMXo(q) = _mm_mul_ps(DMXo(q), xEv);
-	      IMXo(q) = _mm_mul_ps(IMXo(q), xEv);
+	      MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xEv);
+	      DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
+	      IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
 	    }
 	  ox->xmx[p7X_SCALE][i] = xE;
 	  ox->totscale += log(xE);
@@ -307,60 +461,14 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, i
   else if  (xC == 0.0)      ESL_EXCEPTION(eslERANGE, "forward score underflow (is 0.0)");
   else if  (isinf(xC) == 1) ESL_EXCEPTION(eslERANGE, "forward score overflow (is infinity)");
 
-  *ret_sc = ox->totscale + log(xC * om->xf[p7O_C][p7O_MOVE]);
+  if (opt_sc != NULL) *opt_sc = ox->totscale + log(xC * om->xf[p7O_C][p7O_MOVE]);
   return eslOK;
 }
 
 
 
-/* Function:  p7_Backward()
- * Synopsis:  The Backward algorithm.
- * Incept:    SRE, Thu Jul 31 09:29:23 2008 [Janelia]
- *
- * Purpose:   Calculates the Backward algorithm for sequence <dsq> of
- *            length <L> residues, using optimized profile <om>, and a
- *            preallocated DP matrix <ox>. Optionally return the
- *            Backward score (in nats) in <opt_sc>.
- *            
- *            If the <do_full> flag is <TRUE>, then the standard
- *            Backward calculation is done, in $O(ML)$ memory, keeping
- *            the entire DP matrix. The caller must provide a suitably
- *            allocated full <ox> by calling <ox = p7_omx_Create(M, L,
- *            L)> or <p7_omx_GrowTo(ox, M, L, L)>.
- *
- *            If <do_full> is <FALSE>, then a linear-memory "parsing"
- *            calculation is done in $O(M+L)$ memory, keeping only one
- *            row of the main MDI matrix. Upon return,
- *            <ox->xmx[][0,1..L]> contain the DP matrix in
- *            single-precision probability for all special X states
- *            (BENCJ). The caller must provide a suitably allocated
- *            "parsing" <ox> by calling <ox = p7_omx_Create(M, 0, L)>
- *            or <p7_omx_GrowTo(ox, M, 0, L)>.
- *            
- *            The model <om> must be configured in local alignment
- *            mode. The sparse rescaling method used to keep
- *            probability values within single-precision floating
- *            point dynamic range cannot be safely applied to models in
- *            glocal or global mode.
- *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues          
- *            om      - optimized profile
- *            ox      - DP matrix
- *            do_full - TRUE=full matrix; FALSE=linear memory parse mode
- *            opt_sc  - optRETURN: Backward score (in nats)          
- *
- * Returns:   <eslOK> on success. 
- *
- * Throws:    <eslEINVAL> if <ox> allocation is too small, or if the profile
- *            isn't in local alignment mode.
- *            <eslERANGE> if the score exceeds the limited range of
- *            a probability-space odds ratio.
- *            In either case, <*opt_sc> is undefined.
- */
-int 
-p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, 
-		  P7_OMX *bck, float *opt_sc)
+static int 
+backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
 {
   register __m128 mpv, ipv, dpv;      /* previous row values                                       */
   register __m128 mcv, dcv;           /* current row values                                        */
@@ -373,62 +481,59 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
   int      q;			      /* counter over quads 0..Q-1                                 */
   int      Q       = p7O_NQF(om->M);  /* segment length: # of vectors                              */
   int      j;			      /* DD segment iteration counter (4 = full serialization)     */
-  __m128  *dp;                        /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  __m128  *dpc;                       /* current DP row                                            */
+  __m128  *dpp;			      /* next ("previous") DP row                                  */
   __m128  *rp;			      /* will point into om->rf[x] for residue x[i+1]              */
   __m128  *tp;		              /* will point into (and step thru) om->tf transition scores  */
 
- /* Check that the DP matrix is ok for us. */
-  if (Q > bck->allocQ4)  
-    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-  if (bck->allocXRQ*4 <= L) 
-    ESL_EXCEPTION(eslEINVAL, "DP matrix X beams allocated too small");
-  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL)
-    ESL_EXCEPTION(eslEINVAL, "This function makes assumptions that only apply to local alignment");
-  bck->M  = om->M;
-  bck->L  = L;
+
+
 
   /* initialize the L row. */
-  dp = bck->dpf[L * do_full];
-  xJ = 0.0;
-  xB = 0.0;
-  xN = 0.0;
-  xC = om->xf[p7O_C][p7O_MOVE];      /* C<-T */
-  xE = xC * om->xf[p7O_E][p7O_MOVE]; /* E<-C, no tail */
+  bck->M = om->M;
+  bck->L = L;
+  dpc    = bck->dpf[L * do_full];
+  xJ     = 0.0;
+  xB     = 0.0;
+  xN     = 0.0;
+  xC     = om->xf[p7O_C][p7O_MOVE];      /* C<-T */
+  xE     = xC * om->xf[p7O_E][p7O_MOVE]; /* E<-C, no tail */
+  xEv    = _mm_set1_ps(xE); 
+  zerov  = _mm_setzero_ps();  
+  dcv    = zerov;		/* solely to silence a compiler warning */
+  for (q = 0; q < Q; q++) MMO(dpc,q) = DMO(dpc,q) = xEv;
+  for (q = 0; q < Q; q++) IMO(dpc,q) = zerov;
 
-  xEv   = _mm_set1_ps(xE);   for (q = 0; q < Q; q++) MMXo(q) = DMXo(q) = xEv;
-  zerov = _mm_setzero_ps();  for (q = 0; q < Q; q++) IMXo(q) = zerov;
-  dcv   = zerov;		/* solely to silence a compiler warning */
-
-  /* init row L's DD paths, 1) first segment includes xE, from DMXo(q) */
-  tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
-  dpv = _mm_move_ss(DMXo(Q-1), zerov);                  /* start leftshift: [1 5 9 13] -> [x 5 9 13] */
+  /* init row L's DD paths, 1) first segment includes xE, from DMO(q) */
+  tp  = om->tf + 8*Q - 1;	                        /* <*tp> now the [4 8 12 x] TDD quad         */
+  dpv = _mm_move_ss(DMO(dpc,Q-1), zerov);               /* start leftshift: [1 5 9 13] -> [x 5 9 13] */
   dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(0,3,2,1)); /* finish leftshift:[x 5 9 13] -> [5 9 13 x] */
   for (q = Q-1; q >= 0; q--)
     {
-      dcv     = _mm_mul_ps(dpv, *tp);      tp--;
-      DMXo(q) = _mm_add_ps(DMXo(q), dcv);
-      dpv     = DMXo(q);
+      dcv        = _mm_mul_ps(dpv, *tp);      tp--;
+      DMO(dpc,q) = _mm_add_ps(DMO(dpc,q), dcv);
+      dpv        = DMO(dpc,q);
     }
-  /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMXo(q)) */
+  /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMO(q)) */
   for (j = 1; j < 4; j++)
     {
-      tp  = om->tf + 8*Q - 1;	              /* <*tp> now the [4 8 12 x] TDD quad */
+      tp  = om->tf + 8*Q - 1;	                            /* <*tp> now the [4 8 12 x] TDD quad         */
       dcv = _mm_move_ss(dcv, zerov);                        /* start leftshift: [1 5 9 13] -> [x 5 9 13] */
       dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(0,3,2,1)); /* finish leftshift:[x 5 9 13] -> [5 9 13 x] */
       for (q = Q-1; q >= 0; q--)
 	{
-	  dcv     = _mm_mul_ps(dcv, *tp); tp--;
-	  DMXo(q) = _mm_add_ps(DMXo(q), dcv);
+	  dcv        = _mm_mul_ps(dcv, *tp); tp--;
+	  DMO(dpc,q) = _mm_add_ps(DMO(dpc,q), dcv);
 	}
     }
   /* now MD init */
-  tp  = om->tf + 7*Q - 3;	              /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad */
-  dcv = _mm_move_ss(DMXo(0), zerov);                    /* start leftshift: [1 5 9 13] -> [x 5 9 13] */
+  tp  = om->tf + 7*Q - 3;	                        /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
+  dcv = _mm_move_ss(DMO(dpc,0), zerov);                 /* start leftshift: [1 5 9 13] -> [x 5 9 13] */
   dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(0,3,2,1)); /* finish leftshift:[x 5 9 13] -> [5 9 13 x] */
   for (q = Q-1; q >= 0; q--)
     {
-      MMXo(q) = _mm_add_ps(MMXo(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
-      dcv     = DMXo(q);
+      MMO(dpc,q) = _mm_add_ps(MMO(dpc,q), _mm_mul_ps(dcv, *tp)); tp -= 7;
+      dcv        = DMO(dpc,q);
     }
 
   /* Sparse rescaling: same scale factors as fwd matrix */
@@ -440,9 +545,9 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
       xB  = xB / fwd->xmx[p7X_SCALE][L];
       xEv = _mm_set1_ps(1.0 / fwd->xmx[p7X_SCALE][L]);
       for (q = 0; q < Q; q++) {
-	MMXo(q) = _mm_mul_ps(MMXo(q), xEv);
-	DMXo(q) = _mm_mul_ps(DMXo(q), xEv);
-	IMXo(q) = _mm_mul_ps(IMXo(q), xEv);
+	MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xEv);
+	DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
+	IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
       }
       xE = 1.0;
     }
@@ -465,36 +570,37 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
       /* phase 1. B(i) collected. Old row destroyed, new row contains
        *    complete I(i,k), partial {MD}(i,k) w/ no {MD}->{DE} paths yet.
        */
-      dp = bck->dpf[i * do_full];
-      rp = om->rf[dsq[i+1]] + 2*Q-1; /* <*rp> is now the [4 8 12 x] insert emission quad */
-      tp = om->tf + 7*Q - 1;	        /* <*tp> is now the [4 8 12 x] TII transition quad  */
+      dpc = bck->dpf[i     * do_full];
+      dpp = bck->dpf[(i+1) * do_full];
+      rp  = om->rf[dsq[i+1]] + 2*Q-1; /* <*rp> is now the [4 8 12 x] insert emission quad */
+      tp  = om->tf + 7*Q - 1;	        /* <*tp> is now the [4 8 12 x] TII transition quad  */
 
       /* leftshift the first transition quads */
       tmmv = _mm_move_ss(om->tf[1], zerov); tmmv = _mm_shuffle_ps(tmmv, tmmv, _MM_SHUFFLE(0,3,2,1));
       timv = _mm_move_ss(om->tf[2], zerov); timv = _mm_shuffle_ps(timv, timv, _MM_SHUFFLE(0,3,2,1));
       tdmv = _mm_move_ss(om->tf[3], zerov); tdmv = _mm_shuffle_ps(tdmv, tdmv, _MM_SHUFFLE(0,3,2,1));
 
-      mpv = _mm_mul_ps(MMXo(0), om->rf[dsq[i+1]][0]); /* precalc M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+      mpv = _mm_mul_ps(MMO(dpp,0), om->rf[dsq[i+1]][0]); /* precalc M(i+1,k+1) * e(M_k+1, x_{i+1}) */
       mpv = _mm_move_ss(mpv, zerov);
       mpv = _mm_shuffle_ps(mpv, mpv, _MM_SHUFFLE(0,3,2,1));
 
       xBv = zerov;
       for (q = Q-1; q >= 0; q--)     /* backwards stride */
 	{
-	  ipv = _mm_mul_ps(IMXo(q), *rp);   rp--;  /* precalc I(i+1,k) * e_(I_k, x_{i+1}); i+1's IMXo(q) now free */
+	  ipv = _mm_mul_ps(IMO(dpp,q), *rp);   rp--;  /* precalc I(i+1,k) * e_(I_k, x_{i+1}); i+1's IMO(q) now free */
 
-	  IMXo(q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
-	  DMXo(q) =                                  _mm_mul_ps(mpv, tdmv); 
-	  mcv    = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
+	  IMO(dpc,q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
+	  DMO(dpc,q) =                                  _mm_mul_ps(mpv, tdmv); 
+	  mcv        = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
 	  
-	  mpv    = _mm_mul_ps(MMXo(q), *rp);  rp--;  /* obtain mpv for next q. i+1's MMXo(q) is freed  */
-	  MMXo(q) = mcv;
+	  mpv        = _mm_mul_ps(MMO(dpp,q), *rp);  rp--;  /* obtain mpv for next q. i+1's MMO(q) is freed  */
+	  MMO(dpc,q) = mcv;
 
-	  tdmv   = *tp;   tp--;
-	  timv   = *tp;   tp--;
-	  tmmv   = *tp;   tp--;
+	  tdmv = *tp;   tp--;
+	  timv = *tp;   tp--;
+	  tmmv = *tp;   tp--;
 
-	  xBv  = _mm_add_ps(xBv, _mm_mul_ps(mpv, *tp)); tp--;
+	  xBv = _mm_add_ps(xBv, _mm_mul_ps(mpv, *tp)); tp--;
 	}
 
       /* phase 2: now that we have accumulated the B->Mk transitions in xBv, we can do the specials */
@@ -512,15 +618,15 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
 
       /* phase 3: {MD}->E paths and one step of the D->D paths */
       tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
-      dpv = _mm_add_ps(DMXo(0), xEv);
+      dpv = _mm_add_ps(DMO(dpc,0), xEv);
       dpv = _mm_move_ss(dpv, zerov);
       dpv = _mm_shuffle_ps(dpv, dpv, _MM_SHUFFLE(0,3,2,1));
       for (q = Q-1; q >= 0; q--)
 	{
-	  dcv    = _mm_mul_ps(dpv, *tp); tp--;
-	  DMXo(q) = _mm_add_ps(DMXo(q), _mm_add_ps(dcv, xEv));
-	  dpv    = DMXo(q);
-	  MMXo(q) = _mm_add_ps(MMXo(q), xEv);
+	  dcv        = _mm_mul_ps(dpv, *tp); tp--;
+	  DMO(dpc,q) = _mm_add_ps(DMO(dpc,q), _mm_add_ps(dcv, xEv));
+	  dpv        = DMO(dpc,q);
+	  MMO(dpc,q) = _mm_add_ps(MMO(dpc,q), xEv);
 	}
       
       /* phase 4: finish extending the DD paths */
@@ -532,19 +638,19 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
 	  tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
 	  for (q = Q-1; q >= 0; q--)
 	    {
-	      dcv    = _mm_mul_ps(dcv, *tp); tp--;
-	      DMXo(q) = _mm_add_ps(DMXo(q), dcv);
+	      dcv        = _mm_mul_ps(dcv, *tp); tp--;
+	      DMO(dpc,q) = _mm_add_ps(DMO(dpc,q), dcv);
 	    }
 	}
 
       /* phase 5: add M->D paths */
-      dcv = _mm_move_ss(DMXo(0), zerov);
+      dcv = _mm_move_ss(DMO(dpc,0), zerov);
       dcv = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(0,3,2,1));
       tp  = om->tf + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
       for (q = Q-1; q >= 0; q--)
 	{
-	  MMXo(q) = _mm_add_ps(MMXo(q), _mm_mul_ps(dcv, *tp)); tp -= 7;
-	  dcv    = DMXo(q);
+	  MMO(dpc,q) = _mm_add_ps(MMO(dpc,q), _mm_mul_ps(dcv, *tp)); tp -= 7;
+	  dcv        = DMO(dpc,q);
 	}
 
       /* Sparse rescaling: same scale factors as fwd matrix */
@@ -557,9 +663,9 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
 	  xB  = xB / fwd->xmx[p7X_SCALE][i];
 	  xEv = _mm_set1_ps(1.0 / fwd->xmx[p7X_SCALE][i]);
 	  for (q = 0; q < Q; q++) {
-	    MMXo(q) = _mm_mul_ps(MMXo(q), xEv);
-	    DMXo(q) = _mm_mul_ps(DMXo(q), xEv);
-	    IMXo(q) = _mm_mul_ps(IMXo(q), xEv);
+	    MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xEv);
+	    DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
+	    IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
 	  }
 
 	}
@@ -581,15 +687,15 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
     } /* thus ends the loop over sequence positions i */
 
   /* Termination at i=0, where we can only reach N,B states. */
-  dp  = ox->dpf[0];
+  dpp = bck->dpf[1 * do_full];
   tp  = om->tf;	        /* <*tp> is now the [1 5 9 13] TBMk transition quad  */
   rp  = om->rf[dsq[1]];	/* <*rp> is now the [1 5 9 13] match emission quad   */
   xBv = zerov;
   for (q = 0; q < Q; q++)
     {
-      mpv = _mm_mul_ps(MMXo(q), *rp);  rp += 2;
-      mpv = _mm_mul_ps(mpv,     *tp);  tp += 7;
-      xBv = _mm_add_ps(xBv,     mpv);
+      mpv = _mm_mul_ps(MMO(dpp,q), *rp);  rp += 2;
+      mpv = _mm_mul_ps(mpv,        *tp);  tp += 7;
+      xBv = _mm_add_ps(xBv,        mpv);
     }
   /* horizontal sum of xBv */
   xBv = _mm_add_ps(xBv, _mm_shuffle_ps(xBv, xBv, _MM_SHUFFLE(0, 3, 2, 1)));
@@ -608,8 +714,9 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
   bck->totscale          = fwd->totscale;
 
 #if p7_DEBUGGING
-  for (q = 0; q < Q; q++) /* Not strictly necessary: */
-    MMXo(q) = DMXo(q) = IMXo(q) = zerov;
+  dpc = bck->dpf[0];
+  for (q = 0; q < Q; q++) /* Not strictly necessary, but if someone's looking at DP matrices, this is nice to do: */
+    MMO(dpc,q) = DMO(dpc,q) = IMO(dpc,q) = zerov;
   if (bck->debugging) p7_omx_DumpFloatRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E][0], bck->xmx[p7X_N][0],  bck->xmx[p7X_J][0], bck->xmx[p7X_B][0],  bck->xmx[p7X_C][0]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
 #endif
 
@@ -620,11 +727,12 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
   if (opt_sc != NULL) *opt_sc = bck->totscale + log(xN);
   return eslOK;
 }
-/*---------------------- end, forward/backward ---------------------------*/
+/*-------------- end, forward/backward engines  -----------------*/
+
 
 
 /*****************************************************************
- * 2. Posterior decoding.
+ * 3. Posterior decoding.
  *****************************************************************/
 
 
@@ -642,8 +750,8 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
  *            Each residue <i> must have been emitted by match state
  *            <1..M>, insert state <1..M-1>, or an NN, CC, or JJ loop
  *            transition.  For <dp = pp->dp>, <xmx = pp->xmx>,
- *            <MMXo(i,k)> is the probability that match <k> emitted
- *            residue <i>; <IMXo(i,k)> is the probability that insert
+ *            <MMO(i,k)> is the probability that match <k> emitted
+ *            residue <i>; <IMO(i,k)> is the probability that insert
  *            <k> emitted residue <i>; <pp->xmx[NCJ][i]> are
  *            the probabilities that residue <i> was
  *            emitted on an NN, CC, or JJ transition. The sum over all
@@ -666,7 +774,7 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_PosteriorDecoding(const P7_PROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
+p7_PosteriorDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
 {
   register __m128 *ppv;
   register __m128 *fv;
@@ -687,7 +795,7 @@ p7_PosteriorDecoding(const P7_PROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OM
   for (i = 1; i <= L; i++)
     {
       ppv =  pp->dpf[i];
-      fv  = oxf->dpf[i]
+      fv  = oxf->dpf[i];
       bv  = oxb->dpf[i];
       scv = _mm_set1_ps(oxf->xmx[p7X_SCALE][i]);
 
@@ -749,70 +857,13 @@ p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF 
 
 
 /*****************************************************************
- * 3. Stochastic traceback
- *****************************************************************/ 
-
-/* Function:  p7_StochasticTrace()
- * Synopsis:  Sample a traceback from a Forward matrix
- * Incept:    SRE, Fri Aug  8 17:40:18 2008 [UA217, IAD-SFO]
- *
- * Purpose:   Perform a stochastic traceback from Forward matrix <ox>,
- *            using random number generator <r>, in order to sample an
- *            alignmnet of model <om> to digital sequence <dsq> of
- *            length <L>. 
- *            
- *            The sampled traceback is returned in <tr>, which the
- *            caller provides with at least an initial allocation;
- *            the <tr> allocation will be grown as needed here.
- *
- * Args:      r   - source of random numbers
- *            dsq - digital sequence being aligned, 1..L
- *            L   - length of dsq
- *            om  - profile
- *            ox  - Forward matrix to trace, LxM
- *            tr  - storage for the recovered traceback
- *
- * Returns:   <eslOK> on success
- *
- * Throws:    <eslEMEM> on allocation error.
- */
-int
-p7_StochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox,
-		   P7_TRACE *tr)
-{
-  int i;			/* position in sequence 1..L */
-  int k;			/* position in model 1..M */
-  int status;			
-
-  
-  /* Initialization.
-   * (back to front. ReverseTrace() called later.)
-   */
-  if ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) return status;
-  if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) return status;
-  i    = L;			/* next position to explain in seq */
-
-  while (tr->st[tr->N-1] != p7T_S)
-    {
-
-      /* SRE STOPPED HERE */
-    }
-
-  if ((status = p7_trace_Reverse(tr)) != eslOK) return status;
-  return eslOK;
-}
-/*------------------ end, stochastic traceback ------------------*/
-
-
-/*****************************************************************
  * 4. Benchmark driver.
  *****************************************************************/
-#ifdef p7FBPARSERS_BENCHMARK
+#ifdef p7FWDBACK_BENCHMARK
 /* -c, -x options are for debugging and testing: see fwdfilter.c for explanation */
 /* 
-   gcc -o benchmark-fbparsers -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
-   gcc -o benchmark-fbparsers -std=gnu99 -O2 -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
-   icc -o benchmark-fbparsers -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7FBPARSERS_BENCHMARK fbparsers.c -lhmmer -leasel -lm 
+   gcc  -std=gnu99 -O2 -msse2 -o fwdback_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_BENCHMARK fwdback.c -lhmmer -leasel -lm 
+   icc  -O3 -static           -o fwdback_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_BENCHMARK fwdback.c -lhmmer -leasel -lm 
 
    ./benchmark-fbparsers <hmmfile>           runs benchmark on both Forward and Backward parser
    ./benchmark-fbparsers -c -N100 <hmmfile>  compare scores of SSE to generic impl
@@ -839,12 +890,13 @@ static ESL_OPTIONS options[] = {
   { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-B", "only benchmark the ForwardParser()",               0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-B", "only benchmark the BackwardParser()",              0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-B", "only benchmark Forward",                           0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-F", "only benchmark Backward",                          0 },
+  { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "benchmark parsing version, not full version",      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the Parser() implementations";
+static char banner[] = "benchmark driver for Forward, Backward implementations";
 
 int 
 main(int argc, char **argv)
@@ -889,14 +941,18 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
     p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
 
-  fwd = p7_omx_Create(gm->M, 0, L);
-  bck = p7_omx_Create(gm->M, 0, L);
+  if (esl_opt_GetBoolean(go, "-P")) {
+    fwd = p7_omx_Create(gm->M, 0, L);
+    bck = p7_omx_Create(gm->M, 0, L);
+  } else {
+    fwd = p7_omx_Create(gm->M, L, L);
+    bck = p7_omx_Create(gm->M, L, L);
+  }
   gx  = p7_gmx_Create(gm->M, L);
 
   /* Get a baseline time: how long it takes just to generate the sequences */
   esl_stopwatch_Start(w);
-  for (i = 0; i < N; i++)
-    esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+  for (i = 0; i < N; i++) esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
   esl_stopwatch_Stop(w);
   base_time = w->user;
 
@@ -904,8 +960,13 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      if (! esl_opt_GetBoolean(go, "-B"))  p7_ForwardParser (dsq, L, om,      fwd, &fsc);
-      if (! esl_opt_GetBoolean(go, "-F"))  p7_BackwardParser(dsq, L, om, fwd, bck, &bsc);
+      if (esl_opt_GetBoolean(go, "-P")) {
+	if (! esl_opt_GetBoolean(go, "-B"))  p7_ForwardParser (dsq, L, om,      fwd, &fsc);
+	if (! esl_opt_GetBoolean(go, "-F"))  p7_BackwardParser(dsq, L, om, fwd, bck, &bsc);
+      } else {
+	if (! esl_opt_GetBoolean(go, "-B"))  p7_Forward (dsq, L, om,      fwd, &fsc);
+	if (! esl_opt_GetBoolean(go, "-F"))  p7_Backward(dsq, L, om, fwd, bck, &bsc);
+      }
 
       if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
 	{
@@ -936,33 +997,40 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7FBPARSERS_BENCHMARK*/
+#endif /*p7FWDBACK_BENCHMARK*/
 /*------------------- end, benchmark driver ---------------------*/
 
+
+
+
+
 /*****************************************************************
- * 3. Unit tests.
+ * 5. Unit tests.
  *****************************************************************/
-#ifdef p7FBPARSERS_TESTDRIVE
+#ifdef p7FWDBACK_TESTDRIVE
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
-/* unit test for scores.
- * compare to GForward() scores and ForwardFilter() scores.
+/* 
+ * compare to GForward() scores.
  */
 static void
-utest_fbparser_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
-  char        *msg = "forward/backward parser score unit test failed";
+  char        *msg = "forward/backward unit test failed";
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
   P7_OMX      *fwd = p7_omx_Create(M, 0, L);
   P7_OMX      *bck = p7_omx_Create(M, 0, L);
+  P7_OMX      *oxf = p7_omx_Create(M, L, L);
+  P7_OMX      *oxb = p7_omx_Create(M, L, L);
   P7_GMX      *gx  = p7_gmx_Create(M, L);
   float tolerance;
-  float fsc1, fsc2, fsc3;
-  float bsc1;
+  float fsc1, fsc2;
+  float bsc1, bsc2;
+  float generic_sc;
 
   p7_FLogsumInit();
   if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test against GForward()   */
@@ -973,42 +1041,46 @@ utest_fbparser_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, in
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
-      p7_ForwardFilter (dsq, L, om, fwd, &fsc3);
-      p7_GForward      (dsq, L, gm, gx,  &fsc2);
-      p7_ForwardParser (dsq, L, om,      fwd, &fsc1);
-      p7_BackwardParser(dsq, L, om, fwd, bck, &bsc1);
+      p7_Forward       (dsq, L, om,      oxf, &fsc1);
+      p7_Backward      (dsq, L, om, oxf, oxb, &bsc1);
+      p7_ForwardParser (dsq, L, om,      fwd, &fsc2);
+      p7_BackwardParser(dsq, L, om, fwd, bck, &bsc2);
+      p7_GForward      (dsq, L, gm, gx,  &generic_sc);
 
-      /* Forward and Backward parser scores should agree with high tolerance */
+      /* Forward and Backward scores should agree with high tolerance */
       if (fabs(fsc1-bsc1) > 0.0001)    esl_fatal(msg);
+      if (fabs(fsc2-bsc2) > 0.0001)    esl_fatal(msg);
+      if (fabs(fsc1-fsc2) > 0.0001)    esl_fatal(msg);
 
-      /* they should agree with ForwardFilter with high tolerance */
-      if (fabs(fsc1-fsc3) > 0.0001)    esl_fatal(msg);
-
-      /* GForward scores should approximate ForwardParser scores, 
+      /* GForward scores should approximate Forward scores, 
        * with tolerance that depends on how logsum.c was compiled
        */
-      if (fabs(fsc1-fsc2) > tolerance) esl_fatal(msg);
+      if (fabs(fsc1-generic_sc) > tolerance) esl_fatal(msg);
     }
 
   free(dsq);
   p7_hmm_Destroy(hmm);
+  p7_omx_Destroy(oxb);
+  p7_omx_Destroy(oxf);
   p7_omx_Destroy(bck);
   p7_omx_Destroy(fwd);
   p7_gmx_Destroy(gx);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
 }
-#endif /*p7FBPARSERS_TESTDRIVE*/
+#endif /*p7FWDBACK_TESTDRIVE*/
 /*---------------------- end, unit tests ------------------------*/
 
 
+
+
 /*****************************************************************
- * 4. Test driver
+ * 6. Test driver
  *****************************************************************/
-#ifdef p7FBPARSERS_TESTDRIVE
+#ifdef p7FWDBACK_TESTDRIVE
 /* 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o fbparsers_utest -Dp7FBPARSERS_TESTDRIVE fbparsers.c -lhmmer -leasel -lm
-   ./fbparsers_utest
+   gcc -g -Wall -msse2 -std=gnu99 -o fwdback_utest -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_TESTDRIVE fwdback.c -lhmmer -leasel -lm
+   ./fwdback_utest
  */
 #include "p7_config.h"
 
@@ -1030,7 +1102,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE implementation";
+static char banner[] = "test driver for SSE Forward, Backward implementations";
 
 int
 main(int argc, char **argv)
@@ -1050,9 +1122,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  utest_fbparser_scores(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_fbparser_scores(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_fbparser_scores(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+  utest_fwdback(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_fwdback(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_fwdback(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -1061,9 +1133,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  utest_fbparser_scores(r, abc, bg, M, L, N);   
-  utest_fbparser_scores(r, abc, bg, 1, L, 10);  
-  utest_fbparser_scores(r, abc, bg, M, 1, 10);  
+  utest_fwdback(r, abc, bg, M, L, N);   
+  utest_fwdback(r, abc, bg, 1, L, 10);  
+  utest_fwdback(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -1072,37 +1144,47 @@ main(int argc, char **argv)
   esl_randomness_Destroy(r);
   return eslOK;
 }
-#endif /*FBPARSERS_TESTDRIVE*/
+#endif /*p7FWDBACK_TESTDRIVE*/
 /*--------------------- end, test driver ------------------------*/
 
 
 
 /*****************************************************************
- * 5. Example
+ * 7. Example
  *****************************************************************/
-#ifdef p7FBPARSERS_EXAMPLE
+#ifdef p7FWDBACK_EXAMPLE
 /* Useful for debugging on small HMMs and sequences.
  * 
- * Compares to GForward() and ForwardFilter() scores.
+ * Compares to GForward().
  * 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7FBPARSERS_EXAMPLE fbparsers.c -lhmmer -leasel -lm
-   ./example <hmmfile> <seqfile>
+   gcc -g -Wall -msse2 -std=gnu99 -o fwdback_example -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_EXAMPLE fwdback.c -lhmmer -leasel -lm
+   ./fwdback_example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_getopts.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
 #include "hmmer.h"
 #include "impl_sse.h"
 
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of Forward/Backward (SSE versions)";
+
 int 
 main(int argc, char **argv)
 {
-  char           *hmmfile = argv[1];
-  char           *seqfile = argv[2];
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -1136,24 +1218,31 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
   om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
 
-  /* p7_oprofile_Dump(stdout, om); */
+  /* p7_oprofile_Dump(stdout, om);  */
 
   /* allocate DP matrices for O(M+L) parsers */
   fwd = p7_omx_Create(gm->M, 0, sq->n);
   bck = p7_omx_Create(gm->M, 0, sq->n);
+  gx  = p7_gmx_Create(gm->M, sq->n);
 
-  /* p7_omx_SetDumpMode(stdout, bck, TRUE);  */    /* makes the fast DP algorithms dump their matrices */
+  /* allocate DP matrices for O(ML) fills */
+  /* fwd = p7_omx_Create(gm->M, sq->n, sq->n); */
+  /* bck = p7_omx_Create(gm->M, sq->n, sq->n); */
+
+  /* p7_omx_SetDumpMode(stdout, fwd, TRUE); */     /* makes the fast DP algorithms dump their matrices */
+  /* p7_omx_SetDumpMode(stdout, bck, TRUE); */  
 
   p7_ForwardParser (sq->dsq, sq->n, om,      fwd, &fsc);  printf("forward parser:       %.2f nats\n", fsc);
   p7_BackwardParser(sq->dsq, sq->n, om, fwd, bck, &bsc);  printf("backward parser:      %.2f nats\n", bsc);
 
-  /* Comparison to other F/B implementations */
-  gx  = p7_gmx_Create(gm->M, sq->n);
-  p7_GForward     (sq->dsq, sq->n, gm, gx,  &fsc);   printf("GForward:             %.2f nats\n", fsc);
-  p7_GBackward    (sq->dsq, sq->n, gm, gx,  &bsc);   printf("GBackward:            %.2f nats\n", bsc);
-  /* p7_ForwardFilter(sq->dsq, sq->n, om, fwd, &fsc);   printf("ForwardFilter:        %.2f nats\n", fsc); */
+  /* p7_Forward (sq->dsq, sq->n, om,      fwd, &fsc);        printf("forward:              %.2f nats\n", fsc); */
+  /* p7_Backward(sq->dsq, sq->n, om, fwd, bck, &bsc);        printf("backward:             %.2f nats\n", bsc); */
 
-  /* p7_gmx_Dump(stdout, gx); */
+  /* Comparison to other F/B implementations */
+  p7_GForward     (sq->dsq, sq->n, gm, gx,  &fsc);        printf("GForward:             %.2f nats\n", fsc);
+  p7_GBackward    (sq->dsq, sq->n, gm, gx,  &bsc);        printf("GBackward:            %.2f nats\n", bsc);
+
+  /* p7_gmx_Dump(stdout, gx);  */
 
   /* In a real app, you'd need to convert raw nat scores to final bit
    * scores, by subtracting the null model score and rescaling.
@@ -1173,7 +1262,7 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   return 0;
 }
-#endif /*p7IMPL_SSE_EXAMPLE*/
+#endif /*p7FWDBACK_EXAMPLE*/
 
 /*****************************************************************
  * @LICENSE@
