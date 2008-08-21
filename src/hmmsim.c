@@ -672,7 +672,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
 	{
 	  p7_GTrace(dsq, L, gm, gx, tr);
-	  p7_trace_StateUseCounts(tr, scounts);
+	  p7_trace_GetStateUseCounts(tr, scounts);
 
 	  /* there's various ways we could counts "alignment length". 
 	   * Here we'll use the total length of model used, in nodes: M+D states.

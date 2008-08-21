@@ -697,7 +697,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_EXAMPLE
 /* 
-   gcc -g -O2 -Dp7GENERIC_FWDBACK_EXAMPLE -I. -I../easel -L. -L../easel -o example generic_fwdback.c -lhmmer -leasel -lm
+   gcc -g -O2 -o generic_fwdback_example -Dp7GENERIC_FWDBACK_EXAMPLE -I. -I../easel -L. -L../easel generic_fwdback.c -lhmmer -leasel -lm
  */
 #include "p7_config.h"
 
@@ -715,7 +715,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of generic Forward/Backward";
+static char banner[] = "example of Forward/Backward, generic implementation";
 
 int 
 main(int argc, char **argv)

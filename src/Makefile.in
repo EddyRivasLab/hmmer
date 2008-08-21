@@ -1,13 +1,8 @@
-############################################################
 # Makefile for HMMER src directory
 #
 # SRE, Mon Jan  1 19:05:39 2007 [Casa de Gatos]
 # SVN $Id$
-#
 
-
-## your compiler and compiler flags
-#
 CC       = @CC@
 CFLAGS   = @CFLAGS@
 SIMDFLAGS= @SIMD_CFLAGS@
@@ -16,13 +11,8 @@ LDFLAGS  = @LDFLAGS@
 DEFS     = @DEFS@
 LIBS     = @LIBS@ -lm
 
-## archiving command, and ranlib command if you need one.
-#  In general, you shouldn't need to change these, and they're
-#  only used for building the testsuite anyway... e.g. we
-#  make a "libhmmer.a" library for building the testsuite.
-#
-AR     = @AR@ rcv 
-RANLIB = @RANLIB@
+AR       = @AR@ rcv 
+RANLIB   = @RANLIB@
 
 # Configuration for optional pthreads multiprocessor support
 #
@@ -47,13 +37,15 @@ HDRS =  hmmer.h\
 	p7_config.h
 
 OBJS =  build.o\
-	dp_optaccuracy.o\
 	emit.o\
 	errors.o\
 	evalues.o\
 	eweight.o\
+	generic_decoding.o\
 	generic_fwdback.o\
+	generic_null2.o\
 	generic_msv.o\
+	generic_optacc.o\
 	generic_stotrace.o\
 	generic_viterbi.o\
 	generic_vtrace.o\
@@ -63,7 +55,6 @@ OBJS =  build.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
-	null2.o\
 	seqmodel.o\
 	p7_alidisplay.o\
 	p7_bg.o\
@@ -79,8 +70,11 @@ OBJS =  build.o\
 #	island.o\
 
 IMPL_OBJ =\
+	${IMPLDIR}/decoding.o\
 	${IMPLDIR}/fwdback.o\
 	${IMPLDIR}/msvfilter.o\
+	${IMPLDIR}/null2.o\
+	${IMPLDIR}/optacc.o\
 	${IMPLDIR}/stotrace.o\
 	${IMPLDIR}/vitfilter.o\
 	${IMPLDIR}/vitscore.o\
@@ -88,6 +82,15 @@ IMPL_OBJ =\
 	${IMPLDIR}/p7_oprofile.o
 
 IMPL_HEADER = ${IMPLDIR}/impl_${IMPL_CHOICE}.h
+
+BENCHMARKS = \
+	generic_decoding_benchmark\
+	generic_fwdback_benchmark\
+	generic_msv_benchmark\
+	generic_null2_benchmark\
+	generic_optacc_benchmark\
+	generic_stotrace_benchmark\
+	generic_viterbi_benchmark
 
 UTESTS =\
 	build_utest\
@@ -102,15 +105,10 @@ UTESTS =\
 	p7_profile_utest\
 	p7_tophits_utest
 
-BENCHMARKS = \
-	generic_fwdback_benchmark\
-	generic_msv_benchmark\
-	generic_stotrace_benchmark\
-	generic_viterbi_benchmark
-
 EXAMPLES = \
 	generic_fwdback_example\
 	generic_msv_example\
+	generic_optacc_example\
 	generic_stotrace_example\
 	generic_viterbi_example\
 	generic_vtrace_example

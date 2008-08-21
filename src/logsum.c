@@ -95,12 +95,12 @@ p7_FLogsumInit(void)
 float
 p7_FLogsum(float a, float b)
 {
-#if 0
-  return (log(exp(a) + exp(b))); /* SRE: While debugging SSE impl. Remember to remove! */
-#endif
   const float max = ESL_MAX(a, b);
   const float min = ESL_MIN(a, b);
-  return  (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
+#if 0
+  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  /* SRE: While debugging SSE impl. Remember to remove! */
+#endif
+  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
 } 
 
 /* Function:  p7_FLogsumError()

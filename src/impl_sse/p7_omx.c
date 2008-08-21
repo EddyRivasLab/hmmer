@@ -151,7 +151,7 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
    */
   if (ncells > ox->ncells)
     {
-      ESL_RALLOC(ox->dp_mem, p, ncells * sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15);
+      ESL_RALLOC(ox->dp_mem, p, sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15);
       ox->ncells = ncells;
       reset_row_pointers = TRUE;
     }
@@ -168,7 +168,7 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
   /* If there aren't enough rows, reallocate the row pointers; we'll
    * realign and reset them later.
    */
-  if (allocL > ox->allocR)
+  if (allocL >= ox->allocR)
     {
       ESL_RALLOC(ox->dpu, p, sizeof(__m128i *) * (allocL+1));
       ESL_RALLOC(ox->dpf, p, sizeof(__m128  *) * (allocL+1));
@@ -178,6 +178,10 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 
   /* must we widen the rows? */
   if (allocM > ox->allocQ4*4)
+    reset_row_pointers = TRUE;
+
+  /* must we set some more valid row pointers? */
+  if (allocL >= ox->validR)
     reset_row_pointers = TRUE;
 
   /* now reset the row pointers, if needed */
@@ -204,6 +208,47 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
  ERROR:
   return status;
 }  
+
+/* Function:  p7_omx_FDeconvert()
+ * Synopsis:  Convert an optimized DP matrix to generic one.
+ * Incept:    SRE, Tue Aug 19 17:58:13 2008 [Janelia]
+ *
+ * Purpose:   Convert the 32-bit float values in optimized DP matrix
+ *            <ox> to a generic one <gx>. Caller provides <gx> with sufficient
+ *            space to hold the <ox->M> by <ox->L> matrix.
+ *            
+ *            This function is used to gain access to the
+ *            somewhat more powerful debugging and display
+ *            tools available for generic DP matrices.
+ */
+int
+p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx)
+{
+  int Q = p7O_NQF(ox->M);
+  int i, q, r, k;
+  union { __m128 v; float p[4]; } u;
+  float      **dp   = gx->dp;
+  float       *xmx  = gx->xmx; 			    
+
+  for (i = 0; i <= ox->L; i++)
+    {
+      MMX(i,0) = DMX(i,0) = IMX(i,0) = -eslINFINITY;
+      for (q = 0; q < Q; q++)
+	{
+	  u.v = MMO(ox->dpf[i],q);  for (r = 0; r < 4; r++) { k = (Q*r)+q+1; if (k <= ox->M) MMX(i, (Q*r)+q+1) = u.p[r]; }
+	  u.v = DMO(ox->dpf[i],q);  for (r = 0; r < 4; r++) { k = (Q*r)+q+1; if (k <= ox->M) DMX(i, (Q*r)+q+1) = u.p[r]; }
+	  u.v = IMO(ox->dpf[i],q);  for (r = 0; r < 4; r++) { k = (Q*r)+q+1; if (k <= ox->M) IMX(i, (Q*r)+q+1) = u.p[r]; }
+	}
+      XMX(i,p7G_E) = ox->xmx[p7X_E][i];
+      XMX(i,p7G_N) = ox->xmx[p7X_N][i];
+      XMX(i,p7G_J) = ox->xmx[p7X_J][i];
+      XMX(i,p7G_B) = ox->xmx[p7X_B][i];
+      XMX(i,p7G_C) = ox->xmx[p7X_C][i];
+    }
+  gx->L = ox->L;
+  gx->M = ox->M;
+  return eslOK;
+}
 
 
 
@@ -398,7 +443,7 @@ p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, 
   int      Q  = p7O_NQF(M);
   float   *v  = NULL;		/* array of uninterleaved, unstriped scores  */
   int      q,z,k;
-  union { __m128 v; float x[16]; } tmp;
+  union { __m128 v; float x[4]; } tmp;
   int      status;
 
   dp = (ox->allocR == 1) ? ox->dpf[0] :	ox->dpf[rowi];	  /* must set <dp> before using {MDI}MX macros */

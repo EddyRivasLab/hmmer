@@ -53,7 +53,6 @@ main(int argc, char **argv)
   P7_BG           *bg      = NULL;     /* null model                              */
   P7_TRACE        *tr      = NULL;     /* sampled trace                           */
   ESL_SQ          *sq      = NULL;     /* sampled digital sequence                */
-  char             sqname[64];
   int              nseq;
   int              fmt;
 
@@ -127,8 +126,7 @@ main(int argc, char **argv)
 	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
       }
       
-      sprintf(sqname, "%s-sample%d", hmm->name, nseq);
-      status = esl_sq_SetName(sq, sqname);
+      status = esl_sq_SetName(sq, "%s-sample%d", hmm->name, nseq);
       if (status != eslOK) esl_fatal("Failed to set sequence name\n");
 
       status = esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);

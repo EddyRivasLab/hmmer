@@ -105,6 +105,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->name      = NULL;
   om->nj        = 0.0f;
   om->mode      = p7_NO_MODE;
+  om->L         = 0;
   om->allocM    = allocM;
   om->M         = 0;
   om->abc       = abc;
@@ -200,6 +201,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   om->nj   = gm->nj;
   om->mode = gm->mode;
+  om->L    = gm->L;
   om->M    = gm->M;
   return eslOK;
 
@@ -246,8 +248,82 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 
   /* ViterbiFilter() parameters: lspace uchars; the LOOP costs are zero  */
   om->xu[p7O_N][p7O_MOVE] =  om->xu[p7O_C][p7O_MOVE] = om->xu[p7O_J][p7O_MOVE] = unbiased_charify(om, logf(pmove));
+  om->L = L;
   return eslOK;
 }
+
+/* Function:  p7_oprofile_ReconfigMultihit()
+ * Synopsis:  Quickly reconfig model into multihit mode for target length <L>.
+ * Incept:    SRE, Thu Aug 21 10:04:07 2008 [Janelia]
+ *
+ * Purpose:   Given a profile <om> that's already been configured once,
+ *            quickly reconfigure it into a multihit mode for target 
+ *            length <L>. 
+ *            
+ *            This gets called in domain definition, when we need to
+ *            flip the model in and out of unihit mode to
+ *            process individual domains.
+ *            
+ * Note:      You can't just flip uni/multi mode alone, because that
+ *            parameterization also affects target length
+ *            modeling. You need to make sure uni vs. multi choice is
+ *            made before the length model is set, and you need to
+ *            make sure the length model is recalculated if you change
+ *            the uni/multi mode. Hence, these functions call
+ *            <p7_oprofile_ReconfigLength()>.
+ */
+int
+p7_oprofile_ReconfigMultihit(P7_OPROFILE *om, int L)
+{
+  if (om->lspace_f) {
+    om->xf[p7O_E][p7O_MOVE] = -eslCONST_LOG2;
+    om->xf[p7O_E][p7O_LOOP] = -eslCONST_LOG2;
+    om->nj = 1.0f;
+  } else {
+    om->xf[p7O_E][p7O_MOVE] = 0.5;
+    om->xf[p7O_E][p7O_LOOP] = 0.5;
+    om->nj = 1.0f;
+  }
+
+  om->xu[p7O_E][p7O_MOVE] = unbiased_charify(om, -eslCONST_LOG2);
+  om->xu[p7O_E][p7O_LOOP] = unbiased_charify(om, -eslCONST_LOG2);
+
+  return p7_oprofile_ReconfigLength(om, L);
+}
+
+/* Function:  p7_oprofile_ReconfigUnihit()
+ * Synopsis:  Quickly reconfig model into unihit mode for target length <L>.
+ * Incept:    SRE, Thu Aug 21 10:10:32 2008 [Janelia]
+ *
+ * Purpose:   Given a profile <om> that's already been configured once,
+ *            quickly reconfigure it into a unihit mode for target 
+ *            length <L>. 
+ *            
+ *            This gets called in domain definition, when we need to
+ *            flip the model in and out of unihit <L=0> mode to
+ *            process individual domains.
+ */
+int
+p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
+{
+  
+  if (om->lspace_f) {
+    om->xf[p7O_E][p7O_MOVE] = 0.0f;
+    om->xf[p7O_E][p7O_LOOP] = -eslINFINITY;
+    om->nj = 1.0f;
+  } else {
+    om->xf[p7O_E][p7O_MOVE] = 1.0f;
+    om->xf[p7O_E][p7O_LOOP] = 0.0f;
+    om->nj = 1.0f;
+  }
+
+  om->xu[p7O_E][p7O_MOVE] = 255;
+  om->xu[p7O_E][p7O_LOOP] = 0;
+
+  return p7_oprofile_ReconfigLength(om, L);
+}
+
+
 
 /* Function:  p7_oprofile_Logify()
  * Synopsis:  Convert existing model's float scores to lspace.

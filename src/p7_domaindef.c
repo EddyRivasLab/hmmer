@@ -46,10 +46,9 @@
 
 #include "hmmer.h"
 
-static int calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef);
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
-static int region_trace_ensemble  (P7_DOMAINDEF *ddef,       P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, 
+static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2, 
 				   int i, int j, int null2_is_done);
 
 
@@ -119,7 +118,7 @@ p7_domaindef_Create(ESL_RANDOMNESS *r)
 
   /* allocate reusable, growable objects that domain def reuses for each seq */
   ddef->sp  = p7_spensemble_Create(1024, 64, 32); /* init allocs = # sampled pairs; max endpoint range; # of domains */
-  ddef->tr  = p7_trace_Create();
+  ddef->tr  = p7_trace_CreateWithPP();
   ddef->gtr = p7_trace_Create();
 
   /* keep a copy of ptr to the RNG */
@@ -310,6 +309,7 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
  * 2. Routines inferring domain structure of a target sequence
  *****************************************************************/
 
+#if 0
 /* Function:  p7_domaindef_ByViterbi()
  * Synopsis:  Define domains in a sequence by maximum likelihood.
  * Incept:    SRE, Fri Jan 25 15:10:21 2008 [Janelia]
@@ -344,6 +344,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
   return eslOK;
 }
+#endif
 
 
 /* Function:  p7_domaindef_ByPosteriorHeuristics()
@@ -351,10 +352,13 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  * Incept:    SRE, Sat Feb 23 08:17:44 2008 [Janelia]
  *
  * Purpose:   Given a sequence <sq> and model <gm> for which we have 
- *            already calculated a Forward and Backward matrix
- *            <fwd> and <bck>; use posterior probability heuristics
- *            to determine an annotated domain structure. Caller
- *            provides a new or reused <ddef> object to hold these
+ *            already calculated a Forward and Backward parsing matrices
+ *            <oxf> and <oxb>; use posterior probability heuristics
+ *            to determine an annotated domain structure; and for
+ *            each domain found, score it (with null2 calculations)
+ *            and obtain an optimal accuracy alignment, using <fwd> and
+ *            <bck> matrices as workspace for the necessary full-matrix
+ *            DP calculations. Caller provides a new or reused <ddef> object to hold these
  *            results.
  *            
  *            Upon return, <ddef> contains the definitions of all the
@@ -365,7 +369,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  */
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE *om, 
-				   P7_OMX *oxf, P7_OMX *oxb, P7_GMX *fwd, P7_GMX *bck, 
+				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
 				   P7_DOMAINDEF *ddef)
 {
   int i, j;
@@ -373,16 +377,16 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
   int d;
   int i2,j2;
   int last_j2;
-  int saveL = gm->L;
+  int saveL = om->L;
   int nc;
   int status;
 
   p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
-  p7_omx_DomainPosteriors(om, oxf, oxb, ddef);     /* now ddef->{btot,etot,mocc} are made.                           */
+  p7_DomainDecoding(om, oxf, oxb, ddef);           /* now ddef->{btot,etot,mocc} are made.                           */
   esl_vec_FSet(ddef->n2sc, sq->n+1, 0.0);          /* ddef->n2sc null2 scores are initialized                        */
   ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
-  p7_ReconfigUnihit(gm, saveL);	                   /* process each domain in unilocal mode                           */
+  p7_oprofile_ReconfigUnihit(om, saveL);	   /* process each domain in unilocal mode                           */
   i     = -1;
   triggered = FALSE;
   for (j = 1; j <= sq->n; j++)
@@ -396,8 +400,8 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
       else if (ddef->mocc[j] - (ddef->etot[j] - ddef->etot[j-1])  <  ddef->rt2) 
 	{
 	  /* We have a region i..j to evaluate. */
-	  p7_gmx_GrowTo(fwd, gm->M, j-i+1);
-	  p7_gmx_GrowTo(bck, gm->M, j-i+1);
+	  p7_omx_GrowTo(fwd, om->M, j-i+1, j-i+1);
+	  p7_omx_GrowTo(bck, om->M, j-i+1, j-i+1);
 	  ddef->nregions++;
 	  if (is_multidomain_region(ddef, i, j))
 	    {
@@ -413,10 +417,10 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 	       * here; we will consolidate later if null2 strategy
 	       * works
 	       */
-	      p7_ReconfigMultihit(gm, saveL);
-	      region_trace_ensemble(ddef, gm, sq, i, j, fwd, &nc);
-	      p7_null2_BySampling(ddef, gm, sq->dsq, i, j, fwd);
-	      p7_ReconfigUnihit(gm, saveL);
+	      p7_oprofile_ReconfigMultihit(om, saveL);
+	      p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
+	      region_trace_ensemble(ddef, gm, om, sq->dsq, i, j, fwd, bck, &nc);
+	      p7_oprofile_ReconfigUnihit(om, saveL);
 	      /* ddef->n2sc is now set on i..j by the traceback-dependent method */
 
 	      last_j2 = 0;
@@ -433,7 +437,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 		   in the output.
 		 */
 		ddef->nenvelopes++;
-		status = rescore_isolated_domain(ddef, gm, sq, fwd, bck, i2, j2, TRUE);
+		status = rescore_isolated_domain(ddef, gm, om, sq, fwd, bck, i2, j2, TRUE);
 		if (status == eslOK) last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
@@ -443,14 +447,14 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 	    {
 	      /* The region looks simple, single domain; convert the region to an envelope. */
 	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, gm, sq, fwd, bck, i, j, FALSE);
+	      rescore_isolated_domain(ddef, gm, om, sq, fwd, bck, i, j, FALSE);
 	    }
 	  i     = -1;
 	  triggered = FALSE;
 	}
     }
 
-  p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
+  p7_oprofile_ReconfigMultihit(om, saveL); /* restore original profile configuration */
   return eslOK;
 }
 
@@ -459,87 +463,6 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 /*****************************************************************
  * 3. Internal routines 
  *****************************************************************/
-
-/* calculate_domain_posteriors()
- * SRE, Fri Feb  8 10:44:30 2008 [Janelia]
- *
- * The caller has calculated Forward and Backward matrices <fwd> and
- * <bck> for model <gm> aligned to a target sequence. (The target
- * sequence doesn't need to be provided, because all we need to know
- * is its length <L>, and that's available in either of the two DP
- * matrices.) 
- * 
- * We use this information to calculate the posterior probabilities
- * that we're in a begin state B, end state E, or any core model state
- * {M,D,I} at each target sequence position <i = 1..L>.
- * 
- * This information is stored in three arrays in <ddef>. This routine
- * expects that this storage has already been (re)allocated
- * appropriately for a target seq of length <L>.
- * 
- * <ddef->btot[i]> stores the cumulative expectation \sum_1^i of the
- * number of i's that were emitted (by an Mk state) immediately after
- * a B : i.e., the expected number of times domains have started at or
- * before position i.
- * 
- * <ddef->etot[i]> stores the cumulative expectation \sum_1^i of the
- * number of i's that were emitted (by an Mk or Dk state) and
- * immediately followed by an end transition to E : i.e., the expected
- * number of times domains have ended at or before position i.
- * 
- * <ddef->mocc[i]> stores the probability that residue i is emitted by
- * the core model, as opposed to the flanking N,C,J states : i.e., the
- * probability that i is in a domain.
- * 
- * Upon return, each of these arrays has been made, and <ddef->L> has
- * been set.
- * 
- * Ideas for future optimization:
- * 
- * - The calculations only need to access the xmx[CNJBE][i] special
- *   states in the fwd, bck matrices, so we could use streamlined
- *   (checkpointed?) matrices that only maintain this info over all
- *   i. This would be a step in letting us do domain parses in linear
- *   memory.
- *   
- * - indeed, the <btot>, <etot>, and <mocc> arrays could be made
- *   sparse; on long target sequences, we expect long stretches of
- *   negligible posterior probability that we're in the model or using
- *   a begin or end transition.
- *   
- * - indeed indeed, we don't really need to store the <btot>, <etot>,
- *   and <mocc> arrays at all. We can define regions in a single pass
- *   in O(1) extra memory, straight from the <fwd>, <bck> matrices, if
- *   we have to (xref J2/101). <p7_domaindef_ByPosteriorHeuristics()>
- *   is already implemented in a way to make this easy. We're not
- *   doing that for now, partly for clarity in the code, and partly
- *   because I think we'll want to output the <btot>, <etot>, and
- *   <mocc> arrays -- this view of the posterior decoding of the
- *   domain structure of a target sequence will be useful. Also, it's
- *   a lot easier to implement the <is_multidomain_region()> trigger
- *   if these arrays are available.
- */
-static int
-calculate_domain_posteriors(P7_PROFILE *gm, P7_GMX *fwd, P7_GMX *bck, P7_DOMAINDEF *ddef)
-{
-  int   L            = fwd->L;
-  float overall_logp = fwd->xmx[p7G_NXCELLS*L + p7G_C] + gm->xsc[p7P_C][p7P_MOVE];
-  float njcp;
-  int   i;
-
-  for (i = 1; i <= L; i++)
-    {
-      ddef->btot[i] = ddef->btot[i-1] + exp(fwd->xmx[(i-1)*p7G_NXCELLS+p7G_B] + bck->xmx[(i-1)*p7G_NXCELLS+p7G_B] - overall_logp);
-      ddef->etot[i] = ddef->etot[i-1] + exp(fwd->xmx[i    *p7G_NXCELLS+p7G_E] + bck->xmx[i    *p7G_NXCELLS+p7G_E] - overall_logp);
-
-      njcp  = expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_N] + bck->xmx[p7G_NXCELLS*i + p7G_N] + gm->xsc[p7P_N][p7P_LOOP] - overall_logp);
-      njcp += expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_J] + bck->xmx[p7G_NXCELLS*i + p7G_J] + gm->xsc[p7P_J][p7P_LOOP] - overall_logp);
-      njcp += expf(fwd->xmx[p7G_NXCELLS*(i-1) + p7G_C] + bck->xmx[p7G_NXCELLS*i + p7G_C] + gm->xsc[p7P_C][p7P_LOOP] - overall_logp);
-      ddef->mocc[i] = 1. - njcp;
-    }
-  ddef->L = gm->L;
-  return eslOK;
-}
 
 
 /* is_multidomain_region()
@@ -591,20 +514,21 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
 /* region_trace_ensemble()
  * SRE, Fri Feb  8 11:49:44 2008 [Janelia]
  *
- * Here, we've decided that region <i>..<j> in sequence <sq> might be
+ * Here, we've decided that region <ireg>..<jreg> in sequence <dsq> might be
  * composed of more than one domain, and we're going to use clustering
  * of a posterior ensemble of stochastic tracebacks to sort it out.
  * 
- * To collect stochastic tracebacks, we need a Forward matrix
- * calculated over the region. Wastefully (see section on future
- * optimizations below), we calculate the Forward matrix here.  This
- * means we need the caller to provide the model <gm> and allocated
- * space for the Forward DP matrix in <gx>. 
- * 
- * The caller provides model <gm> configured in multihit mode, with
- * its target length distribution set to <sq->n>: i.e., the model
+ * Caller provides a filled Forward matrix in <fwd> for the sequence
+ * region <dsq+ireg-1>, length <jreg-ireg+1>, for the model <om>
+ * configured in multihit mode with its target length distribution
+ * set to the total length of <dsq>: i.e., the same model
  * configuration used to score the complete sequence (if it weren't
  * multihit, we wouldn't be worried about multiple domains).
+ * 
+ * Caller also provides a DP matrix in <wrk> containing at least one
+ * row, for use as temporary workspace. (This will typically be the
+ * caller's Backwards matrix, which we haven't yet used at this point
+ * in the processing pipeline.)
  * 
  * Caller provides <ddef>, which defines heuristic parameters that
  * control the clustering, and provides working space for the
@@ -623,6 +547,9 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
  * 
  * Other information on what's happened in working memory:
  * 
+ * <ddef->n2sc[ireg..jreg]> now contains log f'(x_i) / f(x_i) null2 scores
+ *    for each residue.
+ *
  * <ddef->sp> gets filled in, and upon return, it's holding the answers 
  *    (the cluster definitions). When the caller is done retrieving those
  *    answers, it needs to <esl_spensemble_Reuse()> it before calling
@@ -630,31 +557,51 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
  *    
  * <ddef->tr> is used as working memory for sampled traces.
  *    
- * <gm> gets reconfigured into multihit <L> mode!
- * 
- * <gx> is used for a Forward matrix on the domain <i..j>.
- * 
+ * <wrk> has had its zero row clobbered as working space for a null2 calculation.
  */
 static int
-region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int i, int j, P7_GMX *gx, int *ret_nc)
+region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, 
+		      const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc)
 {
-  float sc;
-  int   t, d, d2;
-  int   nov, n;
-  int   nc;
+  int    Lr  = jreg-ireg+1;
+  int    t, d, d2;
+  int    nov, n;
+  int    nc;
+  int    pos;
+  float  null2[p7_MAXCODE];
 
-  p7_GForward(sq->dsq+i-1, j-i+1, gm, gx, &sc);
+  esl_vec_FSet(ddef->n2sc+ireg, Lr, 0.0); /* zero the null2 scores in region */
 
+  /* Collect an ensemble of sampled traces; calculate null2 odds ratios from these */
   for (t = 0; t < ddef->nsamples; t++)
     {
-      p7_GStochasticTrace(ddef->r, sq->dsq+i-1, j-i+1, gm, gx, ddef->tr);
+      p7_StochasticTrace(ddef->r, dsq+ireg-1, Lr, om, fwd, ddef->tr);
       p7_trace_Index(ddef->tr);
 
+      pos = 1;
       for (d = 0; d < ddef->tr->ndom; d++)
-	p7_spensemble_Add(ddef->sp, t, ddef->tr->sqfrom[d]+i-1, ddef->tr->sqto[d]+i-1, ddef->tr->hmmfrom[d], ddef->tr->hmmto[d]);
+	{
+	  p7_spensemble_Add(ddef->sp, t, ddef->tr->sqfrom[d]+ireg-1, ddef->tr->sqto[d]+ireg-1, ddef->tr->hmmfrom[d], ddef->tr->hmmto[d]);
+
+	  p7_Null2_ByTrace(om, ddef->tr, ddef->tr->tfrom[d], ddef->tr->tto[d], wrk, null2);
+	  
+	  /* residues outside domains get bumped +1: because f'(x) = f(x), so f'(x)/f(x) = 1 in these segments */
+	  for (; pos <= ddef->tr->sqfrom[d]; pos++) ddef->n2sc[ireg+pos-1] += 1.0;
+
+	  /* Residues inside domains get bumped by their null2 ratio */
+	  for (; pos <= ddef->tr->sqto[d];   pos++) ddef->n2sc[ireg+pos-1] += null2[dsq[ireg+pos-1]];
+	}
+      /* the remaining residues in the region outside any domains get +1 */
+      for (; pos <= Lr; pos++)  ddef->n2sc[ireg+pos-1] += 1.0;
 
       p7_trace_Reuse(ddef->tr);        
     }
+
+  /* Convert the accumulated n2sc[] ratios in this region to log odds null2 scores on each residue. */
+  for (pos = ireg; pos <= jreg; pos++)
+    ddef->n2sc[pos] = logf(ddef->n2sc[pos] / (float) ddef->nsamples);
+
+  /* Cluster the ensemble of traces to break region into envelopes. */
   p7_spensemble_Cluster(ddef->sp, ddef->min_overlap, ddef->of_smaller, ddef->max_diagdiff, ddef->min_posterior, ddef->min_endpointp, &nc);
 
   /* A little hacky now. Remove "dominated" domains relative to seq coords. */
@@ -701,20 +648,24 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  * seq into a new per-seq score, to compare to the original per-seq
  * score).
  *  
- * The caller provides model <gm> configured in unilocal mode; by
+ * The caller provides model <om> configured in unilocal mode; by
  * using unilocal (as opposed to multilocal), we're going to force the
  * identification of a single domain in this envelope now.
  * 
  * The alignment is an optimal accuracy alignment (sensu IH Holmes),
- * also obtained in lobal mode.
+ * also obtained in unilocal mode.
  * 
- * The caller provides DP matrices <gx1> and <gx2> with sufficient
+ * The caller provides DP matrices <ox1> and <ox2> with sufficient
  * space to hold Forward and Backward calculations for this domain
  * against the model. (The caller will typically already have matrices
  * sufficient for the complete sequence lying around, and can just use
  * those.) The caller also provides a <P7_DOMAINDEF> object which is
  * (efficiently, we trust) managing any necessary temporary working
  * space and heuristic thresholds.
+ * 
+ * <gm> is also needed - solely because we need to pass it to
+ * alidisplay creation. We could remove this dependency, and work
+ * only with <om> and access functions.                      
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -726,44 +677,49 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, P7_PROFILE *gm, const ESL_SQ *sq, int 
  *         the OA trace of the domain. Before exit, we called
  *         <Reuse()> on it.
  * 
- * <gx1> : happens to be holding OA score matrix for the domain
+ * <ox1> : happens to be holding OA score matrix for the domain
  *         upon return, but that's not part of the spec; officially
  *         its contents are "undefined".
  *
- * <gx2> : happens to be holding a posterior probability matrix
+ * <ox2> : happens to be holding a posterior probability matrix
  *         for the domain upon return, but we're not making that
  *         part of the spec, so caller shouldn't rely on this;
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const ESL_SQ *sq, 
-			P7_GMX *gx1, P7_GMX *gx2, int i, int j, int null2_is_done)
+rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_SQ *sq, 
+			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done)
 {
   P7_DOMAIN     *dom           = NULL;
   int            Ld            = j-i+1;
   float          domcorrection = 0.0;
   float          envsc, oasc;
   int            z;
-
   int            pos;
+  float          null2[p7_MAXCODE];
   int            status;
 
-  p7_GForward (sq->dsq + i-1, Ld, gm, gx1, &envsc);
-  p7_GBackward(sq->dsq + i-1, Ld, gm, gx2, NULL);
-  p7_GPosteriorDecoding(Ld, gm, gx1, gx2, gx2);      /* <gx2> is now overwritten with post probabilities     */
+  p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
+  p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
+  p7_Decoding(om, ox1, ox2, ox2);      /* <gx2> is now overwritten with post probabilities     */
 
   /* Is null2 set already for this i..j? (It is, if we're in a domain that
    * was defined by stochastic traceback clustering in a multidomain region;
    * it isn't yet, if we're in a simple one-domain region). If it isn't,
    * do it now, by the expectation (posterior decoding) method.
    */
-  if (! null2_is_done) p7_null2_ByExpectation(ddef, gm, sq->dsq, i, j, gx2, gx1, NULL);
-
-  for (pos = i; pos <= j; pos++) domcorrection += ddef->n2sc[pos];
+  if (! null2_is_done) {
+    p7_Null2_ByExpectation(om, ox2, null2);
+    for (pos = i; pos <= j; pos++) 
+      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+  }
+    
+  for (pos = i; pos <= j; pos++) 
+    domcorrection   += ddef->n2sc[pos];
 
   /* Find an optimal accuracy alignment */
-  p7_OptimalAccuracyDP(Ld, gm, gx2, gx1, &oasc); /* <gx1> is now overwritten with OA scores              */
-  p7_OATrace(Ld, gm, gx2, gx1, ddef->tr);        /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
+  p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
+  p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
   
   /* hack the trace's sq coords to be correct w.r.t. original dsq */
   for (z = 0; z < ddef->tr->N; z++)

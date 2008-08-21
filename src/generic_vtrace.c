@@ -54,21 +54,21 @@
 int
 p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr)
 {
-  int     status;
-  int     i;			/* position in seq (1..L) */
-  int     k;			/* position in model (1..M) */
-  int     sprv, scur;		/* previous, current state in trace */
-  int     M   = gm->M;
-  float **dp  = gx->dp;
-  float  *xmx = gx->xmx;
-  float   tol = 1e-5;
-  float   esc = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+  int          i   = L;		/* position in seq (1..L)         */
+  int          k   = 0;		/* position in model (1..M)       */
+  int          M   = gm->M;
+  float      **dp  = gx->dp;	/* so {MDI}MX() macros work       */
+  float       *xmx = gx->xmx;	/* so XMX() macro works           */
+  float        tol = 1e-5;	/* floating point "equality" test */
+  float        esc = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
   float const *tsc  = gm->tsc;
+  int     sprv, scur;		/* previous, current state in trace */
+  int     status;
 
-  if ((status = p7_trace_Reuse(tr)) != eslOK) return status;
+#ifdef p7_DEBUGGING
+  if (tr->N != 0) ESL_EXCEPTION(eslEINVAL, "trace isn't empty: forgot to Reuse()?");
+#endif
 
-  k = 0;
-  i = L;		
   if ((status = p7_trace_Append(tr, p7T_T, k, i)) != eslOK) return status;
   if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) return status;
   sprv = p7T_C;
@@ -79,8 +79,8 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     case p7T_C:		/* C(i) comes from C(i-1) or E(i) */
       if   (XMX(i,p7G_C) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
 
-      if      (esl_FCompare(XMX(i, p7G_C), XMX(i-1, p7G_C) + gm->xsc[p7P_C][p7P_LOOP], tol) == eslOK) { scur = p7T_C; }
-      else if (esl_FCompare(XMX(i, p7G_C), XMX(i,   p7G_E) + gm->xsc[p7P_E][p7P_MOVE], tol) == eslOK) { scur = p7T_E; }
+      if      (esl_FCompare(XMX(i, p7G_C), XMX(i-1, p7G_C) + gm->xsc[p7P_C][p7P_LOOP], tol) == eslOK)  scur = p7T_C; 
+      else if (esl_FCompare(XMX(i, p7G_C), XMX(i,   p7G_E) + gm->xsc[p7P_E][p7P_MOVE], tol) == eslOK)  scur = p7T_E; 
       else ESL_EXCEPTION(eslFAIL, "C at i=%d couldn't be traced", i);
       break;
 

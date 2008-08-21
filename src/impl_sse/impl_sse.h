@@ -120,6 +120,7 @@ typedef struct p7_oprofile_s {
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gather, trust, noise cutoffs */
   float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit     */
   int    mode;			/* p7_LOCAL, for example                           */
+  int    L;			/* current configured target seq length            */
   int    allocM;		/* maximum model length currently allocated for    */
   int    M;			/* model length                                    */
   const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information             */
@@ -199,6 +200,19 @@ p7_omx_FGetMDI(P7_OMX *ox, int s, int i, int k)
   return u.p[r];
 }
 
+static inline void
+p7_omx_FSetMDI(P7_OMX *ox, int s, int i, int k, float val)
+{
+  union { __m128 v; float p[4]; } u;
+  int   Q = p7O_NQF(ox->M);
+  int   q = p7X_NSCELLS * ((k-1) % Q) + s;
+  int   r = (k-1)/Q;
+
+  u.v           = ox->dpf[i][q];
+  u.p[r]        = val;
+  ox->dpf[i][q] = u.v;
+}
+  
 
 
 /*****************************************************************
@@ -208,13 +222,13 @@ p7_omx_FGetMDI(P7_OMX *ox, int s, int i, int k)
 /* p7_omx.c */
 extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
 extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
+extern int          p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx);
 extern void         p7_omx_Destroy(P7_OMX *ox);
-extern int          p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef);
 
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
-extern int          p7_omx_DumpCharRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpCharRow (P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 extern int          p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
-extern int          p7_omx_DumpMSVRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpMSVRow  (P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 
 /* p7_oprofile.c */
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
@@ -222,8 +236,10 @@ extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
-extern int          p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L);
-extern int          p7_oprofile_Logify(P7_OPROFILE *om);
+extern int          p7_oprofile_ReconfigLength  (P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigMultihit(P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigUnihit  (P7_OPROFILE *gm, int L);
+extern int          p7_oprofile_Logify (P7_OPROFILE *om);
 extern int          p7_oprofile_Probify(P7_OPROFILE *om);
 extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
 				       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
@@ -231,17 +247,30 @@ extern int          p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *
 extern int          p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
 
+/* decoding.c */
+extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
+extern int p7_DomainDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P7_DOMAINDEF *ddef);
+
 /* fwdback.c */
 extern int p7_Forward       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
 extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
 extern int p7_Backward      (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 
-extern int p7_PosteriorDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp);
-extern int p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef);
-
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+
+/* null2.c */
+extern int p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int p7_Null2_ByTrace      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+
+/* optacc.c */
+extern int p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp,       P7_OMX *ox, float *ret_e);
+extern int p7_OATrace        (const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *tr);
+
+/* stotrace.c */
+extern int p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox,
+			      P7_TRACE *tr);
 
 /* vitfilter.c */
 extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

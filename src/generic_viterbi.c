@@ -505,7 +505,7 @@ main(int argc, char **argv)
   int             format  = eslSQFILE_UNKNOWN;
   char            errbuf[eslERRBUFSIZE];
   float           sc;
-  int             i,d;
+  int             d;
   int             status;
 
   /* Read in one HMM */
@@ -539,7 +539,7 @@ main(int argc, char **argv)
 
   /* Dump and validate the trace. */
   p7_trace_Dump(stdout, tr, gm, sq->dsq);
-  if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace %d fails validation:\n%s\n", i, errbuf);
+  if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 
   /* Domain info in the trace. */
   p7_trace_Index(tr);

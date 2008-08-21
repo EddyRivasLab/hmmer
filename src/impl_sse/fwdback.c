@@ -22,7 +22,6 @@
  * Contents:
  *   1. Forward/Backward wrapper API
  *   2. Forward and Backward engine implementations
- *   3. Posterior decoding.
  *   4. Benchmark driver.
  *   5. Unit tests.
  *   6. Test driver.
@@ -731,129 +730,6 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 
 
 
-/*****************************************************************
- * 3. Posterior decoding.
- *****************************************************************/
-
-
-/* Function:  p7_PosteriorDecoding()
- * Synopsis:  Posterior decoding of residue assignment.
- * Incept:    SRE, Fri Aug  8 14:29:42 2008 [UA217 to SFO]
- *
- * Purpose:   Calculates a posterior decoding of the residues <1..L> in
- *            a target sequence of length <L>, given profile <om>, a
- *            filled Forward matrix <oxf>, and a Backward matrix <oxb>.
- *            
- *            The resulting posterior decoding is stored in a DP matrix <pp>,
- *            provided by the caller.
- *            
- *            Each residue <i> must have been emitted by match state
- *            <1..M>, insert state <1..M-1>, or an NN, CC, or JJ loop
- *            transition.  For <dp = pp->dp>, <xmx = pp->xmx>,
- *            <MMO(i,k)> is the probability that match <k> emitted
- *            residue <i>; <IMO(i,k)> is the probability that insert
- *            <k> emitted residue <i>; <pp->xmx[NCJ][i]> are
- *            the probabilities that residue <i> was
- *            emitted on an NN, CC, or JJ transition. The sum over all
- *            these possibilities for a given residue <i> is 1.0.
- *            
- *            The caller may pass the Backward matrix <oxb> as <pp>,
- *            in which case <bck> will be overwritten with
- *            <pp>. However, the caller may \emph{not} overwrite <fwd>
- *            this way; an <(i-1)> dependency in the calculation of
- *            NN, CC, JJ transitions prevents this.
- *
- * Args:      L    - length of the target sequence
- *            om   - profile (must be the same that was used to fill <oxf>, <oxb>).
- *            oxf  - filled Forward matrix 
- *            oxb  - filled Backward matrix
- *            pp   - RESULT: posterior decoding matrix.
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_PosteriorDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
-{
-  register __m128 *ppv;
-  register __m128 *fv;
-  register __m128 *bv;
-  register __m128  totrv;
-  register __m128  scv;
-  int    L  = oxf->L;
-  int    M  = om->M;
-  int    Q3 = 3*p7O_NQF(M);	/* 3, for MDI */
-  int    i,q;
-  float  totp_reciprocal = 1.0 / (oxf->xmx[p7X_C][L] * om->xf[p7O_C][p7O_MOVE]);
-
-  ppv = pp->dpf[0];
-  for (q = 0; q < Q3; q++) 
-    ppv[q] = _mm_setzero_ps();
-
-  totrv = _mm_set1_ps(totp_reciprocal);
-  for (i = 1; i <= L; i++)
-    {
-      ppv =  pp->dpf[i];
-      fv  = oxf->dpf[i];
-      bv  = oxb->dpf[i];
-      scv = _mm_set1_ps(oxf->xmx[p7X_SCALE][i]);
-
-      for (q = 0; q < Q3; q++)
-	{
-	  ppv[q] = _mm_mul_ps(fv[q],  bv[q]);
-	  ppv[q] = _mm_mul_ps(ppv[q], scv);
-	  ppv[q] = _mm_mul_ps(ppv[q], totrv);
-	}
-
-      pp->xmx[p7X_N][i] = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * totp_reciprocal;
-      pp->xmx[p7X_J][i] = oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * totp_reciprocal;
-      pp->xmx[p7X_C][i] = oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * totp_reciprocal;
-    }
-  return eslOK;
-}
-
-/* Function:  p7_omx_DomainDecoding()
- * Synopsis:  Posterior decoding of domain location.
- * Incept:    SRE, Tue Aug  5 08:39:07 2008 [Janelia]
- *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
- */
-int
-p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF *ddef)
-{
-  int   L               = oxf->L;
-  float totp_reciprocal = 1.0 / (oxf->xmx[p7X_C][L] * om->xf[p7O_C][p7O_MOVE]);
-  float njcp;
-  int   i;
-
-  ddef->btot[0] = 0.0;
-  ddef->etot[0] = 0.0;
-  ddef->mocc[0] = 0.0;
-  for (i = 1; i <= L; i++)
-    {
-      ddef->btot[i] = ddef->btot[i-1] +
-	(oxf->xmx[p7X_B][i-1] * oxb->xmx[p7X_B][i-1] * oxf->xmx[p7X_SCALE][i-1] * totp_reciprocal);
-      ddef->etot[i] = ddef->etot[i-1] +
-	(oxf->xmx[p7X_E][i]   * oxb->xmx[p7X_E][i]   * oxf->xmx[p7X_SCALE][i]   * totp_reciprocal);
-
-      njcp  = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * totp_reciprocal;
-      njcp += oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * totp_reciprocal;
-      njcp += oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * totp_reciprocal;
-      ddef->mocc[i] = 1. - njcp;
-    }
-  ddef->L = oxf->L;
-  return eslOK;
-}
-/*------------------ end, posterior decoding --------------------*/
 
 
 /*****************************************************************
@@ -862,12 +738,11 @@ p7_omx_DomainPosteriors(P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_DOMAINDEF 
 #ifdef p7FWDBACK_BENCHMARK
 /* -c, -x options are for debugging and testing: see fwdfilter.c for explanation */
 /* 
-   gcc  -std=gnu99 -O2 -msse2 -o fwdback_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_BENCHMARK fwdback.c -lhmmer -leasel -lm 
-   icc  -O3 -static           -o fwdback_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_BENCHMARK fwdback.c -lhmmer -leasel -lm 
+   icc  -O3 -static -o fwdback_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_BENCHMARK fwdback.c -lhmmer -leasel -lm 
 
-   ./benchmark-fbparsers <hmmfile>           runs benchmark on both Forward and Backward parser
-   ./benchmark-fbparsers -c -N100 <hmmfile>  compare scores of SSE to generic impl
-   ./benchmark-fbparsers -x -N100 <hmmfile>  test that scores match trusted implementation.
+   ./fwdback_benchmark <hmmfile>           runs benchmark on both Forward and Backward parser
+   ./fwdback_benchmark -c -N100 <hmmfile>  compare scores of SSE to generic impl
+   ./fwdback_benchmark -x -N100 <hmmfile>  test that scores match trusted implementation.
  */
 #include "p7_config.h"
 

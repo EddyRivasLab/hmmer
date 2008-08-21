@@ -324,8 +324,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_OPROFILE     *om      = NULL;     /* optimized profiile                      */
   ESL_SQ          *sq      = NULL;      /* target sequence                        */
   P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
-  P7_GMX          *fwd     = NULL;     /* DP matrix                               */
-  P7_GMX          *bck     = NULL;     /* DP matrix                               */
+  P7_OMX          *fwd     = NULL;     /* DP matrix                               */
+  P7_OMX          *bck     = NULL;     /* DP matrix                               */
   P7_OMX          *oxf     = NULL;     /* optimized DP matrix for Forward         */
   P7_OMX          *oxb     = NULL;     /* optimized DP matrix for Backward        */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
@@ -347,10 +347,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              k,x;
 
   tr  = p7_trace_Create();
-  fwd = p7_gmx_Create(200, 400);    /* initial alloc is for M=200, L=400; will grow as needed */
-  bck = p7_gmx_Create(200, 400);	
-  oxf = p7_omx_Create(200, 0, 400); /* one-row parsing matrix, O(M+L) */
-  oxb = p7_omx_Create(200, 0, 400);     
+  fwd = p7_omx_Create(200, 400, 400);    /* initial alloc is for M=200, L=400; will grow as needed */
+  bck = p7_omx_Create(200, 400, 400);	
+  oxf = p7_omx_Create(200, 0,   400); /* one-row parsing matrix, O(M+L) */
+  oxb = p7_omx_Create(200, 0,   400);     
   
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
   if ((status = init_worker_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
@@ -530,8 +530,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile);
 
-  p7_gmx_Destroy(fwd);
-  p7_gmx_Destroy(bck);
+  p7_omx_Destroy(fwd);
+  p7_omx_Destroy(bck);
   p7_omx_Destroy(oxf);
   p7_omx_Destroy(oxb);
   p7_trace_Destroy(tr);

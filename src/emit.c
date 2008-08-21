@@ -204,6 +204,7 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
     if ((status = p7_trace_Append(tr, p7T_N, k, i)) != eslOK) goto ERROR;
   }
   st    = p7T_N;
+  i     = 0;
   while (st != p7T_T)
     {
       /* Sample a state transition. After this section, prv and st (prev->current state) are set;
@@ -392,7 +393,7 @@ main(int argc, char **argv)
   for (i = 0; i < n; i++) 
     {
       p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
-      p7_trace_StateUseCounts(tr, counts);
+      p7_trace_GetStateUseCounts(tr, counts);
 
       p7_ReconfigLength(gm, sq->n);
       p7_bg_SetLength(bg, sq->n);
@@ -414,12 +415,98 @@ main(int argc, char **argv)
   p7_hmm_Destroy(hmm);
   return eslOK;
 } 
-
-
 #endif /*p7EMIT_STATS*/
+/*-------------------- end, stats driver ------------------------*/
 
 
+/*****************************************************************
+ * x. Example
+ *****************************************************************/
+#ifdef p7EMIT_EXAMPLE
+/* 
+   gcc -g -Wall -o emit_example -Dp7EMIT_EXAMPLE -I. -I../easel -L. -L../easel emit.c -lhmmer -leasel -lm
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "configured mean seq length for profile",           0 },
+  { "-N",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "example of emitting sequences from profile";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng     = NULL;
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_TRACE       *tr      = p7_trace_Create();
+  ESL_SQ         *sq      = NULL;
+  char            errbuf[eslERRBUFSIZE];
+  int             i;
+
+  if (esl_opt_GetBoolean(go, "-r"))  rng = esl_randomness_CreateTimeseeded();
+  else                               rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, L);
+  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  sq = esl_sq_CreateDigital(abc);
+
+  for (i = 0; i < N; i++)
+    {
+      p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
+      esl_sq_SetName(sq, "%s-sample%d", hmm->name, i);
+      esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);
+
+      if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal(errbuf);
+
+      esl_sq_Reuse(sq);
+      p7_trace_Reuse(tr);
+    }      
+
+  esl_sq_Destroy(sq);
+  p7_trace_Destroy(tr);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7EMIT_EXAMPLE*/
+
+
+
+/*---------------------- end, example ---------------------------*/
 
 /*****************************************************************
  * @LICENSE@
  *****************************************************************/
+
+
