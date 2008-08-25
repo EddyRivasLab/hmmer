@@ -1,0 +1,7 @@
+#! /usr/bin/perl
+
+use demotic_hmmer;
+
+&demotic_hmmer::parse(\*STDIN);
+&demotic_hmmer::profmark_out(\*STDOUT);
+

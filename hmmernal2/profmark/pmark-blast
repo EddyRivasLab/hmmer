@@ -1,0 +1,53 @@
+#! /usr/bin/perl
+
+# Usage: pmark-blast <dir> <index-table> <msafile> <seqfile>  <outfile>
+
+$dir        = shift;
+$table      = shift;
+$msafile    = shift;
+$seqfile    = shift;
+$outfile    = shift;
+
+$blastp     = "/usr/local/wublast/blastp";
+$blastopts  = "cpus=1 filter=seg+xnu V=9999 B=0";
+
+open(OUTFILE,">$outfile") || die "failed to open $outfile";
+open(TABLE, "$table")     || die "failed to open $table";
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    %seen          = ();
+    %best_pval     = ();
+    %best_bitscore = ();
+
+    $output = `esl-afetch -o $dir/$msaname.sto $msafile $msaname`;
+    if ($? != 0) { die "FAILED: esl-afetch -o $dir/$msaname.sto $msafile $msaname"; }
+
+    # Extract a list of individual sequence names from the multiple alignment.
+    $output = `esl-seqstat -a $dir/$msaname.sto | grep "^=" | awk '{print \$2}'`;
+    if ($? != 0) { die "FAILED: esl-seqstat -a $dir/$msaname.sto | grep "^=" | awk '{print \$2}'"; }
+
+    @qnames = split(/^/,$output);
+    chop (@qnames);
+
+    # Choose a random query
+    $qname = $qnames[int(rand($#qnames +1))];
+
+    $output = `esl-sfetch -o $dir/$msaname.query.fa $dir/$msaname.sto $qname`;
+    if ($? != 0) { die "FAILED: esl-sfetch -o $dir/$msaname.query.fa $dir/$msaname.sto $qname"; }
+
+    $output = `$blastp $seqfile $dir/$msaname.query.fa $blastopts | ./wublast2profmark`;
+    if ($? != 0) { die "FAILED: $blastp $seqfile $dir/$msaname.query.fa $blastopts | ./wublast2profmark"; }
+
+    @lines  = split(/^/,$output);
+    foreach $line (@lines) 
+    {
+	($pval, $bitscore, $target, $query) = split(' ', $line);
+	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname;
+    } 
+
+    unlink "$dir/$msaname.query.fa";
+    unlink "$dir/$msaname.sto";
+}
+close TABLE;
