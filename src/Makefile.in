@@ -22,8 +22,8 @@ MPILIBS        = @MPILIBS@
 
 SHELL     = /bin/sh
 MYLIBS    = -lhmmer -leasel 
-MYLIBDIRS = -L../easel -L.
-MYINCDIRS = -I../easel -I.
+MYLIBDIRS = -L../../easel -L.
+MYINCDIRS = -I../../easel -I.
 IMPLDIR   = impl_@IMPL_CHOICE@
 
 PROGS = hmmbuild\
@@ -124,7 +124,7 @@ dev:    ${PROGS} ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
 ${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../easel/libeasel.a
 	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} ${PVMLIBDIR} -o $@ $@.o ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
 
-${UTESTS}: libhmmer.a ../easel/libeasel.a
+${UTESTS}: libhmmer.a ../../easel/libeasel.a
 	@ echo "Compiling $@ ..."
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
@@ -136,7 +136,7 @@ ${UTESTS}: libhmmer.a ../easel/libeasel.a
 	fi;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
+${BENCHMARKS}: libhmmer.a ../../easel/libeasel.a
 	@ echo "Compiling $@ ..."
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
@@ -148,7 +148,7 @@ ${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
 	fi;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${EXAMPLES}: libhmmer.a ../easel/libeasel.a
+${EXAMPLES}: libhmmer.a ../../easel/libeasel.a
 	@ echo "Compiling $@ ..."
 	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
@@ -166,7 +166,7 @@ libhmmer.a: ${HDRS} ${OBJS} ${IMPL_OBJ}
 	chmod 644 libhmmer.a
 
 ../easel/libeasel.a: 
-	cd ../easel; ${MAKE} libeasel.a
+	cd ../../easel; ${MAKE} libeasel.a
 
 ${IMPL_OBJ}: 
 	cd ${IMPLDIR}; make
