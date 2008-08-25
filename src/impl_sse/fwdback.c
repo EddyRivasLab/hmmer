@@ -538,6 +538,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   /* Sparse rescaling: same scale factors as fwd matrix */
   if (fwd->xmx[p7X_SCALE][L] > 1.0)
     {
+      xE  = xE / fwd->xmx[p7X_SCALE][L];
       xN  = xN / fwd->xmx[p7X_SCALE][L];
       xC  = xC / fwd->xmx[p7X_SCALE][L];
       xJ  = xJ / fwd->xmx[p7X_SCALE][L];
@@ -548,7 +549,6 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 	DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
 	IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
       }
-      xE = 1.0;
     }
   bck->xmx[p7X_SCALE][L] = fwd->xmx[p7X_SCALE][L];
 

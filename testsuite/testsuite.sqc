@@ -27,6 +27,8 @@
 
 1 exercise fwdback            @fwdback_utest@
 1 exercise msvfilter          @msvfilter_utest@
+1 exercise optacc             @optacc_utest@
+1 exercise stotrace           @stotrace_utest@
 1 exercise vitfilter          @vitfilter_utest@
 1 exercise vitscore           @vitscore_utest@
 

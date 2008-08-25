@@ -378,6 +378,8 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
 
       if (esl_opt_GetBoolean(go, "--vv"))       
 	printf("utest_viterbi: Viterbi score: %.4f (null %.4f) (total so far: %.4f)\n", sc1, sc2, avg_sc);
+
+      p7_trace_Reuse(tr);
     }
 
   avg_sc /= (float) nseq;
