@@ -90,7 +90,7 @@ p7_FLogsumInit(void)
  *            but neither may be $+\infty$ or <NaN>.
  *
  * Note:      This function is a critical optimization target, because
- *            it's in the inner loop of Forward() algorithms.
+ *            it's in the inner loop of generic Forward() algorithms.
  */
 float
 p7_FLogsum(float a, float b)

@@ -33,9 +33,9 @@ static ESL_OPTIONS options[] = {
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",             1 },
   { "-E",        eslARG_REAL,  "10.0", NULL,"x>0",      NULL,  NULL,  NULL, "E-value cutoff for sequences",                      1 },
 
-  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSV filter threshold: promote hits w/ P < F1",      2 },
-  { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit filter threshold: promote hits w/ P < F2",      2 },
-  { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd filter threshold: promote hits w/ P < F3",      2 },
+  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSV threshold: promote hits w/ P <= F1",            2 },
+  { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit threshold: promote hits w/ P <= F2",            2 },
+  { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd threshold: promote hits w/ P <= F3",            2 },
 
   { "--unilocal",eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "do unilocal (Smith/Waterman) alignment",            3 },
 
@@ -108,6 +108,7 @@ main(int argc, char **argv)
   /* Initializations */
   process_commandline(argc, argv, &cfg, &go);    
   init_shared_cfg(go, &cfg);                        
+  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
 
   /* Stall here, if we need to wait for a debugger to attach to us (MPI) */
   while (cfg.do_stall); 
@@ -334,12 +335,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   double F3                = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold                    */
   double Evalue_threshold  = esl_opt_GetReal(go, "-E");	  /* per-seq E-value threshold                  */
   float            usc, vfsc;          /* filter scores                           */
+  float            fwdsc;
   float            final_sc;	       /* final bit score                         */
   float            nullsc;             /* null model score                        */
   float            omega  = 1.0f/256.0f;
   float            seqbias;  
   float            seq_score;          /* the per-seq bit score */
   double           P;		       /* P-value of a hit */
+  double           E;		       /* bound on E-value of a hit  */
   int              Ld;		       /* # of residues in envelopes */
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
@@ -395,25 +398,28 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_MSVFilter(sq->dsq, sq->n, om, oxf, &usc);
 	  usc = (usc - nullsc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
-	  if (P >= F1) { esl_sq_Reuse(sq); continue; } 
+	  E = P * (double) cfg->nseq;
+	  if (P > F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
 	  cfg->n_past_msv++;
 
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
-	  if (P >= F2) 		
+	  if (P > F2) 		
 	    {
 	      p7_ViterbiFilter(sq->dsq, sq->n, om, oxf, &vfsc);  
 	      vfsc = (vfsc-nullsc) / eslCONST_LOG2;
 	      P  = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
-	      if (P >= F2) { esl_sq_Reuse(sq); continue; } 
+	      E = P * (double) cfg->nseq;
+	      if (P > F2 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; } 
 	    }
 	  cfg->n_past_vit++;
 
 	  /* Parse it with Forward and obtain its real Forward score. */
 	  p7_omx_GrowTo(oxf, hmm->M, 0, sq->n); 
-	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &final_sc);
-	  final_sc = (final_sc-nullsc) / eslCONST_LOG2;
+	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &fwdsc);
+	  final_sc = (fwdsc-nullsc) / eslCONST_LOG2;
 	  P = esl_exp_surv(final_sc,  hmm->evparam[p7_TAU],  hmm->evparam[p7_LAMBDA]);
-	  if (P >= F3) { esl_sq_Reuse(sq); continue; }
+	  E = P * (double) cfg->nseq;
+	  if (P >= F3 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; }
 	  cfg->n_past_fwd++;
 
 	  /* ok, it's for real; do the Backwards parser pass and hand
@@ -441,7 +447,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      /* Figure out the sum of null2 corrections to be added to the null score */
 	      seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
 	      seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
-	      seq_score =  (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
+	      seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
 	    }
 
 	  P         =  esl_exp_surv (seq_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
@@ -459,7 +465,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      hit->noverlaps  = cfg->ddef->noverlaps;
 	      hit->nenvelopes = cfg->ddef->nenvelopes;
 
-	      hit->pre_score  = ( final_sc-nullsc) / eslCONST_LOG2;
+	      hit->pre_score  = ( fwdsc-nullsc) / eslCONST_LOG2;
 	      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 
 	      hit->score      = seq_score;

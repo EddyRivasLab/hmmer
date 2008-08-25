@@ -310,11 +310,11 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
   if (om->lspace_f) {
     om->xf[p7O_E][p7O_MOVE] = 0.0f;
     om->xf[p7O_E][p7O_LOOP] = -eslINFINITY;
-    om->nj = 1.0f;
+    om->nj = 0.0f;
   } else {
     om->xf[p7O_E][p7O_MOVE] = 1.0f;
     om->xf[p7O_E][p7O_LOOP] = 0.0f;
-    om->nj = 1.0f;
+    om->nj = 0.0f;
   }
 
   om->xu[p7O_E][p7O_MOVE] = 255;

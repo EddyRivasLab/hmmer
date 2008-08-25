@@ -69,20 +69,6 @@ OBJS =  build.o\
 	p7_trace.o
 #	island.o\
 
-IMPL_OBJ =\
-	${IMPLDIR}/decoding.o\
-	${IMPLDIR}/fwdback.o\
-	${IMPLDIR}/msvfilter.o\
-	${IMPLDIR}/null2.o\
-	${IMPLDIR}/optacc.o\
-	${IMPLDIR}/stotrace.o\
-	${IMPLDIR}/vitfilter.o\
-	${IMPLDIR}/vitscore.o\
-	${IMPLDIR}/p7_omx.o\
-	${IMPLDIR}/p7_oprofile.o
-
-IMPL_HEADER = ${IMPLDIR}/impl_${IMPL_CHOICE}.h
-
 BENCHMARKS = \
 	generic_decoding_benchmark\
 	generic_fwdback_benchmark\
@@ -160,15 +146,15 @@ ${EXAMPLES}: libhmmer.a ../easel/libeasel.a
 	fi;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-libhmmer.a: ${HDRS} ${OBJS} ${IMPL_OBJ}
-	$(AR) libhmmer.a ${OBJS} ${IMPL_OBJ}
+libhmmer.a: ${HDRS} ${OBJS} impl_obj
+	$(AR) libhmmer.a ${OBJS}
 	$(RANLIB) libhmmer.a
 	chmod 644 libhmmer.a
 
 ../easel/libeasel.a: 
 	cd ../easel; ${MAKE} libeasel.a
 
-${IMPL_OBJ}: 
+impl_obj:
 	cd ${IMPLDIR}; make
 
 .c.o:

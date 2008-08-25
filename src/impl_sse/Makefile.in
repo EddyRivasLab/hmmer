@@ -58,6 +58,9 @@ EXAMPLES =\
 	vitscore_example
 
 all: 	   ${HDRS} ${OBJS}
+	$(AR) ../libhmmer.a ${OBJS}
+	$(RANLIB) ../libhmmer.a
+	chmod 644 ../libhmmer.a
 
 check:     ${UTESTS}
 
