@@ -32,6 +32,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"	/* ESL_DSQ, ESL_ALPHABET */
 #include "esl_dmatrix.h"	/* ESL_DMATRIX           */
+#include "esl_hmm.h"	        /* ESL_HMM               */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
 #include "esl_sq.h"		/* ESL_SQ                */
@@ -226,10 +227,13 @@ typedef struct p7_profile_s {
  *****************************************************************/
 
 typedef struct p7_bg_s {
-  ESL_ALPHABET *abc;		/* reference to alphabet in use       */
-  
-  float  p1;			/* null model's self-loop probability */
-  float *f;			/* residue frequencies [0..K-1] */
+  float  p1;			/* null model's self-loop probability           */
+  float *f;			/* residue frequencies [0..K-1]                 */
+
+  float   *mcomp;		/* model composition frequencies [0..K-1]       */
+  ESL_HMM *fhmm;		/* 2-state HMM used as null model in prefilters */
+
+  const ESL_ALPHABET *abc;	/* reference to alphabet in use                 */
 } P7_BG;
 
 /*****************************************************************
@@ -704,6 +708,10 @@ extern int    p7_bg_Dump(FILE *ofp, P7_BG *bg);
 extern void   p7_bg_Destroy(P7_BG *bg);
 extern int    p7_bg_SetLength(P7_BG *bg, int L);
 extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc);
+
+extern int    p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm);
+extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
+
 
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);

@@ -12,6 +12,8 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_hmm.h"
+#include "esl_random.h"		/* needed for now in SetFilter() routines; will disappear */
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -39,9 +41,14 @@ p7_bg_Create(const ESL_ALPHABET *abc)
   int    status;
 
   ESL_ALLOC(bg, sizeof(P7_BG));
-  bg->f = NULL;
+  bg->f     = NULL;
+  bg->mcomp = NULL;
+  bg->fhmm  = NULL;
 
-  ESL_ALLOC(bg->f, sizeof(float) * abc->K);
+  ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
+  ESL_ALLOC(bg->mcomp, sizeof(float) * abc->K);
+  if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
+
   if       (abc->type == eslAMINO)
     {
       if (p7_AminoFrequencies(bg->f) != eslOK) goto ERROR;
@@ -50,7 +57,7 @@ p7_bg_Create(const ESL_ALPHABET *abc)
     esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
 
   bg->p1  = 350./351.;
-  bg->abc = (ESL_ALPHABET *) abc; /* safe: we're just keeping a reference */
+  bg->abc = abc;
   return bg;
 
  ERROR:
@@ -73,11 +80,15 @@ p7_bg_CreateUniform(const ESL_ALPHABET *abc)
   int    status;
 
   ESL_ALLOC(bg, sizeof(P7_BG));
-  bg->f = NULL;
-  ESL_ALLOC(bg->f, sizeof(float) * abc->K);
+  bg->f     = NULL;
+  bg->mcomp = NULL;
+  bg->fhmm  = NULL;
+
+  ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
+  ESL_ALLOC(bg->mcomp, sizeof(float) * abc->K);
+  if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
 
   esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
-
   bg->p1  = 350./351.;
   bg->abc = (ESL_ALPHABET *) abc; /* safe: we're just keeping a reference */
   return bg;
@@ -154,3 +165,80 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
   return eslOK;
 }
 
+
+/* bg->mcomp has been set; create the two-state HMM */
+static int
+create_filter_hmm(P7_BG *bg)
+{
+  float L0 = 400.0;		/* mean length in state 0 */
+  float L1 = 400.0;		/* mean length in state 1 */
+
+  /* State 0 is the normal iid model. */
+  bg->fhmm->t[0][0] =   L0 / (L0+1.0f);
+  bg->fhmm->t[0][1] = 1.0f / (L0+1.0f);
+  bg->fhmm->t[0][2] = 1.0f;          	/* 1.0 transition to E means we'll set length distribution externally. */
+  esl_vec_FCopy(bg->f, bg->abc->K, bg->fhmm->e[0]);
+
+  /* State 1 is the potentially biased model composition. */
+  bg->fhmm->t[1][0] = 1.0f / (L1+1.0f);
+  bg->fhmm->t[1][1] =   L1 / (L1+1.0f);
+  bg->fhmm->t[1][2] = 1.0f;         	/* 1.0 transition to E means we'll set length distribution externally. */
+  esl_vec_FCopy(bg->mcomp, bg->abc->K, bg->fhmm->e[1]);
+
+  bg->fhmm->pi[0] = 0.99;
+  bg->fhmm->pi[1] = 0.01;
+
+  esl_hmm_Configure(bg->fhmm, bg->f);
+  return eslOK;
+}
+
+int
+p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
+{
+  ESL_RANDOMNESS  *rng  = esl_randomness_CreateTimeseeded();     /* source of randomness                    */
+  ESL_SQ          *sq   = esl_sq_CreateDigital(bg->abc);
+  int              nseq = 1000;
+  int              pos;
+  int              status;
+
+  esl_vec_FSet(bg->mcomp, bg->abc->K, 1.0); /* a +1 prior */
+
+  while (nseq--)
+    {
+      if ((status = p7_CoreEmit(rng, hmm, sq, NULL)) != eslOK) goto ERROR;
+
+      for (pos = 1; pos <= sq->n; pos++)
+	bg->mcomp[sq->dsq[pos]] += 1.0;
+
+      esl_sq_Reuse(sq);
+    }
+  
+  esl_vec_FNorm(bg->mcomp, bg->abc->K);
+
+  create_filter_hmm(bg);
+
+  esl_sq_Destroy(sq);
+  esl_randomness_Destroy(rng);
+  return eslOK;
+
+ ERROR:
+  esl_sq_Destroy(sq);
+  esl_randomness_Destroy(rng);
+  return status;
+}
+
+
+int
+p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc)
+{
+  ESL_HMX *hmx = esl_hmx_Create(L, bg->fhmm->M); /* optimization target: this can be a 2-row matrix, and it can be stored in <bg>. */
+  float nullsc;
+  int   i;
+  
+  esl_hmm_Forward(dsq, L, bg->fhmm, hmx, &nullsc);
+
+  /* impose the length distribution */
+  *ret_sc = nullsc + (float) L * logf(bg->p1) + logf(1.-bg->p1);
+  esl_hmx_Destroy(hmx);
+  return eslOK;
+}

@@ -32,6 +32,7 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "show brief help on version and usage",              1 },
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",             1 },
   { "-E",        eslARG_REAL,  "10.0", NULL,"x>0",      NULL,  NULL,  NULL, "E-value cutoff for sequences",                      1 },
+  { "-Z",        eslARG_INT,    FALSE, NULL,"n>0",      NULL,  NULL,  NULL, "set # of seqs in target DB, for E-value calculation", 1 },
 
   { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSV threshold: promote hits w/ P <= F1",            2 },
   { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit threshold: promote hits w/ P <= F2",            2 },
@@ -227,7 +228,7 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
    * master accumulates in its main hitlist. 
    */
   cfg->hitlist    = p7_tophits_Create();
-  cfg->nseq       = 0;
+  cfg->nseq       = (esl_opt_IsDefault(go, "-Z") ?  0 : esl_opt_GetInteger(go, "-Z"));
   cfg->nmodels    = 0;
   cfg->nres       = 0;
   cfg->nnodes     = 0;
@@ -337,6 +338,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   float            usc, vfsc;          /* filter scores                           */
   float            fwdsc;
   float            final_sc;	       /* final bit score                         */
+  float            filtersc;	       /* filter pipeline's null model score      */
   float            nullsc;             /* null model score                        */
   float            omega  = 1.0f/256.0f;
   float            seqbias;  
@@ -365,12 +367,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* One time only initializations after abc becomes known: */
       if (cfg->bg == NULL) cfg->bg = p7_bg_Create(cfg->abc);
       if (sq      == NULL) sq      = esl_sq_CreateDigital(cfg->abc);
+
+      p7_bg_SetFilterByHMM(cfg->bg, hmm); /* EXPERIMENTAL */
       
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
       p7_ProfileConfig(hmm, cfg->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; MSVFilter requires local mode */
 
-      /* Experimental: shut the inserts off. */
+      /* EXPERIMENTAL: shut the inserts off. */
       for (k = 1; k < hmm->M; k++)
 	for (x = 0; x < gm->abc->Kp; x++)
 	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
@@ -386,41 +390,48 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       while ( (sstatus = esl_sqio_Read(cfg->sqfp, sq)) == eslOK)
 	{
-	  cfg->nseq++;
+	  if (esl_opt_IsDefault(go, "-Z")) cfg->nseq++;
 	  cfg->nres += sq->n;
 	  p7_oprofile_ReconfigLength(om, sq->n);
 
 	  /* Null model score for this sequence.  */
 	  p7_bg_SetLength(cfg->bg, sq->n);
-	  p7_bg_NullOne(cfg->bg, sq->dsq, sq->n, &nullsc);
+	  p7_bg_NullOne    (cfg->bg, sq->dsq, sq->n, &nullsc);
+	  p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
 
 	  /* First level filter: the MSV filter, multihit with <om> */
 	  p7_MSVFilter(sq->dsq, sq->n, om, oxf, &usc);
-	  usc = (usc - nullsc) / eslCONST_LOG2;
+	  usc = (usc - filtersc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	  E = P * (double) cfg->nseq;
 	  if (P > F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
 	  cfg->n_past_msv++;
 
+	  //printf("Past MSV: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, usc, P);
+
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
 	  if (P > F2) 		
 	    {
 	      p7_ViterbiFilter(sq->dsq, sq->n, om, oxf, &vfsc);  
-	      vfsc = (vfsc-nullsc) / eslCONST_LOG2;
+	      vfsc = (vfsc-filtersc) / eslCONST_LOG2;
 	      P  = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	      E = P * (double) cfg->nseq;
 	      if (P > F2 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; } 
+	      //  printf("Past VIT: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, vfsc, P);
 	    }
 	  cfg->n_past_vit++;
+
 
 	  /* Parse it with Forward and obtain its real Forward score. */
 	  p7_omx_GrowTo(oxf, hmm->M, 0, sq->n); 
 	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &fwdsc);
-	  final_sc = (fwdsc-nullsc) / eslCONST_LOG2;
+	  final_sc = (fwdsc-filtersc) / eslCONST_LOG2;
 	  P = esl_exp_surv(final_sc,  hmm->evparam[p7_TAU],  hmm->evparam[p7_LAMBDA]);
 	  E = P * (double) cfg->nseq;
 	  if (P >= F3 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; }
 	  cfg->n_past_fwd++;
+
+	  //	  printf("Past FWD: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, final_sc, P);
 
 	  /* ok, it's for real; do the Backwards parser pass and hand
 	   * it off to domain definition logic. 
