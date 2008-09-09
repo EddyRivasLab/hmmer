@@ -1,0 +1,498 @@
+ID              1
+STATUS          closed
+DESCRIPTION     BPA1_HUMAN crashes Pfam server
+NOTED_DATE      1/16/98
+NOTED_XREF      
+REPORTED_BY     David Kerk
+REPRODUCE_WITH  
+REPRODUCE_ON	ANY
+CLOSED_DATE     1/16/98
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              2
+STATUS          closed
+DESCRIPTION     null2 consistency problem between per-seq and per-domain
+NOTED_DATE      1/7/99
+NOTED_XREF      notebook STL1 p.117 
+REPORTED_BY     David Kerk
+REPRODUCE_WITH  bug2.pl
+REPRODUCE_ON	ANY
+CLOSED_DATE     SRE, Tue Dec 19 17:45:46 2000
+CLOSED_XREF     STL3 notebook, p.127
+CLOSED_ACTION   created postprocess_hit() in hmmpfam.c
+//
+ID              3
+STATUS          closed
+DESCRIPTION     hmmbuild segfaults on alignments labeled with #=ID
+NOTED_DATE      1/15/99
+NOTED_XREF      
+REPORTED_BY     SRE
+REPRODUCE_WITH  
+REPRODUCE_ON	Solaris
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              4
+STATUS          closed
+DESCRIPTION     sreformat core dumps when reformatting single seq to SELEX
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     sre
+REPRODUCE_WITH  
+REPRODUCE_ON    any
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              5
+STATUS          closed
+DESCRIPTION     hmmbuild core dumps when building model from single 
+	        seqs FASTA file
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     agb
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              6
+STATUS          closed
+DESCRIPTION     getseq clashes with GCG program of same name
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     sre
+REPRODUCE_WITH  
+REPRODUCE_ON    n/a
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   renamed getseq to sfetch
+//
+ID              7
+STATUS          closed
+DESCRIPTION     Digital 4.0d binaries do not run on 4.0b; 
+                pthread_setconcurrency() missing
+NOTED_DATE      1/18/99
+NOTED_XREF      
+REPORTED_BY     Bill Pearson
+REPRODUCE_WITH  
+REPRODUCE_ON    Digital UNIX
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              8
+STATUS          closed
+DESCRIPTION     hmmpfam segfaults on GCG-reformatted Swissprot file 
+NOTED_DATE      1/19/99
+NOTED_XREF      
+REPORTED_BY     James Holzwarth
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     1/19/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              9
+STATUS          OPEN
+DESCRIPTION     C->T transition doesn't seem to be parsed from save files
+NOTED_DATE      6/29/99
+NOTED_XREF      
+REPORTED_BY     Bob Farrington
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              10
+STATUS          closed
+DESCRIPTION     Floating point exception in ExtremeValueP() on Digital 4.0b: 
+                range error. 
+NOTED_DATE      7/2/99
+NOTED_XREF      
+REPORTED_BY     ju@harvard
+REPRODUCE_WITH  
+REPRODUCE_ON    Digital UNIX 4.0b
+CLOSED_DATE     9/17/99
+CLOSED_XREF     
+CLOSED_ACTION   
+//
+ID              11
+STATUS          OPEN
+NOTED_DATE      11/15/99
+NOTED_XREF      
+REPORTED_BY     marcel@cs.berkeley.edu
+REPRODUCE_WITH  
+REPRODUCE_ON    
+CLOSED_DATE     
+CLOSED_XREF     
+CLOSED_ACTION   
+DESCRIPTION     
+   hmmbuild, illegal B->E in traceback.
+   Appears to be exacerbated by fragment detection code;
+   a blank sequence in a multiple alignment will trigger it.
+//
+ID              12
+STATUS          closed
+DESCRIPTION     --domE, --domT don't work correctly in hmmpfam; E-value
+                is assumed to be monotonic w/ score.
+NOTED_DATE      11/29/00
+NOTED_XREF      STL3 p.127
+REPORTED_BY     vanschlun@gcg.com
+REPRODUCE_WITH  bug12.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Tue Dec 19 17:47:01 2000
+CLOSED_XREF     STL3 p.127
+CLOSED_ACTION   removed the break statements when looping over domain list.
+//
+ID              13
+STATUS          closed
+DESCRIPTION     hmmconvert happily converts a bogus HMM database w/ 
+                both DNA and protein
+NOTED_DATE      12/24/00
+NOTED_XREF      STL3 p.133
+REPORTED_BY     vanschlun@gcg.com, email 12/14/00
+REPRODUCE_WITH  bug13.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Sun Dec 24 11:58:28 2000
+CLOSED_XREF     STL3 p.133
+CLOSED_ACTION   hmmio.c now checks for changes in Alphabet_type while reading HMMs.
+//
+ID              14
+STATUS          closed
+DESCRIPTION     hmmconvert doesn't complain about appending binary to 
+	        ASCII HMMs, or vice versa
+NOTED_DATE      12/24/00
+NOTED_XREF      STL3 p.133
+REPORTED_BY     vanschlun@gcg.com, email 12/14/00
+REPRODUCE_WITH  bug13.pl
+REPRODUCE_ON    any
+CLOSED_DATE     SRE, Sun Dec 24 15:33:11 2000
+CLOSED_XREF     STL3 p. 133
+CLOSED_ACTION   hmmconvert.c now tests for this case
+//
+ID              15
+STATUS          untested
+DESCRIPTION     hmmpfam slave process leak when nhmm < nslaves
+NOTED_DATE      10/25/01
+NOTED_XREF      STL5 p. 66
+REPORTED_BY     John Blanchard (johnb@incyte.com), email 10/17/01
+REPRODUCE_WITH  
+REPRODUCE_ON    any PVM
+CLOSED_DATE     
+CLOSED_XREF     STL5 p.66
+CLOSED_ACTION   hmmpfam.c modified: kill slaves off in a separate loop
+//
+ID              16
+STATUS          untested
+DESCRIPTION     PVMConfirmSlaves() assumes nslaves=nhosts 
+NOTED_DATE      10/25/01
+NOTED_XREF      STL5 p. 66
+REPORTED_BY     John Blanchard (johnb@incyte.com), email 10/17/01
+REPRODUCE_WITH  
+REPRODUCE_ON    any PVM; only when DEBUGLEVEL>0
+CLOSED_DATE     
+CLOSED_XREF     STL5 p.66
+CLOSED_ACTION   pvm.c:PVMConfirmSlaves()... replace pvm_config() w/ pvm_tasks().
+//
+ID              17
+STATUS          closed
+DESCRIPTION     threaded, unthreaded hmmsearch don't give same histogram
+NOTED_DATE      2/27/02
+NOTED_XREF      STL6 p.1
+REPORTED_BY     Yang Yang
+REPRODUCE_WITH  bug17.sh
+REPRODUCE_ON    any
+CLOSED_DATE     2/27/02
+CLOSED_XREF     STL6 p.1
+CLOSED_ACTION   modifications to hmmsearch.c; see notes.
+//
+ID              18
+STATUS          closed
+DESCRIPTION     HMMs differ when built from mul vs. Stockholm format
+NOTED_DATE      3/16/02
+NOTED_XREF      STL6 p.12
+REPORTED_BY     Sam Griffiths (sjg@sanger.ac.uk)
+REPRODUCE_WITH  bug18.sh - was deleted from CVS.
+REPRODUCE_ON    Alpha (waterbug) 
+CLOSED_DATE     3/29/02
+CLOSED_XREF     STL6 p.12
+CLOSED_ACTION   Not a bug. 
+//
+ID              h19
+TITLE           floating point exception on Alpha/Linux
+STATUS          CLOSED
+XREF            none
+REPORTED_BY     "Yungok S. Ihm" <youngok@iastate.edu>
+CLOSED_DATE     SRE, Fri May  9 15:31:23 2003
+DESCRIPTION     
+ hmmpfam crashes on extremely low scoring hits (<-1000),
+ on Alpha/Linux. Appears in both 2.2g and 2.3dev. 
+ mathsupport.c:PValue() doesn't check for underflow before
+ calling sreEXP2() on the score; the Alpha crashes on this.
+ No test case built for bugs.sqc.
+//
+ID              h20
+TITLE           hmmpfam E-values dependent on # of threads.
+STATUS          CLOSED
+XREF            STL7 p.70
+REPORTED_BY     Robert A. Wilson <robwilso@us.ibm.com>
+CLOSED_DATE     SRE, Fri Jun  6 18:56:43 2003
+DESCRIPTION     
+ Original report cited difference in E-values between 
+ IBM 2.2g binaries and 2.3 binaries. Investigation shows
+ problem is really in both: # of threads is added to
+ nhmms, and counted as Z, so E-values end up depending
+ on thread #. (IBM 2.2g binaries weren't compiled w/ threads,
+ hence the difference seen by IBM.) In hmmpfam.c:worker_thread(), 
+ we were bumping nhmm++ before successfully reading the HMM,
+ so on normal exit, each thread bumps nhmm one extra time after
+ the HMM file is emptied.
+
+ To reproduce:   hmmpfam --cpu 0 <any hmm> <any seq> vs.
+                 hmmpfam --cpu <n> <any hmm> <any seq> 
+ should give identical E-values.
+ Fixed; verified on Intel/Linux.
+ No test case built for bugs.sqc. 
+//
+ID              h21
+TITLE           "make install" doesn't create target directories
+STATUS          CLOSED
+XREF            STL7 p.70
+REPORTED_BY     Gisle SÅÅÊlensminde <gisle@ii.uib.no> [10 Jun 2003]
+CLOSED_DATE     SRE, Thu Jun 12 12:37:54 2003
+DESCRIPTION     
+  "make install" doesn't create target directories if they 
+  don't exist, and fails w/ poor error message. Added and documented
+  mkdir -p steps in Makefile.in
+//
+ID              h22
+TITLE           hmmpfam crash related to resizing DP matrix
+STATUS          CLOSED
+XREF            STL7 p.70
+REPORTED_BY     James Cuff <james@sanger.ac.uk> 12 June 2003
+CLOSED_DATE     SRE, Fri Jun 13 14:56:42 2003
+DESCRIPTION     
+  hmmpfam crashes on Pfam_ls.
+  Problem is with reallocation in ResizePlan7Matrix(), when it
+  is called with N < maxN - it didn't reinitialize ptrs up to 
+  maxN, it only did it up to N. 
+//
+ID              h23
+TITLE           Does not compile w/ --enable-pvm
+STATUS          CLOSED
+XREF            STL7 p.71
+REPORTED_BY     Goran Ceric <goran@genetics.wustl.edu> 12 June 2003
+CLOSED_DATE     SRE, Fri Jun 13 14:57:58 2003
+DESCRIPTION     
+  Didn't compile w/ PVM support, because of #define name changes
+  in 2.3.
+//
+ID              h24
+TITLE           Does not use CPPFLAGS, LDFLAGS in environment
+STATUS          CLOSED
+XREF            STL7 p.71
+REPORTED_BY     Ajay Khanna <askhanna@genetics.wustl.edu> 13 June 2003
+CLOSED_DATE     SRE, Fri Jun 13 14:59:13 2003
+DESCRIPTION     
+  ./configure claims to use CPPFLAGS, LDFLAGS from environment,
+  but doesn't.
+//
+ID              h25
+TITLE           Memory-related hmmsearch crash on Swissprot.
+STATUS          CLOSED
+XREF            STL7 p.121
+REPORTED_BY     Niklaus Fankhauser <niklaus.fankhauser@izb.unibe.ch> 26 Sept 2003;
+		Kaivalya Dixit <dixit@austin.ibm.com>, 24 Sept 2003.
+OPENED_DATE	SRE, Tue Sep 30 14:53:19 2003
+CLOSED_DATE     SRE, Wed Oct  1 08:07:18 2003
+DESCRIPTION     
+  hmmsearch crashes unpredictably on Swissprot searches (EMBL
+  format).
+
+  AMD contributes an Insure++ report showing three problems:
+  1. Alphabet[] is not a string but is being passed to strchr();
+  2. readEMBL is looking for a \0 in a growing seq, but a growing
+     seq has no \0 until ReadSeq() polishes it off;
+  3. xmx[] is shown as a dangling/wild ptr in core_algorithms.c 
+     and fast_algorithms.c.
+  AMD and/or Intel also indicate, via Kaivalya, that the problem
+  is in sqio.c: they explicitly nul-terminate after every reallocation
+  of the seq, and the problem disappears.
+  Fixed problems 1 and 2. Can't find the problem that Insure++ is
+  bitching about for 3; worrying. Bug goes away: it was clearly the result
+  of problem 2. Bugs in #1 should only appear for databases with
+  nonstandard residues.
+//
+ID              h26
+TITLE           Memory crash in hmmpfam.
+STATUS          CLOSED
+XREF            STL7 p.122.
+REPORTED_BY     Gary Montry <montry@spsoft.com>, 15 Aug 2003.
+OPENED_DATE	SRE, Wed Oct  1 12:29:25 2003
+CLOSED_DATE     SRE, Thu Oct  2 11:20:00 2003
+DESCRIPTION     
+  hmmpfam search with 125,000aa sequence eventually crashes 
+  because of lack of RAM, instead of successfully using small
+  memory routines.
+
+  Problem is that the code assumed that M,N can't both grow in
+  allocating a matrix, but that's not true in hmmpfam; after P7SmallViterbi(),
+  we may hand various sized bits of sequence off for subalignment,
+  with different sized models.
+
+  Wrote P7ViterbiSpaceOK(); used it instead of P7ViterbiSize() to switch
+  between normal and small variants; allow creation routine to grow in M
+  and N (padM and padN can both be positive); make initial allocs for 
+  hmmpfam matrices to be 300x300, to avoid pathologically asymmetric
+  matrices.
+//
+ID              h27
+TITLE           Negative element in dsq; char vs. unsigned char.
+STATUS          CLOSED
+XREF            STL7 p.123
+REPORTED_BY     Kaivalya Dixit <dixit@austin.ibm.com>, Sept 2003.
+OPENED_DATE     SRE, Thu Oct  2 2003
+CLOSED_DATE     SRE, Thu Oct  2 11:25:57 2003
+DESCRIPTION     
+  Turned up in SPEC certification process. Alan L. MacKay
+  <amackay@us.ibm.com>, of IBM AIX Compilers/Performance group, sends
+  an Insure++ report that shows a case where dsq[] was a negative
+  number. Kaivalya reports that they "fixed" this by forcing compilers
+  to use unsigned chars by default. A confusing discussion ensues;
+  MacKay thinks the problem is the use of char dsq[] as an array index,
+  whereas I think the code "guarantees" nonnegative dsq[] and that
+  there isn't a problem here; I think the crash IBM saw was coming
+  from memory corruption due to bug #h25.
+
+  Nonetheless, he has a point: if I'm going to use dsq[] as an array
+  index, it would be better coding practice to declare it as 
+  unsigned char.
+
+  Changed dsq from char to unsigned char throughout (and some
+  instances of sym, symidx). Removed (int) casts whereever dsq[],
+  symidx were being used as array indices.
+//
+ID              h28
+TITLE           P7Forward typo: bsc[M-1] should be bsc[M]
+STATUS          CLOSED
+XREF            STL7 p.123
+REPORTED_BY     Robel Kahsay <kahsay@mail.capsl.udel.edu>
+CLOSED_DATE     SRE, Fri Oct  3 12:48:50 2003
+DESCRIPTION     
+  Calculation of mmx[M] should touch bsc[M], not bsc[M-1].
+//
+ID              h29
+TITLE           hmmsearch does not scale on SMP Xeons with hyperthreads
+STATUS          CLOSED
+XREF            notebook/0115-hmmer-bug-h29
+REPORTED_BY     Gordon Gremme <gremme@zbh.uni-hamburg.de>
+OPENED_DATE     SRE, Thu Jan 15 13:30:00 2004
+CLOSED_DATE     SRE, Thu Jan 15 15:43:25 2004
+DESCRIPTION     
+  See the notes [xref] for details.
+
+  This appears to be a Linux 2.4 SMP scheduler problem.
+  No action taken.	
+//
+ID              h30
+TITLE           get_wee_midpt crashes out if given seq of L=1
+STATUS          CLOSED
+XREF            2004:1119-hmmer-bug-h30
+REPORTED_BY     James Stroud <jstroud@mbi.ucla.edu>
+OPENED_DATE     SRE, Fri Nov 19 13:28:55 2004
+CLOSED_DATE     SRE, Fri Nov 19 13:58:08 2004
+DESCRIPTION     
+  hmmpfam crashes on Pfam_fs w/ "FATAL: you can't init get_wee_midpt
+  with a T", on a long HMM Arena_RNA_pol.
+
+  The problem is that P7WeeViterbi() is called w/ subseq of L=1. The
+  init of P7WeeViterbi sets begin,end points initially to STS, STT;
+  but when 1==L, assignment of tassign[L] to STT clobbers tassign[1].
+
+  Fixing this properly will require rethinking get_wee_midpt carefully.
+
+  Instead, hack around it. P7WeeViterbi() is only called once, from
+  within P7SmallViterbi(). Insert an extra test; if sqlen==1, do not
+  call P7WeeViterbi(), instead allocate a tiny L=1 matrix and use 
+  P7Viterbi().
+
+  Document P7WeeViterbi(): it can't take L=1.
+//
+ID              h31
+TITLE           Malloc failure in hmmsearch
+STATUS          CLOSED
+XREF            2005:1002-hmmer-bug-h31
+REPORTED_BY     Robert Petryszak <rpetry@ebi.ac.uk>
+OPENED_DATE     SRE, Sun Oct  2 10:39:30 2005
+CLOSED_DATE     SRE, Sun Oct 16 13:37:50 2005
+DESCRIPTION     
+  hmmsearch fails w/ "realloc of X bytes failed: file core_algorithms.c line
+  157". Petryszak provides a "test case" consisting of a 1.9 GB FASTA
+  file and an HMM:
+     hmmsearch PF01121.10.fs UPI0000000001_UPI00005B0DDD
+
+  However, this runs fine on whelk01, wildebeest (Power5/Linux), and
+  an AIX Power 5 in Warren's lab. Petryszak's machine is an IBM p690
+  Regatta (8x Power4, AIX 5.2), hanni1 at HLRN
+  (http://www.hlrn.de/doc/basics.html). Tests on hanni1 reproduce
+  the failure.
+
+  The problem appears to be that IBM AIX inscrutably limits 32-bit
+  applications to one 256 MB data segment of memory by default.  On
+  hanni, w/ 8 processors and a RAMLIMIT of 32 MB/proc, this limitation
+  is exposed.  This memory limitation needs to be lifted. There are
+  three options:
+
+  1. Compile w/ xlc_r -q64 flag, to create a 64-bit executable. 
+     ar needs -X64 flag as well, to archive 64-bit object files.
+     Manually modify AR command in Makefile.in in hmmer/ and squid/
+     subdirs.
+
+  2. Compile w/ xlc_r -bmaxdata:0x80000000 flag, to make a 32-bit
+     executable w/ "large memory model".
+
+  3. Don't run that many cpus; use --cpu <n> flag.
+
+//
+ID              h32
+TITLE		hmmalign can't handle length 0 sequences
+STATUS          OPEN
+XREF            2006/0316-hmmer-bug-h32
+REPORTED_BY     Allen Bryan <awbryan@mit.edu>
+OPENED_DATE     SRE, Thu Mar 16 17:46:42 2006
+CLOSED_DATE     -
+DESCRIPTION     
+  hmmalign segfaults when a sequence is "empty" (length 0) in 
+  an input fasta file.
+//
+ID              h33
+TITLE           ExtremeValueFitHistogram() crashes on uncensored fitting
+STATUS          CLOSED (in 2.4-stable branch)
+XREF            ~/notebook/2007/0531-hmmer-bug-h32
+REPORTED_BY     Yaniv Loewenstein (lonshy@cs.huji.ac.il)
+OPENED_DATE     SRE, Thu May 31 13:49:27 2007
+CLOSED_DATE     SRE, Thu May 31 13:49:29 2007
+DESCRIPTION     
+  ExtremeValueFitHistogram() crashes with a bad malloc() if 
+  asked to fit an uncensored histogram. z is uninitialized.
+  Fix is to initialize z=0. Made this change in 2.4stable branch.
+//
+ID              h34
+TITLE           hmmbuild -o crashes if alignment has #=GR SS or #=GR SA lines
+STATUS          CLOSED in 2.3 branch
+XREF            ~/notebook/2008/0802-hmmer-bug-h34  [J3/87]
+REPORTED_BY     "Bernd Brandt" <bernd.brandt@gmail.com>
+OPENED_DATE     SRE, Sat Aug  2 11:49:40 2008
+CLOSED_DATE     SRE, Sat Aug  2 11:57:37 2008: SVN r2518
+DESCRIPTION     
+  hmmbuild -o foo segfaults when trying to re-save an alignment if
+  the alignment contains #=GR SS or SA annotation. 
+  trace.c:P7Traces2Alignment() wasn't initializing these optional
+  fields correctly to NULL after allocating them.
+//
+
