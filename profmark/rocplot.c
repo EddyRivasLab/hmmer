@@ -480,6 +480,11 @@ make_plot(struct result_s *rp, int nresults, int **pni, double *queryp, int nq, 
 	}
       if (curr_xi >= plot->nxpts) break;
     }
+
+  /* Rarely, the plot won't have enough false positives to extend all the way to 
+   * the left extreme of the x-axis; make sure we propagate the last true_pos */
+  for (curr_xi++; curr_xi < plot->nxpts; curr_xi++)
+    plot->tp[curr_xi] = true_pos;
 }
   
 

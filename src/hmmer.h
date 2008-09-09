@@ -227,9 +227,8 @@ typedef struct p7_profile_s {
  *****************************************************************/
 
 typedef struct p7_bg_s {
-  float  p1;			/* null model's self-loop probability           */
-  float *f;			/* residue frequencies [0..K-1]                 */
-
+  float    p1;			/* null model's self-loop probability           */
+  float   *f;			/* residue frequencies [0..K-1]                 */
   float   *mcomp;		/* model composition frequencies [0..K-1]       */
   ESL_HMM *fhmm;		/* 2-state HMM used as null model in prefilters */
 
@@ -602,6 +601,7 @@ extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_T
 /* emit.c */
 extern int p7_CoreEmit   (ESL_RANDOMNESS *r, const P7_HMM *hmm,                                        ESL_SQ *sq, P7_TRACE *tr);
 extern int p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const P7_BG *bg, ESL_SQ *sq, P7_TRACE *tr);
+extern int p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq);
 
 /* errors.c */
 extern void p7_Die (char *format, ...);
@@ -704,7 +704,7 @@ extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_a
 /* p7_bg.c */
 extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
 extern P7_BG *p7_bg_CreateUniform(const ESL_ALPHABET *abc);
-extern int    p7_bg_Dump(FILE *ofp, P7_BG *bg);
+extern int    p7_bg_Dump(FILE *ofp, const P7_BG *bg);
 extern void   p7_bg_Destroy(P7_BG *bg);
 extern int    p7_bg_SetLength(P7_BG *bg, int L);
 extern int    p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc);
@@ -763,7 +763,7 @@ extern int     p7_hmm_SampleUniform   (ESL_RANDOMNESS *r, int M, const ESL_ALPHA
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
-extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ);
+extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc);
 
 
 

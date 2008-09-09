@@ -284,6 +284,34 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
   return status;
 }
 
+/* Function:  p7_emit_SimpleConsensus()
+ * Synopsis:  Generate simple consensus: ML residue in each match state
+ * Incept:    SRE, Mon Sep  1 09:10:47 2008 [Janelia]
+ *
+ * Purpose:   Generate a simple consensus sequence for model <hmm>
+ *            consisting of the maximum probability residue in each
+ *            match state; store this consensus in <sq>.
+ */
+int
+p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq)
+{
+  int k;
+  int x;
+  int status;
+  
+  if ((status = esl_sq_GrowTo(sq, hmm->M)) != eslOK) return status;
+
+  for (k = 1; k <= hmm->M; k++)
+    {
+      x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
+      if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) return status;
+    }
+  if ((status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) return status;
+  return eslOK;
+}
+
+
+
 /*****************************************************************
  * 2. Private functions.
  *****************************************************************/

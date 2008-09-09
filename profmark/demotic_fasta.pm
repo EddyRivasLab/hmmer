@@ -1,18 +1,14 @@
 ############################################################################
-# demotic_wublast package   
-#    Parses blast output, stores extracted information in convenient vars.
-#    Despite the name, this works on either NCBI-BLAST or WU-BLAST.
-#    (SRE originated, 10/2000)
+# demotic_fasta package   
+#    Parses fasta or ssearch output, stores extracted information in convenient vars.
+#    SRE, Wed Jun 25 13:41:41 2003
 ############################################################################
-# CVS information
-#  Revision $Revision: 1.8 $
-#  Last author: $Author: eddy $
-#  Last modification: $Date: 2002/06/21 14:54:57 $
+#  CVS $Id$
 ############################################################################
 
-package demotic_wublast;
+package demotic_fasta;
 
-# parse(\*STDIN) would parse BLAST output
+# parse(\*STDIN) would parse ssearch output
 # coming in via stdin.
 #
 sub parse (*) {
@@ -20,12 +16,11 @@ sub parse (*) {
     my $parsing_header  = 1;
     my $parsing_hitlist = 0;
     my $parsing_alilist = 0;
-    my $is_wublast      = 0;
     my $target;
-    my $firstchunk;
+    my $alilinecount = 0;
 
     # Initialize everything... so we can call the parser
-    # repeatedly, one call per BLAST output.
+    # repeatedly, one call per ssearch output.
     #
     # This section also documents what's available in
     # variables within the package.
@@ -44,22 +39,23 @@ sub parse (*) {
     $nhits          = 0;	# Number of entries in the hit list
     @hit_target     = ();	# Target sequence name (by rank)
     %target_desc    = ();	# Target sequence description (by targ name)
-    @hit_bitscore   = ();	# Raw score (by rank)
-    @hit_Eval       = ();	# E-val (by rank)
+    %target_len     = ();	# Length of target sequence
+    @hit_score      = ();	# Raw score (by rank)
+    @hit_bitscore   = ();	# Bit score (by rank)
+    @hit_Eval       = ();	# E-value (by rank)
 
 				# The alignment output (in order it came in)
 				# all indexed by # of alignment [0..nali-1]
     $nali           = 0;	# Number of alignments
     @ali_target     = ();	# Target sequence name
-    @ali_score      = ();	# Raw score of alignment
+    @ali_score      = ();	# Smith/Waterman raw score of alignment
     @ali_bitscore   = ();	# bit score
     @ali_evalue     = ();	# E-value
-    @ali_pvalue     = ();	# P-value
     @ali_nident     = ();	# Number of identical residues
-    @ali_alen       = ();	# Length of alignment
+    @ali_alen       = ();	# Length of alignment (overlap)
     @ali_identity   = ();	# Percent identity
-    @ali_npos       = (); # Number of positives (similar positions)
-    @ali_positive   = (); # Percent of positions matched or similar
+#    @ali_npos       = (); # Number of positives (similar positions)
+#    @ali_positive   = (); # Percent of positions matched or similar
     @ali_qstart     = ();	# Start position on query
     @ali_qend       = ();	# End position on query
     @ali_tstart     = ();	# Start position on target
@@ -71,98 +67,77 @@ sub parse (*) {
     #
     while (<$fh>) {
 	if ($parsing_header) {
-	    if (/^Sequences producing /) { # wu and ncbi share this
+	    if (/^The best scores are:/) { # start of hit list
 		$parsing_header  = 0;
 		$parsing_hitlist = 1;
-		<$fh>;		# This discards the next (blank) line (ncbi, wu)
 		next;
-	    } elsif (/^Query=\s*(\S*)\s*(.*)\s*$/) { # allows blank query
+	    } elsif (/^\s+\d+>>>\s*(\S*)\s*(.*)\s*-\s*(\d+) nt$/) { # allows blank query
 		$queryname = $1;
-		$querydesc = $2; chomp $querydesc;
+		$querydesc = $2;
+		$querylen  = $3;
 		if ($queryname eq "") { 
 		    $queryname = "unnamed_query";
 		}
-		while (1) {
-		    $_ = <$fh>; # perl quirk: unless part of a while()
-		                # loop, line must be explicitly assigned  
-                                # to $_ or else it will be lost.
-		    if (/^\s+\((\d+) letters/) {
-			$querylen  = $1; 
-			last;
-		    } elsif (/^\s*( .+)\s*$/) { 
-			$querydesc .= $1; chomp $querydesc;
-		    }
-		}
-	    } elsif (/^Database:\s*(.+)\s*$/) {
-		$db  = $1;
-		$_ = <$fh>;
-		if (/^\s+(\d+) sequences; (\S+) total letters/) {
-		    $db_nseq     = $1;
-		    $db_nletters = $2;
-		}
-	    } elsif (/^Copyright.+Washington University/) {
-		$is_wublast = 1;
+	    } elsif (/^\s+(\d+)\s+residues in\s+(\d+)\s+sequences\s*$/) {
+		$db_nletters = $1;
+		$db_nseq     = $2;
 	    }
 	} 
 	elsif ($parsing_hitlist) {
-	    if (/^\s*$/) { 
+	    if (/^\s*$/) {	# blank line marks end of hit list, start of alignments
 		$parsing_hitlist = 0;
 		$parsing_alilist = 1;
 		next;
-	    } elsif (/^(\S+)\s+(.+)\s+(\d+)\s+(\S+)/) {
+	    } elsif (/^(\S+)\s*(.*\S?)\s*\(\s*(\d+)\)\s+(\d+)\s+(\S+)\s+(\S+)\s*$/) {
 		$hit_target[$nhits]    = $1;
-		$target_desc{$1}             = $2;
-		$hit_bitscore[$nhits] = $3;
-		if ($is_wublast) { $hit_Eval[$nhits] = -1.0 * log(1.0 - $4); } # conversion from P-value
-		else             { $hit_Eval[$nhits] = $4; }
-
+		$target_desc{$1}       = $2;
+	        $target_len{$1}        = $3;
+		$hit_score[$nhits]     = $4;
+		$hit_bitscore[$nhits]  = $5;
+		$hit_Eval[$nhits]      = $6;
 		$nhits++;
 	    }
 	}
 	elsif ($parsing_alilist) {
-	    if (/^>(\S+)\s*(.*)$/) {
+	    if (/^>>(\S+)\s*(.*)\s+\((\d+) \S\S\)\s*$/) {  # the \S\S is either nt or aa
 		$target = $1;
 		$target_desc{$target} = $2;
-
-		$_ = <$fh>; 
-		if (/^\s+Length = (\S+)/) { 
-		    $target_len{$target} = $1;
-		} 
+		if ($3 != $target_len{$target}) { die "can't happen.", "1)", $3, "2)", $target_len{$target}; }
 	    } 
-	    elsif (/^ Score =\s+(\d+) \((\S+) bits\), Expect = (\S+),/) { # WU
+	    elsif (/^ s-w opt:\s+(\d+)\s+Z-score:\s*(\S+)\s+bits:\s+(\S+)\s+E\(\):\s+(\S+)\s*$/) {  # SSEARCH
 		$nali++;
 		$ali_target[$nali-1]   = $target;
 		$ali_score[$nali-1]    = $1;
-		$ali_bitscore[$nali-1] = $2;
-		$ali_evalue[$nali-1]   = $3;
+		$ali_bitscore[$nali-1] = $3;
+		$ali_evalue[$nali-1]   = $4;
 	    } 
-	    elsif (/^ Score =\s+(\S+) bits \((\S+)\), Expect = (\S+)/) { # NCBI
+	    elsif (/^ initn:\s*\d+\s*init1:\s*\d+\s*opt:\s*(\d+)\s*Z-score:\s*(\S+)\s*bits:\s*(\S+)\s*E\(\):\s*(\S+)\s*$/) { # FASTA
 		$nali++;
 		$ali_target[$nali-1]   = $target;
-		$ali_bitscore[$nali-1] = $1;
-		$ali_score[$nali-1]    = $2;
-		$ali_evalue[$nali-1]   = $3;
-	    }
-	    elsif (/^ Identities = (\d+)\/(\d+) \((\d+)%\).+Positives = (\d+).+\((\d+)%/) { # NCBI or WU
-		$ali_nident[$nali-1]     = $1;
-		$ali_alen[$nali-1]       = $2;
-		$ali_identity[$nali-1]   = $3;
-		$ali_npos[$nali-1]       = $4;
-		$ali_positive[$nali-1]   = $5;
-		$firstchunk = 1;
+		$ali_score[$nali-1]    = $1;
+		$ali_bitscore[$nali-1] = $3;
+		$ali_evalue[$nali-1]   = $4;
+	    }		
+	    elsif (/^Smith-Waterman score:\s+(\d+);\s+(\S+)% identity \(\S+% ungapped\) in (\d+) nt overlap \((\d+)-(\d+):(\d+)-(\d+)\)\s*/) {
+		$ali_identity[$nali-1]   = $2;
+		$ali_alen[$nali-1]       = $3;
+		$ali_qstart[$nali-1]     = $4;
+		$ali_qend[$nali-1]       = $5;
+		$ali_tstart[$nali-1]     = $6;
+		$ali_tend[$nali-1]       = $7;
+#		$ali_nident[$nali-1]     = $1;
+#		$ali_npos[$nali-1]       = $4;
+#		$ali_positive[$nali-1]   = $5;
+		$alilinecount            = 0;
 	    } 
-	    elsif (/^Query:\s+(\d+)\s+(\S+)\s+(\d+)\s*$/) {
-		if ($firstchunk) { $ali_qstart[$nali-1] = $1; }
-		$ali_qali[$nali-1]  .= $2;
-		$ali_qend[$nali-1]   = $3;
-	    } 
-	    elsif (/^Sbjct:\s+(\d+)\s+(\S+)\s+(\d+)\s*$/) {
-		if ($firstchunk) { $ali_tstart[$nali-1] = $1; }
-		$ali_tali[$nali-1]  .= $2;
-		$ali_tend[$nali-1]   = $3;
-		$firstchunk = 0;
+	    elsif (/^\S+\s+(\S+)\s*$/) { # only ali lines are right-flushed
+		if ($alilinecount % 2 == 0) {
+		    $ali_qali[$nali-1]  .= $1; 
+		} else {
+		    $ali_qali[$nali-1]  .= $1; 
+		}
+		$alilinecount++;
 	    }
-
 	}
 
     } # this closes the loop over lines in the input stream.
@@ -176,6 +151,7 @@ sub profmark_out {
 	printf $ofh "%g\t%.1f\t%s\t%s\n", $hit_Eval[$i], $hit_bitscore[$i], $hit_target[$i], $queryname;
     }
 }
+
 
 sub exblxout {
     my $ofh     = shift;

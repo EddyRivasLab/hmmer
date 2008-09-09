@@ -173,7 +173,7 @@ p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_e
   double  xm, xi, xd;
   
   ESL_ALLOC(mocc, sizeof(float) * (hmm->M+1));
-  if ((status = p7_hmm_CalculateOccupancy(hmm, mocc)) != eslOK) goto ERROR;
+  if ((status = p7_hmm_CalculateOccupancy(hmm, mocc, NULL)) != eslOK) goto ERROR;
   
   /* mre = the weighted relative entropy per match emission */
   for (mre = 0., k = 1; k <= hmm->M; k++)
@@ -237,7 +237,7 @@ p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp)
 
   ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
   ESL_ALLOC(p,   sizeof(float) * K);
-  p7_hmm_CalculateOccupancy(hmm, occ);
+  p7_hmm_CalculateOccupancy(hmm, occ, NULL);
 
   esl_vec_FSet(p, K, 0.);
   for (k = 1; k <= hmm->M; k++)

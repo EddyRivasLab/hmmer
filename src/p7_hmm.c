@@ -1082,23 +1082,35 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
 /* Function:  p7_hmm_CalculateOccupancy()
  * Incept:    SRE, Mon Jan 22 08:10:05 2007 [Janelia]
  *
- * Purpose:   Calculate a vector <occ[1..M]> containing probability
+ * Purpose:   Calculate a vector <mocc[1..M]> containing probability
  *            that each match state is used in a sampled path through
  *            the model. Caller provides allocated space (<M+1> floats)
- *            for <occ>.
+ *            for <mocc>.
+ *            
+ *            Caller may optionally provide an array <iocc[0..M]> as
+ *            well, which (if provided) will be set to contain the
+ *            expected number of times that a sampled path would contain
+ *            each insert state.
  *
  * Returns:   <eslOK> on success.
  */
 int
-p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *occ)
+p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
 {
   int k;
 
-  occ[0] = 0.;			                    /* no M_0 state */
-  occ[1] = hmm->t[0][p7H_MI] + hmm->t[0][p7H_MM];   /* initialize w/ 1 - B->D_1 */
+  mocc[0] = 0.;			                    /* no M_0 state */
+  mocc[1] = hmm->t[0][p7H_MI] + hmm->t[0][p7H_MM];   /* initialize w/ 1 - B->D_1 */
   for (k = 2; k <= hmm->M; k++)
-    occ[k] = occ[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
-      (1.0-occ[k-1]) * hmm->t[k-1][p7H_DM];
+    mocc[k] = mocc[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
+      (1.0-mocc[k-1]) * hmm->t[k-1][p7H_DM];  
+
+  if (iocc != NULL) {
+    iocc[0] = hmm->t[0][p7H_MI] / hmm->t[0][p7H_II];
+    for (k = 1; k <= hmm->M; k++)
+      iocc[k] = mocc[k] * hmm->t[k][p7H_MI] / hmm->t[k][p7H_II];
+  }
+
   return eslOK;
 }
 
@@ -1124,7 +1136,7 @@ utest_occupancy(P7_HMM *hmm)
   float  x;
 
   occ = malloc(sizeof(float) * (hmm->M+1));
-  p7_hmm_CalculateOccupancy(hmm, occ);
+  p7_hmm_CalculateOccupancy(hmm, occ, NULL);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
   if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
   free(occ);

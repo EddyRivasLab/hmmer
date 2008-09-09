@@ -73,7 +73,7 @@ fi
 ################################################################
 
 HMMER_DATE="March 2008"
-HMMER_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute. All rights reserved."
+HMMER_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"

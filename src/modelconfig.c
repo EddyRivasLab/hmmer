@@ -98,7 +98,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
        * (Reduces to uniform 2/(M(M+1)) for occupancies of 1.0)  */
       Z = 0.;
       ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
-      if ((status = p7_hmm_CalculateOccupancy(hmm, occ)) != eslOK) goto ERROR;
+      if ((status = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) goto ERROR;
       for (k = 1; k <= hmm->M; k++) 
 	Z += occ[k] * (float) (hmm->M-k+1);
       for (k = 1; k <= hmm->M; k++) 
@@ -301,7 +301,7 @@ utest_occupancy(P7_HMM *hmm)
   float  x;
 
   occ = malloc(sizeof(float) * (hmm->M+1));
-  p7_hmm_CalculateOccupancy(hmm, occ);
+  p7_hmm_CalculateOccupancy(hmm, occ, NULL);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
   if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
   free(occ);

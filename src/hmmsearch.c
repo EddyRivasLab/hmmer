@@ -397,12 +397,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Null model score for this sequence.  */
 	  p7_bg_SetLength(cfg->bg, sq->n);
 	  p7_bg_NullOne    (cfg->bg, sq->dsq, sq->n, &nullsc);
-	  p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
 
 	  /* First level filter: the MSV filter, multihit with <om> */
 	  p7_MSVFilter(sq->dsq, sq->n, om, oxf, &usc);
-	  usc = (usc - filtersc) / eslCONST_LOG2;
-	  P = esl_gumbel_surv(usc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	  final_sc = (usc - nullsc) / eslCONST_LOG2;
+	  P = esl_gumbel_surv(final_sc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	  E = P * (double) cfg->nseq;
+	  if (P > F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
+
+	  p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
+	  final_sc = (usc - filtersc) / eslCONST_LOG2;
+	  P = esl_gumbel_surv(final_sc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
 	  E = P * (double) cfg->nseq;
 	  if (P > F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
 	  cfg->n_past_msv++;

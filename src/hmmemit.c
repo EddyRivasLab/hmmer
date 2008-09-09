@@ -22,16 +22,19 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
-  { "-n",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    NULL, "number of seqs to sample",                  0 },
-  { "-p",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "sample from profile, not core model",       0 },
-  { "-L",        eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",   0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",         0 },
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-p", "emit simple consensus sequence",               0 },
+  { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "send sequence output to file <f>, not stdout", 0 },
+  { "-p",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-c", "sample from profile, not core model",          0 },
+  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    "-c", "number of seqs to sample",                     0 },
+  { "-L",        eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    "-c", "set expected length from profile to <n>",      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 static char usage[]  = "hmmemit [-options] <hmmfile (single)>";
 
 struct emitcfg_s {
+  FILE *ofp;			/* output stream */
   int   nseq;			/* how many sequences to emit */
   int   do_profile;		/* TRUE to emit from implicit profile model, not core model */
   int   L;			/* expected length from a profile */
@@ -71,16 +74,23 @@ main(int argc, char **argv)
     return eslOK;
   }
 
-  cfg.nseq         = esl_opt_GetInteger(go, "-n");
   cfg.do_profile   = esl_opt_GetBoolean(go, "-p");
+  cfg.nseq         = esl_opt_GetInteger(go, "-N");
   cfg.L            = esl_opt_GetInteger(go, "-L");
+
+  if (! esl_opt_IsDefault(go, "-o"))
+    {
+      cfg.ofp = fopen(esl_opt_GetString(go, "-o"), "w");
+      if (cfg.ofp == NULL) esl_fatal("Failed to open output file %s", esl_opt_GetString(go, "-o"));
+    }
+  else cfg.ofp = stdout;
 
   if (esl_opt_ArgNumber(go) != 1) {
     puts("Incorrect number of command line arguments.");
     puts(usage);
     return eslFAIL;
   }
-  hmmfile = esl_opt_GetArg(go, 1); /* NULL=no range checking */
+  hmmfile = esl_opt_GetArg(go, 1);
   if (hmmfile == NULL) esl_fatal("failed to get <hmmfile> on cmdline: %s\n", go->errbuf);
 
   /*****************************************************************
@@ -94,9 +104,6 @@ main(int argc, char **argv)
   if (status == eslENOTFOUND) esl_fatal("Failed to open hmm file %s for reading.\n", hmmfile);
   else if (status != eslOK)   esl_fatal("Unexpected error in opening hmm file %s.\n", hmmfile);
     
-  tr = p7_trace_Create();
-  if (tr == NULL) esl_fatal("Failed to allocate trace\n");
-
   if ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslOK) {
     if      (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
     else if (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s", hmmfile);
@@ -108,34 +115,47 @@ main(int argc, char **argv)
   if (sq == NULL) sq = esl_sq_CreateDigital(abc);
   if (sq == NULL) esl_fatal("Failed to allocated sequence");
 
-  if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
-  if ((gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal("failed to create profile");
-
-  if (p7_ProfileConfig(hmm, bg, gm, cfg.L, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
-  if (p7_bg_SetLength(bg, cfg.L)                     != eslOK) esl_fatal("failed to reconfig null model length");
-  if (p7_hmm_Validate    (hmm, NULL, 0.0001)         != eslOK) esl_fatal("whoops, HMM is bad!");
-  if (p7_profile_Validate(gm,  NULL, 0.0001)         != eslOK) esl_fatal("whoops, profile is bad!");
-
-  for (nseq = 1; nseq <= cfg.nseq; nseq++) 
+  if (esl_opt_GetBoolean(go, "-c")) 
     {
-      if (cfg.do_profile) {
-	status = p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
-	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
-      } else {
-	status = p7_CoreEmit(r, hmm, sq, tr);
-	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
-      }
-      
-      status = esl_sq_SetName(sq, "%s-sample%d", hmm->name, nseq);
-      if (status != eslOK) esl_fatal("Failed to set sequence name\n");
+      if (p7_emit_SimpleConsensus(hmm, sq)              != eslOK) esl_fatal("failed to create simple consensus seq");
+      if (esl_sq_SetName(sq, "%s-consensus", hmm->name) != eslOK) esl_fatal("Failed to set sequence name");
+      if (esl_sqio_Write(cfg.ofp, sq, eslSQFILE_FASTA)   != eslOK) esl_fatal("Failed to write sequence");
+    }
+  else
+    {
+      if ((tr = p7_trace_Create())              == NULL)  esl_fatal("Failed to allocate trace");
+      if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
+      if ((gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal("failed to create profile");
 
-      status = esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);
-      if (status != eslOK) esl_fatal("Failed to write sequence\n");
+      if (p7_ProfileConfig(hmm, bg, gm, cfg.L, p7_LOCAL) != eslOK) esl_fatal("failed to configure profile");
+      if (p7_bg_SetLength(bg, cfg.L)                     != eslOK) esl_fatal("failed to reconfig null model length");
+      if (p7_hmm_Validate    (hmm, NULL, 0.0001)         != eslOK) esl_fatal("whoops, HMM is bad!");
+      if (p7_profile_Validate(gm,  NULL, 0.0001)         != eslOK) esl_fatal("whoops, profile is bad!");
+
+      for (nseq = 1; nseq <= cfg.nseq; nseq++) 
+	{
+	  if (cfg.do_profile) {
+	    status = p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
+	    if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
+	  } else {
+	    status = p7_CoreEmit(r, hmm, sq, tr);
+	    if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
+	  }
+      
+	  status = esl_sq_SetName(sq, "%s-sample%d", hmm->name, nseq);
+	  if (status != eslOK) esl_fatal("Failed to set sequence name\n");
+
+	  status = esl_sqio_Write(cfg.ofp, sq, eslSQFILE_FASTA);
+	  if (status != eslOK) esl_fatal("Failed to write sequence\n");
+	}
+
+      p7_profile_Destroy(gm);
+      p7_bg_Destroy(bg);
+      p7_trace_Destroy(tr);
     }
 
-  p7_profile_Destroy(gm);
+  if (! esl_opt_IsDefault(go, "-o")) { fclose(cfg.ofp); }
   esl_sq_Destroy(sq);
-  p7_trace_Destroy(tr);
   esl_randomness_Destroy(r);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);

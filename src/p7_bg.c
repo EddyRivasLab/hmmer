@@ -1,8 +1,9 @@
-/* Support for the background model, P7_BG
+/* P7_BG: the null (background) model
  * 
  * Contents:
- *     1. The P7_BG object: allocation, initialization, destruction.
- *     2. Simple null model scores
+ *     1. P7_BG object: allocation, initialization, destruction.
+ *     2. Standard iid null model ("null1")
+ *     3. Filter null model. 
  * 
  * SRE, Fri Jan 12 13:31:26 2007 [Janelia] [Ravel, Bolero]
  * SVN $Id$
@@ -29,6 +30,18 @@
  * Purpose:   Allocate a <P7_BG> object for digital alphabet <abc>,
  *            initializes it to appropriate default values, and
  *            returns a pointer to it.
+ *            
+ *            For protein models, default iid background frequencies
+ *            are set (by <p7_AminoFrequencies()>) to average
+ *            SwissProt residue composition. For DNA, RNA and other
+ *            alphabets, default frequencies are set to a uniform
+ *            distribution.
+ *            
+ *            The model composition <bg->mcomp[]> is not initialized
+ *            here; neither is the filter null model <bg->fhmm>.  To
+ *            use the filter null model, caller will want to
+ *            initialize these fields by calling
+ *            <p7_bg_SetFilterByHMM()>.
  *
  * Throws:    <NULL> on allocation failure.
  *
@@ -106,7 +119,7 @@ p7_bg_CreateUniform(const ESL_ALPHABET *abc)
  * Purpose:   Given a null model <bg>, dump it as text to stream <fp>.
  */
 int
-p7_bg_Dump(FILE *ofp, P7_BG *bg)
+p7_bg_Dump(FILE *ofp, const P7_BG *bg)
 {
   esl_vec_FDump(ofp, bg->f, bg->abc->K, bg->abc->sym);
   return eslOK;
@@ -134,17 +147,29 @@ p7_bg_Destroy(P7_BG *bg)
 }
 
 
+/* Function:  p7_bg_SetLength()
+ * Synopsis:  Set the null model length distribution.
+ * Incept:    SRE, Thu Aug 28 08:44:22 2008 [Janelia]
+ *
+ * Purpose:   Sets the geometric null model length 
+ *            distribution in <bg> to a mean of <L> residues.
+ */
 int
 p7_bg_SetLength(P7_BG *bg, int L)
 {
   bg->p1 = (float) L / (float) (L+1);
+  
+  bg->fhmm->t[0][0] = bg->p1;
+  bg->fhmm->t[0][1] = 1.0f - bg->p1;
+
   return eslOK;
 }
 
 
 
+
 /*****************************************************************
- * 2. Simple null model scores
+ * 2. Standard iid null model ("null1")
  *****************************************************************/
 
 /* Function:  p7_bg_NullOne()
@@ -166,37 +191,69 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 }
 
 
-/* bg->mcomp has been set; create the two-state HMM */
-static int
-create_filter_hmm(P7_BG *bg)
-{
-  float L0 = 400.0;		/* mean length in state 0 */
-  float L1 = 400.0;		/* mean length in state 1 */
 
-  /* State 0 is the normal iid model. */
-  bg->fhmm->t[0][0] =   L0 / (L0+1.0f);
-  bg->fhmm->t[0][1] = 1.0f / (L0+1.0f);
-  bg->fhmm->t[0][2] = 1.0f;          	/* 1.0 transition to E means we'll set length distribution externally. */
-  esl_vec_FCopy(bg->f, bg->abc->K, bg->fhmm->e[0]);
 
-  /* State 1 is the potentially biased model composition. */
-  bg->fhmm->t[1][0] = 1.0f / (L1+1.0f);
-  bg->fhmm->t[1][1] =   L1 / (L1+1.0f);
-  bg->fhmm->t[1][2] = 1.0f;         	/* 1.0 transition to E means we'll set length distribution externally. */
-  esl_vec_FCopy(bg->mcomp, bg->abc->K, bg->fhmm->e[1]);
 
-  bg->fhmm->pi[0] = 0.99;
-  bg->fhmm->pi[1] = 0.01;
+/*****************************************************************
+ * 3. Filter null model
+ *****************************************************************/
 
-  esl_hmm_Configure(bg->fhmm, bg->f);
-  return eslOK;
-}
-
+static int create_filter_hmm(P7_BG *bg, int M);
 int
 p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
 {
-  ESL_RANDOMNESS  *rng  = esl_randomness_CreateTimeseeded();     /* source of randomness                    */
-  ESL_SQ          *sq   = esl_sq_CreateDigital(bg->abc);
+  float *mocc = NULL;
+  float *iocc = NULL;
+  int    status;
+  int    k;
+  float  norm = 0.0;
+
+  ESL_ALLOC(mocc, sizeof(float) * (hmm->M+1));
+  ESL_ALLOC(iocc, sizeof(float) * (hmm->M+1));
+
+  p7_hmm_CalculateOccupancy(hmm, mocc, iocc);
+
+  esl_vec_FSet(bg->mcomp, bg->abc->K, 0.0);
+  esl_vec_FAddScaled(bg->mcomp, hmm->ins[0], iocc[0], hmm->abc->K);
+  for (k = 1; k <= hmm->M; k++)
+    {
+      esl_vec_FAddScaled(bg->mcomp, hmm->mat[k], mocc[k], hmm->abc->K);
+      esl_vec_FAddScaled(bg->mcomp, hmm->ins[k], iocc[k], hmm->abc->K);
+    }
+  norm  = esl_vec_FSum(mocc, hmm->M+1);
+  norm += esl_vec_FSum(iocc, hmm->M+1);
+  esl_vec_FScale(bg->mcomp, hmm->abc->K, 1.0 / norm);
+
+  create_filter_hmm(bg, hmm->M);
+  free(mocc);
+  free(iocc);
+  return eslOK;
+
+ ERROR:
+  if (mocc != NULL) free(mocc);
+  if (iocc != NULL) free(iocc);
+  return status;
+}
+
+
+#if 0
+/* Function:  p7_bg_SetFilterByHMM()
+ * Synopsis:  Parameterizes the filter null model from an HMM.
+ * Incept:    SRE, Thu Aug 28 08:48:35 2008 [Janelia]
+ *
+ * Purpose:   Given a particular model <hmm>, parameterize a two-state
+ *            model-dependent filter null model in <bg> in which one
+ *            state is the usual iid background model, the second
+ *            state emits the average residue composition of sequences
+ *            emitted by <hmm>, and the transition probabilities are
+ *            set to arbitrary hardcoded values that happen to work
+ *            empirically.
+ */
+int
+p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
+{
+  ESL_RANDOMNESS  *rng  = esl_randomness_CreateTimeseeded();     /* source of randomness     FIXME: see below  */
+  ESL_SQ          *sq   = esl_sq_CreateDigital(bg->abc);         /* FIXME: don't need to do this by sampling; can do it analytically */
   int              nseq = 1000;
   int              pos;
   int              status;
@@ -215,7 +272,7 @@ p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
   
   esl_vec_FNorm(bg->mcomp, bg->abc->K);
 
-  create_filter_hmm(bg);
+  create_filter_hmm(bg, hmm->M);
 
   esl_sq_Destroy(sq);
   esl_randomness_Destroy(rng);
@@ -226,14 +283,31 @@ p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
   esl_randomness_Destroy(rng);
   return status;
 }
+#endif
 
 
+/* Function:  p7_bg_FilterScore()
+ * Synopsis:  Calculates the filter null model score.
+ * Incept:    SRE, Thu Aug 28 08:52:53 2008 [Janelia]
+ *
+ * Purpose:   Calculates the filter null model <bg> score for sequence
+ *            <dsq> of length <L>, and return it in 
+ *            <*ret_sc>.
+ *            
+ *            The score is calculated as an HMM Forward score using
+ *            the two-state filter null model. It is a log-odds ratio,
+ *            relative to the iid background frequencies, in nats:
+ *            same as main model Forward scores.
+ *
+ *            The filter null model has no length distribution of its
+ *            own; the same geometric length distribution (controlled
+ *            by <bg->p1>) that the null1 model uses is imposed.
+ */
 int
 p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc)
 {
   ESL_HMX *hmx = esl_hmx_Create(L, bg->fhmm->M); /* optimization target: this can be a 2-row matrix, and it can be stored in <bg>. */
-  float nullsc;
-  int   i;
+  float nullsc;		                  	 /* (or it could be passed in as an arg, but for sure it shouldn't be alloc'ed here */
   
   esl_hmm_Forward(dsq, L, bg->fhmm, hmx, &nullsc);
 
@@ -242,3 +316,195 @@ p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc)
   esl_hmx_Destroy(hmx);
   return eslOK;
 }
+
+
+/* create_filter_hmm()
+ * assumes bg->mcomp has just been set; 
+ * now create the two-state HMM;
+ * parameters are arbitrary hardwired guesses
+ */
+static int
+create_filter_hmm(P7_BG *bg, int M)
+{
+  float L0 = 400.0;		/* mean length in state 0 */
+  float L1 = (float) M / 8.0; 	/* mean length in state 1 */
+
+  /* State 0 is the normal iid model. */
+  bg->fhmm->t[0][0] =   L0 / (L0+1.0f);
+  bg->fhmm->t[0][1] = 1.0f / (L0+1.0f);
+  bg->fhmm->t[0][2] = 1.0f;          	/* 1.0 transition to E means we'll set length distribution externally. */
+  esl_vec_FCopy(bg->f, bg->abc->K, bg->fhmm->e[0]);
+
+  /* State 1 is the potentially biased model composition. */
+  bg->fhmm->t[1][0] = 1.0f / (L1+1.0f);
+  bg->fhmm->t[1][1] =   L1 / (L1+1.0f);
+  bg->fhmm->t[1][2] = 1.0f;         	/* 1.0 transition to E means we'll set length distribution externally. */
+  esl_vec_FCopy(bg->mcomp, bg->abc->K, bg->fhmm->e[1]);
+
+  bg->fhmm->pi[0] = 0.999;
+  bg->fhmm->pi[1] = 0.001;
+
+  esl_hmm_Configure(bg->fhmm, bg->f);
+  return eslOK;
+}
+
+
+/*****************************************************************
+ * x. Benchmark
+ *****************************************************************/
+#ifdef p7BG_BENCHMARK
+/*
+   gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_benchmark -I. -L. -I../easel -L../easel -Dp7BG_BENCHMARK p7_bg.c -lhmmer -leasel -lm
+   ./p7_bg_benchmark <hmmfile>
+ */ 
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_stopwatch.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random target seqs",              0 },
+  { "-N",        eslARG_INT,    "100", NULL, "n>0",     NULL,      NULL,    NULL, "number of random target seqs",              0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "benchmark timing for calculating null model scores";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  int             i;
+ 
+  /* Read one HMM from <hmmfile> */
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  bg = p7_bg_Create(abc);
+
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    p7_bg_SetFilterByHMM(bg, hmm);
+  esl_stopwatch_Stop(w);
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7BG_BENCHMARK*/
+
+
+
+/*****************************************************************
+ * x. Example
+ *****************************************************************/
+#ifdef p7BG_EXAMPLE
+/*
+   gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_example -I. -L. -I../easel -L../easel -Dp7BG_EXAMPLE p7_bg.c -lhmmer -leasel -lm
+   ./p7_bg_example <hmmfile> <seqfile>
+ */ 
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of calculating null model scores";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  ESL_SQ         *sq      = NULL;
+  float           nullsc, filtersc, H;
+  int             status;
+ 
+  /* Read one HMM from <hmmfile> */
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  /* Open <seqfile> for reading */
+  status = esl_sqfile_OpenDigital(abc, seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) esl_fatal("No such file.");
+  else if (status == eslEFORMAT)   esl_fatal("Format unrecognized.");
+  else if (status != eslOK)        esl_fatal("Open failed, code %d.", status);
+
+  sq = esl_sq_CreateDigital(abc);
+  bg = p7_bg_Create(abc);
+  p7_bg_SetFilterByHMM(bg, hmm);
+
+  H = esl_vec_FEntropy(bg->f, bg->abc->K);
+  printf("bg iid H = %.4f\n", H);
+
+  H = esl_vec_FEntropy(bg->mcomp, bg->abc->K);
+  printf("modelcomp H = %.4f\n", H);
+
+  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_bg_SetLength(bg, sq->n);
+
+      p7_bg_NullOne    (bg, sq->dsq, sq->n, &nullsc);
+      p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
+
+      printf("%-20s %5d %8.5f %8.5f %8.5f\n", sq->name, (int) sq->n, nullsc, filtersc, filtersc-nullsc);
+
+      esl_sq_Reuse(sq);
+    }
+  if (status != eslEOF) 
+    esl_fatal("Parse failed, line %ld, file %s:\n%s", (long) sqfp->linenumber, sqfp->filename, sqfp->errbuf);
+
+  esl_sqfile_Close(sqfp);
+  esl_sq_Destroy(sq);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7BG_EXAMPLE*/
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
+
+
+  

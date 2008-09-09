@@ -219,7 +219,7 @@ p7_oprofile_Config(const P7_HMM *hmm, const P7_BG *bg, P7_OPROFILE *om, int mode
    * are occ[k] /( \sum_i occ[i] * (M-k+1))
    */
   ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
-  if ((status = p7_hmm_CalculateOccupancy(hmm, occ)) != eslOK) goto ERROR;
+  if ((status = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) goto ERROR;
   for (Z = 0., k = 1; k <= hmm->M; k++) 
     Z += occ[k] * (float) (hmm->M-k+1);
 
