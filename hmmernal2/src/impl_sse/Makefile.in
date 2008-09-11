@@ -15,8 +15,8 @@ RANLIB         = @RANLIB@
 
 SHELL          = /bin/sh
 MYLIBS         = -lhmmer -leasel -lm
-MYLIBDIRS      = -L../../easel -L..
-MYINCDIRS      = -I../../easel -I..
+MYLIBDIRS      = -L../../../easel -L..
+MYINCDIRS      = -I../../../easel -I..
 
 OBJS =  decoding.o\
 	fwdback.o\
