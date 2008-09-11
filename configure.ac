@@ -78,11 +78,11 @@ HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"
 
-EASEL_DATE="March 2008"
-EASEL_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute. All rights reserved."
-EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
-EASEL_VERSION="h$PACKAGE_VERSION"
-EASEL_URL="http://easel.janelia.org/"
+#EASEL_DATE="March 2008"
+#EASEL_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute. All rights reserved."
+#EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
+#EASEL_VERSION="h$PACKAGE_VERSION"
+#EASEL_URL="http://easel.janelia.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
 AC_SUBST(HMMER_DATE)
@@ -91,11 +91,11 @@ AC_SUBST(HMMER_LICENSE)
 AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
 
-AC_SUBST(EASEL_DATE)
-AC_SUBST(EASEL_COPYRIGHT)
-AC_SUBST(EASEL_LICENSE)
-AC_SUBST(EASEL_VERSION)
-AC_SUBST(EASEL_URL)
+#AC_SUBST(EASEL_DATE)
+#AC_SUBST(EASEL_COPYRIGHT)
+#AC_SUBST(EASEL_LICENSE)
+#AC_SUBST(EASEL_VERSION)
+#AC_SUBST(EASEL_URL)
 
 # Preprocessor symbols (replace #undefs in p7config.h)
 AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
@@ -103,12 +103,12 @@ AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
 AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
 AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
 
-AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
-AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
-AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
-AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
+#AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
+#AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
+#AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
+#AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
 
-AC_DEFINE(eslLIBRARY)
+#AC_DEFINE(eslLIBRARY)
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
@@ -422,10 +422,10 @@ AC_CONFIG_FILES([src/Makefile  testsuite/Makefile profmark/Makefile])
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
 AC_CONFIG_HEADERS(src/p7_config.h)
 
-AC_CONFIG_HEADERS([easel/esl_config.h])
-AC_CONFIG_FILES([easel/miniapps/Makefile])
-AC_CONFIG_FILES([easel/testsuite/Makefile])
-AC_CONFIG_FILES([easel/Makefile])
+#AC_CONFIG_HEADERS([easel/esl_config.h])
+#AC_CONFIG_FILES([easel/miniapps/Makefile])
+#AC_CONFIG_FILES([easel/testsuite/Makefile])
+#AC_CONFIG_FILES([easel/Makefile])
 
 
 ################################################################

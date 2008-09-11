@@ -78,13 +78,11 @@ all:
 	  echo "If you really want to rebuild from source, move or delete the" ;\
 	  echo "binaries/ subdirectory."; \
 	else\
-	  (cd easel;     ${MAKE});\
 	  (cd src;       ${MAKE});\
 	fi
 
 
 dev:
-	cd easel; ${MAKE}
 	cd src;   ${MAKE} dev
 
 # check: compiles and runs test suite in testsuite/
@@ -138,7 +136,6 @@ bindist:
 #	(cd src;       make clean)
 clean:
 	if test -d src;       then (cd src;       make clean); fi
-	if test -d easel;     then (cd easel;     make clean); fi
 	if test -d profmark;  then (cd profmark;  make clean); fi
 	if test -d testsuite; then (cd testsuite; make clean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
@@ -152,7 +149,6 @@ distclean:
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	if test -d src;       then (cd src;       make distclean); fi
-	if test -d easel;     then (cd easel;     make distclean); fi
 	if test -d profmark;  then (cd profmark;  make distclean); fi
 	if test -d testsuite; then (cd testsuite; make distclean); fi
 	-rm LICENSE.csh
@@ -164,7 +160,6 @@ distclean:
 #	(cd src;       make binclean)
 binclean:
 	if test -d src;       then (cd src;       make binclean); fi
-	if test -d easel;     then (cd easel;     make binclean); fi
 	if test -d profmark;  then (cd profmark;  make binclean); fi
 	if test -d testsuite; then (cd testsuite; make binclean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
@@ -193,7 +188,6 @@ tags:
 	etags src/*.c src/*.h Makefile.in
 	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in
 	etags -a src/impl_vmx/*.c src/impl_vmx/*.h src/impl_vmx/Makefile.in
-	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 
 ###########
