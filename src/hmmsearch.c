@@ -373,6 +373,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
       p7_ProfileConfig(hmm, cfg->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; MSVFilter requires local mode */
+      /* additionally this *must* be a multihit mode. unihit modes have rare numerical problems in posterior decoding. [J3/119-120] */
 
       /* EXPERIMENTAL: shut the inserts off. */
       for (k = 1; k < hmm->M; k++)
@@ -380,7 +381,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
 
       p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
-      p7_omx_GrowTo(oxf, om->M, 0, 0); /* expand the one-row omx if needed */
 
       fprintf(cfg->ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
       if (hmm->acc  != NULL) fprintf(cfg->ofp, "Accession:   %s\n", hmm->acc);
@@ -393,6 +393,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (esl_opt_IsDefault(go, "-Z")) cfg->nseq++;
 	  cfg->nres += sq->n;
 	  p7_oprofile_ReconfigLength(om, sq->n);
+	  p7_omx_GrowTo(oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
 	  /* Null model score for this sequence.  */
 	  p7_bg_SetLength(cfg->bg, sq->n);
@@ -428,7 +429,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 	  /* Parse it with Forward and obtain its real Forward score. */
-	  p7_omx_GrowTo(oxf, hmm->M, 0, sq->n); 
+	  p7_omx_GrowTo(oxf, om->M, 0, sq->n); 
 	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &fwdsc);
 	  final_sc = (fwdsc-filtersc) / eslCONST_LOG2;
 	  P = esl_exp_surv(final_sc,  hmm->evparam[p7_TAU],  hmm->evparam[p7_LAMBDA]);
@@ -436,7 +437,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (P >= F3 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; }
 	  cfg->n_past_fwd++;
 
-	  //	  printf("Past FWD: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, final_sc, P);
+	  //printf("forward = %g\n", fwdsc);
+	  //  printf("Past FWD: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, final_sc, P);
 
 	  /* ok, it's for real; do the Backwards parser pass and hand
 	   * it off to domain definition logic. 
@@ -444,7 +446,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_ReconfigLength(gm, sq->n);
 	  p7_omx_GrowTo(oxb, hmm->M, 0, sq->n);
 	  p7_BackwardParser(sq->dsq, sq->n, om, oxf, oxb, NULL);
-	  p7_domaindef_ByPosteriorHeuristics(sq, gm, om, oxf, oxb, fwd, bck, cfg->ddef);
+
+	  status = p7_domaindef_ByPosteriorHeuristics(sq, gm, om, oxf, oxb, fwd, bck, cfg->ddef);
+	  if (status == eslERANGE) { 
+	    fprintf(stderr, "WARNING: posterior decoding failed on %s; skipping it!\n", sq->name);
+	    esl_sq_Reuse(sq);
+	    continue;
+	  } else if (status != eslOK) {
+	    fprintf(stderr, "WARNING: domain definition failed due to unknown problem on %s; skipping it!\n", sq->name);
+	    esl_sq_Reuse(sq);
+	    continue;
+	  }
 
 	  if (esl_opt_GetBoolean(go, "--best1")) 
 	    {

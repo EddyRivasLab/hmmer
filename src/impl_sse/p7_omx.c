@@ -99,9 +99,10 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   for (i = 1; i < p7X_NXCELLS; i++)
     ox->xmx[i] = ox->xmx[0] + i * ox->allocXRQ * 4;
 
-  ox->M        = 0;
-  ox->L        = 0;
-  ox->totscale = 0.0;
+  ox->M              = 0;
+  ox->L              = 0;
+  ox->totscale       = 0.0;
+  ox->has_own_scales = TRUE;	/* most matrices are Forward, control their own scale factors */
 #ifdef p7_DEBUGGING
   ox->debugging = FALSE;
   ox->dfp       = NULL;

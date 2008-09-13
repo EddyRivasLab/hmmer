@@ -44,22 +44,48 @@
  *            pp   - RESULT: posterior decoding matrix.
  *
  * Returns:   <eslOK> on success.
+ *            
+ *            Returns <eslERANGE> if numeric range of floating-point
+ *            values is exceeded during posterior probability
+ *            calculations. In this case, the <pp> matrix must not be
+ *            used by the caller; it will contain <NaN> values. To be
+ *            safe, the caller should recalculate a generic posterior
+ *            decoding matrix instead -- generic calculations are done
+ *            in log probability space and are robust. 
+ *            
+ *            However, I currently believe that this overflow only
+ *            occurs on an unusual and ignorable situation: when a
+ *            <p7_UNILOCAL> model is used on a region that contains
+ *            two or more high scoring distinct alignments to the
+ *            model. And that only happens if domain definition fails,
+ *            after stochastic clustering, and an envelope that we
+ *            pass to p7_domaindef.c::rescore_isolated_domain()
+ *            erroneously contains 2+ distinct domains. (Note that
+ *            this is different from having 2+ expected B states: that
+ *            can happen normally, if a single consistent domain is
+ *            better described by 2+ passes through the model). And I
+ *            strongly believe all this only can happen on repetitive
+ *            or biased-composition junk that we want to ignore anyway.
+ *            Therefore the caller should be safe in ignoring any domain
+ *            for which <p7_Decoding()> returns <eslERANGE>.
  *
  * Throws:    (no abnormal error conditions)
+ * 
+ * Xref:      [J3/119-121]: for analysis of numeric range issues when
+ *            <scaleproduct> overflows.
  */
 int
 p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
 {
-  register __m128 *ppv;
-  register __m128 *fv;
-  register __m128 *bv;
-  register __m128  totrv;
-  register __m128  scv;
+  __m128 *ppv;
+  __m128 *fv;
+  __m128 *bv;
+  __m128  totrv;
   int    L  = oxf->L;
   int    M  = om->M;
   int    Q  = p7O_NQF(M);	
   int    i,q;
-  float  totp_reciprocal = 1.0 / (oxf->xmx[p7X_C][L] * om->xf[p7O_C][p7O_MOVE]);
+  float  scaleproduct = 1.0 / oxb->xmx[p7X_N][0];
 
   ppv = pp->dpf[0];
   for (q = 0; q < Q; q++) {
@@ -73,19 +99,17 @@ p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
   pp->xmx[p7X_C][0] = 0.0;
   pp->xmx[p7X_B][0] = 0.0;
 
-  totrv = _mm_set1_ps(totp_reciprocal);
   for (i = 1; i <= L; i++)
     {
-      ppv =  pp->dpf[i];
-      fv  = oxf->dpf[i];
-      bv  = oxb->dpf[i];
-      scv = _mm_set1_ps(oxf->xmx[p7X_SCALE][i]);
+      ppv   =  pp->dpf[i];
+      fv    = oxf->dpf[i];
+      bv    = oxb->dpf[i];
+      totrv = _mm_set1_ps(scaleproduct * oxf->xmx[p7X_SCALE][i]);
 
       for (q = 0; q < Q; q++)
 	{
 	  /* M */
 	  *ppv = _mm_mul_ps(*fv,  *bv);
-	  *ppv = _mm_mul_ps(*ppv,  scv);
 	  *ppv = _mm_mul_ps(*ppv,  totrv);
 	  ppv++;  fv++;  bv++;
 
@@ -95,17 +119,20 @@ p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
 
 	  /* I */
 	  *ppv = _mm_mul_ps(*fv,  *bv);
-	  *ppv = _mm_mul_ps(*ppv,  scv);
 	  *ppv = _mm_mul_ps(*ppv,  totrv);
 	  ppv++;  fv++;  bv++;
 	}
       pp->xmx[p7X_E][i] = 0.0;
-      pp->xmx[p7X_N][i] = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * totp_reciprocal;
-      pp->xmx[p7X_J][i] = oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * totp_reciprocal;
-      pp->xmx[p7X_C][i] = oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * totp_reciprocal;
+      pp->xmx[p7X_N][i] = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * scaleproduct;
+      pp->xmx[p7X_J][i] = oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * scaleproduct;
+      pp->xmx[p7X_C][i] = oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * scaleproduct;
       pp->xmx[p7X_B][i] = 0.0;
+
+      if (oxb->has_own_scales) scaleproduct *= oxf->xmx[p7X_SCALE][i] /  oxb->xmx[p7X_SCALE][i];
     }
-  return eslOK;
+
+  if (isinf(scaleproduct)) return eslERANGE;
+  else                     return eslOK;
 }
 
 /* Function:  p7_DomainDecoding()
@@ -122,14 +149,17 @@ p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
  *            ddef - container for the results.
  *
  * Returns:   <eslOK> on success.
+ * 
+ *            <eslERANGE> on numeric overflow. See commentary in
+ *            <p7_Decoding()>.
  *
  * Throws:    (no abnormal error conditions)
  */
 int
 p7_DomainDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P7_DOMAINDEF *ddef)
 {
-  int   L               = oxf->L;
-  float totp_reciprocal = 1.0 / (oxf->xmx[p7X_C][L] * om->xf[p7O_C][p7O_MOVE]);
+  int   L             = oxf->L;
+  float scaleproduct  = 1.0 / oxb->xmx[p7X_N][0];
   float njcp;
   int   i;
 
@@ -138,18 +168,25 @@ p7_DomainDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P
   ddef->mocc[0] = 0.0;
   for (i = 1; i <= L; i++)
     {
+      /* scaleproduct is prod_j=0^i-2 now */
       ddef->btot[i] = ddef->btot[i-1] +
-	(oxf->xmx[p7X_B][i-1] * oxb->xmx[p7X_B][i-1] * oxf->xmx[p7X_SCALE][i-1] * totp_reciprocal);
-      ddef->etot[i] = ddef->etot[i-1] +
-	(oxf->xmx[p7X_E][i]   * oxb->xmx[p7X_E][i]   * oxf->xmx[p7X_SCALE][i]   * totp_reciprocal);
+	(oxf->xmx[p7X_B][i-1] * oxb->xmx[p7X_B][i-1] * oxf->xmx[p7X_SCALE][i-1] * scaleproduct);
 
-      njcp  = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * totp_reciprocal;
-      njcp += oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * totp_reciprocal;
-      njcp += oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * totp_reciprocal;
+      if (oxb->has_own_scales) scaleproduct *= oxf->xmx[p7X_SCALE][i-1] /  oxb->xmx[p7X_SCALE][i-1]; 
+      /* scaleproduct is prod_j=0^i-1 now */
+
+      ddef->etot[i] = ddef->etot[i-1] +
+	(oxf->xmx[p7X_E][i]   * oxb->xmx[p7X_E][i]   * oxf->xmx[p7X_SCALE][i]   * scaleproduct);
+
+      njcp  = oxf->xmx[p7X_N][i-1] * oxb->xmx[p7X_N][i] * om->xf[p7O_N][p7O_LOOP] * scaleproduct;
+      njcp += oxf->xmx[p7X_J][i-1] * oxb->xmx[p7X_J][i] * om->xf[p7O_J][p7O_LOOP] * scaleproduct;
+      njcp += oxf->xmx[p7X_C][i-1] * oxb->xmx[p7X_C][i] * om->xf[p7O_C][p7O_LOOP] * scaleproduct;
       ddef->mocc[i] = 1. - njcp;
     }
   ddef->L = oxf->L;
-  return eslOK;
+
+  if (isinf(scaleproduct)) return eslERANGE;
+  else                     return eslOK;
 }
 /*------------------ end, posterior decoding --------------------*/
 

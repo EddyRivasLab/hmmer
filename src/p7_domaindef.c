@@ -366,6 +366,10 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            scores, and their optimal posterior accuracy alignments.
  *            
  * Returns:   <eslOK> on success.           
+ *            
+ *            <eslERANGE> on numeric overflow in posterior
+ *            decoding. This should not be possible for multihit
+ *            models. 
  */
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE *om, 
@@ -381,8 +385,9 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
   int nc;
   int status;
 
-  p7_domaindef_GrowTo(ddef, sq->n);                /* now ddef's btot,etot,mocc arrays are ready for seq of length n */
-  p7_DomainDecoding(om, oxf, oxb, ddef);           /* now ddef->{btot,etot,mocc} are made.                           */
+  if ((status = p7_domaindef_GrowTo(ddef, sq->n))      != eslOK) return status;  /* ddef's btot,etot,mocc now ready for seq of length n */
+  if ((status = p7_DomainDecoding(om, oxf, oxb, ddef)) != eslOK) return status;  /* ddef->{btot,etot,mocc} now made.                    */
+
   esl_vec_FSet(ddef->n2sc, sq->n+1, 0.0);          /* ddef->n2sc null2 scores are initialized                        */
   ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
@@ -437,8 +442,8 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 		   in the output.
 		 */
 		ddef->nenvelopes++;
-		status = rescore_isolated_domain(ddef, gm, om, sq, fwd, bck, i2, j2, TRUE);
-		if (status == eslOK) last_j2 = j2;
+		if (rescore_isolated_domain(ddef, gm, om, sq, fwd, bck, i2, j2, TRUE) == eslOK) 
+		  last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
 	      p7_trace_Reuse(ddef->tr);
@@ -701,7 +706,9 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROF
 
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
-  p7_Decoding(om, ox1, ox2, ox2);      /* <gx2> is now overwritten with post probabilities     */
+
+  status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
+  if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
 
   /* Is null2 set already for this i..j? (It is, if we're in a domain that
    * was defined by stochastic traceback clustering in a multidomain region;

@@ -276,6 +276,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   /* Initialization. */
   ox->M  = om->M;
   ox->L  = L;
+  ox->has_own_scales = TRUE; 	/* all forward matrices control their own scalefactors */
   zerov  = _mm_setzero_ps();
   for (q = 0; q < Q; q++)
     MMO(dpc,q) = IMO(dpc,q) = DMO(dpc,q) = zerov;
@@ -485,12 +486,10 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   __m128  *rp;			      /* will point into om->rf[x] for residue x[i+1]              */
   __m128  *tp;		              /* will point into (and step thru) om->tf transition scores  */
 
-
-
-
   /* initialize the L row. */
   bck->M = om->M;
   bck->L = L;
+  bck->has_own_scales = FALSE;	/* backwards scale factors are *usually* given by <fwd> */
   dpc    = bck->dpf[L * do_full];
   xJ     = 0.0;
   xB     = 0.0;
@@ -551,6 +550,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       }
     }
   bck->xmx[p7X_SCALE][L] = fwd->xmx[p7X_SCALE][L];
+  bck->totscale          = log(bck->xmx[p7X_SCALE][L]);
 
   /* Stores */
   bck->xmx[p7X_E][L] = xE;
@@ -652,23 +652,34 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 	  dcv        = DMO(dpc,q);
 	}
 
-      /* Sparse rescaling: same scale factors as fwd matrix */
-      if (fwd->xmx[p7X_SCALE][i] > 1.0)
-	{
-	  xE  = xE / fwd->xmx[p7X_SCALE][i];
-	  xN  = xN / fwd->xmx[p7X_SCALE][i];
-	  xC  = xC / fwd->xmx[p7X_SCALE][i];
-	  xJ  = xJ / fwd->xmx[p7X_SCALE][i];
-	  xB  = xB / fwd->xmx[p7X_SCALE][i];
-	  xEv = _mm_set1_ps(1.0 / fwd->xmx[p7X_SCALE][i]);
-	  for (q = 0; q < Q; q++) {
-	    MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xEv);
-	    DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
-	    IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
-	  }
+      /* Sparse rescaling  */
 
+      /* In rare cases [J3/119] scale factors from <fwd> are
+       * insufficient and backwards will overflow. In this case, we
+       * switch on the fly to using our own scale factors, different
+       * from those in <fwd>. This will complicate subsequent
+       * posterior decoding routines.
+       */
+      if (xB > 1.0e16) bck->has_own_scales = TRUE;
+
+      if      (bck->has_own_scales)  bck->xmx[p7X_SCALE][i] = (xB > 1.0e4) ? xB : 1.0;
+      else                           bck->xmx[p7X_SCALE][i] = fwd->xmx[p7X_SCALE][i];
+
+      if (bck->xmx[p7X_SCALE][i] > 1.0)
+	{
+	  xE /= bck->xmx[p7X_SCALE][i];
+	  xN /= bck->xmx[p7X_SCALE][i];
+	  xJ /= bck->xmx[p7X_SCALE][i];
+	  xB /= bck->xmx[p7X_SCALE][i];
+	  xC /= bck->xmx[p7X_SCALE][i];
+	  xBv = _mm_set1_ps(1.0 / bck->xmx[p7X_SCALE][i]);
+	  for (q = 0; q < Q; q++) {
+	    MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xBv);
+	    DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xBv);
+	    IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xBv);
+	  }
+	  bck->totscale += log(bck->xmx[p7X_SCALE][i]);
 	}
-      bck->xmx[p7X_SCALE][i] = fwd->xmx[p7X_SCALE][i];
 
       /* Stores are separate only for pedagogical reasons: easy to
        * turn this into a more memory efficient version just by
@@ -703,14 +714,12 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
  
   xN = (xB * om->xf[p7O_N][p7O_MOVE]) + (xN * om->xf[p7O_N][p7O_LOOP]);  
 
-  bck->xmx[p7X_B][0] = xB;
-  bck->xmx[p7X_C][0] = 0.0;
-  bck->xmx[p7X_J][0] = 0.0;
-  bck->xmx[p7X_N][0] = xN;
-  bck->xmx[p7X_E][0] = 0.0;
-
-  bck->xmx[p7X_SCALE][0] = fwd->xmx[p7X_SCALE][0]; /* 1.0 */
-  bck->totscale          = fwd->totscale;
+  bck->xmx[p7X_B][0]     = xB;
+  bck->xmx[p7X_C][0]     = 0.0;
+  bck->xmx[p7X_J][0]     = 0.0;
+  bck->xmx[p7X_N][0]     = xN;
+  bck->xmx[p7X_E][0]     = 0.0;
+  bck->xmx[p7X_SCALE][0] = 1.0;
 
 #if p7_DEBUGGING
   dpc = bck->dpf[0];
@@ -719,9 +728,9 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   if (bck->debugging) p7_omx_DumpFloatRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E][0], bck->xmx[p7X_N][0],  bck->xmx[p7X_J][0], bck->xmx[p7X_B][0],  bck->xmx[p7X_C][0]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
 #endif
 
-  if       (isnan(xN))      ESL_EXCEPTION(eslERANGE, "forward score is NaN");
-  else if  (xN == 0.0)      ESL_EXCEPTION(eslERANGE, "forward score underflow (is 0.0)");
-  else if  (isinf(xN) == 1) ESL_EXCEPTION(eslERANGE, "forward score overflow (is infinity)");
+  if       (isnan(xN))      ESL_EXCEPTION(eslERANGE, "backward score is NaN");
+  else if  (xN == 0.0)      ESL_EXCEPTION(eslERANGE, "backward score underflow (is 0.0)");
+  else if  (isinf(xN) == 1) ESL_EXCEPTION(eslERANGE, "backward score overflow (is infinity)");
 
   if (opt_sc != NULL) *opt_sc = bck->totscale + log(xN);
   return eslOK;
@@ -1090,7 +1099,13 @@ main(int argc, char **argv)
 
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, sq->n);
-  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
+
+  int k,x;
+  for (k = 1; k < hmm->M; k++)
+    for (x = 0; x < gm->abc->Kp; x++)
+      gm->rsc[x][k*2 + p7P_ISC] = 0.0;
+
   om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
 
   /* p7_oprofile_Dump(stdout, om);  */
@@ -1110,8 +1125,8 @@ main(int argc, char **argv)
   p7_ForwardParser (sq->dsq, sq->n, om,      fwd, &fsc);  printf("forward parser:       %.2f nats\n", fsc);
   p7_BackwardParser(sq->dsq, sq->n, om, fwd, bck, &bsc);  printf("backward parser:      %.2f nats\n", bsc);
 
-  /* p7_Forward (sq->dsq, sq->n, om,      fwd, &fsc);        printf("forward:              %.2f nats\n", fsc); */
-  /* p7_Backward(sq->dsq, sq->n, om, fwd, bck, &bsc);        printf("backward:             %.2f nats\n", bsc); */
+  /* p7_Forward (sq->dsq, sq->n, om,      fwd, &fsc);        printf("forward:              %.2f nats\n", fsc);  */
+  /* p7_Backward(sq->dsq, sq->n, om, fwd, bck, &bsc);        printf("backward:             %.2f nats\n", bsc);  */
 
   /* Comparison to other F/B implementations */
   p7_GForward     (sq->dsq, sq->n, gm, gx,  &fsc);        printf("GForward:             %.2f nats\n", fsc);

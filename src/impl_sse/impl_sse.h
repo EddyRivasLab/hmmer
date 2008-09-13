@@ -168,6 +168,8 @@ typedef struct p7_omx_s {
   int       allocXRQ;		/* # of quads allocated in each xmx[] array; XRQ*4 >= L+1      */
   float     totscale;		/* log of the product of all scale factors (0.0 if unscaled)   */
 
+  int       has_own_scales;	/* TRUE to use own scale factors; FALSE if scales provided     */
+
 #ifdef p7_DEBUGGING  
   /* Parsers,scorers only hold a row at a time, so to get them to dump full matrix, it
    * must be done during a DP calculation, after each row is calculated 
