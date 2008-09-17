@@ -5,6 +5,9 @@
  * 
  * SRE, Fri Mar 23 07:54:02 2007 [Janelia] [Decembrists, Picaresque]
  * SVN $Id$
+ *
+ * SC, Wed Sep 17 17:52:11 EDT 2008
+ *
  */
 
 #include "p7_config.h"
