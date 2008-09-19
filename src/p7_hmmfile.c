@@ -333,6 +333,140 @@ p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
  * 3. Private functions for parsing HMM file formats.
  *****************************************************************/
 
+static void multiline(FILE *fp, const char *pfx, char *s);
+static void printprob(FILE *fp, int fieldwidth, float p);
+
+static int
+write_asc30hmm(FILE *fp, P7_HMM *hmm)
+{
+  int k, x;
+  
+  fprintf(fp, "HMMER3-a [%s | %s]\n", HMMER_VERSION, HMMER_DATE);
+  
+  fprintf(fp, "NAME  %s\n", hmm->name);
+  if (hmm->flags & p7H_ACC)  fprintf(fp, "ACC   %s\n", hmm->acc);
+  if (hmm->flags & p7H_DESC) fprintf(fp, "DESC  %s\n", hmm->desc);
+  fprintf(fp, "LENG  %d\n", hmm->M);
+  fprintf(fp, "ALPH  %s\n", esl_abc_DescribeType(hmm->abc->type));
+  fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)  ? "yes" : "no");
+  fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)  ? "yes" : "no");
+  fprintf(fp, "MAP   %s\n", (hmm->flags & p7H_MAP) ? "yes" : "no");
+
+  fprintf  (fp, "DATE  %s\n", hmm->ctime);
+  multiline(fp, "COM  ",      hmm->comlog);
+  fprintf  (fp, "NSEQ  %d\n", hmm->nseq);
+  fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq);
+  fprintf  (fp, "CKSUM %d\n", hmm->checksum);
+
+  if (hmm->flags & p7H_GA)  fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]);
+  if (hmm->flags & p7H_TC)  fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]);
+  if (hmm->flags & p7H_NC)  fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]);
+
+  if (hmm->flags & p7H_STATS) {
+    fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_LAMBDA]);
+    fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MU]);
+    fprintf(fp, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_TAU]);
+  }
+
+  if (hmm->flags & p7H_COMPO) {
+    fprintf(fp, "COMPO");
+    for (x = 0; x < hmm->abc->K; x++) printprob(fp, 8, hmm->compo[x]);
+    fputc('\n', fp);
+  }
+
+  fprintf(fp, "HMM     ");
+  for (x = 0; x < hmm->abc->K; x++) fprintf(fp, "     %c   ", hmm->abc->sym[x]);
+  fputc('\n', fp);
+  fprintf(fp, "        %8s %8s %8s %8s %8s %8s %8s\n",
+          "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d");
+  
+  fputs("        ", fp);
+  for (x = 0; x < p7H_NTRANSITIONS; x++) printprob(fp, 8, hmm->t[0][x]);
+  fputc('\n', fp);
+  
+  for (k = 1; k <= hmm->M; k++)
+    {
+      /* Line 1: k; match emissions; optional map, RF, CS */ 
+      fprintf(fp, " %6d ",  k);
+      for (x = 0; x < hmm->abc->K; x++) printprob(fp, 8, hmm->mat[k][x]);
+      if (hmm->flags & p7H_MAP) fprintf(fp, " %6d", hmm->map[k]); 
+      else                      fprintf(fp, " %6s", "-");
+      fprintf(fp, " %c",   (hmm->flags & p7H_RF) ? hmm->rf[k] : '-');
+      fprintf(fp, " %c\n", (hmm->flags & p7H_CS) ? hmm->cs[k] : '-');
+
+      /* Line 2:   insert emissions */
+      fputs("        ", fp);
+      for (x = 0; x < hmm->abc->K; x++) printprob(fp, 8, hmm->ins[k][x]);
+
+      /* Line 3:   transitions */
+      fputs("\n        ", fp);
+      for (x = 0; x < p7H_NTRANSITIONS; x++) printprob(fp, 8, hmm->t[k][x]);
+      fputc('\n', fp);
+    }
+  fputs("//\n", fp);
+  return eslOK;
+}
+
+/* multiline()
+ * Mon Jan  5 14:57:50 1998 [StL]
+ * 
+ * Used to print the command log to ASCII save files.
+ *
+ * Given a record (like the comlog) that contains 
+ * multiple lines, print it as multiple lines with
+ * a given prefix. e.g.:
+ *           
+ * given:   "COM   ", "foo\nbar\nbaz"
+ * print:   COM   1 foo
+ *          COM   2 bar
+ *          COM   3 baz
+ *
+ * If <s> is NULL, no-op. Otherwise <s> must be a <NUL>-terminated
+ * string.  It does not matter if it ends in <\n> or not. <pfx>
+ * must be a valid <NUL>-terminated string; it may be empty.
+ *           
+ * Args:     fp:   FILE to print to
+ *           pfx:  prefix for each line
+ *           s:    line to break up and print; tolerates a NULL
+ */
+static void
+multiline(FILE *fp, const char *pfx, char *s)
+{
+  char *sptr  = s;
+  char *end   = NULL;
+  int   n     = 0;
+  int   nline = 1;
+
+  do {
+    end = strchr(sptr, '\n');
+
+    if (end != NULL) 		             /* if there's no \n left, end == NULL */
+      {
+	n = end - sptr;	                     /* n chars exclusive of \n */
+	fprintf(fp, "%s [%d] ", pfx, nline++);
+	fwrite(sptr, sizeof(char), n, fp);   /* using fwrite lets us write fixed # of chars   */
+	fprintf(fp, "\n");                   /* while writing \n w/ printf allows newline conversion */
+	sptr += n + 1;	                     /* +1 to get past \n */
+      } 
+    else 
+      {
+	fprintf(fp, "%s [%d] %s\n", pfx, nline++, sptr); /* last line */
+      }
+  } while (end != NULL  && *sptr != '\0');   /* *sptr == 0 if <s> terminates with a \n */
+}
+
+
+static void
+printprob(FILE *fp, int fieldwidth, float p)
+{
+  if      (p == 0.0) fprintf(fp, " %*s",   fieldwidth, "*");
+  else if (p == 1.0) fprintf(fp, " %*.5f", fieldwidth, 0.0);
+  else               fprintf(fp, " %*.5f", fieldwidth, -logf(p));
+}
+
+  
+
+
 /* Binary save files from HMMER 3.x
  * 
  * Returns:    <eslOK> on success, and <ret_hmm> points at a newly allocated HMM.
@@ -603,6 +737,49 @@ main(int argc, char **argv)
   exit(0);
 }
 #endif /*p7HMMFILE_TESTDRIVE*/
+
+
+/*****************************************************************
+ * 7. Example.
+ *****************************************************************/
+#ifdef p7HMMFILE_EXAMPLE
+/* gcc -g -Wall -Dp7HMMFILE_EXAMPLE -I. -I../easel -L. -L../easel -o p7_hmmfile_example p7_hmmfile.c -lhmmer -leasel -lm
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+
+#include "hmmer.h"
+
+int
+main(int argc, char **argv)
+{
+  char         *hmmfile = argv[1];
+  P7_HMMFILE   *hfp     = NULL;
+  P7_HMM       *hmm     = NULL;
+  ESL_ALPHABET *abc     = NULL;
+  int           status;
+  
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
+  if (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",     hmmfile);
+  else if (status != eslOK)   p7_Fail("Unexpected error %d in opening hmm file %s.\n", status, hmmfile);  
+
+  status = p7_hmmfile_Read(hfp, &abc, &hmm);
+  if      (status == eslEOD)       p7_Fail("read failed, HMM file %s may be truncated?", hmmfile);
+  else if (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile);
+
+  write_asc30hmm(stdout, hmm);
+
+  p7_hmmfile_Close(hfp);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  return 0;
+}
+#endif /*p7HMMFILE_EXAMPLE*/
+
 
 
 /*****************************************************************

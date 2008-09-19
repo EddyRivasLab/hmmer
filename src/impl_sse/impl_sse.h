@@ -80,8 +80,8 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
  */
 typedef struct p7_oprofile_s {
   /* tu, ru, xu are for ViterbiFilter(): lspace uchars, 16x vectors            */
-  __m128i  *tu;	        	/* transition score blocks                     */
-  __m128i **ru;     		/* [x][q]:  ru, ru[0] are allocated            */
+  __m128i  *tu;	        	/* transition score blocks          [8*Q16]    */
+  __m128i **ru;     		/* [x][q]:  ru, ru[0] are allocated [Kp][2*Q16]*/
   uint8_t   xu[p7O_NXSTATES][p7O_NXTRANS];
   int       allocQ16;		/* how many uchar vectors                      */
 
@@ -98,8 +98,8 @@ typedef struct p7_oprofile_s {
   uint8_t   bias;	        /* positive bias for emission scores           */
 
   /* tf, rf, xf are for ForwardFilter():    pspace floats, 4x vectors          */
-  __m128  *tf;	    		/* transition probability blocks               */
-  __m128 **rf;     		/* [x][q]:  rf, rf[0] are allocated            */
+  __m128  *tf;	    		/* transition probability blocks    [8*Q4]     */
+  __m128 **rf;     		/* [x][q]:  rf, rf[0] are allocated [Kp][2*Q4] */
   float    xf[p7O_NXSTATES][p7O_NXTRANS];
   int      allocQ4;		/* how many float vectors                      */
 

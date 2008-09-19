@@ -141,26 +141,26 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
 
 
 /* Function:  p7_Tau()
- * Synopsis:  Determine Forward mu by brief simulation.
+ * Synopsis:  Determine Forward tau by brief simulation.
  * Incept:    SRE, Thu Aug  9 15:08:39 2007 [Janelia]
  *
- * Purpose:   Determine the <mu> parameter for an exponential tail fit
+ * Purpose:   Determine the <tau> parameter for an exponential tail fit
  *            to the Forward score distribution for model <gm>, on
  *            random sequences with the composition of the background
- *            model <bg>. This <mu> parameter is for an exponential
+ *            model <bg>. This <tau> parameter is for an exponential
  *            distribution anchored from $P=1.0$, so it's not really a
  *            tail per se; but it's only an accurate fit in the tail
  *            of the Forward score distribution, from about $P=0.001$
  *            or so.
  *            
- *            The determination of <mu> is done by a brief simulation
+ *            The determination of <tau> is done by a brief simulation
  *            in which we fit a Gumbel distribution to a small number
  *            of Forward scores of random sequences, and use that to
  *            predict the location of the tail at probability <tailp>.
  *            
  *            The Gumbel is of course inaccurate, but we can use it
  *            here solely as an empirical distribution to determine
- *            the location of a reasonable <mu> more accurately on a
+ *            the location of a reasonable <tau> more accurately on a
  *            smaller number of samples than we could do with raw
  *            order statistics. 
  *            

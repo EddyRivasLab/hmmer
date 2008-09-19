@@ -74,9 +74,9 @@
 #define p7H_TC      (1<<11)   /* trusted cutoffs available                       !*/
 #define p7H_NC      (1<<12)   /* noise cutoffs available                         !*/
 #define p7H_CA      (1<<13)   /* surface accessibilities available               !*/
+#define p7H_COMPO   (1<<14)   /* model-specific residue composition available    !*/
 
-/* Indices of Plan7 main model state transitions, hmm->t[k][]
- */
+/* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
   p7H_MM = 0,
   p7H_MI = 1,
@@ -88,15 +88,13 @@ enum p7h_transitions_e {
 };
 #define p7H_NTRANSITIONS 7
 
-/* How the hmm->t[k] vector is interpreted as separate probability vectors.
- */
+/* How the hmm->t[k] vector is interpreted as separate probability vectors. */
 #define P7H_TMAT(hmm, k) ((hmm)->t[k])
 #define P7H_TINS(hmm, k) ((hmm)->t[k]+3)
 #define P7H_TDEL(hmm, k) ((hmm)->t[k]+5)
 #define p7H_NTMAT 3
 #define p7H_NTDEL 2
 #define p7H_NTINS 2
-
 
 /* Some notes:
  *   0. The model might be either in counts or probability form.
@@ -137,6 +135,7 @@ typedef struct p7_hmm_s {
 
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                        */
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs       */
+  float  compo[p7_MAXABET];	/* model's background residue composition (optional: p7_COMPO)*/
 
   off_t  offset;              /* HMM record offset on disk */
   int    flags;               /* status flags */
@@ -745,11 +744,12 @@ extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
 extern char   *p7_hmm_DescribeStatetype(char st);
 /*      2. Convenience routines for setting fields in an HMM. */
-extern int     p7_hmm_SetName(P7_HMM *hmm, char *name);
-extern int     p7_hmm_SetAccession(P7_HMM *hmm, char *acc);
+extern int     p7_hmm_SetName       (P7_HMM *hmm, char *name);
+extern int     p7_hmm_SetAccession  (P7_HMM *hmm, char *acc);
 extern int     p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
-extern int     p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv);
-extern int     p7_hmm_SetCtime(P7_HMM *hmm);
+extern int     p7_hmm_AppendComlog  (P7_HMM *hmm, int argc, char **argv);
+extern int     p7_hmm_SetCtime      (P7_HMM *hmm);
+extern int     p7_hmm_SetComposition(P7_HMM *hmm);
 /*      3. Renormalization and rescaling counts in core HMMs. */
 extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);

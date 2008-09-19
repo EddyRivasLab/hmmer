@@ -543,9 +543,9 @@ p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv)
 int
 p7_hmm_SetCtime(P7_HMM *hmm)
 {
-  int    status;
-  char  *s = NULL;
-  time_t date;
+  int      status;
+  char    *s = NULL;
+  time_t   date;
 
   if ((date   = time(NULL))                       == -1) { status = eslESYS; goto ERROR; }
   if ((status = esl_strdup(ctime(&date), -1, &s)) != eslOK) goto ERROR;
@@ -559,6 +559,54 @@ p7_hmm_SetCtime(P7_HMM *hmm)
   if (s != NULL) free(s);
   return status;
 }
+
+/* Function:  p7_hmm_SetComposition()
+ * Synopsis:  Calculate and set model composition, <hmm->compo[]>
+ * Incept:    SRE, Tue Sep 16 13:54:29 2008 [Janelia]
+ *
+ * Purpose:   Calculates the mean residue composition emitted by
+ *            model <hmm>, and set <hmm->compo[]> to it.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure, in which case 
+ *            values in <hmm->compo[]> are unchanged.
+ */
+int
+p7_hmm_SetComposition(P7_HMM *hmm)
+{
+  float *mocc = NULL;
+  float *iocc = NULL;
+  float  norm = 0.0;
+  int    k;
+  int    status;
+
+  ESL_ALLOC(mocc, sizeof(float) * (hmm->M+1));
+  ESL_ALLOC(iocc, sizeof(float) * (hmm->M+1));
+
+  p7_hmm_CalculateOccupancy(hmm, mocc, iocc);
+  esl_vec_FSet(hmm->compo, hmm->abc->K, 0.0);
+  esl_vec_FAddScaled(hmm->compo, hmm->ins[0], iocc[0], hmm->abc->K);
+  for (k = 1; k <= hmm->M; k++)
+    {
+      esl_vec_FAddScaled(hmm->compo, hmm->mat[k], mocc[k], hmm->abc->K);
+      esl_vec_FAddScaled(hmm->compo, hmm->ins[k], iocc[k], hmm->abc->K);
+    }
+  norm  = esl_vec_FSum(mocc, hmm->M+1);
+  norm += esl_vec_FSum(iocc, hmm->M+1);
+
+  esl_vec_FScale(hmm->compo, hmm->abc->K, 1.0 / norm);
+  free(mocc);
+  free(iocc);
+  return eslOK;
+
+ ERROR:
+  if (mocc != NULL) free(mocc);
+  if (iocc != NULL) free(iocc);
+  return status;
+}
+  
+
 /*---------------- end, internal-setting routines ---------------*/
 
 

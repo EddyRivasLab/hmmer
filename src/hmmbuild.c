@@ -129,6 +129,7 @@ static int set_model_name         (const ESL_GETOPTS *go, const struct cfg_s *cf
 static int set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *prior);
 static int parameterize           (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_DPRIOR *prior);
 static int calibrate              (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm);
+static int stamp                  (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
 
 static double default_target_relent(const ESL_ALPHABET *abc, int M, double eX);
 
@@ -650,6 +651,7 @@ process_workunit(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, E
   if ((status =  set_effective_seqnumber(go, cfg, errbuf, msa, hmm, cfg->bg, cfg->pri)) != eslOK) goto ERROR;
   if ((status =  parameterize           (go, cfg, errbuf, hmm, cfg->pri))               != eslOK) goto ERROR;
   if ((status =  calibrate              (go, cfg, errbuf, hmm))                         != eslOK) goto ERROR;
+  if ((status =  stamp                  (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
 
   *ret_hmm = hmm;
   return eslOK;
@@ -938,11 +940,13 @@ calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *
   if ((status = p7_Lambda(hmm, cfg->bg, &lambda))                    != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine lambda");
   if ((status = p7_Mu    (r, gm, cfg->bg, vL, vN, lambda, &mu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine mu");
   if ((status = p7_Tau   (r, gm, cfg->bg, fL, fN, lambda, ft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine tau");
+  if ((status = p7_hmm_SetComposition(hmm))                          != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine model composition");
 
   hmm->evparam[p7_LAMBDA] = lambda;
   hmm->evparam[p7_MU]     = mu;
   hmm->evparam[p7_TAU]    = tau;
   hmm->flags             |= p7H_STATS;
+  hmm->flags             |= p7H_COMPO;
 
   p7_profile_Destroy(gm);
   esl_randomness_Destroy(r);
@@ -954,6 +958,26 @@ calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *
   p7_profile_Destroy(gm);
   if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
   return status;
+}
+
+
+/* stamp()
+ * 
+ * Sets the timestamp, command log, and checksum in the model.
+ */
+static int
+stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm)
+{
+  int status;
+
+  if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Logging information");    fflush(cfg->ofp); }
+
+  if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv)) != eslOK) ESL_FAIL(status, errbuf, "Failed to record command log");
+  if ((status = p7_hmm_SetCtime(hmm))                         != eslOK) ESL_FAIL(status, errbuf, "Failed to record timestamp");
+  if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))      != eslOK) ESL_FAIL(status, errbuf, "Failed to record checksum"); 
+
+  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  return eslOK;
 }
 
 
