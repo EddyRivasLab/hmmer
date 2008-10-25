@@ -127,7 +127,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
       break;
 
     case p7T_N:			/* N connects from S, N */
-      if (XMX(i, p7G_N) <= p7_IMPOSSIBLE) ESL_EXCEPTION(eslFAIL, "impossible N reached at i=%d", i);
+      if (XMX(i, p7G_N) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible N reached at i=%d", i);
       scur = ( (i == 0) ? p7T_S : p7T_N);
       break;
 

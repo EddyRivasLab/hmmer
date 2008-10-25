@@ -2,71 +2,73 @@
 
 HMMER is an implementation of profile hidden Markov models (profile
 HMMs) for biological sequence analysis
-\cite{Krogh94,Eddy98,Durbin98}. 
+\citep{Krogh94,Eddy98,Durbin98}. 
 
 \subsection{How to avoid reading this manual}
 
 I hate reading documentation. If you're like me, you're sitting here
-thinking, \pageref{manualend} pages of documentation, you must be
-joking! I just want to know that the software compiles, runs, and
-gives apparently useful results, before I read some 
-\pageref{manualend} exhausting pages of someone's documentation. For
-you cynics that have seen one too many software packages that don't
-work:
+thinking, over 100 pages of documentation, you must be joking! I just
+want to know that the software compiles, runs, and gives apparently
+useful results, before I read 100+ exhausting pages of someone's
+amateur documentation. So, for you cynics that have seen one too many
+software packages that don't work:
 
 \begin{itemize}
 \item Follow the quick installation instructions on page
-      \pageref{section:installation}. An automated test suite
-      is included, so you will know immediately if something
-      went wrong.
+      \pageref{section:installation}. An automated test suite is
+      included, so you will know immediately if something went
+      wrong. These instructions amount to a standard GNU configuration
+      and compile:\\
+         \user{./configure; make; make check}\\
+      ought to do it.
+
 \item Go to the tutorial, section \ref{section:tutorial} on page
-\pageref{section:tutorial}, which walks you through some examples of
-using HMMER on real data.
+      \pageref{section:tutorial}. This walks you through some examples of
+      using HMMER on real data.
 \end{itemize}
 
 Everything else, you can come back and read later.
 
 \subsection{What profile HMMs are}
 
-Profile HMMs are statistical models of multiple sequence alignments.
-They capture position-specific information about how conserved each
-column of the alignment is, and which residues are likely.  Anders
-Krogh, David Haussler, and co-workers at UC Santa Cruz introduced
-profile HMMs to computational biology \cite{Krogh94}, adopting HMM
-techniques which have been used for years in speech recognition. HMMs
-had been used in biology before the Krogh/Haussler work, notably by
-Gary Churchill \cite{Churchill89}, but the Krogh paper had a dramatic
-impact, because HMM technology was so well-suited to the popular
-``profile'' methods for searching databases using multiple sequence
-alignments instead of single query sequences. 
+Profile HMMs are statistical models of single sequences or multiple
+sequence alignments. They capture position-specific information about
+how conserved each sequence residue or alignment column, and which
+residues are likely.  Anders Krogh, David Haussler, and co-workers at
+UC Santa Cruz introduced profile HMMs to computational biology
+\cite{Krogh94}, adopting HMM techniques which have been used for years
+in speech recognition. HMMs had been used in biology before the
+Krogh/Haussler work, notably by Gary Churchill \cite{Churchill89}, but
+the Krogh paper had a dramatic impact, because HMM technology was so
+well-suited to the popular ``profile'' methods for searching databases
+using multiple sequence alignments instead of single query sequences.
 
 ``Profiles'' were introduced by Gribskov and colleagues
 \cite{Gribskov87,Gribskov90}, and several other groups introduced
 similar approaches at about the same time, such as ``flexible
 patterns'' \cite{Barton90}, and
 ``templates''\cite{Bashford87,Taylor86}. The term ``profile'' has
-stuck.\footnote{There has been some agitation to call all such models
-``position specific scoring matrices'', PSSMs, but certain small
-nocturnal North American marsupials have a prior claim on the name.}
-All of the profile methods are more or less statistical descriptions
-of the consensus of a multiple sequence alignment. They use
-\emph{position-specific} scores for amino acids (or nucleotides) and
-position specific penalties for opening and extending an insertion or
-deletion.  Traditional pairwise alignment (for example, BLAST
-\cite{Altschul90}, FASTA \cite{Pearson88}, or the Smith/Waterman
-algorithm \cite{Smith81}) uses position-{\em independent} scoring
-parameters. This property of profiles captures important information
-about the degree of conservation at various positions in the multiple
-alignment, and the varying degree to which gaps and insertions are
-permitted.
+stuck.\footnote{Some use the term ``position specific scoring
+matrices'', PSSMs, but certain nocturnal North American marsupials
+have prior claim on the name.}  All of the profile methods are more or
+less statistical descriptions of the consensus of a multiple sequence
+alignment. They use \emph{position-specific} scores for amino acids
+(or nucleotides) and position specific penalties for opening and
+extending an insertion or deletion.  Traditional pairwise alignment
+(for example, BLAST \cite{Altschul90}, FASTA \cite{Pearson88}, or the
+Smith/Waterman algorithm \cite{Smith81}) uses position-{\em
+independent} scoring parameters. This means a profile is capable of
+capturing important information about the degree of conservation at
+various positions in the multiple alignment, and the varying degree to
+which gaps and insertions are permitted.
 
-The advantage of using HMMs is that HMMs have a formal probabilistic
-basis. We use probability theory to guide how all the scoring
-parameters should be set. Though this might sound like a purely
-academic issue, this probabilistic basis lets us do things that more
-heuristic methods cannot do easily. For example, a profile HMM can be
-trained from unaligned sequences, if a trusted alignment isn't yet
-known. Another consequence is that HMMs have a consistent theory
+An advantage of using HMM methodology is that HMMs have a formal
+probabilistic basis. We use probability theory to guide how all the
+scoring parameters should be set. Though this might sound like a
+purely academic issue, this probabilistic basis lets us do things that
+more heuristic methods cannot do easily. For example, a profile HMM
+can be trained from unaligned sequences, if a trusted alignment isn't
+yet known. Another consequence is that HMMs have a consistent theory
 behind gap and insertion scores. In most details, profile HMMs are a
 slight improvement over a carefully constructed profile -- but less
 skill and manual intervention are necessary to use profile HMMs.  This

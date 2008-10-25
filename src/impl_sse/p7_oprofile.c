@@ -102,12 +102,26 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->ddbound_f = 0.0f;
   om->lspace_f  = FALSE;
 
+  for (x = 0; x < p7_NOFFSETS; x++) om->offs[x]    = -1;
+  for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = 0.0f;
+  for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = 0.0f;
+
   om->name      = NULL;
-  om->nj        = 0.0f;
+  om->acc       = NULL;
+  om->desc      = NULL;
+
+  ESL_ALLOC(om->ref,       sizeof(char) * (allocM+2)); 
+  ESL_ALLOC(om->cs,        sizeof(char) * (allocM+2));
+  ESL_ALLOC(om->consensus, sizeof(char) * (allocM+2));
+  om->ref[0]       = '\0';
+  om->cs[0]        = '\0';
+  om->consensus[0] = '\0';
+
   om->mode      = p7_NO_MODE;
   om->L         = 0;
   om->allocM    = allocM;
   om->M         = 0;
+  om->nj        = 0.0f;
   om->abc       = abc;
   return om;
 
@@ -138,15 +152,20 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->name   != NULL) free(om->name);
-  if (om->tu_mem != NULL) free(om->tu_mem);
-  if (om->ru_mem != NULL) free(om->ru_mem);
-  if (om->rm_mem != NULL) free(om->rm_mem);
-  if (om->tf_mem != NULL) free(om->tf_mem);
-  if (om->rf_mem != NULL) free(om->rf_mem);
-  if (om->ru     != NULL) free(om->ru);
-  if (om->rm     != NULL) free(om->rm);
-  if (om->rf     != NULL) free(om->rf);
+  if (om->tu_mem    != NULL) free(om->tu_mem);
+  if (om->ru_mem    != NULL) free(om->ru_mem);
+  if (om->rm_mem    != NULL) free(om->rm_mem);
+  if (om->tf_mem    != NULL) free(om->tf_mem);
+  if (om->rf_mem    != NULL) free(om->rf_mem);
+  if (om->ru        != NULL) free(om->ru);
+  if (om->rm        != NULL) free(om->rm);
+  if (om->rf        != NULL) free(om->rf);
+  if (om->name      != NULL) free(om->name);
+  if (om->acc       != NULL) free(om->acc);
+  if (om->desc      != NULL) free(om->desc);
+  if (om->ref       != NULL) free(om->ref);
+  if (om->cs        != NULL) free(om->cs);
+  if (om->consensus != NULL) free(om->consensus);
   free(om);
 }
 /*----------------- end, P7_OPROFILE structure ------------------*/
@@ -191,6 +210,11 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   if ((status =  pspace_float_conversion(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
 
   if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
+  if ((status = esl_strdup(gm->acc,  -1, &(om->acc)))  != eslOK) goto ERROR;
+  if ((status = esl_strdup(gm->desc, -1, &(om->desc))) != eslOK) goto ERROR;
+  strcpy(om->ref,       gm->rf);
+  strcpy(om->cs,        gm->cs);
+  strcpy(om->consensus, gm->consensus);
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
 
@@ -199,10 +223,10 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->tec  = unbiased_charify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
   /* tjb is length dependent; see ReconfigLength() for setting, below */
 
-  om->nj   = gm->nj;
   om->mode = gm->mode;
   om->L    = gm->L;
   om->M    = gm->M;
+  om->nj   = gm->nj;
   return eslOK;
 
  ERROR:

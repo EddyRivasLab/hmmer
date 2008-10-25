@@ -39,6 +39,7 @@
      {\end{list}}
        
 \DefineVerbatimEnvironment{sreoutput}{Verbatim}{fontsize=\scriptsize,xleftmargin=2.0\parindent}%
+\DefineVerbatimEnvironment{tinysreoutput}{Verbatim}{fontsize=\tiny,xleftmargin=2.0\parindent}%
 
 \makeatletter
 \newcommand{\listoffaqs}{\@starttoc{faq}}
@@ -58,7 +59,7 @@
 %   \ccode{}    for an inlined C code phrase
 \newcommand{\software}[1]{\textsc{#1}}
 \newcommand{\database}[1]{\textsc{#1}}
-\newcommand{\prog}[1]{{\small\bfseries\texttt{#1}}}
+\newcommand{\prog}[1]{{\small\texttt{#1}}}
 \newcommand{\emprog}[1]{{\small\bfseries\texttt{#1}}}
 \newcommand{\user}[1]{\indent\indent{\small\bfseries\texttt{> #1}}}
 \newcommand{\response}[1]{\indent\indent{\small\bfseries\texttt{#1}}}

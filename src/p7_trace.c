@@ -698,7 +698,7 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ 
       fprintf(fp, "--  ----   ----\n");
       for (z = 0; z < tr->N; z++) {
 	fprintf(fp, "%1s  %4d %6d\n", 
-		p7_hmm_DescribeStatetype(tr->st[z]),
+		p7_hmm_DecodeStatetype(tr->st[z]),
 		tr->k[z],
 		tr->i[z]);
       } 
@@ -723,7 +723,7 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ 
 	    }
 	  else tsc = 0.0f;
 
-	  fprintf(fp, "%1s  %4d %6d  %8.4f", p7_hmm_DescribeStatetype(tr->st[z]),  tr->k[z], tr->i[z], tsc);
+	  fprintf(fp, "%1s  %4d %6d  %8.4f", p7_hmm_DecodeStatetype(tr->st[z]),  tr->k[z], tr->i[z], tsc);
 	  sc += tsc;
 	  
 	  if (dsq != NULL) {

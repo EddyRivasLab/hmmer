@@ -252,6 +252,30 @@ p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx)
 }
 
 
+/* Function:  p7_omx_Reuse()
+ * Synopsis:  Recycle an optimized DP matrix.
+ * Incept:    SRE, Wed Oct 22 11:31:00 2008 [Janelia]
+ *
+ * Purpose:   Recycles <ox> for re-use.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_omx_Reuse(P7_OMX *ox)
+{
+  ox->M              = 0;
+  ox->L              = 0;
+  ox->totscale       = 0.0;
+  ox->has_own_scales = TRUE;	/* default assumes a Forward matrix, with its own scale factors */
+#ifdef p7_DEBUGGING
+  ox->debugging      = FALSE;
+  ox->dfp            = NULL;
+#endif
+  return eslOK;
+}
+
+
+
 
 /* Function:  p7_omx_Destroy()
  * Synopsis:  Frees an optimized DP matrix.

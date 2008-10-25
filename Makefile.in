@@ -58,13 +58,13 @@ SHELL       = /bin/sh
 #
 PROGS = hmmalign\
 	hmmbuild\
-	hmmcalibrate\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
-	hmmindex\
 	hmmpfam\
-	hmmsearch
+	hmmpress\
+	hmmsearch\
+	hmmstat
 
 PVMPROGS = @PVMPROGS@
 
@@ -190,9 +190,12 @@ optcheck:
 
 
 tags:
-	etags src/*.c src/*.h Makefile.in
-	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in
-	etags -a src/impl_vmx/*.c src/impl_vmx/*.h src/impl_vmx/Makefile.in
+	etags src/*.c src/*.h src/p7_config.h.in Makefile.in 
+	etags -a documentation/userguide/*.tex documentation/userguide/Makefile
+	etags -a documentation/man/*.man  documentation/man/boilerplate
+	etags -a documentation/devguide/*.tex 
+	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in 
+	etags -a src/impl_vmx/*.c src/impl_vmx/*.h 
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 

@@ -72,13 +72,13 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="March 2008"
+HMMER_DATE="October 2008"
 HMMER_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.janelia.org/"
 
-EASEL_DATE="March 2008"
+EASEL_DATE="October 2008"
 EASEL_COPYRIGHT="Copyright (C) 2008 Howard Hughes Medical Institute. All rights reserved."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
@@ -102,6 +102,7 @@ AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
 AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
 AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
 AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
+AC_DEFINE_UNQUOTED(HMMER_URL,       "$HMMER_URL")
 
 AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
 AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")

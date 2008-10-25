@@ -1,4 +1,4 @@
-/* Display summary statistics for an HMM database (such as Pfam).
+/* hmmstat: display summary statistics for an HMM database.
  * 
  * Example:
  *  ./hmmstat Pfam
@@ -6,7 +6,6 @@
  * SRE, Thu May 24 11:18:20 2007
  * SVN $Id$
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>

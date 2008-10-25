@@ -114,19 +114,39 @@ typedef struct p7_oprofile_s {
   __m128   *tf_mem;
   __m128   *rf_mem;
 
+  /* Disk offset information for hmmpfam's fast model retrieval                */
+  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET */
+
   /* Information copied from parent profile:                                       */
   char  *name;			/* unique name of model                            */
+  char  *acc;			/* unique accession of model, or NULL              */
+  char  *desc;                  /* brief (1-line) description of model, or NULL    */
+  char  *ref;                   /* reference line           1..M; *ref=0: unused   */
+  char  *cs;                    /* consensus structure line 1..M, *cs=0: unused    */
+  char  *consensus;		/* consensus residues for ali display, 1..M        */
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values             */
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gather, trust, noise cutoffs */
-  float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit     */
+
   int    mode;			/* p7_LOCAL, for example                           */
   int    L;			/* current configured target seq length            */
   int    allocM;		/* maximum model length currently allocated for    */
   int    M;			/* model length                                    */
+  float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit     */
   const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information             */
 } P7_OPROFILE;
 
 
+/* s = p7O_MSC or p7O_ISC */
+static inline float 
+p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x, int s)
+{
+  union { __m128 v; float p[4]; } u;
+  int   Q = p7O_NQF(om->M);
+  int   q = p7O_NR * ((k-1) % Q) + s;
+  int   r = (k-1)/Q;
+  u.v = om->rf[x][q];
+  return u.p[r];
+}
 
 /*****************************************************************
  * 2. P7_OMX: a one-row dynamic programming matrix
@@ -192,7 +212,7 @@ typedef struct p7_omx_s {
 #define IMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
 
 static inline float
-p7_omx_FGetMDI(P7_OMX *ox, int s, int i, int k)
+p7_omx_FGetMDI(const P7_OMX *ox, int s, int i, int k)
 {
   union { __m128 v; float p[4]; } u;
   int   Q = p7O_NQF(ox->M);
@@ -203,7 +223,7 @@ p7_omx_FGetMDI(P7_OMX *ox, int s, int i, int k)
 }
 
 static inline void
-p7_omx_FSetMDI(P7_OMX *ox, int s, int i, int k, float val)
+p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
 {
   union { __m128 v; float p[4]; } u;
   int   Q = p7O_NQF(ox->M);
@@ -225,6 +245,7 @@ p7_omx_FSetMDI(P7_OMX *ox, int s, int i, int k, float val)
 extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
 extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
 extern int          p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx);
+extern int          p7_omx_Reuse  (P7_OMX *ox);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
@@ -258,6 +279,12 @@ extern int p7_Forward       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,  
 extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
 extern int p7_Backward      (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+
+/* io.c */
+extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
+extern int p7_oprofile_ReadMSV (P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_OPROFILE **ret_om);
+extern int p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om);
+
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

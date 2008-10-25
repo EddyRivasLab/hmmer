@@ -26,9 +26,13 @@ MYLIBDIRS = -L../easel -L.
 MYINCDIRS = -I../easel -I.
 IMPLDIR   = impl_@IMPL_CHOICE@
 
-PROGS = hmmbuild\
+PROGS = hmmalign\
+	hmmbuild\
+	hmmconvert\
 	hmmemit\
 	hmmfetch\
+	hmmpfam\
+	hmmpress\
 	hmmsearch\
 	hmmsim\
 	hmmstat
@@ -36,7 +40,8 @@ PROGS = hmmbuild\
 HDRS =  hmmer.h\
 	p7_config.h
 
-OBJS =  build.o\
+OBJS =  align.o\
+	build.o\
 	emit.o\
 	errors.o\
 	evalues.o\

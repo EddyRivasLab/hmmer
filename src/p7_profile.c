@@ -334,14 +334,14 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_B: tsc =  gm->xsc[p7P_N][p7P_MOVE]; break;
     case p7T_N: tsc =  gm->xsc[p7P_N][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
   case p7T_B:
     switch (st2) {
     case p7T_M:  tsc = p7P_TSC(gm, k2-1, p7P_BM); break; /* remember, B->Mk is stored in [k-1][p7P_BM] */
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -354,7 +354,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
       if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (M%d of %d) in non-local model", k1, gm->M);
       tsc = 0.0f;		/* by def'n in H3 local alignment */
       break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DescribeStatetype(st1), k1, p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -366,7 +366,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
       if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (D%d of %d) in non-local model", k1, gm->M);
       tsc = 0.0f;		/* by def'n in H3 local alignment */
       break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DescribeStatetype(st1), k1, p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -374,7 +374,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_M: tsc = p7P_TSC(gm, k1, p7P_IM); break;
     case p7T_I: tsc = p7P_TSC(gm, k1, p7P_II); break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DescribeStatetype(st1), k1, p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -382,7 +382,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_C: tsc = gm->xsc[p7P_E][p7P_MOVE]; break;
     case p7T_J: tsc = gm->xsc[p7P_E][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -390,7 +390,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_B: tsc = gm->xsc[p7P_J][p7P_MOVE]; break;
     case p7T_J: tsc = gm->xsc[p7P_J][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -398,7 +398,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_T:  tsc = gm->xsc[p7P_C][p7P_MOVE]; break;
     case p7T_C:  tsc = gm->xsc[p7P_C][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DescribeStatetype(st1), p7_hmm_DescribeStatetype(st2));
+    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 

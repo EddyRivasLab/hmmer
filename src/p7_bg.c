@@ -140,7 +140,9 @@ void
 p7_bg_Destroy(P7_BG *bg)
 {
   if (bg != NULL) {
-    if (bg->f != NULL) free(bg->f);
+    if (bg->f     != NULL) free(bg->f);
+    if (bg->mcomp != NULL) free(bg->mcomp);
+    if (bg->fhmm  != NULL) esl_hmm_Destroy(bg->fhmm);
     free(bg);
   }
   return;

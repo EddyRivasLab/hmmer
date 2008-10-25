@@ -97,14 +97,15 @@ p7_hmm_CreateShell(void)
   hmm->cs       = NULL;
   hmm->ca       = NULL;
   hmm->comlog   = NULL; 
-  hmm->nseq     = 0;
-  hmm->eff_nseq = 0;
+  hmm->nseq     = -1;
+  hmm->eff_nseq = -1.0;
   hmm->ctime    = NULL;
   hmm->map      = NULL;
   hmm->checksum = 0;
 
   for (z = 0; z < p7_NCUTOFFS; z++) hmm->cutoff[z]  = 0.0f;
   for (z = 0; z < p7_NEVPARAM; z++) hmm->evparam[z] = 0.0f;
+  for (z = 0; z < p7_MAXABET;  z++) hmm->compo[z]   = 0.0f;
 
   hmm->offset   = 0;
   hmm->flags    = 0;
@@ -271,14 +272,14 @@ p7_hmm_Clone(const P7_HMM *hmm)
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
   p7_hmm_CopyParameters(hmm, new);
   
-  if (hmm->name != NULL    && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
-  if (hmm->acc  != NULL    && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
-  if (hmm->desc != NULL    && (status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
-  if (hmm->flags & p7H_RF  && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
-  if (hmm->flags & p7H_CS  && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
-  if (hmm->flags & p7H_CA  && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
-  if (hmm->comlog != NULL  && (status = esl_strdup(hmm->comlog, -1, &(new->comlog))) != eslOK) goto ERROR;
-  if (hmm->ctime  != NULL  && (status = esl_strdup(hmm->ctime,  -1, &(new->ctime)))  != eslOK) goto ERROR;
+  if (hmm->name != NULL      && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_ACC) && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_DESC)&& (status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_RF)  && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CS)  && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CA)  && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
+  if ((hmm->comlog != NULL)  && (status = esl_strdup(hmm->comlog, -1, &(new->comlog))) != eslOK) goto ERROR;
+  if ((hmm->ctime  != NULL)  && (status = esl_strdup(hmm->ctime,  -1, &(new->ctime)))  != eslOK) goto ERROR;
   if (hmm->flags & p7H_MAP) {
     ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
     esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
@@ -289,6 +290,7 @@ p7_hmm_Clone(const P7_HMM *hmm)
 
   for (z = 0; z < p7_NEVPARAM; z++) new->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) new->cutoff[z]  = hmm->cutoff[z];
+  for (z = 0; z < p7_MAXABET;  z++) new->compo[z]   = hmm->compo[z];
 
   new->offset   = hmm->offset;
   new->flags    = hmm->flags;
@@ -326,7 +328,9 @@ p7_hmm_Scale(P7_HMM *hmm, double scale)
 /* Function:  p7_hmm_Zero()
  * Incept:    SRE, Mon Jan  1 16:32:59 2007 [Casa de Gatos]
  *
- * Purpose:   Zeroes the counts/probabilities fields in core model.
+ * Purpose:   Zeroes all counts/probabilities fields in core model,
+ *            including emissions, transitions, and model
+ *            composition.
  *
  * Returns:   <eslOK> on success.
  */
@@ -340,20 +344,51 @@ p7_hmm_Zero(P7_HMM *hmm)
     esl_vec_FSet(hmm->mat[k], hmm->abc->K, 0.);  
     esl_vec_FSet(hmm->ins[k], hmm->abc->K, 0.);  
   }
+  esl_vec_FSet(hmm->compo, p7_MAXABET, 0.);
   return eslOK;
 }
 
 
 
-/* Function:  p7_hmm_DescribeStatetype()
+/* Function:  p7_hmm_EncodeStatetype()
+ * Synopsis:  Convert a state type string to internal code.
+ * Incept:    SRE, Sat Oct 25 10:48:43 2008 [Janelia]
+ *
+ * Purpose:   Converts state type string <typestring> case insensitively to
+ *            an internal code, and returns the code. For example,
+ *            <p7_hmm_DecodeStatetype("M")> returns <p7T_M>.
+ *            
+ *            If the string isn't recognized, returns <p7T_BOGUS>.
+ */
+char
+p7_hmm_EncodeStatetype(char *typestring)
+{
+  if      (strcasecmp(typestring, "M") == 0) return p7T_M;
+  else if (strcasecmp(typestring, "D") == 0) return p7T_D;
+  else if (strcasecmp(typestring, "I") == 0) return p7T_I;
+  else if (strcasecmp(typestring, "S") == 0) return p7T_S;
+  else if (strcasecmp(typestring, "N") == 0) return p7T_N;
+  else if (strcasecmp(typestring, "B") == 0) return p7T_B;
+  else if (strcasecmp(typestring, "E") == 0) return p7T_E;
+  else if (strcasecmp(typestring, "C") == 0) return p7T_C;
+  else if (strcasecmp(typestring, "T") == 0) return p7T_T;
+  else if (strcasecmp(typestring, "J") == 0) return p7T_J;
+  else if (strcasecmp(typestring, "X") == 0) return p7T_X;
+  else return p7T_BOGUS;
+}
+
+/* Function:  p7_hmm_DecodeStatetype()
  * Incept:    SRE, Mon Jan  1 18:47:34 2007 [Casa de Gatos]
  *
  * Purpose:   Returns the state type in text, as a string of length 1 
- *            (2 if you count NUL). For example, <p7_Statetype(p7T_S)>
+ *            (2 if you count <NUL>). For example, <p7_DecodeStatetype(p7T_S)>
  *            returns "S".
+ *            
+ * Throws:    an internal <eslEINVAL> exception if the code doesn't 
+ *            exist, and returns <NULL>.           
  */
 char *
-p7_hmm_DescribeStatetype(char st)
+p7_hmm_DecodeStatetype(char st)
 {
   switch (st) {
   case p7T_M: return "M";
@@ -366,8 +401,10 @@ p7_hmm_DescribeStatetype(char st)
   case p7T_C: return "C";
   case p7T_T: return "T";
   case p7T_J: return "J";
-  default:     return "?";
+  default:    break;
   }
+  esl_exception(eslEINVAL, __FILE__, __LINE__, "no such statetype code %d", st);
+  return NULL;
 }
 
 
@@ -559,6 +596,8 @@ p7_hmm_SetCtime(P7_HMM *hmm)
   if (s != NULL) free(s);
   return status;
 }
+
+
 
 /* Function:  p7_hmm_SetComposition()
  * Synopsis:  Calculate and set model composition, <hmm->compo[]>
@@ -775,15 +814,11 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
   hmm->t[M][p7H_DM] = 1.0;
   hmm->t[M][p7H_DD] = 0.0;
   
-  /* Add mandatory annotation
-   */
+  /* Add mandatory annotation, and some relevant optional annotation  */
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  hmm->nseq     = 0;
-  hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
-  hmm->checksum = 0;
-
+  
   *ret_hmm = hmm;
   return eslOK;
   
@@ -895,10 +930,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
    */
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  hmm->nseq     = 0;
-  hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
-  hmm->checksum = 0;
 
   /* SRE DEBUGGING */
   p7_hmm_Validate(hmm, NULL, 0.0001);
@@ -969,10 +1001,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
    */
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  hmm->nseq     = 0;
-  hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
-  hmm->checksum = 0;
 
   *ret_hmm = hmm;
   return eslOK;
@@ -1078,40 +1107,41 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
       if (esl_vec_FValidate(hmm->t[k]+3, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_I[%d] fails pvector validation", k);
       if (esl_vec_FValidate(hmm->t[k]+5, 2,           tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "t_D[%d] fails pvector validation", k);
     }
-  if (hmm->t[hmm->M][p7H_MD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TMD should be 0 for last node");
-  if (hmm->t[hmm->M][p7H_DM] != 1.0) ESL_XFAIL(eslFAIL, errbuf, "TDM should be 1 for last node");
-  if (hmm->t[hmm->M][p7H_DD] != 0.0) ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
+  if (hmm->t[hmm->M][p7H_MD] != 0.0)                       ESL_XFAIL(eslFAIL, errbuf, "TMD should be 0 for last node");
+  if (hmm->t[hmm->M][p7H_DM] != 1.0)                       ESL_XFAIL(eslFAIL, errbuf, "TDM should be 1 for last node");
+  if (hmm->t[hmm->M][p7H_DD] != 0.0)                       ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
 
-  /* Don't be strict about mandatory name, comlog, ctime for now in development */
-  /*  if (hmm->name     == NULL) return eslFAIL; */
-  /*  if (hmm->comlog   == NULL) return eslFAIL; */
-  /*  if (hmm->ctime    == NULL) return eslFAIL;  */
-  if (hmm->nseq     <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid nseq");
-  if (hmm->eff_nseq <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid eff_nseq");
-  if (hmm->checksum <  0 )   ESL_XFAIL(eslFAIL, errbuf, "invalid checksum");
+  if (hmm->name == NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "name is NULL: this field is mandatory");
+  if ( (hmm->flags & p7H_ACC)    && hmm->acc  == NULL)     ESL_XFAIL(eslFAIL, errbuf, "accession null but p7H_ACC flag is up");
+  if (!(hmm->flags & p7H_ACC)    && hmm->acc  != NULL)     ESL_XFAIL(eslFAIL, errbuf, "accession present but p7H_ACC flag is down");
+  if ( (hmm->flags & p7H_DESC)   && hmm->desc == NULL)     ESL_XFAIL(eslFAIL, errbuf, "description null but p7H_DESC flag is up");
+  if (!(hmm->flags & p7H_DESC)   && hmm->desc != NULL)     ESL_XFAIL(eslFAIL, errbuf, "description present but p7H_DESC flag is down");
+  /* comlog is either NULL or a free text string: hard to validate */
+  /* ctime, ditto */
+  if ( (hmm->nseq     != -1)     && hmm->nseq     <= 0)    ESL_XFAIL(eslFAIL, errbuf, "invalid nseq");
+  if ( (hmm->eff_nseq != -1.0f)  && hmm->eff_nseq <= 0.0f) ESL_XFAIL(eslFAIL, errbuf, "invalid eff_nseq");
+  if (!(hmm->flags & p7H_CHKSUM) && hmm->checksum != 0 )   ESL_XFAIL(eslFAIL, errbuf, "p7H_CHKSUM flag down, but nonzero checksum present"); 
 
-  if (  (hmm->flags & p7H_ACC)  && hmm->acc  == NULL) ESL_XFAIL(eslFAIL, errbuf, "accession null but p7H_ACC flag is up");
-  if (! (hmm->flags & p7H_ACC)  && hmm->acc  != NULL) ESL_XFAIL(eslFAIL, errbuf, "accession present but p7H_ACC flag is down");
-  if (  (hmm->flags & p7H_DESC) && hmm->desc == NULL) ESL_XFAIL(eslFAIL, errbuf, "description null but p7H_DESC flag is up");
-  if (! (hmm->flags & p7H_DESC) && hmm->desc != NULL) ESL_XFAIL(eslFAIL, errbuf, "description present but p7H_DESC flag is down");
   if (hmm->flags & p7H_RF) {
-    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag up, but rf string is invalid");
+    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1)    ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag up, but rf string is invalid");
   } else 
-    if (hmm->rf != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag down, but rf string is present");
+    if (hmm->rf != NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag down, but rf string is present");
   if (hmm->flags & p7H_CS) {
-    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag up, but cs string is invalid");
+    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1)    ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag up, but cs string is invalid");
   } else 
-    if (hmm->cs != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag down, but cs string is present");
+    if (hmm->cs != NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag down, but cs string is present");
   if (hmm->flags & p7H_CA) {
-    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag up, but ca string is invalid");
+    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1)    ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag up, but ca string is invalid");
   } else 
-    if (hmm->ca != NULL)                                ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag down, but ca string is present");
-  if (  (hmm->flags & p7H_MAP) && hmm->map == NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag up, but map string is null");
-  if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)      ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
+    if (hmm->ca != NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag down, but ca string is present");
+  if (  (hmm->flags & p7H_MAP) && hmm->map == NULL)        ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag up, but map string is null");
+  if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)        ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
 
   if (hmm->flags & p7H_STATS) {
     if (hmm->evparam[p7_LAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
   }
+  if (hmm->flags & p7H_COMPO && esl_vec_FValidate(hmm->compo, hmm->abc->K, tol, NULL) != eslOK)
+    ESL_XFAIL(eslFAIL, errbuf, "composition fails pvector validation");
 
   return eslOK;
 

@@ -60,7 +60,7 @@
  *            fails. In either case, <*buf> and <*nalloc> remain valid and useful
  *            memory (though the contents of <*buf> are undefined). 
  * 
- * Note:      Compare to p7_hmmfile_Write(). The two operations (sending
+ * Note:      Compare to p7_hmmfile_WriteBinary(). The two operations (sending
  *            an HMM via MPI, or saving it as a binary file to disk) are
  *            similar.
  */

@@ -682,8 +682,8 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
       return eslOK;
     }
 
-  if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))  != eslOK) return status;
-  if ((status = p7_hmmfile_Write(cfg->hmmfp, hmm))     != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
+  if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))   != eslOK) return status;
+  if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
   if (! cfg->be_verbose)	/* tabular output */
     {                    /* #   name nseq alen M */
@@ -972,9 +972,11 @@ stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MS
 
   if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Logging information");    fflush(cfg->ofp); }
 
-  if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv)) != eslOK) ESL_FAIL(status, errbuf, "Failed to record command log");
-  if ((status = p7_hmm_SetCtime(hmm))                         != eslOK) ESL_FAIL(status, errbuf, "Failed to record timestamp");
-  if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))      != eslOK) ESL_FAIL(status, errbuf, "Failed to record checksum"); 
+  if ((status = p7_hmm_SetAccession  (hmm, msa->acc))           != eslOK) ESL_FAIL(status, errbuf, "Failed to record MSA accession");
+  if ((status = p7_hmm_SetDescription(hmm, msa->desc))          != eslOK) ESL_FAIL(status, errbuf, "Failed to record MSA description");
+  if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv))   != eslOK) ESL_FAIL(status, errbuf, "Failed to record command log");
+  if ((status = p7_hmm_SetCtime(hmm))                           != eslOK) ESL_FAIL(status, errbuf, "Failed to record timestamp");
+  if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))        != eslOK) ESL_FAIL(status, errbuf, "Failed to record checksum"); 
 
   if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
   return eslOK;

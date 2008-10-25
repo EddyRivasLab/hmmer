@@ -1,11 +1,5 @@
 /* General routines used throughout HMMER.
- * 
- * Internally, HMMER profiles work in scaled integer log-odds (SILO)
- * scores.  The dynamic range of SILO scores is controlled by
- * p7_INTSCALE at compile time (p7_INTSCALE defaults to
- * 1000). Externally, HMMER reports real-numbered bit scores.
- * The code refers to "SILO score" and "bit score" to differentiate.
- * 
+ *
  * SRE, Fri Jan 12 13:19:38 2007 [Janelia] [Franz Ferdinand, eponymous]
  * SVN $Id$
  */
@@ -65,7 +59,7 @@ p7_banner(FILE *fp, char *progname, char *banner)
   if (esl_FileTail(progname, FALSE, &appname) != eslOK) appname = progname;
 
   fprintf(fp, "# %s :: %s\n", appname, banner);
-  fprintf(fp, "# HMMER %s (%s)\n", HMMER_VERSION, HMMER_DATE);
+  fprintf(fp, "# HMMER %s (%s); %s\n", HMMER_VERSION, HMMER_DATE, HMMER_URL);
   fprintf(fp, "# %s\n", HMMER_COPYRIGHT);
   fprintf(fp, "# %s\n", HMMER_LICENSE);
   fprintf(fp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
@@ -74,35 +68,6 @@ p7_banner(FILE *fp, char *progname, char *banner)
   return;
 }
 
-
-
-/* Function:  p7_SILO2Lod()
- * Synopsis:  Convert a scaled integer score to a lod score.
- * Incept:    SRE, Wed Jul 18 08:52:19 2007 [Janelia]
- *
- * Purpose:   Convert a SILO (scaled integer log-odds) score
- *            to a lod score.
- *            
- *            HMMER3 normally works internally in floating-point log
- *            odds probabilities, in nats. Some alternate/optimized
- *            implementations of alignment algorithms (Viterbi,
- *            Forward) work in scaled integer scores called SILO
- *            scores. These routines must convert their final answer
- *            back to lod score form before returning it to H3.
- *            
- *            Beside simply descaling and casting to a float, the
- *            conversion needs to be careful to convert the integer
- *            <p7_IMPOSSIBLE> to $\-infty$; and indeed, anything
- *            within shouting range of <p7_IMPOSSIBLE>, because we may
- *            have added a positive score to an impossible value.
- *
- */
-float
-p7_SILO2Lod(int silo)
-{
-  if (silo <= p7_IMPOSSIBLE + 10 * p7_INTSCALE) return -eslINFINITY; /* anything within 10 nats of impossible is impossible */
-  else return (float) silo / p7_INTSCALE;
-}
 
 
 /* Function:  p7_AminoFrequencies()

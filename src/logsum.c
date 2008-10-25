@@ -2,12 +2,11 @@
  * 
  * Contents:
  *    1. Floating point log sum.
- *    2. Scaled integer log sum.
- *    3. Benchmark driver.
- *    4. Unit tests.
- *    5. Test driver.
- *    6. Example.
- *    7. Copyright and license information.
+ *    2. Benchmark driver.
+ *    3. Unit tests.
+ *    4. Test driver.
+ *    5. Example.
+ *    6. Copyright and license information.
  *
  * Exegesis:
  * 
@@ -47,7 +46,6 @@
 #include "hmmer.h"
 
 static float flogsum_lookup[p7_LOGSUM_TBL];
-static int   ilogsum_lookup[p7_LOGSUM_TBL];
 
 /*****************************************************************
  *= 1. floating point log sum
@@ -129,59 +127,9 @@ p7_FLogsumError(float a, float b)
   return (exp(approx) - exp(exact));
 }
 
-/*****************************************************************
- *= 2. scaled integer version
- *****************************************************************/
-
-
-/* Function:  p7_ILogsumInit()
- * Synopsis:  Initialize the p7_ILogsum() function.
- * Incept:    SRE, Thu Apr 10 08:54:24 2008 [Janelia]
- *
- * Purpose:   One-time initialization of the lookup table for
- *            <p7_ILogsum()>.  This must be done once before any call
- *            to <p7_ILogsum()>.
- *            
- *            The precision of both the lookup table and the scaled
- *            integers that will be logsummed is determined by the
- *            compile-time <p7_INTSCALE> constant.
- *
- * Returns:   <eslOK> on success
- */
-int
-p7_ILogsumInit(void)
-{
-  static int firsttime = TRUE;
-  if (!firsttime)  return eslOK;
-  firsttime = FALSE;
-    
-  int i;
-  for (i = 0; i < p7_LOGSUM_TBL; i++) 
-    ilogsum_lookup[i] = rint(p7_INTSCALE * (log(1.+exp((double) -i/p7_INTSCALE))));
-  return eslOK;
-
-}
-
-/* Function:  p7_ILogsum()
- * Synopsis:  Approximate scaled integer log of $(e^a + e^b)$
- * Incept:    SRE, Thu Apr 10 08:58:42 2008 [Janelia]
- *
- * Purpose:   Returns the scaled integer logarithm of 
- *            $e^a + e^b$ where $a,b$ are both scaled integer
- *            logarithms, using the <p7_INTSCALE> compile-time
- *            constant.
- */
-int 
-p7_ILogsum(int a, int b)
-{
-  const int max = ESL_MAX(p7_IMPOSSIBLE, ESL_MAX(a, b));
-  const int min = ESL_MIN(a, b);
-  return  (min <= p7_IMPOSSIBLE || (max-min) >= p7_LOGSUM_TBL) ? max : max + ilogsum_lookup[max-min];
-} 
-
 
 /*****************************************************************
- * 3. Benchmark driver.
+ * 2. Benchmark driver.
  *****************************************************************/
 #ifdef p7LOGSUM_BENCHMARK
 /* gcc -o benchmark -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_BENCHMARK logsum.c -leasel -lm
@@ -296,7 +244,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Unit tests
+ * 3. Unit tests
  *****************************************************************/
 #ifdef p7LOGSUM_TESTDRIVE
 
@@ -354,7 +302,7 @@ utest_FLogsumSpecials(void)
 /*------------------- end, unit tests ---------------------------*/
 
 /*****************************************************************
- * 5. Test driver.
+ * 4. Test driver.
  *****************************************************************/
 #ifdef p7LOGSUM_TESTDRIVE
 /*
@@ -408,7 +356,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Example.
+ * 5. Example.
  *****************************************************************/
 #ifdef p7LOGSUM_EXAMPLE
 /* gcc -o example -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_EXAMPLE logsum.c -leasel -lm

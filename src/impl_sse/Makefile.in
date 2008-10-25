@@ -20,6 +20,7 @@ MYINCDIRS      = -I../../easel -I..
 
 OBJS =  decoding.o\
 	fwdback.o\
+	io.o\
 	null2.o\
 	optacc.o\
 	msvfilter.o\

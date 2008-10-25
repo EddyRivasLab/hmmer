@@ -47,8 +47,8 @@
 #include "hmmer.h"
 
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
-static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2, 
+static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2, 
 				   int i, int j, int null2_is_done);
 
 
@@ -351,7 +351,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  * Synopsis:  Define domains in a sequence using posterior probs.
  * Incept:    SRE, Sat Feb 23 08:17:44 2008 [Janelia]
  *
- * Purpose:   Given a sequence <sq> and model <gm> for which we have 
+ * Purpose:   Given a sequence <sq> and model <om> for which we have 
  *            already calculated a Forward and Backward parsing matrices
  *            <oxf> and <oxb>; use posterior probability heuristics
  *            to determine an annotated domain structure; and for
@@ -372,7 +372,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            models. 
  */
 int
-p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE *om, 
+p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
 				   P7_DOMAINDEF *ddef)
 {
@@ -424,7 +424,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 	       */
 	      p7_oprofile_ReconfigMultihit(om, saveL);
 	      p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
-	      region_trace_ensemble(ddef, gm, om, sq->dsq, i, j, fwd, bck, &nc);
+	      region_trace_ensemble(ddef, om, sq->dsq, i, j, fwd, bck, &nc);
 	      p7_oprofile_ReconfigUnihit(om, saveL);
 	      /* ddef->n2sc is now set on i..j by the traceback-dependent method */
 
@@ -442,7 +442,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 		   in the output.
 		 */
 		ddef->nenvelopes++;
-		if (rescore_isolated_domain(ddef, gm, om, sq, fwd, bck, i2, j2, TRUE) == eslOK) 
+		if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE) == eslOK) 
 		  last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
@@ -452,7 +452,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE
 	    {
 	      /* The region looks simple, single domain; convert the region to an envelope. */
 	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, gm, om, sq, fwd, bck, i, j, FALSE);
+	      rescore_isolated_domain(ddef, om, sq, fwd, bck, i, j, FALSE);
 	    }
 	  i     = -1;
 	  triggered = FALSE;
@@ -565,7 +565,7 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
  * <wrk> has had its zero row clobbered as working space for a null2 calculation.
  */
 static int
-region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, 
+region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, 
 		      const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc)
 {
   int    Lr  = jreg-ireg+1;
@@ -668,10 +668,6 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFIL
  * (efficiently, we trust) managing any necessary temporary working
  * space and heuristic thresholds.
  * 
- * <gm> is also needed - solely because we need to pass it to
- * alidisplay creation. We could remove this dependency, and work
- * only with <om> and access functions.                      
- * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
  * registered in <ddef>, in <ddef->dcl>.
@@ -692,7 +688,7 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFIL
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROFILE *om, const ESL_SQ *sq, 
+rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ *sq, 
 			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done)
 {
   P7_DOMAIN     *dom           = NULL;
@@ -745,7 +741,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_PROFILE *gm, const P7_OPROF
   dom->jenv          = j;
   dom->envsc         = envsc;
   dom->domcorrection = domcorrection;
-  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, gm, sq);
+  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   ddef->ndom++;
 
   p7_trace_Reuse(ddef->tr);

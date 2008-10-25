@@ -18,12 +18,12 @@
 
 
 /* Function:  p7_alidisplay_Create()
- * Synopsis:  Create an alignment display, from trace and profile.
+ * Synopsis:  Create an alignment display, from trace and oprofile.
  * Incept:    SRE, Sun Dec 30 09:13:31 2007 [Janelia]
  *
  * Purpose:   Creates and returns an alignment display for domain number
  *            <which> in traceback <tr>, where the traceback
- *            corresponds to an alignment of profile <gm> to digital sequence
+ *            corresponds to an alignment of optimized profile <om> to digital sequence
  *            <dsq>, and the unique name of that target
  *            sequence <dsq> is <sqname>. The <which> index starts at 0.
  *            
@@ -37,7 +37,7 @@
  *
  * Args:      tr     - traceback
  *            which  - domain number, 0..tr->ndom-1
- *            gm     - profile (query)
+ *            om     - optimized profile (query)
  *            sq     - digital sequence (target)
  *
  * Returns:   <eslOK> on success.
@@ -46,10 +46,10 @@
  *            in the data.
  */
 P7_ALIDISPLAY *
-p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq)
+p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq)
 {
   P7_ALIDISPLAY *ad       = NULL;
-  char          *Alphabet = gm->abc->sym;
+  char          *Alphabet = om->abc->sym;
   int            n, pos, z;
   int            z1,z2;
   int            k,x,i,s;
@@ -57,7 +57,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const 
   int            sq_namelen,  sq_acclen,  sq_desclen;
   int            status;
   
-  /* First figure out which piece of the trace (from M to M) 
+  /* First figure out which piece of the trace (from first match to last match) 
    * we're going to represent, and how big it is.
    */
   if (tr->ndom > 0) {		/* if we have an index, this is a little faster: */
@@ -86,12 +86,13 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const 
    * memory space, so this appears to be intricate, but it's just
    * bookkeeping.  
    */
-  n = (z2-z1+2) * 3;                 /* model, mline, aseq mandatory */
-  if (gm->rf[0] != 0) n += z2-z1+2;  /* optional reference line      */
-  if (gm->cs[0] != 0) n += z2-z1+2;  /* optional structure line      */
-  hmm_namelen = strlen(gm->name);                           n += hmm_namelen + 1;
-  hmm_acclen  = (gm->acc  != NULL ? strlen(gm->acc)  : 0);  n += hmm_acclen  + 1;
-  hmm_desclen = (gm->desc != NULL ? strlen(gm->desc) : 0);  n += hmm_desclen + 1;
+  n = (z2-z1+2) * 3;                     /* model, mline, aseq mandatory         */
+  if (om->ref[0] != 0)    n += z2-z1+2;  /* optional reference line              */
+  if (om->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
+  if (tr->pp     != NULL) n += z2-z1+2;  /* optional posterior prob line         */
+  hmm_namelen = strlen(om->name);                           n += hmm_namelen + 1;
+  hmm_acclen  = (om->acc  != NULL ? strlen(om->acc)  : 0);  n += hmm_acclen  + 1;
+  hmm_desclen = (om->desc != NULL ? strlen(om->desc) : 0);  n += hmm_desclen + 1;
   sq_namelen  = strlen(sq->name);                           n += sq_namelen  + 1;
   sq_acclen   = strlen(sq->acc);                            n += sq_acclen   + 1; /* sq->acc is "\0" when unset */
   sq_desclen  = strlen(sq->desc);                           n += sq_desclen  + 1; /* same for desc              */
@@ -101,11 +102,12 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const 
 
   pos = 0; 
   ESL_ALLOC(ad->mem, sizeof(char) * n);
-  if (gm->rf[0] != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
-  if (gm->cs[0] != 0) { ad->csline = ad->mem + pos; pos += z2-z1+2; } else { ad->csline = NULL; }
+  if (om->ref[0] != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
+  if (om->cs[0]  != 0) { ad->csline = ad->mem + pos; pos += z2-z1+2; } else { ad->csline = NULL; }
   ad->model   = ad->mem + pos;  pos += z2-z1+2;
   ad->mline   = ad->mem + pos;  pos += z2-z1+2;
   ad->aseq    = ad->mem + pos;  pos += z2-z1+2;
+  if (tr->pp != NULL)  { ad->ppline = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline = NULL; }
   ad->hmmname = ad->mem + pos;  pos += hmm_namelen +1;
   ad->hmmacc  = ad->mem + pos;  pos += hmm_acclen +1;
   ad->hmmdesc = ad->mem + pos;  pos += hmm_desclen +1;
@@ -113,9 +115,9 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const 
   ad->sqacc   = ad->mem + pos;  pos += sq_acclen +1;
   ad->sqdesc  = ad->mem + pos;  pos += sq_desclen +1;
 
-  strcpy(ad->hmmname, gm->name);
-  if (gm->acc  != NULL) strcpy(ad->hmmacc,  gm->acc);  else ad->hmmacc[0]  = 0;
-  if (gm->desc != NULL) strcpy(ad->hmmdesc, gm->desc); else ad->hmmdesc[0] = 0;
+  strcpy(ad->hmmname, om->name);
+  if (om->acc  != NULL) strcpy(ad->hmmacc,  om->acc);  else ad->hmmacc[0]  = 0;
+  if (om->desc != NULL) strcpy(ad->hmmdesc, om->desc); else ad->hmmdesc[0] = 0;
   strcpy(ad->sqname,  sq->name);
   strcpy(ad->sqacc,   sq->acc);
   strcpy(ad->sqdesc,  sq->desc);
@@ -128,17 +130,23 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const 
 
   /* optional rf line */
   if (ad->rfline != NULL) {
-    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : gm->rf[tr->k[z]]);
+    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->ref[tr->k[z]]);
     ad->rfline[z-z1] = '\0';
   }
 
   /* optional cs line */
   if (ad->csline != NULL) {
-    for (z = z1; z <= z2; z++) ad->csline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : gm->cs[tr->k[z]]);
+    for (z = z1; z <= z2; z++) ad->csline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->cs[tr->k[z]]);
     ad->csline[z-z1] = '\0';
   }
 
-  /* mandatory three alignment display lines */
+  /* optional pp line */
+  if (ad->ppline != NULL) {
+    for (z = z1; z <= z2; z++) ad->ppline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodePostProb(tr->pp[z]));
+    ad->ppline[z-z1] = '\0';
+  }
+
+  /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
     {
       k = tr->k[z];
@@ -148,31 +156,31 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const 
 
       switch (s) {
       case p7T_M:
-	ad->model[z-z1] = gm->consensus[k]; 
-	if      (x == esl_abc_DigitizeSymbol(gm->abc, gm->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
-	else if (p7P_MSC(gm, k, x) > 0)                                  ad->mline[z-z1] = '+';
+	ad->model[z-z1] = om->consensus[k]; 
+	if      (x == esl_abc_DigitizeSymbol(om->abc, om->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
+	else if (p7_oprofile_FGetEmission(om, k, x, p7O_MSC) > 0.0)      ad->mline[z-z1] = '+';
 	else                                                             ad->mline[z-z1] = ' ';
-	ad->aseq[z-z1] = toupper(Alphabet[x]);
+	ad->aseq  [z-z1] = toupper(Alphabet[x]);
 	break;
 	
       case p7T_I:
-	ad->model[z-z1] = '.';
-	ad->mline[z-z1] = ((p7P_ISC(gm, k, x) > 0) ? '+' : ' ');
-	ad->aseq[z-z1]  = tolower(Alphabet[x]);
+	ad->model [z-z1] = '.';
+	ad->mline [z-z1] = ((p7_oprofile_FGetEmission(om, k, x, p7O_ISC) > 0.0) ? '+' : ' ');
+	ad->aseq  [z-z1] = tolower(Alphabet[x]);
 	break;
 	
       case p7T_D:
-	ad->model[z-z1] = gm->consensus[k]; 
-	ad->mline[z-z1] = ' ';
-	ad->aseq[z-z1]  = '-';
+	ad->model [z-z1] = om->consensus[k]; 
+	ad->mline [z-z1] = ' ';
+	ad->aseq  [z-z1] = '-';
 	break;
 
       default: ESL_XEXCEPTION(eslEINVAL, "invalid state in trace: not M,D,I");
       }
     }
-  ad->model[z2-z1+1] = '\0';
-  ad->mline[z2-z1+1] = '\0';
-  ad->aseq [z2-z1+1] = '\0';
+  ad->model [z2-z1+1] = '\0';
+  ad->mline [z2-z1+1] = '\0';
+  ad->aseq  [z2-z1+1] = '\0';
   ad->N = z2-z1+1;
   return ad;
 
@@ -194,7 +202,6 @@ p7_alidisplay_Destroy(P7_ALIDISPLAY *ad)
 }
 
 
-
 static int
 integer_textwidth(long n)
 {
@@ -202,6 +209,31 @@ integer_textwidth(long n)
   while (n != 0) { n /= 10; w++; }
   return w;
 }
+
+/* Function:  p7_alidisplay_EncodePostProb()
+ * Synopsis:  Convert a posterior probability to a char code.
+ * Incept:    SRE, Thu Oct 23 08:20:20 2008 [Janelia]
+ *
+ * Purpose:   Convert the posterior probability <p> to
+ *            a character code suitable for Stockholm format
+ *            <#=GC PP_cons> and <#=GR seqname PP> annotation
+ *            lines. HMMER uses the same codes in alignment
+ *            output.
+ *            
+ *            Characters <0-9*> are used; $0.0 \leq p < 0.05$
+ *            is coded as 0, $0.05 \leq p < 0.15$ is coded as
+ *            1, ... and so on ..., $0.85 \leq p < 0.95$ is
+ *            coded as 9, and $0.95 \leq p \leq 1.0$ is coded
+ *            as '*'.
+ *
+ * Returns:   the encoded character.
+ */
+char
+p7_alidisplay_EncodePostProb(float p)
+{
+  return (p + 0.05 >= 1.0) ? '*' :  (char) ((p + 0.05) * 10.0) + '0';
+}
+
 
 /* Function:  p7_alidisplay_Print()
  * Synopsis:  Human readable output of <P7_ALIDISPLAY>
@@ -267,6 +299,8 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
       if (ni > 0) { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*ld %s %-*ld\n", namewidth, ad->sqname, coordwidth, i1,  buf, coordwidth, i2);  }
       else        { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, ad->sqname, coordwidth, "-", buf, coordwidth, "-"); }
 
+      if (ad->ppline != NULL) { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
+
       i1 += ni;
       k1 += nk;
     }
@@ -304,6 +338,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing",                                  0 },
+  { "-p",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "include fake PP line, just to see how it looks",   0 },
   { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of traces to generate",                     0 },
@@ -325,10 +360,11 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
   P7_TRACE       *tr      = NULL;
   ESL_SQ         *sq      = NULL;
   P7_ALIDISPLAY  *ad      = NULL;
-  int             i;
+  int             i,z;
 
 
   if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
@@ -343,8 +379,12 @@ main(int argc, char **argv)
   p7_bg_SetLength(bg, 0);
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, 0, p7_UNIGLOCAL); /* that sets N,C,J to generate nothing */
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
 
-  tr = p7_trace_Create();
+  if (esl_opt_GetBoolean(go, "-p")) tr = p7_trace_CreateWithPP();
+  else                              tr = p7_trace_Create();
+
   sq = esl_sq_CreateDigital(abc);
 
   esl_stopwatch_Start(w);
@@ -353,11 +393,16 @@ main(int argc, char **argv)
       p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
       esl_sq_SetName(sq, "random");
 
-      if (! esl_opt_GetBoolean(go, "-b")) {
-	ad = p7_alidisplay_Create(tr, 0, gm, sq);
-	p7_alidisplay_Print(stdout, ad, 40, 80);
-	p7_alidisplay_Destroy(ad);
-      }
+      if (! esl_opt_GetBoolean(go, "-b")) 
+	{
+	  if (esl_opt_GetBoolean(go, "-p")) 
+	    for (z = 0; z < tr->N; z++)
+	      if (tr->i[z] > 0) tr->pp[z] = esl_random(r);
+
+	  ad = p7_alidisplay_Create(tr, 0, om, sq);
+	  p7_alidisplay_Print(stdout, ad, 40, 80);
+	  p7_alidisplay_Destroy(ad);
+	}
       p7_trace_Reuse(tr);
       esl_sq_Reuse(sq);
     }
@@ -366,6 +411,7 @@ main(int argc, char **argv)
 
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
+  p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);

@@ -39,8 +39,7 @@
 #include "esl_histogram.h"      /* ESL_HISTOGRAM         */
 #include "esl_dirichlet.h"	/* ESL_MIXDCHLET         */
 
-/* Search modes.
- */
+/* Search modes. */
 #define p7_NO_MODE   0
 #define p7_LOCAL     1		/* multihit local:  "fs" mode   */
 #define p7_GLOCAL    2		/* multihit glocal: "ls" mode   */
@@ -50,15 +49,32 @@
 #define p7_IsLocal(mode)  (mode == p7_LOCAL || mode == p7_UNILOCAL)
 #define p7_IsMulti(mode)  (mode == p7_LOCAL || mode == p7_GLOCAL)
 
+#define p7_NEVPARAM 3	/* number of statistical parameters stored in models */
+#define p7_NCUTOFFS 6	/* number of Pfam score cutoffs stored in models     */
+#define p7_NOFFSETS 3	/* number of disk offsets stored in models for hmmpfam's fast model input */
+
+enum p7_evparams_e {  p7_LAMBDA = 0,      p7_MU = 1,     p7_TAU = 2 };
+enum p7_cutoffs_e  {     p7_GA1 = 0,     p7_GA2 = 1,     p7_TC1 = 2,   p7_TC2 = 3, p7_NC1 = 4, p7_NC2 = 5 };
+enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
+
+
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
  *****************************************************************/
 
-/* Flag codes for hmm->flags.
- * Flags marked with ! may not be changed nor used for other meanings;
- * such flags were stored in old HMM files, and we must preserve their
- * meaning to preserve reverse compatibility.
+/* Bit flags used in <hmm->flags>: optional annotation in an HMM
+ * 
+ * Flags marked with ! may not be changed nor used for other meanings,
+ * because they're codes used by HMMER2 (and earlier) that must be
+ * preserved for reverse compatibility with old HMMER files.
+ * 
+ * Why use flags? (So I don't ask this question of myself again:)
+ *   1. The way we allocate an HMM, we need to know if we're allocating
+ *      M-width annotation fields (RF, CS, CA, MAP) before we read the
+ *      annotation from the file.
+ *   2. Historically, H2 used flags, so we still need to read H2 flags
+ *      for backwards compatibility; so we may as well keep using them.
  */
 #define p7H_HASBITS (1<<0)    /* obsolete (was: model has log-odds scores)       !*/
 #define p7H_DESC    (1<<1)    /* description exists                              !*/
@@ -74,7 +90,9 @@
 #define p7H_TC      (1<<11)   /* trusted cutoffs available                       !*/
 #define p7H_NC      (1<<12)   /* noise cutoffs available                         !*/
 #define p7H_CA      (1<<13)   /* surface accessibilities available               !*/
-#define p7H_COMPO   (1<<14)   /* model-specific residue composition available    !*/
+#define p7H_COMPO   (1<<14)   /* model-specific residue composition available     */
+#define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
+
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
@@ -120,26 +138,25 @@ typedef struct p7_hmm_s {
    * optional values are set. All the char *'s are proper nul-terminated
    * strings, not just arrays. (hmm->map is an int array).
    */
-  char  *name;       /* name of the model                     (mandatory) */ /* String, \0-terminated */
-  char  *acc;	     /* accession number of model (Pfam)      (p7_ACC)    */ /* String, \0-terminated */
-  char  *desc;       /* brief (1-line) description of model   (p7_DESC)   */ /* String, \0-terminated */
-  char  *rf;         /* reference line from alignment 1..M    (p7_RF)     */ /* String; 0=' ', M+1='\0' */
-  char  *cs;         /* consensus structure line      1..M    (p7_CS)     */ /* String; 0=' ', M+1='\0' */
-  char  *ca;	     /* consensus accessibility line  1..M    (p7_CA)     */ /* String; 0=' ', M+1='\0' */
-  char  *comlog;     /* command line(s) that built model      (mandatory) */ /* String, \0-terminated */
-  int    nseq;	     /* number of training sequences          (mandatory) */
-  float  eff_nseq;   /* effective number of seqs (<= nseq)    (mandatory) */
-  char  *ctime;	     /* creation date                         (mandatory) */
-  int   *map;	     /* map of alignment cols onto model 1..M (p7_MAP)    */ /* Array; 0=0 */
-  int    checksum;   /* checksum of training sequences        (mandatory) */
+  char    *name;                 /* name of the model                     (mandatory)      */ /* String, \0-terminated   */
+  char    *acc;	                 /* accession number of model (Pfam)      (p7H_ACC)        */ /* String, \0-terminated   */
+  char    *desc;                 /* brief (1-line) description of model   (p7H_DESC)       */ /* String, \0-terminated   */
+  char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
+  char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
+  char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
+  char    *comlog;               /* command line(s) that built model      (optional: NULL) */ /* String, \0-terminated   */
+  int      nseq;	         /* number of training sequences          (optional: -1)   */
+  float    eff_nseq;             /* effective number of seqs (<= nseq)    (optional: -1)   */
+  char    *ctime;	         /* creation date                         (optional: NULL) */
+  int     *map;	                 /* map of alignment cols onto model 1..M (p7H_MAP)        */ /* Array; map[0]=0 */
+  uint32_t checksum;             /* checksum of training sequences        (p7H_CHKSUM)     */
+  float    evparam[p7_NEVPARAM]; /* E-value params                        (p7H_STATS)      */
+  float    cutoff[p7_NCUTOFFS];  /* Pfam score cutoffs                    (p7H_{GA,TC,NC}) */
+  float    compo[p7_MAXABET];    /* model bg residue comp                 (p7H_COMPO)      */
 
-  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values                        */
-  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gathering, trusted, noise cutoffs       */
-  float  compo[p7_MAXABET];	/* model's background residue composition (optional: p7_COMPO)*/
-
-  off_t  offset;              /* HMM record offset on disk */
-  int    flags;               /* status flags */
-  const ESL_ALPHABET *abc;    /* ptr to alphabet info (hmm->abc->K is alphabet size) */
+  off_t    offset;               /* HMM record offset on disk                              */
+  const ESL_ALPHABET *abc;       /* ptr to alphabet info (hmm->abc->K is alphabet size)    */
+  int      flags;                /* status flags                                           */
 } P7_HMM;
 
 
@@ -302,16 +319,24 @@ typedef struct p7_trace_s {
  *****************************************************************/
 
 typedef struct p7_hmmfile_s {
-  FILE         *f;		 /* pointer to stream for reading                */
-  char         *fname;	         /* name of the HMM file; [STDIN] if -           */
+  FILE         *f;		 /* pointer to stream for reading models                 */
+  char         *fname;	         /* (fully qualified) name of the HMM file; [STDIN] if - */
+  ESL_SSI      *ssi;		 /* open SSI index for model file <f>; NULL if none.     */
+
+  int           do_gzip;	/* TRUE if f is "gzip -dc |" (will pclose(f))           */ 
+  int           do_stdin;       /* TRUE if f is stdin (won't close f)                   */
+  int           newly_opened;	/* TRUE if we just opened the stream (and parsed magic) */
+  int           is_pressed;	/* TRUE if a pressed HMM database file (Pfam or equiv)  */
 
   int (*parser)(struct p7_hmmfile_s *, ESL_ALPHABET **, P7_HMM **);  /* parsing function */
+  ESL_FILEPARSER *efp;
 
-  int           do_gzip;	/* TRUE if f is "gzip -dc |" (will pclose(f))    */ 
-  int           do_stdin;       /* TRUE if f is stdin (won't close f)            */
-  ESL_SSI      *ssi;		/* open SSI index file; or NULL if none.         */
+  /* If <is_pressed>, we can read optimized profiles directly, via:  */
+  FILE         *ffp;		/* MSV part of the optimized profile */
+  FILE         *pfp;		/* rest of the optimized profile     */
+
+  char          errbuf[eslERRBUFSIZE];
 } P7_HMMFILE;
-
 
 
 
@@ -427,8 +452,8 @@ typedef struct p7_spensemble_s {
  * Alignment of a sequence domain to an HMM, formatted for printing.
  * 
  * For an alignment of L residues and names C chars long, requires
- * 5L + 2C + 30 bytes; for typical case of L=100,C=10, that's
- * 0.5 Kb.
+ * 6L + 2C + 30 bytes; for typical case of L=100,C=10, that's
+ * <0.7 Kb.
  */
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info                 */
@@ -436,12 +461,15 @@ typedef struct p7_alidisplay_s {
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
+  char *ppline;			/* posterior probability annotation     */
   int   N;			/* length of strings                    */
+
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM                     */
   char *hmmdesc;		/* description of HMM                   */
   int   hmmfrom;		/* start position on HMM (1..M, or -1)  */
   int   hmmto;			/* end position on HMM (1..M, or -1)    */
+
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target sequence         */
   char *sqdesc;			/* description of target sequence       */
@@ -593,6 +621,10 @@ typedef struct p7_tophits_s {
  * 13. Routines in HMMER's exposed API.
  *****************************************************************/
 
+/* align.c */
+extern int p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, ESL_MSA **ret_msa);
+
+
 /* build.c */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
@@ -696,8 +728,9 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 
 
 /* p7_alidisplay.c */
-extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
+extern char           p7_alidisplay_EncodePostProb(float p);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth);
 
 /* p7_bg.c */
@@ -720,7 +753,7 @@ extern int           p7_domaindef_DumpPosteriors(FILE *ofp, P7_DOMAINDEF *ddef);
 extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
 extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
-extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_PROFILE *gm, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb,
+extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb,
 					      P7_OMX *fwd, P7_OMX *bck, P7_DOMAINDEF *ddef);
 
 
@@ -742,7 +775,8 @@ extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
 extern P7_HMM *p7_hmm_Clone(const P7_HMM *hmm);
 extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
-extern char   *p7_hmm_DescribeStatetype(char st);
+extern char    p7_hmm_EncodeStatetype(char *typestring);
+extern char   *p7_hmm_DecodeStatetype(char st);
 /*      2. Convenience routines for setting fields in an HMM. */
 extern int     p7_hmm_SetName       (P7_HMM *hmm, char *name);
 extern int     p7_hmm_SetAccession  (P7_HMM *hmm, char *acc);
@@ -770,8 +804,9 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 /* p7_hmmfile.c */
 extern int  p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
-extern int  p7_hmmfile_Write(FILE *fp, P7_HMM *hmm);
-extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **ret_hmm);
+extern int  p7_hmmfile_WriteBinary(FILE *fp, P7_HMM *hmm);
+extern int  p7_hmmfile_WriteASCII (FILE *fp, P7_HMM *hmm);
+extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 
 /* p7_prior.c */
