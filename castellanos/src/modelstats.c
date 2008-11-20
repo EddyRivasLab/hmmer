@@ -135,7 +135,7 @@ p7_MeanForwardScore(const P7_HMM *hmm, const P7_BG *bg)
   esl_sq_Destroy(sq);
   p7_gmx_Destroy(gx);
   p7_profile_Destroy(gm);
-  return (sum / (double) N);
+  return (sum / (double) N); 
 }
 
 

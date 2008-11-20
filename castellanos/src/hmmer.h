@@ -857,13 +857,9 @@ extern int  p7_trace_Index(P7_TRACE *tr);
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 
-
-
-
-
-/* seqmodel.c */
+/* seq2hmm.c */
 extern int p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
-		       ESL_DMATRIX *P, float *f, double popen, double pextend,
+		       ESL_DMATRIX *P, P7_BG *bg, const double popen, const double pextend,
 		       P7_HMM **ret_hmm);
 
 #endif /*P7_HMMERH_INCLUDED*/
