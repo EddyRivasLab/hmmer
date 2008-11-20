@@ -48,7 +48,7 @@ static ESL_OPTIONS options[] = {
   { "--fast",    eslARG_NONE,"default",NULL, NULL,    CONOPTS,    NULL,     NULL, "assign cols w/ >= symfrac residues as consensus",       3 },
   { "--hand",    eslARG_NONE,   FALSE, NULL, NULL,    CONOPTS,    NULL,     NULL, "manual construction (requires reference annotation)",   3 },
   { "--symfrac", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,   "--fast",   NULL, "sets sym fraction controlling --fast construction",     3 },
-/* Alternate relative sequence weighting strategies */
+/* Alternate relative sequence weighting strategies (internsl weighting) */
   /* --wme not implemented in HMMER3 yet */
   { "--wgsc",    eslARG_NONE,"default",NULL, NULL,    WGTOPTS,    NULL,      NULL, "Gerstein/Sonnhammer/Chothia tree weights",         4},
   { "--wblosum", eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff simple filter weights",                   4},
@@ -644,11 +644,23 @@ process_workunit(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, E
   P7_HMM *hmm = NULL;
   int status;
 
-  if ((status =  set_relative_weights   (go, cfg, errbuf, msa))                         != eslOK) goto ERROR;
-  if ((status =  build_model            (go, cfg, errbuf, msa, &hmm, opt_tr))           != eslOK) goto ERROR;
+  if ((status =  set_relative_weights   (go, cfg, errbuf, msa))                         != eslOK) goto ERROR; /* internal weighting
+													       * return msa with weights
+													       * that sum to msa nseq
+													       */
+
+  if ((status =  build_model            (go, cfg, errbuf, msa, &hmm, opt_tr))           != eslOK) goto ERROR; 
+
   if ((status =  set_model_name         (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
-  if ((status =  set_effective_seqnumber(go, cfg, errbuf, msa, hmm, cfg->bg, cfg->pri)) != eslOK) goto ERROR;
-  if ((status =  parameterize           (go, cfg, errbuf, hmm, cfg->pri))               != eslOK) goto ERROR;
+  if ((status =  set_effective_seqnumber(go, cfg, errbuf, msa, hmm, cfg->bg, cfg->pri)) != eslOK) goto ERROR; /* external weighting 
+													       * takes an hmm with
+													       * weighted counts and
+													       * reescales to sum to
+													       * effective seq. number
+													       */
+
+  if ((status =  parameterize           (go, cfg, errbuf, hmm, cfg->pri))               != eslOK) goto ERROR; /* convert counts to probability parameters */
+
   if ((status =  calibrate              (go, cfg, errbuf, hmm))                         != eslOK) goto ERROR;
 
   *ret_hmm = hmm;
@@ -698,6 +710,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
 
 /* set_relative_weights():
  * Set msa->wgt vector, using user's choice of relative weighting algorithm.
+ * Relative weight for each sequence in the alignment
  */
 static int
 set_relative_weights(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
@@ -965,6 +978,8 @@ calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *
  *            the model is high enough to find local alignments; but don't set it
  *            below a hard alphabet-dependent limit (p7_ETARGET_AMINO, etc.). See J1/67 for
  *            notes.
+ *
+ *            p7_ETARGET_AMINO  = 0.59 in p7_config.h
  *            
  * Args:      M  - model length in nodes
  *            eX - X parameter: minimum total rel entropy target
