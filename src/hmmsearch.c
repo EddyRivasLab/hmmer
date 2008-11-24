@@ -34,16 +34,16 @@ static ESL_OPTIONS options[] = {
   { "-E",        eslARG_REAL,  "10.0", NULL,"x>0",      NULL,  NULL,  NULL, "E-value cutoff for sequences",                       1 },
   { "-Z",        eslARG_INT,    FALSE, NULL,"n>0",      NULL,  NULL,  NULL, "set # of comparisons done, for E-value calculation", 1 },
 
-  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL,  NULL, "MSV threshold: promote hits w/ P <= F1",            2 },
-  { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL,  NULL, "Vit threshold: promote hits w/ P <= F2",            2 },
-  { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL,  NULL, "Fwd threshold: promote hits w/ P <= F3",            2 },
+  { "--max",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3", "Turn heuristic speed filters off (increase sensitivity)", 2 },
+  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",          "MSV threshold: promote hits w/ P <= F1",                  2 },
+  { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",          "Vit threshold: promote hits w/ P <= F2",                  2 },
+  { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",          "Fwd threshold: promote hits w/ P <= F3",                  2 },
 
-  { "--unilocal",eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "do unilocal (Smith/Waterman) alignment",            3 },
+  { "--nobias",  eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off the biased sequence composition corrections",               3 },
 
   { "--textw",   eslARG_INT,    "120", NULL, NULL,      NULL,  NULL,  NULL, "sets maximum ASCII text output line length",         4 },
   { "--seed",    eslARG_INT,    NULL,  NULL, NULL,      NULL,  NULL,  NULL, "random number generator seed",                       4 },  
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",    4 },  
-  { "--best1",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "make per-seq the best single domain score",          4 },  
 #ifdef HAVE_MPI
   { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                     4 },
 #endif 
@@ -66,7 +66,12 @@ struct cfg_s {
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
 
-  uint64_t         nseq;	/* number of sequences searched             */
+  double           F1;		/* MSV filter threshold                     */
+  double           F2;		/* Viterbi filter threshold                 */
+  double           F3;		/* uncorrected Forward filter threshold     */
+
+  uint64_t         Z;		/* # of seqs searched for E-value purposes  */
+  uint64_t         nseq;	/* true number of sequences searched        */
   uint64_t         nmodels;	/* number of models searched                */
   uint64_t         nres;	/* # of residues searched                   */
   uint64_t         nnodes;	/* # of model nodes searched                */
@@ -233,13 +238,20 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
    * master accumulates in its main hitlist. 
    */
   cfg->hitlist    = p7_tophits_Create();
-  cfg->nseq       = (esl_opt_IsDefault(go, "-Z") ?  0 : esl_opt_GetInteger(go, "-Z"));
+  cfg->Z          = (esl_opt_IsDefault(go, "-Z") ?  0 : esl_opt_GetInteger(go, "-Z"));
+  cfg->nseq       = 0;
   cfg->nmodels    = 0;
   cfg->nres       = 0;
   cfg->nnodes     = 0;
   cfg->n_past_msv = 0;
   cfg->n_past_vit = 0;
   cfg->n_past_fwd = 0;
+
+  /* Filter thresholds */
+  cfg->F1       = esl_opt_GetReal(go, "--F1");
+  cfg->F2       = esl_opt_GetReal(go, "--F2");
+  cfg->F3       = esl_opt_GetReal(go, "--F3");
+  if (esl_opt_GetBoolean(go, "--max")) { cfg->F1 = cfg->F2 = cfg->F3 = 1.0; }
 
   /* These will be initialized when we read first HMM and know our alphabet: */
   cfg->abc      = NULL;		        
@@ -337,18 +349,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_OMX          *oxf     = NULL;     /* optimized DP matrix for Forward         */
   P7_OMX          *oxb     = NULL;     /* optimized DP matrix for Backward        */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
-  double F1                = esl_opt_GetReal(go, "--F1"); /* MSVFilter threshold: must be < F1 to go on */
-  double F2                = esl_opt_GetReal(go, "--F2"); /* ViterbiFilter threshold                    */
-  double F3                = esl_opt_GetReal(go, "--F3"); /* ForwardFilter threshold                    */
   double Evalue_threshold  = esl_opt_GetReal(go, "-E");	  /* per-seq E-value threshold                  */
-  float            usc, vfsc;          /* filter scores                           */
-  float            fwdsc;
-  float            final_sc;	       /* final bit score                         */
-  float            filtersc;	       /* filter pipeline's null model score      */
+  float            usc, vfsc, fwdsc;   /* filter scores                           */
+  float            filtersc;           /* HMM null filter score                   */
   float            nullsc;             /* null model score                        */
   float            omega  = 1.0f/256.0f;
   float            seqbias;  
-  float            seq_score;          /* the per-seq bit score */
+  float            seq_score;          /* the corrected per-seq bit score */
+  float            sum_score;	       /* the corrected reconstruction score for the seq */
+  float            pre_score, pre2_score; /* uncorrected bit scores for seq */
   double           P;		       /* P-value of a hit */
   double           E;		       /* bound on E-value of a hit  */
   int              Ld;		       /* # of residues in envelopes */
@@ -396,8 +405,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       while ( (sstatus = esl_sqio_Read(cfg->sqfp, sq)) == eslOK)
 	{
-	  if (esl_opt_IsDefault(go, "-Z")) cfg->nseq++;
-	  cfg->nres += sq->n;
+	  cfg->nseq++;
+	  if (esl_opt_IsDefault(go, "-Z")) cfg->Z = cfg->nseq;
+	  cfg->nres+= sq->n;
 	  p7_oprofile_ReconfigLength(om, sq->n);
 	  p7_omx_GrowTo(oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
@@ -407,38 +417,43 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* First level filter: the MSV filter, multihit with <om> */
 	  p7_MSVFilter(sq->dsq, sq->n, om, oxf, &usc);
-	  final_sc = (usc - nullsc) / eslCONST_LOG2;
-	  P = esl_gumbel_surv(final_sc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
-	  E = P * (double) cfg->nseq;
-	  if (P > F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
+	  seq_score = (usc - nullsc) / eslCONST_LOG2;
+	  P = esl_gumbel_surv(seq_score,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	  E = P * (double) cfg->Z;
+	  if (P > cfg->F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
 
-	  p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
-	  final_sc = (usc - filtersc) / eslCONST_LOG2;
-	  P = esl_gumbel_surv(final_sc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
-	  E = P * (double) cfg->nseq;
-	  if (P > F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
+	  /* HMM filtering */
+	  if (! esl_opt_GetBoolean(go, "--nobias") && ! esl_opt_GetBoolean(go, "--max")) 
+	    {
+	      p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
+	      seq_score = (usc - filtersc) / eslCONST_LOG2;
+	      P = esl_gumbel_surv(seq_score,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	      E = P * (double) cfg->Z;
+	      if (P > cfg->F1 && E > Evalue_threshold ) { esl_sq_Reuse(sq); continue; } 
+	    }
+	  else filtersc = nullsc;
 	  cfg->n_past_msv++;
 
 	  //printf("Past MSV: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, usc, P);
 
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
-	  if (P > F2) 		
+	  if (P > cfg->F2) 		
 	    {
 	      p7_ViterbiFilter(sq->dsq, sq->n, om, oxf, &vfsc);  
-	      vfsc = (vfsc-filtersc) / eslCONST_LOG2;
-	      P  = esl_gumbel_surv(vfsc,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
-	      E = P * (double) cfg->nseq;
-	      if (P > F2 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; } 
+	      seq_score = (vfsc-filtersc) / eslCONST_LOG2;
+	      P  = esl_gumbel_surv(seq_score,  hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]);
+	      E = P * (double) cfg->Z;
+	      if (P > cfg->F2 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; } 
 	      //  printf("Past VIT: %-20s %5d %8.4f %8.4f %8.4f %8.4f\n", sq->name, (int) sq->n, nullsc, filtersc, vfsc, P);
 	    }
 	  cfg->n_past_vit++;
 
 	  /* Parse it with Forward and obtain its real Forward score. */
 	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &fwdsc);
-	  final_sc = (fwdsc-filtersc) / eslCONST_LOG2;
-	  P = esl_exp_surv(final_sc,  hmm->evparam[p7_TAU],  hmm->evparam[p7_LAMBDA]);
-	  E = P * (double) cfg->nseq;
-	  if (P > F3 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; }
+	  seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
+	  P = esl_exp_surv(seq_score,  hmm->evparam[p7_TAU],  hmm->evparam[p7_LAMBDA]);
+	  E = P * (double) cfg->Z;
+	  if (P > cfg->F3 && E > Evalue_threshold) { esl_sq_Reuse(sq); continue; }
 	  cfg->n_past_fwd++;
 
 	  //printf("forward = %g\n", fwdsc);
@@ -460,28 +475,51 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    continue;
 	  }
 
-	  if (esl_opt_GetBoolean(go, "--best1")) 
+	  /* What's the per-seq score, and is it significant enough to be reported? */
+	  /* Figure out the sum of null2 corrections to be added to the null score */
+	  if (! esl_opt_GetBoolean(go, "--nobias"))
 	    {
-	      seq_score = -9999.0;
-	      for (d = 0; d < cfg->ddef->ndom; d++) 
-		{
-		  Ld       = cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
-		  final_sc = cfg->ddef->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-		  final_sc = (final_sc - (nullsc +  p7_FLogsum(0.0, log(omega) + cfg->ddef->dcl[d].domcorrection))) / eslCONST_LOG2;
-		  if (final_sc > seq_score) seq_score = final_sc;
-		}
-	    }
-	  else
-	    {
-	      /* What's the per-seq score, and is it significant enough to be reported? */
-	      /* Figure out the sum of null2 corrections to be added to the null score */
 	      seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
 	      seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
-	      seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
+	    }
+	  else seqbias = 0.0;
+	  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
+	  seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
+
+	  /* Calculate the "reconstruction score": estimated
+	   * per-sequence score as sum of individual domains,
+	   * discounting domains that aren't significant after they're
+	   * null-corrected.
+	   */
+	  sum_score = 0.0f;
+	  seqbias   = 0.0f;
+	  Ld        = 0;
+	  for (d = 0; d < cfg->ddef->ndom; d++) 
+	    {
+	      if (esl_opt_GetBoolean(go, "--nobias")) cfg->ddef->dcl[d].domcorrection = 0.0f;
+	      if (cfg->ddef->dcl[d].envsc - cfg->ddef->dcl[d].domcorrection > 0.0) 
+		{
+		  sum_score += cfg->ddef->dcl[d].envsc;
+		  Ld        += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
+		  seqbias   += cfg->ddef->dcl[d].domcorrection;
+		}
+	    }
+	  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
+	  if (! esl_opt_GetBoolean(go, "--nobias")) 
+	    seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
+	  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;
+	  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;
+	  
+	  
+	  /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
+	  if (Ld > 0 && sum_score > seq_score)
+	    {
+	      seq_score = sum_score;
+	      pre_score = pre2_score;
 	    }
 
 	  P         =  esl_exp_surv (seq_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-	  if (P * (double) cfg->nseq <= Evalue_threshold) /* P*current nseq is only a bound on the E-value */
+	  if (P * (double) cfg->Z <= Evalue_threshold) /* P*current nseq is only a bound on the E-value */
 	    {
 	      /* Calculate and store the per-seq hit output information */
 	      p7_tophits_CreateNextHit(cfg->hitlist, &hit);
@@ -495,42 +533,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      hit->noverlaps  = cfg->ddef->noverlaps;
 	      hit->nenvelopes = cfg->ddef->nenvelopes;
 
-	      hit->pre_score  = ( fwdsc-nullsc) / eslCONST_LOG2;
+	      hit->pre_score  = pre_score;
 	      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 
 	      hit->score      = seq_score;
 	      hit->pvalue     = P;
 	      hit->sortkey    = -log(P);
 
-	      /* Calculate the "reconstruction score": estimated per-sequence score as sum of the domains */
-	      hit->sum_score = 0.0f;
-	      Ld             = 0;
-	      final_sc       = 0.0;
-	      seqbias        = 0.0f;
-	      
-	      for (d = 0; d < cfg->ddef->ndom; d++) 
-		{
-		  if (cfg->ddef->dcl[d].envsc - cfg->ddef->dcl[d].domcorrection > 0.0) 
-		    {
-		      final_sc       += cfg->ddef->dcl[d].envsc;
-		      seqbias        += cfg->ddef->dcl[d].domcorrection;
-		      Ld             += cfg->ddef->dcl[d].jenv  - cfg->ddef->dcl[d].ienv + 1;
-		    }
-		}
-	      final_sc       += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	      seqbias = p7_FLogsum(0.0, log(omega) + seqbias);
-	      hit->sum_score  = (final_sc - (nullsc + seqbias)) / eslCONST_LOG2;
+	      hit->sum_score  = sum_score;
 	      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-
-	      /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
-	      if (Ld > 0 && hit->sum_score > seq_score && ! esl_opt_GetBoolean(go, "--best1"))
-		{
-		  hit->score     = hit->sum_score;
-		  hit->pvalue    = hit->sum_pvalue;
-		  hit->sortkey   = -log(hit->sum_pvalue);
-		  hit->pre_score = ( final_sc-nullsc) / eslCONST_LOG2;
-		  hit->pre_pvalue = esl_exp_surv (hit->pre_score,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
-		}
 
 	      /* Transfer the domain coordinates and alignment display to the hit list */
 	      hit->dcl       = cfg->ddef->dcl;
@@ -539,7 +550,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		{
 		  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
 		  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-		  seqbias              = p7_FLogsum(0.0, log(omega) + hit->dcl[d].domcorrection);
+		  if (! esl_opt_GetBoolean(go, "--nobias")) 
+		    seqbias = p7_FLogsum(0.0, log(omega) + hit->dcl[d].domcorrection);
+		  else
+		    seqbias = 0.0;
 		  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + seqbias)) / eslCONST_LOG2;
 		  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]);
 		}
@@ -588,6 +602,7 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   fprintf(cfg->ofp, "target sequence database:   %s\n", cfg->seqfile);
   if (! esl_opt_IsDefault(go, "-o"))     fprintf(cfg->ofp, "output directed to file:    %s\n",    esl_opt_GetString(go, "-o"));
   if (! esl_opt_IsDefault(go, "-E"))     fprintf(cfg->ofp, "sequence E-value threshold: <= %g\n", esl_opt_GetReal(go, "-E"));
+  if ( esl_opt_GetBoolean(go, "--max"))  fprintf(cfg->ofp, "Max sensitivity: heuristic filters OFF\n");
   if (! esl_opt_IsDefault(go, "--F1"))   fprintf(cfg->ofp, "MSV filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
   if (! esl_opt_IsDefault(go, "--F2"))   fprintf(cfg->ofp, "Vit filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F2"));
   if (! esl_opt_IsDefault(go, "--F3"))   fprintf(cfg->ofp, "Fwd filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F3"));
@@ -614,16 +629,16 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 
   for (h = 0; h < hitlist->N; h++)
     {
-      E = (double) cfg->nseq * hitlist->hit[h]->pvalue;
+      E = (double) cfg->Z * hitlist->hit[h]->pvalue;
 
       if (E <= Evalue_threshold) 
 	{
 	  fprintf(cfg->ofp, "%7.1f %10.2g %7.1f %7.1f %10.2g %3d %5.1f %3d %3d %3d %3d %-*s %-.*s\n",
 		  hitlist->hit[h]->score,
-		  hitlist->hit[h]->pvalue * (double) cfg->nseq,
+		  hitlist->hit[h]->pvalue * (double) cfg->Z,
 		  hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
 		  hitlist->hit[h]->sum_score,
-		  hitlist->hit[h]->sum_pvalue * (double) cfg->nseq,
+		  hitlist->hit[h]->sum_pvalue * (double) cfg->Z,
 		  hitlist->hit[h]->ndom,
 		  hitlist->hit[h]->nexpected,
 		  hitlist->hit[h]->nregions,
@@ -653,7 +668,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 
   for (h = 0; h < hitlist->N; h++)
     {
-      seqE = hitlist->hit[h]->pvalue * (double) cfg->nseq;
+      seqE = hitlist->hit[h]->pvalue * (double) cfg->Z;
       if (seqE <= Evalue_threshold) 
 	{
 	  for (d = 0; d < hitlist->hit[h]->ndom; d++)
@@ -665,7 +680,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 		      hitlist->hit[h]->dcl[d].ienv,
 		      hitlist->hit[h]->dcl[d].jenv,
 		      hitlist->hit[h]->dcl[d].bitscore,
-		      hitlist->hit[h]->dcl[d].pvalue * (double) cfg->nseq,  /* E-value if this were the only domain in the seq          */
+		      hitlist->hit[h]->dcl[d].pvalue * (double) cfg->Z,     /* E-value if this were the only domain in the seq          */
 		      hitlist->hit[h]->dcl[d].pvalue * (double) (h+1));     /* E-value conditional on all seqs to this point being true */
 	    }
 	}
@@ -684,7 +699,7 @@ output_alignments(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 
   for (h = 0; h < hitlist->N; h++)
     {
-      seqE = hitlist->hit[h]->pvalue * (double) cfg->nseq;
+      seqE = hitlist->hit[h]->pvalue * (double) cfg->Z;
     
       for (d = 0; d < hitlist->hit[h]->ndom; d++)
 	{
@@ -710,13 +725,21 @@ output_search_statistics(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w)
   fprintf(cfg->ofp, "Query HMM(s):      %ld  (%ld nodes)\n",    cfg->nmodels, cfg->nnodes);
   fprintf(cfg->ofp, "Target sequences:  %ld  (%ld residues)\n", cfg->nseq,    cfg->nres);
 
-  fprintf(cfg->ofp, "Passed MSV filter: %ld  (%.3f; expected %.3f)\n", 
-	  cfg->n_past_msv, (double) cfg->n_past_msv / (double) cfg->nseq, esl_opt_GetReal(go, "--F1"));
-  fprintf(cfg->ofp, "Passed Vit filter: %ld  (%.4f; expected %.4f)\n",   
-	  cfg->n_past_vit, (double) cfg->n_past_vit / (double) cfg->nseq, esl_opt_GetReal(go, "--F2"));
-  fprintf(cfg->ofp, "Passed Fwd filter: %ld  (%.2g; expected %.2g)\n",         
-	  cfg->n_past_fwd, (double) cfg->n_past_fwd / (double) cfg->nseq, esl_opt_GetReal(go, "--F3"));
-
+  fprintf(cfg->ofp, "Passed MSV filter: %ld  (%.4g); expected %.4g (%.4g)\n", 
+	  cfg->n_past_msv,
+	  (double) cfg->n_past_msv / (double) cfg->nseq, 
+	  cfg->F1 * (double) cfg->nseq, 
+	  cfg->F1);
+  fprintf(cfg->ofp, "Passed Vit filter: %ld  (%.4g); expected %.4g (%.4g)\n",   
+	  cfg->n_past_vit,
+	  (double) cfg->n_past_vit / (double) cfg->nseq,
+	  cfg->F2 * (double) cfg->nseq,
+	  cfg->F2);
+  fprintf(cfg->ofp, "Passed Fwd filter: %ld  (%.4g); expected %.4g (%.4g)\n",         
+	  cfg->n_past_fwd, 
+	  (double) cfg->n_past_fwd / (double) cfg->nseq,
+	  cfg->F3 * (double) cfg->nseq,
+	  cfg->F3);	  
   fprintf(cfg->ofp, "Mc/sec:            %.2f\n", 
 	  (double) cfg->nres * (double) cfg->nnodes / (w->user * 1.0e6));
   esl_stopwatch_Display(cfg->ofp, w, "# CPU time: ");

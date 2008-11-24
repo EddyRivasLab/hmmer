@@ -977,6 +977,7 @@ stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MS
   if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv))   != eslOK) ESL_FAIL(status, errbuf, "Failed to record command log");
   if ((status = p7_hmm_SetCtime(hmm))                           != eslOK) ESL_FAIL(status, errbuf, "Failed to record timestamp");
   if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))        != eslOK) ESL_FAIL(status, errbuf, "Failed to record checksum"); 
+  hmm->flags |= p7H_CHKSUM;
 
   if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
   return eslOK;

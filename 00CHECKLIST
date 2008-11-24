@@ -72,6 +72,9 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
 
 * Export a snapshot, alpha, beta, or release candidate from the development trunk: 
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${HMMER_VERSION}
+
+   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-3.0.snap20081101
+
    cd hmmer-${HMMER_VERSION}
 * or: Export a major or minor release from its permanent tag
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION} hmmer-${HMMER_VERSION}
@@ -156,6 +159,8 @@ Release history
 
 Release           Date            SVN (HMMER/Easel)
 ----------------  -------------   -----------------
-3.0.snap20080325  25 March 2008     r2370/r236
-3.0.snap20080419  19 April 2008     r2398/r247
+3.0.snap20080325  25 Mar 2008     r2370/r236
+3.0.snap20080419  19 Apr 2008     r2398/r247
+3.0.snap20081101   1 Nov 2008     r2620/r302
+
 
