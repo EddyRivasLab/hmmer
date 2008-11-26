@@ -130,6 +130,7 @@ static int set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cf
 static int parameterize           (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_DPRIOR *prior);
 static int calibrate              (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm);
 static int stamp                  (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
+static int transfer_score_cutoffs (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
 
 static double default_target_relent(const ESL_ALPHABET *abc, int M, double eX);
 
@@ -652,6 +653,7 @@ process_workunit(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, E
   if ((status =  parameterize           (go, cfg, errbuf, hmm, cfg->pri))               != eslOK) goto ERROR;
   if ((status =  calibrate              (go, cfg, errbuf, hmm))                         != eslOK) goto ERROR;
   if ((status =  stamp                  (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
+  if ((status =  transfer_score_cutoffs (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
 
   *ret_hmm = hmm;
   return eslOK;
@@ -983,6 +985,18 @@ stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MS
   return eslOK;
 }
 
+static int
+transfer_score_cutoffs(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm)
+{
+  if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Transferring bit score cutoffs");    fflush(cfg->ofp); }
+
+  if (msa->cutset[eslMSA_GA1] && msa->cutset[eslMSA_GA2]) { hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1]; hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2]; hmm->flags |= p7H_GA; }
+  if (msa->cutset[eslMSA_TC1] && msa->cutset[eslMSA_TC2]) { hmm->cutoff[p7_TC1] = msa->cutoff[eslMSA_TC1]; hmm->cutoff[p7_TC2] = msa->cutoff[eslMSA_TC2]; hmm->flags |= p7H_TC; }
+  if (msa->cutset[eslMSA_NC1] && msa->cutset[eslMSA_NC2]) { hmm->cutoff[p7_NC1] = msa->cutoff[eslMSA_NC1]; hmm->cutoff[p7_NC2] = msa->cutoff[eslMSA_NC2]; hmm->flags |= p7H_NC; }
+
+  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  return eslOK;
+}
 
 /* default_amino_target_relent()
  * Incept:    SRE, Fri May 25 15:14:16 2007 [Janelia]

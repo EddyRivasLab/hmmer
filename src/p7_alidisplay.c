@@ -125,8 +125,10 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   /* Determine hit coords */
   ad->hmmfrom = tr->k[z1];
   ad->hmmto   = tr->k[z2];
+  ad->M       = om->M;
   ad->sqfrom  = tr->i[z1];
   ad->sqto    = tr->i[z2];
+  ad->L       = sq->n;
 
   /* optional rf line */
   if (ad->rfline != NULL) {

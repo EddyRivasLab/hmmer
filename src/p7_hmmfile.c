@@ -730,6 +730,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on GA line");
 	hmm->cutoff[p7_GA1] = atof(tok1);
 	hmm->cutoff[p7_GA2] = atof(tok2);
+	hmm->flags         |= p7H_GA;
       }
 
       else if (strcmp(tag, "TC") == 0) {
@@ -737,6 +738,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on TC line");
 	  hmm->cutoff[p7_TC1] = atof(tok1);
 	  hmm->cutoff[p7_TC2] = atof(tok2);
+	  hmm->flags         |= p7H_TC;
       }
 
       else if (strcmp(tag, "NC") == 0) {
@@ -744,6 +746,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on NC line");
 	  hmm->cutoff[p7_NC1] = atof(tok1);
 	  hmm->cutoff[p7_NC2] = atof(tok2);
+	  hmm->flags         |= p7H_NC;
       }
 
       else if (strcmp(tag, "HMM") == 0) 

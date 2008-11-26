@@ -469,12 +469,14 @@ typedef struct p7_alidisplay_s {
   char *hmmdesc;		/* description of HMM                   */
   int   hmmfrom;		/* start position on HMM (1..M, or -1)  */
   int   hmmto;			/* end position on HMM (1..M, or -1)    */
+  int   M;			/* length of model                      */
 
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target sequence         */
   char *sqdesc;			/* description of target sequence       */
   long  sqfrom;			/* start position on sequence (1..L)    */
   long  sqto;		        /* end position on sequence   (1..L)    */
+  long  L;			/* length of sequence                   */
 
   char *mem;			/* memory used for the char data above  */
 } P7_ALIDISPLAY;
@@ -487,10 +489,12 @@ typedef struct p7_alidisplay_s {
 typedef struct p7_dom_s { 
   int            ienv, jenv;
   int            iali, jali;
-  float          envsc;  	/* Forward score in envelope ienv..jenv; without null2 correction */
-  float          domcorrection;	/* null2 correction to add null score when calculating a per-domain score */
+  float          envsc;  	/* Forward score in envelope ienv..jenv; without null2 correction             */
+  float          domcorrection;	/* null2 correction to add null score when calculating a per-domain score     */
+  float          oasc;		/* optimal accuracy score (expected # residues correctly aligned)             */
   float          bitscore;	/* overall score in bits, null corrected, if this were the only domain in seq */
-  double         pvalue;	/* P-value of the bitscore */
+  double         pvalue;	/* P-value of the bitscore                                                    */
+  int            is_reported;	/* TRUE if domain satisfies output reporting thresholds                       */
   P7_ALIDISPLAY *ad; 
 } P7_DOMAIN;
 
@@ -572,22 +576,26 @@ typedef struct p7_hit_s {
   char   *desc;			/* description of the target        */
   double sortkey;		/* number to sort by; big is better    */
 
-  float  score;			/* bit score of the hit                        */
-  float  pre_score;		/* bit score before null2 correction           */
-  float  sum_score;		/* bit score reconstructed from sum of domains */
+  float  score;			/* bit score of the sequence (all domains, w/ correction) */
+  float  pre_score;		/* bit score of sequence before null2 correction          */
+  float  sum_score;		/* bit score reconstructed from sum of domain envelopes   */
 
   double pvalue;		/* P-value of the score               */
   double pre_pvalue;		/* P-value of the pre_score           */
   double sum_pvalue;		/* P-value of the sum_score           */
 
-  int    ndom;		/* total # of domains in this seq   */
   float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
   int    nregions;	/* number of regions evaluated */
   int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */
   int    noverlaps;	/* number of envelopes defined in ensemble clustering that overlap w/ prev envelope */
   int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
+  int    ndom;		/* total # of domains identified in this seq   */
 
-  P7_DOMAIN *dcl;		/* domain coordinate list and alignment display */
+  int    is_reported;   /* TRUE if this sequence satisfies output thresholding (is significant) */
+  int    nreported;	/* # of domains satisfying output thresholding  */
+  int    best_domain;	/* index of best-scoring domain in dcl */
+
+  P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
 } P7_HIT;
 
 
@@ -598,8 +606,9 @@ typedef struct p7_hit_s {
 typedef struct p7_tophits_s {
   P7_HIT **hit;         /* sorted pointer array                     */
   P7_HIT  *unsrt;	/* unsorted data storage                    */
-  int      Nalloc;	/* current allocation size                  */
-  int      N;		/* number of hits in list now               */
+  uint64_t Nalloc;	/* current allocation size                  */
+  uint64_t N;		/* number of hits in list now               */
+  uint64_t nreported;	/* number of hits that are reportable       */
   int      is_sorted;	/* TRUE when h->hit valid for all N hits    */
 } P7_TOPHITS;
 

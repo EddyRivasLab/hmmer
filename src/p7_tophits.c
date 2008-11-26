@@ -43,6 +43,7 @@ p7_tophits_Create(void)
   ESL_ALLOC(h->unsrt, sizeof(P7_HIT)   * default_nalloc);
   h->Nalloc    = default_nalloc;
   h->N         = 0;
+  h->nreported = 0;
   h->is_sorted = TRUE;       	/* but only because there's 0 hits */
   h->hit[0]    = h->unsrt;	/* if you're going to call it "sorted" when it contains just one hit, you need this */
   return h;
@@ -122,27 +123,30 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   h->N++;
   if (h->N >= 2) h->is_sorted = FALSE;
 
-  hit->name       = NULL;
-  hit->acc        = NULL;
-  hit->desc       = NULL;
-  hit->sortkey    = 0.0;
+  hit->name         = NULL;
+  hit->acc          = NULL;
+  hit->desc         = NULL;
+  hit->sortkey      = 0.0;
 
-  hit->score      = 0.0;
-  hit->pre_score  = 0.0;
-  hit->sum_score  = 0.0;
+  hit->score        = 0.0;
+  hit->pre_score    = 0.0;
+  hit->sum_score    = 0.0;
 
-  hit->pvalue     = 0.0;
-  hit->pre_pvalue = 0.0;
-  hit->sum_pvalue = 0.0;
+  hit->pvalue       = 0.0;
+  hit->pre_pvalue   = 0.0;
+  hit->sum_pvalue   = 0.0;
 
-  hit->ndom       = 0;
-  hit->nexpected  = 0.0;
-  hit->nregions   = 0;
-  hit->nclustered = 0;
-  hit->noverlaps  = 0;
-  hit->nenvelopes = 0;
+  hit->ndom         = 0;
+  hit->nexpected    = 0.0;
+  hit->nregions     = 0;
+  hit->nclustered   = 0;
+  hit->noverlaps    = 0;
+  hit->nenvelopes   = 0;
 
-  hit->dcl        = NULL;
+  hit->is_reported  = FALSE;
+  hit->nreported    = 0;
+  hit->best_domain  = -1;
+  hit->dcl          = NULL;
 
   *ret_hit = hit;
   return eslOK;

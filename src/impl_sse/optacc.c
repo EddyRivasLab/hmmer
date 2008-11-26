@@ -165,6 +165,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       t2 = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[p7X_J][i]);
       ox->xmx[p7X_B][i] = ESL_MAX(t1, t2);
     }
+
   *ret_e = ox->xmx[p7X_C][pp->L];
   return eslOK;
 }
