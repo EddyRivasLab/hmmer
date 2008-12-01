@@ -17,6 +17,7 @@
 #include "p7_config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */

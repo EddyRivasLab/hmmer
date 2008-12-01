@@ -327,7 +327,7 @@ p7_hmmfile_WriteASCII(FILE *fp, P7_HMM *hmm)
   if (hmm->comlog   != NULL)   multiline(fp, "COM  ",      hmm->comlog);
   if (hmm->nseq     >= 0)      fprintf  (fp, "NSEQ  %d\n", hmm->nseq);
   if (hmm->eff_nseq >= 0)      fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq);
-  if (hmm->flags & p7H_CHKSUM) fprintf  (fp, "CKSUM %d\n", hmm->checksum);
+  if (hmm->flags & p7H_CHKSUM) fprintf  (fp, "CKSUM %u\n", hmm->checksum); /* unsigned 32-bit */
 
   if (hmm->flags & p7H_GA)  fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]);
   if (hmm->flags & p7H_TC)  fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]);
@@ -1175,7 +1175,7 @@ main(int argc, char **argv)
  * 7. Unit tests.
  *****************************************************************/
 #ifdef p7HMMFILE_TESTDRIVE
-/* utest_io_30: tests binary read/write for 3.0 save files.
+/* utest_io_30: tests read/write for 3.0 save files.
  *              Caller provides a named tmpfile that we can
  *              open, write to, close, reopen, then read from.
  *              Caller also provides a test HMM, which might
@@ -1188,8 +1188,12 @@ utest_io_30(char *tmpfile, P7_HMM *hmm)
   P7_HMMFILE   *hfp    = NULL;
   P7_HMM       *new    = NULL;
   ESL_ALPHABET *newabc = NULL;
-  char          msg[] = "3.0 binary file i/o unit test failed";
+  char          msg[] = "3.0 file i/o unit test failed";
   
+  /* Try to break the 32-bit unsigned checksum, setting high order bit */
+  hmm->checksum = 0xffeeddcc;
+  hmm->flags |= p7H_CHKSUM;
+
   /* Write the HMM to disk as ASCII */
   if ((fp = fopen(tmpfile, "w"))      == NULL)  esl_fatal(msg);
   if (p7_hmmfile_WriteASCII(fp, hmm)  != eslOK) esl_fatal(msg);

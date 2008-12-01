@@ -14,6 +14,9 @@
  *   12. Inclusion of the architecture-specific optimized implementation.
  *   13. Declaration of functions in HMMER's exposed API.
  *   14. Copyright and license information.
+ *   
+ * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
+ * specific to the acceleration layer.
  * 
  * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
  * SVN $Id$

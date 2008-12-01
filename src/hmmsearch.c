@@ -30,29 +30,31 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles  reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "show brief help on version and usage",                         1 },
-  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",                        1 },
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "show brief help on version and usage",                         1 },
+  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",                        1 },
 
-  { "--seqE",    eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "E-value cutoff for reporting sequences",                       2 },
-  { "--seqT",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "bit score cutoff for reporting sequences",                     2 },
-  { "--domE",    eslARG_REAL,"1000.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "E-value cutoff for reporting individual domains",              2 },
-  { "--domT",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "bit score cutoff for reporting individual domains",            2 },
-  { "--cut_ga",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--seqE,--seqT,--domE,--domT", "use GA gathering threshold bit score cutoffs in <hmmfile>",    2 },
-  { "--cut_nc",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--seqE,--seqT,--domE,--domT", "use NC noise threshold bit score cutoffs in <hmmfile>",        2 },
-  { "--cut_tc",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--seqE,--seqT,--domE,--domT", "use TC trusted threshold bit score cutoffs in <hmmfile>",      2 },
-  { "--seqZ",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           2 },
-  { "--domZ",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of significant seqs, for domain E-value calculation",    2 },
+  { "--seqE",       eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "E-value cutoff for reporting sequences",                       2 },
+  { "--seqT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "bit score cutoff for reporting sequences",                     2 },
+  { "--domE",       eslARG_REAL,"1000.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "E-value cutoff for reporting individual domains",              2 },
+  { "--domT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "bit score cutoff for reporting individual domains",            2 },
+  { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--seqE,--seqT,--domE,--domT", "use GA gathering threshold bit score cutoffs in <hmmfile>",    2 },
+  { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--seqE,--seqT,--domE,--domT", "use NC noise threshold bit score cutoffs in <hmmfile>",        2 },
+  { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--seqE,--seqT,--domE,--domT", "use TC trusted threshold bit score cutoffs in <hmmfile>",      2 },
+  { "--seqZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           2 },
+  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of significant seqs, for domain E-value calculation",    2 },
 
-  { "--slomax",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3", "Turn heuristic filters off (increase sensitivity)",    3 },
-  { "--F1",      eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--slomax",       "Stage 1 (MSV) threshold: promote hits w/ P <= F1",     3 },
-  { "--F2",      eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--slomax",       "Stage 2 (Vit) threshold: promote hits w/ P <= F2",     3 },
-  { "--F3",      eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--slomax",       "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",     3 },
+  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (increase sensitivity)",                    3 },
+  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",                         3 },
+  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",                         3 },
+  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",                         3 },
+  { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",          "turn on composition bias filter (may increase speed, reduce sensitivity)", 3 },
 
-  { "--nobias",  eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off biased sequence composition corrections",               4 },
-  { "--seed",    eslARG_INT,    NULL,  NULL, NULL,      NULL,  NULL,  NULL, "set random number generator seed",                               4 },  
-  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",                4 },  
+  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off biased sequence composition corrections to scores",     4 },
+  { "--seed",       eslARG_INT,    "42",  NULL, NULL,      NULL,  NULL,  NULL, "set random number generator seed",                               4 },  
+  { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "choose quasirandom random number generator seed (by time())",    4 },  
+  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",                4 },  
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                                 4 },
+  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                                 4 },
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -88,7 +90,7 @@ struct cfg_s {
   int     seqZ_is_fixed;	/* TRUE if seqZ was set on cmd line         */
   int     domZ_is_fixed;	/* TRUE if domZ was set on cmd line         */
 
-  int              do_slomax;	/* TRUE to run in slow/max mode             */
+  int              do_max;	/* TRUE to run in slow/max mode             */
   double           F1;		/* MSV filter threshold                     */
   double           F2;		/* Viterbi filter threshold                 */
   double           F3;		/* uncorrected Forward filter threshold     */
@@ -324,13 +326,13 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 
   /* Heuristic filter thresholds */
-  cfg->do_slomax = FALSE;
-  cfg->F1        = esl_opt_GetReal(go, "--F1");
-  cfg->F2        = esl_opt_GetReal(go, "--F2");
-  cfg->F3        = esl_opt_GetReal(go, "--F3");
-  if (esl_opt_GetBoolean(go, "--slomax")) 
+  cfg->do_max = FALSE;
+  cfg->F1     = esl_opt_GetReal(go, "--F1");
+  cfg->F2     = esl_opt_GetReal(go, "--F2");
+  cfg->F3     = esl_opt_GetReal(go, "--F3");
+  if (esl_opt_GetBoolean(go, "--max")) 
     {
-      cfg->do_slomax = TRUE;
+      cfg->do_max = TRUE;
       cfg->F1 = cfg->F2 = cfg->F3 = 1.0; 
     }
 
@@ -411,8 +413,8 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 static int
 init_worker_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 {
-  if (esl_opt_IsDefault(go, "--seed")) cfg->r = esl_randomness_CreateTimeseeded();
-  else                                 cfg->r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  if (esl_opt_GetBoolean(go, "--timeseed")) cfg->r = esl_randomness_CreateTimeseeded();
+  else                                      cfg->r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
   if (cfg->r == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
 
   if ((cfg->ddef = p7_domaindef_Create(cfg->r)) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
@@ -470,7 +472,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Pfam bit score thresholds may be in use */
       if (cfg->model_cutoff_flag && set_pfam_bitscore_cutoffs(cfg, hmm) != eslOK) p7_Fail("requested score cutoffs not available in model %s\n", hmm->name);
 
-      p7_bg_SetFilterByHMM(cfg->bg, hmm); /* EXPERIMENTAL */
+      if (esl_opt_GetBoolean(go, "--biasfilter"))
+	p7_bg_SetFilterByHMM(cfg->bg, hmm); /* EXPERIMENTAL */
       
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
@@ -510,7 +513,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (P > cfg->F1 && ! sequence_is_reportable(cfg, seq_score, P)) { esl_sq_Reuse(sq); continue; } 
 
 	  /* HMM filtering */
-	  if (! esl_opt_GetBoolean(go, "--nobias") && ! esl_opt_GetBoolean(go, "--slomax")) 
+	  if (esl_opt_GetBoolean(go, "--biasfilter"))
 	    {
 	      p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
 	      seq_score = (usc - filtersc) / eslCONST_LOG2;
@@ -564,7 +567,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* What's the per-seq score, and is it significant enough to be reported? */
 	  /* Figure out the sum of null2 corrections to be added to the null score */
-	  if (! esl_opt_GetBoolean(go, "--nobias"))
+	  if (! esl_opt_GetBoolean(go, "--nonull2"))
 	    {
 	      seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
 	      seqbias = p7_FLogsum(0.0, log(cfg->omega) + seqbias);
@@ -583,7 +586,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  Ld        = 0;
 	  for (d = 0; d < cfg->ddef->ndom; d++) 
 	    {
-	      if (esl_opt_GetBoolean(go, "--nobias")) cfg->ddef->dcl[d].domcorrection = 0.0f;
+	      if (esl_opt_GetBoolean(go, "--nonull2")) cfg->ddef->dcl[d].domcorrection = 0.0f;
 	      if (cfg->ddef->dcl[d].envsc - cfg->ddef->dcl[d].domcorrection > 0.0) 
 		{
 		  sum_score += cfg->ddef->dcl[d].envsc;
@@ -592,7 +595,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		}
 	    }
 	  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	  if (! esl_opt_GetBoolean(go, "--nobias")) 
+	  if (! esl_opt_GetBoolean(go, "--nonull2")) 
 	    seqbias = p7_FLogsum(0.0, log(cfg->omega) + seqbias);
 	  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;
 	  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;
@@ -648,7 +651,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		{
 		  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
 		  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-		  if (! esl_opt_GetBoolean(go, "--nobias")) 
+		  if (! esl_opt_GetBoolean(go, "--nonull2")) 
 		    seqbias = p7_FLogsum(0.0, log(cfg->omega) + hit->dcl[d].domcorrection);
 		  else
 		    seqbias = 0.0;
@@ -763,13 +766,14 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   
   fprintf(cfg->ofp, "# query HMM file:             %s\n", cfg->hmmfile);
   fprintf(cfg->ofp, "# target sequence database:   %s\n", cfg->seqfile);
-  if (! esl_opt_IsDefault(go, "-o"))       fprintf(cfg->ofp, "# output directed to file:    %s\n",    esl_opt_GetString(go, "-o"));
-  if (! esl_opt_IsDefault(go, "--seqE"))   fprintf(cfg->ofp, "# sequence E-value threshold: <= %g\n", esl_opt_GetReal(go, "--seqE"));
-  if ( esl_opt_GetBoolean(go, "--slomax")) fprintf(cfg->ofp, "# Max sensitivity: heuristic filters OFF\n");
-  if (! esl_opt_IsDefault(go, "--F1"))     fprintf(cfg->ofp, "# MSV filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
-  if (! esl_opt_IsDefault(go, "--F2"))     fprintf(cfg->ofp, "# Vit filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F2"));
-  if (! esl_opt_IsDefault(go, "--F3"))     fprintf(cfg->ofp, "# Fwd filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F3"));
-  if (! esl_opt_IsDefault(go, "--seed"))   fprintf(cfg->ofp, "# Random generator seed:      %d\n",    esl_opt_GetInteger(go, "--seed"));
+  if (! esl_opt_IsDefault(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:    %s\n",    esl_opt_GetString(go, "-o"));
+  if (! esl_opt_IsDefault(go, "--seqE"))      fprintf(cfg->ofp, "# sequence E-value threshold: <= %g\n", esl_opt_GetReal(go, "--seqE"));
+  if (  esl_opt_GetBoolean(go, "--max"))      fprintf(cfg->ofp, "# Max sensitivity: heuristic filters OFF\n");
+  if (! esl_opt_IsDefault(go, "--F1"))        fprintf(cfg->ofp, "# MSV filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F1"));
+  if (! esl_opt_IsDefault(go, "--F2"))        fprintf(cfg->ofp, "# Vit filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F2"));
+  if (! esl_opt_IsDefault(go, "--F3"))        fprintf(cfg->ofp, "# Fwd filter P threshold:     <= %g\n", esl_opt_GetReal(go, "--F3"));
+  if (  esl_opt_GetBoolean(go, "--timeseed")) fprintf(cfg->ofp, "# Random generator seed:      [quasirandom by time()]\n");
+  else                                        fprintf(cfg->ofp, "# Random generator seed:      %d\n", esl_opt_GetInteger(go, "--seed"));
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
