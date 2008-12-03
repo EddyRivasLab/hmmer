@@ -423,7 +423,7 @@ p7_tophits_Destroy(P7_TOPHITS *h)
   ./benchmark-tophits
 
   As of 28 Dec 07, shows 0.20u for 10 lists of 10,000 hits each (at least ~100x normal expectation),
-  so we expect top hits list time to be negligible for typical hmmsearch/hmmpfam runs.
+  so we expect top hits list time to be negligible for typical hmmsearch/hmmscan runs.
   
   If needed, we do have opportunity for optimization, however - especially in memory handling.
  */

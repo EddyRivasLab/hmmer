@@ -119,7 +119,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_OPROFILE **ret_o
   int           status;
 
   if (hfp->errbuf != NULL) hfp->errbuf[0] = '\0';
-  if (feof(hfp->ffp)) { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
+  if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
+  if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
   
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
   if (magic != v30fmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic");

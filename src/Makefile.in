@@ -31,8 +31,8 @@ PROGS = hmmalign\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
-	hmmpfam\
 	hmmpress\
+	hmmscan\
 	hmmsearch\
 	hmmsim\
 	hmmstat

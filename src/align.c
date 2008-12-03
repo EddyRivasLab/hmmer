@@ -11,7 +11,8 @@
 #include "hmmer.h"
 
 static int  annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M);
-static int  rejustify_insertions(ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
+static int  rejustify_insertions_digital  (                         ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
+static int  rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
 /*static void rightjustify(const ESL_ALPHABET *abc, ESL_DSQ *ax, int n);*/
 
 
@@ -19,24 +20,47 @@ static int  rejustify_insertions(ESL_MSA *msa, int *inserts, int *matmap, int *m
  * Synopsis:  Convert array of traces to a new MSA.
  * Incept:    SRE, Tue Oct 21 19:40:33 2008 [Janelia]
  *
- * Purpose:   
+ * Purpose:   Convert an array of <nseq> traces <tr[0..nseq-1]>, for
+ *            digital sequences <sq[0..nseq-1]> aligned to a model of
+ *            length <M>, to a new multiple sequence alignment.
+ *            The new alignment structure is allocated here, and returned
+ *            in <*ret_msa>.
+ *            
+ *            <optflags> controls some optional behaviors in producing
+ *            the alignment. A <p7_DIGITIZE> flag creates the MSA in
+ *            digital mode, as opposed to a default text mode.  A
+ *            <p7_ALL_CONSENSUS_COLS> flag will create a column for
+ *            every consensus column in the model, even if it means
+ *            having all gap characters (deletions) in a column; this
+ *            guarantees that the alignment will have at least <M>
+ *            columns. The default is to only show columns that have
+ *            at least one residue in them.
+ *            
+ *            The <optflags> can be combined by logical OR; for
+ *            example, <p7_DIGITIZE | p7_ALL_CONSENSUS_COLS>.
+ *            
+ * Args:      sq       - array of digital sequences, 0..nseq-1
+ *            tr       - array of tracebacks, 0..nseq-1
+ *            nseq     - number of sequences
+ *            M        - length of model sequences were aligned to
+ *            optflags - flags controlling optional behaviours;
+ *                       <p7_DIGITIZE | p7_ALL_CONSENSUS_COLS>
+ *            ret_msa  - RETURN: new multiple sequence alignment
  *
- * Args:      
+ * Returns:   <eslOK> on success, and <*ret_msa> points to a new
+ *            <ESL_MSA> object. Caller is responsible for free'ing
+ *            this new MSA with <esl_msa_Destroy()>.
  *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ * Throws:    <eslEMEM> on allocation failure; <*ret_msa> is <NULL>.
  */
 int
-p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, ESL_MSA **ret_msa)
+p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa)
 {
-  ESL_MSA      *msa     = NULL;	        /* RETURN: new MSA */
-  const ESL_ALPHABET *abc     = sq[0]->abc;   /* digital alphabet */
-  int          *inserts = NULL;	        /* array of max gaps between aligned columns */
-  int          *matmap  = NULL;         /* matmap[k] = apos of match k [1..M] */
-  int          *matuse  = NULL;         /* TRUE if an alignment column is associated with match state k [1..M] */
+  ESL_MSA      *msa        = NULL;	/* RETURN: new MSA */
+  const ESL_ALPHABET *abc  = sq[0]->abc;/* digital alphabet */
+  int          *inserts    = NULL;	/* array of max gaps between aligned columns */
+  int          *matmap     = NULL;      /* matmap[k] = apos of match k [1..M] */
+  int          *matuse     = NULL;      /* TRUE if an alignment column is associated with match state k [1..M] */
   int           idx;                    /* counter over sequences */
   int           alen;		        /* width of alignment */
   int           nins;                   /* counter for inserts */
@@ -50,17 +74,30 @@ p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, ESL_MSA **ret_m
    * sort of overall knowledge of where the inserts are and how long
    * they are in order to create the alignment.
    * 
-   * Here's our trick. inserts[] is a 0..hmm->M array; inserts[i] stores
+   * Here's our trick. inserts[] is a 0..M array; inserts[i] stores
    * the maximum number of times insert substate i was used. This
    * is the maximum number of gaps to insert between canonical 
    * column i and i+1.  inserts[0] is the N-term tail; inserts[M] is
    * the C-term tail.
    * 
+   * Additionally, matuse[k=1..M] says whether we're going to make an
+   * alignment column for consensus position k. By default this is
+   * TRUE only if there is at least one residue in the column. If
+   * the p7_ALL_CONSENSUS_COLS option flag is set, though, all
+   * matuse[1..M] are set TRUE. (matuse[0] is unused, always FALSE.)
+   * 
    * Remember that N and C emit on transition, hence the check for an
    * N->N or C->C transition before bumping nins. 
    */
-  ESL_ALLOC(inserts, sizeof(int) * (M+1));   esl_vec_ISet(inserts, M+1, 0);
-  ESL_ALLOC(matuse,  sizeof(int) * (M+1));   esl_vec_ISet(matuse,  M+1, FALSE);
+  ESL_ALLOC(inserts, sizeof(int) * (M+1));   
+  esl_vec_ISet(inserts, M+1, 0);
+
+  ESL_ALLOC(matuse,  sizeof(int) * (M+1));   
+  if (optflags & p7_ALL_CONSENSUS_COLS) {
+    matuse[0] = FALSE;
+    esl_vec_ISet(matuse+1, M, TRUE);
+  } else 
+    esl_vec_ISet(matuse, M+1, FALSE);
 
   for (idx = 0; idx < nseq; idx++) 
     {
@@ -86,6 +123,10 @@ p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, ESL_MSA **ret_m
 	    break;
 
 	  case p7T_B: 
+	    inserts[0] = ESL_MAX(nins, inserts[0]); 
+	    nins = 0;
+	    break;
+
 	  case p7T_S: break;	
 
 	  case p7T_J: p7_Die("J state unsupported in p7_Traces2Alignment()");
@@ -94,57 +135,113 @@ p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, ESL_MSA **ret_m
 	}
     }
 
-  /* Using inserts[], construct matmap[] and determine alen */
+  /* Using inserts[] and matuse[], construct matmap[] and determine alen.
+   * matmap[1..M] = position 1..alen that match state k maps to. 
+   */
   ESL_ALLOC(matmap, sizeof(int) * (M+1));
-  for (alen = 0, k = 1; k <= M; k++) {
+  matmap[0] = 0;
+  alen      = inserts[0];
+  for (k = 1; k <= M; k++) {
     if (matuse[k]) { matmap[k] = alen+1; alen += 1+inserts[k]; }
     else           { matmap[k] = alen;   alen +=   inserts[k]; }
   }
   
   /* construct the new alignment */
-  if ((msa = esl_msa_CreateDigital(sq[0]->abc, nseq, alen)) == NULL) goto ERROR;
-  
-  for (idx = 0; idx < nseq; idx++)
+  if (optflags & p7_DIGITIZE) 
     {
-      for (apos = 1; apos <= alen; apos++) msa->ax[idx][apos] = esl_abc_XGetGap(abc);
-
-      apos = 1;
-      for (z = 0; z < tr[idx]->N; z++)
+      if ((msa = esl_msa_CreateDigital(sq[0]->abc, nseq, alen)) == NULL) goto ERROR;
+  
+      for (idx = 0; idx < nseq; idx++)
 	{
-	  switch (tr[idx]->st[z]) {
-	  case p7T_M:
-	    msa->ax[idx][matmap[tr[idx]->k[z]]] = sq[idx]->dsq[tr[idx]->i[z]];
-	    /* fallthru */
-	  case p7T_D:
-	    apos = matmap[tr[idx]->k[z]] + 1;
-	    break;
+	  msa->ax[idx][0]      = eslDSQ_SENTINEL;
+	  for (apos = 1; apos <= alen; apos++) msa->ax[idx][apos] = esl_abc_XGetGap(abc);
+	  msa->ax[idx][alen+1] = eslDSQ_SENTINEL;
 
-	  case p7T_I:
-	    msa->ax[idx][apos] = sq[idx]->dsq[tr[idx]->i[z]];
-	    apos++;
-	    break;
+	  apos = 1;
+	  for (z = 0; z < tr[idx]->N; z++)
+	    {
+	      switch (tr[idx]->st[z]) {
+	      case p7T_M:
+		msa->ax[idx][matmap[tr[idx]->k[z]]] = sq[idx]->dsq[tr[idx]->i[z]];
+		apos = matmap[tr[idx]->k[z]] + 1;
+		break;
+		/* fallthru */
+	      case p7T_D:
+		apos = matmap[tr[idx]->k[z]] + 1;
+		break;
+
+	      case p7T_I:
+		msa->ax[idx][apos] = sq[idx]->dsq[tr[idx]->i[z]];
+		apos++;
+		break;
 	    
-	  case p7T_N:
-	  case p7T_C:
-	    if (tr[idx]->i[z] > 0) {
-	      msa->ax[idx][apos] = sq[idx]->dsq[tr[idx]->i[z]];
-	      apos++;
+	      case p7T_N:
+	      case p7T_C:
+		if (tr[idx]->i[z] > 0) {
+		  msa->ax[idx][apos] = sq[idx]->dsq[tr[idx]->i[z]];
+		  apos++;
+		}
+		break;
+	    
+	      case p7T_E:
+		apos = matmap[M]+1;	/* set position for C-terminal tail */
+		break;
+
+	      default:
+		break;
+	      }
 	    }
-	    break;
-	    
-	  case p7T_E:
-	    apos = matmap[M]+1;	/* set position for C-terminal tail */
-	    break;
+	}
+    }
+  else /* text mode alignment */
+    {
+      if ((msa = esl_msa_Create(nseq, alen)) == NULL) goto ERROR;
 
-	  default:
-	    break;
-	  }
+      for (idx = 0; idx < nseq; idx++)
+	{
+	  for (apos = 0; apos < alen; apos++) msa->aseq[idx][apos] = '.';
+	  for (k    = 1; k    <= M;   k++)    if (matuse[k]) msa->aseq[idx][-1+matmap[k]] = '-';
+	  msa->aseq[idx][apos] = '\0';
+
+	  apos = 0;
+	  for (z = 0; z < tr[idx]->N; z++)
+	    {
+	      switch (tr[idx]->st[z]) {
+	      case p7T_M:
+		msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = toupper(abc->sym[sq[idx]->dsq[tr[idx]->i[z]]]);
+		/*fallthru*/
+	      case p7T_D:
+		apos = matmap[tr[idx]->k[z]];
+		break;
+
+	      case p7T_I:
+		msa->aseq[idx][apos] = tolower(abc->sym[sq[idx]->dsq[tr[idx]->i[z]]]);
+		apos++;
+		break;
+	    
+	      case p7T_N:
+	      case p7T_C:
+		if (tr[idx]->i[z] > 0) {
+		  msa->aseq[idx][apos] = tolower(abc->sym[sq[idx]->dsq[tr[idx]->i[z]]]);
+		  apos++;
+		}
+		break;
+	    
+	      case p7T_E:
+		apos = matmap[M];	/* set position for C-terminal tail */
+		break;
+
+	      default:
+		break;
+	      }
+	    }
 	}
     }
 
   annotate_posterior_probability(msa, tr, matmap, M);
 
-  rejustify_insertions(msa, inserts, matmap, matuse, M);
+  if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inserts, matmap, matuse, M);
+  else                        rejustify_insertions_text   (abc, msa, inserts, matmap, matuse, M);
 
   msa->nseq = nseq;
   msa->alen = alen;
@@ -255,7 +352,7 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M)
 }
 
 
-/* Function:  rejustify_insertions()
+/* Function:  rejustify_insertions_digital()
  * Synopsis:  
  * Incept:    SRE, Thu Oct 23 13:06:12 2008 [Janelia]
  *
@@ -290,7 +387,7 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M)
  * Xref:      
  */
 static int
-rejustify_insertions(ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M)
+rejustify_insertions_digital(ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M)
 {
   int idx;
   int k;
@@ -305,7 +402,9 @@ rejustify_insertions(ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M
 	  {
 	    for (nins = 0, apos = matmap[k]+1; apos <= matmap[k+1]-matuse[k+1]; apos++)
 	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) nins++;
-	    nins /= 2;		/* split in half; nins now = # of residues left left-justified  */
+
+	    if (k == 0) nins = 0;    /* N-terminus is right justified */
+	    else        nins /= 2;   /* split in half; nins now = # of residues left left-justified  */
 	    
 	    opos = npos = matmap[k+1]-matuse[k+1];
 	    while (opos >= matmap[k]+1+nins) {
@@ -320,6 +419,46 @@ rejustify_insertions(ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M
 	    while (npos >= matmap[k]+1+nins) {
 	      msa->ax[idx][npos] = esl_abc_XGetGap(msa->abc);
 	      if (msa->pp != NULL && msa->pp[idx] != NULL) msa->pp[idx][npos-1] = '.';
+	      npos--;
+	    }
+	  }
+    }
+  return eslOK;
+}
+
+static int
+rejustify_insertions_text(const ESL_ALPHABET *abc, ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M)
+{
+  int idx;
+  int k;
+  int apos;
+  int nins;
+  int npos, opos;
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      for (k = 0; k < M; k++)
+	if (inserts[k] > 1) 
+	  {
+	    for (nins = 0, apos = matmap[k]; apos < matmap[k+1]-matuse[k+1]; apos++)
+	      if (esl_abc_CIsResidue(abc, msa->aseq[idx][apos])) nins++;
+
+	    if (k == 0) nins = 0;    /* N-terminus is right justified */
+	    else        nins /= 2;   /* split in half; nins now = # of residues left left-justified  */
+	    
+	    opos = npos = -1+matmap[k+1]-matuse[k+1];
+	    while (opos >= matmap[k]+nins) {
+	      if (esl_abc_CIsGap(abc, msa->aseq[idx][opos])) opos--;
+	      else {
+		msa->aseq[idx][npos] = msa->aseq[idx][opos];
+		if (msa->pp != NULL && msa->pp[idx] != NULL) msa->pp[idx][npos] = msa->pp[idx][opos];
+		npos--;
+		opos--;
+	      }		
+	    }
+	    while (npos >= matmap[k]+nins) {
+	      msa->aseq[idx][npos] = '.';
+	      if (msa->pp != NULL && msa->pp[idx] != NULL) msa->pp[idx][npos] = '.';
 	      npos--;
 	    }
 	  }

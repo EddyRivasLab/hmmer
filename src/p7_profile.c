@@ -35,7 +35,7 @@
  *            alphabet <abc>.
  *            
  *            Because this function might be in the critical path (in
- *            hmmpfam, for example), we leave much of the model
+ *            hmmscan, for example), we leave much of the model
  *            unintialized, including scores and length model
  *            probabilities. The <p7_ProfileConfig()> call is what
  *            sets these. 

@@ -1,4 +1,4 @@
-/* hmmpress: prepare an HMM database for faster hmmpfam searches.
+/* hmmpress: prepare an HMM database for faster hmmscan searches.
  * 
  * SRE, Fri Oct 17 11:24:26 2008 [Janelia]
  * SVN $Id$
@@ -21,7 +21,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "prepare an HMM database for faster hmmpfam searches";
+static char banner[] = "prepare an HMM database for faster hmmscan searches";
 
 static void open_db_files(char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, ESL_NEWSSI **ret_nssi);
 

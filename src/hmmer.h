@@ -54,11 +54,17 @@
 
 #define p7_NEVPARAM 3	/* number of statistical parameters stored in models */
 #define p7_NCUTOFFS 6	/* number of Pfam score cutoffs stored in models     */
-#define p7_NOFFSETS 3	/* number of disk offsets stored in models for hmmpfam's fast model input */
+#define p7_NOFFSETS 3	/* number of disk offsets stored in models for hmmscan's fast model input */
 
 enum p7_evparams_e {  p7_LAMBDA = 0,      p7_MU = 1,     p7_TAU = 2 };
 enum p7_cutoffs_e  {     p7_GA1 = 0,     p7_GA2 = 1,     p7_TC1 = 2,   p7_TC2 = 3, p7_NC1 = 4, p7_NC2 = 5 };
 enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
+
+/* Option flags when creating multiple alignments */
+#define p7_DEFAULT             0
+#define p7_DIGITIZE            (1<<0)
+#define p7_ALL_CONSENSUS_COLS  (1<<1)
+
 
 
 
@@ -634,7 +640,7 @@ typedef struct p7_tophits_s {
  *****************************************************************/
 
 /* align.c */
-extern int p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, ESL_MSA **ret_msa);
+extern int p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
 
 
 /* build.c */

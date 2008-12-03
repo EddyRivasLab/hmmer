@@ -24,7 +24,7 @@ static ESL_OPTIONS options[] = {
   { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                    1 },
   { "-q",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "quiet: suppress banner and informational output",             1 },
 
-  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> using map in HMM",              2 },
+  //  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> using map in HMM",              2 },
   { "--amino",     eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
   { "--dna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both DNA: no autodetection",      2 },
   { "--rna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both RNA: no autodetection",      2 },
@@ -69,7 +69,8 @@ main(int argc, char **argv)
   ESL_GETOPTS  *go      = NULL;	/* application configuration       */
   char         *hmmfile = NULL;	/* HMM file name                   */
   char         *seqfile = NULL; /* sequence file name              */
-  int           format  = eslSQFILE_UNKNOWN;
+  int           infmt   = eslSQFILE_UNKNOWN;
+  int           outfmt  = eslMSAFILE_STOCKHOLM;
   P7_HMMFILE   *hfp     = NULL;	/* open HMM file                   */
   ESL_SQFILE   *sqfp    = NULL;	/* open sequence file              */
   ESL_SQ      **sq      = NULL;	/* array of sequences              */
@@ -81,7 +82,7 @@ main(int argc, char **argv)
   P7_PROFILE   *gm      = NULL;
   P7_OPROFILE  *om      = NULL;
   P7_OMX       *oxf     = NULL;	/* optimized Forward matrix        */
-  P7_OMX       *oxb     = NULL;	/* optimized Forward matrix        */
+  P7_OMX       *oxb     = NULL;	/* optimized Backward matrix       */
   P7_TRACE    **tr      = NULL;	/* array of tracebacks             */
   ESL_MSA      *msa     = NULL;	/* resulting multiple alignment    */
   int           idx;		/* counter over seqs, traces       */
@@ -100,14 +101,25 @@ main(int argc, char **argv)
   hmmfile = esl_opt_GetArg(go, 1);
   seqfile = esl_opt_GetArg(go, 2);
 
+  /* If caller declared an input format, decode it 
+   */
+  if (! esl_opt_IsDefault(go, "--informat")) {
+    infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
+    if (infmt == eslSQFILE_UNKNOWN) cmdline_failure(argv[0], "%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
+  }
+
+  /* Determine output alignment file format */
+  outfmt = esl_msa_EncodeFormat(esl_opt_GetString(go, "--outformat"));
+  if (outfmt == eslMSAFILE_UNKNOWN)    cmdline_failure(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
+
+
   /* If caller forced an alphabet on us, create the one the caller wants  
    */
   if      (esl_opt_GetBoolean(go, "--amino")) abc = esl_alphabet_Create(eslAMINO);
   else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
   else if (esl_opt_GetBoolean(go, "--rna"))   abc = esl_alphabet_Create(eslRNA);
 
-
-  /* Read one HMM; make sure there's only one.
+  /* Read one HMM, and make sure there's only one.
    */
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) cmdline_failure(argv[0], "Failed to open HMM file %s for reading.\n",                   hmmfile);
@@ -122,12 +134,12 @@ main(int argc, char **argv)
 
   status = p7_hmmfile_Read(hfp, &abc, NULL);
   if      (status != eslEOF)       cmdline_failure(argv[0], "HMM file %s does not contain just one HMM\n", hfp->fname);
-
   p7_hmmfile_Close(hfp);
 
 
-
-  status = esl_sqfile_OpenDigital(abc, seqfile, format, NULL, &sqfp);
+  /* Read digital sequences into an array.
+   */
+  status = esl_sqfile_OpenDigital(abc, seqfile, infmt, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          seqfile);
   else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            seqfile);
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, seqfile);
@@ -147,6 +159,8 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
 
 
+  /* Remaining initializations, including trace array allocation
+   */
   ESL_ALLOC(tr, sizeof(P7_TRACE *) * nseq);
   for (idx = 0; idx < nseq; idx++)
     tr[idx] = p7_trace_CreateWithPP();
@@ -161,6 +175,9 @@ main(int argc, char **argv)
   oxf = p7_omx_Create(hmm->M, sq[0]->n, sq[0]->n);
   oxb = p7_omx_Create(hmm->M, sq[0]->n, sq[0]->n);	
   
+
+  /* Collect an OA trace for each sequence 
+   */
   for (idx = 0; idx < nseq; idx++)
     {
       p7_omx_GrowTo(oxf, hmm->M, sq[idx]->n, sq[idx]->n);
@@ -181,9 +198,14 @@ main(int argc, char **argv)
       p7_omx_Reuse(oxb);
     }
 
-  p7_Traces2Alignment(sq, tr, nseq, om->M, &msa);
+#if 0
+  for (idx = 0; idx < nseq; idx++)
+    p7_trace_Dump(stdout, tr[idx], gm, sq[idx]->dsq);
+#endif
 
-  esl_msa_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
+  p7_Traces2Alignment(sq, tr, nseq, om->M, p7_DEFAULT, &msa);
+
+  esl_msa_Write(stdout, msa, outfmt);
 
   for (idx = 0; idx <= nseq; idx++) esl_sq_Destroy(sq[idx]);    /* including sq[nseq] because we overallocated */
   for (idx = 0; idx <  nseq; idx++) p7_trace_Destroy(tr[idx]); 
