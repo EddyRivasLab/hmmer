@@ -115,7 +115,7 @@ typedef struct p7_oprofile_s {
   __m128   *rf_mem;
 
   /* Disk offset information for hmmpfam's fast model retrieval                */
-  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET */
+  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                       */
 
   /* Information copied from parent profile:                                       */
   char  *name;			/* unique name of model                            */
@@ -124,8 +124,9 @@ typedef struct p7_oprofile_s {
   char  *ref;                   /* reference line           1..M; *ref=0: unused   */
   char  *cs;                    /* consensus structure line 1..M, *cs=0: unused    */
   char  *consensus;		/* consensus residues for ali display, 1..M        */
-  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values             */
-  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain gather, trust, noise cutoffs */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET   */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-dom bit cutoffs, or UNSET           */
+  float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET      */
 
   int    mode;			/* p7_LOCAL, for example                           */
   int    L;			/* current configured target seq length            */
@@ -259,9 +260,11 @@ extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
-extern int          p7_oprofile_ReconfigLength  (P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigMultihit(P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigUnihit  (P7_OPROFILE *gm, int L);
+extern int          p7_oprofile_ReconfigLength    (P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigMSVLength (P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigMultihit  (P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigUnihit    (P7_OPROFILE *gm, int L);
 extern int          p7_oprofile_Logify (P7_OPROFILE *om);
 extern int          p7_oprofile_Probify(P7_OPROFILE *om);
 extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,

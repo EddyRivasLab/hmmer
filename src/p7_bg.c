@@ -14,7 +14,6 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_hmm.h"
-#include "esl_random.h"		/* needed for now in SetFilter() routines; will disappear */
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -55,11 +54,9 @@ p7_bg_Create(const ESL_ALPHABET *abc)
 
   ESL_ALLOC(bg, sizeof(P7_BG));
   bg->f     = NULL;
-  bg->mcomp = NULL;
   bg->fhmm  = NULL;
 
   ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
-  ESL_ALLOC(bg->mcomp, sizeof(float) * abc->K);
   if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
 
   if       (abc->type == eslAMINO)
@@ -69,8 +66,9 @@ p7_bg_Create(const ESL_ALPHABET *abc)
   else
     esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
 
-  bg->p1  = 350./351.;
-  bg->abc = abc;
+  bg->p1    = 350./351.;
+  bg->omega = 1./256.;
+  bg->abc   = abc;
   return bg;
 
  ERROR:
@@ -94,15 +92,14 @@ p7_bg_CreateUniform(const ESL_ALPHABET *abc)
 
   ESL_ALLOC(bg, sizeof(P7_BG));
   bg->f     = NULL;
-  bg->mcomp = NULL;
   bg->fhmm  = NULL;
 
   ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
-  ESL_ALLOC(bg->mcomp, sizeof(float) * abc->K);
   if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
 
   esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
-  bg->p1  = 350./351.;
+  bg->p1    = 350./351.;
+  bg->omega = 1./256.;
   bg->abc = (ESL_ALPHABET *) abc; /* safe: we're just keeping a reference */
   return bg;
 
@@ -141,7 +138,6 @@ p7_bg_Destroy(P7_BG *bg)
 {
   if (bg != NULL) {
     if (bg->f     != NULL) free(bg->f);
-    if (bg->mcomp != NULL) free(bg->mcomp);
     if (bg->fhmm  != NULL) esl_hmm_Destroy(bg->fhmm);
     free(bg);
   }
@@ -200,92 +196,59 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  * 3. Filter null model
  *****************************************************************/
 
-static int create_filter_hmm(P7_BG *bg, int M);
-int
-p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
-{
-  float *mocc = NULL;
-  float *iocc = NULL;
-  int    status;
-  int    k;
-  float  norm = 0.0;
-
-  ESL_ALLOC(mocc, sizeof(float) * (hmm->M+1));
-  ESL_ALLOC(iocc, sizeof(float) * (hmm->M+1));
-
-  p7_hmm_CalculateOccupancy(hmm, mocc, iocc);
-
-  esl_vec_FSet(bg->mcomp, bg->abc->K, 0.0);
-  esl_vec_FAddScaled(bg->mcomp, hmm->ins[0], iocc[0], hmm->abc->K);
-  for (k = 1; k <= hmm->M; k++)
-    {
-      esl_vec_FAddScaled(bg->mcomp, hmm->mat[k], mocc[k], hmm->abc->K);
-      esl_vec_FAddScaled(bg->mcomp, hmm->ins[k], iocc[k], hmm->abc->K);
-    }
-  norm  = esl_vec_FSum(mocc, hmm->M+1);
-  norm += esl_vec_FSum(iocc, hmm->M+1);
-  esl_vec_FScale(bg->mcomp, hmm->abc->K, 1.0 / norm);
-
-  create_filter_hmm(bg, hmm->M);
-  free(mocc);
-  free(iocc);
-  return eslOK;
-
- ERROR:
-  if (mocc != NULL) free(mocc);
-  if (iocc != NULL) free(iocc);
-  return status;
-}
-
-
-#if 0
-/* Function:  p7_bg_SetFilterByHMM()
- * Synopsis:  Parameterizes the filter null model from an HMM.
- * Incept:    SRE, Thu Aug 28 08:48:35 2008 [Janelia]
+/* Function:  p7_bg_SetFilter()
+ * Synopsis:  Configure filter HMM with new model composition.
+ * Incept:    SRE, Fri Dec  5 09:08:15 2008 [Janelia]
  *
- * Purpose:   Given a particular model <hmm>, parameterize a two-state
- *            model-dependent filter null model in <bg> in which one
- *            state is the usual iid background model, the second
- *            state emits the average residue composition of sequences
- *            emitted by <hmm>, and the transition probabilities are
- *            set to arbitrary hardcoded values that happen to work
- *            empirically.
+ * Purpose:   The "filter HMM" is an experimental filter in the
+ *            acceleration pipeline for avoiding biased composition
+ *            sequences. It has no effect on final scoring, if a
+ *            sequence passes all steps of the pipeline; it is only
+ *            used to eliminate biased sequences from further
+ *            consideration early in the pipeline, before the big guns
+ *            of domain postprocessing are applied.
+ *            
+ *            At least at present, it doesn't actually work as well as
+ *            one would hope.  This will be an area of future work.
+ *            What we really want to do is make a better null model of
+ *            real protein sequences (and their biases), and incorporate
+ *            that model into the flanks (NCJ states) of the profile.
+ *            
+ *            <compo> is the average model residue composition, from
+ *            either the HMM or the copy in a profile or optimized
+ *            profile. <M> is the length of the model in nodes.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      J4/25: generalized to use composition vector, not
+ *                   specifically an HMM. 
  */
 int
-p7_bg_SetFilterByHMM(P7_BG *bg, P7_HMM *hmm)
+p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)
 {
-  ESL_RANDOMNESS  *rng  = esl_randomness_CreateTimeseeded();     /* source of randomness     FIXME: see below  */
-  ESL_SQ          *sq   = esl_sq_CreateDigital(bg->abc);         /* FIXME: don't need to do this by sampling; can do it analytically */
-  int              nseq = 1000;
-  int              pos;
-  int              status;
+  float L0 = 400.0;		/* mean length in state 0 of filter HMM (normal background) */
+  float L1 = (float) M / 8.0; 	/* mean length in state 1 of filter HMM (biased segment) */
 
-  esl_vec_FSet(bg->mcomp, bg->abc->K, 1.0); /* a +1 prior */
+  /* State 0 is the normal iid model. */
+  bg->fhmm->t[0][0] =   L0 / (L0+1.0f);
+  bg->fhmm->t[0][1] = 1.0f / (L0+1.0f);
+  bg->fhmm->t[0][2] = 1.0f;          	/* 1.0 transition to E means we'll set length distribution externally. */
+  esl_vec_FCopy(bg->f, bg->abc->K, bg->fhmm->e[0]);
 
-  while (nseq--)
-    {
-      if ((status = p7_CoreEmit(rng, hmm, sq, NULL)) != eslOK) goto ERROR;
+  /* State 1 is the potentially biased model composition. */
+  bg->fhmm->t[1][0] = 1.0f / (L1+1.0f);
+  bg->fhmm->t[1][1] =   L1 / (L1+1.0f);
+  bg->fhmm->t[1][2] = 1.0f;         	/* 1.0 transition to E means we'll set length distribution externally. */
+  esl_vec_FCopy(compo, bg->abc->K, bg->fhmm->e[1]);
 
-      for (pos = 1; pos <= sq->n; pos++)
-	bg->mcomp[sq->dsq[pos]] += 1.0;
+  bg->fhmm->pi[0] = 0.999;
+  bg->fhmm->pi[1] = 0.001;
 
-      esl_sq_Reuse(sq);
-    }
-  
-  esl_vec_FNorm(bg->mcomp, bg->abc->K);
-
-  create_filter_hmm(bg, hmm->M);
-
-  esl_sq_Destroy(sq);
-  esl_randomness_Destroy(rng);
+  esl_hmm_Configure(bg->fhmm, bg->f);
   return eslOK;
-
- ERROR:
-  esl_sq_Destroy(sq);
-  esl_randomness_Destroy(rng);
-  return status;
 }
-#endif
 
 
 /* Function:  p7_bg_FilterScore()
@@ -320,35 +283,6 @@ p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc)
 }
 
 
-/* create_filter_hmm()
- * assumes bg->mcomp has just been set; 
- * now create the two-state HMM;
- * parameters are arbitrary hardwired guesses
- */
-static int
-create_filter_hmm(P7_BG *bg, int M)
-{
-  float L0 = 400.0;		/* mean length in state 0 */
-  float L1 = (float) M / 8.0; 	/* mean length in state 1 */
-
-  /* State 0 is the normal iid model. */
-  bg->fhmm->t[0][0] =   L0 / (L0+1.0f);
-  bg->fhmm->t[0][1] = 1.0f / (L0+1.0f);
-  bg->fhmm->t[0][2] = 1.0f;          	/* 1.0 transition to E means we'll set length distribution externally. */
-  esl_vec_FCopy(bg->f, bg->abc->K, bg->fhmm->e[0]);
-
-  /* State 1 is the potentially biased model composition. */
-  bg->fhmm->t[1][0] = 1.0f / (L1+1.0f);
-  bg->fhmm->t[1][1] =   L1 / (L1+1.0f);
-  bg->fhmm->t[1][2] = 1.0f;         	/* 1.0 transition to E means we'll set length distribution externally. */
-  esl_vec_FCopy(bg->mcomp, bg->abc->K, bg->fhmm->e[1]);
-
-  bg->fhmm->pi[0] = 0.999;
-  bg->fhmm->pi[1] = 0.001;
-
-  esl_hmm_Configure(bg->fhmm, bg->f);
-  return eslOK;
-}
 
 
 /*****************************************************************

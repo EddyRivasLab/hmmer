@@ -237,6 +237,32 @@ p7_alidisplay_EncodePostProb(float p)
 }
 
 
+/* Function:  p7_alidisplay_DecodePostProb()
+ * Synopsis:  Convert a char code post prob to an approx float.
+ * Incept:    SRE, Wed Dec 10 08:59:16 2008 [Janelia]
+ *
+ * Purpose:   Convert posterior probability code <pc>, which
+ *            is [0-9*], to an approximate floating point probability.
+ *            
+ *            The result is crude, because <pc> has already discretized
+ *            with loss of precision. We require that 
+ *            <p7_alidisplay_EncodePostProb(p7_alidisplay_DecodePostProb(pc)) == pc>,
+ *            and that <pc=='0'> decodes to a nonzero probability just to
+ *            avoid any possible absorbing-zero artifacts.
+ *
+ * Returns:   the decoded real-valued approximate probability.
+ */
+float
+p7_alidisplay_DecodePostProb(char pc)
+{
+  if      (pc == '0') return 0.01;
+  else if (pc == '*') return 1.0;
+  else if (pc == '.') return 0.0;
+  else                return ((float) (pc - '0') / 10.);
+}
+
+
+
 /* Function:  p7_alidisplay_Print()
  * Synopsis:  Human readable output of <P7_ALIDISPLAY>
  * Incept:    SRE, Thu Jan  3 10:02:05 2008 [Janelia]
@@ -314,6 +340,110 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
   if (buf != NULL) free(buf);
   return status;
 }  
+
+
+/* Function:  p7_alidisplay_Backconvert()
+ * Synopsis:  Convert an alidisplay to a faux trace and subsequence.
+ * Incept:    SRE, Wed Dec 10 09:49:28 2008 [Janelia]
+ *
+ * Purpose:   Convert alignment display object <ad> to a faux subsequence
+ *            and faux subsequence trace, returning them in <ret_sq> and
+ *            <ret_tr>. 
+ *            
+ *            The subsequence <*ret_sq> is digital; ascii residues in
+ *            <ad> are digitized using digital alphabet <abc>.
+ *            
+ *            The subsequence and trace are suitable for passing as
+ *            array elements to <p7_MultipleAlignment>. This is the
+ *            main purpose of backconversion. Results of a profile
+ *            search are stored in a hit list as a processed
+ *            <P7_ALIDISPLAY>, not as a <P7_TRACE> and <ESL_SQ>, to
+ *            reduce space and to reduce communication overhead in
+ *            parallelized search implementations. After reduction
+ *            to a final hit list, a master may want to construct a
+ *            multiple alignment of all the significant hits. 
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failures. <eslECORRUPT> on unexpected internal
+ *            data corruption. On any exception, <*ret_sq> and <*ret_tr> are
+ *            <NULL>.
+ *
+ * Xref:      J4/29.
+ */
+int
+p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr)
+{
+  ESL_SQ   *sq   = NULL;	/* RETURN: faux subsequence          */
+  P7_TRACE *tr   = NULL;	/* RETURN: faux trace                */
+  int       subL = 0;		/* subsequence length in the <ad>    */
+  int       a, i, k;        	/* coords for <ad>, <sq->dsq>, model */
+  char      st;			/* state type: MDI                   */
+  int       status;
+  
+  /* Make a first pass over <ad> just to calculate subseq length */
+  for (a = 0; a < ad->N; a++)
+    if (esl_abc_CIsResidue(abc, ad->aseq[a])) subL++;
+
+  /* Allocations */
+  if ((sq = esl_sq_CreateDigital(abc)) == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((status = esl_sq_GrowTo(sq, subL)) != eslOK) goto ERROR;
+
+  if ((tr = (ad->ppline == NULL) ?  p7_trace_Create() : p7_trace_CreateWithPP()) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((status = p7_trace_GrowTo(tr, subL+6)) != eslOK) goto ERROR;   /* +6 is for SNB/ECT */
+  
+  /* Construction of dsq, trace */
+  sq->dsq[0] = eslDSQ_SENTINEL;
+  if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_S, 0, 0) : p7_trace_AppendWithPP(tr, p7T_S, 0, 0, 0.0))) != eslOK) goto ERROR;
+  if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_N, 0, 0) : p7_trace_AppendWithPP(tr, p7T_N, 0, 0, 0.0))) != eslOK) goto ERROR;
+  if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_B, 0, 0) : p7_trace_AppendWithPP(tr, p7T_B, 0, 0, 0.0))) != eslOK) goto ERROR;
+  k = ad->hmmfrom;
+  i = 1; 
+  for (a = 0; a < ad->N; a++)
+    {
+      if (esl_abc_CIsResidue(abc, ad->model[a])) { st = (esl_abc_CIsResidue(abc, ad->aseq[a]) ? p7T_M : p7T_D); } else st = p7T_I;
+
+      if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, st, k, i) : p7_trace_AppendWithPP(tr, st, k, i, p7_alidisplay_DecodePostProb(ad->ppline[a])))) != eslOK) goto ERROR;
+
+      switch (st) {
+      case p7T_M: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); k++; i++; break;
+      case p7T_I: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]);      i++; break;
+      case p7T_D:                                                        k++;      break;
+      }
+    }
+  if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_E, 0, 0) : p7_trace_AppendWithPP(tr, p7T_E, 0, 0, 0.0))) != eslOK) goto ERROR;
+  if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_C, 0, 0) : p7_trace_AppendWithPP(tr, p7T_C, 0, 0, 0.0))) != eslOK) goto ERROR;
+  if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_T, 0, 0) : p7_trace_AppendWithPP(tr, p7T_T, 0, 0, 0.0))) != eslOK) goto ERROR;
+  sq->dsq[i] = eslDSQ_SENTINEL;
+
+  /* some sanity checks */
+  if (tr->N != ad->N + 6)      ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size");
+  if (k     != ad->hmmto + 1)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace didn't end at expected place on model");
+  if (i     != subL + 1)       ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length");
+
+  /* Set up <sq> annotation as a subseq of a source sequence */
+  if ((status = esl_sq_SetName  (sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
+  if ((status = esl_sq_SetDesc  (sq, "[subseq from] %s", ad->sqdesc[0] != '\0' ? ad->sqdesc : ad->sqname)) != eslOK) goto ERROR;
+  if ((status = esl_sq_SetSource(sq, ad->sqname))                                                          != eslOK) goto ERROR;
+  if (ad->sqacc[0]  != '\0') { if ((status = esl_sq_SetAccession  (sq, ad->sqacc)) != eslOK) goto ERROR; }
+  sq->n     = subL;
+  sq->start = ad->sqfrom;
+  sq->end   = ad->sqto;
+  sq->C     = 0;
+  sq->W     = subL;
+  sq->L     = ad->L;
+  
+  *ret_sq = sq;
+  *ret_tr = tr;
+  return eslOK;
+
+ ERROR:
+  if (sq != NULL) esl_sq_Destroy(sq);
+  if (tr != NULL) p7_trace_Destroy(tr);
+  *ret_sq = NULL;
+  *ret_tr = NULL;
+  return status;
+}
 
 
 /*****************************************************************

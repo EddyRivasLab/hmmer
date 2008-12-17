@@ -13,6 +13,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "easel.h"
 
@@ -97,27 +98,27 @@ p7_tophits_Grow(P7_TOPHITS *h)
 }
 
 
-/* Function:  
- * Synopsis:  
+/* Function:  p7_tophits_CreateNextHit()
+ * Synopsis:  Get pointer to new structure for recording a hit.
  * Incept:    SRE, Tue Mar 11 08:44:53 2008 [Janelia]
  *
- * Purpose:   
+ * Purpose:   Ask the top hits object <h> to do any necessary
+ *            internal allocation and bookkeeping to add a new,
+ *            empty hit to its list; return a pointer to 
+ *            this new <P7_HIT> structure for data to be filled
+ *            in by the caller.
  *
- * Args:      
+ * Returns:   <eslOK> on success.
  *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ * Throws:    <eslEMEM> on allocation error.
  */
 int
 p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
 {
-  P7_HIT *hit;
+  P7_HIT *hit = NULL;
   int     status;
 
-  if ((status = p7_tophits_Grow(h)) != eslOK) return status;
+  if ((status = p7_tophits_Grow(h)) != eslOK) goto ERROR;
   
   hit = &(h->unsrt[h->N]);
   h->N++;
@@ -150,6 +151,10 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
 
   *ret_hit = hit;
   return eslOK;
+
+ ERROR:
+  *ret_hit = NULL;
+  return status;
 }
 
 
@@ -189,6 +194,9 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> if reallocation failed.
+ * 
+ * Note:      Is this actually used anywhere? (SRE, 10 Dec 08) 
+ *            I think it's not up to date.
  */
 int
 p7_tophits_Add(P7_TOPHITS *h,
@@ -412,6 +420,300 @@ p7_tophits_Destroy(P7_TOPHITS *h)
   free(h);
   return;
 }
+
+
+/*****************************************************************
+ * x. Output API: reporting results from a processing pipeline
+ *****************************************************************/
+
+/* Function:  p7_tophits_Threshold()
+ * Synopsis:  Apply score and E-value thresholds to a hitlist before output.
+ * Incept:    SRE, Tue Dec  9 09:04:55 2008 [Janelia]
+ *
+ * Purpose:   After a pipeline has completed, go through it and mark all
+ *            the targets and domains that are "significant" (satisfying
+ *            the reporting thresholds set for the pipeline). 
+ *            
+ *            Also sets the final total number of reported targets
+ *            <th->nreported> and the size of the search space for
+ *            per-domain conditional E-value calculations,
+ *            <pli->domZ>. By default, <pli->domZ> is the number of
+ *            significant targets reported.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
+{
+  int h, d;	/* counters over sequence hits, domains in sequences */
+  
+  /* First pass over sequences: flag all reportable ones */
+  th->nreported = 0;
+  for (h = 0; h < th->N; h++)
+    {
+      if (p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->pvalue))
+	{
+	  th->hit[h]->is_reported = TRUE;
+	  th->nreported++;
+	}
+    }
+  
+  /* Now we can determined domZ, the effective search space in which additional domains are found */
+  if (pli->domZ_setby == p7_ZSETBY_NTARGETS) pli->domZ = (double) th->nreported;
+
+  /* Second pass is over domains, flagging reportable ones:
+   * we always report at least the best single domain for each sequence, 
+   * regardless of threshold.
+   */
+  for (h = 0; h < th->N; h++)  
+    if (th->hit[h]->is_reported)
+      for (d = 0; d < th->hit[h]->ndom; d++)
+	{
+	  if (th->hit[h]->best_domain == d ||
+	      p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+	    {
+	      th->hit[h]->nreported++;
+	      th->hit[h]->dcl[d].is_reported = TRUE;
+	    }
+	}
+  return eslOK;
+}
+
+
+/* Function:  p7_tophits_Targets()
+ * Synopsis:  Standard output format for a top target hits list.
+ * Incept:    SRE, Tue Dec  9 09:10:43 2008 [Janelia]
+ *
+ * Purpose:   Output a list of the top target hits in <th> 
+ *            in tabular ASCII text format to stream <ofp>, using
+ *            final pipeline accounting stored in <pli>. 
+ *
+ *            It also currently needs access to <bg> to see the
+ *            <bg->omega> prior, but this should eventually change.
+ * 
+ *            The tophits list <th> should already be sorted (see
+ *            <p7_tophits_Sort()> and thresholded (see
+ *            <p7_tophits_Threshold>).
+ *            
+ *            Because <p7_FLogsum()> is used here, you must 
+ *            initialize its lookup table with <p7_FLogsumInit()>
+ *            first.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Notes:     Recalculating the actual null2 score correction with
+ *            <bg->omega> here seems silly - surely we can do that
+ *            in the pipeline?
+ */
+int
+p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw)
+{
+  int    h;
+  int    d;
+  int    namew = ESL_MAX(8,  p7_tophits_GetMaxNameLength(th));
+  int    descw;
+
+  if (textw >  0) descw = ESL_MAX(32, textw - namew - 69); /* 69 is from the format lines below: 57 total width, 12 spaces */
+  else            descw = INT_MAX;
+
+  fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", 
+	  pli->mode == p7_SEARCH_SEQS ? "s" : "");
+
+  /* The minimum width of the target table is 109 char: 46 from fields, 8 from min name, 32 from min desc, 12 spaces */
+  fprintf(ofp, "%25s  %25s  %13s\n", "   --- full sequence ----", "---- single best dom ----", "-- #doms --");
+  fprintf(ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "E-value", "  score", "  bias", "  score",   "bias",    "E-value", "   exp",     "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
+  fprintf(ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "-------", "-------", "------", "-------", "------", "----------", " -----", "-----", namew, "--------", "-----------");
+
+  for (h = 0; h < th->N; h++)
+    if (th->hit[h]->is_reported)
+      {
+	d    = th->hit[h]->best_domain;
+
+	fprintf(ofp, "%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %-.*s\n",
+		th->hit[h]->pvalue * pli->Z,
+		th->hit[h]->score,
+		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+		th->hit[h]->dcl[d].bitscore,
+		p7_FLogsum(0.0, log(bg->omega) + th->hit[h]->dcl[d].domcorrection),
+		th->hit[h]->dcl[d].pvalue * pli->Z,
+		th->hit[h]->nexpected,
+		th->hit[h]->nreported,
+		namew, th->hit[h]->name,
+		descw, th->hit[h]->desc);
+      }
+  if (th->nreported == 0) fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n");
+  return eslOK;
+}
+
+
+/* Function:  p7_tophits_Domains()
+ * Synopsis:  Standard output format for top domain hits and alignments.
+ * Incept:    SRE, Tue Dec  9 09:32:32 2008 [Janelia]
+ *
+ * Purpose:   For each reportable target sequence, output a tabular summary
+ *            of reportable domains found in it, followed by alignments of
+ *            each domain.
+ * 
+ *            Similar to <p7_tophits_Targets()>; see additional notes there.
+ */
+int
+p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw)
+{
+  int h, d;
+  int nd;
+  int namew, descw;
+
+
+
+  fprintf(ofp, "Domain and alignment annotation for each %s:\n", pli->mode == p7_SEARCH_SEQS ? "sequence" : "model");
+
+  for (h = 0; h < th->N; h++)
+    if (th->hit[h]->is_reported)
+      {
+	namew = strlen(th->hit[h]->name);
+	descw = (textw > 0 ?  ESL_MAX(32, textw - namew - 5) : INT_MAX);
+
+	fprintf(ofp, ">> %s  %-.*s\n", th->hit[h]->name, descw, th->hit[h]->desc);
+
+	/* The domain table is 117 char wide:
+           #  bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali acc
+         ---- --------- ------- ---------- ---------- -------- --------    -------- --------    -------- --------    -------
+            1     123.4    23.1    9.7e-11     6.8e-9        3     1230 ..        1      492 []        2      490 .]    0.90
+         1234 1234567.9 12345.7 1234567890 1234567890 12345678 12345678 .. 12345678 12345678 [] 12345678 12345678 .]    0.12
+	*/
+	fprintf(ofp, "  %4s %9s %7s %10s %10s %8s %8s %2s %8s %8s %2s %8s %8s %2s %7s\n",    "#", "bit score",    "bias",    "E-value", "ind Evalue", "hmm from",   "hmm to", "  ", "ali from", "ali to",   "  ", "env from",   "env to", "  ", "ali-acc");
+	fprintf(ofp, "  %4s %9s %7s %10s %10s %8s %8s %2s %8s %8s %2s %8s %8s %2s %7s\n",  "---", "---------", "-------", "----------", "----------", "--------", "--------", "  ", "--------", "--------", "  ", "--------", "--------", "  ", "-------");
+	nd = 0;
+	for (d = 0; d < th->hit[h]->ndom; d++)
+	  if (th->hit[h]->dcl[d].is_reported) 
+	    {
+	      nd++;
+	      fprintf(ofp, "  %4d %9.1f %7.1f %10.2g %10.2g %8d %8d %c%c %8ld %8ld %c%c %8d %8d %c%c %7.2f\n",
+		      nd,
+		      th->hit[h]->dcl[d].bitscore,
+		      p7_FLogsum(0.0, log(bg->omega) + th->hit[h]->dcl[d].domcorrection),
+		      th->hit[h]->dcl[d].pvalue * pli->domZ,
+		      th->hit[h]->dcl[d].pvalue * pli->Z,
+		      th->hit[h]->dcl[d].ad->hmmfrom,
+		      th->hit[h]->dcl[d].ad->hmmto,
+		      (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+		      (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
+		      th->hit[h]->dcl[d].ad->sqfrom,
+		      th->hit[h]->dcl[d].ad->sqto,
+		      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+		      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+		      th->hit[h]->dcl[d].ienv,
+		      th->hit[h]->dcl[d].jenv,
+		      (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+		      (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
+	    }
+
+	
+	fprintf(ofp, "\n  Alignments for each domain:\n");
+	nd = 0;
+	for (d = 0; d < th->hit[h]->ndom; d++)
+	  if (th->hit[h]->dcl[d].is_reported) 
+	    {
+	      nd++;
+	      fprintf(ofp, "  == domain %d    score: %.1f bits;  conditional E-value: %.2g\n",
+		      nd, 
+		      th->hit[h]->dcl[d].bitscore,
+		      th->hit[h]->dcl[d].pvalue * pli->domZ);
+	      p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw);
+	      fprintf(ofp, "\n");
+	    }
+      }
+  if (th->nreported == 0) { fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n"); return eslOK; }
+  return eslOK;
+}
+
+
+/* Function:  p7_tophits_Alignment()
+ * Synopsis:  Create a multiple alignment of all the reported domains.
+ * Incept:    SRE, Wed Dec 10 11:04:40 2008 [Janelia]
+ *
+ * Purpose:   Create a digital multiple alignment of all domains marked
+ *            "reportable" in the top hits list <th>, and return it in
+ *            <*ret_msa>. The MSA is digitized using alphabet <abc>.
+ *
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> if there are no reported domains that satisfy
+ *            reporting thresholds.
+ *
+ * Throws:    <eslEMEM> on allocation failure; <eslECORRUPT> on 
+ *            unexpected internal data corruption.
+ *
+ * Xref:      J4/29.
+ */
+int
+p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **ret_msa)
+{
+  ESL_SQ   **sqarr = NULL;
+  P7_TRACE **trarr = NULL;
+  ESL_MSA   *msa   = NULL;
+  int        ndom  = 0;
+  int        h, d, y;
+  int        M;
+  int        status;
+
+  /* How many domains will be included in the new alignment? */
+  /* Someday we may want to distinguish between a longer list
+   * of reported domains and  a shorter list of domains included
+   * in an alignment.
+   * 
+   * We also set model size M here; every alignment has a copy.
+   */
+  for (h = 0; h < th->N; h++)
+    if (th->hit[h]->is_reported)
+      {
+	for (d = 0; d < th->hit[h]->ndom; d++)
+	  if (th->hit[h]->dcl[d].is_reported) 
+	    ndom++;
+      }
+  if (ndom == 0) { status = eslFAIL; goto ERROR; }
+  M = th->hit[0]->dcl[0].ad->M;
+
+  
+  /* Allocation */
+  ESL_ALLOC(sqarr, sizeof(ESL_SQ *)   * ndom);
+  ESL_ALLOC(trarr, sizeof(P7_TRACE *) * ndom);
+  for (y = 0; y < ndom; y++) sqarr[y] = NULL;
+  for (y = 0; y < ndom; y++) trarr[y] = NULL;
+  
+  /* Make faux sequences, traces */
+  y = 0;
+  for (h = 0; h < th->N; h++)
+    if (th->hit[h]->is_reported)
+      {
+	for (d = 0; d < th->hit[h]->ndom; d++)
+	  if (th->hit[h]->dcl[d].is_reported) 
+	    {
+	      if ((status = p7_alidisplay_Backconvert(th->hit[h]->dcl[d].ad, abc, &(sqarr[y]), &(trarr[y]))) != eslOK) goto ERROR;
+	      y++;
+	    }
+      }
+
+  /* Make the multiple alignment */
+  if ((status = p7_MultipleAlignment(sqarr, trarr, ndom, M, p7_DEFAULT, &msa)) != eslOK) goto ERROR;
+
+
+  /* Clean up */
+  for (y = 0; y < ndom; y++) esl_sq_Destroy(sqarr[y]);
+  for (y = 0; y < ndom; y++) p7_trace_Destroy(trarr[y]);
+  free(sqarr);
+  free(trarr);
+  *ret_msa = msa;
+  return eslOK;
+  
+ ERROR:
+  if (sqarr != NULL) { for (y = 0; y < ndom; y++) if (sqarr[y] != NULL) esl_sq_Destroy(sqarr[y]);   free(sqarr); }
+  if (trarr != NULL) { for (y = 0; y < ndom; y++) if (trarr[y] != NULL) p7_trace_Destroy(trarr[y]); free(trarr); }
+  if (msa   != NULL) esl_msa_Destroy(msa);
+  *ret_msa = NULL;
+  return status;
+}
+
 
 
 /*****************************************************************

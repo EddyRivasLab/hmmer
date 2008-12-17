@@ -57,7 +57,7 @@ static int read_bin_string (FILE *fp, char **ret_s);
  * 1. The P7_HMMFILE object for reading HMMs.
  *****************************************************************/
 
-/* Function:  esl_hmmfile_Open()
+/* Function:  p7_hmmfile_Open()
  * Incept:    SRE, Wed Jan  3 18:38:10 2007 [Casa de Gatos]
  *
  * Purpose:   Open an HMM file <filename>, and prepare to read the first

@@ -351,15 +351,15 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  * Synopsis:  Define domains in a sequence using posterior probs.
  * Incept:    SRE, Sat Feb 23 08:17:44 2008 [Janelia]
  *
- * Purpose:   Given a sequence <sq> and model <om> for which we have 
- *            already calculated a Forward and Backward parsing matrices
- *            <oxf> and <oxb>; use posterior probability heuristics
- *            to determine an annotated domain structure; and for
- *            each domain found, score it (with null2 calculations)
- *            and obtain an optimal accuracy alignment, using <fwd> and
- *            <bck> matrices as workspace for the necessary full-matrix
- *            DP calculations. Caller provides a new or reused <ddef> object to hold these
- *            results.
+ * Purpose:   Given a sequence <sq> and model <om> for which we have
+ *            already calculated a Forward and Backward parsing
+ *            matrices <oxf> and <oxb>; use posterior probability
+ *            heuristics to determine an annotated domain structure;
+ *            and for each domain found, score it (with null2
+ *            calculations) and obtain an optimal accuracy alignment,
+ *            using <fwd> and <bck> matrices as workspace for the
+ *            necessary full-matrix DP calculations. Caller provides a
+ *            new or reused <ddef> object to hold these results.
  *            
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
@@ -369,7 +369,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            
  *            <eslERANGE> on numeric overflow in posterior
  *            decoding. This should not be possible for multihit
- *            models. 
+ *            models.
  */
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
@@ -925,7 +925,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char usage[]  = "[-options] <hmmfile>";
 static char banner[] = "example of domain definition by posterior sampling";
 
 int 

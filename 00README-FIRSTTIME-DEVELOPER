@@ -8,6 +8,21 @@ directory:
    (cd easel; autoconf)
 
 
+Different ways of configuring HMMER during development:
+
+for production:      ./configure CC=icc LDFLAGS="-static"
+   icc (Intel C compiler) is best, for optimal performance
+
+for debugging:       ./configure --enable-debugging
+
+for profiling:       ./configure CFLAGS="-g -pg -O"
+                     make
+                     (run benchmark program; gprof program)
+
+
+
+
+
 
 
 

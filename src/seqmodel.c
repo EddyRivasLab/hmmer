@@ -47,7 +47,7 @@
  * Throws:    <eslEMEM> on allocation error, and <*ret_hmm> is <NULL>.
  */
 int
-p7_Seqmodel(ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
+p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 	    ESL_DMATRIX *Q, float *f, double popen, double pextend,
 	    P7_HMM **ret_hmm)
 {
@@ -174,8 +174,8 @@ main(int argc, char **argv)
   else {
     ESL_FILEPARSER *efp = NULL;
 
-    if ( esl_fileparser_Open(mxfile, &efp) != eslOK) esl_fatal("failed to open score file %s",  mxfile);
-    if ( esl_sco_Read(efp, abc, &S)        != eslOK) esl_fatal("failed to read matrix from %s", mxfile);
+    if ( esl_fileparser_Open(mxfile, NULL,  &efp) != eslOK) esl_fatal("failed to open score file %s",  mxfile);
+    if ( esl_sco_Read(efp, abc, &S)               != eslOK) esl_fatal("failed to read matrix from %s", mxfile);
     esl_fileparser_Close(efp);
   }
   if (! esl_scorematrix_IsSymmetric(S)) esl_fatal("Score matrix isn't symmetric");

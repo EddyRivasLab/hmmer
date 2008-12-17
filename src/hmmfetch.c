@@ -218,7 +218,7 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
   int             keyidx;
   int             status;
   
-  if (esl_fileparser_Open(keyfile, &efp) != eslOK)  p7_Fail("Failed to open key file %s\n", keyfile);
+  if (esl_fileparser_Open(keyfile, NULL, &efp) != eslOK)  p7_Fail("Failed to open key file %s\n", keyfile);
   esl_fileparser_SetCommentChar(efp, '#');
 
   while (esl_fileparser_NextLine(efp) == eslOK)

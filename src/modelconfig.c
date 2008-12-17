@@ -76,6 +76,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   if (hmm->flags & p7H_CS) strcpy(gm->cs, hmm->cs);
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
+  for (z = 0; z < p7_MAXABET;  z++) gm->compo[z]   = hmm->compo[z];
 
   /* Determine the "consensus" residue for each match position.
    * This is only used for alignment displays, not in any calculations.
@@ -153,7 +154,26 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
     }
   }
   
-  /* Insert emission scores: relies on sc[K, Kp-1] initialization to -inf above */
+  /* Insert emission scores */
+  /* SRE, Fri Dec 5 08:41:08 2008: We currently hardwire insert scores
+   * to 0, i.e. corresponding to the insertion emission probabilities
+   * being equal to the background probabilities. Benchmarking shows
+   * that setting inserts to informative emission distributions causes
+   * more problems than it's worth: polar biased composition hits
+   * driven by stretches of "insertion" occur, and are difficult to
+   * correct for.
+   */
+  for (x = 0; x < gm->abc->Kp; x++)
+    {
+      for (k = 1; k < hmm->M; k++) p7P_ISC(gm, k, x) = 0.0f;
+      p7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
+    }
+  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->K)    = -eslINFINITY; /* gap symbol */
+  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-1) = -eslINFINITY; /* missing data symbol */
+
+
+#if 0
+  /* original (informative) insert setting: relies on sc[K, Kp-1] initialization to -inf above */
   for (k = 1; k < hmm->M; k++) {
     for (x = 0; x < hmm->abc->K; x++) 
       sc[x] = log(hmm->ins[k][x] / bg->f[x]); 
@@ -165,7 +185,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   }    
   for (x = 0; x < hmm->abc->Kp; x++)
     p7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
-
+#endif
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLength()
    */

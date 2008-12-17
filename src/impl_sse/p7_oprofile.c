@@ -104,8 +104,9 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->lspace_f  = FALSE;
 
   for (x = 0; x < p7_NOFFSETS; x++) om->offs[x]    = -1;
-  for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = 0.0f;
-  for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = 0.0f;
+  for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = p7_EVPARAM_UNSET;
+  for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = p7_CUTOFF_UNSET;
+  for (x = 0; x < p7_MAXABET;  x++) om->compo[x]   = p7_COMPO_UNSET;
 
   om->name      = NULL;
   om->acc       = NULL;
@@ -218,6 +219,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   strcpy(om->consensus, gm->consensus);
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
+  for (z = 0; z < p7_MAXABET;  z++) om->compo[z]   = gm->compo[z];
 
   /* MSVFilter's constants */
   om->tbm  = unbiased_charify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
@@ -255,6 +257,53 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 {
+  int status;
+  if ((status = p7_oprofile_ReconfigMSVLength (om, L)) != eslOK) return status;
+  if ((status = p7_oprofile_ReconfigRestLength(om, L)) != eslOK) return status;
+  return eslOK;
+}
+
+/* Function:  p7_oprofile_ReconfigMSVLength()
+ * Synopsis:  Set the target sequence length of the MSVFilter part of the model.
+ * Incept:    SRE, Tue Dec 16 13:39:17 2008 [Janelia]
+ *
+ * Purpose:   Given an  already configured model <om>, quickly reset its
+ *            expected length distribution for a new mean target sequence
+ *            length of <L>, only for the part of the model that's used
+ *            for the accelerated MSV filter.
+ *            
+ *            The acceleration pipeline uses this to defer reconfiguring the
+ *            length distribution of the main model, mostly because hmmscan
+ *            reads the model in two pieces, MSV part first, then the rest.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
+{
+  om->tjb = unbiased_charify(om, logf(3.0f / (float) (L+3)));
+  return eslOK;
+}
+
+/* Function:  p7_oprofile_ReconfigRestLength()
+ * Synopsis:  Set the target sequence length of the main profile.
+ * Incept:    SRE, Tue Dec 16 13:41:30 2008 [Janelia]
+ *
+ * Purpose:   Given an  already configured model <om>, quickly reset its
+ *            expected length distribution for a new mean target sequence
+ *            length of <L>, for everything except the MSV filter part
+ *            of the model.
+ *            
+ *            Calling <p7_oprofile_ReconfigMSVLength()> then
+ *            <p7_oprofile_ReconfigRestLength()> is equivalent to
+ *            just calling <p7_oprofile_ReconfigLength()>. The two
+ *            part version is used in the acceleration pipeline.
+ *
+ * Returns:   <eslOK> on success.           
+ */
+int
+p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
+{
   float pmove, ploop;
   
   pmove = (2.0f + om->nj) / ((float) L + 2.0f + om->nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
@@ -268,14 +317,13 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
     om->xf[p7O_N][p7O_MOVE] =  om->xf[p7O_C][p7O_MOVE] = om->xf[p7O_J][p7O_MOVE] = pmove;
   }
   
-  /* MSVFilter() */
-  om->tjb = unbiased_charify(om, logf(3.0f / (float) (L+3)));
-
   /* ViterbiFilter() parameters: lspace uchars; the LOOP costs are zero  */
   om->xu[p7O_N][p7O_MOVE] =  om->xu[p7O_C][p7O_MOVE] = om->xu[p7O_J][p7O_MOVE] = unbiased_charify(om, logf(pmove));
   om->L = L;
   return eslOK;
 }
+
+
 
 /* Function:  p7_oprofile_ReconfigMultihit()
  * Synopsis:  Quickly reconfig model into multihit mode for target length <L>.

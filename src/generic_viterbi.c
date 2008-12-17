@@ -295,7 +295,7 @@ utest_basic(ESL_GETOPTS *go)
   P7_HMM         *hmm  = NULL;
   P7_PROFILE     *gm   = NULL;
   P7_BG          *bg   = NULL;
-  P7_DPRIOR      *pri  = NULL;	
+  P7_PRIOR       *pri  = NULL;	
   ESL_DSQ        *dsq  = NULL;
   P7_GMX         *gx   = NULL;
   P7_TRACE        *tr  = NULL;
@@ -303,7 +303,7 @@ utest_basic(ESL_GETOPTS *go)
   float           vsc, vsc2, fsc;
 
   if ((abc = esl_alphabet_Create(eslDNA))          == NULL)  esl_fatal("failed to create alphabet");
-  if ((pri = p7_dprior_CreateNucleic())            == NULL)  esl_fatal("failed to create prior");
+  if ((pri = p7_prior_CreateNucleic())             == NULL)  esl_fatal("failed to create prior");
   if ((msa = esl_msa_CreateFromString(query, fmt)) == NULL)  esl_fatal("failed to create MSA");
   if (esl_msa_Digitize(abc, msa)                   != eslOK) esl_fatal("failed to digitize MSA");
   if (p7_Fastmodelmaker(msa, 0.5, &hmm, NULL)      != eslOK) esl_fatal("failed to create GAATTC model");
@@ -337,7 +337,7 @@ utest_basic(ESL_GETOPTS *go)
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
   esl_msa_Destroy(msa);
-  p7_dprior_Destroy(pri);
+  p7_prior_Destroy(pri);
   esl_alphabet_Destroy(abc);
   return;
 }

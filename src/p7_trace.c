@@ -994,6 +994,7 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
 
   if ((status = p7_trace_Grow(tr)) != eslOK) return status;
 
+
   switch (st) {
     /* Emit-on-transition states: */
   case p7T_N: 

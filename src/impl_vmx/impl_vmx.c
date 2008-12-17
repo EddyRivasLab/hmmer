@@ -1229,6 +1229,7 @@ p7_oprofile_Convert(P7_PROFILE *gm, P7_OPROFILE *om)
   if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
+  for (z = 0; z < p7_MAXABET;  z++) om->compo[z]   = gm->compo[z];
 
   /* MSVFilter's constants */
   om->tbm  = unbiased_charify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */

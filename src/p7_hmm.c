@@ -13,8 +13,7 @@
  * SRE, Mon Jan  1 16:20:29 2007 [Casa de Gatos] [Verdi, La Traviata]
  * SVN $Id$
  */
-
-#include "p7_config.h"		/* must be included first */
+#include "p7_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -103,9 +102,9 @@ p7_hmm_CreateShell(void)
   hmm->map      = NULL;
   hmm->checksum = 0;
 
-  for (z = 0; z < p7_NCUTOFFS; z++) hmm->cutoff[z]  = 0.0f;
-  for (z = 0; z < p7_NEVPARAM; z++) hmm->evparam[z] = 0.0f;
-  for (z = 0; z < p7_MAXABET;  z++) hmm->compo[z]   = 0.0f;
+  for (z = 0; z < p7_NCUTOFFS; z++) hmm->cutoff[z]  = p7_CUTOFF_UNSET;
+  for (z = 0; z < p7_NEVPARAM; z++) hmm->evparam[z] = p7_EVPARAM_UNSET;
+  for (z = 0; z < p7_MAXABET;  z++) hmm->compo[z]   = p7_COMPO_UNSET;
 
   hmm->offset   = 0;
   hmm->flags    = 0;

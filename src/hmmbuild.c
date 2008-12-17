@@ -3,7 +3,6 @@
  * SRE, Wed Jan  3 11:03:47 2007 [Janelia] [The Chemical Brothers]
  * SVN $Id$
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -33,48 +32,49 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",              1 },
-  { "-n",        eslARG_STRING,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "name the HMM <s>",                                  1 },
-  { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "direct summary output to file <f>, not stdout",     1 },
-  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "use tabular output summary format, 1 line per HMM", 1 },
-#ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "run as an MPI parallel program",                    1 },  
-#endif
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                  1 },
+  { "-n",        eslARG_STRING,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "name the HMM <s>",                                      1 },
+  { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "direct summary output to file <f>, not stdout",         1 },
+  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "use tabular output summary format, 1 line per HMM",     1 },
 /* Selecting the alphabet rather than autoguessing it */
-  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is protein sequence data",              2},
-  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is DNA sequence data",                  2},
-  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is RNA sequence data",                  2},
+  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is protein sequence data",              2 },
+  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is DNA sequence data",                  2 },
+  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is RNA sequence data",                  2 },
 /* Alternate model construction strategies */
   { "--fast",    eslARG_NONE,"default",NULL, NULL,    CONOPTS,    NULL,     NULL, "assign cols w/ >= symfrac residues as consensus",       3 },
   { "--hand",    eslARG_NONE,   FALSE, NULL, NULL,    CONOPTS,    NULL,     NULL, "manual construction (requires reference annotation)",   3 },
   { "--symfrac", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,   "--fast",   NULL, "sets sym fraction controlling --fast construction",     3 },
 /* Alternate relative sequence weighting strategies */
   /* --wme not implemented in HMMER3 yet */
-  { "--wgsc",    eslARG_NONE,"default",NULL, NULL,    WGTOPTS,    NULL,      NULL, "Gerstein/Sonnhammer/Chothia tree weights",         4},
-  { "--wblosum", eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff simple filter weights",                   4},
-  { "--wpb",     eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff position-based weights",                  4},
-  { "--wnone",   eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "don't do any relative weighting; set all to 1",    4},
-  { "--wgiven",  eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "use weights as given in MSA file",                 4},
-  { "--pbswitch",eslARG_INT,  "1000",  NULL,"n>0",       NULL,    NULL,      NULL, "set failover to efficient PB wgts at > <n> seqs",  4},
-  { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",               4},
+  { "--wgsc",    eslARG_NONE,"default",NULL, NULL,    WGTOPTS,    NULL,      NULL, "Gerstein/Sonnhammer/Chothia tree weights",             4 },
+  { "--wblosum", eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff simple filter weights",                       4 },
+  { "--wpb",     eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff position-based weights",                      4 },
+  { "--wnone",   eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "don't do any relative weighting; set all to 1",        4 },
+  { "--wgiven",  eslARG_NONE,  FALSE,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "use weights as given in MSA file",                     4 },
+  { "--pbswitch",eslARG_INT,  "1000",  NULL,"n>0",       NULL,    NULL,      NULL, "set failover to efficient PB wgts at > <n> seqs",      4 },
+  { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",                   4 },
 /* Alternate effective sequence weighting strategies */
-  { "--eent",    eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to achieve relative entropy target", 5},
-  { "--eclust",  eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "eff seq # is # of single linkage clusters",           5},
-  { "--enone",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "no effective seq # weighting: just use nseq",         5},
-  { "--eset",    eslARG_REAL,   NULL,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "set eff seq # for all models to <x>",                 5},
-  { "--ere",     eslARG_REAL,   NULL,  NULL,"x>0",       NULL, "--eent",     NULL, "for --eent: set target relative entropy to <x>",      5},
-  { "--eX",      eslARG_REAL,  "6.0",  NULL,"x>0",       NULL, "--eent",  "--ere", "for --eent: set minimum total rel ent param to <x>",  5},
-  { "--eid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--eclust",    NULL, "for --eclust: set fractional identity cutoff to <x>", 5},
+  { "--eent",    eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to achieve relative entropy target",  5 },
+  { "--eclust",  eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "eff seq # is # of single linkage clusters",            5 },
+  { "--enone",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "no effective seq # weighting: just use nseq",          5 },
+  { "--eset",    eslARG_REAL,   NULL,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "set eff seq # for all models to <x>",                  5 },
+  { "--ere",     eslARG_REAL,   NULL,  NULL,"x>0",       NULL, "--eent",     NULL, "for --eent: set target relative entropy to <x>",       5 },
+  { "--eX",      eslARG_REAL,  "6.0",  NULL,"x>0",       NULL, "--eent",  "--ere", "for --eent: set minimum total rel ent param to <x>",   5 },
+  { "--eid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--eclust",    NULL, "for --eclust: set fractional identity cutoff to <x>",  5 },
 /* Control of E-value calibration */
-  { "--Es",      eslARG_INT,    NULL,  NULL,"n>0",       NULL,    NULL,      NULL, "set random number seed to <n>",                     6},
-  { "--EvL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Viterbi Gumbel mu fit",     6},   
-  { "--EvN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Viterbi Gumbel mu fit",     6},   
-  { "--EfL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Forward exp tail mu fit",   6},   
-  { "--EfN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Forward exp tail mu fit",   6},   
-  { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail mu fit",     6},   
+  { "--EvL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Viterbi Gumbel mu fit",        6 },   
+  { "--EvN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Viterbi Gumbel mu fit",        6 },   
+  { "--EfL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Forward exp tail mu fit",      6 },   
+  { "--EfN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Forward exp tail mu fit",      6 },   
+  { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail mu fit",        6 },   
+  { "--Eseed",   eslARG_INT,     "42", NULL,"n>0",       NULL,    NULL,   "--Ernd", "set random number generator seed to <n>",             6 },
+  { "--Ernd",    eslARG_NONE,  FALSE,  NULL, NULL,       NULL,    NULL,  "--Eseed", "use arbitrary RNG seed(s) (by time())",               6 },
 /* Other options */
-  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                            7},
-  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",   7},  
+#ifdef HAVE_MPI
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "run as an MPI parallel program",                        7 },  
+#endif
+  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                                7 },
+  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",       7 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -96,9 +96,9 @@ struct cfg_s {
   FILE         *hmmfp;          /* HMM output file handle                  */
 
   P7_BG	       *bg;		/* null model                              */
-  P7_DPRIOR    *pri;		/* mixture Dirichlet prior for the HMM     */
+  P7_PRIOR     *pri;		/* mixture Dirichlet prior for the HMM     */
 
-  int           be_verbose;	/* standard verbose output, as opposed to one-line-per-HMM summary */
+  int           tabular;	/* one-line-per-HMM summary, instead of verbose output */
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
 
   int           do_mpi;		/* TRUE if we're doing MPI parallelization */
@@ -120,14 +120,16 @@ static void  mpi_master    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
+
 static int process_workunit       (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
+static int output_header          (const ESL_GETOPTS *go, const struct cfg_s *cfg);
 static int output_result          (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
 
 static int set_relative_weights   (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
 static int build_model            (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int set_model_name         (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM *hmm);
-static int set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *prior);
-static int parameterize           (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_DPRIOR *prior);
+static int set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *prior);
+static int parameterize           (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_PRIOR *prior);
 static int calibrate              (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm);
 static int stamp                  (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
 static int transfer_score_cutoffs (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
@@ -156,19 +158,19 @@ main(int argc, char **argv)
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\n  where basic options are:");
+      puts("\nwhere basic options are:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
-      puts("\n  options for selecting alphabet rather than guessing it:");
+      puts("\nOptions for selecting alphabet rather than guessing it:");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
-      puts("\n  alternative model construction strategies:");
+      puts("\nAlternative model construction strategies:");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
-      puts("\n  alternative relative sequence weighting strategies:");
+      puts("\nAlternative relative sequence weighting strategies:");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
-      puts("\n  alternate effective sequence weighting strategies:");
+      puts("\nAlternate effective sequence weighting strategies:");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
-      puts("\n  control of E-value calibration:");
+      puts("\nControl of E-value calibration:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
-      puts("\n  other (rarely used) options:");
+      puts("\nOther options:");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
       exit(0);
     }
@@ -176,7 +178,7 @@ main(int argc, char **argv)
     {
       puts("Incorrect number of command line arguments.");
       esl_usage(stdout, argv[0], usage);
-      puts("\n  where basic options are:");
+      puts("\nwhere basic options are:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
       printf("\nTo see more help on other available options, do %s -h\n\n", argv[0]);
       exit(1);
@@ -195,8 +197,8 @@ main(int argc, char **argv)
   cfg.bg         = NULL;	           /* created in init_shared_cfg() */
   cfg.pri        = NULL;                   /* created in init_shared_cfg() */
 
-  if (esl_opt_GetBoolean(go, "-1")) cfg.be_verbose = FALSE;        
-  else                              cfg.be_verbose = TRUE;        
+  if (esl_opt_GetBoolean(go, "-1")) cfg.tabular = TRUE;        
+  else                              cfg.tabular = FALSE;        
   cfg.nali       = 0;		           /* this counter is incremented in masters */
   cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
   cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
@@ -220,7 +222,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--mpi")) 
     {
       cfg.do_mpi     = TRUE;
-      cfg.be_verbose = FALSE;
+      cfg.tabular    = TRUE;
       MPI_Init(&argc, &argv);
       MPI_Comm_rank(MPI_COMM_WORLD, &(cfg.my_rank));
       MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
@@ -239,7 +241,10 @@ main(int argc, char **argv)
       esl_stopwatch_Stop(w);
     }
 
-  if (cfg.my_rank == 0) esl_stopwatch_Display(cfg.ofp, w, "# CPU time: ");
+  if (cfg.my_rank == 0) {
+    fputc('\n', cfg.ofp);
+    esl_stopwatch_Display(cfg.ofp, w, "# CPU time: ");
+  }
 
 
   /* Clean up the shared cfg. 
@@ -251,7 +256,7 @@ main(int argc, char **argv)
     if (cfg.hmmfp != NULL) fclose(cfg.hmmfp);
   }
   p7_bg_Destroy(cfg.bg);
-  p7_dprior_Destroy(cfg.pri);
+  p7_prior_Destroy(cfg.pri);
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);
   return 0;
@@ -305,8 +310,10 @@ init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 
   if ((cfg->hmmfp = fopen(cfg->hmmfile, "w")) == NULL) ESL_FAIL(status, errmsg, "Failed to open HMM file %s for writing", cfg->hmmfile);
 
+  output_header(go, cfg);
+
   /* with msa == NULL, output_result() prints the tabular results header, if needed */
-  if (! cfg->be_verbose) output_result(go, cfg, errmsg, 0, NULL, NULL);
+  if (cfg->tabular) output_result(go, cfg, errmsg, 0, NULL, NULL);
   return eslOK;
 }
 
@@ -326,13 +333,13 @@ init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 {
   if (esl_opt_GetBoolean(go, "--laplace"))
     {
-      cfg->pri = p7_dprior_CreateLaplace(cfg->abc);
+      cfg->pri = p7_prior_CreateLaplace(cfg->abc);
     }
   else 
     {
-      if      (cfg->abc->type == eslAMINO) cfg->pri = p7_dprior_CreateAmino();
-      else if (cfg->abc->type == eslDNA)   cfg->pri = p7_dprior_CreateNucleic();  
-      else if (cfg->abc->type == eslRNA)   cfg->pri = p7_dprior_CreateNucleic();  
+      if      (cfg->abc->type == eslAMINO) cfg->pri = p7_prior_CreateAmino();
+      else if (cfg->abc->type == eslDNA)   cfg->pri = p7_prior_CreateNucleic();  
+      else if (cfg->abc->type == eslRNA)   cfg->pri = p7_prior_CreateNucleic();  
       else    ESL_FAIL(eslEINVAL, errmsg, "invalid alphabet type");
     }
 
@@ -369,22 +376,24 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (status != eslOK)       p7_Fail("Alignment file read unexpectedly failed with code %d\n", status);
       cfg->nali++;  
 
-      if (cfg->be_verbose) {
-	if (msa->name != NULL) fprintf(cfg->ofp, "Alignment:           %s\n",  msa->name);
-	else                   fprintf(cfg->ofp, "Alignment:           #%d\n", cfg->nali);
-	fprintf                       (cfg->ofp, "Number of sequences: %d\n",  msa->nseq);
+      if (! cfg->tabular) {
+	if (msa->name != NULL) fprintf(cfg->ofp, "Alignment:           %s\n",           msa->name);
+	else                   fprintf(cfg->ofp, "Alignment:           #%d\n",          cfg->nali);
+	if (msa->desc != NULL) fprintf(cfg->ofp, "Description:         %s\n",           msa->desc);
+	fprintf                       (cfg->ofp, "Number of sequences: %d\n",           msa->nseq);
 	fprintf                       (cfg->ofp, "Number of columns:   %" PRId64 "\n",  msa->alen);
-	fputs("", cfg->ofp);
+	fputs("\n", cfg->ofp);
 	fflush(stdout);
       }
       
       if ((status = process_workunit(go, cfg, errmsg,            msa, &hmm, NULL)) != eslOK) p7_Fail(errmsg);
       if ((status = output_result(   go, cfg, errmsg, cfg->nali, msa, hmm))        != eslOK) p7_Fail(errmsg);
 
-      if (cfg->be_verbose) {
-	fprintf(cfg->ofp, "Built a model of %d nodes.\n", hmm->M);
+      if (! cfg->tabular) {
+	fprintf(cfg->ofp, "\nBuilt a model of %d nodes.\n", hmm->M);
 	fprintf(cfg->ofp, "Mean match relative entropy:  %.2f bits\n", p7_MeanMatchRelativeEntropy(hmm, cfg->bg));
 	fprintf(cfg->ofp, "Mean match information:       %.2f bits\n", p7_MeanMatchInfo(hmm, cfg->bg));
+	fprintf(cfg->ofp, "//\n");
       }
 
       p7_hmm_Destroy(hmm);
@@ -660,11 +669,58 @@ process_workunit(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, E
 
  ERROR:
   ESL_DPRINTF2(("worker %d: has caught an error in process_workunit\n", cfg->my_rank));
-  p7_hmm_Destroy(hmm);
-  p7_trace_DestroyArray(*opt_tr, msa->nseq);
-  *ret_hmm = NULL;
-  if (opt_tr  != NULL) *opt_tr = NULL;
+  p7_hmm_Destroy(hmm);   *ret_hmm = NULL;
+  if (opt_tr != NULL) { p7_trace_DestroyArray(*opt_tr, msa->nseq); *opt_tr = NULL; }
   return status;
+}
+
+
+static int
+output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
+{
+  if (cfg->my_rank > 0)  return eslOK;
+  /*  if (! cfg->be_verbose) return eslOK; */
+  p7_banner(cfg->ofp, go->argv[0], banner);
+  
+  fprintf(cfg->ofp, "# input alignment file:             %s\n", cfg->alifile);
+  fprintf(cfg->ofp, "# output HMM file:                  %s\n", cfg->hmmfile);
+
+  if (! esl_opt_IsDefault(go, "-n"))          fprintf(cfg->ofp, "# name (the single) HMM:            %s\n",   esl_opt_GetString(go, "-n"));
+  if (! esl_opt_IsDefault(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:          %s\n",   esl_opt_GetString(go, "-o"));
+  if (! esl_opt_IsDefault(go, "-1"))          fprintf(cfg->ofp, "# output format:                    tabular summary\n");
+  if (! esl_opt_IsDefault(go, "--amino"))     fprintf(cfg->ofp, "# input alignment is asserted as:   protein\n");
+  if (! esl_opt_IsDefault(go, "--dna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   DNA\n");
+  if (! esl_opt_IsDefault(go, "--rna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   RNA\n");
+  if (! esl_opt_IsDefault(go, "--fast"))      fprintf(cfg->ofp, "# model architecture construction:  fast/heuristic\n");
+  if (! esl_opt_IsDefault(go, "--hand"))      fprintf(cfg->ofp, "# model architecture construction:  hand-specified by RF annotation\n");
+  if (! esl_opt_IsDefault(go, "--symfrac"))   fprintf(cfg->ofp, "# sym fraction for model structure: %.3f\n", esl_opt_GetReal(go, "--symfrac"));
+  if (! esl_opt_IsDefault(go, "--wgsc"))      fprintf(cfg->ofp, "# relative weighting scheme:        G/S/C\n");
+  if (! esl_opt_IsDefault(go, "--wblosum"))   fprintf(cfg->ofp, "# relative weighting scheme:        BLOSUM filter\n");
+  if (! esl_opt_IsDefault(go, "--wpb"))       fprintf(cfg->ofp, "# relative weighting scheme:        Henikoff PB\n");
+  if (! esl_opt_IsDefault(go, "--wnone"))     fprintf(cfg->ofp, "# relative weighting scheme:        none\n");
+  if (! esl_opt_IsDefault(go, "--pbswitch"))  fprintf(cfg->ofp, "# num seqs to failover to PB wgts:  %d\n",   esl_opt_GetInteger(go, "--pbswitch"));
+  if (! esl_opt_IsDefault(go, "--wid"))       fprintf(cfg->ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",   esl_opt_GetReal(go, "--wid"));
+  if (! esl_opt_IsDefault(go, "--eent"))      fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting\n");
+  if (! esl_opt_IsDefault(go, "--eclust"))    fprintf(cfg->ofp, "# effective seq number scheme:      single linkage clusters\n");
+  if (! esl_opt_IsDefault(go, "--enone"))     fprintf(cfg->ofp, "# effective seq number scheme:      none\n");
+  if (! esl_opt_IsDefault(go, "--eset"))      fprintf(cfg->ofp, "# effective seq number:             set to %f\n", esl_opt_GetReal(go, "--eset"));
+  if (! esl_opt_IsDefault(go, "--ere") )      fprintf(cfg->ofp, "# rel entropy target for eweights:  %f\n",        esl_opt_GetReal(go, "--ere"));
+  if (! esl_opt_IsDefault(go, "--eX") )       fprintf(cfg->ofp, "# min total relentropy, eweights:   %f\n",        esl_opt_GetReal(go, "--eX"));
+  if (! esl_opt_IsDefault(go, "--eid") )      fprintf(cfg->ofp, "# frac id cutoff for --eclust:      %f\n",        esl_opt_GetReal(go, "--eid"));
+  if (! esl_opt_IsDefault(go, "--EvL") )      fprintf(cfg->ofp, "# seq length for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvL"));
+  if (! esl_opt_IsDefault(go, "--EvN") )      fprintf(cfg->ofp, "# seq number for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvN"));
+  if (! esl_opt_IsDefault(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
+  if (! esl_opt_IsDefault(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
+  if (! esl_opt_IsDefault(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
+  if (! esl_opt_IsDefault(go, "--Eseed") )    fprintf(cfg->ofp, "# random number generator seed:     %d\n",        esl_opt_GetInteger(go, "--Eseed"));
+  if (! esl_opt_IsDefault(go, "--Ernd") )     fprintf(cfg->ofp, "# random number generator seed:     quasirandom by time()\n");
+#ifdef HAVE_MPI
+  if (! esl_opt_IsDefault(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
+#endif
+  if (! esl_opt_IsDefault(go, "--laplace") )  fprintf(cfg->ofp, "# prior:                            Laplace +1\n");
+  fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+
+  return eslOK;
 }
 
 
@@ -677,25 +733,25 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
    * Arranged this way to keep the two fprintf()'s close together in the code,
    * so we can keep the data and labels properly sync'ed.
    */
-  if (msa == NULL && ! cfg->be_verbose) 
+  if (msa == NULL && cfg->tabular) 
     {
-      fprintf(cfg->ofp, "# %3s %-20s %5s %5s %5s\n", "idx", "name",                 "nseq",  "alen",  "M");
-      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s\n", "----", "--------------------", "-----", "-----", "-----");
+      fprintf(cfg->ofp, "# %3s %-20s %5s %5s %5s  %s\n", "idx", "name",                 "nseq",  "alen",  "M",     "description");
+      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s  %s\n", "----", "--------------------", "-----", "-----", "-----", "-----------");
       return eslOK;
     }
 
   if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))   != eslOK) return status;
   if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
-  if (! cfg->be_verbose)	/* tabular output */
-    {                    /* #   name nseq alen M */
-      fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d\n",
-	      msaidx,
-	      (msa->name != NULL) ? msa->name : "",
-	      msa->nseq,
-	      msa->alen,
-	      hmm->M);
-    }
+  if (cfg->tabular)	/* #   name nseq alen M description*/
+    fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d  %s\n",
+	    msaidx,
+	    (msa->name != NULL) ? msa->name : "",
+	    msa->nseq,
+	    msa->alen,
+	    hmm->M,
+	    (msa->desc != NULL) ? msa->desc : "");
+
   return eslOK;
 }
 
@@ -706,7 +762,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
 static int
 set_relative_weights(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
 {
-  if (cfg->be_verbose) {
+  if (! cfg->tabular) {
     fprintf(cfg->ofp, "%-40s ... ", "Relative sequence weighting");  
     fflush(cfg->ofp); 
   }
@@ -718,7 +774,7 @@ set_relative_weights(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbu
   else if (esl_opt_GetBoolean(go, "--wgsc"))                   esl_msaweight_GSC(msa);
   else if (esl_opt_GetBoolean(go, "--wblosum"))                esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
 
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
   return eslOK;
 }
 
@@ -734,7 +790,7 @@ build_model(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MS
 {
   int status;
 
-  if (cfg->be_verbose) {
+  if (! cfg->tabular) {
     fprintf(cfg->ofp, "%-40s ... ", "Constructing model architecture"); 
     fflush(cfg->ofp);
   }
@@ -755,11 +811,11 @@ build_model(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MS
       else if (status != eslOK)        ESL_XFAIL(status, errbuf, "internal error in model construction.\n");
     }
 
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
   return eslOK;
 
  ERROR:
-  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
   return status;
 
 }
@@ -793,7 +849,7 @@ set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL
 {
   int status;
 
-  if (cfg->be_verbose) {
+  if (! cfg->tabular) {
     fprintf(cfg->ofp, "%-40s ... ", "Set model name");
     fflush(cfg->ofp);
   }
@@ -817,11 +873,11 @@ set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL
       else                                     ESL_XFAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment.\n");
     }
 
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done. [%s]\n", hmm->name);
+  if (! cfg->tabular) fprintf(cfg->ofp, "done. [%s]\n", hmm->name);
   return eslOK;
 
  ERROR:
-  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
   return status;
 }
 
@@ -840,12 +896,12 @@ set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL
  * looking for the right relative entropy. (for --eent, the default)
  */
 static int
-set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *prior)
+set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *prior)
 {
   int    status = eslOK;
   double neff;
 
-  if (cfg->be_verbose){
+  if (! cfg->tabular){
     fprintf(cfg->ofp, "%-40s ... ", "Set effective sequence number");
     fflush(cfg->ofp);
   }
@@ -853,12 +909,12 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
   if      (esl_opt_GetBoolean(go, "--enone") == TRUE) 
     {
       neff = msa->nseq;
-      if (cfg->be_verbose) fprintf(cfg->ofp, "done. [--enone: neff=nseq=%d]\n", msa->nseq);
+      if (! cfg->tabular) fprintf(cfg->ofp, "done. [--enone: neff=nseq=%d]\n", msa->nseq);
     }
   else if (! esl_opt_IsDefault(go, "--eset"))
     {
       neff = esl_opt_GetReal(go, "--eset");
-      if (cfg->be_verbose) fprintf(cfg->ofp, "done. [--eset: set to neff = %.2f]\n", neff);
+      if (! cfg->tabular) fprintf(cfg->ofp, "done. [--eset: set to neff = %.2f]\n", neff);
     }
   else if (esl_opt_GetBoolean(go, "--eclust") == TRUE)
     {
@@ -869,7 +925,7 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
       else if (status != eslOK)   ESL_XFAIL(status, errbuf, "single linkage clustering algorithm (at %d%% id) failed", (int)(100 * esl_opt_GetReal(go, "--eid")));
 
       neff = (double) nclust;
-      if (cfg->be_verbose) fprintf(cfg->ofp, "done. [--eclust SLC at %.1f%%; neff = %.2f clusters]\n", 100. * esl_opt_GetReal(go, "--eid"), neff);
+      if (! cfg->tabular) fprintf(cfg->ofp, "done. [--eclust SLC at %.1f%%; neff = %.2f clusters]\n", 100. * esl_opt_GetReal(go, "--eid"), neff);
     }
   else if (esl_opt_GetBoolean(go, "--eent") == TRUE)
     {
@@ -882,7 +938,7 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
       if      (status == eslEMEM) ESL_XFAIL(status, errbuf, "memory allocation failed");
       else if (status != eslOK)   ESL_XFAIL(status, errbuf, "internal failure in entropy weighting algorithm");
     
-      if (cfg->be_verbose) fprintf(cfg->ofp, "done. [etarget %.2f bits; neff %.2f]\n", etarget, neff);
+      if (! cfg->tabular) fprintf(cfg->ofp, "done. [etarget %.2f bits; neff %.2f]\n", etarget, neff);
     }
     
   hmm->eff_nseq = neff;
@@ -890,7 +946,7 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
   return eslOK;
 
  ERROR:
-  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
   return status;
 }
 
@@ -898,19 +954,19 @@ set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *er
  * Converts counts to probability parameters.
  */
 static int
-parameterize(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_DPRIOR *prior)
+parameterize(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_PRIOR *prior)
 {
   int status;
 
-  if (cfg->be_verbose){ fprintf(cfg->ofp, "%-40s ... ", "Parameterizing"); fflush(cfg->ofp); }
+  if (! cfg->tabular){ fprintf(cfg->ofp, "%-40s ... ", "Parameterizing"); fflush(cfg->ofp); }
 
   if ((status = p7_ParameterEstimation(hmm, prior)) != eslOK) ESL_XFAIL(status, errbuf, "parameter estimation failed");
 
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
   return eslOK;
 
  ERROR:
-  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
   return status;
 }
 
@@ -931,10 +987,10 @@ calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *
   double lambda, mu, tau;
   int    status;
 
-  if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Calibrating");    fflush(cfg->ofp); }
+  if (! cfg->tabular) { fprintf(cfg->ofp, "%-40s ... ", "Calibrating");    fflush(cfg->ofp); }
 
-  if (esl_opt_IsDefault(go, "--Es"))  r = esl_randomness_CreateTimeseeded();
-  else                                r = esl_randomness_Create(esl_opt_GetInteger(go, "--Es"));
+  if (esl_opt_GetBoolean(go, "--Ernd"))  r = esl_randomness_CreateTimeseeded();
+  else                                   r = esl_randomness_Create(esl_opt_GetInteger(go, "--Eseed"));
   if (r == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create random number generator");
 
   if ((gm     = p7_profile_Create(hmm->M, cfg->abc))                  == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
@@ -952,13 +1008,13 @@ calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *
 
   p7_profile_Destroy(gm);
   esl_randomness_Destroy(r);
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
   return eslOK;
 
  ERROR:
   esl_randomness_Destroy(r);
   p7_profile_Destroy(gm);
-  if (cfg->be_verbose) fprintf(cfg->ofp, "FAILED.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
   return status;
 }
 
@@ -972,7 +1028,7 @@ stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MS
 {
   int status;
 
-  if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Logging information");    fflush(cfg->ofp); }
+  if (! cfg->tabular) { fprintf(cfg->ofp, "%-40s ... ", "Logging information");    fflush(cfg->ofp); }
 
   if ((status = p7_hmm_SetAccession  (hmm, msa->acc))           != eslOK) ESL_FAIL(status, errbuf, "Failed to record MSA accession");
   if ((status = p7_hmm_SetDescription(hmm, msa->desc))          != eslOK) ESL_FAIL(status, errbuf, "Failed to record MSA description");
@@ -981,20 +1037,20 @@ stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MS
   if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))        != eslOK) ESL_FAIL(status, errbuf, "Failed to record checksum"); 
   hmm->flags |= p7H_CHKSUM;
 
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
   return eslOK;
 }
 
 static int
 transfer_score_cutoffs(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm)
 {
-  if (cfg->be_verbose) { fprintf(cfg->ofp, "%-40s ... ", "Transferring bit score cutoffs");    fflush(cfg->ofp); }
+  if (! cfg->tabular) { fprintf(cfg->ofp, "%-40s ... ", "Transferring bit score cutoffs");    fflush(cfg->ofp); }
 
   if (msa->cutset[eslMSA_GA1] && msa->cutset[eslMSA_GA2]) { hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1]; hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2]; hmm->flags |= p7H_GA; }
   if (msa->cutset[eslMSA_TC1] && msa->cutset[eslMSA_TC2]) { hmm->cutoff[p7_TC1] = msa->cutoff[eslMSA_TC1]; hmm->cutoff[p7_TC2] = msa->cutoff[eslMSA_TC2]; hmm->flags |= p7H_TC; }
   if (msa->cutset[eslMSA_NC1] && msa->cutset[eslMSA_NC2]) { hmm->cutoff[p7_NC1] = msa->cutoff[eslMSA_NC1]; hmm->cutoff[p7_NC2] = msa->cutoff[eslMSA_NC2]; hmm->flags |= p7H_NC; }
 
-  if (cfg->be_verbose) fprintf(cfg->ofp, "done.\n");
+  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
   return eslOK;
 }
 

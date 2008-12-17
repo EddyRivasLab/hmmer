@@ -18,7 +18,7 @@
 struct ew_param_s {
   const P7_HMM    *hmm;		/* ptr to the original count-based HMM, which remains unchanged */
   const P7_BG     *bg;		/* ptr to the null model */
-  const P7_DPRIOR *pri;		/* Dirichlet prior used to parameterize from counts */
+  const P7_PRIOR  *pri;		/* Dirichlet prior used to parameterize from counts */
   P7_HMM          *h2;		/* our working space: a copy of <hmm> that we can muck with */
   double           etarget;	/* information content target, in bits */
 };
@@ -59,7 +59,7 @@ eweight_target_f(double Neff, void *params, double *ret_fx)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_DPRIOR *pri, double etarget, double *ret_Neff)
+p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double etarget, double *ret_Neff)
 {
   int status;
   ESL_ROOTFINDER *R = NULL;

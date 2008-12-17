@@ -16,7 +16,7 @@ static int  rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa
 /*static void rightjustify(const ESL_ALPHABET *abc, ESL_DSQ *ax, int n);*/
 
 
-/* Function:  p7_Traces2Alignment()
+/* Function:  p7_MultipleAlignment()
  * Synopsis:  Convert array of traces to a new MSA.
  * Incept:    SRE, Tue Oct 21 19:40:33 2008 [Janelia]
  *
@@ -27,14 +27,20 @@ static int  rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa
  *            in <*ret_msa>.
  *            
  *            <optflags> controls some optional behaviors in producing
- *            the alignment. A <p7_DIGITIZE> flag creates the MSA in
- *            digital mode, as opposed to a default text mode.  A
- *            <p7_ALL_CONSENSUS_COLS> flag will create a column for
- *            every consensus column in the model, even if it means
- *            having all gap characters (deletions) in a column; this
+ *            the alignment, as follows:
+ *            
+ *            <p7_DIGITIZE>: creates the MSA in digital mode, as
+ *            opposed to a default text mode. 
+ *            
+ *            <p7_ALL_CONSENSUS_COLS>: create a column for every
+ *            consensus column in the model, even if it means having
+ *            all gap characters (deletions) in a column; this
  *            guarantees that the alignment will have at least <M>
  *            columns. The default is to only show columns that have
  *            at least one residue in them.
+ *            
+ *            <p7_TRIM>: trim off any residues that get assigned to
+ *            flanking N,C states.
  *            
  *            The <optflags> can be combined by logical OR; for
  *            example, <p7_DIGITIZE | p7_ALL_CONSENSUS_COLS>.
@@ -43,8 +49,7 @@ static int  rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa
  *            tr       - array of tracebacks, 0..nseq-1
  *            nseq     - number of sequences
  *            M        - length of model sequences were aligned to
- *            optflags - flags controlling optional behaviours;
- *                       <p7_DIGITIZE | p7_ALL_CONSENSUS_COLS>
+ *            optflags - flags controlling optional behaviours.
  *            ret_msa  - RETURN: new multiple sequence alignment
  *
  * Returns:   <eslOK> on success, and <*ret_msa> points to a new
@@ -54,7 +59,7 @@ static int  rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa
  * Throws:    <eslEMEM> on allocation failure; <*ret_msa> is <NULL>.
  */
 int
-p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa)
+p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa)
 {
   ESL_MSA      *msa        = NULL;	/* RETURN: new MSA */
   const ESL_ALPHABET *abc  = sq[0]->abc;/* digital alphabet */
@@ -129,11 +134,16 @@ p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, E
 
 	  case p7T_S: break;	
 
-	  case p7T_J: p7_Die("J state unsupported in p7_Traces2Alignment()");
-	  default:    p7_Die("Unrecognized statetype %d in p7_Traces2Alignment()", tr[idx]->st[z]);
+	  case p7T_J: p7_Die("J state unsupported in p7_MultipleAlignment()");
+	  default:    p7_Die("Unrecognized statetype %d in p7_MultipleAlignment()", tr[idx]->st[z]);
 	  }
 	}
     }
+
+  /* if we're trimming N and C off, reset inserts[0], inserts[M] to 0.
+   */
+  if (optflags & p7_TRIM) { inserts[0] = inserts[M] = 0; }
+
 
   /* Using inserts[] and matuse[], construct matmap[] and determine alen.
    * matmap[1..M] = position 1..alen that match state k maps to. 
@@ -177,7 +187,7 @@ p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, E
 	    
 	      case p7T_N:
 	      case p7T_C:
-		if (tr[idx]->i[z] > 0) {
+		if (! (optflags & p7_TRIM) && tr[idx]->i[z] > 0) {
 		  msa->ax[idx][apos] = sq[idx]->dsq[tr[idx]->i[z]];
 		  apos++;
 		}
@@ -221,7 +231,7 @@ p7_Traces2Alignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, E
 	    
 	      case p7T_N:
 	      case p7T_C:
-		if (tr[idx]->i[z] > 0) {
+		if (! (optflags & p7_TRIM) && tr[idx]->i[z] > 0) {
 		  msa->aseq[idx][apos] = tolower(abc->sym[sq[idx]->dsq[tr[idx]->i[z]]]);
 		  apos++;
 		}

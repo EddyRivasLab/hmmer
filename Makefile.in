@@ -64,7 +64,9 @@ PROGS = hmmalign\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
-	hmmstat
+	hmmstat\
+	jackhmmer\
+	phmmer
 
 PVMPROGS = @PVMPROGS@
 

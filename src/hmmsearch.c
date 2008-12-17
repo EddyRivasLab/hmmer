@@ -52,9 +52,9 @@ static ESL_OPTIONS options[] = {
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off biased composition score corrections",            4 },
   { "--seed",       eslARG_INT,    "42",  NULL, NULL,      NULL,  NULL,  NULL, "set random number generator seed",                         4 },  
   { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "use arbitrary random number generator seed (by time())",   4 },  
-  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
 #ifdef HAVE_MPI
-  //  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
+  // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
+  //  { "--mpi",       eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -74,8 +74,6 @@ struct cfg_s {
   P7_BG           *bg;          /* null model                               */
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
-
-  float            omega;	/* prior on null correction                 */
 
   int     do_seq_by_E;		/* TRUE to cut sequence reporting off by E  */
   double  seqE;	                /* sequence E-value threshold               */
@@ -224,7 +222,7 @@ process_commandline(int argc, char **argv, struct cfg_s *cfg, ESL_GETOPTS **ret_
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nwhere most common options are:");
+      puts("\nwhere basic options are:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
 
       puts("\nOptions controlling significance thresholds for reporting:");
@@ -247,7 +245,7 @@ process_commandline(int argc, char **argv, struct cfg_s *cfg, ESL_GETOPTS **ret_
   
  ERROR:  /* all errors handled here are user errors, so be polite.  */
   esl_usage(stdout, argv[0], usage);
-  puts("\nwhere most common options are:");
+  puts("\nwhere basic options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
   printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
   exit(1);  
@@ -269,8 +267,6 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->bg       = NULL;		        /* to be initialized later */
   cfg->mode     = p7_LOCAL;
   cfg->hitlist  = p7_tophits_Create();  /* master accumulates complete list; workers have partial lists. */
-
-  cfg->omega    = 1.0 / 256.0;
 
   /* Reporting thresholds */
   cfg->do_seq_by_E       = TRUE;
@@ -348,7 +344,8 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->do_mpi   = FALSE;
   cfg->my_rank  = 0;
   cfg->nproc    = 0;
-  cfg->do_stall = esl_opt_GetBoolean(go, "--stall");
+  cfg->do_stall = FALSE;
+  //  cfg->do_stall = esl_opt_GetBoolean(go, "--stall");
 
   /* These are initialized later in the workers only: */
   cfg->r        = NULL;
@@ -429,8 +426,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_HMM          *hmm     = NULL;     /* query HMM                               */
   P7_PROFILE      *gm      = NULL;     /* profile HMM                             */
   P7_OPROFILE     *om      = NULL;     /* optimized profiile                      */
-  ESL_SQ          *sq      = NULL;      /* target sequence                        */
-  P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
+  ESL_SQ          *sq      = NULL;     /* target sequence                         */
   P7_OMX          *fwd     = NULL;     /* DP matrix                               */
   P7_OMX          *bck     = NULL;     /* DP matrix                               */
   P7_OMX          *oxf     = NULL;     /* optimized DP matrix for Forward         */
@@ -449,7 +445,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
   int              status, hstatus, sstatus;
   int              d;
-  int              k,x;
 
   if ((status = init_master_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
   if ((status = init_worker_cfg(go, cfg, errbuf)) != eslOK) esl_fatal(errbuf);
@@ -458,7 +453,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   while ((hstatus = p7_hmmfile_Read(cfg->hfp, &(cfg->abc), &hmm)) == eslOK) 
     {
-      tr  = p7_trace_Create();
       fwd = p7_omx_Create(hmm->M, 400, 400); /* initial alloc is for M, L=400; will grow as needed */
       bck = p7_omx_Create(hmm->M, 400, 400);	
       oxf = p7_omx_Create(hmm->M, 0,   400); /* one-row parsing matrix, O(M+L) */
@@ -472,17 +466,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (cfg->model_cutoff_flag && set_pfam_bitscore_cutoffs(cfg, hmm) != eslOK) p7_Fail("requested score cutoffs not available in model %s\n", hmm->name);
 
       if (esl_opt_GetBoolean(go, "--biasfilter"))
-	p7_bg_SetFilterByHMM(cfg->bg, hmm); /* EXPERIMENTAL */
+	p7_bg_SetFilter(cfg->bg, hmm->M, hmm->compo); /* EXPERIMENTAL */
       
       gm = p7_profile_Create (hmm->M, cfg->abc);
       om = p7_oprofile_Create(hmm->M, cfg->abc);
       p7_ProfileConfig(hmm, cfg->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; MSVFilter requires local mode */
       /* additionally this *must* be a multihit mode. unihit modes have rare numerical problems in posterior decoding. [J3/119-120] */
-
-      /* EXPERIMENTAL: shut the inserts off. */
-      for (k = 1; k < hmm->M; k++)
-	for (x = 0; x < gm->abc->Kp; x++)
-	  gm->rsc[x][k*2 + p7P_ISC] = 0.0;
 
       p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
 
@@ -569,7 +558,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (! esl_opt_GetBoolean(go, "--nonull2"))
 	    {
 	      seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
-	      seqbias = p7_FLogsum(0.0, log(cfg->omega) + seqbias);
+	      seqbias = p7_FLogsum(0.0, log(cfg->bg->omega) + seqbias);
 	    }
 	  else seqbias = 0.0;
 	  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
@@ -595,7 +584,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    }
 	  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
 	  if (! esl_opt_GetBoolean(go, "--nonull2")) 
-	    seqbias = p7_FLogsum(0.0, log(cfg->omega) + seqbias);
+	    seqbias = p7_FLogsum(0.0, log(cfg->bg->omega) + seqbias);
 	  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;
 	  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;
 	  
@@ -651,7 +640,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
 		  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
 		  if (! esl_opt_GetBoolean(go, "--nonull2")) 
-		    seqbias = p7_FLogsum(0.0, log(cfg->omega) + hit->dcl[d].domcorrection);
+		    seqbias = p7_FLogsum(0.0, log(cfg->bg->omega) + hit->dcl[d].domcorrection);
 		  else
 		    seqbias = 0.0;
 		  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + seqbias)) / eslCONST_LOG2;
@@ -687,7 +676,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   p7_omx_Destroy(bck);
   p7_omx_Destroy(oxf);
   p7_omx_Destroy(oxb);
-  p7_trace_Destroy(tr);
   esl_sq_Destroy(sq);
   return;
 }
@@ -811,7 +799,7 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 		hitlist->hit[h]->score,
 		hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
 		hitlist->hit[h]->dcl[d].bitscore,
-		p7_FLogsum(0.0, log(cfg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
+		p7_FLogsum(0.0, log(cfg->bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
 		hitlist->hit[h]->dcl[d].pvalue * (double) cfg->seqZ,
 		hitlist->hit[h]->nexpected,
 		hitlist->hit[h]->nreported,
@@ -853,7 +841,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 	      fprintf(cfg->ofp, "  %4d %9.1f %7.1f %10.2g %10.2g %8d %8d %c%c %8ld %8ld %c%c %8d %8d %c%c %7.2f\n",
 		      nd,
 		      hitlist->hit[h]->dcl[d].bitscore,
-		      p7_FLogsum(0.0, log(cfg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
+		      p7_FLogsum(0.0, log(cfg->bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
 		      hitlist->hit[h]->dcl[d].pvalue * cfg->domZ,
 		      hitlist->hit[h]->dcl[d].pvalue * cfg->seqZ,
 		      hitlist->hit[h]->dcl[d].ad->hmmfrom,

@@ -70,8 +70,6 @@ struct cfg_s {
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
 
-  float            omega;	/* prior on null2 correction                */
-
   int     do_hmm_by_E;		/* TRUE to cut HMM reporting off by E       */
   double  hmmE;	                /* HMM E-value threshold                    */
   double  hmmT;	                /* HMM bit score threshold                  */
@@ -269,8 +267,6 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->mode     = p7_LOCAL;
   cfg->hitlist  = p7_tophits_Create(); /* master accumulates complete list; workers have partial lists. */
 
-  cfg->omega    = 1.0 / 256.0;
-
   /* Reporting thresholds */
   cfg->do_hmm_by_E       = TRUE;
   cfg->hmmE              = esl_opt_GetReal(go, "--hmmE");
@@ -392,6 +388,8 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
   else if (status == eslEINVAL)    ESL_FAIL(status, errbuf, "Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        ESL_FAIL(status, errbuf, "Unexpected error %d opening sequence file %s\n", status, cfg->seqfile);
 
+  if (! cfg->hfp->is_pressed)      ESL_FAIL(eslEINVAL, errbuf, "Failed to open binary dbs for HMM file %s: use hmmpress first\n", cfg->hmmfile);
+
   filename = esl_opt_GetString(go, "-o");
   if (filename != NULL) {
     if ((cfg->ofp = fopen(filename, "w")) == NULL) 
@@ -428,7 +426,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   P7_OPROFILE     *om      = NULL;     /* optimized profiile                      */
   ESL_SQ          *sq      = NULL;     /* target sequence                         */
-  P7_TRACE        *tr      = NULL;     /* trace of hmm aligned to sq              */
   P7_OMX          *fwd     = NULL;     /* DP matrix                               */
   P7_OMX          *bck     = NULL;     /* DP matrix                               */
   P7_OMX          *oxf     = NULL;     /* optimized DP matrix for Forward         */
@@ -461,7 +458,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   while ( (sstatus = esl_sqio_Read(cfg->sqfp, sq)) == eslOK)
     {
-      tr  = p7_trace_Create();
       fwd = p7_omx_Create(200, sq->n, sq->n); /* initial alloc is for M=200, L; will grow as needed */
       bck = p7_omx_Create(200, sq->n, sq->n);	
       oxf = p7_omx_Create(200, 0,     sq->n); /* one-row parsing matrix, O(M+L) */
@@ -499,7 +495,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (cfg->model_cutoff_flag && set_pfam_bitscore_cutoffs(cfg, om) != eslOK) p7_Fail("requested score cutoffs not available in model %s\n", om->name);
 
 	  p7_omx_GrowTo(oxf, om->M, 0, sq->n); 
-	  p7_oprofile_ReconfigLength(om, sq->n);
+	  p7_oprofile_ReconfigMSVLength(om, sq->n);
 	
 	  /* First level filter: the MSV filter, multihit with <om> */
 	  p7_MSVFilter(sq->dsq, sq->n, om, oxf, &usc);
@@ -511,7 +507,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* If it passes the MSV filter, read the rest of the profile */
 	  p7_oprofile_ReadRest(cfg->hfp, om);
-
+	  p7_oprofile_ReconfigRestLength(om, sq->n);
 
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
 	  p7_ViterbiFilter(sq->dsq, sq->n, om, oxf, &vfsc);  
@@ -542,7 +538,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (! esl_opt_GetBoolean(go, "--nonull2"))
 	    {
 	      seqbias = esl_vec_FSum(cfg->ddef->n2sc, sq->n+1);
-	      seqbias = p7_FLogsum(0.0, log(cfg->omega) + seqbias);
+	      seqbias = p7_FLogsum(0.0, log(cfg->bg->omega) + seqbias);
 	    }
 	  else seqbias = 0.0f;
 	  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
@@ -568,7 +564,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    }
 	  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
 	  if (! esl_opt_GetBoolean(go, "--nonull2")) 
-	    seqbias = p7_FLogsum(0.0, log(cfg->omega) + seqbias);
+	    seqbias = p7_FLogsum(0.0, log(cfg->bg->omega) + seqbias);
 	  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;
 	  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;
 
@@ -625,7 +621,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
 		  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
 		  if (! esl_opt_GetBoolean(go, "--nonull2")) 
-		    seqbias = p7_FLogsum(0.0, log(cfg->omega) + hit->dcl[d].domcorrection);
+		    seqbias = p7_FLogsum(0.0, log(cfg->bg->omega) + hit->dcl[d].domcorrection);
 		  else  seqbias = 0.0;
 		  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + seqbias)) / eslCONST_LOG2;
 		  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
@@ -653,7 +649,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_omx_Destroy(bck);
       p7_omx_Destroy(oxf);
       p7_omx_Destroy(oxb);
-      p7_trace_Destroy(tr);
       esl_sq_Reuse(sq);
     } /* end, loop over sequences */
   if (sstatus != eslEOF) p7_Fail("Sequence file %s has a format problem: read failed at line %d:\n%s\n",
@@ -675,14 +670,14 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   fprintf(cfg->ofp, "# query sequence file:             %s\n", cfg->seqfile);
   fprintf(cfg->ofp, "# target HMM database:             %s\n", cfg->hmmfile);
   if (! esl_opt_IsDefault(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:         %s\n",   esl_opt_GetString(go, "-o"));
-  if (! esl_opt_IsDefault(go, "--hmmE"))      fprintf(cfg->ofp, "# HMM E-value threshold:        <= %g\n",   esl_opt_GetReal(go, "--seqE"));
-  if (! esl_opt_IsDefault(go, "--hmmT"))      fprintf(cfg->ofp, "# HMM bit score threshold:      <= %g\n",   esl_opt_GetReal(go, "--seqT"));
+  if (! esl_opt_IsDefault(go, "--hmmE"))      fprintf(cfg->ofp, "# HMM E-value threshold:        <= %g\n",   esl_opt_GetReal(go, "--hmmE"));
+  if (! esl_opt_IsDefault(go, "--hmmT"))      fprintf(cfg->ofp, "# HMM bit score threshold:      <= %g\n",   esl_opt_GetReal(go, "--hmmT"));
   if (! esl_opt_IsDefault(go, "--domE"))      fprintf(cfg->ofp, "# domain E-value threshold:     <= %g\n",   esl_opt_GetReal(go, "--domE"));
   if (! esl_opt_IsDefault(go, "--domT"))      fprintf(cfg->ofp, "# domain bit score threshold:   <= %g\n",   esl_opt_GetReal(go, "--domT"));
   if (! esl_opt_IsDefault(go, "--cut_ga"))    fprintf(cfg->ofp, "# using GA bit score thresholds:   yes\n"); 
   if (! esl_opt_IsDefault(go, "--cut_nc"))    fprintf(cfg->ofp, "# using NC bit score thresholds:   yes\n");
   if (! esl_opt_IsDefault(go, "--cut_tc"))    fprintf(cfg->ofp, "# using TC bit score thresholds:   yes\n");
-  if (! esl_opt_IsDefault(go, "--hmmZ"))      fprintf(cfg->ofp, "# HMM search space set to:    %.0f\n",    esl_opt_GetReal(go, "--seqZ"));
+  if (! esl_opt_IsDefault(go, "--hmmZ"))      fprintf(cfg->ofp, "# HMM search space set to:    %.0f\n",    esl_opt_GetReal(go, "--hmmZ"));
   if (! esl_opt_IsDefault(go, "--domZ"))      fprintf(cfg->ofp, "# domain search space set to:      %.0f\n",    esl_opt_GetReal(go, "--domZ"));
   if (! esl_opt_IsDefault(go, "--max"))       fprintf(cfg->ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n");
   if (! esl_opt_IsDefault(go, "--F1"))        fprintf(cfg->ofp, "# MSV filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F1"));
@@ -790,7 +785,7 @@ output_per_model_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist
 		hitlist->hit[h]->score,
 		hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
 		hitlist->hit[h]->dcl[d].bitscore,
-		p7_FLogsum(0.0, log(cfg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
+		p7_FLogsum(0.0, log(cfg->bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
 		hitlist->hit[h]->dcl[d].pvalue * (double) cfg->hmmZ,
 		hitlist->hit[h]->nexpected,
 		hitlist->hit[h]->nreported,
@@ -831,7 +826,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 	      fprintf(cfg->ofp, "  %4d %9.1f %7.1f %10.2g %10.2g %8d %8d %c%c %8ld %8ld %c%c %8d %8d %c%c %7.2f\n",
 		      nd,
 		      hitlist->hit[h]->dcl[d].bitscore,
-		      p7_FLogsum(0.0, log(cfg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
+		      p7_FLogsum(0.0, log(cfg->bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
 		      hitlist->hit[h]->dcl[d].pvalue * cfg->domZ,
 		      hitlist->hit[h]->dcl[d].pvalue * cfg->hmmZ,
 		      hitlist->hit[h]->dcl[d].ad->hmmfrom,

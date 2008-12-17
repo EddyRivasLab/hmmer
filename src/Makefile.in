@@ -35,7 +35,9 @@ PROGS = hmmalign\
 	hmmscan\
 	hmmsearch\
 	hmmsim\
-	hmmstat
+	hmmstat\
+	jackhmmer\
+	phmmer
 
 HDRS =  hmmer.h\
 	p7_config.h
@@ -63,16 +65,19 @@ OBJS =  align.o\
 	seqmodel.o\
 	p7_alidisplay.o\
 	p7_bg.o\
+	p7_builder.o\
 	p7_domaindef.o\
 	p7_gmx.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
+	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
 	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o
 #	island.o\
+
 
 BENCHMARKS = \
 	generic_decoding_benchmark\

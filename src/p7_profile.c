@@ -96,16 +96,23 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   esl_vec_FSet(gm->rsc[x], (allocM+1)*p7P_NR, -eslINFINITY);
 
   /* Set remaining info  */
-  gm->mode        = p7_NO_MODE;
-  gm->L           = 0;
-  gm->allocM      = allocM;
-  gm->M           = 0;
-  gm->nj          = 0.0f;
-  gm->name        = NULL;
-  gm->acc         = NULL;
-  gm->desc        = NULL;
-  gm->rf[0]       = 0;     /* RF line is optional annotation; this flags that it's not set yet */
-  gm->cs[0]       = 0;     /* likewise for CS annotation line */
+  gm->mode         = p7_NO_MODE;
+  gm->L            = 0;
+  gm->allocM       = allocM;
+  gm->M            = 0;
+  gm->nj           = 0.0f;
+
+  gm->name         = NULL;
+  gm->acc          = NULL;
+  gm->desc         = NULL;
+  gm->rf[0]        = 0;     /* RF line is optional annotation; this flags that it's not set yet */
+  gm->cs[0]        = 0;     /* likewise for CS annotation line */
+  gm->consensus[0] = 0;
+  
+  for (x = 0; x < p7_NEVPARAM; x++) gm->evparam[x] = p7_EVPARAM_UNSET;
+  for (x = 0; x < p7_NCUTOFFS; x++) gm->cutoff[x]  = p7_CUTOFF_UNSET;
+  for (x = 0; x < p7_MAXABET;  x++) gm->compo[x]   = p7_COMPO_UNSET;
+
   gm->abc         = abc;
   return gm;
 
@@ -159,6 +166,7 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
 
   for (z = 0; z < p7_NEVPARAM; z++) dst->evparam[z] = src->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) dst->cutoff[z]  = src->cutoff[z];
+  for (z = 0; z < p7_MAXABET;  z++) dst->compo[z]   = src->compo[z];
   return eslOK;
 }
 

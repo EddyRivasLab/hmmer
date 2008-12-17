@@ -272,7 +272,7 @@ parse_tblfile(char *tblfile, ESL_KEYHASH *kh)
   char           *tok = NULL;
   int             toklen;
 
-  if (esl_fileparser_Open(tblfile, &efp) != eslOK) esl_fatal("failed to open pmark table %s", tblfile);
+  if (esl_fileparser_Open(tblfile, NULL, &efp) != eslOK) esl_fatal("failed to open pmark table %s", tblfile);
   esl_fileparser_SetCommentChar(efp, '#');
   
   while (esl_fileparser_NextLine(efp) == eslOK)
@@ -350,7 +350,7 @@ parse_results(char *resfile, int **pni, ESL_KEYHASH *qkh, ESL_KEYHASH *poskh, ES
   int              ralloc = 0;
   int              nr     = 0;
 
-  if (esl_fileparser_Open(resfile, &efp) != eslOK) esl_fatal("failed to open pmark results file %s", resfile);
+  if (esl_fileparser_Open(resfile, NULL, &efp) != eslOK) esl_fatal("failed to open pmark results file %s", resfile);
   esl_fileparser_SetCommentChar(efp, '#');
 
   if ((rp = malloc(sizeof(struct result_s) * 256)) == NULL) esl_fatal("malloc failed");

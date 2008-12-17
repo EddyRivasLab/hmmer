@@ -14,7 +14,7 @@
 #include "hmmer.h"
 
 
-/* Function:  p7_dprior_CreateAmino()
+/* Function:  p7_prior_CreateAmino()
  * Incept:    SRE, Sat Mar 24 09:35:36 2007 [Janelia]
  *
  * Purpose:   Creates the default mixture Dirichlet prior for protein
@@ -36,13 +36,13 @@
  *            observed count data. The slightly polar parameterization
  *            was obtained by training on Pfam 1.0.
  *
- * Returns:   a pointer to the new <P7_DPRIOR> structure.
+ * Returns:   a pointer to the new <P7_PRIOR> structure.
  */
-P7_DPRIOR *
-p7_dprior_CreateAmino(void)
+P7_PRIOR *
+p7_prior_CreateAmino(void)
 {
   int status;
-  P7_DPRIOR *pri = NULL;
+  P7_PRIOR *pri = NULL;
   int q;
 				/* default match mixture coefficients: [Sjolander96] */
   static double defmq[9] = {
@@ -89,7 +89,7 @@ p7_dprior_CreateAmino(void)
       0.003172, 0.003690, 0.002967, 0.002772, 0.002686 },
   };
 
-  ESL_ALLOC(pri, sizeof(P7_DPRIOR));
+  ESL_ALLOC(pri, sizeof(P7_PRIOR));
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
 
   pri->tm = esl_mixdchlet_Create(1, 3);	 /* single component; 3 params */
@@ -156,12 +156,12 @@ p7_dprior_CreateAmino(void)
   return pri;
 
  ERROR:
-  if (pri != NULL) p7_dprior_Destroy(pri);
+  if (pri != NULL) p7_prior_Destroy(pri);
   return NULL;
 }
 
 
-/* Function:  p7_dprior_CreateNucleic()
+/* Function:  p7_prior_CreateNucleic()
  * Synopsis:  Creates the default DNA/RNA prior.
  * Incept:    SRE, Tue Jun 12 11:19:53 2007 [Janelia]
  *
@@ -171,15 +171,15 @@ p7_dprior_CreateAmino(void)
  *            Laplace prior, for both emissions and transitions.
  *            This should be changed to an informative prior.
  *
- * Returns:   a pointer to the new <P7_DPRIOR> structure.
+ * Returns:   a pointer to the new <P7_PRIOR> structure.
  */
-P7_DPRIOR *
-p7_dprior_CreateNucleic(void)
+P7_PRIOR *
+p7_prior_CreateNucleic(void)
 {
   int status;
-  P7_DPRIOR *pri = NULL;
+  P7_PRIOR *pri = NULL;
 
-  ESL_ALLOC(pri, sizeof(P7_DPRIOR));
+  ESL_ALLOC(pri, sizeof(P7_PRIOR));
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
 
   pri->tm = esl_mixdchlet_Create(1, 3);	 /* single component; 3 params */
@@ -210,23 +210,23 @@ p7_dprior_CreateNucleic(void)
   return pri;
 
  ERROR:
-  if (pri != NULL) p7_dprior_Destroy(pri);
+  if (pri != NULL) p7_prior_Destroy(pri);
   return NULL;
 }
 
-/* Function:  p7_dprior_CreateLaplace()
+/* Function:  p7_prior_CreateLaplace()
  * Synopsis:  Creates Laplace plus-one prior.
  * Incept:    SRE, Sat Jun 30 09:48:13 2007 [Janelia]
  *
  * Purpose:   Create a Laplace plus-one prior for alphabet <abc>.
  */
-P7_DPRIOR *
-p7_dprior_CreateLaplace(ESL_ALPHABET *abc)
+P7_PRIOR *
+p7_prior_CreateLaplace(const ESL_ALPHABET *abc)
 {
-  P7_DPRIOR *pri = NULL;
+  P7_PRIOR *pri = NULL;
   int        status;
 
-  ESL_ALLOC(pri, sizeof(P7_DPRIOR));
+  ESL_ALLOC(pri, sizeof(P7_PRIOR));
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
 
   pri->tm = esl_mixdchlet_Create(1, 3);	     /* single component; 3 params */
@@ -245,18 +245,18 @@ p7_dprior_CreateLaplace(ESL_ALPHABET *abc)
   return pri;
 
  ERROR:
-  p7_dprior_Destroy(pri);
+  p7_prior_Destroy(pri);
   return NULL;
 }
 
 
-/* Function:  p7_dprior_Destroy()
+/* Function:  p7_prior_Destroy()
  * Incept:    SRE, Sat Mar 24 09:55:09 2007 [Janelia]
  *
  * Purpose:   Frees a mixture Dirichlet prior.
  */
 void
-p7_dprior_Destroy(P7_DPRIOR *pri)
+p7_prior_Destroy(P7_PRIOR *pri)
 {
   if (pri == NULL) return;
   if (pri->tm != NULL) esl_mixdchlet_Destroy(pri->tm);
@@ -281,7 +281,7 @@ p7_dprior_Destroy(P7_DPRIOR *pri)
  * Returns:   <eslOK> on success.
  */
 int
-p7_ParameterEstimation(P7_HMM *hmm, const P7_DPRIOR *pri)
+p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
 {
   int   k;
   double c[p7_MAXABET];

@@ -25,6 +25,7 @@ static ESL_OPTIONS options[] = {
   { "-q",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "quiet: suppress banner and informational output",             1 },
 
   //  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> using map in HMM",              2 },
+  { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",   2 },
   { "--amino",     eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
   { "--dna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both DNA: no autodetection",      2 },
   { "--rna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both RNA: no autodetection",      2 },
@@ -85,6 +86,7 @@ main(int argc, char **argv)
   P7_OMX       *oxb     = NULL;	/* optimized Backward matrix       */
   P7_TRACE    **tr      = NULL;	/* array of tracebacks             */
   ESL_MSA      *msa     = NULL;	/* resulting multiple alignment    */
+  int           msaopts = 0;	/* flags to p7_MultipleAlignment() */
   int           idx;		/* counter over seqs, traces       */
   float         fwdsc;		/* Forward score                   */
   float         oasc;		/* optimal accuracy score          */
@@ -100,6 +102,8 @@ main(int argc, char **argv)
 
   hmmfile = esl_opt_GetArg(go, 1);
   seqfile = esl_opt_GetArg(go, 2);
+
+  if (esl_opt_GetBoolean(go, "--trim"))  msaopts |= p7_TRIM;
 
   /* If caller declared an input format, decode it 
    */
@@ -203,7 +207,7 @@ main(int argc, char **argv)
     p7_trace_Dump(stdout, tr[idx], gm, sq[idx]->dsq);
 #endif
 
-  p7_Traces2Alignment(sq, tr, nseq, om->M, p7_DEFAULT, &msa);
+  p7_MultipleAlignment(sq, tr, nseq, om->M, msaopts, &msa);
 
   esl_msa_Write(stdout, msa, outfmt);
 
