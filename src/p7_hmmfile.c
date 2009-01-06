@@ -427,7 +427,7 @@ p7_hmmfile_WriteBinary(FILE *fp, P7_HMM *hmm)
   if (fwrite((char *) &(hmm->eff_nseq), sizeof(float),  1,   fp) != 1) return eslFAIL;
   write_bin_string(fp, hmm->ctime);
   if ((hmm->flags & p7H_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
-  if (fwrite((char *) &(hmm->checksum), sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->checksum), sizeof(uint32_t),1,  fp) != 1) return eslFAIL;
 
   /* E-value parameters and Pfam cutoffs */
   if (fwrite((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, fp) != p7_NEVPARAM) return eslFAIL;
@@ -711,7 +711,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 
       else if (strcmp(tag, "CKSUM") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows CKSUM tag");
-	hmm->checksum = atoi(tok1);
+	hmm->checksum = atoll(tok1); /* if atoi(), then you may truncate uint32_t checksums > 2^31-1 */
 	hmm->flags |= p7H_CHKSUM;
       }
 
@@ -926,7 +926,7 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if (! fread((char *) &(hmm->eff_nseq), sizeof(float), 1, hfp->f))                                  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read eff_nseq");
   if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                                   ESL_XFAIL(status,     hfp->errbuf, "failed to read ctime");
   if ((hmm->flags & p7H_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read map");
-  if (! fread((char *) &(hmm->checksum), sizeof(int), 1, hfp->f))                                    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read checksum");
+  if (! fread((char *) &(hmm->checksum), sizeof(uint32_t),1,hfp->f))                                 ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read checksum");
 
   /* E-value parameters and Pfam cutoffs */
   if (! fread((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read statistical params");
