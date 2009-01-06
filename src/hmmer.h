@@ -712,42 +712,51 @@ typedef struct p7_pipeline_s {
  * 14. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
-enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
 enum p7_archchoice_e { p7_ARCH_FAST = 0, p7_ARCH_HAND = 1 };
+enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
 enum p7_effnchoice_e { p7_EFFN_NONE = 0, p7_EFFN_SET  = 1, p7_EFFN_CLUST = 2, p7_EFFN_ENTROPY = 3 };
+enum p7_rngchoice_e  { p7_RNG_DET   = 0, p7_RNG_SEED  = 1, p7_RNG_ARB    = 2 };
 
 typedef struct p7_builder_s {
-  enum p7_wgtchoice_e  wgt_strategy;     /* choice of relative sequence weighting algorithm        */
+  /* Model architecture                                                                            */
   enum p7_archchoice_e arch_strategy;    /* choice of model architecture determination algorithm   */
+  float                symfrac;	         /* residue occ thresh for fast architecture determination */
+
+  /* Relative sequence weights                                                                     */
+  enum p7_wgtchoice_e  wgt_strategy;     /* choice of relative sequence weighting algorithm        */
+  int                  pbswitch;	 /* if nseq >= pbswitch, use PB rel wgts; or -1            */
+  double               wid;		 /* %id threshold for BLOSUM relative weighting            */
+
+  /* Effective sequence number                                                                     */
   enum p7_effnchoice_e effn_strategy;    /* choice of effective seq # determination algorithm      */
+  double               re_target;	 /* rel entropy target for effn eweighting, if set; or -1.0*/
+  double               eX;		 /* min total rel ent parameter for effn entropy weights   */
+  double               eid;		 /* %id threshold for effn clustering                      */
+  double               eset;		 /* effective sequence number, if --eset; or -1.0          */
 
-  int             pbswitch;		 /* if nseq >= pbswitch, use PB rel wgts; or -1            */
-  double          wid;		         /* %id threshold for BLOSUM relative weighting            */
-  float           symfrac;	         /* residue occ thresh for fast architecture determination */
-  double          re_target;	         /* rel entropy target for effn eweighting, if set; or -1.0*/
-  double          eX;		         /* min total rel ent parameter for effn entropy weights   */
-  double          eid;		         /* %id threshold for effn clustering                      */
-  double          eset;		         /* effective sequence number, if set; or -1.0             */
-  char           *setname;	         /* (optional) name to assign to new HMM; or NULL          */
-  P7_PRIOR       *prior;	         /* choice of prior when parameterizing from counts        */
+  /* Run-to-run variation due to random number generation                                          */
+  enum p7_rngchoice_e  rng_strategy;     /* how to reseed random number generator                  */
+  ESL_RANDOMNESS      *r;	         /* RNG for E-value calibration simulations                */
+  int                  seed;		 /* fixed seed value for reseeding, if --Rseed; else 0     */
 
-  int             EvL;	             	 /* length of sequences generated for Viterbi fitting      */
-  int             EvN;		         /* # of sequences generated for Viterbi fitting           */
-  int             EfL;		         /* length of sequences generated for Forward fitting      */
-  int             EfN;		         /* # of sequences generated for Forward fitting           */
-  double          Eft;		         /* tail mass used for Forward fitting                     */
-  ESL_RANDOMNESS *r;	         	 /* RNG for E-value calibration simulations                */
+  /* E-value parameter calibration                                                                 */
+  int                  EvL;            	 /* length of sequences generated for Viterbi fitting      */
+  int                  EvN;	         /* # of sequences generated for Viterbi fitting           */
+  int                  EfL;	         /* length of sequences generated for Forward fitting      */
+  int                  EfN;	         /* # of sequences generated for Forward fitting           */
+  double               Eft;	         /* tail mass used for Forward fitting                     */
 
-  /* Optional information used for parameterizing single sequence queries                          */
-  ESL_SCOREMATRIX *S;		         /* residue score matrix                                   */
-  ESL_DMATRIX     *Q;		         /* Q->mx[a][b] = P(b|a) residue probabilities             */
-  double          popen;            	 /* gap open probability                                   */
-  double          pextend;               /* gap extend probability                                 */
+  /* Choice of prior                                                                               */
+  P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
-  int             nmodels;	         /* Number of models constructed by this builder           */
-  FILE           *logfp;		 /* COPY of stream to log verbose output lines to; or NULL */
-  const ESL_ALPHABET *abc;		 /* COPY of alphabet                                       */
-  char            errbuf[eslERRBUFSIZE]; /* informative message on model construction failure      */
+  /* Optional: information used for parameterizing single sequence queries                         */
+  ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
+  ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
+  double               popen;         	 /* gap open probability                                   */
+  double               pextend;          /* gap extend probability                                 */
+
+  const ESL_ALPHABET  *abc;		 /* COPY of alphabet                                       */
+  char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
 } P7_BUILDER;
 
 
@@ -758,7 +767,6 @@ typedef struct p7_builder_s {
 
 /* align.c */
 extern int p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
-
 
 /* build.c */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
@@ -774,9 +782,10 @@ extern void p7_Die (char *format, ...);
 extern void p7_Fail(char *format, ...);
 
 /* evalues.c */
+extern int p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om);
 extern int p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda);
-extern int p7_Mu (ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,               double *ret_mu);
-extern int p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau);
+extern int p7_Mu (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda,               double *ret_mu);
+extern int p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau);
 
 /* eweight.c */
 extern int p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double infotarget, double *ret_Neff);
@@ -820,6 +829,9 @@ extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 
 /* island.c */
 extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM *h);
+
+/* h2_io.c */
+extern int   p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm);
 
 /* hmmer.c */
 extern void  p7_banner(FILE *fp, char *progname, char *banner);
@@ -882,7 +894,7 @@ extern int    p7_bg_SetFilter  (P7_BG *bg, int M, const float *compo);
 extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
 
 /* p7_builder.c */
-extern P7_BUILDER *p7_builder_Create(const ESL_ALPHABET *abc, FILE *logfp);
+extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc);
 extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 

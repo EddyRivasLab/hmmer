@@ -17,6 +17,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"
+#include "esl_getopts.h"
 #include "esl_msa.h"
 #include "esl_msacluster.h"
 #include "esl_msaweight.h"
@@ -33,33 +34,83 @@
  * Synopsis:  Create a default HMM construction configuration.
  * Incept:    SRE, Thu Dec 11 13:14:21 2008 [Janelia]
  *
- * Purpose:   Create a default HMM construction configuration
- *            and return a pointer to it.
+ * Purpose:   Create a construction configuration for building
+ *            HMMs in alphabet <abc>, and return a pointer to it.
+ *            
+ *            An application configuration <go> may optionally be
+ *            provided. If <go> is <NULL>, default parameters are
+ *            used. If <go> is non-<NULL>, it must include appropriate
+ *            settings for all 24 ``standard build options'':
+ *            
+ *            Model construction:   --fast --hand --symfrac
+ *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --pbswitch --wid
+ *            Effective seq #:      --eent --eclust --enone --eset --ere --eX --eid
+ *            E-val calibration:    --EvL --EvN --EfL --EfN --Eft
+ *            run-to-run variation: --Rdet --Rseed --Rarb
+ *            
+ *            See <hmmbuild.c> or other big users of the build
+ *            pipeline for an example of appropriate <ESL_GETOPTS>
+ *            initializations of these 24 options.
  */
 P7_BUILDER *
-p7_builder_Create(const ESL_ALPHABET *abc, FILE *logfp)
+p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
 {
   P7_BUILDER *bld = NULL;
   int         status;
 
   ESL_ALLOC(bld, sizeof(P7_BUILDER));
-  bld->setname   = NULL;
   bld->prior     = NULL;
   bld->r         = NULL;
+  bld->S         = NULL;
   bld->Q         = NULL;
-  
-  bld->wgt_strategy  = p7_WGT_GSC;
-  bld->arch_strategy = p7_ARCH_FAST;
-  bld->effn_strategy = p7_EFFN_ENTROPY;
-
-  bld->pbswitch  = 1000;
-  bld->wid       = 0.62;
-  bld->symfrac   = 0.5;
-  bld->re_target = -1.0;	/* -1.0 = override unset: use default equation if effn_strategy is p7_EFFN_ENTROPY */
-  bld->eX        = 6.0;
-  bld->eid       = 0.62;
   bld->eset      = -1.0;	/* -1.0 = unset; must be set if effn_strategy is p7_EFFN_SET */
+  bld->re_target = -1.0;
+  bld->seed      = 0;
   
+  if (go == NULL) 
+    {
+      bld->arch_strategy = p7_ARCH_FAST;
+      bld->wgt_strategy  = p7_WGT_GSC;
+      bld->effn_strategy = p7_EFFN_ENTROPY;
+      bld->rng_strategy  = p7_RNG_DET;
+    }
+  else 
+    {
+      if      (esl_opt_GetBoolean(go, "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
+      else if (esl_opt_GetBoolean(go, "--hand"))    bld->arch_strategy = p7_ARCH_HAND;
+
+      if      (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
+      else if (esl_opt_GetBoolean(go, "--wblosum")) bld->wgt_strategy = p7_WGT_BLOSUM;
+      else if (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
+      else if (esl_opt_GetBoolean(go, "--wnone"))   bld->wgt_strategy = p7_WGT_NONE;
+      else if (esl_opt_GetBoolean(go, "--wgiven"))  bld->wgt_strategy = p7_WGT_GIVEN;
+
+      if      (esl_opt_GetBoolean(go, "--eent"))    bld->effn_strategy = p7_EFFN_ENTROPY;
+      else if (esl_opt_GetBoolean(go, "--eclust"))  bld->effn_strategy = p7_EFFN_CLUST;
+      else if (esl_opt_GetBoolean(go, "--enone"))   bld->effn_strategy = p7_EFFN_NONE;
+      else if (!esl_opt_IsDefault(go, "--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, "--eset"); }
+
+      if      (esl_opt_GetBoolean(go, "--Rdet"))    bld->rng_strategy = p7_RNG_DET;
+      else if (!esl_opt_IsDefault(go, "--Rseed")) { bld->rng_strategy = p7_RNG_SEED;       bld->seed = esl_opt_GetInteger(go, "--Rseed"); }
+      else if (esl_opt_GetBoolean(go, "--Rarb"))    bld->rng_strategy = p7_RNG_ARB;
+    }
+
+  bld->symfrac   = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")  : 0.5; 
+  bld->pbswitch  = (go != NULL) ?  esl_opt_GetInteger(go, "--pbswitch") : 1000;
+  bld->wid       = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")      : 0.62;
+  bld->re_target = (go != NULL && ! esl_opt_IsDefault(go, "--ere")) ? esl_opt_GetReal(go, "--ere") : -1.0;
+  bld->eX        = (go != NULL) ?  esl_opt_GetReal   (go, "--eX")       : 6.0;
+  bld->eid       = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")      : 0.62;
+  bld->EvL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")      : 100;
+  bld->EvN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvN")      : 200;
+  bld->EfL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfL")      : 100;
+  bld->EfN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")      : 200;
+  bld->Eft       = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")      : 0.04;
+    
+  /* it's correct to initially create a timeseeded RNG. The DET and SEED options 
+   * reseed it later as needed at the appropriate granularity */
+  if ((bld->r = esl_randomness_CreateTimeseeded()) == NULL) goto ERROR;
+
   switch (abc->type) {
   case eslAMINO: bld->prior = p7_prior_CreateAmino();      break;
   case eslDNA:   bld->prior = p7_prior_CreateNucleic();    break;
@@ -68,16 +119,6 @@ p7_builder_Create(const ESL_ALPHABET *abc, FILE *logfp)
   }
   if (bld->prior == NULL) goto ERROR;
 
-  bld->EvL = 100;
-  bld->EvN = 200;
-  bld->EfL = 100;
-  bld->EfN = 200;
-  bld->Eft = 0.04;
-
-  if ((bld->r = esl_randomness_Create(42)) == NULL) goto ERROR;
-
-  bld->nmodels   = 0;
-  bld->logfp     = logfp;
   bld->abc       = abc;
   bld->errbuf[0] = '\0';
   return bld;
@@ -86,6 +127,9 @@ p7_builder_Create(const ESL_ALPHABET *abc, FILE *logfp)
   p7_builder_Destroy(bld);
   return NULL;
 }
+
+
+
 
 /* Function:  p7_builder_SetScoreSystem()
  * Synopsis:  Initialize score system for single sequence queries.
@@ -104,7 +148,7 @@ p7_builder_Create(const ESL_ALPHABET *abc, FILE *logfp)
  *            
  *            Set the gap-open and gap-extend probabilities to
  *            <popen>, <pextend>, respectively.
-
+ *
  *
  * Args:      bld      - <P7_BUILDER> to initialize
  *            mxfile   - score matrix file to use, or NULL for BLOSUM62 default
@@ -191,10 +235,10 @@ p7_builder_Destroy(P7_BUILDER *bld)
 {
   if (bld == NULL) return;
 
-  if (bld->setname != NULL) free(bld->setname);
   if (bld->prior   != NULL) p7_prior_Destroy(bld->prior);
   if (bld->r       != NULL) esl_randomness_Destroy(bld->r);
   if (bld->Q       != NULL) esl_dmatrix_Destroy(bld->Q);
+  if (bld->S       != NULL) esl_scorematrix_Destroy(bld->S);
 
   free(bld);
   return;
@@ -338,7 +382,6 @@ static int
 relative_weights(P7_BUILDER *bld, ESL_MSA *msa)
 {
   int status;
-  if (bld->logfp) { fprintf(bld->logfp, "%-40s ... ", "Relative sequence weighting");  fflush(bld->logfp);  }
 
   if      (bld->wgt_strategy == p7_WGT_NONE)                    { esl_vec_DSet(msa->wgt, msa->nseq, 1.); status = eslOK; }
   else if (bld->wgt_strategy == p7_WGT_GIVEN)                   status = eslOK;
@@ -349,11 +392,9 @@ relative_weights(P7_BUILDER *bld, ESL_MSA *msa)
 
   if (status != eslOK) ESL_XFAIL(status, bld->errbuf, "failed to set relative weights in alignment");
 
-  if (bld->logfp) fprintf(bld->logfp, "done.\n");
   return eslOK;
 
  ERROR:
-  if (bld->logfp) fprintf(bld->logfp, "FAILED.\n");
   return status;
 }
 
@@ -369,7 +410,6 @@ static int
 build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 {
   int status;
-  if (bld->logfp) { fprintf(bld->logfp, "%-40s ... ", "Constructing model architecture");  fflush(bld->logfp); }
 
   if      (bld->arch_strategy == p7_ARCH_FAST)
     {
@@ -386,12 +426,9 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");
       else if (status != eslOK)        ESL_XFAIL(status, bld->errbuf, "internal error in model construction.\n");
     }
-
-  if (bld->logfp) fprintf(bld->logfp, "done.\n");
   return eslOK;
 
  ERROR:
-  if (bld->logfp) fprintf(bld->logfp, "FAILED.\n");
   return status;
 }
 
@@ -414,21 +451,8 @@ effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_B
 {
   int    status;
 
-  if (! bld->logfp){ fprintf(bld->logfp, "%-40s ... ", "Set effective sequence number"); fflush(bld->logfp); }
-
-  if (bld->effn_strategy == p7_EFFN_NONE)
-    {
-      hmm->eff_nseq = msa->nseq;
-      if (! bld->logfp) fprintf(bld->logfp, "done. [--enone: neff=nseq=%d]\n", msa->nseq);
-    }
-
-  else if (bld->effn_strategy == p7_EFFN_SET)
-    {
-      hmm->eff_nseq = bld->eset;
-      if (! bld->logfp) fprintf(bld->logfp, "done. [--eset: set to neff = %.2f]\n", bld->eset);
-    }
-
-
+  if      (bld->effn_strategy == p7_EFFN_NONE)    hmm->eff_nseq = msa->nseq;
+  else if (bld->effn_strategy == p7_EFFN_SET)     hmm->eff_nseq = bld->eset;
   else if (bld->effn_strategy == p7_EFFN_CLUST)
     {
       int nclust;
@@ -438,9 +462,7 @@ effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_B
       else if (status != eslOK)   ESL_XFAIL(status, bld->errbuf, "single linkage clustering algorithm (at %d%% id) failed", (int)(100 * bld->eid));
 
       hmm->eff_nseq = (double) nclust;
-      if (! bld->logfp) fprintf(bld->logfp, "done. [--eclust SLC at %.1f%%; neff = %d clusters]\n", 100. * bld->eid, nclust);
     }
-
 
   else if (bld->effn_strategy == p7_EFFN_ENTROPY)
     {
@@ -454,15 +476,12 @@ effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_B
       if      (status == eslEMEM) ESL_XFAIL(status, bld->errbuf, "memory allocation failed");
       else if (status != eslOK)   ESL_XFAIL(status, bld->errbuf, "internal failure in entropy weighting algorithm");
       hmm->eff_nseq = eff_nseq;
-    
-      if (! bld->logfp) fprintf(bld->logfp, "done. [etarget %.2f bits; neff %.2f]\n", etarget, hmm->eff_nseq);
     }
     
   p7_hmm_Scale(hmm, hmm->eff_nseq / (double) hmm->nseq);
   return eslOK;
 
  ERROR:
-  if (! bld->logfp) fprintf(bld->logfp, "FAILED.\n");
   return status;
 }
 
@@ -474,15 +493,12 @@ static int
 parameterize(P7_BUILDER *bld, P7_HMM *hmm)
 {
   int status;
-  if (bld->logfp) { fprintf(bld->logfp, "%-40s ... ", "Parameterizing"); fflush(bld->logfp); }
 
   if ((status = p7_ParameterEstimation(hmm, bld->prior)) != eslOK) ESL_XFAIL(status, bld->errbuf, "parameter estimation failed");
 
-  if (bld->logfp) fprintf(bld->logfp, "done.\n");
   return eslOK;
 
  ERROR:
-  if (bld->logfp) fprintf(bld->logfp, "FAILED.\n");
   return status;
 }
 
@@ -490,17 +506,15 @@ parameterize(P7_BUILDER *bld, P7_HMM *hmm)
 
 /* annotate()
  * Transfer annotation information from MSA to new HMM.
+ * Also sets model-specific residue composition (hmm->compo).
  */
 static int
 annotate(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm)
 {
   int status;
 
-  if (bld->logfp) { fprintf(bld->logfp, "%-40s ... ", "Annotating model");    fflush(bld->logfp); }
-
   /* Name. */
-  if      (bld->setname) p7_hmm_SetName(hmm, bld->setname);
-  else if (msa->name)    p7_hmm_SetName(hmm, msa->name);  
+  if (msa->name) p7_hmm_SetName(hmm, msa->name);  
   else ESL_XFAIL(eslEINVAL, bld->errbuf, "Unable to name the HMM.");
 
   if ((status = p7_hmm_SetAccession  (hmm, msa->acc))           != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record MSA accession");
@@ -516,56 +530,30 @@ annotate(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm)
   if (msa->cutset[eslMSA_TC1] && msa->cutset[eslMSA_TC2]) { hmm->cutoff[p7_TC1] = msa->cutoff[eslMSA_TC1]; hmm->cutoff[p7_TC2] = msa->cutoff[eslMSA_TC2]; hmm->flags |= p7H_TC; }
   if (msa->cutset[eslMSA_NC1] && msa->cutset[eslMSA_NC2]) { hmm->cutoff[p7_NC1] = msa->cutoff[eslMSA_NC1]; hmm->cutoff[p7_NC2] = msa->cutoff[eslMSA_NC2]; hmm->flags |= p7H_NC; }
 
-  if (bld->logfp) fprintf(bld->logfp, "done.\n");
   return eslOK;
 
  ERROR:
-  if (bld->logfp) fprintf(bld->logfp, "FAILED.\n");
   return status;
 }
 
 /* calibrate()
  * 
  * Sets the E value parameters of the model with two short simulations.
- * Also sets model-specific residue composition (hmm->compo).
  * A profile and an oprofile are created here. If caller wants to keep either
  * of them, it can pass non-<NULL> <opt_gm>, <opt_om> pointers.
  */
 static int
 calibrate(P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om)
 {
-  P7_PROFILE     *gm = NULL;
-  P7_OPROFILE    *om = NULL;
-  double          lambda, mu, tau;
-  int             status;
+  int status;
 
-  if (bld->logfp) { fprintf(bld->logfp, "%-40s ... ", "Calibrating"); fflush(bld->logfp); }
+  if (opt_gm != NULL) *opt_gm = NULL;
+  if (opt_om != NULL) *opt_om = NULL;
 
-  if ((gm     = p7_profile_Create(hmm->M, hmm->abc))                                   == NULL)  ESL_XFAIL(eslEMEM, bld->errbuf, "failed to allocate profile");
-  if ((status = p7_ProfileConfig(hmm, bg, gm, bld->EvL, p7_LOCAL))                     != eslOK) ESL_XFAIL(status,  bld->errbuf, "failed to configure profile");
-
-  if ((om     = p7_oprofile_Create(hmm->M, hmm->abc))                                  == NULL)  ESL_XFAIL(eslEMEM, bld->errbuf, "failed to allocate optimized profile");
-  if ((status = p7_oprofile_Convert(gm, om))                                           != eslOK) ESL_XFAIL(status,  bld->errbuf, "failed to convert to optimized profile");
-
-  if ((status = p7_Lambda(hmm, bg, &lambda))                                           != eslOK) ESL_XFAIL(status,  bld->errbuf, "failed to determine lambda");
-  if ((status = p7_Mu    (bld->r, gm, bg, bld->EvL, bld->EvN, lambda, &mu))            != eslOK) ESL_XFAIL(status,  bld->errbuf, "failed to determine mu");
-  if ((status = p7_Tau   (bld->r, gm, bg, bld->EfL, bld->EfN, lambda, bld->Eft, &tau)) != eslOK) ESL_XFAIL(status,  bld->errbuf, "failed to determine tau");
-
-
-  hmm->evparam[p7_LAMBDA] = gm->evparam[p7_LAMBDA] = om->evparam[p7_LAMBDA] = lambda;
-  hmm->evparam[p7_MU]     = gm->evparam[p7_MU]     = om->evparam[p7_MU]     = mu;
-  hmm->evparam[p7_TAU]    = gm->evparam[p7_TAU]    = om->evparam[p7_TAU]    = tau;
-  hmm->flags             |= p7H_STATS;
-
-  if (opt_gm != NULL) *opt_gm = gm; else p7_profile_Destroy(gm);
-  if (opt_om != NULL) *opt_om = om; else p7_oprofile_Destroy(om);
-  if (bld->logfp) fprintf(bld->logfp, "done.\n");
+  if ((status = p7_Calibrate(hmm, bld, &(bld->r), &bg, opt_gm, opt_om)) != eslOK) goto ERROR;
   return eslOK;
 
  ERROR:
-  p7_profile_Destroy(gm);
-  p7_oprofile_Destroy(om);
-  if (bld->logfp) fprintf(bld->logfp, "FAILED.\n");
   return status;
 }
 

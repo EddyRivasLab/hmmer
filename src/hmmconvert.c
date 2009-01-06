@@ -16,13 +16,14 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",          0 },
-  { "-a",        eslARG_NONE,"default",NULL, NULL,   "-a,-b",      NULL,    NULL, "ascii:  output models in HMMER3 ASCII format",  0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,   "-a,-b",      NULL,    NULL, "binary: output models in HMMER3 binary format", 0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,       NULL,    NULL, "show brief help on version and usage",                             0 },
+  { "-a",        eslARG_NONE,"default",NULL, NULL, "-a,-b,-2",      NULL,    NULL, "ascii:  output models in HMMER3 ASCII format",                     0 },
+  { "-b",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "binary: output models in HMMER3 binary format",                    0 },
+  { "-2",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "HMMER2: output backward compatible HMMER2 ASCII format (ls mode)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "convert a profile HMM file to a HMMER3 format";
+static char banner[] = "convert profile HMM file to a HMMER format";
 
 
 int 
@@ -45,6 +46,7 @@ main(int argc, char **argv)
     {
       if      (esl_opt_GetBoolean(go, "-a") == TRUE) p7_hmmfile_WriteASCII (ofp, hmm);
       else if (esl_opt_GetBoolean(go, "-b") == TRUE) p7_hmmfile_WriteBinary(ofp, hmm);
+      else if (esl_opt_GetBoolean(go, "-2") == TRUE) p7_h2io_WriteASCII    (ofp, hmm);
 
       p7_hmm_Destroy(hmm);
     }

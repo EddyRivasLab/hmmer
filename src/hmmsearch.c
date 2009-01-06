@@ -883,19 +883,19 @@ output_search_statistics(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_STOPWATCH *w)
 {
   fprintf(cfg->ofp, "Internal statistics summary:\n");
   fprintf(cfg->ofp, "----------------------------\n");
-  fprintf(cfg->ofp, "Query HMM(s):                %15ld  (%ld nodes)\n",    cfg->nmodels, cfg->nnodes);
-  fprintf(cfg->ofp, "Target sequences:            %15ld  (%ld residues)\n", cfg->nseq,    cfg->nres);
-  fprintf(cfg->ofp, "Passed MSV filter:           %15ld  (%.6g); expected %.1f (%.6g)\n", 
+  fprintf(cfg->ofp, "Query HMM(s):                %15" PRId64 "  (%" PRId64" nodes)\n",    cfg->nmodels, cfg->nnodes);
+  fprintf(cfg->ofp, "Target sequences:            %15" PRId64 "  (%" PRId64" residues)\n", cfg->nseq,    cfg->nres);
+  fprintf(cfg->ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n", 
 	  cfg->n_past_msv,
 	  (double) cfg->n_past_msv / (double) cfg->nseq, 
 	  cfg->F1 * (double) cfg->nseq, 
 	  cfg->F1);
-  fprintf(cfg->ofp, "Passed Vit filter:           %15ld  (%.6g); expected %.1f (%.6g)\n",   
+  fprintf(cfg->ofp, "Passed Vit filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",   
 	  cfg->n_past_vit,
 	  (double) cfg->n_past_vit / (double) cfg->nseq,
 	  cfg->F2 * (double) cfg->nseq,
 	  cfg->F2);
-  fprintf(cfg->ofp, "Passed Fwd filter:           %15ld  (%.6g); expected %.1f (%.6g)\n",         
+  fprintf(cfg->ofp, "Passed Fwd filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",         
 	  cfg->n_past_fwd, 
 	  (double) cfg->n_past_fwd / (double) cfg->nseq,
 	  cfg->F3 * (double) cfg->nseq,

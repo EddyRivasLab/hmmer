@@ -1,9 +1,15 @@
 /* Calculations and simulations relevant to E-value calculations.
  * 
+ * Contents:
+ *   1. p7_Calibrate():  model calibration wrapper 
+ *   2. Determination of individual E-value parameters
+ *   3. Statistics and specific experiment drivers
+ *   4. Benchmark driver
+ *   5. Copyright and license information
+ * 
  * SRE, Mon Aug  6 13:00:06 2007
  * SVN $Id$
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -13,6 +19,122 @@
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
+
+/*****************************************************************
+ * 1. p7_Calibrate():  model calibration wrapper 
+ *****************************************************************/ 
+
+/* Function:  p7_Calibrate()
+ * Synopsis:  Calibrate the E-value parameters of a model.
+ * Incept:    SRE, Thu Dec 25 09:29:31 2008 [Magallon]
+ *
+ * Purpose:   Calibrate the E-value parameters of a model with 
+ *            one calculation ($\lambda$) and two brief simulations
+ *            (Viterbi $\mu$, Forward $\tau$).
+ *
+ * Args:      hmm     - HMM to be calibrated
+ *            cfg_b   - OPTCFG: ptr to optional build configuration;
+ *                      if <NULL>, use default parameters.
+ *            byp_rng - BYPASS optimization: pass ptr to <ESL_RANDOMNESS> generator
+ *                      if already known; 
+ *                      <*byp_rng> == NULL> if <rng> return is desired;
+ *                      pass <NULL> to use and discard internal default.
+ *            byp_bg  - BYPASS optimization: pass ptr to <P7_BG> if already known; 
+ *                      <*byp_bg == NULL> if <bg> return is desired;
+ *                      pass <NULL> to use and discard internal default.
+ *            byp_gm  - BYPASS optimization: pass ptr to <gm> profile if already known;
+ *                      pass <*byp_gm == NULL> if <gm> return desired;
+ *                      pass <NULL> to use and discard internal default.
+ *            byp_om  - BYPASS optimization: pass ptr to <om> profile if already known;
+ *                      pass <*byp_om == NULL> if <om> return desired;
+ *                      pass <NULL> to use and discard internal default.          
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            <eslEINVAL> if <hmm>, <gm>, <om> aren't compatible somehow.
+ *
+ * Xref:      J4/41
+ */
+int
+p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om)
+{
+  P7_BG          *bg     = (esl_byp_IsProvided(byp_bg)  ? *byp_bg  : NULL); 
+  P7_PROFILE     *gm     = (esl_byp_IsProvided(byp_gm)  ? *byp_gm  : NULL); 
+  P7_OPROFILE    *om     = (esl_byp_IsProvided(byp_om)  ? *byp_om  : NULL); 
+  ESL_RANDOMNESS *r      = (esl_byp_IsProvided(byp_rng) ? *byp_rng : NULL);
+  char           *errbuf = ((cfg_b != NULL) ? cfg_b->errbuf : NULL);
+  int             EvL    = ((cfg_b != NULL) ? cfg_b->EvL    : 100);
+  int             EvN    = ((cfg_b != NULL) ? cfg_b->EvN    : 200);
+  int             EfL    = ((cfg_b != NULL) ? cfg_b->EfL    : 100);
+  int             EfN    = ((cfg_b != NULL) ? cfg_b->EfN    : 200);
+  double          Eft    = ((cfg_b != NULL) ? cfg_b->Eft    : 0.04);
+  double          lambda, mu, tau;
+  int             status;
+  
+  /* Configure any objects we need
+   * that weren't already passed to us as a bypass optimization 
+   */
+  if (r  == NULL) {
+    if ((r = esl_randomness_Create(42)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create RNG");
+  }
+
+  if (bg == NULL) {
+    if ((bg = p7_bg_Create(hmm->abc)) == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate background");
+  }
+
+  /* there's an odd case where the <om> is provided and a <gm> isn't going to be returned
+   * where we don't need a <gm> at all, and <gm> stays <NULL> after the next block:
+   */
+  if ((esl_byp_IsInternal(byp_gm) && ! esl_byp_IsProvided(byp_om)) || esl_byp_IsReturned(byp_gm)) {
+    if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))          == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
+    if  ( (status = p7_ProfileConfig(hmm, bg, gm, EvL, p7_LOCAL)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to configure profile");
+  }
+
+  if (om == NULL) {
+    if ((om     = p7_oprofile_Create(hmm->M, hmm->abc)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create optimized profile");
+    if ((status = p7_oprofile_Convert(gm, om))         != eslOK) ESL_XFAIL(status,  errbuf, "failed to convert to optimized profile");
+  }
+
+  /* The calibration steps themselves */
+  if ((status = p7_Lambda(hmm, bg, &lambda))                       != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine lambda");
+  if ((status = p7_Mu    (r, om, bg, EvL, EvN, lambda, &mu))       != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine mu");
+  if ((status = p7_Tau   (r, om, bg, EfL, EfN, lambda, Eft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine tau");
+
+  /* Store results */
+  hmm->evparam[p7_LAMBDA] = om->evparam[p7_LAMBDA] = lambda;
+  hmm->evparam[p7_MU]     = om->evparam[p7_MU]     = mu;
+  hmm->evparam[p7_TAU]    = om->evparam[p7_TAU]    = tau;
+  hmm->flags             |= p7H_STATS;
+
+  if (gm != NULL) {
+    gm->evparam[p7_LAMBDA] = lambda;
+    gm->evparam[p7_MU]     = mu;
+    gm->evparam[p7_TAU]    = tau;
+  }
+    
+  if (byp_rng != NULL) *byp_rng = r;  else esl_randomness_Destroy(r); /* bypass convention: no-op if rng was provided.*/
+  if (byp_bg  != NULL) *byp_bg  = bg; else p7_bg_Destroy(bg);         /* bypass convention: no-op if bg was provided. */
+  if (byp_gm  != NULL) *byp_gm  = gm; else p7_profile_Destroy(gm);    /* bypass convention: no-op if gm was provided. */
+  if (byp_om  != NULL) *byp_om  = om; else p7_oprofile_Destroy(om);   /* bypass convention: no-op if om was provided. */
+  return eslOK;
+
+ ERROR:
+  if (! esl_byp_IsProvided(byp_rng)) esl_randomness_Destroy(r);
+  if (! esl_byp_IsProvided(byp_bg))  p7_bg_Destroy(bg);
+  if (! esl_byp_IsProvided(byp_gm))  p7_profile_Destroy(gm);
+  if (! esl_byp_IsProvided(byp_om))  p7_oprofile_Destroy(om);
+  return status;
+}
+/*---------------------- end, wrapper API -----------------------*/
+
+
+
+
+
+/*****************************************************************
+ * 2. Determination of individual E-value parameters
+ *****************************************************************/ 
 
 /* Function:  p7_Lambda()
  * Synopsis:  Determines length-corrected local lambda parameter.
@@ -61,7 +183,7 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  * Synopsis:  Determines the local Viterbi Gumbel mu parameter for a model.
  * Incept:    SRE, Mon Aug  6 13:00:57 2007 [Janelia]
  *
- * Purpose:   Given model <gm> configured for local alignment (typically
+ * Purpose:   Given model <om> configured for local alignment (typically
  *            multihit, but may be unihit), determine the Gumbel
  *            location parameter $\mu$ by brief simulation. The
  *            simulation generates <N> random sequences of length <L>
@@ -76,12 +198,12 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            of $\pm$ 8\% in E-value estimates. [J1/135].
  *            
  *            This function changes the length configuration of both
- *            <gm> and <bg>. The caller must remember to reconfigure
+ *            <om> and <bg>. The caller must remember to reconfigure
  *            both of their length models appropriately for any
  *            subsequent alignments.
  *            
  * Args:      r      :  source of random numbers
- *            gm     :  score profile
+ *            om     :  score profile
  *            bg     :  null model
  *            L      :  length of sequences to simulate
  *            N	     :  number of sequences to simulate		
@@ -95,44 +217,49 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  * 
  * Note:      The FitCompleteLoc() function is simple, and it's tempting
  *            to inline it here and save the <xv> working memory. However,
- *            realized that the FitCompleteLoc() function is vulnerable
+ *            the FitCompleteLoc() function is vulnerable
  *            to under/overflow error, and we'll probably fix it
  *            eventually - need to be sure that fix applies here too.
  */
 int
-p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double *ret_mu)
+p7_Mu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_mu)
 {
-  P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	 /* DP matrix: L (rows) will grow as needed */
+  P7_OMX  *ox      = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
   ESL_DSQ *dsq     = NULL;
   double  *xv      = NULL;
   int      i;
   float    sc, nullsc;
+  float    maxsc   = (255 - om->base) / om->scale; /* if score overflows, use this */
   int      status;
 
-  if (gx == NULL) { status = eslEMEM; goto ERROR; }
+  if (ox == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(xv,  sizeof(double)  * N);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
 
-  p7_ReconfigLength(gm, L);
+  p7_oprofile_ReconfigLength(om, L);
   p7_bg_SetLength(bg, L);
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rsq_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
-      if ((status = p7_GViterbi(dsq, L, gm, gx, &sc))            != eslOK) goto ERROR;
+      if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
+
+      status = p7_MSVFilter(dsq, L, om, ox, &sc);
+      if      (status == eslERANGE) sc = maxsc;
+      else if (status != eslOK)     goto ERROR;
+
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
     }
 
   if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_mu))  != eslOK) goto ERROR;
-  p7_gmx_Destroy(gx);
+  p7_omx_Destroy(ox);
   free(xv);
   free(dsq);
   return eslOK;
 
  ERROR:
   *ret_mu = 0.0;
-  if (gx  != NULL) p7_gmx_Destroy(gx);
+  if (ox  != NULL) p7_omx_Destroy(ox);
   if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
   return status;
@@ -145,7 +272,7 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
  * Incept:    SRE, Thu Aug  9 15:08:39 2007 [Janelia]
  *
  * Purpose:   Determine the <tau> parameter for an exponential tail fit
- *            to the Forward score distribution for model <gm>, on
+ *            to the Forward score distribution for model <om>, on
  *            random sequences with the composition of the background
  *            model <bg>. This <tau> parameter is for an exponential
  *            distribution anchored from $P=1.0$, so it's not really a
@@ -181,12 +308,12 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
  *            approximation. See [J1/135] for discussion.
  *            
  *            This function changes the length configuration of both
- *            <gm> and <bg>. The caller must remember to reconfigure
+ *            <om> and <bg>. The caller must remember to reconfigure
  *            both of their length models appropriately for any
  *            subsequent alignments.
  *            
  * Args:      r      : source of randomness
- *            gm     : configured profile to sample sequences from
+ *            om     : configured profile to sample sequences from
  *            bg     : null model (for background residue frequencies)
  *            L      : mean length model for seq emission from profile
  *            N      : number of sequences to generate
@@ -200,9 +327,9 @@ p7_Mu(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda,
  * Throws:    <eslEMEM> on allocation error, and <*ret_fv> is 0.
  */
 int
-p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
+p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
 {
-  P7_GMX  *gx      = p7_gmx_Create(gm->M, L);	     /* DP matrix: L (rows) will grow as needed */
+  P7_OMX  *ox      = p7_omx_Create(om->M, 0, L);     /* DP matrix: for ForwardParser,  L rows */
   ESL_DSQ *dsq     = NULL;
   double  *xv      = NULL;
   float    fsc, nullsc;		                  
@@ -212,15 +339,15 @@ p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
 
   ESL_ALLOC(xv,  sizeof(double)  * N);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
-  if (gx == NULL) { status = eslEMEM; goto ERROR; }
+  if (ox == NULL) { status = eslEMEM; goto ERROR; }
 
-  p7_ReconfigLength(gm, L);
+  p7_oprofile_ReconfigLength(om, L);
   p7_bg_SetLength(bg, L);
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rsq_xfIID(r, bg->f, gm->abc->K, L, dsq)) != eslOK) goto ERROR;
-      if ((status = p7_GForward(dsq, L, gm, gx, &fsc))           != eslOK) goto ERROR;
+      if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
+      if ((status = p7_ForwardParser(dsq, L, om, ox, &fsc))      != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
     }
@@ -235,24 +362,26 @@ p7_Tau(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, int N, double lambda
   
   free(xv);
   free(dsq);
-  p7_gmx_Destroy(gx);
+  p7_omx_Destroy(ox);
   return eslOK;
 
  ERROR:
   *ret_tau = 0.;
   if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
-  if (gx  != NULL) p7_gmx_Destroy(gx);
+  if (ox  != NULL) p7_omx_Destroy(ox);
   return status;
 }
+/*-------------- end, determining individual parameters ---------*/
+
+
 
 
 /*****************************************************************
- * 2. Experiment code.
+ * 3. Statistics and specific experiment drivers
  *****************************************************************/
-
 #ifdef p7EVALUES_STATS
-/* gcc -o stats -g -O2 -I. -L. -I../easel -L../easel -Dp7EVALUES_STATS evalues.c -lhmmer -leasel -lm
+/* gcc -o stats -g -O2 -msse2 -I. -L. -I../easel -L../easel -Dp7EVALUES_STATS evalues.c -lhmmer -leasel -lm
  * ./stats <hmmfile>
  */
 #include "p7_config.h"
@@ -268,9 +397,9 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
   { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
-  { "-t",        eslARG_REAL,  "0.05", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
+  { "-t",        eslARG_REAL,  "0.04", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
+  { "-N",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -287,6 +416,7 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
   double          lambda;
   double          vmu;
   double          fmu;
@@ -304,15 +434,18 @@ main(int argc, char **argv)
       if (bg == NULL) bg = p7_bg_Create(abc);
       gm = p7_profile_Create(hmm->M, abc);
       p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+      om = p7_oprofile_Create(hmm->M, abc);
+      p7_oprofile_Convert(gm, om);
 
       p7_Lambda(hmm, bg, &lambda);
-      p7_Mu(r, gm, bg, L, N, lambda, &vmu);
-      p7_Tau(r, gm, bg, L, N, tailp,  &fmu);
+      p7_Mu (r, om, bg, L, N, lambda, &vmu);
+      p7_Tau(r, om, bg, L, N, lambda, tailp,  &fmu);
       
       printf("%s %.4f %.4f %.4f\n", hmm->name, lambda, vmu, fmu);
 
       p7_hmm_Destroy(hmm);      
       p7_profile_Destroy(gm);
+      p7_oprofile_Destroy(om);
     }
 
   p7_hmmfile_Close(hfp);
@@ -327,7 +460,7 @@ main(int argc, char **argv)
 
 #ifdef p7EXP_J1_135
 /* Determining precision and accuracy of mu estimates. [xref J1/135]
- * gcc -o exp -g -O2 -I. -L. -I../easel -L../easel -Dp7EXP_J1_135 evalues.c -lhmmer -leasel -lm
+ * gcc -o exp -g -O2 -msse2 -I. -L. -I../easel -L../easel -Dp7EXP_J1_135 evalues.c -lhmmer -leasel -lm
  * ./exp <hmmfile>
  */
 #include "p7_config.h"
@@ -345,9 +478,9 @@ static ESL_OPTIONS options[] = {
   { "-f",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "fit the Forward mu, not Viterbi mu",             0 },
   { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
   { "-l",        eslARG_REAL,"0.6931", NULL, NULL,  NULL,  NULL, NULL, "set lambda param to <x>",                        0 },
-  { "-t",        eslARG_REAL,  "0.05", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
+  { "-t",        eslARG_REAL,  "0.04", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
+  { "-N",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
   { "-Z",        eslARG_INT,   "1000", NULL, NULL,  NULL,  NULL, NULL, "set number of iterations to <n>",                0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -365,6 +498,7 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
   double          lambda  = esl_opt_GetReal   (go, "-l");
   double          tailp   = esl_opt_GetReal   (go, "-t");
   int             L       = esl_opt_GetInteger(go, "-L");
@@ -382,15 +516,18 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  om = p7_oprofile_Create(hmm->M, abc);
+  p7_oprofile_Convert(gm, om);
 
   for (i = 0; i < Z; i++)
     {
-      if (esl_opt_GetBoolean(go, "-f")) p7_Tau(r, gm, bg, L, N, tailp,  &mu);
-      else                              p7_Mu(r, gm, bg, L, N, lambda, &mu);
+      if (esl_opt_GetBoolean(go, "-f")) p7_Tau(r, om, bg, L, N, lambda, tailp,  &mu);
+      else                              p7_Mu( r, om, bg, L, N, lambda, &mu);
       printf("%.4f\n", mu);
     }
 
   p7_hmm_Destroy(hmm);      
+  p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_hmmfile_Close(hfp);
   p7_bg_Destroy(bg);
@@ -400,6 +537,76 @@ main(int argc, char **argv)
   return eslOK;
 }
 #endif /*p7EXP_J1_135*/
+/*----------------- end, stats/experiment drivers ---------------*/
+
+
+/*****************************************************************
+ * 4. Benchmark driver
+ *****************************************************************/
+
+#ifdef p7EVALUES_BENCHMARK
+/*
+ *   gcc -O3 -malign-double -msse2 -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
+ *   gcc -g -O -pg  -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
+ *   gcc -g -Wall -msse2 -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
+ *
+ *   ./evalues-benchmark <hmmfile>
+ *
+ *  -malign-double is needed for gcc if the rest of HMMER was compiled w/ -malign-double 
+ *  (i.e., our default gcc optimization)
+ *
+ *  27 Dec 08 on wanderoo: 24 msec per RRM_1 calibration; 37 msec for Caudal_act
+ *  profiling shows 75% in Forward; 12% esl_random(); <3% in MSVFilter.
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_stopwatch.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-N",        eslARG_INT,    "100", NULL, "n>0", NULL,  NULL, NULL, "number of calibrations to do",                     0 },
+   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "benchmark driver for E-value calibration";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  int             N       = esl_opt_GetInteger(go, "-N");
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  esl_stopwatch_Start(w);
+  while (N--)
+    { /*                cfg   rng   bg    gm    om  */
+      p7_Calibrate(hmm, NULL, NULL, NULL, NULL, NULL);
+    }
+  esl_stopwatch_Stop(w);
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7EVALUES_BENCHMARK*/
+
 
 
 /*****************************************************************

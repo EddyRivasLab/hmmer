@@ -1,8 +1,8 @@
 /* H3's accelerated seq/profile comparison pipeline
  *  
  * Contents:
- *   1. P7_PIPELINE: allocation, initialization, destruction.
- *   2. Pipeline API.
+ *   1. P7_PIPELINE: allocation, initialization, destruction
+ *   2. Pipeline API
  *   3. Example 1: search mode (in a sequence db)
  *   4. Example 2: scan mode (in an HMM db)
  *   5. Copyright and license information
@@ -562,26 +562,26 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "Internal pipeline statistics summary:\n");
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp, "Query model(s)               %15ld  (%ld nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp, "Target sequences             %15ld  (%ld residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query model(s)               %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Target sequences             %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp, "Query sequence(s)            %15ld  (%ld residues)\n",  pli->nseqs,   pli->nres);
-    fprintf(ofp, "Target model(s)s)            %15ld  (%ld nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Query sequence(s)            %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Target model(s)s)            %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }
 
-  fprintf(ofp, "Passed MSV filter:           %15ld  (%.6g); expected %.1f (%.6g)\n", 
+  fprintf(ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n", 
 	  pli->n_past_msv,
 	  (double) pli->n_past_msv / ntargets,
 	  pli->F1 * ntargets,
 	  pli->F1);
-  fprintf(ofp, "Passed Vit filter:           %15ld  (%.6g); expected %.1f (%.6g)\n",   
+  fprintf(ofp, "Passed Vit filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",   
 	  pli->n_past_vit,
 	  (double) pli->n_past_vit / ntargets,
 	  pli->F2 * ntargets,
 	  pli->F2);
-  fprintf(ofp, "Passed Fwd filter:           %15ld  (%.6g); expected %.1f (%.6g)\n",         
+  fprintf(ofp, "Passed Fwd filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",         
 	  pli->n_past_fwd, 
 	  (double) pli->n_past_fwd / ntargets,
 	  pli->F3 * ntargets,

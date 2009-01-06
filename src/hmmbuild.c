@@ -29,13 +29,13 @@
 #define CONOPTS "--fast,--hand"                                /* Exclusive options for model construction                    */
 #define EFFOPTS "--eent,--eclust,--eset,--enone"               /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"      /* Exclusive options for relative weighting                    */
+#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                  1 },
   { "-n",        eslARG_STRING,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "name the HMM <s>",                                      1 },
   { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "direct summary output to file <f>, not stdout",         1 },
-  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "use tabular output summary format, 1 line per HMM",     1 },
 /* Selecting the alphabet rather than autoguessing it */
   { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is protein sequence data",              2 },
   { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is DNA sequence data",                  2 },
@@ -67,14 +67,16 @@ static ESL_OPTIONS options[] = {
   { "--EfL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Forward exp tail mu fit",      6 },   
   { "--EfN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Forward exp tail mu fit",      6 },   
   { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail mu fit",        6 },   
-  { "--Eseed",   eslARG_INT,     "42", NULL,"n>0",       NULL,    NULL,   "--Ernd", "set random number generator seed to <n>",             6 },
-  { "--Ernd",    eslARG_NONE,  FALSE,  NULL, NULL,       NULL,    NULL,  "--Eseed", "use arbitrary RNG seed(s) (by time())",               6 },
+/* Control of run-to-run variation in RNG */
+  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,    NULL,    NULL, "reseed RNG to minimize run-to-run stochastic variation",       7 },
+  { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "reseed RNG with fixed seed",                                   7 },
+  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "seed RNG arbitrarily; allow run-to-run stochastic variation",  7 },
 /* Other options */
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "run as an MPI parallel program",                        7 },  
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "run as an MPI parallel program",                        8 },  
 #endif
-  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                                7 },
-  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",       7 },  
+  { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                                8 },
+  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -98,7 +100,6 @@ struct cfg_s {
   P7_BG	       *bg;		/* null model                              */
   P7_PRIOR     *pri;		/* mixture Dirichlet prior for the HMM     */
 
-  int           tabular;	/* one-line-per-HMM summary, instead of verbose output */
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
 
   int           do_mpi;		/* TRUE if we're doing MPI parallelization */
@@ -120,21 +121,10 @@ static void  mpi_master    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
-
-static int process_workunit       (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int output_header          (const ESL_GETOPTS *go, const struct cfg_s *cfg);
 static int output_result          (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
 
-static int set_relative_weights   (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
-static int build_model            (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int set_model_name         (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM *hmm);
-static int set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *prior);
-static int parameterize           (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_PRIOR *prior);
-static int calibrate              (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm);
-static int stamp                  (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
-static int transfer_score_cutoffs (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm);
-
-static double default_target_relent(const ESL_ALPHABET *abc, int M, double eX);
 
 int
 main(int argc, char **argv)
@@ -170,8 +160,10 @@ main(int argc, char **argv)
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
       puts("\nControl of E-value calibration:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
-      puts("\nOther options:");
+      puts("\nControl of run-to-run variation due to random number generator:");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
+      puts("\nOther options:");
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != 2) 
@@ -197,8 +189,6 @@ main(int argc, char **argv)
   cfg.bg         = NULL;	           /* created in init_shared_cfg() */
   cfg.pri        = NULL;                   /* created in init_shared_cfg() */
 
-  if (esl_opt_GetBoolean(go, "-1")) cfg.tabular = TRUE;        
-  else                              cfg.tabular = FALSE;        
   cfg.nali       = 0;		           /* this counter is incremented in masters */
   cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
   cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
@@ -222,7 +212,6 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--mpi")) 
     {
       cfg.do_mpi     = TRUE;
-      cfg.tabular    = TRUE;
       MPI_Init(&argc, &argv);
       MPI_Comm_rank(MPI_COMM_WORLD, &(cfg.my_rank));
       MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
@@ -313,7 +302,7 @@ init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
   output_header(go, cfg);
 
   /* with msa == NULL, output_result() prints the tabular results header, if needed */
-  if (cfg->tabular) output_result(go, cfg, errmsg, 0, NULL, NULL);
+  output_result(go, cfg, errmsg, 0, NULL, NULL);
   return eslOK;
 }
 
@@ -361,13 +350,16 @@ init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 static void
 serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  int      status;
-  char     errmsg[eslERRBUFSIZE];
-  ESL_MSA *msa = NULL;
-  P7_HMM  *hmm = NULL;
+  P7_BUILDER *bld = NULL;
+  ESL_MSA    *msa = NULL;
+  P7_HMM     *hmm = NULL;
+  char        errmsg[eslERRBUFSIZE];
+  int         status;
 
   if ((status = init_master_cfg(go, cfg, errmsg)) != eslOK) p7_Fail(errmsg);
   if ((status = init_shared_cfg(go, cfg, errmsg)) != eslOK) p7_Fail(errmsg);
+  
+  if ((bld    = p7_builder_Create(go, cfg->abc))  == NULL)  p7_Fail("p7_builder_Create failed");
 
   cfg->nali = 0;
   while ((status = esl_msa_Read(cfg->afp, &msa)) != eslEOF)
@@ -376,29 +368,15 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (status != eslOK)       p7_Fail("Alignment file read unexpectedly failed with code %d\n", status);
       cfg->nali++;  
 
-      if (! cfg->tabular) {
-	if (msa->name != NULL) fprintf(cfg->ofp, "Alignment:           %s\n",           msa->name);
-	else                   fprintf(cfg->ofp, "Alignment:           #%d\n",          cfg->nali);
-	if (msa->desc != NULL) fprintf(cfg->ofp, "Description:         %s\n",           msa->desc);
-	fprintf                       (cfg->ofp, "Number of sequences: %d\n",           msa->nseq);
-	fprintf                       (cfg->ofp, "Number of columns:   %" PRId64 "\n",  msa->alen);
-	fputs("\n", cfg->ofp);
-	fflush(stdout);
-      }
-      
-      if ((status = process_workunit(go, cfg, errmsg,            msa, &hmm, NULL)) != eslOK) p7_Fail(errmsg);
-      if ((status = output_result(   go, cfg, errmsg, cfg->nali, msa, hmm))        != eslOK) p7_Fail(errmsg);
-
-      if (! cfg->tabular) {
-	fprintf(cfg->ofp, "\nBuilt a model of %d nodes.\n", hmm->M);
-	fprintf(cfg->ofp, "Mean match relative entropy:  %.2f bits\n", p7_MeanMatchRelativeEntropy(hmm, cfg->bg));
-	fprintf(cfg->ofp, "Mean match information:       %.2f bits\n", p7_MeanMatchInfo(hmm, cfg->bg));
-	fprintf(cfg->ofp, "//\n");
-      }
+                /*         bg   new-HMM trarr gm   om  */
+      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+      if ((status = output_result(go, cfg, errmsg, cfg->nali, msa, hmm))   != eslOK) p7_Fail(errmsg);
 
       p7_hmm_Destroy(hmm);
       esl_msa_Destroy(msa);
     }
+
+  p7_builder_Destroy(bld);
 }
 
 #ifdef HAVE_MPI
@@ -570,6 +548,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   int           xstatus = eslOK;
   int           status;
   int           type;
+  P7_BUILDER   *bld  = NULL;
   ESL_MSA      *msa  = NULL;
   P7_HMM       *hmm  = NULL;
   char         *wbuf = NULL;	/* packed send/recv buffer  */
@@ -594,18 +573,21 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (xstatus == eslOK) { if ((cfg->abc = esl_alphabet_Create(type))      == NULL)    xstatus = eslEMEM; }
   if (xstatus == eslOK) { if ((status = init_shared_cfg(go, cfg, errmsg)) != eslOK)   xstatus = status;  }
   if (xstatus == eslOK) { wn = 4096;  if ((wbuf = malloc(wn * sizeof(char))) == NULL) xstatus = eslEMEM; }
+  if (xstatus == eslOK) { if ((bld = p7_builder_Create(go, cfg->abc))     == NULL)    xstatus = eslEMEM; }
   MPI_Reduce(&xstatus, &status, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD); /* everyone sends xstatus back to master */
   if (xstatus != eslOK) {
     if (wbuf != NULL) free(wbuf);
+    if (bld  != NULL) p7_builder_Destroy(bld);
     return; /* shutdown; we passed the error back for the master to deal with. */
   }
+
   ESL_DPRINTF2(("worker %d: initialized\n", cfg->my_rank));
 
                       /* source = 0 (master); tag = 0 */
   while (esl_msa_MPIRecv(0, 0, MPI_COMM_WORLD, cfg->abc, &wbuf, &wn, &msa) == eslOK) 
     {
       ESL_DPRINTF2(("worker %d: has received MSA %s (%d columns, %d seqs)\n", cfg->my_rank, msa->name, msa->alen, msa->nseq));
-      if ((status =   process_workunit(go, cfg, errmsg, msa, &hmm, NULL)) != eslOK) goto ERROR;
+      if ((status = p7_Builder(bld, msa, NULL, &hmm, NULL, NULL, NULL))   != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       ESL_DPRINTF2(("worker %d: has produced an HMM %s\n", cfg->my_rank, hmm->name));
 
       n = 0;
@@ -629,6 +611,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 
   if (wbuf != NULL) free(wbuf);
+  p7_builder_Destroy(bld);
   return;
 
  ERROR:
@@ -640,39 +623,11 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (wbuf != NULL) free(wbuf);
   if (msa  != NULL) esl_msa_Destroy(msa);
   if (hmm  != NULL) p7_hmm_Destroy(hmm);
+  if (bld  != NULL) p7_builder_Destroy(bld);
   return;
 }
 #endif /*HAVE_MPI*/
 
-
-
-/* A work unit consists of one multiple alignment, <msa>.
- * The job is to turn it into a new profile HMM, returned in <*ret_hmm>.
- */
-static int
-process_workunit(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
-{
-  P7_HMM *hmm = NULL;
-  int status;
-
-  if ((status =  set_relative_weights   (go, cfg, errbuf, msa))                         != eslOK) goto ERROR;
-  if ((status =  build_model            (go, cfg, errbuf, msa, &hmm, opt_tr))           != eslOK) goto ERROR;
-  if ((status =  set_model_name         (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
-  if ((status =  set_effective_seqnumber(go, cfg, errbuf, msa, hmm, cfg->bg, cfg->pri)) != eslOK) goto ERROR;
-  if ((status =  parameterize           (go, cfg, errbuf, hmm, cfg->pri))               != eslOK) goto ERROR;
-  if ((status =  calibrate              (go, cfg, errbuf, hmm))                         != eslOK) goto ERROR;
-  if ((status =  stamp                  (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
-  if ((status =  transfer_score_cutoffs (go, cfg, errbuf, msa, hmm))                    != eslOK) goto ERROR;
-
-  *ret_hmm = hmm;
-  return eslOK;
-
- ERROR:
-  ESL_DPRINTF2(("worker %d: has caught an error in process_workunit\n", cfg->my_rank));
-  p7_hmm_Destroy(hmm);   *ret_hmm = NULL;
-  if (opt_tr != NULL) { p7_trace_DestroyArray(*opt_tr, msa->nseq); *opt_tr = NULL; }
-  return status;
-}
 
 
 static int
@@ -687,7 +642,6 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
 
   if (! esl_opt_IsDefault(go, "-n"))          fprintf(cfg->ofp, "# name (the single) HMM:            %s\n",   esl_opt_GetString(go, "-n"));
   if (! esl_opt_IsDefault(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:          %s\n",   esl_opt_GetString(go, "-o"));
-  if (! esl_opt_IsDefault(go, "-1"))          fprintf(cfg->ofp, "# output format:                    tabular summary\n");
   if (! esl_opt_IsDefault(go, "--amino"))     fprintf(cfg->ofp, "# input alignment is asserted as:   protein\n");
   if (! esl_opt_IsDefault(go, "--dna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   DNA\n");
   if (! esl_opt_IsDefault(go, "--rna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   RNA\n");
@@ -712,8 +666,9 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   if (! esl_opt_IsDefault(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
   if (! esl_opt_IsDefault(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
   if (! esl_opt_IsDefault(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
-  if (! esl_opt_IsDefault(go, "--Eseed") )    fprintf(cfg->ofp, "# random number generator seed:     %d\n",        esl_opt_GetInteger(go, "--Eseed"));
-  if (! esl_opt_IsDefault(go, "--Ernd") )     fprintf(cfg->ofp, "# random number generator seed:     quasirandom by time()\n");
+  if (! esl_opt_IsDefault(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed deterministically; minimize variation\n");
+  if (! esl_opt_IsDefault(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
+  if (! esl_opt_IsDefault(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  one arbitrary seed; allow run-to-run variation\n");
 #ifdef HAVE_MPI
   if (! esl_opt_IsDefault(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
 #endif
@@ -733,7 +688,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
    * Arranged this way to keep the two fprintf()'s close together in the code,
    * so we can keep the data and labels properly sync'ed.
    */
-  if (msa == NULL && cfg->tabular) 
+  if (msa == NULL)
     {
       fprintf(cfg->ofp, "# %3s %-20s %5s %5s %5s  %s\n", "idx", "name",                 "nseq",  "alen",  "M",     "description");
       fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s  %s\n", "----", "--------------------", "-----", "-----", "-----", "-----------");
@@ -743,82 +698,18 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
   if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))   != eslOK) return status;
   if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
-  if (cfg->tabular)	/* #   name nseq alen M description*/
-    fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d  %s\n",
-	    msaidx,
-	    (msa->name != NULL) ? msa->name : "",
-	    msa->nseq,
-	    msa->alen,
-	    hmm->M,
-	    (msa->desc != NULL) ? msa->desc : "");
-
+	             /* #   name nseq alen M description*/
+  fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d  %s\n",
+	  msaidx,
+	  (msa->name != NULL) ? msa->name : "",
+	  msa->nseq,
+	  msa->alen,
+	  hmm->M,
+	  (msa->desc != NULL) ? msa->desc : "");
+  
   return eslOK;
 }
 
-
-/* set_relative_weights():
- * Set msa->wgt vector, using user's choice of relative weighting algorithm.
- */
-static int
-set_relative_weights(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
-{
-  if (! cfg->tabular) {
-    fprintf(cfg->ofp, "%-40s ... ", "Relative sequence weighting");  
-    fflush(cfg->ofp); 
-  }
-
-  if      (esl_opt_GetBoolean(go, "--wnone"))                  esl_vec_DSet(msa->wgt, msa->nseq, 1.);
-  else if (esl_opt_GetBoolean(go, "--wgiven"))                 ;
-  else if (msa->nseq >= esl_opt_GetInteger(go, "--pbswitch"))  esl_msaweight_PB(msa);
-  else if (esl_opt_GetBoolean(go, "--wpb"))                    esl_msaweight_PB(msa);
-  else if (esl_opt_GetBoolean(go, "--wgsc"))                   esl_msaweight_GSC(msa);
-  else if (esl_opt_GetBoolean(go, "--wblosum"))                esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
-
-  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
-  return eslOK;
-}
-
-/* build_model():
- * Given <msa>, choose HMM architecture, collect counts;
- * upon return, <*ret_hmm> is newly allocated and contains
- * relative-weighted observed counts.
- * Optionally, caller can request an array of inferred traces for
- * the <msa> too.
- */
-static int
-build_model(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
-{
-  int status;
-
-  if (! cfg->tabular) {
-    fprintf(cfg->ofp, "%-40s ... ", "Constructing model architecture"); 
-    fflush(cfg->ofp);
-  }
-
-  if      (esl_opt_GetBoolean(go, "--fast")) 
-    {
-      status = p7_Fastmodelmaker(msa, esl_opt_GetReal(go, "--symfrac"), ret_hmm, opt_tr);
-      if      (status == eslENORESULT) ESL_XFAIL(status, errbuf, "Alignment %s has no consensus columns w/ > %d%% residues - can't build a model.\n", msa->name != NULL ? msa->name : "", (int) (100 * esl_opt_GetReal(go, "--symfrac")));
-      else if (status == eslEMEM)      ESL_XFAIL(status, errbuf, "Memory allocation failure in model construction.\n");
-      else if (status != eslOK)        ESL_XFAIL(status, errbuf, "internal error in model construction.\n");      
-    }
-  else if (esl_opt_GetBoolean(go, "--hand")) 
-    {
-      status = p7_Handmodelmaker(msa, ret_hmm, opt_tr);
-      if      (status == eslENORESULT) ESL_XFAIL(status, errbuf, "Alignment %s has no annotated consensus columns - can't build a model.\n", msa->name != NULL ? msa->name : "");
-      else if (status == eslEFORMAT)   ESL_XFAIL(status, errbuf, "Alignment %s has no reference annotation line\n", msa->name != NULL ? msa->name : "");            
-      else if (status == eslEMEM)      ESL_XFAIL(status, errbuf, "Memory allocation failure in model construction.\n");
-      else if (status != eslOK)        ESL_XFAIL(status, errbuf, "internal error in model construction.\n");
-    }
-
-  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
-  return eslOK;
-
- ERROR:
-  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
-  return status;
-
-}
 
 
 /* set_model_name()
@@ -849,11 +740,6 @@ set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL
 {
   int status;
 
-  if (! cfg->tabular) {
-    fprintf(cfg->ofp, "%-40s ... ", "Set model name");
-    fflush(cfg->ofp);
-  }
-
   if (cfg->do_mpi == FALSE && cfg->nali == 1)	/* first (only?) HMM in file:  */
     {
       if      (esl_opt_GetString(go, "-n") != NULL) p7_hmm_SetName(hmm, esl_opt_GetString(go, "-n"));
@@ -873,216 +759,13 @@ set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL
       else                                     ESL_XFAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment.\n");
     }
 
-  if (! cfg->tabular) fprintf(cfg->ofp, "done. [%s]\n", hmm->name);
   return eslOK;
 
  ERROR:
-  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
   return status;
 }
 
 
-/* set_effective_seqnumber()
- * Incept:    SRE, Fri May 11 08:14:57 2007 [Janelia]
- *
- * <hmm> comes in with weighted observed counts. It goes out with
- * those observed counts rescaled to sum to the "effective sequence
- * number". 
- *
- * <msa> is needed because we may need to see the sequences in order 
- * to determine effective seq #. (for --eclust)
- *
- * <prior> is needed because we may need to parameterize test models
- * looking for the right relative entropy. (for --eent, the default)
- */
-static int
-set_effective_seqnumber(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *prior)
-{
-  int    status = eslOK;
-  double neff;
-
-  if (! cfg->tabular){
-    fprintf(cfg->ofp, "%-40s ... ", "Set effective sequence number");
-    fflush(cfg->ofp);
-  }
-
-  if      (esl_opt_GetBoolean(go, "--enone") == TRUE) 
-    {
-      neff = msa->nseq;
-      if (! cfg->tabular) fprintf(cfg->ofp, "done. [--enone: neff=nseq=%d]\n", msa->nseq);
-    }
-  else if (! esl_opt_IsDefault(go, "--eset"))
-    {
-      neff = esl_opt_GetReal(go, "--eset");
-      if (! cfg->tabular) fprintf(cfg->ofp, "done. [--eset: set to neff = %.2f]\n", neff);
-    }
-  else if (esl_opt_GetBoolean(go, "--eclust") == TRUE)
-    {
-      int nclust;
-
-      status = esl_msacluster_SingleLinkage(msa, esl_opt_GetReal(go, "--eid"), NULL, NULL, &nclust);
-      if      (status == eslEMEM) ESL_XFAIL(status, errbuf, "memory allocation failed");
-      else if (status != eslOK)   ESL_XFAIL(status, errbuf, "single linkage clustering algorithm (at %d%% id) failed", (int)(100 * esl_opt_GetReal(go, "--eid")));
-
-      neff = (double) nclust;
-      if (! cfg->tabular) fprintf(cfg->ofp, "done. [--eclust SLC at %.1f%%; neff = %.2f clusters]\n", 100. * esl_opt_GetReal(go, "--eid"), neff);
-    }
-  else if (esl_opt_GetBoolean(go, "--eent") == TRUE)
-    {
-      double etarget; 
-
-      if (esl_opt_IsDefault(go, "--ere")) etarget = default_target_relent(hmm->abc, hmm->M, esl_opt_GetReal(go, "--eX"));
-      else                                etarget = esl_opt_GetReal(go, "--ere");
-
-      status = p7_EntropyWeight(hmm, bg, prior, etarget, &neff);
-      if      (status == eslEMEM) ESL_XFAIL(status, errbuf, "memory allocation failed");
-      else if (status != eslOK)   ESL_XFAIL(status, errbuf, "internal failure in entropy weighting algorithm");
-    
-      if (! cfg->tabular) fprintf(cfg->ofp, "done. [etarget %.2f bits; neff %.2f]\n", etarget, neff);
-    }
-    
-  hmm->eff_nseq = neff;
-  p7_hmm_Scale(hmm, neff / (double) hmm->nseq);
-  return eslOK;
-
- ERROR:
-  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
-  return status;
-}
-
-/* parameterize()
- * Converts counts to probability parameters.
- */
-static int
-parameterize(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, const P7_PRIOR *prior)
-{
-  int status;
-
-  if (! cfg->tabular){ fprintf(cfg->ofp, "%-40s ... ", "Parameterizing"); fflush(cfg->ofp); }
-
-  if ((status = p7_ParameterEstimation(hmm, prior)) != eslOK) ESL_XFAIL(status, errbuf, "parameter estimation failed");
-
-  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
-  return eslOK;
-
- ERROR:
-  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
-  return status;
-}
-
-/* calibrate()
- * 
- * Sets the E value parameters of the model with two short simulations.
- */
-static int
-calibrate(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
-{
-  ESL_RANDOMNESS *r  = NULL;
-  P7_PROFILE     *gm = NULL;
-  int             vL = esl_opt_GetInteger(go, "--EvL");	/* length of random seqs for Viterbi mu sim */
-  int             vN = esl_opt_GetInteger(go, "--EvN");	/* number of random seqs for Viterbi mu sim */
-  int             fL = esl_opt_GetInteger(go, "--EfL");	/* length of random seqs for Forward mu sim */
-  int             fN = esl_opt_GetInteger(go, "--EfN");	/* number of random seqs for Forward mu sim */
-  double          ft = esl_opt_GetReal   (go, "--Eft");	/* tail mass for Forward mu sim             */
-  double lambda, mu, tau;
-  int    status;
-
-  if (! cfg->tabular) { fprintf(cfg->ofp, "%-40s ... ", "Calibrating");    fflush(cfg->ofp); }
-
-  if (esl_opt_GetBoolean(go, "--Ernd"))  r = esl_randomness_CreateTimeseeded();
-  else                                   r = esl_randomness_Create(esl_opt_GetInteger(go, "--Eseed"));
-  if (r == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create random number generator");
-
-  if ((gm     = p7_profile_Create(hmm->M, cfg->abc))                  == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
-  if ((status = p7_ProfileConfig(hmm, cfg->bg, gm, vL, p7_LOCAL))    != eslOK) ESL_XFAIL(status,  errbuf, "failed to configure profile");
-  if ((status = p7_Lambda(hmm, cfg->bg, &lambda))                    != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine lambda");
-  if ((status = p7_Mu    (r, gm, cfg->bg, vL, vN, lambda, &mu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine mu");
-  if ((status = p7_Tau   (r, gm, cfg->bg, fL, fN, lambda, ft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine tau");
-  if ((status = p7_hmm_SetComposition(hmm))                          != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine model composition");
-
-  hmm->evparam[p7_LAMBDA] = lambda;
-  hmm->evparam[p7_MU]     = mu;
-  hmm->evparam[p7_TAU]    = tau;
-  hmm->flags             |= p7H_STATS;
-  hmm->flags             |= p7H_COMPO;
-
-  p7_profile_Destroy(gm);
-  esl_randomness_Destroy(r);
-  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
-  return eslOK;
-
- ERROR:
-  esl_randomness_Destroy(r);
-  p7_profile_Destroy(gm);
-  if (! cfg->tabular) fprintf(cfg->ofp, "FAILED.\n");
-  return status;
-}
-
-
-/* stamp()
- * 
- * Sets the timestamp, command log, and checksum in the model.
- */
-static int
-stamp(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm)
-{
-  int status;
-
-  if (! cfg->tabular) { fprintf(cfg->ofp, "%-40s ... ", "Logging information");    fflush(cfg->ofp); }
-
-  if ((status = p7_hmm_SetAccession  (hmm, msa->acc))           != eslOK) ESL_FAIL(status, errbuf, "Failed to record MSA accession");
-  if ((status = p7_hmm_SetDescription(hmm, msa->desc))          != eslOK) ESL_FAIL(status, errbuf, "Failed to record MSA description");
-  if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv))   != eslOK) ESL_FAIL(status, errbuf, "Failed to record command log");
-  if ((status = p7_hmm_SetCtime(hmm))                           != eslOK) ESL_FAIL(status, errbuf, "Failed to record timestamp");
-  if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))        != eslOK) ESL_FAIL(status, errbuf, "Failed to record checksum"); 
-  hmm->flags |= p7H_CHKSUM;
-
-  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
-  return eslOK;
-}
-
-static int
-transfer_score_cutoffs(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, const ESL_MSA *msa, P7_HMM *hmm)
-{
-  if (! cfg->tabular) { fprintf(cfg->ofp, "%-40s ... ", "Transferring bit score cutoffs");    fflush(cfg->ofp); }
-
-  if (msa->cutset[eslMSA_GA1] && msa->cutset[eslMSA_GA2]) { hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1]; hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2]; hmm->flags |= p7H_GA; }
-  if (msa->cutset[eslMSA_TC1] && msa->cutset[eslMSA_TC2]) { hmm->cutoff[p7_TC1] = msa->cutoff[eslMSA_TC1]; hmm->cutoff[p7_TC2] = msa->cutoff[eslMSA_TC2]; hmm->flags |= p7H_TC; }
-  if (msa->cutset[eslMSA_NC1] && msa->cutset[eslMSA_NC2]) { hmm->cutoff[p7_NC1] = msa->cutoff[eslMSA_NC1]; hmm->cutoff[p7_NC2] = msa->cutoff[eslMSA_NC2]; hmm->flags |= p7H_NC; }
-
-  if (! cfg->tabular) fprintf(cfg->ofp, "done.\n");
-  return eslOK;
-}
-
-/* default_amino_target_relent()
- * Incept:    SRE, Fri May 25 15:14:16 2007 [Janelia]
- *
- * Purpose:   Implements a length-dependent calculation of the target rel entropy
- *            per position, attempting to ensure that the information content of
- *            the model is high enough to find local alignments; but don't set it
- *            below a hard alphabet-dependent limit (p7_ETARGET_AMINO, etc.). See J1/67 for
- *            notes.
- *            
- * Args:      M  - model length in nodes
- *            eX - X parameter: minimum total rel entropy target
- *
- * Xref:      J1/67.
- */
-static double
-default_target_relent(const ESL_ALPHABET *abc, int M, double eX)
-{
-  double etarget;
-
-  etarget = 6.* (eX + log((double) ((M * (M+1)) / 2)) / log(2.))    / (double)(2*M + 4);
-
-  switch (abc->type) {
-  case eslAMINO:  if (etarget < p7_ETARGET_AMINO)  etarget = p7_ETARGET_AMINO; break;
-  case eslDNA:    if (etarget < p7_ETARGET_DNA)    etarget = p7_ETARGET_DNA;   break;
-  case eslRNA:    if (etarget < p7_ETARGET_DNA)    etarget = p7_ETARGET_DNA;   break;
-  default:        if (etarget < p7_ETARGET_OTHER)  etarget = p7_ETARGET_OTHER; break;
-  }
-  return etarget;
-}
 
 
 /*****************************************************************

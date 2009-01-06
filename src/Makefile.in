@@ -56,6 +56,7 @@ OBJS =  align.o\
 	generic_stotrace.o\
 	generic_viterbi.o\
 	generic_vtrace.o\
+	h2_io.o\
 	heatmap.o\
 	hmmer.o\
 	logsum.o\
