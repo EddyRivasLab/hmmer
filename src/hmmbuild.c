@@ -73,7 +73,7 @@ static ESL_OPTIONS options[] = {
   { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "seed RNG arbitrarily; allow run-to-run stochastic variation",  7 },
 /* Other options */
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "run as an MPI parallel program",                        8 },  
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-n",  "run as an MPI parallel program",                        8 },  
 #endif
   { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                                8 },
   { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
@@ -121,10 +121,10 @@ static void  mpi_master    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
-static int output_header          (const ESL_GETOPTS *go, const struct cfg_s *cfg);
-static int output_result          (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
+static int output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg);
+static int output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
+static int set_msa_name (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
 
-static int set_model_name         (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM *hmm);
 
 int
 main(int argc, char **argv)
@@ -367,6 +367,8 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       if      (status == eslEFORMAT)  p7_Fail("Alignment file parse error, line %d of file %s:\n%s\nOffending line is:\n%s\n", cfg->afp->linenumber, cfg->afp->fname, cfg->afp->errbuf, cfg->afp->buf);
       else if (status != eslOK)       p7_Fail("Alignment file read unexpectedly failed with code %d\n", status);
       cfg->nali++;  
+
+      if (msa->name == NULL && ((status = set_msa_name(go, cfg, errmsg, msa)) != eslOK)) p7_Fail("%s\n", errmsg);
 
                 /*         bg   new-HMM trarr gm   om  */
       if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
@@ -712,21 +714,20 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
 
 
 
-/* set_model_name()
- * Give the model a name.
- * We deal with this differently depending on whether
- * we're in an alignment database or a single alignment.
+/* set_msa_name()
+ * If the alignment doesn't already have a name, try to give it one;
+ * this will then be transferred to the model.
  * 
- * If a single alignment, priority is:
+ * We can only do this for a single alignment in a file.
+ *
+ * Priority is:
  *      1. Use -n <name> if set.
- *      2. Use msa->name (avail in Stockholm/Pfam or SELEX formats only)
- *      3. If all else fails, use alignment file name without
- *         filename extension (e.g. "globins.slx" gets named "globins"
+ *      2. Use alignment file name without path and without filename extension 
+ *         (e.g. "/usr/foo/globins.slx" gets named "globins")
+ * If neither is true, return <eslEINVAL>.
  *         
  * If a multiple MSA database (e.g. Stockholm/Pfam), 
- * only msa->name is applied. -n is not allowed.
- * if msa->name is unavailable, or -n was used,
- * a fatal error is thrown.
+ * return <eslEINVAL> if nali > 1.
  * 
  * If we're in MPI mode, we assume we're in a multiple MSA database.
  * 
@@ -736,37 +737,32 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
  * Oh well.
  */
 static int
-set_model_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa, P7_HMM *hmm)
+set_msa_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
 {
-  int status;
+  char *name = NULL;
+  int   status;
 
-  if (cfg->do_mpi == FALSE && cfg->nali == 1)	/* first (only?) HMM in file:  */
+  if (cfg->do_mpi == FALSE && cfg->nali == 1) /* first (only?) HMM in file: */
     {
-      if      (esl_opt_GetString(go, "-n") != NULL) p7_hmm_SetName(hmm, esl_opt_GetString(go, "-n"));
-      else if (msa->name != NULL)                   p7_hmm_SetName(hmm, msa->name);
-      else  
+      if  (esl_opt_GetString(go, "-n") != NULL)
 	{
-	  char *name;
-	  esl_FileTail(esl_opt_GetArg(go, 2), TRUE, &name); /* TRUE=nosuffix */
-	  p7_hmm_SetName(hmm, name);
+	  if ((status = esl_msa_SetName(msa, esl_opt_GetString(go, "-n"))) != eslOK) return status;
+	}
+      else if (! cfg->afp->do_stdin)
+	{
+	  if ((status = esl_FileTail(cfg->afp->fname, TRUE, &name)) != eslOK) return status; /* TRUE=nosuffix */	  
+	  if ((status = esl_msa_SetName(msa, name))                 != eslOK) return status;
 	  free(name);
 	}
+      else ESL_FAIL(eslEINVAL, errbuf, "Failed to set model name: msa has no name, no msa filename, and no -n");
     }
-  else				/* multi */
+  else 
     {
-      if (esl_opt_GetString(go, "-n") != NULL) ESL_XFAIL(eslEINVAL, errbuf, "Oops. Wait. You can't use -n with an alignment database.\n");
-      else if (msa->name != NULL)              p7_hmm_SetName(hmm, msa->name);
-      else                                     ESL_XFAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment.\n");
+      if (esl_opt_GetString(go, "-n") != NULL) ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. You can't use -n with an alignment database.");
+      else                                     ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment in a multi MSA file.");
     }
-
   return eslOK;
-
- ERROR:
-  return status;
 }
-
-
-
 
 /*****************************************************************
  * @LICENSE@

@@ -27,6 +27,7 @@
 
 #include "hmmer.h"
 
+#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles  reqs   incomp  help   docgroup*/
@@ -43,18 +44,20 @@ static ESL_OPTIONS options[] = {
   { "--seqZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           2 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of significant seqs, for domain E-value calculation",    2 },
 
-  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",  3 },
+  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      3 },
   { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             3 },
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             3 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             3 },
-  { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",          "turn on composition bias filter (more speed, less power)", 3 },
-
-  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off biased composition score corrections",            4 },
-  { "--seed",       eslARG_INT,    "42",  NULL, NULL,      NULL,  NULL,  NULL, "set random number generator seed",                         4 },  
-  { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "use arbitrary random number generator seed (by time())",   4 },  
+  { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",          "turn on composition bias filter (more speed, less power)",     3 },
+/* Control of run-to-run variation in RNG */
+  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,    NULL,          "reseed RNG to minimize run-to-run stochastic variation",       4 },
+  { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,          "reseed RNG with fixed seed",                                   4 },
+  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,          "seed RNG arbitrarily; allow run-to-run stochastic variation",  4 },
+/* Other options */
+  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off biased composition score corrections",            5 },
 #ifdef HAVE_MPI
-  // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
-  //  { "--mpi",       eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
+  // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          5 },  
+  //  { "--mpi",       eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           5 },
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -231,8 +234,11 @@ process_commandline(int argc, char **argv, struct cfg_s *cfg, ESL_GETOPTS **ret_
       puts("\nOptions controlling acceleration heuristics:");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
+      puts("\nOptions controlling run-to-run variation due to random number generation:");
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 120); 
+
       puts("\nOther expert options:");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
       exit(0);
     }
 
@@ -409,11 +415,8 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 static int
 init_worker_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 {
-  if (esl_opt_GetBoolean(go, "--timeseed")) cfg->r = esl_randomness_CreateTimeseeded();
-  else                                      cfg->r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  if (cfg->r == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
-
-  if ((cfg->ddef = p7_domaindef_Create(cfg->r)) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
+  if ((cfg->r    = esl_randomness_CreateTimeseeded()) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
+  if ((cfg->ddef = p7_domaindef_Create(cfg->r))       == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
   return eslOK;
 }
 
@@ -768,9 +771,10 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (! esl_opt_IsDefault(go, "--F2"))        fprintf(cfg->ofp, "# Vit filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F2"));
   if (! esl_opt_IsDefault(go, "--F3"))        fprintf(cfg->ofp, "# Fwd filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F3"));
   if (! esl_opt_IsDefault(go, "--biasfilter"))fprintf(cfg->ofp, "# biased composition HMM filter:   on\n");
+  if (! esl_opt_IsDefault(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation): reseed deterministically; minimize variation\n");
+  if (! esl_opt_IsDefault(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation): reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
+  if (! esl_opt_IsDefault(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation): one arbitrary seed; allow run-to-run variation\n");
   if (! esl_opt_IsDefault(go, "--nonull2"))   fprintf(cfg->ofp, "# null2 bias corrections:          off\n");
-  if (! esl_opt_IsDefault(go, "--seed"))      fprintf(cfg->ofp, "# random number seed set to:       %d\n",  esl_opt_GetInteger(go, "--seed"));
-  if (! esl_opt_IsDefault(go, "--timeseed"))  fprintf(cfg->ofp, "# random number seed set to:       %ld\n",  cfg->r->seed);
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }

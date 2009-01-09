@@ -628,19 +628,17 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   tr = p7_trace_Create();
 
   /* Create optimized model and DP matrix */
-  if (esl_opt_GetBoolean(go, "--fast")) {
-    om = p7_oprofile_Create(gm->M, cfg->abc);
-    p7_oprofile_Convert(gm, om);
-    p7_oprofile_ReconfigLength(om, L);
-    ox = p7_omx_Create(gm->M, 0, 0);
-  }
+  om = p7_oprofile_Create(gm->M, cfg->abc);
+  p7_oprofile_Convert(gm, om);
+  p7_oprofile_ReconfigLength(om, L);
+  ox = p7_omx_Create(gm->M, 0, 0);
 
   /* Determine E-value parameters 
    */
   p7_Lambda(hmm, cfg->bg, &lambda);
-  if      (esl_opt_GetBoolean(go, "--vit"))  p7_Mu (cfg->r, gm, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--msv"))  p7_Mu (cfg->r, gm, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau(cfg->r, gm, cfg->bg, efL, efN, lambda, eft, &mu);
+  if      (esl_opt_GetBoolean(go, "--vit"))  p7_Mu (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--msv"))  p7_Mu (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau(cfg->r, om, cfg->bg, efL, efN, lambda, eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* The mu determination has changed the length config of <gm> and <bg>; reset them.

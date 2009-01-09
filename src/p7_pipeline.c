@@ -70,8 +70,9 @@
  *            | --F3         |  Stage 2 (Fwd) thresh: promote hits P <= F3 |    1e-5   |
  *            | --nonull2    |  turn OFF biased comp score correction      |   FALSE   |
  *            | --biasfilter |  turn ON composition bias filter HMM        |   FALSE   |
- *            | --seed       |  set random number generator seed           |      42   |
- *            | --timeseed   |  use arbitrary RNG seed (from time())       |   FALSE   |
+ *            | --Rdet       |  reseed RNG to minimize run-to-run variance | default   |
+ *            | --Rseed      |  reseed RNG with fixed seed                 |    NULL   |
+ *            | --Rarb       |  seed RNG arbitrarily, allow variance       |   FALSE   |
  *
  * Returns:   ptr to new <P7_PIPELINE> object on success. Caller frees this
  *            with <p7_pipeline_Destroy()>.
@@ -91,11 +92,10 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   if ((pli->oxf = p7_omx_Create(M_hint, 0,      L_hint)) == NULL) goto ERROR;
   if ((pli->oxb = p7_omx_Create(M_hint, 0,      L_hint)) == NULL) goto ERROR;     
 
-  if (esl_opt_GetBoolean(go, "--timeseed")) pli->r = esl_randomness_CreateTimeseeded();
-  else                                      pli->r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  if (pli->r == NULL) goto ERROR;
-
-  if ((pli->ddef = p7_domaindef_Create(pli->r)) == NULL) goto ERROR;
+  /* it's correct to initially create a timeseeded RNG. The DET and SEED options 
+   * reseed it later as needed at the appropriate granularity */
+  if ((pli->r    = esl_randomness_CreateTimeseeded()) == NULL) goto ERROR;
+  if ((pli->ddef = p7_domaindef_Create(pli->r))       == NULL) goto ERROR;
 
   /* Configure threshold settings for reporting hits 
    */
@@ -228,6 +228,7 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
   p7_omx_Destroy(pli->bck);
   esl_randomness_Destroy(pli->r);
   p7_domaindef_Destroy(pli->ddef);
+  free(pli);
 }
 /*---------------- end, P7_PIPELINE object ----------------------*/
 
@@ -624,6 +625,8 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 
 #include "hmmer.h"
 
+#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
+
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                                  docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show brief help on version and usage",                         0 },
@@ -642,8 +645,9 @@ static ESL_OPTIONS options[] = {
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             0 },
   { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",                        "turn on composition bias filter (more speed, less power)",     0 },
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL,                          "turn off biased composition score corrections",                0 },
-  { "--seed",       eslARG_INT,    "42",  NULL, NULL,      NULL,  NULL,  NULL,                          "set random number generator seed",                             0 },  
-  { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "use arbitrary random number generator seed (by time())",       0 },  
+  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG to minimize run-to-run stochastic variation",       0 },
+  { "--Rseed",      eslARG_INT,     NULL, NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG with fixed seed",                                   0 },
+  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "seed RNG arbitrarily; allow run-to-run stochastic variation",  0 },
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqdb>";
@@ -763,6 +767,8 @@ main(int argc, char **argv)
 
 #include "hmmer.h"
 
+#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
+
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                                  docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show brief help on version and usage",                         0 },
@@ -781,9 +787,10 @@ static ESL_OPTIONS options[] = {
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             0 },
   { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",                        "turn on composition bias filter (more speed, less power)",     0 },
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL,                          "turn off biased composition score corrections",                0 },
-  { "--seed",       eslARG_INT,    "42",  NULL, NULL,      NULL,  NULL,  NULL,                          "set random number generator seed",                             0 },  
-  { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "use arbitrary random number generator seed (by time())",       0 },  
- {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG to minimize run-to-run stochastic variation",       0 },
+  { "--Rseed",      eslARG_INT,     NULL, NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG with fixed seed",                                   0 },
+  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "seed RNG arbitrarily; allow run-to-run stochastic variation",  0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
 static char banner[] = "example of using acceleration pipeline in scan mode (HMM targets)";

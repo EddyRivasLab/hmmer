@@ -30,7 +30,7 @@ static ESL_OPTIONS options[] = {
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "show brief help on version and usage",                         1 },
   { "-o",           eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "direct output to file <f>, not stdout",                        1 },
 
-  { "--popen",      eslARG_REAL,   "0.1", NULL, "0<=x<0.5",NULL,    NULL,  NULL,                          "gap open probability",                                         2 },
+  { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,    NULL,  NULL,                          "gap open probability",                                         2 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,    NULL,  NULL,                          "gap extend probability",                                       2 },
   { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "substitution score matrix [default: BLOSUM62]",                2 },
 
@@ -260,7 +260,7 @@ main(int argc, char **argv)
   status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
   if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
-  /* Open the output file */
+  /* Open the results output file */
   if (esl_opt_IsDefault(go, "-o")) ofp = stdout;
   else {
     ofp = fopen(esl_opt_GetString(go, "-o"), "w");
@@ -297,7 +297,7 @@ main(int argc, char **argv)
   if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
   fprintf(ofp, "             building query model ... "); fflush(ofp);
-  p7_SingleBuilder(bld, qsq, bg, &hmm, NULL, &om); /* bypass HMM - all we need is the model */
+  p7_SingleBuilder(bld, qsq, bg, NULL, NULL, &om); /* bypass HMM - all we need is the model */
   fprintf(ofp, "[done]\n\n");
   
 
@@ -337,9 +337,8 @@ main(int argc, char **argv)
       esl_msa_SetName(msa, "iteration%d\n", iteration);
 
       /* Throw away old model. Build new one. */
-      p7_hmm_Destroy(hmm);      hmm = NULL;
       p7_oprofile_Destroy(om);  om  = NULL;
-      p7_Builder(bld, msa, bg, &hmm, NULL, NULL, &om);
+      p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om);
       
       esl_sqfile_Position(dbfp, 0); /* rewind */
       esl_msa_Destroy(msa);

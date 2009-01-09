@@ -169,7 +169,7 @@ impl_obj:
 	cd ${IMPLDIR}; make
 
 .c.o:
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} ${PVMINCDIR} -c $<
+	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${SIMDFLAGS} ${CPPFLAGS} ${MYINCDIRS} ${PVMINCDIR} -c $<
 
 
 distclean:

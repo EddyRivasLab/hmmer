@@ -84,8 +84,8 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ESL_ALLOC(ox->dpu,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
 
-  ox->dpu[0] = (__m128i *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
-  ox->dpf[0] = (__m128  *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
+  ox->dpu[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
+  ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
 
   for (i = 1; i <= allocL; i++) {
     ox->dpf[i] = ox->dpf[0] + i * ox->allocQ4  * p7X_NSCELLS;
@@ -95,7 +95,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   /* X matrix is allocated one row of quads for each of five special states, for xmx[][0,1..L] */
   ox->allocXRQ = (allocXL/4)+1;
   ESL_ALLOC(ox->x_mem,  sizeof(float) * ox->allocXRQ * 4 * p7X_NXCELLS + 15); 
-  ox->xmx[0] = (float *) ( ( (unsigned long int) (ox->x_mem  + 15) & (~0xf)));
+  ox->xmx[0] = (float *) ( ( (unsigned long int) ((char *) ox->x_mem  + 15) & (~0xf)));
   for (i = 1; i < p7X_NXCELLS; i++)
     ox->xmx[i] = ox->xmx[0] + i * ox->allocXRQ * 4;
 
@@ -162,7 +162,7 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
     {
       ESL_RALLOC(ox->x_mem, p, sizeof(float) * ((allocXL/4)+1) * 4 * p7X_NXCELLS + 15); 
       ox->allocXRQ = (allocXL/4)+1;
-      ox->xmx[0] = (float *) ( ( (unsigned long int) (ox->x_mem  + 15) & (~0xf)));
+      ox->xmx[0] = (float *) ( ( (unsigned long int) ((char *) ox->x_mem  + 15) & (~0xf)));
       for (i = 1; i < p7X_NXCELLS; i++) ox->xmx[i] = ox->xmx[0] + i * ox->allocXRQ * 4;
     }
 
@@ -188,8 +188,8 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
   /* now reset the row pointers, if needed */
   if (reset_row_pointers)
     {
-      ox->dpu[0] = (__m128i *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
-      ox->dpf[0] = (__m128  *) ( ( (unsigned long int) (ox->dp_mem + 15) & (~0xf)));
+      ox->dpu[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
+      ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
 
       ox->validR = ESL_MIN( ox->ncells / (nqf * 4), ox->allocR);
       for (i = 1; i < ox->validR; i++)
