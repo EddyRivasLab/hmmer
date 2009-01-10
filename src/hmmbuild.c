@@ -692,7 +692,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
    */
   if (msa == NULL)
     {
-      fprintf(cfg->ofp, "# %3s %-20s %5s %5s %5s  %s\n", "idx", "name",                 "nseq",  "alen",  "M",     "description");
+      fprintf(cfg->ofp, "# %3s %-20s %5s %5s %5s  %s\n", "idx", "name",                 "nseq",  "alen",  "mlen",  "description");
       fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s  %s\n", "----", "--------------------", "-----", "-----", "-----", "-----------");
       return eslOK;
     }

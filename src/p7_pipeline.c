@@ -68,8 +68,8 @@
  *            | --F1         |  Stage 1 (MSV) thresh: promote hits P <= F1 |    0.02   |
  *            | --F2         |  Stage 2 (Vit) thresh: promote hits P <= F2 |    1e-3   |
  *            | --F3         |  Stage 2 (Fwd) thresh: promote hits P <= F3 |    1e-5   |
+ *            | --nobias     |  turn OFF composition bias filter HMM       |   FALSE   |
  *            | --nonull2    |  turn OFF biased comp score correction      |   FALSE   |
- *            | --biasfilter |  turn ON composition bias filter HMM        |   FALSE   |
  *            | --Rdet       |  reseed RNG to minimize run-to-run variance | default   |
  *            | --Rseed      |  reseed RNG with fixed seed                 |    NULL   |
  *            | --Rarb       |  seed RNG arbitrarily, allow variance       |   FALSE   |
@@ -153,18 +153,19 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
 
   /* Configure accelaration pipeline thresholds */
   pli->do_max        = FALSE;
-  pli->do_biasfilter = FALSE;
+  pli->do_biasfilter = TRUE;
   pli->do_null2      = TRUE;
   pli->F1     = esl_opt_GetReal(go, "--F1");
   pli->F2     = esl_opt_GetReal(go, "--F2");
   pli->F3     = esl_opt_GetReal(go, "--F3");
   if (esl_opt_GetBoolean(go, "--max")) 
     {
-      pli->do_max = TRUE;
+      pli->do_max        = TRUE;
+      pli->do_biasfilter = FALSE;
       pli->F1 = pli->F2 = pli->F3 = 1.0; 
     }
-  if (esl_opt_GetBoolean(go, "--nonull2"))    pli->do_null2      = FALSE;
-  if (esl_opt_GetBoolean(go, "--biasfilter")) pli->do_biasfilter = TRUE;
+  if (esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
+  if (esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
   /* Accounting as we collect results */
   pli->nmodels    = 0;
@@ -643,7 +644,7 @@ static ESL_OPTIONS options[] = {
   { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             0 },
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             0 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             0 },
-  { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",                        "turn on composition bias filter (more speed, less power)",     0 },
+  { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL, "--max",                        "turn off composition bias filter",                             0 },
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL,                          "turn off biased composition score corrections",                0 },
   { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG to minimize run-to-run stochastic variation",       0 },
   { "--Rseed",      eslARG_INT,     NULL, NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG with fixed seed",                                   0 },
@@ -785,7 +786,7 @@ static ESL_OPTIONS options[] = {
   { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             0 },
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             0 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",                        "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             0 },
-  { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",                        "turn on composition bias filter (more speed, less power)",     0 },
+  { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL, "--max",                        "turn off composition bias filter",                             0 },
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL,                          "turn off biased composition score corrections",                0 },
   { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG to minimize run-to-run stochastic variation",       0 },
   { "--Rseed",      eslARG_INT,     NULL, NULL, NULL,   RNGOPTS,  NULL,  NULL,                          "reseed RNG with fixed seed",                                   0 },

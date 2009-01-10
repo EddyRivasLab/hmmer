@@ -1,0 +1,693 @@
+
+\section{Tutorial}
+\label{section:tutorial}
+
+Here's a tutorial walk-through of some small projects with HMMER3, to
+get you oriented.
+
+\subsection{Files used in the tutorial}
+
+The subdirectory \prog{/tutorial} in the HMMER distribution contains the
+files used in the tutorial, as well as a number of examples of various
+file formats that HMMER reads. The important files for the tutorial
+are:
+
+
+\begin{wideitem}
+\item[\emprog{globins4.sto}] An example alignment of four globin sequences, in
+  Stockholm format. This alignment is a subset of a famous old
+  published structural alignment from Don Bashford \citep{Bashford87}.
+%
+\item[\emprog{globins4.hmm}] An example profile HMM file, built from
+  \prog{globins4.out}, in HMMER3 ASCII text format.
+%
+\item[\emprog{globins4.out}] An example \prog{hmmsearch} output file that results
+  from searching the \prog{globins4.hmm} against Uniprot 7.0.
+%
+\item[\emprog{fn3.sto}] An example alignment of 106 fibronectin type III
+  domains. This is the Pfam 22.0 \prog{fn3} seed alignment. It provides an
+  example of a Stockholm format with more complex annotation. We'll also use
+  it for an example of \prog{hmmsearch} analyzing sequences containing multiple
+  domains.
+%
+\item[\emprog{fn3.hmm}] A profile HMM created from \prog{fn3.sto} by
+  \prog{hmmbuild}.
+%
+\item[\emprog{7LESS\_DROME}] A FASTA file containing the sequence of
+  the \emph{Drosophila} Sevenless protein, a receptor tyrosine kinase
+  whose extracellular region is thought to contain seven fibronectin
+  type III domains. 
+%
+\item[\emprog{fn3.out}] Output of \prog{hmmsearch fn3.hmm 7LESS\_DROME}.
+\end{wideitem}
+
+
+
+\subsection{Searching a sequence database with a single profile HMM}
+
+\subsubsection{Step 1: build a profile HMM with hmmbuild}
+
+HMMER starts with a multiple sequence alignment file that you
+provide. Currently HMMER3 only reads Stockholm
+alignments.\footnote{I'm lying. It can read more. I just don't trust
+any other parsers yet.} The file \prog{tutorial/globins4.sto} is an
+example of a simple Stockholm file. It looks like this:
+
+\begin{sreoutput}
+# STOCKHOLM 1.0
+
+HBB_HUMAN   ........VHLTPEEKSAVTALWGKV....NVDEVGGEALGRLLVVYPWTQRFFESFGDLSTPDAVMGNPKVKAHGKKVL
+HBA_HUMAN   .........VLSPADKTNVKAAWGKVGA..HAGEYGAEALERMFLSFPTTKTYFPHF.DLS.....HGSAQVKGHGKKVA
+MYG_PHYCA   .........VLSEGEWQLVLHVWAKVEA..DVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKASEDLKKHGVTVL
+GLB5_PETMA  PIVDTGSVAPLSAAEKTKIRSAWAPVYS..TYETSGVDILVKFFTSTPAAQEFFPKFKGLTTADQLKKSADVRWHAERII
+
+HBB_HUMAN   GAFSDGLAHL...D..NLKGTFATLSELHCDKL..HVDPENFRLLGNVLVCVLAHHFGKEFTPPVQAAYQKVVAGVANAL
+HBA_HUMAN   DALTNAVAHV...D..DMPNALSALSDLHAHKL..RVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVL
+MYG_PHYCA   TALGAILKK....K.GHHEAELKPLAQSHATKH..KIPIKYLEFISEAIIHVLHSRHPGDFGADAQGAMNKALELFRKDI
+GLB5_PETMA  NAVNDAVASM..DDTEKMSMKLRDLSGKHAKSF..QVDPQYFKVLAAVIADTVAAG.........DAGFEKLMSMICILL
+
+HBB_HUMAN   AHKYH......
+HBA_HUMAN   TSKYR......
+MYG_PHYCA   AAKYKELGYQG
+GLB5_PETMA  RSAY.......
+//
+\end{sreoutput}
+
+
+Most popular alignment formats are similar block-based formats, and
+can be turned into Stockholm format with a little editing or
+scripting. Don't forget the \prog{\# STOCKHOLM 1.0} line at the start
+of the alignment, nor the \prog{//} at the end. Stockholm alignments
+can be concatenated to create one file of many alignments.
+
+
+The \prog{hmmbuild} command builds a profile HMM from an alignment (or
+HMMs for each of many alignments in a Stockholm file), and saves the
+HMM(s) in a file. For example, type:
+
+\user{hmmbuild globins4.hmm tutorial/globins4.sto}
+
+and you'll see some output that looks like:
+
+\begin{sreoutput}
+# hmmbuild :: profile HMM construction from a multiple sequence alignment
+# HMMER 3.0a1 (January 2009); http://hmmer.org/
+# Copyright (C) 2008 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# input alignment file:             globins4.sto
+# output HMM file:                  globins4.hmm
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# idx name                  nseq  alen  mlen  description
+#---- -------------------- ----- ----- -----  -----------
+1     globins4                 4   171   148
+
+# CPU time: 0.37u 0.00s 00:00:00.37 Elapsed: 00:00:01
+\end{sreoutput}
+
+
+If your input file had contained more than one alignment, you'd get
+one line of output for each model. For instance, a single
+\prog{hmmbuild} command suffices to turn a Pfam seed alignment
+flatfile (such as \prog{Pfam-A.seed}) into a profile HMM flatfile
+(such as \prog{Pfam.hmm}).
+
+The information on these lines is almost self-explanatory. The
+\prog{globins4} alignment consisted of 4 sequences with 171 aligned
+columns. HMMER turned it into a model of 148 consensus positions,
+leaving 23 gap-containing alignment columns defined to be insertions
+relative to consensus.
+
+This output format is rudimentary.  HMMER3 knows quite a bit more
+information about what it's done to build this HMM. Some of this
+information is likely to be useful to you, the user. As H3 testing and
+development proceeds, we're likely to expand the amount of data that
+\prog{hmmbuild} reports.
+
+The new HMM was saved to \prog{globins4.hmm}. If you were to look at
+this file (and you don't have to -- it's intended for HMMER's
+consumption, not yours), you'd see something like:
+
+\begin{sreoutput}
+HMMER3/a [3.0a1 | January 2009]
+NAME  globins4
+LENG  148
+ALPH  amino
+RF    no
+CS    no
+MAP   yes
+DATE  Fri Jan  9 11:58:38 2009
+NSEQ  4
+EFFN  0.962402
+CKSUM 247350336
+STATS LOCAL     VLAMBDA 0.709641
+STATS LOCAL         VMU -9.735310
+STATS LOCAL        FTAU -4.078249
+HMM          A        C        D        E        F        G        H        I    ...   W        Y
+            m->m     m->i     m->d     i->m     i->i     d->m     d->d
+  COMPO   2.37156  4.52373  2.96553  2.70511  3.20656  3.01795  3.40301  2.91175 ... 4.55553  3.62859
+          2.68606  4.42250  2.77504  2.73148  3.46379  2.40510  3.72519  3.29311 ... 4.58502  3.61528
+          0.34002  1.27034  4.89152  1.48427  0.25705  0.00000        *
+      1   2.62751  4.46690  3.32467  2.83143  3.63123  3.49811  2.73769  3.02526 ... 5.05801  3.76691     10 - -
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 ... 4.58477  3.61503
+          0.02324  4.16917  4.89152  0.61958  0.77255  0.48576  0.95510
+...
+    148   2.93123  5.12550  3.29461  2.66392  4.49241  3.60571  2.49799  3.89555 ... 5.42846  4.19770    165 - -
+          2.68633  4.42241  2.77535  2.73099  3.46369  2.40470  3.72510  3.29370 ... 4.58492  3.61421
+          0.20946  1.66612        *  1.49476  0.25399  0.00000        *
+//
+\end{sreoutput}
+
+The HMMER3 ASCII save file format is defined in Chapter~\ref{QQ}.
+
+If you're used to HMMER2, now you may be expecting to calibrate the
+model with H2's \prog{hmmcalibrate} program. HMMER3 models no longer
+need a separate calibration step. We've figured out how to calculate
+the necessary parameters rapidly, bypassing the need for costly
+simulation \citep{Eddy08}. The determination of the statistical
+parameters is part of \prog{hmmbuild}. These are the parameter values
+$\lambda$, $\mu$, and $\tau$ on the lines marked \prog{STATS}.
+
+You also may be expecting to need to configure the model's alignment
+mode (HMMER2's \prog{hmmbuild -f} option for building local ``fragment
+search'' alignment models, for example). HMMER3's \prog{hmmbuild} does
+not have these options. \prog{hmmbuild} builds a ``core profile'',
+which the search and alignment programs configure as they need
+to. (And for the moment, they always configure for local alignment.)
+
+
+\subsubsection{Step 2: search the sequence database with hmmsearch}
+
+Presumably you have a sequence database to search. Here I'll use the
+Uniprot 7.0 Swissprot FASTA format flatfile (not provided in the
+tutorial, because of its large size), \prog{uniprot\_sprot.fasta}.
+\prog{hmmsearch} accepts any FASTA file as input. It also accepts
+EMBL/Uniprot text format. It will automatically determine what format
+your file is in; you don't have to say. An example of searching a
+sequene database with our \prog{globins4.hmm} model would look like:
+
+\user{hmmsearch globins4.hmm uniprot\_sprot.fasta > globins4.out}
+
+Depending on the database you search, the output file
+\prog{globins4.out} should look more or less like the example provided
+in \prog{tutorial/globins4.out}.
+
+The first section is the \emph{header} that tells you what program you
+ran, on what, and with what options:
+
+\begin{sreoutput}
+# hmmsearch :: search profile HMM(s) against a sequence database
+# HMMER 3.0a1 (January 2009); http://hmmer.org/
+# Copyright (C) 2008 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query HMM file:                  globins4.hmm
+# target sequence database:        uniprot_sprot.fasta
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       globins4  [M=148]
+Scores for complete sequences (score includes all domains):
+\end{sreoutput}
+
+The second section is the \emph{ sequence top hits} list. It is a list
+of ranked top hits (sorted by E-value, most significant hit first),
+formatted in a BLAST-like style:
+
+\begin{sreoutput}
+   --- full sequence ----  ---- single best dom ----    -- #doms --
+   E-value   score   bias    score   bias    E-value     exp     N  Sequence    Description
+   ------- ------- ------  ------- ------ ----------   ----- -----  --------    -----------
+   2.8e-64   219.4    0.1    219.2    0.0    3.1e-64     1.0     1  HBB_GORGO   (P02024) Hemoglobin beta subunit
+   3.7e-64   219.0    3.2    218.8    2.2    4.1e-64     1.0     1  MYG_PHYCA   (P02185) Myoglobin
+     4e-64   218.9    0.0    218.7    0.0    4.5e-64     1.0     1  HBB_HUMAN   (P68871) Hemoglobin beta subunit
+     4e-64   218.9    0.0    218.7    0.0    4.5e-64     1.0     1  HBB_PANPA   (P68872) Hemoglobin beta subunit
+     4e-64   218.9    0.0    218.7    0.0    4.5e-64     1.0     1  HBB_PANTR   (P68873) Hemoglobin beta subunit
+   6.6e-64   218.2    0.1    218.0    0.1    7.4e-64     1.0     1  HBB_HYLLA   (P02025) Hemoglobin beta subunit
+     1e-63   217.5    0.2    217.4    0.1    1.1e-63     1.0     1  HBB_COLBA   (P02033) Hemoglobin beta subunit
+\end{sreoutput}
+
+The last two columns, obviously, are the name of each target sequence
+and optional description.
+
+The most important number here is the first one, the \emph{sequence
+E-value}. This is the statistical significance of the match to this
+sequence: the number of hits we'd expect to score this highly in a
+database of this size if the database contained only nonhomologous
+random sequences. The lower the E-value, the more significant the hit.
+
+The E-value is based on the \emph{sequence bit score}, which is the
+second number. This is the log-odds score for the complete sequence.
+Some people like to see a bit score instead of an E-value, because the
+bit score doesn't depend on the size of the sequence database, only on
+the profile HMM and the target sequence.
+
+The next number, the \emph{bias}, is a correction term for biased
+sequence composition that's been applied to the sequence bit
+score.\footnote{The method that HMMER3 uses to compensate for biased
+composition is unpublished, and different from HMMER2. We will write
+it up when there's a chance.} The only time you really need to pay
+attention to this value is when it's large, and on the same order of
+magnitude as the sequence bit score. This might be a sign that the
+target sequence isn't really a homolog, but merely shares a similar
+strong biased composition with the query model.  The biased
+composition correction usually works well, but occasionally will not
+knock down a falsely ``significant'' nonhomologous hit as far as it
+should.
+
+The next three numbers are again a score, bias, and E-value, but only
+for the single best-scoring domain in the sequence, rather than the
+sum of all its identified domains. The rationale for this isn't
+apparent in the globin example, because all the globins in this
+example consist of only a single globin domain. So let's set up a
+second example, using a model of a single domain that's commonly found
+in multiple domains in a single sequence. Build a fibronectin type III
+domain model using the \prog{tutorial/fn3.sto} alignment (this happens
+to be a Pfam seed alignment; it's a good example of an alignment with
+complex Stockholm annotation). Then use that model to analyze the
+sequence \prog{tutorial/7LESS\_DROME}, the \emph{Drosophila} Sevenless
+receptor tyrosine kinase:
+
+\user{hmmbuild fn3.hmm tutorial/fn3.sto} \\
+\user{hmmsearch fn3.hmm tutorial/7LESS\_DROME > fn3.out}
+
+An example of what that output file will look like is provided in
+\prog{tutorial/fn3.out}. The sequence top hits list says:
+
+\begin{sreoutput}
+  --- full sequence ----  ---- single best dom ----    -- #doms --
+   E-value   score   bias    score   bias    E-value     exp     N  Sequence    Description
+   ------- ------- ------  ------- ------ ----------   ----- -----  --------    -----------
+   3.1e-56   174.0    0.1     43.3    0.4    2.6e-15     9.6     9  7LESS_DROME RecName: Full=Protein sevenless; 
+\end{sreoutput}
+
+OK, now let's pick up the explanation where we left off. The total
+sequence score of 174.0 sums up \emph{all} the fibronectin III domains
+that were found in the \prog{7LESS\_DROME} sequence. The ``single best
+dom'' score and E-value are the bit score and E-value as if the target
+sequence only contained the single best-scoring domain, without this
+summation.
+
+The idea is that we might be able to detect that a sequence is a
+member of a multidomain family because it contains multiple
+weakly-scoring domains, even if no single domain is solidly
+significant on its own.  On the other hand, if the target sequence
+happened to be a piece of junk consisting of a set of identical
+internal repeats, and one of those repeats accidentially gives a weak
+hit to the query model, all the repeats will sum up and the sequence
+score might look ``significant'' (which mathematically, alas, is the
+correct answer: the null hypothesis we're testing against is that the
+sequence is a \emph{random} sequence of some base composition, and a
+repetitive sequence isn't random).
+
+So operationally:
+\begin{itemize}
+\item if both E-values are significant ($<<1$), the sequence is likely
+      to be homologous to your query.
+\item if the full sequence E-value is significant but the single best domain
+      E-value is not, the target sequence is probably a multidomain remote 
+      homolog; but be wary, and watch out for the case where it's just a repetitive
+      sequence.
+\end{itemize}
+
+OK, the sharp eyed reader asks, if that's so, then why in the globin4
+output (all of which have only a single domain) do the full sequence
+bit scores and best single domain bit scores not exactly agree? For
+example, the top ranked hit, \prog{HBB\_GORGO} (gorilla $\beta$
+hemoglobin) has a full sequence score of 219.4 and a single best
+domain score of 219.2. What's going on? What's going on is that the
+position and alignment of that domain is uncertain -- in this case,
+only very slightly so, but nonetheless uncertain. The full sequence
+score is summed over all possible alignments of the globin model to
+the \prog{HBB\_GORGO} sequence. When HMMER3 identifies domains, it
+identifies what it calls an \textbf{envelope} bounding where the
+domain's alignment most probably lies. (More on this later, when we
+discuss the reported coordinates of domains and alignments in the next
+section of the output.) The ``single best dom'' score is calculated
+after the domain envelope has been defined, and the summation is
+restricted only to the ensemble of possible alignments that lie within
+the envelope. The fact that the two scores are slightly different is
+therefore telling you that there's a small amount of probability
+(uncertainty) that the domain lies somewhat outside the envelope
+bounds that HMMER has selected.
+
+The two columns headed \prog{\# doms} are two different estimates of
+the number of distinct domains that the target sequence contains. The
+first, the column marked \prog{exp}, is the \emph{expected number of
+domains} according to HMMER's statistical model. It's an average,
+calculated as a weighted marginal sum over all possible
+alignments. Because it's an average, it isn't necessarily a round
+integer. The second, the column marked \prog{N}, is the number of
+domains that HMMER3's domain postprocessing and annotation pipeline
+decided to identify, annotate, and align in the target sequence. This
+is the number of alignments that will show up in the domain report
+later in the output file. 
+
+These two numbers should be about the same. Rarely, you might see that
+they're wildly different, and this would usually be a sign that the
+target sequence is so highly repetitive that it's confused the H3
+domain postprocessors. Such sequences shoudn't be likely to show up as
+significant homologs to any sensible query in the first place.
+
+
+The sequence top hits output continues until it runs out of sequences
+to report. By default, the report includes all sequences with an
+E-value of 10.0 or less. 
+
+Then comes the third output section, which starts with
+
+\begin{sreoutput}
+Domain and alignment annotation for each sequence:
+\end{sreoutput}
+
+Now for each sequence in the top hits list, there will be a section of
+containing a table of where HMMER3 thinks all the domains are,
+followed by the alignment inferred for each domain. Let's use the
+\prog{fn3/7LESS\_DROME} example, because it contains lots of domains
+and is more interesting in this respect than the globin4 output.  The
+domain table for \prog{7LESS\_DROME} looks like:
+
+\begin{sreoutput}
+>> 7LESS_DROME  RecName: Full=Protein sevenless;          EC=2.7.10.1;
+     # bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali-acc
+   --- --------- ------- ---------- ---------- -------- --------    -------- --------    -------- --------    -------
+     1      -2.3     0.0       0.47       0.47       60       72 ..      396      408 ..      395      410 ..    0.86
+     2      42.0     0.0    6.5e-15    6.5e-15        2       83 ..      439      520 ..      437      521 ..    0.95
+     3      15.1     0.0    1.7e-06    1.7e-06       14       82 ..      837      911 ..      827      914 ..    0.82
+     4       3.6     0.0      0.007      0.007        6       35 ..     1205     1235 ..     1202     1258 ..    0.81
+     5      22.9     0.0    6.1e-09    6.1e-09       13       79 ..     1312     1380 ..     1304     1385 ..    0.81
+     6      -0.6     0.0       0.14       0.14       57       72 ..     1754     1769 ..     1747     1769 ..    0.87
+     7      43.3     0.4    2.6e-15    2.6e-15        1       82 [.     1799     1888 ..     1799     1891 ..    0.89
+     8      19.2     0.0    9.1e-08    9.1e-08        6       73 ..     1904     1966 ..     1900     1976 ..    0.90
+     9      12.0     0.0    1.6e-05    1.6e-05        1       77 [.     1993     2098 ..     1993     2107 ..    0.74
+\end{sreoutput}
+
+Domains are reported in the order they appear in the sequence, not in
+order of their significance.
+
+The bit score and bias values are as described above for sequence
+scores, but are the score of just one domain's envelope. 
+
+The first of the two E-values is the \textbf{conditional
+E-value}. This is an odd number, and it's not even clear we're going
+to keep it. Pay attention to what it means! It is an attempt to
+measure the statistical significance of each domain, \emph{given that
+we've already decided that the target sequence is a true homolog}.  It
+is the expected number of \emph{additional} domains we'd find with a
+domain score this big in the set of sequences reported in the top hits
+list, if those sequences consisted only of random nonhomologous
+sequence outside the region that sufficed to define them as homologs. 
+
+The second number is the \textbf{independent E-value}: the
+significance of the sequence in the \emph{whole} database search, if
+this were the only domain we had identified. It's exactly the same as
+the ``best single dom'' E-value in the sequence top hits list. 
+
+The different between the two E-values is not apparent in the
+\prog{7LESS\_DROME} example because in both cases, the size of the
+search space as 1 sequence. There's a single sequence in the target
+sequence database (that's the size of the search space that the
+independent/best single domain E-value depends on). There's one
+sequence reported as a putative homolog in the sequence top hits list
+(that's the size of the search space that the conditional E-value
+depends on). A better example is to see what happens when we search
+Uniprot (7.0 contains 207132 sequences) with the \prog{fn3} model with
+\user{hmmsearch fn3.hmm uniprot\_sprot.fasta}, and find the domain
+report for \prog{7LESS\_DROME} in the output:
+
+\begin{sreoutput}
+>> 7LESS_DROME  (P13368) Sevenless protein (EC 2.7.1.112)
+     # bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali-acc
+   --- --------- ------- ---------- ---------- -------- --------    -------- --------    -------- --------    -------
+     1      -2.3     0.0    2.5e+02    9.7e+04       60       72 ..      396      408 ..      395      410 ..    0.86
+     2      42.0     0.0    3.5e-12    1.3e-09        2       83 ..      439      520 ..      437      521 ..    0.95
+     3      15.1     0.0     0.0009       0.35       14       82 ..      837      911 ..      827      914 ..    0.82
+     4       3.6     0.0        3.7    1.4e+03        6       35 ..     1205     1235 ..     1202     1258 ..    0.81
+     5      22.9     0.0    3.3e-06     0.0013       13       79 ..     1312     1380 ..     1304     1385 ..    0.81
+     6      -0.6     0.0         76    2.9e+04       57       72 ..     1754     1769 ..     1747     1769 ..    0.87
+     7      43.3     0.4    1.4e-12    5.4e-10        1       82 [.     1799     1888 ..     1799     1891 ..    0.89
+     8      19.2     0.0    4.9e-05      0.019        6       73 ..     1904     1966 ..     1900     1976 ..    0.90
+     9      12.0     0.0     0.0083        3.2        1       77 [.     1993     2098 ..     1993     2107 ..    0.74
+\end{sreoutput}
+
+Notice that everything's the same (it's the same target sequence,
+after all) \emph{except} those E-values. The independent E-value is
+calculated assuming a search space of all 207132 sequences. For
+example, look at domain number 7, the highest scoring domain. When we
+only looked at a single sequence, its score of 43.3 bits has an
+E-value of 2.6e-15. When we search a database of 207132 sequences, a
+hit scoring 43.3 bits would be expected to happen 207132 times as
+often: 2.6e-15 $\times$ 207132 $=$ 5.4e-10. In this Uniprot search,
+535 sequences were reported in the top hits list (with E-values $\leq
+10$). If we were to assume that all 535 are true homologs, x out the
+domain(s) that made us think that, and then went looking for
+\emph{additional} domains in those 535 sequences, we'd be searching a
+smaller database of 535 sequences: the expected number of times we'd
+see a hit of 43.3 bits or better is now 2.6e-15 $\times$ 535 $=$
+1.4e-12.
+
+So, operationally:
+
+\begin{itemize}
+\item If the independent E-value is significant ($<<1$), that means
+that even this single domain \emph{by itself} is such a strong hit
+that it suffices to identify the sequence as a significant homolog
+with respect to the size of the entire original database search. You
+can be confident that this is a homologous domain.
+
+\item Once there's one or more high-scoring domains in the sequence
+already, sufficient to decide that the sequence contains homologs of
+your query, you can look (with some caution) at the conditional
+E-value to decide the statistical significance of additional
+weak-scoring domains.
+\end{itemize}
+
+In this case, for example, I'd be pretty sure of four of the domains
+(2, 5, 7, and 8), each of which has a strong enough independent
+E-value to declare \emph{7LESS\_DROME} to be an
+fnIII-domain-containing protein. Domains 3 and 9 wouldn't be
+significant if they were all I saw in the sequence, but in a small
+search space, their conditional E-values indicate that they are
+probably also fn3 domains. Domains 1, 4, and 6 are too weak to be sure
+of, from this search alone, but would be something to pay attention to
+and follow up on.
+
+The next four columns give the endpoints of the reported local
+alignment with respect to both the query model (``hmm from'' and ``hmm
+to'') and the target sequence (``ali from'' and ``ali to''). 
+
+It's not immediately easy to tell from the ``to'' coordinate whether
+the alignment ended internally in the query or target, versus ran all
+the way (as in a full-length global alignment) to the end(s). To make
+this more readily apparent, with each pair of query and target
+endpoint coordinates, there's also a little symbology. \prog{..}
+meaning both ends of the alignment ended internally, and \prog{[]}
+means both ends of the alignment were full-length flush to the ends of
+the query or target, and \prog{[.} and \prog{.]} mean only the left or
+right end was flush/full length. 
+
+The next two columns (``env from'' and ``env to'') define the
+\emph{envelope} of the domain's location on the target sequence.  The
+envelope is almost always a little wider than what HMMER chooses to
+show as a reasonably confident alignment. As mentioned earlier, the
+envelope represents a subsequence that encompasses most of the
+posterior probability for a given homologous domain, even if precise
+endpoints are only fuzzily inferrable. You'll notice that for higher
+scoring domains, the coordinates of the envelope and the inferred
+alignment will tend to be in tighter agreement, corresponding to
+sharper posterior probability defining the location of the homologous
+region. 
+
+Operationally, I would use the envelope coordinates to annotate domain
+locations on target sequences, not the alignment coordinates. However,
+be aware that when two weaker-scoring domains are close to each other,
+envelope coordinates can and will overlap, corresponding to the
+overlapping uncertainty of where one domain ends and another begins.
+In contrast, alignment coordinates generally do not overlap (though
+there are cases where even they will overlap\footnote{Not to mention
+one (mercifully rare) bug/artifact that I'm betting alpha testers
+don't even see an example of -- but we'll see.}.
+
+The last column is the average posterior probability of the aligned
+target sequence residues; effectively, the expected accuracy per
+residue of the alignment.
+
+For comparison, current Uniprot consensus annotation of Sevenless
+shows seven domains:
+
+\begin{sreoutput}
+FT   DOMAIN      311    431       Fibronectin type-III 1.
+FT   DOMAIN      436    528       Fibronectin type-III 2.
+FT   DOMAIN      822    921       Fibronectin type-III 3.
+FT   DOMAIN     1298   1392       Fibronectin type-III 4.
+FT   DOMAIN     1680   1794       Fibronectin type-III 5.
+FT   DOMAIN     1797   1897       Fibronectin type-III 6.
+FT   DOMAIN     1898   1988       Fibronectin type-III 7.
+\end{sreoutput}
+
+Each of these overlaps with one of the domains identified by HMMER,
+plus HMMER calls an additional two domains (numbered 4 and 9 in its
+output).
+
+
+Under the domain table, an ``optimal posterior accuracy'' alignment
+\citep{Holmes98} is computed within each domain's envelope, and
+displayed. For example, (skipping domain 1 because it's weak and
+unconvincing), fibronectin III domain 2 of \prog{7LESS\_DROME} is
+shown as:
+
+\begin{sreoutput}
+ == domain 2    score: 42.0 bits;  conditional E-value: 6.5e-15
+                  ---CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTEE.E CS
+          fn3   2 saptnlsvtevtstsltlsWsppe.gngpitgYeveyreknegeeekeltvpgtttsvtltgLkpgteYevrVqavngagegp 83 
+                  sap++++++++++++l+++W+p++++ngpi+gY+++++++++++ ++e++vp++++s+++++L++gt+Y+++++++n++gegp
+  7LESS_DROME 439 SAPVIEHLMGLDDSHLAVHWHPGRfTNGPIEGYRLRLSSSEGNA-TSEQLVPAGRGSYIFSQLQAGTNYTLALSMINKQGEGP 520
+                  78888999999*****************************9997.**********************************9997 PP
+\end{sreoutput}
+
+The initial header line starts with a \prog{==} as a little handle for
+a parsing script to grab hold of. The rest of that line, we'll
+probably put more information on eventually.
+
+If the model had any consensus structure or reference line annotation
+that it inherited from your multiple alignment (\prog{\#=GC SS\_cons},
+\prog{\#=GC RF} annotation in Stockholm files), that information is
+simply regurgitated as \prog{CS} or \prog{RF} annotation lines
+here. The \prog{fn3} model had a consensus structure annotation line.
+
+The line starting with \prog{fn3} is the consensus of the query
+model. Capital letters represent the most conserved (high information
+content) positions. Dots (\prog{.}) in this line indicate insertions
+in the target sequence with respect to the model.
+
+The midline indicates matches between the query model and target
+sequence. \prog{+} indicates positive score (which can be interpreted
+as ``conservative substitution'', with respect to what the model
+expects at that position). 
+
+The line starting with \prog{7LESS\_DROME} is the target sequence.
+Dashes (\prog{-}) in this line indicate deletions in the target
+sequence with respect to the model.
+
+The bottom line is new to HMMER3. This represents the posterior
+probability (essentially the expected accuracy) of each aligned
+residue. A 0 means 0-5\%, 1 means 5-15\%, and so on; 9 means 85-95\%,
+and a \prog{*} means 95-100\% posterior probability. You can use these
+posterior probabilities to decide which parts of the alignment are
+well-determined or not. You'll often observe, for example, that
+expected alignment accuracy degrades around locations of insertion and
+deletion, which you'd intuitively expect. 
+
+You'll also see expected alignment accuracy degrade at the ends of an
+alignment -- this is because ``alignment accuracy'' posterior
+probabilities currently not only includes whether the residue is
+aligned to one model position versus others, but also confounded with
+whether a residue should be considered to be homologous (aligned to
+the model somewhere) versus not homologous at all.\footnote{It may
+make more sense to condition the posterior probabilities on the
+assumption that the residue is indeed homologous: given that, how
+likely is it that I've got it correctly aligned.}
+
+
+These domain table and per-domain alignment reports for each sequence
+then continue, for each sequence that was in the per-sequence top hits
+list.
+
+Finally, at the bottom of the file, you'll see some summary
+statistics.  For example, at the bottom of the globins search output,
+you'll find something like:
+
+\begin{sreoutput}
+//
+Internal statistics summary:
+----------------------------
+Query HMM(s):                              1  (148 nodes)
+Target sequences:                     207132  (75438310 residues)
+Passed MSV filter:                      7444  (0.0359384); expected 4142.6 (0.02)
+Passed Vit filter:                      1602  (0.0077342); expected 207.1 (0.001)
+Passed Fwd filter:                      1189  (0.0057403); expected 2.1 (1e-05)
+Initial search space (seqZ):          207132  [actual number of target seqs]
+Domain search space  (domZ):            1049  [number of seqs reported over threshold]
+Mc/sec:                              1555.00
+# CPU time: 7.18u 0.11s 00:00:07.29 Elapsed: 00:00:07
+\end{sreoutput}
+
+This gives you some idea of what's going on in HMMER3's acceleration
+pipeline. You've got one query HMM, and the database has 207,132
+target sequences. Each sequence goes through a gauntlet of three
+scoring algorithms called MSV, Viterbi, and Forward, in order of 
+increasing sensitivity and increasing computational requirement. 
+
+MSV (the ``ungapped Multi Segment Viterbi'' algorithm) is the new
+algorithm in HMMER3. It essentially calculates the HMM equivalent of
+BLAST's sum score -- an optimal sum of ungapped high-scoring alignment
+segments. Unlike BLAST, it does this calculation directly, without
+BLAST's word hit or hit extension step, using a SIMD vector-parallel
+algorithm. By default, HMMER3 is configured to allow sequences with a
+P-value of $\leq 2$\% through the MSV score filter (thus, if the
+database contained no homologs and P-values were accurately
+calculated, the highest scoring 2\% of the sequences will pass the
+filter). Here, about 3.6\% of the database got through the MSV filter.
+
+The Viterbi filter then calculates a gapped optimal alignment score.
+This is a bit more sensitive than the MSV score, but the Viterbi
+filter is about QQ-fold slower than MSV. By default, HMMER3 lets
+sequences with a P-value of $\leq 0.001$ through this stage. Here
+(because there's a little over a thousand true globin homologs in this
+database), much more than that gets through - 1602 sequences.
+
+Then the full Forward score is calculated, which sums over all
+possible alignments of the profile to the target sequence. The default
+allows sequences with a P-value of $\leq 0.001$\% through; 1189
+sequences passed.
+
+All sequences that make it through the three filters are then
+subjected to a full probabilistic analysis using the HMM
+Forward/Backward algorithms, first to identify domains and assign
+domain envelopes; then within each individual domain envelope,
+Forward/Backward calculations are done to determine posterior
+probabilities for each aligned residue, followed by optimal accuracy
+alignment. The results of this step are what you finally see on the
+output.
+
+Recall the difference between conditional and independent E-values,
+with their two different search space sizes; these search space sizes
+are reported in the statistics summary. 
+
+Finally, it reports the speed of the search in units of Mc/sec
+(million dynamic programming cells per second), and the CPU time.
+This search took 7.3 seconds. That's in the same ballpark as BLAST,
+depending on which BLAST you compare to. On the same machine, an NCBI
+BLAST with one of these globin sequences took 3.7 seconds, and
+WU-BLAST took 8.5 seconds.
+
+
+
+\subsection{Searching a profile HMM database with a query sequence}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

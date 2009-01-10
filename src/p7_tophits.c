@@ -513,29 +513,29 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
   int    namew = ESL_MAX(8,  p7_tophits_GetMaxNameLength(th));
   int    descw;
 
-  if (textw >  0) descw = ESL_MAX(32, textw - namew - 69); /* 69 is from the format lines below: 57 total width, 12 spaces */
+  if (textw >  0) descw = ESL_MAX(32, textw - namew - 59); /* 59 chars excluding desc is from the format: 22+2 +22+2 +8+2 +<name>+1 */
   else            descw = INT_MAX;
 
   fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", 
 	  pli->mode == p7_SEARCH_SEQS ? "s" : "");
 
   /* The minimum width of the target table is 109 char: 46 from fields, 8 from min name, 32 from min desc, 12 spaces */
-  fprintf(ofp, "%25s  %25s  %13s\n", "   --- full sequence ----", "---- single best dom ----", "-- #doms --");
-  fprintf(ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "E-value", "  score", "  bias", "  score",   "bias",    "E-value", "   exp",     "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
-  fprintf(ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "-------", "-------", "------", "-------", "------", "----------", " -----", "-----", namew, "--------", "-----------");
+  fprintf(ofp, "%22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
+  fprintf(ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
+  fprintf(ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->is_reported)
       {
 	d    = th->hit[h]->best_domain;
 
-	fprintf(ofp, "%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %-.*s\n",
+	fprintf(ofp, "%9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-.*s\n",
 		th->hit[h]->pvalue * pli->Z,
 		th->hit[h]->score,
 		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+		th->hit[h]->dcl[d].pvalue * pli->Z,
 		th->hit[h]->dcl[d].bitscore,
 		p7_FLogsum(0.0, log(bg->omega) + th->hit[h]->dcl[d].domcorrection),
-		th->hit[h]->dcl[d].pvalue * pli->Z,
 		th->hit[h]->nexpected,
 		th->hit[h]->nreported,
 		namew, th->hit[h]->name,
@@ -562,8 +562,6 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
   int h, d;
   int nd;
   int namew, descw;
-
-
 
   fprintf(ofp, "Domain and alignment annotation for each %s:\n", pli->mode == p7_SEARCH_SEQS ? "sequence" : "model");
 

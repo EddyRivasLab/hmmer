@@ -1,0 +1,136 @@
+\section{Installation}
+\label{section:installation}
+
+\subsection{Quick installation instructions}
+
+Download \prog{hmmer-3.0a1.tar.gz} from
+\url{http://hmmer.janelia.org/}, or directly from
+\url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0a1.tar.gz};
+untar; and change into the newly created directory \prog{hmmer-3.0a1}:
+
+\user{wget ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0a1.tar.gz}\\
+\user{tar xf hmmer-3.0a1.tar.gz}\\
+\user{cd hmmer-3.0a1}
+
+The alpha test code includes precompiled binaries for x86/Linux
+platforms. These are in the \prog{binaries} directory. You can just
+stop here if you like, if you're on a x86/Linux machine and you want
+to try the programs out without installing them.
+
+To compile new binaries from source, do a standard GNUish build:
+
+\user{./configure}\\ 
+\user{make}
+
+To compile and run a test suite to make sure all is well, you can
+optionally do:
+
+\user{make check}
+
+All these tests should pass.
+
+You don't have to install HMMER programs to run them. The newly
+compiled binaries are now in the \prog{src} directory; you can run
+them from there. To install the programs and man pages somewhere on
+your system, do:
+
+\user{make install} 
+
+By default, programs are installed in \prog{/usr/local/bin} and man
+pages in \prog{/usr/local/man/man1/}. You can change \prog{/usr/local}
+to any directory you want using the \prog{./configure --prefix}
+option, as in \prog{./configure --prefix /the/directory/you/want}.
+
+If you have the Intel C compiler \prog{icc}, we strongly recommend
+that you use it (instead of \prog{gcc}, for example), for performance
+reasons, by specifying {CC=icc} either in your environment or on the
+\user{./configure} command line. 
+
+For example, on our systems, we would do:
+
+\user{./configure CC=icc LDFLAGS=-static --prefix=/usr/local/hmmer-3.0/}\\
+\user{make}\\
+\user{make check}\\
+\user{make install}
+
+
+\subsection{System requirements}
+
+\textbf{Operating system:} HMMER is designed to run on UNIX platforms,
+including Linux and MacOS/X. The code is POSIX-compliant, meaning it
+should run on any POSIX-compliant operating system. This essentially
+includes all operating systems except Microsoft Windows.  
+
+The alpha test code includes precompiled binaries for Linux. These
+were compiled with the Intel C compiler (\prog{icc}) on an x86\_64
+Intel platform running Red Hat Enterprise Linux AS4. We believe they
+should be widely portable to different Linux systems. 
+
+We have tested most extensively on Linux, and to a lesser extent on
+MacOS/X. We aim to be portabile to all other POSIX platforms.  We
+currently do not plan to develop for Windows.\footnote{Though I'd
+expect it should compile and run fine on Windows, especially using
+add-on products that are available for making Windows more
+POSIX-compliant.}
+
+\textbf{Processor:} HMMER3 currently runs effectively only on x86
+(IA32/IA64) processors that support the SSE2 vector instruction set.
+This includes all Intel processors from the Pentium 4 on, and all AMD
+processors from the K8 (Athlon) on.
+
+We aim to be portable to all modern processors. The acceleration
+algorithms are designed to be portable despite their use of
+specialized SIMD vector instructions, and to take advantage of
+multiple levels of parallelization available on modern hardware.
+HMMER3 has prototype code for processors that use VMX/Altivec vector
+instructions, including PowerPC processors and the Cell processor. We
+expect that this processor support will appear in the 3.0 public
+release. We expect to add support for the Sun SPARC VIS instruction
+set at some point. We believe that the code will be able to take
+advantage of GP-GPUs and FPGAs in the future.
+
+\textbf{Compiler:} The source code is C, conforming to POSIX and ANSI
+C99 standards. It should compile with any ANSI C99 compliant compiler,
+including the GNU C compiler \prog{gcc}.  We have tested the code
+using both the \prog{gcc} and \prog{icc} compilers.
+
+If you compile HMMER from source, we strongly recommend using the
+Intel C compiler \prog{icc} rather than \prog{gcc}. \prog{icc} is free
+for noncommercial use and heavily discounted for academic use.  HMMER3
+makes extensive use of SIMD vector instructions (SSE, Intel's
+Streaming SIMD Extensions). \prog{gcc} is not as effective at
+compiling SSE code. It produces HMMER programs that are significantly
+slower than what \prog{icc} produces.
+
+\textbf{Libraries and other installation requirements:} HMMER includes
+a software library called Easel, which it will automatically compile
+during its installation process.  By default, HMMER3 does not require
+any additional libraries to be installed by you, other than standard
+ANSI C99 libraries that should already be present on a system that can
+compile C code.
+
+Optionally, some programs in HMMER3 include support for MPI (Message
+Passing Interface) parallelization, for clusters for example. To use
+MPI, you first need to have MPI installed, such as OpenMPI
+(\url{www.open-mpi.org}), and you add \ccode{--enable-mpi} to the
+\ccode{./configure} command line. HMMER3's MPI support is not
+completely written at this time, and has not been extensively tested
+yet.
+
+
+\begin{sidebar}
+One of the objectives of the alpha test is to identify portability
+issues. If HMMER3 fails to compile and/or run under a POSIX-compliant
+OS, on an x86 processor, using an ANSI C99-compliant compiler, please
+report the problem.
+\end{sidebar}
+
+
+
+
+
+
+
+
+
+

@@ -1,7 +1,7 @@
 Brief installation instructions 
 HMMER @HMMER_VERSION@; @HMMER_DATE@
 SRE, Mon Mar 24 09:29:34 2008
-------------------------------------------
+-------------------------------------------------------------
 
 These are quick installation instructions. For complete documentation,
 see the Installation chapter in the HMMER User's Guide (Userguide.pdf).
@@ -19,13 +19,15 @@ For information on more expert customization options available to you
 in the configuration and the Makefiles, see the Installation chapter
 in the HMMER User's Guide (Userguide.pdf).
 
-HMMER is developed on Linux, and tested on a variety of UNIX and
-UNIX-like operating systems, including Apple OS/X. It is written in
-ANSI C99 and should build cleanly on any system with an ANSI C99
-compiler, including Microsoft Windows.
+HMMER is developed primarily on Linux systems. It is tested on a
+variety of UNIX and UNIX-like operating systems, including Apple
+OS/X. It is written in ANSI C99 conforming to POSIX standards. It
+should build cleanly on any POSIX-compliant system with an ANSI C99
+compiler, including UNIX and Macintosh systems.
 
 -------------------------------------------------------------
-
+Sean Eddy
+HHMI Janelia Farm Research Campus
 
 
 

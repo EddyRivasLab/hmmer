@@ -45,8 +45,8 @@ static ESL_OPTIONS options[] = {
   { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,   NULL,  NULL, "--max",                        "MSV threshold: promote hits w/ P <= F1",                       3 },
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,   NULL,  NULL, "--max",                        "Vit threshold: promote hits w/ P <= F2",                       3 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,   NULL,  NULL, "--max",                        "Fwd threshold: promote hits w/ P <= F3",                       3 },
+  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL, "--max",                        "turn off biased composition score corrections",                3 },
 
-  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL,  NULL,                          "turn off biased composition score corrections",                4 },
   { "--seed",       eslARG_INT,     "42", NULL, NULL,   NULL,  NULL,  NULL,                          "set random number generator seed",                             4 },  
   { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL,  NULL,                          "use arbitrary random number generator seed (by time())",       4 },  
   { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL,  NULL,                          "arrest after start: for debugging MPI under gdb",              4 },  

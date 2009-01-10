@@ -51,14 +51,14 @@ sub parse (*) {
     @ali_nident     = ();	# Number of identical residues
     @ali_alen       = ();	# Length of alignment
     @ali_identity   = ();	# Percent identity
-    @ali_npos       = (); # Number of positives (similar positions)
-    @ali_positive   = (); # Percent of positions matched or similar
+    @ali_npos       = ();       # Number of positives (similar positions)
+    @ali_positive   = ();       # Percent of positions matched or similar
     @ali_qstart     = ();	# Start position on query
     @ali_qend       = ();	# End position on query
     @ali_tstart     = ();	# Start position on target
     @ali_tend       = ();	# End position on target
-    @ali_qali       = (); # Aligned string from query
-    @ali_tali       = (); # Aligned string from target (subject)
+    @ali_qali       = ();       # Aligned string from query
+    @ali_tali       = ();       # Aligned string from target (subject)
 
     # Now, loop over the lines of our input, and parse 'em.
     #
@@ -67,8 +67,9 @@ sub parse (*) {
 	    if (/^Scores for complete sequences /) { # seq section starts with this line
 		$parsing_header  = 0;
 		$parsing_seqs    = 1;
-		<$fh>;		# This discards the next line (Score E-value ... column header)
-		<$fh>;		# and discard another line    (----- ------- ... column header)
+		<$fh>;		# This discards the next line:   --- full sequence ----  ---- single best dom ----
+		<$fh>;		# and discard another line:      E-value   score   bias    score   bias 
+		<$fh>;		# and discard another line:      ------- ------- ------  ------- ------ ----------
 		next;
 	    } elsif (/Query:\s*(\S+)\s*(.*)$/) {
 		$queryname = $1;
@@ -81,13 +82,13 @@ sub parse (*) {
 		$parsing_seqs    = 0;
 		$parsing_domains = 1;
 		next;
-	    } elsif (/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+\S+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\S+)\s+(.+)$/) {
-		#         score   e-value  corr   sum-sc  sum-E     N     exp   reg   clu   ov    env    target desc
-		#           1       2       3       4       5       6                                     7       8
-		$hit_target[$nhits]    = $7;
-		$target_desc{$1}       = $8;
-		$hit_bitscore[$nhits]  = $1;
-		$hit_Eval[$nhits]      = $2;
+	    } elsif (/^\s*(\S+)\s+(\S+)\s+(\S+)\s+\S+\s+\S+\s+\S+\s+(\S+)\s+(\d+)\s+(\S+)\s+(.+)$/) {
+		#        evalue   score    bias evalue score  bias   exp      N     target  desc
+                #           1       2       3                         4       5       6       7
+		$hit_target[$nhits]    = $6;
+		$target_desc{$1}       = $7;
+		$hit_bitscore[$nhits]  = $2;
+		$hit_Eval[$nhits]      = $1;
 		$nhits++;
 	    }
 	}

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 #ifdef HAVE_MPI
 #include "mpi.h"
@@ -48,16 +49,18 @@ static ESL_OPTIONS options[] = {
   { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             3 },
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             3 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             3 },
-  { "--biasfilter", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--max",          "turn on composition bias filter (more speed, less power)",     3 },
+  { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL, "--max",          "turn off composition bias filter",                             3 },
+  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,    NULL,          "turn off biased composition score corrections",                3 },
 /* Control of run-to-run variation in RNG */
   { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,    NULL,          "reseed RNG to minimize run-to-run stochastic variation",       4 },
   { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,          "reseed RNG with fixed seed",                                   4 },
   { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,          "seed RNG arbitrarily; allow run-to-run stochastic variation",  4 },
 /* Other options */
-  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL, "turn off biased composition score corrections",            5 },
+  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",     "set max width of ASCII text output lines",                     5 },
+  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",       "unlimit ASCII text output line width",                         5 },
 #ifdef HAVE_MPI
-  // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          5 },  
-  //  { "--mpi",       eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           5 },
+  // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          6 },  
+  //  { "--mpi",       eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           6 },
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -77,6 +80,7 @@ struct cfg_s {
   P7_BG           *bg;          /* null model                               */
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
+  int              textw;
 
   int     do_seq_by_E;		/* TRUE to cut sequence reporting off by E  */
   double  seqE;	                /* sequence E-value threshold               */
@@ -274,6 +278,9 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->mode     = p7_LOCAL;
   cfg->hitlist  = p7_tophits_Create();  /* master accumulates complete list; workers have partial lists. */
 
+  if (esl_opt_GetBoolean(go, "--notextw")) cfg->textw = 0;
+  else                                     cfg->textw = esl_opt_GetInteger(go, "--textw");
+
   /* Reporting thresholds */
   cfg->do_seq_by_E       = TRUE;
   cfg->seqE              = esl_opt_GetReal(go, "--seqE");
@@ -468,7 +475,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Pfam bit score thresholds may be in use */
       if (cfg->model_cutoff_flag && set_pfam_bitscore_cutoffs(cfg, hmm) != eslOK) p7_Fail("requested score cutoffs not available in model %s\n", hmm->name);
 
-      if (esl_opt_GetBoolean(go, "--biasfilter"))
+      if (! esl_opt_GetBoolean(go, "--nobias") && ! esl_opt_GetBoolean(go, "--max"))
 	p7_bg_SetFilter(cfg->bg, hmm->M, hmm->compo); /* EXPERIMENTAL */
       
       gm = p7_profile_Create (hmm->M, cfg->abc);
@@ -504,7 +511,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (P > cfg->F1 && ! sequence_is_reportable(cfg, seq_score, P)) { esl_sq_Reuse(sq); continue; } 
 
 	  /* HMM filtering */
-	  if (esl_opt_GetBoolean(go, "--biasfilter"))
+	  if (! esl_opt_GetBoolean(go, "--nobias") && !  esl_opt_GetBoolean(go, "--max"))
 	    {
 	      p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
 	      seq_score = (usc - filtersc) / eslCONST_LOG2;
@@ -770,11 +777,13 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (! esl_opt_IsDefault(go, "--F1"))        fprintf(cfg->ofp, "# MSV filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F1"));
   if (! esl_opt_IsDefault(go, "--F2"))        fprintf(cfg->ofp, "# Vit filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F2"));
   if (! esl_opt_IsDefault(go, "--F3"))        fprintf(cfg->ofp, "# Fwd filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F3"));
-  if (! esl_opt_IsDefault(go, "--biasfilter"))fprintf(cfg->ofp, "# biased composition HMM filter:   on\n");
+  if (! esl_opt_IsDefault(go, "--nobias"))    fprintf(cfg->ofp, "# biased composition HMM filter:   off\n");
+  if (! esl_opt_IsDefault(go, "--nonull2"))   fprintf(cfg->ofp, "# null2 bias corrections:          off\n");
   if (! esl_opt_IsDefault(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation): reseed deterministically; minimize variation\n");
   if (! esl_opt_IsDefault(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation): reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
   if (! esl_opt_IsDefault(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation): one arbitrary seed; allow run-to-run variation\n");
-  if (! esl_opt_IsDefault(go, "--nonull2"))   fprintf(cfg->ofp, "# null2 bias corrections:          off\n");
+  if (! esl_opt_IsDefault(go, "--textw"))     fprintf(cfg->ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
+  if (! esl_opt_IsDefault(go, "--notextw"))   fprintf(cfg->ofp, "# max ASCII text line length:      unlimited\n");
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -785,31 +794,33 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 {
   int    h;
   int    d;
-  int    namew       = ESL_MAX(8,  p7_tophits_GetMaxNameLength(hitlist));
-  
-  fprintf(cfg->ofp, "Scores for complete sequences (score includes all domains):\n");
+  int    namew    = ESL_MAX(8,  p7_tophits_GetMaxNameLength(hitlist));
+  int    descw;
 
-  fprintf(cfg->ofp, "%25s  %25s  %13s\n", "   --- full sequence ----", "---- single best dom ----", "-- #doms --");
-  fprintf(cfg->ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "E-value", "  score", "  bias", "  score",   "bias",    "E-value", "   exp",     "N", namew, "Sequence", "Description");
-  fprintf(cfg->ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "-------", "-------", "------", "-------", "------", "----------", " -----", "-----", namew, "--------", "-----------");
+  if (cfg->textw >  0) descw = ESL_MAX(32, cfg->textw - namew - 59);  /* 59 chars excluding desc is from the format: 22+2 +22+2 +8+2 +<name>+1 */
+  else                 descw = INT_MAX;
+
+  fprintf(cfg->ofp, "Scores for complete sequences (score includes all domains):\n");
+  fprintf(cfg->ofp, "%22s  %22s  %8s\n",                              " --- full sequence ---",   " --- best 1 domain ---",       "-#dom-");
+  fprintf(cfg->ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score",  "bias", "  exp",  "N", namew, "Sequence", "Description");
+  fprintf(cfg->ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
 
   for (h = 0; h < hitlist->N; h++)
     if (hitlist->hit[h]->is_reported)
       {
 	d    = hitlist->hit[h]->best_domain;
 
-	fprintf(cfg->ofp, "%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %s\n",
+	fprintf(cfg->ofp, "%9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-.*s\n",
 		hitlist->hit[h]->pvalue * (double) cfg->seqZ,
 		hitlist->hit[h]->score,
 		hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+		hitlist->hit[h]->dcl[d].pvalue * (double) cfg->seqZ,
 		hitlist->hit[h]->dcl[d].bitscore,
 		p7_FLogsum(0.0, log(cfg->bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
-		hitlist->hit[h]->dcl[d].pvalue * (double) cfg->seqZ,
 		hitlist->hit[h]->nexpected,
 		hitlist->hit[h]->nreported,
-		namew, 
-		hitlist->hit[h]->name,
-		hitlist->hit[h]->desc);
+		namew, hitlist->hit[h]->name,
+		descw, hitlist->hit[h]->desc);
       }
   return eslOK;
 }
@@ -820,13 +831,17 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 {
   int h, d;
   int nd;
+  int namew, descw;
 
   fprintf(cfg->ofp, "Domain and alignment annotation for each sequence:\n");
 
   for (h = 0; h < hitlist->N; h++)
     if (hitlist->hit[h]->is_reported)
       {
-	fprintf(cfg->ofp, ">> %s  %s\n", hitlist->hit[h]->name, hitlist->hit[h]->desc);
+	namew = strlen(hitlist->hit[h]->name);
+	descw = (cfg->textw > 0 ?  ESL_MAX(32, cfg->textw - namew - 5) : INT_MAX);
+
+	fprintf(cfg->ofp, ">> %s  %-.*s\n", hitlist->hit[h]->name, descw, hitlist->hit[h]->desc);
 
 	/* The domain table is 117 char wide:
            #  bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali acc
@@ -874,7 +889,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 		      nd, 
 		      hitlist->hit[h]->dcl[d].bitscore,
 		      hitlist->hit[h]->dcl[d].pvalue * cfg->domZ);
-	      p7_alidisplay_Print(cfg->ofp, hitlist->hit[h]->dcl[d].ad, 40, -1);
+	      p7_alidisplay_Print(cfg->ofp, hitlist->hit[h]->dcl[d].ad, 40, cfg->textw);
 	      fprintf(cfg->ofp, "\n");
 	    }
       }
