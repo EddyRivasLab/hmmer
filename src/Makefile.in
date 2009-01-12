@@ -16,9 +16,7 @@ RANLIB   = @RANLIB@
 
 # Configuration for optional pthreads multiprocessor support
 #
-PTHREAD_LIBS   = @PTHREAD_LIBS@
-PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
-MPILIBS        = @MPILIBS@
+MPILIBS   = @MPILIBS@
 
 SHELL     = /bin/sh
 MYLIBS    = -lhmmer -leasel 
@@ -119,7 +117,7 @@ dev:    ${PROGS} ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
 	cd ${IMPLDIR}; ${MAKE} dev
 
 ${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../easel/libeasel.a
-	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} ${PVMLIBDIR} -o $@ $@.o ${PVMLIBS} ${MYLIBS} ${PTHREAD_LIBS} ${MPILIBS} ${LIBS}
+	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MYLIBS} ${MPILIBS} ${LIBS}
 
 ${UTESTS}: libhmmer.a ../easel/libeasel.a
 	@ echo "Compiling $@ ..."
@@ -169,7 +167,7 @@ impl_obj:
 	cd ${IMPLDIR}; make
 
 .c.o:
-	${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${SIMDFLAGS} ${CPPFLAGS} ${MYINCDIRS} ${PVMINCDIR} -c $<
+	${CC} ${CFLAGS} ${DEFS} ${SIMDFLAGS} ${CPPFLAGS} ${MYINCDIRS} -c $<
 
 
 distclean:
@@ -196,7 +194,7 @@ binclean:
 tags:
 	etags  *.c *.h Makefile.in
 	etags -a impl_sse/*.c impl_sse/*.h impl_sse/Makefile.in
-	etags -a impl_vmx/*.c impl_vmx/*.h impl_vmx/Makefile.in
+#	etags -a impl_vmx/*.c impl_vmx/*.h impl_vmx/Makefile.in
 
 ###########
 # @LICENSE@

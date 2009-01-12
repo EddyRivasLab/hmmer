@@ -46,14 +46,23 @@ CFLAGS = @CFLAGS@
 #######
 ## You should not need to modify below this line.
 ## Much of it is concerned with maintenance of the development version
-## and building the release (indeed, several commands will only work in 
-## St. Louis)
+## and building the release (indeed, several commands will only work at
+## Janelia)
 #######
 SHELL       = /bin/sh
+PACKAGE     = @PACKAGE_NAME@
+BASENAME    = @PACKAGE_TARNAME@
+RELEASE     = @PACKAGE_VERSION@
+RELEASEDATE = "@PACKAGE_DATE@"
+COPYRIGHT   = "@PACKAGE_COPYRIGHT@"
+LICENSELINE = "@PACKAGE_LICENSE@"
+LICENSETAG  = gnu
+COMPRESS    = gzip
+REPOSITORY  = https://svn.janelia.org/eddylab/eddys/src/
 
 # The program lists below for HMMER are not necessarily
 # a complete manifest. They are the list of stable programs that the
-# package will install. There must be a man page for each one of them
+# package will install. Eventually there will be a man page for each one of them
 # in the appropriate places (documentation/man for HMMER)
 #
 PROGS = hmmalign\
@@ -67,9 +76,6 @@ PROGS = hmmalign\
 	hmmstat\
 	jackhmmer\
 	phmmer
-
-PVMPROGS = @PVMPROGS@
-
 
 # all: Compile everything.
 #
@@ -100,29 +106,47 @@ src/libhmmer.a:
 
 
 # install: installs the binaries in BINDIR/
-#          installs man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
+#          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 #          Creates these directories if they don't exist.
 #          Prefix those paths with ${DESTDIR} (rarely used, usually null;
 #          may be set on a make command line when building contrib RPMs).
 install: 
-	mkdir -p ${DESTDIR}/${BINDIR}
+	-mkdir -p ${DESTDIR}/${BINDIR}
 	-mkdir -p ${DESTDIR}/${MANDIR}/man${MANSUFFIX}
-	for file in $(PROGS) $(PVMPROGS); do\
+	for file in $(PROGS); do\
 	   cp src/$$file ${DESTDIR}/$(BINDIR)/;\
 	done
-	-for file in hmmer $(PROGS); do\
-	   $(INSTMAN) documentation/man/$$file.man ${DESTDIR}/$(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
-	done
+#	-for file in hmmer $(PROGS); do\
+#	   $(INSTMAN) documentation/man/$$file.man ${DESTDIR}/$(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+#	done
 
 # uninstall: Reverses the steps of "make install".
 #
 uninstall: 
-	for file in $(PROGS) $(PVMPROGS); do\
+	for file in $(PROGS); do\
 	   rm ${BINDIR}/$$file;\
 	done
-	for file in hmmer $(PROGS); do\
-	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
-	done
+#	for file in hmmer $(PROGS); do\
+#	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+#	done
+
+
+# dist: build a new distribution in hmmer-${RELEASE}
+#
+dist:
+	# Make sure we pointed the make dist to a subversion repository
+	@if test x${REPOSITORY} = 'x'; then\
+	  echo "REPOSITORY isn't set; use make REPOSITORY=... dist";\
+	  exit 1;\
+	fi
+	# Delete old versions of the same release
+	#
+	@if test -d ../${BASENAME}-$(RELEASE);        then rm -rf ../${BASENAME}-$(RELEASE);        fi
+	@if test -e ../${BASENAME}-$(RELEASE).tar;    then rm -f  ../${BASENAME}-$(RELEASE).tar;    fi
+	@if test -e ../${BASENAME}-$(RELEASE).tar.Z;  then rm -f  ../${BASENAME}-$(RELEASE).tar.Z;  fi
+	@if test -e ../${BASENAME}-$(RELEASE).tar.gz; then rm -f  ../${BASENAME}-$(RELEASE).tar.gz; fi
+
+
 
 # bindist: after building, prep the whole directory for a binary
 #          distribution: symlink supported binaries in binaries/
@@ -175,8 +199,8 @@ binclean:
 
 # doc:  build the Userguide and on-line manual
 #
-doc:
-	(cd documentation/userguide; make)
+#doc:
+#	(cd documentation/userguide; make)
 
 
 # make optcheck:
@@ -184,11 +208,11 @@ doc:
 #    and tested in sqc scripts, by running ssdk's checkoptions.pl 
 #    script on each program. 
 #    
-optcheck:
-	@echo Checking options for consistency and documentation...
-	@for prog in $(PROGS); do\
-	   ssdk/checkoptions.pl src/$$prog documentation/man/$$prog.man testsuite/exercises.sqc testsuite/exercises-threaded.sqc testsuite/exercises-pvm.sqc;\
-	done
+# optcheck:
+# 	@echo Checking options for consistency and documentation...
+# 	@for prog in $(PROGS); do\
+# 	   ssdk/checkoptions.pl src/$$prog documentation/man/$$prog.man testsuite/exercises.sqc testsuite/exercises-threaded.sqc testsuite/exercises-pvm.sqc;\
+# 	done
 
 
 tags:
@@ -197,7 +221,7 @@ tags:
 	etags -a documentation/man/*.man  documentation/man/boilerplate
 	etags -a documentation/devguide/*.tex 
 	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in 
-	etags -a src/impl_vmx/*.c src/impl_vmx/*.h 
+#	etags -a src/impl_vmx/*.c src/impl_vmx/*.h 
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 
