@@ -157,7 +157,7 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);	                          
   
   /* Main body: hand off to serial version or MPI masters/workers, as appropriate */
-#ifdef HAVE_MPI
+#if 0  /* HAVE_MPI */
   if (esl_opt_GetBoolean(go, "--mpi")) 
     {
       /* Initialize MPI, figure out who we are, and whether we're running
@@ -169,10 +169,8 @@ main(int argc, char **argv)
       MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
       if (cfg.my_rank == 0 && cfg.nproc < 2) p7_Fail("Need at least 2 MPI processes to run --mpi mode.");
 
-#if 0
       if (cfg.my_rank > 0)   mpi_worker(go, &cfg);
       else                   mpi_master(go, &cfg);
-#endif
 
       esl_stopwatch_Stop(w);
       esl_stopwatch_MPIReduce(w, 0, MPI_COMM_WORLD);

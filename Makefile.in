@@ -80,16 +80,8 @@ PROGS = hmmalign\
 # all: Compile everything.
 #
 all:   
-	@ if test -d binaries; then\
-	  echo "This appears to be a binary distribution; nothing needs to be compiled." ; \
-          echo "Use make install to install the precompiled binaries." ; \
-	  echo "If you really want to rebuild from source, move or delete the" ;\
-	  echo "binaries/ subdirectory."; \
-	else\
-	  (cd easel;     ${MAKE});\
-	  (cd src;       ${MAKE});\
-	fi
-
+	cd easel; ${MAKE}
+	cd src;   ${MAKE}
 
 dev:
 	cd easel; ${MAKE}
@@ -131,17 +123,6 @@ uninstall:
 #	done
 
 
-# bindist: after building, prep the whole directory for a binary
-#          distribution: symlink supported binaries in binaries/
-#          subdir, remove everything but binaries and Makefiles.
-#
-bindist:
-	mkdir binaries
-	for prog in ${PROGS} ${PVMPROGS}; do\
-	   (cd binaries; ln -s ../src/$$prog .);\
-	done
-	make binclean
-
 # "make clean" removes almost everything except configuration files.
 #
 #	(cd src;       make clean)
@@ -171,14 +152,14 @@ distclean:
 #       distribution behind, including configured Makefiles.
 #
 #	(cd src;       make binclean)
-binclean:
-	if test -d src;       then (cd src;       make binclean); fi
-	if test -d easel;     then (cd easel;     make binclean); fi
-	if test -d profmark;  then (cd profmark;  make binclean); fi
-	if test -d testsuite; then (cd testsuite; make binclean); fi
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	-rm config.log config.status
-	-rm -rf autom4te.cache
+# binclean:
+# 	if test -d src;       then (cd src;       make binclean); fi
+# 	if test -d easel;     then (cd easel;     make binclean); fi
+# 	if test -d profmark;  then (cd profmark;  make binclean); fi
+# 	if test -d testsuite; then (cd testsuite; make binclean); fi
+# 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+# 	-rm config.log config.status
+#	-rm -rf autom4te.cache
 
 # doc:  build the Userguide and on-line manual
 #

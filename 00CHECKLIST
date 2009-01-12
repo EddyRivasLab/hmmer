@@ -87,7 +87,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    cd hmmer-${HMMER_VERSION}
 
 
-* Edit configure.ac: set version, date, copyright info
+* Edit configure.ac: make sure version, date, copyright info is set correctly
    emacs configure.ac
    ln -s easel/aclocal.m4 .
    autoconf; (cd easel; autoconf)
@@ -173,8 +173,28 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    make check
    cd ../..
 
-
+* test the tutorial
+   src/hmmbuild globins4.hmm tutorial/globins4.sto
+   src/hmmsearch globins4.hmm /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > globins4.out
+   src/hmmbuild fn3.hmm tutorial/fn3.sto
+   src/hmmsearch fn3.hmm tutorial/7LESS_DROME > fn3.out
+   src/hmmsearch fn3.hmm /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > fn3-2.out
+   src/hmmbuild Pkinase.hmm tutorial/Pkinase.sto
+   cat globins4.hmm fn3.hmm Pkinase.hmm > minifam
+   src/hmmpress minifam
+   src/hmmscan minifam tutorial/7LESS_DROME
+   src/hmmalign globins4.hmm tutorial/globins45.fa
+   src/phmmer tutorial/HBB_HUMAN  /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > hbb.out
+   src/phmmer tutorial/HBB_HUMAN  tutorial/globins45.fa
    
+   setenv OMPI_MPICC icc
+   setenv OMPI_MPICC_CFLAGS "-O3"
+   setenv OMPI_MPICC_LDFLAGS "-static"
+   ./configure --enable-mpi --prefix=/usr/local/hmmer3
+   make
+   cd src
+   ln -s /misc/data0/databases/Pfam/Pfam-A.seed .
+   qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe openmpi 200 'mpirun -mca btl self,tcp --prefix /usr/local/openmpi -np 200 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'
 
 * copy to ftp site
 
@@ -193,6 +213,6 @@ Release           Date            SVN (HMMER/Easel)
 3.0.snap20080325  25 Mar 2008     r2370/r236
 3.0.snap20080419  19 Apr 2008     r2398/r247
 3.0.snap20081101   1 Nov 2008     r2620/r302
-3.0a1             12 Jan 2009     r2697/r312
+3.0a1             12 Jan 2009     r2699/r312
 
 
