@@ -5,42 +5,40 @@ This is a user's guide to the HMMER3 alpha test distribution.
 It really isn't meant for a new user. I will assume you are already
 familiar with profile hidden Markov models (profile HMMs)
 \citep{Krogh94,Eddy98,Durbin98}; with the previous version of HMMER
-[HMMER2, \url{http://hmmer.janelia.org}]; with other popular
-biological sequence comparison tools, such as BLAST
-\citep{Altschul97}; and with running sequence analysis tools on a UNIX
-or UNIX-like command line. If this isn't true of you, you should
-probably not be using the HMMER3 code yet. Instead, you should wait
-for a later and more stable version, when the user documentation will
-take less for granted.
+[HMMER2, \url{http://hmmer.org}]; with other popular biological
+sequence comparison tools, such as BLAST \citep{Altschul97}; and with
+running sequence analysis tools on a UNIX or UNIX-like command
+line. If this isn't true of you, you should probably not be using the
+HMMER3 code yet. Instead, you should wait for a later and more stable
+version, when the user documentation will take less for granted.
 
 \subsection{Design goals of HMMER3}
 
 HMMER3's objective is to combine the power of probabilistic inference
-with BLAST's speed. We aim to enable molecular biology to upgrade some
-of its most important sequence analysis applications for remote
-homology identification to use more powerful statistical inference
-engines, while not sacrificing computational performance.
+with BLAST's speed. We aim to upgrade some of molecular biology's most
+important sequence analysis applications to use more powerful
+statistical inference engines, while not sacrificing computational
+performance.
 
-Specifically, HMMER3 has three main design features that in
-combination distinguish it from previous tools:
+Specifically, HMMER3 has three main design features that, in
+combination, distinguish it from previous tools:
 
 \begin{description}
 \item[\textbf{Explicit representation of alignment uncertainty.}]
-  Most sequence alignment analysis tools, including BLAST and FASTA,
-  report only a single best-scoring alignment. However, sequence
-  alignments are uncertain, and the more distantly related sequences
-  are, the more uncertain alignments become. HMMER3 calculates
-  complete posterior alignment ensembles rather than single optimal
-  alignments. Posterior ensembles get used for a variety of useful
-  inferences involving alignment uncertainty. For example, any HMMER3
-  sequence alignment is accompanied by posterior probability
-  annotation, representing the degree of confidence in each individual
-  aligned residue.
+  Most sequence alignment analysis tools report only a single
+  best-scoring alignment. However, sequence alignments are uncertain,
+  and the more distantly related sequences are, the more uncertain
+  alignments become. HMMER3 calculates complete posterior alignment
+  ensembles rather than single optimal alignments. Posterior ensembles
+  get used for a variety of useful inferences involving alignment
+  uncertainty. For example, any HMMER3 sequence alignment is
+  accompanied by posterior probability annotation, representing the
+  degree of confidence in each individual aligned residue.
 
-\item[\textbf{Sequence scores -- not alignment scores.}]  Alignment
-  uncertainty has a particularly important impact on the power of
-  sequence database searches.  It's precisely the most remote homologs
-  -- the most difficult to identify and potentially most interesting
+\item[\textbf{Sequence scores, not alignment scores.}]  Alignment
+  uncertainty has an important impact on the power of sequence
+  database searches.  It's precisely the most remote homologs -- the
+  most difficult to identify and potentially most interesting
   sequences -- where alignment uncertainty is greatest, and where the
   statistical approximation inherent in scoring just a single best
   alignment breaks down the most. To maximize power to discriminate
@@ -54,30 +52,30 @@ combination distinguish it from previous tools:
 \item[\textbf{Speed.}] A major limitation of previous profile HMM
   implementations (including HMMER2) was their slow
   performance. HMMER3 implements a new heuristic acceleration
-  algorithm, and now it's about as fast as BLAST.
+  algorithm. For most queries, it's about as fast as BLAST.
 \end{description}
 
 Individually, none of these points is new. As far as alignment
-ensembles and sequence scores go, pretty much the whole reason that
+ensembles and sequence scores go, pretty much the whole reason why
 hidden Markov models are so theoretically attractive for sequence
 analysis is that they are good probabilistic models for explicitly
-dealing with alignment uncertainty. For example, the SAM profile HMM
-software from UC Santa Cruz has always used full probabilistic
-inference (the HMM ``Forward'' and ``Backward'' algorithms) as opposed
-to optimal alignment scores (the HMM ``Viterbi'' algorithm). HMMER2
-had the full HMM inference algorithms available as command-line
-options, but used Viterbi alignment by default, in part for speed
-reasons (calculating alignment ensembles is even more computationally
-intensive than calculating single optimal alignments).
+dealing with alignment uncertainty. The SAM profile HMM software from
+UC Santa Cruz has always used full probabilistic inference (the HMM
+``Forward'' and ``Backward'' algorithms) as opposed to optimal
+alignment scores (the HMM ``Viterbi'' algorithm). HMMER2 had the full
+HMM inference algorithms available as command-line options, but used
+Viterbi alignment by default, in part for speed reasons. Calculating
+alignment ensembles is even more computationally intensive than
+calculating single optimal alignments.
 
-One reason that it's been hard to deploy sequence scores is that we
-haven't known how to accurately calculate the statistical significance
-of a log-odds score that's been integrated over alignment
-uncertainty. Accurate statistical significance estimates are essential
-when one is trying to discriminate homologs from millions of unrelated
-sequences in a large sequence database search. The statistical
-significance of optimal alignment scores can be calculated by
-Karlin/Altschul statistics
+One reason why it's been hard to deploy sequence scores for practical
+large-scale use is that we haven't known how to accurately calculate
+the statistical significance of a log-odds score that's been
+integrated over alignment uncertainty. Accurate statistical
+significance estimates are essential when one is trying to
+discriminate homologs from millions of unrelated sequences in a large
+sequence database search. The statistical significance of optimal
+alignment scores can be calculated by Karlin/Altschul statistics
 \citep{Karlin90,KarlinAltschul93}. Karlin/Altschul statistics are one
 of the most important and fundamental advances introduced by BLAST.
 However, this theory doesn't apply to integrated log-odds sequence
@@ -88,19 +86,16 @@ statistical properties of integrated log-odds scores which have been
 supported by numerical simulation experiments \citep{Eddy08}.
 
 And as far as speed goes, there's really nothing new about HMMER3's
-speed either. Besides Karlin/Altschul statistics, the other
-fundamental reason BLAST has been so useful is that it's so fast.  Our
-design goal in HMMER3 was not to outperform BLAST in speed (though we
-would have been happy to), but to achieve rough speed parity between
-BLAST and more formal and powerful HMM-based methods. There's really
-nothing that's prevented profile HMM implementors from applying
-heuristic acceleration algorithms (even the BLAST algorithm itself),
-other than the fact that we've just never done it. However, that said,
-the acceleration algorithm in HMMER3 is new and interesting in itself
-(imho); it's likely to be more sensitive than BLAST's heuristics on
-theoretical grounds, it certainly benchmarks that way in practice, and
-it's very well suited to modern hardware architectures (Eddy, 2009,
-manuscript in preparation). 
+speed either. Besides Karlin/Altschul statistics, the other big reason
+BLAST has been so useful is that it's so fast.  Our design goal in
+HMMER3 was to achieve rough speed parity between BLAST and more formal
+and powerful HMM-based methods.  The acceleration algorithm in HMMER3
+is a new heuristic. It seems likely to be more sensitive than BLAST's
+heuristics on theoretical grounds, and it certainly benchmarks that
+way in practice (Eddy, 2009, manuscript in preparation). Additionally,
+it's very well suited to modern hardware architectures. We expect to
+be able to take good advantage of GPUs and other parallel processing
+environments in the near future.
 
 
 
@@ -116,7 +111,7 @@ manuscript in preparation).
 \textbf{hmmbuild}  & Build a profile HMM from an input multiple alignment.\\
 \textbf{hmmsearch} & Search a profile HMM against a sequence database.\\
 \textbf{hmmscan}   & Search a sequence against a profile HMM database.\\
-\textbf{hmmalign}  & Multiply align sequences to a common profile HMM.\\
+\textbf{hmmalign}  & Make a multiple alignment of many sequences to a common profile HMM.\\
  & \\ 
 \multicolumn{2}{c}{\textbf{Other utilities}}\\ 
  & \\ 
@@ -126,6 +121,7 @@ manuscript in preparation).
 \textbf{hmmpress}   & Format an HMM database into a binary format for \prog{hmmscan}.\\
 \textbf{hmmstat}    & Show summary statistics for each profile in an HMM database.\\ 
 \end{tabular} \\
+\\
 
 The quadrumvirate of \prog{hmmbuild/hmmsearch/hmmscan/hmmalign} is
 supposed to suffice to replace HMMER2's core functionality of
@@ -136,7 +132,7 @@ serious independent testing by Rob Finn of the Pfam Consortium, who is
 visiting at Janelia for several months, preparing to adopt HMMER3 at
 Pfam, apparently by beating the living tar out of it. I haven't yet
 fixed all the issues the hated Rob has identified, but I have fixed
-the showstopping bugs, I'm pretty sure.
+the showstopping bugs.\footnote{I think.}
 
 The \prog{phmmer} program is new to HMMER3. It searches a single
 sequence against a sequence database, akin to BLASTP. (Internally, it
@@ -161,42 +157,44 @@ Oh, lots. The most egregious lacunae include:
 at three levels: SIMD vector instructions within the CPU,
 multithreaded (probably using OpenMP) across processor cores, and MPI
 across individual nodes of a cluster. Relatively little of this
-potential has been realized. The hardest bit to code, the SIMD
-parallelization, is part of what's scientifically new and perhaps most
-interesting in HMMER3, but the new SIMD ``MSV'' algorithm is currently
-implemented only for Intel x86 compatible architectures. No
-multithreading is implemented yet; and MPI parallelization is only
-implemented in \prog{hmmbuild}.
+potential has been realized. The SIMD parallelization is part of
+what's scientifically new and perhaps most interesting in HMMER3,
+because SIMD parallelization is at the heart of the new acceleration
+algorithm. However, for now HMMER's new SIMD ``MSV'' algorithm is
+implemented only for Intel x86 compatible architectures. We will port
+it to other SIMD vector architectures soon. No multithreading is
+implemented yet; and MPI parallelization is only implemented in
+\prog{hmmbuild}.
 
 \textbf{More processor support.} One of the attractive features of the
-HMMER3 acceleration core is that it is a very tight and efficient
-piece of code, which ought to be able to take advantage of recent
-advances in using massively parallel GPUs (graphics processing units),
-and other specialized processors such as the Cell processor, or
-FPGAs. We have prototype work going on in a variety of processors, but
-none of this is far along as yet. But this work (combined with the
-parallelization) is partly why we expect to wring significant more
-speed out of HMMER in the future.
+MSV algorithm is that it is a very tight and efficient piece of code,
+which ought to be able to take advantage of recent advances in using
+massively parallel GPUs (graphics processing units), and other
+specialized processors such as the Cell processor, or FPGAs. We have
+prototype work going on in a variety of processors, but none of this
+is far along as yet. But this work (combined with the parallelization)
+is partly why we expect to wring significant more speed out of HMMER
+in the future.
 
 \textbf{More speed.} Even on x86 platforms, HMMER3's acceleration
-algorithms are still on an asymptotic optimization curve. I still
-think I can accelerate the code by another two-fold or
-so. Additionally, for a small number of HMMs ($<1$\% of Pfam models),
-the acceleration core is performing relatively poorly, for reasons I
-pretty much understand (having to do with biased composition; most of
-these pesky models are hydrophobic membrane proteins), but which are
-nontrivial to work around. This'll produce an annoying behavior that
-some testers are sure to notice: if you look systematically, sometimes
-you'll see a model that runs at something more like HMMER2 speed, 100x
-or so slower than an average query. This, needless to say, Will Be
-Fixed.
+algorithms are still on a nicely sloping bit of their asymptotic
+optimization curve. I still think I can accelerate the code by another
+two-fold or so. Additionally, for a small number of HMMs ($<1$\% of
+Pfam models), the acceleration core is performing relatively poorly,
+for reasons I pretty much understand (having to do with biased
+composition; most of these pesky models are hydrophobic membrane
+proteins), but which are nontrivial to work around. This'll produce an
+annoying behavior that some testers are sure to notice: if you look
+systematically, sometimes you'll see a model that runs at something
+more like HMMER2 speed, 100x or so slower than an average query. This,
+needless to say, Will Be Fixed.
 
 \textbf{DNA sequence comparison.} HMMER's search pipeline is somewhat
 specialized to protein/protein comparison: specifically, the pipeline
 works by filtering individual sequences, winnowing down to a subset of
 the sequences in a database that need close attention from the full
 heavy artillery of Bayesian inference. This strategy doesn't work for
-long DNA sequences; it doesn't filter the human genome to say
+long DNA sequences; it doesn't filter the human genome much to say
 ``there's a hit on chromosome 1''. The algorithms need to be adapted
 to identify high-scoring regions of a target sequence, rather than
 filtering by whole sequence scores. (You can chop a DNA sequence into
@@ -231,7 +229,7 @@ Part of the reason for the alpha test is to confirm that these points
 are just as annoying to you as they are to me, and therefore important
 to fix asap. Feel free to tell me you want these things even though I
 already know about them. I also want to find out what glaring problems
-you find that I'm not already losing sleep over. (Really.)
+you find that I'm \emph{not} already losing sleep over. (Really.)
 \end{sidebar}
 
 
@@ -244,21 +242,21 @@ applications, command line options, i/o formats -- is prototypical and
 still fluid.  The main objective of the alpha test period is for a
 small number of savvy power users to have the opportunity to give
 feedback while the user-oriented layers of HMMER3 are still under
-development, and in particular, before its basic feature set, command
+development -- in particular, before its basic feature set, command
 line options, and input and output formats get frozen. You might want
 it to spit out XML, or you like tab-delimited format, or you want this
 number or that number on such-and-such a line to make it really fit in
 your analysis pipeline, or you really really need a command line
-option for slowing it back down to HMMER2 speed so you have more time
-for coffee\footnote{Actually, this option already exists:
-\prog{--max}.}. This is the kind of stuff I'd most like to hear now
-while the code is still fluid.
+option for slowing the search programs back down to HMMER2 speed so
+you have more time for coffee\footnote{Actually, this option already
+exists: \prog{--max}.}. This is the kind of stuff I'd most like to
+hear now while the code is still fluid.
 
 \begin{sidebar}
-An obvious corollary of this is, for gods sakes, \textbf{don't write
-any heavy duty output parsers around HMMER3 just yet.} You should
-expect all the output formats to change, at least slightly, before a
-public release is finalized.
+An obvious corollary of this responsiveness to your feedback is,
+\textbf{don't write any heavy duty output parsers around HMMER3 just
+yet.} You should expect all the output formats to change, at least
+slightly, before a public release is finalized.
 \end{sidebar}
 
 Of course, since it's alpha test code, I'd like to also hear about

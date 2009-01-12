@@ -11,10 +11,6 @@
 #include <math.h>
 #include <limits.h>
 
-#ifdef HAVE_MPI
-#include "mpi.h"
-#endif 
-
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
@@ -25,6 +21,11 @@
 #include "esl_gumbel.h"
 #include "esl_exponential.h"
 #include "esl_vectorops.h"
+
+#ifdef HAVE_MPI
+#include "mpi.h"
+#include "esl_mpi.h"
+#endif 
 
 #include "hmmer.h"
 
@@ -80,7 +81,7 @@ struct cfg_s {
   P7_BG           *bg;          /* null model                               */
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
-  int              textw;
+  int              textw;	/* width of output ASCII text               */
 
   int     do_seq_by_E;		/* TRUE to cut sequence reporting off by E  */
   double  seqE;	                /* sequence E-value threshold               */
@@ -792,10 +793,10 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
 static int
 output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 {
-  int    h;
-  int    d;
-  int    namew    = ESL_MAX(8,  p7_tophits_GetMaxNameLength(hitlist));
-  int    descw;
+  int h;
+  int d;
+  int namew    = ESL_MAX(8,  p7_tophits_GetMaxNameLength(hitlist));
+  int descw;
 
   if (cfg->textw >  0) descw = ESL_MAX(32, cfg->textw - namew - 59);  /* 59 chars excluding desc is from the format: 22+2 +22+2 +8+2 +<name>+1 */
   else                 descw = INT_MAX;
@@ -820,7 +821,7 @@ output_per_sequence_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitl
 		hitlist->hit[h]->nexpected,
 		hitlist->hit[h]->nreported,
 		namew, hitlist->hit[h]->name,
-		descw, hitlist->hit[h]->desc);
+		descw, (hitlist->hit[h]->desc == NULL ? "" : hitlist->hit[h]->desc));
       }
   return eslOK;
 }
@@ -841,7 +842,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 	namew = strlen(hitlist->hit[h]->name);
 	descw = (cfg->textw > 0 ?  ESL_MAX(32, cfg->textw - namew - 5) : INT_MAX);
 
-	fprintf(cfg->ofp, ">> %s  %-.*s\n", hitlist->hit[h]->name, descw, hitlist->hit[h]->desc);
+	fprintf(cfg->ofp, ">> %s  %-.*s\n", hitlist->hit[h]->name, descw, (hitlist->hit[h]->desc == NULL ? "" : hitlist->hit[h]->desc));
 
 	/* The domain table is 117 char wide:
            #  bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali acc

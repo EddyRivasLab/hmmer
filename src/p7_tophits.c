@@ -539,7 +539,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
 		th->hit[h]->nexpected,
 		th->hit[h]->nreported,
 		namew, th->hit[h]->name,
-		descw, th->hit[h]->desc);
+		descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
       }
   if (th->nreported == 0) fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n");
   return eslOK;
@@ -571,7 +571,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
 	namew = strlen(th->hit[h]->name);
 	descw = (textw > 0 ?  ESL_MAX(32, textw - namew - 5) : INT_MAX);
 
-	fprintf(ofp, ">> %s  %-.*s\n", th->hit[h]->name, descw, th->hit[h]->desc);
+	fprintf(ofp, ">> %s  %-.*s\n", th->hit[h]->name, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
 
 	/* The domain table is 117 char wide:
            #  bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali acc

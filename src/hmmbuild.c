@@ -589,7 +589,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   while (esl_msa_MPIRecv(0, 0, MPI_COMM_WORLD, cfg->abc, &wbuf, &wn, &msa) == eslOK) 
     {
       ESL_DPRINTF2(("worker %d: has received MSA %s (%d columns, %d seqs)\n", cfg->my_rank, msa->name, msa->alen, msa->nseq));
-      if ((status = p7_Builder(bld, msa, NULL, &hmm, NULL, NULL, NULL))   != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
+      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL))   != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       ESL_DPRINTF2(("worker %d: has produced an HMM %s\n", cfg->my_rank, hmm->name));
 
       n = 0;

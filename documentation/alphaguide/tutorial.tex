@@ -2,8 +2,12 @@
 \section{Tutorial}
 \label{section:tutorial}
 
-Here's a tutorial walk-through of some small projects with HMMER3, to
-get you oriented.
+Here's a tutorial walk-through of some small projects with
+HMMER3. This should suffice to get you oriented to a ``safe path''
+through HMMER3 alpha test code that should work as advertised -- before
+you start boldly exploring later-to-be-documented command line options
+that might or might not be doing anything sensible yet.
+
 
 \subsection{Files used in the tutorial}
 
@@ -39,6 +43,11 @@ are:
   type III domains. 
 %
 \item[\emprog{fn3.out}] Output of \prog{hmmsearch fn3.hmm 7LESS\_DROME}.
+%
+\item[\emprog{fn3.out}] Output of \prog{hmmsearch fn3.hmm 7LESS\_DROME}.
+%
+\item[\emprog{Pkinase.sto}] The Pfam 22.0 {Pkinase} seed alignment of
+  protein kinase domains.
 \end{wideitem}
 
 
@@ -50,7 +59,7 @@ are:
 HMMER starts with a multiple sequence alignment file that you
 provide. Currently HMMER3 only reads Stockholm
 alignments.\footnote{I'm lying. It can read more. I just don't trust
-any other parsers yet.} The file \prog{tutorial/globins4.sto} is an
+its other parsers yet.} The file \prog{tutorial/globins4.sto} is an
 example of a simple Stockholm file. It looks like this:
 
 \begin{sreoutput}
@@ -78,7 +87,8 @@ Most popular alignment formats are similar block-based formats, and
 can be turned into Stockholm format with a little editing or
 scripting. Don't forget the \prog{\# STOCKHOLM 1.0} line at the start
 of the alignment, nor the \prog{//} at the end. Stockholm alignments
-can be concatenated to create one file of many alignments.
+can be concatenated to create an alignment database flatfile
+containing many alignments.
 
 
 The \prog{hmmbuild} command builds a profile HMM from an alignment (or
@@ -665,12 +675,289 @@ WU-BLAST took 8.5 seconds.
 
 \subsection{Searching a profile HMM database with a query sequence}
 
+The \prog{hmmscan} program is for annotating all the different
+known/detectable domains in a given sequence. It takes a single query
+sequence and an HMM database as input. The HMM database might be Pfam,
+SMART, or TIGRfams, for example, or another collection of your choice.
+
+\subsubsection{Step 1: create an HMM database flatfile}
+
+An HMM ``database'' flatfile is simply a concatenation of individual
+HMM files. To create a database flatfile, you can either build
+individual HMM files and concatenate them, or you can concatenate
+Stockholm alignments and use \prog{hmmbuild} to build an HMM database
+of all of them in one command. 
+
+Let's create a tiny database called \prog{minifam} containing models
+of globin, fn3, and Pkinase (protein kinase) domains by concatenating
+model files:
+
+\user{hmmbuild globins4.hmm globins4.sto}
+\user{hmmbuild fn3.hmm fn3.sto}
+\user{hmmbuild Pkinase.hmm Pkinase.sto}
+\user{cat globins4.hmm fn3.hmm Pkinase.hmm > minifam}
+
+We'll use \prog{minifam} for our examples in just a bit, but first a
+few words on other ways to build HMM databases, especially big ones.
+
+Alternatively, you can concatenate Stockholm alignment files together
+(as Pfam does in its big \prog{Pfam-A.seed} and \prog{Pfam-A.full}
+flatfiles) and use \prog{hmmbuild} to build HMMs for all the
+alignments at once. This won't work properly for our tutorial
+alignments, because the \prog{globins4.sto} alignment doesn't have an
+\prog{\#=GF ID} annotation line giving a name to the globins4
+alignment, so \prog{hmmbuild} wouldn't know how to name it
+correctly. To build a multi-model database from a multi-MSA flatfile,
+the alignments have to be in Stockholm format (no other MSA format
+that I'm aware of supports having more than one alignment per file),
+and each alignment must have a name on a \prog{\#=GF ID} line.
+
+But if you happen to have a Pfam seed alignment flatfile
+\prog{Pfam-A.seed} around, an example command would be:
+
+\user{hmmbuild Pfam-A.hmm Pfam-A.seed}
+
+This would take about four hours to build all 10,000 models or so in
+Pfam.  To speed the database construction process up, \prog{hmmbuild}
+supports MPI parallelization,
+
+As far as HMMER's concerned, all you have to do is add \prog{--mpi} to
+the command line for \prog{hmmbuild}, assuming you've compiled support
+for MPI into it; see the installation instructions.
+
+You'll also need to know how to invoke an MPI job in your particular
+environment, with your job scheduler and MPI distribution. We can't
+really help you with this -- different sites have different cluster
+environments.
+
+With our scheduler (SGE, the Sun Grid Engine) and our MPI distro
+(OpenMPI), an example incantation for building \prog{Pfam.hmm} from
+\prog{Pfam-A.seed} is:
+
+\user{qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe openmpi 200 'mpirun -mca btl self,tcp --prefix /usr/local/openmpi -np 200 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'}
+
+This reduces the time to build Pfam from about four hours to about a
+minute.
+
+\subsubsection{Step 2: compress and index the flatfile with hmmpress}
+
+The \prog{hmmscan} program has to read a lot of HMMs in a hurry, and
+HMMER's ASCII flatfiles are bulky. In order to accelerate this,
+\prog{hmmscan} uses binary compression and indexing of the flatfiles.
+To use \prog{hmmscan}, you must first compress and index your HMM
+database with the \prog{hmmpress} program:
+
+\user{hmmpress minifam}
+
+This will quickly produce:
+
+\begin{sreoutput}
+Working...    done.
+Pressed and indexed 3 HMMs (3 names and 2 accessions).
+Models pressed into binary file:   minifam.h3m
+SSI index for binary model file:   minifam.h3i
+Profiles (MSV part) pressed into:  minifam.h3f
+Profiles (remainder) pressed into: minifam.h3p
+\end{sreoutput}
+
+and you'll see these four new binary files in the directory.
+
+\subsubsection{Step 3: search the HMM database with hmmscan}
+
+Now we can analyze sequences using our HMM database and
+\prog{hmmscan}. 
+
+For example, the receptor tyrosine kinase \prog{7LESS\_DROME} not only
+has all those fibronectin type III domains on its extracellular face,
+it's got a protein kinase domain on its intracellular face. Our
+\prog{minifam} database has models of both \prog{fn3} and
+\prog{Pkinase}, as well as the unrelated \prog{globins4} model. So
+what happens when we scan the \prog{7LESS\_DROME} sequence:
+
+\user{hmmscan minifam 7LESS\_DROME} 
+
+The header and the first section of the output will look like:
+
+\begin{sreoutput}
+# hmmscan :: search sequence(s) against a profile HMM database
+# HMMER 3.0a1 (January 2009); http://hmmer.org/
+# Copyright (C) 2009 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query sequence file:             7LESS_DROME
+# target HMM database:             minifam
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       7LESS_DROME  [L=2554]
+Accession:   P13368
+Description: RecName: Full=Protein sevenless;          EC=2.7.10.1;
+Scores for complete sequence (score includes all domains):
+ --- full sequence ---   --- best 1 domain ---    -#dom-
+  E-value  score  bias    E-value  score  bias    exp  N  Model    Description
+  ------- ------ -----    ------- ------ -----   ---- --  -------- -----------
+  5.3e-56  174.0   0.0    4.4e-15   43.3   0.4    9.6  9  fn3      Fibronectin type III domain
+    5e-43  135.0   0.0    7.8e-43  134.4   0.0    1.3  1  Pkinase  Protein kinase domain
+      1.1   -2.5   0.0          0    0.0   0.0    1.2  0  globins4
+\end{sreoutput}
+
+The output fields are in the same order and have the same meaning as
+in \prog{hmmsearch}'s output. 
+
+The size of the search space for \prog{hmmscan} is the number of
+models in the HMM database (here, 3; for a Pfam search, on the order
+of 10000). In \prog{hmmsearch}, the size of the search space is the
+number of sequences in the sequence database. This means that E-values
+may differ even for the same individual profile vs. sequence
+comparison, depending on how you do the search.
+
+For domain, there then follows a domain table and alignment output,
+just as in \prog{hmmsearch}. The \prog{fn3} annotation, for example,
+looks like:
+
+\begin{sreoutput}
+Domain and alignment annotation for each model:
+>> fn3  Fibronectin type III domain
+     # bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali-acc
+   --- --------- ------- ---------- ---------- -------- --------    -------- --------    -------- --------    -------
+     1      -2.3     0.0       0.79       0.79       60       72 ..      396      408 ..      395      410 ..    0.86
+     2      42.0     0.0    1.1e-14    1.1e-14        2       83 ..      439      520 ..      437      521 ..    0.95
+     3      15.1     0.0    2.8e-06    2.8e-06       14       82 ..      837      911 ..      827      914 ..    0.82
+     4       3.6     0.0      0.012      0.012        6       35 ..     1205     1235 ..     1202     1258 ..    0.81
+     5      22.9     0.0      1e-08      1e-08       13       79 ..     1312     1380 ..     1304     1385 ..    0.81
+     6      -0.6     0.0       0.24       0.24       57       72 ..     1754     1769 ..     1747     1769 ..    0.87
+     7      43.3     0.4    4.4e-15    4.4e-15        1       82 [.     1799     1888 ..     1799     1891 ..    0.89
+     8      19.2     0.0    1.5e-07    1.5e-07        6       73 ..     1904     1966 ..     1900     1976 ..    0.90
+     9      12.0     0.0    2.6e-05    2.6e-05        1       77 [.     1993     2098 ..     1993     2107 ..    0.74
+\end{sreoutput}
+
+and an example alignment (of that second domain again):
+
+\begin{sreoutput}
+  == domain 2    score: 42.0 bits;  conditional E-value: 1.1e-14
+                  ---CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTEE.E CS
+          fn3   2 saptnlsvtevtstsltlsWsppe.gngpitgYeveyreknegeeekeltvpgtttsvtltgLkpgteYevrVqavngagegp 83
+                  sap++++++++++++l+++W+p++++ngpi+gY+++++++++++ ++e++vp++++s+++++L++gt+Y+++++++n++gegp
+  7LESS_DROME 439 SAPVIEHLMGLDDSHLAVHWHPGRfTNGPIEGYRLRLSSSEGNA-TSEQLVPAGRGSYIFSQLQAGTNYTLALSMINKQGEGP 520
+                  78888999999*****************************9997.**********************************9997 PP
+\end{sreoutput}
+
+You'd think (and you'd usually be right) that except for the E-values
+(which depend on database search space sizes), you should get exactly
+the same scores, domain number, domain coordinates, and alignment
+every time you do a search of the same HMM against the same
+sequence. And in this case, with the comparison of the \prog{fn3}
+model and \prog{7LESS\_DROME}, that's what's happened. But it isn't
+guaranteed to happen. In some cases, particularly cases where exact
+domain number and boundaries are difficult to infer, HMMER3 uses
+stochastic sampling algorithms. Therefore you may see differences from
+run to run. We know this isn't what many people expect or like -- even
+though probabilistically it's just another way that HMMER's more or
+less correctly reflecting true uncertainty of its inferences. We plan
+to implement some ways to make results more reproducible by default,
+by more precisely controlling the state of the pseudorandom number
+generators.
 
 
 
+\subsection{Creating multiple alignments with hmmalign}
+
+The file \prog{tutorial/globins45.fa} is a FASTA file containing 45
+unaligned globin sequences. To align all of these to the
+\prog{globins4} model and make a multiple sequence alignment:
+
+\user{hmmalign globins4.hmm tutorial/globins45.fa}
+
+The output of this is a Stockholm format multiple alignment file. The
+first few lines of it look like:
+
+\begin{sreoutput}
+# STOCKHOLM 1.0
+
+MYG_ESCGI          ...VLSDAEWQLVLNIWAKVEADVAGHGQDILIRLFKGHPETLEKFDKFK
+#=GR MYG_ESCGI  PP ...69*********************************************
+MYG_HORSE          ..g-LSDGEWQQVLNVWGKVEADIAGHGQEVLIRLFTGHPETLEKFDKFK
+#=GR MYG_HORSE  PP ..7.89********************************************
+MYG_PROGU          ..g-LSDGEWQLVLNVWGKVEGDLSGHGQEVLIRLFKGHPETLEKFDKFK
+#=GR MYG_PROGU  PP ..7.89********************************************
+MYG_SAISC          ..g-LSDGEWQLVLNIWGKVEADIPSHGQEVLISLFKGHPETLEKFDKFK
+#=GR MYG_SAISC  PP ..7.89********************************************
+MYG_LYCPI          ..g-LSDGEWQIVLNIWGKVETDLAGHGQEVLIRLFKNHPETLDKFDKFK
+#=GR MYG_LYCPI  PP ..7.89********************************************
+MYG_MOUSE          ..g-LSDGEWQLVLNVWGKVEADLAGHGQEVLIGLFKTHPETLDKFDKFK
+#=GR MYG_MOUSE  PP ..7.89********************************************
+MYG_MUSAN          ..v-----DWEKVNSVWSAVESDLTAIGQNILLRLFEQYPESQNHFPKFK
+#=GR MYG_MUSAN  PP ..7.....89***************************************9
+...
+\end{sreoutput}
+
+and so on. 
+
+Notice those \prog{PP} annotation lines. That's posterior probability
+annotation, as in the single sequence alignments that \prog{hmmscan}
+and \prog{hmmsearch} showed. This essentially represents the
+confidence that each residue is aligned where it should be.
+
+\prog{hmmalign} currently has an undesirable/problematic ``feature''
+that we're aware of. Recall that HMMER3 only does local
+alignments. Here, we know that we've provided full length globin
+sequences, and \prog{globins4} is a full length globin model. We'd
+really like \prog{hmmalign} to produce a global alignment. It can't
+currently do that. If it doesn't quite manage to extend its local
+alignment to the full length of a target globin sequence, you'll get a
+weird-looking effect, as the nonmatching termini are pulled out to the
+left or right. For example, look at the N-terminal \prog{g} in
+\prog{MYG\_HORSE} above. H3 is about 70\% confident that this residue
+is nonhomologous, though any sensible person would align it into the
+first globin consensus column.
+
+Look at the end of that first block of Stockholm alignment, where you'll
+see:
+
+\begin{sreoutput}
+...
+HBBL_RANCA         vhw--TAEEKAVINSVWQKV--DVEQDGHEALTRLFIVYPWTQRYFSTFG
+#=GR HBBL_RANCA PP *65..899************..****************************
+HBB2_TRICR         ..vHLTAEDRKEIAAILGKV--NVDSLGGQCLARLIVVNPWSRRYFHDFG
+#=GR HBB2_TRICR PP ..*79***************..****************************
+#=GC PP_cons       ...799********************************************
+\end{sreoutput}
+
+The \prog{\#=GC PP\_cons} line is Stockholm-format \emph{consensus
+posterior probability} annotation for the entire column. It's
+calculated simply as the arithmetic mean of the per-residue posterior
+probabilities in that column. This should prove useful in phylogenetic
+inference applications, for example, where it's common to mask away
+nonconfidently aligned columns of a multiple alignment. The
+\prog{PP\_cons} line provides an objective measure of the confidence
+assigned to each column.
 
 
 
+\subsection{Single sequence queries using phmmer}
+
+The \prog{phmmer} program is for searching a single sequence query
+against a sequence database, much as \prog{BLASTP} or \prog{FASTA}
+would do. \prog{phmmer} works essentially just like \prog{hmmsearch}
+does, except you provide a query sequence instead of a query profile
+HMM. 
+
+Internally, HMMER builds a profile HMM from your single query
+sequence, using a simple position-independent scoring system (BLOSUM62
+scores converted to probabilities, plus a gap-open and gap-extend
+probability).
+
+The file \prog{tutorial/HBB\_HUMAN} is a FASTA file containing the
+human $\beta-$globin sequence as an example query. If you have a
+sequence database such as \prog{uniprot\_sprot.fasta}, make that your
+target database; otherwise, use \prog{tutorial/globins45.fa} as a
+small example:
+
+\user{phmmer HBB\_HUMAN uniprot\_sprot.fa}\\
+or\\
+\user{phmmer HBB\_HUMAN tutorial/globins45.fa}
+
+Everything about the output is essentially as previously described for
+\prog{hmmsearch}. 
 
 
 

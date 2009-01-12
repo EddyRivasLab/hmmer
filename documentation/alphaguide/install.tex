@@ -4,7 +4,7 @@
 \subsection{Quick installation instructions}
 
 Download \prog{hmmer-3.0a1.tar.gz} from
-\url{http://hmmer.janelia.org/}, or directly from
+\url{http://hmmer.org/}, or directly from
 \url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0a1.tar.gz};
 untar; and change into the newly created directory \prog{hmmer-3.0a1}:
 
@@ -67,7 +67,7 @@ Intel platform running Red Hat Enterprise Linux AS4. We believe they
 should be widely portable to different Linux systems. 
 
 We have tested most extensively on Linux, and to a lesser extent on
-MacOS/X. We aim to be portabile to all other POSIX platforms.  We
+MacOS/X. We aim to be portable to all other POSIX platforms.  We
 currently do not plan to develop for Windows.\footnote{Though I'd
 expect it should compile and run fine on Windows, especially using
 add-on products that are available for making Windows more
@@ -109,15 +109,6 @@ any additional libraries to be installed by you, other than standard
 ANSI C99 libraries that should already be present on a system that can
 compile C code.
 
-Optionally, some programs in HMMER3 include support for MPI (Message
-Passing Interface) parallelization, for clusters for example. To use
-MPI, you first need to have MPI installed, such as OpenMPI
-(\url{www.open-mpi.org}), and you add \ccode{--enable-mpi} to the
-\ccode{./configure} command line. HMMER3's MPI support is not
-completely written at this time, and has not been extensively tested
-yet.
-
-
 \begin{sidebar}
 One of the objectives of the alpha test is to identify portability
 issues. If HMMER3 fails to compile and/or run under a POSIX-compliant
@@ -125,6 +116,31 @@ OS, on an x86 processor, using an ANSI C99-compliant compiler, please
 report the problem.
 \end{sidebar}
 
+
+
+\subsection{Experimental: MPI support}
+
+Optionally, a couple of programs in HMMER3 include support for MPI
+(Message Passing Interface) parallelization. To use MPI, you first
+need to have MPI installed, such as OpenMPI (\url{www.open-mpi.org}),
+and you add \ccode{--enable-mpi} to the \ccode{./configure} command
+line. HMMER3's MPI support is not completely written at this time, and
+has not been extensively tested yet. 
+
+One place it's useful is in parallelizing \prog{hmmbuild}.
+
+It's highly advantageous to get \prog{mpicc} to use the Intel C
+compiler rather than its default, which is often \prog{gcc}. Different
+MPI distributions may have different ways of selecting the C compiler
+and its options. OpenMPI can be controlled by environment variables.
+For example, in our environment, we currently build HMMER3 for MPI
+using:
+
+\user{setenv OMPI_MPICC         "icc"}\\
+\user{setenv OMPI_MPICC_CFLAGS  "-O3"}\\
+\user{setenv OMPI_MPICC_LDFLAGS "-static"}\\
+\user{./configure --enable-mpi --prefix=/usr/local/hmmer3}\\
+\user{make}
 
 
 

@@ -7,10 +7,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
-#ifdef HAVE_MPI
-#include "mpi.h"
-#endif 
+#include <string.h>
+#include <limits.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -23,8 +21,14 @@
 #include "esl_stopwatch.h"
 #include "esl_vectorops.h"
 
+#ifdef HAVE_MPI
+#include "mpi.h"
+#include "esl_mpi.h"
+#endif 
 
 #include "hmmer.h"
+
+#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
 
 static ESL_OPTIONS options[] = {
   /* name           type          default  env  range toggles  reqs   incomp                         help                                                      docgroup*/
@@ -41,17 +45,22 @@ static ESL_OPTIONS options[] = {
   { "--hmmZ",       eslARG_REAL,   FALSE, NULL, "x>0",  NULL,  NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           2 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",  NULL,  NULL,  NULL,                          "set # of significant seqs, for domain E-value calculation",    2 },
 
-  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, "--F1,--F2,--F3",               "Turn all heuristic filters off (less speed, more power)",      3 },
-  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,   NULL,  NULL, "--max",                        "MSV threshold: promote hits w/ P <= F1",                       3 },
-  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,   NULL,  NULL, "--max",                        "Vit threshold: promote hits w/ P <= F2",                       3 },
-  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,   NULL,  NULL, "--max",                        "Fwd threshold: promote hits w/ P <= F3",                       3 },
-  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL, "--max",                        "turn off biased composition score corrections",                3 },
-
-  { "--seed",       eslARG_INT,     "42", NULL, NULL,   NULL,  NULL,  NULL,                          "set random number generator seed",                             4 },  
-  { "--timeseed",   eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL,  NULL,                          "use arbitrary random number generator seed (by time())",       4 },  
-  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL,  NULL,                          "arrest after start: for debugging MPI under gdb",              4 },  
+  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, "--F1,--F2,--F3",   "Turn all heuristic filters off (less speed, more power)",      3 },
+  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,   NULL,  NULL, "--max",            "MSV threshold: promote hits w/ P <= F1",                       3 },
+  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,   NULL,  NULL, "--max",            "Vit threshold: promote hits w/ P <= F2",                       3 },
+  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,   NULL,  NULL, "--max",            "Fwd threshold: promote hits w/ P <= F3",                       3 },
+  { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL, "--max",            "turn off composition bias filter",                             3 },
+  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL,    NULL,            "turn off biased composition score corrections",                3 },
+/* Control of run-to-run variation in RNG */
+  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,    NULL,         "reseed RNG to minimize run-to-run stochastic variation",       4 },
+  { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,         "reseed RNG with fixed seed",                                   4 },
+  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,         "seed RNG arbitrarily; allow run-to-run stochastic variation",  4 },
+/* Other options */
+  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",    "set max width of ASCII text output lines",                     5 },
+  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",      "unlimit ASCII text output line width",                         5 },
 #ifdef HAVE_MPI
   //  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL,  NULL,                          "run as an MPI parallel program",                               4 },
+  //  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL,  NULL,                          "arrest after start: for debugging MPI under gdb",              4 },  
 #endif 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -69,6 +78,7 @@ struct cfg_s {
   P7_BG           *bg;          /* null model                               */
   int              mode;	/* profile mode: e.g. p7_LOCAL              */
   P7_TOPHITS      *hitlist;	/* top-scoring sequence hits                */
+  int              textw;	/* width of output ASCII text               */
 
   int     do_hmm_by_E;		/* TRUE to cut HMM reporting off by E       */
   double  hmmE;	                /* HMM E-value threshold                    */
@@ -231,8 +241,11 @@ process_commandline(int argc, char **argv, struct cfg_s *cfg, ESL_GETOPTS **ret_
       puts("\nOptions controlling acceleration heuristics:");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
+      puts("\nOptions controlling run-to-run variation due to random number generation:");
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 120); 
+
       puts("\nOther expert options:");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
       exit(0);
     }
 
@@ -266,6 +279,9 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->bg       = NULL;		        /* to be initialized later */
   cfg->mode     = p7_LOCAL;
   cfg->hitlist  = p7_tophits_Create(); /* master accumulates complete list; workers have partial lists. */
+
+  if (esl_opt_GetBoolean(go, "--notextw")) cfg->textw = 0;
+  else                                     cfg->textw = esl_opt_GetInteger(go, "--textw");
 
   /* Reporting thresholds */
   cfg->do_hmm_by_E       = TRUE;
@@ -344,7 +360,8 @@ init_shared_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->do_mpi   = FALSE;
   cfg->my_rank  = 0;
   cfg->nproc    = 0;
-  cfg->do_stall = esl_opt_GetBoolean(go, "--stall");
+  cfg->do_stall = FALSE;
+  // cfg->do_stall = esl_opt_GetBoolean(go, "--stall");
 
   /* These are initialized later in the workers only: */
   cfg->r        = NULL;
@@ -409,11 +426,8 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 static int
 init_worker_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
 {
-  if (esl_opt_GetBoolean(go, "--timeseed")) cfg->r = esl_randomness_CreateTimeseeded();
-  else                                      cfg->r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  if (cfg->r == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
-
-  if ((cfg->ddef = p7_domaindef_Create(cfg->r)) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
+  if ((cfg->r    = esl_randomness_CreateTimeseeded()) == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create random number generator");
+  if ((cfg->ddef = p7_domaindef_Create(cfg->r))       == NULL) ESL_FAIL(eslEMEM, errbuf, "Failed to create domain definition workbook");
   return eslOK;
 }
 
@@ -432,6 +446,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_OMX          *oxb     = NULL;     /* optimized DP matrix for Backward        */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   float            usc, vfsc, fwdsc;   /* filter scores                           */
+  float            filtersc;	       /* HMM null filter score                   */
   float            nullsc;             /* null model score                        */
   float            seqbias;  	
   float            seq_score;	       /* final corrected per-seq bit score       */
@@ -502,16 +517,27 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  seq_score = (usc - nullsc) / eslCONST_LOG2;
 	  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
 	  if (P > cfg->F1 && ! hmm_is_reportable(cfg, seq_score, P)) goto FINISH;
-	  cfg->n_past_msv++;
-
 
 	  /* If it passes the MSV filter, read the rest of the profile */
 	  p7_oprofile_ReadRest(cfg->hfp, om);
 	  p7_oprofile_ReconfigRestLength(om, sq->n);
 
+	  /* HMM filtering */
+	  if (! esl_opt_GetBoolean(go, "--nobias") && !  esl_opt_GetBoolean(go, "--max"))
+	    {
+	      p7_bg_SetFilter(cfg->bg, om->M, om->compo); /* EXPERIMENTAL */
+	      p7_bg_FilterScore(cfg->bg, sq->dsq, sq->n, &filtersc);
+	      seq_score = (usc - filtersc) / eslCONST_LOG2;
+	      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+	      if (P > cfg->F1 && ! hmm_is_reportable(cfg, seq_score, P)) goto FINISH;
+	    }
+	  else filtersc = nullsc;
+	  cfg->n_past_msv++;
+
+
 	  /* Second level filter: ViterbiFilter(), multihit with <om> */
 	  p7_ViterbiFilter(sq->dsq, sq->n, om, oxf, &vfsc);  
-	  seq_score = (vfsc-nullsc) / eslCONST_LOG2;
+	  seq_score = (vfsc-filtersc) / eslCONST_LOG2;
 	  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_MU], om->evparam[p7_LAMBDA]);
 	  if (P > cfg->F2 && ! hmm_is_reportable(cfg, seq_score, P)) goto FINISH;
 	  cfg->n_past_vit++;
@@ -519,7 +545,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Parse it with Forward and obtain its real Forward score. */
 	  p7_ForwardParser(sq->dsq, sq->n, om, oxf, &fwdsc);
-	  seq_score = (fwdsc-nullsc) / eslCONST_LOG2;
+	  seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
 	  P = esl_exp_surv(seq_score,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
 	  if (P > cfg->F3 && ! hmm_is_reportable(cfg, seq_score, P)) goto FINISH;
 	  cfg->n_past_fwd++;
@@ -684,8 +710,13 @@ output_header(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (! esl_opt_IsDefault(go, "--F2"))        fprintf(cfg->ofp, "# Vit filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F2"));
   if (! esl_opt_IsDefault(go, "--F3"))        fprintf(cfg->ofp, "# Fwd filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F3"));
   if (! esl_opt_IsDefault(go, "--nonull2"))   fprintf(cfg->ofp, "# null2 bias corrections:          off\n");
-  if (! esl_opt_IsDefault(go, "--seed"))      fprintf(cfg->ofp, "# random number seed set to:       %d\n",  esl_opt_GetInteger(go, "--seed"));
-  if (! esl_opt_IsDefault(go, "--timeseed"))  fprintf(cfg->ofp, "# random number seed set to:       %ld\n",  cfg->r->seed);
+  if (! esl_opt_IsDefault(go, "--nobias"))    fprintf(cfg->ofp, "# biased composition HMM filter:   off\n");
+  if (! esl_opt_IsDefault(go, "--nonull2"))   fprintf(cfg->ofp, "# null2 bias corrections:          off\n");
+  if (! esl_opt_IsDefault(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation): reseed deterministically; minimize variation\n");
+  if (! esl_opt_IsDefault(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation): reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
+  if (! esl_opt_IsDefault(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation): one arbitrary seed; allow run-to-run variation\n");
+  if (! esl_opt_IsDefault(go, "--textw"))     fprintf(cfg->ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
+  if (! esl_opt_IsDefault(go, "--notextw"))   fprintf(cfg->ofp, "# max ASCII text line length:      unlimited\n");
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -765,33 +796,35 @@ apply_thresholds_to_output(struct cfg_s *cfg, P7_TOPHITS *hitlist)
 static int
 output_per_model_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 {
-  int    h;
-  int    d;
-  int    namew       = ESL_MAX(8,  p7_tophits_GetMaxNameLength(hitlist));
+  int h;
+  int d;
+  int namew       = ESL_MAX(8,  p7_tophits_GetMaxNameLength(hitlist));
+  int descw;
   
-  fprintf(cfg->ofp, "Scores for complete sequence (score includes all domains):\n");
+  if (cfg->textw >  0) descw = ESL_MAX(32, cfg->textw - namew - 59);  /* 59 chars excluding desc is from the format: 22+2 +22+2 +8+2 +<name>+1 */
+  else                 descw = INT_MAX;  
 
-  fprintf(cfg->ofp, "%25s  %25s  %13s\n", "   --- full sequence ----", "---- single best dom ----", "-- #doms --");
-  fprintf(cfg->ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "E-value", "  score", "  bias", "  score",   "bias",    "E-value", "   exp",     "N", namew, "Model",    "Description");
-  fprintf(cfg->ofp, "%10s %7s %6s  %7s %6s %10s  %6s %5s  %-*s %s\n", "-------", "-------", "------", "-------", "------", "----------", " -----", "-----", namew, "--------", "-----------");
+  fprintf(cfg->ofp, "Scores for complete sequence (score includes all domains):\n");
+  fprintf(cfg->ofp, "%22s  %22s  %8s\n",                              " --- full sequence ---",   " --- best 1 domain ---",       "-#dom-");
+  fprintf(cfg->ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score",  "bias", "  exp",  "N", namew, "Model",    "Description");
+  fprintf(cfg->ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
 
   for (h = 0; h < hitlist->N; h++)
     if (hitlist->hit[h]->is_reported)
       {
 	d    = hitlist->hit[h]->best_domain;
 
-	fprintf(cfg->ofp, "%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %s\n",
+	fprintf(cfg->ofp, "%9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-.*s\n",
 		hitlist->hit[h]->pvalue * (double) cfg->hmmZ,
 		hitlist->hit[h]->score,
 		hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+		hitlist->hit[h]->dcl[d].pvalue * (double) cfg->hmmZ,
 		hitlist->hit[h]->dcl[d].bitscore,
 		p7_FLogsum(0.0, log(cfg->bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
-		hitlist->hit[h]->dcl[d].pvalue * (double) cfg->hmmZ,
 		hitlist->hit[h]->nexpected,
 		hitlist->hit[h]->nreported,
-		namew, 
-		hitlist->hit[h]->name,
-		hitlist->hit[h]->desc);
+		namew, hitlist->hit[h]->name,
+		descw, (hitlist->hit[h]->desc == NULL ? "" : hitlist->hit[h]->desc));
       }
   return eslOK;
 }
@@ -799,15 +832,19 @@ output_per_model_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist
 static int
 output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlist)
 {
- int h, d;
+  int h, d;
   int nd;
+  int namew, descw;
 
   fprintf(cfg->ofp, "Domain and alignment annotation for each model:\n");
 
   for (h = 0; h < hitlist->N; h++)
     if (hitlist->hit[h]->is_reported)
       {
-	fprintf(cfg->ofp, ">> %s  %s\n", hitlist->hit[h]->name, hitlist->hit[h]->desc);
+	namew = strlen(hitlist->hit[h]->name);
+	descw = (cfg->textw > 0 ?  ESL_MAX(32, cfg->textw - namew - 5) : INT_MAX);
+
+	fprintf(cfg->ofp, ">> %s  %-.*s\n", hitlist->hit[h]->name, descw, (hitlist->hit[h]->desc == NULL ? "" : hitlist->hit[h]->desc));
 
 	/* The domain table is 117 char wide:
            #  bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali acc
@@ -855,7 +892,7 @@ output_per_domain_hitlist(ESL_GETOPTS *go, struct cfg_s *cfg, P7_TOPHITS *hitlis
 		      nd, 
 		      hitlist->hit[h]->dcl[d].bitscore,
 		      hitlist->hit[h]->dcl[d].pvalue * cfg->domZ);
-	      p7_alidisplay_Print(cfg->ofp, hitlist->hit[h]->dcl[d].ad, 40, -1);
+	      p7_alidisplay_Print(cfg->ofp, hitlist->hit[h]->dcl[d].ad, 40, cfg->textw);
 	      fprintf(cfg->ofp, "\n");
 	    }
       }
