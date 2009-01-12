@@ -35,12 +35,13 @@ snapshot <lineage>.<major-release>.snap<yyyymmdd>       3.0.snap20080325
 
 
 ================================================================
-= Creating a new major release branch
+= Creating a new major release branch, if necessary
 ================================================================
 
-For major releases (3.0, 3.1): we create a Subversion branch, so we
-can continue support (with bugfixes) without disrupting development of
-the next main release.
+For major public releases (3.0, 3.1): we create a Subversion branch,
+so we can continue support (with bugfixes) without disrupting
+development of the next main release.
+
 
 *  First test the development trunk.
    Compile should be entirely clean when compiled -Wall.
@@ -58,13 +59,19 @@ the next main release.
             https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
             -m "created 3.0 release branch"          
 
+
+
 ================================================================
 = Creating a distribution
 ================================================================
-${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
-   setenv HMMER_VERSION  3.0.snap20080419
 
+${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Makefile
+
+
+* You can put it in the environment and everything will work as cut/paste:
+   setenv HMMER_VERSION  3.0a1
    cd ~/releases
+
 * Delete any old releases of the same number
    rm -rf hmmer-${HMMER_VERSION}
    rm -f  hmmer-${HMMER_VERSION}.tar
@@ -72,10 +79,9 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
 
 * Export a snapshot, alpha, beta, or release candidate from the development trunk: 
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${HMMER_VERSION}
-
-   svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-3.0.snap20081101
-
    cd hmmer-${HMMER_VERSION}
+
+
 * or: Export a major or minor release from its permanent tag
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION} hmmer-${HMMER_VERSION}
    cd hmmer-${HMMER_VERSION}
@@ -104,9 +110,18 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" COPYRIGHT
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" INSTALL
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" LICENSE.tag
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" documentation/alphaguide/copyright.tex
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" documentation/alphaguide/titlepage.tex
    find .     -type f -exec easel/devkit/sedition-pp LICENSE       LICENSE.tag {} \;
 
 * compile documentation
+  Alpha Guide:
+   cd documentation/alphaguide
+   make
+   mv Alphaguide.pdf ../../Userguide.pdf
+   cd ../..
+
+  User Guide (not ready yet)
    cd documentation/userguide
    ln -s plan7-core.ai plan7-core.pdf
    ln -s plan7-search.ai  plan7-search.pdf
@@ -115,15 +130,27 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    mv Userguide.pdf ../../
    cd ../..	 
 
+* compile binaries
+
+   ssh login-eddy
+   cd releases/hmmer-${HMMER_VERSION}
+   source LICENSE.csh
+   ./configure CC=icc LDFLAGS=-static
+   make
+   make check
+   make BINDIR=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries install
+
+
 * clean up files that don't belong in the distro
 
    make distclean
    rm -f  00CHECKLIST CHECKLIST 00README-FIRSTTIME-DEVELOPER
-   rm -f  MAILING_LIST LICENSE.tag LICENSE.csh.in
+   rm -f  MAILING_LIST ALPHATEST TODO LICENSE.tag LICENSE.csh.in
    rm -rf Bugs Internal-Notes Release-Notes
-   rm -rf old-src ssdk old-testsuite
+   rm -rf old-src ssdk old-testsuite old-tutorial
+   rm -rf src/impl_vmx	
+   rm -rf src/testsuite
    rm -rf documentation
-   rm -rf tutorial
 
    cd easel
    rm -f  00CHECKLIST LICENSE.csh.in LICENSE.tag 
@@ -141,9 +168,13 @@ ${HMMER_VERSION} tag should match @HMMER_VERSION@ in configure.ac, Makefile
    ./configure
    make
    make check
+   make dev
    cd easel
    make check
    cd ../..
+
+
+   
 
 * copy to ftp site
 
@@ -162,5 +193,6 @@ Release           Date            SVN (HMMER/Easel)
 3.0.snap20080325  25 Mar 2008     r2370/r236
 3.0.snap20080419  19 Apr 2008     r2398/r247
 3.0.snap20081101   1 Nov 2008     r2620/r302
+3.0a1             12 Jan 2009     r2697/r312
 
 

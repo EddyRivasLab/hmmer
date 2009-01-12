@@ -131,23 +131,6 @@ uninstall:
 #	done
 
 
-# dist: build a new distribution in hmmer-${RELEASE}
-#
-dist:
-	# Make sure we pointed the make dist to a subversion repository
-	@if test x${REPOSITORY} = 'x'; then\
-	  echo "REPOSITORY isn't set; use make REPOSITORY=... dist";\
-	  exit 1;\
-	fi
-	# Delete old versions of the same release
-	#
-	@if test -d ../${BASENAME}-$(RELEASE);        then rm -rf ../${BASENAME}-$(RELEASE);        fi
-	@if test -e ../${BASENAME}-$(RELEASE).tar;    then rm -f  ../${BASENAME}-$(RELEASE).tar;    fi
-	@if test -e ../${BASENAME}-$(RELEASE).tar.Z;  then rm -f  ../${BASENAME}-$(RELEASE).tar.Z;  fi
-	@if test -e ../${BASENAME}-$(RELEASE).tar.gz; then rm -f  ../${BASENAME}-$(RELEASE).tar.gz; fi
-
-
-
 # bindist: after building, prep the whole directory for a binary
 #          distribution: symlink supported binaries in binaries/
 #          subdir, remove everything but binaries and Makefiles.
@@ -173,14 +156,14 @@ clean:
 #
 #	(cd src;       make distclean)
 distclean:
-	-rm -rf binaries
+#	-rm -rf binaries
 	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	if test -d src;       then (cd src;       make distclean); fi
-	if test -d easel;     then (cd easel;     make distclean); fi
-	if test -d profmark;  then (cd profmark;  make distclean); fi
-	if test -d testsuite; then (cd testsuite; make distclean); fi
+	if test -d src;           then (cd src;       make distclean); fi
+	if test -d easel;         then (cd easel;     make distclean); fi
+	if test -d profmark;      then (cd profmark;  make distclean); fi
+	if test -d testsuite;     then (cd testsuite; make distclean); fi
 	-rm LICENSE.csh
 	-rm Makefile
 

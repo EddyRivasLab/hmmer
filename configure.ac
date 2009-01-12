@@ -130,7 +130,7 @@ AC_CANONICAL_HOST
 #
 # Implements a sneaky if statement that wraps most of the configure.ac M4 code.
 #
-if ((! test -d binaries) && test -d src); then 
+#if ((! test -d binaries) && test -d src); then 
 AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
 
@@ -434,9 +434,9 @@ AC_CONFIG_FILES([easel/Makefile])
 ################################################################
 # remember that sneaky if statement that wraps the source
 # configuration? well, it ends here.
-else
-  AC_MSG_NOTICE([This is a precompiled binary distribution - using abbreviated config])
-fi
+#else
+#  AC_MSG_NOTICE([This is a precompiled binary distribution - using abbreviated config])
+#fi
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
 
