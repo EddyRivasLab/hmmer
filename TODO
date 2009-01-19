@@ -1,0 +1,37 @@
+
+
+*
+
+** Multiple sequence alignment file formats
+   Define a short list of popular multiple alignment formats,
+   and add i/o support for them in Easel.
+
+* 
+
+** Random number generators
+   need to be seeded in predictable ways so searches give predictable
+   results, even if they use stochastic sampling algorithms. 
+   Make the --Rdet, --Rseed, --Rarb options work.
+
+
+* Speed issues
+
+** Port to GPUs 
+   (we have a nVidia server and CUDA waiting)
+
+** Port to Altivec/VMX 
+   (see code in src/impl_vmx; follow impl_sse framework)
+
+** Port to Cell processor 
+   (see IBM donated code; see Michael Farrar's work)
+
+
+* Small feature requests
+
+** hmmscan (and other progs) should have --acc option, as hmmpfam did,
+   for output of accessions instead of names. ("Hiroshi", 13 Jan 09)
+
+
+
+
+

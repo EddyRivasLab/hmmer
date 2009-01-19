@@ -98,8 +98,10 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    find . -type f -exec chmod +r {} \;
    chmod +x easel/devkit/autodoc
    chmod +x easel/devkit/sqc
+
 * versioning, dating, licensing (these are originally set in configure.ac)
 * must do Easel first
+
    easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE "${EASEL_DATE}" EASEL_COPYRIGHT "${EASEL_COPYRIGHT}" easel/00README
    easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE "${EASEL_DATE}" EASEL_COPYRIGHT "${EASEL_COPYRIGHT}" easel/COPYRIGHT
    easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE "${EASEL_DATE}" EASEL_COPYRIGHT "${EASEL_COPYRIGHT}" easel/INSTALL
@@ -130,7 +132,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    mv Userguide.pdf ../../
    cd ../..	 
 
-* compile binaries
+* compile Linux binaries with icc
 
    ssh login-eddy
    cd releases/hmmer-${HMMER_VERSION}
@@ -198,11 +200,19 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
 * copy to ftp site
 
-  To make snapshots privately available:
-   scp hmmer-${HMMER_VERSION}.tar.gz selab:/opt/www/ftp/pub/pickup/ 
-   echo ftp://selab.janelia.org/pub/pickup/hmmer-${HMMER_VERSION}.tar.gz
+   scp hmmer-${HMMER_VERSION}.tar.gz selab:/opt/www/ftp/pub/software/hmmer3/
+   echo ftp://selab.janelia.org/pub/software/hmmer3/hmmer-${HMMER_VERSION}.tar.gz
    
    
+* tag the release. Replace version # below!
+   svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk\
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0a1\
+            -m "tagged 3.0a1 release, from development trunk"          
+   svn copy https://svn.janelia.org/eddylab/eddys/easel/trunk\
+            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0a1\
+            -m "tagged Easel for HMMER 3.0a1 release, from development trunk"          
+
+
    
    
 Release history

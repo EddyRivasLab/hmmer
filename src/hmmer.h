@@ -518,7 +518,8 @@ typedef struct p7_dom_s {
   float          oasc;		/* optimal accuracy score (expected # residues correctly aligned)             */
   float          bitscore;	/* overall score in bits, null corrected, if this were the only domain in seq */
   double         pvalue;	/* P-value of the bitscore                                                    */
-  int            is_reported;	/* TRUE if domain satisfies output reporting thresholds                       */
+  int            is_reported;	/* TRUE if domain meets reporting thresholds                                  */
+  int            is_included;	/* TRUE if domain meets inclusion thresholds                                  */
   P7_ALIDISPLAY *ad; 
 } P7_DOMAIN;
 
@@ -615,8 +616,10 @@ typedef struct p7_hit_s {
   int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
   int    ndom;		/* total # of domains identified in this seq   */
 
-  int    is_reported;   /* TRUE if this sequence satisfies output thresholding (is significant) */
-  int    nreported;	/* # of domains satisfying output thresholding  */
+  int    is_reported;   /* TRUE if this sequence meets output thresholding (is significant) */
+  int    is_included;	/* TRUE if this sequence meets inclusion thresholding*/
+  int    nreported;	/* # of domains satisfying reporting thresholding  */
+  int    nincluded;	/* # of domains satisfying inclusion thresholding */
   int    best_domain;	/* index of best-scoring domain in dcl */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
@@ -633,6 +636,7 @@ typedef struct p7_tophits_s {
   uint64_t Nalloc;	/* current allocation size                  */
   uint64_t N;		/* number of hits in list now               */
   uint64_t nreported;	/* number of hits that are reportable       */
+  uint64_t nincluded;	/* number of hits that are includable       */
   int      is_sorted;	/* TRUE when h->hit valid for all N hits    */
 } P7_TOPHITS;
 
@@ -668,14 +672,23 @@ typedef struct p7_pipeline_s {
   ESL_RANDOMNESS *r;		/* random number generator                  */
   P7_DOMAINDEF   *ddef;		/* domain definition workflow               */
 
-  /* Threshold settings for reporting hits                                  */
+  /* Reporting threshold settings                                           */
   int     by_E;		        /* TRUE to cut per-target report off by E   */
   double  E;	                /* per-target E-value threshold             */
   double  T;	                /* per-target bit score threshold           */
   int     dom_by_E;             /* TRUE to cut domain reporting off by E    */
   double  domE;	                /* domain E-value threshold                 */
   double  domT;	                /* domain bit score threshold               */
-  int     use_bit_cutoffs;      /* FALSE, p7H_GA, p7H_TC, or p7H_NC         */
+  int     use_bit_cutoffs;      /* (FALSE | p7H_GA | p7H_TC | p7H_NC)       */
+
+  /* Inclusion threshold settings                                           */
+  int     inc_by_E;		/* TRUE to threshold inclusion by E-values  */
+  double  incE;			/* per-target inclusion E-value threshold   */
+  double  incT;			/* per-target inclusion score threshold     */
+  int     incdom_by_E;		/* TRUE to threshold domain inclusion by E  */
+  double  incdomE;		/* per-domain inclusion E-value threshold   */
+  double  incdomT;		/* per-domain inclusion E-value threshold   */
+  int     incuse_bit_cutoffs;	/* (FALSE | p7H_GA | p7H_TC | p7H_NC)       */
 
   /* Tracking search space sizes for E value calculations                   */
   double  Z;			/* eff # targs searched (per-target E-val)  */
@@ -972,6 +985,8 @@ extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 
 extern int p7_pli_TargetReportable(P7_PIPELINE *pli, float score,     float Pval);
 extern int p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, float Pval);
+extern int p7_pli_TargetIncludable(P7_PIPELINE *pli, float score,     float Pval);
+extern int p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, float Pval);
 extern int p7_pli_NewModel        (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
 extern int p7_pli_NewSeq          (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline            (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);

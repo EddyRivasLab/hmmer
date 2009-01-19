@@ -10,6 +10,7 @@
 
 #include "hmmer.h"
 
+static int  annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap);
 static int  annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M);
 static int  rejustify_insertions_digital  (                         ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
 static int  rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
@@ -64,7 +65,7 @@ p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, 
   ESL_MSA      *msa        = NULL;	/* RETURN: new MSA */
   const ESL_ALPHABET *abc  = sq[0]->abc;/* digital alphabet */
   int          *inserts    = NULL;	/* array of max gaps between aligned columns */
-  int          *matmap     = NULL;      /* matmap[k] = apos of match k [1..M] */
+  int          *matmap     = NULL;      /* matmap[k] = apos of match k matmap[1..M] = [1..alen] */
   int          *matuse     = NULL;      /* TRUE if an alignment column is associated with match state k [1..M] */
   int           idx;                    /* counter over sequences */
   int           alen;		        /* width of alignment */
@@ -147,6 +148,13 @@ p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, 
 
   /* Using inserts[] and matuse[], construct matmap[] and determine alen.
    * matmap[1..M] = position 1..alen that match state k maps to. 
+   * if match state k is not going to appear in the alignment (matuse[k] == FALSE),
+   * matmap[k] = the last alignment column that a match state did map to; 
+   * this is a trick to make some apos coordinate setting work cleanly.
+   *
+   * Thus you can't just assume because matmap[k] is nonzero that match state k
+   * maps somewhere in the alignment; you have to check matuse[k] == TRUE,
+   * then look at what matmap[k] says. See #=RF line construction below, for example.
    */
   ESL_ALLOC(matmap, sizeof(int) * (M+1));
   matmap[0] = 0;
@@ -248,7 +256,8 @@ p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, 
 	}
     }
 
-  annotate_posterior_probability(msa, tr, matmap, M);
+  if ((status = annotate_rf(msa, M, matuse, matmap))                != eslOK) goto ERROR;
+  if ((status = annotate_posterior_probability(msa, tr, matmap, M)) != eslOK) goto ERROR;
 
   if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inserts, matmap, matuse, M);
   else                        rejustify_insertions_text   (abc, msa, inserts, matmap, matuse, M);
@@ -277,6 +286,47 @@ p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, 
   return status;
 }
 
+
+/* annotate_rf()
+ * Incept:    SRE, Fri Jan 16 09:30:08 2009 [Janelia]
+ *
+ * Purpose:  Create an RF reference coordinate annotation line that annotates the
+ *           consensus columns: the columns associated with profile match states.
+ * 
+ *           Recall that msa->rf is <NULL> when unset/by default in an MSA;
+ *           msa->rf[0..alen-1] = 'x' | '.' is the simplest convention;
+ *           msa->rf is a NUL-terminated string (msa->rf[alen] = '\0')
+ *
+ * Args:     M      - profile length
+ *           matuse - matuse[1..M] == TRUE | FALSE : is this match state represented
+ *                    by a column in the alignment.
+ *           matmap - matmap[1..M] == (1..alen): if matuse[k], then what alignment column
+ *                    does state k map to.
+ * 
+ * Returns:  <eslOK> on success; msa->rf is set to an appropriate reference
+ *           coordinate string.
+ *
+ * Throws:   <eslEMEM> on allocation failure.
+ */
+static int
+annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap)
+{
+  int apos, k;
+  int status;
+
+  ESL_ALLOC(msa->rf, sizeof(char) * (msa->alen+1));
+  for (apos = 0; apos < msa->alen; apos++) 
+    msa->rf[apos] = '.';
+  msa->rf[msa->alen] = '\0';
+  
+  for (k = 1; k <= M; k++)
+    if (matuse[k]) msa->rf[matmap[k]-1] = 'x'; /* watch off by one: rf[0..alen-1]; matmap[] = 1..alen */
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+  
 
 
 static int
@@ -348,11 +398,10 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M)
   msa->pp_cons[msa->alen] = '\0';
   for (apos = 0; apos < msa->alen; apos++)
     if (matuse[apos]) msa->pp_cons[apos] = p7_alidisplay_EncodePostProb( totp[apos] / (double) matuse[apos]);
-
   
   free(matuse);
   free(totp);
-  return status;
+  return eslOK;
 
  ERROR:
   if (matuse  != NULL) free(matuse);

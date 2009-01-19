@@ -58,12 +58,19 @@
  *            | -E           |  report hits <= this E-value threshold      |    10.0   |
  *            | -T           |  report hits >= this bit score threshold    |    NULL   |
  *            | -Z           |  set initial hit search space size          |    NULL   |
- *            | --domE       |  report domains <= this E-value threshold   |  1000.0   |
- *            | --domT       |  report domains <= this bit score threshold |    NULL   |
  *            | --domZ       |  set domain search space size               |    NULL   |
- *            | --cut_ga     |  use model's GA bit score thresholds        |   FALSE   |
- *            | --cut_nc     |  use model's NC bit score thresholds        |   FALSE   |
- *            | --cut_tc     |  use model's TC bit score thresholds        |   FALSE   |
+ *            | --domE       |  report domains <= this E-value threshold   |    10.0   |
+ *            | --domT       |  report domains <= this bit score threshold |    NULL   |
+ *            | --cut_ga     |  set -T, --domT using model's GA thresholds |   FALSE   |
+ *            | --cut_nc     |  set -T, --domT using model's NC thresholds |   FALSE   |
+ *            | --cut_tc     |  set -T, --domT using model's TC thresholds |   FALSE   |
+ *            | --incE       |  include hits <= this E-value threshold     |    0.01   |
+ *            | --incT       |  include hits >= this bit score threshold   |    NULL   |
+ *            | --incdomE    |  include domains <= this E-value threshold  |    0.01   |
+ *            | --incdomT    |  include domains <= this score threshold    |    NULL   |
+ *            | --inc_ga     |  set --incT, --incdomT using GA thresholds  |   FALSE   |
+ *            | --inc_nc     |  set --incT, --incdomT using NC thresholds  |   FALSE   |
+ *            | --inc_tc     |  set --incT, --incdomT using TC thresholds  |   FALSE   |
  *            | --max        |  turn all heuristic filters off             |   FALSE   |
  *            | --F1         |  Stage 1 (MSV) thresh: promote hits P <= F1 |    0.02   |
  *            | --F2         |  Stage 2 (Vit) thresh: promote hits P <= F2 |    1e-3   |
@@ -135,6 +142,47 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
       pli->by_E = pli->dom_by_E = FALSE;
       pli->use_bit_cutoffs = p7H_TC;
     }
+
+
+  /* Configure threshold settings for including hits 
+   */
+  pli->inc_by_E           = TRUE;
+  pli->incE               = esl_opt_GetReal(go, "--incE");
+  pli->incT               = 0.0;
+  pli->incdom_by_E        = TRUE;
+  pli->incdomE            = esl_opt_GetReal(go, "--incdomE");
+  pli->incdomT            = 0.0;
+  pli->incuse_bit_cutoffs = FALSE;
+
+  if (! esl_opt_IsDefault(go, "--incT")) 
+    {
+      pli->incT     = esl_opt_GetReal(go, "--incT"); 
+      pli->inc_by_E = FALSE;
+    } 
+  if (! esl_opt_IsDefault(go, "--incdomT")) 
+    {
+      pli->incdomT     = esl_opt_GetReal(go, "--incdomT"); 
+      pli->incdom_by_E = FALSE;
+    }
+  if (esl_opt_GetBoolean(go, "--inc_ga"))
+    {
+      pli->incT     = pli->incdomT     = 0.0;
+      pli->inc_by_E = pli->incdom_by_E = FALSE;
+      pli->incuse_bit_cutoffs = p7H_GA;
+    }
+  if (esl_opt_GetBoolean(go, "--inc_nc"))
+    {
+      pli->incT     = pli->incdomT     = 0.0;
+      pli->inc_by_E = pli->incdom_by_E = FALSE;
+      pli->incuse_bit_cutoffs = p7H_NC;
+    }
+  if (esl_opt_GetBoolean(go, "--inc_tc"))
+    {
+      pli->incT     = pli->incdomT     = 0.0;
+      pli->inc_by_E = pli->incdom_by_E = FALSE;
+      pli->incuse_bit_cutoffs = p7H_TC;
+    }
+
 
   /* Configure search space sizes for E value calculations   
    */
@@ -242,11 +290,11 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  *****************************************************************/
 
 /* Function:  p7_pli_TargetReportable
- * Synopsis:  Returns TRUE if target is a significant hit. 
+ * Synopsis:  Returns TRUE if target score meets reporting threshold.
  * Incept:    SRE, Tue Dec  9 08:57:26 2008 [Janelia]
  *
  * Purpose:   Returns <TRUE> if the bit score <score> and/or 
- *            P-value <Pval> are above per-target reporting thresholds 
+ *            P-value <Pval> meeds per-target reporting thresholds 
  *            for the processing pipeline.
  */
 int
@@ -258,11 +306,11 @@ p7_pli_TargetReportable(P7_PIPELINE *pli, float score, float Pval)
 }
 
 /* Function:  p7_pli_DomainReportable
- * Synopsis:  Returns TRUE if domain is a significant hit. 
+ * Synopsis:  Returns TRUE if domain score meets reporting threshold. 
  * Incept:    SRE, Tue Dec  9 09:01:01 2008 [Janelia]
  *
  * Purpose:   Returns <TRUE> if the bit score <score> and/or 
- *            P-value <Pval> are above per-domain reporting thresholds 
+ *            P-value <Pval> meets per-domain reporting thresholds 
  *            for the processing pipeline.
  */
 int
@@ -272,6 +320,32 @@ p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, float Pval)
   else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
   else return FALSE;
 }
+
+/* Function:  p7_pli_TargetIncludable()
+ * Synopsis:  Returns TRUE if target score meets inclusion threshold.
+ * Incept:    SRE, Fri Jan 16 11:18:08 2009 [Janelia]
+ */
+int
+p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, float Pval)
+{
+  if      (  pli->inc_by_E   && Pval * pli->Z <= pli->incE) return TRUE;
+  else if (! pli->inc_by_E   && score         >= pli->incT) return TRUE;
+  else return FALSE;
+}
+
+/* Function:  p7_pli_DomainIncludable()
+ * Synopsis:  Returns TRUE if domain score meets inclusion threshold.
+ * Incept:    SRE, Fri Jan 16 11:20:38 2009 [Janelia]
+ */
+int
+p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, float Pval)
+{
+  if      (  pli->incdom_by_E   && Pval * pli->domZ <= pli->incdomE) return TRUE;
+  else if (! pli->incdom_by_E   && dom_score        >= pli->incdomT) return TRUE;
+  else return FALSE;
+}
+
+
 
 
 /* Function:  p7_pli_NewModel()
@@ -321,6 +395,30 @@ p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 	  pli->domT = om->cutoff[p7_NC2]; 
 	}
     }
+
+  if (pli->incuse_bit_cutoffs)
+    {
+      if (pli->incuse_bit_cutoffs == p7H_GA)
+	{
+	  if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
+	  pli->incT    = om->cutoff[p7_GA1];  
+	  pli->incdomT = om->cutoff[p7_GA2]; 
+	}
+      else if  (pli->incuse_bit_cutoffs == p7H_TC)
+	{
+	  if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
+	  pli->incT    = om->cutoff[p7_TC1];  
+	  pli->incdomT = om->cutoff[p7_TC2]; 
+	}
+      else if (pli->incuse_bit_cutoffs == p7H_NC)
+	{
+	  if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
+	  pli->incT    = om->cutoff[p7_NC1]; 
+	  pli->incdomT = om->cutoff[p7_NC2]; 
+	}
+    }
+
+
   return eslOK;
 }
 
