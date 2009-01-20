@@ -292,8 +292,8 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
   if (hfp->do_gzip && hfp->f != NULL)    pclose(hfp->f);
 #endif
   if (!hfp->do_gzip && !hfp->do_stdin && hfp->f != NULL) fclose(hfp->f);
-  if (hfp->ffp   != NULL) free(hfp->ffp);
-  if (hfp->pfp   != NULL) free(hfp->pfp);
+  if (hfp->ffp   != NULL) fclose(hfp->ffp);
+  if (hfp->pfp   != NULL) fclose(hfp->pfp);
   if (hfp->fname != NULL) free(hfp->fname);
   if (hfp->efp   != NULL) esl_fileparser_Destroy(hfp->efp);
   if (hfp->ssi   != NULL) esl_ssi_Close(hfp->ssi);

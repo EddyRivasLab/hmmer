@@ -105,7 +105,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7H_XRAY    (1<<4)    /* obsolete (was: structural data available)       !*/
 #define p7H_HASPROB (1<<5)    /* obsolete (was: model in probability form)       !*/
 #define p7H_HASDNA  (1<<6)    /* obsolete (was: protein HMM->DNA seq params set) !*/
-#define p7H_STATS   (1<<7)    /* model has EVD stats calibrated                  !*/
+#define p7H_STATS   (1<<7)    /* model has E-value statistics calibrated         !*/
 #define p7H_MAP     (1<<8)    /* alignment map is available                      !*/
 #define p7H_ACC     (1<<9)    /* accession number is available                   !*/
 #define p7H_GA      (1<<10)   /* gathering thresholds available                  !*/

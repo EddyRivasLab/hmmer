@@ -5,6 +5,9 @@
  *    3. Debugging and development code.
  *    4. Unit tests.
  *    5. Test driver.
+ *
+ * See also: 
+ *   modelconfig.c : routines that configure a profile given an HMM
  *    
  * SRE, Thu Jan 11 15:16:47 2007 [Janelia] [Sufjan Stevens, Illinois]
  * SVN $Id$

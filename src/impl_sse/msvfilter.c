@@ -15,7 +15,7 @@
  *   6. Copyright and license information
  * 
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
- * SVN $Id: impl_sse.c 2509 2008-07-30 14:45:52Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 

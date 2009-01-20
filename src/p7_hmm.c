@@ -634,6 +634,8 @@ p7_hmm_SetComposition(P7_HMM *hmm)
   norm += esl_vec_FSum(iocc, hmm->M+1);
 
   esl_vec_FScale(hmm->compo, hmm->abc->K, 1.0 / norm);
+  hmm->flags  |= p7H_COMPO;
+
   free(mocc);
   free(iocc);
   return eslOK;

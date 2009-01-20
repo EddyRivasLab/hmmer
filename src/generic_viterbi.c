@@ -23,7 +23,7 @@
  *    6. Copyright and license information.
  * 
  * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
- * SVN $Id: dp_generic.c 2521 2008-08-03 23:27:42Z eddys $
+ * SVN $Id$
  */
  
 #include "p7_config.h"

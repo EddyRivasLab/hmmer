@@ -745,6 +745,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
   dom->bitscore      = 0.0;	/* gets set later by caller, using envsc and domcorrection */
   dom->pvalue        = 1.0;	/* gets set later by caller, using bitscore */
   dom->is_reported   = FALSE;	/* gets set later by caller */
+  dom->is_included   = FALSE;	/* gets set later by caller */
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   dom->iali          = dom->ad->sqfrom;
   dom->jali          = dom->ad->sqto;
