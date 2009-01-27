@@ -84,9 +84,9 @@ main(int argc, char **argv)
   /* Open the HMM file.  */
   hmmfile = esl_opt_GetArg(go, 1);
   status  = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if (status == eslENOTFOUND)     p7_Fail("HMM file %s doesn't exist or is not readable\n", hmmfile);
-  else if (status != eslOK)       p7_Fail("HMM file open failed with error %d\n", status);
-
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
+  else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
 
  /* Open the output file, if any  */
   if (esl_opt_GetBoolean(go, "-O")) 
@@ -141,8 +141,7 @@ create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
   uint16_t      fh;
   int           status;
 
-  if (esl_FileNewSuffix(hfp->fname, "ssi", &ssifile) != eslOK)
-    esl_fatal("Failed to name SSI file for %s\n", hfp->fname);
+  if (esl_sprintf(&ssifile, "%s.ssi", hfp->fname) != eslOK) p7_Die("esl_sprintf() failed");
 
   status = esl_newssi_Open(ssifile, FALSE, &ns);
   if      (status == eslENOTFOUND)   esl_fatal("failed to open SSI index %s", ssifile);

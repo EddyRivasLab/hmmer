@@ -29,6 +29,7 @@ static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles     reqs   incomp                             help                                                  docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "show brief help on version and usage",                         1 },
   { "-o",           eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "direct output to file <f>, not stdout",                        1 },
+  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save multiple alignment of hits to file <s>",                  1 },
 /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,    NULL,  NULL,                          "gap open probability",                                         2 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,    NULL,  NULL,                          "gap extend probability",                                       2 },
@@ -109,7 +110,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
 {
   ESL_GETOPTS *go = NULL;
 
-  if ((go = esl_getopts_Create(options))     == NULL)     p7_Die("Internal failure creating options object");
+  if ((go = esl_getopts_Create(options))     == NULL)     esl_fatal("Internal failure creating options object");
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
   if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
 
@@ -176,6 +177,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   fprintf(ofp, "# query sequence file:             %s\n", qfile);
   fprintf(ofp, "# target sequence database:        %s\n", dbfile);
   if (! esl_opt_IsDefault(go, "-o"))          fprintf(ofp, "# output directed to file:         %s\n",      esl_opt_GetString(go, "-o"));
+  if (! esl_opt_IsDefault(go, "-A"))          fprintf(ofp, "# MSA of hits saved to file:       %s\n",      esl_opt_GetString(go, "-A"));
   if (! esl_opt_IsDefault(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",      esl_opt_GetReal  (go, "--popen"));
   if (! esl_opt_IsDefault(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",      esl_opt_GetReal  (go, "--pextend"));
   if (! esl_opt_IsDefault(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",      esl_opt_GetString(go, "--mxfile"));
@@ -249,132 +251,164 @@ main(int argc, char **argv)
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                        */
   P7_BG           *bg       = NULL;               /* null model                               */
   P7_BUILDER      *bld      = NULL;               /* HMM construction configuration           */
-  P7_PIPELINE     *pli      = NULL;		  /* accelerated HMM/seq comparison pipeline  */
-  P7_TOPHITS      *hitlist  = NULL;      	  /* top-scoring sequence hits                */
   ESL_SQ          *qsq      = NULL;               /* query sequence                           */
   ESL_SQ          *dbsq     = NULL;               /* target sequence                          */
-  P7_HMM          *hmm      = NULL;               /* query HMM                                */
-  P7_OPROFILE     *om       = NULL;               /* optimized query profile                  */
-  ESL_MSA         *msa      = NULL;               /* multiple alignment of sig hits           */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                               */
   int              textw;
   int              iteration;
   int              maxiterations = 3;
   int              status;
+  int              qstatus, sstatus;
 
   /* Initializations */
   process_commandline(argc, argv, &go, &qfile, &dbfile);    
+  p7_FLogsumInit();
   abc     = esl_alphabet_Create(eslAMINO);
   bg      = p7_bg_Create(abc);
   w       = esl_stopwatch_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
-
-  p7_FLogsumInit();
   esl_stopwatch_Start(w);
 
   /* Initialize builder configuration */
   bld = p7_builder_Create(go, abc);
   status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
-  if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", bld->errbuf);
+  if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
   /* Open the results output file */
   if (esl_opt_IsDefault(go, "-o")) ofp = stdout;
   else {
     ofp = fopen(esl_opt_GetString(go, "-o"), "w");
-    if (ofp == NULL) p7_Fail("Failed to open output file %s for writing\n", esl_opt_GetString(go, "-o"));
+    if (ofp == NULL) esl_fatal("Failed to open output file %s for writing\n", esl_opt_GetString(go, "-o"));
   }
 
   /* Open the target sequence database for sequential access. */
   status =  esl_sqfile_OpenDigital(abc, dbfile, dbformat, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      dbfile);
-  else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   dbfile);
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        p7_Die("Unexpected error %d opening target sequence database file %s\n", status, dbfile);
-  
-  /* Read in one and only one query sequence, and build a model of it  */
-  qsq = esl_sq_CreateDigital(abc);
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n",      dbfile);
+  else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n",   dbfile);
+  else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        esl_fatal("Unexpected error %d opening target sequence database file %s\n", status, dbfile);
   dbsq = esl_sq_CreateDigital(abc);
+  
+  /* Open the query sequence file  */
   status = esl_sqfile_OpenDigital(abc, qfile, qformat, NULL, &qfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",      qfile);
-  else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",        qfile);
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        p7_Die ("Unexpected error %d opening sequence file %s\n", status, qfile);
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open sequence file %s for reading\n",      qfile);
+  else if (status == eslEFORMAT)   esl_fatal("Sequence file %s is empty or misformatted\n",        qfile);
+  else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        esl_fatal ("Unexpected error %d opening sequence file %s\n", status, qfile);
+  qsq = esl_sq_CreateDigital(abc);
 
-  status = esl_sqio_Read(qfp, qsq);
-  if      (status == eslEOF)       p7_Fail("Query sequence file %s is empty?", qfile);
-  else if (status == eslEFORMAT)   p7_Fail("Query seq file %s parse failed, line %ld:\n%s\n", qfile, qfp->linenumber, qfp->errbuf);
-  else if (status != eslOK)        p7_Die ("Unexpected error %d reading seq file %s\n", status, qfile);
-  esl_sqfile_Close(qfp);
-
-
-  /* The first block of output: configuration, and what the query is  */
+  /* Ready to begin */
   output_header(ofp, go, qfile, dbfile);
-  fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
-  if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
-  if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
-
-  p7_SingleBuilder(bld, qsq, bg, NULL, NULL, &om); /* bypass HMM - all we need is the model */
-
-  for (iteration = 1; iteration <= maxiterations; iteration++)
-    {       /* We enter each iteration with an HMM and its optimized profile. */
-
-      /* Create processing pipeline and top hits list. (TODO: reuse rather than recreate) */
-      hitlist = p7_tophits_Create();
-      pli     = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS);  /* 400 is a dummy length for now */
-      p7_pli_NewModel(pli, om, bg);
-
-      /* Run each target sequence through the pipeline */
-      while ((status = esl_sqio_Read(dbfp, dbsq)) == eslOK)
-	{ 
-	  p7_pli_NewSeq(pli, dbsq);
-	  p7_bg_SetLength(bg, dbsq->n);
-	  p7_oprofile_ReconfigLength(om, dbsq->n);
   
-	  p7_Pipeline(pli, om, bg, dbsq, hitlist);
-
-	  esl_sq_Reuse(dbsq);
-	  p7_pipeline_Reuse(pli);
-	}
-      if      (status == eslEFORMAT) p7_Fail("Target database file %s parse failed, line %ld:\n%s\n", dbfile, dbfp->linenumber, dbfp->errbuf);
-      else if (status != eslEOF)     p7_Die ("Unexpected error %d reading target database seq file %s\n", status, dbfile);
-
-      /* Print the results. */
-      p7_tophits_Sort(hitlist);
-      p7_tophits_Threshold(hitlist, pli);
-      p7_tophits_Targets(ofp, hitlist, pli, bg, textw); fprintf(ofp, "\n\n");
-      p7_tophits_Domains(ofp, hitlist, pli, bg, textw); fprintf(ofp, "\n\n");
-
-      /* Create alignment of the top hits */
-      p7_tophits_Alignment(hitlist, abc, &msa);
-      esl_msa_Digitize(abc,msa);
-      esl_msa_SetName(msa, "iteration%d", iteration);
-
-      /* Throw away old model. Build new one. */
-      p7_oprofile_Destroy(om);  om  = NULL;
-      status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om);
-      if      (status == eslENORESULT) p7_Die("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
-      else if (status == eslEFORMAT)   p7_Die("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
-      else if (status != eslOK)        p7_Die("Unexpected error constructing new model at iteration %d:",     iteration);
+  /* Outer loop over sequence queries, if more than one */
+  while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
+    {
+      P7_PIPELINE     *pli = NULL;	     /* accelerated HMM/seq comparison pipeline  */
+      P7_TOPHITS      *th  = NULL;           /* top-scoring sequence hits                */
+      P7_OPROFILE     *om  = NULL;           /* optimized query profile                  */
+      ESL_MSA         *msa = NULL;           /* multiple alignment of included hits      */
       
-      esl_sqfile_Position(dbfp, 0); /* rewind */
-      esl_msa_Destroy(msa);
-      p7_pipeline_Destroy(pli);
-      p7_tophits_Destroy(hitlist);
-    }
+      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
+      if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
+      if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
-  esl_stopwatch_Stop(w);
-  p7_pli_Statistics(ofp, pli, w);
-  
-  esl_stopwatch_Destroy(w);
-  p7_oprofile_Destroy(om);
-  p7_hmm_Destroy(hmm);
+      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, &om); /* bypass HMM - all we need is the model */
+
+      for (iteration = 1; iteration <= maxiterations; iteration++)
+	{       /* We enter each iteration with an optimized profile. */
+	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
+	  esl_stopwatch_Start(w);
+	  if (th   != NULL) p7_tophits_Destroy(th);
+	  if (pli  != NULL) p7_pipeline_Destroy(pli);
+	  th  = p7_tophits_Create();
+	  pli = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS);  /* 400 is a dummy length for now */
+	  p7_pli_NewModel(pli, om, bg);
+
+	  /* Run each target sequence through the pipeline */
+	  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+	    { 
+	      p7_pli_NewSeq(pli, dbsq);
+	      p7_bg_SetLength(bg, dbsq->n);
+	      p7_oprofile_ReconfigLength(om, dbsq->n);
+	      
+	      p7_Pipeline(pli, om, bg, dbsq, th);
+	      
+	      esl_sq_Reuse(dbsq);
+	      p7_pipeline_Reuse(pli);
+	    }
+	  if      (sstatus == eslEFORMAT) esl_fatal("Target database file %s parse failed, line %ld:\n%s\n", dbfile, dbfp->linenumber, dbfp->errbuf);
+	  else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading target database seq file %s\n", sstatus, dbfile);
+
+	  /* Print the results. */
+	  p7_tophits_Sort(th);
+	  p7_tophits_Threshold(th, pli);
+	  p7_tophits_Targets(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
+	  p7_tophits_Domains(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
+
+	  /* Create alignment of the top hits */
+	  p7_tophits_Alignment(th, abc, &msa);
+	  esl_msa_Digitize(abc,msa);
+	  esl_msa_SetName(msa, "iteration%d", iteration);
+
+	  /* Throw away old model. Build new one. */
+	  p7_oprofile_Destroy(om);  om  = NULL;
+	  status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om);
+	  if      (status == eslENORESULT) esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
+	  else if (status == eslEFORMAT)   esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
+	  else if (status != eslOK)        esl_fatal("Unexpected error constructing new model at iteration %d:",     iteration);
+	  
+	  esl_sqfile_Position(dbfp, 0); /* rewind */
+	  esl_msa_Destroy(msa);
+	  esl_stopwatch_Stop(w);
+	} /* end iteration loop */
+
+      /* Because we destroy/create the hitlist, om, and pipeline above, rather than create/destroy,
+       * the results of the last iteration have carried through to us now, and we can output
+       * whatever final results we care to.
+       */
+      p7_pli_Statistics(ofp, pli, w);
+      fprintf(ofp, "//\n");
+
+
+      /* Output the results in an MSA */
+      if (! esl_opt_IsDefault(go, "-A")) {
+	FILE    *afp = NULL;
+	ESL_MSA *msa = NULL;
+
+	if ((afp = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL)
+	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));
+
+	if (afp != NULL) {
+	  p7_tophits_Alignment(th, abc, &msa);
+	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	  else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
+
+	  fprintf(ofp, "# Alignment of all hits above threshold saved to: %s\n", esl_opt_GetString(go, "-A"));
+
+	  esl_msa_Destroy(msa);
+	  fclose(afp);
+	}
+      }
+
+      p7_tophits_Destroy(th);
+      p7_pipeline_Destroy(pli);
+      p7_oprofile_Destroy(om);
+      esl_sq_Reuse(qsq);
+    }
+  if      (qstatus == eslEFORMAT)  esl_fatal("Query seq file %s parse failed, line %ld:\n%s\n", qfile, qfp->linenumber, qfp->errbuf);
+  else if (qstatus == eslEINVAL)   esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
+  else if (qstatus != eslEOF)      esl_fatal("Unexpected error %d reading seq file %s\n", status, qfile);
+
+  esl_sqfile_Close(qfp);
+  esl_sqfile_Close(dbfp);
   esl_sq_Destroy(dbsq);
-  esl_sq_Destroy(qsq);
+  esl_sq_Destroy(qsq);  
+  esl_stopwatch_Destroy(w);
   p7_bg_Destroy(bg);
+  p7_builder_Destroy(bld);
   esl_alphabet_Destroy(abc);
   if (! esl_opt_IsDefault(go, "-o"))  fclose(ofp);
-  esl_sqfile_Close(dbfp);
   esl_getopts_Destroy(go);
   return eslOK;
 }

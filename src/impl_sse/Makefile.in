@@ -34,6 +34,7 @@ HDRS =  impl_sse.h
 
 UTESTS = \
 	fwdback_utest\
+	io_utest\
 	msvfilter_utest\
 	optacc_utest\
 	stotrace_utest\
@@ -52,8 +53,10 @@ BENCHMARKS =\
 
 EXAMPLES =\
 	fwdback_example\
+	io_example\
 	msvfilter_example\
 	optacc_example\
+	p7_oprofile_example\
 	stotrace_example\
 	vitfilter_example\
 	vitscore_example

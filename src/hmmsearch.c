@@ -168,6 +168,7 @@ main(int argc, char **argv)
   P7_HMM          *hmm     = NULL;
   char            *dbfile  = NULL;
   int              dbfmt   = eslSQFILE_UNKNOWN;
+  ESL_SQFILE      *dbfp    = NULL;
   ESL_SQ          *dbsq    = NULL;
   ESL_ALPHABET    *abc     = NULL;
   ESL_STOPWATCH   *w       = NULL;
@@ -182,6 +183,13 @@ main(int argc, char **argv)
   w = esl_stopwatch_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
+
+  /* Open the target sequence database */
+  status = esl_sqfile_Open(dbfile, dbfmt, p7_SEQDBENV, &dbfp);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          dbfile);
+  else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            dbfile);
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, dbfile);  
 
   /* Open the query profile HMM file */
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
@@ -199,7 +207,6 @@ main(int argc, char **argv)
   /* Outer loop: over each query HMM in <hmmfile>. <abc> is not known 'til first HMM is read. */
   while ((hstatus = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK) 
     {
-      ESL_SQFILE      *dbfp    = NULL;
       P7_PIPELINE     *pli     = NULL;
       P7_TOPHITS      *th      = NULL;
       P7_PROFILE      *gm      = NULL;
@@ -220,13 +227,6 @@ main(int argc, char **argv)
       om = p7_oprofile_Create(hmm->M, abc);
       p7_ProfileConfig(hmm, bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
-
-      /* Open the target sequence database */
-      status = esl_sqfile_Open(dbfile, dbfmt, p7_SEQDBENV, &dbfp);
-      if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          dbfile);
-      else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            dbfile);
-      else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
-      else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, dbfile);  
 
       /* Create processing pipeline and hit list */
       pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
@@ -251,7 +251,6 @@ main(int argc, char **argv)
 	}
       if      (sstatus == eslEFORMAT) p7_Fail("Target database file %s parse failed, line %ld:\n%s\n", dbfile, dbfp->linenumber, dbfp->errbuf);
       else if (sstatus != eslEOF)     p7_Die ("Unexpected error %d reading target database seq file %s\n", status, dbfile);
-
   
       /* Print the results.  */
       p7_tophits_Sort(th);
@@ -283,7 +282,7 @@ main(int argc, char **argv)
 	}
       }
 
-      esl_sqfile_Close(dbfp);
+      esl_sqfile_Position(dbfp, 0); /* rewind */
       p7_pipeline_Destroy(pli);
       p7_tophits_Destroy(th);
       p7_profile_Destroy(gm);
@@ -297,6 +296,7 @@ main(int argc, char **argv)
 
 
   p7_hmmfile_Close(hfp);
+  esl_sqfile_Close(dbfp);
   p7_bg_Destroy(bg);
   esl_sq_Destroy(dbsq);
   esl_stopwatch_Destroy(w);

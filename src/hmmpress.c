@@ -46,9 +46,9 @@ main(int argc, char **argv)
   int            status;
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",     hmmfile);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
   else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n", status, hmmfile);  
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
 
   if (hfp->do_stdin || hfp->do_gzip) p7_Fail("HMM file %s must be a normal file, not gzipped or a stdin pipe", hmmfile);
 
@@ -109,7 +109,9 @@ main(int argc, char **argv)
   printf("Profiles (MSV part) pressed into:  %s.h3f\n", hfp->fname);
   printf("Profiles (remainder) pressed into: %s.h3p\n", hfp->fname);
 
-  fclose(mfp); fclose(ffp); fclose(pfp);
+  fclose(mfp);
+  fclose(ffp); 
+  fclose(pfp);
   esl_newssi_Close(nssi);
   p7_bg_Destroy(bg);
   p7_hmmfile_Close(hfp);
@@ -132,6 +134,12 @@ open_db_files(char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, 
   ESL_NEWSSI *nssi    = NULL;
   int         status;
 
+  if (esl_sprintf(&ssifile, "%s.h3i", basename) != eslOK) p7_Die("esl_sprintf() failed");
+  status = esl_newssi_Open(ssifile, FALSE, &nssi);
+  if      (status == eslENOTFOUND)   p7_Fail("failed to open SSI index %s", ssifile);
+  else if (status == eslEOVERWRITE)  p7_Fail("Looks like %s is already pressed (.h3i file present, anyway): delete old indices first", basename);
+  else if (status != eslOK)          p7_Fail("failed to create a new SSI index");
+
   if (esl_sprintf(&mfile, "%s.h3m", basename) != eslOK) p7_Die("esl_sprintf() failed");
   if ((mfp = fopen(mfile, "wb"))              == NULL)  p7_Fail("Failed to open binary HMM file %s for writing", mfile);
 
@@ -140,12 +148,6 @@ open_db_files(char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, 
 
   if (esl_sprintf(&pfile, "%s.h3p", basename) != eslOK) p7_Die("esl_sprintf() failed");
   if ((pfp = fopen(pfile, "wb"))              == NULL)  p7_Fail("Failed to open binary pprofile file %s for writing", pfile);
-
-  if (esl_sprintf(&ssifile, "%s.h3i", basename) != eslOK) p7_Die("esl_sprintf() failed");
-  status = esl_newssi_Open(ssifile, FALSE, &nssi);
-  if      (status == eslENOTFOUND)   p7_Fail("failed to open SSI index %s", ssifile);
-  else if (status == eslEOVERWRITE)  p7_Fail("SSI index %s already exists; delete or rename it", ssifile);
-  else if (status != eslOK)          p7_Fail("failed to create a new SSI index");
 
   free(mfile);     free(ffile);     free(pfile);      free(ssifile);
   *ret_mfp = mfp;  *ret_ffp = ffp;  *ret_pfp = pfp;   *ret_nssi = nssi;

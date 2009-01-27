@@ -272,6 +272,7 @@ extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *ab
 extern int          p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
+extern int          p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 
 /* decoding.c */
 extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
@@ -285,7 +286,7 @@ extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 
 /* io.c */
 extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
-extern int p7_oprofile_ReadMSV (P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_OPROFILE **ret_om);
+extern int p7_oprofile_ReadMSV (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
 extern int p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om);
 
 

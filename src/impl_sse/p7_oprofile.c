@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>		/* roundf() */
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
@@ -112,12 +113,17 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->acc       = NULL;
   om->desc      = NULL;
 
-  ESL_ALLOC(om->ref,       sizeof(char) * (allocM+2)); 
-  ESL_ALLOC(om->cs,        sizeof(char) * (allocM+2));
-  ESL_ALLOC(om->consensus, sizeof(char) * (allocM+2));
-  om->ref[0]       = '\0';
-  om->cs[0]        = '\0';
-  om->consensus[0] = '\0';
+  /* in a P7_OPROFILE, we always allocate for the optional RF, CS annotation.  
+   * we only rely on the leading \0 to signal that it's unused, but 
+   * we initialize all this memory to zeros to shut valgrind up about 
+   * fwrite'ing uninitialized memory in the io functions.
+   */
+  ESL_ALLOC(om->ref,         sizeof(char) * (allocM+2)); 
+  ESL_ALLOC(om->cs,          sizeof(char) * (allocM+2));
+  ESL_ALLOC(om->consensus,   sizeof(char) * (allocM+2));
+  memset(om->ref,      '\0', sizeof(char) * (allocM+2));
+  memset(om->cs,       '\0', sizeof(char) * (allocM+2));
+  memset(om->consensus,'\0', sizeof(char) * (allocM+2));
 
   om->mode      = p7_NO_MODE;
   om->L         = 0;
@@ -1167,7 +1173,113 @@ oprofile_dump_float(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   fprintf(fp, "M:     %d\n",   M);  
   return eslOK;
 }
-/*------------ end, debugging dumps of P7_OPROFILE --------------*/
+
+
+/* Function:  p7_oprofile_Compare()
+ * Synopsis:  Compare two optimized profiles for equality.
+ * Incept:    SRE, Wed Jan 21 13:29:10 2009 [Janelia]
+ *
+ * Purpose:   Compare the contents of <om1> and <om2>; return 
+ *            <eslOK> if they are effectively identical profiles,
+ *            or <eslFAIL> if not.
+ * 
+ *            Floating point comparisons are done to a tolerance
+ *            of <tol> using <esl_FCompare()>.
+ *            
+ *            If a comparison fails, an informative error message is
+ *            left in <errmsg> to indicate why.
+ *            
+ *            Internal allocation sizes are not compared, only the
+ *            data.
+ *            
+ * Args:      om1    - one optimized profile to compare
+ *            om2    - the other
+ *            tol    - floating point comparison tolerance; see <esl_FCompare()>
+ *            errmsg - ptr to array of at least <eslERRBUFSIZE> characters.
+ *            
+ * Returns:   <eslOK> on effective equality;  <eslFAIL> on difference.
+ */
+int
+p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
+{
+  int Q4  = p7O_NQF(om1->M);
+  int Q16 = p7O_NQU(om1->M);
+  int q, r, x, y;
+  union { __m128i v; uint8_t c[16]; } a16, b16;
+  union { __m128  v; float   x[4];  } a4,  b4;
+
+  if (om1->mode      != om2->mode)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: mode");
+  if (om1->L         != om2->L)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: L");
+  if (om1->M         != om2->M)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: M");
+  if (om1->nj        != om2->nj)        ESL_FAIL(eslFAIL, errmsg, "comparison failed: nj");
+  if (om1->abc->type != om2->abc->type) ESL_FAIL(eslFAIL, errmsg, "comparison failed: alphabet type");
+
+  for (q = 0; q < 8*Q16; q++)
+    {
+      a16.v = om1->tu[q]; b16.v = om2->tu[q];
+      for (r = 0; r < 16; r++) if (a16.c[r] != b16.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: tu[%d] elem %d", q, r);
+    }
+
+  for (x = 0; x < om1->abc->Kp; x++)
+    for (q = 0; q < 2*Q16; q++)
+      {
+	a16.v = om1->ru[x][q]; b16.v = om2->ru[x][q];
+	for (r = 0; r < 16; r++) if (a16.c[r] != b16.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ru[%d] elem %d", q, r);
+      }
+
+  for (x = 0; x < p7O_NXSTATES; x++)
+    for (y = 0; y < p7O_NXTRANS; y++)
+      if (om1->xu[x][y] != om2->xu[x][y]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: xu[%d][%d]", x, y);
+  
+  for (x = 0; x < om1->abc->Kp; x++)
+    for (q = 0; q < Q16; q++)
+      {
+	a16.v = om1->rm[x][q]; b16.v = om2->rm[x][q];
+	for (r = 0; r < 16; r++) if (a16.c[r] != b16.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rm[%d] elem %d", q, r);
+      }
+	
+  if (om1->ddbound_u != om2->ddbound_u) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ddbound_u");
+  if (om1->scale     != om2->scale)     ESL_FAIL(eslFAIL, errmsg, "comparison failed: scale");
+  if (om1->base      != om2->base)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: base");
+  if (om1->bias      != om2->bias)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: bias");
+  
+  for (q = 0; q < 8*Q16; q++)
+    {
+      a4.v = om1->tf[q]; b4.v = om2->tf[q];
+      for (r = 0; r < 4; r++) if (esl_FCompare(a4.x[r], b4.x[r], tol) != eslOK)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: tf[%d] elem %d", q, r);
+    }
+
+  for (x = 0; x < om1->abc->Kp; x++)
+    for (q = 0; q < 2*Q4; q++)
+      {
+	a4.v = om1->rf[x][q]; b4.v = om2->rf[x][q];
+	for (r = 0; r < 4; r++) if (esl_FCompare(a4.x[r], b4.x[r], tol) != eslOK)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: rf[%d] elem %d", q, r);
+      }
+
+   for (x = 0; x < p7O_NXSTATES; x++)
+     if (esl_vec_FCompare(om1->xf[x], om2->xf[x], p7O_NXTRANS, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: xf[%d] vector", x);
+
+   if (om1->ddbound_f != om2->ddbound_f) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ddbound_f");
+   if (om1->lspace_f  != om2->lspace_f)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: lspace_f");
+   
+   for (x = 0; x < p7_NOFFSETS; x++)
+     if (om1->offs[x] != om2->offs[x]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: offs[%d]", x);
+
+   if (esl_strcmp(om1->name,      om2->name)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: name");
+   if (esl_strcmp(om1->acc,       om2->acc)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: acc");
+   if (esl_strcmp(om1->desc,      om2->desc)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: desc");
+   if (esl_strcmp(om1->ref,       om2->ref)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ref");
+   if (esl_strcmp(om1->cs,        om2->cs)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cs");
+   if (esl_strcmp(om1->consensus, om2->consensus) != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: consensus");
+   
+   if (esl_vec_FCompare(om1->evparam, om2->evparam, p7_NEVPARAM, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: evparam vector");
+   if (esl_vec_FCompare(om1->cutoff,  om2->cutoff,  p7_NCUTOFFS, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cutoff vector");
+   if (esl_vec_FCompare(om1->compo,   om2->compo,   p7_MAXABET,  tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: compo vector");
+
+   return eslOK;
+}
+/*------------ end, P7_OPROFILE debugging tools  ----------------*/
+
 
 
 /*****************************************************************
@@ -1277,10 +1389,55 @@ main(int argc, char **argv)
  * 7. Example
  *****************************************************************/
 #ifdef p7OPROFILE_EXAMPLE
+/* gcc -std=gnu99 -g -Wall -Dp7OPROFILE_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o p7_oprofile_example p7_oprofile.c -lhmmer -leasel -lm
+ * ./p7_oprofile_example <hmmfile>
+ */
+#include "p7_config.h"
+#include <stdlib.h>
+#include "easel.h"
+#include "hmmer.h"
 
+int
+main(int argc, char **argv)
+{
+  char         *hmmfile = argv[1];
+  ESL_ALPHABET *abc     = NULL;
+  P7_HMMFILE   *hfp     = NULL;
+  P7_HMM       *hmm     = NULL;
+  P7_BG        *bg      = NULL;
+  P7_PROFILE   *gm      = NULL;
+  P7_OPROFILE  *om      = NULL;
+  int           status;
 
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open HMM file %s for reading.\n",                   hmmfile);
+  else if (status == eslEFORMAT)   esl_fatal("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
+  else if (status != eslOK)        esl_fatal("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+
+  status = p7_hmmfile_Read(hfp, &abc, &hmm);
+  if      (status == eslEFORMAT)   esl_fatal("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) esl_fatal("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       esl_fatal("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        esl_fatal("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create(hmm->M, abc);   
+  om = p7_oprofile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_oprofile_Convert(gm, om);
+  
+  p7_oprofile_Dump(stdout, om);
+
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  return eslOK;
+}
 #endif /*p7OPROFILE_EXAMPLE*/
-/*------------------- end, test driver --------------------------*/
+/*----------------------- end, example --------------------------*/
 
 
 

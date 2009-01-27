@@ -269,11 +269,12 @@ main(int argc, char **argv)
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pli, w);
+      fprintf(ofp, "//\n");
 
       p7_hmmfile_Close(hfp);
       p7_pipeline_Destroy(pli);
       p7_tophits_Destroy(th);
-      fprintf(ofp, "//\n");
+      esl_sq_Reuse(qsq);
     }
   if (sstatus != eslEOF) p7_Fail("Sequence file %s parse failed (line %d):\n%s\n", seqfile, sqfp->linenumber, sqfp->errbuf);     
 

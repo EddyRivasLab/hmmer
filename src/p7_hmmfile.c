@@ -201,7 +201,7 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
       else if (hfp->f == NULL && esl_FileEnvOpen(dbfile, env, &(hfp->f), &envfile) == eslOK)
 	{ /* found a binary-only press'ed db in one of the env directories. */
 	  free(hfp->fname);
-	  envfile[strlen(envfile)-4] = '0';	/* "strip" the .h3m suffix */
+	  envfile[strlen(envfile)-4] = '\0';	/* "strip" the .h3m suffix */
 	  if ((status = esl_strdup(envfile, n, &(hfp->fname)))    != eslOK) goto ERROR;
 	  hfp->is_pressed = TRUE;
 	}
@@ -541,6 +541,8 @@ p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
   if (hfp->ssi == NULL) ESL_EXCEPTION(eslEINVAL, "Need an open SSI index to call p7_hmmfile_PositionByKey()");
   if ((status = esl_ssi_FindName(hfp->ssi, key, &fh, &offset, NULL, NULL)) != eslOK) return status;
   if (fseeko(hfp->f, offset, SEEK_SET) != 0)    ESL_EXCEPTION(eslESYS, "fseek failed");
+
+  hfp->newly_opened = FALSE;	/* because we're poised on the magic number, and must read it */
   return eslOK;
 }
 /*------------------- end, input API ----------------------------*/
@@ -833,8 +835,9 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if (strcmp(tok1, "//")                                                      != 0)      ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Expected closing //; found %s instead", tok1);
 
   /* Finish up. */
-  if (hmm->flags & p7H_RF)  { hmm->rf[0] = ' '; hmm->rf[hmm->M+1] = '\0'; }
-  if (hmm->flags & p7H_CS)  { hmm->cs[0] = ' '; hmm->cs[hmm->M+1] = '\0'; }
+  if (hmm->flags & p7H_RF)  { hmm->rf[0]  = ' '; hmm->rf[hmm->M+1] = '\0'; }
+  if (hmm->flags & p7H_CS)  { hmm->cs[0]  = ' '; hmm->cs[hmm->M+1] = '\0'; }
+  if (hmm->flags & p7H_MAP) { hmm->map[0] = 0; }
   if (hmm->name == NULL)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No NAME found for HMM");
   if (hmm->M    <= 0)       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No LENG found for HMM (or LENG <= 0)");
   if (abc       == NULL)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No ALPH found for HMM");
@@ -1386,9 +1389,9 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",     hmmfile);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
   else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n", status, hmmfile);  
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
@@ -1571,18 +1574,18 @@ main(int argc, char **argv)
   
   /* An example of reading a single HMM from a file, and checking that it is the only one. */
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open HMM file %s for reading.\n",                   hmmfile);
+  else if (status == eslEFORMAT)   esl_fatal("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
+  else if (status != eslOK)        esl_fatal("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+  if      (status == eslEFORMAT)   esl_fatal("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) esl_fatal("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       esl_fatal("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        esl_fatal("Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   status = p7_hmmfile_Read(hfp, &abc, NULL);
-  if (status != eslEOF)            p7_Fail("HMM file %s does not contain just one HMM\n", hfp->fname);
+  if (status != eslEOF)            esl_fatal("HMM file %s does not contain just one HMM\n", hfp->fname);
 
   p7_hmmfile_Close(hfp);
 

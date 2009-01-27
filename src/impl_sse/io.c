@@ -1,10 +1,29 @@
 /* Saving optimized profiles in two pieces: MSV part and the rest.
  * 
+ * To accelerate hmmscan, which is limited by speed of HMM input,
+ * hmmpress saves an optimized profile in two pieces. One file gets
+ * a bare minimum of information needed to run the MSV filter.
+ * The other file gets the rest of the profile. Both files are binary,
+ * stored exactly as the <P7_OPROFILE> has the information internally.
+ * 
+ * By convention, hmmpress calls the two files <hmmfile>.h3f and
+ * <hmmfile>.h3p, which nominally stand for "H3 filter" and "H3
+ * profile".
+ * 
  * Contents:
- *    1. 
- *    x. 
- *    x. 
- *    x. Copyright and license information.
+ *    1. Writing optimized profiles to two files.
+ *    2. Reading optimized profiles in two stages.
+ *    3. Benchmark driver.
+ *    4. Unit tests.
+ *    5. Test driver.
+ *    6. Example.
+ *    7. Copyright and license information.
+ *    
+ * TODO:
+ *    - crossplatform binary compatibility (endedness and off_t)
+ *    - Write() could save a tag (model #) instead of name for verifying
+ *      that MSV and Rest parts match, saving a malloc for var-lengthed name
+ *      in ReadRest().
  *    
  * SRE, Fri Oct 17 10:10:31 2008 [Janelia]
  * SVN $Id$
@@ -27,6 +46,30 @@ static uint32_t  v30fmagic = 0xe8b3e6f3; /* V3.0 binary MSV file, SSE:     "h3fs
 static uint32_t  v30pmagic = 0xe8b3f0f3; /* V3.0 binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
 
 
+/*****************************************************************
+ *# 1. Writing optimized profiles to two files.
+ *****************************************************************/
+
+/* Function:  p7_oprofile_Write()
+ * Synopsis:  Write an optimized profile in two files.
+ * Incept:    SRE, Wed Jan 21 10:35:28 2009 [Janelia]
+ *
+ * Purpose:   Write the MSV filter part of <om> to open binary stream
+ *            <ffp>, and the rest of the model to <pfp>. These two
+ *            streams will typically be <.h3f> and <.h3p> files 
+ *            being created by hmmpress.
+ *
+ * Args:      ffp  - open binary stream for saving MSV filter part
+ *            pfp  - open binary stream for saving rest of profile
+ *            om   - optimized profile to save
+ *
+ * Returns:   <eslOK> on success.
+ *
+ *            Returns <eslFAIL> on any write failure; for example,
+ *            if disk is full. 
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
@@ -104,12 +147,63 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->L)   ,      sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   return eslOK;
 }
+/*---------------- end, writing oprofile ------------------------*/
 
 
 
 
+/*****************************************************************
+ * 2. Reading optimized profiles in two stages.
+ *****************************************************************/
+
+/* Function:  p7_oprofile_ReadMSV()
+ * Synopsis:  Read MSV filter part of an optimized profile.
+ * Incept:    SRE, Wed Jan 21 10:39:20 2009 [Janelia]
+ *
+ * Purpose:   Read the MSV filter part of a profile from the
+ *            <.h3f> file associated with an open HMM file <hfp>.
+ *            Allocate a new model, populate it with this minimal
+ *            MSV filter information, and return a pointer to it
+ *            in <*ret_om>. 
+ *            
+ *            Our alphabet may get set by the first HMM we read.  If
+ *            <*byp_abc> is <NULL> at start, create a new alphabet and
+ *            return a pointer to it in <*byp_abc>. If <*byp_abc> is
+ *            non-<NULL>, it is assumed to be a pointer to an existing
+ *            alphabet; we verify that the HMM's alphabet matches it
+ *            and <*ret_abc> isn't changed.  This is the same
+ *            convention used by <p7_hmmfile_Read()>.
+ *            
+ *            The <.h3f> file was opened automatically, if it existed,
+ *            when the HMM file was opened with <p7_hmmfile_Open()>.
+ *            
+ *            When no more HMMs remain in the file, return <eslEOF>.
+ *
+ * Args:      hfp     - open HMM file, with associated .h3p file
+ *            byp_abc - BYPASS: <*byp_abc == ESL_ALPHABET *> if known; 
+ *                              <*byp_abc == NULL> if desired; 
+ *                              <NULL> if unwanted.
+ *            ret_om  - RETURN: newly allocated <om> with MSV filter
+ *                      data filled in.
+ *            
+ * Returns:   <eslOK> on success. <*ret_om> is allocated here;
+ *            caller free's with <p7_oprofile_Destroy()>.
+ *            <*byp_abc> is allocated here if it was requested;
+ *            caller free's with <esl_alphabet_Destroy()>.
+ *            
+ *            Returns <eslEFORMAT> if <hfp> has no <.h3f> file open,
+ *            or on any parsing error.
+ *            
+ *            Returns <eslEINCOMPAT> if the HMM we read is incompatible
+ *            with the existing alphabet <*byp_abc> led us to expect.
+ *            
+ *            On any returned error, <hfp->errbuf> contains an
+ *            informative error message.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
 int
-p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_OPROFILE **ret_om)
+p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
@@ -131,12 +225,13 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_OPROFILE **ret_o
   Q = p7O_NQU(M);
 
   /* Set or verify alphabet. */
-  if (*ret_abc == NULL)	{	/* still unknown: set it, pass control of it back to caller */
+  if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
     if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
-  } else {			/* already known: check it */
-    abc = *ret_abc;
-    if (abc->type != alphatype)                          ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
-								   esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
+  } else {			/* alphabet already known: verify it against what we see in the HMM */
+    abc = *byp_abc;
+    if (abc->type != alphatype) 
+      ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
+		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
   }
   /* Now we know the sizes of things, so we can allocate. */
   if ((om = p7_oprofile_Create(M, abc)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
@@ -157,22 +252,47 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_OPROFILE **ret_o
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
 
-  if (*ret_abc == NULL) *ret_abc = abc;	/* pass our new alphabet back to caller, if caller didn't know it already */
+  if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;
   return eslOK;
 
  ERROR:
-  if (*ret_abc == NULL && abc != NULL) esl_alphabet_Destroy(abc);
+  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
   if (om != NULL) p7_oprofile_Destroy(om);
   *ret_om = NULL;
   return status;
 }
 
 
-/* issues:
- *   1. not robust against byteswapping
- *   2. could store a tag (model #) instead of name for crosschecking, and save a malloc
- *   3. not robust against crossplatform difference in off_t
+/* Function:  p7_oprofile_ReadRest()
+ * Synopsis:  Read the rest of an optimized profile.
+ * Incept:    SRE, Wed Jan 21 11:04:56 2009 [Janelia]
+ *
+ * Purpose:   Read the rest of an optimized profile <om> from
+ *            the <.h3p> file associated with an open HMM
+ *            file <hfp>. 
+ *            
+ *            This is the second part of a two-part calling sequence.
+ *            The <om> here must be the result of a previous
+ *            successful <p7_oprofile_ReadMSV()> call on the same
+ *            open <hfp>.
+ *
+ * Args:      hfp - open HMM file, from which we've previously
+ *                  called <p7_oprofile_ReadMSV()>.
+ *            om  - optimized profile that was successfully
+ *                  returned by  <p7_oprofile_ReadMSV()>.
+ *
+ * Returns:   <eslOK> on success, and <om> is now a complete
+ *            optimized profile.
+ *            
+ *            Returns <eslEFORMAT> if <hfp> has no <.h3p> file open,
+ *            or on any parsing error, and set <hfp->errbuf> to
+ *            an informative error message.
+ *
+ * Throws:    <eslESYS> if an <fseek()> fails to reposition the
+ *            binary <.h3p> file.
+ *            
+ *            <eslEMEM> on allocation error.
  */
 int
 p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
@@ -185,7 +305,8 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   int           status;
 
   if (hfp->errbuf != NULL) hfp->errbuf[0] = '\0';
-
+  if (hfp->pfp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
+ 
   /* Position the <hfp->pfp> using offset stored in <om> */
   if (fseeko(hfp->pfp, om->offs[p7_POFFSET], SEEK_SET) != 0)                       ESL_EXCEPTION(eslESYS, "fseeko() failed");
    
@@ -246,9 +367,12 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (name != NULL) free(name);
   return status;
 }
+/*----------- end, reading optimized profiles -------------------*/
+
+
 
 /*****************************************************************
- * x. Benchmark driver.
+ * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7IO_BENCHMARK
 /*
@@ -320,7 +444,162 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * x. Example.
+ * 4. Unit tests.
+ *****************************************************************/
+#ifdef p7IO_TESTDRIVE
+
+static void
+utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
+{
+  char        *msg         = "oprofile read/write unit test failure";
+  ESL_ALPHABET *abc        = NULL;
+  P7_OPROFILE *om2         = NULL;
+  char         tmpfile[16] = "esltmpXXXXXX";
+  char        *mfile       = NULL;
+  char        *ffile       = NULL;
+  char        *pfile       = NULL;
+  char        *ssifile     = NULL;
+  FILE        *fp          = NULL;
+  FILE        *mfp         = NULL;
+  FILE        *ffp         = NULL;
+  FILE        *pfp         = NULL;
+  ESL_NEWSSI  *nssi        = NULL;
+  P7_HMMFILE  *hfp         = NULL;
+  uint16_t     fh          = 0;
+  float        tolerance   = 0.001;
+  char         errbuf[eslERRBUFSIZE];
+
+
+  /* 1. A mini version of hmmpress: save the test HMM to a file along with its associated .h3{mfpi} files
+   */
+  if ( esl_tmpfile_named(tmpfile, &fp)          != eslOK) esl_fatal(msg);
+  if ( esl_sprintf(&mfile,   "%s.h3m", tmpfile) != eslOK) esl_fatal(msg);
+  if ( esl_sprintf(&ffile,   "%s.h3f", tmpfile) != eslOK) esl_fatal(msg);
+  if ( esl_sprintf(&pfile,   "%s.h3p", tmpfile) != eslOK) esl_fatal(msg);
+  if ( esl_sprintf(&ssifile, "%s.h3i", tmpfile) != eslOK) esl_fatal(msg);
+
+  if ( esl_newssi_Open(ssifile, TRUE, &nssi)    != eslOK) esl_fatal(msg);
+  if (( mfp = fopen(mfile, "wb"))               == NULL)  esl_fatal(msg);
+  if (( ffp = fopen(ffile, "wb"))               == NULL)  esl_fatal(msg);
+  if (( pfp = fopen(pfile, "wb"))               == NULL)  esl_fatal(msg);
+
+  /* the disk offsets are all 0 by construction, if there's only one
+   * HMM in the file - but don't want to forget them, if we change the
+   * unit test in the future to be multi HMM
+   */
+  if ((om->offs[p7_MOFFSET] = ftello(mfp))      == -1)    esl_fatal(msg);
+  if ((om->offs[p7_FOFFSET] = ftello(ffp))      == -1)    esl_fatal(msg);
+  if ((om->offs[p7_POFFSET] = ftello(pfp))      == -1)    esl_fatal(msg);
+
+  if ( p7_hmmfile_WriteASCII(fp, hmm)           != eslOK) esl_fatal(msg);
+  if ( p7_hmmfile_WriteBinary(mfp, hmm)         != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_Write(ffp, pfp, om)          != eslOK) esl_fatal(msg);
+
+  if ( esl_newssi_AddFile(nssi, tmpfile, 0, &fh)                           != eslOK) esl_fatal(msg);
+  if ( esl_newssi_AddKey (nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK) esl_fatal(msg);
+  if ( esl_newssi_Write(nssi)                                              != eslOK) esl_fatal(msg);
+
+  fclose(fp);
+  fclose(mfp);
+  fclose(ffp); 
+  fclose(pfp);
+  esl_newssi_Close(nssi);
+
+  /* 2. read the optimized profile back in */
+  if ( p7_hmmfile_Open(tmpfile, NULL, &hfp)  != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_ReadMSV(hfp, &abc, &om2)  != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_ReadRest(hfp, om2)        != eslOK) esl_fatal(msg);
+
+  /* 3. it should be identical to the original  */
+  if ( p7_oprofile_Compare(om, om2, tolerance, errbuf) != eslOK) esl_fatal("%s\n%s", msg, errbuf);
+       
+  p7_oprofile_Destroy(om2);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  remove(ssifile);
+  remove(ffile);
+  remove(pfile);
+  remove(mfile);
+  remove(tmpfile);
+
+  free(ssifile);
+  free(mfile);
+  free(ffile);
+  free(pfile);
+}
+  
+#endif /*p7IO_TESTDRIVE*/
+/*------------------ end, unit tests ----------------------------*/
+
+
+/*****************************************************************
+ * 5. Test driver
+ *****************************************************************/
+#ifdef p7IO_TESTDRIVE
+/* 
+   gcc -g -Wall -msse2 -std=gnu99 -o io_utest -I.. -L.. -I../../easel -L../../easel -Dp7IO_TESTDRIVE io.c -lhmmer -leasel -lm
+   ./io_utest
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+
+#include "hmmer.h"
+#include "impl_sse.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-M",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "size of random model to sample",                 0 },
+  { "-L",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "configure model for length <n>",                 0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for SSE Forward, Backward implementations";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = NULL;
+  ESL_ALPHABET   *abc  = NULL;
+  P7_BG          *bg   = NULL;
+  P7_HMM         *hmm  = NULL;
+  P7_OPROFILE    *om   = NULL;
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+  
+  if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
+  else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+
+  /* Sample a random HMM and optimized profile, in amino acid alphabet.  */
+  if ((abc = esl_alphabet_Create(eslAMINO))                    == NULL)  esl_fatal("failed to create alphabet");
+  if ((bg = p7_bg_Create(abc))                                 == NULL)  esl_fatal("failed to create null model");
+  if (( p7_oprofile_Sample(r, abc, bg, M, L, &hmm, NULL, &om)) != eslOK) esl_fatal("failed to sample HMM and profile");
+
+  /* unit test(s) */
+  utest_ReadWrite(hmm, om);
+
+  p7_oprofile_Destroy(om);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return eslOK;
+}
+
+#endif /*p7IO_TESTDRIVE*/
+/*------------------- end, test driver --------------------------*/
+
+
+
+/*****************************************************************
+ * 6. Example.
  *****************************************************************/
 #ifdef p7IO_EXAMPLE
 /* gcc -g -Wall -Dp7IO_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o io_example io.c -lhmmer -leasel -lm
@@ -356,14 +635,25 @@ main(int argc, char **argv)
   P7_BG         *bg      = NULL;
   P7_PROFILE    *gm      = NULL;
   P7_OPROFILE   *om      = NULL;
+  char          *fname   = NULL;
+  char          *pname   = NULL;
+  FILE          *ffp     = NULL;
+  FILE          *pfp     = NULL;
   int            nmodel  = 0;
   uint64_t       totM    = 0;
   int            status;
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",     hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n", status, hmmfile);  
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open HMM file %s for reading.\n",                   hmmfile);
+  else if (status == eslEFORMAT)   esl_fatal("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
+  else if (status != eslOK)        esl_fatal("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+
+  esl_sprintf(&fname, "%s.h3f", hmmfile);  
+  esl_sprintf(&pname, "%s.h3f", hmmfile);  
+  if ((ffp = fopen(fname, "wb")) == NULL) esl_fatal("failed to open %s\n", fname);
+  if ((pfp = fopen(pname, "wb")) == NULL) esl_fatal("failed to open %s\n", pname);
+  free(fname);
+  free(pname);
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
@@ -381,16 +671,18 @@ main(int argc, char **argv)
       om = p7_oprofile_Create(gm->M, abc);
       p7_oprofile_Convert(gm, om);
       
-      p7_oprofile_Write(stdout, NULL, om);
+      p7_oprofile_Write(ffp, pfp, om);
 
       p7_profile_Destroy(gm);
       p7_oprofile_Destroy(om);
       p7_hmm_Destroy(hmm);
     }
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
-  else if (status != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile);
+  if      (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s",             hmmfile);
+  else if (status == eslEINCOMPAT) esl_fatal("HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslEOF)       esl_fatal("Unexpected error in reading HMMs from %s",   hmmfile);
 
+  fclose(ffp);
+  fclose(pfp);
   p7_bg_Destroy(bg);
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);

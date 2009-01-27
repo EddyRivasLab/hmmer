@@ -298,8 +298,9 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
   int   status;
 
   status = p7_hmmfile_Open(cfg->hmmfile, NULL, &(cfg->hfp));
-  if (status == eslENOTFOUND) ESL_FAIL(eslFAIL, errbuf, "Failed to open hmm file %s for reading.\n",  cfg->hmmfile);
-  else if (status != eslOK)   ESL_FAIL(eslFAIL, errbuf, "Unexpected error in opening hmm file %s.\n", cfg->hmmfile);
+  if      (status == eslENOTFOUND) ESL_FAIL(eslFAIL, errbuf, "Failed to open HMM file %s for reading.\n",                   cfg->hmmfile);
+  else if (status == eslEFORMAT)   ESL_FAIL(eslFAIL, errbuf, "File %s does not appear to be in a recognized HMM format.\n", cfg->hmmfile);
+  else if (status != eslOK)        ESL_FAIL(eslFAIL, errbuf, "Unexpected error %d in opening HMM file %s.\n",       status, cfg->hmmfile);  
 
   filename = esl_opt_GetString(go, "-o");
   if (filename != NULL) 
