@@ -425,8 +425,10 @@ main(int argc, char **argv)
 
       esl_sq_Reuse(sq);
     }
-  if (status != eslEOF) 
-    esl_fatal("Parse failed, line %ld, file %s:\n%s", (long) sqfp->linenumber, sqfp->filename, sqfp->errbuf);
+  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+					    status, sqfp->filename);
 
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);

@@ -157,9 +157,10 @@ main(int argc, char **argv)
       ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (nseq+1));
       sq[nseq] = esl_sq_CreateDigital(abc);
     }
-  if      (status == eslEFORMAT) p7_Fail("Parse failed, line %ld, file %s\n%s", (long) sqfp->linenumber, sqfp->filename, sqfp->errbuf);
-  else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
-
+  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+					    status, sqfp->filename);
   esl_sqfile_Close(sqfp);
 
 

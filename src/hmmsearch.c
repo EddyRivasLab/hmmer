@@ -249,8 +249,10 @@ main(int argc, char **argv)
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(pli);
 	}
-      if      (sstatus == eslEFORMAT) p7_Fail("Target database file %s parse failed, line %ld:\n%s\n", dbfile, dbfp->linenumber, dbfp->errbuf);
-      else if (sstatus != eslEOF)     p7_Die ("Unexpected error %d reading target database seq file %s\n", status, dbfile);
+      if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+						dbfp->filename, dbfp->linenumber, dbfp->errbuf);     
+      else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+						sstatus, dbfp->filename);
   
       /* Print the results.  */
       p7_tophits_Sort(th);

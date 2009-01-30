@@ -337,8 +337,10 @@ main(int argc, char **argv)
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
 	    }
-	  if      (sstatus == eslEFORMAT) esl_fatal("Target database file %s parse failed, line %ld:\n%s\n", dbfile, dbfp->linenumber, dbfp->errbuf);
-	  else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading target database seq file %s\n", sstatus, dbfile);
+	  if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+						    dbfp->filename, dbfp->linenumber, dbfp->errbuf);     
+	  else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+						    sstatus, dbfp->filename);
 
 	  /* Print the results. */
 	  p7_tophits_Sort(th);
@@ -396,9 +398,10 @@ main(int argc, char **argv)
       p7_oprofile_Destroy(om);
       esl_sq_Reuse(qsq);
     }
-  if      (qstatus == eslEFORMAT)  esl_fatal("Query seq file %s parse failed, line %ld:\n%s\n", qfile, qfp->linenumber, qfp->errbuf);
-  else if (qstatus == eslEINVAL)   esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
-  else if (qstatus != eslEOF)      esl_fatal("Unexpected error %d reading seq file %s\n", status, qfile);
+  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+					    qstatus, qfp->filename);
 
   esl_sqfile_Close(qfp);
   esl_sqfile_Close(dbfp);

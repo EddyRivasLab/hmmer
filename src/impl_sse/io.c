@@ -96,6 +96,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   
   if (fwrite((char *) om->evparam,      sizeof(float),    p7_NEVPARAM, ffp) != p7_NEVPARAM) return eslFAIL;
   if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) return eslFAIL;
+  if (fwrite((char *) om->compo,        sizeof(float),    p7_MAXABET,  ffp) != p7_MAXABET)  return eslFAIL;
 
   /* <pfp> gets the rest of the oprofile */
   if (fwrite((char *) &(v30pmagic),     sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
@@ -141,7 +142,6 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->ddbound_f), sizeof(float),    1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->lspace_f),  sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *)   om->cutoff,     sizeof(float),    p7_NCUTOFFS, pfp) != p7_NCUTOFFS) return eslFAIL;
-  if (fwrite((char *)   om->compo,      sizeof(float),    p7_MAXABET,  pfp) != p7_MAXABET)  return eslFAIL;
   if (fwrite((char *) &(om->nj),        sizeof(float),    1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->mode),      sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->L)   ,      sizeof(int),      1,           pfp) != 1)           return eslFAIL;
@@ -251,6 +251,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
     if (! fread((char *) om->rm[x],      sizeof(__m128i), Q,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
+  if (! fread((char *) om->compo,        sizeof(float),   p7_MAXABET,  hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
+
 
   if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;
@@ -355,7 +357,6 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) &(om->ddbound_f), sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_f");
   if (! fread((char *) &(om->lspace_f),  sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read lspace_f");
   if (! fread((char *)   om->cutoff,     sizeof(float),    p7_NCUTOFFS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read Pfam score cutoffs");
-  if (! fread((char *)   om->compo,      sizeof(float),    p7_MAXABET,  hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
   if (! fread((char *) &(om->nj),        sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nj");
   if (! fread((char *) &(om->mode),      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mode");
   if (! fread((char *) &(om->L)   ,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read L");

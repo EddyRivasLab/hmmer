@@ -206,8 +206,10 @@ main(int argc, char **argv)
 
       p7_hmm_Destroy(hmm);
     }
-  if (status != eslEOF) esl_fatal("Parse failed, line %d, query file %s:\n%s", 
-				  qfp->linenumber, qfp->filename, qfp->errbuf);
+  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+					    status, qfp->filename);
   
   esl_dmatrix_Destroy(Q);
   esl_scorematrix_Destroy(S);

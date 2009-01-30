@@ -276,7 +276,10 @@ main(int argc, char **argv)
       p7_tophits_Destroy(th);
       esl_sq_Reuse(qsq);
     }
-  if (sstatus != eslEOF) p7_Fail("Sequence file %s parse failed (line %d):\n%s\n", seqfile, sqfp->linenumber, sqfp->errbuf);     
+  if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+					    sstatus, sqfp->filename);
 
   esl_sq_Destroy(qsq);
   esl_stopwatch_Destroy(w);
