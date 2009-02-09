@@ -145,8 +145,7 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->noverlaps    = 0;
   hit->nenvelopes   = 0;
 
-  hit->is_reported  = FALSE;
-  hit->is_included  = FALSE;
+  hit->flags        = p7_HITFLAGS_DEFAULT;
   hit->nreported    = 0;
   hit->nincluded    = 0;
   hit->best_domain  = -1;
@@ -456,12 +455,12 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
     {
       if (p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->pvalue))
 	{
-	  th->hit[h]->is_reported = TRUE;
+	  th->hit[h]->flags |= p7_IS_REPORTED;
 	  th->nreported++;
 	}
       if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->pvalue))
 	{
-	  th->hit[h]->is_included = TRUE;
+	  th->hit[h]->flags |= p7_IS_INCLUDED;
 	  th->nincluded++;
 	}
     }
@@ -475,7 +474,7 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
    */
   for (h = 0; h < th->N; h++)  
     {
-      if (th->hit[h]->is_reported)
+      if (th->hit[h]->flags & p7_IS_REPORTED)
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  {
 	    if (th->hit[h]->best_domain == d ||
@@ -485,7 +484,7 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 		th->hit[h]->dcl[d].is_reported = TRUE;
 	      }
 	  }
-      if (th->hit[h]->is_included)
+      if (th->hit[h]->flags & p7_IS_INCLUDED)
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  {
 	    if (th->hit[h]->best_domain == d ||
@@ -497,6 +496,102 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 	  }
     }
   return eslOK;
+}
+
+
+/* Function:  p7_tophits_CompareRanking()
+ * Synopsis:  Compare current top hits to previous top hits ranking.
+ * Incept:    SRE, Sun Feb  8 20:33:02 2009 [Janelia]
+ *
+ * Purpose:   Using a keyhash <kh> of the previous top hits and the
+ *            their ranks, look at the current top hits list <th>
+ *            and flag new hits that are included for the first time
+ *            (by setting <p7_IS_NEW> flag) and hits that were 
+ *            included previously, but are now below the inclusion
+ *            threshold in the list (<by setting <p7_IS_DROPPED>
+ *            flag). 
+ *
+ *            The <th> must already have been processed by
+ *            <p7_tophits_Threshold()>. We assume the <is_included>,
+ *            <is_reported> flags are set on the appropriate hits.
+ * 
+ *            Upon return, the keyhash <kh> is updated to hash the
+ *            current top hits list and their ranks. 
+ *            
+ *            Optionally, <*opt_nnew> is set to the number of 
+ *            newly included hits. jackhmmer uses this as part of
+ *            its convergence criteria, for example.
+ *            
+ *            These flags affect output of top target hits from
+ *            <p7_tophits_Targets()>. 
+ *            
+ *            It only makes sense to call this function in context of
+ *            an iterative search.
+ *            
+ *            The <p7_IS_NEW> flag is comprehensive: all new hits
+ *            are flagged (and counted in <*opt_nnew>). The <p7_WAS_DROPPED> 
+ *            flag is not comprehensive: only those hits that still 
+ *            appear in the current top hits list are flagged. If a 
+ *            hit dropped entirely off the list, it isn't counted
+ *            as "dropped". (This could be done, but we would want
+ *            to have two keyhashes, one old and one new, to do the
+ *            necessary comparisons efficiently.)
+ *            
+ *            If the target names in <th> are not unique, results may
+ *            be strange.
+ *
+ * Args:      th         - current top hits list
+ *            kh         - hash of top hits' ranks (in: previous tophits; out: <th>'s tophits)
+ *            opt_nnew   - optRETURN: number of new hits above inclusion threshold
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> if <kh> needed to be reallocated but this failed.
+ */
+int
+p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew)
+{
+  int nnew = 0;
+  int oldrank;
+  int h;
+  int status;
+
+  /* Flag the hits in the list with whether they're new in the included top hits,
+   * and whether they've dropped off the included list.
+   */
+  for (h = 0; h < th->N; h++)
+    {
+      esl_key_Lookup(kh, th->hit[h]->name, &oldrank);
+      
+      if (th->hit[h]->flags & p7_IS_INCLUDED) 
+	{
+	  if (oldrank == -1) th->hit[h]->flags |= p7_IS_NEW;
+	  nnew++;
+	}
+      else 
+	{
+	  if (oldrank >=  0) th->hit[h]->flags |= p7_IS_DROPPED;
+	}
+    }	
+
+  /* Replace the old rank list with the new one */
+  esl_keyhash_Reuse(kh);
+  for (h = 0; h < th->N; h++)
+    {
+      if (th->hit[h]->flags & p7_IS_INCLUDED) 
+	{
+	  /* What happens when the same sequence name appears twice? It gets stored with higher rank */
+	  status = esl_key_Store(kh, th->hit[h]->name, NULL);
+	  if (status != eslOK && status != eslEDUP) goto ERROR;
+	}
+    }
+  
+  if (opt_nnew != NULL) *opt_nnew = nnew;
+  return eslOK;
+
+ ERROR:
+  if (opt_nnew != NULL) *opt_nnew = 0;
+  return status;
 }
 
 
@@ -528,34 +623,41 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 int
 p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw)
 {
+  char   newness;
   int    h;
   int    d;
   int    namew = ESL_MAX(8,  p7_tophits_GetMaxNameLength(th));
   int    descw;
   int    have_printed_incthresh = FALSE;
 
-  if (textw >  0) descw = ESL_MAX(32, textw - namew - 59); /* 59 chars excluding desc is from the format: 22+2 +22+2 +8+2 +<name>+1 */
+  if (textw >  0) descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
   else            descw = INT_MAX;
 
   fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", 
 	  pli->mode == p7_SEARCH_SEQS ? "s" : "");
 
-  /* The minimum width of the target table is 109 char: 46 from fields, 8 from min name, 32 from min desc, 12 spaces */
-  fprintf(ofp, "%22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
-  fprintf(ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
-  fprintf(ofp, "%9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
+  /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
+  fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
+  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
+  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
 
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->is_reported)
+    if (th->hit[h]->flags & p7_IS_REPORTED)
       {
 	d    = th->hit[h]->best_domain;
 
-	if (! th->hit[h]->is_included && h < th->N-1 && ! have_printed_incthresh) {
-	  fprintf(ofp, " ------ inclusion threshold ------\n");
+	if (! (th->hit[h]->flags & p7_IS_INCLUDED) && h < th->N-1 && ! have_printed_incthresh) {
+	  fprintf(ofp, "  ------ inclusion threshold ------\n");
 	  have_printed_incthresh = TRUE;
 	}
 
-	fprintf(ofp, "%9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-.*s\n",
+	if      (th->hit[h]->flags & p7_IS_NEW)     newness = '+';
+	else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
+	else                                        newness = ' ';
+
+
+	fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-.*s\n",
+		newness,
 		th->hit[h]->pvalue * pli->Z,
 		th->hit[h]->score,
 		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
@@ -592,7 +694,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
   fprintf(ofp, "Domain and alignment annotation for each %s:\n", pli->mode == p7_SEARCH_SEQS ? "sequence" : "model");
 
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->is_reported)
+    if (th->hit[h]->flags & p7_IS_REPORTED)
       {
 	namew = strlen(th->hit[h]->name);
 	descw = (textw > 0 ?  ESL_MAX(32, textw - namew - 5) : INT_MAX);
@@ -690,7 +792,7 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **re
    * We also set model size M here; every alignment has a copy.
    */
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->is_included)
+    if (th->hit[h]->flags & p7_IS_INCLUDED)
       {
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  if (th->hit[h]->dcl[d].is_included) 
@@ -709,7 +811,7 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **re
   /* Make faux sequences, traces */
   y = 0;
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->is_included)
+    if (th->hit[h]->flags & p7_IS_INCLUDED)
       {
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  if (th->hit[h]->dcl[d].is_included) 

@@ -12,6 +12,7 @@
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"
 #include "esl_getopts.h"
+#include "esl_keyhash.h"
 #include "esl_scorematrix.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
@@ -253,10 +254,13 @@ main(int argc, char **argv)
   P7_BUILDER      *bld      = NULL;               /* HMM construction configuration           */
   ESL_SQ          *qsq      = NULL;               /* query sequence                           */
   ESL_SQ          *dbsq     = NULL;               /* target sequence                          */
+  ESL_KEYHASH     *kh       = NULL;		  /* hash of previous top hits' ranks         */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                               */
   int              textw;
   int              iteration;
   int              maxiterations = 3;
+  int              nnew_targets;
+  int              prv_msa_nseq;
   int              status;
   int              qstatus, sstatus;
 
@@ -266,6 +270,7 @@ main(int argc, char **argv)
   abc     = esl_alphabet_Create(eslAMINO);
   bg      = p7_bg_Create(abc);
   w       = esl_stopwatch_Create();
+  kh      = esl_keyhash_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
   esl_stopwatch_Start(w);
@@ -345,6 +350,7 @@ main(int argc, char **argv)
 	  /* Print the results. */
 	  p7_tophits_Sort(th);
 	  p7_tophits_Threshold(th, pli);
+	  p7_tophits_CompareRanking(th, kh, &nnew_targets);
 	  p7_tophits_Targets(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
 	  p7_tophits_Domains(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
 
@@ -397,12 +403,14 @@ main(int argc, char **argv)
       p7_pipeline_Destroy(pli);
       p7_oprofile_Destroy(om);
       esl_sq_Reuse(qsq);
+      esl_keyhash_Reuse(kh);
     }
   if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
 					    qfp->filename, qfp->linenumber, qfp->errbuf);     
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
+  esl_keyhash_Destroy(kh);
   esl_sqfile_Close(qfp);
   esl_sqfile_Close(dbfp);
   esl_sq_Destroy(dbsq);

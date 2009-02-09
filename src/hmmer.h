@@ -44,6 +44,7 @@
 #include "esl_getopts.h"	/* ESL_GETOPTS           */
 #include "esl_histogram.h"      /* ESL_HISTOGRAM         */
 #include "esl_hmm.h"	        /* ESL_HMM               */
+#include "esl_keyhash.h"        /* ESL_KEYHASH           */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
 #include "esl_sq.h"		/* ESL_SQ                */
@@ -586,6 +587,12 @@ typedef struct p7_domaindef_s {
  * 11. P7_TOPHITS: ranking lists of top-scoring hits
  *****************************************************************/
 
+#define p7_HITFLAGS_DEFAULT 0
+#define p7_IS_INCLUDED      (1<<0)
+#define p7_IS_REPORTED      (1<<1)
+#define p7_IS_NEW           (1<<2)
+#define p7_IS_DROPPED       (1<<3)
+
 /* Structure: P7_HIT
  * 
  * Info about a high-scoring database hit, kept so we can output a
@@ -616,11 +623,10 @@ typedef struct p7_hit_s {
   int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
   int    ndom;		/* total # of domains identified in this seq   */
 
-  int    is_reported;   /* TRUE if this sequence meets output thresholding (is significant) */
-  int    is_included;	/* TRUE if this sequence meets inclusion thresholding*/
-  int    nreported;	/* # of domains satisfying reporting thresholding  */
-  int    nincluded;	/* # of domains satisfying inclusion thresholding */
-  int    best_domain;	/* index of best-scoring domain in dcl */
+  uint32_t flags;      	/* p7_IS_REPORTED | p7_IS_INCLUDED | p7_IS_NEW | p7_IS_DROPPED */
+  int      nreported;	/* # of domains satisfying reporting thresholding  */
+  int      nincluded;	/* # of domains satisfying inclusion thresholding */
+  int      best_domain;	/* index of best-scoring domain in dcl */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
 } P7_HIT;
@@ -1047,6 +1053,7 @@ extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
+extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
 extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw);
 extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw);
 extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **ret_msa);
