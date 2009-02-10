@@ -310,11 +310,13 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
 static int
 fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 {
-  int  status;
   P7_TRACE **tr = NULL;
+  char errbuf[eslERRBUFSIZE];
   int  idx;                     /* counter over sequences          */
   int  k;                       /* position in HMM                 */
   int  apos;                    /* position in alignment columns   */
+  int  status;
+
 
   ESL_ALLOC(tr, sizeof(P7_TRACE *) * msa->nseq);
   for (idx = 0; idx < msa->nseq; idx++) tr[idx] = NULL;
@@ -361,14 +363,17 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 	    }
 	}
       if ((status = p7_trace_Append(tr[idx], p7T_E, 0, 0)) != eslOK) goto ERROR;
+      /* k == M by construction; set tr->L = msa->alen since coords are w.r.t. ax */
+      tr[idx]->M = k;
+      tr[idx]->L = msa->alen;
 
       /* clean up: deal with DI, ID transitions and other plan7 impossibilities */
       if ((status = trace_doctor(tr[idx], NULL, NULL)) != eslOK) goto ERROR;
 
       /* Validate it. */
       /* p7_trace_Dump(stdout, tr[idx], NULL, NULL);  */
-      if (p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], NULL) != eslOK) 
-	ESL_XEXCEPTION(eslFAIL, "validation failed");
+      if (p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], errbuf) != eslOK) 
+	ESL_XEXCEPTION(eslFAIL, "validation failed: %s", errbuf);
     } 
   *ret_tr = tr;
   return eslOK;

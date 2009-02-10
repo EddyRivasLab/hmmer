@@ -273,7 +273,7 @@ main(int argc, char **argv)
 	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));
 
 	if (afp != NULL) {
-	  p7_tophits_Alignment(th, abc, &msa);
+	  p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa);
 	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	  else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
 	  

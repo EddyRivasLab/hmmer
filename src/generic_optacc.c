@@ -234,6 +234,8 @@ p7_GOATrace(const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx, P7_TRACE *
       if ( (scur == p7T_N || scur == p7T_J || scur == p7T_C) && scur == sprv) i--;
       sprv = scur;
     }
+  tr->M = gm->M;
+  tr->L = gx->L;
   return p7_trace_Reverse(tr);
 }
 

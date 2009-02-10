@@ -181,6 +181,8 @@ p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFI
     } /* end traceback, at S state */
 
   if ((status = p7_trace_Reverse(tr)) != eslOK) goto ERROR;
+  tr->M = gm->M;
+  tr->L = L;
   free(sc);
   return eslOK;
 

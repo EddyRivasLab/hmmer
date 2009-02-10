@@ -258,6 +258,8 @@ p7_OATrace(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *
       if ( (s1 == p7T_N || s1 == p7T_J || s1 == p7T_C) && s1 == s0) i--;
       s0 = s1;
     } /* end traceback, at S state */
+  tr->M = om->M;
+  tr->L = ox->L;
   return p7_trace_Reverse(tr);
 }
 

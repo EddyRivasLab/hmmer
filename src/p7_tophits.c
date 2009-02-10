@@ -565,8 +565,7 @@ p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew)
       
       if (th->hit[h]->flags & p7_IS_INCLUDED) 
 	{
-	  if (oldrank == -1) th->hit[h]->flags |= p7_IS_NEW;
-	  nnew++;
+	  if (oldrank == -1) { th->hit[h]->flags |= p7_IS_NEW; nnew++; }
 	}
       else 
 	{
@@ -760,9 +759,18 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
  * Synopsis:  Create a multiple alignment of all the included domains.
  * Incept:    SRE, Wed Dec 10 11:04:40 2008 [Janelia]
  *
- * Purpose:   Create a digital multiple alignment of all domains marked
+ * Purpose:   Create a multiple alignment of all domains marked
  *            "includable" in the top hits list <th>, and return it in
- *            <*ret_msa>. The MSA is digitized using alphabet <abc>.
+ *            <*ret_msa>.
+ *            
+ *            Use of <optflags> is identical to <optflags> in <p7_MultipleAlignment()>.
+ *            Possible flags include <p7_DIGITIZE>, <p7_ALL_CONSENSUS_COLS>,
+ *            and <p7_TRIM>; they may be OR'ed together. Otherwise, pass
+ *            <p7_DEFAULT> to set no flags.
+ *
+ *            Caller may optionally provide <inc_sqarr>, <inc_trarr>, and
+ *            <inc_n> to include additional sequences in the alignment
+ *            (the jackhmmer query, for example). Otherwise, pass <NULL, NULL, 0>.
  *
  * Returns:   <eslOK> on success.
  *            <eslFAIL> if there are no reported domains that satisfy
@@ -771,10 +779,13 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
  * Throws:    <eslEMEM> on allocation failure; <eslECORRUPT> on 
  *            unexpected internal data corruption.
  *
- * Xref:      J4/29.
+ * Xref:      J4/29: incept.
+ *            J4/76: added inc_sqarr, inc_trarr, inc_n, optflags 
  */
 int
-p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **ret_msa)
+p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
+		     ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n,
+		     int optflags, ESL_MSA **ret_msa)
 {
   ESL_SQ   **sqarr = NULL;
   P7_TRACE **trarr = NULL;
@@ -784,11 +795,7 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **re
   int        M;
   int        status;
 
-  /* How many domains will be included in the new alignment? */
-  /* Someday we may want to distinguish between a longer list
-   * of reported domains and  a shorter list of domains included
-   * in an alignment.
-   * 
+  /* How many domains will be included in the new alignment? 
    * We also set model size M here; every alignment has a copy.
    */
   for (h = 0; h < th->N; h++)
@@ -798,18 +805,20 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **re
 	  if (th->hit[h]->dcl[d].is_included) 
 	    ndom++;
       }
-  if (ndom == 0) { status = eslFAIL; goto ERROR; }
-  M = th->hit[0]->dcl[0].ad->M;
+  if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
 
+  if (th->N > 0) M = th->hit[0]->dcl[0].ad->M; /* usually */
+  else           M = inc_trarr[0]->M;          /* alignment only build from included seqs */
   
   /* Allocation */
-  ESL_ALLOC(sqarr, sizeof(ESL_SQ *)   * ndom);
-  ESL_ALLOC(trarr, sizeof(P7_TRACE *) * ndom);
-  for (y = 0; y < ndom; y++) sqarr[y] = NULL;
-  for (y = 0; y < ndom; y++) trarr[y] = NULL;
-  
-  /* Make faux sequences, traces */
-  y = 0;
+  ESL_ALLOC(sqarr, sizeof(ESL_SQ *)   * (ndom + inc_n));
+  ESL_ALLOC(trarr, sizeof(P7_TRACE *) * (ndom + inc_n));
+  /* Inclusion of preexisting seqs, traces: make copy of pointers */
+  for (y = 0; y < inc_n;        y++) { sqarr[y] = inc_sqarr[y];  trarr[y] = inc_trarr[y]; }
+  for (;      y < (ndom+inc_n); y++) { sqarr[y] = NULL;          trarr[y] = NULL; }
+
+  /* Make faux sequences, traces from hit list */
+  y = inc_n;
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_INCLUDED)
       {
@@ -820,22 +829,21 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, ESL_MSA **re
 	      y++;
 	    }
       }
-
+  
   /* Make the multiple alignment */
-  if ((status = p7_MultipleAlignment(sqarr, trarr, ndom, M, p7_DEFAULT, &msa)) != eslOK) goto ERROR;
-
+  if ((status = p7_MultipleAlignment(sqarr, trarr, inc_n+ndom, M, optflags, &msa)) != eslOK) goto ERROR;
 
   /* Clean up */
-  for (y = 0; y < ndom; y++) esl_sq_Destroy(sqarr[y]);
-  for (y = 0; y < ndom; y++) p7_trace_Destroy(trarr[y]);
+  for (y = inc_n; y < ndom+inc_n; y++) esl_sq_Destroy(sqarr[y]);
+  for (y = inc_n; y < ndom+inc_n; y++) p7_trace_Destroy(trarr[y]);
   free(sqarr);
   free(trarr);
   *ret_msa = msa;
   return eslOK;
   
  ERROR:
-  if (sqarr != NULL) { for (y = 0; y < ndom; y++) if (sqarr[y] != NULL) esl_sq_Destroy(sqarr[y]);   free(sqarr); }
-  if (trarr != NULL) { for (y = 0; y < ndom; y++) if (trarr[y] != NULL) p7_trace_Destroy(trarr[y]); free(trarr); }
+  if (sqarr != NULL) { for (y = inc_n; y < ndom+inc_n; y++) if (sqarr[y] != NULL) esl_sq_Destroy(sqarr[y]);   free(sqarr); }
+  if (trarr != NULL) { for (y = inc_n; y < ndom+inc_n; y++) if (trarr[y] != NULL) p7_trace_Destroy(trarr[y]); free(trarr); }
   if (msa   != NULL) esl_msa_Destroy(msa);
   *ret_msa = NULL;
   return status;

@@ -106,6 +106,8 @@ p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPRO
       s0 = s1;
     } /* end traceback, at S state */
 
+  tr->M = om->M;
+  tr->L = L;
   return p7_trace_Reverse(tr);
 }
 /*------------------ end, stochastic traceback ------------------*/

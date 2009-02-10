@@ -159,6 +159,8 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     sprv = scur;
   } /* end traceback, at S state */
 
+  tr->M = gm->M;
+  tr->L = L;
   return p7_trace_Reverse(tr);
 }
 

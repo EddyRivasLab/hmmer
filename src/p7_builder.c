@@ -344,23 +344,39 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE 
  *            <eslEINVAL> if <bld> isn't properly configured somehow.
  */
 int
-p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om)
+p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
+		 P7_TRACE **opt_tr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om)
 {
-  P7_HMM *hmm = NULL;
-  int     status;
+  P7_HMM   *hmm = NULL;
+  P7_TRACE *tr  = NULL;
+  int       k;
+  int       status;
   
   bld->errbuf[0] = '\0';
-
   if (! bld->Q) ESL_XEXCEPTION(eslEINVAL, "score system not initialized");
 
   if ((status = p7_Seqmodel(bld->abc, sq->dsq, sq->n, sq->name, bld->Q, bg->f, bld->popen, bld->pextend, &hmm)) != eslOK) goto ERROR;
   if ((status = calibrate(bld, hmm, bg, opt_gm, opt_om))                                                        != eslOK) goto ERROR;
 
+  /* build a faux trace: relative to core model (B->M_1..M_L->E) */
+  if (opt_tr != NULL) 
+    {
+      if ((tr = p7_trace_Create())                      == NULL)  goto ERROR;
+      if ((status = p7_trace_Append(tr, p7T_B, 0, 0))   != eslOK) goto ERROR; 
+      for (k = 1; k <= sq->n; k++)
+	if ((status = p7_trace_Append(tr, p7T_M, k, k)) != eslOK) goto ERROR;
+      if ((status = p7_trace_Append(tr, p7T_E, 0, 0))   != eslOK) goto ERROR; 
+      tr->M = sq->n;
+      tr->L = sq->n;
+    }
+
   if (opt_hmm   != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
+  if (opt_tr    != NULL) *opt_tr  = tr;
   return eslOK;
 
  ERROR:
   p7_hmm_Destroy(hmm);
+  if (tr        != NULL) p7_trace_Destroy(tr);
   if (opt_gm    != NULL) p7_profile_Destroy(*opt_gm);
   if (opt_om    != NULL) p7_oprofile_Destroy(*opt_om);
   return status;

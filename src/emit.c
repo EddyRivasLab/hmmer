@@ -78,7 +78,7 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 
   if (sq != NULL) esl_sq_Reuse(sq);    
   if (tr != NULL) {
-    if ((status = p7_trace_Reuse(tr))                != eslOK) goto ERROR;
+    if ((status = p7_trace_Reuse(tr))            != eslOK) goto ERROR;
     if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
   }
   while (st != p7T_E)
@@ -138,8 +138,9 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 	if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
     }
 
-  /* Terminate the sequence and return */
-  if ((status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
+  /* Terminate the trace and sequence (both are optional, remember) */
+  if (tr != NULL) {  tr->M = hmm->M; tr->L = i; }
+  if (sq != NULL && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
   return eslOK;
 
 ERROR:
@@ -276,7 +277,8 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
 	if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
       } 
     }
-  /* Terminate the sequence (if we're generating one) */
+  /* Terminate the trace and sequence (both are optional, remember) */
+  if (tr != NULL) {  tr->M = hmm->M; tr->L = i; }
   if (sq != NULL && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
   return eslOK;
 

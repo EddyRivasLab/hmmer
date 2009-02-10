@@ -276,7 +276,7 @@ main(int argc, char **argv)
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
       /* Build the model */
-      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, &om); /* bypass HMM - all we need is the model */
+      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
       /* Create processing pipeline and top hits list */
       th   = p7_tophits_Create();
@@ -319,7 +319,7 @@ main(int argc, char **argv)
 	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));
 
 	if (afp != NULL) {
-	  p7_tophits_Alignment(th, abc, &msa);
+	  p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa);
 	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	  else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
 

@@ -31,6 +31,7 @@ static ESL_OPTIONS options[] = {
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "show brief help on version and usage",                         1 },
   { "-o",           eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "direct output to file <f>, not stdout",                        1 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save multiple alignment of hits to file <s>",                  1 },
+  { "-N",           eslARG_INT,      "5", NULL, NULL,      NULL,    NULL,  NULL,                          "set maximum number of iterations to <n>",                      1 },
 /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,    NULL,  NULL,                          "gap open probability",                                         2 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,    NULL,  NULL,                          "gap extend probability",                                       2 },
@@ -46,9 +47,9 @@ static ESL_OPTIONS options[] = {
   { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  "-E,-T,--domE,--domT",         "use profile's NC noise cutoffs to set -T, --domT",             99 },
   { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  "-E,-T,--domE,--domT",         "use profile's TC trusted cutoffs to set -T, --domT",           99 },
 /* Control of inclusion thresholds */
-  { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include sequences <= this E-value threshold in output ali",    4 },
+  { "--incE",       eslARG_REAL, "0.001", NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include sequences <= this E-value threshold in output ali",    4 },
   { "--incT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include sequences >= this score threshold in output ali",      4 },
-  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include domains <= this E-value threshold in output ali",      4 },
+  { "--incdomE",    eslARG_REAL, "0.001", NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include domains <= this E-value threshold in output ali",      4 },
   { "--incdomT",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include domains >= this score threshold in output ali",        4 },
   { "--inc_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--incE,--incT,--incdomE,--incdomT", "use profile's GA gathering cutoffs to set --incT, --incdomT",  99 },
   { "--inc_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--incE,--incT,--incdomE,--incdomT", "use profile's NC noise cutoffs to set --incT, --incdomT",      99 },
@@ -258,7 +259,7 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w        = NULL;               /* for timing                               */
   int              textw;
   int              iteration;
-  int              maxiterations = 3;
+  int              maxiterations;
   int              nnew_targets;
   int              prv_msa_nseq;
   int              status;
@@ -267,13 +268,15 @@ main(int argc, char **argv)
   /* Initializations */
   process_commandline(argc, argv, &go, &qfile, &dbfile);    
   p7_FLogsumInit();
-  abc     = esl_alphabet_Create(eslAMINO);
-  bg      = p7_bg_Create(abc);
-  w       = esl_stopwatch_Create();
-  kh      = esl_keyhash_Create();
+  abc           = esl_alphabet_Create(eslAMINO);
+  bg            = p7_bg_Create(abc);
+  w             = esl_stopwatch_Create();
+  kh            = esl_keyhash_Create();
+  maxiterations = esl_opt_GetInteger(go, "-N");
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
   esl_stopwatch_Start(w);
+
 
   /* Initialize builder configuration */
   bld = p7_builder_Create(go, abc);
@@ -312,20 +315,48 @@ main(int argc, char **argv)
       P7_PIPELINE     *pli = NULL;	     /* accelerated HMM/seq comparison pipeline  */
       P7_TOPHITS      *th  = NULL;           /* top-scoring sequence hits                */
       P7_OPROFILE     *om  = NULL;           /* optimized query profile                  */
+      P7_TRACE        *qtr = NULL;           /* faux trace for query sequence            */
       ESL_MSA         *msa = NULL;           /* multiple alignment of included hits      */
       
-      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
-      if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
-      if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
-
-      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, &om); /* bypass HMM - all we need is the model */
-
       for (iteration = 1; iteration <= maxiterations; iteration++)
 	{       /* We enter each iteration with an optimized profile. */
-	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  esl_stopwatch_Start(w);
-	  if (th   != NULL) p7_tophits_Destroy(th);
 	  if (pli  != NULL) p7_pipeline_Destroy(pli);
+	  if (th   != NULL) p7_tophits_Destroy(th);
+	  if (om   != NULL) p7_oprofile_Destroy(om);
+
+	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
+	  if (msa == NULL)	/* round 1 */
+	    {
+	      p7_SingleBuilder(bld, qsq, bg, NULL, &qtr, NULL, &om); /* bypass HMM - only need model */
+
+	      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
+	      if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
+	      if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
+	      fprintf(ofp, "\n");
+
+	      prv_msa_nseq = 1;
+	    }
+	  else 
+	    {
+	      /* Throw away old model. Build new one. */
+	      status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om);
+	      if      (status == eslENORESULT) esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
+	      else if (status == eslEFORMAT)   esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
+	      else if (status != eslOK)        esl_fatal("Unexpected error constructing new model at iteration %d:",     iteration);
+
+	      fprintf(ofp, "@@\n");
+	      fprintf(ofp, "@@ Round:                  %d\n", iteration);
+	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n", 
+		      msa->nseq, msa->nseq-1, kh->nkeys);
+	      fprintf(ofp, "@@ Model size:             %d positions\n", om->M);
+	      fprintf(ofp, "@@\n\n");
+	  
+	      prv_msa_nseq = msa->nseq;
+	      esl_msa_Destroy(msa);
+	    }
+
+	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  th  = p7_tophits_Create();
 	  pli = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS);  /* 400 is a dummy length for now */
 	  p7_pli_NewModel(pli, om, bg);
@@ -355,29 +386,34 @@ main(int argc, char **argv)
 	  p7_tophits_Domains(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
 
 	  /* Create alignment of the top hits */
-	  p7_tophits_Alignment(th, abc, &msa);
+	  p7_tophits_Alignment(th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa);
 	  esl_msa_SetName(msa, "iteration%d", iteration);
 
-	  /* Throw away old model. Build new one. */
-	  p7_oprofile_Destroy(om);  om  = NULL;
-	  status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om);
-	  if      (status == eslENORESULT) esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
-	  else if (status == eslEFORMAT)   esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
-	  else if (status != eslOK)        esl_fatal("Unexpected error constructing new model at iteration %d:",     iteration);
-	  
 	  esl_sqfile_Position(dbfp, 0); /* rewind */
-	  esl_msa_Destroy(msa);
 	  esl_stopwatch_Stop(w);
+	  p7_pli_Statistics(ofp, pli, w);
+	  fprintf(ofp, "\n");
+
+	  /* Convergence test */
+	  fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets);
+	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n", 
+		  msa->nseq, prv_msa_nseq);
+	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq) 
+	    { 
+	      fprintf(ofp, "@@\n");
+	      fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration);
+	      fprintf(ofp, "@@\n\n");
+	      break;
+	    }
+	  else { fprintf(ofp, "@@ Continuing to next round.\n\n"); }
 	} /* end iteration loop */
 
-      /* Because we destroy/create the hitlist, om, and pipeline above, rather than create/destroy,
+      /* Because we destroy/create the hitlist, om, pipeline, and msa above, rather than create/destroy,
        * the results of the last iteration have carried through to us now, and we can output
        * whatever final results we care to.
        */
-      p7_pli_Statistics(ofp, pli, w);
       fprintf(ofp, "//\n");
-
 
       /* Output the results in an MSA */
       if (! esl_opt_IsDefault(go, "-A")) {
@@ -388,20 +424,18 @@ main(int argc, char **argv)
 	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));
 
 	if (afp != NULL) {
-	  p7_tophits_Alignment(th, abc, &msa);
 	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	  else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
-
 	  fprintf(ofp, "# Alignment of all hits above threshold saved to: %s\n", esl_opt_GetString(go, "-A"));
-
-	  esl_msa_Destroy(msa);
 	  fclose(afp);
 	}
       }
 
       p7_tophits_Destroy(th);
       p7_pipeline_Destroy(pli);
+      esl_msa_Destroy(msa);
       p7_oprofile_Destroy(om);
+      p7_trace_Destroy(qtr);
       esl_sq_Reuse(qsq);
       esl_keyhash_Reuse(kh);
     }

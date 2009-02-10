@@ -83,6 +83,8 @@ trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posterio
   tr->k  = NULL;
   tr->i  = NULL;
   tr->pp = NULL;
+  tr->M  = 0;
+  tr->L  = 0;
   tr->tfrom   = tr->tto   = NULL;
   tr->sqfrom  = tr->sqto  = NULL;
   tr->hmmfrom = tr->hmmto = NULL;
@@ -130,6 +132,8 @@ int
 p7_trace_Reuse(P7_TRACE *tr)
 {
   tr->N    = 0;
+  tr->M    = 0;
+  tr->L    = 0;
   tr->ndom = 0;
   return eslOK;
 }
@@ -663,6 +667,11 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
   for (; dsq[i] != eslDSQ_SENTINEL; i++) 
     if (esl_abc_XIsResidue(abc, dsq[i])) 
       ESL_FAIL(eslFAIL, errbuf, "trace didn't account for all residues in the sq");
+
+  /* No k larger than M; no i-1 larger than L (i is sitting on dsq[n+1] sentinel right now) */
+  if (k   > tr->M) ESL_FAIL(eslFAIL, errbuf, "M=%d, but k went to %d\n", tr->M, k);
+  if (i-1 > tr->L) ESL_FAIL(eslFAIL, errbuf, "L=%d, but i went to %d\n", tr->L, i);
+
   return eslOK;
 }
 
@@ -790,6 +799,8 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
   int z,d;
   
   if (tr1->N != tr2->N) esl_fatal("FAIL");
+  if (tr1->M != tr2->M) esl_fatal("FAIL");
+  if (tr1->L != tr2->L) esl_fatal("FAIL");
   
   /* Main data in the trace */
   for (z = 0; z < tr1->N; z++)
@@ -993,7 +1004,6 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
   int status;
 
   if ((status = p7_trace_Grow(tr)) != eslOK) return status;
-
 
   switch (st) {
     /* Emit-on-transition states: */

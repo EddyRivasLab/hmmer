@@ -303,6 +303,7 @@ main(int argc, char **argv)
 	{ /* This is approximately what p7_domaindef.c::region_trace_ensemble() is doing: */
 	  for (j = 0; j < nsamples; j++)
 	    {
+	      /* 9Feb09: FIXME: um, what?  tr is empty here, I think? */
 	      p7_Null2_ByTrace(om, tr, 0, tr->N-1, ox2, null2);
 	      for (pos = 1; pos <= L; pos++)
 		n2sc[pos] += null2[dsq[pos]];

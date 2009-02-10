@@ -433,6 +433,9 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   sq->W     = subL;
   sq->L     = ad->L;
   
+  tr->M     = ad->M;
+  tr->L     = ad->L;
+
   *ret_sq = sq;
   *ret_tr = tr;
   return eslOK;

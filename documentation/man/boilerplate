@@ -7,7 +7,7 @@ pages: see
 .PP
 For complete documentation, see the user guide that came with the
 distribution (Userguide.pdf); or see the HMMER web page,
-http://hmmer.wustl.edu/.
+http://hmmer.org/.
 
 .SH COPYRIGHT
 
@@ -22,11 +22,10 @@ conditions.
 
 .nf
 Sean Eddy
-HHMI/Dept. of Genetics
-Washington Univ. School of Medicine
-4566 Scott Ave.
-St Louis, MO 63110 USA
-http://www.genetics.wustl.edu/eddy/
+HHMI Janelia Farm Research Campus
+19700 Helix Drive
+Ashburn VA 20147 USA
+http://eddylab.org/
 .fi
 
 
