@@ -239,7 +239,7 @@ main(int argc, char **argv)
   /* Clean up the shared cfg. 
    */
   if (cfg.my_rank == 0) {
-    if (! esl_opt_IsDefault(go, "-o")) { fclose(cfg.ofp); }
+    if (esl_opt_IsOn(go, "-o")) { fclose(cfg.ofp); }
     if (cfg.afp   != NULL) esl_msafile_Close(cfg.afp);
     if (cfg.abc   != NULL) esl_alphabet_Destroy(cfg.abc);
     if (cfg.hmmfp != NULL) fclose(cfg.hmmfp);
@@ -642,39 +642,39 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   fprintf(cfg->ofp, "# input alignment file:             %s\n", cfg->alifile);
   fprintf(cfg->ofp, "# output HMM file:                  %s\n", cfg->hmmfile);
 
-  if (! esl_opt_IsDefault(go, "-n"))          fprintf(cfg->ofp, "# name (the single) HMM:            %s\n",   esl_opt_GetString(go, "-n"));
-  if (! esl_opt_IsDefault(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:          %s\n",   esl_opt_GetString(go, "-o"));
-  if (! esl_opt_IsDefault(go, "--amino"))     fprintf(cfg->ofp, "# input alignment is asserted as:   protein\n");
-  if (! esl_opt_IsDefault(go, "--dna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   DNA\n");
-  if (! esl_opt_IsDefault(go, "--rna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   RNA\n");
-  if (! esl_opt_IsDefault(go, "--fast"))      fprintf(cfg->ofp, "# model architecture construction:  fast/heuristic\n");
-  if (! esl_opt_IsDefault(go, "--hand"))      fprintf(cfg->ofp, "# model architecture construction:  hand-specified by RF annotation\n");
-  if (! esl_opt_IsDefault(go, "--symfrac"))   fprintf(cfg->ofp, "# sym fraction for model structure: %.3f\n", esl_opt_GetReal(go, "--symfrac"));
-  if (! esl_opt_IsDefault(go, "--wgsc"))      fprintf(cfg->ofp, "# relative weighting scheme:        G/S/C\n");
-  if (! esl_opt_IsDefault(go, "--wblosum"))   fprintf(cfg->ofp, "# relative weighting scheme:        BLOSUM filter\n");
-  if (! esl_opt_IsDefault(go, "--wpb"))       fprintf(cfg->ofp, "# relative weighting scheme:        Henikoff PB\n");
-  if (! esl_opt_IsDefault(go, "--wnone"))     fprintf(cfg->ofp, "# relative weighting scheme:        none\n");
-  if (! esl_opt_IsDefault(go, "--pbswitch"))  fprintf(cfg->ofp, "# num seqs to failover to PB wgts:  %d\n",   esl_opt_GetInteger(go, "--pbswitch"));
-  if (! esl_opt_IsDefault(go, "--wid"))       fprintf(cfg->ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",   esl_opt_GetReal(go, "--wid"));
-  if (! esl_opt_IsDefault(go, "--eent"))      fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting\n");
-  if (! esl_opt_IsDefault(go, "--eclust"))    fprintf(cfg->ofp, "# effective seq number scheme:      single linkage clusters\n");
-  if (! esl_opt_IsDefault(go, "--enone"))     fprintf(cfg->ofp, "# effective seq number scheme:      none\n");
-  if (! esl_opt_IsDefault(go, "--eset"))      fprintf(cfg->ofp, "# effective seq number:             set to %f\n", esl_opt_GetReal(go, "--eset"));
-  if (! esl_opt_IsDefault(go, "--ere") )      fprintf(cfg->ofp, "# rel entropy target for eweights:  %f\n",        esl_opt_GetReal(go, "--ere"));
-  if (! esl_opt_IsDefault(go, "--eX") )       fprintf(cfg->ofp, "# min total relentropy, eweights:   %f\n",        esl_opt_GetReal(go, "--eX"));
-  if (! esl_opt_IsDefault(go, "--eid") )      fprintf(cfg->ofp, "# frac id cutoff for --eclust:      %f\n",        esl_opt_GetReal(go, "--eid"));
-  if (! esl_opt_IsDefault(go, "--EvL") )      fprintf(cfg->ofp, "# seq length for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvL"));
-  if (! esl_opt_IsDefault(go, "--EvN") )      fprintf(cfg->ofp, "# seq number for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvN"));
-  if (! esl_opt_IsDefault(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
-  if (! esl_opt_IsDefault(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
-  if (! esl_opt_IsDefault(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
-  if (! esl_opt_IsDefault(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed deterministically; minimize variation\n");
-  if (! esl_opt_IsDefault(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
-  if (! esl_opt_IsDefault(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  one arbitrary seed; allow run-to-run variation\n");
+  if (esl_opt_IsUsed(go, "-n"))          fprintf(cfg->ofp, "# name (the single) HMM:            %s\n",   esl_opt_GetString(go, "-n"));
+  if (esl_opt_IsUsed(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:          %s\n",   esl_opt_GetString(go, "-o"));
+  if (esl_opt_IsUsed(go, "--amino"))     fprintf(cfg->ofp, "# input alignment is asserted as:   protein\n");
+  if (esl_opt_IsUsed(go, "--dna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   DNA\n");
+  if (esl_opt_IsUsed(go, "--rna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   RNA\n");
+  if (esl_opt_IsUsed(go, "--fast"))      fprintf(cfg->ofp, "# model architecture construction:  fast/heuristic\n");
+  if (esl_opt_IsUsed(go, "--hand"))      fprintf(cfg->ofp, "# model architecture construction:  hand-specified by RF annotation\n");
+  if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(cfg->ofp, "# sym fraction for model structure: %.3f\n", esl_opt_GetReal(go, "--symfrac"));
+  if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(cfg->ofp, "# relative weighting scheme:        G/S/C\n");
+  if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(cfg->ofp, "# relative weighting scheme:        BLOSUM filter\n");
+  if (esl_opt_IsUsed(go, "--wpb"))       fprintf(cfg->ofp, "# relative weighting scheme:        Henikoff PB\n");
+  if (esl_opt_IsUsed(go, "--wnone"))     fprintf(cfg->ofp, "# relative weighting scheme:        none\n");
+  if (esl_opt_IsUsed(go, "--pbswitch"))  fprintf(cfg->ofp, "# num seqs to failover to PB wgts:  %d\n",   esl_opt_GetInteger(go, "--pbswitch"));
+  if (esl_opt_IsUsed(go, "--wid"))       fprintf(cfg->ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",   esl_opt_GetReal(go, "--wid"));
+  if (esl_opt_IsUsed(go, "--eent"))      fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting\n");
+  if (esl_opt_IsUsed(go, "--eclust"))    fprintf(cfg->ofp, "# effective seq number scheme:      single linkage clusters\n");
+  if (esl_opt_IsUsed(go, "--enone"))     fprintf(cfg->ofp, "# effective seq number scheme:      none\n");
+  if (esl_opt_IsUsed(go, "--eset"))      fprintf(cfg->ofp, "# effective seq number:             set to %f\n", esl_opt_GetReal(go, "--eset"));
+  if (esl_opt_IsUsed(go, "--ere") )      fprintf(cfg->ofp, "# rel entropy target for eweights:  %f\n",        esl_opt_GetReal(go, "--ere"));
+  if (esl_opt_IsUsed(go, "--eX") )       fprintf(cfg->ofp, "# min total relentropy, eweights:   %f\n",        esl_opt_GetReal(go, "--eX"));
+  if (esl_opt_IsUsed(go, "--eid") )      fprintf(cfg->ofp, "# frac id cutoff for --eclust:      %f\n",        esl_opt_GetReal(go, "--eid"));
+  if (esl_opt_IsUsed(go, "--EvL") )      fprintf(cfg->ofp, "# seq length for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvL"));
+  if (esl_opt_IsUsed(go, "--EvN") )      fprintf(cfg->ofp, "# seq number for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvN"));
+  if (esl_opt_IsUsed(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
+  if (esl_opt_IsUsed(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
+  if (esl_opt_IsUsed(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
+  if (esl_opt_IsUsed(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed deterministically; minimize variation\n");
+  if (esl_opt_IsUsed(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
+  if (esl_opt_IsUsed(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  one arbitrary seed; allow run-to-run variation\n");
 #ifdef HAVE_MPI
-  if (! esl_opt_IsDefault(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
+  if (esl_opt_IsUsed(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
 #endif
-  if (! esl_opt_IsDefault(go, "--laplace") )  fprintf(cfg->ofp, "# prior:                            Laplace +1\n");
+  if (esl_opt_IsUsed(go, "--laplace") )  fprintf(cfg->ofp, "# prior:                            Laplace +1\n");
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
   return eslOK;

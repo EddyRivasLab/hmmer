@@ -187,8 +187,8 @@ main(int argc, char **argv)
    * and workers in this .c file.
    */
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
-  if (! esl_opt_IsDefault(go, "--seed"))  cfg.r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  else                                    cfg.r = esl_randomness_CreateTimeseeded();
+  if ( esl_opt_IsOn(go, "--seed"))  cfg.r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  else                              cfg.r = esl_randomness_CreateTimeseeded();
   cfg.abc      = esl_alphabet_Create(eslAMINO);
 
   if (esl_opt_GetBoolean(go, "--bgflat")) cfg.bg = p7_bg_CreateUniform(cfg.abc);
@@ -256,12 +256,12 @@ main(int argc, char **argv)
 
   /* Clean up and exit. */
   if (cfg.my_rank == 0) {
-    if (cfg.hfp    != NULL)             p7_hmmfile_Close(cfg.hfp);
-    if (! esl_opt_IsDefault(go, "-o"))  fclose(cfg.ofp); 
-    if (cfg.survfp != NULL)             fclose(cfg.survfp);
-    if (cfg.efp    != NULL)             fclose(cfg.efp);
-    if (cfg.xfp    != NULL)             fclose(cfg.xfp);
-    if (cfg.alfp   != NULL)             fclose(cfg.alfp);
+    if (cfg.hfp    != NULL)      p7_hmmfile_Close(cfg.hfp);
+    if (esl_opt_IsOn(go, "-o"))  fclose(cfg.ofp); 
+    if (cfg.survfp != NULL)      fclose(cfg.survfp);
+    if (cfg.efp    != NULL)      fclose(cfg.efp);
+    if (cfg.xfp    != NULL)      fclose(cfg.xfp);
+    if (cfg.alfp   != NULL)      fclose(cfg.alfp);
   }
   p7_bg_Destroy(cfg.bg);
   esl_alphabet_Destroy(cfg.abc);

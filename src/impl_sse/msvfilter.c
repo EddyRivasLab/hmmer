@@ -450,13 +450,14 @@ main(int argc, char **argv)
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7MSVFILTER_EXAMPLE msvfilter.c -lhmmer -leasel -lm
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o msvfilter_example -Dp7MSVFILTER_EXAMPLE msvfilter.c -lhmmer -leasel -lm
    ./example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_gumbel.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
@@ -479,7 +480,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           sc;
+  float           sc, nullsc, seqscore;
+  double          P;
   int             status;
 
   /* Read in one HMM */
@@ -502,6 +504,7 @@ main(int argc, char **argv)
   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
+  p7_oprofile_ReconfigLength(om, sq->n);
 
   /* allocate DP matrices, both a generic and an optimized one */
   ox = p7_omx_Create(gm->M, 0, 0); /* one row version */
@@ -513,9 +516,16 @@ main(int argc, char **argv)
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
      p7_oprofile_SameMSV(om, gm);
   */
+  p7_MSVFilter   (sq->dsq, sq->n, om, ox, &sc);  
 
-  p7_MSVFilter      (sq->dsq, sq->n, om, ox, &sc);  
+  p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
+  seqscore = (sc - nullsc) / eslCONST_LOG2;
+  P        =  esl_gumbel_surv(seqscore,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+
   printf("msv filter score:     %.2f nats\n", sc);
+  printf("null score:           %.2f nats\n", nullsc);
+  printf("per-seq score:        %.2f bits\n", seqscore);
+  printf("P-value:              %f\n",        P);
 
   /* now in a real app, you'd need to convert raw nat scores to final bit
    * scores, by subtracting the null model score and rescaling.

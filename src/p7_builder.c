@@ -88,17 +88,17 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       if      (esl_opt_GetBoolean(go, "--eent"))    bld->effn_strategy = p7_EFFN_ENTROPY;
       else if (esl_opt_GetBoolean(go, "--eclust"))  bld->effn_strategy = p7_EFFN_CLUST;
       else if (esl_opt_GetBoolean(go, "--enone"))   bld->effn_strategy = p7_EFFN_NONE;
-      else if (!esl_opt_IsDefault(go, "--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, "--eset"); }
+      else if (esl_opt_IsOn      (go, "--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, "--eset"); }
 
       if      (esl_opt_GetBoolean(go, "--Rdet"))    bld->rng_strategy = p7_RNG_DET;
-      else if (!esl_opt_IsDefault(go, "--Rseed")) { bld->rng_strategy = p7_RNG_SEED;       bld->seed = esl_opt_GetInteger(go, "--Rseed"); }
+      else if (esl_opt_IsOn      (go, "--Rseed")) { bld->rng_strategy = p7_RNG_SEED;       bld->seed = esl_opt_GetInteger(go, "--Rseed"); }
       else if (esl_opt_GetBoolean(go, "--Rarb"))    bld->rng_strategy = p7_RNG_ARB;
     }
 
   bld->symfrac   = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")  : 0.5; 
   bld->pbswitch  = (go != NULL) ?  esl_opt_GetInteger(go, "--pbswitch") : 1000;
   bld->wid       = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")      : 0.62;
-  bld->re_target = (go != NULL && ! esl_opt_IsDefault(go, "--ere")) ? esl_opt_GetReal(go, "--ere") : -1.0;
+  bld->re_target = (go != NULL &&  esl_opt_IsOn      (go, "--ere")) ? esl_opt_GetReal(go, "--ere") : -1.0;
   bld->eX        = (go != NULL) ?  esl_opt_GetReal   (go, "--eX")       : 6.0;
   bld->eid       = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")      : 0.62;
   bld->EvL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")      : 100;

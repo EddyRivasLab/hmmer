@@ -114,12 +114,12 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   pli->domT            = 0.0;
   pli->use_bit_cutoffs = FALSE;
 
-  if (! esl_opt_IsDefault(go, "-T")) 
+  if (esl_opt_IsOn(go, "-T")) 
     {
       pli->T    = esl_opt_GetReal(go, "-T"); 
       pli->by_E = FALSE;
     } 
-  if (! esl_opt_IsDefault(go, "--domT")) 
+  if (esl_opt_IsOn(go, "--domT")) 
     {
       pli->domT     = esl_opt_GetReal(go, "--domT"); 
       pli->dom_by_E = FALSE;
@@ -154,12 +154,12 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   pli->incdomT            = 0.0;
   pli->incuse_bit_cutoffs = FALSE;
 
-  if (! esl_opt_IsDefault(go, "--incT")) 
+  if (esl_opt_IsOn(go, "--incT")) 
     {
       pli->incT     = esl_opt_GetReal(go, "--incT"); 
       pli->inc_by_E = FALSE;
     } 
-  if (! esl_opt_IsDefault(go, "--incdomT")) 
+  if (esl_opt_IsOn(go, "--incdomT")) 
     {
       pli->incdomT     = esl_opt_GetReal(go, "--incdomT"); 
       pli->incdom_by_E = FALSE;
@@ -188,12 +188,12 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
    */
   pli->Z       = pli->domZ       = 0.0;
   pli->Z_setby = pli->domZ_setby = p7_ZSETBY_NTARGETS;
-  if (! esl_opt_IsDefault(go, "-Z")) 
+  if (esl_opt_IsOn(go, "-Z")) 
     {
       pli->Z_setby = p7_ZSETBY_OPTION;
       pli->Z       = esl_opt_GetReal(go, "-Z");
     }
-  if (! esl_opt_IsDefault(go, "--domZ")) 
+  if (esl_opt_IsOn(go, "--domZ")) 
     {
       pli->domZ_setby = p7_ZSETBY_OPTION;
       pli->domZ       = esl_opt_GetReal(go, "--domZ");

@@ -107,7 +107,7 @@ main(int argc, char **argv)
 
   /* If caller declared an input format, decode it 
    */
-  if (! esl_opt_IsDefault(go, "--informat")) {
+  if (esl_opt_IsOn(go, "--informat")) {
     infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
     if (infmt == eslSQFILE_UNKNOWN) cmdline_failure(argv[0], "%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
   }

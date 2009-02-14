@@ -425,8 +425,8 @@ main(int argc, char **argv)
   int             N     = esl_opt_GetInteger(go, "-N");
   int             status;
 
-  if (esl_opt_IsDefault(go, "-s"))  r = esl_randomness_CreateTimeseeded();
-  else                              r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  if (esl_opt_IsOn(go, "-s"))  r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  else                         r = esl_randomness_CreateTimeseeded();
 
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
@@ -508,8 +508,8 @@ main(int argc, char **argv)
   int             i;
 
 
-  if (esl_opt_IsDefault(go, "-s"))  r = esl_randomness_CreateTimeseeded();
-  else                              r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  if (esl_opt_IsOn(go, "-s")) r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  else                        r = esl_randomness_CreateTimeseeded();    
 
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM from %s", hmmfile);

@@ -80,7 +80,7 @@ main(int argc, char **argv)
   cfg.nseq         = esl_opt_GetInteger(go, "-N");
   cfg.L            = esl_opt_GetInteger(go, "-L");
 
-  if (! esl_opt_IsDefault(go, "-o"))
+  if ( esl_opt_IsOn(go, "-o"))
     {
       cfg.ofp = fopen(esl_opt_GetString(go, "-o"), "w");
       if (cfg.ofp == NULL) esl_fatal("Failed to open output file %s", esl_opt_GetString(go, "-o"));
@@ -159,7 +159,7 @@ main(int argc, char **argv)
       p7_trace_Destroy(tr);
     }
 
-  if (! esl_opt_IsDefault(go, "-o")) { fclose(cfg.ofp); }
+  if (esl_opt_IsOn(go, "-o")) { fclose(cfg.ofp); }
   esl_sq_Destroy(sq);
   esl_randomness_Destroy(r);
   esl_alphabet_Destroy(abc);
