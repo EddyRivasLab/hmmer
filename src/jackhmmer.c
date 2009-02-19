@@ -298,6 +298,9 @@ main(int argc, char **argv)
   else if (status != eslOK)        esl_fatal("Unexpected error %d opening target sequence database file %s\n", status, dbfile);
   dbsq = esl_sq_CreateDigital(abc);
   
+  if (! esl_sqfile_IsRewindable(dbfp)) 
+    esl_fatal("Target sequence file %s isn't rewindable; jackhmmer requires that it is", dbfile);
+
   /* Open the query sequence file  */
   status = esl_sqfile_OpenDigital(abc, qfile, qformat, NULL, &qfp);
   if      (status == eslENOTFOUND) esl_fatal("Failed to open sequence file %s for reading\n",      qfile);
@@ -325,7 +328,7 @@ main(int argc, char **argv)
 	  if (th   != NULL) p7_tophits_Destroy(th);
 	  if (om   != NULL) p7_oprofile_Destroy(om);
 
-	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
+ 	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
 	  if (msa == NULL)	/* round 1 */
 	    {
 	      p7_SingleBuilder(bld, qsq, bg, NULL, &qtr, NULL, &om); /* bypass HMM - only need model */
@@ -390,7 +393,6 @@ main(int argc, char **argv)
 	  esl_msa_Digitize(abc,msa);
 	  esl_msa_SetName(msa, "iteration%d", iteration);
 
-	  esl_sqfile_Position(dbfp, 0); /* rewind */
 	  esl_stopwatch_Stop(w);
 	  p7_pli_Statistics(ofp, pli, w);
 	  fprintf(ofp, "\n");
@@ -407,6 +409,8 @@ main(int argc, char **argv)
 	      break;
 	    }
 	  else { fprintf(ofp, "@@ Continuing to next round.\n\n"); }
+
+	  esl_sqfile_Position(dbfp, 0);
 	} /* end iteration loop */
 
       /* Because we destroy/create the hitlist, om, pipeline, and msa above, rather than create/destroy,

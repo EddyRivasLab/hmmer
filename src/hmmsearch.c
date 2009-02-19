@@ -173,6 +173,7 @@ main(int argc, char **argv)
   ESL_ALPHABET    *abc     = NULL;
   ESL_STOPWATCH   *w       = NULL;
   P7_BG           *bg      = NULL;
+  int              nquery  = 0;
   int              textw;
   int              status;
   int              hstatus, sstatus;
@@ -212,6 +213,7 @@ main(int argc, char **argv)
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;
 
+      nquery++;
       esl_stopwatch_Start(w);
 
       /* One-time initializations after alphabet <abc> becomes known */
@@ -220,6 +222,14 @@ main(int argc, char **argv)
 	  output_header(ofp, go, hmmfile, dbfile);
 	  bg   = p7_bg_Create(abc);
 	  dbsq = esl_sq_CreateDigital(abc);
+	}
+
+      /* seqfile may need to be rewound (multiquery mode) */
+      if (nquery > 1)
+	{
+	  if (! esl_sqfile_IsRewindable(dbfp)) 
+	    esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", dbfile);
+	  esl_sqfile_Position(dbfp, 0);
 	}
 
       /* Convert to an optimized model */
@@ -284,7 +294,6 @@ main(int argc, char **argv)
 	}
       }
 
-      esl_sqfile_Position(dbfp, 0); /* rewind */
       p7_pipeline_Destroy(pli);
       p7_tophits_Destroy(th);
       p7_profile_Destroy(gm);

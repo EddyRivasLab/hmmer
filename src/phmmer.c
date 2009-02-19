@@ -206,6 +206,7 @@ main(int argc, char **argv)
   P7_BG           *bg       = NULL;               /* null model                               */
   P7_BUILDER      *bld      = NULL;               /* HMM construction configuration           */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                               */
+  int              nquery   = 0;
   int              textw;
   int              status;
   int              qstatus, sstatus;
@@ -269,7 +270,15 @@ main(int argc, char **argv)
       P7_TOPHITS      *th       = NULL;      	  /* top-scoring sequence hits                */
       P7_OPROFILE     *om       = NULL;           /* optimized query profile                  */
 
+      nquery++;
       esl_stopwatch_Start(w);
+
+      /* seqfile may need to be rewound (multiquery mode) */
+      if (nquery > 1)
+	{
+	  if (! esl_sqfile_IsRewindable(dbfp)) esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", dbfile);
+	  esl_sqfile_Position(dbfp, 0);
+	}
 
       fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
       if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
@@ -330,7 +339,6 @@ main(int argc, char **argv)
 	}
       }
 
-      esl_sqfile_Position(dbfp, 0); /* rewind */
       p7_pipeline_Destroy(pli);
       p7_tophits_Destroy(th);
       p7_oprofile_Destroy(om);
