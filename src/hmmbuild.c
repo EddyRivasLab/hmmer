@@ -29,7 +29,6 @@
 #define CONOPTS "--fast,--hand"                                /* Exclusive options for model construction                    */
 #define EFFOPTS "--eent,--eclust,--eset,--enone"               /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"      /* Exclusive options for relative weighting                    */
-#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
@@ -67,14 +66,11 @@ static ESL_OPTIONS options[] = {
   { "--EfL",     eslARG_INT,    "100", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for Forward exp tail mu fit",      6 },   
   { "--EfN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Forward exp tail mu fit",      6 },   
   { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail mu fit",        6 },   
-/* Control of run-to-run variation in RNG */
-  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,    NULL,    NULL, "reseed RNG to minimize run-to-run stochastic variation",       7 },
-  { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "reseed RNG with fixed seed",                                   7 },
-  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "seed RNG arbitrarily; allow run-to-run stochastic variation",  7 },
 /* Other options */
 #ifdef HAVE_MPI
   { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-n",  "run as an MPI parallel program",                        8 },  
 #endif
+  { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
   { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                                8 },
   { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -160,8 +156,6 @@ main(int argc, char **argv)
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
       puts("\nControl of E-value calibration:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
-      puts("\nControl of run-to-run variation due to random number generator:");
-      esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
       puts("\nOther options:");
       esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
       exit(0);
@@ -668,12 +662,13 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
   if (esl_opt_IsUsed(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
   if (esl_opt_IsUsed(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
-  if (esl_opt_IsUsed(go, "--Rdet") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed deterministically; minimize variation\n");
-  if (esl_opt_IsUsed(go, "--Rseed") )    fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
-  if (esl_opt_IsUsed(go, "--Rarb") )     fprintf(cfg->ofp, "# RNG seed (run-to-run variation):  one arbitrary seed; allow run-to-run variation\n");
 #ifdef HAVE_MPI
   if (esl_opt_IsUsed(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
 #endif
+  if (esl_opt_IsUsed(go, "--seed"))  {
+    if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(cfg->ofp,"# random number seed:               one-time arbitrary\n");
+    else                                       fprintf(cfg->ofp,"# random number seed set to:        %d\n", esl_opt_GetInteger(go, "--seed"));
+  }
   if (esl_opt_IsUsed(go, "--laplace") )  fprintf(cfg->ofp, "# prior:                            Laplace +1\n");
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 

@@ -485,7 +485,6 @@ p7_spensemble_Destroy(P7_SPENSEMBLE *sp)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-N",        eslARG_INT,   "1000", NULL, NULL,  NULL,  NULL, NULL, "number of trace samples to take",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -498,7 +497,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r       = NULL;
+  ESL_RANDOMNESS *r       = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   int             format  = eslSQFILE_FASTA;
@@ -518,9 +517,6 @@ main(int argc, char **argv)
   float           sc;
   float           prob;
   int             status;
-
-  if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
-  else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   /* Read in one HMM */
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

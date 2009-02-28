@@ -354,10 +354,10 @@ main(int argc, char **argv)
   P7_BG          *bg     = NULL;
   int             M      = 10000;
   
-  if ((abc = esl_alphabet_Create(eslAMINO))     == NULL)  esl_fatal("failed to create amino alphabet");
-  if ((r   = esl_randomness_CreateTimeseeded()) == NULL)  esl_fatal("failed to create randomness");
-  if (p7_hmm_Sample(r, M, abc, &hmm)            != eslOK) esl_fatal("failed to sample random HMM");
-  if ((bg = p7_bg_Create(abc))                  == NULL)  esl_fatal("failed to created null model");
+  if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create amino alphabet");
+  if ((r   = esl_randomness_Create(0))      == NULL)  esl_fatal("failed to create randomness");
+  if (p7_hmm_Sample(r, M, abc, &hmm)        != eslOK) esl_fatal("failed to sample random HMM");
+  if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
 
   utest_Config(hmm, bg);
   utest_occupancy(hmm);
@@ -480,7 +480,7 @@ main(int argc, char **argv)
     return eslFAIL;
   }
 
-  r   = esl_randomness_CreateTimeseeded();
+  r = esl_randomness_Create(0);
 
   if (hmmfile != NULL)
     {	/* Read the HMM (and get alphabet from it) */

@@ -78,7 +78,7 @@ static ESL_OPTIONS options[] = {
   { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                7 },  
   { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 7 },
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   7 },  
-  { "--seed",    eslARG_INT,     NULL, NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
+  { "--seed",    eslARG_INT,      "0", NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
 
   { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -187,8 +187,7 @@ main(int argc, char **argv)
    * and workers in this .c file.
    */
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
-  if ( esl_opt_IsOn(go, "--seed"))  cfg.r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  else                              cfg.r = esl_randomness_CreateTimeseeded();
+  cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
   cfg.abc      = esl_alphabet_Create(eslAMINO);
 
   if (esl_opt_GetBoolean(go, "--bgflat")) cfg.bg = p7_bg_CreateUniform(cfg.abc);

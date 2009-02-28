@@ -22,12 +22,14 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",         0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-p", "emit simple consensus sequence",               0 },
-  { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "send sequence output to file <f>, not stdout", 0 },
-  { "-p",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-c", "sample from profile, not core model",          0 },
-  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    "-c", "number of seqs to sample",                     0 },
-  { "-L",        eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    "-c", "set expected length from profile to <n>",      0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                0 },
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-p", "emit simple consensus sequence",                      0 },
+  { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "send sequence output to file <f>, not stdout",        0 },
+  { "-p",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-c", "sample from profile, not core model",                 0 },
+  { "-N",        eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    "-c", "number of seqs to sample",                            0 },
+  { "-L",        eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    "-c", "set expected length from profile to <n>",             0 },
+  { "--seed",    eslARG_INT,      "0", NULL, "n>=0",    NULL,      NULL,    NULL, "set RNG seed to <n>",                                 0 },
+
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -99,8 +101,7 @@ main(int argc, char **argv)
    * Initializations, including opening the HMM file
    *****************************************************************/
 
-  if ((r = esl_randomness_CreateTimeseeded()) == NULL)
-    esl_fatal("Failed to create random number generator: probably out of memory");
+  r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);

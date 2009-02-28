@@ -7,18 +7,42 @@
 # SVN $Id$
 #
 
-IMPLDIR  = impl_@IMPL_CHOICE@
+SRCDIR   = ../src
 ESLDIR   = ../easel
+IMPLDIR  = ${SRCDIR}/impl_@IMPL_CHOICE@
+SQCLEVEL = 2
+
+PROGS    = 
 
 all:  
+	cd ${ESLDIR};  ${MAKE} easel_lib
+	cd ${ESLDIR};  ${MAKE} easel_progs
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+	cd ${SRCDIR};  ${MAKE} hmmer_lib
+	cd ${SRCDIR};  ${MAKE} hmmer_progs
+	cd ${IMPLDIR}; ${MAKE} hmmer_utests
+	cd ${IMPLDIR}; ${MAKE} impl_utests
+	${MAKE} testsuite_progs
 
 check: 
-	@cd ../src/;           ${MAKE} check
-	@cd ../src/${IMPLDIR}; ${MAKE} check
+	cd ${ESLDIR};  ${MAKE} easel_lib
+	cd ${ESLDIR};  ${MAKE} easel_progs
+	cd ${ESLDIR};  ${MAKE} easel_utests
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+	cd ${SRCDIR};  ${MAKE} hmmer_lib
+	cd ${SRCDIR};  ${MAKE} hmmer_progs
+	cd ${IMPLDIR}; ${MAKE} hmmer_utests
+	cd ${IMPLDIR}; ${MAKE} impl_utests
+	${MAKE} testsuite_progs
+	${MAKE} run_sqc
+
+testsuite_progs: ${PROGS}
+
+run_sqc:
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${ESLDIR}/devkit/sqc 2 testsuite.sqc . ../src/ ../src/${IMPLDIR}
+	@${ESLDIR}/devkit/sqc -p ${ESLDIR}/miniapps ${SQCLEVEL} testsuite.sqc . ../src/ ../src/${IMPLDIR}
 
 clean:
 	-rm -f *.gcno *.gcda *.gcov

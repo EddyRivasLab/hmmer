@@ -1524,10 +1524,10 @@ main(int argc, char **argv)
   char tmpfile[32]     = "tmp-hmmerXXXXXX";
   int           M      = 20;
   
-  if ((aa_abc = esl_alphabet_Create(eslAMINO))     == NULL)  esl_fatal("failed to create amino alphabet");
-  if ((nt_abc = esl_alphabet_Create(eslDNA))       == NULL)  esl_fatal("failed to create DNA alphabet");
-  if ((r      = esl_randomness_CreateTimeseeded()) == NULL)  esl_fatal("failed to create randomness");
-  if ((esl_tmpfile_named(tmpfile, &fp))            != eslOK) esl_fatal("failed to create tmp file");
+  if ((aa_abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create amino alphabet");
+  if ((nt_abc = esl_alphabet_Create(eslDNA))   == NULL)  esl_fatal("failed to create DNA alphabet");
+  if ((r      = esl_randomness_Create(0))      == NULL)  esl_fatal("failed to create randomness");
+  if ((esl_tmpfile_named(tmpfile, &fp))        != eslOK) esl_fatal("failed to create tmp file");
   fclose(fp);
 
   /* Protein HMMs */

@@ -410,7 +410,7 @@ main(int argc, char **argv)
   float            nullsc;
   double           bitscore;
 
-  r  = esl_randomness_CreateTimeseeded();
+  r  = esl_randomness_Create(0);
   tr = p7_trace_Create();
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("failed to open %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read HMM");
@@ -469,7 +469,6 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "configured mean seq length for profile",           0 },
   { "-N",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
@@ -482,7 +481,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = NULL;
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
@@ -495,9 +494,6 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   char            errbuf[eslERRBUFSIZE];
   int             i;
-
-  if (esl_opt_GetBoolean(go, "-r"))  rng = esl_randomness_CreateTimeseeded();
-  else                               rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");

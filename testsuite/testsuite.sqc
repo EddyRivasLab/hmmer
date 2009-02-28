@@ -33,7 +33,6 @@
 1 exercise vitfilter          @vitfilter_utest@
 1 exercise vitscore           @vitscore_utest@
 
-
 # Still to come, unit tests for
 #   dp_optaccuracy.c
 #   emit.c
@@ -58,3 +57,35 @@
 #   p7_spensemble.c
 #   p7_trace.c
 #   seqmodel.c
+
+################################################################
+# Integration tests
+################################################################
+
+# Run-to-run variation tests
+# By default, stochastic simulations are seeded reproducibly, so there
+# is no run-to-run variation; whereas with different RNG seeds,
+# run-to-run variation does occur. [xref J5/99]
+#           xxxxxxxxxxxxxxxxxxxx
+1 prep      Caudal                @esl-afetch@ minifam Caudal_act > %CAUDAL.STO%
+1 prep      hmm                   @hmmbuild@ %CAUDAL.HMM% %CAUDAL.STO%
+1 prep      minifam               @hmmbuild@ %MINIFAM.HMM% minifam
+1 prep      minifam_press         @hmmpress@ %MINIFAM.HMM% 
+1 prep      seq                   @hmmemit@  --seed 2 -p %CAUDAL.HMM% > %TESTSEQ%
+1 prep      db_1                  @hmmemit@  --seed 2 -p %CAUDAL.HMM% > %TESTDB%
+1 prep      db_2                  @esl-reformat@ fasta Caudal_act.sto >> %TESTDB%
+1 prep      db_3                  @esl-shuffle@ -G --amino -N 100 -L 350 >> %TESTDB%
+1 exercise  hmmbuild_variation    @i1-build-variation.sh@     @hmmbuild@   Caudal_act.sto          %OUTFILES%
+1 exercise  hmmscan_variation     @i2-search-variation.sh@    @hmmscan@    %MINIFAM.HMM% %TESTSEQ% %OUTFILES%
+1 exercise  hmmsearch_variation   @i2-search-variation.sh@    @hmmsearch@  %CAUDAL.HMM%  %TESTDB%  %OUTFILES%
+1 exercise  phmmer_variation      @i3-seqsearch-variation.sh@ @phmmer@     %TESTSEQ%     %TESTDB%  %OUTFILES%
+3 exercise  jackhmmer_variation   @i3-seqsearch-variation.sh@ @jackhmmer@  %TESTSEQ%     %TESTDB%  %OUTFILES%
+1 prep      cleanup               rm %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3i %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3p
+
+
+################################################################
+# Fixed bug tests
+################################################################
+
+1 exercise h39                @hmmsearch@ M1.hmm M1.sto
+

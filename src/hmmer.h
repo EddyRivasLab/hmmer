@@ -551,8 +551,9 @@ typedef struct p7_domaindef_s {
   float *n2sc;
 
   /* rng and reusable memory for stochastic tracebacks */
-  ESL_RANDOMNESS *r;
-  P7_SPENSEMBLE  *sp;
+  ESL_RANDOMNESS *r;		/* random number generator                                 */
+  int             do_reseeding;	/* TRUE to reset the RNG, make results reproducible        */
+  P7_SPENSEMBLE  *sp;		/* an ensemble of sampled segment pairs (domain endpoints) */
   P7_TRACE       *tr;		/* reusable space for a trace of a domain                  */
   P7_TRACE       *gtr;		/* reusable space for a traceback of the entire target seq */
 
@@ -678,6 +679,7 @@ typedef struct p7_pipeline_s {
 
   /* Domain postprocessing                                                  */
   ESL_RANDOMNESS *r;		/* random number generator                  */
+  int             do_reseeding; /* TRUE: reseed for reproducible results    */
   P7_DOMAINDEF   *ddef;		/* domain definition workflow               */
 
   /* Reporting threshold settings                                           */
@@ -736,7 +738,6 @@ typedef struct p7_pipeline_s {
 enum p7_archchoice_e { p7_ARCH_FAST = 0, p7_ARCH_HAND = 1 };
 enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
 enum p7_effnchoice_e { p7_EFFN_NONE = 0, p7_EFFN_SET  = 1, p7_EFFN_CLUST = 2, p7_EFFN_ENTROPY = 3 };
-enum p7_rngchoice_e  { p7_RNG_DET   = 0, p7_RNG_SEED  = 1, p7_RNG_ARB    = 2 };
 
 typedef struct p7_builder_s {
   /* Model architecture                                                                            */
@@ -756,9 +757,8 @@ typedef struct p7_builder_s {
   double               eset;		 /* effective sequence number, if --eset; or -1.0          */
 
   /* Run-to-run variation due to random number generation                                          */
-  enum p7_rngchoice_e  rng_strategy;     /* how to reseed random number generator                  */
   ESL_RANDOMNESS      *r;	         /* RNG for E-value calibration simulations                */
-  int                  seed;		 /* fixed seed value for reseeding, if --Rseed; else 0     */
+  int                  do_reseeding;	 /* TRUE to reseed, making results reproducible            */
 
   /* E-value parameter calibration                                                                 */
   int                  EvL;            	 /* length of sequences generated for Viterbi fitting      */

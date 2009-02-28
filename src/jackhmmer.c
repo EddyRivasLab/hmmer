@@ -24,7 +24,6 @@
 #define CONOPTS "--fast,--hand"                            /* Exclusive options for model construction                    */
 #define EFFOPTS "--eent,--eclust,--eset,--enone"           /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"  /* Exclusive options for relative weighting                    */
-#define RNGOPTS "--Rdet,--Rseed,-Rarb"                     /* Exclusive options for controlling run-to-run variation      */
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles     reqs   incomp                             help                                                  docgroup*/
@@ -87,11 +86,8 @@ static ESL_OPTIONS options[] = {
   { "--EfL",         eslARG_INT,   "100", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Forward exp tail mu fit",              9 },   
   { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Forward exp tail mu fit",              9 },   
   { "--Eft",         eslARG_REAL, "0.04", NULL,"0<x<1",    NULL,    NULL,    NULL, "tail mass for Forward exponential tail mu fit",                9 },   
-/* Control of run-to-run variation in RNG */
-  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,    NULL,    NULL, "reseed RNG to minimize run-to-run stochastic variation",      10 },
-  { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "reseed RNG with fixed seed",                                  10 },
-  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,    NULL,    NULL, "seed RNG arbitrarily; allow run-to-run stochastic variation", 10 },
 /* Other options */
+  { "--seed",        eslARG_INT,    "42", NULL, "n>=0",    NULL,  NULL,    NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",       11 },
   { "--textw",       eslARG_INT,   "120", NULL, "n>=120",  NULL,    NULL,"--notextw","set max width of ASCII text output lines",                  11 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,"--textw",  "unlimit ASCII text output line width",                      11 },
 #ifdef HAVE_MPI
@@ -147,9 +143,6 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
 
       puts("\nOptions controlling E value calibration:");
       esl_opt_DisplayHelp(stdout, go, 9, 2, 120); 
-
-      puts("\nOptions controlling run-to-run variation due to random number generation:");
-      esl_opt_DisplayHelp(stdout, go, 10, 2, 120); 
 
       puts("\nOther expert options:");
       esl_opt_DisplayHelp(stdout, go, 11, 2, 120); 
@@ -226,9 +219,10 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));
   if (esl_opt_IsUsed(go, "--EfN") )      fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfN"));
   if (esl_opt_IsUsed(go, "--Eft") )      fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",     esl_opt_GetReal   (go, "--Eft"));
-  if (esl_opt_IsUsed(go, "--Rdet") )     fprintf(ofp, "# RNG seed (run-to-run variation): reseed deterministically; minimize variation\n");
-  if (esl_opt_IsUsed(go, "--Rseed") )    fprintf(ofp, "# RNG seed (run-to-run variation): reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
-  if (esl_opt_IsUsed(go, "--Rarb") )     fprintf(ofp, "# RNG seed (run-to-run variation): one arbitrary seed; allow run-to-run variation\n");
+  if (esl_opt_IsUsed(go, "--seed"))  {
+    if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(ofp, "# random number seed:              one-time arbitrary\n");
+    else                                       fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(go, "--seed"));
+  }
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
   if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
@@ -276,7 +270,6 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
   esl_stopwatch_Start(w);
-
 
   /* Initialize builder configuration */
   bld = p7_builder_Create(go, abc);

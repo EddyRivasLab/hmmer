@@ -31,7 +31,7 @@
  * Purpose:   Calibrate the E-value parameters of a model with 
  *            one calculation ($\lambda$) and two brief simulations
  *            (Viterbi $\mu$, Forward $\tau$).
- *
+ *            
  * Args:      hmm     - HMM to be calibrated
  *            cfg_b   - OPTCFG: ptr to optional build configuration;
  *                      if <NULL>, use default parameters.
@@ -77,6 +77,8 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
    */
   if (r  == NULL) {
     if ((r = esl_randomness_Create(42)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create RNG");
+  } else if (cfg_b != NULL && cfg_b->do_reseeding) {
+    esl_randomness_Init(r, esl_randomness_GetSeed(r));
   }
 
   if (bg == NULL) {
@@ -396,7 +398,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
   { "-t",        eslARG_REAL,  "0.04", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
   { "-N",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "set seq number to <n>",                          0 },
@@ -410,7 +412,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_RANDOMNESS *r       = NULL;
+  ESL_RANDOMNESS *r       = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -424,9 +426,6 @@ main(int argc, char **argv)
   int             L     = esl_opt_GetInteger(go, "-L");
   int             N     = esl_opt_GetInteger(go, "-N");
   int             status;
-
-  if (esl_opt_IsOn(go, "-s"))  r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
-  else                         r = esl_randomness_CreateTimeseeded();
 
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
@@ -476,7 +475,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
   { "-f",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "fit the Forward mu, not Viterbi mu",             0 },
-  { "-s",        eslARG_INT,     NULL, NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
+  { "-s",        eslARG_INT,     "0",  NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed to <n>",        0 },
   { "-l",        eslARG_REAL,"0.6931", NULL, NULL,  NULL,  NULL, NULL, "set lambda param to <x>",                        0 },
   { "-t",        eslARG_REAL,  "0.04", NULL, NULL,  NULL,  NULL, NULL, "set fitted tail probability to <x>",             0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "set length to <n>",                              0 },
@@ -492,7 +491,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_RANDOMNESS *r       = NULL;
+  ESL_RANDOMNESS *r       = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -506,10 +505,6 @@ main(int argc, char **argv)
   int             Z       = esl_opt_GetInteger(go, "-Z");
   double          mu;
   int             i;
-
-
-  if (esl_opt_IsOn(go, "-s")) r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
-  else                        r = esl_randomness_CreateTimeseeded();    
 
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM from %s", hmmfile);

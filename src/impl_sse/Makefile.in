@@ -61,57 +61,83 @@ EXAMPLES =\
 	vitfilter_example\
 	vitscore_example
 
-all: 	   ${HDRS} ${OBJS}
-	$(AR) ../libhmmer.a ${OBJS}
+all: 	 impl_lib
+
+check:     
+	cd ../../easel; ${MAKE} easel_lib
+	cd ..;          ${MAKE} hmmer_lib
+	${MAKE} impl_lib
+	${MAKE} impl_utests
+
+dev:     
+	cd ../../easel; ${MAKE} easel_lib
+	cd ..;          ${MAKE} hmmer_lib
+	${MAKE} impl_lib
+	${MAKE} impl_utests
+	${MAKE} impl_benchmarks
+	${MAKE} impl_examples
+
+impl_lib:        impl_lib_stamp
+impl_utests:     ${UTESTS}
+impl_benchmarks: ${BENCHMARKS}
+impl_examples:   ${EXAMPLES}
+
+impl_lib_stamp: ${OBJS}
+	$(AR) ../libhmmer.a $?
 	$(RANLIB) ../libhmmer.a
-	chmod 644 ../libhmmer.a
+	chmod 644 ../libhmmer.a	
+	touch $@
 
-check:     ${UTESTS}
+${OBJS}:   ${HDRS}
 
-dev:       ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
+.c.o:  
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
 ${UTESTS}: ../libhmmer.a ../../easel/libeasel.a 
 	@ echo "Compiling $@"
-	@BASENAME=`echo $@ | sed -e 's/_utest//'` ;\
+	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
-	DFILE=$${BASENAME}.c ;\
+	if test -e p7_$${BASENAME}.c; then \
+           DFILE=p7_$${BASENAME}.c ;\
+        else \
+           DFILE=$${BASENAME}.c ;\
+	fi;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
 ${BENCHMARKS}: ../libhmmer.a ../../easel/libeasel.a
 	@ echo "Compiling $@"
-	@BASENAME=`echo $@ | sed -e 's/_benchmark//'` ;\
+	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
-	DFILE=$${BASENAME}.c ;\
+	if test -e p7_$${BASENAME}.c; then \
+           DFILE=p7_$${BASENAME}.c ;\
+        else \
+           DFILE=$${BASENAME}.c ;\
+	fi;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
 ${EXAMPLES}: ../libhmmer.a ../../easel/libeasel.a 
 	@ echo "Compiling $@"
-	@BASENAME=`echo $@ | sed -e 's/_example//'` ;\
+	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
-	DFILE=$${BASENAME}.c ;\
+	if test -e p7_$${BASENAME}.c; then \
+           DFILE=p7_$${BASENAME}.c ;\
+        else \
+           DFILE=$${BASENAME}.c ;\
+	fi;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
-../libhmmer.a:  ${HDRS} ${OBJS}
-	cd ..; ${MAKE} libhmmer.a
-
-../../easel/libeasel.a:
-	cd ../../easel/; ${MAKE} libeasel.a
-
-.c.o:
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
-
-
 distclean:
-	make clean
+	${MAKE} clean
 	-rm -f Makefile 
 
 clean:
 	-rm -f ${UTESTS}
 	-rm -f ${BENCHMARKS}
 	-rm -f ${EXAMPLES}
+	-rm -f impl_lib_stamp
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
 	-rm -f *.gcno
 

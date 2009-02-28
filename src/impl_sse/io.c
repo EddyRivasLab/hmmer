@@ -553,7 +553,6 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-M",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "size of random model to sample",                 0 },
   { "-L",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "configure model for length <n>",                 0 },
@@ -566,7 +565,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = NULL;
+  ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = NULL;
   P7_BG          *bg   = NULL;
   P7_HMM         *hmm  = NULL;
@@ -574,9 +573,6 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   
-  if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
-  else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
-
   /* Sample a random HMM and optimized profile, in amino acid alphabet.  */
   if ((abc = esl_alphabet_Create(eslAMINO))                    == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))                                 == NULL)  esl_fatal("failed to create null model");

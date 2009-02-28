@@ -44,7 +44,6 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of randomly sampled HMMs",                0 },
@@ -94,7 +93,7 @@ main(int argc, char **argv)
   struct p7_bruteparam_s prm;
   ESL_GETOPTS    *go       = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_ALPHABET   *abc      = esl_alphabet_Create(eslDNA);
-  ESL_RANDOMNESS *r        = NULL;
+  ESL_RANDOMNESS *r        = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   P7_BG          *bg       = p7_bg_Create(abc);
   P7_GMX         *gx       = p7_gmx_Create(3, 4); /* M=3, L up to 4. */
   P7_OMX         *ox       = p7_omx_Create(3, 4); 
@@ -112,9 +111,6 @@ main(int argc, char **argv)
   int             L;
   int             i,j;
   float           vprecision, fprecision; /* expected bound on absolute accuracy for viterbi, forward */
-
-  if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
-  else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   for (do_alternate_implementation = 0; do_alternate_implementation <= 1; do_alternate_implementation++)
     for (do_local = 0; do_local <= 1; do_local++) /* run tests in both glocal and local mode   */

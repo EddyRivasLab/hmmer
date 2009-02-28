@@ -46,7 +46,7 @@
  *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --pbswitch --wid
  *            Effective seq #:      --eent --eclust --enone --eset --ere --eX --eid
  *            E-val calibration:    --EvL --EvN --EfL --EfN --Eft
- *            run-to-run variation: --Rdet --Rseed --Rarb
+ *            run-to-run variation: --seed
  *            
  *            See <hmmbuild.c> or other big users of the build
  *            pipeline for an example of appropriate <ESL_GETOPTS>
@@ -56,23 +56,24 @@ P7_BUILDER *
 p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
 {
   P7_BUILDER *bld = NULL;
+  int         seed;
   int         status;
 
+
   ESL_ALLOC(bld, sizeof(P7_BUILDER));
-  bld->prior     = NULL;
-  bld->r         = NULL;
-  bld->S         = NULL;
-  bld->Q         = NULL;
-  bld->eset      = -1.0;	/* -1.0 = unset; must be set if effn_strategy is p7_EFFN_SET */
-  bld->re_target = -1.0;
-  bld->seed      = 0;
-  
+  bld->prior        = NULL;
+  bld->r            = NULL;
+  bld->S            = NULL;
+  bld->Q            = NULL;
+  bld->eset         = -1.0;	/* -1.0 = unset; must be set if effn_strategy is p7_EFFN_SET */
+  bld->re_target    = -1.0;
+
   if (go == NULL) 
     {
       bld->arch_strategy = p7_ARCH_FAST;
       bld->wgt_strategy  = p7_WGT_GSC;
       bld->effn_strategy = p7_EFFN_ENTROPY;
-      bld->rng_strategy  = p7_RNG_DET;
+      seed               = 0;
     }
   else 
     {
@@ -90,9 +91,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       else if (esl_opt_GetBoolean(go, "--enone"))   bld->effn_strategy = p7_EFFN_NONE;
       else if (esl_opt_IsOn      (go, "--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, "--eset"); }
 
-      if      (esl_opt_GetBoolean(go, "--Rdet"))    bld->rng_strategy = p7_RNG_DET;
-      else if (esl_opt_IsOn      (go, "--Rseed")) { bld->rng_strategy = p7_RNG_SEED;       bld->seed = esl_opt_GetInteger(go, "--Rseed"); }
-      else if (esl_opt_GetBoolean(go, "--Rarb"))    bld->rng_strategy = p7_RNG_ARB;
+      seed = esl_opt_GetInteger(go, "--seed");
     }
 
   bld->symfrac   = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")  : 0.5; 
@@ -107,9 +106,13 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->EfN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")      : 200;
   bld->Eft       = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")      : 0.04;
     
-  /* it's correct to initially create a timeseeded RNG. The DET and SEED options 
-   * reseed it later as needed at the appropriate granularity */
-  if ((bld->r = esl_randomness_CreateTimeseeded()) == NULL) goto ERROR;
+  /* Normally we reinitialize the RNG to original seed before calibrating each model.
+   * This eliminates run-to-run variation.
+   * As a special case, seed==0 means choose an arbitrary seed and shut off the
+   * reinitialization; this allows run-to-run variation.
+   */
+  bld->r            = esl_randomness_Create(seed);
+  bld->do_reseeding = (seed == 0) ? FALSE : TRUE;
 
   switch (abc->type) {
   case eslAMINO: bld->prior = p7_prior_CreateAmino();      break;

@@ -1,30 +1,30 @@
-################################################################# 
-# HMMER
-# Main project directory: installation, documentation
-# SVN $Id$
-
-
+# Top level Makefile for HMMER
+# 
 # On most Unices, you can build the package without modifying anything 
 #   by just typing "./configure; make".
-
-
+#
 # Post-configuration, you may still want to modify the following make variables:
 #   BINDIR  - where the executables will be installed by a 'make install'
 #   MANDIR  - where the man pages will be installed by a 'make install'
 #   CC      - which compiler to use
 #   CFLAGS  - compiler flags to use
 #
-# We generally follow GNU coding standards here. ${prefix} might be /usr/local.
-# ${exec_prefix} gives you some flexibility for installing architecture
-# dependent files (e.g. the programs): an example ${exec_prefix} might be
-# /nfs/share/irix64/
+# We generally follow GNU coding standards. ${prefix} might be
+# /usr/local.  ${exec_prefix} gives you some flexibility for
+# installing architecture dependent files (e.g. the programs): an
+# example ${exec_prefix} might be /nfs/share/irix64/
 #
 # You can also provide DESTDIR from the commandline, for installation
 # in a buildroot; for example:
 #     make DESTDIR=~/rpm/tmp/buildroot install
 # By default, DESTDIR is null.
-# This was added by request (rousse@ccr.jussieu.fr), to support 
-# packaging of an official Mandrake Linux contrib RPM.
+#
+# SVN $Id$
+SHELL       = /bin/sh
+SUFFIXES    = 
+SUFFIXES    = .c .o
+
+# Installation targets
 #
 prefix      = @prefix@
 exec_prefix = @exec_prefix@
@@ -32,24 +32,29 @@ datarootdir = @datarootdir@
 BINDIR      = @bindir@
 MANDIR      = @mandir@
 
-# how to install the man pages; 
-# cp is generally fine, unless you preformat your pages.
+# Compiler configuration
+#
+CC        = @CC@
+CFLAGS    = @CFLAGS@
+LDFLAGS   = -static @LDFLAGS@
+SIMDFLAGS = @SIMD_CFLAGS@
+CPPFLAGS  = @CPPFLAGS@
+
+# Other tools
 #
 INSTMAN   = cp
 MANSUFFIX = 1
+AR        = @AR@ rcv
+LN        = ln
+RANLIB    = @RANLIB@
+COMPRESS  = gzip
 
-# your compiler and compiler flags
-#
-CC     = @CC@
-CFLAGS = @CFLAGS@
-
-#######
+#######################################################################
 ## You should not need to modify below this line.
 ## Much of it is concerned with maintenance of the development version
 ## and building the release (indeed, several commands will only work at
 ## Janelia)
 #######
-SHELL       = /bin/sh
 PACKAGE     = @PACKAGE_NAME@
 BASENAME    = @PACKAGE_TARNAME@
 RELEASE     = @PACKAGE_VERSION@
@@ -57,8 +62,13 @@ RELEASEDATE = "@PACKAGE_DATE@"
 COPYRIGHT   = "@PACKAGE_COPYRIGHT@"
 LICENSELINE = "@PACKAGE_LICENSE@"
 LICENSETAG  = gnu
-COMPRESS    = gzip
 REPOSITORY  = https://svn.janelia.org/eddylab/eddys/src/
+
+ESLDIR      = easel
+SRCDIR      = src
+TESTDIR     = testsuite
+PMARKDIR    = profmark
+IMPLDIR     = ${SRCDIR}/impl_@IMPL_CHOICE@
 
 # The program lists below for HMMER are not necessarily
 # a complete manifest. They are the list of stable programs that the
@@ -77,21 +87,54 @@ PROGS = hmmalign\
 	jackhmmer\
 	phmmer
 
-# all: Compile everything.
+# all: Compile all documented executables.
+#      (Excludes test programs.)
 #
 all:   
-	cd easel; ${MAKE}
-	cd src;   ${MAKE}
+	cd ${ESLDIR};   ${MAKE} easel_lib
+	cd ${ESLDIR};   ${MAKE} easel_progs
+	cd ${IMPLDIR};  ${MAKE} impl_lib
+	cd ${SRCDIR};   ${MAKE} hmmer_lib
+	cd ${PMARKDIR}; ${MAKE} profmark_progs
+	cd ${SRCDIR};   ${MAKE} hmmer_progs	
 
+
+# check: Run test suites.
+check:
+	cd ${ESLDIR};   ${MAKE} easel_lib
+	cd ${ESLDIR};   ${MAKE} easel_progs
+	cd ${ESLDIR};   ${MAKE} easel_utests
+	cd ${IMPLDIR};  ${MAKE} impl_lib
+	cd ${SRCDIR};   ${MAKE} hmmer_lib
+	cd ${SRCDIR};   ${MAKE} hmmer_progs
+	cd ${SRCDIR};   ${MAKE} hmmer_utests
+	cd ${IMPLDIR};  ${MAKE} impl_utests
+	cd ${TESTDIR};  ${MAKE} testsuite_progs
+	cd ${ESLDIR};   ${MAKE} run_sqc
+	cd ${TESTDIR};  ${MAKE} run_sqc
+
+# dev: compile all executables, including drivers.
 dev:
-	cd easel; ${MAKE}
-	cd src;   ${MAKE} dev
+	cd ${ESLDIR};   ${MAKE} easel_lib
+	cd ${ESLDIR};   ${MAKE} easel_progs
+	cd ${ESLDIR};   ${MAKE} easel_utests
+	cd ${IMPLDIR};  ${MAKE} impl_lib
+	cd ${SRCDIR};   ${MAKE} hmmer_lib
+	cd ${SRCDIR};   ${MAKE} hmmer_progs
+	cd ${SRCDIR};   ${MAKE} hmmer_utests
+	cd ${SRCDIR};   ${MAKE} hmmer_benchmarks
+	cd ${SRCDIR};   ${MAKE} hmmer_examples
+	cd ${IMPLDIR};  ${MAKE} impl_utests
+	cd ${IMPLDIR};  ${MAKE} impl_benchmarks
+	cd ${IMPLDIR};  ${MAKE} impl_examples
+	cd ${PMARKDIR}; ${MAKE} profmark_progs
+	cd ${TESTDIR};  ${MAKE} testsuite_progs
 
-# check: compiles and runs test suite in testsuite/
-#       These are public tests, distributed with the package.
-#
-check:	
-	(cd testsuite; make check)
+Makefile:  configure
+	./configure
+
+configure: configure.ac
+	autoconf
 
 src/libhmmer.a: 
 	cd src; ${MAKE} libhmmer.a
@@ -125,26 +168,25 @@ uninstall:
 
 # "make clean" removes almost everything except configuration files.
 #
-#	(cd src;       make clean)
 clean:
-	if test -d src;       then (cd src;       make clean); fi
-	if test -d easel;     then (cd easel;     make clean); fi
-	if test -d profmark;  then (cd profmark;  make clean); fi
-	if test -d testsuite; then (cd testsuite; make clean); fi
+	if test -d src;       then (cd src;       ${MAKE} clean); fi
+	if test -d easel;     then (cd easel;     ${MAKE} clean); fi
+	if test -d profmark;  then (cd profmark;  ${MAKE} clean); fi
+	if test -d testsuite; then (cd testsuite; ${MAKE} clean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
 # "make distclean" leaves a pristine source distribution.
 #
-#	(cd src;       make distclean)
 distclean:
 #	-rm -rf binaries
 	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	if test -d src;           then (cd src;       make distclean); fi
-	if test -d easel;         then (cd easel;     make distclean); fi
-	if test -d profmark;      then (cd profmark;  make distclean); fi
-	if test -d testsuite;     then (cd testsuite; make distclean); fi
+	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
+	if test -d src;           then (cd src;       ${MAKE} distclean); fi
+	if test -d easel;         then (cd easel;     ${MAKE} distclean); fi
+	if test -d profmark;      then (cd profmark;  ${MAKE} distclean); fi
+	if test -d testsuite;     then (cd testsuite; ${MAKE} distclean); fi
 	-rm LICENSE.csh
 	-rm Makefile
 
@@ -179,7 +221,7 @@ distclean:
 # 	done
 
 
-tags:
+TAGS:
 	etags src/*.c src/*.h src/p7_config.h.in Makefile.in 
 	etags -a documentation/userguide/*.tex documentation/userguide/Makefile
 	etags -a documentation/man/*.man  documentation/man/boilerplate

@@ -165,6 +165,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",    0 },
   { "-i",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "run the integer version",                 0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",           0 },
   { "-v",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual results",     0 },
   { "-N",        eslARG_INT,"100000000",NULL,"n>0", NULL,  NULL, NULL, "number of trials",                        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -189,7 +190,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r       = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   int             N       = esl_opt_GetInteger(go, "-N");
   int             i;
@@ -325,8 +326,7 @@ static ESL_OPTIONS options[] = {
   {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0},
   {"-N",  eslARG_INT,    "1000", NULL, "n>0",NULL, NULL, NULL, "number of samples",                 0},
   {"-S",  eslARG_REAL,   "20.0", NULL, "x>0",NULL, NULL, NULL, "maximum operand value",             0},
-  {"-r",  eslARG_NONE,     NULL, NULL, NULL, NULL, NULL, NULL, "use arbitrary random number seed",  0},
-  {"-s",  eslARG_INT,      "42", NULL, "n>0",NULL, NULL, NULL, "random number seed",                0},
+  {"-s",  eslARG_INT,      "42", NULL,"n>=0",NULL, NULL, NULL, "random number seed",                0},
   {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose output",               0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
@@ -337,10 +337,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go     = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r      = NULL;
-
-  if (esl_opt_GetBoolean(go, "-r")) r = esl_randomness_CreateTimeseeded();
-  else                              r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   p7_FLogsumInit();
 

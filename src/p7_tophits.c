@@ -876,7 +876,6 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-M",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "number of top hits lists to simulate and merge",   0 },
   { "-N",        eslARG_INT,  "10000", NULL, NULL,  NULL,  NULL, NULL, "number of top hits to simulate",                   0 },
@@ -890,7 +889,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_STOPWATCH  *w        = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r        = NULL;
+  ESL_RANDOMNESS *r        = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   int             N        = esl_opt_GetInteger(go, "-N");
   int             M        = esl_opt_GetInteger(go, "-M");
   P7_TOPHITS    **h        = NULL;
@@ -900,9 +899,6 @@ main(int argc, char **argv)
   char            desc[]   = "Test description for the purposes of making the benchmark allocate space";
   int             i,j;
   int             status;
-
-  if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
-  else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   /* prep work: generate our sort keys before starting to time anything    */
   ESL_ALLOC(h,        sizeof(P7_TOPHITS *) * M); /* allocate pointers for M lists */
@@ -968,7 +964,6 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-r",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "set random number seed randomly",                  0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of top hits to simulate",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -981,7 +976,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r        = NULL;
+  ESL_RANDOMNESS *r        = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   int             N        = esl_opt_GetInteger(go, "-N");
   P7_TOPHITS     *h1       = NULL;
   P7_TOPHITS     *h2       = NULL;
@@ -991,9 +986,6 @@ main(int argc, char **argv)
   char            desc[]   = "Test description for the purposes of making the test driver allocate space";
   double          key;
   int             i;
-
-  if (esl_opt_GetBoolean(go, "-r"))  r = esl_randomness_CreateTimeseeded();
-  else                               r = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   h1 = p7_tophits_Create();
   h2 = p7_tophits_Create();

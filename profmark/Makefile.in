@@ -13,6 +13,7 @@ SIMDFLAGS= @SIMD_CFLAGS@
 DEFS     = @DEFS@
 LIBS     = @LIBS@ -lm
 MPILIBS  = @MPILIBS@
+IMPLDIR  = impl_@IMPL_CHOICE@
 
 SRCDIR   = ../src
 ESLDIR   = ../easel
@@ -21,6 +22,13 @@ PROGS    = create-profmark\
 	   rocplot
 
 all: ${PROGS} 
+	cd ${ESLDIR};            ${MAKE} easel_lib
+	cd ${SRCDIR}/${IMPLDIR}; ${MAKE} impl_lib
+	cd ${SRCDIR};            ${MAKE} hmmer_lib
+	cd ${SRCDIR};            ${MAKE} hmmer_progs
+	${MAKE} profmark_progs
+
+profmark_progs: ${PROGS}
 
 .c.o: 
 	${CC} -I ${ESLDIR} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		

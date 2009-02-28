@@ -18,7 +18,6 @@
 
 #include "hmmer.h"
 
-#define RNGOPTS "--Rdet,--Rseed,-Rarb"                         /* Exclusive options for controlling run-to-run variation      */
 
 static ESL_OPTIONS options[] = {
   /* name           type          default  env  range toggles  reqs   incomp                         help                                                      docgroup*/
@@ -49,11 +48,8 @@ static ESL_OPTIONS options[] = {
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,   NULL,  NULL, "--max",            "Fwd threshold: promote hits w/ P <= F3",                       4 },
   { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL, "--max",            "turn off composition bias filter",                             4 },
   { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,   NULL,  NULL,    NULL,            "turn off biased composition score corrections",                4 },
-  /* Control of run-to-run variation in RNG */
-  { "--Rdet",       eslARG_NONE,"default",NULL, NULL,   RNGOPTS,  NULL,    NULL,         "reseed RNG to minimize run-to-run stochastic variation",       5 },
-  { "--Rseed",       eslARG_INT,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,         "reseed RNG with fixed seed",                                   5 },
-  { "--Rarb",       eslARG_NONE,    NULL, NULL, NULL,   RNGOPTS,  NULL,    NULL,         "seed RNG arbitrarily; allow run-to-run stochastic variation",  5 },
   /* Other options */
+  { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,    NULL,         "set RNG seed to <n> (if 0: one-time arbitrary seed)",          6 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",    "set max width of ASCII text output lines",                     6 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",      "unlimit ASCII text output line width",                         6 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -95,9 +91,6 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 
       puts("\nOptions controlling acceleration heuristics:");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
-
-      puts("\nOptions controlling run-to-run variation due to random number generation:");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
 
       puts("\nOther expert options:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80); 
@@ -150,9 +143,10 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
   if (esl_opt_IsUsed(go, "--nobias"))    fprintf(ofp, "# biased composition HMM filter:   off\n");
   if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
-  if (esl_opt_IsUsed(go, "--Rdet") )     fprintf(ofp, "# RNG seed (run-to-run variation): reseed deterministically; minimize variation\n");
-  if (esl_opt_IsUsed(go, "--Rseed") )    fprintf(ofp, "# RNG seed (run-to-run variation): reseed to %d\n", esl_opt_GetInteger(go, "--Rseed"));
-  if (esl_opt_IsUsed(go, "--Rarb") )     fprintf(ofp, "# RNG seed (run-to-run variation): one arbitrary seed; allow run-to-run variation\n");
+  if (esl_opt_IsUsed(go, "--seed"))  {
+    if (esl_opt_GetInteger(go, "--seed")==0)fprintf(ofp, "# random number seed:              one-time arbitrary\n");
+    else                                    fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(go, "--seed"));
+  }
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
   if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");

@@ -109,18 +109,53 @@ EXAMPLES = \
 	generic_vtrace_example
 
 
-all: 	${PROGS}
+all:    
+	cd ../easel;   ${MAKE} easel_lib
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+	${MAKE} hmmer_lib
+	${MAKE} hmmer_progs
 
-check:  ${PROGS} ${UTESTS}
+check:  
+	cd ../easel;   ${MAKE} easel_lib
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+	${MAKE} hmmer_lib
+	${MAKE} hmmer_progs
+	${MAKE} hmmer_utests
+	cd ${IMPLDIR}; make impl_utests
 
-dev:    ${PROGS} ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
-	cd ${IMPLDIR}; ${MAKE} dev
+dev:
+	cd ../easel;   ${MAKE} easel_lib
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+	${MAKE} hmmer_lib
+	${MAKE} hmmer_progs
+	${MAKE} hmmer_utests
+	${MAKE} hmmer_benchmarks
+	${MAKE} hmmer_examples
+	cd ${IMPLDIR}; ${MAKE} impl_utests
+	cd ${IMPLDIR}; ${MAKE} impl_benchmarks
+	cd ${IMPLDIR}; ${MAKE} impl_examples
 
-${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../easel/libeasel.a
-	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MYLIBS} ${MPILIBS} ${LIBS}
+hmmer_lib:        libhmmer.a
+hmmer_progs:      ${PROGS}
+hmmer_utests:     ${UTESTS}
+hmmer_benchmarks: ${BENCHMARKS}
+hmmer_examples:   ${EXAMPLES}
 
-${UTESTS}: libhmmer.a ../easel/libeasel.a
-	@ echo "Compiling $@ ..."
+
+libhmmer.a: ${OBJS} 
+	${AR} libhmmer.a $?
+	${RANLIB} libhmmer.a
+	chmod 644 libhmmer.a
+
+${OBJS}: ${HDRS}
+
+${PROGS}: @EXEC_DEPENDENCY@ ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MYLIBS} ${MPILIBS} ${LIBS}
+
+.c.o:
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -c $<
+
+${UTESTS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -129,10 +164,10 @@ ${UTESTS}: libhmmer.a ../easel/libeasel.a
         else \
            DFILE=$${BASENAME}.c ;\
 	fi;\
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
-	@ echo "Compiling $@ ..."
+${BENCHMARKS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -141,10 +176,11 @@ ${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
         else \
            DFILE=$${BASENAME}.c ;\
 	fi;\
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${EXAMPLES}: libhmmer.a ../easel/libeasel.a
-	@ echo "Compiling $@ ..."
+
+${EXAMPLES}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -153,22 +189,8 @@ ${EXAMPLES}: libhmmer.a ../easel/libeasel.a
         else \
            DFILE=$${BASENAME}.c ;\
 	fi;\
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
-
-libhmmer.a: ${HDRS} ${OBJS} impl_obj
-	$(AR) libhmmer.a ${OBJS}
-	$(RANLIB) libhmmer.a
-	chmod 644 libhmmer.a
-
-../easel/libeasel.a: 
-	cd ../easel; ${MAKE} libeasel.a
-
-impl_obj:
-	cd ${IMPLDIR}; make
-
-.c.o:
-	${CC} ${CFLAGS} ${DEFS} ${SIMDFLAGS} ${CPPFLAGS} ${MYINCDIRS} -c $<
-
 
 distclean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
@@ -177,7 +199,7 @@ distclean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f Makefile p7_config.h
-	cd  ${IMPLDIR}; make distclean
+	cd  ${IMPLDIR}; ${MAKE} distclean
 
 clean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
@@ -185,11 +207,11 @@ clean:
 	-rm -f ${BENCHMARKS}
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
-	cd ${IMPLDIR}; make clean
+	cd ${IMPLDIR}; ${MAKE} clean
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
-	cd ${IMPLDIR}; make binclean
+	cd ${IMPLDIR}; ${MAKE} binclean
 
 tags:
 	etags  *.c *.h Makefile.in

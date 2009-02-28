@@ -122,7 +122,8 @@ p7_domaindef_Create(ESL_RANDOMNESS *r)
   ddef->gtr = p7_trace_Create();
 
   /* keep a copy of ptr to the RNG */
-  ddef->r = r;  
+  ddef->r            = r;  
+  ddef->do_reseeding = TRUE;
   return ddef;
   
  ERROR:
@@ -576,6 +577,12 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
   float  null2[p7_MAXCODE];
 
   esl_vec_FSet(ddef->n2sc+ireg, Lr, 0.0); /* zero the null2 scores in region */
+
+  /* By default, we make results reproducible by forcing a reset of
+   * the RNG to its originally seeded state.
+   */
+  if (ddef->do_reseeding) 
+    esl_randomness_Init(ddef->r, esl_randomness_GetSeed(ddef->r));
 
   /* Collect an ensemble of sampled traces; calculate null2 odds ratios from these */
   for (t = 0; t < ddef->nsamples; t++)

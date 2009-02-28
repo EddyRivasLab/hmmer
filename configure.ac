@@ -402,6 +402,7 @@ AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
 AC_CHECK_FUNCS(strcasecmp)
 AC_CHECK_FUNCS(times)
+AC_CHECK_FUNCS(getpid)
 AC_FUNC_FSEEKO
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
