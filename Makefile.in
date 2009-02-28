@@ -187,7 +187,7 @@ distclean:
 	if test -d easel;         then (cd easel;     ${MAKE} distclean); fi
 	if test -d profmark;      then (cd profmark;  ${MAKE} distclean); fi
 	if test -d testsuite;     then (cd testsuite; ${MAKE} distclean); fi
-	-rm LICENSE.csh
+	-rm Release-Notes/LICENSE.csh
 	-rm Makefile
 
 # "make binclean" is special: it cleans up and leaves only a binary
