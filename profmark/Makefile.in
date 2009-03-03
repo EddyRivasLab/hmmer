@@ -31,10 +31,10 @@ all: ${PROGS}
 profmark_progs: ${PROGS}
 
 .c.o: 
-	${CC} -I ${ESLDIR} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
+	${CC} -I ${ESLDIR} -I ${SRCDIR} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
 
 ${PROGS}: @EXEC_DEPENDENCY@  ${SRCDIR}/libhmmer.a ${ESLDIR}/libeasel.a
-	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -I ${ESLDIR} -L ${ESLDIR} -o $@ $@.o ${ESLDIR}/libeasel.a ${LIBS}
+	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L${ESLDIR} -L${SRCDIR} -o $@ $@.o -lhmmer -leasel ${LIBS}
 
 distclean:
 	make clean

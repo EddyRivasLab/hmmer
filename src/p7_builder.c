@@ -577,6 +577,20 @@ calibrate(P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROF
 }
 
 
+static int
+make_post_msa(P7_BUILDER *bld, ESL_MSA *premsa, P7_HMM *hmm, P7_TRACE **tr)
+{
+  ESL_SQ  **sqarr   = NULL;
+  ESL_MSA  *postmsa = NULL;
+  int       i;
+
+  ESL_ALLOC(sqarr, sizeof(ESL_SQ *) * premsa->nseq);
+  
+
+  p7_MultipleAlignment(sq, tr, premsa->nseq, hmm->M, p7_DEFAULT, &postmsa);
+  
+
+
 /* default_target_relent()
  * Incept:    SRE, Fri May 25 15:14:16 2007 [Janelia]
  *

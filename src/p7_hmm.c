@@ -32,7 +32,7 @@
 
 
 /*****************************************************************
- * 1. The P7_HMM object: allocation, initialization, destruction.
+ *# 1. The P7_HMM object: allocation, initialization, destruction.
  *****************************************************************/
 
 /* Function:  p7_hmm_Create()

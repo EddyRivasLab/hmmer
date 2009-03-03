@@ -786,9 +786,6 @@ typedef struct p7_builder_s {
  * 15. Routines in HMMER's exposed API.
  *****************************************************************/
 
-/* align.c */
-extern int p7_MultipleAlignment(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
-
 /* build.c */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
@@ -894,6 +891,9 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
 #endif /*HAVE_MPI*/
 
+/* tracealign.c */
+extern int p7_tracealign_Seqs(const ESL_SQ **sq,     const P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
+extern int p7_tracealign_MSA (const ESL_MSA *premsa, const P7_TRACE **tr,           int M, int optflags, ESL_MSA **ret_postmsa);
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
