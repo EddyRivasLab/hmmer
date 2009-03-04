@@ -831,7 +831,7 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
       }
   
   /* Make the multiple alignment */
-  if ((status = p7_MultipleAlignment(sqarr, trarr, inc_n+ndom, M, optflags, &msa)) != eslOK) goto ERROR;
+  if ((status = p7_tracealign_Seqs(sqarr, trarr, inc_n+ndom, M, optflags, &msa)) != eslOK) goto ERROR;
 
   /* Clean up */
   for (y = inc_n; y < ndom+inc_n; y++) esl_sq_Destroy(sqarr[y]);

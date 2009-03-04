@@ -336,7 +336,7 @@ main(int argc, char **argv)
 	  else 
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om);
+	      status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om, NULL);
 	      if      (status == eslENORESULT) esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        esl_fatal("Unexpected error constructing new model at iteration %d:",     iteration);

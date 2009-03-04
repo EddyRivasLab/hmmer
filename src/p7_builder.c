@@ -261,6 +261,7 @@ static int    effective_seqnumber  (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM 
 static int    parameterize         (P7_BUILDER *bld, P7_HMM *hmm);
 static int    annotate             (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm);
 static int    calibrate            (P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om);
+static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRACE **tr, ESL_MSA **opt_postmsa);
 static double default_target_relent(P7_BUILDER *bld, int M);
 
 /* Function:  p7_Builder()
@@ -273,17 +274,19 @@ static double default_target_relent(P7_BUILDER *bld, int M);
  *            Effective sequence number determination and calibration steps require
  *            additionally providing a null model <bg>.
  *
- * Args:      bld       - build configuration
- *            msa       - multiple sequence alignment
- *            bg        - null model
- *            opt_hmm   - optRETURN: new HMM
- *            opt_trarr - optRETURN: array of faux tracebacks, <0..nseq-1>
- *            opt_gm    - optRETURN: profile corresponding to <hmm>
- *            opt_om    - optRETURN: optimized profile corresponding to <gm>
+ * Args:      bld         - build configuration
+ *            msa         - multiple sequence alignment
+ *            bg          - null model
+ *            opt_hmm     - optRETURN: new HMM
+ *            opt_trarr   - optRETURN: array of faux tracebacks, <0..nseq-1>
+ *            opt_postmsa - optRETURN: RF-annotated, possibly modified MSA 
+ *            opt_gm      - optRETURN: profile corresponding to <hmm>
+ *            opt_om      - optRETURN: optimized profile corresponding to <gm>
  *
  * Returns:   <eslOK> on success. The new HMM is optionally returned in
  *            <*opt_hmm>, along with optional returns of an array of faux tracebacks
- *            for each sequence in <*opt_trarr>, a configured search profile in 
+ *            for each sequence in <*opt_trarr>, the annotated MSA used to construct
+ *            the model in <*opt_postmsa>, a configured search profile in 
  *            <*opt_gm>, and an optimized search profile in <*opt_om>. These are
  *            all optional returns because the caller may, for example, be interested
  *            only in an optimized profile, or may only be interested in the HMM.
@@ -299,26 +302,32 @@ static double default_target_relent(P7_BUILDER *bld, int M);
  * Xref:      J4/30.
  */
 int
-p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om)
+p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
+	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
+	   ESL_MSA **opt_postmsa)
 {
-  P7_HMM *hmm = NULL;
-  int     status;
+  P7_HMM     *hmm    = NULL;
+  P7_TRACE  **tr     = NULL;
+  P7_TRACE ***tr_ptr = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
+  int         status;
 
-  if ((status =  relative_weights   (bld, msa))                     != eslOK) goto ERROR;
-  if ((status =  build_model        (bld, msa, &hmm, opt_trarr))    != eslOK) goto ERROR;
-  if ((status =  effective_seqnumber(bld, msa, hmm, bg))            != eslOK) goto ERROR;
-  if ((status =  parameterize       (bld, hmm))                     != eslOK) goto ERROR;
-  if ((status =  annotate           (bld, msa, hmm))                != eslOK) goto ERROR;
-  if ((status =  calibrate          (bld, hmm, bg, opt_gm, opt_om)) != eslOK) goto ERROR;
+  if ((status =  relative_weights   (bld, msa))                       != eslOK) goto ERROR;
+  if ((status =  build_model        (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
+  if ((status =  effective_seqnumber(bld, msa, hmm, bg))              != eslOK) goto ERROR;
+  if ((status =  parameterize       (bld, hmm))                       != eslOK) goto ERROR;
+  if ((status =  annotate           (bld, msa, hmm))                  != eslOK) goto ERROR;
+  if ((status =  calibrate          (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
+  if ((status =  make_post_msa      (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
 
-  if (opt_hmm   != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
+  if (opt_hmm   != NULL) *opt_hmm   = hmm; else p7_hmm_Destroy(hmm);
+  if (opt_trarr != NULL) *opt_trarr = tr;  else p7_trace_DestroyArray(tr, msa->nseq);
   return eslOK;
 
  ERROR:
   p7_hmm_Destroy(hmm);
+  p7_trace_DestroyArray(tr, msa->nseq);
   if (opt_gm    != NULL) p7_profile_Destroy(*opt_gm);
   if (opt_om    != NULL) p7_oprofile_Destroy(*opt_om);
-  if (opt_trarr != NULL) p7_trace_DestroyArray(*opt_trarr, msa->nseq);
   return status;
 }
 
@@ -577,17 +586,32 @@ calibrate(P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROF
 }
 
 
+/* make_post_msa()
+ * 
+ * Optionally, we can return the alignment we actually built the model
+ * from (including RF annotation on assigned consensus columns, and any
+ * trace doctoring to enforce Plan7 consistency). 
+ */
 static int
-make_post_msa(P7_BUILDER *bld, ESL_MSA *premsa, P7_HMM *hmm, P7_TRACE **tr)
+make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRACE **tr, ESL_MSA **opt_postmsa)
 {
-  ESL_SQ  **sqarr   = NULL;
-  ESL_MSA  *postmsa = NULL;
-  int       i;
+  ESL_MSA  *postmsa  = NULL;
+  int       optflags = p7_DEFAULT;
+  int       status;
 
-  ESL_ALLOC(sqarr, sizeof(ESL_SQ *) * premsa->nseq);
+  if (opt_postmsa == NULL) return eslOK;
+
+  /* someday we might want to transfer more info from HMM to postmsa */
+  if ((status = p7_tracealign_MSA(premsa, tr, hmm->M, optflags, &postmsa)) != eslOK) goto ERROR;
   
+  *opt_postmsa = postmsa;
+  return eslOK;
+  
+ ERROR:
+  if (postmsa != NULL) esl_msa_Destroy(postmsa);
+  return status;
+}
 
-  p7_MultipleAlignment(sq, tr, premsa->nseq, hmm->M, p7_DEFAULT, &postmsa);
   
 
 

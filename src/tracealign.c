@@ -16,13 +16,13 @@
 #include "hmmer.h"
 
 static int     map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen);
-static ESL_DSQ get_dsq_z(ESL_SQ **sq, ESL_MSA *msa, P7_TRACE **tr, int idx, int z)
-static int     make_digital_msa(ESL_SQ **sq, ESL_MSA *premsa, P7_TRACE **tr, int nseq, int *matuse, int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
-static int     make_text_msa   (ESL_SQ **sq, ESL_MSA *premsa, P7_TRACE **tr, int nseq, int *matuse, int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
+static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z);
+static int     make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
+static int     make_text_msa   (ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
 static int     annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap);
-static int     annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M);
-static int     rejustify_insertions_digital  (                         ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
-static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M);
+static int     annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M);
+static int     rejustify_insertions_digital  (                         ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
+static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
 
 
 /*****************************************************************
@@ -88,10 +88,10 @@ static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *
  *              argument.)
  */
 int
-p7_tracealign_Seqs(const ESL_SQ **sq, const P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa)
+p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa)
 {
   ESL_MSA      *msa        = NULL;	/* RETURN: new MSA */
-  ESL_ALPHABET *abc        = sq[0]->abc;
+  const ESL_ALPHABET *abc  = sq[0]->abc;
   int          *inscount   = NULL;	/* array of max gaps between aligned columns */
   int          *matmap     = NULL;      /* matmap[k] = apos of match k matmap[1..M] = [1..alen] */
   int          *matuse     = NULL;      /* TRUE if an alignment column is associated with match state k [1..M] */
@@ -107,8 +107,8 @@ p7_tracealign_Seqs(const ESL_SQ **sq, const P7_TRACE **tr, int nseq, int M, int 
   if ((status = annotate_rf(msa, M, matuse, matmap))                != eslOK) goto ERROR;
   if ((status = annotate_posterior_probability(msa, tr, matmap, M)) != eslOK) goto ERROR;
 
-  if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inserts, matmap, matuse, M);
-  else                        rejustify_insertions_text   (abc, msa, inserts, matmap, matuse, M);
+  if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
+  else                        rejustify_insertions_text   (abc, msa, inscount, matmap, matuse, M);
 
   for (idx = 0; idx < nseq; idx++)
     {
@@ -124,10 +124,10 @@ p7_tracealign_Seqs(const ESL_SQ **sq, const P7_TRACE **tr, int nseq, int M, int 
   return eslOK;
 
  ERROR:
-  if (msa     != NULL) esl_msa_Destroy(msa);
-  if (inserts != NULL) free(inserts);
-  if (matmap  != NULL) free(matmap);
-  if (matuse  != NULL) free(matuse);
+  if (msa      != NULL) esl_msa_Destroy(msa);
+  if (inscount != NULL) free(inscount);
+  if (matmap   != NULL) free(matmap);
+  if (matuse   != NULL) free(matuse);
   *ret_msa = NULL;
   return status;
 }
@@ -152,10 +152,10 @@ p7_tracealign_Seqs(const ESL_SQ **sq, const P7_TRACE **tr, int nseq, int M, int 
  * Xref:      J4/102.
  */
 int
-p7_tracealign_MSA(const ESL_MSA *premsa, const P7_TRACE **tr, int M, int optflags, ESL_MSA **ret_postmsa)
+p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL_MSA **ret_postmsa)
 {
+  const ESL_ALPHABET *abc  = premsa->abc;
   ESL_MSA      *msa        = NULL;	/* RETURN: new MSA */
-  ESL_ALPHABET *abc        = premsa->abc;
   int          *inscount   = NULL;	/* array of max gaps between aligned columns */
   int          *matmap     = NULL;      /* matmap[k] = apos of match k matmap[1..M] = [1..alen] */
   int          *matuse     = NULL;      /* TRUE if an alignment column is associated with match state k [1..M] */
@@ -163,23 +163,31 @@ p7_tracealign_MSA(const ESL_MSA *premsa, const P7_TRACE **tr, int M, int optflag
   int           alen;		        /* width of alignment */
   int           status;
 
-  if ((status = map_new_msa(tr, nseq, M, optflags, &inscount, &matuse, &matmap, &alen)) != eslOK) return status;
+  if ((status = map_new_msa(tr, premsa->nseq, M, optflags, &inscount, &matuse, &matmap, &alen)) != eslOK) return status;
  
-  if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(NULL, premsa, sq, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
-  else                        { if ((status = make_text_msa   (NULL, premsa, sq, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
+  if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(NULL, premsa, tr, premsa->nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
+  else                        { if ((status = make_text_msa   (NULL, premsa, tr, premsa->nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
 
   if ((status = annotate_rf(msa, M, matuse, matmap))                != eslOK) goto ERROR;
   if ((status = annotate_posterior_probability(msa, tr, matmap, M)) != eslOK) goto ERROR;
 
-  if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inserts, matmap, matuse, M);
-  else                        rejustify_insertions_text   (abc, msa, inserts, matmap, matuse, M);
+  if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
+  else                        rejustify_insertions_text   (abc, msa, inscount, matmap, matuse, M);
 
 
-  for (idx = 0; idx < nseq; idx++)
+  /* Transfer information from old MSA to new */
+  esl_msa_SetName     (msa, premsa->name);
+  esl_msa_SetDesc     (msa, premsa->desc);
+  esl_msa_SetAccession(msa, premsa->acc);
+
+  for (idx = 0; idx < premsa->nseq; idx++)
     {
-      if ((status = esl_strdup(premsa->sqname[idx], -1, &(msa->sqname[idx]))) != eslOK) goto ERROR;
-      msa->wgt[idx] = 1.0;
+      esl_msa_SetSeqName       (msa, idx, premsa->sqname[idx]);
+      if (msa->sqacc)  esl_msa_SetSeqAccession  (msa, idx, premsa->sqacc[idx]);
+      if (msa->sqdesc) esl_msa_SetSeqDescription(msa, idx, premsa->sqdesc[idx]);
+      msa->wgt[idx] = premsa->wgt[idx];
     }
+  msa->flags |= eslMSA_HASWGTS;
 
   free(inscount);
   free(matmap);
@@ -188,11 +196,11 @@ p7_tracealign_MSA(const ESL_MSA *premsa, const P7_TRACE **tr, int M, int optflag
   return eslOK;
 
  ERROR:
-  if (msa     != NULL) esl_msa_Destroy(msa);
-  if (inserts != NULL) free(inserts);
-  if (matmap  != NULL) free(matmap);
-  if (matuse  != NULL) free(matuse);
-  *ret_msa = NULL;
+  if (msa      != NULL) esl_msa_Destroy(msa);
+  if (inscount != NULL) free(inscount);
+  if (matmap   != NULL) free(matmap);
+  if (matuse   != NULL) free(matuse);
+  *ret_postmsa = NULL;
   return status;
 }
 /*--------------- end, exposed API ------------------------------*/
@@ -252,6 +260,7 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, in
   int  z;		  /* index into trace positions */
   int  apos;		  /* index into alignment positions 1..alen  */
   int  alen;		  /* length of alignment */
+  int  k;		  /* counter over nodes 1..M */
   int  status;
   
   ESL_ALLOC(inscount, sizeof(int) * (M+1));   
@@ -291,8 +300,8 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, in
 
 	  case p7T_S: break;	
 
-	  case p7T_J: p7_Die("J state unsupported in p7_MultipleAlignment()");
-	  default:    p7_Die("Unrecognized statetype %d in p7_MultipleAlignment()", tr[idx]->st[z]);
+	  case p7T_J: p7_Die("J state unsupported");
+	  default:    p7_Die("Unrecognized statetype %d", tr[idx]->st[z]);
 	  }
 	}
     }
@@ -331,9 +340,9 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, in
  * get the digital residue corresponding to tr[idx]->i[z].
  */
 static ESL_DSQ
-get_dsq_z(ESL_SQ **sq, ESL_MSA *msa, P7_TRACE **tr, int idx, int z)
+get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z)
 {
-  return ( (msa == NULL) ? sq[idx]->dsq[tr[idx]->i[z]] : msa->ax[idx][tr[idx]->i[z]]);
+  return ( (premsa == NULL) ? sq[idx]->dsq[tr[idx]->i[z]] : premsa->ax[idx][tr[idx]->i[z]]);
 }
 
 /* make_digital_msa()
@@ -341,10 +350,10 @@ get_dsq_z(ESL_SQ **sq, ESL_MSA *msa, P7_TRACE **tr, int idx, int z)
  * (One and only one of <sq>,<premsa> are non-<NULL>.
  */
 static int
-make_digital_msa(ESL_SQ **sq, ESL_MSA *premsa, P7_TRACE **tr, int nseq, int *matuse, int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
+make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
 {
+  const ESL_ALPHABET *abc = (sq == NULL) ? premsa->abc : sq[0]->abc;
   ESL_MSA      *msa = NULL;
-  ESL_ALPHABET *abc = (sq == NULL) ? premsa->abc : sq[0]->abc;
   int           idx;
   int           apos;
   int           z;
@@ -416,12 +425,14 @@ make_digital_msa(ESL_SQ **sq, ESL_MSA *premsa, P7_TRACE **tr, int nseq, int *mat
  * and residues are upper case.
  */
 static int
-make_text_msa(ESL_SQ **sq, ESL_MSA *premsa, P7_TRACE **tr, int nseq, int *matuse, int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
+make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
 {
+  const ESL_ALPHABET *abc = (sq == NULL) ? premsa->abc : sq[0]->abc;
   ESL_MSA      *msa = NULL;
   int           idx;
   int           apos;
   int           z;
+  int           k;
   int           status;
 
   if ((msa = esl_msa_Create(nseq, alen)) == NULL) goto ERROR;
@@ -437,21 +448,21 @@ make_text_msa(ESL_SQ **sq, ESL_MSA *premsa, P7_TRACE **tr, int nseq, int *matuse
 	{
 	  switch (tr[idx]->st[z]) {
 	  case p7T_M:
-	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = toupper(abc->sym[get_residue_z(sq, premsa, tr, idx, z)]);
+	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = toupper(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	    /*fallthru*/
 	  case p7T_D:
 	    apos = matmap[tr[idx]->k[z]];
 	    break;
 
 	  case p7T_I:
-	    msa->aseq[idx][apos] = tolower(abc->sym[get_residue_z(sq, premsa, tr, idx, z)]);
+	    msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	    apos++;
 	    break;
 	    
 	  case p7T_N:
 	  case p7T_C:
 	    if (! (optflags & p7_TRIM) && tr[idx]->i[z] > 0) {
-	      msa->aseq[idx][apos] = tolower(abc->sym[get_residue_z(sq, premsa, tr, idx, z)]);
+	      msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	      apos++;
 	    }
 	    break;
@@ -522,7 +533,7 @@ annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap)
 
 
 static int
-annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M)
+annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M)
 {
   double *totp   = NULL;	/* total posterior probability in column <apos>: [0..alen-1] */
   int    *matuse = NULL;	/* #seqs with pp annotation in column <apos>: [0..alen-1] */
@@ -638,7 +649,7 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, int *matmap, int M)
  * Xref:      
  */
 static int
-rejustify_insertions_digital(ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M)
+rejustify_insertions_digital(ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M)
 {
   int idx;
   int k;
@@ -678,7 +689,7 @@ rejustify_insertions_digital(ESL_MSA *msa, int *inserts, int *matmap, int *matus
 }
 
 static int
-rejustify_insertions_text(const ESL_ALPHABET *abc, ESL_MSA *msa, int *inserts, int *matmap, int *matuse, int M)
+rejustify_insertions_text(const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M)
 {
   int idx;
   int k;
@@ -716,23 +727,6 @@ rejustify_insertions_text(const ESL_ALPHABET *abc, ESL_MSA *msa, int *inserts, i
     }
   return eslOK;
 }
-
-
-#if 0
-static void
-rightjustify(const ESL_ALPHABET *abc, ESL_DSQ *ax, int n)
-{
-  int npos = n-1;
-  int opos = n-1;
-
-  while (opos >= 0) {
-    if (esl_abc_XIsGap(abc, ax[opos])) opos--;
-    else                    ax[npos--]=ax[opos--];  
-  }
-  while (npos >= 0) ax[npos--] = esl_abc_XGetGap(abc);
-}
-#endif
-
 /*---------------- end, internal functions ----------------------*/
 
 

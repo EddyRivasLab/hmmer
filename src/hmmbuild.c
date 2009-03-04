@@ -35,6 +35,7 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                  1 },
   { "-n",        eslARG_STRING,  NULL, NULL, NULL,      NULL,      NULL,    NULL, "name the HMM <s>",                                      1 },
   { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "direct summary output to file <f>, not stdout",         1 },
+  { "-O",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "resave annotated, possibly modified MSA to file <f>",   1 },
 /* Selecting the alphabet rather than autoguessing it */
   { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is protein sequence data",              2 },
   { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is DNA sequence data",                  2 },
@@ -93,6 +94,9 @@ struct cfg_s {
   char         *hmmfile;        /* file to write HMM to                    */
   FILE         *hmmfp;          /* HMM output file handle                  */
 
+  char         *postmsafile;	/* optional file to resave annotated, modified MSAs to  */
+  FILE         *postmsafp;	/* open <postmsafile>, or NULL */
+
   P7_BG	       *bg;		/* null model                              */
   P7_PRIOR     *pri;		/* mixture Dirichlet prior for the HMM     */
 
@@ -118,7 +122,7 @@ static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
 static int output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg);
-static int output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm);
+static int output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa);
 static int set_msa_name (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
 
 
@@ -173,15 +177,17 @@ main(int argc, char **argv)
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
-  cfg.ofp        = NULL;	           /* opened in init_master_cfg() */
-  cfg.alifile    = esl_opt_GetArg(go, 2);
-  cfg.fmt        = eslMSAFILE_UNKNOWN;     /* autodetect alignment format by default. */ 
-  cfg.afp        = NULL;	           /* created in init_master_cfg() */
-  cfg.abc        = NULL;	           /* created in init_master_cfg() in masters, or in mpi_worker() in workers */
-  cfg.hmmfile    = esl_opt_GetArg(go, 1); 
-  cfg.hmmfp      = NULL;	           /* opened in init_master_cfg() */
-  cfg.bg         = NULL;	           /* created in init_shared_cfg() */
-  cfg.pri        = NULL;                   /* created in init_shared_cfg() */
+  cfg.ofp         = NULL;	           /* opened in init_master_cfg() */
+  cfg.alifile     = esl_opt_GetArg(go, 2);
+  cfg.fmt         = eslMSAFILE_UNKNOWN;     /* autodetect alignment format by default. */ 
+  cfg.afp         = NULL;	           /* created in init_master_cfg() */
+  cfg.abc         = NULL;	           /* created in init_master_cfg() in masters, or in mpi_worker() in workers */
+  cfg.hmmfile     = esl_opt_GetArg(go, 1); 
+  cfg.hmmfp       = NULL;	           /* opened in init_master_cfg() */
+  cfg.postmsafile = esl_opt_GetString(go, "-O"); /* NULL by default */
+  cfg.postmsafp   = NULL;                  /* opened in init_master_cfg() */
+  cfg.bg          = NULL;	           /* created in init_shared_cfg() */
+  cfg.pri         = NULL;                  /* created in init_shared_cfg() */
 
   cfg.nali       = 0;		           /* this counter is incremented in masters */
   cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
@@ -249,13 +255,15 @@ main(int argc, char **argv)
 /* init_master_cfg()
  * Called by masters, mpi or serial.
  * Already set:
- *    cfg->hmmfile - command line arg 1
- *    cfg->alifile - command line arg 2
- *    cfg->fmt     - format of alignment file
+ *    cfg->hmmfile     - command line arg 1
+ *    cfg->alifile     - command line arg 2
+ *    cfg->postmsafile - option -O (default NULL)
+ *    cfg->fmt         - format of alignment file
  * Sets: 
- *    cfg->afp     - open alignment file                
- *    cfg->abc     - digital alphabet
- *    cfg->hmmfp   - open HMM file
+ *    cfg->afp       - open alignment file                
+ *    cfg->abc       - digital alphabet
+ *    cfg->hmmfp     - open HMM file
+ *    cfg->postmsafp - open MSA resave file, or NULL
  *                   
  * Errors in the MPI master here are considered to be "recoverable",
  * in the sense that we'll try to delay output of the error message
@@ -293,10 +301,14 @@ init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 
   if ((cfg->hmmfp = fopen(cfg->hmmfile, "w")) == NULL) ESL_FAIL(status, errmsg, "Failed to open HMM file %s for writing", cfg->hmmfile);
 
+  if (cfg->postmsafile != NULL) {
+    if ((cfg->postmsafp = fopen(cfg->postmsafile, "w")) == NULL) ESL_FAIL(status, errmsg, "Failed to MSA resave file %s for writing", cfg->postmsafile);
+  } else cfg->postmsafp = NULL;
+
   output_header(go, cfg);
 
   /* with msa == NULL, output_result() prints the tabular results header, if needed */
-  output_result(go, cfg, errmsg, 0, NULL, NULL);
+  output_result(go, cfg, errmsg, 0, NULL, NULL, NULL);
   return eslOK;
 }
 
@@ -344,9 +356,11 @@ init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
 static void
 serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  P7_BUILDER *bld = NULL;
-  ESL_MSA    *msa = NULL;
-  P7_HMM     *hmm = NULL;
+  P7_BUILDER *bld         = NULL;
+  ESL_MSA    *msa         = NULL;
+  ESL_MSA    *postmsa     = NULL;
+  ESL_MSA   **postmsa_ptr = (cfg->postmsafile != NULL) ? &postmsa : NULL;
+  P7_HMM     *hmm         = NULL;
   char        errmsg[eslERRBUFSIZE];
   int         status;
 
@@ -365,11 +379,12 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       if (msa->name == NULL && ((status = set_msa_name(go, cfg, errmsg, msa)) != eslOK)) p7_Fail("%s\n", errmsg);
 
                 /*         bg   new-HMM trarr gm   om  */
-      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
-      if ((status = output_result(go, cfg, errmsg, cfg->nali, msa, hmm))   != eslOK) p7_Fail(errmsg);
+      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+      if ((status = output_result(go, cfg, errmsg, cfg->nali, msa, hmm, postmsa))       != eslOK) p7_Fail(errmsg);
 
       p7_hmm_Destroy(hmm);
       esl_msa_Destroy(msa);
+      esl_msa_Destroy(postmsa);
     }
 
   p7_builder_Destroy(bld);
@@ -407,6 +422,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_MSA *msa           = NULL;
   P7_HMM  *hmm           = NULL;
   ESL_MSA **msalist      = NULL;
+  ESL_MSA  *postmsa      = NULL;
   int      *msaidx       = NULL;
   char     errmsg[eslERRBUFSIZE];
   MPI_Status mpistatus; 
@@ -496,10 +512,14 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 		  if (p7_hmm_MPIUnpack(buf, bn, &pos, MPI_COMM_WORLD, &(cfg->abc), &hmm) != eslOK) p7_Fail("HMM unpack failed");
 		  ESL_DPRINTF1(("MPI master has unpacked the HMM\n"));
 
-		  if ((status = output_result(go, cfg, errmsg, msaidx[wi], msalist[wi], hmm))     != eslOK) xstatus = status;
+		  if (cfg->postmsafile != NULL) {
+		    if (esl_msa_MPIUnpack(cfg->abc, buf, bn, &pos, MPI_COMM_WORLD, &postmsa) != eslOK) p7_Fail("postmsa unpack failed");
+		  } 
 
-		  p7_hmm_Destroy(hmm);
-		  hmm = NULL;
+		  if ((status = output_result(go, cfg, errmsg, msaidx[wi], msalist[wi], hmm, postmsa)) != eslOK) xstatus = status;
+
+		  esl_msa_Destroy(postmsa); postmsa = NULL;
+		  p7_hmm_Destroy(hmm);      hmm     = NULL;
 		}
 	      else	/* worker reported an error. Get the errmsg. */
 		{
@@ -544,12 +564,15 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   int           xstatus = eslOK;
   int           status;
   int           type;
-  P7_BUILDER   *bld  = NULL;
-  ESL_MSA      *msa  = NULL;
-  P7_HMM       *hmm  = NULL;
-  char         *wbuf = NULL;	/* packed send/recv buffer  */
-  int           wn   = 0;	/* allocation size for wbuf */
-  int           sz, n;		/* size of a packed message */
+  P7_BUILDER   *bld         = NULL;
+  ESL_MSA      *msa         = NULL;
+  ESL_MSA      *postmsa     = NULL;
+  ESL_MSA     **postmsa_ptr = (cfg->postmsafile != NULL) ? &postmsa : NULL;
+  P7_HMM       *hmm         = NULL;
+  char         *wbuf        = NULL;	/* packed send/recv buffer  */
+  void         *tmp;			/* for reallocation of wbuf */
+  int           wn          = 0;	/* allocation size for wbuf */
+  int           sz, n;		        /* size of a packed message */
   int           pos;
   char          errmsg[eslERRBUFSIZE];
 
@@ -582,28 +605,30 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
                       /* source = 0 (master); tag = 0 */
   while (esl_msa_MPIRecv(0, 0, MPI_COMM_WORLD, cfg->abc, &wbuf, &wn, &msa) == eslOK) 
     {
+      /* Build the HMM */
       ESL_DPRINTF2(("worker %d: has received MSA %s (%d columns, %d seqs)\n", cfg->my_rank, msa->name, msa->alen, msa->nseq));
-      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL))   != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
+      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       ESL_DPRINTF2(("worker %d: has produced an HMM %s\n", cfg->my_rank, hmm->name));
 
+      /* Calculate upper bound on size of sending status, HMM, and optional postmsa; make sure wbuf can hold it. */
       n = 0;
-      if (MPI_Pack_size(1, MPI_INT, MPI_COMM_WORLD, &sz) != 0)     goto ERROR;   n += sz;
-      if (p7_hmm_MPIPackSize(hmm, MPI_COMM_WORLD, &sz)   != eslOK) goto ERROR;   n += sz;
-      if (n > wn) {
-	void *tmp;
-	ESL_RALLOC(wbuf, tmp, sizeof(char) * n);
-	wn = n;
-      }
+      if (MPI_Pack_size(1,    MPI_INT, MPI_COMM_WORLD, &sz) != 0)     goto ERROR;   n += sz;
+      if (p7_hmm_MPIPackSize( hmm,     MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
+      if (esl_msa_MPIPackSize(postmsa, MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
+      if (n > wn) { ESL_RALLOC(wbuf, tmp, sizeof(char) * n); wn = n; }
       ESL_DPRINTF2(("worker %d: has calculated that HMM will pack into %d bytes\n", cfg->my_rank, n));
 
+      /* Send status, HMM, and optional postmsa back to the master */
       pos = 0;
-      if (MPI_Pack(&status, 1, MPI_INT, wbuf, wn, &pos, MPI_COMM_WORLD)   != 0)     goto ERROR;
-      if (p7_hmm_MPIPack(hmm, wbuf, wn, &pos, MPI_COMM_WORLD)             != eslOK) goto ERROR;
+      if (MPI_Pack       (&status, 1, MPI_INT, wbuf, wn, &pos, MPI_COMM_WORLD) != 0)     goto ERROR;
+      if (p7_hmm_MPIPack (hmm,                 wbuf, wn, &pos, MPI_COMM_WORLD) != eslOK) goto ERROR;
+      if (esl_msa_MPIPack(postmsa,             wbuf, wn, &pos, MPI_COMM_WORLD) != eslOK) goto ERROR;
       MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
       ESL_DPRINTF2(("worker %d: has sent HMM to master in message of %d bytes\n", cfg->my_rank, pos));
 
-      esl_msa_Destroy(msa); msa = NULL;
-      p7_hmm_Destroy(hmm);  hmm = NULL;
+      esl_msa_Destroy(msa);     msa     = NULL;
+      esl_msa_Destroy(postmsa); postmsa = NULL;
+      p7_hmm_Destroy(hmm);      hmm     = NULL;
     }
 
   if (wbuf != NULL) free(wbuf);
@@ -677,7 +702,7 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
 
 
 static int
-output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm)
+output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa)
 {
   int status;
 
@@ -704,6 +729,10 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
 	  hmm->M,
 	  (msa->desc != NULL) ? msa->desc : "");
   
+  if (cfg->postmsafp != NULL && postmsa != NULL) {
+    esl_msa_Write(cfg->postmsafp, postmsa, eslMSAFILE_STOCKHOLM);
+  }
+
   return eslOK;
 }
 

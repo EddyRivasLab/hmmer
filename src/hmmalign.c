@@ -208,7 +208,7 @@ main(int argc, char **argv)
     p7_trace_Dump(stdout, tr[idx], gm, sq[idx]->dsq);
 #endif
 
-  p7_MultipleAlignment(sq, tr, nseq, om->M, msaopts, &msa);
+  p7_tracealign_Seqs(sq, tr, nseq, om->M, msaopts, &msa);
 
   esl_msa_Write(stdout, msa, outfmt);
 

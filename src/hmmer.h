@@ -74,7 +74,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7_CUTOFF_UNSET  -99999.0f  /* if cutoff[XX1] is unset, then cutoff[XX2] unset, XX={GA,TC,NC} */
 #define p7_COMPO_UNSET   -1.0f      /* if compo[0] is unset, then all unset                           */
 
-/* Option flags when creating multiple alignments with p7_MultipleAlignment() */
+/* Option flags when creating multiple alignments with p7_tracealign_*() */
 #define p7_DEFAULT             0
 #define p7_DIGITIZE            (1<<0)
 #define p7_ALL_CONSENSUS_COLS  (1<<1)
@@ -892,8 +892,8 @@ extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPH
 #endif /*HAVE_MPI*/
 
 /* tracealign.c */
-extern int p7_tracealign_Seqs(const ESL_SQ **sq,     const P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
-extern int p7_tracealign_MSA (const ESL_MSA *premsa, const P7_TRACE **tr,           int M, int optflags, ESL_MSA **ret_postmsa);
+extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
+extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           int M, int optflags, ESL_MSA **ret_postmsa);
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
@@ -919,8 +919,8 @@ extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *
 extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
-extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om);
-extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om);
+extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
+extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
