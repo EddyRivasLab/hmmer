@@ -1,17 +1,17 @@
-HMMER3/a [3.0a1 | January 2009]
+HMMER3/a [3.0a2 | March 2009]
 NAME  globins4
 LENG  148
 ALPH  amino
 RF    no
 CS    no
 MAP   yes
-DATE  Mon Jan 12 09:45:36 2009
+DATE  Thu Mar 12 17:07:03 2009
 NSEQ  4
 EFFN  0.962402
 CKSUM 247350336
 STATS LOCAL     VLAMBDA 0.709641
-STATS LOCAL         VMU -9.954710
-STATS LOCAL        FTAU -4.479053
+STATS LOCAL         VMU -9.991825
+STATS LOCAL        FTAU -4.611069
 HMM          A        C        D        E        F        G        H        I        K        L        M        N        P        Q        R        S        T        V        W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   2.37156  4.52373  2.96553  2.70511  3.20656  3.01795  3.40301  2.91175  2.55355  2.34720  3.67748  3.19358  3.44665  3.16225  3.07905  2.66618  2.85319  2.57451  4.55553  3.62859

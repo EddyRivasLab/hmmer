@@ -267,6 +267,8 @@ main(int argc, char **argv)
       P7_OPROFILE     *om       = NULL;           /* optimized query profile                  */
 
       nquery++;
+      if (qsq->n == 0) continue; /* skip zero length seqs as if they aren't even present */
+
       esl_stopwatch_Start(w);
 
       /* seqfile may need to be rewound (multiquery mode) */
@@ -280,10 +282,9 @@ main(int argc, char **argv)
       if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
-      /* Build the model */
-      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
-      /* Create processing pipeline and top hits list */
+      /* Build the model, create processing pipeline  and top hits list */
+      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
       th   = p7_tophits_Create();
       pli  = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS);  /* 400 is a dummy length for now */
       p7_pli_NewModel(pli, om, bg);
@@ -303,7 +304,7 @@ main(int argc, char **argv)
       if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
 						dbfp->filename, dbfp->linenumber, dbfp->errbuf);     
       else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-						sstatus, dbfp->filename);
+						    sstatus, dbfp->filename);
 
       /* Print the results.  */
       p7_tophits_Sort(th);

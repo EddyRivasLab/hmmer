@@ -18,12 +18,13 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",          0 },
+  { "-f",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "force: overwrite any previous pressed files",   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
 static char banner[] = "prepare an HMM database for faster hmmscan searches";
 
-static void open_db_files(char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, ESL_NEWSSI **ret_nssi);
+static void open_db_files(ESL_GETOPTS *go, char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, ESL_NEWSSI **ret_nssi);
 
 int
 main(int argc, char **argv)
@@ -52,7 +53,7 @@ main(int argc, char **argv)
 
   if (hfp->do_stdin || hfp->do_gzip) p7_Fail("HMM file %s must be a normal file, not gzipped or a stdin pipe", hmmfile);
 
-  open_db_files(hmmfile, &mfp, &ffp, &pfp, &nssi);
+  open_db_files(go, hmmfile, &mfp, &ffp, &pfp, &nssi);
 
   if (esl_newssi_AddFile(nssi, hfp->fname, 0, &fh) != eslOK) /* 0 = format code (HMMs don't have any yet) */
     p7_Die("Failed to add HMM file %s to new SSI index\n", hfp->fname);
@@ -122,31 +123,35 @@ main(int argc, char **argv)
 
 
 static void
-open_db_files(char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, ESL_NEWSSI **ret_nssi)
+open_db_files(ESL_GETOPTS *go, char *basename, FILE **ret_mfp,  FILE **ret_ffp,  FILE **ret_pfp, ESL_NEWSSI **ret_nssi)
 {
-  char       *mfile   = NULL; /* .h3m file: binary core HMMs */
-  char       *ffile   = NULL; /* .h3f file: binary optimized profiles, MSV filter part only */
-  char       *pfile   = NULL; /* .h3p file: binary optimized profiles, remainder (excluding MSV filter) */
-  char       *ssifile = NULL;
-  FILE       *mfp     = NULL;
-  FILE       *ffp     = NULL;
-  FILE       *pfp     = NULL;
-  ESL_NEWSSI *nssi    = NULL;
+  char       *mfile           = NULL; /* .h3m file: binary core HMMs */
+  char       *ffile           = NULL; /* .h3f file: binary optimized profiles, MSV filter part only */
+  char       *pfile           = NULL; /* .h3p file: binary optimized profiles, remainder (excluding MSV filter) */
+  char       *ssifile         = NULL;
+  FILE       *mfp             = NULL;
+  FILE       *ffp             = NULL;
+  FILE       *pfp             = NULL;
+  ESL_NEWSSI *nssi            = NULL;
+  int         allow_overwrite = esl_opt_GetBoolean(go, "-f");
   int         status;
 
   if (esl_sprintf(&ssifile, "%s.h3i", basename) != eslOK) p7_Die("esl_sprintf() failed");
-  status = esl_newssi_Open(ssifile, FALSE, &nssi);
+  status = esl_newssi_Open(ssifile, allow_overwrite, &nssi);
   if      (status == eslENOTFOUND)   p7_Fail("failed to open SSI index %s", ssifile);
-  else if (status == eslEOVERWRITE)  p7_Fail("Looks like %s is already pressed (.h3i file present, anyway): delete old indices first", basename);
+  else if (status == eslEOVERWRITE)  p7_Fail("Looks like %s is already pressed (.h3i file present, anyway): delete old hmmpress indices first", basename);
   else if (status != eslOK)          p7_Fail("failed to create a new SSI index");
 
   if (esl_sprintf(&mfile, "%s.h3m", basename) != eslOK) p7_Die("esl_sprintf() failed");
+  if (! allow_overwrite && esl_FileExists(mfile))       p7_Fail("Binary HMM file %s already exists; delete old hmmpress indices first", mfile);
   if ((mfp = fopen(mfile, "wb"))              == NULL)  p7_Fail("Failed to open binary HMM file %s for writing", mfile);
 
   if (esl_sprintf(&ffile, "%s.h3f", basename) != eslOK) p7_Die("esl_sprintf() failed");
-  if ((ffp = fopen(ffile, "wb"))              == NULL)  p7_Fail("Failed to open binary MSV oprofile file %s for writing", ffile);
+  if (! allow_overwrite && esl_FileExists(ffile))       p7_Fail("Binary MSV filter file %s already exists; delete old hmmpress indices first", ffile);
+  if ((ffp = fopen(ffile, "wb"))              == NULL)  p7_Fail("Failed to open binary MSV filter file %s for writing", ffile);
 
   if (esl_sprintf(&pfile, "%s.h3p", basename) != eslOK) p7_Die("esl_sprintf() failed");
+  if (! allow_overwrite && esl_FileExists(pfile))       p7_Fail("Binary profile file %s already exists; delete old hmmpress indices first", pfile);
   if ((pfp = fopen(pfile, "wb"))              == NULL)  p7_Fail("Failed to open binary pprofile file %s for writing", pfile);
 
   free(mfile);     free(ffile);     free(pfile);      free(ssifile);

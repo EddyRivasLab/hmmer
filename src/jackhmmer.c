@@ -314,6 +314,8 @@ main(int argc, char **argv)
       P7_TRACE        *qtr = NULL;           /* faux trace for query sequence            */
       ESL_MSA         *msa = NULL;           /* multiple alignment of included hits      */
       
+      if (qsq->n == 0) continue; /* skip zero length queries as if they aren't even present. */
+
       for (iteration = 1; iteration <= maxiterations; iteration++)
 	{       /* We enter each iteration with an optimized profile. */
 	  esl_stopwatch_Start(w);
@@ -401,7 +403,8 @@ main(int argc, char **argv)
 	      fprintf(ofp, "@@\n\n");
 	      break;
 	    }
-	  else { fprintf(ofp, "@@ Continuing to next round.\n\n"); }
+	  else if (iteration < maxiterations)
+	    { fprintf(ofp, "@@ Continuing to next round.\n\n"); }
 
 	  esl_sqfile_Position(dbfp, 0);
 	} /* end iteration loop */

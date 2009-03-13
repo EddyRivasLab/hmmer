@@ -1,17 +1,17 @@
-HMMER3/a [3.0a1 | January 2009]
+HMMER3/a [3.0a2 | March 2009]
 NAME  globins4
 LENG  148
 ALPH  amino
 RF    no
 CS    no
 MAP   yes
-DATE  Mon Jan 12 09:45:36 2009
+DATE  Thu Mar 12 17:07:03 2009
 NSEQ  4
 EFFN  0.962402
 CKSUM 247350336
 STATS LOCAL     VLAMBDA 0.709641
-STATS LOCAL         VMU -9.954710
-STATS LOCAL        FTAU -4.479053
+STATS LOCAL         VMU -9.991825
+STATS LOCAL        FTAU -4.611069
 HMM          A        C        D        E        F        G        H        I        K        L        M        N        P        Q        R        S        T        V        W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   2.37156  4.52373  2.96553  2.70511  3.20656  3.01795  3.40301  2.91175  2.55355  2.34720  3.67748  3.19358  3.44665  3.16225  3.07905  2.66618  2.85319  2.57451  4.55553  3.62859
@@ -462,7 +462,7 @@ HMM          A        C        D        E        F        G        H        I   
           2.68633  4.42241  2.77535  2.73099  3.46369  2.40470  3.72510  3.29370  2.67756  2.69332  4.24705  2.90362  2.73755  3.18099  2.89816  2.37902  2.77535  2.98534  4.58492  3.61421
           0.20946  1.66612        *  1.49476  0.25399  0.00000        *
 //
-HMMER3/a [3.0a1 | January 2009]
+HMMER3/a [3.0a2 | March 2009]
 NAME  fn3
 ACC   PF00041.12
 DESC  Fibronectin type III domain
@@ -471,7 +471,7 @@ ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Mon Jan 12 09:56:05 2009
+DATE  Thu Mar 12 17:07:13 2009
 NSEQ  106
 EFFN  9.032143
 CKSUM 72638555
@@ -479,8 +479,8 @@ GA    8.00 7.20
 TC    8.00 7.20
 NC    7.90 7.90
 STATS LOCAL     VLAMBDA 0.720693
-STATS LOCAL         VMU -9.708701
-STATS LOCAL        FTAU -3.645828
+STATS LOCAL         VMU -9.875146
+STATS LOCAL        FTAU -3.948565
 HMM          A        C        D        E        F        G        H        I        K        L        M        N        P        Q        R        S        T        V        W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   2.68767  4.94115  3.00986  2.61892  3.63594  2.87809  3.76954  3.06987  2.75623  2.65521  4.11700  2.95663  2.92348  3.00587  2.95429  2.45315  2.59068  2.59370  4.08075  3.20758
@@ -742,7 +742,7 @@ HMM          A        C        D        E        F        G        H        I   
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  2.67741  2.69355  4.24690  2.90347  2.73739  3.18146  2.89801  2.37887  2.77519  2.98518  4.58477  3.61503
           0.00283  5.87058        *  0.61958  0.77255  0.00000        *
 //
-HMMER3/a [3.0a1 | January 2009]
+HMMER3/a [3.0a2 | March 2009]
 NAME  Pkinase
 ACC   PF00069.16
 DESC  Protein kinase domain
@@ -751,7 +751,7 @@ ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Mon Jan 12 10:11:59 2009
+DATE  Thu Mar 12 17:07:22 2009
 NSEQ  54
 EFFN  3.319382
 CKSUM 3879615604
@@ -759,8 +759,8 @@ GA    70.30 70.30
 TC    70.30 70.30
 NC    70.20 70.20
 STATS LOCAL     VLAMBDA 0.702534
-STATS LOCAL         VMU -10.711016
-STATS LOCAL        FTAU -4.942206
+STATS LOCAL         VMU -11.024760
+STATS LOCAL        FTAU -5.115977
 HMM          A        C        D        E        F        G        H        I        K        L        M        N        P        Q        R        S        T        V        W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   2.59878  4.19939  2.95441  2.62949  3.33887  2.92263  3.47380  2.76907  2.59713  2.42352  3.58806  3.07789  3.46535  3.09483  2.95270  2.67609  2.88091  2.66443  4.55166  3.41834

@@ -484,6 +484,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   int              d;
   int              status;
   
+  if (sq->n == 0) return eslOK;	/* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
@@ -667,12 +669,12 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "Internal pipeline statistics summary:\n");
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp, "Query model(s)               %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp, "Target sequences             %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp, "Query sequence(s)            %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
-    fprintf(ofp, "Target model(s)s)            %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }
 

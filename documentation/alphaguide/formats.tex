@@ -78,7 +78,7 @@ The header section is parsed line by line in a tag/value format. Each
 line type is either \textbf{mandatory} or \textbf{optional} as
 indicated. 
 
-\begin{wideitem}
+\begin{sreitems}{\emprog{STATS <s1> <s2> <f>}}
 
 \item [\emprog{HMMER3/a}] Unique identifier for the save file format
 version; the \prog{/a} means that this is HMMER3 HMM file format
@@ -220,7 +220,7 @@ model. The $K$ fields on this line are log probabilities for each
 residue in the appropriate biosequence alphabet's
 order. \textbf{Optional.}
 
-\end{wideitem}
+\end{sreitems}
 
 \subsubsection{main model section}
 
@@ -241,7 +241,7 @@ The remainder of the model has three lines per node, for $M$ nodes
 (where $M$ is the number of match states, as given by the \prog{LENG}
 line). These three lines are ($K$ is the alphabet size in residues):
 
-\begin{wideitem}
+\begin{sreitems}{\textbf{State transition line}}
 
 \item [\textbf{Match emission line}] The first field is the node
 number ($1 \ldots M$).  The parser verifies this number as a
@@ -276,7 +276,7 @@ interpreted as the END state $E$, and there is no delete state $M+1$;
 therefore the final $M_k \rightarrow D_{k+1}$ and $D_k \rightarrow
 D_{k+1}$ transitions are always * (zero probability), and the final
 $D_k \rightarrow M_{k+1}$ transition is always 0.0 (probability 1.0).
-\end{wideitem}
+\end{sreitems}
 
 Finally, the last line of the format is the ``//'' record separator.
 
@@ -337,7 +337,7 @@ source sequence) See below for details.
 There are four types of Stockholm markup annotation, for per-file,
 per-sequence, per-column, and per-residue annotation:
 
-\begin{wideitem}
+\begin{sreitems}{\emprog{\#=GR <seqname> <tag> <..s..>}}
 \item [\emprog{\#=GF <tag> <s>}]
         Per-file annotation. \prog{<s>} is a free format text line
         of annotation type \prog{<tag>}. For example, \prog{\#=GF DATE
@@ -355,28 +355,28 @@ per-sequence, per-column, and per-residue annotation:
         output), will typically occur in the header preceding the
         alignment but following the \prog{\#=GF} annotation.
 
-\item [\emprog{\#=GC <tag> <...s...>}]
-        Per-column annotation. \prog{<...s...>} is an aligned text line
+\item [\emprog{\#=GC <tag> <..s..>}]
+        Per-column annotation. \prog{<..s..>} is an aligned text line
         of annotation type \prog{<tag>}.
         \verb+#=GC+ lines are
-        associated with a sequence alignment block; \prog{<...s...>}
+        associated with a sequence alignment block; \prog{<..s..>}
         is aligned to the residues in the alignment block, and has
         the same length as the rest of the block.
         Typically \verb+#=GC+ lines are placed at the end of each block.
 
-\item [\emprog{\#=GR <seqname> <tag> <.....s.....>}]
-        Per-residue annotation. \prog{<...s...>} is an aligned text line
+\item [\emprog{\#=GR <seqname> <tag> <..s..>}]
+        Per-residue annotation. \prog{<..s..>} is an aligned text line
         of annotation type \prog{<tag>}, associated with the sequence
         named \prog{<seqname>}. 
         \verb+#=GR+ lines are 
         associated with one sequence in a sequence alignment block; 
-        \prog{<...s...>}
+        \prog{<..s..>}
         is aligned to the residues in that sequence, and has
         the same length as the rest of the block.
         Typically
         \verb+#=GR+ lines are placed immediately following the
         aligned sequence they annotate.
-\end{wideitem}
+\end{sreitems}
 
 \subsubsection{semantics of Stockholm markup}
 
@@ -405,7 +405,7 @@ The Stockholm markup tags that are parsed semantically by my software
 are as follows:
 
 \subsubsection{recognized \#=GF annotations}
-\begin{wideitem}
+\begin{sreitems}{\emprog{TC  <f> <f>}}
 \item [\emprog{ID  <s>}] 
         Identifier. \emprog{<s>} is a name for the alignment;
         e.g. ``rrm''. One word. Unique in file.
@@ -445,11 +445,11 @@ are as follows:
         lowest scores seen for true homologous sequences that
         were above the GA gathering thresholds, when gathering
         members of Pfam full alignments. 
-\end{wideitem}
+\end{sreitems}
 
 \subsubsection{recognized \#=GS annotations}
 
-\begin{wideitem}
+\begin{sreitems}{\emprog{WT  <f>}}
 \item [\emprog{WT  <f>}]
         Weight. \emprog{<f>} is a positive real number giving the
         relative weight for a sequence, usually used to compensate
@@ -468,12 +468,12 @@ are as follows:
         Description. \emprog{<s>} is one line giving a description for
         this sequence. (Compare the \prog{\#=GF DE} markup, which gives
         a description for the whole alignment.)
-\end{wideitem}
+\end{sreitems}
 
 
 \subsubsection{recognized \#=GC annotations}
 
-\begin{wideitem}
+\begin{sreitems}{\emprog{SA\_cons}}
 \item [\emprog{RF}]
         Reference line. Any character is accepted as a markup for a
         column. The intent is to allow labeling the columns with some
@@ -490,16 +490,16 @@ are as follows:
 
 \item [\emprog{SA\_cons}]
         Surface accessibility consensus. 0-9, gap symbols, or X are
-        accepted as markup. 0 means <10\% accessible residue surface
-        area, 1 means <20\%, 9 means <100\%, etc. X means unknown
+        accepted as markup. 0 means $<$10\% accessible residue surface
+        area, 1 means $<$20\%, 9 means $<$100\%, etc. X means unknown
         structure.
-\end{wideitem}
+\end{sreitems}
 
 \subsubsection{recognized \#=GR annotations}
-\begin{wideitem}
+\begin{sreitems}{\emprog{SA}}
 \item [\emprog{SS}]
         Secondary structure consensus. See \prog{\#=GC SS\_cons} above.
 \item [\emprog{SA}]
         Surface accessibility consensus. See \prog{\#=GC SA\_cons} above.
-\end{wideitem}
+\end{sreitems}
 

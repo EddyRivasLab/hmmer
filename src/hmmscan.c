@@ -206,6 +206,7 @@ main(int argc, char **argv)
       P7_PIPELINE     *pli     = NULL;		/* processing pipeline                      */
       P7_TOPHITS      *th      = NULL;        	/* top-scoring sequence hits                */
       P7_OPROFILE     *om      = NULL;		/* target profile                           */
+      int              qshown  = FALSE;		/* flag for deferred query name/acc/desc    */
 
       esl_stopwatch_Start(w);	                          
 
@@ -221,9 +222,9 @@ main(int argc, char **argv)
       th  = p7_tophits_Create(); 
       pli->hfp = hfp;		/* for two-stage input, pipeline needs to know about <hfp> */
 
-      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
-      if (qsq->acc[0]  != 0) fprintf(ofp, "Accession:   %s\n", qsq->acc);
-      if (qsq->desc[0] != 0) fprintf(ofp, "Description: %s\n", qsq->desc);
+      /* unlike hmmsearch (for instance) we have to defer printing the query name,acc,desc until after output_header()
+       * is called, so it can't go here (where it would seem to make sense); it's below instead (using <qshown>)
+       */
       p7_pli_NewSeq(pli, qsq);
 
       if (abc != NULL)	/* once we're on sequence #>2, abc is known, bg exists */
@@ -241,6 +242,17 @@ main(int argc, char **argv)
 	      if (esl_sq_Digitize(abc, qsq) != eslOK) p7_Die("alphabet mismatch");
 	      esl_sqfile_SetDigital(sqfp, abc);
 	      p7_bg_SetLength(bg, qsq->n);
+	    }
+
+	  /* Because we deferred output_header(), we had to defer query name/acc/desc output too,
+	   * else they come out in the wrong order
+	   */
+	  if (! qshown) 
+	    {			
+	      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
+	      if (qsq->acc[0]  != 0) fprintf(ofp, "Accession:   %s\n", qsq->acc);
+	      if (qsq->desc[0] != 0) fprintf(ofp, "Description: %s\n", qsq->desc);
+	      qshown = TRUE;
 	    }
 
 	  p7_pli_NewModel(pli, om, bg);

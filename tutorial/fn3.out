@@ -1,9 +1,9 @@
 # hmmsearch :: search profile HMM(s) against a sequence database
-# HMMER 3.0a1 (January 2009); http://hmmer.org/
+# HMMER 3.0a2 (March 2009); http://hmmer.org/
 # Copyright (C) 2009 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# query HMM file:                  tutorial/fn3.hmm
+# query HMM file:                  fn3.hmm
 # target sequence database:        tutorial/7LESS_DROME
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -11,83 +11,84 @@ Query:       fn3  [M=85]
 Accession:   PF00041.12
 Description: Fibronectin type III domain
 Scores for complete sequences (score includes all domains):
- --- full sequence ---   --- best 1 domain ---    -#dom-
-  E-value  score  bias    E-value  score  bias    exp  N  Sequence    Description
-  ------- ------ -----    ------- ------ -----   ---- --  --------    -----------
-  2.5e-56  174.0   0.1    2.1e-15   43.3   0.4    9.6  9  7LESS_DROME RecName: Full=Protein sevenless;          EC=2.7.1
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence    Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------    -----------
+      2e-56  174.0   0.1    1.7e-15   43.3   0.4    9.6  9  7LESS_DROME RecName: Full=Protein sevenless;          EC=2.7
+
 
 Domain and alignment annotation for each sequence:
 >> 7LESS_DROME  RecName: Full=Protein sevenless;          EC=2.7.10.1;
-     # bit score    bias    E-value ind Evalue hmm from   hmm to    ali from   ali to    env from   env to    ali-acc
-   --- --------- ------- ---------- ---------- -------- --------    -------- --------    -------- --------    -------
-     1      -2.3     0.0       0.37       0.37       60       72 ..      396      408 ..      395      410 ..    0.86
-     2      42.0     0.0    5.2e-15    5.2e-15        2       83 ..      439      520 ..      437      521 ..    0.95
-     3      15.1     0.0    1.3e-06    1.3e-06       14       82 ..      837      911 ..      827      914 ..    0.82
-     4       3.6     0.0     0.0055     0.0055        6       35 ..     1205     1235 ..     1202     1258 ..    0.81
-     5      22.9     0.0    4.8e-09    4.8e-09       13       79 ..     1312     1380 ..     1304     1385 ..    0.81
-     6      -0.6     0.0       0.11       0.11       57       72 ..     1754     1769 ..     1747     1769 ..    0.87
-     7      43.3     0.4    2.1e-15    2.1e-15        1       82 [.     1799     1888 ..     1799     1891 ..    0.89
-     8      19.2     0.0    7.2e-08    7.2e-08        6       73 ..     1904     1966 ..     1900     1976 ..    0.90
-     9      12.0     0.0    1.2e-05    1.2e-05        1       77 [.     1993     2098 ..     1993     2107 ..    0.74
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 ?   -2.3   0.0       0.3       0.3      60      72 ..     396     408 ..     395     410 .. 0.86
+   2 !   42.0   0.0   4.2e-15   4.2e-15       2      83 ..     439     520 ..     437     521 .. 0.95
+   3 !   15.1   0.0   1.1e-06   1.1e-06      14      82 ..     837     911 ..     827     914 .. 0.82
+   4 !    3.6   0.0    0.0044    0.0044       6      35 ..    1205    1235 ..    1202    1258 .. 0.81
+   5 !   22.9   0.0   3.9e-09   3.9e-09      13      79 ..    1312    1380 ..    1304    1385 .. 0.81
+   6 ?   -0.6   0.0      0.09      0.09      57      72 ..    1754    1769 ..    1747    1769 .. 0.87
+   7 !   43.3   0.4   1.7e-15   1.7e-15       1      82 [.    1799    1888 ..    1799    1891 .. 0.89
+   8 !   19.2   0.0   5.8e-08   5.8e-08       6      73 ..    1904    1966 ..    1900    1976 .. 0.90
+   9 !   12.0   0.0   9.9e-06   9.9e-06       1      77 [.    1993    2098 ..    1993    2107 .. 0.74
 
   Alignments for each domain:
-  == domain 1    score: -2.3 bits;  conditional E-value: 0.37
+  == domain 1    score: -2.3 bits;  conditional E-value: 0.3
                   EES--TT-EEEEE CS
           fn3  60 ltgLkpgteYevr 72 
                   l++L+p+t+Y++r
   7LESS_DROME 396 LEALIPYTQYRFR 408
                   6789*******98 PP
 
-  == domain 2    score: 42.0 bits;  conditional E-value: 5.2e-15
+  == domain 2    score: 42.0 bits;  conditional E-value: 4.2e-15
                   ---CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTEE.E CS
           fn3   2 saptnlsvtevtstsltlsWsppe.gngpitgYeveyreknegeeekeltvpgtttsvtltgLkpgteYevrVqavngagegp 83 
                   sap++++++++++++l+++W+p++++ngpi+gY+++++++++++ ++e++vp++++s+++++L++gt+Y+++++++n++gegp
   7LESS_DROME 439 SAPVIEHLMGLDDSHLAVHWHPGRfTNGPIEGYRLRLSSSEGNA-TSEQLVPAGRGSYIFSQLQAGTNYTLALSMINKQGEGP 520
                   78888999999*****************************9997.**********************************9997 PP
 
-  == domain 3    score: 15.1 bits;  conditional E-value: 1.3e-06
+  == domain 3    score: 15.1 bits;  conditional E-value: 1.1e-06
                   TTEEEEEEE--S........SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTE.E. CS
           fn3  14 stsltlsWsppe.......gngpitgYeveyreknegeeekeltvpgtttsvtltgLkpgteYevrVqavngag.eg 82 
                   ++++++sW++pe++++++++++++++Ye+e++++++++++++++++g++  ++l++L+p+++Y++rV+a+n++g++g
   7LESS_DROME 837 AQAAKISWKEPErnpyqsaDAARSWSYELEVLDVASQSAFSIRNIRGPI--FGLQRLQPDNLYQLRVRAINVDGePG 911
                   56788999999998887666777889********999955555666666..*********************98444 PP
 
-  == domain 4    score: 3.6 bits;  conditional E-value: 0.0055
+  == domain 4    score: 3.6 bits;  conditional E-value: 0.0044
                    EEEEEEECTTEEEEEEE--S..SS--SEEEE CS
           fn3    6 nlsvtevtstsltlsWsppe.gngpitgYev 35  
                    +++++++++++++++W+p+++g++++++Y++
   7LESS_DROME 1205 SVRLDDGHWDDFHVRWQPSTsGGNHSVSYRL 1235
                    5666677788999999999999999999987 PP
 
-  == domain 5    score: 22.9 bits;  conditional E-value: 4.8e-09
+  == domain 5    score: 22.9 bits;  conditional E-value: 3.9e-09
                    CTTEEEEEEE--S.....SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETT CS
           fn3   13 tstsltlsWsppe....gngpitgYeveyreknegeeekeltvpgtttsvtltgLkpgteYevrVqavnga 79  
                    +++s++l+W++pe+++++++++++Y++++++++e+  ++el+++++++++++++L+p+++Y+++V+a+++a
   7LESS_DROME 1312 ANVSAVLRWDAPEqgqeAPMQALEYHISCWVGSEL--HEELRLNQSALEARVEHLQPDQTYHFQVEARVAA 1380
                    56799*********8555666789******66555..677777777778*****************98665 PP
 
-  == domain 6    score: -0.6 bits;  conditional E-value: 0.11
+  == domain 6    score: -0.6 bits;  conditional E-value: 0.09
                    EEEEES--TT-EEEEE CS
           fn3   57 svtltgLkpgteYevr 72  
                    s++lt+L+p+t+Y+v+
   7LESS_DROME 1754 SLNLTDLLPFTRYRVS 1769
                    799**********985 PP
 
-  == domain 7    score: 43.3 bits;  conditional E-value: 2.1e-15
+  == domain 7    score: 43.3 bits;  conditional E-value: 1.7e-15
                    ----CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCC.......GCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTEE. CS
           fn3    1 psaptnlsvtevtstsltlsWsppe.gngpitgYeveyreknege.......eekeltvpgtttsvtltgLkpgteYevrVqavngageg 82  
                    ps+p+n+sv+++++++l++sW+ppe++++++++Y+++++++++ge++++++++e+++++++t+++++ltg+kpg++Y+++Vqa+++++++
   7LESS_DROME 1799 PSPPRNFSVRVLSPRELEVSWLPPEqLRSESVYYTLHWQQELDGEnvqdrreWEAHERRLETAGTHRLTGIKPGSGYSLWVQAHATPTKS 1888
                    89************************************99999999***997666666667777*******************9877655 PP
 
-  == domain 8    score: 19.2 bits;  conditional E-value: 7.2e-08
+  == domain 8    score: 19.2 bits;  conditional E-value: 5.8e-08
                    EEEEEEECTTEEEEEEE--S.SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEE CS
           fn3    6 nlsvtevtstsltlsWsppegngpitgYeveyreknegeeekeltvpgtttsvtltgLkpgteYevrV 73  
                    +l+++e++++sl+l+W+++  ++p++++++e+r+++e+   ++++v+g++t++++++L+p+t+Y++r+
   7LESS_DROME 1904 ELQLLELGPYSLSLTWAGT--PDPLGSLQLECRSSAEQ---LRRNVAGNHTKMVVEPLQPRTRYQCRL 1966
                    6888999************..9***********88555...79**********************987 PP
 
-  == domain 9    score: 12.0 bits;  conditional E-value: 1.2e-05
+  == domain 9    score: 12.0 bits;  conditional E-value: 9.9e-06
                    ----CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCC...........................GCEEEEEETTTS.EEEEES--TT- CS
           fn3    1 psaptnlsvtevtstsltlsWsppe.gngpitgYeveyreknege...........................eekeltvpgttt.svtltgLkpgt 67  
                    ps+p++++++++++++++++W++++++++pi++Y++e+++++++++++++++++++++++++++++++++++e+++l++++tt++s+++++L++++
@@ -101,16 +102,16 @@ Domain and alignment annotation for each sequence:
                    7777777766 PP
 
 
-//
-Internal statistics summary:
-----------------------------
-Query HMM(s):                              1  (85 nodes)
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (85 nodes)
 Target sequences:                          1  (2554 residues)
 Passed MSV filter:                         1  (1); expected 0.0 (0.02)
 Passed Vit filter:                         1  (1); expected 0.0 (0.001)
 Passed Fwd filter:                         1  (1); expected 0.0 (1e-05)
-Initial search space (seqZ):               1  [actual number of target seqs]
-Domain search space  (domZ):               1  [number of seqs reported over threshold]
-Mc/sec:                                21.71
+Initial search space (Z):                  1  [actual number of targets]
+Domain search space  (domZ):               1  [number of targets reported over threshold]
 # CPU time: 0.01u 0.00s 00:00:00.01 Elapsed: 00:00:00
-
+# Mc/sec: 21.71
+//

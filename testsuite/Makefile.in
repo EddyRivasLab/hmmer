@@ -20,7 +20,7 @@ all:
 	cd ${IMPLDIR}; ${MAKE} impl_lib
 	cd ${SRCDIR};  ${MAKE} hmmer_lib
 	cd ${SRCDIR};  ${MAKE} hmmer_progs
-	cd ${IMPLDIR}; ${MAKE} hmmer_utests
+	cd ${SRCDIR};  ${MAKE} hmmer_utests
 	cd ${IMPLDIR}; ${MAKE} impl_utests
 	${MAKE} testsuite_progs
 
@@ -31,7 +31,7 @@ check:
 	cd ${IMPLDIR}; ${MAKE} impl_lib
 	cd ${SRCDIR};  ${MAKE} hmmer_lib
 	cd ${SRCDIR};  ${MAKE} hmmer_progs
-	cd ${IMPLDIR}; ${MAKE} hmmer_utests
+	cd ${SRCDIR};  ${MAKE} hmmer_utests
 	cd ${IMPLDIR}; ${MAKE} impl_utests
 	${MAKE} testsuite_progs
 	${MAKE} run_sqc

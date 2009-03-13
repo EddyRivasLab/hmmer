@@ -1,4 +1,4 @@
-HMMER3/a [3.0a1 | January 2009]
+HMMER3/a [3.0a2 | March 2009]
 NAME  Pkinase
 ACC   PF00069.16
 DESC  Protein kinase domain
@@ -7,7 +7,7 @@ ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Mon Jan 12 10:11:59 2009
+DATE  Thu Mar 12 17:07:22 2009
 NSEQ  54
 EFFN  3.319382
 CKSUM 3879615604
@@ -15,8 +15,8 @@ GA    70.30 70.30
 TC    70.30 70.30
 NC    70.20 70.20
 STATS LOCAL     VLAMBDA 0.702534
-STATS LOCAL         VMU -10.711016
-STATS LOCAL        FTAU -4.942206
+STATS LOCAL         VMU -11.024760
+STATS LOCAL        FTAU -5.115977
 HMM          A        C        D        E        F        G        H        I        K        L        M        N        P        Q        R        S        T        V        W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   2.59878  4.19939  2.95441  2.62949  3.33887  2.92263  3.47380  2.76907  2.59713  2.42352  3.58806  3.07789  3.46535  3.09483  2.95270  2.67609  2.88091  2.66443  4.55166  3.41834

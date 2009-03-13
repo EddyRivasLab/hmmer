@@ -1,4 +1,4 @@
-HMMER3/a [3.0a1 | January 2009]
+HMMER3/a [3.0a2 | March 2009]
 NAME  fn3
 ACC   PF00041.12
 DESC  Fibronectin type III domain
@@ -7,7 +7,7 @@ ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Mon Jan 12 09:56:05 2009
+DATE  Thu Mar 12 17:07:13 2009
 NSEQ  106
 EFFN  9.032143
 CKSUM 72638555
@@ -15,8 +15,8 @@ GA    8.00 7.20
 TC    8.00 7.20
 NC    7.90 7.90
 STATS LOCAL     VLAMBDA 0.720693
-STATS LOCAL         VMU -9.708701
-STATS LOCAL        FTAU -3.645828
+STATS LOCAL         VMU -9.875146
+STATS LOCAL        FTAU -3.948565
 HMM          A        C        D        E        F        G        H        I        K        L        M        N        P        Q        R        S        T        V        W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   2.68767  4.94115  3.00986  2.61892  3.63594  2.87809  3.76954  3.06987  2.75623  2.65521  4.11700  2.95663  2.92348  3.00587  2.95429  2.45315  2.59068  2.59370  4.08075  3.20758

@@ -15,10 +15,10 @@ version, when the user documentation will take less for granted.
 \subsection{Design goals of HMMER3}
 
 HMMER3's objective is to combine the power of probabilistic inference
-with BLAST's speed. We aim to upgrade some of molecular biology's most
-important sequence analysis applications to use more powerful
-statistical inference engines, while not sacrificing computational
-performance.
+with high computational speed. We aim to upgrade some of molecular
+biology's most important sequence analysis applications to use more
+powerful statistical inference engines, without sacrificing
+computational performance.
 
 Specifically, HMMER3 has three main design features that, in
 combination, distinguish it from previous tools:
@@ -46,8 +46,8 @@ combination, distinguish it from previous tools:
   inference theory says you ought to be scoring sequences by
   integrating over alignment uncertainty, not just scoring the single
   best alignment. HMMER3's log-odds scores are sequence scores, not
-  just optimal alignment scores, integrated over the posterior
-  alignment ensemble.
+  just optimal alignment scores; they are integrated over the
+  posterior alignment ensemble.
   
 \item[\textbf{Speed.}] A major limitation of previous profile HMM
   implementations (including HMMER2) was their slow
@@ -86,15 +86,15 @@ statistical properties of integrated log-odds scores which have been
 supported by numerical simulation experiments \citep{Eddy08}.
 
 And as far as speed goes, there's really nothing new about HMMER3's
-speed either. Besides Karlin/Altschul statistics, the other big reason
+speed either. Besides Karlin/Altschul statistics, the main reason
 BLAST has been so useful is that it's so fast.  Our design goal in
 HMMER3 was to achieve rough speed parity between BLAST and more formal
 and powerful HMM-based methods.  The acceleration algorithm in HMMER3
 is a new heuristic. It seems likely to be more sensitive than BLAST's
-heuristics on theoretical grounds, and it certainly benchmarks that
-way in practice (Eddy, 2009, manuscript in preparation). Additionally,
-it's very well suited to modern hardware architectures. We expect to
-be able to take good advantage of GPUs and other parallel processing
+heuristics on theoretical grounds. It certainly benchmarks that way in
+practice (Eddy, 2009, manuscript in preparation). Additionally, it's
+very well suited to modern hardware architectures. We expect to be
+able to take good advantage of GPUs and other parallel processing
 environments in the near future.
 
 
@@ -105,6 +105,7 @@ environments in the near future.
 \multicolumn{2}{c}{\textbf{Single sequence queries: new to HMMER3}} \\ 
  & \\ 
 \textbf{phmmer}    & Search a sequence against a sequence database. (BLASTP-like) \\
+\textbf{jackhmmer} & Iteratively search a sequence against a sequence database. (PSIBLAST-like) \\
  & \\ 
 \multicolumn{2}{c}{\textbf{Replacements for HMMER2's functionality}}  \\
  & \\ 
@@ -123,30 +124,25 @@ environments in the near future.
 \end{tabular} \\
 \\
 
-The quadrumvirate of \prog{hmmbuild/hmmsearch/hmmscan/hmmalign} is
-supposed to suffice to replace HMMER2's core functionality of
+The quadrumvirate of \prog{hmmbuild/hmmsearch/hmmscan/hmmalign}
+replaces HMMER2's core functionality of
 \prog{hmmbuild/hmmsearch/hmmpfam/hmmalign} in people's domain analysis
 and annotation pipelines, for instance using profile databases like
 Pfam or SMART. These four programs have already been subjected to some
-serious independent testing by Rob Finn of the Pfam Consortium, who is
-visiting at Janelia for several months, preparing to adopt HMMER3 at
-Pfam, apparently by beating the living tar out of it. I haven't yet
-fixed all the issues the evil Rob has identified, but I have fixed
-the showstopping bugs.\footnote{I think.}
+serious independent testing by Rob Finn of the Pfam Consortium, who
+visited Janelia for several months in order to adopt HMMER3 at Pfam,
+apparently by beating the living tar out of it. I haven't yet fixed
+all the issues the evil Rob has identified, but I have fixed the
+showstopping bugs.\footnote{I think.}
 
-The \prog{phmmer} program is new to HMMER3. It searches a single
-sequence against a sequence database, akin to BLASTP. (Internally, it
-just produces a profile HMM from the query sequence, then runs an HMM
-search.) An additional program, \prog{jackhmmer}, has narrowly missed
-being supported as part of the initial alpha test release; there's
-still some final work to do there. \prog{jackhmmer} is an iterative
-sequence search program, essentially like \prog{PSI-BLAST}. 
+The \prog{phmmer} and \prog{jackhmmer} programs are new to
+HMMER3. They searches a single sequence against a sequence database,
+akin to BLASTP and PSIBLAST, respectively. (Internally, they just
+produce a profile HMM from the query sequence, then run HMM searches.)
 
 In the Tutorial section, I'll show examples of running each of these
 programs, using examples in the \ccode{tutorial/} subdirectory of the
 distribution.
-
-
 
 
 \subsection{What's still missing}
@@ -265,7 +261,7 @@ wrong, or confusing results, or when it doesn't compile or run at all.
 Some bugs, I already know about, but I'd still like to hear about them
 just to know you care.
 
-\emph{Cryptogenomicon} (\url{http://cryptogenomicon.org/}) is a blog
+\textbf{Cryptogenomicon} (\url{http://cryptogenomicon.org/}) is a blog
 where I'll be talking about issues as they arise in HMMER3, and where
 you can comment or follow the discussion.
 

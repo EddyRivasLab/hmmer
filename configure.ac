@@ -41,7 +41,7 @@
 
 
 AC_PREREQ(2.60)
-AC_INIT(HMMER, 3.0a1, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, 3.0a2, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -72,13 +72,13 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="January 2009"
+HMMER_DATE="March 2009"
 HMMER_COPYRIGHT="Copyright (C) 2009 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 
-EASEL_DATE="January 2009"
+EASEL_DATE="March 2009"
 EASEL_COPYRIGHT="Copyright (C) 2009 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
@@ -420,7 +420,11 @@ AC_SYS_LARGEFILE
 if test -e "LICENSE.csh.in"; then
   AC_CONFIG_FILES(LICENSE.csh)
 fi
-AC_CONFIG_FILES([src/Makefile  testsuite/Makefile profmark/Makefile])
+if test -d documentation/alphaguide; then  
+  AC_CONFIG_FILES([documentation/alphaguide/Makefile])
+fi
+AC_CONFIG_FILES([src/Makefile testsuite/Makefile profmark/Makefile])
+
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
 AC_CONFIG_HEADERS(src/p7_config.h)
 
