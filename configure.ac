@@ -417,8 +417,8 @@ AC_SYS_LARGEFILE
 # Done.
 # Config subdirs and files (except main Makefile, which we defer)
 #
-if test -e "LICENSE.csh.in"; then
-  AC_CONFIG_FILES(LICENSE.csh)
+if test -d release-notes; then
+  AC_CONFIG_FILES(release-notes/LICENSE.csh)
 fi
 if test -d documentation/alphaguide; then  
   AC_CONFIG_FILES([documentation/alphaguide/Makefile])
