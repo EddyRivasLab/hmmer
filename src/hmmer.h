@@ -516,8 +516,9 @@ typedef struct p7_alidisplay_s {
 typedef struct p7_dom_s { 
   int            ienv, jenv;
   int            iali, jali;
-  float          envsc;  	/* Forward score in envelope ienv..jenv; without null2 correction             */
+  float          envsc;  	/* Forward score in envelope ienv..jenv; nats; without null2 correction       */
   float          domcorrection;	/* null2 correction to add null score when calculating a per-domain score     */
+  float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 contribution to bitscore */
   float          oasc;		/* optimal accuracy score (expected # residues correctly aligned)             */
   float          bitscore;	/* overall score in bits, null corrected, if this were the only domain in seq */
   double         pvalue;	/* P-value of the bitscore                                                    */
@@ -719,9 +720,10 @@ typedef struct p7_pipeline_s {
   uint64_t      nseqs;	        /* # of sequences searched                  */
   uint64_t      nres;	        /* # of residues searched                   */
   uint64_t      nnodes;	        /* # of model nodes searched                */
-  uint64_t      n_past_msv;	/* # models that pass the MSVFilter()       */
-  uint64_t      n_past_vit;	/* # models that pass the ViterbiFilter()   */
-  uint64_t      n_past_fwd;	/* # models that pass the ForwardFilter()   */
+  uint64_t      n_past_msv;	/* # comparisons that pass MSVFilter()      */
+  uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
+  uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
+  uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
 
@@ -818,7 +820,7 @@ extern int p7_GBackward    (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *opt_fwdscore, float *opt_hybscore);
 
 /* generic_msv.c */
-extern int p7_GMSV         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GMSV         (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float nu, float *ret_sc);
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1056,11 +1058,14 @@ extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
-extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw);
-extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw);
+extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);
+extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);
 extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
 				ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n, int optflags,
 				ESL_MSA **ret_msa);
+extern int p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
+extern int p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
+
 
 
 /* p7_trace.c */

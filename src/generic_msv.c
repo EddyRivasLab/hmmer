@@ -24,7 +24,7 @@
  *****************************************************************/
 
 /* Function:  p7_GMSV()
- * Synopsis:  The MSV score algorithm.
+ * Synopsis:  The MSV score algorithm (slow, correct version)
  * Incept:    SRE, Thu Dec 27 08:33:39 2007 [Janelia]
  *
  * Purpose:   Calculates the maximal score of ungapped local segment
@@ -36,6 +36,7 @@
  *            L            - length of dsq
  *            gm           - profile (can be in any mode)
  *            gx           - DP matrix with room for an MxL alignment
+ *            nu           - configuration: expected number of hits (use 2.0 as a default)
  *            opt_sc       - optRETURN: MSV lod score in nats.
  *
  * Returns:   <eslOK> on success.
@@ -52,14 +53,15 @@
  *            versions.)  
  */            
 int
-p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_sc)
+p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *opt_sc)
 {
   float      **dp    = gx->dp;
   float       *xmx   = gx->xmx;
   float        tloop = logf((float) L / (float) (L+3));
   float        tmove = logf(     3.0f / (float) (L+3));
   float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
-  float        tec   = logf(0.5f);
+  float        tej   = logf((nu - 1.0f) / nu);
+  float        tec   = logf(1.0f / nu);
   int          i,k;
 
   XMX(0,p7G_N) = 0;
@@ -81,10 +83,10 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_
 	  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
 	}
    
-      XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) + tloop,     XMX(i-1,p7G_E) + tec);
-      XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) + tloop,     XMX(i,  p7G_E) + tec);
+      XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) + tloop,     XMX(i, p7G_E) + tej);
+      XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) + tloop,     XMX(i, p7G_E) + tec);
       XMX(i,p7G_N) =          XMX(i-1,p7G_N) + tloop;
-      XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i,  p7G_J) + tmove);
+      XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i, p7G_J) + tmove);
     }
   gx->M = gm->M;
   gx->L = L;
@@ -111,7 +113,7 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *opt_
  *    Viterbi  = 61.8 Mc/s
  *    Forward  =  8.6 Mc/s
  *   Backward  =  7.1 Mc/s
- *        MSV  = 55.9 Mc/s
+ *       GMSV  = 55.9 Mc/s
  * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
 #include "p7_config.h"
@@ -176,7 +178,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_GMSV      (dsq, L, gm, gx, &sc);
+      p7_GMSV      (dsq, L, gm, gx, 2.0, &sc);
     }
   esl_stopwatch_Stop(w);
   bench_time = w->user - base_time;
@@ -236,8 +238,8 @@ utest_msv(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_P
     {
       if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
 
-      if (p7_GMSV    (dsq, L, gm, gx, &sc1)       != eslOK) esl_fatal("MSV failed");
-      if (p7_GViterbi(dsq, L, g2, gx, &sc2)       != eslOK) esl_fatal("viterbi failed");
+      if (p7_GMSV    (dsq, L, gm, gx, 2.0, &sc1)       != eslOK) esl_fatal("MSV failed");
+      if (p7_GViterbi(dsq, L, g2, gx,      &sc2)       != eslOK) esl_fatal("viterbi failed");
       if (fabs(sc1-sc2) > 0.0001) esl_fatal("MSV score not equal to Viterbi score");
     }
 
@@ -322,6 +324,7 @@ main(int argc, char **argv)
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_gumbel.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
@@ -330,6 +333,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,  NULL,  NULL, NULL, "set nu param to <x>: expected # MSV diagonals",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -342,6 +346,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
+  float           nu      = esl_opt_GetReal(go, "--nu");
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -353,6 +358,9 @@ main(int argc, char **argv)
   P7_TRACE       *tr      = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           sc;
+  float           nullsc;
+  float           seqscore;
+  float           P;
   int             status;
 
   /* Read in one HMM */
@@ -367,23 +375,41 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
-  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
-  esl_sqfile_Close(sqfp);
- 
+
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
-  p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
-  
+
   /* Allocate matrix */
   fwd = p7_gmx_Create(gm->M, sq->n);
- 
-  /* Run MSV */
-  p7_GMSV(sq->dsq, sq->n, gm, fwd, &sc);
-  printf("msv = %.4f nats\n", sc);
+
+  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_ReconfigLength(gm,  sq->n);
+      p7_bg_SetLength(bg,    sq->n);
+      p7_gmx_GrowTo(fwd, gm->M, sq->n); 
+
+      /* Run MSV */
+      p7_GMSV(sq->dsq, sq->n, gm, fwd, nu, &sc);
+
+      /* Calculate bit score and P-value using standard null1 model*/
+      p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
+      seqscore = (sc - nullsc) / eslCONST_LOG2;
+      P        =  esl_gumbel_surv(seqscore,  gm->evparam[p7_MU],  gm->evparam[p7_LAMBDA]);
+
+      /* output suitable for direct use in profmark benchmark postprocessors:
+       * <Pvalue> <bitscore> <target name> <query name>
+       */
+      printf("%g\t%.2f\t%s\t%s\n", P, seqscore, sq->name, hmm->name);
+
+      esl_sq_Reuse(sq);
+    }
+  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",    status, sqfp->filename);
 
   /* Cleanup */
+  esl_sqfile_Close(sqfp); 
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
   p7_gmx_Destroy(fwd);

@@ -216,6 +216,9 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    
    
 * tag the release. Replace version # below!
+   cd ~/src/hmmer
+   svn commit
+
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk\
             https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0a2\
             -m "tagged 3.0a2 release, from development trunk"          
@@ -235,5 +238,5 @@ Release           Date            SVN (HMMER/Easel)
 3.0.snap20080419  19 Apr 2008     r2398/r247
 3.0.snap20081101   1 Nov 2008     r2620/r302
 3.0a1             12 Jan 2009     r2699/r312
-3.0a2             13 Mar 2009     
+3.0a2             13 Mar 2009     r2744/r330
 

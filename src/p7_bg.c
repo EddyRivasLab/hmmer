@@ -224,6 +224,13 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *
  * Xref:      J4/25: generalized to use composition vector, not
  *                   specifically an HMM. 
+ *                   
+ * Note:      This looks like a two-state HMM, but if you start thinking
+ *            about its length distribution ("oh my god, L0 assumes a
+ *            fixed L=400 expectation, it's all wrong, it's not conditional
+ *            on the target sequence length and length modeling's messed
+ *            up!"), don't panic. It's set up as a conditional-on-L model;
+ *            the P(L) term is added in p7_bg_FilterScore() below.                  
  */
 int
 p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)

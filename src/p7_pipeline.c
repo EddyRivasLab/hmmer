@@ -206,9 +206,9 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   pli->do_max        = FALSE;
   pli->do_biasfilter = TRUE;
   pli->do_null2      = TRUE;
-  pli->F1     = esl_opt_GetReal(go, "--F1");
-  pli->F2     = esl_opt_GetReal(go, "--F2");
-  pli->F3     = esl_opt_GetReal(go, "--F3");
+  pli->F1     = ESL_MIN(1.0, esl_opt_GetReal(go, "--F1"));
+  pli->F2     = ESL_MIN(1.0, esl_opt_GetReal(go, "--F2"));
+  pli->F3     = ESL_MIN(1.0, esl_opt_GetReal(go, "--F3"));
   if (esl_opt_GetBoolean(go, "--max")) 
     {
       pli->do_max        = TRUE;
@@ -219,17 +219,18 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   if (esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
   /* Accounting as we collect results */
-  pli->nmodels    = 0;
-  pli->nseqs      = 0;
-  pli->nres       = 0;
-  pli->nnodes     = 0;
-  pli->n_past_msv = 0;
-  pli->n_past_vit = 0;
-  pli->n_past_fwd = 0;
+  pli->nmodels     = 0;
+  pli->nseqs       = 0;
+  pli->nres        = 0;
+  pli->nnodes      = 0;
+  pli->n_past_msv  = 0;
+  pli->n_past_bias = 0;
+  pli->n_past_vit  = 0;
+  pli->n_past_fwd  = 0;
   
-  pli->mode       = mode;
-  pli->hfp        = NULL;
-  pli->errbuf[0]  = '\0';
+  pli->mode        = mode;
+  pli->hfp         = NULL;
+  pli->errbuf[0]   = '\0';
 
   return pli;
 
@@ -496,6 +497,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
   if (P > pli->F1 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
+  pli->n_past_msv++;
 
   /* biased composition HMM filtering */
   if (pli->do_biasfilter)
@@ -506,8 +508,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       if (P > pli->F1 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
     }
   else filtersc = nullsc;
-  pli->n_past_msv++;
-
+  pli->n_past_bias++;
 
   /* In scan mode, if it passes the MSV filter, read the rest of the profile */
   if (pli->hfp) {
@@ -560,19 +561,32 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   sum_score = 0.0f;
   seqbias   = 0.0f;
   Ld        = 0;
-  for (d = 0; d < pli->ddef->ndom; d++) 
-    {
-      if (! pli->do_null2) pli->ddef->dcl[d].domcorrection = 0.0f;
-      if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0) 
-	{
-	  sum_score += pli->ddef->dcl[d].envsc;
-	  Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
-	  seqbias   += pli->ddef->dcl[d].domcorrection;
-	}
-    }
-  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
   if (pli->do_null2) 
-    seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);
+    {
+      for (d = 0; d < pli->ddef->ndom; d++) 
+	{
+	  if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0) 
+	    {
+	      sum_score += pli->ddef->dcl[d].envsc;
+	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
+	      seqbias   += pli->ddef->dcl[d].domcorrection;
+	    }
+	}
+      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);
+    }
+  else 
+    {
+      for (d = 0; d < pli->ddef->ndom; d++) 
+	{
+	  if (pli->ddef->dcl[d].envsc > 0.0) 
+	    {
+	      sum_score += pli->ddef->dcl[d].envsc;
+	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
+	    }
+	}
+      seqbias = 0.0;
+    }    
+  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
   pre2_score = (sum_score - nullsc) / eslCONST_LOG2;
   sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;
 
@@ -633,11 +647,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	{
 	  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
 	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	  if (pli->do_null2)
-	    seqbias = p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection);
-	  else
-	    seqbias = 0.0;
-	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + seqbias)) / eslCONST_LOG2;
+	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0);
+	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2;
 	  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
 	  
 	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
@@ -683,11 +694,19 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 	  (double) pli->n_past_msv / ntargets,
 	  pli->F1 * ntargets,
 	  pli->F1);
+
+  fprintf(ofp, "Passed bias filter:          %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n", 
+	  pli->n_past_bias,
+	  (double) pli->n_past_bias / ntargets,
+	  pli->F1 * ntargets,
+	  pli->F1);
+
   fprintf(ofp, "Passed Vit filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",   
 	  pli->n_past_vit,
 	  (double) pli->n_past_vit / ntargets,
 	  pli->F2 * ntargets,
 	  pli->F2);
+
   fprintf(ofp, "Passed Fwd filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",         
 	  pli->n_past_fwd, 
 	  (double) pli->n_past_fwd / ntargets,

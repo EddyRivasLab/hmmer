@@ -258,7 +258,6 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, in
   int  idx;		  /* counter over sequences */
   int  nins;		  /* counter for inserted residues observed */
   int  z;		  /* index into trace positions */
-  int  apos;		  /* index into alignment positions 1..alen  */
   int  alen;		  /* length of alignment */
   int  k;		  /* counter over nodes 1..M */
   int  status;

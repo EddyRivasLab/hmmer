@@ -81,6 +81,7 @@ static ESL_OPTIONS options[] = {
   { "--seed",    eslARG_INT,      "0", NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
 
   { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      8 },
+  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",       8 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -602,6 +603,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   int    efL          = esl_opt_GetInteger(go, "--efL");
   int    efN          = esl_opt_GetInteger(go, "--efN");
   double eft          = esl_opt_GetReal   (go, "--eft");
+  float  nu           = esl_opt_GetReal   (go, "--nu");
 
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
@@ -630,7 +632,6 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   /* Create optimized model and DP matrix */
   om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);
-  p7_oprofile_ReconfigLength(om, L);
   ox = p7_omx_Create(gm->M, 0, 0);
 
   /* Determine E-value parameters 
@@ -641,8 +642,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau(cfg->r, om, cfg->bg, efL, efN, lambda, eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
-  /* The mu determination has changed the length config of <gm> and <bg>; reset them.
-   */
+  /* The mu, tau determination has changed the length config of models; reset them.  */
+  p7_oprofile_ReconfigLength(om, L);
   p7_ReconfigLength(gm,      L);
   p7_bg_SetLength  (cfg->bg, L);
 
@@ -660,10 +661,10 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
       if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a filter overflows, failover to slow versions */
 	{
-	  if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx, &sc);
-	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx, &sc);
+	  if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx,       &sc);
+	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx,       &sc);
 	  else if (esl_opt_GetBoolean(go, "--hyb")) p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
-	  else if (esl_opt_GetBoolean(go, "--msv")) p7_GMSV    (dsq, L, gm, gx, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msv")) p7_GMSV    (dsq, L, gm, gx, nu,   &sc);
 	}
 
       /* Optional: get Viterbi alignment length too. */

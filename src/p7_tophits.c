@@ -2,9 +2,11 @@
  * 
  * Contents:
  *    1. The P7_TOPHITS object.
- *    2. Benchmark driver.
- *    3. Test driver.
- *    4. Copyright and license information.
+ *    2. Standard (human-readable) output of pipeline results.
+ *    3. Tabular (parsable) output of pipeline results.
+ *    4. Benchmark driver.
+ *    5. Test driver.
+ *    6. Copyright and license information.
  * 
  * SRE, Fri Dec 28 07:14:54 2007 [Janelia] [Enigma, MCMXC a.D.]
  * SVN $Id$
@@ -19,6 +21,10 @@
 
 #include "hmmer.h"
 
+
+/*****************************************************************
+ * 1. The P7_TOPHITS object
+ *****************************************************************/
 
 /* Function:  p7_tophits_Create()
  * Synopsis:  Allocate a hit list.
@@ -422,10 +428,15 @@ p7_tophits_Destroy(P7_TOPHITS *h)
   free(h);
   return;
 }
+/*---------------- end, P7_TOPHITS object -----------------------*/
+
+
+
+
 
 
 /*****************************************************************
- * x. Output API: reporting results from a processing pipeline
+ * 2. Standard (human-readable) output of pipeline results
  *****************************************************************/
 
 /* Function:  p7_tophits_Threshold()
@@ -599,28 +610,17 @@ p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew)
  * Incept:    SRE, Tue Dec  9 09:10:43 2008 [Janelia]
  *
  * Purpose:   Output a list of the reportable top target hits in <th> 
- *            in tabular ASCII text format to stream <ofp>, using
+ *            in human-readable ASCII text format to stream <ofp>, using
  *            final pipeline accounting stored in <pli>. 
- *
- *            It also currently needs access to <bg> to see the
- *            <bg->omega> prior, but this should eventually change.
  * 
  *            The tophits list <th> should already be sorted (see
  *            <p7_tophits_Sort()> and thresholded (see
  *            <p7_tophits_Threshold>).
- *            
- *            Because <p7_FLogsum()> is used here, you must 
- *            initialize its lookup table with <p7_FLogsumInit()>
- *            first.
  *
  * Returns:   <eslOK> on success.
- *
- * Notes:     Recalculating the actual null2 score correction with
- *            <bg->omega> here seems silly - surely we can do that
- *            in the pipeline?
  */
 int
-p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw)
+p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 {
   char   newness;
   int    h;
@@ -662,7 +662,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
 		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
 		th->hit[h]->dcl[d].pvalue * pli->Z,
 		th->hit[h]->dcl[d].bitscore,
-		p7_FLogsum(0.0, log(bg->omega) + th->hit[h]->dcl[d].domcorrection),
+		th->hit[h]->dcl[d].dombias,
 		th->hit[h]->nexpected,
 		th->hit[h]->nreported,
 		namew, th->hit[h]->name,
@@ -684,7 +684,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
  *            Similar to <p7_tophits_Targets()>; see additional notes there.
  */
 int
-p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int textw)
+p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 {
   int h, d;
   int nd;
@@ -717,7 +717,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, P7_BG *bg, int t
 		      nd,
 		      th->hit[h]->dcl[d].is_included ? '!' : '?',
 		      th->hit[h]->dcl[d].bitscore,
-		      p7_FLogsum(0.0, log(bg->omega) + th->hit[h]->dcl[d].domcorrection),
+		      th->hit[h]->dcl[d].dombias,
 		      th->hit[h]->dcl[d].pvalue * pli->domZ,
 		      th->hit[h]->dcl[d].pvalue * pli->Z,
 		      th->hit[h]->dcl[d].ad->hmmfrom,
@@ -848,11 +848,141 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
   *ret_msa = NULL;
   return status;
 }
+/*---------------- end, standard output format ------------------*/
+
+
 
 
 
 /*****************************************************************
- * 2. Benchmark driver
+ * 3. Tabular (parsable) output of pipeline results.
+ *****************************************************************/
+
+/* Function:  p7_tophits_TabularTargets()
+ * Synopsis:  Output parsable table of per-sequence hits.
+ * Incept:    SRE, Wed Mar 18 15:26:17 2009 [Janelia]
+ *
+ * Purpose:   Output a parseable table of reportable per-sequence hits
+ *            in sorted tophits list <th> in an easily parsed ASCII
+ *            tabular form to stream <ofp>, using final pipeline
+ *            accounting stored in <pli>.
+ *            
+ *            Designed to be concatenated for multiple queries and
+ *            multiple top hits list.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
+{
+  int qnamew = ESL_MAX(20, strlen(queryname));
+  int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  int h,d;
+  
+  if (show_header)
+    {  
+      fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
+      fprintf(ofp, "#%-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
+	      tnamew-1, "target", qnamew, "query", "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
+      fprintf(ofp, "#%*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
+	      tnamew-1, "-------------------", qnamew, "--------------------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
+     }
+
+  for (h = 0; h < th->N; h++)
+    if (th->hit[h]->flags & p7_IS_REPORTED)
+      {
+	d    = th->hit[h]->best_domain;
+
+	fprintf(ofp, "%-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n", 
+		tnamew, th->hit[h]->name,
+		qnamew, queryname, 
+		th->hit[h]->pvalue * pli->Z,
+		th->hit[h]->score,
+		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+		th->hit[h]->dcl[d].pvalue * pli->Z,
+		th->hit[h]->dcl[d].bitscore,
+		th->hit[h]->dcl[d].dombias,
+		th->hit[h]->nexpected,
+		th->hit[h]->nregions,
+		th->hit[h]->nclustered,
+		th->hit[h]->noverlaps,
+		th->hit[h]->nenvelopes,
+		th->hit[h]->ndom,
+		th->hit[h]->nreported,
+		th->hit[h]->nincluded,
+		(th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));
+      }
+  return eslOK;
+}
+
+
+/* Function:  p7_tophits_TabularDomains()
+ * Synopsis:  Output parseable table of per-domain hits
+ * Incept:    SRE, Wed Mar 18 16:57:58 2009 [Janelia]
+ *
+ * Purpose:   Output a parseable table of reportable per-domain hits
+ *            in sorted tophits list <th> in an easily parsed ASCII
+ *            tabular form to stream <ofp>, using final pipeline
+ *            accounting stored in <pli>.
+ *            
+ *            Designed to be concatenated for multiple queries and
+ *            multiple top hits list.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
+{
+  int qnamew = ESL_MAX(20, strlen(queryname));
+  int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  int h,d,nd;
+
+  if (show_header)
+    {
+      fprintf(ofp, "#%*s %22s %37s %11s %11s %11s\n", tnamew+qnamew-1+13, "", "--- full sequence ---", "------------ this domain ------------", "hmm coord", "ali coord", "env coord");
+      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", tnamew-1, "target", "tlen", qnamew, "query", "qlen", "E-value", "score", "bias", "#", "of", "c-Evalue", "i-Evalue", "score", "bias", "from", "to", "from", "to", "from", "to", "acc", "description of target");
+      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s\n", tnamew-1, "-------------------", "-----", qnamew, "--------------------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
+    }
+
+  for (h = 0; h < th->N; h++)
+    if (th->hit[h]->flags & p7_IS_REPORTED)
+      {
+	nd = 0;
+	for (d = 0; d < th->hit[h]->ndom; d++)
+	  if (th->hit[h]->dcl[d].is_reported) 
+	    {
+	      nd++;
+	      fprintf(ofp, "%-*s %5d %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5d %5d %5d %5d %4.2f %s\n", 
+		      tnamew, th->hit[h]->name, th->hit[h]->dcl[d].ad->L,
+		      qnamew, queryname,        th->hit[h]->dcl[d].ad->M,
+		      th->hit[h]->pvalue * pli->Z,
+		      th->hit[h]->score,
+		      th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+		      nd, 
+		      th->hit[h]->nreported,
+		      th->hit[h]->dcl[d].pvalue * pli->domZ,
+		      th->hit[h]->dcl[d].pvalue * pli->Z,
+		      th->hit[h]->dcl[d].bitscore,
+		      th->hit[h]->dcl[d].dombias,
+		      th->hit[h]->dcl[d].ad->hmmfrom,
+		      th->hit[h]->dcl[d].ad->hmmto,
+		      th->hit[h]->dcl[d].ad->sqfrom,
+		      th->hit[h]->dcl[d].ad->sqto,
+		      th->hit[h]->dcl[d].ienv,
+		      th->hit[h]->dcl[d].jenv,
+		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
+		      (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));		      
+	    }
+      }
+  return eslOK;
+}
+/*------------------- end, tabular output -----------------------*/
+
+
+
+
+/*****************************************************************
+ * 4. Benchmark driver
  *****************************************************************/
 #ifdef p7TOPHITS_BENCHMARK
 /* 
@@ -944,7 +1074,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 3. Test driver
+ * 5. Test driver
  *****************************************************************/
 
 #ifdef p7TOPHITS_TESTDRIVE

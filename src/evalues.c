@@ -205,8 +205,8 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            subsequent alignments.
  *            
  * Args:      r      :  source of random numbers
- *            om     :  score profile
- *            bg     :  null model
+ *            om     :  score profile (length config is changed upon return!)
+ *            bg     :  null model    (length config is changed upon return!)
  *            L      :  length of sequences to simulate
  *            N	     :  number of sequences to simulate		
  *            lambda :  known Gumbel lambda parameter

@@ -79,7 +79,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
   register __m128i biasv;	   /* emission bias in a vector                                 */
-  uint8_t  xE, xB, xC;             /* special states' scores                                    */
+  uint8_t  xE, xB, xJ;             /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
@@ -96,10 +96,10 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   for (q = 0; q < Q; q++)
     dp[q] = _mm_setzero_si128();
   xB   = om->base - om->tjb;                /* remember, all values are costs to be subtracted. */
-  xC   = 0;
+  xJ   = 0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpMSVRow(ox, 0, 0, 0, xC, xB, xC);
+  if (ox->debugging) p7_omx_DumpMSVRow(ox, 0, 0, 0, xJ, xB, xJ);
 #endif
 
   for (i = 1; i <= L; i++)
@@ -129,16 +129,16 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xE = esl_sse_hmax_epu8(xEv);
       if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
 
-      xC = ESL_MAX(xC,        xE  - om->tec);
-      xB = ESL_MAX(om->base,  xC) - om->tjb;
+      xJ = ESL_MAX(xJ,        xE  - om->tec);
+      xB = ESL_MAX(om->base,  xJ) - om->tjb;
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpMSVRow(ox, i, xE, 0, xC, xB, xC);   
+      if (ox->debugging) p7_omx_DumpMSVRow(ox, i, xE, 0, xJ, xB, xJ);   
 #endif
     } /* end loop over sequence residues 1..L */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-  *ret_sc = ((float) (xC - om->tjb) - (float) om->base);
+  *ret_sc = ((float) (xJ - om->tjb) - (float) om->base);
   *ret_sc /= om->scale;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 
@@ -261,7 +261,7 @@ main(int argc, char **argv)
       /* -c option: compare generic to fast score */
       if (esl_opt_GetBoolean(go, "-c")) 
 	{
-	  p7_GMSV    (dsq, L, gm, gx, &sc2); 
+	  p7_GMSV    (dsq, L, gm, gx, 2.0, &sc2); 
 	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
 

@@ -270,8 +270,8 @@ main(int argc, char **argv)
       /* Print results */
       p7_tophits_Sort(th);
       p7_tophits_Threshold(th, pli);
-      p7_tophits_Targets(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
-      p7_tophits_Domains(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pli, w);

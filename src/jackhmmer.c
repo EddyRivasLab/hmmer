@@ -380,8 +380,8 @@ main(int argc, char **argv)
 	  p7_tophits_Sort(th);
 	  p7_tophits_Threshold(th, pli);
 	  p7_tophits_CompareRanking(th, kh, &nnew_targets);
-	  p7_tophits_Targets(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
-	  p7_tophits_Domains(ofp, th, pli, bg, textw); fprintf(ofp, "\n\n");
+	  p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+	  p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
 
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
@@ -418,7 +418,6 @@ main(int argc, char **argv)
       /* Output the results in an MSA */
       if (esl_opt_IsOn(go, "-A")) {
 	FILE    *afp = NULL;
-	ESL_MSA *msa = NULL;
 
 	if ((afp = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL)
 	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));

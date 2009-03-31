@@ -29,8 +29,10 @@ SUFFIXES    = .c .o
 prefix      = @prefix@
 exec_prefix = @exec_prefix@
 datarootdir = @datarootdir@
-BINDIR      = @bindir@
-MANDIR      = @mandir@
+bindir      = @bindir@
+mandir      = @mandir@
+man1dir     = ${mandir}/man1
+manext      = .1
 
 # Compiler configuration
 #
@@ -43,7 +45,6 @@ CPPFLAGS  = @CPPFLAGS@
 # Other tools
 #
 INSTMAN   = cp
-MANSUFFIX = 1
 AR        = @AR@ rcv
 LN        = ln
 RANLIB    = @RANLIB@
@@ -140,7 +141,7 @@ src/libhmmer.a:
 	cd src; ${MAKE} libhmmer.a
 
 
-# install: installs the binaries in BINDIR/
+# install: installs the binaries in ${bindir}/
 #          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 #          Creates these directories if they don't exist.
 #          Prefix those paths with ${DESTDIR} (rarely used, usually null;
@@ -152,20 +153,20 @@ install:
 	cd ${SRCDIR};   ${MAKE} hmmer_lib
 	cd ${PMARKDIR}; ${MAKE} profmark_progs
 	cd ${SRCDIR};   ${MAKE} hmmer_progs	
-	-mkdir -p ${DESTDIR}/${BINDIR}
+	-mkdir -p ${DESTDIR}${bindir}
 	for file in $(PROGS); do\
-	   cp src/$$file ${DESTDIR}/$(BINDIR)/;\
+	   cp src/$$file ${DESTDIR}${bindir}/;\
 	done
 #	-mkdir -p ${DESTDIR}/${MANDIR}/man${MANSUFFIX}
 #	-for file in hmmer $(PROGS); do\
-#	   $(INSTMAN) documentation/man/$$file.man ${DESTDIR}/$(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
+#	   $(INSTMAN) documentation/man/$$file.man ${DESTDIR}$(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
 #	done
 
 # uninstall: Reverses the steps of "make install".
 #
 uninstall: 
 	for file in $(PROGS); do\
-	   rm ${BINDIR}/$$file;\
+	   rm ${DESTDIR}${bindir}/$$file;\
 	done
 #	for file in hmmer $(PROGS); do\
 #	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
@@ -228,9 +229,9 @@ distclean:
 
 TAGS:
 	etags src/*.c src/*.h src/p7_config.h.in Makefile.in 
-	etags -a documentation/userguide/*.tex documentation/userguide/Makefile
-	etags -a documentation/man/*.man  documentation/man/boilerplate
-	etags -a documentation/devguide/*.tex 
+	etags -a documentation/alphaguide/*.tex documentation/alphaguide/Makefile.in
+#	etags -a documentation/man/*.man  documentation/man/boilerplate
+#	etags -a documentation/devguide/*.tex 
 	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in 
 #	etags -a src/impl_vmx/*.c src/impl_vmx/*.h 
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)

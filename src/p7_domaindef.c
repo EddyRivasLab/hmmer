@@ -749,7 +749,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
   dom->envsc         = envsc;
   dom->domcorrection = domcorrection;
   dom->oasc          = oasc;
-  dom->bitscore      = 0.0;	/* gets set later by caller, using envsc and domcorrection */
+  dom->dombias       = 0.0;	/* gets set later, using bg->omega and dombias */
+  dom->bitscore      = 0.0;	/* gets set later by caller, using envsc, null score, and dombias */
   dom->pvalue        = 1.0;	/* gets set later by caller, using bitscore */
   dom->is_reported   = FALSE;	/* gets set later by caller */
   dom->is_included   = FALSE;	/* gets set later by caller */
