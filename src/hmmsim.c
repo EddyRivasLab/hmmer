@@ -50,6 +50,7 @@ static ESL_OPTIONS options[] = {
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             2 },
   { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",              2 },
   { "--efile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output E vs. E plots to <f> in xy format",          2 },
+  { "--ffile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output filter fraction: # seqs passing P thresh",   2 },
   { "--pfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output P(S>x) plots to <f> in xy format",           2 },
   { "--xfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output bitscores as binary double vector to <f>",   2 },
 
@@ -81,7 +82,8 @@ static ESL_OPTIONS options[] = {
   { "--seed",    eslARG_INT,      "0", NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
 
   { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      8 },
-  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",       8 },  
+  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",    8 },  
+  { "--pthresh", eslARG_REAL,   "0.02",NULL, NULL,     NULL,"--ffile", NULL, "set P-value threshold for --ffile",               8 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -108,6 +110,7 @@ struct cfg_s {
   FILE           *ofp;		/* output file for results (default is stdout) */
   FILE           *survfp;	/* optional output for survival plots */
   FILE           *efp;		/* optional output for E vs. E plots */
+  FILE           *ffp;		/* optional output for filter power data */
   FILE           *xfp;		/* optional output for binary score vectors */
   FILE           *alfp;		/* optional output for alignment lengths */
 };
@@ -123,8 +126,9 @@ static void serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_master     (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_worker     (ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif 
-static int process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double *ret_mu, double *ret_lambda);
-static int output_result   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double mu, double lambda);
+static int process_workunit   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double *ret_mu, double *ret_lambda);
+static int output_result      (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double mu, double lambda);
+static int output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
 
 #ifdef HAVE_MPI
 static int minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn);
@@ -204,6 +208,7 @@ main(int argc, char **argv)
   cfg.ofp      = NULL;
   cfg.survfp   = NULL;
   cfg.efp      = NULL;
+  cfg.ffp      = NULL;
   cfg.xfp      = NULL;
   cfg.alfp     = NULL;
 
@@ -260,6 +265,7 @@ main(int argc, char **argv)
     if (esl_opt_IsOn(go, "-o"))  fclose(cfg.ofp); 
     if (cfg.survfp != NULL)      fclose(cfg.survfp);
     if (cfg.efp    != NULL)      fclose(cfg.efp);
+    if (cfg.ffp    != NULL)      fclose(cfg.ffp);
     if (cfg.xfp    != NULL)      fclose(cfg.xfp);
     if (cfg.alfp   != NULL)      fclose(cfg.alfp);
   }
@@ -280,6 +286,7 @@ main(int argc, char **argv)
  *    cfg->ofp     - open output steam
  *    cfg->survfp  - open xmgrace survival plot file 
  *    cfg->efp     - open E vs. E plot file
+ *    cfg->ffp     - open filter power data file
  *    cfg->xfp     - open binary score file
  *    cfg->alfp    - open alignment length file
  *
@@ -322,6 +329,13 @@ init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf)
     {
       if ((cfg->efp = fopen(filename, "w")) == NULL) 
 	ESL_FAIL(eslFAIL, errbuf, "Failed to open --efile output file %s\n", filename);
+    }
+
+  filename = esl_opt_GetString(go, "--ffile");
+  if (filename != NULL) 
+    {
+      if ((cfg->ffp = fopen(filename, "w")) == NULL) 
+	ESL_FAIL(eslFAIL, errbuf, "Failed to open --ffile output file %s\n", filename);
     }
 
   filename = esl_opt_GetString(go, "--xfile");
@@ -634,8 +648,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   p7_oprofile_Convert(gm, om);
   ox = p7_omx_Create(gm->M, 0, 0);
 
-  /* Determine E-value parameters 
-   */
+  /* Determine E-value parameters (in addition to any that are already in the HMM structure)  */
   p7_Lambda(hmm, cfg->bg, &lambda);
   if      (esl_opt_GetBoolean(go, "--vit"))  p7_Mu (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
   else if (esl_opt_GetBoolean(go, "--msv"))  p7_Mu (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
@@ -708,7 +721,8 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   double         tailp;
   double         x10;
   double         mu, lambda, E10;
-  double         mufix, E10fix;
+  double         mufix,  E10fix;
+  double         mufix2, E10fix2;
   double         E10p;
   double         almean, alvar;	/* alignment length mean and variance (optional output) */
   int            status;
@@ -720,37 +734,36 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   if (cfg->alfp)                     for (i = 0; i < cfg->N; i++) fprintf(cfg->alfp, "%d  %.3f\n", alilens[i], scores[i]);
   if (esl_opt_GetBoolean(go, "-v"))  for (i = 0; i < cfg->N; i++) printf("%.3f\n", scores[i]);
 
+  /* optional "filter power" data file: <hmm name> <# seqs <= P threshold> <fraction of seqs <= P threshold>  */
+  if (cfg->ffp)                      output_filter_power(go, cfg, errbuf, hmm, scores);
+
   /* Count the scores into a histogram object.  */
   if ((h = esl_histogram_CreateFull(-50., 50., 0.2)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "allocation failed");
   for (i = 0; i < cfg->N; i++) esl_histogram_Add(h, scores[i]);
-
-  /* header */
-#if 0
-  fprintf(cfg->ofp, "# %18s  %8s %26s %17s %26s\n", "", "", 
-	  "-------- ML lambda -------", 
-	  "-- lambda fixed--",
-	  "-- calibrated mu,lambda --");
-  fprintf(cfg->ofp, "# %-18s  %8s %8s %8s %8s %8s %8s %8s %8s %8s\n", 
-	  "HMM", "tailprob",
-	  "mu", "lambda", "E@10", 
-	  "mu", "E@10", 
-	  "mu", "lambda", "E@10");
-#endif
 
   /* For viterbi, MSV, and hybrid, fit data to a Gumbel, either with known lambda or estimated lambda. */
   if (esl_opt_GetBoolean(go, "--vit") || esl_opt_GetBoolean(go, "--hyb") || esl_opt_GetBoolean(go, "--msv"))
     {
       esl_histogram_GetRank(h, 10, &x10);
-
       tailp  = 1.0;
+
+      /* mu, lambda, E10 fields: ML Gumbel fit to the observed data */
       esl_gumbel_FitComplete(scores, cfg->N, &mu, &lambda);
       E10    = cfg->N * esl_gumbel_surv(x10, mu, lambda); 
+
+      /* mufix, E10fix fields:   assume lambda = log2; fit an ML mu to the data */
       esl_gumbel_FitCompleteLoc(scores, cfg->N, 0.693147, &mufix);
       E10fix = cfg->N * esl_gumbel_surv(x10, mufix, 0.693147); 
-      E10p   = cfg->N * esl_gumbel_surv(x10, pmu,   plambda); 
+
+      /* mufix2, E10fix2 fields: assume edge-corrected H3 lambda estimate; fit ML mu */
+      esl_gumbel_FitCompleteLoc(scores, cfg->N, plambda, &mufix2);
+      E10fix2 = cfg->N * esl_gumbel_surv(x10, mufix2, plambda); 
       
-      fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f", 
-	      hmm->name, tailp, mu, lambda, E10, mufix, E10fix, pmu, plambda, E10p);
+      /* pmu, plambda, E10p:     use H3 estimates (pmu, plambda) */
+      E10p    = cfg->N * esl_gumbel_surv(x10, pmu,   plambda); 
+      
+      fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f", 
+              hmm->name, tailp, mu, lambda, E10, mufix, E10fix, mufix2, E10fix2, pmu, plambda, E10p);
 
       if (esl_opt_GetBoolean(go, "-a")) {
 	esl_stats_IMean(alilens, cfg->N, &almean, &alvar);
@@ -834,6 +847,51 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   esl_histogram_Destroy(h);
   return status;
 }
+
+
+/* output_filter_power()
+ *
+ * Used for testing whether the filters (MSV scores, Viterbi scores)
+ * have the power they're supposed to have: for example, if MSV filter
+ * is set at a P-value threshold of 0.02, ~2% of sequences should get
+ * through, regardless of things like model and target sequence
+ * length.
+ * 
+ * Output a file suitable for constructing histograms over many HMMs,
+ * for a particular choice of hmmsim'ed L and N targets:
+ *    <hmm name>  <# of seqs passing threshold>  <fraction of seqs passing threshold>
+ * 
+ * SRE, Thu Apr  9 08:57:32 2009 [Janelia] xref J4/133
+ */
+static int
+output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores)
+{
+  double pthresh = esl_opt_GetReal(go, "--pthresh"); /* P-value threshold set for the filter score       */
+  double P;					     /* calculated P-value (using HMM's own calibration) */
+  int    npass = 0;				     /* number of scores that pass the P threshold       */
+  double fpass;					     /* fraction of scores that pass the P threshold     */
+  int    i;					     /* counter over scores                              */
+  int    do_gumbel;				     /* flag for how to determine P values               */
+
+  if       (esl_opt_GetBoolean(go, "--vit")) do_gumbel = TRUE;
+  else if  (esl_opt_GetBoolean(go, "--msv")) do_gumbel = TRUE; 
+  else if  (esl_opt_GetBoolean(go, "--hyb")) do_gumbel = FALSE;
+  else     ESL_FAIL(eslEINVAL, errbuf, "can only use --ffile with viterbi, msv, or fwd scores");
+
+  for (i = 0; i < cfg->N; i++)
+    {
+      P = (do_gumbel ? 
+	   esl_gumbel_surv(scores[i], hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]) :
+	   esl_exp_surv   (scores[i], hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]));
+	   
+      if (P <= pthresh) npass++;
+    }
+  fpass = (double) npass / (double) cfg->N;
+
+  fprintf(cfg->ffp, "%s\t%d\t%.4f\n", hmm->name, npass, fpass);
+  return eslOK;
+}
+
 
 
 #ifdef HAVE_MPI

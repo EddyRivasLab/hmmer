@@ -33,14 +33,14 @@ static ESL_OPTIONS options[] = {
   { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "-E,-T,--domE,--domT",               "use profile's GA gathering cutoffs to set -T, --domT",         2 },
   { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "-E,-T,--domE,--domT",               "use profile's NC noise cutoffs to set -T, --domT",             2 },
   { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "-E,-T,--domE,--domT",               "use profile's TC trusted cutoffs to set -T, --domT",           2 },
-  /* Control of inclusion thresholds */
-  { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  "-A",  "--inc_ga,--inc_nc,--inc_tc",        "include sequences <= this E-value threshold in output ali",    3 },
-  { "--incT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  "-A",  "--inc_ga,--inc_nc,--inc_tc",        "include sequences >= this score threshold in output ali",      3 },
-  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  "-A",  "--inc_ga,--inc_nc,--inc_tc",        "include domains <= this E-value threshold in output ali",      3 },
-  { "--incdomT",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  "-A",  "--inc_ga,--inc_nc,--inc_tc",        "include domains >= this score threshold in output ali",        3 },
-  { "--inc_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  "-A",  "--incE,--incT,--incdomE,--incdomT", "use profile's GA gathering cutoffs to set --incT, --incdomT",  3 },
-  { "--inc_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  "-A",  "--incE,--incT,--incdomE,--incdomT", "use profile's NC noise cutoffs to set --incT, --incdomT",      3 },
-  { "--inc_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  "-A",  "--incE,--incT,--incdomE,--incdomT", "use profile's TC trusted cutoffs to set --incT, --incdomT",    3 },
+  /* Control of inclusion thresholds: in hmmscan, these make no sense, so hide them (group 99) but they must be present for the P7_PIPELINE */
+  { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  NULL,  "--inc_ga,--inc_nc,--inc_tc",        "include sequences <= this E-value threshold in output ali",    99 },
+  { "--incT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--inc_ga,--inc_nc,--inc_tc",        "include sequences >= this score threshold in output ali",      99 },
+  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  NULL,  "--inc_ga,--inc_nc,--inc_tc",        "include domains <= this E-value threshold in output ali",      99 },
+  { "--incdomT",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--inc_ga,--inc_nc,--inc_tc",        "include domains >= this score threshold in output ali",        99 },
+  { "--inc_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--incE,--incT,--incdomE,--incdomT", "use profile's GA gathering cutoffs to set --incT, --incdomT",  99 },
+  { "--inc_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--incE,--incT,--incdomE,--incdomT", "use profile's NC noise cutoffs to set --incT, --incdomT",      99 },
+  { "--inc_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  "--incE,--incT,--incdomE,--incdomT", "use profile's TC trusted cutoffs to set --incT, --incdomT",    99 },
   /* Control of filter pipeline */
   { "--max",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, "--F1,--F2,--F3",   "Turn all heuristic filters off (less speed, more power)",      4 },
   { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,   NULL,  NULL, "--max",            "MSV threshold: promote hits w/ P <= F1",                       4 },

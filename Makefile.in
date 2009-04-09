@@ -84,6 +84,7 @@ PROGS = hmmalign\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
+	hmmsim\
 	hmmstat\
 	jackhmmer\
 	phmmer
