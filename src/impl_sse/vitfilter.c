@@ -523,24 +523,37 @@ main(int argc, char **argv)
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7VITFILTER_EXAMPLE vitfilter.c -lhmmer -leasel -lm
-   ./example <hmmfile> <seqfile>
+   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_example -Dp7VITFILTER_EXAMPLE vitfilter.c -lhmmer -leasel -lm
+   ./vitfilter_example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_gumbel.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
 #include "hmmer.h"
 #include "impl_sse.h"
 
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in one line awkable format",                0 },
+  { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in profmark format",                        0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of Viterbi filter algorithm";
+
 int 
 main(int argc, char **argv)
 {
-  char           *hmmfile = argv[1];
-  char           *seqfile = argv[2];
+  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -552,7 +565,9 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           sc;
+  float           vfraw, nullsc, vfscore;
+  float           graw, gscore;
+  double          P, gP;
   int             status;
 
   /* Read in one HMM */
@@ -566,7 +581,6 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
-  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
 
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);
@@ -586,12 +600,45 @@ main(int argc, char **argv)
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
   */
 
-  p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &sc);  printf("viterbi filter score: %.2f nats\n", sc);
-  p7_GViterbi       (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);
+  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_oprofile_ReconfigLength(om, sq->n);
+      p7_ReconfigLength(gm,          sq->n);
+      p7_bg_SetLength(bg,            sq->n);
+      p7_omx_GrowTo(ox, om->M, 0,    sq->n); 
+      p7_gmx_GrowTo(gx, gm->M,       sq->n); 
 
-  /* now in a real app, you'd need to convert raw nat scores to final bit
-   * scores, by subtracting the null model score and rescaling.
-   */
+      p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &vfraw);
+      p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
+      vfscore = (vfraw - nullsc) / eslCONST_LOG2;
+      P        = esl_gumbel_surv(vfscore,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+
+      p7_GViterbi       (sq->dsq, sq->n, gm, gx, &graw); 
+      gscore   = (graw - nullsc) / eslCONST_LOG2;
+      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_MU],  gm->evparam[p7_LAMBDA]);
+
+      if (esl_opt_GetBoolean(go, "-1"))
+	{
+	  printf("%-30s\t%-20s\t%9.2g\t%6.1f\t%9.2g\t%6.1f\n", sq->name, hmm->name, P, vfscore, gP, gscore);
+	}
+      else if (esl_opt_GetBoolean(go, "-P"))
+	{ /* output suitable for direct use in profmark benchmark postprocessors: */
+	  printf("%g\t%.2f\t%s\t%s\n", P, vfscore, sq->name, hmm->name);
+	}
+      else
+	{
+	  printf("target sequence:      %s\n",        sq->name);
+	  printf("vit filter raw score: %.2f nats\n", vfraw);
+	  printf("null score:           %.2f nats\n", nullsc);
+	  printf("per-seq score:        %.2f bits\n", vfscore);
+	  printf("P-value:              %g\n",        P);
+	  printf("GViterbi raw score:   %.2f nats\n", graw);
+	  printf("GViterbi seq score:   %.2f bits\n", gscore);
+	  printf("GViterbi P-value:     %g\n",        gP);
+	}
+      
+      esl_sq_Reuse(sq);
+    }
 
   /* cleanup */
   esl_sq_Destroy(sq);
@@ -604,6 +651,7 @@ main(int argc, char **argv)
   p7_hmm_Destroy(hmm);
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
   return 0;
 }
 #endif /*p7VITFILTER_EXAMPLE*/

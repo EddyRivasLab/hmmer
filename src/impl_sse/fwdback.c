@@ -1040,6 +1040,7 @@ main(int argc, char **argv)
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_exponential.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
@@ -1050,6 +1051,8 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in one line awkable format",                0 },
+  { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in profmark format",                        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1073,39 +1076,37 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           fsc, bsc;
+  float           fraw, braw, nullsc, fsc;
+  float           gfraw, gbraw, gfsc;
+  double          P, gP;
   int             status;
 
   /* Read in one HMM */
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
 
-  /* Read in one sequence */
+  /* Open sequence file for reading */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("No such file.");
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
-  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
 
   /* create default null model, then create and optimize profile */
-  bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, sq->n);
-  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
-
-  int k,x;
-  for (k = 1; k < hmm->M; k++)
-    for (x = 0; x < gm->abc->Kp; x++)
-      gm->rsc[x][k*2 + p7P_ISC] = 0.0;
-
-  om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
+  bg = p7_bg_Create(abc);               
+  p7_bg_SetLength(bg, sq->n);
+  gm = p7_profile_Create(hmm->M, abc); 
+  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
 
   /* p7_oprofile_Dump(stdout, om);  */
 
   /* allocate DP matrices for O(M+L) parsers */
   fwd = p7_omx_Create(gm->M, 0, sq->n);
   bck = p7_omx_Create(gm->M, 0, sq->n);
-  gx  = p7_gmx_Create(gm->M, sq->n);
+  gx  = p7_gmx_Create(gm->M,    sq->n);
 
   /* allocate DP matrices for O(ML) fills */
   /* fwd = p7_omx_Create(gm->M, sq->n, sq->n); */
@@ -1114,21 +1115,58 @@ main(int argc, char **argv)
   /* p7_omx_SetDumpMode(stdout, fwd, TRUE); */     /* makes the fast DP algorithms dump their matrices */
   /* p7_omx_SetDumpMode(stdout, bck, TRUE); */  
 
-  p7_ForwardParser (sq->dsq, sq->n, om,      fwd, &fsc);  printf("forward parser:       %.2f nats\n", fsc);
-  p7_BackwardParser(sq->dsq, sq->n, om, fwd, bck, &bsc);  printf("backward parser:      %.2f nats\n", bsc);
+  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_oprofile_ReconfigLength(om, sq->n);
+      p7_ReconfigLength(gm,          sq->n);
+      p7_bg_SetLength(bg,            sq->n);
+      p7_omx_GrowTo(fwd, om->M, 0,   sq->n); 
+      p7_omx_GrowTo(bck, om->M, 0,   sq->n); 
+      p7_gmx_GrowTo(gx,  gm->M,      sq->n); 
 
-  /* p7_Forward (sq->dsq, sq->n, om,      fwd, &fsc);        printf("forward:              %.2f nats\n", fsc);  */
-  /* p7_Backward(sq->dsq, sq->n, om, fwd, bck, &bsc);        printf("backward:             %.2f nats\n", bsc);  */
+      p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
+    
+      p7_ForwardParser (sq->dsq, sq->n, om,      fwd, &fraw);
+      p7_BackwardParser(sq->dsq, sq->n, om, fwd, bck, &braw);
 
-  /* Comparison to other F/B implementations */
-  p7_GForward     (sq->dsq, sq->n, gm, gx,  &fsc);        printf("GForward:             %.2f nats\n", fsc);
-  p7_GBackward    (sq->dsq, sq->n, gm, gx,  &bsc);        printf("GBackward:            %.2f nats\n", bsc);
+      /* p7_Forward (sq->dsq, sq->n, om,      fwd, &fsc);        printf("forward:              %.2f nats\n", fsc);  */
+      /* p7_Backward(sq->dsq, sq->n, om, fwd, bck, &bsc);        printf("backward:             %.2f nats\n", bsc);  */
 
-  /* p7_gmx_Dump(stdout, gx);  */
+      /* Comparison to other F/B implementations */
+      p7_GForward     (sq->dsq, sq->n, gm, gx,  &gfraw);
+      p7_GBackward    (sq->dsq, sq->n, gm, gx,  &gbraw);
 
-  /* In a real app, you'd need to convert raw nat scores to final bit
-   * scores, by subtracting the null model score and rescaling.
-   */
+      /* p7_gmx_Dump(stdout, gx);  */
+
+      fsc  =  (fraw-nullsc) / eslCONST_LOG2;
+      gfsc = (gfraw-nullsc) / eslCONST_LOG2;
+      P  = esl_exp_surv(fsc,   om->evparam[p7_TAU],  om->evparam[p7_LAMBDA]);
+      gP = esl_exp_surv(gfsc,  gm->evparam[p7_TAU],  gm->evparam[p7_LAMBDA]);
+
+      if (esl_opt_GetBoolean(go, "-1"))
+	{
+	  printf("%-30s\t%-20s\t%9.2g\t%6.1f\t%9.2g\t%6.1f\n", sq->name, hmm->name, P, fsc, gP, gfsc);
+	}
+      else if (esl_opt_GetBoolean(go, "-P"))
+	{ /* output suitable for direct use in profmark benchmark postprocessors: */
+	  printf("%g\t%.2f\t%s\t%s\n", P, fsc, sq->name, hmm->name);
+	}
+      else
+	{
+	  printf("target sequence:      %s\n",        sq->name);
+	  printf("fwd filter raw score: %.2f nats\n", fraw);
+	  printf("bck filter raw score: %.2f nats\n", braw);
+	  printf("null score:           %.2f nats\n", nullsc);
+	  printf("per-seq score:        %.2f bits\n", fsc);
+	  printf("P-value:              %g\n",        P);
+	  printf("GForward raw score:   %.2f nats\n", gfraw);
+	  printf("GBackward raw score:  %.2f nats\n", gbraw);
+	  printf("GForward seq score:   %.2f bits\n", gfsc);
+	  printf("GForward P-value:     %g\n",        gP);
+	}
+
+      esl_sq_Reuse(sq);
+    }
 
   /* cleanup */
   esl_sq_Destroy(sq);
@@ -1142,6 +1180,7 @@ main(int argc, char **argv)
   p7_hmm_Destroy(hmm);
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
   return 0;
 }
 #endif /*p7FWDBACK_EXAMPLE*/

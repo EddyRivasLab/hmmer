@@ -357,10 +357,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   P7_TRACE       *tr      = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           sc;
-  float           nullsc;
-  float           seqscore;
-  float           P;
+  float           sc, nullsc, seqscore, P;
   int             status;
 
   /* Read in one HMM */
@@ -368,7 +365,7 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
-  /* Read in one sequence */
+  /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("No such file.");
