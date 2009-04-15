@@ -539,7 +539,7 @@ main(int argc, char **argv)
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{
-	  printf("%-30s\t%-20s\t%9.2g\t%6.1f\t%9.2g\t%6.1f\n", sq->name, hmm->name, P, msvscore, gP, gscore);
+	  printf("%-30s\t%-20s\t%9.2g\t%7.2f\t%9.2g\t%7.2f\n", sq->name, hmm->name, P, msvscore, gP, gscore);
 	}
       else if (esl_opt_GetBoolean(go, "-P"))
 	{ /* output suitable for direct use in profmark benchmark postprocessors: */
