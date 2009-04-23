@@ -17,40 +17,23 @@
 
 #include "hmmer.h"
 
-#define p7_SIMD_NF 4
-#define p7_SIMD_NU 16
-
 /* In calculating Q, the number of vectors we need in a row, we have
  * to make sure there's at least 2, or a striped implementation fails.
  */
-#define p7O_NQU(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars */
-#define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /* 4 floats  */
+#define p7O_NQB(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars  */
+#define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 words   */
+#define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /*  4 floats  */
+
 
 /*****************************************************************
  * 1. P7_OPROFILE: an optimized score profile
  *****************************************************************/
-/* The SSE OPROFILE normally contains scores for the Filters;
- * it can optionally replace the ForwardFilter's 4 pspace floats
- * with 4 lspace floats, for the SSE ViterbiScore function.
- */
-
-#define p7O_NXSTATES  4
-#define p7O_NXTRANS   2
-#define p7O_NR        2
-#define p7O_NTRANS    8
-enum p7o_xstates_e      { p7O_E    = 0, p7O_N    = 1,  p7O_J  = 2,  p7O_C  = 3 };
-enum p7o_xtransitions_e { p7O_MOVE = 0, p7O_LOOP = 1 };
-enum p7o_rsc_e          { p7O_MSC  = 0, p7O_ISC  = 1 };
-enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
-			  p7O_MD   = 4, p7O_MI   = 5,  p7O_II = 6,  p7O_DD = 7 };
-
 /* The OPROFILE is striped [Farrar07] and interleaved, as is the DP matrix.
  * For example, the layout of a profile for an M=14 model (xref J2/46):
  * 
- * rsc[x] : interleaved blocks of M and I emissions, starting with q=0
- *                1      1     11     11     1      1      1      1 
- *             1593   1593   2604   2604   371x   371x   482x   482x
- *            [MMMM] [IIII] [MMMM] [IIII] [MMMM] [IIII] [MMMM] [IIII] 
+ * rsc[x] : striped blocks of M emissions, starting with q=0
+ *                1     11     1      1  
+ *             1593   2604   371x   482x 
  * 
  * tsc:  grouped in order of accession in DP for 7 transition scores;
  *       starting at q=0 for all but the three transitions to M, which
@@ -78,72 +61,79 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3,
  *        { [TDD] [TDD] [TDD] [TDD] }
  *        
  */
+
+#define p7O_NXSTATES  4		/* special states stored: ENJC                       */
+#define p7O_NXTRANS   2         /* special states all have 2 transitions: move, loop */
+#define p7O_NTRANS    8		/* 7 core transitions + BMk entry                    */
+enum p7o_xstates_e      { p7O_E    = 0, p7O_N    = 1,  p7O_J  = 2,  p7O_C  = 3 };
+enum p7o_xtransitions_e { p7O_MOVE = 0, p7O_LOOP = 1 };
+enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, p7O_MD   = 4, p7O_MI   = 5,  p7O_II = 6,  p7O_DD = 7 };
+
 typedef struct p7_oprofile_s {
-  /* tu, ru, xu are for ViterbiFilter(): lspace uchars, 16x vectors            */
-  __m128i  *tu;	        	/* transition score blocks          [8*Q16]    */
-  __m128i **ru;     		/* [x][q]:  ru, ru[0] are allocated [Kp][2*Q16]*/
-  uint8_t   xu[p7O_NXSTATES][p7O_NXTRANS];
-  int       allocQ16;		/* how many uchar vectors                      */
+  /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
+  __m128i **rb;     		/* match scores [x][q]: rm, rm[0] are allocated      */
+  uint8_t   tbm_b;		/* constant B->Mk cost:    scaled log 2/M(M+1)       */
+  uint8_t   tec_b;		/* constant E->C  cost:    scaled log 0.5            */
+  uint8_t   tjb_b;		/* constant NCJ move cost: scaled log 3/(L+3)        */
+  float     scale_b;		/* typically 3 / log2: scores scale to 1/3 bits      */
+  uint8_t   base_b;  	        /* typically +190: offset of uchar scores            */
+  uint8_t   bias_b;		/* positive bias to emission scores, make them >=0   */
 
-  /* info for the MSVFilter() implementation                                   */
-  __m128i **rm;     		/* [x][q]:  rm, rm[0] are allocated            */
-  uint8_t   tbm;		/* constant B->Mk cost: scaled log 2/M(M+1)    */
-  uint8_t   tec;		/* constant E->C  cost: scaled log 0.5         */
-  uint8_t   tjb;		/* constant J->B  cost: scaled log 3/(L+3)     */
+  /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
+  __m128i **rw;			/* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  __m128i  *tw;			/* transition score blocks          [8*Q8]           */ 
+  int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
+  float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
+  int16_t   base_w;             /* offset of sword scores: typically +12000          */
+  int16_t   ddbound_w;		/* threshold used for lazy DD evaluation             */
 
-  /* info for the ViterbiFilter() implementation                               */
-  int       ddbound_u;	        /* used for lazy DD. it must be signed!        */
-  float     scale;		/* typically (2,3)*log(2): half or third bits  */
-  uint8_t   base;  	        /* typically +127: offset of uchar scores      */
-  uint8_t   bias;	        /* positive bias for emission scores           */
+  /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
+  __m128 **rf;     		/* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  __m128  *tf;	    		/* transition probability blocks    [8*Q4]           */
+  float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ transition costs                   */
 
-  /* tf, rf, xf are for ForwardFilter():    pspace floats, 4x vectors          */
-  __m128  *tf;	    		/* transition probability blocks    [8*Q4]     */
-  __m128 **rf;     		/* [x][q]:  rf, rf[0] are allocated [Kp][2*Q4] */
-  float    xf[p7O_NXSTATES][p7O_NXTRANS];
-  int      allocQ4;		/* how many float vectors                      */
-
-  /* Info specific to the optional ViterbiScore() implementation               */
-  float    ddbound_f;		/* full precision bound for lazy DD            */
-  int      lspace_f;		/* TRUE if tf,rf are in lspace for Score()     */
-
-  /* Our actual vector mallocs, before we align the memory                     */
-  __m128i  *tu_mem;
-  __m128i  *ru_mem;
-  __m128i  *rm_mem;
+  /* Our actual vector mallocs, before we align the memory                           */
+  __m128i  *rb_mem;
+  __m128i  *rw_mem;
+  __m128i  *tw_mem;
   __m128   *tf_mem;
   __m128   *rf_mem;
+  
+  /* Disk offset information for hmmpfam's fast model retrieval                      */
+  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
 
-  /* Disk offset information for hmmpfam's fast model retrieval                */
-  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                       */
+  /* Information, annotation copied from parent profile:                             */
+  char  *name;			/* unique name of model                              */
+  char  *acc;			/* unique accession of model, or NULL                */
+  char  *desc;                  /* brief (1-line) description of model, or NULL      */
+  char  *ref;                   /* reference line           1..M; *ref=0: unused     */
+  char  *cs;                    /* consensus structure line 1..M, *cs=0: unused      */
+  char  *consensus;		/* consensus residues for ali display, 1..M          */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET     */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-dom bit cutoffs, or UNSET             */
+  float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET        */
+  const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information               */
 
-  /* Information copied from parent profile:                                       */
-  char  *name;			/* unique name of model                            */
-  char  *acc;			/* unique accession of model, or NULL              */
-  char  *desc;                  /* brief (1-line) description of model, or NULL    */
-  char  *ref;                   /* reference line           1..M; *ref=0: unused   */
-  char  *cs;                    /* consensus structure line 1..M, *cs=0: unused    */
-  char  *consensus;		/* consensus residues for ali display, 1..M        */
-  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET   */
-  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-dom bit cutoffs, or UNSET           */
-  float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET      */
-
-  int    mode;			/* p7_LOCAL, for example                           */
-  int    L;			/* current configured target seq length            */
-  int    allocM;		/* maximum model length currently allocated for    */
-  int    M;			/* model length                                    */
-  float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit     */
-  const ESL_ALPHABET *abc;	/* copy of ptr to alphabet information             */
+  /* Information about current configuration, size, allocation                       */
+  int    L;			/* current configured target seq length              */
+  int    M;			/* model length                                      */
+  int    allocM;		/* maximum model length currently allocated for      */
+  int    allocQ4;		/* p7_NQF(allocM): alloc size for tf, rf             */
+  int    allocQ8;		/* p7_NQW(allocM): alloc size for tw, rw             */
+  int    allocQ16;		/* p7_NQB(allocM): alloc size for rb                 */
+  int    mode;			/* currently must be p7_LOCAL                        */
+  float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit       */
 } P7_OPROFILE;
 
 
-/* s = p7O_MSC or p7O_ISC */
+/* retrieve match odds ratio [k][x]
+ * this gets used in p7_alidisplay.c, when we're deciding if a residue is conserved or not */
 static inline float 
-p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x, int s)
+p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 {
   union { __m128 v; float p[4]; } u;
   int   Q = p7O_NQF(om->M);
-  int   q = p7O_NR * ((k-1) % Q) + s;
+  int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
   u.v = om->rf[x][q];
   return u.p[r];
@@ -175,37 +165,37 @@ typedef struct p7_omx_s {
 
   /* The main dynamic programming matrix for M,D,I states                                      */
   __m128  **dpf;		/* striped DP matrix for [0,1..L][0..Q-1][MDI], float vectors  */
-  __m128i **dpu;		/* striped DP matrix for [0,1..L][0..Q-1][MDI], uchar vectors  */
-  void     *dp_mem;		/* DP memory shared by <dpu>, <dpf>                            */
+  __m128i **dpw;		/* striped DP matrix for [0,1..L][0..Q-1][MDI], sword vectors  */
+  __m128i **dpb;		/* striped DP matrix for [0,1..L][0..Q-1] uchar vectors        */
+  void     *dp_mem;		/* DP memory shared by <dpb>, <dpw>, <dpf>                     */
   int       allocR;		/* current allocated # rows in dp{uf}. allocR >= validR >= L+1 */
   int       validR;		/* current # of rows actually pointing at DP memory            */
   int       allocQ4;		/* current set row width in <dpf> quads:   allocQ4*4 >= M      */
-  int       allocQ16;		/* current set row width in <dpu> 16-mers: allocQ16*16 >= M    */
+  int       allocQ8;		/* current set row width in <dpw> octets:  allocQ8*8 >= M      */
+  int       allocQ16;		/* current set row width in <dpb> 16-mers: allocQ16*16 >= M    */
   size_t    ncells;		/* current allocation size of <dp_mem>, in accessible cells    */
 
-  /* The X states (for full,parser; or NULL, for scorer                                        */
-  float    *xmx[p7X_NXCELLS];	/* [ENJBC][0..(allocXRQ*4)-1]                                  */
+  /* The X states (for full,parser; or NULL, for scorer)                                       */
+  float    *xmx;        	/* logically [0.1..L][ENJBCS]; indexed [i*p7X_NXCELLS+s]       */
   void     *x_mem;		/* X memory before 16-byte alignment                           */
-  int       allocXRQ;		/* # of quads allocated in each xmx[] array; XRQ*4 >= L+1      */
+  int       allocXR;		/* # of rows allocated in each xmx[] array; allocXR >= L+1     */
   float     totscale;		/* log of the product of all scale factors (0.0 if unscaled)   */
-
   int       has_own_scales;	/* TRUE to use own scale factors; FALSE if scales provided     */
 
-#ifdef p7_DEBUGGING  
   /* Parsers,scorers only hold a row at a time, so to get them to dump full matrix, it
    * must be done during a DP calculation, after each row is calculated 
    */
   int     debugging;		/* TRUE if we're in debugging mode                             */
   FILE   *dfp;			/* output stream for diagnostics                               */
-#endif
 } P7_OMX;
 
 /* ?MXo(q) access macros work for either uchar or float, so long as you
  * init your "dp" to point to the appropriate array.
  */
-#define MMXo(q) (dp[(q) * p7X_NSCELLS + p7X_M])
-#define DMXo(q) (dp[(q) * p7X_NSCELLS + p7X_D])
-#define IMXo(q) (dp[(q) * p7X_NSCELLS + p7X_I])
+#define MMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
+#define DMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
+#define IMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
+#define XMXo(i,s) (xmx[(i) * p7X_NXCELLS + s])
 
 /* and this version works with a ptr to the approp DP row. */
 #define MMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_M])
@@ -250,9 +240,11 @@ extern int          p7_omx_Reuse  (P7_OMX *ox);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
-extern int          p7_omx_DumpCharRow (P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
-extern int          p7_omx_DumpFloatRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
-extern int          p7_omx_DumpMSVRow  (P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpMFRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpVFRow(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int          p7_omx_DumpFBRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
+
+
 
 /* p7_oprofile.c */
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
@@ -264,15 +256,16 @@ extern int          p7_oprofile_ReconfigLength    (P7_OPROFILE *om, int L);
 extern int          p7_oprofile_ReconfigMSVLength (P7_OPROFILE *om, int L);
 extern int          p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L);
 extern int          p7_oprofile_ReconfigMultihit  (P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigUnihit    (P7_OPROFILE *gm, int L);
-extern int          p7_oprofile_Logify (P7_OPROFILE *om);
-extern int          p7_oprofile_Probify(P7_OPROFILE *om);
+extern int          p7_oprofile_ReconfigUnihit    (P7_OPROFILE *om, int L);
+
+extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
 extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
 				       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
-extern int          p7_oprofile_SameRounding(const P7_OPROFILE *om, P7_PROFILE *gm);
-extern int          p7_oprofile_SameMSV(const P7_OPROFILE *om, P7_PROFILE *gm);
-extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
 extern int          p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
+extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
+
+
 
 /* decoding.c */
 extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);

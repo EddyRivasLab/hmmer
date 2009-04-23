@@ -253,6 +253,7 @@ AC_ARG_WITH([gsl],
 # If the user didn't force an implementation on us, select a default
 if test "$impl_choice" = "none"; then
   case $host in 
+    ia64-*-*)      impl_choice=sse;;
     i?86-*-*)      impl_choice=sse;;
     x86*-*-*)      impl_choice=sse;;
     powerpc*-*-*)  impl_choice=vmx;;

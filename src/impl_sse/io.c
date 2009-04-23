@@ -74,7 +74,8 @@ int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
   int Q4  = p7O_NQF(om->M);
-  int Q16 = p7O_NQU(om->M);
+  int Q8  = p7O_NQW(om->M);
+  int Q16 = p7O_NQB(om->M);
   int n   = strlen(om->name);
   int x;
 
@@ -84,15 +85,15 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &n,               sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) om->name,         sizeof(char),     n+1,         ffp) != n+1)         return eslFAIL;
-  if (fwrite((char *) &(om->tbm),       sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
-  if (fwrite((char *) &(om->tec),       sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
-  if (fwrite((char *) &(om->tjb),       sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
-  if (fwrite((char *) &(om->scale),     sizeof(float),    1,           ffp) != 1)           return eslFAIL;  
-  if (fwrite((char *) &(om->base),      sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
-  if (fwrite((char *) &(om->bias),      sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->tbm_b),     sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->tec_b),     sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->tjb_b),     sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->scale_b),   sizeof(float),    1,           ffp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->base_b),    sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->bias_b),    sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
 
   for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->rm[x],     sizeof(__m128i),  Q16,         ffp) != Q16)         return eslFAIL;
+    if (fwrite( (char *) om->rb[x],     sizeof(__m128i),  Q16,         ffp) != Q16)         return eslFAIL;
   
   if (fwrite((char *) om->evparam,      sizeof(float),    p7_NEVPARAM, ffp) != p7_NEVPARAM) return eslFAIL;
   if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) return eslFAIL;
@@ -127,20 +128,23 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) om->cs,           sizeof(char),     om->M+2,     pfp) != om->M+2)     return eslFAIL;
   if (fwrite((char *) om->consensus,    sizeof(char),     om->M+2,     pfp) != om->M+2)     return eslFAIL;
 
-  if (fwrite((char *) om->tu,           sizeof(__m128i),  8*Q16,       pfp) != 8*Q16)       return eslFAIL;
+  /* ViterbiFilter part */
+  if (fwrite((char *) om->tw,           sizeof(__m128i),  8*Q8,        pfp) != 8*Q8)        return eslFAIL;
   for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->ru[x],     sizeof(__m128i),  2*Q16,       pfp) != 2*Q16)       return eslFAIL;
+    if (fwrite( (char *) om->rw[x],     sizeof(__m128i),  Q8,          pfp) != Q8)          return eslFAIL;
   for (x = 0; x < p7O_NXSTATES; x++)
-    if (fwrite( (char *) om->xu[x],     sizeof(uint8_t),  p7O_NXTRANS, pfp) != p7O_NXTRANS) return eslFAIL;
-  if (fwrite((char *) &(om->ddbound_u), sizeof(int),      1,           pfp) != 1)           return eslFAIL;
+    if (fwrite( (char *) om->xw[x],     sizeof(int16_t),  p7O_NXTRANS, pfp) != p7O_NXTRANS) return eslFAIL;
+  if (fwrite((char *) &(om->scale_w),   sizeof(float),    1,           pfp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->base_w),    sizeof(int16_t),  1,           pfp) != 1)           return eslFAIL;  
+  if (fwrite((char *) &(om->ddbound_w), sizeof(int16_t),  1,           pfp) != 1)           return eslFAIL;
 
+  /* Forward/Backward part */
   if (fwrite((char *) om->tf,           sizeof(__m128),   8*Q4,        pfp) != 8*Q4)        return eslFAIL;
   for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->rf[x],     sizeof(__m128),   2*Q4,        pfp) != 2*Q4)        return eslFAIL;
+    if (fwrite( (char *) om->rf[x],     sizeof(__m128),   Q4,          pfp) != Q4)          return eslFAIL;
   for (x = 0; x < p7O_NXSTATES; x++)
     if (fwrite( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, pfp) != p7O_NXTRANS) return eslFAIL;
-  if (fwrite((char *) &(om->ddbound_f), sizeof(float),    1,           pfp) != 1)           return eslFAIL;
-  if (fwrite((char *) &(om->lspace_f),  sizeof(int),      1,           pfp) != 1)           return eslFAIL;
+
   if (fwrite((char *)   om->cutoff,     sizeof(float),    p7_NCUTOFFS, pfp) != p7_NCUTOFFS) return eslFAIL;
   if (fwrite((char *) &(om->nj),        sizeof(float),    1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->mode),      sizeof(int),      1,           pfp) != 1)           return eslFAIL;
@@ -208,7 +212,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
-  int           M, Q;
+  int           M, Q16;
   int           x,n;
   int           alphatype;
   int           status;
@@ -222,7 +226,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q = p7O_NQU(M);
+  Q16 = p7O_NQB(M);
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
@@ -241,18 +245,17 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   ESL_ALLOC(om->name, sizeof(char) * (n+1));
   if (! fread((char *) om->name,         sizeof(char),    n+1,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");
 
-  if (! fread((char *) &(om->tbm),       sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tbm");
-  if (! fread((char *) &(om->tec),       sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tec");
-  if (! fread((char *) &(om->tjb),       sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tjb");
-  if (! fread((char *) &(om->scale),     sizeof(float),   1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read scale");
-  if (! fread((char *) &(om->base),      sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read base");
-  if (! fread((char *) &(om->bias),      sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read bias");
+  if (! fread((char *) &(om->tbm_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tbm");
+  if (! fread((char *) &(om->tec_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tec");
+  if (! fread((char *) &(om->tjb_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tjb");
+  if (! fread((char *) &(om->scale_b),   sizeof(float),   1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read scale");
+  if (! fread((char *) &(om->base_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read base");
+  if (! fread((char *) &(om->bias_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read bias");
   for (x = 0; x < abc->Kp; x++)
-    if (! fread((char *) om->rm[x],      sizeof(__m128i), Q,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
+    if (! fread((char *) om->rb[x],      sizeof(__m128i), Q16,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
   if (! fread((char *) om->compo,        sizeof(float),   p7_MAXABET,  hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
-
 
   if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;
@@ -300,7 +303,7 @@ int
 p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
   uint32_t      magic;
-  int           M, Q4, Q16;
+  int           M, Q4, Q8;
   int           x,n;
   char         *name = NULL;
   int           alphatype;
@@ -341,21 +344,23 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) om->consensus,    sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read consensus annotation");
 
   Q4  = p7O_NQF(om->M);
-  Q16 = p7O_NQU(om->M);
+  Q8  = p7O_NQW(om->M);
 
-  if (! fread((char *) om->tu,           sizeof(__m128i),  8*Q16,       hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tu>, vitfilter transitions");
+  if (! fread((char *) om->tw,           sizeof(__m128i),  8*Q8,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tu>, vitfilter transitions");
   for (x = 0; x < om->abc->Kp; x++)
-    if (! fread( (char *) om->ru[x],     sizeof(__m128i),  2*Q16,       hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <ru>[%d], vitfilter emissions for sym %c", x, om->abc->sym[x]);
+    if (! fread( (char *) om->rw[x],     sizeof(__m128i),  Q8,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <ru>[%d], vitfilter emissions for sym %c", x, om->abc->sym[x]);
   for (x = 0; x < p7O_NXSTATES; x++)
-    if (! fread( (char *) om->xu[x],     sizeof(uint8_t),  p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xu>[%d], vitfilter special transitions", x);
-  if (! fread((char *) &(om->ddbound_u), sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_u");
+    if (! fread( (char *) om->xw[x],     sizeof(int16_t),  p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xu>[%d], vitfilter special transitions", x);
+  if (! fread((char *) &(om->scale_w),   sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read scale_w");
+  if (! fread((char *) &(om->base_w),    sizeof(int16_t),  1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read base_w");
+  if (! fread((char *) &(om->ddbound_w), sizeof(int16_t),  1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_w");
+
   if (! fread((char *) om->tf,           sizeof(__m128),   8*Q4,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tf> transitions");
   for (x = 0; x < om->abc->Kp; x++)
-    if (! fread( (char *) om->rf[x],     sizeof(__m128),   2*Q4,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <rf>[%d] emissions for sym %c", x, om->abc->sym[x]);
+    if (! fread( (char *) om->rf[x],     sizeof(__m128),   Q4,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <rf>[%d] emissions for sym %c", x, om->abc->sym[x]);
   for (x = 0; x < p7O_NXSTATES; x++)
     if (! fread( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xf>[%d] special transitions", x);
-  if (! fread((char *) &(om->ddbound_f), sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_f");
-  if (! fread((char *) &(om->lspace_f),  sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read lspace_f");
+
   if (! fread((char *)   om->cutoff,     sizeof(float),    p7_NCUTOFFS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read Pfam score cutoffs");
   if (! fread((char *) &(om->nj),        sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nj");
   if (! fread((char *) &(om->mode),      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mode");

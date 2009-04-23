@@ -130,7 +130,7 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
   __m128 *tp    = om->tf + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
-  __m128  xBv   = _mm_set1_ps(ox->xmx[p7X_B][i-1]);
+  __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
   __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u;
@@ -222,8 +222,8 @@ select_c(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
   float path[2];
   int   state[2] = { p7T_C, p7T_E };
 
-  path[0] = ox->xmx[p7X_C][i-1] * om->xf[p7O_C][p7O_LOOP];
-  path[1] = ox->xmx[p7X_E][i]   * om->xf[p7O_E][p7O_MOVE] * ox->xmx[p7X_SCALE][i];
+  path[0] = ox->xmx[(i-1)*p7X_NXCELLS+p7X_C] * om->xf[p7O_C][p7O_LOOP];
+  path[1] = ox->xmx[    i*p7X_NXCELLS+p7X_E] * om->xf[p7O_E][p7O_MOVE] * ox->xmx[i*p7X_NXCELLS+p7X_SCALE];
   esl_vec_FNorm(path, 2);
   return state[esl_rnd_FChoose(rng, path, 2)];
 }
@@ -235,8 +235,8 @@ select_j(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
   float path[2];
   int   state[2] = { p7T_J, p7T_E };
 
-  path[0] = ox->xmx[p7X_J][i-1] * om->xf[p7O_J][p7O_LOOP];
-  path[1] = ox->xmx[p7X_E][i]   * om->xf[p7O_E][p7O_LOOP] * ox->xmx[p7X_SCALE][i];
+  path[0] = ox->xmx[(i-1)*p7X_NXCELLS+p7X_J] * om->xf[p7O_J][p7O_LOOP];
+  path[1] = ox->xmx[    i*p7X_NXCELLS+p7X_E] * om->xf[p7O_E][p7O_LOOP] * ox->xmx[i*p7X_NXCELLS+p7X_SCALE];
   esl_vec_FNorm(path, 2);
   return state[esl_rnd_FChoose(rng, path, 2)];
 }
@@ -253,7 +253,7 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int    Q     = p7O_NQF(ox->M);
   float  sum   = 0.0;
   float  roll  = esl_random(rng);
-  float  norm  = 1.0 / ox->xmx[p7X_E][i]; /* all M, D already scaled exactly the same */
+  float  norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E]; /* all M, D already scaled exactly the same */
   __m128 xEv   = _mm_set1_ps(norm);
   union { __m128 v; float p[4]; } u;
   int    q,r;
@@ -287,8 +287,8 @@ select_b(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
   float path[2];
   int   state[2] = { p7T_N, p7T_J };
 
-  path[0] = ox->xmx[p7X_N][i] * om->xf[p7O_N][p7O_MOVE];
-  path[1] = ox->xmx[p7X_J][i] * om->xf[p7O_J][p7O_MOVE];
+  path[0] = ox->xmx[i*p7X_NXCELLS+p7X_N] * om->xf[p7O_N][p7O_MOVE];
+  path[1] = ox->xmx[i*p7X_NXCELLS+p7X_J] * om->xf[p7O_J][p7O_MOVE];
   esl_vec_FNorm(path, 2);
   return state[esl_rnd_FChoose(rng, path, 2)];
 }

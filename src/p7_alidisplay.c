@@ -160,14 +160,14 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       case p7T_M:
 	ad->model[z-z1] = om->consensus[k]; 
 	if      (x == esl_abc_DigitizeSymbol(om->abc, om->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
-	else if (p7_oprofile_FGetEmission(om, k, x, p7O_MSC) > 0.0)      ad->mline[z-z1] = '+';
+	else if (p7_oprofile_FGetEmission(om, k, x) > 1.0)               ad->mline[z-z1] = '+'; /* >1 not >0; om has odds ratios, not scores */
 	else                                                             ad->mline[z-z1] = ' ';
 	ad->aseq  [z-z1] = toupper(Alphabet[x]);
 	break;
 	
       case p7T_I:
 	ad->model [z-z1] = '.';
-	ad->mline [z-z1] = ((p7_oprofile_FGetEmission(om, k, x, p7O_ISC) > 0.0) ? '+' : ' ');
+	ad->mline [z-z1] = ' ';
 	ad->aseq  [z-z1] = tolower(Alphabet[x]);
 	break;
 	

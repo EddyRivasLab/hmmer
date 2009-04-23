@@ -45,9 +45,11 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
   int      M    = om->M;
   int      Ld   = pp->L;
   int      Q    = p7O_NQF(M);
+  float   *xmx  = pp->xmx;	/* enables use of XMXo(i,s) macro */
   float    norm;
   __m128  *rp;
   __m128   sv;
+
   float    xfactor;
   int      i,q,x;
   
@@ -56,9 +58,10 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
    * The 0 row in <wrk> is used to hold these numbers.
    */
   memcpy(pp->dpf[0], pp->dpf[1], sizeof(__m128) * 3 * Q);
-  pp->xmx[p7X_N][0] = pp->xmx[p7X_N][1];
-  pp->xmx[p7X_C][0] = pp->xmx[p7X_C][1]; /* 0.0 */
-  pp->xmx[p7X_J][0] = pp->xmx[p7X_J][1]; /* 0.0 */
+  XMXo(0,p7X_N) = XMXo(1,p7X_N);
+  XMXo(0,p7X_C) = XMXo(1,p7X_C); /* 0.0 */
+  XMXo(0,p7X_J) = XMXo(1,p7X_J); /* 0.0 */
+
   for (i = 2; i <= Ld; i++)
     {
       for (q = 0; q < Q; q++)
@@ -66,9 +69,9 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
 	  pp->dpf[0][q*3 + p7X_M] = _mm_add_ps(pp->dpf[i][q*3 + p7X_M], pp->dpf[0][q*3 + p7X_M]);
 	  pp->dpf[0][q*3 + p7X_I] = _mm_add_ps(pp->dpf[i][q*3 + p7X_I], pp->dpf[0][q*3 + p7X_I]);
 	}
-      pp->xmx[p7X_N][0] += pp->xmx[p7X_N][i];
-      pp->xmx[p7X_C][0] += pp->xmx[p7X_C][i];
-      pp->xmx[p7X_J][0] += pp->xmx[p7X_J][i];
+      XMXo(0,p7X_N) += XMXo(i,p7X_N);
+      XMXo(0,p7X_C) += XMXo(i,p7X_C); 
+      XMXo(0,p7X_J) += XMXo(i,p7X_J); 
     }
 
   /* Convert those expected #'s to frequencies, to use as posterior weights. */
@@ -79,14 +82,14 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
       pp->dpf[0][q*3 + p7X_M] = _mm_mul_ps(pp->dpf[0][q*3 + p7X_M], sv);
       pp->dpf[0][q*3 + p7X_I] = _mm_mul_ps(pp->dpf[0][q*3 + p7X_I], sv);
     }
-  pp->xmx[p7X_N][0] *= norm;
-  pp->xmx[p7X_C][0] *= norm;
-  pp->xmx[p7X_J][0] *= norm;
+  XMXo(0,p7X_N) *= norm;
+  XMXo(0,p7X_C) *= norm;
+  XMXo(0,p7X_J) *= norm;
 
   /* Calculate null2's emission odds, by taking posterior weighted sum
    * over all emission vectors used in paths explaining the domain.
    */
-  xfactor =  pp->xmx[p7X_N][0] +   pp->xmx[p7X_C][0] +  pp->xmx[p7X_J][0];
+  xfactor = XMXo(0, p7X_N) + XMXo(0, p7X_C) + XMXo(0, p7X_J); 
   for (x = 0; x < om->abc->K; x++)
     {
       sv = _mm_setzero_ps();
@@ -127,6 +130,7 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
   union { __m128 v; float p[4]; } u;
   int    Q  = p7O_NQF(om->M);
   int    Ld = 0;
+  float *xmx = wrk->xmx;	/* enables use of XMXo macro */
   float  norm;
   float  xfactor;
   __m128 sv;
@@ -141,9 +145,9 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       wrk->dpf[0][q*3 + p7X_M] = _mm_setzero_ps();
       wrk->dpf[0][q*3 + p7X_I] = _mm_setzero_ps();
     }
-  wrk->xmx[p7X_N][0] = 0.0;
-  wrk->xmx[p7X_C][0] = 0.0;
-  wrk->xmx[p7X_J][0] = 0.0;
+  XMXo(0,p7X_N) =  0.0;
+  XMXo(0,p7X_C) =  0.0;
+  XMXo(0,p7X_J) =  0.0;
 
   /* Calculate emitting state usage in this particular trace segment */
   for (z = zstart; z <= zend; z++)
@@ -163,9 +167,9 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       else /* emitted an x_i with no k; must be an N,C,J */
 	{
 	  switch (tr->st[z]) {
-	  case p7T_N: wrk->xmx[p7X_N][0] += 1.0; break;
-	  case p7T_C: wrk->xmx[p7X_C][0] += 1.0; break;
-	  case p7T_J: wrk->xmx[p7X_J][0] += 1.0; break;
+	  case p7T_N: XMXo(0,p7X_N) += 1.0; break;
+	  case p7T_C: XMXo(0,p7X_C) += 1.0; break;
+	  case p7T_J: XMXo(0,p7X_J) += 1.0; break;
 	  }
 	}
     }
@@ -176,14 +180,14 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       wrk->dpf[0][q*3 + p7X_M] = _mm_mul_ps(wrk->dpf[0][q*3 + p7X_M], sv);
       wrk->dpf[0][q*3 + p7X_I] = _mm_mul_ps(wrk->dpf[0][q*3 + p7X_I], sv);
     }
-  wrk->xmx[p7X_N][0] *= norm;
-  wrk->xmx[p7X_C][0] *= norm;
-  wrk->xmx[p7X_J][0] *= norm;
+  XMXo(0,p7X_N) *= norm;
+  XMXo(0,p7X_C) *= norm;
+  XMXo(0,p7X_J) *= norm;
 
   /* Calculate null2's emission odds, by taking posterior weighted sum
    * over all emission vectors used in paths explaining the domain.
    */
-  xfactor =  wrk->xmx[p7X_N][0] +   wrk->xmx[p7X_C][0] +  wrk->xmx[p7X_J][0];
+  xfactor =  XMXo(0,p7X_N) + XMXo(0,p7X_C) + XMXo(0,p7X_J);
   for (x = 0; x < om->abc->K; x++)
     {
       sv = _mm_setzero_ps();

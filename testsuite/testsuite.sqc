@@ -31,7 +31,6 @@
 1 exercise optacc             @optacc_utest@
 1 exercise stotrace           @stotrace_utest@
 1 exercise vitfilter          @vitfilter_utest@
-1 exercise vitscore           @vitscore_utest@
 
 # Still to come, unit tests for
 #   dp_optaccuracy.c

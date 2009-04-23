@@ -1,14 +1,14 @@
 /* The MSV filter implementation; SSE version.
  * 
- * A "filter" is a one-row, O(M), DP implementation that calculates
- * an approximated nat score (i.e. in limited precision - uchar, for 
- * example) and may have limited numeric range. It will return 
- * <eslERANGE> if its numeric range is exceeded, in which case the caller
- * will have to obtain the score by another (probably slower) method.
+ * A "filter" is a one-row, O(M), DP implementation that calculates an
+ * approximated nat score (i.e. in limited precision - here, uchar)
+ * and may have limited numeric range. It will return <eslERANGE> if
+ * its numeric range is exceeded, in which case the caller will have
+ * to obtain the score by another (probably slower) method.
  * 
  * Contents:
- *   1. p7_MSVFilter() implementation.
- *   2. Benchmark driver.
+ *   1. p7_MSVFilter() implementation
+ *   2. Benchmark driver
  *   3. Unit tests
  *   4. Test driver
  *   5. Example
@@ -45,7 +45,7 @@
  *            estimated MSV score (in nats) in <ret_sc>.
  *            
  *            Score may overflow (and will, on high-scoring
- *            sequences), but will not underflow. 
+ *            sequences), but will not underflow.
  *            
  *            The model may be in any mode, because only its match
  *            emission scores will be used. The MSV filter inherently
@@ -82,9 +82,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   uint8_t  xE, xB, xJ;             /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpu[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
-  __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
+  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  __m128i *rsc;			   /* will point at om->rb[x] for residue x[i]                  */
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -92,21 +92,20 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
-  biasv = _mm_set1_epi8((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
-  for (q = 0; q < Q; q++)
-    dp[q] = _mm_setzero_si128();
-  xB   = om->base - om->tjb;                /* remember, all values are costs to be subtracted. */
+  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
+  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+  xB   = om->base_b - om->tjb_b;                /* remember, all values are costs to be subtracted. */
   xJ   = 0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpMSVRow(ox, 0, 0, 0, xJ, xB, xJ);
+  if (ox->debugging) p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
 #endif
 
   for (i = 1; i <= L; i++)
     {
-      rsc = om->rm[dsq[i]];
+      rsc = om->rb[dsq[i]];
       xEv = _mm_setzero_si128();      
-      xBv = _mm_set1_epi8((int8_t) (xB - om->tbm));
+      xBv = _mm_set1_epi8((int8_t) (xB - om->tbm_b));
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
@@ -117,7 +116,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 	{
 	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
 	  sv   = _mm_max_epu8(mpv, xBv);
-	  sv   = _mm_adds_epu8(sv, biasv);     
+	  sv   = _mm_adds_epu8(sv, biasv);      
 	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
 	  xEv  = _mm_max_epu8(xEv, sv);	
 
@@ -127,19 +126,19 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       xE = esl_sse_hmax_epu8(xEv);
-      if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
+      if (xE >= 255 - om->bias_b) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
 
-      xJ = ESL_MAX(xJ,        xE  - om->tec);
-      xB = ESL_MAX(om->base,  xJ) - om->tjb;
+      xJ = ESL_MAX(xJ,         xE  - om->tec_b);
+      xB = ESL_MAX(om->base_b, xJ) - om->tjb_b;
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpMSVRow(ox, i, xE, 0, xJ, xB, xJ);   
+      if (ox->debugging) p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);   
 #endif
     } /* end loop over sequence residues 1..L */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-  *ret_sc = ((float) (xJ - om->tjb) - (float) om->base);
-  *ret_sc /= om->scale;
+  *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
+  *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 
   return eslOK;
@@ -175,8 +174,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  */
 #ifdef p7MSVFILTER_BENCHMARK
 /* 
-   gcc -o benchmark-msvfilter -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
-   icc -o benchmark-msvfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
+   gcc -o msvfilter-benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
+   icc -o msvfilter-benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
 
    ./benchmark-msvfilter <hmmfile>            runs benchmark 
    ./benchmark-msvfilter -N100 -c <hmmfile>   compare scores to generic impl
@@ -240,7 +239,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x")) p7_oprofile_SameMSV(om, gm);
+  if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsMF(om, gm);
 
   ox = p7_omx_Create(gm->M, 0, 0);
   gx = p7_gmx_Create(gm->M, L);
@@ -269,7 +268,7 @@ main(int argc, char **argv)
       if (esl_opt_GetBoolean(go, "-x"))
 	{
 	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
-	  sc2 /= om->scale;
+	  sc2 /= om->scale_b;
 	  if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
 	  else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 	  printf("%.4f %.4f\n", sc1, sc2);  
@@ -330,7 +329,7 @@ utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
-  p7_oprofile_SameMSV(om, gm);
+  p7_profile_SameAsMF(om, gm);
 #if 0
   p7_oprofile_Dump(stdout, om);              //dumps the optimized profile
   p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
@@ -345,7 +344,7 @@ utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
       p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
 #endif
 
-      sc2 = sc2 / om->scale - 3.0f;
+      sc2 = sc2 / om->scale_b - 3.0f;
       if (fabs(sc1-sc2) > 0.001) esl_fatal("msv filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }
 
@@ -515,10 +514,11 @@ main(int argc, char **argv)
 
   /* Useful to place and compile in for debugging: 
      p7_oprofile_Dump(stdout, om);      dumps the optimized profile
-     p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
+     p7_omx_SetDumpMode(stdout, ox, TRUE);      makes the fast DP algorithms dump their matrices
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
      p7_oprofile_SameMSV(om, gm);
   */
+  p7_omx_SetDumpMode(stdout, ox, TRUE);    
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {

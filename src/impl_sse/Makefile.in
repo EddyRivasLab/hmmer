@@ -21,12 +21,11 @@ MYINCDIRS      = -I../../easel -I..
 OBJS =  decoding.o\
 	fwdback.o\
 	io.o\
+	msvfilter.o\
 	null2.o\
 	optacc.o\
-	msvfilter.o\
 	stotrace.o\
 	vitfilter.o\
-	vitscore.o\
 	p7_omx.o\
 	p7_oprofile.o
 
@@ -38,8 +37,7 @@ UTESTS = \
 	msvfilter_utest\
 	optacc_utest\
 	stotrace_utest\
-	vitfilter_utest\
-	vitscore_utest
+	vitfilter_utest
 
 BENCHMARKS =\
 	decoding_benchmark\
@@ -48,8 +46,7 @@ BENCHMARKS =\
 	null2_benchmark\
 	optacc_benchmark\
 	stotrace_benchmark\
-	vitfilter_benchmark\
-	vitscore_benchmark
+	vitfilter_benchmark
 
 EXAMPLES =\
 	fwdback_example\
@@ -58,8 +55,7 @@ EXAMPLES =\
 	optacc_example\
 	p7_oprofile_example\
 	stotrace_example\
-	vitfilter_example\
-	vitscore_example
+	vitfilter_example
 
 all: 	 impl_lib
 

@@ -941,7 +941,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
     {
       fprintf(ofp, "#%*s %22s %37s %11s %11s %11s\n", tnamew+qnamew-1+13, "", "--- full sequence ---", "------------ this domain ------------", "hmm coord", "ali coord", "env coord");
       fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", tnamew-1, "target", "tlen", qnamew, "query", "qlen", "E-value", "score", "bias", "#", "of", "c-Evalue", "i-Evalue", "score", "bias", "from", "to", "from", "to", "from", "to", "acc", "description of target");
-      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s\n", tnamew-1, "-------------------", "-----", qnamew, "--------------------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
+      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", tnamew-1, "-------------------", "-----", qnamew, "--------------------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
     }
 
   for (h = 0; h < th->N; h++)
@@ -952,7 +952,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
 	  if (th->hit[h]->dcl[d].is_reported) 
 	    {
 	      nd++;
-	      fprintf(ofp, "%-*s %5d %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5d %5d %5d %5d %4.2f %s\n", 
+	      fprintf(ofp, "%-*s %5ld %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n", 
 		      tnamew, th->hit[h]->name, th->hit[h]->dcl[d].ad->L,
 		      qnamew, queryname,        th->hit[h]->dcl[d].ad->M,
 		      th->hit[h]->pvalue * pli->Z,

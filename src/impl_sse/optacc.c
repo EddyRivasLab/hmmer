@@ -64,6 +64,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
   register __m128 xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128 dcv;
+  float  *xmx = ox->xmx;
   __m128 *dpc = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
   __m128 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
   __m128 *ppp;			   /* quads in the <pp> posterior probability matrix            */
@@ -80,12 +81,12 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
   ox->M = om->M;
   ox->L = pp->L;
   for (q = 0; q < Q; q++) MMO(dpc, q) = IMO(dpc,q) = DMO(dpc,q) = infv;
-  ox->xmx[p7X_E][0] = -eslINFINITY;
-  ox->xmx[p7X_N][0] = 0.;
-  ox->xmx[p7X_J][0] = -eslINFINITY;
-  ox->xmx[p7X_B][0] = 0.;
-  ox->xmx[p7X_C][0] = -eslINFINITY;
-  
+  XMXo(0, p7X_E)    = -eslINFINITY;
+  XMXo(0, p7X_N)    = 0.;
+  XMXo(0, p7X_J)    = -eslINFINITY;
+  XMXo(0, p7X_B)    = 0.;
+  XMXo(0, p7X_C)    = -eslINFINITY;
+
   for (i = 1; i <= pp->L; i++)
     {
       dpp = dpc;		/* previous DP row in OA matrix */
@@ -94,7 +95,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       tp  = om->tf;		/* transition probabilities */
       dcv = infv;
       xEv = infv;
-      xBv = _mm_set1_ps(ox->xmx[p7X_B][i-1]);
+      xBv = _mm_set1_ps(XMXo(i-1, p7X_B));
 
       mpv = esl_sse_rightshift_ps(MMO(dpp,Q-1), infv);  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
       dpv = esl_sse_rightshift_ps(DMO(dpp,Q-1), infv);
@@ -149,24 +150,24 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       for (q = 0; q < Q; q++) xEv = _mm_max_ps(xEv, DMO(dpc,q));
       
       /* Specials */
-      esl_sse_hmax_ps(xEv, &(ox->xmx[p7X_E][i]));
+      esl_sse_hmax_ps(xEv, &(XMXo(i,p7X_E)));
       
-      t1 = ( (om->xf[p7O_J][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[p7X_J][i-1] + pp->xmx[p7X_J][i]);
-      t2 = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[p7X_E][i]);
-      ox->xmx[p7X_J][i] = ESL_MAX(t1, t2);
+      t1 = ( (om->xf[p7O_J][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_J] + pp->xmx[i*p7X_NXCELLS+p7X_J]);
+      t2 = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
+      ox->xmx[i*p7X_NXCELLS+p7X_J] = ESL_MAX(t1, t2);
 
-      t1 = ( (om->xf[p7O_C][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[p7X_C][i-1] + pp->xmx[p7X_C][i]);
-      t2 = ( (om->xf[p7O_E][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[p7X_E][i]);
-      ox->xmx[p7X_C][i] = ESL_MAX(t1, t2);
+      t1 = ( (om->xf[p7O_C][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_C] + pp->xmx[i*p7X_NXCELLS+p7X_C]);
+      t2 = ( (om->xf[p7O_E][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
+      ox->xmx[i*p7X_NXCELLS+p7X_C] = ESL_MAX(t1, t2);
       
-      ox->xmx[p7X_N][i] = ((om->xf[p7O_N][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[p7X_N][i-1] + pp->xmx[p7X_N][i]);
+      ox->xmx[i*p7X_NXCELLS+p7X_N] = ((om->xf[p7O_N][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_N] + pp->xmx[i*p7X_NXCELLS+p7X_N]);
       
-      t1 = ( (om->xf[p7O_N][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[p7X_N][i]);
-      t2 = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[p7X_J][i]);
-      ox->xmx[p7X_B][i] = ESL_MAX(t1, t2);
+      t1 = ( (om->xf[p7O_N][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[i*p7X_NXCELLS+p7X_N]);
+      t2 = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[i*p7X_NXCELLS+p7X_J]);
+      ox->xmx[i*p7X_NXCELLS+p7X_B] = ESL_MAX(t1, t2);
     }
 
-  *ret_e = ox->xmx[p7X_C][pp->L];
+  *ret_e = ox->xmx[pp->L*p7X_NXCELLS+p7X_C];
   return eslOK;
 }
 /*------------------- end, OA DP fill ---------------------------*/
@@ -274,9 +275,9 @@ get_postprob(const P7_OMX *pp, int scur, int sprv, int k, int i)
   switch (scur) {
   case p7T_M: u.v = MMO(pp->dpf[i], q); return u.p[r]; 
   case p7T_I: u.v = IMO(pp->dpf[i], q); return u.p[r]; 
-  case p7T_N: if (sprv == scur) return pp->xmx[p7X_N][i];
-  case p7T_C: if (sprv == scur) return pp->xmx[p7X_C][i];
-  case p7T_J: if (sprv == scur) return pp->xmx[p7X_J][i];
+  case p7T_N: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_N];
+  case p7T_C: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_C];
+  case p7T_J: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_J];
   default:    return 0.0;
   }
 }
@@ -289,7 +290,7 @@ select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
   __m128 *tp    = om->tf + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
-  __m128  xBv   = _mm_set1_ps(ox->xmx[p7X_B][i-1]);
+  __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
   __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u, tv;
@@ -371,8 +372,8 @@ static inline int
 select_c(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, int i)
 {
   float path[2];
-  path[0] = ( (om->xf[p7O_C][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[p7X_C][i-1] + pp->xmx[p7X_C][i]);
-  path[1] = ( (om->xf[p7O_E][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[p7X_E][i]);
+  path[0] = ( (om->xf[p7O_C][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[(i-1)*p7X_NXCELLS+p7X_C] + pp->xmx[i*p7X_NXCELLS+p7X_C]);
+  path[1] = ( (om->xf[p7O_E][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
   return  ((path[0] > path[1]) ? p7T_C : p7T_E);
 }
 
@@ -382,8 +383,8 @@ select_j(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, int i)
 {
   float path[2];
 
-  path[0] = ( (om->xf[p7O_J][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[p7X_J][i-1] + pp->xmx[p7X_J][i]);
-  path[1] = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[p7X_E][i]);
+  path[0] = ( (om->xf[p7O_J][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[(i-1)*p7X_NXCELLS+p7X_J] + pp->xmx[i*p7X_NXCELLS+p7X_J]);
+  path[1] = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
   return  ((path[0] > path[1]) ? p7T_J : p7T_E);
 }
  
@@ -416,8 +417,8 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
 {
   float path[2];
 
-  path[0] = ( (om->xf[p7O_N][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[p7X_N][i]);
-  path[1] = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[p7X_J][i]);
+  path[0] = ( (om->xf[p7O_N][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[i*p7X_NXCELLS+p7X_N]);
+  path[1] = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[i*p7X_NXCELLS+p7X_J]);
   return  ((path[0] > path[1]) ? p7T_N : p7T_J);
 }
 /*---------------------- end, OA traceback ----------------------*/

@@ -94,7 +94,7 @@ p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *
 #ifdef p7_DEBUGGING		
   if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (L     >= ox->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= ox->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
 
@@ -136,7 +136,7 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 #ifdef p7_DEBUGGING		
   if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (ox->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= ox->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
 
@@ -194,7 +194,7 @@ p7_Backward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd,
 #ifdef p7_DEBUGGING		
   if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (L     >= bck->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= bck->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (L     >= bck->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
   if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
@@ -240,7 +240,7 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
 #ifdef p7_DEBUGGING		
   if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (bck->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= bck->allocXRQ*4)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
+  if (L     >= bck->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
   if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
@@ -280,17 +280,17 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   zerov  = _mm_setzero_ps();
   for (q = 0; q < Q; q++)
     MMO(dpc,q) = IMO(dpc,q) = DMO(dpc,q) = zerov;
-  xE    = ox->xmx[p7X_E][0] = 0.;
-  xN    = ox->xmx[p7X_N][0] = 1.;
-  xJ    = ox->xmx[p7X_J][0] = 0.;
-  xB    = ox->xmx[p7X_B][0] = om->xf[p7O_N][p7O_MOVE];
-  xC    = ox->xmx[p7X_C][0] = 0.;
+  xE    = ox->xmx[p7X_E] = 0.;
+  xN    = ox->xmx[p7X_N] = 1.;
+  xJ    = ox->xmx[p7X_J] = 0.;
+  xB    = ox->xmx[p7X_B] = om->xf[p7O_N][p7O_MOVE];
+  xC    = ox->xmx[p7X_C] = 0.;
 
-  ox->xmx[p7X_SCALE][0] = 1.0;
-  ox->totscale          = 0.0;
+  ox->xmx[p7X_SCALE] = 1.0;
+  ox->totscale       = 0.0;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpFloatRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
+  if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
   for (i = 1; i <= L; i++)
@@ -334,10 +334,9 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	   */
 	  dcv   = _mm_mul_ps(sv, *tp); tp++;
 
-	  /* Calculate and store I(i,q) */
+	  /* Calculate and store I(i,q); assumes odds ratio for emission is 1.0 */
 	  sv         =                _mm_mul_ps(mpv, *tp);  tp++;
-	  sv         = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	  IMO(dpc,q) = _mm_mul_ps(sv, *rp);                  rp++;
+	  IMO(dpc,q) = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
 	}	  
 
       /* Now the DD paths. We would rather not serialize them but 
@@ -431,24 +430,24 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	      DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
 	      IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
 	    }
-	  ox->xmx[p7X_SCALE][i] = xE;
+	  ox->xmx[i*p7X_NXCELLS+p7X_SCALE] = xE;
 	  ox->totscale += log(xE);
 	  xE = 1.0;		
 	}
-      else ox->xmx[p7X_SCALE][i] = 1.0;
+      else ox->xmx[i*p7X_NXCELLS+p7X_SCALE] = 1.0;
 
       /* Storage of the specials.  We could've stored these already
        * but using xE, etc. variables makes it easy to convert this
        * code to O(M) memory versions just by deleting storage steps.
        */
-      ox->xmx[p7X_E][i] = xE;
-      ox->xmx[p7X_N][i] = xN;
-      ox->xmx[p7X_J][i] = xJ;
-      ox->xmx[p7X_B][i] = xB;
-      ox->xmx[p7X_C][i] = xC;
+      ox->xmx[i*p7X_NXCELLS+p7X_E] = xE;
+      ox->xmx[i*p7X_NXCELLS+p7X_N] = xN;
+      ox->xmx[i*p7X_NXCELLS+p7X_J] = xJ;
+      ox->xmx[i*p7X_NXCELLS+p7X_B] = xB;
+      ox->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpFloatRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
+      if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -535,32 +534,32 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
     }
 
   /* Sparse rescaling: same scale factors as fwd matrix */
-  if (fwd->xmx[p7X_SCALE][L] > 1.0)
+  if (fwd->xmx[L*p7X_NXCELLS+p7X_SCALE] > 1.0)
     {
-      xE  = xE / fwd->xmx[p7X_SCALE][L];
-      xN  = xN / fwd->xmx[p7X_SCALE][L];
-      xC  = xC / fwd->xmx[p7X_SCALE][L];
-      xJ  = xJ / fwd->xmx[p7X_SCALE][L];
-      xB  = xB / fwd->xmx[p7X_SCALE][L];
-      xEv = _mm_set1_ps(1.0 / fwd->xmx[p7X_SCALE][L]);
+      xE  = xE / fwd->xmx[L*p7X_NXCELLS+p7X_SCALE];
+      xN  = xN / fwd->xmx[L*p7X_NXCELLS+p7X_SCALE];
+      xC  = xC / fwd->xmx[L*p7X_NXCELLS+p7X_SCALE];
+      xJ  = xJ / fwd->xmx[L*p7X_NXCELLS+p7X_SCALE];
+      xB  = xB / fwd->xmx[L*p7X_NXCELLS+p7X_SCALE];
+      xEv = _mm_set1_ps(1.0 / fwd->xmx[L*p7X_NXCELLS+p7X_SCALE]);
       for (q = 0; q < Q; q++) {
 	MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xEv);
 	DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xEv);
 	IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xEv);
       }
     }
-  bck->xmx[p7X_SCALE][L] = fwd->xmx[p7X_SCALE][L];
-  bck->totscale          = log(bck->xmx[p7X_SCALE][L]);
+  bck->xmx[L*p7X_NXCELLS+p7X_SCALE] = fwd->xmx[L*p7X_NXCELLS+p7X_SCALE];
+  bck->totscale                     = log(bck->xmx[L*p7X_NXCELLS+p7X_SCALE]);
 
   /* Stores */
-  bck->xmx[p7X_E][L] = xE;
-  bck->xmx[p7X_N][L] = xN;
-  bck->xmx[p7X_J][L] = xJ;
-  bck->xmx[p7X_B][L] = xB;
-  bck->xmx[p7X_C][L] = xC;
+  bck->xmx[L*p7X_NXCELLS+p7X_E] = xE;
+  bck->xmx[L*p7X_NXCELLS+p7X_N] = xN;
+  bck->xmx[L*p7X_NXCELLS+p7X_J] = xJ;
+  bck->xmx[L*p7X_NXCELLS+p7X_B] = xB;
+  bck->xmx[L*p7X_NXCELLS+p7X_C] = xC;
 
 #if p7_DEBUGGING
-  if (bck->debugging) p7_omx_DumpFloatRow(bck, TRUE, L, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=L, width=9, precision=4*/
+  if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, L, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=L, width=9, precision=4*/
 #endif
 
   /* main recursion */
@@ -571,8 +570,8 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
        */
       dpc = bck->dpf[i     * do_full];
       dpp = bck->dpf[(i+1) * do_full];
-      rp  = om->rf[dsq[i+1]] + 2*Q-1; /* <*rp> is now the [4 8 12 x] insert emission quad */
-      tp  = om->tf + 7*Q - 1;	        /* <*tp> is now the [4 8 12 x] TII transition quad  */
+      rp  = om->rf[dsq[i+1]] + Q-1; /* <*rp> is now the [4 8 12 x] match emission quad */
+      tp  = om->tf + 7*Q - 1;	    /* <*tp> is now the [4 8 12 x] TII transition quad  */
 
       /* leftshift the first transition quads */
       tmmv = _mm_move_ss(om->tf[1], zerov); tmmv = _mm_shuffle_ps(tmmv, tmmv, _MM_SHUFFLE(0,3,2,1));
@@ -586,8 +585,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       xBv = zerov;
       for (q = Q-1; q >= 0; q--)     /* backwards stride */
 	{
-	  ipv = _mm_mul_ps(IMO(dpp,q), *rp);   rp--;  /* precalc I(i+1,k) * e_(I_k, x_{i+1}); i+1's IMO(q) now free */
-
+	  ipv = IMO(dpp,q); /* assumes emission odds ratio of 1.0; i+1's IMO(q) now free */
 	  IMO(dpc,q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
 	  DMO(dpc,q) =                                  _mm_mul_ps(mpv, tdmv); 
 	  mcv        = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
@@ -662,37 +660,37 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
        */
       if (xB > 1.0e16) bck->has_own_scales = TRUE;
 
-      if      (bck->has_own_scales)  bck->xmx[p7X_SCALE][i] = (xB > 1.0e4) ? xB : 1.0;
-      else                           bck->xmx[p7X_SCALE][i] = fwd->xmx[p7X_SCALE][i];
+      if      (bck->has_own_scales)  bck->xmx[i*p7X_NXCELLS+p7X_SCALE] = (xB > 1.0e4) ? xB : 1.0;
+      else                           bck->xmx[i*p7X_NXCELLS+p7X_SCALE] = fwd->xmx[i*p7X_NXCELLS+p7X_SCALE];
 
-      if (bck->xmx[p7X_SCALE][i] > 1.0)
+      if (bck->xmx[i*p7X_NXCELLS+p7X_SCALE] > 1.0)
 	{
-	  xE /= bck->xmx[p7X_SCALE][i];
-	  xN /= bck->xmx[p7X_SCALE][i];
-	  xJ /= bck->xmx[p7X_SCALE][i];
-	  xB /= bck->xmx[p7X_SCALE][i];
-	  xC /= bck->xmx[p7X_SCALE][i];
-	  xBv = _mm_set1_ps(1.0 / bck->xmx[p7X_SCALE][i]);
+	  xE /= bck->xmx[i*p7X_NXCELLS+p7X_SCALE];
+	  xN /= bck->xmx[i*p7X_NXCELLS+p7X_SCALE];
+	  xJ /= bck->xmx[i*p7X_NXCELLS+p7X_SCALE];
+	  xB /= bck->xmx[i*p7X_NXCELLS+p7X_SCALE];
+	  xC /= bck->xmx[i*p7X_NXCELLS+p7X_SCALE];
+	  xBv = _mm_set1_ps(1.0 / bck->xmx[i*p7X_NXCELLS+p7X_SCALE]);
 	  for (q = 0; q < Q; q++) {
 	    MMO(dpc,q) = _mm_mul_ps(MMO(dpc,q), xBv);
 	    DMO(dpc,q) = _mm_mul_ps(DMO(dpc,q), xBv);
 	    IMO(dpc,q) = _mm_mul_ps(IMO(dpc,q), xBv);
 	  }
-	  bck->totscale += log(bck->xmx[p7X_SCALE][i]);
+	  bck->totscale += log(bck->xmx[i*p7X_NXCELLS+p7X_SCALE]);
 	}
 
       /* Stores are separate only for pedagogical reasons: easy to
        * turn this into a more memory efficient version just by
        * deleting the stores.
        */
-      bck->xmx[p7X_E][i] = xE;
-      bck->xmx[p7X_N][i] = xN;
-      bck->xmx[p7X_J][i] = xJ;
-      bck->xmx[p7X_B][i] = xB;
-      bck->xmx[p7X_C][i] = xC;
+      bck->xmx[i*p7X_NXCELLS+p7X_E] = xE;
+      bck->xmx[i*p7X_NXCELLS+p7X_N] = xN;
+      bck->xmx[i*p7X_NXCELLS+p7X_J] = xJ;
+      bck->xmx[i*p7X_NXCELLS+p7X_B] = xB;
+      bck->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
 #if p7_DEBUGGING
-      if (bck->debugging) p7_omx_DumpFloatRow(bck, TRUE, i, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=4*/
+      if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, i, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=4*/
 #endif
     } /* thus ends the loop over sequence positions i */
 
@@ -703,7 +701,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   xBv = zerov;
   for (q = 0; q < Q; q++)
     {
-      mpv = _mm_mul_ps(MMO(dpp,q), *rp);  rp += 2;
+      mpv = _mm_mul_ps(MMO(dpp,q), *rp);  rp++;
       mpv = _mm_mul_ps(mpv,        *tp);  tp += 7;
       xBv = _mm_add_ps(xBv,        mpv);
     }
@@ -714,18 +712,18 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
  
   xN = (xB * om->xf[p7O_N][p7O_MOVE]) + (xN * om->xf[p7O_N][p7O_LOOP]);  
 
-  bck->xmx[p7X_B][0]     = xB;
-  bck->xmx[p7X_C][0]     = 0.0;
-  bck->xmx[p7X_J][0]     = 0.0;
-  bck->xmx[p7X_N][0]     = xN;
-  bck->xmx[p7X_E][0]     = 0.0;
-  bck->xmx[p7X_SCALE][0] = 1.0;
+  bck->xmx[p7X_B]     = xB;
+  bck->xmx[p7X_C]     = 0.0;
+  bck->xmx[p7X_J]     = 0.0;
+  bck->xmx[p7X_N]     = xN;
+  bck->xmx[p7X_E]     = 0.0;
+  bck->xmx[p7X_SCALE] = 1.0;
 
 #if p7_DEBUGGING
   dpc = bck->dpf[0];
   for (q = 0; q < Q; q++) /* Not strictly necessary, but if someone's looking at DP matrices, this is nice to do: */
     MMO(dpc,q) = DMO(dpc,q) = IMO(dpc,q) = zerov;
-  if (bck->debugging) p7_omx_DumpFloatRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E][0], bck->xmx[p7X_N][0],  bck->xmx[p7X_J][0], bck->xmx[p7X_B][0],  bck->xmx[p7X_C][0]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
+  if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E], bck->xmx[p7X_N],  bck->xmx[p7X_J], bck->xmx[p7X_B],  bck->xmx[p7X_C]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
 #endif
 
   if       (isnan(xN))      ESL_EXCEPTION(eslERANGE, "backward score is NaN");

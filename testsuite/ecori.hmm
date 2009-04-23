@@ -1,20 +1,21 @@
-HMMER3/a [3.0.dev | March 2008]
+HMMER3/a [3.0a2 | March 2009]
 NAME  ecori
 LENG  6
 ALPH  DNA
 RF    no
 CS    no
 MAP   yes
-DATE  Wed Oct 22 13:49:28 2008
-COM   [1] ../src/hmmbuild ecori.hmm ecori.sto
+DATE  Tue Apr 21 15:01:59 2009
 NSEQ  2
 EFFN  2.000000
+CKSUM 3343066187
 STATS LOCAL     VLAMBDA 1.849669
-STATS LOCAL         VMU -9.883107
-STATS LOCAL        FTAU -0.921763
+STATS LOCAL         VMU -7.911099
+STATS LOCAL        FTAU -0.872725
 HMM          A        C        G        T   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   1.31653  1.46727  1.44883  1.32224
+          1.38629  1.38629  1.38629  1.38629
           0.51083  1.60944  1.60944  0.69315  0.69315  0.00000        *
       1   1.79176  1.79176  0.69315  1.79176      1 - -
           1.38629  1.38629  1.38629  1.38629

@@ -231,7 +231,7 @@ p7_Mu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda
   double  *xv      = NULL;
   int      i;
   float    sc, nullsc;
-  float    maxsc   = (255 - om->base) / om->scale; /* if score overflows, use this */
+  float    maxsc   = (255 - om->base_b) / om->scale_b; /* if score overflows, use this */
   int      status;
 
   if (ox == NULL) { status = eslEMEM; goto ERROR; }

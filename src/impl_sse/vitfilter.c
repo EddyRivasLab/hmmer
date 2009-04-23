@@ -1,10 +1,10 @@
 /* Viterbi filter implementation; SSE version.
  * 
  * This is a SIMD vectorized, striped, interleaved, one-row, reduced
- * precision (epu8) implementation of the Viterbi algorithm.
+ * precision (epi16) implementation of the Viterbi algorithm.
  * 
  * It calculates a close approximation of the Viterbi score, in
- * limited precision (uchars: 0..255) and range. It may overflow on
+ * limited precision (signed words: 16 bits) and range. It may overflow on
  * high scoring sequences, but this indicates that the sequence is a
  * high-scoring hit worth examining more closely anyway.  It will not
  * underflow, in local alignment mode.
@@ -56,7 +56,7 @@
  *            
  *            This is a striped SIMD Viterbi implementation using Intel
  *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
- *            precision (unsigned chars).
+ *            precision (signed words, 16 bits).
  *
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of dsq in residues          
@@ -80,6 +80,7 @@
  *            J2/60 for reduced precision (epu8)
  *            J2/65 for initial benchmarking
  *            J2/66 for precision maximization
+ *            J4/138-140 for reimplementation in 16-bit precision
  */
 int
 p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
@@ -90,62 +91,59 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i Dmaxv;          /* keeps track of maximum D cell on row                      */
-  __m128i  biasv;		   /* emission bias in a vector                                 */
-  uint8_t  xE, xB, xC, xJ;	   /* special states' scores                                    */
-  uint8_t  Dmax;		   /* maximum D cell score on row                               */
+  int16_t  xE, xB, xC, xJ;	   /* special states' scores                                    */
+  int16_t  Dmax;		   /* maximum D cell score on row                               */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQU(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpu[0];	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  int Q        = p7O_NQW(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpw[0];	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
 
   /* Check that the DP matrix is ok for us. */
-  if (Q > ox->allocQ16)                                ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  if (Q > ox->allocQ8)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
   ox->M   = om->M;
 
-  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
+  /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
-  biasv = _mm_set1_epi8((int8_t) om->bias); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++)
-    MMXo(q) = IMXo(q) = DMXo(q) = _mm_setzero_si128();
-  xB   = om->base - om->xu[p7O_N][p7O_MOVE]; /* remember, all values are costs to be subtracted. */
-  xJ   = 0;
-  xC   = 0;
-  xE   = 0;
+    MMXo(q) = IMXo(q) = DMXo(q) = _mm_set1_epi16(-32768);
+  xB   = om->base_w + om->xw[p7O_N][p7O_MOVE];
+  xJ   = -32768;
+  xC   = -32768;
+  xE   = -32768;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpCharRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
+  if (ox->debugging) p7_omx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
   for (i = 1; i <= L; i++)
     {
-      rsc   = om->ru[dsq[i]];
-      tsc   = om->tu;
-      dcv   = _mm_setzero_si128();      /* "-infinity" */
-      xEv   = _mm_setzero_si128();     
-      Dmaxv = _mm_setzero_si128();     
-      xBv   = _mm_set1_epi8((char) xB);
+      rsc   = om->rw[dsq[i]];
+      tsc   = om->tw;
+      dcv   = _mm_set1_epi16(-32768);      /* "-infinity" */
+      xEv   = _mm_set1_epi16(-32768);     
+      Dmaxv = _mm_set1_epi16(-32768);     
+      xBv   = _mm_set1_epi16(xB);
 
-      /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
+      /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
-       * Zeros shift on automatically, which is our -infinity.
+       * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 1);  
-      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 1);  
-      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 1);  
+      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_insert_epi16(mpv, -32768, 0);
+      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_insert_epi16(dpv, -32768, 0);
+      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_insert_epi16(ipv, -32768, 0);
 
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
-	  sv   =                   _mm_subs_epu8(xBv, *tsc);  tsc++;
-	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(mpv, *tsc)); tsc++;
-	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(ipv, *tsc)); tsc++;
-	  sv   = _mm_max_epu8 (sv, _mm_subs_epu8(dpv, *tsc)); tsc++;
-	  sv   = _mm_adds_epu8(sv, biasv);     
-	  sv   = _mm_subs_epu8(sv, *rsc);                     rsc++;
-	  xEv  = _mm_max_epu8(xEv, sv);
+	  sv   =                    _mm_adds_epi16(xBv, *tsc);  tsc++;
+	  sv   = _mm_max_epi16 (sv, _mm_adds_epi16(mpv, *tsc)); tsc++;
+	  sv   = _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
+	  sv   = _mm_max_epi16 (sv, _mm_adds_epi16(dpv, *tsc)); tsc++;
+	  sv   = _mm_adds_epi16(sv, *rsc);                      rsc++;
+	  xEv  = _mm_max_epi16(xEv, sv);
 	  
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
 	   * {MDI}MX(q) is then the current, not the prev row
@@ -161,22 +159,20 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = _mm_subs_epu8(sv, *tsc);  tsc++;
-	  Dmaxv = _mm_max_epu8(dcv, Dmaxv);
+	  dcv   = _mm_adds_epi16(sv, *tsc);  tsc++;
+	  Dmaxv = _mm_max_epi16(dcv, Dmaxv);
 
 	  /* Calculate and store I(i,q) */
-	  sv     =                   _mm_subs_epu8(mpv, *tsc);  tsc++;
-	  sv     = _mm_max_epu8 (sv, _mm_subs_epu8(ipv, *tsc)); tsc++;
-	  sv     = _mm_adds_epu8(sv, biasv);
-	  IMXo(q) = _mm_subs_epu8(sv, *rsc);                     rsc++;
+	  sv     =                    _mm_adds_epi16(mpv, *tsc);  tsc++;
+	  IMXo(q)= _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
 	}	  
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      xE = esl_sse_hmax_epu8(xEv);
-      if (xE >= 255 - om->bias) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
-      xC = ESL_MAX(xC, xE - om->xu[p7O_E][p7O_MOVE]);
-      xJ = ESL_MAX(xJ, xE - om->xu[p7O_E][p7O_LOOP]);
-      xB = ESL_MAX(xJ - om->xu[p7O_J][p7O_MOVE],  om->base - om->xu[p7O_N][p7O_MOVE]);
+      xE = esl_sse_hmax_epi16(xEv);
+      if (xE >= 32767) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
+      xC = ESL_MAX(xC, xE + om->xw[p7O_E][p7O_MOVE]);
+      xJ = ESL_MAX(xJ, xE + om->xw[p7O_E][p7O_LOOP]);
+      xB = ESL_MAX(xJ + om->xw[p7O_J][p7O_MOVE],  om->base_w + om->xw[p7O_N][p7O_MOVE]);
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
       /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
@@ -193,17 +189,18 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      Dmax = esl_sse_hmax_epu8(Dmaxv);
-      if ((int) Dmax + om->ddbound_u > (int) xB) 
+      Dmax = esl_sse_hmax_epi16(Dmaxv);
+      if (Dmax + om->ddbound_w > xB) 
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
-	  dcv = _mm_slli_si128(dcv, 1);
-	  tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
+	  dcv = _mm_slli_si128(dcv, 2); 
+	  dcv = _mm_insert_epi16(dcv, -32768, 0);
+	  tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
-	      DMXo(q) = _mm_max_epu8(dcv, DMXo(q));	
-	      dcv    = _mm_subs_epu8(DMXo(q), *tsc); tsc++;
+	      DMXo(q) = _mm_max_epi16(dcv, DMXo(q));	
+	      dcv     = _mm_adds_epi16(DMXo(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -211,27 +208,28 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   * our score. 
 	   */
 	  do {
-	    dcv = _mm_slli_si128(dcv, 1);
-	    tsc = om->tu + 7*Q;	/* set tsc to start of the DD's */
+	    dcv = _mm_slli_si128(dcv, 2);
+	    dcv = _mm_insert_epi16(dcv, -32768, 0);
+	    tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
-		if (! esl_sse_any_gt_epu8(dcv, DMXo(q))) break;
-		DMXo(q) = _mm_max_epu8(dcv, DMXo(q));	
-		dcv    = _mm_subs_epu8(DMXo(q), *tsc);   tsc++;
+		if (! esl_sse_any_gt_epi16(dcv, DMXo(q))) break;
+		DMXo(q) = _mm_max_epi16(dcv, DMXo(q));	
+		dcv     = _mm_adds_epi16(DMXo(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
-	DMXo(0) = _mm_slli_si128(dcv, 1);
+	DMXo(0) =  _mm_insert_epi16(_mm_slli_si128(dcv, 2),  -32768, 0);
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpCharRow(ox, i, xE, 0, xJ, xB, xC);   
+      if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-  *ret_sc = ((float) (xC - om->xu[p7O_C][p7O_MOVE]) - (float) om->base);
-  *ret_sc /= om->scale;
+  *ret_sc = ((float) (xC + om->xw[p7O_C][p7O_MOVE]) - (float) om->base_w);
+  *ret_sc /= om->scale_w;
   if      (om->mode == p7_UNILOCAL) *ret_sc -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
   else if (om->mode == p7_LOCAL)    *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
   return eslOK;
@@ -315,7 +313,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x")) p7_oprofile_SameRounding(om, gm);
+  if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsVF(om, gm);
 
   ox = p7_omx_Create(gm->M, 0, 0);
   gx = p7_gmx_Create(gm->M, L);
@@ -343,7 +341,7 @@ main(int argc, char **argv)
       if (esl_opt_GetBoolean(go, "-x"))
 	{
 	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
-	  sc2 /= om->scale;
+	  sc2 /= om->scale_w;
 	  if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
 	  else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 	  printf("%.4f %.4f\n", sc1, sc2);  
@@ -405,7 +403,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
-  p7_oprofile_SameRounding(om, gm);	/* round and scale the scores in <gm> the same as in <om> */
+  p7_profile_SameAsVF(om, gm);	/* round and scale the scores in <gm> the same as in <om> */
 
 #if 0
   p7_oprofile_Dump(stdout, om);              // dumps the optimized profile
@@ -423,7 +421,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
       p7_gmx_Dump(stdout, gx);              // dumps a generic DP matrix
 #endif
 
-      sc2 /= om->scale;
+      sc2 /= om->scale_w;
       if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
       else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 
