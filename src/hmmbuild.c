@@ -101,6 +101,7 @@ struct cfg_s {
   P7_PRIOR     *pri;		/* mixture Dirichlet prior for the HMM     */
 
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
+  int           nnamed;		/* number of alignments that had their own names */
 
   int           do_mpi;		/* TRUE if we're doing MPI parallelization */
   int           nproc;		/* how many MPI processes, total */
@@ -123,7 +124,7 @@ static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 
 static int output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg);
 static int output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa);
-static int set_msa_name (const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
+static int set_msa_name (const ESL_GETOPTS *go,       struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
 
 
 int
@@ -190,6 +191,7 @@ main(int argc, char **argv)
   cfg.pri         = NULL;                  /* created in init_shared_cfg() */
 
   cfg.nali       = 0;		           /* this counter is incremented in masters */
+  cfg.nnamed     = 0;		           /* 0 or 1 if a single MSA; == nali if multiple MSAs */
   cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
   cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
   cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
@@ -376,7 +378,7 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (status != eslOK)       p7_Fail("Alignment file read unexpectedly failed with code %d\n", status);
       cfg->nali++;  
 
-      if (msa->name == NULL && ((status = set_msa_name(go, cfg, errmsg, msa)) != eslOK)) p7_Fail("%s\n", errmsg);
+      if ((status = set_msa_name(go, cfg, errmsg, msa)) != eslOK) p7_Fail("%s\n", errmsg); /* cfg->nnamed gets incremented in this call */
 
                 /*         bg   new-HMM trarr gm   om  */
       if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
@@ -738,22 +740,27 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
 
 
 
-/* set_msa_name()
- * If the alignment doesn't already have a name, try to give it one;
- * this will then be transferred to the model.
+/* set_msa_name() 
+ * Make sure the alignment has a name; this name will
+ * then be transferred to the model.
  * 
- * We can only do this for a single alignment in a file.
+ * We can only do this for a single alignment in a file. For multi-MSA
+ * files, each MSA is required to have a name already.
  *
  * Priority is:
- *      1. Use -n <name> if set.
- *      2. Use alignment file name without path and without filename extension 
+ *      1. Use -n <name> if set, overriding any name the alignment might already have. 
+ *      2. Use alignment's existing name, if non-NULL.
+ *      3. Make a name, from alignment file name without path and without filename extension 
  *         (e.g. "/usr/foo/globins.slx" gets named "globins")
- * If neither is true, return <eslEINVAL>.
+ * If none of these succeeds, return <eslEINVAL>.
  *         
- * If a multiple MSA database (e.g. Stockholm/Pfam), 
- * return <eslEINVAL> if nali > 1.
+ * If a multiple MSA database (e.g. Stockholm/Pfam), and we encounter
+ * an MSA that doesn't already have a name, return <eslEINVAL> if nali > 1.
+ * (We don't know we're in a multiple MSA database until we're on the second
+ * alignment.)
  * 
- * If we're in MPI mode, we assume we're in a multiple MSA database.
+ * If we're in MPI mode, we assume we're in a multiple MSA database,
+ * even on the first alignment.
  * 
  * Because we can't tell whether we've got more than one
  * alignment 'til we're on the second one, these fatal errors
@@ -761,7 +768,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
  * Oh well.
  */
 static int
-set_msa_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
+set_msa_name(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
 {
   char *name = NULL;
   int   status;
@@ -771,6 +778,10 @@ set_msa_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_M
       if  (esl_opt_GetString(go, "-n") != NULL)
 	{
 	  if ((status = esl_msa_SetName(msa, esl_opt_GetString(go, "-n"))) != eslOK) return status;
+	}
+      else if (msa->name != NULL) 
+	{
+	  cfg->nnamed++;
 	}
       else if (! cfg->afp->do_stdin)
 	{
@@ -783,7 +794,12 @@ set_msa_name(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, ESL_M
   else 
     {
       if (esl_opt_GetString(go, "-n") != NULL) ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. You can't use -n with an alignment database.");
-      else                                     ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment in a multi MSA file.");
+      else if (msa->name              != NULL) cfg->nnamed++;
+      else                                     ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment in a multi MSA file; failed on #%d", cfg->nali+1);
+
+      /* special kind of failure: the *first* alignment didn't have a name, and we used the filename to
+       * construct one; now that we see a second alignment, we realize this was a boo-boo*/
+      if (cfg->nnamed != cfg->nali)            ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment in a multi MSA file; first MSA didn't have one");
     }
   return eslOK;
 }

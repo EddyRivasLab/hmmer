@@ -91,7 +91,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i Dmaxv;          /* keeps track of maximum D cell on row                      */
-  int16_t  xE, xB, xC, xJ;	   /* special states' scores                                    */
+  int16_t  xE, xB, xC, xJ, xN;	   /* special states' scores                                    */
   int16_t  Dmax;		   /* maximum D cell score on row                               */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
@@ -109,7 +109,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
    */
   for (q = 0; q < Q; q++)
     MMXo(q) = IMXo(q) = DMXo(q) = _mm_set1_epi16(-32768);
-  xB   = om->base_w + om->xw[p7O_N][p7O_MOVE];
+  xN   = om->base_w;
+  xB   = xN + om->xw[p7O_N][p7O_MOVE];
   xJ   = -32768;
   xC   = -32768;
   xE   = -32768;
@@ -170,9 +171,10 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       xE = esl_sse_hmax_epi16(xEv);
       if (xE >= 32767) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
-      xC = ESL_MAX(xC, xE + om->xw[p7O_E][p7O_MOVE]);
-      xJ = ESL_MAX(xJ, xE + om->xw[p7O_E][p7O_LOOP]);
-      xB = ESL_MAX(xJ + om->xw[p7O_J][p7O_MOVE],  om->base_w + om->xw[p7O_N][p7O_MOVE]);
+      xN = xN + om->xw[p7O_N][p7O_LOOP];
+      xC = ESL_MAX(xC + om->xw[p7O_C][p7O_LOOP], xE + om->xw[p7O_E][p7O_MOVE]);
+      xJ = ESL_MAX(xJ + om->xw[p7O_J][p7O_LOOP], xE + om->xw[p7O_E][p7O_LOOP]);
+      xB = ESL_MAX(xJ + om->xw[p7O_J][p7O_MOVE], xN + om->xw[p7O_N][p7O_MOVE]);
       /* and now xB will carry over into next i, and xC carries over after i=L */
 
       /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
@@ -227,11 +229,10 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 #endif
     } /* end loop over sequence residues 1..L */
 
-  /* finally C->T, and add our missing precision on the NN,CC,JJ back */
+  /* finally C->T */
   *ret_sc = ((float) (xC + om->xw[p7O_C][p7O_MOVE]) - (float) om->base_w);
+  *ret_sc += L * om->ncj_roundoff; /* see J4/150 for rationale */
   *ret_sc /= om->scale_w;
-  if      (om->mode == p7_UNILOCAL) *ret_sc -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
-  else if (om->mode == p7_LOCAL)    *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
   return eslOK;
 }
 /*---------------- end, p7_ViterbiFilter() ----------------------*/
@@ -421,9 +422,8 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
       p7_gmx_Dump(stdout, gx);              // dumps a generic DP matrix
 #endif
 
+      sc2 += om->ncj_roundoff * L; 
       sc2 /= om->scale_w;
-      if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
-      else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 
       if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }

@@ -95,8 +95,8 @@
 
 #           xxxxxxxxxxxxxxxxxxxx
 1 exercise  h39                  @hmmsearch@ M1.hmm M1.sto
-1 exercise  h45                  @i4-zerolength-seqs.sh@ @hmmscan@ @hmmsearch@ @phmmer@ @jackhmmer@ %MINIFAM.HMM% %OUTFILES%
+1 exercise  h45                  @i4-zerolength-seqs.sh@ @hmmscan@  @hmmsearch@ @phmmer@ @jackhmmer@ %MINIFAM.HMM% %OUTFILES%
+1 exercise  h50                  @i5-hmmbuild-naming.pl@ @hmmbuild@ . ../tutorial %OUTFILES%
 
 
 # Clean up after minifam's index files, which hmmpress created (not the sqc script)
-1 prep      cleanup               rm %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3i %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3p

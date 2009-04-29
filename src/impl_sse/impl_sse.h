@@ -85,7 +85,8 @@ typedef struct p7_oprofile_s {
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
-  int16_t   ddbound_w;		/* threshold used for lazy DD evaluation             */
+  int16_t   ddbound_w;		/* threshold precalculated for lazy DD evaluation    */
+  float     ncj_roundoff;	/* missing precision on NN,CC,JJ after rounding      */
 
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
   __m128 **rf;     		/* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */

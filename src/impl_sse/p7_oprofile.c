@@ -104,9 +104,10 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->base_b    = 0;
   om->bias_b    = 0;
 
-  om->scale_w   = 0.0f;
-  om->base_w    = 0;
-  om->ddbound_w = 0;
+  om->scale_w      = 0.0f;
+  om->base_w       = 0;
+  om->ddbound_w    = 0;
+  om->ncj_roundoff = 0.0f;	
 
   for (x = 0; x < p7_NOFFSETS; x++) om->offs[x]    = -1;
   for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = p7_EVPARAM_UNSET;
@@ -360,17 +361,17 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       om->tw[j++] = tmp.v;
     }
 
-  /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)
-   * NN, CC, JJ are all hardcoded 0; part of precision-maximizing strategy [xref J2/66].
-   */
+  /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)  */
   om->xw[p7O_E][p7O_LOOP] = wordify(om, gm->xsc[p7P_E][p7P_LOOP]);  
   om->xw[p7O_E][p7O_MOVE] = wordify(om, gm->xsc[p7P_E][p7P_MOVE]);
-  om->xw[p7O_N][p7O_LOOP] = 0;
   om->xw[p7O_N][p7O_MOVE] = wordify(om, gm->xsc[p7P_N][p7P_MOVE]);
-  om->xw[p7O_C][p7O_LOOP] = 0;
+  om->xw[p7O_N][p7O_LOOP] = wordify(om, gm->xsc[p7P_N][p7P_LOOP]);
   om->xw[p7O_C][p7O_MOVE] = wordify(om, gm->xsc[p7P_C][p7P_MOVE]);
-  om->xw[p7O_J][p7O_LOOP] = 0;
+  om->xw[p7O_C][p7O_LOOP] = wordify(om, gm->xsc[p7P_C][p7P_LOOP]);
   om->xw[p7O_J][p7O_MOVE] = wordify(om, gm->xsc[p7P_J][p7P_MOVE]);
+  om->xw[p7O_J][p7O_LOOP] = wordify(om, gm->xsc[p7P_J][p7P_LOOP]);
+
+  om->ncj_roundoff = om->scale_w * gm->xsc[p7P_N][p7P_LOOP] -  om->xw[p7O_N][p7O_LOOP]; /* assumes NN=CC=JJ. See J4/150 */
 
   /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
   om->ddbound_w = -32768;	
@@ -583,8 +584,11 @@ p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
   om->xf[p7O_N][p7O_LOOP] =  om->xf[p7O_C][p7O_LOOP] = om->xf[p7O_J][p7O_LOOP] = ploop;
   om->xf[p7O_N][p7O_MOVE] =  om->xf[p7O_C][p7O_MOVE] = om->xf[p7O_J][p7O_MOVE] = pmove;
 
-  /* ViterbiFilter() parameters: lspace uchars; the LOOP costs are zero  */
+  /* ViterbiFilter() parameters: lspace signed 16-bit ints */
   om->xw[p7O_N][p7O_MOVE] =  om->xw[p7O_C][p7O_MOVE] = om->xw[p7O_J][p7O_MOVE] = wordify(om, logf(pmove));
+  om->xw[p7O_N][p7O_LOOP] =  om->xw[p7O_C][p7O_LOOP] = om->xw[p7O_J][p7O_LOOP] = wordify(om, logf(ploop));
+  om->ncj_roundoff        = (om->scale_w * logf(ploop)) - om->xw[p7O_N][p7O_LOOP]; /* J4/150; assumes NN=CC=JJ */
+
   om->L = L;
   return eslOK;
 }
@@ -1239,11 +1243,6 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
   for (k = 0; k < p7P_NXSTATES; k++)
     for (x = 0; x < p7P_NXTRANS; x++)
       gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_w * gm->xsc[k][x]);
-
-  /* NN, CC, JJ are hardcoded 0 in limited precision */
-  gm->xsc[p7P_N][p7P_LOOP] = 0;
-  gm->xsc[p7P_C][p7P_LOOP] = 0;
-  gm->xsc[p7P_J][p7P_LOOP] = 0;
 
   return eslOK;
 }
