@@ -246,7 +246,8 @@ p7_Mu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda
       if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
 
-      status = p7_MSVFilter(dsq, L, om, ox, &sc);
+      /*status = p7_ViterbiFilter(dsq, L, om, ox, &sc); */
+      status = p7_MSVFilter(dsq, L, om, ox, &sc); 
       if      (status == eslERANGE) sc = maxsc;
       else if (status != eslOK)     goto ERROR;
 

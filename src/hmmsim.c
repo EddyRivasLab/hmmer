@@ -72,9 +72,9 @@ static ESL_OPTIONS options[] = {
 
   { "--evL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Viterbi Gumbel mu fit",     6 },   
   { "--evN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Viterbi Gumbel mu fit",     6 },   
-  { "--efL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Forward exp tail mu fit",   6 },   
-  { "--efN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Forward exp tail mu fit",   6 },   
-  { "--eft",    eslARG_REAL,   "0.03", NULL, NULL,      NULL,  NULL, NULL, "tail mass for Forward exponential tail mu fit",     6 },   
+  { "--efL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Forward exp tail tau fit",  6 },   
+  { "--efN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Forward exp tail tau fit",  6 },   
+  { "--eft",    eslARG_REAL,   "0.03", NULL, NULL,      NULL,  NULL, NULL, "tail mass for Forward exponential tail tau fit",    6 },   
 
   { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                7 },  
   { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 7 },
@@ -128,7 +128,7 @@ static void mpi_worker     (ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif 
 static int process_workunit   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double *ret_mu, double *ret_lambda);
 static int output_result      (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double mu, double lambda);
-static int output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
+static int output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, double mu, double lambda);
 
 #ifdef HAVE_MPI
 static int minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn);
@@ -646,7 +646,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   /* Create optimized model and DP matrix */
   om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);
-  ox = p7_omx_Create(gm->M, 0, 0);
+  ox = p7_omx_Create(gm->M, 0, L);
 
   /* Determine E-value parameters (in addition to any that are already in the HMM structure)  */
   p7_Lambda(hmm, cfg->bg, &lambda);
@@ -735,7 +735,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   if (esl_opt_GetBoolean(go, "-v"))  for (i = 0; i < cfg->N; i++) printf("%.3f\n", scores[i]);
 
   /* optional "filter power" data file: <hmm name> <# seqs <= P threshold> <fraction of seqs <= P threshold>  */
-  if (cfg->ffp)                      output_filter_power(go, cfg, errbuf, hmm, scores);
+  if (cfg->ffp)                      output_filter_power(go, cfg, errbuf, hmm, scores, pmu, plambda);
 
   /* Count the scores into a histogram object.  */
   if ((h = esl_histogram_CreateFull(-50., 50., 0.2)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "allocation failed");
@@ -864,7 +864,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
  * SRE, Thu Apr  9 08:57:32 2009 [Janelia] xref J4/133
  */
 static int
-output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores)
+output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, double pmu, double plambda)
 {
   double pthresh = esl_opt_GetReal(go, "--pthresh"); /* P-value threshold set for the filter score       */
   double P;					     /* calculated P-value (using HMM's own calibration) */
@@ -880,10 +880,8 @@ output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hm
 
   for (i = 0; i < cfg->N; i++)
     {
-      P = (do_gumbel ? 
-	   esl_gumbel_surv(scores[i], hmm->evparam[p7_MU],  hmm->evparam[p7_LAMBDA]) :
-	   esl_exp_surv   (scores[i], hmm->evparam[p7_TAU], hmm->evparam[p7_LAMBDA]));
-	   
+      P = (do_gumbel ?  esl_gumbel_surv(scores[i], pmu, plambda) : 
+                        esl_exp_surv   (scores[i], pmu, plambda));
       if (P <= pthresh) npass++;
     }
   fpass = (double) npass / (double) cfg->N;
