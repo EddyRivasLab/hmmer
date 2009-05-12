@@ -218,7 +218,7 @@ p7_profile_SetNullEmissions(P7_PROFILE *gm)
 {
   int x;
   for (x = 0; x <= gm->abc->K; x++)                esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* canonicals    */
-  for (x = gm->abc->K+1; x <= gm->abc->Kp-2; x++)  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* noncanonicals */
+  for (x = gm->abc->K+1; x <= gm->abc->Kp-3; x++)  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* noncanonicals */
   return eslOK;
 }
 

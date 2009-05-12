@@ -143,6 +143,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   
   /* Match emission scores. */
   sc[hmm->abc->K]     = -eslINFINITY; /* gap character */
+  sc[hmm->abc->Kp-2]  = -eslINFINITY; /* nonresidue character */
   sc[hmm->abc->Kp-1]  = -eslINFINITY; /* missing data character */
   for (k = 1; k <= hmm->M; k++) {
     for (x = 0; x < hmm->abc->K; x++) 
@@ -169,6 +170,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
       p7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
     }
   for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->K)    = -eslINFINITY; /* gap symbol */
+  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-2) = -eslINFINITY; /* nonresidue symbol */
   for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-1) = -eslINFINITY; /* missing data symbol */
 
 

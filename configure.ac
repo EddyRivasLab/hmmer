@@ -40,7 +40,8 @@
 #  13. AC_OUTPUT
 
 
-AC_PREREQ(2.60)
+# Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
+AC_PREREQ(2.63)
 AC_INIT(HMMER, 3.0a2, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
@@ -404,16 +405,18 @@ AC_CHECK_FUNCS(popen)
 AC_CHECK_FUNCS(strcasecmp)
 AC_CHECK_FUNCS(times)
 AC_CHECK_FUNCS(getpid)
-AC_FUNC_FSEEKO
+
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
 AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
 AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+AC_FUNC_FSEEKO
 
 #
 # 11. System services
 #
 AC_SYS_LARGEFILE
+
 
 # Done.
 # Config subdirs and files (except main Makefile, which we defer)
