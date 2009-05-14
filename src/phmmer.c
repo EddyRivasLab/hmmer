@@ -97,28 +97,28 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
       puts("\nwhere basic options are:");
-      esl_opt_DisplayHelp(stdout, go, 1, 2, 120); /* 1= group; 2 = indentation; 120=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
       puts("\nOptions directing output:");
-      esl_opt_DisplayHelp(stdout, go, 7, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
 
       puts("\nOptions controlling scoring system:");
-      esl_opt_DisplayHelp(stdout, go, 2, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
 
       puts("\nOptions controlling significance thresholds for reporting:");
-      esl_opt_DisplayHelp(stdout, go, 3, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
       puts("\nOptions controlling significance thresholds for inclusion in output alignment (-A):");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
 
       puts("\nOptions controlling acceleration heuristics:");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
 
       puts("\nOptions controlling E value calibration:");
-      esl_opt_DisplayHelp(stdout, go, 6, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 6, 2, 80); 
 
       puts("\nOther options:");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 80); 
       exit(0);
     }
 
@@ -195,8 +195,9 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS     *go       = NULL;               /* application configuration options                */
   FILE            *ofp      = stdout;             /* output file for results (default stdout)         */
-  FILE            *tblfp    = NULL;		  /* output stream for tabular per-seq (default NULL) */
-  FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (default NULL) */
+  FILE            *afp      = NULL;               /* alignment output file (-A option)                */
+  FILE            *tblfp    = NULL;		  /* output stream for tabular per-seq (--tblout)     */
+  FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (--domtblout)  */
   char            *qfile    = NULL;               /* file to read query sequence from                 */
   int              qformat  = eslSQFILE_FASTA;    /* format of qfile                                  */
   ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                       */
@@ -245,6 +246,7 @@ main(int argc, char **argv)
 
   /* Open results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); } 
+  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"),          "w")) == NULL)  esl_fatal("Failed to open alignment output file %s for writing\n",       esl_opt_GetString(go, "-A")); } 
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
     
@@ -328,24 +330,20 @@ main(int argc, char **argv)
       p7_pli_Statistics(ofp, pli, w);
       fprintf(ofp, "//\n");
 
-      /* Output the results in an MSA */
-      if (esl_opt_IsOn(go, "-A")) {
-	FILE    *afp = NULL;
+      /* Output the results in an MSA (-A option) */
+      if (afp) {
 	ESL_MSA *msa = NULL;
 
-	if ((afp = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL)
-	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));
+	if ( p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) 
+	  {
+	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
 
-	if (afp != NULL) {
-	  p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa);
-	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	  else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
-
-	  fprintf(ofp, "# Alignment of all hits above threshold saved to: %s\n", esl_opt_GetString(go, "-A"));
-
-	  esl_msa_Destroy(msa);
-	  fclose(afp);
-	}
+	    fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
+	  }
+	else fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n");
+	  
+	esl_msa_Destroy(msa);
       }
 
       p7_pipeline_Destroy(pli);
@@ -367,6 +365,7 @@ main(int argc, char **argv)
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
   if (ofp      != stdout) fclose(ofp);
+  if (afp      != NULL)   fclose(afp);
   if (tblfp    != NULL)   fclose(tblfp);
   if (domtblfp != NULL)   fclose(domtblfp);
   esl_getopts_Destroy(go);

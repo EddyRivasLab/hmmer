@@ -772,9 +772,12 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
  *            <inc_n> to include additional sequences in the alignment
  *            (the jackhmmer query, for example). Otherwise, pass <NULL, NULL, 0>.
  *
- * Returns:   <eslOK> on success.
- *            <eslFAIL> if there are no reported domains that satisfy
- *            reporting thresholds.
+ * Returns:   <eslOK> on success, and <*ret_msa> points to a new MSA that
+ *            the caller is responsible for freeing.
+ *
+ *            Returns <eslFAIL> if there are no reported domains that
+ *            satisfy reporting thresholds, in which case <*ret_msa>
+ *            is <NULL>.
  *
  * Throws:    <eslEMEM> on allocation failure; <eslECORRUPT> on 
  *            unexpected internal data corruption.

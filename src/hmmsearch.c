@@ -26,8 +26,11 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles  reqs   incomp  help   docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "show brief help on version and usage",                         1 },
-  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",                        1 },
-  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "save multiple alignment of all hits to file <s>",              1 },
+  /* Control of output */
+  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "direct output to file <f>, not stdout",                        7 },
+  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "save multiple alignment of all hits to file <s>",              7 },
+  { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "save parseable table of per-sequence hits to file <s>",        7 },
+  { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL, "save parseable table of per-domain hits to file <s>",          7 },
   /* Control of reporting thresholds */
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",        "report sequences <= this E-value threshold in output",         2 },
   { "-T",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",        "report sequences >= this score threshold in output",           2 },
@@ -82,10 +85,13 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       puts("\nwhere most common options are:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
 
-      puts("\nOptions controlling reporting thresholds:");
+      puts("\nOptions directing output:");
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
+
+      puts("\nOptions controlling significance thresholds for reporting:");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
 
-      puts("\nOptions controlling significance (inclusion) thresholds:");
+      puts("\nOptions controlling significance thresholds for inclusion in output alignment:");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
       puts("\nOptions controlling acceleration heuristics:");
@@ -119,6 +125,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   fprintf(ofp, "# target sequence database:        %s\n", seqfile);
   if (esl_opt_IsUsed(go, "-o"))          fprintf(ofp, "# output directed to file:         %s\n",      esl_opt_GetString(go, "-o"));
   if (esl_opt_IsUsed(go, "-A"))          fprintf(ofp, "# MSA of all hits saved to file:   %s\n",      esl_opt_GetString(go, "-A"));
+  if (esl_opt_IsUsed(go, "--tblout"))    fprintf(ofp, "# per-seq hits tabular output:     %s\n",      esl_opt_GetString(go, "--tblout"));
+  if (esl_opt_IsUsed(go, "--domtblout")) fprintf(ofp, "# per-dom hits tabular output:     %s\n",      esl_opt_GetString(go, "--domtblout"));
   if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence E-value threshold:   <= %g\n",      esl_opt_GetReal(go, "-E"));
   if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence bit score threshold: >= %g\n",      esl_opt_GetReal(go, "-T"));
   if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
@@ -154,19 +162,22 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS     *go	   = NULL;               /* command line processing                 */
-  FILE            *ofp     = NULL;
-  char            *hmmfile = NULL;
-  P7_HMMFILE      *hfp     = NULL;
-  P7_HMM          *hmm     = NULL;
-  char            *dbfile  = NULL;
-  int              dbfmt   = eslSQFILE_UNKNOWN;
-  ESL_SQFILE      *dbfp    = NULL;
-  ESL_SQ          *dbsq    = NULL;
-  ESL_ALPHABET    *abc     = NULL;
-  ESL_STOPWATCH   *w       = NULL;
-  P7_BG           *bg      = NULL;
-  int              nquery  = 0;
+  ESL_GETOPTS     *go	    = NULL;              /* command line processing                         */
+  FILE            *ofp      = stdout;            /* results output file (-o)                        */
+  FILE            *afp      = NULL;              /* alignment output file (-A)                      */
+  FILE            *tblfp    = NULL;		 /* output stream for tabular per-seq (--tblout)    */
+  FILE            *domtblfp = NULL;		 /* output stream for tabular per-seq (--domtblout) */
+  char            *hmmfile  = NULL;              /* query HMM file                                  */
+  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
+  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
+  char            *dbfile   = NULL;              /* target sequence database file                   */
+  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
+  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
+  ESL_SQ          *dbsq     = NULL;              /* one target sequence (digital)                   */
+  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
+  ESL_STOPWATCH   *w        = NULL;              /* for clocking performance                        */
+  P7_BG           *bg       = NULL;              /* null model                                      */
+  int              nquery   = 0;
   int              textw;
   int              status;
   int              hstatus, sstatus;
@@ -191,12 +202,11 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n", hmmfile);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          hmmfile);  
 
-  /* Open the results output file */
-  if (esl_opt_IsOn(go, "-o")) {
-    ofp = fopen(esl_opt_GetString(go, "-o"), "w");
-    if (ofp == NULL) p7_Fail("Failed to open output file %s for writing\n", esl_opt_GetString(go, "-o"));
-  } else
-    ofp = stdout;
+  /* Open the results output files */
+  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
+  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
+  if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
+  if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
 
   /* Outer loop: over each query HMM in <hmmfile>. <abc> is not known 'til first HMM is read. */
   while ((hstatus = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK) 
@@ -262,29 +272,28 @@ main(int argc, char **argv)
       p7_tophits_Threshold(th, pli);
       p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
       p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, th, pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, th, pli, (nquery == 1));
   
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pli, w);
       fprintf(ofp, "//\n");
 
-      /* Output the results in an MSA */
-      if ( esl_opt_IsOn(go, "-A")) {
-	FILE    *afp = NULL;
+      /* Output the results in an MSA (-A option) */
+      if (afp) {
 	ESL_MSA *msa = NULL;
 
-	if ((afp = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL)
-	  fprintf(ofp, "WARNING: failed to open alignment file %s; skipping the alignment output\n", esl_opt_GetString(go, "-A"));
-
-	if (afp != NULL) {
-	  p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa);
-	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	  else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
+	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK)
+	  {
+	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
 	  
-	  fprintf(ofp, "# Alignment of all hits above threshold saved to: %s\n", esl_opt_GetString(go, "-A"));
+	    fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
+	  } 
+	else fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n");
 	  
-	  esl_msa_Destroy(msa);
-	  fclose(afp);
-	}
+	esl_msa_Destroy(msa);
       }
 
       p7_pipeline_Destroy(pli);
@@ -305,7 +314,10 @@ main(int argc, char **argv)
   esl_sq_Destroy(dbsq);
   esl_stopwatch_Destroy(w);
   esl_alphabet_Destroy(abc);
-  if (esl_opt_IsOn(go, "-o")) fclose(ofp);
+  if (ofp != stdout) fclose(ofp);
+  if (afp)           fclose(afp);
+  if (tblfp)         fclose(tblfp);
+  if (domtblfp)      fclose(domtblfp);
   esl_getopts_Destroy(go);
   return eslOK;
 }
