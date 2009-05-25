@@ -52,15 +52,9 @@
  *            its rows are numbered <1..Ld>, for envelope <ienv..jenv>
  *            of length <Ld=jenv-ienv+1>.
  *            
- *            The calculation can optionally return the null2 log odds
- *            scores in <opt_null2> as a <0..Kp-1> array containing
- *            $\log \frac{f'{x}}{f{x}}$ scores; caller provides
- *            allocated space for this score vector, if it wants to
- *            see it.
- *
  * Args:      gm    - profile, in any mode, target length model set to <L>
  *            pp    - posterior prob matrix, for <gm> against domain envelope <dsq+i-1> (offset)
- *            null2 - RETURN: null2 log odds scores; <0..Kp-1>; caller allocated space
+ *            null2 - RETURN: null2 odds ratios per residue; <0..Kp-1>; caller allocated space
  *
  * Returns:   <eslOK> on success; <null2> contains the null2 scores. The 0
  *            row of <pp> has been used as temp space, and happens to contain
@@ -123,7 +117,6 @@ p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2)
     }
 
   esl_vec_FExp (null2, gm->abc->K);
-  esl_vec_FNorm(null2, gm->abc->K);
   /* now null2[x] = \frac{f_d(x)}{f_0(x)} for all x in alphabet,
    * 0..K-1, where f_d(x) are the ad hoc "null2" residue frequencies
    * for this envelope.

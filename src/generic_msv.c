@@ -393,7 +393,7 @@ main(int argc, char **argv)
       /* Calculate bit score and P-value using standard null1 model*/
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
       seqscore = (sc - nullsc) / eslCONST_LOG2;
-      P        =  esl_gumbel_surv(seqscore,  gm->evparam[p7_MU],  gm->evparam[p7_LAMBDA]);
+      P        =  esl_gumbel_surv(seqscore,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
 
       /* output suitable for direct use in profmark benchmark postprocessors:
        * <Pvalue> <bitscore> <target name> <query name>

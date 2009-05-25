@@ -1139,7 +1139,9 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
   if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)        ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
 
   if (hmm->flags & p7H_STATS) {
-    if (hmm->evparam[p7_LAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
+    if (hmm->evparam[p7_MLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
+    if (hmm->evparam[p7_VLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
+    if (hmm->evparam[p7_FLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
   }
   if (hmm->flags & p7H_COMPO && esl_vec_FValidate(hmm->compo, hmm->abc->K, tol, NULL) != eslOK)
     ESL_XFAIL(eslFAIL, errbuf, "composition fails pvector validation");
@@ -1210,7 +1212,7 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
 static void
 utest_occupancy(P7_HMM *hmm)
 {
-  char  *msg = "modelconfig.c::calculate_occupancy() unit test failed";
+  char  *msg = "p7_hmm.c:: occupancy unit test failed";
   float *occ;
   float  x;
 

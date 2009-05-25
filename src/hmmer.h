@@ -62,12 +62,11 @@
 #define p7_IsLocal(mode)  (mode == p7_LOCAL || mode == p7_UNILOCAL)
 #define p7_IsMulti(mode)  (mode == p7_LOCAL || mode == p7_GLOCAL)
 
-#define p7_NEVPARAM 3	/* number of statistical parameters stored in models */
-#define p7_NCUTOFFS 6	/* number of Pfam score cutoffs stored in models     */
+#define p7_NEVPARAM 6	/* number of statistical parameters stored in models                      */
+#define p7_NCUTOFFS 6	/* number of Pfam score cutoffs stored in models                          */
 #define p7_NOFFSETS 3	/* number of disk offsets stored in models for hmmscan's fast model input */
-
-enum p7_evparams_e {  p7_LAMBDA = 0,      p7_MU = 1,     p7_TAU = 2 };
-enum p7_cutoffs_e  {     p7_GA1 = 0,     p7_GA2 = 1,     p7_TC1 = 2,   p7_TC2 = 3, p7_NC1 = 4, p7_NC2 = 5 };
+enum p7_evparams_e {    p7_MMU  = 0, p7_MLAMBDA = 1,     p7_VMU = 2,  p7_VLAMBDA = 3, p7_FTAU = 4, p7_FLAMBDA = 5 };
+enum p7_cutoffs_e  {     p7_GA1 = 0,     p7_GA2 = 1,     p7_TC1 = 2,      p7_TC2 = 3,  p7_NC1 = 4,     p7_NC2 = 5 };
 enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 
 #define p7_EVPARAM_UNSET -99999.0f  /* if evparam[0] is unset, then all unset                         */
@@ -80,7 +79,8 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7_ALL_CONSENSUS_COLS  (1<<1)
 #define p7_TRIM                (1<<2)
 
-
+/* Option flags when creating faux traces with p7_trace_FauxFromMSA() */
+#define p7_MSA_COORDS	       (1<<0) /* default: i = unaligned seq residue coords     */
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
@@ -291,6 +291,15 @@ typedef struct p7_bg_s {
  * tr->st[0]; if it's a p7T_S, it's for a profile, and if it's p7T_B,
  * it's for a core model.
  * 
+ * A "profile" trace uniquely has S,N,C,T,J states and their
+ * transitions; it also can have B->Mk and Mk->E internal entry/exit
+ * transitions for local alignments. A "core" trace uniquely has I0,
+ * IM, and D1 states and their transitions. A "core" trace can also
+ * have B->X->Mk and Mk->X->E transitions as a special hack in a build
+ * procedure, to deal with the case of a local alignment fragment
+ * implied by an input alignment, which is "impossible" for a core
+ * model.
+ *   
  * A profile's N,C,J states emit on transition, not on state, so a
  * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
  * residues, and so on. By convention, the trace always associates an
@@ -344,6 +353,12 @@ typedef struct p7_trace_s {
  * 5. P7_HMMFILE:  an HMM save file or database, open for reading.
  *****************************************************************/
 
+enum p7_hmmfile_formats_e {
+  p7_HMMFILE_20 = 0,
+  p7_HMMFILE_3a = 1,
+  p7_HMMFILE_3b = 2,
+};
+
 typedef struct p7_hmmfile_s {
   FILE         *f;		 /* pointer to stream for reading models                 */
   char         *fname;	         /* (fully qualified) name of the HMM file; [STDIN] if - */
@@ -354,7 +369,8 @@ typedef struct p7_hmmfile_s {
   int           newly_opened;	/* TRUE if we just opened the stream (and parsed magic) */
   int           is_pressed;	/* TRUE if a pressed HMM database file (Pfam or equiv)  */
 
-  int (*parser)(struct p7_hmmfile_s *, ESL_ALPHABET **, P7_HMM **);  /* parsing function */
+  int            format;	/* HMM file format code */
+  int           (*parser)(struct p7_hmmfile_s *, ESL_ALPHABET **, P7_HMM **);  
   ESL_FILEPARSER *efp;
 
   /* If <is_pressed>, we can read optimized profiles directly, via:  */
@@ -804,8 +820,9 @@ extern void p7_Fail(char *format, ...);
 /* evalues.c */
 extern int p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om);
 extern int p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda);
-extern int p7_Mu (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda,               double *ret_mu);
-extern int p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau);
+extern int p7_MSVMu     (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda,               double *ret_mmu);
+extern int p7_ViterbiMu (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda,               double *ret_vmu);
+extern int p7_Tau       (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau);
 
 /* eweight.c */
 extern int p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double infotarget, double *ret_Neff);
@@ -940,6 +957,7 @@ extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
 extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
 extern void    p7_gmx_Destroy(P7_GMX *gx);
+extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
 
@@ -983,8 +1001,8 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 /* p7_hmmfile.c */
 extern int  p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
-extern int  p7_hmmfile_WriteBinary(FILE *fp, P7_HMM *hmm);
-extern int  p7_hmmfile_WriteASCII (FILE *fp, P7_HMM *hmm);
+extern int  p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm);
+extern int  p7_hmmfile_WriteASCII (FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 
@@ -1095,6 +1113,9 @@ extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
 extern int  p7_trace_AppendWithPP(P7_TRACE *tr, char st, int k, int i, float pp);
 extern int  p7_trace_Reverse(P7_TRACE *tr);
 extern int  p7_trace_Index(P7_TRACE *tr);
+
+extern int  p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr);
+extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 

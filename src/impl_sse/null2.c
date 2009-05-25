@@ -38,6 +38,10 @@
  *            <om>, <pp> are SSE optimized versions of the profile
  *            and the residue posterior probability matrix. See 
  *            <p7_GNull2_ByExpectation()>  documentation.
+ *            
+ * Args:      om    - profile, in any mode, target length model set to <L>
+ *            pp    - posterior prob matrix, for <om> against domain envelope <dsq+i-1> (offset)
+ *            null2 - RETURN: null2 log odds scores per residue; <0..Kp-1>; caller allocated space
  */
 int
 p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
@@ -49,7 +53,6 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
   float    norm;
   __m128  *rp;
   __m128   sv;
-
   float    xfactor;
   int      i,q,x;
   
@@ -97,7 +100,8 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
       for (q = 0; q < Q; q++)
 	{
 	  sv = _mm_add_ps(sv, _mm_mul_ps(pp->dpf[0][q*3 + p7X_M], *rp)); rp++;
-	  sv = _mm_add_ps(sv, _mm_mul_ps(pp->dpf[0][q*3 + p7X_I], *rp)); rp++;
+	  sv = _mm_add_ps(sv,            pp->dpf[0][q*3 + p7X_I]);              /* insert odds implicitly 1.0 */
+	  //	  sv = _mm_add_ps(sv, _mm_mul_ps(pp->dpf[0][q*3 + p7X_I], *rp)); rp++; 
 	}
       esl_sse_hsum_ps(sv, &(null2[x]));
       null2[x] += xfactor;
@@ -195,7 +199,8 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       for (q = 0; q < Q; q++)
 	{
 	  sv = _mm_add_ps(sv, _mm_mul_ps(wrk->dpf[0][q*3 + p7X_M], *rp)); rp++;
-	  sv = _mm_add_ps(sv, _mm_mul_ps(wrk->dpf[0][q*3 + p7X_I], *rp)); rp++;
+	  sv = _mm_add_ps(sv,            wrk->dpf[0][q*3 + p7X_I]); /* insert emission odds implicitly 1.0 */
+	  //	  sv = _mm_add_ps(sv, _mm_mul_ps(wrk->dpf[0][q*3 + p7X_I], *rp)); rp++;
 	}
       esl_sse_hsum_ps(sv, &(null2[x]));
       null2[x] += xfactor;
@@ -357,7 +362,62 @@ main(int argc, char **argv)
  * 3. Unit tests
  *****************************************************************/
 #ifdef p7NULL2_TESTDRIVE
+#include "esl_random.h"
+#include "esl_randomseq.h"
+#include "esl_vectorops.h"
 
+/* compare results to GDecoding(). */
+static void
+utest_null2_expectation(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N, float tolerance)
+{
+  char        *msg  = "decoding unit test failed";
+  P7_HMM      *hmm  = NULL;
+  P7_PROFILE  *gm   = NULL;
+  P7_OPROFILE *om   = NULL;
+  ESL_DSQ     *dsq  = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_OMX      *fwd  = p7_omx_Create(M, L, L);
+  P7_OMX      *bck  = p7_omx_Create(M, L, L);
+  P7_OMX      *pp   = p7_omx_Create(M, L, L);
+  P7_GMX      *gxf  = p7_gmx_Create(M, L);
+  P7_GMX      *gxb  = p7_gmx_Create(M, L);
+  P7_GMX      *gpp  = p7_gmx_Create(M, L);
+  float       *on2  = malloc(sizeof(float) * abc->Kp);
+  float       *gn2  = malloc(sizeof(float) * abc->Kp);
+  float fsc1, fsc2;
+  float bsc1, bsc2;
+
+  if (!gn2 || !on2) esl_fatal(msg);
+
+  if (p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om) != eslOK) esl_fatal(msg);
+  while (N--)
+    {
+      if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal(msg);
+      if (p7_Forward       (dsq, L, om, fwd,      &fsc1) != eslOK) esl_fatal(msg);
+      if (p7_Backward      (dsq, L, om, fwd, bck, &bsc1) != eslOK) esl_fatal(msg);
+      if (p7_Decoding(om, fwd, bck, pp)                  != eslOK) esl_fatal(msg);
+      if (p7_Null2_ByExpectation(om, pp, on2)            != eslOK) esl_fatal(msg);
+      
+      if (p7_GForward (dsq, L, gm, gxf, &fsc2)           != eslOK) esl_fatal(msg);
+      if (p7_GBackward(dsq, L, gm, gxb, &bsc2)           != eslOK) esl_fatal(msg);
+      if (p7_GDecoding(gm, gxf, gxb, gpp)                != eslOK) esl_fatal(msg);
+      if (p7_GNull2_ByExpectation(gm, gpp, gn2)          != eslOK) esl_fatal(msg);
+
+      if (esl_vec_FCompare(gn2, on2, abc->Kp, tolerance) != eslOK) esl_fatal(msg);
+    }
+
+  p7_gmx_Destroy(gpp);
+  p7_gmx_Destroy(gxf);
+  p7_gmx_Destroy(gxb);
+  p7_omx_Destroy(pp);
+  p7_omx_Destroy(fwd);
+  p7_omx_Destroy(bck);
+  free(on2);
+  free(gn2);
+  free(dsq);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+}
 #endif /*p7NULL2_TESTDRIVE*/
 /*--------------------- end, unit tests -------------------------*/
 
@@ -368,7 +428,55 @@ main(int argc, char **argv)
  * 4. Test driver
  *****************************************************************/
 #ifdef p7NULL2_TESTDRIVE
+/* 
+   gcc -g -Wall -msse2 -std=gnu99 -o null2_utest -I.. -L.. -I../../easel -L../../easel -Dp7NULL2_TESTDRIVE null2.c -lhmmer -leasel -lm
+   ./null2_utest
+ */
+#include "p7_config.h"
 
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+#include "impl_sse.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-t",        eslARG_REAL,  "0.01", NULL, NULL,  NULL,  NULL, NULL, "floating point comparison tolerance",            0 },
+  { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
+  { "-M",        eslARG_INT,     "72", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  { "-N",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for SSE implementation of null2 model";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  P7_BG          *bg   = p7_bg_Create(abc);
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+  int             N    = esl_opt_GetInteger(go, "-N");
+  float           tol  = esl_opt_GetReal   (go, "-t");
+
+  p7_FLogsumInit();
+
+  utest_null2_expectation(r, abc, bg, M, L, N, tol);
+
+  esl_getopts_Destroy(go);
+  esl_randomness_Destroy(r);
+  esl_alphabet_Destroy(abc);
+  p7_bg_Destroy(bg);
+  return eslOK;
+}
 #endif /*p7NULL2_TESTDRIVE*/
 /*-------------------- end, test driver -------------------------*/
 

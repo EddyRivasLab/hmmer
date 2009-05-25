@@ -124,6 +124,7 @@ dev:
 	cd ${SRCDIR};   ${MAKE} hmmer_lib
 	cd ${SRCDIR};   ${MAKE} hmmer_progs
 	cd ${SRCDIR};   ${MAKE} hmmer_utests
+	cd ${SRCDIR};   ${MAKE} hmmer_stats
 	cd ${SRCDIR};   ${MAKE} hmmer_benchmarks
 	cd ${SRCDIR};   ${MAKE} hmmer_examples
 	cd ${IMPLDIR};  ${MAKE} impl_utests

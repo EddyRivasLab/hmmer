@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -20,6 +21,7 @@ static ESL_OPTIONS options[] = {
   { "-a",        eslARG_NONE,"default",NULL, NULL, "-a,-b,-2",      NULL,    NULL, "ascii:  output models in HMMER3 ASCII format",                     0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "binary: output models in HMMER3 binary format",                    0 },
   { "-2",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "HMMER2: output backward compatible HMMER2 ASCII format (ls mode)", 0 },
+  { "--outfmt",  eslARG_STRING, "3/b", NULL, NULL,      NULL,       NULL,    "-2", "choose output legacy 3.x file formats by name, such as '3/a'",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -35,7 +37,15 @@ main(int argc, char **argv)
   P7_HMMFILE    *hfp     = NULL;
   P7_HMM        *hmm     = NULL;
   FILE          *ofp     = stdout;
+  char          *outfmt  = esl_opt_GetString(go, "--outfmt");
+  int            fmtcode = -1;
   int            status;
+
+  if (outfmt != NULL) {
+    if      (strcmp(outfmt, "3/a") == 0) fmtcode = p7_HMMFILE_3a;
+    else if (strcmp(outfmt, "3/b") == 0) fmtcode = p7_HMMFILE_3b;
+    else    p7_Fail("No such 3.x output format code %s.\n", outfmt);
+  }
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",     hmmfile);
@@ -44,8 +54,8 @@ main(int argc, char **argv)
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
-      if      (esl_opt_GetBoolean(go, "-a") == TRUE) p7_hmmfile_WriteASCII (ofp, hmm);
-      else if (esl_opt_GetBoolean(go, "-b") == TRUE) p7_hmmfile_WriteBinary(ofp, hmm);
+      if      (esl_opt_GetBoolean(go, "-a") == TRUE) p7_hmmfile_WriteASCII (ofp, fmtcode, hmm);
+      else if (esl_opt_GetBoolean(go, "-b") == TRUE) p7_hmmfile_WriteBinary(ofp, fmtcode, hmm);
       else if (esl_opt_GetBoolean(go, "-2") == TRUE) p7_h2io_WriteASCII    (ofp, hmm);
 
       p7_hmm_Destroy(hmm);

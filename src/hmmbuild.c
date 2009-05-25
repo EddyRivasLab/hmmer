@@ -719,8 +719,8 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
       return eslOK;
     }
 
-  if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))   != eslOK) return status;
-  if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
+  if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))       != eslOK) return status;
+  if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
 	             /* #   name nseq alen M description*/
   fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d  %s\n",

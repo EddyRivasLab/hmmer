@@ -30,9 +30,6 @@
  *            where $p_k(x)$ is emission probability for symbol $x$
  *            from match state $k$, and $f(x)$ is the null model's
  *            background emission probability for $x$.
- *            
- *            This statistic is used in "entropy weighting" to set the
- *            total sequence weight when model building.
  */
 double
 p7_MeanMatchInfo(const P7_HMM *hmm, const P7_BG *bg)

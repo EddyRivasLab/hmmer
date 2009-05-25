@@ -87,7 +87,7 @@ main(int argc, char **argv)
 	if (esl_newssi_AddAlias(nssi, hmm->acc, hmm->name) != eslOK) p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);
       }
 
-      p7_hmmfile_WriteBinary(mfp, hmm);
+      p7_hmmfile_WriteBinary(mfp, -1, hmm);
       p7_oprofile_Write(ffp, pfp, om);
 
       p7_profile_Destroy(gm);

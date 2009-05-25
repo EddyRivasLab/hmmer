@@ -919,9 +919,9 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
-      p7_Forward       (dsq, L, om,      oxf, &fsc1);
+      p7_Forward       (dsq, L, om, oxf,      &fsc1);
       p7_Backward      (dsq, L, om, oxf, oxb, &bsc1);
-      p7_ForwardParser (dsq, L, om,      fwd, &fsc2);
+      p7_ForwardParser (dsq, L, om, fwd,      &fsc2);
       p7_BackwardParser(dsq, L, om, fwd, bck, &bsc2);
       p7_GForward      (dsq, L, gm, gx,  &generic_sc);
 
@@ -965,6 +965,7 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_random.h"
 
 #include "hmmer.h"
 #include "impl_sse.h"
@@ -1138,8 +1139,8 @@ main(int argc, char **argv)
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       gfsc = (gfraw-nullsc) / eslCONST_LOG2;
-      P  = esl_exp_surv(fsc,   om->evparam[p7_TAU],  om->evparam[p7_LAMBDA]);
-      gP = esl_exp_surv(gfsc,  gm->evparam[p7_TAU],  gm->evparam[p7_LAMBDA]);
+      P  = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+      gP = esl_exp_surv(gfsc,  gm->evparam[p7_FTAU],  gm->evparam[p7_FLAMBDA]);
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{

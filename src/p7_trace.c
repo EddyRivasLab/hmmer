@@ -5,8 +5,11 @@
  *   2. Access routines
  *   3. Debugging tools
  *   4. Creating traces by DP traceback
- *   5. Counting traces into new HMMs
- *   6. Copyright and license information
+ *   5. Creating faux traces from existing MSAs
+ *   6. Counting traces into new HMMs
+ *   7. Unit tests
+ *   8. Test driver
+ *   9. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
  * 
@@ -1200,9 +1203,205 @@ p7_trace_Index(P7_TRACE *tr)
 /*----------- end, creating traces by DP traceback ---------------*/
 
 
+/*****************************************************************
+ * 5. Creating faux traces from MSAs
+ *****************************************************************/
+
+/* Function:  p7_trace_FauxFromMSA()
+ * Synopsis:  Create array of faux tracebacks from an existing MSA.
+ * Incept:    SRE, Thu May 21 08:07:25 2009 [Janelia]
+ *
+ * Purpose:   Given an existing <msa> and an array <matassign> that
+ *            flags the alignment columns that are assigned to consensus
+ *            match states (matassign[1..alen] = 1|0); create an array
+ *            of faux traces <tr[0..msa->nseq-1]>. <optflags> controls 
+ *            optional behavior; it can be <p7_DEFAULT> or <p7_MSA_COORDS>,
+ *            as explained below.
+ *            
+ *            The traces are core traces: they start/end with B/E,
+ *            they may use I_0,I_M, and D_1 states. Any flanking
+ *            insertions (outside the first/last consensus column) are
+ *            assigned to I_0 and I_M.
+ *            
+ *            If the input alignment contains sequence fragments,
+ *            caller should first convert leading/trailing gaps to
+ *            missing data symbols. This hack causes entry/exit
+ *            transitions to be encoded in the trace as B->X->{MD}k
+ *            and {MD}k->X->E, rather than B->DDDD->Mk, Mk->DDDDD->E
+ *            paths involving terminal deletions, and all functions
+ *            that use traces (should), such as <p7_trace_Count()>,
+ *            ignore transitions involving <p7T_X> states.
+ *            
+ *            By default (<optflags = p7_DEFAULT>), the <i> coordinate
+ *            in the faux tracebacks is <1..L>, relative to the
+ *            unaligned raw sequences in <msa>, the way most H3 traces
+ *            are supposed to be. In some cases (such as model
+ *            construction from an MSA) it is convenient to reference
+ *            residues in the MSA cooordinate system directly; setting
+ *            <optflags = p7_MSA_COORDS> makes the traces come out
+ *            with <i=1..alen> coords for residues.
+ *            
+ *            Important: an MSA may imply DI and ID transitions that
+ *            are illegal in a core model. If the only purpose of the
+ *            traces is to go straight back into alignment
+ *            construction through a <p7_tracealign_*> function, this
+ *            is ok, because the <p7_tracealign_*> routines can handle
+ *            DI and ID transitions (enabling reconstruction of almost
+ *            exactly the same input alignment, modulo unaligned
+ *            insertions). This is what happens for <hmmalign
+ *            --mapali>, for example. However, if the caller wants to
+ *            use the traces for anything else, these illegal DI and
+ *            ID transitions have to be removed first, and the caller
+ *            should use <p7_trace_Doctor()> to do it.
+ *
+ * Args:      msa       - digital alignment
+ *            matassign - flag for each alignment column, whether
+ *                        it is consensus or not. matassign[1..alen] = 1|0; 
+ *                        matassign[0] = 0
+ *            optflags  - p7_DEFAULT | p7_MSA_COORDS 
+ *            tr        - RETURN: caller provides 0..nseq-1 pointer 
+ *                        array for holding returned traces.
+ *
+ * Returns:   <eslOK> on success, and tr[0..nseq-1] now point to newly
+ *            created traces; caller is responsible for freeing these.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *
+ * Xref:      J5/17: build.c::fake_tracebacks() becomes p7_trace_FauxFromMSA();
+ *                   ability to handle MSA or raw coords added.
+ */
+int
+p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
+{		      
+  int  idx;			/* counter over seqs in MSA */
+  int  k;                       /* position in HMM                 */
+  int  apos;                    /* position in alignment columns 1..alen */
+  int  rpos;			/* position in unaligned sequence residues 1..L */
+  int  showpos;			/* coord to actually record: apos or rpos */
+  int  status = eslOK;
+ 
+  for (idx = 0; idx < msa->nseq; idx++) tr[idx] = NULL;
+ 
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      if ((tr[idx] = p7_trace_Create())                      == NULL) goto ERROR; 
+      if ((status  = p7_trace_Append(tr[idx], p7T_B, 0, 0)) != eslOK) goto ERROR;
+
+      for (k = 0, rpos = 1, apos = 1; apos <= msa->alen; apos++)
+	{
+	  showpos = (optflags & p7_MSA_COORDS) ? apos : rpos;
+
+	  if (matassign[apos]) 
+	    {			/* match or delete */
+	      k++;
+	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) 
+		status = p7_trace_Append(tr[idx], p7T_M, k, showpos);
+	      else if (esl_abc_XIsGap    (msa->abc, msa->ax[idx][apos])) 
+		status = p7_trace_Append(tr[idx], p7T_D, k, 0);          
+	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
+		{
+		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
+		    status = p7_trace_Append(tr[idx], p7T_X, k, 0); /* allow only one X in a row */
+		}
+	      else ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
+	    }
+	  else
+	    { 			/* insert or nothing */
+	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
+		status = p7_trace_Append(tr[idx], p7T_I, k, showpos);
+	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
+		{ 
+		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
+		    status = p7_trace_Append(tr[idx], p7T_X, k, 0);
+		}
+	      else if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
+		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
+	    }
+
+	  if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) rpos++; 
+	  if (status != eslOK) goto ERROR;
+	}
+      if ((status = p7_trace_Append(tr[idx], p7T_E, 0, 0)) != eslOK) goto ERROR;
+      /* k == M by construction; set tr->L = msa->alen since coords are w.r.t. ax */
+      tr[idx]->M = k;
+      tr[idx]->L = msa->alen;
+    }
+  return eslOK;
+
+
+ ERROR:
+  for (idx = 0; idx < msa->nseq; idx++) { p7_trace_Destroy(tr[idx]); tr[idx] = NULL; }
+  return status; 
+}
+
+
+
+/* Function: p7_trace_Doctor()
+ * Incept:   SRE, Thu May 21 08:45:46 2009 [Janelia]
+ * 
+ * Purpose:  Plan 7 disallows D->I and I->D "chatter" transitions.
+ *           However, these transitions will be implied by many
+ *           alignments. trace_doctor() arbitrarily collapses I->D or
+ *           D->I into a single M position in the trace.
+ *           
+ *           trace_doctor does not examine any scores when it does
+ *           this. In ambiguous situations (D->I->D) the symbol
+ *           will be pulled arbitrarily to the left, regardless
+ *           of whether that's the best column to put it in or not.
+ *           
+ * Args:     tr      - trace to doctor
+ *           opt_ndi - optRETURN: number of DI transitions doctored
+ *           opt_nid - optRETURN: number of ID transitions doctored
+ * 
+ * Return:   <eslOK> on success, and the trace <tr> is modified.
+ */               
+int
+p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid)
+{
+  int opos;			/* position in old trace                 */
+  int npos;			/* position in new trace (<= opos)       */
+  int ndi, nid;			/* number of DI, ID transitions doctored */
+
+  /* overwrite the trace from left to right */
+  ndi  = nid  = 0;
+  opos = npos = 0;
+  while (opos < tr->N) {
+      /* fix implied D->I transitions; D transforms to M, I pulled in */
+    if (tr->st[opos] == p7T_D && tr->st[opos+1] == p7T_I) {
+      tr->st[npos] = p7T_M;
+      tr->k[npos]  = tr->k[opos];     /* D transforms to M      */
+      tr->i[npos]  = tr->i[opos+1];   /* insert char moves back */
+      opos += 2;
+      npos += 1;
+      ndi++;
+    } /* fix implied I->D transitions; D transforms to M, I is pushed in */
+    else if (tr->st[opos]== p7T_I && tr->st[opos+1]== p7T_D) {
+      tr->st[npos] = p7T_M;
+      tr->k[npos]  = tr->k[opos+1];    /* D transforms to M    */
+      tr->i[npos]  = tr->i[opos];      /* insert char moves up */
+      opos += 2;
+      npos += 1;
+      nid++; 
+    } /* everything else is just copied */
+    else {
+      tr->st[npos] = tr->st[opos];
+      tr->k[npos]  = tr->k[opos];
+      tr->i[npos]  = tr->i[opos];
+      opos++;
+      npos++;
+    }
+  }
+  tr->N = npos;
+
+  if (opt_ndi != NULL) *opt_ndi = ndi;
+  if (opt_nid != NULL) *opt_nid = nid;
+  return eslOK;
+}
+/*-------------- end, faux traces from MSAs ---------------------*/
+
 
 /*****************************************************************
- * 5. Counting traces into new HMMs.
+ * 6. Counting traces into new HMMs.
  *****************************************************************/
 
 /* Function: p7_trace_Count()
@@ -1247,18 +1446,20 @@ p7_trace_Index(P7_TRACE *tr)
 int
 p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 {
-  int z;                     /* position in tr */
+  int z;                        /* position in tr         */
   int i;			/* symbol position in seq */
-  int st,st2;     		/* state type (cur, nxt) */
-  int k,k2,ktmp;		/* node index (cur, nxt) */
+  int st,st2;     		/* state type (cur, nxt)  */
+  int k,k2,ktmp;		/* node index (cur, nxt)  */
   
   for (z = 0; z < tr->N-1; z++) 
     {
       if (tr->st[z] == p7T_X) continue; /* skip missing data */
 
       /* pull some info into tmp vars for notational clarity later. */
-      st  = tr->st[z]; st2 = tr->st[z+1];
-      k   = tr->k[z];  k2  = tr->k[z+1];
+      st  = tr->st[z]; 
+      st2 = tr->st[z+1];
+      k   = tr->k[z]; 
+      k2  = tr->k[z+1];
       i   = tr->i[z];
 
       /* Emission counts. */
@@ -1313,10 +1514,114 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
     } /* end loop over trace position */
   return eslOK;
 }
-/*------------------ end, trace counting -------------------*/
+/*--------------------- end, trace counting ---------------------*/
 
 
-			 
+/*****************************************************************
+ * 7. Unit tests
+ *****************************************************************/			 
+#ifdef p7TRACE_TESTDRIVE
+
+/* convert an MSA to traces; then traces back to MSA; 
+ * starting and ending MSA should be the same, provided
+ * the msa doesn't have any ambiguously aligned insertions.
+ */
+static void
+utest_faux(ESL_MSA *msa, int *matassign, int M)
+{
+  char      *msg  = "p7_trace.c:: FauxFromMSA unit test failed";
+  ESL_MSA   *msa2 = NULL;
+  ESL_SQ   **sq   = malloc(sizeof(ESL_SQ)   * msa->nseq);
+  P7_TRACE **tr   = malloc(sizeof(P7_TRACE) * msa->nseq);
+  int        i;
+  int        optflags = p7_DIGITIZE;
+
+  for (i = 0; i < msa->nseq; i++)
+    if (esl_sq_FetchFromMSA(msa, i, &(sq[i]))                   != eslOK) esl_fatal(msg);
+
+  if (p7_trace_FauxFromMSA(msa, matassign, p7_MSA_COORDS, tr)   != eslOK) esl_fatal(msg);
+  if (p7_tracealign_MSA(msa, tr, M, optflags, &msa2)            != eslOK) esl_fatal(msg);
+  if (esl_msa_Compare(msa, msa2)                                != eslOK) esl_fatal(msg);
+  esl_msa_Destroy(msa2);
+  for (i = 0; i < msa->nseq; i++) p7_trace_Destroy(tr[i]);
+
+  if (p7_trace_FauxFromMSA(msa, matassign, p7_DEFAULT, tr)      != eslOK) esl_fatal(msg);
+  if (p7_tracealign_Seqs(sq, tr, msa->nseq, M, optflags, &msa2) != eslOK) esl_fatal(msg);
+  if (esl_msa_Compare(msa, msa2)                                != eslOK) esl_fatal(msg);
+
+  esl_msa_Destroy(msa2);
+  for (i = 0; i < msa->nseq; i++) p7_trace_Destroy(tr[i]);
+  for (i = 0; i < msa->nseq; i++) esl_sq_Destroy(sq[i]);
+  free(tr);
+  free(sq);
+  return;
+}
+
+#endif /*p7TRACE_TESTDRIVE*/
+/*--------------------- end, unit tests -------------------------*/
+
+/*****************************************************************
+ * 8. Test driver
+ *****************************************************************/			 
+#ifdef p7TRACE_TESTDRIVE
+/*
+  gcc -o p7_trace_utest -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TRACE_TESTDRIVE p7_trace.c -lhmmer -leasel -lm 
+  ./p7_trace_utest
+*/
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for P7_TRACE";
+
+int
+main(int argc, char **argv)
+{
+  char           *msg       = "p7_trace_utest failed";
+  ESL_GETOPTS    *go        = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r         = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc       = esl_alphabet_Create(eslAMINO);
+  ESL_MSA        *msa       = NULL;
+  int             alen      = 6;
+  int             M         = 4;
+  int            *matassign = malloc(sizeof(int) * (alen+1)); /* 1..alen */
+
+  /* Create a test MSA/matassign/M triplet */
+  /* missing data ~ doesn't work here yet; tracealign_* doesn't propagate p7T_X in any way  */
+  if ((msa = esl_msa_CreateFromString("# STOCKHOLM 1.0\n#=GC RF .xxxx.\nseq1    AAAAAA\nseq2    -AAA--\nseq3    AA--AA\n//\n", eslMSAFILE_STOCKHOLM)) == NULL) esl_fatal(msg);
+  if (esl_msa_Digitize(abc, msa) != eslOK) esl_fatal(msg);
+
+  matassign[0] = 0;
+  matassign[1] = 0;
+  matassign[2] = 1;
+  matassign[3] = 1;
+  matassign[4] = 1;
+  matassign[5] = 1;
+  matassign[6] = 0;
+  
+  utest_faux(msa, matassign, M);
+
+  free(matassign);
+  esl_msa_Destroy(msa);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return eslOK;
+}
+#endif /*p7TRACE_TESTDRIVE*/
+/*--------------------- end, test driver ------------------------*/
+
 
 /************************************************************
  * @LICENSE@

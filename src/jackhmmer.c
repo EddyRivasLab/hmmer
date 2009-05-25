@@ -246,7 +246,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS     *go       = NULL;               /* application configuration options               */
-  FILE            *ofp      = NULL;               /* output file for results (default stdout)        */
+  FILE            *ofp      = stdout;             /* output file for results (default stdout)        */
   FILE            *afp      = NULL;               /* alignment output file (-A option)               */
   FILE            *tblfp    = NULL;		  /* output stream for tabular per-seq (--tblout)    */
   FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (--domtblout) */

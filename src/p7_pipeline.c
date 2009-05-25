@@ -495,7 +495,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   /* First level filter: the MSV filter, multihit with <om> */
   p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P > pli->F1 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
   pli->n_past_msv++;
 
@@ -504,7 +504,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
     {
       p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
     }
   else filtersc = nullsc;
@@ -521,7 +521,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
     {
       p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);  
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
-      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
     }
   pli->n_past_vit++;
@@ -529,7 +529,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
-  P = esl_exp_surv(seq_score,  om->evparam[p7_TAU],  om->evparam[p7_LAMBDA]);
+  P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > pli->F3 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
   pli->n_past_fwd++;
 
@@ -602,7 +602,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
    * only be a lower bound for now, so this list may be longer
    * than eventually reported.
    */
-  P =  esl_exp_surv (seq_score,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
+  P =  esl_exp_surv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
   if (p7_pli_TargetReportable(pli, seq_score, P))
     {
       p7_tophits_CreateNextHit(hitlist, &hit);
@@ -623,14 +623,14 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       hit->nenvelopes = pli->ddef->nenvelopes;
 
       hit->pre_score  = pre_score;
-      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
+      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       hit->score      = seq_score;
       hit->pvalue     = P;
       hit->sortkey    = -log(P);
 
       hit->sum_score  = sum_score;
-      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
+      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       /* Transfer all domain coordinates (unthresholded for
        * now) with their alignment displays to the hit list,
@@ -649,7 +649,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
 	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0);
 	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2;
-	  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_TAU], om->evparam[p7_LAMBDA]);
+	  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 	  
 	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
 	}

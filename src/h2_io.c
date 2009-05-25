@@ -134,7 +134,7 @@ p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm)
       fprintf(fp, " %5d ", k);
       for (x = 0; x < hmm->abc->K; x++) 
 	printprob(fp, 6, hmm->mat[k][x], bg->f[x]);
-      if (hmm->flags & p7H_MAP) fprintf(fp, "%5d", hmm->map[k]);
+      if (hmm->flags & p7H_MAP) fprintf(fp, " %5d", hmm->map[k]);
       fputc('\n', fp);
 				/* Line 2: RF and insert emissions */
       fprintf(fp, " %5c ", hmm->flags & p7H_RF ? hmm->rf[k] : '-');

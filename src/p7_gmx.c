@@ -181,6 +181,39 @@ p7_gmx_Destroy(P7_GMX *gx)
  * 2. Debugging aids
  *****************************************************************/
 
+/* Function:  p7_gmx_Compare()
+ * Synopsis:  Compare two DP matrices for equality within given tolerance.
+ * Incept:    SRE, Sat May 16 09:56:41 2009 [Janelia]
+ *
+ * Purpose:   Compare all the values in DP matrices <gx1> and <gx2> using
+ *            <esl_FCompare()> and relative epsilon <tolerance>. If any
+ *            value pairs differ by more than the acceptable <tolerance>
+ *            return <eslFAIL>.  If all value pairs are identical within
+ *            tolerance, return <eslOK>. 
+ */
+int
+p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
+{
+  int i,k,x;
+  if (gx1->M != gx2->M) return eslFAIL;
+  if (gx1->L != gx2->L) return eslFAIL;
+  
+  for (i = 0; i <= gx1->L; i++)
+    {
+      for (k = 1; k <= gx1->M; k++) /* k=0 is a boundary; doesn't need to be checked */
+	{
+	  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_M],  gx2->dp[i][k * p7G_NSCELLS + p7G_M], tolerance) != eslOK) return eslFAIL;
+	  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_I],  gx2->dp[i][k * p7G_NSCELLS + p7G_I], tolerance) != eslOK) return eslFAIL;
+	  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
+	}
+      for (x = 0; x < p7G_NXCELLS; x++)
+	if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
+    }
+  return eslOK;	
+}
+
+
+
 /* Function:  p7_gmx_Dump()
  * Synopsis:  Dump a DP matrix to a stream, for diagnostics.
  * Incept:    SRE, Fri Jul 13 09:56:04 2007 [Janelia]
@@ -250,6 +283,8 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
  * 3. Unit tests
  *****************************************************************/
 #ifdef p7GMX_TESTDRIVE
+#include "esl_random.h"
+#include "esl_randomseq.h"
 
 static void
 gmx_testpattern(P7_GMX *gx)
@@ -301,6 +336,28 @@ utest_GrowTo(void)
   p7_gmx_GrowTo(gx,  10,  80);  gmx_testpattern(gx);	/* grow in L, but with enough ncells */
   p7_gmx_GrowTo(gx, 160, 160);  gmx_testpattern(gx);	/* grow in both L and M */
 }
+
+static void
+utest_Compare(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, float tolerance)
+{
+  char         *msg = "gmx_Compare unit test failure";
+  ESL_DSQ      *dsq = malloc(sizeof(ESL_DSQ) *(L+2));
+  P7_GMX       *gx1 = p7_gmx_Create(gm->M, L);
+  P7_GMX       *gx2 = p7_gmx_Create(5, 4);
+  float         fsc;
+
+  if (!r || !gm || !dsq || !gx1 || !gx2 )                   esl_fatal(msg);
+  if (esl_rsq_xfIID(r, bg->f, gm->abc->K, L, dsq) != eslOK) esl_fatal(msg);
+  if (p7_gmx_GrowTo(gx2, gm->M, L)                != eslOK) esl_fatal(msg);
+  if (p7_GForward(dsq, L, gm, gx1, &fsc)          != eslOK) esl_fatal(msg);
+  if (p7_GForward(dsq, L, gm, gx2, &fsc)          != eslOK) esl_fatal(msg);
+  if (p7_gmx_Compare(gx1, gx2, tolerance)         != eslOK) esl_fatal(msg);   
+  
+  p7_gmx_Destroy(gx1);
+  p7_gmx_Destroy(gx2);
+  free(dsq);
+}
+
 #endif /*p7GMX_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
 
@@ -310,8 +367,8 @@ utest_GrowTo(void)
  *****************************************************************/
 #ifdef p7GMX_TESTDRIVE
 /*
-  gcc -o gmx_utest -msse2 -g -Wall -I. -L. -I../easel -L../easel -Dp7GMX_TESTDRIVE p7_gmx.c -leasel -lm
-  ./gmx_utest
+  gcc -o p7_gmx_utest -msse2 -g -Wall -I. -L. -I../easel -L../easel -Dp7GMX_TESTDRIVE p7_gmx.c -lhmmer -leasel -lm
+  ./p7_gmx_utest
  */
 #include "p7_config.h"
 
@@ -320,12 +377,18 @@ utest_GrowTo(void)
 
 #include "easel.h"
 #include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
 
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0},
+  { "-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                  0},
+  { "-s",  eslARG_INT,     "42",  NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",        0 },
+  { "-t",  eslARG_REAL,  "1e-5",  NULL, NULL, NULL, NULL, NULL, "floating point comparison tolerance",  0 },
+  { "-L",  eslARG_INT,     "40",  NULL, NULL, NULL, NULL, NULL, "length of sampled sequences",          0 },
+  { "-M",  eslARG_INT,     "40",  NULL, NULL, NULL, NULL, NULL, "length of sampled test profile",       0 },
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -334,11 +397,33 @@ static char banner[] = "test driver for p7_gmx.c";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go     = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  char           *msg  = "p7_gmx unit test driver failed";
+  ESL_GETOPTS    *go   = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  P7_BG          *bg   = p7_bg_Create(abc);
+  P7_HMM         *hmm  = NULL;
+  P7_PROFILE     *gm   = NULL;
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+  float           tol  = esl_opt_GetReal   (go, "-t");
+
+  p7_FLogsumInit();
+
+  if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal(msg);
+  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal(msg);
+  if (p7_bg_SetLength(bg, L)                        != eslOK) esl_fatal(msg);
+  if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL) != eslOK) esl_fatal(msg);
 
   utest_GrowTo();
+  utest_Compare(r, gm, bg, L, tol);
 
   esl_getopts_Destroy(go);
+  esl_randomness_Destroy(r);
+  esl_alphabet_Destroy(abc);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_profile_Destroy(gm);
   return eslOK;
 }
 #endif /*p7GMX_TESTDRIVE*/

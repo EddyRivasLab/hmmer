@@ -609,11 +609,11 @@ main(int argc, char **argv)
       p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &vfraw);
       p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
       vfscore = (vfraw - nullsc) / eslCONST_LOG2;
-      P        = esl_gumbel_surv(vfscore,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+      P        = esl_gumbel_surv(vfscore,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
 
       p7_GViterbi       (sq->dsq, sq->n, gm, gx, &graw); 
       gscore   = (graw - nullsc) / eslCONST_LOG2;
-      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_MU],  gm->evparam[p7_LAMBDA]);
+      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]);
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{

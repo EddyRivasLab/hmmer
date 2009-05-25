@@ -243,7 +243,7 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
 	  if (esl_key_Lookup(keys, hmm->name, &keyidx) == eslOK || 
 	      ((hmm->flags & p7H_ACC) && esl_key_Lookup(keys, hmm->acc, &keyidx) == eslOK))
 	    {
-	      p7_hmmfile_WriteASCII(ofp, hmm);
+	      p7_hmmfile_WriteASCII(ofp, -1, hmm);
 	      nhmm++;
 	    }
 
@@ -296,7 +296,7 @@ onefetch(ESL_GETOPTS *go, FILE *ofp, char *key, P7_HMMFILE *hfp)
   
   if (status == eslOK) 
     {
-      p7_hmmfile_WriteASCII(ofp, hmm);
+      p7_hmmfile_WriteASCII(ofp, -1, hmm);
       p7_hmm_Destroy(hmm);
     }
   else p7_Fail("HMM %s not found in file %s\n", key, hfp->fname);

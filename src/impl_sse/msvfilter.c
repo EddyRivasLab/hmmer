@@ -531,11 +531,11 @@ main(int argc, char **argv)
       p7_MSVFilter   (sq->dsq, sq->n, om, ox, &msvraw);  
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
       msvscore = (msvraw - nullsc) / eslCONST_LOG2;
-      P        = esl_gumbel_surv(msvscore,  om->evparam[p7_MU],  om->evparam[p7_LAMBDA]);
+      P        = esl_gumbel_surv(msvscore,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
       p7_GMSV(sq->dsq, sq->n, gm, gx, 2.0, &graw);
       gscore   = (graw - nullsc) / eslCONST_LOG2;
-      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_MU],  gm->evparam[p7_LAMBDA]);
+      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{

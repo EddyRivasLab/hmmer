@@ -112,7 +112,9 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ES
 
   for (idx = 0; idx < nseq; idx++)
     {
-      if ((status = esl_strdup(sq[idx]->name, -1, &(msa->sqname[idx]))) != eslOK) goto ERROR;
+      esl_msa_SetSeqName(msa, idx, sq[idx]->name);
+      if (sq[idx]->acc[0]  != '\0') esl_msa_SetSeqAccession  (msa, idx, sq[idx]->acc);
+      if (sq[idx]->desc[0] != '\0') esl_msa_SetSeqDescription(msa, idx, sq[idx]->desc);
       msa->wgt[idx] = 1.0;
       if (msa->sqlen != NULL) msa->sqlen[idx] = sq[idx]->n;
     }
@@ -138,7 +140,7 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ES
  * Incept:    SRE, Mon Mar  2 18:18:22 2009 [Casa de Gatos]
  *
  * Purpose:   Identical to <p7_tracealign_Seqs()> except that the trace 
- *            array <tr> accompanies a digital multiple alignmnet <premsa>, 
+ *            array <tr> accompanies a digital multiple alignment <premsa>, 
  *            rather than an array of digital sequences. 
  *            
  *            This gets used in <p7_Builder()>, where we've
@@ -187,7 +189,9 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
       if (msa->sqdesc) esl_msa_SetSeqDescription(msa, idx, premsa->sqdesc[idx]);
       msa->wgt[idx] = premsa->wgt[idx];
     }
-  msa->flags |= eslMSA_HASWGTS;
+
+  if (premsa->flags & eslMSA_HASWGTS)
+    msa->flags |= eslMSA_HASWGTS;
 
   free(inscount);
   free(matmap);
@@ -250,7 +254,8 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
  * <matmap[0]> is unused; by convention, <matmap[0] = 0>.
  */
 static int
-map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen)
+map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, 
+	    int **ret_matuse, int **ret_matmap, int *ret_alen)
 {
   int *inscount = NULL;	  /* inscount[k=0..M] == max # of inserts in node k */
   int *matuse   = NULL;	  /* matuse[k=1..M] == TRUE|FALSE: does node k map to an alignment column */
@@ -287,17 +292,18 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, in
 	    nins = 0;
 	    break;
 
-	  case p7T_T: /* T: record C-tail max */
+	  case p7T_T: /* T: record C-tail max, for a profile trace */
 	  case p7T_E: /* this handles case of core traces, which do have I_M state  */
 	    inscount[M] = ESL_MAX(nins, inscount[M]); 
 	    break;
 
-	  case p7T_B: 
+	  case p7T_B: /* B: record N-tail max for a profile trace; I0 for a core trace  */
 	    inscount[0] = ESL_MAX(nins, inscount[0]); 
 	    nins = 0;
 	    break;
 
-	  case p7T_S: break;	
+	  case p7T_S: break;	/* don't need to do anything on S, X states */
+	  case p7T_X: break;
 
 	  case p7T_J: p7_Die("J state unsupported");
 	  default:    p7_Die("Unrecognized statetype %d", tr[idx]->st[z]);

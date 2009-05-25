@@ -24,6 +24,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_ssi.h" 		/* this gives us esl_byteswap */
+#include "esl_vectorops.h" 	/* gives us esl_vec_FCopy()   */
 
 #include "hmmer.h"
 
@@ -41,9 +42,9 @@ static uint32_t  v19magic = 0xe8ededb4; /* V1.9 binary: "hmm4" + 0x80808080 */
 static uint32_t  v19swap  = 0xb4edede8; /* V1.9 binary, byteswapped         */ 
 static uint32_t  v20magic = 0xe8ededb5; /* V2.0 binary: "hmm5" + 0x80808080 */
 static uint32_t  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
-static uint32_t  v30swap  = 0xb6edede8; /* V3.0 binary, byteswapped         */
 #endif
-static uint32_t  v30magic = 0xe8ededb6; /* V3.0 binary: "hmm6" + 0x80808080 */
+static uint32_t  v3a_magic = 0xe8ededb6; /* 3/a binary: "hmm6" + 0x80808080 */
+static uint32_t  v3b_magic = 0xe8ededb7; /* 3/b binary: "hmm7" + 0x80808080 */
 
 
 static int read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm);
@@ -240,7 +241,8 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 
   /* 6. Check for binary file format. A pressed db is automatically binary: verify. */
   if (! fread((char *) &(magic.n), sizeof(uint32_t), 1, hfp->f)) { status = eslEFORMAT; goto ERROR; }
-  if (magic.n == v30magic) hfp->parser = read_bin30hmm;
+  if      (magic.n == v3a_magic) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_bin30hmm; }
+  else if (magic.n == v3b_magic) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_bin30hmm; }
   else if (hfp->is_pressed) { status = eslEFORMAT; goto ERROR; }
 
   /* 7. Checks for ASCII file format */
@@ -254,13 +256,13 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
       if ((status = esl_fileparser_NextLinePeeked(hfp->efp, magic.c, 4)) != eslOK)  goto ERROR;
       if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  goto ERROR;
 
-      if (strcmp("HMMER3/a", tok) == 0) hfp->parser = read_asc30hmm;
-      if (strcmp("HMMER2.0", tok) == 0) hfp->parser = read_asc20hmm;
+      if      (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
+      else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
+      else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
     }
 
   /* 8. Still no parser assigned? That's an unrecognized format. */
   if (hfp->parser == NULL) { status = eslEFORMAT; goto ERROR; }
-
 
   *ret_hfp = hfp;
   return eslOK;
@@ -310,12 +312,37 @@ static void multiline(FILE *fp, const char *pfx, char *s);
 static void printprob(FILE *fp, int fieldwidth, float p);
 
 
+/* Function:  p7_hmmfile_WriteASCII()
+ * Synopsis:  Write a HMMER3 ASCII save file.
+ * Incept:    SRE, Tue May 19 09:39:31 2009 [Janelia]
+ *
+ * Purpose:   Write a profile HMM <hmm> in an ASCII save file format to
+ *            an open stream <fp>.
+ *
+ *            Legacy file formats in the 3.x release series are
+ *            supported by specifying the <format> code. Pass <-1> to
+ *            use the default current standard format; pass a valid
+ *            code such as <p7_HMMFILE_3a> to select a specific
+ *            format.
+ *
+ * Args:      fp     - open stream for writing
+ *            format - -1 for default format, or a 3.x format code like <p7_HMMFILE_3a>
+ *            hmm    - HMM to save
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <format> isn't a valid 3.0 format code.
+ */
 int
-p7_hmmfile_WriteASCII(FILE *fp, P7_HMM *hmm)
+p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
 {
   int k, x;
   
-  fprintf(fp, "HMMER3/a [%s | %s]\n", HMMER_VERSION, HMMER_DATE);
+  if (format == -1) format = p7_HMMFILE_3b;
+
+  if      (format == p7_HMMFILE_3b)  fprintf(fp, "HMMER3/b [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE);
+  else if (format == p7_HMMFILE_3a)  fprintf(fp, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
+  else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
   
   fprintf(fp, "NAME  %s\n", hmm->name);
   if (hmm->flags & p7H_ACC)  fprintf(fp, "ACC   %s\n", hmm->acc);
@@ -336,11 +363,22 @@ p7_hmmfile_WriteASCII(FILE *fp, P7_HMM *hmm)
   if (hmm->flags & p7H_TC)  fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]);
   if (hmm->flags & p7H_NC)  fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]);
 
-  if (hmm->flags & p7H_STATS) {
-    fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_LAMBDA]);
-    fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MU]);
-    fprintf(fp, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_TAU]);
-  }
+  if (format == p7_HMMFILE_3a) 
+    {				/* reverse compatibility */
+      if (hmm->flags & p7H_STATS) {
+	fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]);
+	fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]);
+	fprintf(fp, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]);
+      }
+    } 
+  else 
+    {				/* default stats lines */
+      if (hmm->flags & p7H_STATS) {
+	fprintf(fp, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]);
+	fprintf(fp, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA]);
+	fprintf(fp, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA]);
+      }
+    }
 
   fprintf(fp, "HMM     ");
   for (x = 0; x < hmm->abc->K; x++) fprintf(fp, "     %c   ", hmm->abc->sym[x]);
@@ -387,17 +425,29 @@ p7_hmmfile_WriteASCII(FILE *fp, P7_HMM *hmm)
  * 
  * Purpose:   Writes an HMM to a file in HMMER3 binary format.
  *
+ *            Legacy binary file formats in the 3.x release series are
+ *            supported by specifying the <format> code. Pass <-1> to
+ *            use the default current standard format; pass a valid
+ *            code such as <p7_HMMFILE_3a> to select a specific
+ *            binary format.
+ *
  * Returns:   <eslOK> on success.
  *            <eslFAIL> if any writes fail (for instance,
  *            if disk fills up, which did happen during testing!).
+ *
+ * Throws:    <eslEINVAL> if <format> isn't a valid 3.0 format code.
  */
 int
-p7_hmmfile_WriteBinary(FILE *fp, P7_HMM *hmm)
+p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
 {
   int k;
 
+  if (format == -1) format = p7_HMMFILE_3b;
+
   /* ye olde magic number */
-  if (fwrite((char *) &(v30magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL;
+  if      (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  else if (format == p7_HMMFILE_3a) { if (fwrite((char *) &(v3a_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
 
   /* info necessary for sizes of things
    */
@@ -430,7 +480,18 @@ p7_hmmfile_WriteBinary(FILE *fp, P7_HMM *hmm)
   if (fwrite((char *) &(hmm->checksum), sizeof(uint32_t),1,  fp) != 1) return eslFAIL;
 
   /* E-value parameters and Pfam cutoffs */
-  if (fwrite((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, fp) != p7_NEVPARAM) return eslFAIL;
+  if (format == p7_HMMFILE_3a)
+    {	/* reverse compatibility; 3/a format stored LAMBDA, MU, TAU */
+      float oldparam[3];
+      oldparam[0] = hmm->evparam[p7_MLAMBDA];
+      oldparam[1] = hmm->evparam[p7_MMU];
+      oldparam[2] = hmm->evparam[p7_FTAU];
+      if (fwrite((char *) oldparam, sizeof(float), 3, fp) != 3) return eslFAIL;
+    }
+  else
+    {				/* default stats values */
+      if (fwrite((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, fp) != p7_NEVPARAM) return eslFAIL;
+    }
   if (fwrite((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, fp) != p7_NCUTOFFS) return eslFAIL;
   if ((hmm->flags & p7H_COMPO) && (fwrite((char *) hmm->compo, sizeof(float), hmm->abc->K, fp) != hmm->abc->K)) return eslFAIL;
   
@@ -600,6 +661,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   char         *tok1 = NULL;
   char         *tok2 = NULL;
   char         *tok3 = NULL;
+  char         *tok4 = NULL;
   int           alphatype;
   int           k,x;
   off_t         offset = 0;
@@ -618,10 +680,13 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       /* Record where this HMM starts on disk */
       if ((! hfp->do_stdin) && (! hfp->do_gzip) && (offset = ftello(hfp->f)) < 0)   ESL_XEXCEPTION(eslESYS, "ftello() failed");
 
-      /* First line of file: "HMMER3/a". Allocate shell for HMM annotation information (we don't know K,M yet) */
+      /* First line of file: "HMMER3/b". Allocate shell for HMM annotation information (we don't know K,M yet) */
       if ((status = esl_fileparser_NextLine(hfp->efp))                   != eslOK)  goto ERROR;  /* EOF here is normal; could also be a thrown EMEM */
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "unexpected absence of tokens on data line");
-      if (strcmp(tag, "HMMER3/a")                                        != 0)      ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: not a HMMER save file?");
+
+      if      (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
+      else                                                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
     }
 
   if ((hmm = p7_hmm_CreateShell())                                   == NULL)   ESL_XFAIL(eslEMEM,    hfp->errbuf, "allocation failure, HMM shell");
@@ -718,17 +783,34 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       }
 
       else if (strcmp(tag, "STATS") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line");
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line");
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line");  
-	  if (strcasecmp(tok1, "LOCAL") == 0) 
-	    {
-	      if      (strcasecmp(tok2, "VLAMBDA") == 0) { hmm->evparam[p7_LAMBDA] = atof(tok3); statstracker |= 0x1; }
-	      else if (strcasecmp(tok2, "VMU")     == 0) { hmm->evparam[p7_MU]     = atof(tok3); statstracker |= 0x2; }
-	      else if (strcasecmp(tok2, "FTAU")    == 0) { hmm->evparam[p7_TAU]    = atof(tok3); statstracker |= 0x4; }
-	      else                                                                       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
-	    } else                                                                       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
-	}
+	if (hfp->format == p7_HMMFILE_3b)
+	  {
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* MSV | VITERBI | FORWARD */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* mu | tau */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok4, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* lambda */
+	    if (strcasecmp(tok1, "LOCAL") == 0) 
+	      {
+		if      (strcasecmp(tok2, "MSV")     == 0)  { hmm->evparam[p7_MMU]  = atof(tok3); hmm->evparam[p7_MLAMBDA] = atof(tok4); statstracker |= 0x1; }
+		else if (strcasecmp(tok2, "VITERBI") == 0)  { hmm->evparam[p7_VMU]  = atof(tok3); hmm->evparam[p7_VLAMBDA] = atof(tok4); statstracker |= 0x2; }
+		else if (strcasecmp(tok2, "FORWARD") == 0)  { hmm->evparam[p7_FTAU] = atof(tok3); hmm->evparam[p7_FLAMBDA] = atof(tok4); statstracker |= 0x4; }
+		else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
+	      } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
+	  }
+	else if (hfp->format == p7_HMMFILE_3a) /* reverse compatibility with 30a */
+	  {
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* VLAMBDA | VMU | FTAU */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* value */
+	    if (strcasecmp(tok1, "LOCAL") == 0) 
+	      {
+		if      (strcasecmp(tok2, "VLAMBDA") == 0)  { hmm->evparam[p7_MLAMBDA] = hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_FLAMBDA] = atof(tok3);  statstracker |= 0x1; }
+		else if (strcasecmp(tok2, "VMU")     == 0)  {                            hmm->evparam[p7_MMU]     = hmm->evparam[p7_VMU]     = atof(tok3);  statstracker |= 0x2; }
+		else if (strcasecmp(tok2, "FTAU")    == 0)  {                                                       hmm->evparam[p7_FTAU]    = atof(tok3);  statstracker |= 0x4; }
+		else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
+	      } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
+	  }
+      }
 
       else if (strcmp(tag, "GA") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on GA line");
@@ -759,7 +841,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
     } /* end, loop over possible header tags */
   if (status != eslOK) goto ERROR;
 
-  /* If we saw one STATS line, we needed all 3 */
+  /* If we saw one STATS line, we need all 3. (True for both 3/a and 3/b formats) */
   if      (statstracker == 0x7) hmm->flags |= p7H_STATS;
   else if (statstracker != 0x0) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Missing one or more STATS parameter lines");
 
@@ -882,7 +964,10 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((offset = ftello(hfp->f)) < 0)                          ESL_XEXCEPTION(eslESYS, "ftello() failed");
       }
       if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOF;       goto ERROR; }
-      if (magic != v30magic)                                        ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");      
+
+      if      (hfp->format == p7_HMMFILE_3b) { if (magic != v3b_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
+      else if (hfp->format == p7_HMMFILE_3a) { if (magic != v3a_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
+      else                                                              ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no such HMM file format code");      
     }
 
   /* Allocate shell of the new HMM. 
@@ -932,7 +1017,18 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if (! fread((char *) &(hmm->checksum), sizeof(uint32_t),1,hfp->f))                                 ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read checksum");
 
   /* E-value parameters and Pfam cutoffs */
-  if (! fread((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read statistical params");
+  if (hfp->format == p7_HMMFILE_3b) {
+    if (! fread((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read statistical params");
+  } else if (hfp->format == p7_HMMFILE_3a) {
+    /* a backward compatibility mode. 3/a files stored 3 floats: LAMBDA, MU, TAU. Read 3 #'s and carefully copy/rearrange them into new 6 format */
+    if (! fread((char *) hmm->evparam, sizeof(float), 3,           hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read statistical params");
+    hmm->evparam[p7_FLAMBDA] = hmm->evparam[0];
+    hmm->evparam[p7_FTAU]    = hmm->evparam[2];
+    hmm->evparam[p7_VLAMBDA] = hmm->evparam[0];
+    hmm->evparam[p7_VMU]     = hmm->evparam[1];
+    hmm->evparam[p7_MLAMBDA] = hmm->evparam[p7_VLAMBDA];
+    hmm->evparam[p7_MMU]     = hmm->evparam[p7_VMU];
+  }
   if (! fread((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read Pfam score cutoffs");
   if ((hmm->flags & p7H_COMPO) && ! fread((char *) hmm->compo, sizeof(float), hmm->abc->K, hfp->f))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
 
@@ -1442,14 +1538,17 @@ main(int argc, char **argv)
  * 7. Unit tests.
  *****************************************************************/
 #ifdef p7HMMFILE_TESTDRIVE
+
 /* utest_io_30: tests read/write for 3.0 save files.
  *              Caller provides a named tmpfile that we can
  *              open, write to, close, reopen, then read from.
+ *              <format> can be -1 or any specified 3.x save
+ *              file format.
  *              Caller also provides a test HMM, which might
  *              be a nasty random-sampled HMM.
  */
 static int
-utest_io_30(char *tmpfile, P7_HMM *hmm)
+utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
 {
   FILE         *fp     = NULL;
   P7_HMMFILE   *hfp    = NULL;
@@ -1457,19 +1556,19 @@ utest_io_30(char *tmpfile, P7_HMM *hmm)
   ESL_ALPHABET *newabc = NULL;
   char          msg[] = "3.0 file i/o unit test failed";
   
-  /* Try to break the 32-bit unsigned checksum, setting high order bit */
-  hmm->checksum = 0xffeeddcc;
-  hmm->flags |= p7H_CHKSUM;
-
   /* Write the HMM to disk as ASCII */
-  if ((fp = fopen(tmpfile, "w"))      == NULL)  esl_fatal(msg);
-  if (p7_hmmfile_WriteASCII(fp, hmm)  != eslOK) esl_fatal(msg);
+  if ((fp = fopen(tmpfile, "w"))              == NULL)  esl_fatal(msg);
+  if (p7_hmmfile_WriteASCII(fp, format, hmm)  != eslOK) esl_fatal(msg);
   fclose(fp);
   
   /* Read it back */
-  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK) esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK)  esl_fatal(msg);
   
+  /* It should have determined the right file format */
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3b) esl_fatal(msg); }
+  else              { if (hfp->format != format)        esl_fatal(msg); } 
+
   /* It should be identical to what we started with */
   if (p7_hmm_Compare(hmm, new, 0.0001)     != eslOK) esl_fatal(msg);
   p7_hmm_Destroy(new);
@@ -1479,12 +1578,15 @@ utest_io_30(char *tmpfile, P7_HMM *hmm)
   p7_hmmfile_Close(hfp);
 
   /* Do it all again, but with binary format */
-  if ((fp = fopen(tmpfile, "w"))       == NULL)  esl_fatal(msg);
-  if (p7_hmmfile_WriteBinary(fp, hmm)  != eslOK) esl_fatal(msg);
+  if ((fp = fopen(tmpfile, "w"))               == NULL)  esl_fatal(msg);
+  if (p7_hmmfile_WriteBinary(fp, format, hmm)  != eslOK) esl_fatal(msg);
   fclose(fp);
-  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK) esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK) esl_fatal(msg);
-  if (p7_hmm_Compare(hmm, new, 0.0001)     != eslOK) esl_fatal(msg);
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK)  esl_fatal(msg);
+  if (p7_hmm_Compare(hmm, new, 0.0001)     != eslOK)  esl_fatal(msg);
+
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3b) esl_fatal(msg); }
+  else              { if (hfp->format != format)        esl_fatal(msg); } 
 
   p7_hmm_Destroy(new);
   p7_hmmfile_Close(hfp);
@@ -1492,6 +1594,46 @@ utest_io_30(char *tmpfile, P7_HMM *hmm)
   esl_alphabet_Destroy(newabc);
   return eslOK;
 }
+
+
+/* Test current 3/b file formats */
+static int
+utest_io_current(char *tmpfile, P7_HMM *hmm)
+{
+  /* Try to break the 32-bit unsigned checksum, setting high order bit */
+  hmm->checksum = 0xffeeddcc;
+  hmm->flags |= p7H_CHKSUM;
+
+  utest_io_30(tmpfile, -1, hmm);
+  return eslOK;
+}
+
+
+/* Test compatibility mode for 3/a file formats */
+static int
+utest_io_3a(char *tmpfile, P7_HMM *hmm)
+{
+  float oldparam[p7_NEVPARAM];
+
+  /* Try to break the 32-bit unsigned checksum, setting high order bit */
+  hmm->checksum = 0xffeeddcc;
+  hmm->flags |= p7H_CHKSUM;
+
+  /* Make a copy of the old statistics. 
+   * Rearrange stats params to satisfy 3/a's constraints: vmu=mmu, mlambda=vlambda=flambda 
+   */
+  esl_vec_FCopy(hmm->evparam, p7_NEVPARAM, oldparam);
+  hmm->evparam[p7_VMU]     = hmm->evparam[p7_MMU];
+  hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_MLAMBDA];
+  hmm->evparam[p7_FLAMBDA] = hmm->evparam[p7_MLAMBDA];
+
+  utest_io_30(tmpfile, p7_HMMFILE_3a, hmm);
+  
+  /* Restore the original statistics */
+  esl_vec_FCopy(oldparam, p7_NEVPARAM, hmm->evparam);
+  return eslOK;
+}
+
 #endif /*p7HMMFILE_TESTDRIVE*/
 /*-------------------- end, unit tests --------------------------*/
 
@@ -1532,12 +1674,14 @@ main(int argc, char **argv)
 
   /* Protein HMMs */
   p7_hmm_Sample(r, M, aa_abc, &hmm);
-  utest_io_30(tmpfile, hmm);
+  utest_io_current(tmpfile, hmm);
+  utest_io_3a     (tmpfile, hmm);
   p7_hmm_Destroy(hmm);
 
   /* Nucleic acid HMMs */
   p7_hmm_Sample(r, M, nt_abc, &hmm);
-  utest_io_30(tmpfile, hmm);
+  utest_io_current(tmpfile, hmm);
+  utest_io_3a     (tmpfile, hmm);
   p7_hmm_Destroy(hmm);
 
   esl_alphabet_Destroy(aa_abc);

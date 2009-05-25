@@ -32,9 +32,11 @@ OBJS =  decoding.o\
 HDRS =  impl_sse.h
 
 UTESTS = \
+	decoding_utest\
 	fwdback_utest\
 	io_utest\
 	msvfilter_utest\
+	null2_utest\
 	optacc_utest\
 	stotrace_utest\
 	vitfilter_utest
@@ -90,7 +92,6 @@ ${OBJS}:   ${HDRS} ../hmmer.h
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
 ${UTESTS}: ../libhmmer.a ../../easel/libeasel.a 
-	@ echo "Compiling $@"
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -99,10 +100,10 @@ ${UTESTS}: ../libhmmer.a ../../easel/libeasel.a
         else \
            DFILE=$${BASENAME}.c ;\
 	fi;\
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
 ${BENCHMARKS}: ../libhmmer.a ../../easel/libeasel.a
-	@ echo "Compiling $@"
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -111,10 +112,10 @@ ${BENCHMARKS}: ../libhmmer.a ../../easel/libeasel.a
         else \
            DFILE=$${BASENAME}.c ;\
 	fi;\
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
 ${EXAMPLES}: ../libhmmer.a ../../easel/libeasel.a 
-	@ echo "Compiling $@"
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -123,6 +124,7 @@ ${EXAMPLES}: ../libhmmer.a ../../easel/libeasel.a
         else \
            DFILE=$${BASENAME}.c ;\
 	fi;\
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
 distclean:

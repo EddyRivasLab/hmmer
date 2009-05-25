@@ -191,6 +191,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLength()
    */
+  gm->L = 0;			/* force ReconfigLength to reconfig */
   if ((status = p7_ReconfigLength(gm, L)) != eslOK) goto ERROR;
   free(occ);
 

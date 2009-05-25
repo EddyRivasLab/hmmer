@@ -849,7 +849,7 @@ main(int argc, char **argv)
   P7_TRACE       *tr      = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   char            errbuf[eslERRBUFSIZE];
-  float           fsc, bsc, vsc;
+  float           fsc, bsc;
   float           accscore;
   int             status;
 

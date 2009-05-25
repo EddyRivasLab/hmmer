@@ -13,8 +13,11 @@
 #include "esl_getopts.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
+
+static int map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE ***ret_tr, int *ret_ntot);
 
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 
@@ -24,7 +27,7 @@ static ESL_OPTIONS options[] = {
   { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                    1 },
   { "-q",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "quiet: suppress banner and informational output",             1 },
 
-  //  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> using map in HMM",              2 },
+  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> (same ali that HMM came from)", 2 },
   { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",   2 },
   { "--amino",     eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
   { "--dna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both DNA: no autodetection",      2 },
@@ -70,13 +73,18 @@ main(int argc, char **argv)
   ESL_GETOPTS  *go      = NULL;	/* application configuration       */
   char         *hmmfile = NULL;	/* HMM file name                   */
   char         *seqfile = NULL; /* sequence file name              */
+  char         *mapfile = NULL; /* optional mapped MSA file name   */
   int           infmt   = eslSQFILE_UNKNOWN;
   int           outfmt  = eslMSAFILE_STOCKHOLM;
   P7_HMMFILE   *hfp     = NULL;	/* open HMM file                   */
   ESL_SQFILE   *sqfp    = NULL;	/* open sequence file              */
+  char         *outfile = NULL;	  /* output filename               */
+  FILE         *ofp     = stdout; /* output stream                 */
   ESL_SQ      **sq      = NULL;	/* array of sequences              */
   void         *p       = NULL;	/* tmp ptr for reallocation        */
-  int           nseq    = 0;
+  int           nseq    = 0;	/* # of sequences in <seqfile>     */
+  int           mapseq  = 0;	/* # of sequences in mapped MSA    */
+  int           totseq  = 0;	/* # of seqs in all sources        */
   ESL_ALPHABET *abc     = NULL;	/* alphabet (set from the HMM file)*/
   P7_BG        *bg      = NULL;
   P7_HMM       *hmm     = NULL;
@@ -116,6 +124,13 @@ main(int argc, char **argv)
   outfmt = esl_msa_EncodeFormat(esl_opt_GetString(go, "--outformat"));
   if (outfmt == eslMSAFILE_UNKNOWN)    cmdline_failure(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
 
+  /* Open output stream */
+  if ( (outfile = esl_opt_GetString(go, "-o")) != NULL) 
+    {
+      if ((ofp = fopen(outfile, "w")) == NULL)
+	cmdline_failure(argv[0], "failed to open -o output file %s for writing\n", outfile);
+    }
+
 
   /* If caller forced an alphabet on us, create the one the caller wants  
    */
@@ -141,49 +156,57 @@ main(int argc, char **argv)
   p7_hmmfile_Close(hfp);
 
 
-  /* Read digital sequences into an array.
+  /* We're going to build up two arrays: sequences and traces.
+   * If --mapali option is chosen, the first set of sequences/traces is from the provided alignment
+   */
+  if ( (mapfile = esl_opt_GetString(go, "--mapali")) != NULL)
+    {
+      map_alignment(mapfile, hmm, &sq, &tr, &mapseq);
+    }
+  totseq = mapseq;
+
+  /* Read digital sequences into an array (possibly concat'ed onto mapped seqs)
    */
   status = esl_sqfile_OpenDigital(abc, seqfile, infmt, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          seqfile);
   else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            seqfile);
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, seqfile);
 
-  ESL_ALLOC(sq, sizeof(ESL_SQ *));
-  sq[0] = esl_sq_CreateDigital(abc);
+  ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq + 1));
+  sq[totseq] = esl_sq_CreateDigital(abc);
   nseq = 0;
-  while ((status = esl_sqio_Read(sqfp, sq[nseq])) == eslOK)
+  while ((status = esl_sqio_Read(sqfp, sq[totseq+nseq])) == eslOK)
     {
       nseq++;
-      ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (nseq+1));
-      sq[nseq] = esl_sq_CreateDigital(abc);
+      ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq+nseq+1));
+      sq[totseq+nseq] = esl_sq_CreateDigital(abc);
     }
-  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
-  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-					    status, sqfp->filename);
+  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s", status, sqfp->filename);
   esl_sqfile_Close(sqfp);
+  totseq += nseq;
 
 
   /* Remaining initializations, including trace array allocation
    */
-  ESL_ALLOC(tr, sizeof(P7_TRACE *) * nseq);
-  for (idx = 0; idx < nseq; idx++)
+  ESL_RALLOC(tr, p, sizeof(P7_TRACE *) * totseq);
+  for (idx = mapseq; idx < totseq; idx++)
     tr[idx] = p7_trace_CreateWithPP();
 
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create (hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
 
-  p7_ProfileConfig(hmm, bg, gm, sq[0]->n, p7_UNILOCAL);
+  p7_ProfileConfig(hmm, bg, gm, sq[mapseq]->n, p7_UNILOCAL);
   p7_oprofile_Convert(gm, om); 
 
-  oxf = p7_omx_Create(hmm->M, sq[0]->n, sq[0]->n);
-  oxb = p7_omx_Create(hmm->M, sq[0]->n, sq[0]->n);	
+  oxf = p7_omx_Create(hmm->M, sq[mapseq]->n, sq[mapseq]->n);
+  oxb = p7_omx_Create(hmm->M, sq[mapseq]->n, sq[mapseq]->n);	
   
 
-  /* Collect an OA trace for each sequence 
+  /* Collect an OA trace for each sequence that needs to be aligned
    */
-  for (idx = 0; idx < nseq; idx++)
+  for (idx = mapseq; idx < totseq; idx++)
     {
       p7_omx_GrowTo(oxf, hmm->M, sq[idx]->n, sq[idx]->n);
       p7_omx_GrowTo(oxb, hmm->M, sq[idx]->n, sq[idx]->n);
@@ -208,12 +231,12 @@ main(int argc, char **argv)
     p7_trace_Dump(stdout, tr[idx], gm, sq[idx]->dsq);
 #endif
 
-  p7_tracealign_Seqs(sq, tr, nseq, om->M, msaopts, &msa);
+  p7_tracealign_Seqs(sq, tr, totseq, om->M, msaopts, &msa);
 
-  esl_msa_Write(stdout, msa, outfmt);
+  esl_msa_Write(ofp, msa, outfmt);
 
-  for (idx = 0; idx <= nseq; idx++) esl_sq_Destroy(sq[idx]);    /* including sq[nseq] because we overallocated */
-  for (idx = 0; idx <  nseq; idx++) p7_trace_Destroy(tr[idx]); 
+  for (idx = 0; idx <= totseq; idx++) esl_sq_Destroy(sq[idx]);    /* including sq[nseq] because we overallocated */
+  for (idx = 0; idx <  totseq; idx++) p7_trace_Destroy(tr[idx]); 
   free(sq);
   free(tr);
   esl_msa_Destroy(msa);
@@ -223,11 +246,72 @@ main(int argc, char **argv)
   p7_omx_Destroy(oxf);
   p7_omx_Destroy(oxb);
   p7_hmm_Destroy(hmm);
+  if (ofp != stdout) fclose(ofp);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
   return eslOK;
 
  ERROR:
+  return status;
+}
+
+
+static int
+map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE ***ret_tr, int *ret_ntot)
+{
+  ESL_SQ      **sq        = NULL;
+  P7_TRACE    **tr        = NULL;
+  ESL_MSAFILE  *afp       = NULL;
+  ESL_MSA      *msa       = NULL;
+  int          *matassign = NULL;
+  uint32_t      chksum    = 0;
+  int           i,k;
+  int           status;
+
+  status = esl_msafile_OpenDigital(hmm->abc, msafile, eslMSAFILE_UNKNOWN, NULL, &afp);
+  if      (status == eslENOTFOUND) esl_fatal("Alignment file %s isn't readable", msafile);
+  else if (status == eslEFORMAT)   esl_fatal("Couldn't determine format of %s",  msafile);
+  else if (status != eslOK)        esl_fatal("Alignment file open failed (error code %d)", status);
+
+  status = esl_msa_Read(afp, &msa);
+  if      (status == eslEFORMAT) esl_fatal("Alignment file %s: %s\n", afp->fname, afp->errbuf);
+  else if (status == eslEOF)     esl_fatal("Alignment file %s empty?", afp->fname);
+  else if (status == eslEINVAL)  esl_fatal("Alignment file %s doesn't appear to be in %s alphabet", afp->fname, esl_abc_DecodeType(hmm->abc->type));
+  else if (status != eslOK)      esl_fatal("Alignment file %s: read failed, error %d\n", afp->fname, status);
+
+  if (! (hmm->flags & p7H_CHKSUM)  )  esl_fatal("HMM has no checksum. --mapali unreliable without it.");
+  if (! (hmm->flags & p7H_MAP)  )     esl_fatal("HMM has no map. --mapali can't work without it.");
+  esl_msa_Checksum(msa, &chksum);
+  if (hmm->checksum != chksum)        esl_fatal("--mapali MSA %s isn't same as the one HMM came from (checksum mismatch)", msafile);
+
+  ESL_ALLOC(sq, sizeof(ESL_SQ *)   * msa->nseq);
+  ESL_ALLOC(tr, sizeof(P7_TRACE *) * msa->nseq);
+  ESL_ALLOC(matassign, sizeof(int) * (msa->alen + 1));
+
+  esl_vec_ISet(matassign, msa->alen+1, 0);
+  for (k = 1; k <= hmm->M; k++) matassign[hmm->map[k]] = 1;
+
+  p7_trace_FauxFromMSA(msa, matassign, p7_DEFAULT, tr);
+
+  for (i = 0; i < msa->nseq; i++)
+    esl_sq_FetchFromMSA(msa, i, &(sq[i]));
+      
+  *ret_ntot = msa->nseq;
+  *ret_tr   = tr;
+  *ret_sq   = sq;
+
+  esl_msafile_Close(afp);
+  esl_msa_Destroy(msa);
+  free(matassign);
+  return eslOK;
+
+ ERROR:
+  *ret_ntot = 0;
+  *ret_tr   = NULL;
+  *ret_sq   = NULL;
+  if (afp       != NULL) esl_msafile_Close(afp);
+  if (msa       != NULL) esl_msa_Destroy(msa);
+  if (matassign != NULL) free(matassign);
   return status;
 }
 

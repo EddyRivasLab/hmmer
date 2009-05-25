@@ -109,6 +109,7 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 		      p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,M-1),
 				 DMX(i-1,M-1)   + TSC(p7P_DM,M-1)));
       MMX(i,M) = sc + MSC(M);
+      IMX(i,M) = -eslINFINITY;
 
       /* unrolled delete state D_M */
       DMX(i,M) = p7_FLogsum(MMX(i,M-1) + TSC(p7P_MD,M-1),

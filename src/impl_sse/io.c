@@ -42,8 +42,12 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-static uint32_t  v30fmagic = 0xe8b3e6f3; /* V3.0 binary MSV file, SSE:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
-static uint32_t  v30pmagic = 0xe8b3f0f3; /* V3.0 binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
+static uint32_t  v3b_fmagic = 0xb3e2e6f3; /* 3/b binary MSV file, SSE:     "3bfs" = 0x 33 62 66 73  + 0x80808080 */
+static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file, SSE: "3bps" = 0x 33 62 70 73  + 0x80808080 */
+
+static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
+static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
+
 
 
 /*****************************************************************
@@ -80,7 +84,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   int x;
 
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
-  if (fwrite((char *) &(v30fmagic),     sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3b_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &n,               sizeof(int),      1,           ffp) != 1)           return eslFAIL;
@@ -100,7 +104,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) om->compo,        sizeof(float),    p7_MAXABET,  ffp) != p7_MAXABET)  return eslFAIL;
 
   /* <pfp> gets the rest of the oprofile */
-  if (fwrite((char *) &(v30pmagic),     sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3b_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &n,               sizeof(int),      1,           pfp) != 1)           return eslFAIL;
@@ -223,7 +227,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
   
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
-  if (magic != v30fmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic");
+  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
+  if (magic != v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -317,7 +322,8 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (fseeko(hfp->pfp, om->offs[p7_POFFSET], SEEK_SET) != 0)                       ESL_EXCEPTION(eslESYS, "fseeko() failed");
    
   if (! fread( (char *) &magic,          sizeof(uint32_t), 1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read magic");
-  if (magic != v30pmagic)                                                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic");
+  if (magic == v3a_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
+  if (magic != v3b_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
 
   if (! fread( (char *) &M,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -499,8 +505,8 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
   if ((om->offs[p7_FOFFSET] = ftello(ffp))      == -1)    esl_fatal(msg);
   if ((om->offs[p7_POFFSET] = ftello(pfp))      == -1)    esl_fatal(msg);
 
-  if ( p7_hmmfile_WriteASCII(fp, hmm)           != eslOK) esl_fatal(msg);
-  if ( p7_hmmfile_WriteBinary(mfp, hmm)         != eslOK) esl_fatal(msg);
+  if ( p7_hmmfile_WriteASCII(fp,   -1, hmm)     != eslOK) esl_fatal(msg);
+  if ( p7_hmmfile_WriteBinary(mfp, -1, hmm)     != eslOK) esl_fatal(msg);
   if ( p7_oprofile_Write(ffp, pfp, om)          != eslOK) esl_fatal(msg);
 
   if ( esl_newssi_AddFile(nssi, tmpfile, 0, &fh)                           != eslOK) esl_fatal(msg);

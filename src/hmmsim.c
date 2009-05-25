@@ -650,9 +650,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
   /* Determine E-value parameters (in addition to any that are already in the HMM structure)  */
   p7_Lambda(hmm, cfg->bg, &lambda);
-  if      (esl_opt_GetBoolean(go, "--vit"))  p7_Mu (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--msv"))  p7_Mu (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau(cfg->r, om, cfg->bg, efL, efN, lambda, eft, &mu);
+  if      (esl_opt_GetBoolean(go, "--vit"))  p7_ViterbiMu(cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--msv"))  p7_MSVMu    (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau      (cfg->r, om, cfg->bg, efL, efN, lambda, eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* The mu, tau determination has changed the length config of models; reset them.  */

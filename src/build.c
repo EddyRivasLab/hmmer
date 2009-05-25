@@ -232,6 +232,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   int      M;                   /* length of new model in match states */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
+  char errbuf[eslERRBUFSIZE];
 
   /* How many match states in the HMM? */
   for (M = 0, apos = 1; apos <= msa->alen; apos++) 
@@ -239,7 +240,14 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   if (M == 0) { status = eslENORESULT; goto ERROR; }
 
   /* Make fake tracebacks for each seq */
-  if ((status = fake_tracebacks(msa, matassign, &tr)) != eslOK) goto ERROR;
+  ESL_ALLOC(tr, sizeof(P7_TRACE *) * msa->nseq);
+  if ((status = p7_trace_FauxFromMSA(msa, matassign, p7_MSA_COORDS, tr))      != eslOK) goto ERROR;
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      if ((status = p7_trace_Doctor(tr[idx], NULL, NULL))                       != eslOK) goto ERROR;
+      if ((status = p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], errbuf)) != eslOK) 
+	ESL_XEXCEPTION(eslFAIL, "validation failed: %s", errbuf);
+    }
 
   /* Build count model from tracebacks */
   if ((hmm    = p7_hmm_Create(M, msa->abc)) == NULL)  { status = eslEMEM; goto ERROR; }
@@ -323,7 +331,7 @@ fake_tracebacks(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
   
   for (idx = 0; idx < msa->nseq; idx++)
     {
-      if ((tr[idx] =  p7_trace_Create()) == NULL)          goto ERROR; /* +2 = B,E */
+      if ((tr[idx] = p7_trace_Create()) == NULL) goto ERROR; 
 
       if ((status = p7_trace_Append(tr[idx], p7T_B, 0, 0)) != eslOK) goto ERROR; 
       for (k = 0, apos = 1; apos <= msa->alen; apos++)
