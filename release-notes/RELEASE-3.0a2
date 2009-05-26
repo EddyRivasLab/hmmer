@@ -41,6 +41,10 @@ release. We plan to upgrade to beta testing stage in May 2009.
     randomizes the seed and does a 'proper' stochastic simulation
     where run-to-run variability is expected.
 
+-:- The format of per-domain hit lists has changed slightly; it now
+    includes marks ! and ? for whether a domain is or is not
+    considered to be an "included" true homolog according to the
+    combination of per-sequence and per-domain inclusion thresholds.
 
 Other changes include:
 
