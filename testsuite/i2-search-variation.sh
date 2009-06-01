@@ -27,9 +27,9 @@ then
 fi
 
 # Running with different seeds shows stochastically differing results
-$prog --seed 1 $hmmfile $seqfile > $tmppfx.out;   if test $? -ne 0; then echo "FAIL: crash"; exit 1; fi
-cat $tmppfx.out | grep -v "^#" > $tmppfx.out1
 $prog --seed 2 $hmmfile $seqfile > $tmppfx.out;   if test $? -ne 0; then echo "FAIL: crash"; exit 1; fi
+cat $tmppfx.out | grep -v "^#" > $tmppfx.out1
+$prog --seed 3 $hmmfile $seqfile > $tmppfx.out;   if test $? -ne 0; then echo "FAIL: crash"; exit 1; fi
 cat $tmppfx.out | grep -v "^#" > $tmppfx.out2
 
 diff $tmppfx.out1 $tmppfx.out2 > /dev/null

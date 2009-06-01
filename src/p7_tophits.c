@@ -810,8 +810,8 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
       }
   if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
 
-  if (th->N > 0) M = th->hit[0]->dcl[0].ad->M; /* usually */
-  else           M = inc_trarr[0]->M;          /* alignment only build from included seqs */
+  if (inc_n)     M = inc_trarr[0]->M;          
+  else           M = th->hit[0]->dcl[0].ad->M;
   
   /* Allocation */
   ESL_ALLOC(sqarr, sizeof(ESL_SQ *)   * (ndom + inc_n));
