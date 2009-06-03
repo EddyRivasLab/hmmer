@@ -69,11 +69,15 @@
 # By default, stochastic simulations are seeded reproducibly, so there
 # is no run-to-run variation; whereas with different RNG seeds,
 # run-to-run variation does occur. [xref J5/99]
-# The hmmemit seed of 41 is carefully chosen to generate a target sequence
+# The hmmemit seed of 35 is carefully chosen to generate a target sequence
 # that requires stochastic clustering when aligned to the Caudal_act.hmm test
+# To search for new seeds, the command line is something like:
+# ( ../src/hmmemit --seed 35 -p Caudal_act.hmm | ../src/hmmsearch --seed 2 --tblout foo.out Caudal_act.hmm - > /dev/null ; cat foo.out )
+# looking for high scoring sequences that force a stochastic clustering step.
+#
 #           xxxxxxxxxxxxxxxxxxxx
-1 prep      seq                   @hmmemit@  --seed 41 -p %CAUDAL.HMM% > %TESTSEQ%
-1 prep      db_1                  @hmmemit@  --seed 41 -p %CAUDAL.HMM% > %TESTDB%
+1 prep      seq                   @hmmemit@  --seed 35 -p %CAUDAL.HMM% > %TESTSEQ%
+1 prep      db_1                  @hmmemit@  --seed 35 -p %CAUDAL.HMM% > %TESTDB%
 1 prep      db_2                  @esl-reformat@ fasta Caudal_act.sto >> %TESTDB%
 1 prep      db_3                  @esl-shuffle@ -G --amino -N 100 -L 350 >> %TESTDB%
 1 exercise  hmmbuild_variation    @i1-build-variation.sh@     @hmmbuild@   Caudal_act.sto          %OUTFILES%

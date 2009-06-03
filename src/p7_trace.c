@@ -1591,7 +1591,7 @@ main(int argc, char **argv)
 {
   char           *msg       = "p7_trace_utest failed";
   ESL_GETOPTS    *go        = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r         = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc       = esl_alphabet_Create(eslAMINO);
   ESL_MSA        *msa       = NULL;
   int             alen      = 6;

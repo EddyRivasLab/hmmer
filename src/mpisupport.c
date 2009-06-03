@@ -756,7 +756,7 @@ main(int argc, char **argv)
 static void
 utest_HMMSendRecv(int my_rank, int nproc)
 {
-  ESL_RANDOMNESS *r    = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(42);
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_HMM         *hmm  = NULL;
   P7_HMM         *xhmm = NULL;
@@ -799,7 +799,7 @@ utest_HMMSendRecv(int my_rank, int nproc)
 static void
 utest_ProfileSendRecv(int my_rank, int nproc)
 {
-  ESL_RANDOMNESS *r    = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(42);
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_HMM         *hmm  = NULL;
   P7_BG          *bg   = NULL;

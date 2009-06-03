@@ -103,7 +103,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
    * variability. As a special case, if seed==0, we choose an arbitrary one-time 
    * seed: time() sets the seed, and we turn off the reinitialization.
    */
-  pli->r            =  esl_randomness_Create(seed);
+  pli->r            =  esl_randomness_CreateFast(seed);
   pli->do_reseeding = (seed == 0) ? FALSE : TRUE;
   pli->ddef         = p7_domaindef_Create(pli->r);
   pli->ddef->do_reseeding = pli->do_reseeding;

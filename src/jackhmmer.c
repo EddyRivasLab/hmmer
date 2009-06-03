@@ -18,8 +18,10 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-
 #include "hmmer.h"
+
+static void checkpoint_hmm(int nquery, P7_HMM *hmm,  char *basename, int iteration);
+static void checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iteration);
 
 #define CONOPTS "--fast,--hand"                            /* Exclusive options for model construction                    */
 #define EFFOPTS "--eent,--eclust,--eset,--enone"           /* Exclusive options for effective sequence number calculation */
@@ -30,10 +32,12 @@ static ESL_OPTIONS options[] = {
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "show brief help on version and usage",                         1 },
   { "-N",           eslARG_INT,      "5", NULL, NULL,      NULL,    NULL,  NULL,                          "set maximum number of iterations to <n>",                      1 },
 /* Control of output */
-  { "-o",           eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "direct output to file <f>, not stdout",                        10 },
+  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "direct output to file <f>, not stdout",                        10 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save multiple alignment of hits to file <s>",                  10 },
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save parseable table of per-sequence hits to file <s>",        10 },
   { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save parseable table of per-domain hits to file <s>",          10 },
+  { "--chkhmm",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save HMM checkpoints to files <s>-<iteration>.hmm",            10 },
+  { "--chkali",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save alignment checkpoints to files <s>-<iteration>.sto",      10 },
 /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,    NULL,  NULL,                          "gap open probability",                                         2 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,    NULL,  NULL,                          "gap extend probability",                                       2 },
@@ -90,9 +94,11 @@ static ESL_OPTIONS options[] = {
   { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Forward exp tail tau fit",             9 },   
   { "--Eft",         eslARG_REAL, "0.04", NULL,"0<x<1",    NULL,    NULL,    NULL, "tail mass for Forward exponential tail tau fit",               9 },   
 /* Other options */
-  { "--seed",        eslARG_INT,    "42", NULL, "n>=0",    NULL,  NULL,    NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",       11 },
+  { "--seed",        eslARG_INT,    "42", NULL, "n>=0",    NULL,    NULL,    NULL,   "set RNG seed to <n> (if 0: one-time arbitrary seed)",       11 },
   { "--textw",       eslARG_INT,   "120", NULL, "n>=120",  NULL,    NULL,"--notextw","set max width of ASCII text output lines",                  11 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,"--textw",  "unlimit ASCII text output line width",                      11 },
+  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,   NULL,    "assert query <seqfile> is in format <s>: no autodetection", 11 },
+  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,   NULL,    "assert target <seqdb> is in format <s>>: no autodetection", 11 },
 #ifdef HAVE_MPI
   // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
   // { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
@@ -182,6 +188,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "-A"))          fprintf(ofp, "# MSA of hits saved to file:       %s\n",      esl_opt_GetString(go, "-A"));
   if (esl_opt_IsUsed(go, "--tblout"))    fprintf(ofp, "# per-seq hits tabular output:     %s\n",      esl_opt_GetString(go, "--tblout"));
   if (esl_opt_IsUsed(go, "--domtblout")) fprintf(ofp, "# per-dom hits tabular output:     %s\n",      esl_opt_GetString(go, "--domtblout"));
+  if (esl_opt_IsUsed(go, "--chkhmm"))    fprintf(ofp, "# HMM checkpoint files output:     %s-<i>.hmm\n", esl_opt_GetString(go, "--chkhmm"));
+  if (esl_opt_IsUsed(go, "--chkali"))    fprintf(ofp, "# MSA checkpoint files output:     %s-<i>.sto\n", esl_opt_GetString(go, "--chkali"));
   if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",      esl_opt_GetReal  (go, "--popen"));
   if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",      esl_opt_GetReal  (go, "--pextend"));
   if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",      esl_opt_GetString(go, "--mxfile"));
@@ -234,6 +242,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   }
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
   if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
+  if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
+  if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -252,8 +262,8 @@ main(int argc, char **argv)
   FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (--domtblout) */
   char            *qfile    = NULL;               /* file to read query sequence from                */
   char            *dbfile   = NULL;               /* file to read sequence(s) from                   */
-  int              qformat  = eslSQFILE_FASTA;    /* format of qfile                                 */
-  int              dbformat = eslSQFILE_FASTA;    /* format of dbfile                                */
+  int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                 */
+  int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                */
   ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                      */
   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                     */
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                               */
@@ -283,6 +293,16 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
   esl_stopwatch_Start(w);
+
+  /* If caller declared input formats, decode them */
+  if (esl_opt_IsOn(go, "--qformat")) {
+    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    if (qformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
+  }
+  if (esl_opt_IsOn(go, "--tformat")) {
+    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
+  }
 
   /* Initialize builder configuration */
   bld = p7_builder_Create(go, abc);
@@ -320,12 +340,16 @@ main(int argc, char **argv)
   /* Outer loop over sequence queries, if more than one */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
     {
-      P7_PIPELINE     *pli = NULL;	     /* accelerated HMM/seq comparison pipeline  */
-      P7_TOPHITS      *th  = NULL;           /* top-scoring sequence hits                */
-      P7_OPROFILE     *om  = NULL;           /* optimized query profile                  */
-      P7_TRACE        *qtr = NULL;           /* faux trace for query sequence            */
-      ESL_MSA         *msa = NULL;           /* multiple alignment of included hits      */
+      P7_PIPELINE     *pli     = NULL;	     /* accelerated HMM/seq comparison pipeline  */
+      P7_TOPHITS      *th      = NULL;       /* top-scoring sequence hits                */
+      P7_HMM          *hmm     = NULL;	     /* HMM - only needed if checkpointed        */
+      P7_HMM         **ret_hmm = NULL;	     /* HMM - only needed if checkpointed        */
+      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
+      P7_TRACE        *qtr     = NULL;       /* faux trace for query sequence            */
+      ESL_MSA         *msa     = NULL;       /* multiple alignment of included hits      */
       
+      if (esl_opt_IsOn(go, "--chkhmm")) ret_hmm = &hmm;
+
       nquery++;
       if (qsq->n == 0) continue; /* skip zero length queries as if they aren't even present. */
 
@@ -339,7 +363,7 @@ main(int argc, char **argv)
  	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
 	  if (msa == NULL)	/* round 1 */
 	    {
-	      p7_SingleBuilder(bld, qsq, bg, NULL, &qtr, NULL, &om); /* bypass HMM - only need model */
+	      p7_SingleBuilder(bld, qsq, bg, ret_hmm, &qtr, NULL, &om); /* bypass HMM - only need model */
 
 	      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
 	      if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
@@ -351,7 +375,7 @@ main(int argc, char **argv)
 	  else 
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, bg, NULL, NULL, NULL, &om, NULL);
+	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL);
 	      if      (status == eslENORESULT) esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   esl_fatal("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        esl_fatal("Unexpected error constructing new model at iteration %d:",     iteration);
@@ -366,6 +390,13 @@ main(int argc, char **argv)
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
 	    }
+
+	  /* HMM checkpoint output */
+	  if (esl_opt_IsOn(go, "--chkhmm")) {
+	    checkpoint_hmm(nquery, hmm, esl_opt_GetString(go, "--chkhmm"), iteration);
+	    p7_hmm_Destroy(hmm);
+	    hmm = NULL;
+	  }
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  th  = p7_tophits_Create();
@@ -399,7 +430,10 @@ main(int argc, char **argv)
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa);
-	  esl_msa_SetName(msa, "iteration%d", iteration);
+	  esl_msa_SetName(msa, "%s-i%d", qsq->name, iteration);
+
+	  /* Optional checkpointing */
+	  if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);
 
 	  esl_stopwatch_Stop(w);
 	  p7_pli_Statistics(ofp, pli, w);
@@ -443,6 +477,7 @@ main(int argc, char **argv)
       p7_trace_Destroy(qtr);
       esl_sq_Reuse(qsq);
       esl_keyhash_Reuse(kh);
+      esl_sqfile_Position(dbfp, 0);
     }
   if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
 					    qfp->filename, qfp->linenumber, qfp->errbuf);     
@@ -464,4 +499,54 @@ main(int argc, char **argv)
   if (domtblfp != NULL)   fclose(domtblfp);
   esl_getopts_Destroy(go);
   return eslOK;
+}
+
+
+
+/* checkpoint_hmm()
+ * Incept:    SRE, Tue Jun  2 10:20:08 2009 [Janelia]
+ *
+ * Purpose:   Save <hmm> to a file <basename>-<iteration>.hmm.
+ *            If <nquery == 1>, start a new checkpoint file;
+ *            for <nquery > 1>, append to existing one.
+ */
+static void
+checkpoint_hmm(int nquery, P7_HMM *hmm, char *basename, int iteration)
+{
+  FILE *fp         = NULL;
+  char *filename   = NULL;
+
+  esl_sprintf(&filename, "%s-%d.hmm", basename, iteration);
+  if (nquery == 1) { if ((fp = fopen(filename, "w")) == NULL) esl_fatal("Failed to open HMM checkpoint file %s for writing\n", filename); }
+  else             { if ((fp = fopen(filename, "a")) == NULL) esl_fatal("Failed to open HMM checkpoint file %s for append\n",  filename); }
+  p7_hmmfile_WriteASCII(fp, -1, hmm);
+  
+  fclose(fp);
+  free(filename);
+  return;
+}
+
+
+/* checkpoint_msa()
+ * Incept:    SRE, Tue Jun  2 10:35:38 2009 [Janelia]
+ *
+ * Purpose:   Save <msa> to a file <basename>-<iteration>.sto.
+ *            If <nquery == 1>, start a new checkpoint file;
+ *            for <nquery > 1>, append to existing one.
+ */
+static void
+checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iteration)
+{
+  FILE *fp         = NULL;
+  char *filename   = NULL;
+
+  esl_sprintf(&filename, "%s-%d.sto", basename, iteration);
+  if (nquery == 1) { if ((fp = fopen(filename, "w")) == NULL) esl_fatal("Failed to open MSA checkpoint file %s for writing\n", filename); }
+  else             { if ((fp = fopen(filename, "a")) == NULL) esl_fatal("Failed to open MSA checkpoint file %s for append\n",  filename); }
+  esl_msa_Write(fp, msa, eslMSAFILE_PFAM);
+  
+  fclose(fp);
+  free(filename);
+  return;
+
 }

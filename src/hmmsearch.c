@@ -60,6 +60,7 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,    NULL,          "set RNG seed to <n> (if 0: one-time arbitrary seed)",          6 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",     "set max width of ASCII text output lines",                     6 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",       "unlimit ASCII text output line width",                         6 },
+  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,           "assert target <seqfile> is in format <s>>: no autodetection",  6 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -155,6 +156,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   }
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n", esl_opt_GetInteger(go, "--textw"));
   if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
+  if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# targ <seqfile> format asserted:  %s\n", esl_opt_GetString(go, "--tformat"));
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -188,6 +190,11 @@ main(int argc, char **argv)
   w = esl_stopwatch_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
+
+  if (esl_opt_IsOn(go, "--tformat")) {
+    dbfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    if (dbfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
+  }
 
   /* Open the target sequence database */
   status = esl_sqfile_Open(dbfile, dbfmt, p7_SEQDBENV, &dbfp);

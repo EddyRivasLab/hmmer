@@ -519,7 +519,7 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
 static void
 utest_Compare(void)
 {
-  ESL_RANDOMNESS *r    = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(42);
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_HMM         *hmm  = NULL;
   P7_BG          *bg   = NULL;

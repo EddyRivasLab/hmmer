@@ -64,9 +64,11 @@ static ESL_OPTIONS options[] = {
   { "--EfN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,                          "number of sequences for Forward exp tail tau fit",             6 },   
   { "--Eft",        eslARG_REAL,  "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,                          "tail mass for Forward exponential tail tau fit",               6 },   
 /* other options */
-  { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,    NULL,                        "set RNG seed to <n> (if 0: one-time arbitrary seed)",          8 },
-  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",                   "set max width of ASCII text output lines",                     8 },
-  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",                     "unlimit ASCII text output line width",                         8 },
+  { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,    NULL,                        "set RNG seed to <n> (if 0: one-time arbitrary seed)",       8 },
+  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",                   "set max width of ASCII text output lines",                  8 },
+  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",                     "unlimit ASCII text output line width",                      8 },
+  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert query <seqfile> is in format <s>: no autodetection", 8 },
+  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert target <seqdb> is in format <s>>: no autodetection", 8 },
 #ifdef HAVE_MPI
   // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
   // { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
@@ -185,6 +187,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   }
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
   if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
+  if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
+  if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -199,11 +203,11 @@ main(int argc, char **argv)
   FILE            *tblfp    = NULL;		  /* output stream for tabular per-seq (--tblout)     */
   FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (--domtblout)  */
   char            *qfile    = NULL;               /* file to read query sequence from                 */
-  int              qformat  = eslSQFILE_FASTA;    /* format of qfile                                  */
+  int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
   ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                       */
   ESL_SQ          *qsq      = NULL;               /* query sequence                                   */
   char            *dbfile   = NULL;               /* file to read sequence(s) from                    */
-  int              dbformat = eslSQFILE_FASTA;    /* format of dbfile                                 */
+  int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                      */
   ESL_SQ          *dbsq     = NULL;               /* target sequence                                  */
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                                */
@@ -225,6 +229,16 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
   esl_stopwatch_Start(w);
+
+  /* If caller declared input formats, decode them */
+  if (esl_opt_IsOn(go, "--qformat")) {
+    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    if (qformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
+  }
+  if (esl_opt_IsOn(go, "--tformat")) {
+    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
+  }
 
   /* Initialize a default builder configuration,
    * then set only the options we need for single sequence search

@@ -1243,7 +1243,7 @@ utest_occupancy(P7_HMM *hmm)
 int
 main(int argc, char **argv)
 {
-  ESL_RANDOMNESS *r    = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(42);
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_HMM         *hmm  = NULL;
   int             M    = 100;

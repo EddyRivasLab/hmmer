@@ -101,7 +101,7 @@ main(int argc, char **argv)
    * Initializations, including opening the HMM file
    *****************************************************************/
 
-  r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  r = esl_randomness_CreateFast(esl_opt_GetInteger(go, "--seed"));
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);

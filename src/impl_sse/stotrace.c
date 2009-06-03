@@ -331,7 +331,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r       = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -477,7 +477,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go     = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r      = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc    = NULL;
   P7_HMM         *hmm    = NULL;
   P7_PROFILE     *gm     = NULL;
@@ -562,7 +562,7 @@ main(int argc, char **argv)
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(0);
+  ESL_RANDOMNESS *rng     = esl_randomness_CreateFast(0);
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;

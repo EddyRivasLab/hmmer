@@ -627,7 +627,7 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
 	{
 	  nov = ESL_MIN(ddef->sp->sigc[d].j, ddef->sp->sigc[d2].j) - ESL_MAX(ddef->sp->sigc[d].i, ddef->sp->sigc[d2].i) + 1;
 	  if (nov == 0) break;
-	  n   = ESL_MIN(ddef->sp->sigc[d].j - ddef->sp->sigc[d].i + 1,  ddef->sp->sigc[d].j - ddef->sp->sigc[d].i + 1);
+	  n   = ESL_MIN(ddef->sp->sigc[d].j - ddef->sp->sigc[d].i + 1,  ddef->sp->sigc[d2].j - ddef->sp->sigc[d2].i + 1);
 	  if ((float) nov / (float) n >= 0.8) /* overlap */
 	    {
 	      if (ddef->sp->sigc[d].prob > ddef->sp->sigc[d2].prob) ddef->sp->assignment[d2] = 1;
@@ -808,7 +808,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(42);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -941,7 +941,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r       = esl_randomness_Create(42);
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(42);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   char           *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp     = NULL;

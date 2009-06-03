@@ -886,7 +886,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
     {  
       fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
       fprintf(ofp, "#%-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
-	      tnamew-1, "target", qnamew, "query", "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
+	      tnamew-1, " target",             qnamew, "query",                "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
       fprintf(ofp, "#%*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
 	      tnamew-1, "-------------------", qnamew, "--------------------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
      }
@@ -942,9 +942,11 @@ p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
 
   if (show_header)
     {
-      fprintf(ofp, "#%*s %22s %37s %11s %11s %11s\n", tnamew+qnamew-1+13, "", "--- full sequence ---", "------------ this domain ------------", "hmm coord", "ali coord", "env coord");
-      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", tnamew-1, "target", "tlen", qnamew, "query", "qlen", "E-value", "score", "bias", "#", "of", "c-Evalue", "i-Evalue", "score", "bias", "from", "to", "from", "to", "from", "to", "acc", "description of target");
-      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", tnamew-1, "-------------------", "-----", qnamew, "--------------------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
+      fprintf(ofp, "#%*s %22s %40s %11s %11s %11s\n", tnamew+qnamew-1+13, "",                    "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord");
+      fprintf(ofp, "#%-*s %5s %-*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
+	      tnamew-1, " target",            "tlen",   qnamew, "query",                "qlen",  "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",   "from",   "to",    "acc",  "description of target");
+      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", 
+	      tnamew-1, "-------------------", "-----", qnamew, "--------------------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
     }
 
   for (h = 0; h < th->N; h++)
@@ -1022,7 +1024,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_STOPWATCH  *w        = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r        = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   int             N        = esl_opt_GetInteger(go, "-N");
   int             M        = esl_opt_GetInteger(go, "-M");
   P7_TOPHITS    **h        = NULL;
@@ -1109,7 +1111,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r        = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   int             N        = esl_opt_GetInteger(go, "-N");
   P7_TOPHITS     *h1       = NULL;
   P7_TOPHITS     *h2       = NULL;

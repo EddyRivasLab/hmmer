@@ -111,7 +111,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
    * As a special case, seed==0 means choose an arbitrary seed and shut off the
    * reinitialization; this allows run-to-run variation.
    */
-  bld->r            = esl_randomness_Create(seed);
+  bld->r            = esl_randomness_CreateFast(seed);
   bld->do_reseeding = (seed == 0) ? FALSE : TRUE;
 
   switch (abc->type) {

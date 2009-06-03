@@ -1668,7 +1668,7 @@ main(int argc, char **argv)
   
   if ((aa_abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create amino alphabet");
   if ((nt_abc = esl_alphabet_Create(eslDNA))   == NULL)  esl_fatal("failed to create DNA alphabet");
-  if ((r      = esl_randomness_Create(0))      == NULL)  esl_fatal("failed to create randomness");
+  if ((r      = esl_randomness_CreateFast(0))  == NULL)  esl_fatal("failed to create randomness");
   if ((esl_tmpfile_named(tmpfile, &fp))        != eslOK) esl_fatal("failed to create tmp file");
   fclose(fp);
 

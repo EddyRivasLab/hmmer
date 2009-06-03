@@ -76,7 +76,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
    * that weren't already passed to us as a bypass optimization 
    */
   if (r  == NULL) {
-    if ((r = esl_randomness_Create(42)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create RNG");
+    if ((r = esl_randomness_CreateFast(42)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create RNG");
   } else if (cfg_b != NULL && cfg_b->do_reseeding) {
     esl_randomness_Init(r, esl_randomness_GetSeed(r));
   }
@@ -500,7 +500,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_RANDOMNESS *r       = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;

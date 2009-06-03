@@ -34,13 +34,12 @@ DESCRIPTION
 //
 ID		h49
 TITLE           domain definition finds same domain twice
-STATUS          OPEN
-XREF            -
+STATUS          CLOSED
+XREF            J5/26
 REPORTED_BY     Michael Remmert <remmert@lmb.uni-muenchen.de>
 OPENED_DATE     SRE, Tue Apr 21 10:06:15 2009
-CLOSED_DATE     -
+CLOSED_DATE     SRE, Tue Jun  2 09:40:12 2009
 DESCRIPTION     
-
  Domain definition failure; it's finding two copies of exactly the
  same domain.
  
@@ -54,6 +53,10 @@ DESCRIPTION
   3 !   22.2   0.1   6.5e-09   6.5e-09      48     151 ..     191     262 ..     145     266 .. 0.57
   4 !   21.3   0.0   1.3e-08   1.3e-08      48     151 ..     191     262 ..     176     264 .. 0.53
 
+ There was a bug in "domain domination" logic in
+ p7_domaindef.c::region_trace_ensemble(): ESL_MIN(len(d), len(d2) was
+ doing ESL_MIN(len(d), len(d)) and failing to detect many cases of
+ dominated domains.
 //
 ID              h48
 TITLE           Degenerate residues cause target seq to be bias-filtered.

@@ -107,7 +107,7 @@ p7_MeanForwardScore(const P7_HMM *hmm, const P7_BG *bg)
   P7_PROFILE     *gm  = p7_profile_Create(hmm->M, hmm->abc);
   P7_GMX         *gx  = p7_gmx_Create(gm->M, L);
   ESL_SQ         *sq  = esl_sq_CreateDigital(hmm->abc);
-  ESL_RANDOMNESS *r   = esl_randomness_Create(0);
+  ESL_RANDOMNESS *r   = esl_randomness_CreateFast(0);
   float           fsc;
   float           nullsc;
   double          bitscore;
