@@ -631,22 +631,11 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       esl_vec_FCopy(p, cfg->abc->K, cfg->bg->f);
     }
 
+  /* First pass: configure gm, om for local until after we've determined mu, lambda, tau params */
   gm = p7_profile_Create(hmm->M, cfg->abc);
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_LOCAL);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNILOCAL);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_GLOCAL);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNIGLOCAL);
-
-  if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
-
-  gx = p7_gmx_Create(gm->M, L);
-  ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
-  tr = p7_trace_Create();
-
-  /* Create optimized model and DP matrix */
+  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_LOCAL);
   om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);
-  ox = p7_omx_Create(gm->M, 0, L);
 
   /* Determine E-value parameters (in addition to any that are already in the HMM structure)  */
   p7_Lambda(hmm, cfg->bg, &lambda);
@@ -655,10 +644,22 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau      (cfg->r, om, cfg->bg, efL, efN, lambda, eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
-  /* The mu, tau determination has changed the length config of models; reset them.  */
-  p7_oprofile_ReconfigLength(om, L);
-  p7_ReconfigLength(gm,      L);
-  p7_bg_SetLength  (cfg->bg, L);
+  /* Now reconfig the models however we were asked to */
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_LOCAL);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNILOCAL);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_GLOCAL);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNIGLOCAL);
+
+  if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
+
+  p7_oprofile_Convert(gm, om);
+  p7_bg_SetLength    (cfg->bg, L);
+
+  /* Remaining allocations */
+  gx = p7_gmx_Create(gm->M, L);
+  ox = p7_omx_Create(gm->M, 0, L);
+  ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
+  tr = p7_trace_Create();
 
   /* Collect scores from N random sequences of length L  */
   for (i = 0; i < cfg->N; i++)
