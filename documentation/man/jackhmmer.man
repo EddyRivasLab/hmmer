@@ -33,10 +33,6 @@ is done (identical to an
 .B hmmsearch
 with the profile).
 
-By default, output is sent to 
-.I stdout
-in a sort of tabular, sort of human-readable format.
-
 
 .SH OPTIONS
 
@@ -45,23 +41,150 @@ in a sort of tabular, sort of human-readable format.
 Print a brief help message which includes HMMER version number and
 release date, and a summary of all available options.
 
+.TP
+.BI -N " <n>"
+Set the maximum number of iterations to 
+.I <n>.
+The default is 5. If N=1, the result is equivalent to a
+.B phmmer
+search.
+
+
+.SH OPTIONS CONTROLLING OUTPUT
+
+By default, output for each iteration appears on stdout in a somewhat
+human readable, somewhat parseable format. These options allow
+redirecting that output or saving additional kinds of output to files,
+including checkpoint files for each iteration.
+
 .TP 
 .BI -o " <outfile>"
-Direct the output to a file
+Direct the human-readable output to a file
 .I <outfile>.
 
 .TP
 .BI -A " <msafile>"
-Save an annotated multiple alignment of the original query and all
-hits satisfying inclusion thresholds to file
+After the final iteration, save an annotated multiple alignment all
+hits satisfying inclusion thresholds (and the original query) to
 .I <msafile>
 in Stockholm format.
 
+.TP
+.BI --tblout " <tblfile>"
+After the final iteration, save a tabular summary of top sequence hits
+to 
+.I <tblfile>
+in a readily parseable, columnar, whitespace-delimited format.
+
+.TP
+.BI --domtblout " <tblfile>"
+After the final iteration, save a tabular summary of top domain hits
+to 
+.I <tblfile>
+in a readily parseable, columnar, whitespace-delimited format.
+
+.TP
+.BI --chkhmm " <prefix>"
+At the start of each iteration, checkpoint the query HMM, saving it
+to a file named
+.I <prefix>-<n>.hmm
+where
+.I <n>
+is the iteration number (from 1..N).
+
+.TP
+.BI --chkali " <prefix>"
+At the end of each iteration, checkpoint an alignment of all
+domains satisfying inclusion thresholds (e.g. what will become the
+query HMM for the next iteration), 
+saving it
+to a file named
+.I <checkpoint file prefix>-<n>.sto
+in Stockholm format,
+where
+.I <n>
+is the iteration number (from 1..N).
 
 
 .SH OPTIONS CONTROLLING SINGLE SEQUENCE SCORING (FIRST ITERATION)
 
-These options 
+By default, the first iteration uses a search model constructed from a
+single query sequence. This model is constructed using a standard
+20x20 substitution matrix for residue probabilities, and two
+additional parameters for position-independent gap open and gap extend
+probabilities. These options allow the default single-sequence scoring
+parameters to be changed.
+
+.TP
+.BI --popen " <x>"
+Set the gap open probability for a single sequence query model to 
+.I <x>.
+The default is 0.02. 
+.I <x> 
+must be >= 0 and < 0.5.
+
+.TP
+.BI --pextend " <x>"
+Set the gap extend probability for a single sequence query model to 
+.I <x>.
+The default is 0.4. 
+.I <x> 
+must be >= 0 and < 1.0.
+
+.TP
+.BI --mxfile " <mxfile>"
+Obtain residue alignment probabilities from the substitution matrix
+in file
+.I <mxfile>.
+The default score matrix is BLOSUM62 (this matrix is internal to
+HMMER and does not have to be available as a file). 
+The format of a substitution matrix
+.I <mxfile>
+is the standard format accepted by BLAST, FASTA, and other sequence 
+analysis software.
+
+.SH OPTIONS CONTROLLING REPORTING THRESHOLDS AND E-VALUES
+
+At each iteration, sequence hits and domain hits are ranked by
+statistical significance (E-value) and output is generated in two
+sections called "per-sequence" and "per-domain" output. In
+per-sequence output, by default, all sequence hits with an E-value <=
+10 are reported. In per-domain output, the top scoring domain per
+reported sequence is always reported (so there is always at least one
+entry in the per-domain output for each reported sequence), and
+additionally, by default, all other domain hits with a conditional
+E-value <= 10 are reported. These options allow you to change those
+E-value thresholds, to use bit score thresholds instead, or to use
+curated bit score thresholds recorded in individual models (Pfam GA,
+NC, TC cutoffs).
+
+
+
+.TP
+.BI -E " <x>"
+Report sequences with E-values <=
+.I <x>
+in per-sequence output. The default is 10.0.
+
+.TP
+.BI -T " <x>"
+Use a bit score threshold for per-sequence output instead of an
+E-value threshold (any setting of
+.B -E
+is ignored). Report sequences with a bit score of >=
+.I <x>.
+By default this option is unset.
+
+
+
+
+
+
+
+
+
+
+
 
 .SH OPTIONS CONTROLLING PROFILE CONSTRUCTION (LATER ITERATIONS)
 
@@ -80,15 +203,13 @@ of <= 0.001  (see
 option) to be "included".
 
 
-.TP
-.BI -E " <x>"
 
 
 
 
 
-.TP
-.BI -T " <x>"
+
+
 
 .TP
 .BI -Z " <x>"

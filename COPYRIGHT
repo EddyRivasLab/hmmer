@@ -8,10 +8,9 @@ Copyright (C) 2000-2009 Howard Hughes Medical Institute
 Copyright (C) 1992-2004 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
 
-HMMER also includes pieces of copyrighted and licensed code and
-technology from a variety of sources and contributors. These are all
-noted in the appropriate places in individual files. Copyright holders
-and contributors include:
+HMMER also includes contributions from others, including copyrighted
+and licensed code and technology. These are noted in the appropriate
+places in source files. Contributors include:
 
    Jeremy Buhler (Washington University)
    Michael Farrar (Amherst, New Hampshire)
@@ -30,6 +29,8 @@ HMMER includes patent-pending SIMD technology under nonexclusive
 license from Michael Farrar. You are sublicensed to use this
 technology specifically for the use, modification, and redistribution
 of HMMER3, under the terms of the GPLv3 patent clause.
+
+
 
 This source code is distributed under the terms of the GNU General
 Public License. See the file LICENSE for details.

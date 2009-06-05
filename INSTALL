@@ -4,26 +4,25 @@ SRE, Mon Mar 24 09:29:34 2008
 -------------------------------------------------------------
 
 These are quick installation instructions. For complete documentation,
-see the Installation chapter in the HMMER User's Guide (Userguide.pdf).
+including customization and troubleshooting, see the Installation
+chapter in the HMMER User's Guide (Userguide.pdf).
 
 Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
- Uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
- Unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
- Move into new directory:   cd hmmer-@HMMER_VERSION@
- Configure:                 ./configure
- Build:                     make
- Automated tests:           make check
- Automated install:         make install
+ uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
+ unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
+ move into new directory:   cd hmmer-@HMMER_VERSION@
+ configure:                 ./configure
+ build:                     make
+ automated tests:           make check
+ automated install:         make install
 
-For information on more expert customization options available to you
-in the configuration and the Makefiles, see the Installation chapter
-in the HMMER User's Guide (Userguide.pdf).
-
-HMMER is developed primarily on Linux systems. It is tested on a
-variety of UNIX and UNIX-like operating systems, including Apple
-OS/X. It is written in ANSI C99 conforming to POSIX standards. It
-should build cleanly on any POSIX-compliant system with an ANSI C99
-compiler, including UNIX and Macintosh systems.
+HMMER is developed primarily on Linux and Mac OS/X systems. It is
+tested on a variety of UNIX and UNIX-like operating systems. It is
+written in ANSI C99 conforming to POSIX standards. It is meant to be
+portable to any POSIX-compliant system with an ANSI C99 compiler,
+including all UNIX and Macintosh systems. It should also build on
+Windows systems with optional POSIX compatibility software installed,
+such as Cygwin.
 
 -------------------------------------------------------------
 Starting from a Subversion (SVN) working copy:

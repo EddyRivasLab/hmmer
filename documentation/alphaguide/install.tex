@@ -56,10 +56,10 @@ For example, on our systems, we would do:
 
 \subsection{System requirements}
 
-\textbf{Operating system:} HMMER is designed to run on UNIX platforms,
-including Linux and MacOS/X. The code is POSIX-compliant, meaning it
-should run on any POSIX-compliant operating system. This essentially
-includes all operating systems except Microsoft Windows.
+\textbf{Operating system:} HMMER is designed to run on
+POSIX-compatible platforms, including UNIX, Linux and MacOS/X.  The
+POSIX standard essentially includes all operating systems except
+Microsoft Windows.
 \footnote{There are add-on products available for making Windows more
   POSIX-compliant and more compatible with GNU-ish configures and
   builds. One such product is Cygwin, \url{http:www.cygwin.com}, which
@@ -73,7 +73,7 @@ should be widely portable to different Linux systems.
 
 We have tested most extensively on Linux, and to a lesser extent on
 MacOS/X. We aim to be portable to all other POSIX platforms. We
-currently do not plan to develop for Windows.
+currently do not develop or test on Windows.
 
 
 \textbf{Processor:} HMMER3 currently runs effectively only on x86
@@ -84,18 +84,16 @@ all Intel and AMD x86 processors produced since about 1999.
 
 We aim to be portable to all modern processors. The acceleration
 algorithms are designed to be portable despite their use of
-specialized SIMD vector instructions, and to take advantage of
-multiple levels of parallelization available on modern hardware.
-HMMER3 has prototype code for processors that use VMX/Altivec vector
-instructions, including PowerPC processors and the Cell processor. We
-expect that this processor support will appear in the 3.0 public
-release. We expect to add support for the Sun SPARC VIS instruction
-set at some point. We believe that the code will be able to take
-advantage of GP-GPUs and FPGAs in the future.
+specialized SIMD vector instructions. In the future we plan to to
+support processors that use VMX/Altivec vector instructions, including
+PowerPC processors and the Cell processor, and hope to be able to add
+support for the Sun SPARC VIS instruction set as well. We believe that
+the code will be able to take advantage of GP-GPUs and FPGAs in the
+future.
 
 \textbf{Compiler:} The source code is C, conforming to POSIX and ANSI
 C99 standards. It should compile with any ANSI C99 compliant compiler,
-including the GNU C compiler \prog{gcc}.  We have tested the code
+including the GNU C compiler \prog{gcc}. We have tested the code
 using both the \prog{gcc} and \prog{icc} compilers.
 
 If you compile HMMER from source, we strongly recommend using the
@@ -119,7 +117,6 @@ issues. If HMMER3 fails to compile and/or run under a POSIX-compliant
 OS, on an x86 processor, using an ANSI C99-compliant compiler, please
 report the problem.
 \end{sidebar}
-
 
 
 \subsection{Experimental: MPI support}
