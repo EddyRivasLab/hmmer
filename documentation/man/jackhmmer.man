@@ -1,0 +1,119 @@
+.TH "hmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+
+.SH NAME
+.TP 
+jackhmmer - iteratively search a protein sequence against a protein database
+
+.SH SYNOPSIS
+.B jackhmmer
+.I [options]
+.I query_seqfile
+.I target_seqdb
+
+.SH DESCRIPTION
+
+.B jackhmmer
+iteratively searches the query sequence(s) in 
+.I query_seqfile
+against the target sequence(s) in
+.I target_seqdb.
+The first iteration is identical to a 
+.B phmmer
+search.
+For the next iteration,
+a multiple alignment of the query together with all target sequences
+satisfying 
+.I inclusion thresholds
+is assembled, a profile is constructed from this alignment
+(identical to using
+.B hmmbuild
+on the alignment), and profile search of the
+.I target_seqdb 
+is done (identical to an
+.B hmmsearch
+with the profile).
+
+By default, output is sent to 
+.I stdout
+in a sort of tabular, sort of human-readable format.
+
+
+.SH OPTIONS
+
+.TP
+.B -h
+Print a brief help message which includes HMMER version number and
+release date, and a summary of all available options.
+
+.TP 
+.BI -o " <outfile>"
+Direct the output to a file
+.I <outfile>.
+
+.TP
+.BI -A " <msafile>"
+Save an annotated multiple alignment of the original query and all
+hits satisfying inclusion thresholds to file
+.I <msafile>
+in Stockholm format.
+
+
+
+.SH OPTIONS CONTROLLING SINGLE SEQUENCE SCORING (FIRST ITERATION)
+
+These options 
+
+.SH OPTIONS CONTROLLING PROFILE CONSTRUCTION (LATER ITERATIONS)
+
+.SH OPTIONS CONTROLLING INCLUSION THRESHOLDS 
+
+.I Inclusion thresholds
+control which hits are included in the multiple alignment and profile
+constructed for the next search iteration.
+
+By default, a hit must have a conditional E-value of <= 0.001 (see 
+.B --domE 
+option), and the
+target sequence the hit is found in must have a per-sequence E-value
+of <= 0.001  (see
+.B -E 
+option) to be "included".
+
+
+.TP
+.BI -E " <x>"
+
+
+
+
+
+.TP
+.BI -T " <x>"
+
+.TP
+.BI -Z " <x>"
+
+.TP
+.BI --domE " <x>"
+
+.TP
+.BI --domT " <x>"
+
+.TP
+.BI --domZ " <x>"
+
+
+
+
+
+.SH OPTIONS CONTROLLING REPORTING THRESHOLDS 
+
+.SH OPTIONS CONTROLLING ACCELERATION HEURISTICS
+
+.SH OPTIONS CONTROLLING E-VALUE CALIBRATION
+
+.SH OTHER OPTIONS
+
+
+
+

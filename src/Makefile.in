@@ -97,6 +97,7 @@ UTESTS =\
 	generic_msv_utest\
 	generic_stotrace_utest\
 	generic_viterbi_utest\
+	hmmer_utest\
 	logsum_utest\
 	modelconfig_utest\
 	p7_gmx_utest\

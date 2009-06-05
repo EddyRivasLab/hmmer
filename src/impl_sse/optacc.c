@@ -610,7 +610,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
   P7_TRACE    *tro = p7_trace_CreateWithPP();
   float        accscore_o;
   float        fsc, bsc, accscore;
-  float        fsc_g, bsc_g, accscore_g;
+  float        fsc_g, bsc_g, accscore_g, accscore_g2;
   float        pptol = 0.01;
   float        sctol = 0.001;
   float        gtol;
@@ -671,18 +671,44 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       if (p7_trace_Validate(trg, abc, sq->dsq, NULL)      != eslOK) esl_fatal(msg);
       if (p7_trace_Compare(tr, trg, pptol)                != eslOK) esl_fatal(msg);
 
-      if (esl_FCompare(fsc,      bsc,        sctol)       != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc_g,    bsc_g,      gtol)        != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc,      fsc_g,      gtol)        != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore, accscore_g, gtol)        != eslOK) esl_fatal(msg);
-  
-      accscore_o = p7_trace_GetExpectedAccuracy(tro);
-      if (accscore_g < accscore_o)                                  esl_fatal(msg);
-      /* _not_ accscore above; must use accscore_g.  accscore can be
-       * slightly > accscore_o because of acceptable floating point
-       * error, but accscore_g is calculated using exactly the same 
-       * posterior probabilities; and we already checked accscore_g
-       * against accscore with the appropriate tolerance.
+      accscore_o  = p7_trace_GetExpectedAccuracy(tro); /* according to gx2; see p7_trace_SetPP() call above */
+      accscore_g2 = p7_trace_GetExpectedAccuracy(trg);
+
+#if 0
+      printf("%f %f %f %f\n", accscore, accscore_g, accscore_g2, accscore_o);
+#endif
+
+      if (esl_FCompare(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
+      if (esl_FCompare(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
+      if (accscore_g2 < accscore_o)                                 esl_fatal(msg);
+      /* the above deserves explanation:
+       *  - accscore_o is the accuracy of the originally emitted trace, according
+       *      to the generic posterior decoding matrix <gx2>. This is a lower bound
+       *      on the expected # of accurately aligned residues found by a DP 
+       *      optimization.
+       *  - accscore is the accuracy found by the fast (vector) code DP implementation.
+       *  - accscore_g is the accuracy found by the generic DP implementation.
+       *      accscore and accscore_g should be nearly identical,
+       *      within tolerance of roundoff error accumulation and
+       *      the imprecision of Logsum() tables.
+       *  - accscore_g2 is the accuracy of the traceback identified by the generic
+       *      DP implementation. It should be identical (within order-of-evaluation
+       *      roundoff error) to accscore_g.
+       *      
+       * the "accscore_g2 < accscore_o" test is carefully contrived.
+       * accscore_o is a theoretical lower bound but because of fp error, 
+       * accscore and (much more rarely) even accscore_g can exceed accscore_o.
+       * accscore_g2, however, is calculated with identical order of evaluation
+       * as accscore_o if the optimal trace does turn out to be identical to 
+       * the originally emitted trace. It should be extremely unlikely (though
+       * not impossible) for accscore_o to exceed accscore_g2. (The DP algorithm
+       * would have to identify a trace that was different than the original trace,
+       * which the DP algorithm, by order-of-evaluation, assigned higher accuracy,
+       * but order-of-evaluation in traceback dependent code assigned lower accuracy.
+       * [xref J5/29]
        */
 
       esl_sq_Reuse(sq);

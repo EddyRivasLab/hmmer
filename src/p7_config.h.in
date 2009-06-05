@@ -71,7 +71,7 @@
  * symbol alphabet size.
  */
 #define p7_MAXABET    20      /* maximum size of alphabet (4 or 20)              */
-#define p7_MAXCODE    28      /* maximum degenerate alphabet size (17 or 28)     */
+#define p7_MAXCODE    29      /* maximum degenerate alphabet size (18 or 29)     */
 
 /* p7_MAX_SC_TXTLEN has to be large enough to represent a score as a
  * string, including \0 and a sign.

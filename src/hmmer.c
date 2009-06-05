@@ -1,4 +1,10 @@
 /* General routines used throughout HMMER.
+ * 
+ * Contents:
+ *   1. Miscellaneous functions for H3
+ *   2. Unit tests
+ *   3. Test driver
+ *   4. License and copyright 
  *
  * SRE, Fri Jan 12 13:19:38 2007 [Janelia] [Franz Ferdinand, eponymous]
  * SVN $Id$
@@ -11,6 +17,11 @@
 
 #include "easel.h"
 #include "hmmer.h"
+
+
+/*****************************************************************
+ * 1. Miscellaneous functions for H3
+ *****************************************************************/
 
 /* Function:  p7_banner()
  * Synopsis:  print standard HMMER application output header
@@ -108,6 +119,60 @@ p7_AminoFrequencies(float *f)
   f[19]= 0.0304133;		/* Y */
   return eslOK;
 }
+
+/*****************************************************************
+ * 2. Unit tests
+ *****************************************************************/
+#ifdef p7HMMER_TESTDRIVE
+
+static void
+utest_alphabet_config(int alphatype)
+{
+  char         *msg = "HMMER alphabet config unit test failed";
+  ESL_ALPHABET *abc = NULL;
+
+  if ((abc = esl_alphabet_Create(alphatype)) == NULL) esl_fatal(msg);
+  if (abc->K  > p7_MAXABET)                           esl_fatal(msg);
+  if (abc->Kp > p7_MAXCODE)                           esl_fatal(msg);
+  esl_alphabet_Destroy(abc);
+}
+#endif /*p7HMMER_TESTDRIVE*/
+
+  
+
+/*****************************************************************
+ * 3. Test driver
+ *****************************************************************/
+#ifdef p7HMMER_TESTDRIVE
+
+/* gcc -o hmmer_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7HMMER_TESTDRIVE hmmer.c -lhmmer -leasel -lm
+ * ./hmmer_utest
+ */
+#include "esl_getopts.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for hmmer.c";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS *go = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+
+  utest_alphabet_config(eslAMINO);
+  utest_alphabet_config(eslDNA);
+  utest_alphabet_config(eslRNA);
+  utest_alphabet_config(eslCOINS);
+  utest_alphabet_config(eslDICE);
+
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7HMMER_TESTDRIVE*/
 
 
 

@@ -12,12 +12,12 @@
 # Unit test drivers for each .c file
 ################################################################
 
+1 exercise hmmer              @hmmer_utest@
 1 exercise build              @build_utest@
 1 exercise generic_fwdback    @generic_fwdback_utest@
 1 exercise generic_msv        @generic_msv_utest@
 1 exercise generic_stotrace   @generic_stotrace_utest@
 1 exercise generic_viterbi    @generic_viterbi_utest@
-
 1 exercise logsum             @logsum_utest@
 1 exercise modelconfig        @modelconfig_utest@
 1 exercise p7_gmx             @p7_gmx_utest@
@@ -37,7 +37,6 @@
 1 exercise vitfilter          @vitfilter_utest@
 
 # Still to come, unit tests for
-#   dp_optaccuracy.c
 #   emit.c
 #   errors.c
 #   evalues.c
