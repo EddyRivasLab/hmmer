@@ -278,7 +278,7 @@ main(int argc, char **argv)
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   float           null2[p7_MAXCODE];
-  int             i,j;
+  int             i,j,d,pos;
   int             nsamples = 200;
   float           fsc, bsc;
   double          Mcs;
@@ -301,18 +301,25 @@ main(int argc, char **argv)
     {
       P7_TRACE *tr   = p7_trace_Create();
       float    *n2sc = malloc(sizeof(float) * (L+1));
-      int       pos;
 
       esl_stopwatch_Start(w);
       for (i = 0; i < N; i++)
 	{ /* This is approximately what p7_domaindef.c::region_trace_ensemble() is doing: */
 	  for (j = 0; j < nsamples; j++)
 	    {
-	      /* 9Feb09: FIXME: um, what?  tr is empty here, I think? */
-	      p7_Null2_ByTrace(om, tr, 0, tr->N-1, ox2, null2);
-	      for (pos = 1; pos <= L; pos++)
-		n2sc[pos] += null2[dsq[pos]];
+	      p7_StochasticTrace(r, dsq, L, om, ox1, tr);
+	      p7_trace_Index(tr);
+	      pos = 1; 
+	      for (d = 0; d < tr->ndom; d++)
+		{
+		  p7_Null2_ByTrace(om, tr, tr->tfrom[d], tr->tto[d], ox2, null2);
+		  for (; pos <= tr->sqfrom[d]; pos++) n2sc[pos] += 1.0;
+		  for (; pos < tr->sqto[d];    pos++) n2sc[pos] += null2[dsq[pos]];
+		}
+	      for (; pos <= L; pos++)  n2sc[pos] += 1.0;
+	      p7_trace_Reuse(tr);
 	    }
+
 	  for (pos = 1; pos <= L; pos++)
 	    n2sc[pos] = logf(n2sc[pos] / nsamples);
 	}

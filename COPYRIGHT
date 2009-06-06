@@ -30,8 +30,6 @@ license from Michael Farrar. You are sublicensed to use this
 technology specifically for the use, modification, and redistribution
 of HMMER3, under the terms of the GPLv3 patent clause.
 
-
-
 This source code is distributed under the terms of the GNU General
 Public License. See the file LICENSE for details.
 
@@ -48,7 +46,15 @@ GNU General Public License for more details.
 A copy of the GNU General Public License is in the file LICENSE.  You
 may also obtain a copy from <http://www.gnu.org/licenses/>.
 
+"HMMER" is a trademark of the Howard Hughes Medical Institute.
+Although the code is freely available as open source, we intend that
+only the version at http://hmmer.org/ is known as HMMER. You are free
+to create a modified version and distribute it (subject to the terms
+of the GPL), but we ask that you name it something that would not be
+confused with HMMER itself.
+
 ------------------------------------------------------------------
+
 Sean Eddy
 HHMI Janelia Farm Research Campus
 
