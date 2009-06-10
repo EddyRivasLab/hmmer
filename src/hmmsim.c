@@ -661,7 +661,13 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   tr = p7_trace_Create();
 
+  /* an EXPERIMENT: shut off the loop scores */
+  //om->xw[p7O_C][p7O_LOOP] = 0;
+  //om->xw[p7O_N][p7O_LOOP] = 0;
+  //om->xw[p7O_J][p7O_LOOP] = 0;
+
   /* Collect scores from N random sequences of length L  */
+
   for (i = 0; i < cfg->N; i++)
     {
       esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
@@ -671,6 +677,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardParser(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
+	  // EXPERIMENT: restore the old -3 nat penalty
+	  //sc -= 3.0;
 	} 
 
       if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a filter overflows, failover to slow versions */

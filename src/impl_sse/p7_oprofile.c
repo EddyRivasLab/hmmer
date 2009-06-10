@@ -362,16 +362,24 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     }
 
   /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)  */
+  /* VF CC,NN,JJ transitions hardcoded zero; -3.0 nat approximation used instead; this papers
+   * over a length independence problem, where the approximation weirdly outperforms the
+   * exact solution, probably indicating that the model's Pascal distribution is problematic,
+   * and the "approximation" is in fact closer to the One True Model, the mythic H4 supermodel.
+   * [xref J5/36] 
+   */
   om->xw[p7O_E][p7O_LOOP] = wordify(om, gm->xsc[p7P_E][p7P_LOOP]);  
   om->xw[p7O_E][p7O_MOVE] = wordify(om, gm->xsc[p7P_E][p7P_MOVE]);
   om->xw[p7O_N][p7O_MOVE] = wordify(om, gm->xsc[p7P_N][p7P_MOVE]);
-  om->xw[p7O_N][p7O_LOOP] = wordify(om, gm->xsc[p7P_N][p7P_LOOP]);
+  om->xw[p7O_N][p7O_LOOP] = 0;                                        /* was wordify(om, gm->xsc[p7P_N][p7P_LOOP]); */
   om->xw[p7O_C][p7O_MOVE] = wordify(om, gm->xsc[p7P_C][p7P_MOVE]);
-  om->xw[p7O_C][p7O_LOOP] = wordify(om, gm->xsc[p7P_C][p7P_LOOP]);
+  om->xw[p7O_C][p7O_LOOP] = 0;                                        /* was wordify(om, gm->xsc[p7P_C][p7P_LOOP]); */
   om->xw[p7O_J][p7O_MOVE] = wordify(om, gm->xsc[p7P_J][p7P_MOVE]);
-  om->xw[p7O_J][p7O_LOOP] = wordify(om, gm->xsc[p7P_J][p7P_LOOP]);
+  om->xw[p7O_J][p7O_LOOP] = 0;                                        /* was wordify(om, gm->xsc[p7P_J][p7P_LOOP]); */
 
-  om->ncj_roundoff = om->scale_w * gm->xsc[p7P_N][p7P_LOOP] -  om->xw[p7O_N][p7O_LOOP]; /* assumes NN=CC=JJ. See J4/150 */
+  om->ncj_roundoff = 0.0; /* goes along with NN=CC=JJ=0, -3.0 nat approximation */
+                          /* otherwise, would be = om->scale_w * gm->xsc[p7P_N][p7P_LOOP] -  om->xw[p7O_N][p7O_LOOP];   */
+			  /* see J4/150 for discussion of VF error suppression, superceded by the -3.0 nat approximation */
 
   /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
   om->ddbound_w = -32768;	
@@ -586,8 +594,8 @@ p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
 
   /* ViterbiFilter() parameters: lspace signed 16-bit ints */
   om->xw[p7O_N][p7O_MOVE] =  om->xw[p7O_C][p7O_MOVE] = om->xw[p7O_J][p7O_MOVE] = wordify(om, logf(pmove));
-  om->xw[p7O_N][p7O_LOOP] =  om->xw[p7O_C][p7O_LOOP] = om->xw[p7O_J][p7O_LOOP] = wordify(om, logf(ploop));
-  om->ncj_roundoff        = (om->scale_w * logf(ploop)) - om->xw[p7O_N][p7O_LOOP]; /* J4/150; assumes NN=CC=JJ */
+  /* om->xw[p7O_N][p7O_LOOP] =  om->xw[p7O_C][p7O_LOOP] = om->xw[p7O_J][p7O_LOOP] = wordify(om, logf(ploop)); */ /* 3nat approx in force: these stay 0 */
+  /* om->ncj_roundoff        = (om->scale_w * logf(ploop)) - om->xw[p7O_N][p7O_LOOP];                         */ /* and this does too                  */
 
   om->L = L;
   return eslOK;
@@ -1199,9 +1207,16 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
  *
  * Purpose:   Round all the scores in a generic (lspace) <P7_PROFILE> <gm> in
  *            exactly the same way that the scores in the
- *            <P7_OPROFILE> <om> were rounded. Then the two profiles
- *            should give identical internal scores in testing, say,
- *            <p7_ViterbiFilter()> against <p7_GViterbi()>.
+ *            <P7_OPROFILE> <om> were rounded. Then we can test that two profiles
+ *            give identical internal scores in testing, say,
+ *            <p7_ViterbiFilter()> against <p7_GViterbi()>. 
+ *            
+ *            The 3nat approximation is used; NN=CC=JJ=0, and 3 nats are
+ *            subtracted at the end to account for their contribution.
+ *            
+ *            To convert a generic Viterbi score <gsc> calculated with this profile
+ *            to a nat score that should match ViterbiFilter() exactly,
+ *            do <(gsc / om->scale_w) - 3.0>.
  *
  *            <gm> must be the same profile that <om> was constructed from.
  * 
@@ -1229,20 +1244,23 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
   
   /* Enforce the rule that no II can be 0; max of -1 */
   for (x = p7P_II; x < gm->M*p7P_NTRANS; x += p7P_NTRANS) 
-    if (gm->tsc[x] == 0) gm->tsc[x] = -1;
+    if (gm->tsc[x] == 0.0) gm->tsc[x] = -1.0;
 
   /* Emissions */
   for (x = 0; x < gm->abc->Kp; x++)
     for (k = 0; k <= gm->M; k++)
       {
 	gm->rsc[x][k*2]   = (gm->rsc[x][k*2]   <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_w * gm->rsc[x][k*2]);
-	gm->rsc[x][k*2+1] = 0;	/* insert score: VF makes it zero no matter what. */
+	gm->rsc[x][k*2+1] = 0.0;	/* insert score: VF makes it zero no matter what. */
       }	
 
   /* Specials */
   for (k = 0; k < p7P_NXSTATES; k++)
     for (x = 0; x < p7P_NXTRANS; x++)
       gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_w * gm->xsc[k][x]);
+
+  /* 3nat approximation: NN, CC, JJ hardcoded 0 in limited precision */
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0.0;
 
   return eslOK;
 }

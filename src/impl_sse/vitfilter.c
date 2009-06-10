@@ -231,8 +231,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* finally C->T */
   *ret_sc = ((float) (xC + om->xw[p7O_C][p7O_MOVE]) - (float) om->base_w);
-  *ret_sc += L * om->ncj_roundoff; /* see J4/150 for rationale */
+  /* *ret_sc += L * om->ncj_roundoff;  see J4/150 for rationale: superceded by -3.0nat approximation*/
   *ret_sc /= om->scale_w;
+  *ret_sc -= 3.0; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ contrib */
   return eslOK;
 }
 /*---------------- end, p7_ViterbiFilter() ----------------------*/
@@ -248,8 +249,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 /* -c, -x are used for debugging, testing; see msvfilter.c for explanation */
 
 /* 
-   gcc -o benchmark-vitfilter -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
-   icc -o benchmark-vitfilter -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
+   gcc -o vitfilter_benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
+   icc -o vitfilter_benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
 
    ./benchmark-vitfilter <hmmfile>          runs benchmark 
    ./benchmark-vitfilter -N100 -c <hmmfile> compare scores to generic impl
@@ -421,9 +422,9 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
 #if 0
       p7_gmx_Dump(stdout, gx);              // dumps a generic DP matrix
 #endif
-
-      sc2 += om->ncj_roundoff * L; 
+      
       sc2 /= om->scale_w;
+      sc2 -= 3.0;
 
       if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
     }

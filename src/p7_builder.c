@@ -43,8 +43,8 @@
  *            settings for all 24 ``standard build options'':
  *            
  *            Model construction:   --fast --hand --symfrac
- *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --pbswitch --wid
- *            Effective seq #:      --eent --eclust --enone --eset --ere --eX --eid
+ *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --wid
+ *            Effective seq #:      --eent --eclust --enone --eset --ere --esigma --eid
  *            E-val calibration:    --EvL --EvN --EfL --EfN --Eft
  *            run-to-run variation: --seed
  *            
@@ -71,7 +71,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   if (go == NULL) 
     {
       bld->arch_strategy = p7_ARCH_FAST;
-      bld->wgt_strategy  = p7_WGT_GSC;
+      bld->wgt_strategy  = p7_WGT_PB;
       bld->effn_strategy = p7_EFFN_ENTROPY;
       seed               = 0;
     }
@@ -80,9 +80,9 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       if      (esl_opt_GetBoolean(go, "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
       else if (esl_opt_GetBoolean(go, "--hand"))    bld->arch_strategy = p7_ARCH_HAND;
 
-      if      (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
+      if      (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
+      else if (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
       else if (esl_opt_GetBoolean(go, "--wblosum")) bld->wgt_strategy = p7_WGT_BLOSUM;
-      else if (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
       else if (esl_opt_GetBoolean(go, "--wnone"))   bld->wgt_strategy = p7_WGT_NONE;
       else if (esl_opt_GetBoolean(go, "--wgiven"))  bld->wgt_strategy = p7_WGT_GIVEN;
 
@@ -94,11 +94,21 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       seed = esl_opt_GetInteger(go, "--seed");
     }
 
+  /* The default RE target is alphabet dependent. */
+  if (go != NULL &&  esl_opt_IsOn (go, "--ere")) 
+    bld->re_target = esl_opt_GetReal(go, "--ere");
+  else {
+    switch (abc->type) {
+    case eslAMINO:  bld->re_target = p7_ETARGET_AMINO; break;
+    case eslDNA:    bld->re_target = p7_ETARGET_DNA;   break;
+    case eslRNA:    bld->re_target = p7_ETARGET_DNA;   break;
+    default:        bld->re_target = p7_ETARGET_OTHER; break;
+    }
+  }
+
   bld->symfrac   = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")  : 0.5; 
-  bld->pbswitch  = (go != NULL) ?  esl_opt_GetInteger(go, "--pbswitch") : 1000;
   bld->wid       = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")      : 0.62;
-  bld->re_target = (go != NULL &&  esl_opt_IsOn      (go, "--ere")) ? esl_opt_GetReal(go, "--ere") : -1.0;
-  bld->eX        = (go != NULL) ?  esl_opt_GetReal   (go, "--eX")       : 6.0;
+  bld->esigma    = (go != NULL) ?  esl_opt_GetReal   (go, "--esigma")   : 45.0;
   bld->eid       = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")      : 0.62;
   bld->EvL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")      : 100;
   bld->EvN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvN")      : 200;
@@ -262,7 +272,6 @@ static int    parameterize         (P7_BUILDER *bld, P7_HMM *hmm);
 static int    annotate             (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm);
 static int    calibrate            (P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om);
 static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRACE **tr, ESL_MSA **opt_postmsa);
-static double default_target_relent(P7_BUILDER *bld, int M);
 
 /* Function:  p7_Builder()
  * Synopsis:  Build a new HMM from an MSA.
@@ -413,7 +422,6 @@ relative_weights(P7_BUILDER *bld, ESL_MSA *msa)
 
   if      (bld->wgt_strategy == p7_WGT_NONE)                    { esl_vec_DSet(msa->wgt, msa->nseq, 1.); status = eslOK; }
   else if (bld->wgt_strategy == p7_WGT_GIVEN)                   status = eslOK;
-  else if (bld->pbswitch != -1 && msa->nseq >= bld->pbswitch)   status = esl_msaweight_PB(msa); 
   else if (bld->wgt_strategy == p7_WGT_PB)                      status = esl_msaweight_PB(msa); 
   else if (bld->wgt_strategy == p7_WGT_GSC)                     status = esl_msaweight_GSC(msa); 
   else if (bld->wgt_strategy == p7_WGT_BLOSUM)                  status = esl_msaweight_BLOSUM(msa, bld->wid); 
@@ -497,8 +505,8 @@ effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_B
       double etarget; 
       double eff_nseq;
 
-      if (bld->re_target < 0.0) etarget = default_target_relent(bld, hmm->M);
-      else                      etarget = bld->re_target;
+      etarget = (bld->esigma - eslCONST_LOG2R * log( 2.0 / ((double) hmm->M * (double) (hmm->M+1)))) / (double) hmm->M; /* xref J5/36. */
+      etarget = ESL_MAX(bld->re_target, etarget);
 
       status = p7_EntropyWeight(hmm, bg, bld->prior, etarget, &eff_nseq);
       if      (status == eslEMEM) ESL_XFAIL(status, bld->errbuf, "memory allocation failed");
@@ -610,39 +618,6 @@ make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRAC
  ERROR:
   if (postmsa != NULL) esl_msa_Destroy(postmsa);
   return status;
-}
-
-  
-
-
-/* default_target_relent()
- * Incept:    SRE, Fri May 25 15:14:16 2007 [Janelia]
- *
- * Purpose:   Implements a length-dependent calculation of the target rel entropy
- *            per position, attempting to ensure that the information content of
- *            the model is high enough to find local alignments; but don't set it
- *            below a hard alphabet-dependent limit (p7_ETARGET_AMINO, etc.). See J1/67 for
- *            notes.
- *            
- * Args:      bld  - build configuration
- *            M    - model length in nodes
- *
- * Xref:      J1/67.
- */
-static double
-default_target_relent(P7_BUILDER *bld, int M)
-{
-  double etarget;
-
-  etarget = 6.* (bld->eX + log((double) ((M * (M+1)) / 2)) / log(2.))    / (double)(2*M + 4);
-
-  switch (bld->abc->type) {
-  case eslAMINO:  if (etarget < p7_ETARGET_AMINO)  etarget = p7_ETARGET_AMINO; break;
-  case eslDNA:    if (etarget < p7_ETARGET_DNA)    etarget = p7_ETARGET_DNA;   break;
-  case eslRNA:    if (etarget < p7_ETARGET_DNA)    etarget = p7_ETARGET_DNA;   break;
-  default:        if (etarget < p7_ETARGET_OTHER)  etarget = p7_ETARGET_OTHER; break;
-  }
-  return etarget;
 }
 /*---------------- end, internal functions ----------------------*/
 

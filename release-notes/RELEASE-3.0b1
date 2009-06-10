@@ -10,7 +10,7 @@ ________________________________________________________________
 
 3.0b1 includes the following large changes:
 
--:- The format of HMM files has changed slightly: there are now six
+-:- The format of HMM files has changed slightly. There are now six
     saved statistical parameters for calculating E-values, not
     three. This format is called the "3/b" format. Previous HMMER3
     flatfiles (3/a format) are read fine in a reverse compatible
@@ -30,14 +30,14 @@ ________________________________________________________________
     [J4/118,124]
 
 -:- One of the stages of the accelerated "filter pipeline" for the
-    search programs has been reimplemented; the ViterbiFilter step is
+    search programs has been reimplemented. The ViterbiFilter step is
     now implemented in 16-bit precision in 8-fold parallel vectors (it
     was previously in 8-bit precision in 16-fold parallel vectors).
     Testing/analysis of numerical roundoff error determined that the
     8-bit implementation had unacceptable error on a subset of Pfam
     models. You should observe little if any difference in speed as a
-    result of this change; there may be small differences in sequences
-    that do or don't pass through the filter; for sequences that pass
+    result of this change. There may be small differences in sequences
+    that do or don't pass through the filter, but for sequences that pass
     the filter, there should be no changes in their called domain
     structure, alignment, scores, or E-values.
 
@@ -50,6 +50,10 @@ ________________________________________________________________
     is assigned to a match state. This is arguably a bug; but you
     shouldn't be using * characters to begin with.
 
+-:- You can now "checkpoint" the results of jackhmmer iterations.  See
+    --chkhmm and --chkali options.
+    [J5/27]
+
 
 Other changes include:
 
@@ -57,13 +61,52 @@ Other changes include:
     alignment (that an HMM was built from) into a new alignment.
     [J5/17]
 
+-:- Henikoff position-based relative weights are now the default,
+    replacing Gerstein/Chothia/Sonnhammer weights, to optimize model
+    construction speed. 
+    [J5/36]
+
+-:- --qformat and --tformat options are added to phmmer, jackhmmer,
+    hmmsearch, and hmmscan, and --informat option to hmmbuild. These
+    allow you to specify input sequence file formats, bypassing
+    automatic format detection.
+
+-:- The target function for entropy weighting has been tweaked and
+    simplified. It is now controlled by --esigma and --ere options.
+    The --ere option no longer overrides the eweighting target
+    function; the two-parameter function is always applied. (To set a
+    fixed RE target without the tail of larger REs for smaller models,
+    set a large negative argument to --esigma, such as --esigma
+    -9999.) The new target function assigns somewhat higher relative
+    entropy targets to small models, and should slightly alleviate
+    H3's lack of sensitivity with certain small, diverse Pfam models
+    that were tuned to take advantage of glocal alignment's somewhat
+    better signal/noise.
+
+-:- The Viterbi filter now uses an approximation (the "3 nat
+    approximation") to account for NN,CC,JJ transitions, even though
+    it has the numerical accuracy to do the exact calculation, because
+    the approximation outperforms the exact calculation. I don't want
+    to talk about it.
+    [J5/36]
+
+-:- Random number generators have been replaced with much faster
+    versions, resulting in ten-fold speedups in stochastic sampling
+    code.
+
+-:- hmmbuild output has changed; it now includes columns for effective
+    sequence number and relative entropy/position.
+
 -:- Automated test coverage has increased.
 
 
 Numbered bugs fixed:
 
+-:- #h52 hmmscan segfaults on rare comparisons with nenvelopes=0
+         after stochastic clustering.
 -:- #h51 "hmmconvert -2" created invalid HMMER2 model if ali len > 9999
 -:- #h50 "hmmbuild -n" (assign name to HMM) didn't have any effect
+-:- #h49 domain definition was sometimes finding the same domain twice
 -:- #h48 Degenerate residues caused target sequence to be bias-filtered.
 -:- #h47 "jackhmmer -A" segfaulted.
 
@@ -78,7 +121,6 @@ Some of the unnumbered bugs that were fixed:
 = Open bugs
 ================================================================
 
--:- #h49 domain definition finds same domain twice
 -:- #h44 Compiler "option -xk not supported" warnings on MacOS/X
 -:- #h43 "non-aligned pointer being freed" on MacOS/X x86_64 icc
 -:- #h42 Low information content models have poor sensitivity
@@ -101,18 +143,9 @@ Some of the unnumbered bugs that were fixed:
     fix.
     [J5/15]
 
--:- more informative hmmbuild output - including relative
-     entropy/position.
-
--:- Replace RNG with Mersenne
-
 -:- esl_normal is messed up
 
 -:- esl_hmm isn't reliable
-
--:- optimize hmmbuild; binary search could be accelerated
-
--:- jackhmmer checkpointing (.1, .2 saves of HMMs, alignments)
 
 -:- more regression testing to catch subtle changes (c.f. the
     19.9->25.8 score shift detailed on J5/13).

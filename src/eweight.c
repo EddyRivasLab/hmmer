@@ -80,7 +80,7 @@ p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double
   if (fx > 0.)
     {
       if ((R = esl_rootfinder_Create(eweight_target_f, &p)) == NULL) {status = eslEMEM; goto ERROR;}
-      esl_rootfinder_SetAbsoluteTolerance(R, 1e-3); /* getting Neff to ~3 sig digits is fine */
+      esl_rootfinder_SetAbsoluteTolerance(R, 0.01); /* getting Neff to ~2 sig digits is fine */
       if ((status = esl_root_Bisection(R, 0., (double) hmm->nseq, &Neff)) != eslOK) goto ERROR;
 
       esl_rootfinder_Destroy(R);

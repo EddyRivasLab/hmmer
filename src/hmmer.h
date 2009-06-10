@@ -764,13 +764,12 @@ typedef struct p7_builder_s {
 
   /* Relative sequence weights                                                                     */
   enum p7_wgtchoice_e  wgt_strategy;     /* choice of relative sequence weighting algorithm        */
-  int                  pbswitch;	 /* if nseq >= pbswitch, use PB rel wgts; or -1            */
   double               wid;		 /* %id threshold for BLOSUM relative weighting            */
 
   /* Effective sequence number                                                                     */
   enum p7_effnchoice_e effn_strategy;    /* choice of effective seq # determination algorithm      */
   double               re_target;	 /* rel entropy target for effn eweighting, if set; or -1.0*/
-  double               eX;		 /* min total rel ent parameter for effn entropy weights   */
+  double               esigma;		 /* min total rel ent parameter for effn entropy weights   */
   double               eid;		 /* %id threshold for effn clustering                      */
   double               eset;		 /* effective sequence number, if --eset; or -1.0          */
 

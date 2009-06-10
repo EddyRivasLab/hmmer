@@ -1,3 +1,22 @@
+ID              h52
+TITLE           hmmscan seg faults in rare cases trying to output per-sequence hit
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Rob Finn <rdf@sanger.ac.uk>, 8 Jun 09
+OPENED_DATE     8 Jun 09
+CLOSED_DATE     SRE, Tue Jun  9 08:35:02 2009
+DESCRIPTION     
+  Domain definition could result in nregions>0 and nenvelopes==0 and
+  thus no available domain information if the region(s) were handled
+  by stochastic traceback clustering; this resulted in passing the
+  nregions==0 failsafe in p7_pipeline, uninitialized domain info
+  fields in tophits structure, and segfaults and/or valgrind bleating
+  when top sequence hit output routines try to access at least one
+  best domain.
+
+  Fix is to add a check for nenvelopes==0 in addition to (could be in
+  lieu of) nregions==0 failsafe.
+//
 ID              h51
 TITLE           hmmconvert -2 creates an invalid HMMER2 model if ali len > 9999
 STATUS          CLOSED

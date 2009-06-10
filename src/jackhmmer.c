@@ -72,20 +72,19 @@ static ESL_OPTIONS options[] = {
   { "--hand",       eslARG_NONE,"default",NULL, NULL,   CONOPTS,    NULL,    NULL, "manual construction (requires reference annotation)",   6 },
   { "--symfrac",    eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,"--fast",    NULL, "sets sym fraction controlling --fast construction",     6 },
 /* Alternate relative sequence weighting strategies */
-  { "--wgsc",       eslARG_NONE,"default",NULL, NULL,   WGTOPTS,    NULL,    NULL, "Gerstein/Sonnhammer/Chothia tree weights",             7 },
-  { "--wblosum",    eslARG_NONE,   FALSE, NULL, NULL,   WGTOPTS,    NULL,    NULL, "Henikoff simple filter weights",                       7 },
-  { "--wpb",        eslARG_NONE,   FALSE, NULL, NULL,   WGTOPTS,    NULL,    NULL, "Henikoff position-based weights",                      7 },
-  { "--wnone",      eslARG_NONE,   FALSE, NULL, NULL,   WGTOPTS,    NULL,    NULL, "don't do any relative weighting; set all to 1",        7 },
-  { "--wgiven",     eslARG_NONE,   FALSE, NULL, NULL,   WGTOPTS,    NULL,    NULL, "use weights as given in MSA file",                     7 },
-  { "--pbswitch",   eslARG_INT,   "1000", NULL,"n>0",      NULL,    NULL,    NULL, "set failover to efficient PB wgts at > <n> seqs",      7 },
+  { "--wpb",        eslARG_NONE,"default",NULL, NULL,   WGTOPTS,    NULL,    NULL, "Henikoff position-based weights",                      7 },
+  { "--wgsc",       eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "Gerstein/Sonnhammer/Chothia tree weights",             7 },
+  { "--wblosum",    eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "Henikoff simple filter weights",                       7 },
+  { "--wnone",      eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "don't do any relative weighting; set all to 1",        7 },
+  { "--wgiven",     eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "use weights as given in MSA file",                    99 }, /* no-op in jackhmmer */
   { "--wid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--wblosum", NULL, "for --wblosum: set identity cutoff",                   7 },
 /* Alternate effective sequence weighting strategies */
   { "--eent",       eslARG_NONE,"default",NULL, NULL,   EFFOPTS,    NULL,    NULL, "adjust eff seq # to achieve relative entropy target",  8 },
   { "--eclust",     eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,    NULL, "eff seq # is # of single linkage clusters",            8 },
   { "--enone",      eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,    NULL, "no effective seq # weighting: just use nseq",          8 },
   { "--eset",       eslARG_REAL,    NULL, NULL, NULL,   EFFOPTS,    NULL,    NULL, "set eff seq # for all models to <x>",                  8 },
-  { "--ere",        eslARG_REAL,    NULL, NULL,"x>0",      NULL, "--eent",   NULL, "for --eent: set target relative entropy to <x>",       8 },
-  { "--eX",         eslARG_REAL,   "6.0", NULL,"x>0",      NULL, "--eent","--ere", "for --eent: set minimum total rel ent param to <x>",   8 },
+  { "--ere",        eslARG_REAL,    NULL, NULL,"x>0",      NULL, "--eent",   NULL, "for --eent: set minimum rel entropy/position to <x>",  8 },
+  { "--esigma",     eslARG_REAL,  "45.0", NULL,"x>0",      NULL, "--eent",   NULL, "for --eent: set sigma param to <x>",                   8 },
   { "--eid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--eclust",  NULL, "for --eclust: set fractional identity cutoff to <x>",  8 },
 /* Control of E-value calibration */
   { "--EvL",         eslARG_INT,   "100", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Viterbi Gumbel mu fit",                9 },   
@@ -218,18 +217,17 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--fast"))      fprintf(ofp, "# model architecture construction: fast/heuristic\n");
   if (esl_opt_IsUsed(go, "--hand"))      fprintf(ofp, "# model architecture construction: hand-specified by RF annotation\n");
   if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(ofp, "# sym frac for model structure:    %.3f\n", esl_opt_GetReal(go, "--symfrac"));
+  if (esl_opt_IsUsed(go, "--wpb"))       fprintf(ofp, "# relative weighting scheme:       Henikoff PB\n");
   if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(ofp, "# relative weighting scheme:       G/S/C\n");
   if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(ofp, "# relative weighting scheme:       BLOSUM filter\n");
-  if (esl_opt_IsUsed(go, "--wpb"))       fprintf(ofp, "# relative weighting scheme:       Henikoff PB\n");
   if (esl_opt_IsUsed(go, "--wnone"))     fprintf(ofp, "# relative weighting scheme:       none\n");
-  if (esl_opt_IsUsed(go, "--pbswitch"))  fprintf(ofp, "# num seqs to failover to PB wgts: %d\n",   esl_opt_GetInteger(go, "--pbswitch"));
   if (esl_opt_IsUsed(go, "--wid"))       fprintf(ofp, "# frac id cutoff for BLOSUM wgts:  %f\n",   esl_opt_GetReal(go, "--wid"));
   if (esl_opt_IsUsed(go, "--eent"))      fprintf(ofp, "# effective seq number scheme:     entropy weighting\n");
   if (esl_opt_IsUsed(go, "--eclust"))    fprintf(ofp, "# effective seq number scheme:     single linkage clusters\n");
   if (esl_opt_IsUsed(go, "--enone"))     fprintf(ofp, "# effective seq number scheme:     none\n");
   if (esl_opt_IsUsed(go, "--eset"))      fprintf(ofp, "# effective seq number:            set to %f\n", esl_opt_GetReal(go, "--eset"));
-  if (esl_opt_IsUsed(go, "--ere") )      fprintf(ofp, "# rel entropy target for eweights: %f\n",        esl_opt_GetReal(go, "--ere"));
-  if (esl_opt_IsUsed(go, "--eX") )       fprintf(ofp, "# min total relentropy, eweights:  %f\n",        esl_opt_GetReal(go, "--eX"));
+  if (esl_opt_IsUsed(go, "--ere") )      fprintf(ofp, "# minimum rel entropy target:      %f bits\n",   esl_opt_GetReal(go, "--ere"));
+  if (esl_opt_IsUsed(go, "--esigma") )   fprintf(ofp, "# entropy target sigma parameter:  %f bits\n",   esl_opt_GetReal(go, "--esigma"));
   if (esl_opt_IsUsed(go, "--eid") )      fprintf(ofp, "# frac id cutoff for --eclust:     %f\n",        esl_opt_GetReal(go, "--eid"));
   if (esl_opt_IsUsed(go, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvL"));
   if (esl_opt_IsUsed(go, "--EvN") )      fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvN"));
