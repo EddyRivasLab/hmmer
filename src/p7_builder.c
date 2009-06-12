@@ -45,7 +45,7 @@
  *            Model construction:   --fast --hand --symfrac
  *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --wid
  *            Effective seq #:      --eent --eclust --enone --eset --ere --esigma --eid
- *            E-val calibration:    --EvL --EvN --EfL --EfN --Eft
+ *            E-val calibration:    --EmL --EmN --EvL --EvN --EfL --EfN --Eft
  *            run-to-run variation: --seed
  *            
  *            See <hmmbuild.c> or other big users of the build
@@ -110,7 +110,9 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->wid       = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")      : 0.62;
   bld->esigma    = (go != NULL) ?  esl_opt_GetReal   (go, "--esigma")   : 45.0;
   bld->eid       = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")      : 0.62;
-  bld->EvL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")      : 100;
+  bld->EmL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EmL")      : 200;
+  bld->EmN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EmN")      : 200;
+  bld->EvL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")      : 200;
   bld->EvN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvN")      : 200;
   bld->EfL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfL")      : 100;
   bld->EfN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")      : 200;

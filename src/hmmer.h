@@ -778,6 +778,8 @@ typedef struct p7_builder_s {
   int                  do_reseeding;	 /* TRUE to reseed, making results reproducible            */
 
   /* E-value parameter calibration                                                                 */
+  int                  EmL;            	 /* length of sequences generated for MSV fitting          */
+  int                  EmN;	         /* # of sequences generated for MSV fitting               */
   int                  EvL;            	 /* length of sequences generated for Viterbi fitting      */
   int                  EvN;	         /* # of sequences generated for Viterbi fitting           */
   int                  EfL;	         /* length of sequences generated for Forward fitting      */

@@ -70,11 +70,13 @@ static ESL_OPTIONS options[] = {
   { "--tpoints", eslARG_INT,      "1", NULL, NULL,      NULL,  NULL, NULL, "set number of tail probs to try",                   5 },
   { "--tlinear", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use linear not log spacing of tail probs",          5 },
 
-  { "--evL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Viterbi Gumbel mu fit",     6 },   
-  { "--evN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Viterbi Gumbel mu fit",     6 },   
-  { "--efL",    eslARG_INT,     "100", NULL, NULL,      NULL,  NULL, NULL, "length of sequences for Forward exp tail tau fit",  6 },   
-  { "--efN",    eslARG_INT,     "200", NULL, NULL,      NULL,  NULL, NULL, "number of sequences for Forward exp tail tau fit",  6 },   
-  { "--eft",    eslARG_REAL,   "0.03", NULL, NULL,      NULL,  NULL, NULL, "tail mass for Forward exponential tail tau fit",    6 },   
+  { "--EmL",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "length of sequences for MSV Gumbel mu fit",         6 },   
+  { "--EmN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for MSV Gumbel mu fit",         6 },   
+  { "--EvL",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "length of sequences for Viterbi Gumbel mu fit",     6 },   
+  { "--EvN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for Viterbi Gumbel mu fit",     6 },   
+  { "--EfL",    eslARG_INT,     "100", NULL, "n>0",     NULL,  NULL, NULL, "length of sequences for Forward exp tail tau fit",  6 },   
+  { "--EfN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for Forward exp tail tau fit",  6 },   
+  { "--Eft",    eslARG_REAL,   "0.04", NULL, "0<x<1",   NULL,  NULL, NULL, "tail mass for Forward exponential tail tau fit",    6 },   
 
   { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                7 },  
   { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 7 },
@@ -612,11 +614,13 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   float  sc;
   float  nullsc;
   double mu, lambda;
-  int    evL          = esl_opt_GetInteger(go, "--evL");
-  int    evN          = esl_opt_GetInteger(go, "--evN");
-  int    efL          = esl_opt_GetInteger(go, "--efL");
-  int    efN          = esl_opt_GetInteger(go, "--efN");
-  double eft          = esl_opt_GetReal   (go, "--eft");
+  int    EmL          = esl_opt_GetInteger(go, "--EmL");
+  int    EmN          = esl_opt_GetInteger(go, "--EmN");
+  int    EvL          = esl_opt_GetInteger(go, "--EvL");
+  int    EvN          = esl_opt_GetInteger(go, "--EvN");
+  int    EfL          = esl_opt_GetInteger(go, "--EfL");
+  int    EfN          = esl_opt_GetInteger(go, "--EfN");
+  double Eft          = esl_opt_GetReal   (go, "--Eft");
   float  nu           = esl_opt_GetReal   (go, "--nu");
 
   /* Optionally set a custom background, determined by model composition;
@@ -639,9 +643,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
   /* Determine E-value parameters (in addition to any that are already in the HMM structure)  */
   p7_Lambda(hmm, cfg->bg, &lambda);
-  if      (esl_opt_GetBoolean(go, "--vit"))  p7_ViterbiMu(cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--msv"))  p7_MSVMu    (cfg->r, om, cfg->bg, evL, evN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau      (cfg->r, om, cfg->bg, efL, efN, lambda, eft, &mu);
+  if      (esl_opt_GetBoolean(go, "--vit"))  p7_ViterbiMu(cfg->r, om, cfg->bg, EvL, EvN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--msv"))  p7_MSVMu    (cfg->r, om, cfg->bg, EmL, EmN, lambda,      &mu);
+  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau      (cfg->r, om, cfg->bg, EfL, EfN, lambda, Eft, &mu);
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* Now reconfig the models however we were asked to */
@@ -661,13 +665,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   tr = p7_trace_Create();
 
-  /* an EXPERIMENT: shut off the loop scores */
-  //om->xw[p7O_C][p7O_LOOP] = 0;
-  //om->xw[p7O_N][p7O_LOOP] = 0;
-  //om->xw[p7O_J][p7O_LOOP] = 0;
-
   /* Collect scores from N random sequences of length L  */
-
   for (i = 0; i < cfg->N; i++)
     {
       esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
@@ -677,8 +675,6 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardParser(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
-	  // EXPERIMENT: restore the old -3 nat penalty
-	  //sc -= 3.0;
 	} 
 
       if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a filter overflows, failover to slow versions */

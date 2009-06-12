@@ -20,7 +20,7 @@ static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int 
 static int     make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
 static int     make_text_msa   (ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
 static int     annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap);
-static int     annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M);
+static int     annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M, int optflags);
 static int     rejustify_insertions_digital  (                         ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
 static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
 
@@ -104,8 +104,8 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ES
   if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
   else                        { if ((status = make_text_msa   (sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
 
-  if ((status = annotate_rf(msa, M, matuse, matmap))                != eslOK) goto ERROR;
-  if ((status = annotate_posterior_probability(msa, tr, matmap, M)) != eslOK) goto ERROR;
+  if ((status = annotate_rf(msa, M, matuse, matmap))                          != eslOK) goto ERROR;
+  if ((status = annotate_posterior_probability(msa, tr, matmap, M, optflags)) != eslOK) goto ERROR;
 
   if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
   else                        rejustify_insertions_text   (abc, msa, inscount, matmap, matuse, M);
@@ -170,8 +170,8 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
   if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(NULL, premsa, tr, premsa->nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
   else                        { if ((status = make_text_msa   (NULL, premsa, tr, premsa->nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
 
-  if ((status = annotate_rf(msa, M, matuse, matmap))                != eslOK) goto ERROR;
-  if ((status = annotate_posterior_probability(msa, tr, matmap, M)) != eslOK) goto ERROR;
+  if ((status = annotate_rf(msa, M, matuse, matmap))                          != eslOK) goto ERROR;
+  if ((status = annotate_posterior_probability(msa, tr, matmap, M, optflags)) != eslOK) goto ERROR;
 
   if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
   else                        rejustify_insertions_text   (abc, msa, inscount, matmap, matuse, M);
@@ -537,8 +537,11 @@ annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap)
   
 
 
+/* annotate_posterior_probability()
+ * Synopsis:  Add posterior probability annotation lines to new MSA.
+ */
 static int
-annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M)
+annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M, int optflags)
 {
   double *totp   = NULL;	/* total posterior probability in column <apos>: [0..alen-1] */
   int    *matuse = NULL;	/* #seqs with pp annotation in column <apos>: [0..alen-1] */
@@ -583,7 +586,7 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, i
 
 	  case p7T_N:
 	  case p7T_C:
-	    if (tr[idx]->i[z] > 0) {
+	    if (! (optflags & p7_TRIM) && tr[idx]->i[z] > 0) {
 	      msa->pp[idx][apos] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);
 	      apos++;
 	    }

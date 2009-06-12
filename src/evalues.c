@@ -64,6 +64,8 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   P7_OPROFILE    *om     = (esl_byp_IsProvided(byp_om)  ? *byp_om  : NULL); 
   ESL_RANDOMNESS *r      = (esl_byp_IsProvided(byp_rng) ? *byp_rng : NULL);
   char           *errbuf = ((cfg_b != NULL) ? cfg_b->errbuf : NULL);
+  int             EmL    = ((cfg_b != NULL) ? cfg_b->EmL    : 200);
+  int             EmN    = ((cfg_b != NULL) ? cfg_b->EmN    : 200);
   int             EvL    = ((cfg_b != NULL) ? cfg_b->EvL    : 200);
   int             EvN    = ((cfg_b != NULL) ? cfg_b->EvN    : 200);
   int             EfL    = ((cfg_b != NULL) ? cfg_b->EfL    : 100);
@@ -86,7 +88,9 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   }
 
   /* there's an odd case where the <om> is provided and a <gm> isn't going to be returned
-   * where we don't need a <gm> at all, and <gm> stays <NULL> after the next block:
+   * where we don't need a <gm> at all, and <gm> stays <NULL> after the next block.
+   * Note that the <EvL> length in the ProfileConfig doesn't matter; the individual
+   * calibration routines MSVMu(), etc. contain their own length reconfig calls.
    */
   if ((esl_byp_IsInternal(byp_gm) && ! esl_byp_IsProvided(byp_om)) || esl_byp_IsReturned(byp_gm)) {
     if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))          == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
@@ -100,7 +104,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
 
   /* The calibration steps themselves */
   if ((status = p7_Lambda(hmm, bg, &lambda))                          != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine lambda");
-  if ((status = p7_MSVMu    (r, om, bg, EvL, EvN, lambda, &mmu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine msv mu");
+  if ((status = p7_MSVMu    (r, om, bg, EmL, EmN, lambda, &mmu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine msv mu");
   if ((status = p7_ViterbiMu(r, om, bg, EvL, EvN, lambda, &vmu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine vit mu");
   if ((status = p7_Tau      (r, om, bg, EfL, EfN, lambda, Eft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine fwd tau");
 
@@ -480,16 +484,20 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp   help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,  "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL,  "set random number generator seed to <n>",        0 },
-  { "-t",        eslARG_REAL,  "0.04", NULL, NULL,  NULL,  NULL, NULL,  "set fitted tail probability to <x>",             0 },
-  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL,  "set length to <n>",                              0 },
-  { "-N",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL,  "set seq number to <n>",                          0 },
-  { "-Z",        eslARG_INT,      "1", NULL, NULL,  NULL,  NULL, NULL,  "set number of iterations per model to <n>",      0 },
-  { "--lambda",  eslARG_REAL,    NULL, NULL, NULL,  NULL,  NULL, NULL,  "set lambda param to <x>",                        0 },
-  { "--msvonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run MSV mu calibration (for benchmarking)", 0 },
-  { "--vitonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run Vit mu calibration (for benchmarking)", 0 },
-  { "--fwdonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run Fwd tau calibration (for benchmarking)",0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,  "show brief help on version and usage",            0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL,  "set random number generator seed to <n>",         0 },
+  { "--EmL",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for MSV Gumbel mu fit",       0 },   
+  { "--EmN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for MSV Gumbel mu fit",       0 },   
+  { "--EvL",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for Viterbi Gumbel mu fit",   0 },   
+  { "--EvN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for Viterbi Gumbel mu fit",   0 },   
+  { "--EfL",     eslARG_INT,    "100", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for Forward exp tail tau fit",0 },   
+  { "--EfN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for Forward exp tail tau fit",0 },   
+  { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",NULL,  NULL, NULL,  "tail mass for Forward exponential tail tau fit",  0 },   
+  { "-Z",        eslARG_INT,      "1", NULL, NULL,  NULL,  NULL, NULL,  "set number of iterations per model to <n>",       0 },
+  { "--lambda",  eslARG_REAL,    NULL, NULL, NULL,  NULL,  NULL, NULL,  "set lambda param to <x>",                         0 },
+  { "--msvonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run MSV mu calibration (for benchmarking)",  0 },
+  { "--vitonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run Vit mu calibration (for benchmarking)",  0 },
+  { "--fwdonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run Fwd tau calibration (for benchmarking)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -511,10 +519,14 @@ main(int argc, char **argv)
   double          mmu     = 0.0;
   double          vmu     = 0.0;
   double          ftau    = 0.0;
-  double          tailp   = esl_opt_GetReal(go, "-t");
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
   int             Z       = esl_opt_GetInteger(go, "-Z");
+  int             EmL     = esl_opt_GetInteger(go, "--EmL");
+  int             EmN     = esl_opt_GetInteger(go, "--EmN");
+  int             EvL     = esl_opt_GetInteger(go, "--EvL");
+  int             EvN     = esl_opt_GetInteger(go, "--EvN");
+  int             EfL     = esl_opt_GetInteger(go, "--EfL");
+  int             EfN     = esl_opt_GetInteger(go, "--EfN");
+  int             Eft     = esl_opt_GetReal   (go, "--Eft");
   int             iteration;
   int             do_msv, do_vit, do_fwd;
   int             status;
@@ -529,7 +541,7 @@ main(int argc, char **argv)
     {
       if (bg == NULL) bg = p7_bg_Create(abc);
       gm = p7_profile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+      p7_ProfileConfig(hmm, bg, gm, EvL, p7_LOCAL); /* the EvL doesn't matter */
       om = p7_oprofile_Create(hmm->M, abc);
       p7_oprofile_Convert(gm, om);
 
@@ -538,9 +550,9 @@ main(int argc, char **argv)
 
       for (iteration = 0; iteration < Z; iteration++)
 	{
-	  if (do_msv) p7_MSVMu     (r, om, bg, L, N, lambda,         &mmu);
-	  if (do_vit) p7_ViterbiMu (r, om, bg, L, N, lambda,         &vmu);
-	  if (do_fwd) p7_Tau       (r, om, bg, L, N, lambda, tailp,  &ftau);
+	  if (do_msv) p7_MSVMu     (r, om, bg, EmL, EmN, lambda,       &mmu);
+	  if (do_vit) p7_ViterbiMu (r, om, bg, EvL, EvN, lambda,       &vmu);
+	  if (do_fwd) p7_Tau       (r, om, bg, EfL, EfN, lambda, Eft,  &ftau);
       
 	  printf("%s %.4f %.4f %.4f %.4f\n", hmm->name, lambda, mmu, vmu, ftau);
 	}

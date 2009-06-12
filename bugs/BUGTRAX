@@ -1,3 +1,17 @@
+ID              h53
+TITLE           hmmalign --trim memory faults
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Alex Ochoa
+OPENED_DATE     SRE, Thu Jun 11 08:24:56 2009
+CLOSED_DATE     SRE, Thu Jun 11 08:24:58 2009
+DESCRIPTION     
+   hmmalign --trim had a memory corruption problem.
+   annotate_posterior_probability() was writing postprobs
+   for N and C states even when p7_TRIM option was set.
+//
+
+
 ID              h52
 TITLE           hmmscan seg faults in rare cases trying to output per-sequence hit
 STATUS          CLOSED

@@ -87,7 +87,9 @@ static ESL_OPTIONS options[] = {
   { "--esigma",     eslARG_REAL,  "45.0", NULL,"x>0",      NULL, "--eent",   NULL, "for --eent: set sigma param to <x>",                   8 },
   { "--eid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--eclust",  NULL, "for --eclust: set fractional identity cutoff to <x>",  8 },
 /* Control of E-value calibration */
-  { "--EvL",         eslARG_INT,   "100", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Viterbi Gumbel mu fit",                9 },   
+  { "--EmL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for MSV Gumbel mu fit",                    9 },   
+  { "--EmN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for MSV Gumbel mu fit",                    9 },   
+  { "--EvL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Viterbi Gumbel mu fit",                9 },   
   { "--EvN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Viterbi Gumbel mu fit",                9 },   
   { "--EfL",         eslARG_INT,   "100", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Forward exp tail tau fit",             9 },   
   { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Forward exp tail tau fit",             9 },   
@@ -229,6 +231,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--ere") )      fprintf(ofp, "# minimum rel entropy target:      %f bits\n",   esl_opt_GetReal(go, "--ere"));
   if (esl_opt_IsUsed(go, "--esigma") )   fprintf(ofp, "# entropy target sigma parameter:  %f bits\n",   esl_opt_GetReal(go, "--esigma"));
   if (esl_opt_IsUsed(go, "--eid") )      fprintf(ofp, "# frac id cutoff for --eclust:     %f\n",        esl_opt_GetReal(go, "--eid"));
+  if (esl_opt_IsUsed(go, "--EmL") )      fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EmL"));
+  if (esl_opt_IsUsed(go, "--EmN") )      fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EmN"));
   if (esl_opt_IsUsed(go, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvL"));
   if (esl_opt_IsUsed(go, "--EvN") )      fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvN"));
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));

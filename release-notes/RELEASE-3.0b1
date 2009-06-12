@@ -102,7 +102,8 @@ Other changes include:
 
 Numbered bugs fixed:
 
--:- #h52 hmmscan segfaults on rare comparisons with nenvelopes=0
+-:- #h53 hmmalign --trim had memory corruption fault
+-:- #h52 hmmscan segfaulted on rare comparisons with nenvelopes=0
          after stochastic clustering.
 -:- #h51 "hmmconvert -2" created invalid HMMER2 model if ali len > 9999
 -:- #h50 "hmmbuild -n" (assign name to HMM) didn't have any effect
@@ -110,7 +111,8 @@ Numbered bugs fixed:
 -:- #h48 Degenerate residues caused target sequence to be bias-filtered.
 -:- #h47 "jackhmmer -A" segfaulted.
 
-Some of the unnumbered bugs that were fixed:
+Some of the unnumbered bugs (things I found that you didn't) that were
+fixed:
 
 -:- "hmmalign -o" now works as intended; it wasn't working before.
     [J5/17]
