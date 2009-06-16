@@ -42,7 +42,7 @@
  *            used. If <go> is non-<NULL>, it must include appropriate
  *            settings for all 24 ``standard build options'':
  *            
- *            Model construction:   --fast --hand --symfrac
+ *            Model construction:   --fast --hand --symfrac --fragthresh
  *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --wid
  *            Effective seq #:      --eent --eclust --enone --eset --ere --esigma --eid
  *            E-val calibration:    --EmL --EmN --EvL --EvN --EfL --EfN --Eft
@@ -80,6 +80,8 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       if      (esl_opt_GetBoolean(go, "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
       else if (esl_opt_GetBoolean(go, "--hand"))    bld->arch_strategy = p7_ARCH_HAND;
 
+      
+
       if      (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
       else if (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
       else if (esl_opt_GetBoolean(go, "--wblosum")) bld->wgt_strategy = p7_WGT_BLOSUM;
@@ -106,17 +108,18 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
     }
   }
 
-  bld->symfrac   = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")  : 0.5; 
-  bld->wid       = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")      : 0.62;
-  bld->esigma    = (go != NULL) ?  esl_opt_GetReal   (go, "--esigma")   : 45.0;
-  bld->eid       = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")      : 0.62;
-  bld->EmL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EmL")      : 200;
-  bld->EmN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EmN")      : 200;
-  bld->EvL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")      : 200;
-  bld->EvN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EvN")      : 200;
-  bld->EfL       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfL")      : 100;
-  bld->EfN       = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")      : 200;
-  bld->Eft       = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")      : 0.04;
+  bld->symfrac    = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")    : 0.5; 
+  bld->fragthresh = (go != NULL) ?  esl_opt_GetReal   (go, "--fragthresh") : 0.5; 
+  bld->wid        = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")        : 0.62;
+  bld->esigma     = (go != NULL) ?  esl_opt_GetReal   (go, "--esigma")     : 45.0;
+  bld->eid        = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")        : 0.62;
+  bld->EmL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EmL")        : 200;
+  bld->EmN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EmN")        : 200;
+  bld->EvL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")        : 200;
+  bld->EvN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EvN")        : 200;
+  bld->EfL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfL")        : 100;
+  bld->EfN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")        : 200;
+  bld->Eft        = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")        : 0.04;
     
   /* Normally we reinitialize the RNG to original seed before calibrating each model.
    * This eliminates run-to-run variation.
@@ -323,6 +326,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   int         status;
 
   if ((status =  relative_weights   (bld, msa))                       != eslOK) goto ERROR;
+  if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))         != eslOK) goto ERROR;
   if ((status =  build_model        (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
   if ((status =  effective_seqnumber(bld, msa, hmm, bg))              != eslOK) goto ERROR;
   if ((status =  parameterize       (bld, hmm))                       != eslOK) goto ERROR;

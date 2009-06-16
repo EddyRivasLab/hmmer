@@ -54,6 +54,11 @@ ________________________________________________________________
     --chkhmm and --chkali options.
     [J5/27]
 
+-:- hmmbuild is now tolerant of alignments that contain sequence
+    fragments. If a sequence looks like a fragment (see the
+    --fragthresh option), leading and trailing gaps are ignored,
+    rather than being counted as deletions. (This is important for
+    metagenomics datasets and other partial protein sequence data.)
 
 Other changes include:
 

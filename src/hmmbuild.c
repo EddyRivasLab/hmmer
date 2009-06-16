@@ -44,6 +44,7 @@ static ESL_OPTIONS options[] = {
   { "--fast",    eslARG_NONE,"default",NULL, NULL,    CONOPTS,    NULL,     NULL, "assign cols w/ >= symfrac residues as consensus",       3 },
   { "--hand",    eslARG_NONE,   FALSE, NULL, NULL,    CONOPTS,    NULL,     NULL, "manual construction (requires reference annotation)",   3 },
   { "--symfrac", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,   "--fast",   NULL, "sets sym fraction controlling --fast construction",     3 },
+  { "--fragthresh",eslARG_REAL, "0.5", NULL, "0<=x<=1", NULL,     NULL,     NULL, "if L < x<L>, tag sequence as a fragment",               3 },
 /* Alternate relative sequence weighting strategies */
   /* --wme not implemented in HMMER3 yet */
   { "--wpb",     eslARG_NONE,"default",NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff position-based weights",                      4 },
@@ -677,6 +678,7 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   if (esl_opt_IsUsed(go, "--fast"))      fprintf(cfg->ofp, "# model architecture construction:  fast/heuristic\n");
   if (esl_opt_IsUsed(go, "--hand"))      fprintf(cfg->ofp, "# model architecture construction:  hand-specified by RF annotation\n");
   if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(cfg->ofp, "# sym fraction for model structure: %.3f\n", esl_opt_GetReal(go, "--symfrac"));
+  if (esl_opt_IsUsed(go, "--fragthresh"))fprintf(cfg->ofp, "# seq called fragment if < xL    :  %.3f\n", esl_opt_GetReal(go, "--fragthresh"));
   if (esl_opt_IsUsed(go, "--wpb"))       fprintf(cfg->ofp, "# relative weighting scheme:        Henikoff PB\n");
   if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(cfg->ofp, "# relative weighting scheme:        G/S/C\n");
   if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(cfg->ofp, "# relative weighting scheme:        BLOSUM filter\n");

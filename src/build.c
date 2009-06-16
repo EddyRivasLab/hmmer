@@ -239,7 +239,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
 
   /* Make fake tracebacks for each seq */
   ESL_ALLOC(tr, sizeof(P7_TRACE *) * msa->nseq);
-  if ((status = p7_trace_FauxFromMSA(msa, matassign, p7_MSA_COORDS, tr))      != eslOK) goto ERROR;
+  if ((status = p7_trace_FauxFromMSA(msa, matassign, p7_MSA_COORDS, tr))        != eslOK) goto ERROR;
   for (idx = 0; idx < msa->nseq; idx++)
     {
       if ((status = p7_trace_Doctor(tr[idx], NULL, NULL))                       != eslOK) goto ERROR;

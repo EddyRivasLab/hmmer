@@ -5,55 +5,58 @@
 \subsection{HMMER profile HMM files}
 \label{section:savefiles}
 
-The file \prog{tutorial/rrm.hmm} gives an example of a HMMER3 ASCII
+The file \prog{tutorial/fn3.hmm} gives an example of a HMMER3 ASCII
 save file. An abridged version is shown here, where (\ldots) mark
 deletions made for clarity and space:
 
 \begin{tinysreoutput}
-HMMER3/a [3.0a1 | January 2009]
-NAME  RRM_1
-ACC   PF00076.13
-DESC  RNA recognition motif. (a.k.a. RRM, RBD, or RNP domain)
-LENG  72
+HMMER3/b [3.0b1 | June 2009]
+NAME  fn3
+ACC   PF00041.12
+DESC  Fibronectin type III domain
+LENG  86
 ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Fri Jan  9 13:51:17 2009
-NSEQ  79
-EFFN  7.722980
-CKSUM 512533816
-STATS LOCAL     VLAMBDA 0.721565
-STATS LOCAL         VMU -8.724843
-STATS LOCAL        FTAU -4.034479
-HMM          A        C        D        E        F        G        H        I     (...)    Y
+DATE  Mon Jun 15 09:39:41 2009
+NSEQ  106
+EFFN  11.415833
+CKSUM 72638555
+GA    8.00 7.20
+TC    8.00 7.20
+NC    7.90 7.90
+STATS LOCAL MSV       -9.4043  0.71847
+STATS LOCAL VITERBI   -9.7737  0.71847
+STATS LOCAL FORWARD   -3.8341  0.71847
+HMM          A        C        D        E        F        G        H        I     (...)    Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
-  COMPO   2.59889  4.44747  2.92534  2.57970  2.91651  2.81030  3.90624  2.78237  (...) 3.49702
+  COMPO   2.70271  4.89246  3.02314  2.64362  3.59817  2.82566  3.74147  3.08574  (...) 3.22607
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
-          0.00484  5.72961  6.45195  0.61958  0.77255  0.00000        *
-      1   3.33305  4.36957  6.20460  5.67416  4.57399  5.57414  6.09195  1.31189  (...) 5.28530      1 - E
+          0.00338  6.08833  6.81068  0.61958  0.77255  0.00000        *
+      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801  (...) 3.93889      1 - -
+          2.68629  4.42236  2.77530  2.73088  3.46365  2.40512  3.72505  3.29365  (...) 3.61514
+          0.09796  2.38361  6.81068  0.10064  2.34607  0.48576  0.95510
+      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731  (...) 4.25623      3 - -
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
-          0.00484  5.72961  6.45195  0.61958  0.77255  0.48576  0.95510
-      2   3.33570  4.71399  5.27635  4.66262  1.20335  3.96868  4.83458  2.71778  (...) 1.66170      2 - E
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
-          0.00484  5.72961  6.45195  0.61958  0.77255  0.48576  0.95510
+          0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
 (...)
-     71   3.08639  5.73256  2.87655  2.29760  4.27257  3.66073  3.11090  3.98349  (...) 3.32445     79 - E
+     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898  (...) 3.43366    120 - B
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
-          0.00484  5.72961  6.45195  0.61958  0.77255  0.48576  0.95510
-     72   2.98106  3.47896  4.24834  4.59436  3.48125  4.49311  4.82169  1.78353  (...) 4.16621     80 - E
+          0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
+     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840  (...) 4.99111    121 - E
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
-          0.00326  5.72803        *  0.61958  0.77255  0.00000        *
+          0.00227  6.08723        *  0.61958  0.77255  0.00000        *
 //
 \end{tinysreoutput}
 
-
 An HMM file consists of one or more HMMs.  Each HMM starts with the
-identifier \prog{HMMER3/a} and ends with \prog{//} on a line by
+identifier \prog{HMMER3/b} and ends with \prog{//} on a line by
 itself.  The identifier allows backward compatibility as the HMMER
 software evolves: it tells the parser this file is from HMMER3's save
-file format version a.  The closing \prog{//} allows multiple HMMs to
-be concatenated.
+file format version b. (The 3/a format was used in alpha test versions
+of HMMER3.)  The closing \prog{//} allows multiple HMMs to be
+concatenated.
 
 The format is divided into two regions. The first region contains
 textual information and miscalleneous parameters in a roughly
@@ -80,15 +83,15 @@ indicated.
 
 \begin{sreitems}{\emprog{STATS <s1> <s2> <f>}}
 
-\item [\emprog{HMMER3/a}] Unique identifier for the save file format
-version; the \prog{/a} means that this is HMMER3 HMM file format
-version a. If HMMER3 ever changes its save file format, the revision
-code will change from a to b. This way, parsers may easily remain
-backwards compatible. The remainder of the line after the
-\prog{HMMER3/a} tag is free text that is ignored by the parser. HMMER
-currently writes its version number and release date in brackets here,
-e.g. \prog{[3.0a1 | January 2009]} in this
-example. \textbf{Mandatory.}
+\item [\emprog{HMMER3/b}] Unique identifier for the save file format
+  version; the \prog{/b} means that this is HMMER3 HMM file format
+  version b. When HMMER3 changes its save file format, the revision
+  code advances. This way, parsers may easily remain backwards
+  compatible. The remainder of the line after the \prog{HMMER3/b} tag
+  is free text that is ignored by the parser. HMMER currently writes
+  its version number and release date in brackets here,
+  e.g. \prog{[3.0b1 | June 2009]} in this
+  example. \textbf{Mandatory.}
 
 \item [\emprog{NAME <s>}] Model name; \prog{<s>} is a single word
 containing no spaces or tabs. The name is normally picked up from the
@@ -176,10 +179,10 @@ model. This field is only used for logging purposes.
 \textbf{Optional.}
 
 \item [\emprog{CKSUM <d>}] Training alignment checksum; \prog{<d>} is
-a nonnegative 32-bit integer. This number is calculated from the
-training sequence data, and used in conjunction with the alignment map
-information to verify that a given alignment is indeed the alignment
-that the map is for. \textbf{Optional.}
+  a nonnegative unsigned 32-bit integer. This number is calculated
+  from the training sequence data, and used in conjunction with the
+  alignment map information to verify that a given alignment is indeed
+  the alignment that the map is for. \textbf{Optional.}
 
 \item [\emprog{GA    <f> <f>}] Pfam gathering thresholds GA1 and GA2.
 See Pfam documentation of GA lines. \textbf{Optional.}
@@ -190,17 +193,19 @@ Pfam documentation of TC lines. \textbf{Optional.}
 \item [\emprog{NC <f> <f>}] Pfam noise cutoffs NC1 and NC2.  See Pfam
 documentation of NC lines. \textbf{Optional.}
 
-\item [\emprog{STATS <s1> <s2> <f>}] Statistical parameters needed for
-E-value calculations. \prog{<s1>} is the model's alignment mode
-configuration: currently only \prog{LOCAL} is recognized. \prog{<s2>}
-is the name of the parameter: currently \prog{VLAMBDA}, \prog{VMU},
-and \prog{FTAU} are recognized, representing the Viterbi score slope
-parameter $\lambda$, Viterbi score location parameter $\mu$, and
-Forward score location parameter $\tau$ \citep{Eddy08}. Each parameter
-is a real number \prog{f}; $\lambda$ must be positive. Either all
-three lines or none of them must be present: when all three are
-present, the model is considered to be calibrated for E-value
-statistics. \textbf{Optional.}
+\item [\emprog{STATS <s1> <s2> <f1> <f2>}] Statistical parameters
+  needed for E-value calculations. \prog{<s1>} is the model's
+  alignment mode configuration: currently only \prog{LOCAL} is
+  recognized. \prog{<s2>} is the name of the score distribution:
+  currently \prog{MSV}, \prog{VITERBI}, and \prog{FORWARD} are
+  recognized.  \prog{<f1>} and \prog{<f2>} are two real-valued
+  parameters controlling location and slope of each distribution,
+  respectively; $\mu$ and $\lambda$ for Gumbel distributions for MSV
+  and Viterbi scores, and $\tau$ and $\lambda$ for exponential tails
+  for Forward scores.  $\lambda$ values must be positive.  All three
+  lines or none of them must be present: when all three are present,
+  the model is considered to be calibrated for E-value
+  statistics. \textbf{Optional.}
 
 \item [\emprog{HMM }] Flags the start of the main model
 section. Solely for human readability of the tabular model data, the
@@ -474,6 +479,7 @@ are as follows:
 \subsubsection{recognized \#=GC annotations}
 
 \begin{sreitems}{\emprog{SA\_cons}}
+
 \item [\emprog{RF}]
         Reference line. Any character is accepted as a markup for a
         column. The intent is to allow labeling the columns with some
@@ -501,5 +507,16 @@ are as follows:
         Secondary structure consensus. See \prog{\#=GC SS\_cons} above.
 \item [\emprog{SA}]
         Surface accessibility consensus. See \prog{\#=GC SA\_cons} above.
+\item [\emprog{PP}] Posterior probability for an aligned residue. This
+  represents the probability that this residue is assigned to the HMM
+  state corresponding to this alignment column, as opposed to some
+  other state. (Note that a residue can be confidently
+  \emph{unaligned}: a residue in an insert state or flanking N or C
+  state may have high posterior probability.) The posterior
+  probability is encoded as 11 possible characters \verb+0-9*+: $0.0
+  \leq p < 0.05$ is coded as 0, $0.05 \leq p < 0.15$ is coded as 1,
+  (... and so on ...), $0.85 \leq p < 0.95$ is coded as 9, and $0.95
+  \leq p \leq 1.0$ is coded as '*'. Gap characters appear in the PP
+  line where no residue has been assigned.
 \end{sreitems}
 

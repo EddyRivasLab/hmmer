@@ -761,6 +761,7 @@ typedef struct p7_builder_s {
   /* Model architecture                                                                            */
   enum p7_archchoice_e arch_strategy;    /* choice of model architecture determination algorithm   */
   float                symfrac;	         /* residue occ thresh for fast architecture determination */
+  float                fragthresh;	 /* < this fraction of average rlen, seq is a fragment     */
 
   /* Relative sequence weights                                                                     */
   enum p7_wgtchoice_e  wgt_strategy;     /* choice of relative sequence weighting algorithm        */

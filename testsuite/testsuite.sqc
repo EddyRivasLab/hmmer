@@ -85,7 +85,7 @@
 1 exercise  phmmer_variation      @i3-seqsearch-variation.sh@ @phmmer@     %TESTSEQ%     %TESTDB%  %OUTFILES%
 3 exercise  jackhmmer_variation   @i3-seqsearch-variation.sh@ @jackhmmer@  %TESTSEQ%     %TESTDB%  %OUTFILES%
 1 exercise  mapali                @i6-hmmalign-mapali.pl@     @hmmalign@   @esl-reformat@ .        %OUTFILES%
-
+1 exercise  fragments             @i7-hmmbuild-fragments.pl@  @hmmbuild@                           %OUTFILES%
 
 
 

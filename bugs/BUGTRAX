@@ -1,3 +1,40 @@
+ID              h55
+TITLE           hmmbuild fails to build reasonable model on frag-rich MSA
+STATUS          CLOSED
+XREF            J5/45
+REPORTED_BY     Peter Williams (LBL)
+OPENED_DATE     SRE, Tue Jun 16 14:19:52 2009
+CLOSED_DATE     SRE, Tue Jun 16 14:19:53 2009
+DESCRIPTION     
+  hmmbuild did not have the fragment-marking step that I thought it
+  did; it failed to deal gracefully with fragment-filled alignments,
+  and built too-short models. Added call to esl_msa_MarkFragments()
+  to the build pipeline.
+//
+ID              h54
+TITLE           hmmpress fails in ftello() on a large HMM database.
+STATUS          WORKSFORME
+XREF            J5/44
+REPORTED_BY     Peter Williams (LBL)
+OPENED_DATE     SRE, Tue Jun 16 12:03:43 2009
+CLOSED_DATE     -
+DESCRIPTION     
+   A claim that hmmpress fails with:
+
+   Fatal exception (source file p7_hmmfile.c, line 619):
+   ftello() failed
+
+   on a large HMM database. This does not reproduce here; a large test
+   HMM database (5 GB, 56K models: 6x replicate of Pfam22) hmmpress'es
+   fine.
+
+   Williams also reported an hmmsearch ftello() failure on 29 May, on
+   cryptogenomicon. I asked him for a reproducible test case; he did
+   not send one. 
+
+   Since both are single source, seems safe to deprioritize; bug
+   opened solely to remember that this happened.
+//
 ID              h53
 TITLE           hmmalign --trim memory faults
 STATUS          CLOSED

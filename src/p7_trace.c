@@ -568,7 +568,7 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 	break;
 	
       case p7T_N:
-	if (is_core)          ESL_FAIL(eslFAIL, errbuf, "core trace can't contain N");
+	if (is_core)       ESL_FAIL(eslFAIL, errbuf, "core trace can't contain N");
 	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "no N should have k set");
 	if (prv == p7T_S) { /* 1st N doesn't emit */
 	  if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "first N shouldn't have i set");
@@ -588,7 +588,7 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 	break;
 
       case p7T_M:
-	if (! is_core && prv == p7T_B) k = tr->k[z]; else k++; /* on a B->Mk entry, trust k; else verify */
+	if (prv == p7T_B) k = tr->k[z]; else k++; /* on a B->Mk entry, trust k; else verify */
 
 	if (tr->k[z] != k) ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
@@ -649,7 +649,7 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 	break;
 
       case p7T_C:
-	if (is_core)          ESL_FAIL(eslFAIL, errbuf, "core trace can't contain C");
+	if (is_core)       ESL_FAIL(eslFAIL, errbuf, "core trace can't contain C");
 	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "no C should have k set");
 	if (prv == p7T_E) { /* 1st C doesn't emit */
 	  if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "first C shouldn't have i set");
