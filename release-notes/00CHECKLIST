@@ -69,7 +69,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
 
 * You can put it in the environment and everything will work as cut/paste:
-   setenv HMMER_VERSION  3.0a2
+   setenv HMMER_VERSION  3.0b1
    cd ~/releases
 
 * Delete any old releases of the same number
@@ -200,9 +200,8 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    src/phmmer tutorial/HBB_HUMAN  tutorial/globins45.fa
    src/jackhmmer tutorial/HBB_HUMAN  /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > hbb-jack.out
    
-   setenv OMPI_MPICC icc
-   setenv OMPI_MPICC_CFLAGS "-O3"
-   setenv OMPI_MPICC_LDFLAGS "-static"
+   setenv OMPI_CC icc
+   setenv OMPI_CFLAGS "-O3"
    ./configure --enable-mpi --prefix=/usr/local/hmmer3
    make
    cd src
