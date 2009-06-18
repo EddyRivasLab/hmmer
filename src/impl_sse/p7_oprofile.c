@@ -495,6 +495,9 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   if ((status =  vf_conversion(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
   if ((status =  fb_conversion(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
 
+  if (om->name != NULL) free(om->name);
+  if (om->acc  != NULL) free(om->acc);
+  if (om->desc != NULL) free(om->desc);
   if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->acc,  -1, &(om->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->desc, -1, &(om->desc))) != eslOK) goto ERROR;

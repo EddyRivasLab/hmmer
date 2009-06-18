@@ -69,6 +69,9 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   /* Copy some pointer references and other info across from HMM  */
   gm->M      = hmm->M;
   gm->mode   = mode;
+  if (gm->name != NULL) free(gm->name);
+  if (gm->acc  != NULL) free(gm->acc);
+  if (gm->desc != NULL) free(gm->desc);
   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) goto ERROR;

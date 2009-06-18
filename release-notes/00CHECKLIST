@@ -34,6 +34,11 @@ snapshot <lineage>.<major-release>.snap<yyyymmdd>       3.0.snap20080325
    'svn add' and 'svn commit' as needed to commit new or modified files.
 
 
+
+
+
+
+
 ================================================================
 = Creating a new major release branch, if necessary
 ================================================================
@@ -46,7 +51,7 @@ development of the next main release.
 *  First test the development trunk.
    Compile should be entirely clean when compiled -Wall.
    'make check' should be clean.
-   '(cd documentation; make)' should work
+   '(cd documentation/alphaguide; make)' should work
 
    When trunk is clean, 
    svn commit
@@ -81,8 +86,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${HMMER_VERSION}
    cd hmmer-${HMMER_VERSION}
 
-
-* or: Export a major or minor release from its permanent tag
+  or: Export a major or minor release from its permanent tag
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION} hmmer-${HMMER_VERSION}
    cd hmmer-${HMMER_VERSION}
 
@@ -111,9 +115,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" README
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" COPYRIGHT
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" INSTALL
-   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" LICENSE.tag
-   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" documentation/alphaguide/copyright.tex
-   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" documentation/alphaguide/titlepage.tex
+   easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" release-notes/LICENSE.tag
    find .     -type f -exec easel/devkit/sedition-pp LICENSE release-notes/LICENSE.tag {} \;
 
 * compile documentation
@@ -139,29 +141,30 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 * compile Linux binaries with icc
 
    ssh login-eddy
-   setenv HMMER_VERSION  3.0a2
+   setenv HMMER_VERSION  3.0b1
    source /usr/local/intel/current/bin/iccvars.csh intel64
    cd releases/hmmer-${HMMER_VERSION}
    source release-notes/LICENSE.csh
-   ./configure CC=icc LDFLAGS=-static
+   ./configure CC=icc LDFLAGS=-static  --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64
    make
    make check
-   make BINDIR=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64 install
-   (cd easel/miniapps; make bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64 install)
+   make install
+   (cd easel/miniapps; make install)
 
    make distclean
    source /usr/local/intel/current/bin/iccvars.csh ia32
-   ./configure CC=icc LDFLAGS=-static
+   ./configure CC=icc LDFLAGS=-static --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32
    make
    make check
-   make BINDIR=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32 install
-   (cd easel/miniapps; make bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32 install)
+   make install
+   (cd easel/miniapps; make install)
 
 * clean up files that don't belong in the distro
 
    make distclean
    cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES
-   rm -ff release-notes
+   rm -rf contrib
+   rm -rf release-notes
    rm -rf bugs
    rm -rf src/impl_vmx	
    rm -rf documentation
@@ -170,6 +173,13 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    rm -f  00CHECKLIST LICENSE.csh.in LICENSE.tag 
    rm -rf documentation
    cd ..
+
+* record and finish release notes
+
+   cat RELEASE-NOTES | dumpnotes
+   emacs RELEASE-NOTES
+   emacs ~/src/hmmer/release-notes/RELEASE-3.0b2
+
 
 * package
    cd ..
@@ -184,30 +194,6 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    make check
    make dev
 
-
-* test the tutorial
-   src/hmmbuild globins4.hmm tutorial/globins4.sto
-   src/hmmsearch globins4.hmm /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > globins4.out
-   src/hmmbuild fn3.hmm tutorial/fn3.sto
-   src/hmmsearch fn3.hmm tutorial/7LESS_DROME > fn3.out
-   src/hmmsearch fn3.hmm /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > fn3-2.out
-   src/hmmbuild Pkinase.hmm tutorial/Pkinase.sto
-   cat globins4.hmm fn3.hmm Pkinase.hmm > minifam
-   src/hmmpress minifam
-   src/hmmscan minifam tutorial/7LESS_DROME
-   src/hmmalign globins4.hmm tutorial/globins45.fa
-   src/phmmer tutorial/HBB_HUMAN  /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > hbb.out
-   src/phmmer tutorial/HBB_HUMAN  tutorial/globins45.fa
-   src/jackhmmer tutorial/HBB_HUMAN  /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta > hbb-jack.out
-   
-   setenv OMPI_CC icc
-   setenv OMPI_CFLAGS "-O3"
-   ./configure --enable-mpi --prefix=/usr/local/hmmer3
-   make
-   cd src
-   ln -s /misc/data0/databases/Pfam/Pfam-A.seed .
-   qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe openmpi 200 'mpirun -mca btl self,tcp --prefix /usr/local/openmpi -np 200 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'
-
 * copy to ftp site
 
    scp hmmer-${HMMER_VERSION}.tar.gz selab:/opt/www/ftp/pub/software/hmmer3/
@@ -219,11 +205,11 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    svn commit
 
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk\
-            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0a2\
-            -m "tagged 3.0a2 release, from development trunk"          
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0b1\
+            -m "tagged 3.0b1 release, from development trunk"          
    svn copy https://svn.janelia.org/eddylab/eddys/easel/trunk\
-            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0a2\
-            -m "tagged Easel for HMMER 3.0a2 release, from development trunk"          
+            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0b1\
+            -m "tagged Easel for HMMER 3.0b1 release, from development trunk"          
 
 
    
@@ -238,4 +224,4 @@ Release           Date            SVN (HMMER/Easel)
 3.0.snap20081101   1 Nov 2008     r2620/r302
 3.0a1             12 Jan 2009     r2699/r312
 3.0a2             13 Mar 2009     r2744/r330
-
+3.0b1             17 Jun 2009     r2831/r345

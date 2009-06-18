@@ -706,6 +706,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   *ret_mu     = mu;
   *ret_lambda = lambda;
   status      = eslOK;
+
  ERROR:
   if (dsq != NULL) free(dsq);
   p7_omx_Destroy(ox);

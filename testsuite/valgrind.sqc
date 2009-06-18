@@ -2,6 +2,9 @@
 #
 # See the ../easel/devkit/sqc script for documentation
 # of how sqc works.
+# 
+# Example:
+#   ../easel/devkit/sqc 2 valgrind.sqc . ../src/ ../src/impl_sse ../easel/miniapps
 #
 # SRE, Fri Jan 23 11:43:07 2009 [Janelia]
 # SVN $Id$
