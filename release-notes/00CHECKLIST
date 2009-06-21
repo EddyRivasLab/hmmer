@@ -74,7 +74,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
 
 * You can put it in the environment and everything will work as cut/paste:
-   setenv HMMER_VERSION  3.0b1
+   setenv HMMER_VERSION  3.0b2
    cd ~/releases
 
 * Delete any old releases of the same number
@@ -141,7 +141,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 * compile Linux binaries with icc
 
    ssh login-eddy
-   setenv HMMER_VERSION  3.0b1
+   setenv HMMER_VERSION  3.0b2
    source /usr/local/intel/current/bin/iccvars.csh intel64
    cd releases/hmmer-${HMMER_VERSION}
    source release-notes/LICENSE.csh
@@ -193,6 +193,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    make
    make check
    make dev
+   cd ..
 
 * copy to ftp site
 
@@ -207,11 +208,11 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    svn commit
 
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk\
-            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0b1\
-            -m "tagged 3.0b1 release, from development trunk"          
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0b2\
+            -m "tagged 3.0b2 release, from development trunk"          
    svn copy https://svn.janelia.org/eddylab/eddys/easel/trunk\
-            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0b1\
-            -m "tagged Easel for HMMER 3.0b1 release, from development trunk"          
+            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0b2\
+            -m "tagged Easel for HMMER 3.0b2 release, from development trunk"          
 
 
    
@@ -227,3 +228,4 @@ Release           Date            SVN (HMMER/Easel)
 3.0a1             12 Jan 2009     r2699/r312
 3.0a2             13 Mar 2009     r2744/r330
 3.0b1             17 Jun 2009     r2831/r345
+3.0b2             21 Jun 2009     r2837/r350
