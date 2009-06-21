@@ -31,27 +31,25 @@ DESCRIPTION
 //
 ID              h54
 TITLE           hmmpress fails in ftello() on a large HMM database.
-STATUS          WORKSFORME
+STATUS          CLOSED
 XREF            J5/44
 REPORTED_BY     Peter Williams (LBL)
 OPENED_DATE     SRE, Tue Jun 16 12:03:43 2009
-CLOSED_DATE     -
+CLOSED_DATE     SRE, Fri Jun 19 13:18:34 2009
 DESCRIPTION     
-   A claim that hmmpress fails with:
+   In alpha2 code, hmmpress fails with:
 
    Fatal exception (source file p7_hmmfile.c, line 619):
    ftello() failed
 
-   on a large HMM database. This does not reproduce here; a large test
-   HMM database (5 GB, 56K models: 6x replicate of Pfam22) hmmpress'es
-   fine.
+   on a large HMM database.
 
-   Williams also reported an hmmsearch ftello() failure on 29 May, on
-   cryptogenomicon. I asked him for a reproducible test case; he did
-   not send one. 
-
-   Since both are single source, seems safe to deprioritize; bug
-   opened solely to remember that this happened.
+   Initially this did not seem to reproduce, because I was testing
+   current dev code, not alpha2 code. Now I've reproduced it not only
+   on AMD Opteron (cf-suse; close to Williams' machine) and even on
+   the desktop, using alpha2 code. beta1 code does not show the same
+   bug. Attributable to the change to autoconf 2.63; autoconf 2.61
+   (used by alpha2) had a bug in how it detected ftello().
 //
 ID              h53
 TITLE           hmmalign --trim memory faults

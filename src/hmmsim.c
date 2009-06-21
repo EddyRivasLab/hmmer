@@ -194,7 +194,7 @@ main(int argc, char **argv)
    * and workers in this .c file.
    */
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
-  cfg.r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "--seed"));
+  cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
   cfg.abc      = esl_alphabet_Create(eslAMINO);
 
   if (esl_opt_GetBoolean(go, "--bgflat")) cfg.bg = p7_bg_CreateUniform(cfg.abc);

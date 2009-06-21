@@ -196,7 +196,9 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
 * copy to ftp site
 
-   scp hmmer-${HMMER_VERSION}.tar.gz selab:/opt/www/ftp/pub/software/hmmer3/
+   scp hmmer-${HMMER_VERSION}.tar.gz        selab:/opt/www/ftp/pub/software/hmmer3/
+   scp hmmer-${HMMER_VERSION}/RELEASE-NOTES selab:/opt/www/ftp/pub/software/hmmer3/
+   scp hmmer-${HMMER_VERSION}/Userguide.pdf selab:/opt/www/ftp/pub/software/hmmer3/
    echo ftp://selab.janelia.org/pub/software/hmmer3/hmmer-${HMMER_VERSION}.tar.gz
    
    
