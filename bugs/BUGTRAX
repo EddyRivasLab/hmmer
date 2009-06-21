@@ -1,3 +1,21 @@
+ID              h56
+TITLE           hmmbuild fails trace validation on frag-rich MSA
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Peter Williams (LBL)
+OPENED_DATE     SRE, Sun Jun 21 09:49:30 2009
+CLOSED_DATE     SRE, Sun Jun 21 09:49:31 2009
+DESCRIPTION     
+  On some alignments, hmmbuild fails with fatal exception;
+  "validation failed" expected k doesn't match trace's k.
+
+  With fragments, an X->Ik transition is possible.
+  p7_trace_Validate wasn't expecting it. 
+
+//
+####
+####  beta1 release
+####
 ID              h55
 TITLE           hmmbuild fails to build reasonable model on frag-rich MSA
 STATUS          CLOSED

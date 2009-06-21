@@ -612,6 +612,7 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 	break;
 	
       case p7T_I:
+	if (tr->st[z-1] == p7T_X)  k = tr->k[z]; /* with fragments, a X->Ik case is possible */
 	if (tr->k[z] != k) ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
 	if (is_core) {
@@ -1226,8 +1227,8 @@ p7_trace_Index(P7_TRACE *tr)
  *            If the input alignment contains sequence fragments,
  *            caller should first convert leading/trailing gaps to
  *            missing data symbols. This hack causes entry/exit
- *            transitions to be encoded in the trace as B->X->{MD}k
- *            and {MD}k->X->E, rather than B->DDDD->Mk, Mk->DDDDD->E
+ *            transitions to be encoded in the trace as B->X->{MDI}k
+ *            and {MDI}k->X->E, rather than B->DDDD->Mk, Mk->DDDDD->E
  *            paths involving terminal deletions, and all functions
  *            that use traces (should), such as <p7_trace_Count()>,
  *            ignore transitions involving <p7T_X> states.
