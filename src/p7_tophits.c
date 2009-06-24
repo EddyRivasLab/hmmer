@@ -321,6 +321,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
       h2->unsrt[i].name = NULL;
       h2->unsrt[i].acc  = NULL;
       h2->unsrt[i].desc = NULL;
+      h2->unsrt[i].dcl  = NULL;
     }
 
   /* Construct the new grown h1 */
