@@ -334,6 +334,21 @@ if test "$impl_choice" = "vmx"; then
    fi
 fi
 
+# check if the SSE2 implementation support cast functions
+if test "$impl_choice" = "sse"; then
+  AC_MSG_CHECKING([checking compiler support for sse2 cast functions])
+  ssecast=no
+  AC_LANG(C)
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],
+                                     [[__m128 a;
+__m128i b;
+b = _mm_castps_si128(a);
+a = _mm_castsi128_ps(b);]])],
+                    [AC_DEFINE([HAVE_SSE2_CAST])
+                     ssecast=yes])
+  AC_MSG_RESULT([$ssecast])
+fi
+
 # Now, we can enable the appropriate optimized implementation.
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
