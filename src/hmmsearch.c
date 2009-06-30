@@ -216,7 +216,6 @@ main(int argc, char **argv)
   ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
   ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
   ESL_STOPWATCH   *w        = NULL;              /* for clocking performance                        */
-  P7_BG           *bg       = NULL;              /* null model                                      */
   int              nquery   = 0;
   int              textw;
   int              status   = eslOK;
@@ -227,8 +226,9 @@ main(int argc, char **argv)
   int              ncpus    = 1;
 
   WORKER_INFO     *info     = NULL;
+  ESL_SQ_BLOCK    *block    = NULL;
 #ifdef HMMER_THREADS
-  ESL_WORK_QUEUE      *queue    = NULL;
+  ESL_WORK_QUEUE  *queue    = NULL;
 #endif
 
   /* Initializations */
@@ -305,7 +305,7 @@ main(int argc, char **argv)
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i)
 	{
-	  ESL_SQ_BLOCK *block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
+	  block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
 	  if (block == NULL) 
 	    {
 	      esl_fatal("Failed to allocate sequence block");
@@ -450,11 +450,27 @@ main(int argc, char **argv)
       p7_Fail("Unexpected error (%d) in reading HMMs from %s", hstatus, hmmfile);
     }
 
+  for (i = 0; i < ncpus; ++i)
+    {
+      p7_bg_Destroy(info[i].bg);
+    }
+
+  esl_workqueue_Reset(queue);
+  while ((block = esl_workqueue_Remove(queue)) != NULL)
+    {
+      esl_sq_DestroyBlock(block);
+    }
+#ifdef HMMER_THREADS
+  esl_workqueue_Destroy(queue);
+#endif
+
+  free(info);
+
   p7_hmmfile_Close(hfp);
   esl_sqfile_Close(dbfp);
-  p7_bg_Destroy(bg);
   esl_stopwatch_Destroy(w);
   esl_alphabet_Destroy(abc);
+
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
