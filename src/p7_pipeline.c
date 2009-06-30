@@ -444,6 +444,45 @@ p7_pli_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
   return eslOK;
 }
 
+/* Function:  p7_pipeline_Merge()
+ * Synopsis:  Merge the pipeline statistics
+ * Incept:    
+ *
+ * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
+ *            to receive this model as either a query or a target.
+ *
+ *            The pipeline may alter the null model <bg> in a model-specific
+ *            way (if we're using a composition bias filter HMM in the
+ *            pipeline).
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ *            <eslEINVAL> if pipeline expects to be able to use a
+ *            model's bit score thresholds, but this model does not
+ *            have the appropriate ones set.
+ */
+int
+p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
+{
+  p1->nseqs   += p2->nseqs;
+  p1->nres    += p2->nres;
+
+  p1->n_past_msv  += p2->n_past_msv;
+  p1->n_past_bias += p2->n_past_bias;
+  p1->n_past_vit  += p2->n_past_vit;
+  p1->n_past_fwd  += p2->n_past_fwd;
+
+  if (p1->Z_setby == p7_ZSETBY_NTARGETS)
+    {
+      p1->Z += (p1->mode == p7_SCAN_MODELS) ? p2->nmodels : p2->nseqs;
+    }
+  else
+    {
+      p1->Z = p2->Z;
+    }
+
+  return eslOK;
+}
 
 /* Function:  p7_Pipeline()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
@@ -496,7 +535,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  if (P > pli->F1 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
+  if (P > pli->F1) return eslOK;
   pli->n_past_msv++;
 
   /* biased composition HMM filtering */
@@ -505,7 +544,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
       seq_score = (usc - filtersc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
+      if (P > pli->F1) return eslOK;
     }
   else filtersc = nullsc;
   pli->n_past_bias++;
@@ -522,7 +561,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);  
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-      if (P > pli->F2 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
+      if (P > pli->F2) return eslOK;
     }
   pli->n_past_vit++;
 
@@ -530,7 +569,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-  if (P > pli->F3 && ! p7_pli_TargetReportable(pli, seq_score, P)) return eslOK;
+  if (P > pli->F3) return eslOK;
   pli->n_past_fwd++;
 
   /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */

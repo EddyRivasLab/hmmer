@@ -1012,6 +1012,7 @@ extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e mode);
 extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
+extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
 extern int p7_pli_TargetReportable(P7_PIPELINE *pli, float score,     float Pval);
 extern int p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, float Pval);

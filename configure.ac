@@ -219,19 +219,45 @@ AC_ARG_ENABLE(mpi,[AS_HELP_STRING([--enable-mpi],[enable MPI parallelization])],
 #     HAVE_PTHREAD_SETCONCURRENCY
 #     HAVE_PTHREAD_ATTR_SETSCOPE
 #
-AC_ARG_ENABLE(threads, 
-[  --enable-threads        enable POSIX multithreading support],
-[case $enable_threads in 
-   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
-        AC_CHECK_FUNCS(pthread_setconcurrency)
-        AC_CHECK_FUNCS(pthread_attr_setscope)
-	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
-	;;
-   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
-        ;;
-   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
-	;;
-esac])
+AC_ARG_ENABLE([threads],
+              [AS_HELP_STRING([--enable-threads],
+                 [enable POSIX multithreading support (default is check)])],
+	      [],
+              [enable_threads=check])
+
+case $enable_threads in 
+   yes)   check_threads=yes
+          ;;
+   no)    check_threads=no
+          ;;
+   check) check_threads=yes
+          ;;
+   *)     check_threads=no
+          AC_MSG_NOTICE([Ignoring unknown argument to --enable-threads: $enable_threads])
+          ;;
+esac
+ 
+AS_IF([test "x$check_threads" != xno],
+      [ACX_PTHREAD([AC_DEFINE(HMMER_THREADS)
+                    AC_SUBST(PTHREAD_LIBS)
+                    AC_SUBST(PTHREAD_CFLAGS)],
+                   [if test "x$enable_threads" != xcheck; then
+                      AC_MSG_FAILURE([POSIX multithreading failed])
+                    fi])])
+
+#AC_ARG_ENABLE(threads, 
+#[  --enable-threads        enable POSIX multithreading support],
+#[case $enable_threads in 
+#   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
+#        AC_CHECK_FUNCS(pthread_setconcurrency)
+#        AC_CHECK_FUNCS(pthread_attr_setscope)
+#	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
+#	;;
+#   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
+#        ;;
+#   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
+#	;;
+#esac])
 
 # --with-gsl        - enable hooks into the GSL (GNU Scientific Library)
 #
@@ -468,7 +494,8 @@ echo "
 
 HMMER configuration:
 
-     compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS}
+     compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS}
+     libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
 "
 
