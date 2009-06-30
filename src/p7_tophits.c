@@ -239,9 +239,9 @@ hit_sorter(const void *vh1, const void *vh2)
   P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
   P7_HIT *h2 = *((P7_HIT **) vh2);
 
-  if      (h1->sortkey < h2->sortkey)  return  1;
-  else if (h1->sortkey > h2->sortkey)  return -1;
-  else                                 return  0;
+  if      (h1->sortkey < h2->sortkey) return  1;
+  else if (h1->sortkey > h2->sortkey) return -1;
+  else                                return  strcmp(h1->name, h2->name);
 }
 
 /* Function:  p7_tophits_Sort()
