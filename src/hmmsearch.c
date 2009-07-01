@@ -18,7 +18,7 @@
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
-#include <pthread.h>
+#include "esl_threads.h"
 #include "esl_workqueue.h"
 #endif
 
@@ -31,7 +31,6 @@
 
 typedef struct {
 #ifdef HMMER_THREADS
-  pthread_t         threadId;
   ESL_WORK_QUEUE   *queue;
 #endif
   P7_BG            *bg;
@@ -43,20 +42,11 @@ typedef struct {
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 2500
 
-static int             startThread = 0;
-
-static pthread_mutex_t startMutex;
-static pthread_cond_t  startCond;
-
-static int threadedLoop(int ncpus, WORKER_INFO *info, ESL_SQFILE *dbfp);
+static int threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void *pipelineThread(void *arg);
 
-#define CHECK(cond,fmt)		\
-  if (cond) esl_fatal("(%s:%d) - " fmt ": %s (%d)", \
-		      __FUNCTION__, __LINE__, \
-		      strerror (cond), cond)
 #else
-static int serialLoop(int ncpus, WORKER_INFO *info, ESL_SQFILE *dbfp);
+static int serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp);
 #endif
 
 static ESL_OPTIONS options[] = {
@@ -228,6 +218,7 @@ main(int argc, char **argv)
   WORKER_INFO     *info     = NULL;
   ESL_SQ_BLOCK    *block    = NULL;
 #ifdef HMMER_THREADS
+  ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
 
@@ -257,7 +248,7 @@ main(int argc, char **argv)
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          hmmfile);  
 
   /* Open the results output files */
-  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed t#ifdef HMMER_THREADSo open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
+  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
@@ -274,12 +265,7 @@ main(int argc, char **argv)
     }
   if (ncpus < 1) ncpus = 1;
 
-  status = pthread_mutex_init (&startMutex, NULL);
-  CHECK (status, "Create mutex failed");
-
-  status = pthread_cond_init (&startCond, NULL);
-  CHECK (status, "Create cond var failed");
-
+  threadObj = esl_threads_Create(&pipelineThread);
   queue = esl_workqueue_Create(ncpus * 2);
 #else
   ncpus = 1;
@@ -355,18 +341,14 @@ main(int argc, char **argv)
 	  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
-	  status = pthread_create(&info[i].threadId,
-				  NULL,
-				  pipelineThread,
-				  &info[i]);
-	  CHECK(status, "Create thread failed");
+	  esl_threads_AddThread(threadObj, &info[i]);
 #endif
 	}
 
 #ifdef HMMER_THREADS
-      sstatus = threadedLoop(ncpus, info, dbfp);
+      sstatus = threadedLoop(threadObj, queue, dbfp);
 #else
-      sstatus = serialLoop(ncpus, info, dbfp);
+      sstatus = serialLoop(info, dbfp);
 #endif
       switch(sstatus)
 	{
@@ -455,13 +437,14 @@ main(int argc, char **argv)
       p7_bg_Destroy(info[i].bg);
     }
 
+#ifdef HMMER_THREADS
   esl_workqueue_Reset(queue);
   while ((block = esl_workqueue_Remove(queue)) != NULL)
     {
       esl_sq_DestroyBlock(block);
     }
-#ifdef HMMER_THREADS
   esl_workqueue_Destroy(queue);
+  esl_threads_Destroy(threadObj);
 #endif
 
   free(info);
@@ -484,38 +467,21 @@ main(int argc, char **argv)
 
 #ifdef HMMER_THREADS
 static int
-threadedLoop(int ncpus, WORKER_INFO *info, ESL_SQFILE *dbfp)
+threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
-  int  i;
-
   int  status  = eslOK;
   int  sstatus = eslOK;
   
   int  eofCount = 0;
 
+  int  nThreads;
+
   ESL_SQ_BLOCK *block;
   void         *newBlock;
 
-  ESL_WORK_QUEUE *queue = info[0].queue;
-
   esl_workqueue_Reset(queue);
 
-  status = pthread_mutex_lock (&startMutex);
-  CHECK(status, "Lock mutex failed");
-
-  /* wait for the threads to have started */
-  while (startThread < ncpus) {
-    status = pthread_cond_wait(&startCond, &startMutex);
-    CHECK(status, "Wait cond failed");
-  }
-
-  /* release all the threads */
-  startThread = 0;
-  status = pthread_cond_broadcast (&startCond);
-  CHECK(status, "Cond broadcast failed");
-
-  status = pthread_mutex_unlock (&startMutex);
-  CHECK(status, "Unlock mutex failed");
+  nThreads = esl_threads_WaitForStart(obj);
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue reader failed");
@@ -527,7 +493,7 @@ threadedLoop(int ncpus, WORKER_INFO *info, ESL_SQFILE *dbfp)
       sstatus = esl_sqio_ReadBlock(dbfp, block);
       if (sstatus == eslEOF)
 	{
-	  if (eofCount < ncpus) sstatus = eslOK;
+	  if (eofCount < nThreads) sstatus = eslOK;
 	  ++eofCount;
 	}
 	  
@@ -543,16 +509,9 @@ threadedLoop(int ncpus, WORKER_INFO *info, ESL_SQFILE *dbfp)
 
   if (sstatus == eslEOF)
     {
-      esl_workqueue_Complete(queue);  
-
       /* wait for all the threads to complete */
-      for (i = 0; i < ncpus; ++i)
-	{
-	  status = pthread_join(info[i].threadId, NULL);
-	  CHECK(status, "Join thread failed");
-
-	  info[i].threadId = 0;
-	}
+      esl_threads_WaitForFinish(obj);
+      esl_workqueue_Complete(queue);  
     }
 
   return sstatus;
@@ -564,27 +523,16 @@ pipelineThread(void *arg)
   int i;
   int status;
 
-  WORKER_INFO   *info = (WORKER_INFO *) arg;
+  WORKER_INFO   *info;
+  ESL_THREADS   *obj;
 
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
-  status = pthread_mutex_lock(&startMutex);
-  CHECK(status, "Unlock mutex failed");
+  obj = (ESL_THREADS *) arg;
+  esl_threads_Started(obj);
 
-  /* signal that we have started */
-  ++startThread;
-  status = pthread_cond_broadcast (&startCond);
-  CHECK(status, "Cond broadcast failed");
-
-  /* wait for the signal to start the calculations */
-  while (startThread) {
-    status = pthread_cond_wait(&startCond, &startMutex);
-    CHECK(status, "Cond wait failed");
-  }
-
-  status = pthread_mutex_unlock(&startMutex);
-  CHECK(status, "Unlock mutex failed");
+  info = (WORKER_INFO *) esl_threads_GetData(obj);
 
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
@@ -617,12 +565,12 @@ pipelineThread(void *arg)
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
-  pthread_exit (NULL);
+  esl_threads_Exit(obj);
   return NULL;
 }
 #else
 static int
-serialLoop(int ncpus, WORKER_INFO *info, ESL_SQFILE *dbfp)
+serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
   int      sstatus;
   ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */

@@ -239,6 +239,7 @@ esac
  
 AS_IF([test "x$check_threads" != xno],
       [ACX_PTHREAD([AC_DEFINE(HMMER_THREADS)
+                    AC_DEFINE(HAVE_PTHREADS)
                     AC_SUBST(PTHREAD_LIBS)
                     AC_SUBST(PTHREAD_CFLAGS)],
                    [if test "x$enable_threads" != xcheck; then
