@@ -310,7 +310,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 
   /* Merge the sorted hit lists */
   for (i=0,j=0,k=0; i < h1->N && j < h2->N ; k++)
-    new_hit[k] = (h2->hit[j]->sortkey > h1->hit[i]->sortkey) ? new2 + (h2->hit[j++] - h2->unsrt) : h1->hit[i++];
+    new_hit[k] = (hit_sorter(&h1->hit[i], &h2->hit[j]) > 0) ? new2 + (h2->hit[j++] - h2->unsrt) : h1->hit[i++];
   while (i < h1->N) new_hit[k++] = h1->hit[i++];
   while (j < h2->N) new_hit[k++] = new2 + (h2->hit[j++] - h2->unsrt);
 
