@@ -181,6 +181,131 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
   if (om->consensus != NULL) free(om->consensus);
   free(om);
 }
+
+/* Function:  p7_oprofile_Copy()
+ * Synopsis:  Allocate an optimized profile structure.
+ * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
+ *
+ * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
+ *
+ * Throws:    <NULL> on allocation error.
+ */
+P7_OPROFILE *
+p7_oprofile_Copy(P7_OPROFILE *om1)
+{
+  int           x, y;
+  int           status;
+
+  int           nqb  = p7O_NQB(om1->allocM); /* # of uchar vectors needed for query */
+  int           nqw  = p7O_NQW(om1->allocM); /* # of sword vectors needed for query */
+  int           nqf  = p7O_NQF(om1->allocM); /* # of float vectors needed for query */
+
+  size_t        size = sizeof(char) * (om1->allocM+2);
+
+  P7_OPROFILE  *om2  = NULL;
+  
+  const ESL_ALPHABET *abc = om1->abc;
+
+  /* level 0 */
+  ESL_ALLOC(om2, sizeof(P7_OPROFILE));
+  om2->rb_mem = NULL;
+  om2->rw_mem = NULL;
+  om2->tw_mem = NULL;
+  om2->rf_mem = NULL;
+  om2->tf_mem = NULL;
+  om2->rb     = NULL;
+  om2->rw     = NULL;
+  om2->tw     = NULL;
+  om2->rf     = NULL;
+  om2->tf     = NULL;
+
+  /* level 1 */
+  ESL_ALLOC(om2->rb_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om2->rw_mem, sizeof(__m128i) * nqw  * abc->Kp    +15);                     
+  ESL_ALLOC(om2->tw_mem, sizeof(__m128i) * nqw  * p7O_NTRANS +15);   
+  ESL_ALLOC(om2->rf_mem, sizeof(__m128)  * nqf  * abc->Kp    +15);                     
+  ESL_ALLOC(om2->tf_mem, sizeof(__m128)  * nqf  * p7O_NTRANS +15);    
+
+  ESL_ALLOC(om2->rb, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om2->rw, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om2->rf, sizeof(__m128  *) * abc->Kp); 
+
+  /* align vector memory on 16-byte boundaries */
+  om2->rb[0] = (__m128i *) (((unsigned long int) om2->rb_mem + 15) & (~0xf));
+  om2->rw[0] = (__m128i *) (((unsigned long int) om2->rw_mem + 15) & (~0xf));
+  om2->tw    = (__m128i *) (((unsigned long int) om2->tw_mem + 15) & (~0xf));
+  om2->rf[0] = (__m128  *) (((unsigned long int) om2->rf_mem + 15) & (~0xf));
+  om2->tf    = (__m128  *) (((unsigned long int) om2->tf_mem + 15) & (~0xf));
+
+  /* set the rest of the row pointers for match emissions */
+  for (x = 0; x < abc->Kp; x++) {
+    om2->rb[x] = om1->rb[x];
+    om2->rw[x] = om1->rw[x];
+    om2->rf[x] = om1->rf[x];
+  }
+  om2->allocQ16  = nqb;
+  om2->allocQ8   = nqw;
+  om2->allocQ4   = nqf;
+
+  /* Remaining initializations */
+  om2->tbm_b     = om1->tbm_b;
+  om2->tec_b     = om1->tec_b;
+  om2->tjb_b     = om1->tjb_b;
+  om2->scale_b   = om1->scale_b;
+  om2->base_b    = om1->base_b;
+  om2->bias_b    = om1->bias_b;
+
+  om2->scale_w      = om1->scale_w;
+  om2->base_w       = om1->base_w;
+  om2->ddbound_w    = om1->ddbound_w;
+  om2->ncj_roundoff = om1->ncj_roundoff;	
+
+  for (x = 0; x < p7_NOFFSETS; x++) om2->offs[x]    = om1->offs[x];
+  for (x = 0; x < p7_NEVPARAM; x++) om2->evparam[x] = om1->evparam[x];
+  for (x = 0; x < p7_NCUTOFFS; x++) om2->cutoff[x]  = om1->cutoff[x];
+  for (x = 0; x < p7_MAXABET;  x++) om2->compo[x]   = om1->compo[x];
+
+  for (x = 0; x < nqw  * p7O_NTRANS; ++x) om2->tw[x] = om1->tw[x];
+  for (x = 0; x < nqf  * p7O_NTRANS; ++x) om2->tf[x] = om1->tf[x];
+
+  for (x = 0; x < p7O_NXSTATES; x++)
+    for (y = 0; y < p7O_NXTRANS; y++)
+      {
+	om2->xw[x][y] = om1->xw[x][y];
+	om2->xf[x][y] = om1->xf[x][y];
+      }
+
+  if ((status = esl_strdup(om1->name, -1, &om2->name)) != eslOK) goto ERROR;
+  if ((status = esl_strdup(om1->acc,  -1, &om2->acc))  != eslOK) goto ERROR;
+  if ((status = esl_strdup(om1->desc, -1, &om2->desc)) != eslOK) goto ERROR;
+
+  /* in a P7_OPROFILE, we always allocate for the optional RF, CS annotation.  
+   * we only rely on the leading \0 to signal that it's unused, but 
+   * we initialize all this memory to zeros to shut valgrind up about 
+   * fwrite'ing uninitialized memory in the io functions.
+   */
+  ESL_ALLOC(om2->ref,         size); 
+  ESL_ALLOC(om2->cs,          size);
+  ESL_ALLOC(om2->consensus,   size);
+
+  memcpy(om2->ref,       om1->ref,       size);
+  memcpy(om2->cs,        om1->cs,        size);
+  memcpy(om2->consensus, om1->consensus, size);
+
+  om2->abc       = om1->abc;
+  om2->L         = om1->L;
+  om2->M         = om1->M;
+  om2->allocM    = om1->allocM;
+  om2->mode      = om1->mode;
+  om2->nj        = om1->nj;
+
+  return om2;
+
+ ERROR:
+  p7_oprofile_Destroy(om2);
+  return NULL;
+}
+
 /*----------------- end, P7_OPROFILE structure ------------------*/
 
 
@@ -1084,7 +1209,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
   int Q16 = p7O_NQB(om1->M);
   int q, r, x, y;
   union { __m128i v; uint8_t c[16]; } a16, b16;
-  union { __m128i v; int16_t w[16]; } a8,  b8;
+  union { __m128i v; int16_t w[8];  } a8,  b8;
   union { __m128  v; float   x[4];  } a4,  b4;
 
   if (om1->mode      != om2->mode)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: mode");
@@ -1395,8 +1520,11 @@ main(int argc, char **argv)
   P7_HMM       *hmm     = NULL;
   P7_BG        *bg      = NULL;
   P7_PROFILE   *gm      = NULL;
-  P7_OPROFILE  *om      = NULL;
+  P7_OPROFILE  *om1     = NULL;
+  P7_OPROFILE  *om2     = NULL;
   int           status;
+
+  char          errmsg[512];
 
   status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) esl_fatal("Failed to open HMM file %s for reading.\n",                   hmmfile);
@@ -1409,15 +1537,19 @@ main(int argc, char **argv)
   else if (status == eslEOF)       esl_fatal("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
   else if (status != eslOK)        esl_fatal("Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
-  bg = p7_bg_Create(abc);
-  gm = p7_profile_Create(hmm->M, abc);   
-  om = p7_oprofile_Create(hmm->M, abc);
+  bg  = p7_bg_Create(abc);
+  gm  = p7_profile_Create(hmm->M, abc);   
+  om1 = p7_oprofile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
-  p7_oprofile_Convert(gm, om);
+  p7_oprofile_Convert(gm, om1);
   
-  p7_oprofile_Dump(stdout, om);
+  p7_oprofile_Dump(stdout, om1);
 
-  p7_oprofile_Destroy(om);
+  om2 = p7_oprofile_Copy(om1);
+  if (p7_oprofile_Compare(om1, om2, 0.001f, errmsg) != eslOK)
+    printf ("ERROR %s\n", errmsg);
+
+  p7_oprofile_Destroy(om1);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
