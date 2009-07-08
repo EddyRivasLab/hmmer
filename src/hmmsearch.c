@@ -310,6 +310,7 @@ main(int argc, char **argv)
   while (hstatus == eslOK) 
     {
       P7_PROFILE      *gm      = NULL;
+      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
 
       nquery++;
       esl_stopwatch_Start(w);
@@ -328,16 +329,16 @@ main(int argc, char **argv)
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc);
+      p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
+      p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
+
       for (i = 0; i < ncpus; ++i)
 	{
-	  info[i].om = p7_oprofile_Create(hmm->M, abc);
-	  p7_ProfileConfig(hmm, info[i].bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
-	  p7_oprofile_Convert(gm, info[i].om);                  /* <om> is now p7_LOCAL, multihit */
-
 	  /* Create processing pipeline and hit list */
-	  info[i].pli = p7_pipeline_Create(go, info[i].om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	  info[i].th  = p7_tophits_Create(); 
-
+	  info[i].om  = p7_oprofile_Clone(om);
+	  info[i].pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
@@ -363,7 +364,6 @@ main(int argc, char **argv)
 	  esl_fatal("Unexpected error %d reading sequence file %s",
 		    sstatus, dbfp->filename);
 	}
-
 
       /* merge the results of the search results */
       for (i = 1; i < ncpus; ++i)
@@ -408,6 +408,7 @@ main(int argc, char **argv)
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
       p7_oprofile_Destroy(info->om);
+      p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
 
