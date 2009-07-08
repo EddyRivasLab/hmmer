@@ -493,8 +493,8 @@ main(int argc, char **argv)
 	  for (i = 0; i < ncpus; ++i)
 	    {
 	      info[i].th  = p7_tophits_Create(); 
-	      info[i].om  = p7_oprofile_Copy(om);
-	      info[i].pli = p7_pipeline_Create(go, info[i].om->M, 400, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	      info[i].om  = p7_oprofile_Clone(om);
+	      info[i].pli = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	      p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
@@ -815,3 +815,8 @@ serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   return sstatus;
 }
 #endif
+
+
+/*****************************************************************
+ * @LICENSE@
+ *****************************************************************/
