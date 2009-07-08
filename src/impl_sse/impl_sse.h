@@ -124,6 +124,10 @@ typedef struct p7_oprofile_s {
   int    allocQ16;		/* p7_NQB(allocM): alloc size for rb                 */
   int    mode;			/* currently must be p7_LOCAL                        */
   float  nj;			/* expected # of J's: 0 or 1, uni vs. multihit       */
+
+  int    clone;                 /* this optimized profile structure is just a copy   */
+                                /* of another profile structre.  all pointers of     */
+                                /* this structure should not be freed.               */
 } P7_OPROFILE;
 
 
@@ -252,6 +256,7 @@ extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
 extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Copy(P7_OPROFILE *om);
+extern P7_OPROFILE *p7_oprofile_Clone(const P7_OPROFILE *om);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
 extern int          p7_oprofile_ReconfigLength    (P7_OPROFILE *om, int L);

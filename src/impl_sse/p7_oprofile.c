@@ -67,6 +67,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->tw     = NULL;
   om->rf     = NULL;
   om->tf     = NULL;
+  om->clone  = 0;
 
   /* level 1 */
   ESL_ALLOC(om->rb_mem, sizeof(__m128i) * nqb  * abc->Kp          +15);	/* +15 is for manual 16-byte alignment */
@@ -165,20 +166,24 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->rb_mem    != NULL) free(om->rb_mem);
-  if (om->rw_mem    != NULL) free(om->rw_mem);
-  if (om->tw_mem    != NULL) free(om->tw_mem);
-  if (om->rf_mem    != NULL) free(om->rf_mem);
-  if (om->tf_mem    != NULL) free(om->tf_mem);
-  if (om->rb        != NULL) free(om->rb);
-  if (om->rw        != NULL) free(om->rw);
-  if (om->rf        != NULL) free(om->rf);
-  if (om->name      != NULL) free(om->name);
-  if (om->acc       != NULL) free(om->acc);
-  if (om->desc      != NULL) free(om->desc);
-  if (om->ref       != NULL) free(om->ref);
-  if (om->cs        != NULL) free(om->cs);
-  if (om->consensus != NULL) free(om->consensus);
+  if (om->clone == 0)
+    {
+      if (om->rb_mem    != NULL) free(om->rb_mem);
+      if (om->rw_mem    != NULL) free(om->rw_mem);
+      if (om->tw_mem    != NULL) free(om->tw_mem);
+      if (om->rf_mem    != NULL) free(om->rf_mem);
+      if (om->tf_mem    != NULL) free(om->tf_mem);
+      if (om->rb        != NULL) free(om->rb);
+      if (om->rw        != NULL) free(om->rw);
+      if (om->rf        != NULL) free(om->rf);
+      if (om->name      != NULL) free(om->name);
+      if (om->acc       != NULL) free(om->acc);
+      if (om->desc      != NULL) free(om->desc);
+      if (om->ref       != NULL) free(om->ref);
+      if (om->cs        != NULL) free(om->cs);
+      if (om->consensus != NULL) free(om->consensus);
+    }
+
   free(om);
 }
 
@@ -298,6 +303,37 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->allocM    = om1->allocM;
   om2->mode      = om1->mode;
   om2->nj        = om1->nj;
+
+  om2->clone     = om1->clone;
+
+  return om2;
+
+ ERROR:
+  p7_oprofile_Destroy(om2);
+  return NULL;
+}
+
+/* Function:  p7_oprofile_Clone()
+ * Synopsis:  Allocate a cloned copy of the optimized profile structure.  All
+ *            allocated memory from the original profile is not reallocated.
+ *            The cloned copy will point to the same memory as the original.
+ * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
+ *
+ * Purpose:   Quick copy of an optimized profile used in mutiple threads.
+ *
+ * Throws:    <NULL> on allocation error.
+ */
+P7_OPROFILE *
+p7_oprofile_Clone(const P7_OPROFILE *om1)
+{
+  int           status;
+
+  P7_OPROFILE  *om2  = NULL;
+
+  ESL_ALLOC(om2, sizeof(P7_OPROFILE));
+  memcpy(om2, om1, sizeof(P7_OPROFILE));
+
+  om2->clone  = 1;
 
   return om2;
 
