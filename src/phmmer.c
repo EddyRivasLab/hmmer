@@ -17,8 +17,33 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
+#ifdef HMMER_THREADS
+#include <unistd.h>
+#include "esl_threads.h"
+#include "esl_workqueue.h"
+#endif
 
 #include "hmmer.h"
+
+typedef struct {
+#ifdef HMMER_THREADS
+  ESL_WORK_QUEUE   *queue;
+#endif
+  P7_BG            *bg;
+  P7_PIPELINE      *pli;
+  P7_TOPHITS       *th;
+  P7_OPROFILE      *om;
+} WORKER_INFO;
+
+#ifdef HMMER_THREADS
+#define BLOCK_SIZE 2500
+
+static int threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
+static void *pipelineThread(void *arg);
+
+#else
+static int serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp);
+#endif
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                                  docgroup*/
@@ -71,6 +96,9 @@ static ESL_OPTIONS options[] = {
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",                     "unlimit ASCII text output line width",                      8 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert query <seqfile> is in format <s>: no autodetection", 8 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert target <seqdb> is in format <s>>: no autodetection", 8 },
+#ifdef HMMER_THREADS
+  { "--cpu",        eslARG_INT,     NULL, NULL, NULL,      NULL,    NULL,   NULL,                       "number of worker threads",                                  8 },
+#endif
 #ifdef HAVE_MPI
   // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
   // { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
@@ -215,20 +243,29 @@ main(int argc, char **argv)
   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                      */
   ESL_SQ          *dbsq     = NULL;               /* target sequence                                  */
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                                */
-  P7_BG           *bg       = NULL;               /* null model                                       */
   P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                   */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                                       */
   int              nquery   = 0;
   int              seed;
   int              textw;
-  int              status;
-  int              qstatus, sstatus;
+  int              status   = eslOK;
+  int              qstatus  = eslOK;
+  int              sstatus  = eslOK;
+  int              i;
+
+  int              ncpus    = 1;
+
+  WORKER_INFO     *info     = NULL;
+  ESL_SQ_BLOCK    *block    = NULL;
+#ifdef HMMER_THREADS
+  ESL_THREADS     *threadObj= NULL;
+  ESL_WORK_QUEUE  *queue    = NULL;
+#endif
 
   /* Initializations */
   process_commandline(argc, argv, &go, &qfile, &dbfile);    
   p7_FLogsumInit();
   abc     = esl_alphabet_Create(eslAMINO);
-  bg      = p7_bg_Create(abc);
   w       = esl_stopwatch_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
@@ -287,14 +324,60 @@ main(int argc, char **argv)
   else if (status != eslOK)        esl_fatal ("Unexpected error %d opening sequence file %s\n", status, qfile);
   qsq  = esl_sq_CreateDigital(abc);
 
+#ifdef HMMER_THREADS
+  /* initialize thread data */
+  if (esl_opt_IsOn(go, "--cpu"))
+    { 
+      ncpus = esl_opt_GetInteger(go, "--cpu");
+    } 
+  else
+    { 
+      ncpus = sysconf(_SC_NPROCESSORS_ONLN);
+    }
+  if (ncpus < 1) ncpus = 1;
+
+  threadObj = esl_threads_Create(&pipelineThread);
+  queue = esl_workqueue_Create(ncpus * 2);
+#else
+  ncpus = 1;
+#endif
+
+  ESL_ALLOC(info, sizeof(*info) * ncpus);
+
   /* Show header output */
   output_header(ofp, go, qfile, dbfile);
+
+  for (i = 0; i < ncpus; ++i)
+    {
+      info[i].pli   = NULL;
+      info[i].th    = NULL;
+      info[i].om    = NULL;
+      info[i].bg    = p7_bg_Create(abc);
+#ifdef HMMER_THREADS
+      info[i].queue = queue;
+#endif
+    }
+
+#ifdef HMMER_THREADS
+  for (i = 0; i < ncpus * 2; ++i)
+    {
+      block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
+      if (block == NULL) 
+	{
+	  esl_fatal("Failed to allocate sequence block");
+	}
+
+      status = esl_workqueue_Init(queue, block);
+      if (status != eslOK) 
+	{
+	  esl_fatal("Failed to add block to work queue");
+	}
+    }
+#endif
 
   /* Outer loop over sequence queries */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
     {
-      P7_PIPELINE     *pli      = NULL;		  /* accelerated HMM/seq comparison pipeline  */
-      P7_TOPHITS      *th       = NULL;      	  /* top-scoring sequence hits                */
       P7_OPROFILE     *om       = NULL;           /* optimized query profile                  */
 
       nquery++;
@@ -314,12 +397,23 @@ main(int argc, char **argv)
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
 
-      /* Build the model, create processing pipeline  and top hits list */
-      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
-      th   = p7_tophits_Create();
-      pli  = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS);  /* 400 is a dummy length for now */
-      p7_pli_NewModel(pli, om, bg);
+      /* Build the model */
+      p7_SingleBuilder(bld, qsq, info->bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
+      for (i = 0; i < ncpus; ++i)
+	{
+	  /* Create processing pipeline and hit list */
+	  info[i].th  = p7_tophits_Create(); 
+	  info[i].om  = p7_oprofile_Clone(om);
+	  info[i].pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+	  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+
+#ifdef HMMER_THREADS
+	  esl_threads_AddThread(threadObj, &info[i]);
+#endif
+	}
+
+#if 0
       /* Run each target sequence through the pipeline */
       while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
 	{ 
@@ -336,25 +430,56 @@ main(int argc, char **argv)
 						dbfp->filename, dbfp->linenumber, dbfp->errbuf);     
       else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 						    sstatus, dbfp->filename);
+#endif
+#ifdef HMMER_THREADS
+      sstatus = threadedLoop(threadObj, queue, dbfp);
+#else
+      sstatus = serialLoop(info, dbfp);
+#endif
+      switch(sstatus)
+	{
+	case eslEFORMAT: 
+	  esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
+		    dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	  break;
+	case eslEOF:
+	  /* do nothing */
+	  break;
+	default:
+	  esl_fatal("Unexpected error %d reading sequence file %s",
+		    sstatus, dbfp->filename);
+	}
+
+
+      /* merge the results of the search results */
+      for (i = 1; i < ncpus; ++i)
+	{
+	  p7_tophits_Merge(info[0].th, info[i].th);
+	  p7_pipeline_Merge(info[0].pli, info[i].pli);
+
+	  p7_pipeline_Destroy(info[i].pli);
+	  p7_tophits_Destroy(info[i].th);
+	  p7_oprofile_Destroy(info[i].om);
+	}
 
       /* Print the results.  */
-      p7_tophits_Sort(th);
-      p7_tophits_Threshold(th, pli);
-      p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
-      p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Sort(info->th);
+      p7_tophits_Threshold(info->th, info->pli);
+      p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
   
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, th, pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, th, pli, (nquery == 1));
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, info->th, info->pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, info->th, info->pli, (nquery == 1));
 
       esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, pli, w);
+      p7_pli_Statistics(ofp, info->pli, w);
       fprintf(ofp, "//\n");
 
       /* Output the results in an MSA (-A option) */
       if (afp) {
 	ESL_MSA *msa = NULL;
 
-	if ( p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) 
+	if ( p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) 
 	  {
 	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
@@ -366,9 +491,9 @@ main(int argc, char **argv)
 	esl_msa_Destroy(msa);
       }
 
-      p7_pipeline_Destroy(pli);
-      p7_tophits_Destroy(th);
-      p7_oprofile_Destroy(om);
+      p7_pipeline_Destroy(info->pli);
+      p7_tophits_Destroy(info->th);
+      p7_oprofile_Destroy(info->om);
       esl_sq_Reuse(qsq);
     } /* end outer loop over query sequences */
   if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
@@ -376,23 +501,172 @@ main(int argc, char **argv)
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
+  for (i = 0; i < ncpus; ++i)
+    {
+      p7_bg_Destroy(info[i].bg);
+    }
+
+#ifdef HMMER_THREADS
+  esl_workqueue_Reset(queue);
+  while ((block = esl_workqueue_Remove(queue)) != NULL)
+    {
+      esl_sq_DestroyBlock(block);
+    }
+  esl_workqueue_Destroy(queue);
+  esl_threads_Destroy(threadObj);
+#endif
+
+  free(info);
+
   esl_sqfile_Close(dbfp);
   esl_sqfile_Close(qfp);
   esl_stopwatch_Destroy(w);
   esl_sq_Destroy(dbsq);
   esl_sq_Destroy(qsq);
   p7_builder_Destroy(bld);
-  p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
+
   if (ofp      != stdout) fclose(ofp);
   if (afp      != NULL)   fclose(afp);
   if (tblfp    != NULL)   fclose(tblfp);
   if (domtblfp != NULL)   fclose(domtblfp);
   esl_getopts_Destroy(go);
   return eslOK;
+
+ ERROR:
+  return eslFAIL;
 }
 
+#ifdef HMMER_THREADS
+static int
+threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
+{
+  int  status  = eslOK;
+  int  sstatus = eslOK;
+  
+  int  eofCount = 0;
 
+  int  nThreads;
+
+  ESL_SQ_BLOCK *block;
+  void         *newBlock;
+
+  esl_workqueue_Reset(queue);
+
+  nThreads = esl_threads_WaitForStart(obj);
+
+  status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+      
+  /* Main loop: */
+  while (sstatus == eslOK)
+    {
+      block = (ESL_SQ_BLOCK *) newBlock;
+      sstatus = esl_sqio_ReadBlock(dbfp, block);
+      if (sstatus == eslEOF)
+	{
+	  if (eofCount < nThreads) sstatus = eslOK;
+	  ++eofCount;
+	}
+	  
+      if (sstatus == eslOK)
+	{
+	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+	  if (status != eslOK) esl_fatal("Work queue reader failed");
+	}
+    }
+
+  status = esl_workqueue_ReaderUpdate(queue, block, NULL);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+
+  if (sstatus == eslEOF)
+    {
+      /* wait for all the threads to complete */
+      esl_threads_WaitForFinish(obj);
+      esl_workqueue_Complete(queue);  
+    }
+
+  return sstatus;
+}
+
+static void *
+pipelineThread(void *arg)
+{
+  int i;
+  int status;
+
+  WORKER_INFO   *info;
+  ESL_THREADS   *obj;
+
+  ESL_SQ_BLOCK  *block = NULL;
+  void          *newBlock;
+  
+  obj = (ESL_THREADS *) arg;
+  esl_threads_Started(obj);
+
+  info = (WORKER_INFO *) esl_threads_GetData(obj);
+
+  status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  /* loop until all blocks have been processed */
+  block = (ESL_SQ_BLOCK *) newBlock;
+  while (block->count > 0)
+    {
+      /* Main loop: */
+      for (i = 0; i < block->count; ++i)
+	{
+	  ESL_SQ *dbsq = block->list + i;
+
+	  p7_pli_NewSeq(info->pli, dbsq);
+	  p7_bg_SetLength(info->bg, dbsq->n);
+	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
+	  
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  
+	  esl_sq_Reuse(dbsq);
+	  p7_pipeline_Reuse(info->pli);
+	}
+
+      status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
+      if (status != eslOK) esl_fatal("Work queue worker failed");
+
+      block = (ESL_SQ_BLOCK *) newBlock;
+    }
+
+  status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_threads_Exit(obj);
+  return NULL;
+}
+#else
+static int
+serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp)
+{
+  int      sstatus;
+  ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
+
+  dbsq = esl_sq_CreateDigital(info->om->abc);
+
+  /* Main loop: */
+  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+    {
+      p7_pli_NewSeq(info->pli, dbsq);
+      p7_bg_SetLength(info->bg, dbsq->n);
+      p7_oprofile_ReconfigLength(info->om, dbsq->n);
+      
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  
+      esl_sq_Reuse(dbsq);
+      p7_pipeline_Reuse(info->pli);
+    }
+
+  esl_sq_Destroy(dbsq);
+
+  return sstatus;
+}
+#endif
 
 
 /*****************************************************************
