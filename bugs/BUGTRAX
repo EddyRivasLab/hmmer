@@ -1,3 +1,23 @@
+ID              h57
+TITLE           jackhmmer fails: "backconverted subseq didn't end at expected length"
+STATUS          CLOSED
+XREF            J5/52
+REPORTED_BY     Michael Seidl <m.f.seidl@uu.nl>, 22 June 2009
+OPENED_DATE     1 July 2009
+CLOSED_DATE     1 July 2009
+DESCRIPTION     
+  jackhmmer fails at p7_alidisplay.c line 422 with error message, 
+  "backconverted subseq didn't end at expected length".
+
+  Seidl sends an example involving a large FASTA database. 
+
+  Turns out to be a problem with * characters; Seidl's db is full of
+  them, and his example is one that puts a * in an insertion in an
+  otherwise highly significant alignment. A routine that is supposed
+  to be counting residue lengths was failing to count the *, so it
+  was getting the wrong length.
+
+//
 ID              h56
 TITLE           hmmbuild fails trace validation on frag-rich MSA
 STATUS          CLOSED
