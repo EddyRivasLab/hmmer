@@ -554,7 +554,7 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
   for (z = 1; z < tr->N-1; z++)
     {
       for (; dsq[i] != eslDSQ_SENTINEL; i++) /* find next non-gap residue in dsq */
-	if (esl_abc_XIsResidue(abc, dsq[i])) break;
+	if (esl_abc_XIsResidue(abc, dsq[i]) || esl_abc_XIsNonresidue(abc, dsq[i])) break; /* '*' included as emitted "residue"  */
 
       /* Handle missing data states: can only be one.
        * prv state might have to skip over one (but not more) missing data states
@@ -1299,6 +1299,8 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 		status = p7_trace_Append(tr[idx], p7T_M, k, showpos);
 	      else if (esl_abc_XIsGap    (msa->abc, msa->ax[idx][apos])) 
 		status = p7_trace_Append(tr[idx], p7T_D, k, 0);          
+	      else if (esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][apos]))
+		status = p7_trace_Append(tr[idx], p7T_M, k, showpos); /* treat * as a residue! */
 	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 		{
 		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
@@ -1310,6 +1312,8 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 	    { 			/* insert or nothing */
 	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
 		status = p7_trace_Append(tr[idx], p7T_I, k, showpos);
+	      else if (esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][apos]))
+		status = p7_trace_Append(tr[idx], p7T_I, k, showpos); /* treat * as a residue! */
 	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
 		{ 
 		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)

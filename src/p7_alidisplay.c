@@ -383,7 +383,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   
   /* Make a first pass over <ad> just to calculate subseq length */
   for (a = 0; a < ad->N; a++)
-    if (esl_abc_CIsResidue(abc, ad->aseq[a])) subL++;
+    if (! esl_abc_CIsGap(abc, ad->aseq[a])) subL++;
 
   /* Allocations */
   if ((sq = esl_sq_CreateDigital(abc)) == NULL)   { status = eslEMEM; goto ERROR; }
@@ -417,9 +417,9 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   sq->dsq[i] = eslDSQ_SENTINEL;
 
   /* some sanity checks */
-  if (tr->N != ad->N + 6)      ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size");
-  if (k     != ad->hmmto + 1)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace didn't end at expected place on model");
-  if (i     != subL + 1)       ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length");
+  if (tr->N != ad->N + 6)      ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size (%s/%s)",         ad->sqname, ad->hmmname);
+  if (k     != ad->hmmto + 1)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace didn't end at expected place on model (%s/%s)", ad->sqname, ad->hmmname);
+  if (i     != subL + 1)       ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
 
   /* Set up <sq> annotation as a subseq of a source sequence */
   if ((status = esl_sq_SetName  (sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
