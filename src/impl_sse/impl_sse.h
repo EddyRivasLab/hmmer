@@ -130,6 +130,11 @@ typedef struct p7_oprofile_s {
                                 /* this structure should not be freed.               */
 } P7_OPROFILE;
 
+typedef struct {
+  int            count;       /* number of <P7_OPROFILE> objects in the block */
+  int            listSize;    /* maximum number elements in the list          */
+  P7_OPROFILE  **list;        /* array of <P7_OPROFILE> objects               */
+} P7_OM_BLOCK;
 
 /* retrieve match odds ratio [k][x]
  * this gets used in p7_alidisplay.c, when we're deciding if a residue is conserved or not */
@@ -287,8 +292,11 @@ extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 /* io.c */
 extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
 extern int p7_oprofile_ReadMSV (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
+extern int p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock);
 extern int p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om);
 
+extern P7_OM_BLOCK *p7_oprofile_CreateBlock(int size);
+extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);

@@ -464,8 +464,19 @@ p7_pli_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
 int
 p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
 {
-  p1->nseqs   += p2->nseqs;
-  p1->nres    += p2->nres;
+  /* if we are searching a sequence database, we need to keep track of the
+   * number of sequences and residues processed.
+   */
+  if (p1->mode == p7_SEARCH_SEQS)
+    {
+      p1->nseqs   += p2->nseqs;
+      p1->nres    += p2->nres;
+    }
+  else
+    {
+      p1->nmodels += p2->nmodels;
+      p1->nnodes  += p2->nnodes;
+    }
 
   p1->n_past_msv  += p2->n_past_msv;
   p1->n_past_bias += p2->n_past_bias;

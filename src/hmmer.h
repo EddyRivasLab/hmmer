@@ -37,6 +37,10 @@
 #include "mpi.h"
 #endif
 
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif
+
 #include "easel.h"
 #include "esl_alphabet.h"	/* ESL_DSQ, ESL_ALPHABET */
 #include "esl_dirichlet.h"	/* ESL_MIXDCHLET         */
@@ -376,6 +380,11 @@ typedef struct p7_hmmfile_s {
   /* If <is_pressed>, we can read optimized profiles directly, via:  */
   FILE         *ffp;		/* MSV part of the optimized profile */
   FILE         *pfp;		/* rest of the optimized profile     */
+
+#ifdef HMMER_THREADS
+  int              syncRead;
+  pthread_mutex_t  readMutex;
+#endif
 
   char          errbuf[eslERRBUFSIZE];
 } P7_HMMFILE;
@@ -1003,6 +1012,9 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 /* p7_hmmfile.c */
 extern int  p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
+#ifdef HMMER_THREADS
+extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
+#endif
 extern int  p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_WriteASCII (FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);

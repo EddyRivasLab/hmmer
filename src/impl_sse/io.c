@@ -13,11 +13,12 @@
  * Contents:
  *    1. Writing optimized profiles to two files.
  *    2. Reading optimized profiles in two stages.
- *    3. Benchmark driver.
- *    4. Unit tests.
- *    5. Test driver.
- *    6. Example.
- *    7. Copyright and license information.
+ *    3. Utility routines.
+ *    4. Benchmark driver.
+ *    5. Unit tests.
+ *    6. Test driver.
+ *    7. Example.
+ *    8. Copyright and license information.
  *    
  * TODO:
  *    - crossplatform binary compatibility (endedness and off_t)
@@ -34,6 +35,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif
+
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 
@@ -48,6 +53,13 @@ static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file, SSE: "3bps
 static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
 static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
 
+
+#ifdef HMMER_THREADS
+#define CHECK(cond,fmt)		\
+  if (cond) esl_fatal("(%s:%d) - " fmt ": %s (%d)", \
+		      __FUNCTION__, __LINE__, \
+		      strerror (cond), cond)
+#endif
 
 
 /*****************************************************************
@@ -275,6 +287,42 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 }
 
 
+/* Function:  p7_oprofile_ReadBlockMSV()
+ * Synopsis:  Read the next block of optimized profiles from a hmm file.
+ * Incept:    
+ *
+ * Purpose:   Reads a block of optimized profiles from open hmm file <hfp> into 
+ *            <hmmBlock>.
+ *
+ * Returns:   <eslOK> on success; the new sequence is stored in <sqBlock>.
+ * 
+ *            Returns <eslEOF> when there is no profiles left in the
+ *            file (including first attempt to read an empty file).
+ * 
+ *            Otherwise return the status of the p7_oprofile_ReadMSV function.
+ */
+int
+p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock)
+{
+  int     i;
+  int     size = 0;
+  int     status = eslOK;
+
+  hmmBlock->count = 0;
+  for (i = 0; i < hmmBlock->listSize; ++i)
+    {
+      status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i]);
+      if (status != eslOK) break;
+      size += hmmBlock->list[i]->M;
+      ++hmmBlock->count;
+    }
+
+  /* EOF will be returned only in the case were no profiles were read */
+  if (status == eslEOF && i > 0) status = eslOK;
+
+  return status;
+}
+
 /* Function:  p7_oprofile_ReadRest()
  * Synopsis:  Read the rest of an optimized profile.
  * Incept:    SRE, Wed Jan 21 11:04:56 2009 [Janelia]
@@ -314,6 +362,17 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   char         *name = NULL;
   int           alphatype;
   int           status;
+
+#ifdef HMMER_THREADS
+  /* lock the mutex to prevent other threads from reading from the optimized
+   * profile at the same time.
+   */
+  if (hfp->syncRead)
+    {
+      int status = pthread_mutex_lock (&hfp->readMutex);
+      CHECK(status, "Lock mutex failed");
+    }
+#endif
 
   if (hfp->errbuf != NULL) hfp->errbuf[0] = '\0';
   if (hfp->pfp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
@@ -374,19 +433,111 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) &(om->mode),      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mode");
   if (! fread((char *) &(om->L)   ,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read L");
 
+#ifdef HMMER_THREADS
+  if (hfp->syncRead)
+    {
+      int sstatus = pthread_mutex_unlock (&hfp->readMutex);
+      CHECK(sstatus, "Unlock mutex failed");
+    }
+#endif
+
   free(name);
   return eslOK;
 
  ERROR:
+
+#ifdef HMMER_THREADS
+  if (hfp->syncRead)
+    {
+      int sstatus = pthread_mutex_unlock (&hfp->readMutex);
+      CHECK(sstatus, "Unlock mutex failed");
+    }
+#endif
+
   if (name != NULL) free(name);
   return status;
 }
 /*----------- end, reading optimized profiles -------------------*/
 
 
+/*****************************************************************
+ * 3. Utility routines
+ *****************************************************************/
+/* Function:  p7_oprofile_CreateBlock()
+ * Synopsis:  Create a new block of empty <P7_OM_BLOCK>.
+ * Incept:    
+ *
+ * Purpose:   Creates a block of empty <P7_OM_BLOCK> profile objects.
+ *            
+ * Returns:   a pointer to the new <P7_OM_BLOCK>. Caller frees this
+ *            with <p7_oprofile_DestroyBlock()>.
+ *
+ * Throws:    <NULL> if allocation fails.
+ */
+P7_OM_BLOCK *
+p7_oprofile_CreateBlock(int count)
+{
+  int i = 0;
+
+  P7_OM_BLOCK *block = NULL;
+  int status = eslOK;
+
+  ESL_ALLOC(block, sizeof(*block));
+
+  block->count = 0;
+  block->listSize = 0;
+  block->list  = NULL;
+
+  ESL_ALLOC(block->list, sizeof(P7_OPROFILE *) * count);
+  block->listSize = count;
+
+  for (i = 0; i < count; ++i)
+    {
+      block->list[i] = NULL;
+    }
+
+  return block;
+
+ ERROR:
+  if (block != NULL)
+    {
+      if (block->list != NULL)  free(block->list);
+      free(block);
+    }
+  
+  return NULL;
+}
+
+/* Function:  p7_oprofile_DestroyBlock()
+ * Synopsis:  Frees an <P7_OM_BLOCK>.
+ * Incept:    
+ *
+ * Purpose:   Free a Create()'d block of profiles.
+ */
+void
+p7_oprofile_DestroyBlock(P7_OM_BLOCK *block)
+{
+  int i;
+
+  if (block == NULL) return;
+
+  if (block->list != NULL)
+    {
+      for (i = 0; i < block->listSize; ++i)
+	{
+	  if (block->list[i] != NULL) p7_oprofile_Destroy(block->list[i]);
+	}
+      free(block->list);
+    }
+
+  free(block);
+  return;
+}
+/*-------------------- end, utility routines ---------------------*/
+
 
 /*****************************************************************
- * 3. Benchmark driver.
+ * 4. Benchmark driver.
  *****************************************************************/
 #ifdef p7IO_BENCHMARK
 /*
@@ -458,7 +609,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Unit tests.
+ * 5. Unit tests.
  *****************************************************************/
 #ifdef p7IO_TESTDRIVE
 
@@ -547,7 +698,7 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 
 
 /*****************************************************************
- * 5. Test driver
+ * 6. Test driver
  *****************************************************************/
 #ifdef p7IO_TESTDRIVE
 /* 
@@ -609,7 +760,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Example.
+ * 7. Example.
  *****************************************************************/
 #ifdef p7IO_EXAMPLE
 /* gcc -g -Wall -Dp7IO_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o io_example io.c -lhmmer -leasel -lm

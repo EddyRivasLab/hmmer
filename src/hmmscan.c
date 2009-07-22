@@ -16,8 +16,33 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
+#ifdef HMMER_THREADS
+#include <unistd.h>
+#include "esl_threads.h"
+#include "esl_workqueue.h"
+#endif
+
 #include "hmmer.h"
 
+typedef struct {
+#ifdef HMMER_THREADS
+  ESL_WORK_QUEUE   *queue;
+#endif
+  ESL_SQ           *qsq;
+  P7_BG            *bg;
+  P7_PIPELINE      *pli;
+  P7_TOPHITS       *th;
+} WORKER_INFO;
+
+#ifdef HMMER_THREADS
+#define BLOCK_SIZE 500
+
+static int threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp);
+static void *pipelineThread(void *arg);
+
+#else
+static int serialLoop(WORKER_INFO *info, P7_HMMFILE *hfp);
+#endif
 
 static ESL_OPTIONS options[] = {
   /* name           type          default  env  range toggles  reqs   incomp                         help                                                      docgroup*/
@@ -56,6 +81,9 @@ static ESL_OPTIONS options[] = {
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",    "set max width of ASCII text output lines",                     6 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",      "unlimit ASCII text output line width",                         6 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,   NULL,   NULL,   NULL,            "assert input <seqfile> is in format <s>: no autodetection",    6 },
+#ifdef HMMER_THREADS
+  { "--cpu",        eslARG_INT,     NULL, NULL, NULL,   NULL,   NULL,   NULL,            "number of worker threads",                                     6 },
+#endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -172,15 +200,27 @@ main(int argc, char **argv)
   char            *seqfile  = NULL;              /* file to read query sequence(s) from             */
   int              seqfmt   = eslSQFILE_UNKNOWN; /* format of seqfile                               */
   ESL_SQFILE      *sqfp     = NULL;              /* open seqfile                                    */
+  P7_HMMFILE      *hfp      = NULL;		 /* open HMM database file                          */
   char            *hmmfile  = NULL;              /* file to read HMM(s) from                        */
   ESL_ALPHABET    *abc      = NULL;              /* sequence alphabet                               */
-  P7_BG           *bg       = NULL;              /* null model                                      */
+  P7_OPROFILE     *om       = NULL;		 /* target profile                                  */
   ESL_STOPWATCH   *w        = NULL;              /* timing                                          */
   ESL_SQ          *qsq      = NULL;		 /* query sequence                                  */
   int              nquery   = 0;
   int              textw;
-  int              status;
-  int              sstatus, hstatus;
+  int              status   = eslOK;
+  int              hstatus  = eslOK;
+  int              sstatus  = eslOK;
+  int              i;
+
+  int              ncpus    = 1;
+
+  WORKER_INFO     *info     = NULL;
+  P7_OM_BLOCK     *block    = NULL;
+#ifdef HMMER_THREADS
+  ESL_THREADS     *threadObj= NULL;
+  ESL_WORK_QUEUE  *queue    = NULL;
+#endif
 
   /* Initializations */
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
@@ -195,109 +235,157 @@ main(int argc, char **argv)
     if (seqfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
+  /* Open the target profile database to get the sequence alphabet */
+  status = p7_hmmfile_Open(hmmfile, p7_HMMDBENV, &hfp);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                       hmmfile);
+  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n",  hmmfile);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, hmmfile);  
+  if (! hfp->is_pressed)           p7_Fail("Failed to open binary dbs for HMM file %s: use hmmpress first\n", hmmfile);
+  
+  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
+  if      (hstatus == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
+  else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
+  else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile); 
+
+  p7_oprofile_Destroy(om);
+  p7_hmmfile_Close(hfp);
+
   /* Open the query sequence database */
-  status = esl_sqfile_Open(seqfile, seqfmt, NULL, &sqfp);
+  status = esl_sqfile_OpenDigital(abc, seqfile, seqfmt, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",      seqfile);
   else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",        seqfile);
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, seqfile);
-  qsq = esl_sq_Create();	/* initially in text mode, until first HMM is read. */
+  qsq = esl_sq_CreateDigital(abc);
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
  
-  /* Note: header output is deferred until we know that HMM file has been opened
-   * and its alphabet matches first query sequence. That happens in a deferred 
-   * initialization block, because we don't know <abc> until first HMM is seen.
-   */
+  output_header(ofp, go, hmmfile, seqfile);
 
-  /* Outside loop: over each query sequence in <seqfile>. <abc> not known when we start! */
+#ifdef HMMER_THREADS
+  /* initialize thread data */
+  if (esl_opt_IsOn(go, "--cpu"))
+    { 
+      ncpus = esl_opt_GetInteger(go, "--cpu");
+    } 
+  else
+    { 
+      ncpus = sysconf(_SC_NPROCESSORS_ONLN);
+    }
+  if (ncpus < 1) ncpus = 1;
+
+  threadObj = esl_threads_Create(&pipelineThread);
+  queue = esl_workqueue_Create(ncpus * 2);
+#else
+  ncpus = 1;
+#endif
+
+  ESL_ALLOC(info, sizeof(*info) * ncpus);
+
+  for (i = 0; i < ncpus; ++i)
+    {
+      info[i].bg    = p7_bg_Create(abc);
+#ifdef HMMER_THREADS
+      info[i].queue = queue;
+#endif
+    }
+
+#ifdef HMMER_THREADS
+  for (i = 0; i < ncpus * 2; ++i)
+    {
+      block = p7_oprofile_CreateBlock(BLOCK_SIZE);
+      if (block == NULL)    esl_fatal("Failed to allocate sequence block");
+
+      status = esl_workqueue_Init(queue, block);
+      if (status != eslOK)  esl_fatal("Failed to add block to work queue");
+    }
+#endif
+
+  /* Outside loop: over each query sequence in <seqfile>. */
   while ( (sstatus = esl_sqio_Read(sqfp, qsq)) == eslOK)
     {
-      P7_HMMFILE      *hfp     = NULL;		/* open HMM database file                   */
-      P7_PIPELINE     *pli     = NULL;		/* processing pipeline                      */
-      P7_TOPHITS      *th      = NULL;        	/* top-scoring sequence hits                */
-      P7_OPROFILE     *om      = NULL;		/* target profile                           */
-      int              qshown  = FALSE;		/* flag for deferred query name/acc/desc    */
-
       nquery++;
       esl_stopwatch_Start(w);	                          
 
       /* Open the target profile database */
       status = p7_hmmfile_Open(hmmfile, p7_HMMDBENV, &hfp);
-      if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                       hmmfile);
-      else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n",  hmmfile);
-      else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, hmmfile);  
-      if (! hfp->is_pressed)           p7_Fail("Failed to open binary dbs for HMM file %s: use hmmpress first\n", hmmfile);
+      if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, hmmfile);  
   
-      /* Create processing pipeline and hit list */
-      pli = p7_pipeline_Create(go, 100, 100, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
-      th  = p7_tophits_Create(); 
-      pli->hfp = hfp;		/* for two-stage input, pipeline needs to know about <hfp> */
+#ifdef HMMER_THREADS
+      /* if we are threaded, create a lock to prevent multiple readers */
+      status = p7_hmmfile_CreateLock(hfp);
+      if (status != eslOK) p7_Fail("Unexpected error %d createing lock\n", status);
+#endif
 
-      /* unlike hmmsearch (for instance) we have to defer printing the query name,acc,desc until after output_header()
-       * is called, so it can't go here (where it would seem to make sense); it's below instead (using <qshown>)
-       */
-      p7_pli_NewSeq(pli, qsq);
+      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
+      if (qsq->acc[0]  != 0) fprintf(ofp, "Accession:   %s\n", qsq->acc);
+      if (qsq->desc[0] != 0) fprintf(ofp, "Description: %s\n", qsq->desc);
 
-      if (abc != NULL)	/* once we're on sequence #>2, abc is known, bg exists */
-	p7_bg_SetLength(bg, qsq->n);
-	  
-      /* Main loop: over each model in the target database; collect hits in <th> list */
-      while ((hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK) /* <abc> gets set by first HMM in file  */
+      for (i = 0; i < ncpus; ++i)
 	{
-	  /* One time only initializations after abc becomes known: */
-	  if (bg == NULL) 	/* bg == NULL serves as a flag for the first-time init  */
-	    {
-	      output_header(ofp, go, hmmfile, seqfile);
+	  /* Create processing pipeline and hit list */
+	  info[i].th  = p7_tophits_Create(); 
+	  info[i].pli = p7_pipeline_Create(go, 100, 100, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
+	  info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
-	      bg = p7_bg_Create(abc);
-	      if (esl_sq_Digitize(abc, qsq) != eslOK) p7_Die("alphabet mismatch");
-	      esl_sqfile_SetDigital(sqfp, abc);
-	      p7_bg_SetLength(bg, qsq->n);
-	    }
+	  p7_pli_NewSeq(info[i].pli, qsq);
+	  p7_bg_SetLength(info[i].bg, qsq->n);
+	  info[i].qsq = qsq;
 
-	  /* Because we deferred output_header(), we had to defer query name/acc/desc output too,
-	   * else they come out in the wrong order
-	   */
-	  if (! qshown) 
-	    {			
-	      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
-	      if (qsq->acc[0]  != 0) fprintf(ofp, "Accession:   %s\n", qsq->acc);
-	      if (qsq->desc[0] != 0) fprintf(ofp, "Description: %s\n", qsq->desc);
-	      qshown = TRUE;
-	    }
-
-	  p7_pli_NewModel(pli, om, bg);
-	  p7_oprofile_ReconfigLength(om, qsq->n);
-
-	  p7_Pipeline(pli, om, bg, qsq, th);
-
-	  p7_oprofile_Destroy(om);
-	  p7_pipeline_Reuse(pli);
+#ifdef HMMER_THREADS
+	  esl_threads_AddThread(threadObj, &info[i]);
+#endif
 	}
-      if      (hstatus == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
-      else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
-      else if (hstatus != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile); 
+
+#ifdef HMMER_THREADS
+      hstatus = threadedLoop(threadObj, queue, hfp);
+#else
+      hstatus = serialLoop(info, hfp);
+#endif
+      switch(hstatus)
+	{
+	case eslEFORMAT:
+	  p7_Fail("bad file format in HMM file %s",             hmmfile);
+	  break;
+	case eslEINCOMPAT:
+	  p7_Fail("HMM file %s contains different alphabets",   hmmfile);
+	  break;
+	case eslEOF:
+	  /* do nothing */
+	  break;
+	default:
+	  p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile); 
+	}
+
+      /* merge the results of the search results */
+      for (i = 1; i < ncpus; ++i)
+	{
+	  p7_tophits_Merge(info[0].th, info[i].th);
+	  p7_pipeline_Merge(info[0].pli, info[i].pli);
+
+	  p7_pipeline_Destroy(info[i].pli);
+	  p7_tophits_Destroy(info[i].th);
+	}
 
       /* Print results */
-      p7_tophits_Sort(th);
-      p7_tophits_Threshold(th, pli);
-      p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
-      p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Sort(info->th);
+      p7_tophits_Threshold(info->th, info->pli);
+      p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
 
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, th, pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, th, pli, (nquery == 1));
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, info->th, info->pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, info->th, info->pli, (nquery == 1));
 
       esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, pli, w);
+      p7_pli_Statistics(ofp, info->pli, w);
       fprintf(ofp, "//\n");
 
       p7_hmmfile_Close(hfp);
-      p7_pipeline_Destroy(pli);
-      p7_tophits_Destroy(th);
+      p7_pipeline_Destroy(info->pli);
+      p7_tophits_Destroy(info->th);
       esl_sq_Reuse(qsq);
     }
   if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
@@ -305,18 +393,165 @@ main(int argc, char **argv)
   else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    sstatus, sqfp->filename);
 
+  for (i = 0; i < ncpus; ++i)
+    {
+      p7_bg_Destroy(info[i].bg);
+    }
+
+#ifdef HMMER_THREADS
+  esl_workqueue_Reset(queue);
+  while ((block = esl_workqueue_Remove(queue)) != NULL)
+    {
+      p7_oprofile_DestroyBlock(block);
+    }
+  esl_workqueue_Destroy(queue);
+  esl_threads_Destroy(threadObj);
+#endif
+
+  free(info);
+
   esl_sq_Destroy(qsq);
   esl_stopwatch_Destroy(w);
   esl_alphabet_Destroy(abc);
   esl_sqfile_Close(sqfp);
-  p7_bg_Destroy(bg);
   if (ofp != stdout) fclose(ofp);
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
   esl_getopts_Destroy(go);
   return eslOK;
+
+ ERROR:
+  return eslFAIL;
 }
 
+#ifdef HMMER_THREADS
+static int
+threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
+{
+  int  status  = eslOK;
+  int  sstatus = eslOK;
+  
+  int  eofCount = 0;
+
+  int  nThreads;
+
+  P7_OM_BLOCK  *block;
+  void         *newBlock;
+
+  esl_workqueue_Reset(queue);
+
+  nThreads = esl_threads_WaitForStart(obj);
+
+  status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+      
+  /* Main loop: */
+  while (sstatus == eslOK)
+    {
+      block = (P7_OM_BLOCK *) newBlock;
+      sstatus = p7_oprofile_ReadBlockMSV(hfp, NULL, block);
+      if (sstatus == eslEOF)
+	{
+	  if (eofCount < nThreads) sstatus = eslOK;
+	  ++eofCount;
+	}
+	  
+      if (sstatus == eslOK)
+	{
+	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+	  if (status != eslOK) esl_fatal("Work queue reader failed");
+	}
+    }
+
+  status = esl_workqueue_ReaderUpdate(queue, block, NULL);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+
+  if (sstatus == eslEOF)
+    {
+      /* wait for all the threads to complete */
+      esl_threads_WaitForFinish(obj);
+      esl_workqueue_Complete(queue);  
+    }
+
+  return sstatus;
+}
+
+static void *
+pipelineThread(void *arg)
+{
+  int i;
+  int status;
+
+  WORKER_INFO   *info;
+  ESL_THREADS   *obj;
+
+  P7_OM_BLOCK   *block;
+  void          *newBlock;
+  
+  obj = (ESL_THREADS *) arg;
+  esl_threads_Started(obj);
+
+  info = (WORKER_INFO *) esl_threads_GetData(obj);
+
+  status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  /* loop until all blocks have been processed */
+  block = (P7_OM_BLOCK *) newBlock;
+  while (block->count > 0)
+    {
+      /* Main loop: */
+      for (i = 0; i < block->count; ++i)
+	{
+	  P7_OPROFILE *om = block->list[i];
+
+	  p7_pli_NewModel(info->pli, om, info->bg);
+	  p7_oprofile_ReconfigLength(om, info->qsq->n);
+
+	  p7_Pipeline(info->pli, om, info->bg, info->qsq, info->th);
+
+	  p7_oprofile_Destroy(om);
+	  p7_pipeline_Reuse(info->pli);
+
+	  block->list[i] = NULL;
+	}
+
+      status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
+      if (status != eslOK) esl_fatal("Work queue worker failed");
+
+      block = (P7_OM_BLOCK *) newBlock;
+    }
+
+  status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_threads_Exit(obj);
+  return NULL;
+}
+#else
+static int
+serialLoop(WORKER_INFO *info, P7_HMMFILE *hfp)
+{
+  int            status;
+
+  P7_OPROFILE   *om;
+  ESL_ALPHABET  *abc;
+
+  /* Main loop: */
+  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
+    {
+      p7_pli_NewModel(info->pli, om, info->bg);
+      p7_oprofile_ReconfigLength(om, info->qsq->n);
+
+      p7_Pipeline(info->pli, om, info->bg, info->qsq, info->th);
+
+      p7_oprofile_Destroy(om);
+      p7_pipeline_Reuse(info->pli);
+    }
+
+  return status;
+}
+#endif
 
 
 /*****************************************************************

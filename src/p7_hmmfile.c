@@ -21,6 +21,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif
+
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_ssi.h" 		/* this gives us esl_byteswap */
@@ -123,6 +127,9 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
   hfp->do_stdin     = FALSE;
   hfp->newly_opened = TRUE;	/* well, it will be, real soon now */
   hfp->is_pressed   = FALSE;
+#ifdef HMMER_THREADS
+  hfp->syncRead     = FALSE;
+#endif
   hfp->parser       = NULL;
   hfp->efp          = NULL;
   hfp->ffp          = NULL;
@@ -299,8 +306,42 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
   if (hfp->fname != NULL) free(hfp->fname);
   if (hfp->efp   != NULL) esl_fileparser_Destroy(hfp->efp);
   if (hfp->ssi   != NULL) esl_ssi_Close(hfp->ssi);
+#ifdef HMMER_THREADS
+  if (hfp->syncRead)      pthread_mutex_destroy (&hfp->readMutex);
+#endif
   free(hfp);
 }
+
+#ifdef HMMER_THREADS
+/* Function:  p7_hmmfile_CreateLock()
+ * Incept:    MSF, Wed July 15 2009
+ *
+ * Purpose:   Create a lock to syncronize readers
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_hmmfile_CreateLock(P7_HMMFILE *hfp)
+{
+  int status;
+
+  if (hfp == NULL) return eslEINVAL;
+
+  /* make sure the lock is not created twice */
+  if (!hfp->syncRead)
+    {
+      hfp->syncRead = TRUE;
+      status = pthread_mutex_init(&hfp->readMutex, NULL);
+      if (status != 0) goto ERROR;
+    }
+
+  return eslOK;
+
+ ERROR:
+  hfp->syncRead = FALSE;
+  return eslFAIL;
+}
+#endif
 /*----------------- end, P7_HMMFILE object ----------------------*/
 
 
