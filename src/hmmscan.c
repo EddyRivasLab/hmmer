@@ -216,8 +216,8 @@ main(int argc, char **argv)
   int              ncpus    = 1;
 
   WORKER_INFO     *info     = NULL;
-  P7_OM_BLOCK     *block    = NULL;
 #ifdef HMMER_THREADS
+  P7_OM_BLOCK     *block    = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
