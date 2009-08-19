@@ -100,10 +100,16 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
 
+  __m128i negInfv;
+
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ8)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
   ox->M   = om->M;
+
+  /* -infinity is -32768 */
+  negInfv = _mm_set1_epi16(-32768);
+  negInfv = _mm_srli_si128(negInfv, 14);
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
@@ -132,9 +138,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_insert_epi16(mpv, -32768, 0);
-      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_insert_epi16(dpv, -32768, 0);
-      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_insert_epi16(ipv, -32768, 0);
+      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_or_si128(mpv, negInfv);
+      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_or_si128(dpv, negInfv);
+      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_or_si128(ipv, negInfv);
 
       for (q = 0; q < Q; q++)
 	{
@@ -197,7 +203,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  dcv = _mm_slli_si128(dcv, 2); 
-	  dcv = _mm_insert_epi16(dcv, -32768, 0);
+	  dcv = _mm_or_si128(dcv, negInfv);
 	  tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -211,7 +217,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   */
 	  do {
 	    dcv = _mm_slli_si128(dcv, 2);
-	    dcv = _mm_insert_epi16(dcv, -32768, 0);
+	    dcv = _mm_or_si128(dcv, negInfv);
 	    tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -222,7 +228,10 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  } while (q == Q);
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
-	DMXo(0) =  _mm_insert_epi16(_mm_slli_si128(dcv, 2),  -32768, 0);
+	{
+	  dcv = _mm_slli_si128(dcv, 2);
+	  DMXo(0) = _mm_or_si128(dcv, negInfv);
+	}
 	  
 #if p7_DEBUGGING
       if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
