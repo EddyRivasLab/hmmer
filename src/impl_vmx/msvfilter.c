@@ -15,14 +15,16 @@
  *   6. Copyright and license information
  * 
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
- * SVN $Id: msvfilter.c 2818 2009-06-03 12:31:02Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <math.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_vmx.h"

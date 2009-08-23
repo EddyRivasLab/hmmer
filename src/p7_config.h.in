@@ -129,7 +129,6 @@
 #undef HMMER_THREADS
 #undef HAVE_PTHREAD_ATTR_SETSCOPE
 #undef HAVE_PTHREAD_SETCONCURRENCY
-#undef HMMER_NCPU	
 
 /* Debugging hooks
  */

@@ -38,8 +38,8 @@ typedef struct {
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 2500
 
-static int threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
-static void *pipelineThread(void *arg);
+static int  threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
+static void pipelineThread(void *arg);
 
 #else
 static int serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp);
@@ -97,7 +97,7 @@ static ESL_OPTIONS options[] = {
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert query <seqfile> is in format <s>: no autodetection", 8 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert target <seqdb> is in format <s>>: no autodetection", 8 },
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,     NULL, NULL, NULL,      NULL,    NULL,   NULL,                       "number of worker threads",                                  8 },
+  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU", "n>0",      NULL,    NULL,   NULL,                       "number of worker threads",                                  8 },
 #endif
 #ifdef HAVE_MPI
   // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
@@ -326,15 +326,8 @@ main(int argc, char **argv)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu"))
-    { 
-      ncpus = esl_opt_GetInteger(go, "--cpu");
-    } 
-  else
-    { 
-      ncpus = sysconf(_SC_NPROCESSORS_ONLN);
-    }
-  if (ncpus < 1) ncpus = 1;
+  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
+  else                           esl_threads_CPUCount(&ncpus);
 
   threadObj = esl_threads_Create(&pipelineThread);
   queue = esl_workqueue_Create(ncpus * 2);
@@ -491,9 +484,10 @@ main(int argc, char **argv)
 	esl_msa_Destroy(msa);
       }
 
-      p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
+      p7_pipeline_Destroy(info->pli);
       p7_oprofile_Destroy(info->om);
+      p7_oprofile_Destroy(om);
       esl_sq_Reuse(qsq);
     } /* end outer loop over query sequences */
   if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
@@ -543,17 +537,12 @@ threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
   int  status  = eslOK;
   int  sstatus = eslOK;
-  
   int  eofCount = 0;
-
-  int  nThreads;
-
   ESL_SQ_BLOCK *block;
   void         *newBlock;
 
   esl_workqueue_Reset(queue);
-
-  nThreads = esl_threads_WaitForStart(obj);
+  esl_threads_WaitForStart(obj);
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue reader failed");
@@ -565,7 +554,7 @@ threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
       sstatus = esl_sqio_ReadBlock(dbfp, block);
       if (sstatus == eslEOF)
 	{
-	  if (eofCount < nThreads) sstatus = eslOK;
+	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
 	  ++eofCount;
 	}
 	  
@@ -589,22 +578,21 @@ threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   return sstatus;
 }
 
-static void *
+static void 
 pipelineThread(void *arg)
 {
   int i;
   int status;
-
+  int workeridx;
   WORKER_INFO   *info;
   ESL_THREADS   *obj;
-
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
   obj = (ESL_THREADS *) arg;
-  esl_threads_Started(obj);
+  esl_threads_Started(obj, &workeridx);
 
-  info = (WORKER_INFO *) esl_threads_GetData(obj);
+  info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
 
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
@@ -637,8 +625,8 @@ pipelineThread(void *arg)
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
-  esl_threads_Exit(obj);
-  return NULL;
+  esl_threads_Finished(obj, workeridx);
+  return;
 }
 #else
 static int

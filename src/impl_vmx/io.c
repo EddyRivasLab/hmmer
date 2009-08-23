@@ -27,7 +27,7 @@
  *      in ReadRest().
  *    
  * SRE, Fri Oct 17 10:10:31 2008 [Janelia]
- * SVN $Id: io.c 2864 2009-07-22 13:46:50Z farrarm $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -39,7 +39,9 @@
 #include <pthread.h>
 #endif
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 

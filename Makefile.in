@@ -235,6 +235,7 @@ TAGS:
 #	etags -a documentation/man/*.man  documentation/man/boilerplate
 #	etags -a documentation/devguide/*.tex 
 	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in 
+	etags -a src/impl_vmx/*.c src/impl_vmx/*.h src/impl_vmx/Makefile.in 
 #	etags -a src/impl_vmx/*.c src/impl_vmx/*.h 
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 

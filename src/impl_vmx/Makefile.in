@@ -1,7 +1,7 @@
 # HMMER VMX optimized implementation
 #
-# SRE, Wed Jul 30 10:49:13 2008 [Janelia]
-# SVN $Id: Makefile.in 2814 2009-05-25 15:37:37Z eddys $
+# Michael Farrar
+# SVN $Id$
 
 CC             = @CC@
 CFLAGS         = @CFLAGS@

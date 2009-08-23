@@ -9,7 +9,7 @@
  *   p7_omx.ai - figure illustrating the layout of a P7_OMX.
  *
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
- * SVN $Id: p7_omx.c 2790 2009-04-23 12:43:39Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -17,7 +17,9 @@
 #include <math.h>
 #include <float.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_alphabet.h"

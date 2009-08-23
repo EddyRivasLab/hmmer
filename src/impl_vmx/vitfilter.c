@@ -18,14 +18,16 @@
  *   6. Copyright and license information
  * 
  * SRE, Thu Jul 31 20:32:25 2008 [Casa de Gatos]
- * SVN $Id: vitfilter.c 2837 2009-06-21 14:15:57Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <math.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_vmx.h"

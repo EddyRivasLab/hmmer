@@ -7,7 +7,9 @@
 #ifndef P7_IMPL_VMX_INCLUDED
 #define P7_IMPL_VMX_INCLUDED
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "p7_config.h"
 

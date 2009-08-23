@@ -10,13 +10,15 @@
  *   7. Copyright and license information.
  * 
  * SRE, Mon Aug 18 20:01:01 2008 [Casa de Gatos]
- * SVN $Id: optacc.c 2821 2009-06-05 11:13:23Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <float.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_vmx.h"

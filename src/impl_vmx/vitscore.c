@@ -20,14 +20,16 @@
  *   6. Copyright and license information.
  *   
  * SRE, Sun Aug  3 13:10:24 2008 [St. Louis]
- * SVN $Id: vitscore.c 2818 2009-06-03 12:31:02Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <math.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_vmx.h"

@@ -17,7 +17,9 @@
 #include <stdio.h>
 #include <math.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_vmx.h"

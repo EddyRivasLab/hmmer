@@ -12,7 +12,7 @@
  *   8. Copyright and license information.
  *
  * SRE, Wed Jul 30 11:00:04 2008 [Janelia]
- * SVN $Id: p7_oprofile.c 2852 2009-07-08 18:40:34Z farrarm $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -20,7 +20,9 @@
 #include <string.h>
 #include <math.h>		/* roundf() */
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_random.h"

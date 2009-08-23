@@ -770,15 +770,11 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   if (w != NULL) {
     esl_stopwatch_Display(ofp, w, "# CPU time: ");
     fprintf(ofp, "# Mc/sec: %.2f\n", 
-	    (double) pli->nres * (double) pli->nnodes / (w->user * 1.0e6));
+	    (double) pli->nres * (double) pli->nnodes / (w->elapsed * 1.0e6));
   }
 
   return eslOK;
 }
-
-
-
-
 /*------------------- end, pipeline API -------------------------*/
 
 

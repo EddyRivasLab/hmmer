@@ -9,14 +9,16 @@
  *   6. Copyright and license information.
  *
  * SRE, Mon Aug 18 08:31:11 2008 [Janelia]
- * SVN $Id: null2.c 2823 2009-06-06 13:08:31Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
+#endif
 
 #include "easel.h"
 #include "esl_vmx.h"
