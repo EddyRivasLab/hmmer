@@ -524,7 +524,7 @@ serialLoop(WORKER_INFO *info, P7_HMMFILE *hfp)
   int            status;
 
   P7_OPROFILE   *om;
-  ESL_ALPHABET  *abc;
+  ESL_ALPHABET  *abc = NULL;
 
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
