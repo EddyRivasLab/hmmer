@@ -7,6 +7,10 @@
 # SVN $Id$
 #
 
+srcdir     = @srcdir@
+top_srcdir = @top_srcdir@
+VPATH      = @srcdir@ @top_srcdir@
+
 SRCDIR   = ../src
 ESLDIR   = ../easel
 IMPLDIR  = ${SRCDIR}/impl_@IMPL_CHOICE@
@@ -42,7 +46,7 @@ run_sqc:
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${ESLDIR}/devkit/sqc ${SQCLEVEL} testsuite.sqc . ../src/ ../src/${IMPLDIR} ${ESLDIR}/miniapps
+	@${top_srcdir}/easel/devkit/sqc -D ${srcdir} ${SQCLEVEL} ${srcdir}/testsuite.sqc . ../src ${IMPLDIR} ${ESLDIR}/miniapps ${srcdir}
 
 clean:
 	-rm -f *.gcno *.gcda *.gcov

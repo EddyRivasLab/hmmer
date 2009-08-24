@@ -5,6 +5,10 @@
 # SRE, Mon Mar 31 09:12:28 2008 [Janelia]
 # SVN $Id$
 
+srcdir     = @srcdir@
+top_srcdir = @top_srcdir@
+VPATH      = @srcdir@ @top_srcdir@
+
 CC       = @CC@
 CFLAGS   = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
@@ -17,6 +21,9 @@ IMPLDIR  = impl_@IMPL_CHOICE@
 
 SRCDIR   = ../src
 ESLDIR   = ../easel
+
+ESLINC   = -I${ESLDIR} -I${top_srcdir}/easel
+SRCINC   = -I${SRCDIR} -I${top_srcdir}/src
 
 PROGS    = create-profmark\
 	   rocplot
@@ -31,7 +38,7 @@ all: ${PROGS}
 profmark_progs: ${PROGS}
 
 .c.o: 
-	${CC} -I ${ESLDIR} -I ${SRCDIR} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
+	${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
 
 ${PROGS}: @EXEC_DEPENDENCY@  ${SRCDIR}/libhmmer.a ${ESLDIR}/libeasel.a
 	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L${ESLDIR} -L${SRCDIR} -o $@ $@.o -lhmmer -leasel ${LIBS}

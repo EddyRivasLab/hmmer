@@ -20,6 +20,9 @@
 # By default, DESTDIR is null.
 #
 # SVN $Id$
+
+VPATH=@srcdir@
+
 SHELL       = /bin/sh
 SUFFIXES    = 
 SUFFIXES    = .c .o
