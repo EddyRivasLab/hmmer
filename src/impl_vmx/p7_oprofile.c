@@ -361,13 +361,25 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
  * When used, we add the bias, then subtract this cost.
  * (A cost of +255 is our -infinity "prohibited event")
  */
+
+/* The (uint8_t) (int) cast is to fix an issue with the ibm's
+ * xlc compiler.  The C standard says the results are undefined
+ * when casting from a float to an integral type and the value
+ * is not is range.  So, if the float has a value of -6.0 and
+ * is cast to an unsigned char, whose range is 0..255, the
+ * result is undefined.  The xlc compiler sets the result to 0.
+ * With gcc and msvc compilers the result is 250.
+ *
+ * This double cast gives the same result on the different compilers.
+ */
+
 static uint8_t
 biased_byteify(P7_OPROFILE *om, float sc)
 {
   uint8_t b;
 
-  sc  = -1.0f * roundf(om->scale_b * sc);                          /* ugh. sc is now an integer cost represented in a float...           */
-  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) sc + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
+  sc  = -1.0f * roundf(om->scale_b * sc);                                /* ugh. sc is now an integer cost represented in a float...           */
+  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) (int) sc + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
   return b;
 }
 
@@ -376,6 +388,8 @@ biased_byteify(P7_OPROFILE *om, float sc)
  * Transition scores for MSVFilter get this treatment.
  * e.g. a score of -2.1, with scale 3.0, becomes a cost of 6.
  * (A cost of +255 is our -infinity "prohibited event")
+ *
+ * See comment above explaining the double cast.
  */
 static uint8_t
 unbiased_byteify(P7_OPROFILE *om, float sc)
@@ -383,7 +397,7 @@ unbiased_byteify(P7_OPROFILE *om, float sc)
   uint8_t b;
 
   sc  = -1.0f * roundf(om->scale_b * sc);       /* ugh. sc is now an integer cost represented in a float...    */
-  b   = (sc > 255.) ? 255 : (uint8_t) sc;	/* and now we cast and saturate it to an unsigned char cost... */
+  b   = (sc > 255.) ? 255 : (uint8_t) (int) sc;	/* and now we cast and saturate it to an unsigned char cost... */
   return b;
 }
 

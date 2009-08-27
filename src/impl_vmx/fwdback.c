@@ -388,7 +388,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 	      dcv = vec_sld(zerov, dcv, 12);
 	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
-	      cv  = vec_splat_u32(0);
+	      cv  = (vector bool int) vec_splat_u32(0);
 	      for (q = 0; q < Q; q++) 
 		{ /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
 		  sv         = vec_add(dcv, DMO(dpc,q));	
