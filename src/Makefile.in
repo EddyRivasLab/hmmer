@@ -18,19 +18,20 @@ LIBS     = @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 AR       = @AR@ rcv 
 RANLIB   = @RANLIB@
 
+ESLDIR    = ../easel
+IMPLDIR   = impl_@IMPL_CHOICE@
+
 # Configuration for optional pthreads multiprocessor support
 #
 MPILIBS   = @MPILIBS@
 
 SHELL     = /bin/sh
-MYLIBS    = -lhmmer -leasel 
-MYLIBDIRS = -L../easel -L.
-MYINCDIRS = -I../easel \
+MYLIBS    = -Wl,--start-group -lhmmer -lhmmerimpl -Wl,--end-group -leasel 
+MYLIBDIRS = -L${ESLDIR} -L./${IMPLDIR} -L.
+MYINCDIRS = -I${ESLDIR} \
 	    -I${top_srcdir}/easel \
 	    -I. \
 	    -I${srcdir}
-
-IMPLDIR   = impl_@IMPL_CHOICE@
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -124,25 +125,13 @@ EXAMPLES = \
 	generic_vtrace_example
 
 
-all:    
-	cd ../easel;   ${MAKE} easel_lib
-	cd ${IMPLDIR}; ${MAKE} impl_lib
-	${MAKE} hmmer_lib
-	${MAKE} hmmer_progs
+all: hmmer_lib hmmer_progs
 
-check:  
-	cd ../easel;   ${MAKE} easel_lib
-	cd ${IMPLDIR}; ${MAKE} impl_lib
-	${MAKE} hmmer_lib
-	${MAKE} hmmer_progs
+check: hmmer_lib hmmer_progs
 	${MAKE} hmmer_utests
 	cd ${IMPLDIR}; make impl_utests
 
-dev:
-	cd ../easel;   ${MAKE} easel_lib
-	cd ${IMPLDIR}; ${MAKE} impl_lib
-	${MAKE} hmmer_lib
-	${MAKE} hmmer_progs
+dev: hmmer_lib hmmer_progs
 	${MAKE} hmmer_stats
 	${MAKE} hmmer_utests
 	${MAKE} hmmer_benchmarks
@@ -151,12 +140,13 @@ dev:
 	cd ${IMPLDIR}; ${MAKE} impl_benchmarks
 	cd ${IMPLDIR}; ${MAKE} impl_examples
 
-hmmer_lib:        libhmmer.a
-hmmer_progs:      ${PROGS}
-hmmer_stats:      ${STATS}
-hmmer_utests:     ${UTESTS}
-hmmer_benchmarks: ${BENCHMARKS}
-hmmer_examples:   ${EXAMPLES}
+hmmer_lib:        libhmmer.a ${IMPLDIR}/libhmmerimpl.a ${ESLDIR}/libeasel.a
+
+hmmer_progs:      hmmer_lib ${PROGS}
+hmmer_stats:      hmmer_lib ${STATS}
+hmmer_utests:     hmmer_lib ${UTESTS}
+hmmer_benchmarks: hmmer_lib ${BENCHMARKS}
+hmmer_examples:   hmmer_lib ${EXAMPLES}
 
 
 libhmmer.a: ${OBJS} 
@@ -164,15 +154,21 @@ libhmmer.a: ${OBJS}
 	${RANLIB} libhmmer.a
 	chmod 644 libhmmer.a
 
+${IMPLDIR}/libhmmerimpl.a:
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+
+${ESLDIR}/libeasel.a:
+	cd ${ESLDIR};  ${MAKE} easel_lib
+
 ${OBJS}: ${HDRS}
 
-${PROGS}: @EXEC_DEPENDENCY@ ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
+${PROGS}: @EXEC_DEPENDENCY@ hmmer_lib
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MYLIBS} ${MPILIBS} ${LIBS}
 
 .c.o:
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -c $<
 
-${UTESTS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
+${UTESTS}: hmmer_lib
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -184,7 +180,7 @@ ${UTESTS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${BENCHMARKS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
+${BENCHMARKS}: hmmer_lib
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -196,7 +192,7 @@ ${BENCHMARKS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${STATS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
+${STATS}: hmmer_lib
 	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_STATS ;\
@@ -208,7 +204,7 @@ ${STATS}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${EXAMPLES}: ${IMPLDIR}/impl_lib_stamp libhmmer.a ../easel/libeasel.a
+${EXAMPLES}: hmmer_lib
 	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\

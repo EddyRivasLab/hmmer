@@ -17,10 +17,12 @@ LIBS           = @LIBS@ -lm
 AR             = @AR@ rcv
 RANLIB         = @RANLIB@
 
+ESLDIR         = ../../easel
+
 SHELL          = /bin/sh
-MYLIBS         = -lhmmer -leasel -lm
-MYLIBDIRS      = -L../../easel -L..
-MYINCDIRS      = -I../../easel \
+MYLIBS         = -Wl,--start-group -lhmmer -lhmmerimpl -Wl,--end-group -leasel -lm
+MYLIBDIRS      = -L${ESLDIR} -L.. -L.
+MYINCDIRS      = -I${ESLDIR} \
 		 -I${top_srcdir}/easel \
 		 -I. \
 		 -I.. \
@@ -71,36 +73,35 @@ EXAMPLES =\
 all: 	 impl_lib
 
 check:     
-	cd ../../easel; ${MAKE} easel_lib
-	cd ..;          ${MAKE} hmmer_lib
+	cd ${ESLDIR};  ${MAKE} easel_lib
+	cd ..;         ${MAKE} hmmer_lib
 	${MAKE} impl_lib
 	${MAKE} impl_utests
 
 dev:     
-	cd ../../easel; ${MAKE} easel_lib
-	cd ..;          ${MAKE} hmmer_lib
+	cd ${ESLDIR};  ${MAKE} easel_lib
+	cd ..;         ${MAKE} hmmer_lib
 	${MAKE} impl_lib
 	${MAKE} impl_utests
 	${MAKE} impl_benchmarks
 	${MAKE} impl_examples
 
-impl_lib:        impl_lib_stamp
+impl_lib:        libhmmerimpl.a
 impl_utests:     ${UTESTS}
 impl_benchmarks: ${BENCHMARKS}
 impl_examples:   ${EXAMPLES}
 
-impl_lib_stamp: ${OBJS}
-	$(AR) ../libhmmer.a $?
-	$(RANLIB) ../libhmmer.a
-	chmod 644 ../libhmmer.a	
-	touch $@
+libhmmerimpl.a: ${OBJS}
+	$(AR) libhmmerimpl.a $?
+	$(RANLIB) libhmmerimpl.a
+	chmod 644 libhmmerimpl.a	
 
 ${OBJS}:   ${HDRS} ../hmmer.h
 
 .c.o:  
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
-${UTESTS}: ../libhmmer.a ../../easel/libeasel.a 
+${UTESTS}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a 
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -112,7 +113,7 @@ ${UTESTS}: ../libhmmer.a ../../easel/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
-${BENCHMARKS}: ../libhmmer.a ../../easel/libeasel.a
+${BENCHMARKS}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -124,7 +125,7 @@ ${BENCHMARKS}: ../libhmmer.a ../../easel/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
-${EXAMPLES}: ../libhmmer.a ../../easel/libeasel.a 
+${EXAMPLES}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a 
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -144,7 +145,7 @@ clean:
 	-rm -f ${UTESTS}
 	-rm -f ${BENCHMARKS}
 	-rm -f ${EXAMPLES}
-	-rm -f impl_lib_stamp
+	-rm -f libhmmerimpl.a
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
 	-rm -f *.gcno
 

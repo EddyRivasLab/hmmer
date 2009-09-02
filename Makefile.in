@@ -95,42 +95,20 @@ PROGS = hmmalign\
 # all: Compile all documented executables.
 #      (Excludes test programs.)
 #
-all:   
-	cd ${ESLDIR};   ${MAKE} easel_lib
-	cd ${ESLDIR};   ${MAKE} easel_progs
-	cd ${IMPLDIR};  ${MAKE} impl_lib
-	cd ${SRCDIR};   ${MAKE} hmmer_lib
+all: libraries programs
 	cd ${PMARKDIR}; ${MAKE} profmark_progs
-	cd ${SRCDIR};   ${MAKE} hmmer_progs	
-
 
 # check: Run test suites.
-check:
-	cd ${ESLDIR};   ${MAKE} easel_lib
-	cd ${ESLDIR};   ${MAKE} easel_progs
-	cd ${ESLDIR};   ${MAKE} easel_utests
-	cd ${IMPLDIR};  ${MAKE} impl_lib
-	cd ${SRCDIR};   ${MAKE} hmmer_lib
-	cd ${SRCDIR};   ${MAKE} hmmer_progs
-	cd ${SRCDIR};   ${MAKE} hmmer_utests
-	cd ${IMPLDIR};  ${MAKE} impl_utests
+check: libraries programs utests
 	cd ${TESTDIR};  ${MAKE} testsuite_progs
 	cd ${ESLDIR};   ${MAKE} run_sqc
 	cd ${TESTDIR};  ${MAKE} run_sqc
 
 # dev: compile all executables, including drivers.
-dev:
-	cd ${ESLDIR};   ${MAKE} easel_lib
-	cd ${ESLDIR};   ${MAKE} easel_progs
-	cd ${ESLDIR};   ${MAKE} easel_utests
-	cd ${IMPLDIR};  ${MAKE} impl_lib
-	cd ${SRCDIR};   ${MAKE} hmmer_lib
-	cd ${SRCDIR};   ${MAKE} hmmer_progs
-	cd ${SRCDIR};   ${MAKE} hmmer_utests
+dev: libraries programs utests
 	cd ${SRCDIR};   ${MAKE} hmmer_stats
 	cd ${SRCDIR};   ${MAKE} hmmer_benchmarks
 	cd ${SRCDIR};   ${MAKE} hmmer_examples
-	cd ${IMPLDIR};  ${MAKE} impl_utests
 	cd ${IMPLDIR};  ${MAKE} impl_benchmarks
 	cd ${IMPLDIR};  ${MAKE} impl_examples
 	cd ${PMARKDIR}; ${MAKE} profmark_progs
@@ -142,25 +120,52 @@ Makefile:  configure
 configure: configure.ac
 	autoconf
 
-src/libhmmer.a: 
-	cd src; ${MAKE} libhmmer.a
+${SRCDIR}/libhmmer.a: 
+	cd ${SRCDIR}; ${MAKE} libhmmer.a
 
+${ESLDIR}/libeasel.a: 
+	cd ${ESLDIR}; ${MAKE} libeasel.a
+
+${IMPLDIR}/libhmmerimpl.a: 
+	cd ${SRCDIR}; ${MAKE} libhmmer.a
+
+libraries: easel_lib impl_lib hmmer_lib
+
+easel_lib: ${ESLDIR}/libeasel.a
+
+impl_lib: ${IMPLDIR}/libhmmerimpl.a
+
+hmmer_lib: ${SRCDIR}/libhmmer.a
+
+programs: easel_progs hmmer_progs
+
+easel_progs: easel_lib
+	cd ${ESLDIR};   ${MAKE} easel_progs
+
+hmmer_progs: libraries
+	cd ${SRCDIR};   ${MAKE} hmmer_progs	
+
+utests: easel_utests hmmer_utests impl_utests
+
+easel_utests: easel_lib
+	cd ${ESLDIR};   ${MAKE} easel_utests
+
+hmmer_utests: libraries
+	cd ${SRCDIR};   ${MAKE} hmmer_utests
+
+impl_utests: libraries
+	cd ${IMPLDIR};  ${MAKE} impl_utests
 
 # install: installs the binaries in ${bindir}/
 #          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 #          Creates these directories if they don't exist.
 #          Prefix those paths with ${DESTDIR} (rarely used, usually null;
 #          may be set on a make command line when building contrib RPMs).
-install: 
-	cd ${ESLDIR};   ${MAKE} easel_lib
-	cd ${ESLDIR};   ${MAKE} easel_progs
-	cd ${IMPLDIR};  ${MAKE} impl_lib
-	cd ${SRCDIR};   ${MAKE} hmmer_lib
+install: libraries programs
 	cd ${PMARKDIR}; ${MAKE} profmark_progs
-	cd ${SRCDIR};   ${MAKE} hmmer_progs	
 	-mkdir -p ${DESTDIR}${bindir}
 	for file in $(PROGS); do\
-	   cp src/$$file ${DESTDIR}${bindir}/;\
+	   cp ${SRCDIR}/$$file ${DESTDIR}${bindir}/;\
 	done
 #	-mkdir -p ${DESTDIR}/${MANDIR}/man${MANSUFFIX}
 #	-for file in hmmer $(PROGS); do\
@@ -233,13 +238,13 @@ distclean:
 
 
 TAGS:
-	etags src/*.c src/*.h src/p7_config.h.in Makefile.in 
+	etags ${SRCDIR}/*.c ${SRCDIR}/*.h ${SRCDIR}/p7_config.h.in Makefile.in 
 	etags -a documentation/alphaguide/*.tex documentation/alphaguide/Makefile.in
 #	etags -a documentation/man/*.man  documentation/man/boilerplate
 #	etags -a documentation/devguide/*.tex 
-	etags -a src/impl_sse/*.c src/impl_sse/*.h src/impl_sse/Makefile.in 
-	etags -a src/impl_vmx/*.c src/impl_vmx/*.h src/impl_vmx/Makefile.in 
-#	etags -a src/impl_vmx/*.c src/impl_vmx/*.h 
+	etags -a ${SRCDIR}/impl_sse/*.c ${SRCDIR}/impl_sse/*.h ${SRCDIR}/impl_sse/Makefile.in 
+	etags -a ${SRCDIR}/impl_vmx/*.c ${SRCDIR}/impl_vmx/*.h ${SRCDIR}/impl_vmx/Makefile.in 
+#	etags -a ${SRCDIR}/impl_vmx/*.c ${SRCDIR}/impl_vmx/*.h 
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 
