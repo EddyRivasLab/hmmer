@@ -25,7 +25,6 @@ static ESL_OPTIONS options[] = {
   /* name             type        default      env  range   toggles   reqs  incomp               help                                          docgroup*/
   { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help on version and usage",                        1 },
   { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                    1 },
-  { "-q",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "quiet: suppress banner and informational output",             1 },
 
   { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> (same ali that HMM came from)", 2 },
   { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",   2 },

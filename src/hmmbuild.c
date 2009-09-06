@@ -114,7 +114,7 @@ struct cfg_s {
 
 
 static char usage[]  = "[-options] <hmmfile output> <alignment file input>";
-static char banner[] = "profile HMM construction from a multiple sequence alignment";
+static char banner[] = "profile HMM construction from multiple sequence alignments";
 
 static int  init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg);
 static int  init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg);
