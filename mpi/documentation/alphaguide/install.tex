@@ -1,0 +1,172 @@
+\section{Installation}
+\label{section:installation}
+
+\subsection{Quick installation instructions}
+
+Download \prog{hmmer-3.0b2.tar.gz} from
+\url{http://hmmer.org/}, or directly from
+\url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0b2.tar.gz};
+untar; and change into the newly created directory \prog{hmmer-3.0b2}:
+
+\user{wget ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0b2.tar.gz}\\
+\user{tar xf hmmer-3.0b2.tar.gz}\\
+\user{cd hmmer-3.0b2}
+
+The alpha test code includes precompiled binaries for x86/Linux
+platforms. These are in the \prog{binaries} directory. You can just
+stop here if you like, if you're on a x86/Linux machine and you want
+to try the programs out without installing them.
+
+To compile new binaries from source, do a standard GNUish build:
+
+\user{./configure}\\ 
+\user{make}
+
+To compile and run a test suite to make sure all is well, you can
+optionally do:
+
+\user{make check}
+
+All these tests should pass.
+
+You don't have to install HMMER programs to run them. The newly
+compiled binaries are now in the \prog{src} directory; you can run
+them from there. To install the programs and man pages somewhere on
+your system, do:
+
+\user{make install} 
+
+By default, programs are installed in \prog{/usr/local/bin} and man
+pages in \prog{/usr/local/man/man1/}. You can change \prog{/usr/local}
+to any directory you want using the \prog{./configure --prefix}
+option, as in \prog{./configure --prefix /the/directory/you/want}.
+
+If you have the Intel C compiler \prog{icc}, we strongly recommend
+that you use it (instead of \prog{gcc}, for example), for performance
+reasons, by specifying {CC=icc} either in your environment or on the
+\user{./configure} command line. 
+
+For example, on our systems, we would do:
+
+\user{./configure CC=icc LDFLAGS=-static --prefix=/usr/local/hmmer-3.0/}\\
+\user{make}\\
+\user{make check}\\
+\user{make install}
+
+
+\subsection{System requirements}
+
+\textbf{Operating system:} HMMER is designed to run on
+POSIX-compatible platforms, including UNIX, Linux and MacOS/X.  The
+POSIX standard essentially includes all operating systems except
+Microsoft Windows.
+\footnote{There are add-on products available for making Windows more
+  POSIX-compliant and more compatible with GNU-ish configures and
+  builds. One such product is Cygwin, \url{http:www.cygwin.com}, which
+  is freely available. Although we do not test on Windows platforms,
+  we understand HMMER builds fine in a Cygwin environment on Windows.}
+
+The alpha test code includes precompiled binaries for Linux. These
+were compiled with the Intel C compiler (\prog{icc}) on an x86\_64
+Intel platform running Red Hat Enterprise Linux AS4. We believe they
+should be widely portable to different Linux systems. 
+
+We have tested most extensively on Linux, and to a lesser extent on
+MacOS/X. We aim to be portable to all other POSIX platforms. We
+currently do not develop or test on Windows.
+
+
+\textbf{Processor:} HMMER3 currently runs effectively only on x86
+(IA32/IA64) processors that support the SSE2 vector instruction set.
+This includes all Intel processors from the Pentium 4 on, and all AMD
+processors from the K8 (Athlon) on. We believe this includes almost
+all Intel and AMD x86 processors produced since about 1999.
+
+We aim to be portable to all modern processors. The acceleration
+algorithms are designed to be portable despite their use of
+specialized SIMD vector instructions. In the future we plan to to
+support processors that use VMX/Altivec vector instructions, including
+PowerPC processors and the Cell processor, and hope to be able to add
+support for the Sun SPARC VIS instruction set as well. We believe that
+the code will be able to take advantage of GP-GPUs and FPGAs in the
+future.
+
+\textbf{Compiler:} The source code is C, conforming to POSIX and ANSI
+C99 standards. It should compile with any ANSI C99 compliant compiler,
+including the GNU C compiler \prog{gcc}. We have tested the code
+using both the \prog{gcc} and \prog{icc} compilers.
+
+If you compile HMMER from source, we strongly recommend using the
+Intel C compiler \prog{icc} rather than \prog{gcc}. \prog{icc} is free
+for noncommercial use and heavily discounted for academic use.  HMMER3
+makes extensive use of SIMD vector instructions (SSE, Intel's
+Streaming SIMD Extensions). \prog{gcc} is not as effective at
+compiling SSE code. It produces HMMER programs that are significantly
+slower than what \prog{icc} produces.
+
+\textbf{Libraries and other installation requirements:} HMMER includes
+a software library called Easel, which it will automatically compile
+during its installation process.  By default, HMMER3 does not require
+any additional libraries to be installed by you, other than standard
+ANSI C99 libraries that should already be present on a system that can
+compile C code.
+
+\begin{sidebar}
+One of the objectives of the alpha test is to identify portability
+issues. If HMMER3 fails to compile and/or run under a POSIX-compliant
+OS, on an x86 processor, using an ANSI C99-compliant compiler, please
+report the problem.
+\end{sidebar}
+
+
+\subsection{Experimental: MPI support}
+
+Optionally, a couple of programs in HMMER3 include support for MPI
+(Message Passing Interface) parallelization. To use MPI, you first
+need to have MPI installed, such as OpenMPI (\url{www.open-mpi.org}),
+and you add \ccode{--enable-mpi} to the \ccode{./configure} command
+line. HMMER3's MPI support is not completely written at this time, and
+has not been extensively tested yet. 
+
+One place it's useful is in parallelizing \prog{hmmbuild}.
+
+It's highly advantageous to get \prog{mpicc} to use the Intel C
+compiler rather than its default, which is often \prog{gcc}. Different
+MPI distributions may have different ways of selecting the C compiler
+and its options. OpenMPI can be controlled by environment variables.
+For example, in our environment, we currently build HMMER3 for MPI
+using:
+
+\user{setenv OMPI\_CC      "icc"}\\
+\user{setenv OMPI\_CFLAGS  "-O3"}\\
+\user{./configure --enable-mpi --prefix=/usr/local/hmmer3}\\
+\user{make}
+
+
+\subsection{Makefile targets}
+
+\begin{sreitems}{\emprog{distclean}}
+\item[\emprog{all}]
+  Builds everything. Same as just saying \ccode{make}.
+
+\item[\emprog{check}]
+  Runs automated test suites in both HMMER and the Easel library.
+
+\item[\emprog{clean}]
+  Removes all files generated by compilation (by
+  \ccode{make}). Configuration (files generated by
+  \ccode{./configure}) is preserved.
+
+\item[\emprog{distclean}]
+Removes all files generated by configuration (by \ccode{./configure})
+and by compilation (by \ccode{make}). 
+
+Note that if you want to make a new configuration (for example, to try
+an MPI version by \ccode{./configure --enable-mpi; make}) you should
+do a \ccode{make distclean} (rather than a \ccode{make clean}), to be
+sure old configuration files aren't used accidentally.
+\end{sreitems}
+
+
+
+

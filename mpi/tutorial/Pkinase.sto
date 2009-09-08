@@ -1,0 +1,352 @@
+# STOCKHOLM 1.0
+#=GF ID   Pkinase
+#=GF AC   PF00069.16
+#=GF DE   Protein kinase domain
+#=GF PI   pkinase;
+#=GF AU   Sonnhammer ELL
+#=GF SE   Unknown
+#=GF GA   70.30 70.30; 20.00 20.00;
+#=GF TC   70.30 70.30; 20.00 20.00;
+#=GF NC   70.20 70.20; 19.90 19.90;
+#=GF TP   Domain
+#=GF BM   hmmbuild -F HMM_ls SEED
+#=GF BM   hmmcalibrate --seed 0 HMM_ls
+#=GF BM   hmmbuild -f -F HMM_fs SEED
+#=GF BM   hmmcalibrate --seed 0 HMM_fs
+#=GF AM   byscore
+#=GF RN   [1]
+#=GF RM   1956325
+#=GF RT   Protein kinase catalytic domain sequence database:
+#=GF RT   identification of conserved features of primary structure
+#=GF RT   and classification of family members. 
+#=GF RA   Hanks SK, Quinn AM; 
+#=GF RL   Methods Enzymol 1991;200:38-62.
+#=GF RN   [2]
+#=GF RM   7768349
+#=GF RT   Protein kinases 6. The eukaryotic protein kinase
+#=GF RT   superfamily: kinase (catalytic) domain structure and
+#=GF RT   classification. 
+#=GF RA   Hanks SK, Hunter T; 
+#=GF RL   FASEB J 1995;9:576-596.
+#=GF RN   [3]
+#=GF RM   9020587
+#=GF RT   The protein kinases of budding yeast: six score and more. 
+#=GF RA   Hunter T, Plowman GD; 
+#=GF RL   Trends Biochem Sci 1997;22:18-22.
+#=GF DR   PROSITE; PDOC00100;
+#=GF DR   PROSITE; PDOC00212;
+#=GF DR   PROSITE; PDOC00213;
+#=GF DR   PROSITE; PDOC00629;
+#=GF DR   PROSITE_PROFILE; PS50011;
+#=GF DR   PRINTS; PR00109;
+#=GF DC   Protein kinase; unclassified specificity.
+#=GF DR   SMART; STYKc;
+#=GF DC   Serine/Threonine protein kinases, catalytic domain
+#=GF DR   SMART; S_TKc;
+#=GF DC   Tyrosine kinase, catalytic domain
+#=GF DR   SMART; TyrKc;
+#=GF DR   SCOP; 1apm; sf;
+#=GF DR   URL; http://www.sdsc.edu/Kinases/pk_home.html;
+#=GF DR   HOMSTRAD; kinase;
+#=GF DR   HOMSTRAD; TyrKc;
+#=GF DC   The following Pfam-B families contain sequences that according to Prodom
+#=GF DC   are members of this Pfam-A family.
+#=GF DR   PFAMB; PB000841;
+#=GF DR   PFAMB; PB000873;
+#=GF DR   PFAMB; PB002216;
+#=GF DR   PFAMB; PB002439;
+#=GF DR   PFAMB; PB003546;
+#=GF DR   PFAMB; PB005609;
+#=GF DR   PFAMB; PB006106;
+#=GF DR   PFAMB; PB006390;
+#=GF DR   PFAMB; PB006481;
+#=GF DR   PFAMB; PB007535;
+#=GF DR   PFAMB; PB011557;
+#=GF DR   PFAMB; PB011901;
+#=GF DR   PFAMB; PB014199;
+#=GF DR   PFAMB; PB015231;
+#=GF DR   PFAMB; PB015918;
+#=GF DR   PFAMB; PB022078;
+#=GF DR   PFAMB; PB022993;
+#=GF DR   PFAMB; PB023115;
+#=GF DR   PFAMB; PB023658;
+#=GF DR   PFAMB; PB027952;
+#=GF DR   PFAMB; PB033508;
+#=GF DR   PFAMB; PB040929;
+#=GF DR   PFAMB; PB043148;
+#=GF DR   PFAMB; PB045725;
+#=GF DR   PFAMB; PB047031;
+#=GF DR   PFAMB; PB053198;
+#=GF DR   PFAMB; PB055408;
+#=GF DR   PFAMB; PB055940;
+#=GF DR   PFAMB; PB062761;
+#=GF DR   PFAMB; PB068343;
+#=GF DR   PFAMB; PB069299;
+#=GF DR   PFAMB; PB070119;
+#=GF DR   PFAMB; PB071581;
+#=GF DR   PFAMB; PB072420;
+#=GF DR   PFAMB; PB072871;
+#=GF DR   PFAMB; PB086575;
+#=GF DR   PFAMB; PB092270;
+#=GF DR   PFAMB; PB093434;
+#=GF DR   PFAMB; PB095597;
+#=GF DR   PFAMB; PB096385;
+#=GF DR   PFAMB; PB105424;
+#=GF DR   PFAMB; PB107978;
+#=GF DR   PFAMB; PB109321;
+#=GF DR   PFAMB; PB110501;
+#=GF DR   PFAMB; PB119477;
+#=GF DR   PFAMB; PB119893;
+#=GF DR   PFAMB; PB127356;
+#=GF DR   PFAMB; PB127504;
+#=GF DR   PFAMB; PB128828;
+#=GF DR   PFAMB; PB144095;
+#=GF DR   PFAMB; PB145981;
+#=GF DR   PFAMB; PB146040;
+#=GF DR   PFAMB; PB147420;
+#=GF DR   PFAMB; PB148685;
+#=GF DR   PFAMB; PB153060;
+#=GF DR   PFAMB; PB156532;
+#=GF DR   PFAMB; PB159344;
+#=GF DR   PFAMB; PB164141;
+#=GF DR   PFAMB; PB169181;
+#=GF DR   PFAMB; PB169732;
+#=GF DR   PFAMB; PB169782;
+#=GF DR   PFAMB; PB170417;
+#=GF DR   PFAMB; PB170537;
+#=GF DR   PFAMB; PB171045;
+#=GF DR   PFAMB; PB171324;
+#=GF DR   PFAMB; PB171867;
+#=GF DR   PFAMB; PB172081;
+#=GF DR   PFAMB; PB172123;
+#=GF DR   PFAMB; PB172249;
+#=GF DR   PFAMB; PB172411;
+#=GF DR   PFAMB; PB172513;
+#=GF DR   PFAMB; PB172965;
+#=GF DR   PFAMB; PB173000;
+#=GF DR   PFAMB; PB173075;
+#=GF DR   PFAMB; PB174732;
+#=GF DR   PFAMB; PB175069;
+#=GF DR   PFAMB; PB175473;
+#=GF DR   PFAMB; PB175628;
+#=GF DR   PFAMB; PB175711;
+#=GF DR   PFAMB; PB175904;
+#=GF DR   PFAMB; PB176198;
+#=GF DR   PFAMB; PB176454;
+#=GF DR   PFAMB; PB176828;
+#=GF DR   PFAMB; PB177033;
+#=GF DR   PFAMB; PB177128;
+#=GF DR   PFAMB; PB177234;
+#=GF DR   PFAMB; PB177329;
+#=GF DR   PFAMB; PB178634;
+#=GF DR   PFAMB; PB179538;
+#=GF DR   PFAMB; PB179977;
+#=GF DR   PFAMB; PB180203;
+#=GF DR   PFAMB; PB180898;
+#=GF DR   PFAMB; PB181067;
+#=GF DR   PFAMB; PB181145;
+#=GF DR   PFAMB; PB181199;
+#=GF DR   PFAMB; PB181463;
+#=GF DR   PFAMB; PB181818;
+#=GF DR   PFAMB; PB182378;
+#=GF DR   PFAMB; PB182477;
+#=GF DR   PFAMB; PB182528;
+#=GF DR   INTERPRO; IPR000719;
+#=GF SQ   54
+#=GS PHKG2_RAT/24-291      AC P31325.1
+#=GS KS6A1_MOUSE/407-664   AC P18653.1
+#=GS KCC4_MOUSE/42-296     AC P08414.2
+#=GS CDPK_SOYBN/34-292     AC P28583.1
+#=GS KPK2_PLAFK/111-364    AC Q02595.1
+#=GS RAD53_YEAST/198-466   AC P22216.1
+#=GS MYLK_CHICK/1453-1708  AC P11799.2
+#=GS CDR1_SCHPO/12-258     AC P07334.3
+#=GS KIN1_SCHPO/125-395    AC P22987.3
+#=GS MEK1_YEAST/162-444    AC P24719.1
+#=GS CDC5_YEAST/82-337     AC P32562.1
+#=GS CHK1_SCHPO/10-272     AC P34208.2
+#=GS KGP1_DROME/457-717    AC Q03042.2
+#=GS KIN82_YEAST/324-602   AC P25341.2
+#=GS AKT_MLVAT/171-429     AC P31748.1
+#=GS PKD1_DICDI/36-291     AC P34100.1
+#=GS ARBK1_BOVIN/191-453   AC P21146.1
+#=GS ARBK1_BOVIN/191-453   DR PDB; 1ym7 D; 191-453;
+#=GS ARBK1_BOVIN/191-453   DR PDB; 1ym7 A; 191-453;
+#=GS ARBK1_BOVIN/191-453   DR PDB; 1ym7 B; 191-453;
+#=GS ARBK1_BOVIN/191-453   DR PDB; 1omw A; 191-453;
+#=GS ARBK1_BOVIN/191-453   DR PDB; 2bcj A; 191-453;
+#=GS ARBK1_BOVIN/191-453   DR PDB; 1ym7 C; 191-453;
+#=GS FUSED_DROME/4-254     AC P23647.2
+#=GS KAB7_YEAST/1096-1354  AC P31374.1
+#=GS PIM1_HUMAN/129-381    AC P11309.3
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxx A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2bzk B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxv A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxu C; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2bzh B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1xr1 A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2bil B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yi3 A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2bik B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1xqz A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1ywv A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2bzj A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxu B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2bzi B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxt A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1xws A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxu A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 2c3i B; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxu D; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yi4 A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yhs A; 38-290;
+#=GS PIM1_HUMAN/129-381    DR PDB; 1yxs A; 38-290;
+#=GS CLK1_MOUSE/160-476    AC P22518.1
+#=GS TTK_HUMAN/509-775     AC P33981.1
+#=GS BUR1_YEAST/60-366     AC P23293.1
+#=GS CDC21_MEDSA/1-284     AC P24923.1
+#=GS KIN28_YEAST/7-290     AC P06242.1
+#=GS CDKL1_HUMAN/4-287     AC Q00532.4
+#=GS MAK_RAT/4-284         AC P20793.1
+#=GS CTK1_YEAST/183-469    AC Q03957.1
+#=GS MK04_HUMAN/20-312     AC P31152.1
+#=GS ERK1_CANAL/68-371     AC P28869.2
+#=GS GSK3A_RAT/119-403     AC P18265.1
+#=GS CSK21_CHICK/39-324    AC P21868.1
+#=GS ACVR1_HUMAN/208-495   AC Q04771.1
+#=GS AVR2A_HUMAN/192-479   AC P27037.1
+#=GS KPRO_MAIZE/534-812    AC P17801.2
+#=GS MIL_AVIMH/82-339      AC P00531.1
+#=GS M3K9_HUMAN/144-403    AC P80192.3
+#=GS PHY1_CERPU/1004-1282  AC P25848.3
+#=GS BYR2_SCHPO/394-658    AC P28829.1
+#=GS CDC15_YEAST/25-272    AC P27636.2
+#=GS STE20_YEAST/620-871   AC Q03497.1
+#=GS STE7_YEAST/191-466    AC P06784.1
+#=GS BYR1_SCHPO/66-320     AC P10506.1
+#=GS MKK1_YEAST/221-488    AC P32490.1
+#=GS MOS_CERAE/60-338      AC P10650.1
+#=GS PKN1_MYXXA/59-320     AC P33973.1
+#=GS RAN1_SCHPO/18-295     AC P08092.2
+#=GS HAL4_YEAST/316-590    AC P25333.1
+#=GS NPR1_YEAST/438-742    AC P22211.2
+#=GS KKL6_YEAST/192-508    AC P28708.1
+#=GS KR1_PRVKA/53-332      AC P17613.1
+#=GS KR1_HHV11/191-478     AC P04413.1
+#=GS WEE1_HUMAN/299-569    AC P30291.2
+#=GS WEE1_HUMAN/299-569    DR PDB; 1x8b A; 299-569;
+#=GS HRR25_YEAST/9-273     AC P29295.1
+PHKG2_RAT/24-291                 YDPKDIIGRGVSSVV..RRCVHRATGD........EFAVKIMEVS.AERLSLEQLEEVRDA.............TRREMHILRQVAG...HPH..I..ITLIDSYES..................SSFMF..LVFDLMRKG.....ELF..DYLT................EKVAL...SEKETRSIMRSLLEAVNFLHV.N..........NIVHRDLKPENILLD.DNMQI...................RLSDFGFSCH..................LEPGE.KLRELCGTPGYLAP....EI....LKCS.........MDETHPGYGKEVDLWACGVILFTLLA.....GS......PPFW.HR........RQILMLRMIMEGQYQFSSPEWDDRS.......................................NTVKDLIAKLLQVDPNARLT.....AEQALQHPFF
+#=GR PHKG2_RAT/24-291      pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KS6A1_MOUSE/407-664              YVVKETIGVGSYSVC..KRCVHKATNM........EYAVKVIDKS.KRDPSE.........................EIEILLRYGQ...HPN..I..ITLKDVYDD..................GKHVY..LVTELMRGG.....ELL..DKIL................RQKFF...SEREASFVLHTISKTVEYLHS.Q..........GVVHRDLKPSNILYV.DESGNPE...............CLRICDFGFAKQL.................RAENG.LLMTPCYTANFVAP....EV....LK...............RQGYDEGCDIWSLGILLYTMLA.....GY......TPFA.NG.....PSDTPEEILTRIGSGKFTLSGGNWNTVS.......................................ETAKDLVSKMLHVDPHQRLT.....AKQVLQHPWI
+#=GR KS6A1_MOUSE/407-664   pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KCC4_MOUSE/42-296                FEVESELGRGATSIV..YRCKQKGTQK........PYALKVLKKT.VDKKIVRT.......................EIGVLLRL.S...HPN..I..IKLKEIFET..................PTEIS..LVLELVTGG.....ELF..DRIV................EKGYY...SERDARDAVKQILEAVAYLHE.N..........GIVHRDLKPENLLYA..TPAPDA...............PLKIADFGLSKI..................VEHQV.LMKTVCGTPGYCAP....EI....LR...............GCAYGPEVDMWSVGIITYILLC.....GF......EPFY.DE.......RGDQFMFRRILNCEYYFISPWWDEVS.......................................LNAKDLVKKLIVLDPKKRLT.....TFQALQHPWV
+#=GR KCC4_MOUSE/42-296     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CDPK_SOYBN/34-292                YEVGRKLGQGQFGTT..FECTRRASGG........KFACKSIPKR.KLLCKEDYEDVWR..................EIQIMHHLSE...HAN..V..VRIEGTYED..................STAVH..LVMELCEGG.....ELF..DRIV................QKGHY...SERQAARLIKTIVEVVEACHS.L..........GVMHRDLKPENFLFD..TIDEDA...............KLKATDFGLSVF..................YKPGE.SFCDVVGSPYYVAP....EV....LR................KLYGPESDVWSAGVILYILLS.....GV......PPFW.AE........SEPGIFRQILLGKLDFHSEPWPSIS.......................................DSAKDLIRKMLDQNPKTRLT.....AHEVLRHPWI
+#=GR CDPK_SOYBN/34-292     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KPK2_PLAFK/111-364               YVLNKKIGKGSFSTA..YIGTNILYGN........RVVVKEVDKS.KVKESNVYT......................EIEVLRKV.M...HKY..I..IKLISAYEQ..................EGFVY..LVLEYLKGG.....ELF..EYLN................NNGPY...TEQVAKKAMKRVLIALEALHS.N..........GVVHRDLKMENLMLE..NPNDPS...............SLKIIDFGLAS...................FLNSP.SMNMRCGSPGYVAP....EI....LK...............CASYGTKVDIFSLGVILFNILC.....GY......PPFR.GN........NVKEIFKKNMRCHISFNTKHWINKS.......................................ESVKEIILWMCCKNPDDRCT.....ALQALGHQWF
+#=GR KPK2_PLAFK/111-364    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+RAD53_YEAST/198-466              SIIDEVVGQGAFATV..KKAIERTTGK........TFAVKIISKR.KVIGNMDGVTR....................ELEVLQKL.N...HPR..I..VRLKGFYED..................TESYY..MVMEFVSGG.....DLM..DFVA................AHGAV...GEDAGREISRQILTAIKYIHS.M..........GISHRDLKPDNILIEQDDPVL..................VKITDFGLAKV..................QGNGS.FMKTFCGTLAYVAP....EV....IRGKDTSV..SPDEYEERNEYSSLVDMWSMGCLVYVILT.....GH......LPFS.GS........TQDQLYKQIGRGSYHEGPLKDFRIS.......................................EEARDFIDSLLQVDPNNRST.....AAKALNHPWI
+#=GR RAD53_YEAST/198-466   AS    .........................................................................................................................................................................................................................*..................................................................................................................................................................................................................................................................
+MYLK_CHICK/1453-1708             YNIEERLGSGKFGQV..FRLVEKKTGK........VWAGKFFKAY.SAKEKENIRD.....................EISIMNCL.H...HPK..L..VQCVDAFEE..................KANIV..MVLEMVSGG.....ELF..ERII...............DEDFEL...TERECIKYMRQISEGVEYIHK.Q..........GIVHLDLKPENIMCV.NKTGTS.................IKLIDFGLARR..................LESAG.SLKVLFGTPEFVAP....EV....IN...............YEPIGYETDMWSIGVICYILVS.....GL......SPFM.GD........NDNETLANVTSATWDFDDEAFDEIS.......................................DDAKDFISNLLKKDMKSRLN.....CTQCLQHPWL
+#=GR MYLK_CHICK/1453-1708  AS    .........................................................................................................................................................................................................................*..................................................................................................................................................................................................................................................................
+CDR1_SCHPO/12-258                WRLGKTLGTGSTSCV..RLAKHAKTGD........LAAIKIIPIR.YASIGM.........................EILMMRLL.R...HPN..I..LRLYDVWTD..................HQHMY..LALEYVPDG.....ELF..HYIR................KHGPL...SEREAAHYLSQILDAVAHCHR.F..........RFRHRDLKLENILIKVNEQQI...................KIADFGMATV..................EPNDS.CLENYCGSLHYLAP....EI....VS..............HKPYRGAPADVWSCGVILYSLLS.....NK......LPFG.GQ........NTDVIYNKIRHGAYDLPSSIS...........................................SAAQDLLHRMLDVNPSTRIT.....IPEVFSHPFL
+#=GR CDR1_SCHPO/12-258     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KIN1_SCHPO/125-395               YVLGKTIGAGSMGKV..KVAHHLKTGE........QFAIKIVTRL.HPDITKAKAAASAEATKAAQSEKNKEIRTVREAALSTLL.R...HPY..I..CEARDVYIT..................NSHYY..MVFEFVDGG.....QML..DYII................SHGKL...KEKQARKFVRQIGSALSYLHQ.N..........SVVHRDLKIENILIS.KTGDI...................KIIDFGLSNL..................YRRQS.RLRTFCGSLYFAAP....EL....LN..............AQPYIGPEVDVWSFGIVLYVLVC.....GK......VPFD.DQ........NMSALHAKIKKGTVEYPSYLS...........................................SDCKGLLSRMLVTDPLKRAT.....LEEVLNHPWM
+#=GR KIN1_SCHPO/125-395    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+MEK1_YEAST/162-444               EITNRIVGNGTFGHV..LITHNSKERDEDVCYHPENYAVKIIKLK.PNKFDK.........................EARILLRL.D...HPN..I..IKVYHTFCD.................RNNHLY..IFQDLIPGG.....DLF..SYLA................KGDCLTSMSETESLLIVFQILQALNYLHD.Q..........DIVHRDLKLDNILLC..TPEPCT...............RIVLADFGIAKDL.................NSNKE.RMHTVVGTPEYCAP....EVGFRANRKAYQSF..SRAATLEQRGYDSKCDLWSLGVITHIMLT.....GI......SPFY.GD.......GSERSIIQNAKIGKLNFKLKQWDIVS.......................................DNAKSFVKDLLQTDVVKRLN.....SKQGLKHIWI
+#=GR MEK1_YEAST/162-444    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CDC5_YEAST/82-337                YHRGHFLGEGGFARC..FQIKDDSGEI.........FAAKTVAKA.SIKSEKTRKKLLS..................EIQIHKSM.S...HPN..I..VQFIDCFED..................DSNVY..ILLEICPNG.....SLM..ELLK................RRKVL...TEPEVRFFTTQICGAIKYMHS.R..........RVIHRDLKLGNIFFD.SNYNL...................KIGDFGLAAVL.................ANESE.RKYTICGTPNYIAP....EV....LM.............GKHSGHSFEVDIWSLGVMLYALLI.....GK......PPFQ.AR........DVNTIYERIKCRDFSFPRDKPIS.........................................DEGKILIRDILSLDPIERPS.....LTEIMDYVWF
+#=GR CDC5_YEAST/82-337     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CHK1_SCHPO/10-272                YHIGREIGTGAFASV..RLCYDDNAKI.........YAVKFVNKK.HATSCMNAGVWARR..............MASEIQLHKLCNG...HKN..I..IHFYNTAEN..................PQWRW..VVLEFAQGG.....DLF..DKIE................PDVGI...DEDVAQFYFAQLMEGISFMHS.K..........GVAHRDLKPENILLD.YNGNL...................KISDFGFASLFS...............YKGKSR.LLNSPVGSPPYAAP....EI....................TQQYDGSKVDVWSCGIILFALLL.....GN......TPWD.EA.....ISNTGDYLLYKKQCERPSYHPWNLLS.........................................PGAYSIITGMLRSDPFKRYS.....VKHVVQHPWL
+#=GR CHK1_SCHPO/10-272     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KGP1_DROME/457-717               LEVVSTLGIGGFGRVELVKAHHQDRVD........IFALKCLKKR.HIVDTKQEEHIFS..................ERHIMLSS.R...SPF..I..CRLYRTFRD..................EKYVY..MLLEACMGG.....EIW..TMLR................DRGSF...EDNAAQFIIGCVLQAFEYLHA.R..........GIIYRDLKPENLMLD.ERGYV...................KIVDFGFAKQ..................IGTSS.KTWTFCGTPEYVAP....EI....IL...............NKGHDRAVDYWALGILIHELLN.....GT......PPFS.AP........DPMQTYNLILKGIDMIAFPKHIS.........................................RWAVQLIKRLCRDVPSERLGYQTGGIQDIKKHKWF
+#=GR KGP1_DROME/457-717    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KIN82_YEAST/324-602              FEKIRLLGQGDVGKV..YLMRERDTNQ........IFALKVLNKH.EMIKRKKIKRVLT..................EQEILATS.D...HPF..I..VTLYHSFQT..................KDYLY..LCMEYCMGG.....EFF..RALQ..............TRKSKCI...AEEDAKFYASEVVAALEYLHL.L..........GFIYRDLKPENILLH.QSGHV...................MLSDFDLSIQATGSKKPTMKDSTYLDTKICSDGFRTNSFVGTEEYLAP....EV....IR...............GNGHTAAVDWWTLGILIYEMLF.....GC......TPFK.GD........NSNETFSNILTKDVKFPHDKEVS.........................................KNCKDLIKKLLNKNEAKRLGSK.SGAADIKRHPFF
+#=GR KIN82_YEAST/324-602   pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+AKT_MLVAT/171-429                FEYLKLLGKGTFGKV..ILVKEKATGR........YYAMKILKKE.VIVAKDEVAHTLT..................ENRVLQNS.R...HPF..L..TALKYSFQT..................HDRLC..FVMEYANGG.....ELF..FHLS................RERVF...SEDRARFYGAEIVSALDYLHSEK..........NVVYRDLKLENLMLD.KDGHI...................KITDFGLCKEG.................IKDGA.TMKTFCGTPEYLAP....EV....LE...............DNDYGRAVDWWGLGVVMYEMMC.....GR......LPFY.NQ........DHEKLFELILMEEIRFPRTLG...........................................PEAKSLLSGLLKKDPTQRLGGGSEDAKEIMQHRFF
+#=GR AKT_MLVAT/171-429     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+PKD1_DICDI/36-291                FNFYGSLGSGSFGTA..KLCRHRGSGL........FFCSKTLRRE.TIVHEKHKEHVNN..................EINIMLNI.S...HPY..I..VKTYSTFNT..................PTKIH..FIMEYAGKK.....DLF..HHLR................ANKCF...TEQTTKLIVAEIVLAIEYLHA.E..........NIIYRDLKPENILID.EKGHI...................KLTDFGFSKK..................TVGGK.NTSSVCGTFDYMAP....EI....LN..............SSNGHGKPVDWWALGVVVYELVT.....GK......LPFS.NSKESLLNRKADFQLIFQNSYLS...................................................DEIKDFIFQLLSVDPSKRLGT..FDSCSIRNHKWF
+#=GR PKD1_DICDI/36-291     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+ARBK1_BOVIN/191-453              FSVHRIIGRGGFGEV..YGCRKADTGK........MYAMKCLDKK.RIKMKQGETLAL...................NERIMLSLVSTGDCPF..I..VCMSYAFHT..................PDKLS..FILDLMNGG.....DLH..YHLS................QHGVF...SEADMRFYAAEIILGLEHMHN.R..........FVVYRDLKPANILLD.EHGHV...................RISDLGLAC...................DFSKK.KPHASVGTHGYMAP....EV....LQ..............KGVAYDSSADWFSLGCMLFKLLR.....GH......SPFR.QH.....KTKDKHEIDRMTLTMAVELPDSFS...........................................PELRSLLEGLLQRDVNRRLGCLGRGAQEVKESPFF
+#=GR ARBK1_BOVIN/191-453   SS    EEEEEEEEE-SSSEE..EEEEETTT--........EEEEEEEEHH.HHHHCTTHHHHH...................HHHHHHHHHSSS--SS..B..--EEEEEEE..................TTEEE..EEEE--TS-.....BHH..HHHH................HH-S-...-HHHHHHHHHHHHHHHHHHHH.T..........TEE----SGGGEEE-.TTS-E...................EE--GTT-E...................E-SSS.---S--S-TTS--H....HH....HS..............SS----THHHHHHHHHHHHHHHH.....SS......-TT-.SS.....SSS-THHHHHHHHH------TTS-...........................................HHHHHHHHHHT-SSSTTSTTTSSSSHHHHHHSGGG
+#=GR ARBK1_BOVIN/191-453   pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+FUSED_DROME/4-254                YAVSSLVGQGSFGCV..YKATRKDDSK........VVAIKVISKR.GRATKELKNLRR...................ECDIQARL.K...HPH..V..IEMIESFES..................KTDLF..VVTEFALM......DLH..RYLS................YNGAM...GEEPARRVTGHLVSALYYLHS.N..........RILHRDLKPQNVLLD.KNMHA...................KLCDFGLARNM.................TLGTH.VLTSIKGTPLYMAP....EL....LA...............EQPYDHHADMWSLGCIAYESMA.....GQ......PPFC.AS........SILHLVKMIKHEDVKWPSTLT...........................................SECRSFLQGLLEKDPGLRIS.....WTQLLCHPFV
+#=GR FUSED_DROME/4-254     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KAB7_YEAST/1096-1354             FVSLQKMGEGAYGKV..NLCIHKKNRY........IVVIKMIFKE.RILVDTWVRDRKLGT.............IPSEIQIMATL.NKKPHEN..I..LRLLDFFED..................DDYYY....IETPVHGETGCIDLF..DLIE................FKTNM...TEFEAKLIFKQVVAGIKHLHD.Q..........GIVHRDIKDENVIVD.SKGFV...................KIIDFGSAA...................YVKSG.PFDVFVGTIDYAAP....EV....LG..............GNPYEGQPQDIWAIGILLYTVVF.....KE......NPFY...............NIDEILEGDLKFNNAEEVS.........................................EDCIELIKSILNRCVPKRPT.....IDDINNDKWL
+#=GR KAB7_YEAST/1096-1354  pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+PIM1_HUMAN/129-381               YQVGPLLGSGGFGSV..YSGIRVSDNL........PVAIKHVEKD.RISDWGE.....LPNG..........TRVPMEVVLLKKV.S...SGFSGV..IRLLDWFER..................PDSFV..LILERPEP....VQDLF..DFIT................ERGAL...QEELARSFFWQVLEAVRHCHN.C..........GVLHRDIKDENILIDLNRGEL...................KLIDFGSGA...................LLKDT.VYTDFDGTRVYSPP....EW....IR..............YHRYHGRSAAVWSLGILLYDMVC.....GD......IPFE.HD....EEIIRGQVFFRQRVS.....................................................SECQHLIRWCLALRPSDRPT.....FEEIQNHPWM
+#=GR PIM1_HUMAN/129-381    SS    EEEEEEEEEETTEEE..EEEEETTTTE........EEEEEEEEGG.G---EEE.....ETTS..........EEEEHHHHHHHHH.H...SSSTSB..--EEEEEEE..................SSEEE..EEEE--SS....EEEHH..HHHH................HH-S-...-HHHHHHHHHHHHHHHHHHHH.T..........TEE-S--SGGGEEEETTTTEE...................EE---TT-E...................E--SS.-B----S-GGGS-H....HH....HH..............HS-B-HHHHHHHHHHHHHHHHHH.....SS......-S--.SH....HHHHHT----SS---.....................................................HHHHHHHHHHT-SSGGGS--.....HHHHHTSGGG
+#=GR PIM1_HUMAN/129-381    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CLK1_MOUSE/160-476               YEIVDTLGEGAFGKVVECIDHKVGGRR.........VAVKIVKNV.DRYCEAAQS......................EIQVLEHLNTTDPHST..FRCVQMLEWFEH..................RGHIC..IVFELL........GLSTYDFIK.................ENSFLPFRMDHIRKMAYQICKSVNFLHS.N..........KLTHTDLKPENILFV.KSDYTEAYNPKMKRDERTIVNPDIKVVDFGSA....................TYDDE.HHSTLVSTRHYRAP....EV....IL...............ALGWSQPCDVWSIGCILIEYYL.....GF......TVFP.TH.....DSREHLAMMERILGPLPKHMIQKTRKRRYFHHDRLDWDEHSSAGR..YVSRRCKPLKEFMLSQDAEHEFLFDLVGKILEYDPAKRIT.....LKEALKHPFF
+#=GR CLK1_MOUSE/160-476    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+TTK_HUMAN/509-775                YSILKQIGSGGSSKV..FQVLNEKKQI.........YAIKYVNLE.EADNQTLDSYRN...................EIAYLNKLQQ..HSDK..I..IRLYDYEIT..................DQYIY..MVMECGNI......DLN..SWLK................KKKSI...DPWERKSYWKNMLEAVHTIHQ.H..........GIVHSDLKPANFLIV..DGML...................KLIDFGIANQMQ...............PDTTSV.VKDSQVGTVNYMPP....EA....IKDMSSS....RENGKSKSKISPKSDVWSLGCILYYMTY.....GK......TPFQ.QI.......INQISKLHAIIDPNHEIEFPDIPE.........................................KDLQDVLKCCLKRDPKQRIS.....IPELLAHPYV
+#=GR TTK_HUMAN/509-775     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+BUR1_YEAST/60-366                YREDEKLGQGTFGEV..YKGIHLETQR........QVAMKKIIVS.VEKDLFPITAQR...................EITILKRL.N...HKN..I..IKLIEMVYDHSPDIT.....NAASSNLHKSFY..MILPYMVADLSGVLHNP.......................RINL...EMCDIKNMMLQILEGLNYIHC.A..........KFMHRDIKTANILID.HNGVL...................KLADFGLARLYYGCPPN.....LKYPGGAGSGA.KYTSVVVTRWYRAP....EL....VL..............GDKQYTTAVDIWGVGCVFAEFFE.....KK......PILQ.GK.....TDIDQGHVIFKLLGTPTEEDWAVARYLPGAELTTTNYK.................PTLRERFGKYLSETGLDFLGQLLALDPYKRLT.....AMSAKHHPWF
+#=GR BUR1_YEAST/60-366     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CDC21_MEDSA/1-284                GENVEKIGEGTYGVV..YKARDRVTNE........TIALKKIRLE.QEDEGVPSTAIR...................EISLLKEM.Q...HRN..I..VRLQDVVHS..................DKRLY..LVFEYLDLDLKKHMDSS.PEFIK........................DPRQVKMFLYQMLCGIAYCHS.H..........RVLHRDLKPQNLLIDRRTNSL...................KLADFGLARAF.................GIPVR.TFTHEVVTLWYRAP....EI....LL..............GSRHYSTPVDVWSVGCIFAEMAN.....RR......PLSP.GD.....SEIDELFKIFRILGTPNEDTWPGVTSLPDFKSTFPRWP.................SKDLATVVPNLEPAGLDLLNSMLCLDPTKRIT.....ARSAVEHEYF
+#=GR CDC21_MEDSA/1-284     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KIN28_YEAST/7-290                YTKEKKVGEGTYAVV..YLGCQHSTGR........KIAIKEIKTS.EFKDGLDMSAIR...................EVKYLQEM.Q...HPN..V..IELIDIFMA..................YDNLN..LVLEFLPTDLEVVIKDK.......................SILF...TPADIKAWMLMTLRGVYHCHR.N..........FILHRDLKPNNLLFS.PDGQI...................KVADFGLARAI.................PAPHE.ILTSNVVTRWYRAP....EL....LF..............GAKHYTSAIDIWSVGVIFAELML.....RI......PYLP.GQ.....NDVDQMEVTFRALGTPTDRDWPEVSSFMTYNKLQIYPPP...............SRDELRKRFIAASEYALDFMCGMLTMNPQKRWT.....AVQCLESDYF
+#=GR KIN28_YEAST/7-290     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CDKL1_HUMAN/4-287                YEKIGKIGEGSYGVV..FKCRNRDTGQ........IVAIKKFLES.EDDPVIKKIALR...................EIRMLKQL.K...HPN..L..VNLLEVFRR..................KRRLH..LVFEYCDHT.....VLH..............E....LDRYQRGV...PEHLVKSITWQTLQAVNFCHK.H..........NCIHRDVKPENILIT.KHSVI...................KLCDFGFARLL.................TGPSD.YYTDYVATRWYRSP....EL....LV..............GDTQYGPPVDVWAIGCVFAELLS.....GV......PLWP.GK.....SDVDQLYLIRKTLGDLIPRHQQVFSTNQYFSGVKIPDPE...............DMEPLELKFPNISYPALGLLKGCLHMDPTQRLT.....CEQLLHHPYF
+#=GR CDKL1_HUMAN/4-287     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+MAK_RAT/4-284                    YTTMRQLGDGTYGSV..LMGKSNESGE........LVAIKRMKRK.FYSWDECMNLR....................EVKSLKKL.N...HAN..V..IKLKEVIRE..................NDHLY..FIFEYMKENLYQLMKDR.......................NKLF...PESVIRNIMYQILQGLAFIHK.H..........GFFHRDMKPENLLCM.GPELV...................KIADFGLARE..................LRSQP.PYTDYVSTRWYRAP....EV....LL..............RSSVYSSPIDVWAVGSIMAELYT.....FR......PLFP.GT.....SEVDEIFKICQVLGTPKKSDWPEGYQLASSMNFRFPQC................IPINLKTLIPNASSEAIQLMTEMLNWDPKKRPT.....ASQALKHPYF
+#=GR MAK_RAT/4-284         pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CTK1_YEAST/183-469               YLRIMQVGEGTYGKV..YKAKNTNTEK........LVALKKLRLQ.GEREGFPITSIR...................EIKLLQSF.D...HPN..V..STIKEIMVE.................SQKTVY..MIFEYADNDLSGLLLNK.......................EVQI...SHSQCKHLFKQLLLGMEYLHD.N..........KILHRDVKGSNILID.NQGNL...................KITDFGLARK..................MNSRA.DYTNRVITLWYRPP....EL....LL..............GTTNYGTEVDMWGCGCLLVELFN.....KT......AIFQ.GS.....NELEQIESIFKIMGTPTINSWPTLYDMPWFFMIMPQQTTK............YVNNFSEKFKSVLPSSKCLQLAINLLCYDQTKRFS.....ATEALQSDYF
+#=GR CTK1_YEAST/183-469    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+MK04_HUMAN/20-312                FVDFQPLGFGVNGLV..LSAVDSRACR........KVAVKKIALS.DARSMKHALR.....................EIKIIRRL.D...HDN..I..VKVYEVLGPKGTDL.......QGELFKFSVAY..IVQEYMETDLARLLEQG.........................TL...AEEHAKLFMYQLLRGLKYIHS.A..........NVLHRDLKPANIFIS.TEDLV..................LKIGDFGLARIVDQ..............HYSHKG.YLSEGLVTKWYRSP....RL....LL..............SPNNYTKAIDMWAAGCILAEMLT.....GR......MLFA.GA.....HELEQMQLILETIPVIREEDKDELLRVMPSFVSSTWEV.................KRPLRKLLPEVNSEAIDFLEKILTFNPMDRLT.....AEMGLQHPYM
+#=GR MK04_HUMAN/20-312     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+ERK1_CANAL/68-371                YQILEIVGEGAYGIV..CSAIHKPSQQ........KVAIKKIEPF.ERSMLCLRTLR....................ELKLLKHF.N...HEN..I..ISILAIQRPIN.............YESFNEIY..LIQELMETDLHRVIRTQ.........................NL...SDDHIQYFIYQTLRALKAMHS.A..........NVLHRDLKPSNLLLN.SNCDL...................KICDFGLARSIAS..............QEDNYG.FMTEYVATRWYRAP....EI....ML..............TFQEYTTAIDVWSVGCILAEMLS.....GR......PLFP.GR.....DYHNQLWLIMEVLGTPNMEDYYNIKSKRAREYIRSLPFCKKIPFSELFANTNNNTSTSNTGGRTNINPLALDLLEKLLIFNPAKRIT.....VEDALKHPYL
+#=GR ERK1_CANAL/68-371     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+GSK3A_RAT/119-403                YTDIKVIGNGSFGVV..YQARLAETRE........LVAIKKVLQD.KRFKNR.........................ELQIMRKL.D...HCN..I..VRLRYFFYSSG..............EKKDELYLNLVLEYVPETVYRVARHF....................TKAKLII...PIIYVKVYMYQLFRSLAYIHS.Q..........GVCHRDIKPQNLLVD.PDTAV..................LKLCDFGSAKQ..................LVRGE.PNVSYICSRYYRAP....EL....IF..............GATDYTSSIDVWSAGCVLAELLL.....GQ......PIFP.GD.....SGVDQLVEIIKVLGTPTREQIREMNPNYTEFKFPQIKA.................HPWTKVFKSRTPPEAIALCSSLLEYTPSSRLS.....PLEACAHSFF
+#=GR GSK3A_RAT/119-403     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CSK21_CHICK/39-324               YQLVRKLGRGKYSEV..FEAINITNNE........KVVVKILKPV.KKKKIKR........................EIKILENLRG...GPN..I..ITLADIVKDP................VSRTPA..LVFEHVNNT.....DFK.....................QLYQTL...TDYDIRFYMYEILKALDYCHS.M..........GIMHRDVKPHNVMID.HEHRK..................LRLIDWGLAEF..................YHPGQ.EYNVRVASRYFKGP....EL....LV..............DYQMYDYSLDMWSLGCMLASMIF.....RK......EPFF.HG....HDNYDQLVRIAKVLGTEDLYDYIDKYNIELDPRFNDILGRHSR.........KRWERFVHSENQHLVSPEALDFLDKLLRYDHQSRLT.....AREAMEHPYF
+#=GR CSK21_CHICK/39-324    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+ACVR1_HUMAN/208-495              ITLLECVGKGRYGEV..WRGSWQGEN..........VAVKIFSSR.DEKSWFRET......................ELYNTVML.R...HEN..I..LGFIASDMTSR..............HSSTQLW..LITHYHEMG.....SLY..DYLQ.................LTTL...DTVSCLRIVLSIASGLAHLHI.EIFGT..QGKPAIAHRDLKSKNILVK.KNGQC...................CIADLGLAVMHSQ.............STNQLDV.GNNPRVGTKRYMAP....EVLDETIQ.............VDCFDSYKRVDIWAFGLVLWEVARRM.VSNGIVEDYKPPFY.DVVPNDPSFEDMRKVVCVDQQRPNIPNRWFSDPTL.......................................TSLAKLMKECWYQNPSARLT.....ALRIKKT..L
+#=GR ACVR1_HUMAN/208-495   pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+AVR2A_HUMAN/192-479              LQLLEVKARGRFGCV..WKAQLLNEY..........VAVKIFPIQ.DKQSWQNEY......................EVYSLPGM.K...HEN..I..LQFIGAEKRGT..............SVDVDLW..LITAFHEKG.....SLS..DFLK.................ANVV...SWNELCHIAETMARGLAYLHE.DIPGLKDGHKPAISHRDIKSKNVLLK.NNLTA...................CIADFGLALKFE...............AGKSAG.DTHGQVGTRRYMAP....EVLEGAIN..............FQRDAFLRIDMYAMGLVLWELASRCTAADGPVDEYMLPFE.EEIGQHPSLEDMQEVVVHKKKRPVLRDYWQKHAGM.......................................AMLCETIEECWDHDAEARLS.....AGCVGER..I
+#=GR AVR2A_HUMAN/192-479   pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KPRO_MAIZE/534-812               RKFKVELGRGESGTV..YKGVLEDDRH.........VAVKKLENV.RQGKEVFQA......................ELSVIGRI.N...HMN..L..VRIWGFCSE..................GSHRL..LVSEYVENG.....SLA..NILF................SEGGNILLDWEGRFNIALGVAKGLAYLHH.EC.......LEWVIHCDVKPENILLD.QAFEP...................KITDFGLVKLLN...............RGGSTQ.NVSHVRGTLGYIAP....EW....VS...............SLPITAKVDVYSYGVVLLELLT.....G.......TRVS.ELVGGTDEVHSMLRKLVRMLSAKLEGEEQSWIDGYLDSKLN.........................RPVNYVQARTLIKLAVSCLEEDRSKRPT.....MEHAVQT..L
+#=GR KPRO_MAIZE/534-812    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+MIL_AVIMH/82-339                 VLLSTRIGSGSFGTV..YKGKWHGD...........VAVKILKVV.DPTPEQFQAFRN...................EVAVLRKT.R...HVN..I..LLFMGYMT...................KDNLA..IVTQWCEGS.....SLY..KHLH...............VQETKF...QMFQLIDIARQTAQGMDYLHA.K..........NIIHRDMKSNNIFLH.GGLTV...................KIGDFGLATVKS...............RWSGSQ.QVEQPTGSILWMAP....EV....IRM............QDSNPFSFQSDVYSYGIVLYELMT.....GE......LPYS.HI.....NNRDQIIFMVGRGYASPDLSKLYKNCP........................................KAMKRLVADCLKKVREERPL.....FPQILSS..I
+#=GR MIL_AVIMH/82-339      pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+M3K9_HUMAN/144-403               LTLEEIIGIGGFGKV..YRAFWIGDE..........VAVKAARHDPDEDISQTIENVRQ..................EAKLFAML.K...HPN..I..IALRGVCLK..................EPNLC..LVMEFARGG.....PLN..RVLS.................GKRI...PPDILVNWAVQIARGMNYLHD.EA.......IVPIIHRDLKSSNILIL.QKVENGDLS...........NKILKITDFGLAR...................EWHRT.TKMSAAGTYAWMAP....EV....IR...............ASMFSKGSDVWSYGVLLWELLT.....GE......VPFR.GI........DGLAVAYGVAMNKLALPIPSTCP.........................................EPFAKLMEDCWNPDPHSRPS.....FTNILDQ..L
+#=GR M3K9_HUMAN/144-403    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+PHY1_CERPU/1004-1282             IQITGSLGSGSSATV..EKAVWLGTP..........VAKKTFYGR.NNEDFKR........................EVEILAEL.C...HPN..I..TSMFCSPLY..................RRKCS..IIMELMDG......DLL..ALMQ.......RRLDRNEDHDSPPF...SILEVVDIILQTSEGMNYLHE.K..........GIIHRDLKSMNILVK.SVKVTKSEI..........GYVHVKVADFGLSKTKD...............SSTRYS.NQTWNRGTNRWMAP....EV....INLGYESTEGEISFDGKVPKYPLKSDVYSFGMVCYEVLT.....GD......VPFPEEK.....NPNNVKRMVLEGVRPDLPAHCP.............................................IELKALITDCWNQDPLKRPS.....FAVICQK..L
+#=GR PHY1_CERPU/1004-1282  pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+BYR2_SCHPO/394-658               WIRGALIGSGSFGQV..YLGMNASSGE........LMAVKQVILD.SVSESKDRHAKLLDA.............LAGEIALLQEL.S...HEH..I..VQYLGSNLN..................SDHLN..IFLEYVPGG.....SVA..GLLT................MYGSF...EETLVKNFIKQTLKGLEYLHS.R..........GIVHRDIKGANILVD.NKGKI...................KISDFGISKKLELN...........STSTKTGG.ARPSFQGSSFWMAP....EV....VK...............QTMHTEKTDIWSLGCLVIEMLT.....SK......HPYP.NC.....DQMQAIFRIGENILPEFPSNIS.............................................SSAIDFLEKTFAIDCNLRPT.....ASELLSHPFV
+#=GR BYR2_SCHPO/394-658    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+CDC15_YEAST/25-272               YHLKQVIGRGSYGVV..YKAINKHTDQ........VVAIKEVVYE.NDEELNDIMA.....................EISLLKNL.N...HNN..I..VKYHGFIRK..................SYELY..ILLEYCANG.....SLR..RLIS...............RSSTGL...SENESKTYVTQTLLGLKYLHG.E..........GVIHRDIKAANILLS.ADNTV...................KLADFGVS....................TIVNS.SALTLAGTLNWMAP....EI....LG...............NRGASTLSDIWSLGATVVEMLT.....KN......PPYH.NL.....TDANIYYAVENDTYYPPSSFS..............................................EPLKDFLSKCFVKNMYKRPT.....ADQLLKHVWI
+#=GR CDC15_YEAST/25-272    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+STE20_YEAST/620-871              YANLVKIGQGASGGV..YTAYEIGTNV........SVAIKQMNLE.KQPKKELIIN.....................EILVMKGS.K...HPN..I..VNFIDSYVL..................KGDLW..VIMEYMEGG.....SLT..DVVT.................HCIL...TEGQIGAVCRETLSGLEFLHS.K..........GVLHRDIKSDNILLS.MEGDI...................KLTDFGFCAQI.................NELNL.KRTTMVGTPYWMAP....EV....VS...............RKEYGPKVDIWSLGIMIIEMIE.....GE......PPYL.NE.....TPLRALYLIATNGTPKLKEPENLS...........................................SSLKKFLDWCLCVEPEDRAS.....ATELLHDEYI
+#=GR STE20_YEAST/620-871   pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+STE7_YEAST/191-466               LVQLGKIGAGNSGTV..VKALHVPDSK........IVAKKTIPVE.QNNSTIINQLVR...................ELSIVKNVKP...HEN..I..ITFYGAYYNQ...............HINNEII..ILMEYSDCG.....SLD..KILSVY...KRFVQRGTVSSKKTWF...NELTISKIAYGVLNGLDHLYRQY..........KIIHRDIKPSNVLIN.SKGQI...................KLCDFGVSK...................KLINS.IADTFVGTSTYMSP....ER....IQ...............GNVYSIKGDVWSLGLMIIELVT.....GE......FPLG.GHNDTPDGILDLLQRIVNEPSPRLPKDRIYS...........................................KEMTDFVNRCCIKNERERSS.....IHELLHHDLI
+#=GR STE7_YEAST/191-466    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+BYR1_SCHPO/66-320                LEVVRHLGEGNGGAV..SLVKHRNI...........FMARKTVYV.GSDSKLQKQILR...................ELGVLHHC.R...SPY..I..VGFYGAFQY..................KNNIS..LCMEYMDCG.....SLD..AILR................EGGPI...PLDILGKIINSMVKGLIYLYNVL..........HIIHRDLKPSNVVVN.SRGEI...................KLCDFGVSG...................ELVNS.VAQTFVGTSTYMSP....ER....IR...............GGKYTVKSDIWSLGISIIELAT.....QE......LPWSFSNIDDSIGILDLLHCIVQEEPPRLPSSFP.............................................EDLRLFVDACLHKDPTLRAS.....PQQLCAMPYF
+#=GR BYR1_SCHPO/66-320     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+MKK1_YEAST/221-488               IETLGILGEGAGGSV..SKCKLKNGSK........IFALKVINTL.NTDPEYQKQIFR...................ELQFNRSF.Q...SEY..I..VRYYGMFTDD................ENSSIY..IAMEYMGGR.....SLD..............AIYKNLLERGGRI...SEKVLGKIAEAVLRGLSYLHE.K..........KVIHRDIKPQNILLN.ENGQV...................KLCDFGVSG...................EAVNS.LATTFTGTSFYMAP....ER....IQ...............GQPYSVTSDVWSLGLTILEVAN.....GK......FPCS.SE.....KMAANIAPFELLMWILTFTPELKDEPESN..................................IIWSPSFKSFIDYCLKKDSRERPS.....PRQMINHPWI
+#=GR MKK1_YEAST/221-488    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+MOS_CERAE/60-338                 VCLLQRLGAGGFGSV..YKATYHGVP..........VAIKQVNKC.TKNRLASRRSFWA..................ELNVARLR.....HDN..I..VRVVAASTRT...............PAGSNSLGTIIMEFGGNV.....TLH..QVIYGAASHPEGDAGEPHCSTGGPL...TLGKCLKYSLDVVNGLLFLHS.Q..........SIVHLDLKPANILIS.EQDVC...................KISDFGCSEKLED..............LLCFQT.PLYPLGGTYTHRAP....EL....LK...............GEGVTPKADIYSFAITLWQMTT.....KQ......APYS.GE.....RQHILYAVVAYDLRPSLSAAVFQDSLPG.......................................QRLGDVIRRCWRPSAAQRPS.....ARPLLVD..L
+#=GR MOS_CERAE/60-338      pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+PKN1_MYXXA/59-320                FRLVRRLGRGGMGAV..YLGEHVSIGS........RVAVKVLHAH.LTMYPELVQRFHA..................EARAVNLI.G...HEN..I..VSIFDMDAT..................PPRPY..LIMEFLDGA.....PLS....................AWVGTPL...AAGAVVSVLSQVCDALQAAHA.R..........GIVHRDLKPDNIFLV.RRNGNAP...............FVKVLDFGIAKLAD...............AHMPQT.HAGIIVGTPEYMAP....EQ....SL...............GRGVDGRADLYALGVIAYQLLT.....GR......LPFN.DE.....GLAAQLVAHQLRPPPPPSSVYPAVS..........................................AALEHVILRALAKKPEDRYA....SIAAFRNALQV
+#=GR PKN1_MYXXA/59-320     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+RAN1_SCHPO/18-295                LRFVSIIGAGAYGVV..YKAEDIYDGT........LYAVKALCKD.GLNEKQKKLQAR...................ELALHARVSS...HPY..I..ITLHRVLET..................EDAIY..VVLQYCPNG.....DLF..TYIT.................EKKVYQGNSHLIKTVFLQLISAVEHCHS.V..........GIYHRDLKPENIMVG.NDVNT..................VYLADFGLA....................TTEPY.SSDFGCGSLFYMSPECQREVKKLSSLSDMLPVTPEPIESQSSSFATAPNDVWALGIILINLCC.....KR......NPWK.RACSQTDGTYRSYVHNPSTLLSILPIS...............................................RELNSLLNRIFDRNPKTRIT.....LPELSTL..V
+#=GR RAN1_SCHPO/18-295     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+HAL4_YEAST/316-590               GRCQEVLGKGAFGVV..RICQKKNVSSQDGNKSEKLYAVKEFKRR.TSESAEKYSKRLT.................SEFCISSSL.H...HTN..I..VTTLDLFQD.................AKGEYC..EVMEYCAGG.....DLF..TLVV................AAGKL...EYMEADCFFKQLIRGVVYMHE.M..........GVCHRDLKPENLLLT.HDGVL...................KITDFGNSECFKM.............AWEKNIH.LSGGVCGSSPYIAP....EE....YI..............KEEFDPRPVDIWACGVIYMAMRT.....GR......QLWS.SA.....EKDDPFYMNYLKGRKEKGGYEPIESLKR.......................................ARCRNVIYSMLDPVPYRRIN.....GKQILNSEWG
+#=GR HAL4_YEAST/316-590    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+NPR1_YEAST/438-742               IKTGADLGAGAGGSV..KLAQRISDNK........IFAVKEFRTK.FENESKRDYVKKI................TSEYCIGTTL.N...HPN..I..IETIEIVYE..................NDRIL..QVMEYCEY......DLF..AIVM.................SNKM...SYEEICCCFKQILTGVQYLHS.I..........GLAHRDLKLDNCVIN.EKGIV...................KLIDFGAAVVFSY.............PFSKNLV.EASGIVGSDPYLAP....EV....CI..............FAKYDPRPVDIWSSAIIFACMIL.....KK......FPWKIPK.....LRDNSFKLFCSGRDCDSLSSLVTRTPDPPSYDESHSTEKKKPESSSNNVSDPNNVNIGPQRLLHSLPEETQHIVGRMIDLAPACRGN.....IEEIMEDPWI
+#=GR NPR1_YEAST/438-742    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KKL6_YEAST/192-508               WKKVRPIGSGNFSTVLLYELMDQSNPKL......KQVAVKRLKYP.EELSNVEQINTSLRYKETLS...RLENSLTRELQVLKSL.N...HPC..I..VKLLGIN.NPIFVTSKKPLCDLIIKTPRALPPCDMIMSYCPAG.....DLL..AAVM...............ARNGRL...EAWLIQRIFTEVVLAVKYLHE.N..........SIIHRDLKLENILLK...YSFDDINSFRDS.PIYCKQNFIELADFGLCKK..................IENNE.MCTARCGSEDYVSP....EI....LM..............GVPYDGHLSDTWALGVILYSLFE.....DR......LPFD.PP.....PNASARQRSRATSHRIARFDWRWYRLSD....................................YKTNVGKQIVENTLTRKNQRWS......INEIYESPFV
+#=GR KKL6_YEAST/192-508    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KR1_PRVKA/53-332                 FEVLQPLQSGSEGRV..FVARRPGEAD........TVVLKVGQKP.STLM...........................EGMLLQRL.S...HDN..V..MRMKQMLAR..................GPATC..LVLPHFRC......DLY..SYLT...............MRDGPL...DMRDAGCVIRAVLRGLAYLHG.M..........RIMHRDVKAENIFLE.DVDTV...................CLGDLGAARC..................NVAAP.NFYGLAGTIETNAP....EV....LA...............RDRYDTKVDVWGAGVVLFETLA.............YPKT.ITGGDEPAINGEMHLIDLIRALGVHPEEFPPDTRLRSEFVRYAGTHR............QPYTQYARVARLGLPETGAFLIYKMLTFDPVRRPS.....ADEILNFGMW
+#=GR KR1_PRVKA/53-332      pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+KR1_HHV11/191-478                FTIHGALTPGSEGCV..FDSSHPDYPQ........RVIVKAGWYT.STSH...........................EARLLRRL.D...HPA..I..LPLLDLHVV..................SGVTC..LVLPKYQA......DLY..TYLS...............RRLNPL...GRPQIAAVSRQLLSAVDYIHR.Q..........GIIHRDIKTENIFIN.TPEDI...................CLGDFGAACFVQ...............GSRSSP.FPYGIAGTIDTNAP....EV....LA...............GDPYTTTVDIWSAGLVIFETAV.....HN......ASLF.SAPRGPKRGPCDSQITRIIRQAQVHVDEFSPHPESRLTSRYRSRAAGNN.........RPPYTRPAWTRYYKMDIDVEYLVCKALTFDGALRPS.....AAELLCLPLF
+#=GR KR1_HHV11/191-478     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+WEE1_HUMAN/299-569               FHELEKIGSGEFGSV..FKCVKRLDGC........IYAIKRSKKP.LAGSVDEQNALR...................EVYAHAVLGQ...HSH..V..VRYFSAWAE..................DDHML..IQNEYCNGG.....SLA..DAIS...............ENYRIMSYFKEAELKDLLLQVGRGLRYIHS.M..........SLVHMDIKPSNIFIS.RTSIPNAASEEGDEDDWASNKVMFKIGDLGH.....................VTRIS.SPQVEEGDSRFLAN....EV....LQ..............ENYTHLPKADIFALALTVVCAAG.....AE......PLPR.NGDQWHEIRQGRLPRIPQVLS.....................................................QEFTELLKVMIHPDPERRPS.....AMALVKHSVL
+#=GR WEE1_HUMAN/299-569    SS    EEEEEEEEEETTEEE..EEEEETTT--........EEEEEEEE--.-TTSHHHHHHHH...................HHHHHHHS-S...-TT..B..--EEEEEEE..................TTEEE..EEEE--TT-.....BHH..HHHH...............HHHHHT----HHHHHHHHHHHHHHHHHHHH.T..........TEE-S--SGGGEEEE.----------------------EEEE---TT.....................-EETT.-S------GGG--H....HH....HT..............T--TTHHHHHHHHHHHHHHHHTT.....--......---S.SSHHHHHHHTT-----SS---.....................................................HHHHHHHHHHT-SSGGGS--.....HHHHHT-TT-
+#=GR WEE1_HUMAN/299-569    pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+HRR25_YEAST/9-273                FRIGRKIGSGSFGDI..YHGTNLISGE........EVAIKLESIR.SRHPQLDY.......................ESRVYRYL.S...GGV..G..IPFIRWFGR.................EGEYNA..MVIDLLGPSLEDLFNYC.......................HRRF...SFKTVIMLALQMFCRIQYIHG.R..........SFIHRDIKPDNFLMG..VGRRGS...............TVHVIDFGLSKKYRDFN..........THRHIPYR.ENKSLTGTARYASV....NT....HL...............GIEQSRRDDLESLGYVLIYFCK.....GS......LPWQ.GL.....KATTKKQKYDRIMEKKLNVSVETLCSGL......................................PLEFQEYMAYCKNLKFDEKPD.......YLFLARLF
+#=GR HRR25_YEAST/9-273     pAS   .........................................................................................................................................................................................................................*.....................................*............................................................................................................................................................................................................................
+#=GC SS_cons                     EEEEEEEEEETTEEE..EEEEETTTTE........EEEEEEEEHH.HCCCCCCHHHHHETTS..........EEEEHHHHHHHHHHSSS.SSSTSB..--EEEEEEE..................TTEEE..EEEE--TS-...EEBHH..HHHH...............HHHHST----HHHHHHHHHHHHHHHHHHHH.T..........TEE-S--SGGGEEEETTTTEE-----------------EEEE--GTT.E...................EECSS.-C-S--S-GGGS-H....HH....HC..............CS-CTHHHHHHHHHHHHHHHHHH.....SS......-TTS.SSHHHHHHHCCTHHHHSSHHH......TTS............................................HHHHHHHHHHT-SSGGGSTTTSSSSHHHHHTSGGG
+#=GC seq_cons                    aphhptlGpGuaGsV..apupcpsssp.........hAlKhlptp.ptppptt.t......................Elplhppl.p...Hss..I..lphhshhps..................psplh..llhEahpsu.....cLh..phl..................pssh...scppspphhtpllpulpYlHs.p..........sllHRDLKspNILls.psspl...................KlsDFGlAp...................ttsss.thpshsGT.hYhAP....El....lt...............sptasttsDlWSlGlllhphls.....Gp......sPFt.sp........sththhtphhtsthphs...............................................ppspcllpphLphcPpcRho.....sppllp+sah
+//
