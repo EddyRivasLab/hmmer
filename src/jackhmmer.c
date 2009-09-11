@@ -122,6 +122,7 @@ static ESL_OPTIONS options[] = {
   { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Forward exp tail tau fit",             9 },   
   { "--Eft",         eslARG_REAL, "0.04", NULL,"0<x<1",    NULL,    NULL,    NULL, "tail mass for Forward exponential tail tau fit",               9 },   
 /* Other options */
+  { "--acc",        eslARG_NONE,  FALSE,  NULL, NULL,      NULL,    NULL,    NULL,   "output target accessions instead of names if possible",     11 },
   { "--seed",        eslARG_INT,    "42", NULL, "n>=0",    NULL,    NULL,    NULL,   "set RNG seed to <n> (if 0: one-time arbitrary seed)",       11 },
   { "--textw",       eslARG_INT,   "120", NULL, "n>=120",  NULL,    NULL,"--notextw","set max width of ASCII text output lines",                  11 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,"--textw",  "unlimit ASCII text output line width",                      11 },
@@ -450,13 +451,6 @@ main(int argc, char **argv)
 	  if (info->th  != NULL) p7_tophits_Destroy(info->th);
 	  if (info->om  != NULL) p7_oprofile_Destroy(info->om);
 
-	  /* HMM checkpoint output */
-	  if (esl_opt_IsOn(go, "--chkhmm")) {
-	    checkpoint_hmm(nquery, hmm, esl_opt_GetString(go, "--chkhmm"), iteration);
-	    p7_hmm_Destroy(hmm);
-	    hmm = NULL;
-	  }
-
  	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
 	  if (msa == NULL)	/* round 1 */
 	    {
@@ -482,6 +476,13 @@ main(int argc, char **argv)
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
 	    }
+
+	  /* HMM checkpoint output */
+	  if (esl_opt_IsOn(go, "--chkhmm")) {
+	    checkpoint_hmm(nquery, hmm, esl_opt_GetString(go, "--chkhmm"), iteration);
+	    p7_hmm_Destroy(hmm);
+	    hmm = NULL;
+	  }
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  for (i = 0; i < ncpus; ++i)
@@ -536,7 +537,7 @@ main(int argc, char **argv)
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa);
-	  esl_msa_SetName(msa, "%s-i%d", qsq->name, iteration);
+	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
 
 	  /* Optional checkpointing */
 	  if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);
@@ -566,8 +567,8 @@ main(int argc, char **argv)
        * the results of the last iteration have carried through to us now, and we can output
        * whatever final results we care to.
        */
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, info->th, info->pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, info->th, info->pli, (nquery == 1));
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
       if (afp) 
 	{
 	  if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);

@@ -1,17 +1,17 @@
-HMMER3/a [3.0a2 | March 2009]
+HMMER3/b [3.0b2 | June 2009]
 NAME  ecori
 LENG  6
 ALPH  DNA
 RF    no
 CS    no
 MAP   yes
-DATE  Tue Apr 21 15:01:59 2009
+DATE  Fri Sep 11 13:46:23 2009
 NSEQ  2
 EFFN  2.000000
-CKSUM 3343066187
-STATS LOCAL     VLAMBDA 1.849669
-STATS LOCAL         VMU -7.911099
-STATS LOCAL        FTAU -0.872725
+CKSUM 3460427537
+STATS LOCAL MSV       -8.4900  1.84967
+STATS LOCAL VITERBI  -10.9227  1.84967
+STATS LOCAL FORWARD   -0.8947  1.84967
 HMM          A        C        G        T   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
   COMPO   1.31653  1.46727  1.44883  1.32224

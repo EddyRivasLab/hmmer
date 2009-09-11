@@ -91,13 +91,14 @@ static ESL_OPTIONS options[] = {
   { "--EfN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,                          "number of sequences for Forward exp tail tau fit",             6 },   
   { "--Eft",        eslARG_REAL,  "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,                          "tail mass for Forward exponential tail tau fit",               6 },   
 /* other options */
+  { "--acc",        eslARG_NONE,  FALSE,  NULL, NULL,      NULL,  NULL,    NULL,                        "output target accessions instead of names if possible",     8 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,    NULL,                        "set RNG seed to <n> (if 0: one-time arbitrary seed)",       8 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",                   "set max width of ASCII text output lines",                  8 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",                     "unlimit ASCII text output line width",                      8 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert query <seqfile> is in format <s>: no autodetection", 8 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,                         "assert target <seqdb> is in format <s>>: no autodetection", 8 },
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU", "n>0",      NULL,    NULL,   NULL,                       "number of worker threads",                                  8 },
+  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU", "n>0",      NULL,    NULL,   NULL,               "number of worker threads",                                  8 },
 #endif
 #ifdef HAVE_MPI
   // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
@@ -461,8 +462,8 @@ main(int argc, char **argv)
       p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
   
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, info->th, info->pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, info->th, info->pli, (nquery == 1));
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, info->pli, w);

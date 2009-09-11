@@ -18,6 +18,17 @@ SQCLEVEL = 2
 
 PROGS    = 
 
+ALIS     = \
+	20aa\
+	Caudal_act\
+	LuxC\
+	M1\
+	Patched\
+	RRM_1\
+	SMC_N\
+	XYPPX\
+	ecori
+
 all:  
 	cd ${ESLDIR};  ${MAKE} easel_lib
 	cd ${ESLDIR};  ${MAKE} easel_progs
@@ -47,6 +58,11 @@ run_sqc:
 	@echo Running HMMER test suite...
 	@echo
 	@${top_srcdir}/easel/devkit/sqc -D ${srcdir} ${SQCLEVEL} ${srcdir}/testsuite.sqc . ../src ${IMPLDIR} ${ESLDIR}/miniapps ${srcdir}
+
+hmms:
+	for ali in ${ALIS}; do\
+	   ${top_srcdir}/src/hmmbuild $$ali.hmm $$ali.sto;\
+	done
 
 clean:
 	-rm -f *.gcno *.gcda *.gcov

@@ -503,13 +503,13 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
       sq->n = L;
       if (ndomains == 2) 
 	{
-	  esl_sq_SetName(sq, "%s/%d/%d-%d/%d-%d", testname, cfg->ntest, i+1, i+d1n, j+d1n+1, j+d1n+d2n);
-	  esl_sq_SetDesc(sq, "domains: %s %s", domain1->name, domain2->name);
+	  esl_sq_FormatName(sq, "%s/%d/%d-%d/%d-%d", testname, cfg->ntest, i+1, i+d1n, j+d1n+1, j+d1n+d2n);
+	  esl_sq_FormatDesc(sq, "domains: %s %s", domain1->name, domain2->name);
 	}
       else
 	{
-	  esl_sq_SetName(sq, "%s/%d/%d-%d",   testname, cfg->ntest, i+1, i+d1n);
-	  esl_sq_SetDesc(sq, "domain: %s", domain1->name);
+	  esl_sq_FormatName(sq, "%s/%d/%d-%d",   testname, cfg->ntest, i+1, i+d1n);
+	  esl_sq_FormatDesc(sq, "domain: %s", domain1->name);
 	}
 
       fprintf(cfg->possummfp, "%-35s %5d %5d %5d %5d %5d %5d", sq->name, (int) sq->n, L1, d1n, L2, d2n, L3);
@@ -574,8 +574,8 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
 
       esl_sq_GrowTo(sq, cfg->test_lens[a].L);
 
-      esl_sq_SetName(sq, "decoy%d", i+1);
-      esl_sq_SetDesc(sq, "L=%d in segments: %d/%d/%d/%d/%d", cfg->test_lens[a].L, L1, d1n, L2, d2n, L3);
+      esl_sq_FormatName(sq, "decoy%d", i+1);
+      esl_sq_FormatDesc(sq, "L=%d in segments: %d/%d/%d/%d/%d", cfg->test_lens[a].L, L1, d1n, L2, d2n, L3);
       sq->n = cfg->test_lens[a].L;
 
       fprintf(cfg->negsummfp, "%-15s %5d %5d %5d %5d %5d %5d", 

@@ -339,7 +339,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 
 
 /* Function:  p7_tophits_GetMaxNameLength()
- * Synopsis:  Returns maximum name length.
+ * Synopsis:  Returns maximum name length in hit list (targets).
  * Incept:    SRE, Fri Dec 28 09:00:13 2007 [Janelia]
  *
  * Purpose:   Returns the maximum name length of all the registered
@@ -365,6 +365,58 @@ p7_tophits_GetMaxNameLength(P7_TOPHITS *h)
     }
   return max;
 }
+
+/* Function:  p7_tophits_GetMaxAccessionLength()
+ * Synopsis:  Returns maximum accession length in hit list (targets).
+ * Incept:    SRE, Tue Aug 25 09:18:33 2009 [Janelia]
+ *
+ * Purpose:   Same as <p7_tophits_GetMaxNameLength()>, but for
+ *            accessions. If there are no hits in <h>, or none
+ *            of the hits have accessions, returns 0.
+ */
+int
+p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h)
+{
+  int i, max, n;
+  for (max = 0, i = 0; i < h->N; i++)
+    if (h->unsrt[i].acc != NULL) {
+      n   = strlen(h->unsrt[i].acc);
+      max = ESL_MAX(n, max);
+    }
+  return max;
+}
+
+/* Function:  p7_tophits_GetMaxShownLength()
+ * Synopsis:  Returns max shown name/accession length in hit list.
+ * Incept:    SRE, Tue Aug 25 09:30:43 2009 [Janelia]
+ *
+ * Purpose:   Same as <p7_tophits_GetMaxNameLength()>, but 
+ *            for the case when --acc is on, where
+ *            we show accession if one is available, and 
+ *            fall back to showing the name if it is not.
+ *            Returns the max length of whatever is being
+ *            shown as the reported "name".
+ */
+int
+p7_tophits_GetMaxShownLength(P7_TOPHITS *h)
+{
+  int i, max, n;
+  for (max = 0, i = 0; i < h->N; i++)
+    {
+      if (h->unsrt[i].acc != NULL && h->unsrt[i].acc[0] != '\0') 
+	{
+	  n   = strlen(h->unsrt[i].acc);
+	  max = ESL_MAX(n, max);
+	} 
+      else if (h->unsrt[i].name != NULL)
+	{
+	  n   = strlen(h->unsrt[i].name);
+	  max = ESL_MAX(n, max);
+	}
+    }
+  return max;
+}
+
 
 /* Function:  p7_tophits_Reuse()
  * Synopsis:  Reuse a hit list, freeing internals.
@@ -626,12 +678,17 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   char   newness;
   int    h;
   int    d;
-  int    namew = ESL_MAX(8,  p7_tophits_GetMaxNameLength(th));
+  int    namew;
   int    descw;
+  char  *showname;
   int    have_printed_incthresh = FALSE;
 
-  if (textw >  0) descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
-  else            descw = INT_MAX;
+  /* when --acc is on, we'll show accession if available, and fall back to name */
+  if (pli->show_accessions) namew = ESL_MAX(8, p7_tophits_GetMaxShownLength(th));
+  else                      namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(th));
+
+  if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
+  else                      descw = INT_MAX;
 
   fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", 
 	  pli->mode == p7_SEARCH_SEQS ? "s" : "");
@@ -651,6 +708,14 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	  have_printed_incthresh = TRUE;
 	}
 
+	if (pli->show_accessions) 
+	  {   /* the --acc option: report accessions rather than names if possible */
+	    if (th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0') showname = th->hit[h]->acc;
+	    else                                                       showname = th->hit[h]->name;
+	  }
+	else 
+	  showname = th->hit[h]->name;
+
 	if      (th->hit[h]->flags & p7_IS_NEW)     newness = '+';
 	else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
 	else                                        newness = ' ';
@@ -666,7 +731,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 		th->hit[h]->dcl[d].dombias,
 		th->hit[h]->nexpected,
 		th->hit[h]->nreported,
-		namew, th->hit[h]->name,
+		namew, showname,
 		descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
       }
   if (th->nreported == 0) fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n");
@@ -690,16 +755,27 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int h, d;
   int nd;
   int namew, descw;
+  char *showname;
 
   fprintf(ofp, "Domain and alignment annotation for each %s:\n", pli->mode == p7_SEARCH_SEQS ? "sequence" : "model");
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
       {
-	namew = strlen(th->hit[h]->name);
+	if (pli->show_accessions && th->hit[h]->acc[0] != '\0')
+	  {
+	    showname = th->hit[h]->acc;
+	    namew    = strlen(th->hit[h]->acc);
+	  }
+	else
+	  {
+	    showname = th->hit[h]->name;
+	    namew = strlen(th->hit[h]->name);
+	  }
+
 	descw = (textw > 0 ?  ESL_MAX(32, textw - namew - 5) : INT_MAX);
 
-	fprintf(ofp, ">> %s  %-.*s\n", th->hit[h]->name, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+	fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
 
 	/* The domain table is 101 char wide:
           #     score  bias  c-Evalue  i-Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
@@ -747,7 +823,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 		      nd, 
 		      th->hit[h]->dcl[d].bitscore,
 		      th->hit[h]->dcl[d].pvalue * pli->domZ);
-	      p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw);
+	      p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli->show_accessions);
 	      fprintf(ofp, "\n");
 	    }
       }
@@ -877,19 +953,21 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
+p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
 {
-  int qnamew = ESL_MAX(20, strlen(queryname));
+  int qnamew = ESL_MAX(20, strlen(qname));
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  int qaccw  = ((qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
+  int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int h,d;
   
   if (show_header)
     {  
-      fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
-      fprintf(ofp, "#%-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
-	      tnamew-1, " target",             qnamew, "query",                "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
-      fprintf(ofp, "#%*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
-	      tnamew-1, "-------------------", qnamew, "--------------------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
+      fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
+      fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
+	      tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
+      fprintf(ofp, "#%*s %*s %*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
+	      tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
      }
 
   for (h = 0; h < th->N; h++)
@@ -897,9 +975,11 @@ p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
       {
 	d    = th->hit[h]->best_domain;
 
-	fprintf(ofp, "%-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n", 
+	fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n", 
 		tnamew, th->hit[h]->name,
-		qnamew, queryname, 
+		taccw,  th->hit[h]->acc[0] != '\0' ?  th->hit[h]->acc : "-",
+		qnamew, qname, 
+		qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
 		th->hit[h]->pvalue * pli->Z,
 		th->hit[h]->score,
 		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
@@ -935,19 +1015,22 @@ p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
+p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
 {
-  int qnamew = ESL_MAX(20, strlen(queryname));
+  int qnamew = ESL_MAX(20, strlen(qname));
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  int qaccw  = ( (qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
+  int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
+  int tlen, qlen;
   int h,d,nd;
 
   if (show_header)
     {
-      fprintf(ofp, "#%*s %22s %40s %11s %11s %11s\n", tnamew+qnamew-1+13, "",                    "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord");
-      fprintf(ofp, "#%-*s %5s %-*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
-	      tnamew-1, " target",            "tlen",   qnamew, "query",                "qlen",  "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",   "from",   "to",    "acc",  "description of target");
-      fprintf(ofp, "#%*s %5s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", 
-	      tnamew-1, "-------------------", "-----", qnamew, "--------------------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
+      fprintf(ofp, "#%*s %22s %40s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw, "",                                   "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord");
+      fprintf(ofp, "#%-*s %-*s %5s %-*s %-*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
+	      tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen",  "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",   "from",   "to",    "acc",  "description of target");
+      fprintf(ofp, "#%*s %*s %5s %*s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", 
+	      tnamew-1, "-------------------", taccw, "----------", "-----", qnamew, "--------------------", qaccw, "----------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
     }
 
   for (h = 0; h < th->N; h++)
@@ -958,9 +1041,22 @@ p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELIN
 	  if (th->hit[h]->dcl[d].is_reported) 
 	    {
 	      nd++;
-	      fprintf(ofp, "%-*s %5ld %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n", 
-		      tnamew, th->hit[h]->name, th->hit[h]->dcl[d].ad->L,
-		      qnamew, queryname,        th->hit[h]->dcl[d].ad->M,
+
+	      /* in hmmsearch, targets are seqs and queries are HMMs;
+	       * in hmmscan, the reverse.  but in the ALIDISPLAY
+	       * structure, lengths L and M are for seq and HMMs, not
+	       * for query and target, so sort it out.
+	       */
+	      if (pli->mode == p7_SEARCH_SEQS) { qlen = th->hit[h]->dcl[d].ad->M; tlen = th->hit[h]->dcl[d].ad->L;  }
+	      else                             { qlen = th->hit[h]->dcl[d].ad->L; tlen = th->hit[h]->dcl[d].ad->M;  }
+
+	      fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n", 
+		      tnamew, th->hit[h]->name,
+		      taccw,  th->hit[h]->acc[0] != '\0' ?  th->hit[h]->acc : "-",
+		      tlen,
+		      qnamew, qname,     
+		      qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+		      qlen,
 		      th->hit[h]->pvalue * pli->Z,
 		      th->hit[h]->score,
 		      th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */

@@ -506,7 +506,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
-      esl_sq_SetName(sq, "%s-sample%d", hmm->name, i);
+      esl_sq_FormatName(sq, "%s-sample%d", hmm->name, i);
       esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);
 
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal(errbuf);

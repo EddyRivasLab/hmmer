@@ -1,3 +1,40 @@
+ID		h59
+TITLE           seq descriptions containing '%' cause segfault
+STATUS          CLOSED
+XREF            J5/75
+REPORTED_BY     Michael Remmert <remmert@genzentrum.lmu.de> 11 Aug 2009
+OPENED_DATE     SRE, Fri Sep 11 10:38:37 2009
+CLOSED_DATE     SRE, Fri Sep 11 13:54:24 2009
+DESCRIPTION     
+   Original email report shows a jackhmmer segfault that appeared
+   fairly obscure -- only with certain queries, only in jackhmmer.
+   Traced to a segfault when using esl_msa_SetSeqDescription()
+   to copy a seq description to a new MSA. This reveals a general
+   flaw in the entire {msa,seq}_Set* functions -- they can't be used
+   to copy a string that might contain a naked '%', from user
+   input outside program's control.
+   
+   Requires changing the {msa,sq} API: _Set* functions changed to
+   _Format*; new _Set* functions take a const string, not a
+   printf()-style format string and varargs.
+
+//
+ID              h58
+TITLE           hmmscan tabular domain output reverses target, query lengths
+STATUS          CLOSED
+XREF            J5/69
+REPORTED_BY     Phil Jones <pjones@ebi.ac.uk> 30 Jul 2009
+OPENED_DATE     SRE, Tue Aug 25 08:56:04 2009
+CLOSED_DATE     SRE, Tue Aug 25 08:56:06 2009
+DESCRIPTION     
+   hmmscan tabular domain output reverses target and query lengths.
+
+   P7_ALIDISPLAY stores actual L and M of sequence and HMM, but
+   tabular domain output is query and target lengths. hmmsearch has
+   HMM query, seq targets; hmmscan has seq query, HMM targets.
+   p7_tophits_TabularTargets() needs to set tlen, qlen using
+   PIPELINE's {p7_SEARCH_SEQS | p7_SCAN_MODELS} flag.
+//
 ID              h57
 TITLE           jackhmmer fails: "backconverted subseq didn't end at expected length"
 STATUS          CLOSED

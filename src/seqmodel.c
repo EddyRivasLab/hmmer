@@ -87,7 +87,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
    */
   p7_hmm_SetName(hmm, name);
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  hmm->nseq     = 0;
+  hmm->nseq     = 1;
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
 

@@ -83,6 +83,7 @@ static ESL_OPTIONS options[] = {
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL, "--max",          "turn off composition bias filter",                             4 },
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,    NULL,          "turn off biased composition score corrections",                4 },
 /* Other options */
+  { "--acc",        eslARG_NONE,  FALSE,  NULL, NULL,      NULL,  NULL,    NULL,          "output target accessions instead of names if possible",        6 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,    NULL,          "set RNG seed to <n> (if 0: one-time arbitrary seed)",          6 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",     "set max width of ASCII text output lines",                     6 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",       "unlimit ASCII text output line width",                         6 },
@@ -375,8 +376,8 @@ main(int argc, char **argv)
       p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
 
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, info->th, info->pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, info->th, info->pli, (nquery == 1));
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, info->th, info->pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, info->th, info->pli, (nquery == 1));
   
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, info->pli, w);

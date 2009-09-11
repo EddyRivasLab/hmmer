@@ -882,7 +882,7 @@ main(int argc, char **argv)
 	     ddef->dcl[d].envsc,
 	     ddef->dcl[d].domcorrection);
 
-      p7_alidisplay_Print(stdout, ddef->dcl[d].ad, 50, 120);
+      p7_alidisplay_Print(stdout, ddef->dcl[d].ad, 50, 120, FALSE);
     }
 
   if ((ofile = esl_opt_GetString(go, "--occp")) != NULL) 

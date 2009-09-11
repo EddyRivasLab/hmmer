@@ -239,6 +239,7 @@ distclean:
 
 TAGS:
 	etags ${SRCDIR}/*.c ${SRCDIR}/*.h ${SRCDIR}/p7_config.h.in Makefile.in 
+	etags profmark/*.c profmark/Makefile.in 
 	etags -a documentation/alphaguide/*.tex documentation/alphaguide/Makefile.in
 #	etags -a documentation/man/*.man  documentation/man/boilerplate
 #	etags -a documentation/devguide/*.tex 

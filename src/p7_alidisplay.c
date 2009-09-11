@@ -281,9 +281,11 @@ p7_alidisplay_DecodePostProb(char pc)
  *            line length.
  */
 int
-p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth)
+p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions)
 {
-  char *buf = NULL;
+  char *buf          = NULL;
+  char *show_hmmname = NULL;
+  char *show_seqname = NULL;
   int   namewidth, coordwidth, aliwidth;
   int   pos;
   int   status;
@@ -292,8 +294,12 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
   long  i1,i2;
   int   k1,k2;
 
-  /* Dynamically determine our field widths on the lines */
-  namewidth  = ESL_MAX(strlen(ad->hmmname), strlen(ad->sqname));
+  /* implement the --acc option for preferring accessions over names in output  */
+  show_hmmname = (show_accessions && ad->hmmacc[0] != '\0') ? ad->hmmacc : ad->hmmname;
+  show_seqname = (show_accessions && ad->sqacc[0]  != '\0') ? ad->sqacc  : ad->sqname;
+      
+  /* dynamically size the output lines */
+  namewidth  = ESL_MAX(strlen(show_hmmname), strlen(show_seqname));
   coordwidth = ESL_MAX(ESL_MAX(integer_textwidth(ad->hmmfrom),
 			       integer_textwidth(ad->hmmto)),
 		       ESL_MAX(integer_textwidth(ad->sqfrom),
@@ -321,11 +327,11 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
       if (ad->csline != NULL) { strncpy(buf, ad->csline+pos, aliwidth); fprintf(fp, "  %*s %s CS\n", namewidth+coordwidth+1, "", buf); }
       if (ad->rfline != NULL) { strncpy(buf, ad->rfline+pos, aliwidth); fprintf(fp, "  %*s %s RF\n", namewidth+coordwidth+1, "", buf); }
 
-      strncpy(buf, ad->model+pos, aliwidth); fprintf(fp, "  %*s %*d %s %-*d\n", namewidth,  ad->hmmname, coordwidth, k1, buf, coordwidth, k2);
+      strncpy(buf, ad->model+pos, aliwidth); fprintf(fp, "  %*s %*d %s %-*d\n", namewidth,  show_hmmname, coordwidth, k1, buf, coordwidth, k2);
       strncpy(buf, ad->mline+pos, aliwidth); fprintf(fp, "  %*s %s\n", namewidth+coordwidth+1, " ", buf);
 
-      if (ni > 0) { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*ld %s %-*ld\n", namewidth, ad->sqname, coordwidth, i1,  buf, coordwidth, i2);  }
-      else        { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, ad->sqname, coordwidth, "-", buf, coordwidth, "-"); }
+      if (ni > 0) { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*ld %s %-*ld\n", namewidth, show_seqname, coordwidth, i1,  buf, coordwidth, i2);  }
+      else        { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, show_seqname, coordwidth, "-", buf, coordwidth, "-"); }
 
       if (ad->ppline != NULL) { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
 
@@ -422,9 +428,9 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   if (i     != subL + 1)       ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
 
   /* Set up <sq> annotation as a subseq of a source sequence */
-  if ((status = esl_sq_SetName  (sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
-  if ((status = esl_sq_SetDesc  (sq, "[subseq from] %s", ad->sqdesc[0] != '\0' ? ad->sqdesc : ad->sqname)) != eslOK) goto ERROR;
-  if ((status = esl_sq_SetSource(sq, ad->sqname))                                                          != eslOK) goto ERROR;
+  if ((status = esl_sq_FormatName(sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
+  if ((status = esl_sq_FormatDesc(sq, "[subseq from] %s", ad->sqdesc[0] != '\0' ? ad->sqdesc : ad->sqname)) != eslOK) goto ERROR;
+  if ((status = esl_sq_SetSource (sq, ad->sqname))                                                          != eslOK) goto ERROR;
   if (ad->sqacc[0]  != '\0') { if ((status = esl_sq_SetAccession  (sq, ad->sqacc)) != eslOK) goto ERROR; }
   sq->n     = subL;
   sq->start = ad->sqfrom;
@@ -530,7 +536,7 @@ main(int argc, char **argv)
 	      if (tr->i[z] > 0) tr->pp[z] = esl_random(r);
 
 	  ad = p7_alidisplay_Create(tr, 0, om, sq);
-	  p7_alidisplay_Print(stdout, ad, 40, 80);
+	  p7_alidisplay_Print(stdout, ad, 40, 80, FALSE);
 	  p7_alidisplay_Destroy(ad);
 	}
       p7_trace_Reuse(tr);

@@ -751,6 +751,7 @@ typedef struct p7_pipeline_s {
   uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
+  int           show_accessions;/* TRUE to output accessions not names      */
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   char          errbuf[eslERRBUFSIZE];
@@ -930,7 +931,7 @@ extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const 
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
-extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth);
+extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
 
 /* p7_bg.c */
@@ -1087,6 +1088,8 @@ extern int         p7_tophits_Add(P7_TOPHITS *h,
 extern int         p7_tophits_Sort(P7_TOPHITS *h);
 extern int         p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2);
 extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
+extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
+extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
@@ -1096,8 +1099,8 @@ extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int t
 extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
 				ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n, int optflags,
 				ESL_MSA **ret_msa);
-extern int p7_tophits_TabularTargets(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
-extern int p7_tophits_TabularDomains(FILE *ofp, char *queryname, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
+extern int p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
+extern int p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
 
 
 
