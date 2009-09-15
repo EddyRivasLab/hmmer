@@ -96,23 +96,17 @@ PROGS = hmmalign\
 #      (Excludes test programs.)
 #
 all: libraries programs
-	cd ${PMARKDIR}; ${MAKE} profmark_progs
 
 # check: Run test suites.
-check: libraries programs utests
-	cd ${TESTDIR};  ${MAKE} testsuite_progs
+check:
+			${MAKE} all
+			${MAKE} utests
+			${MAKE} testsuite
 	cd ${ESLDIR};   ${MAKE} run_sqc
 	cd ${TESTDIR};  ${MAKE} run_sqc
 
 # dev: compile all executables, including drivers.
-dev: libraries programs utests
-	cd ${SRCDIR};   ${MAKE} hmmer_stats
-	cd ${SRCDIR};   ${MAKE} hmmer_benchmarks
-	cd ${SRCDIR};   ${MAKE} hmmer_examples
-	cd ${IMPLDIR};  ${MAKE} impl_benchmarks
-	cd ${IMPLDIR};  ${MAKE} impl_examples
-	cd ${PMARKDIR}; ${MAKE} profmark_progs
-	cd ${TESTDIR};  ${MAKE} testsuite_progs
+dev: libraries programs utests misc
 
 Makefile:  configure
 	./configure
@@ -120,41 +114,54 @@ Makefile:  configure
 configure: configure.ac
 	autoconf
 
-${SRCDIR}/libhmmer.a: 
-	cd ${SRCDIR}; ${MAKE} libhmmer.a
-
-${ESLDIR}/libeasel.a: 
-	cd ${ESLDIR}; ${MAKE} libeasel.a
-
-${IMPLDIR}/libhmmerimpl.a: 
-	cd ${SRCDIR}; ${MAKE} libhmmer.a
-
+# rules to build the libraries
 libraries: easel_lib impl_lib hmmer_lib
 
-easel_lib: ${ESLDIR}/libeasel.a
+easel_lib:
+	cd ${ESLDIR};  ${MAKE} libeasel.a
 
-impl_lib: ${IMPLDIR}/libhmmerimpl.a
+impl_lib:
+	cd ${IMPLDIR}; ${MAKE} libhmmerimpl.a
 
-hmmer_lib: ${SRCDIR}/libhmmer.a
+hmmer_lib:
+	cd ${SRCDIR};  ${MAKE} libhmmer.a
 
-programs: easel_progs hmmer_progs
+# rules to build the programs
+programs: easel_progs hmmer_progs profmark_progs
 
-easel_progs: easel_lib
+easel_progs: libraries
 	cd ${ESLDIR};   ${MAKE} easel_progs
 
 hmmer_progs: libraries
 	cd ${SRCDIR};   ${MAKE} hmmer_progs	
 
-utests: easel_utests hmmer_utests impl_utests
+profmark_progs: libraries
+	cd ${PMARKDIR}; ${MAKE} profmark_progs
 
-easel_utests: easel_lib
+# rules to build the unit tests
+utests: easel_utests hmmer_utests
+
+easel_utests: libraries
 	cd ${ESLDIR};   ${MAKE} easel_utests
 
 hmmer_utests: libraries
 	cd ${SRCDIR};   ${MAKE} hmmer_utests
 
-impl_utests: libraries
-	cd ${IMPLDIR};  ${MAKE} impl_utests
+# rules to build the miscellaneous programs
+misc: hmmer_stats hmmer_benchmarks hmmer_benchmarks hmmer_examples testsuite
+
+hmmer_stats: libraries
+	cd ${SRCDIR};   ${MAKE} hmmer_stats
+
+hmmer_benchmarks: libraries
+	cd ${SRCDIR};   ${MAKE} hmmer_benchmarks
+
+hmmer_examples: libraries
+	cd ${SRCDIR};   ${MAKE} hmmer_examples
+
+testsuite: libraries
+	cd ${TESTDIR};  ${MAKE} testsuite_progs
+
 
 # install: installs the binaries in ${bindir}/
 #          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)

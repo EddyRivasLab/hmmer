@@ -29,6 +29,10 @@ MYINCDIRS      = -I${ESLDIR} \
 		 -I${srcdir} \
 		 -I${top_srcdir}/src
 
+LIBDEP = ../libhmmer.a\
+	./libhmmerimpl.a\
+	${ESLDIR}/libeasel.a
+
 OBJS =  decoding.o\
 	fwdback.o\
 	io.o\
@@ -70,26 +74,31 @@ EXAMPLES =\
 	stotrace_example\
 	vitfilter_example
 
-all: 	 impl_lib
+all: impl_lib
 
-check:     
-	cd ${ESLDIR};  ${MAKE} easel_lib
-	cd ..;         ${MAKE} hmmer_lib
-	${MAKE} impl_lib
-	${MAKE} impl_utests
+check:
+			${MAKE} libraries
+			${MAKE} impl_utests
 
-dev:     
-	cd ${ESLDIR};  ${MAKE} easel_lib
-	cd ..;         ${MAKE} hmmer_lib
-	${MAKE} impl_lib
-	${MAKE} impl_utests
-	${MAKE} impl_benchmarks
-	${MAKE} impl_examples
+dev: libraries utests misc
 
-impl_lib:        libhmmerimpl.a
-impl_utests:     ${UTESTS}
-impl_benchmarks: ${BENCHMARKS}
-impl_examples:   ${EXAMPLES}
+libraries: easel_lib impl_lib hmmer_lib
+
+easel_lib:
+	cd ${ESLDIR}; ${MAKE} libeasel.a
+
+hmmer_lib:
+	cd ..; ${MAKE} hmmer_lib
+
+impl_lib: libhmmerimpl.a
+
+utests: libraries ${UTESTS}
+
+misc: libraries ${BENCHMARKS} ${EXAMPLES}
+
+impl_utests:      ${UTESTS}
+impl_benchmarks:  ${BENCHMARKS}
+impl_examples:    ${EXAMPLES}
 
 libhmmerimpl.a: ${OBJS}
 	$(AR) libhmmerimpl.a $?
@@ -101,7 +110,7 @@ ${OBJS}:   ${HDRS} ../hmmer.h
 .c.o:  
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
-${UTESTS}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a 
+${UTESTS}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -113,7 +122,7 @@ ${UTESTS}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
-${BENCHMARKS}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a
+${BENCHMARKS}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -125,7 +134,7 @@ ${BENCHMARKS}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
 
-${EXAMPLES}: ../libhmmer.a libhmmerimpl.a ${ESLDIR}/libeasel.a 
+${EXAMPLES}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\

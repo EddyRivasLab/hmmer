@@ -33,6 +33,10 @@ MYINCDIRS = -I${ESLDIR} \
 	    -I. \
 	    -I${srcdir}
 
+LIBDEP = ./libhmmer.a\
+	${IMPLDIR}/libhmmerimpl.a\
+	${ESLDIR}/libeasel.a
+
 PROGS = hmmalign\
 	hmmbuild\
 	hmmconvert\
@@ -125,50 +129,66 @@ EXAMPLES = \
 	generic_vtrace_example
 
 
-all: hmmer_lib hmmer_progs
+all: libraries programs
 
-check: hmmer_lib hmmer_progs
-	${MAKE} hmmer_utests
-	cd ${IMPLDIR}; make impl_utests
+# check: Run test suites.
+check:
+			${MAKE} all
+			${MAKE} hmmer_utests
+			${MAKE} testsuite
+	cd ${TESTDIR};  ${MAKE} run_sqc
 
-dev: hmmer_lib hmmer_progs
-	${MAKE} hmmer_stats
-	${MAKE} hmmer_utests
-	${MAKE} hmmer_benchmarks
-	${MAKE} hmmer_examples
-	cd ${IMPLDIR}; ${MAKE} impl_utests
-	cd ${IMPLDIR}; ${MAKE} impl_benchmarks
-	cd ${IMPLDIR}; ${MAKE} impl_examples
+dev: libraries programs utests misc
 
-hmmer_lib:        libhmmer.a ${IMPLDIR}/libhmmerimpl.a ${ESLDIR}/libeasel.a
+libraries: easel_lib impl_lib hmmer_lib
 
-hmmer_progs:      hmmer_lib ${PROGS}
-hmmer_stats:      hmmer_lib ${STATS}
-hmmer_utests:     hmmer_lib ${UTESTS}
-hmmer_benchmarks: hmmer_lib ${BENCHMARKS}
-hmmer_examples:   hmmer_lib ${EXAMPLES}
+easel_lib:
+	cd ${ESLDIR}; ${MAKE} libeasel.a
 
+impl_lib:
+	cd ${IMPLDIR}; ${MAKE} impl_lib
+
+hmmer_lib: libhmmer.a
+
+programs: libraries ${PROGS}
+
+utests: libraries impl_utests ${UTESTS}
+
+misc: libraries ${STATS} impl_benchmarks ${BENCHMARKS} impl_examples ${EXAMPLES}
+
+# the following rules are called from the upper level makefile and
+# any library dependancies are assume to be resolved.
+hmmer_progs:       ${PROGS}
+hmmer_stats:       ${STATS}
+hmmer_utests:      impl_utests     ${UTESTS}
+hmmer_benchmarks:  impl_benchmarks ${BENCHMARKS}
+hmmer_examples:    impl_examples   ${EXAMPLES}
 
 libhmmer.a: ${OBJS} 
 	${AR} libhmmer.a $?
 	${RANLIB} libhmmer.a
 	chmod 644 libhmmer.a
 
-${IMPLDIR}/libhmmerimpl.a:
-	cd ${IMPLDIR}; ${MAKE} impl_lib
+impl_utests:
+	cd ${IMPLDIR}; ${MAKE} impl_utests
 
-${ESLDIR}/libeasel.a:
-	cd ${ESLDIR};  ${MAKE} easel_lib
+impl_benchmarks:
+	cd ${IMPLDIR}; ${MAKE} impl_benchmarks
+
+impl_examples:
+	cd ${IMPLDIR}; ${MAKE} impl_examples
 
 ${OBJS}: ${HDRS}
 
-${PROGS}: @EXEC_DEPENDENCY@ hmmer_lib
+${PROGS}: @EXEC_DEPENDENCY@  ${LIBDEP}
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MYLIBS} ${MPILIBS} ${LIBS}
 
 .c.o:
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -c $<
 
-${UTESTS}: hmmer_lib
+.a:	libraries
+
+${UTESTS}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -180,7 +200,7 @@ ${UTESTS}: hmmer_lib
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${BENCHMARKS}: hmmer_lib
+${BENCHMARKS}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -192,7 +212,7 @@ ${BENCHMARKS}: hmmer_lib
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${STATS}: hmmer_lib
+${STATS}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_STATS ;\
@@ -204,7 +224,7 @@ ${STATS}: hmmer_lib
 	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS};\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS} ${LIBS}
 
-${EXAMPLES}: hmmer_lib
+${EXAMPLES}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
