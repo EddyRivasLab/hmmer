@@ -54,6 +54,38 @@
 #   seqmodel.c
 
 ################################################################
+# Option tests
+################################################################
+
+# hmmalign  xxxxxxxxxxxxxxxxxxxx
+1 prep      testseq              @hmmemit@  -p --unilocal -L0 -N 4 --seed 42 !Caudal_act.hmm! > %TESTSEQ%
+1 exercise  hmmalign             @hmmalign@ !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/-h          @hmmalign@ -h
+1 exercise  hmmalign/-o          @hmmalign@ -o /dev/null               !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--allcol    @hmmalign@ --allcol                   !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--mapali    @hmmalign@ --mapali !Caudal_act.sto!  !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--trim      @hmmalign@ --trim                     !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--amino     @hmmalign@ --amino                    !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--informat  @hmmalign@ --informat fasta           !Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--outformat @hmmalign@ --outformat a2m            !Caudal_act.hmm! %TESTSEQ%
+
+# hmmemit   xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmemit              @hmmemit@                !Caudal_act.hmm!
+1 exercise  hmmemit/-h           @hmmemit@ -h
+1 exercise  hmmemit/-c           @hmmemit@ -c             !Caudal_act.hmm!
+1 exercise  hmmemit/-o           @hmmemit@ -o /dev/null   !Caudal_act.hmm!
+1 exercise  hmmemit/-p           @hmmemit@ -p             !Caudal_act.hmm!
+1 exercise  hmmemit/-N           @hmmemit@ -N 10          !Caudal_act.hmm!
+1 exercise  hmmemit/-L           @hmmemit@ -p -L 50       !Caudal_act.hmm!
+1 exercise  hmmemit/--local      @hmmemit@ -p --local     !Caudal_act.hmm!
+1 exercise  hmmemit/--unilocal   @hmmemit@ -p --unilocal  !Caudal_act.hmm!
+1 exercise  hmmemit/--glocal     @hmmemit@ -p --glocal    !Caudal_act.hmm!
+1 exercise  hmmemit/--uniglocal  @hmmemit@ -p --uniglocal !Caudal_act.hmm!
+
+
+
+
+################################################################
 # Integration tests
 ################################################################
 

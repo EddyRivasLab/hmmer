@@ -1,7 +1,6 @@
-.TH "hmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmbuild" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-.TP 
 hmmbuild - profile HMM construction from multiple sequence alignments
 
 
@@ -323,7 +322,7 @@ Seed the random number generator with
 an integer >= 0. 
 If 
 .I <n> 
-is >0, any stochastic simulations will be reproducible; the same
+is nonzero, any stochastic simulations will be reproducible; the same
 command will give the same results.
 If 
 .I <n>
@@ -342,4 +341,42 @@ immediately after start, and wait for a debugger to attach to the
 running process and release the arrest.
 
 
+
+
+.SH SEE ALSO 
+
+See 
+.B hmmer(1)
+for a master man page with a list of all the individual man pages
+for programs in the HMMER package.
+
+.PP
+For complete documentation, see the user guide that came with your
+HMMER distribution (Userguide.pdf); or see the HMMER web page
+(@HMMER_URL@).
+
+
+
+.SH COPYRIGHT
+
+.nf
+@HMMER_COPYRIGHT@
+@HMMER_LICENSE@
+.fi
+
+For additional information on copyright and licensing, see the file
+called COPYRIGHT in your HMMER source distribution, or see the HMMER
+web page 
+(@HMMER_URL@).
+
+
+.SH AUTHOR
+
+.nf
+Eddy Laboratory
+Janelia Farm Research Campus
+19700 Helix Drive
+Ashburn VA 20147 USA
+http://eddylab.org
+.fi
 

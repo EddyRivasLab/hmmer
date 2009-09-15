@@ -12,10 +12,15 @@ HMMER_COPYRIGHT = "@HMMER_COPYRIGHT@"
 
 SEDITION      = ../../easel/devkit/sedition
 
+HMMERMANS     =\
+	hmmalign\
+	hmmbuild\
+	hmmemit
+
 
 all:    pdf
 
-pdf:   titlepage.tex copyright.tex
+pdf:   titlepage.tex copyright.tex manpages
 	pdflatex main
 	bibtex main
 	pdflatex main
@@ -30,6 +35,14 @@ copyright.tex: copyright.tex.in
 	cp -f copyright.tex.in copyright.tex
 	${SEDITION} HMMER_COPYRIGHT ${HMMER_COPYRIGHT} copyright.tex
 
+# manpages: convert man pages to LaTeX chapter in User Guide.
+#    uses PolyglotMan 3.2 "rman", and rmanprocess.pl script in easel's devkit
+manpages:
+	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
+	@echo "\section{Manual pages}" >> manpages.tex 
+	for file in $(HMMERMANS); do\
+	   rman	-f LaTeX2e ../man/$$file.man | ../../easel/devkit/rmanprocess.pl >> manpages.tex;\
+	done
 
 clean:
 	-rm -f main.aux main.bbl main.blg main.log main.toc *~
@@ -38,5 +51,5 @@ clean:
 distclean:
 	-rm -f main.aux main.bbl main.blg main.log main.toc *~
 	-rm Alphaguide.pdf
-	-rm -f titlepage.tex copyright.tex
+	-rm -f titlepage.tex copyright.tex manpages.tex
 	-rm -f Makefile

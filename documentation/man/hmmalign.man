@@ -1,7 +1,6 @@
-.TH "hmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmalign" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-.TP 
 hmmalign - align sequences to a profile HMM
 
 .SH SYNOPSIS
@@ -48,6 +47,17 @@ Direct the output alignment to file
 .I <f>,
 rather than to
 .I stdout.
+
+.TP
+.B --allcol
+Include columns in the output alignment for every match (consensus)
+state in the 
+.I hmmfile,
+even if it means having all-gap columns. This is useful in analysis 
+pipelines that need to be able to maintain a predetermined profile HMM 
+architecture (with an unchanging number of consensus columns) through an
+.B hmmalign
+step.
 
 .TP
 .BI --mapali " <f>"
@@ -105,3 +115,41 @@ Currently the accepted multiple alignment sequence file formats only
 include Stockholm and SELEX. Default is to autodetect the format of
 the file.
 
+
+
+.SH SEE ALSO 
+
+See 
+.B hmmer(1)
+for a master man page with a list of all the individual man pages
+for programs in the HMMER package.
+
+.PP
+For complete documentation, see the user guide that came with your
+HMMER distribution (Userguide.pdf); or see the HMMER web page
+(@HMMER_URL@).
+
+
+
+.SH COPYRIGHT
+
+.nf
+@HMMER_COPYRIGHT@
+@HMMER_LICENSE@
+.fi
+
+For additional information on copyright and licensing, see the file
+called COPYRIGHT in your HMMER source distribution, or see the HMMER
+web page 
+(@HMMER_URL@).
+
+
+.SH AUTHOR
+
+.nf
+Eddy Laboratory
+Janelia Farm Research Campus
+19700 Helix Drive
+Ashburn VA 20147 USA
+http://eddylab.org
+.fi

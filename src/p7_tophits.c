@@ -532,17 +532,13 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
   /* Now we can determined domZ, the effective search space in which additional domains are found */
   if (pli->domZ_setby == p7_ZSETBY_NTARGETS) pli->domZ = (double) th->nreported;
 
-  /* Second pass is over domains, flagging reportable/includable ones:
-   * we always report or include at least the best single domain for each sequence, 
-   * regardless of domain thresholding.
-   */
+  /* Second pass is over domains, flagging reportable/includable ones. */
   for (h = 0; h < th->N; h++)  
     {
       if (th->hit[h]->flags & p7_IS_REPORTED)
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  {
-	    if (th->hit[h]->best_domain == d ||
-		p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+	    if (p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
 	      {
 		th->hit[h]->nreported++;
 		th->hit[h]->dcl[d].is_reported = TRUE;
@@ -551,8 +547,7 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
       if (th->hit[h]->flags & p7_IS_INCLUDED)
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  {
-	    if (th->hit[h]->best_domain == d ||
-		p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+	    if (p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
 	      {
 		th->hit[h]->nincluded++;
 		th->hit[h]->dcl[d].is_included = TRUE;
