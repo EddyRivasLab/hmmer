@@ -434,7 +434,7 @@ main(int argc, char **argv)
 
 #ifdef HMMER_THREADS
   esl_workqueue_Reset(queue);
-  while ((block = esl_workqueue_Remove(queue)) != NULL)
+  while (esl_workqueue_Remove(queue, (void **) &block) == eslOK)
     {
       esl_sq_DestroyBlock(block);
     }
