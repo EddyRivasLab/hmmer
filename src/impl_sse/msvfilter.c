@@ -79,12 +79,22 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
   register __m128i biasv;	   /* emission bias in a vector                                 */
-  uint8_t  xE, xB, xJ;             /* special states' scores                                    */
+  uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
   __m128i *rsc;			   /* will point at om->rb[x] for residue x[i]                  */
+
+  __m128i xJv;                     /* vector for states score                                   */
+  __m128i tbmv;                    /* vector for B->Mk cost                                     */
+  __m128i tecv;                    /* vector for E->C  cost                                     */
+  __m128i tjbv;                    /* vector for NCJ move cost                                  */
+  __m128i basev;                   /* offset for scores                                         */
+  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i tempv;                   /* work vector                                               */
+
+  int cmp;
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -94,18 +104,35 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
    */
   biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
-  xB   = om->base_b - om->tjb_b;                /* remember, all values are costs to be subtracted. */
   xJ   = 0;
 
+  /* saturate simd register for overflow test */
+  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
+
+  basev = _mm_set1_epi8((int8_t) om->base_b);
+
+  tbmv = _mm_set1_epi8((int8_t) om->tbm_b);
+  tecv = _mm_set1_epi8((int8_t) om->tec_b);
+  tjbv = _mm_set1_epi8((int8_t) om->tjb_b);
+
+  xJv = _mm_subs_epu8(biasv, biasv);
+  xBv = _mm_subs_epu8(basev, tjbv);
+
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+  if (ox->debugging)
+    { 
+      uint8_t xB;
+      xB = _mm_extract_epi16(xBv, 0);
+      xJ = _mm_extract_epi16(xJv, 0);
+      p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+    }
 #endif
 
   for (i = 1; i <= L; i++)
     {
       rsc = om->rb[dsq[i]];
       xEv = _mm_setzero_si128();      
-      xBv = _mm_set1_epi8((int8_t) (xB - om->tbm_b));
+      xBv = _mm_subs_epu8(xBv, tbmv);
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
@@ -124,17 +151,53 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
 	}	  
 
-      /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      xE = esl_sse_hmax_epu8(xEv);
-      if (xE >= 255 - om->bias_b) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
+      /* test for the overflow condition */
+      tempv = _mm_adds_epu8(xEv, biasv);
+      tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+      cmp = _mm_movemask_epi8(tempv);
 
-      xJ = ESL_MAX(xJ,         xE  - om->tec_b);
-      xB = ESL_MAX(om->base_b, xJ) - om->tjb_b;
+      /* Now the "special" states, which start from Mk->E (->C, ->J->B)
+       * Use shuffles instead of shifts so when the last max has completed,
+       * the last four elements of the simd register will contain the
+       * max value.  Then the last shuffle will broadcast the max value
+       * to all simd elements.
+       */
+      tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(2, 3, 0, 1));
+      xEv = _mm_max_epu8(xEv, tempv);
+      tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 1, 2, 3));
+      xEv = _mm_max_epu8(xEv, tempv);
+      tempv = _mm_shufflelo_epi16(xEv, _MM_SHUFFLE(2, 3, 0, 1));
+      xEv = _mm_max_epu8(xEv, tempv);
+      tempv = _mm_srli_si128(xEv, 1);
+      xEv = _mm_max_epu8(xEv, tempv);
+      xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
+
+      /* immediately detect overflow */
+      if (cmp != 0x0000)
+	{ 
+	  *ret_sc = eslINFINITY; 
+	  return eslERANGE; 
+	}
+
+      xEv = _mm_subs_epu8(xEv, tecv);
+      xJv = _mm_max_epu8(xJv,xEv);
+
+      xBv = _mm_max_epu8(basev, xJv);
+      xBv = _mm_subs_epu8(xBv, tjbv);
 	  
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);   
+      if (ox->debugging)
+	{
+	  uint8_t xB, xE;
+	  xB = _mm_extract_epi16(xBv, 0);
+	  xE = _mm_extract_epi16(xEv, 0);
+	  xJ = _mm_extract_epi16(xJv, 0);
+	  p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);   
+	}
 #endif
     } /* end loop over sequence residues 1..L */
+
+  xJ = (uint8_t) _mm_extract_epi16(xJv, 0);
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
