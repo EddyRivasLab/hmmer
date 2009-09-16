@@ -381,12 +381,14 @@ case "$impl_choice" in
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
       AC_DEFINE([HAVE_SSE2])
       AC_DEFINE([p7_IMPL_SSE])
+      AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
       IMPL_CHOICE="sse"
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
       AC_DEFINE([HAVE_VMX])
       AC_DEFINE([p7_IMPL_VMX])
+      AC_SUBST([HMMERIMPLLIB], ["impl_vmx/libhmmerimpl.a"])
       IMPL_CHOICE="vmx"
       ;;
 
@@ -398,6 +400,19 @@ esac
 AC_SUBST(IMPL_CHOICE)
 AC_SUBST(SIMD_CFLAGS)
 
+
+# Check if the linker supports library groups for recursive libraries
+AS_IF([test "x$impl_choice" != xno],
+      [AC_MSG_CHECKING([compiler support --start-group])
+       LDFLAGS_save=$LDFLAGS
+       LDFLAGS="-Wl,--start-group -Wl,--end-group $LDFLAGS"
+       AC_LINK_IFELSE(AC_LANG_PROGRAM([],[]),
+           [AC_MSG_RESULT([yes])
+            AC_SUBST([GROUPHMMERLIBS], ["-Wl,--start-group -lhmmer -lhmmerimpl -Wl,--end-group"])],
+           [AC_MSG_RESULT([no])
+            AC_SUBST([GROUPHMMERLIBS], ["-lhmmer -lhmmerimpl"])])
+       LDFLAGS=$LDFLAGS_save],
+      [AC_SUBST([GROUPHMMERLIBS], ["-lhmmer"])])
 
 # Checks for libraries
 #

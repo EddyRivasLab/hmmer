@@ -20,7 +20,6 @@ RANLIB         = @RANLIB@
 ESLDIR         = ../../easel
 
 SHELL          = /bin/sh
-MYLIBS         = -Wl,--start-group -lhmmer -lhmmerimpl -Wl,--end-group -leasel -lm
 MYLIBDIRS      = -L${ESLDIR} -L.. -L.
 MYINCDIRS      = -I${ESLDIR} \
 		 -I${top_srcdir}/easel \
@@ -29,9 +28,8 @@ MYINCDIRS      = -I${ESLDIR} \
 		 -I${srcdir} \
 		 -I${top_srcdir}/src
 
-LIBDEP = ../libhmmer.a\
-	./libhmmerimpl.a\
-	${ESLDIR}/libeasel.a
+LIBS  += @GROUPHMMERLIBS@ -leasel
+LIBDEP = ../libhmmer.a ./libhmmerimpl.a ${ESLDIR}/libeasel.a
 
 OBJS =  decoding.o\
 	fwdback.o\
@@ -119,8 +117,8 @@ ${UTESTS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${BENCHMARKS}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
@@ -131,8 +129,8 @@ ${BENCHMARKS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${EXAMPLES}: ${LIBDEP}
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
@@ -143,8 +141,8 @@ ${EXAMPLES}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS};\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${MYLIBS}
+	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 distclean:
 	${MAKE} clean
