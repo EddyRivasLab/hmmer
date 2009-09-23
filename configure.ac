@@ -327,6 +327,9 @@ fi
 if test "$enable_mpi" = "yes"; then
    ACX_MPI(,AC_MSG_ERROR([MPI library not found for --enable-mpi]))
    CC=$MPICC
+   if test "$ax_cv_c_compiler_vendor" != "intel"; then
+     AC_PROG_CC_STDC
+   fi
 fi
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
