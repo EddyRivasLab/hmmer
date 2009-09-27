@@ -405,8 +405,12 @@ main(int argc, char **argv)
   status = esl_msafile_OpenDigital(abc, msafile, eslMSAFILE_UNKNOWN, NULL, &afp);
   if (status != eslOK) esl_fatal("msa open failed");
 
-  while ((status = esl_msa_Read(afp, &msa)) == eslOK)
+  while ((status = esl_msa_Read(afp, &msa)) != eslEOF)
     {
+      if      (status == eslEFORMAT) esl_fatal("Alignment file parse error:\n%s\n", afp->errbuf);
+      else if (status == eslEINVAL)  esl_fatal("Alignment file parse error:\n%s\n", afp->errbuf);
+      else if (status != eslOK)      esl_fatal("Alignment file read failed with error code %d\n", status);
+
       nali++;
       
       status = p7_Fastmodelmaker(msa, symfrac, &hmm, NULL);
@@ -415,7 +419,6 @@ main(int argc, char **argv)
       p7_hmm_Destroy(hmm);
       esl_msa_Destroy(msa);
     }
-  if (status != eslEOF) esl_fatal("Alignment read failed");
 
   esl_msafile_Close(afp);
   esl_alphabet_Destroy(abc);

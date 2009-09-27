@@ -275,10 +275,10 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   else if (status != eslOK)        esl_fatal("Alignment file open failed (error code %d)", status);
 
   status = esl_msa_Read(afp, &msa);
-  if      (status == eslEFORMAT) esl_fatal("Alignment file %s: %s\n", afp->fname, afp->errbuf);
-  else if (status == eslEOF)     esl_fatal("Alignment file %s empty?", afp->fname);
-  else if (status == eslEINVAL)  esl_fatal("Alignment file %s doesn't appear to be in %s alphabet", afp->fname, esl_abc_DecodeType(hmm->abc->type));
-  else if (status != eslOK)      esl_fatal("Alignment file %s: read failed, error %d\n", afp->fname, status);
+  if      (status == eslEFORMAT) esl_fatal("Alignment file parse error:\n%s\n",    afp->errbuf);
+  else if (status == eslEINVAL)  esl_fatal("Alignment file alphabet error:\n%s\n", afp->errbuf);
+  else if (status == eslEOF)     esl_fatal("Alignment file %s empty?",             afp->fname);
+  else if (status != eslOK)      esl_fatal("Alignment file read failed with error code %d\n", status);
 
   if (! (hmm->flags & p7H_CHKSUM)  )  esl_fatal("HMM has no checksum. --mapali unreliable without it.");
   if (! (hmm->flags & p7H_MAP)  )     esl_fatal("HMM has no map. --mapali can't work without it.");

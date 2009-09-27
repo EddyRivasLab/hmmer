@@ -1606,7 +1606,7 @@ main(int argc, char **argv)
   /* Create a test MSA/matassign/M triplet */
   /* missing data ~ doesn't work here yet; tracealign_* doesn't propagate p7T_X in any way  */
   if ((msa = esl_msa_CreateFromString("# STOCKHOLM 1.0\n#=GC RF .xxxx.\nseq1    AAAAAA\nseq2    -AAA--\nseq3    AA--AA\n//\n", eslMSAFILE_STOCKHOLM)) == NULL) esl_fatal(msg);
-  if (esl_msa_Digitize(abc, msa) != eslOK) esl_fatal(msg);
+  if (esl_msa_Digitize(abc, msa,NULL) != eslOK) esl_fatal(msg);
 
   matassign[0] = 0;
   matassign[1] = 0;

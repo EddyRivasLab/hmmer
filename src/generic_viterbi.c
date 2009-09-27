@@ -301,7 +301,7 @@ utest_basic(ESL_GETOPTS *go)
   if ((abc = esl_alphabet_Create(eslDNA))          == NULL)  esl_fatal("failed to create alphabet");
   if ((pri = p7_prior_CreateNucleic())             == NULL)  esl_fatal("failed to create prior");
   if ((msa = esl_msa_CreateFromString(query, fmt)) == NULL)  esl_fatal("failed to create MSA");
-  if (esl_msa_Digitize(abc, msa)                   != eslOK) esl_fatal("failed to digitize MSA");
+  if (esl_msa_Digitize(abc, msa, NULL)             != eslOK) esl_fatal("failed to digitize MSA");
   if (p7_Fastmodelmaker(msa, 0.5, &hmm, NULL)      != eslOK) esl_fatal("failed to create GAATTC model");
   if (p7_ParameterEstimation(hmm, pri)             != eslOK) esl_fatal("failed to parameterize GAATTC model");
   if ((bg = p7_bg_Create(abc))                     == NULL)  esl_fatal("failed to create DNA null model");

@@ -536,7 +536,7 @@ main(int argc, char **argv)
 
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
-	  esl_msa_Digitize(abc,msa);
+	  esl_msa_Digitize(abc,msa,NULL);
 	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
 
 	  /* Optional checkpointing */
