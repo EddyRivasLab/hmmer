@@ -363,8 +363,9 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   cfg->nali = 0;
   while ((status = esl_msa_Read(cfg->afp, &msa)) != eslEOF)
     {
-      if      (status == eslEFORMAT)  p7_Fail("Alignment file parse error, line %d of file %s:\n%s\nOffending line is:\n%s\n", cfg->afp->linenumber, cfg->afp->fname, cfg->afp->errbuf, cfg->afp->buf);
-      else if (status != eslOK)       p7_Fail("Alignment file read unexpectedly failed with code %d\n", status);
+      if      (status == eslEFORMAT) p7_Fail("Alignment file parse error:\n%s\n", cfg->afp->errbuf);
+      else if (status == eslEINVAL)  p7_Fail("Alignment file parse error:\n%s\n", cfg->afp->errbuf);
+      else if (status != eslOK)      p7_Fail("Alignment file read failed with error code %d\n", status);
       cfg->nali++;  
 
       if (cfg->be_verbose) {
@@ -477,8 +478,9 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else 
 	    {
 	      have_work = FALSE;
-	      if      (status == eslEFORMAT)  { xstatus = eslEFORMAT; sprintf(errmsg, "Alignment file parse error, line %d of file %s:\n%s\nOffending line is:\n%s\n", cfg->afp->linenumber, cfg->afp->fname, cfg->afp->errbuf, cfg->afp->buf); } 
-	      else if (status != eslEOF)      { xstatus = status;     sprintf(errmsg, "Alignment file read unexpectedly failed with code %d\n", status); }
+	      if      (status == eslEFORMAT)  { xstatus = eslEFORMAT; snprintf(errmsg, eslERRBUFSIZE, "Alignment file parse error:\n%s\n", cfg->afp->errbuf); } 
+	      else if (status == eslEINVAL)   { xstatus = eslEFORMAT; snprintf(errmsg, eslERRBUFSIZE, "Alignment file parse error:\n%s\n", cfg->afp->errbuf); } 
+	      else if (status != eslEOF)      { xstatus = status;     snprintf(errmsg, eslERRBUFSIZE, "Alignment file read unexpectedly failed with code %d\n", status); }
 	      ESL_DPRINTF1(("MPI master has run out of MSAs (having read %d)\n", cfg->nali));
 	    } 
 	}
