@@ -126,7 +126,7 @@ main(int argc, char **argv)
 	if (status != eslOK) esl_fatal("Failed to emit sequence from hmm\n");
       }
       
-      status = esl_sq_SetName(sq, "%s-sample%d", hmm->name, nseq);
+      status = esl_sq_FormatName(sq, "%s-sample%d", hmm->name, nseq);
       if (status != eslOK) esl_fatal("Failed to set sequence name\n");
 
       status = esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);
