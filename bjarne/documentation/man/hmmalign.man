@@ -1,0 +1,155 @@
+.TH "hmmalign" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+
+.SH NAME
+hmmalign - align sequences to a profile HMM
+
+.SH SYNOPSIS
+.B hmmalign
+.I [options]
+.I hmmfile
+.I seqfile
+
+.SH DESCRIPTION
+
+Perform a multiple sequence alignment of all the sequences in
+.I seqfile,
+by aligning them individually to the profile HMM in
+.I hmmfile.
+
+The new alignment is output to 
+.I stdout
+in Stockholm format.
+
+
+The sequences in 
+.I seqfile
+are aligned in unihit local alignment mode.  Therefore they should
+already be known to contain a single domain; they should not contain
+more than one domain.  They may be fragments.  The optimal alignment
+may assign some residues as nonhomologous (N and C states), in which
+case these residues are still included in the resulting alignment, but
+shoved to the outer edges. To trim these nonhomologous residues from
+the result, see the
+.B --trim
+option.
+
+
+.SH OPTIONS
+
+.TP
+.B -h
+Help; print a brief reminder of command line usage and all available
+options.
+
+.TP
+.BI -o " <f>"
+Direct the output alignment to file
+.I <f>,
+rather than to
+.I stdout.
+
+.TP
+.B --allcol
+Include columns in the output alignment for every match (consensus)
+state in the 
+.I hmmfile,
+even if it means having all-gap columns. This is useful in analysis 
+pipelines that need to be able to maintain a predetermined profile HMM 
+architecture (with an unchanging number of consensus columns) through an
+.B hmmalign
+step.
+
+.TP
+.BI --mapali " <f>"
+Merge the existing alignment in file 
+.I <f>
+into the result, where 
+.I <f> 
+is exactly the same alignment that was used to build the model in  
+.I hmmfile.
+This is done using a "map" of alignment columns to consensus 
+profile positions that is stored in the
+.I hmmfile.
+
+.TP
+.B --trim
+Trim nonhomologous residues (assigned to N and C states in the optimal
+alignments) from the resulting multiple alignment output. 
+
+.TP
+.B --amino
+Specify that all sequences in 
+.I seqfile
+are proteins. By default, alphabet type is autodetected
+from looking at the residue composition.
+
+.TP
+.B --dna
+Specify that all sequences in 
+.I seqfile
+are DNAs.
+
+.TP
+.B --rna
+Specify that all sequences in 
+.I seqfile
+are RNAs.
+
+.TP 
+.BI --informat " <s>"
+Declare that the input
+.I seqfile
+is in format 
+.I <s>.
+Accepted sequence file formats include FASTA, EMBL, Genbank, DDBJ,
+Uniprot, Stockholm, and SELEX. Default is to autodetect the format of
+the file.
+
+.TP 
+.BI --outformat " <s>"
+Specify that the 
+.I msafile
+is in format 
+.I <s>.
+Currently the accepted multiple alignment sequence file formats only
+include Stockholm and SELEX. Default is to autodetect the format of
+the file.
+
+
+
+.SH SEE ALSO 
+
+See 
+.B hmmer(1)
+for a master man page with a list of all the individual man pages
+for programs in the HMMER package.
+
+.PP
+For complete documentation, see the user guide that came with your
+HMMER distribution (Userguide.pdf); or see the HMMER web page
+(@HMMER_URL@).
+
+
+
+.SH COPYRIGHT
+
+.nf
+@HMMER_COPYRIGHT@
+@HMMER_LICENSE@
+.fi
+
+For additional information on copyright and licensing, see the file
+called COPYRIGHT in your HMMER source distribution, or see the HMMER
+web page 
+(@HMMER_URL@).
+
+
+.SH AUTHOR
+
+.nf
+Eddy Laboratory
+Janelia Farm Research Campus
+19700 Helix Drive
+Ashburn VA 20147 USA
+http://eddylab.org
+.fi

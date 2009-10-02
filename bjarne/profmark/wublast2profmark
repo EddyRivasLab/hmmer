@@ -1,0 +1,8 @@
+#! /usr/bin/perl
+
+use demotic_wublast;
+
+&demotic_wublast::parse(\*STDIN);
+&demotic_wublast::profmark_out(\*STDOUT);
+
+

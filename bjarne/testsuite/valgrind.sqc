@@ -1,0 +1,27 @@
+# Valgrind test suite, in sqc command format
+#
+# See the ../easel/devkit/sqc script for documentation
+# of how sqc works.
+# 
+# Example:
+#   ../easel/devkit/sqc 2 valgrind.sqc . ../src/ ../src/impl_sse ../easel/miniapps
+#
+# SRE, Fri Jan 23 11:43:07 2009 [Janelia]
+# SVN $Id$
+
+1 prep      minifam         cp ../tutorial/minifam %MINIFAM%
+
+1 valgrind  vg-hmmbuild     @hmmbuild@   %GLOBIN.HMM% ../tutorial/globins4.sto
+1 valgrind  vg-hmmconvert   @hmmconvert@ -b %GLOBIN.HMM%
+1 valgrind  vg-hmmalign     @hmmalign@   %GLOBIN.HMM% ../tutorial/globins45.fa
+1 valgrind  vg-hmmemit      @hmmemit@    -N10 %GLOBIN.HMM% 
+1 valgrind  vg-hmmpress     @hmmpress@   %MINIFAM%
+1 valgrind  vg-hmmfetch     @hmmfetch@   %MINIFAM% fn3
+1 valgrind  vg-hmmscan      @hmmscan@    %MINIFAM% ../tutorial/HBB_HUMAN
+1 valgrind  vg-hmmsearch    @hmmsearch@  %GLOBIN.HMM% ../tutorial/globins45.fa
+1 valgrind  vg-hmmsim       @hmmsim@     %GLOBIN.HMM% 
+1 valgrind  vg-hmmstat      @hmmstat@    %MINIFAM% 
+1 valgrind  vg-jackhmmer    @jackhmmer@  ../tutorial/HBB_HUMAN ../tutorial/globins45.fa
+1 valgrind  vg-phmmer       @phmmer@     ../tutorial/HBB_HUMAN ../tutorial/globins45.fa
+
+1 prep      minifam         rm -f %MINIFAM%.h3f %MINIFAM%.h3p %MINIFAM%.h3m %MINIFAM%.h3i 
