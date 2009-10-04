@@ -96,6 +96,12 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   int cmp;
 
+  int status;
+
+  /* Try fast version first */
+  status = p7_MSVFilter_fast2(dsq, L, om, ox, ret_sc);
+  if (status != eslENORESULT) return status;
+
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M   = om->M;
