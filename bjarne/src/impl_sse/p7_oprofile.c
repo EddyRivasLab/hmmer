@@ -31,7 +31,7 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-
+#define EXTRA_RB 13
 
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
@@ -70,11 +70,11 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->clone  = 0;
 
   /* level 1 */
-  ESL_ALLOC(om->rb_mem, sizeof(__m128i) * nqb  * abc->Kp          +15);	/* +15 is for manual 16-byte alignment */
-  ESL_ALLOC(om->rw_mem, sizeof(__m128i) * nqw  * abc->Kp          +15);                     
-  ESL_ALLOC(om->tw_mem, sizeof(__m128i) * nqw  * p7O_NTRANS       +15);   
-  ESL_ALLOC(om->rf_mem, sizeof(__m128)  * nqf  * abc->Kp          +15);                     
-  ESL_ALLOC(om->tf_mem, sizeof(__m128)  * nqf  * p7O_NTRANS       +15);    
+  ESL_ALLOC(om->rb_mem, sizeof(__m128i) * (nqb + EXTRA_RB)  * abc->Kp          +15);	/* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om->rw_mem, sizeof(__m128i) *  nqw              * abc->Kp          +15);                     
+  ESL_ALLOC(om->tw_mem, sizeof(__m128i) *  nqw              * p7O_NTRANS       +15);   
+  ESL_ALLOC(om->rf_mem, sizeof(__m128)  *  nqf              * abc->Kp          +15);                     
+  ESL_ALLOC(om->tf_mem, sizeof(__m128)  *  nqf              * p7O_NTRANS       +15);    
 
   ESL_ALLOC(om->rb, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om->rw, sizeof(__m128i *) * abc->Kp); 
@@ -89,9 +89,9 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
-    om->rb[x] = om->rb[0] + (x * nqb);
-    om->rw[x] = om->rw[0] + (x * nqw);
-    om->rf[x] = om->rf[0] + (x * nqf);
+    om->rb[x] = om->rb[0] + (x * (nqb + EXTRA_RB));
+    om->rw[x] = om->rw[0] + (x *  nqw            );
+    om->rf[x] = om->rf[0] + (x *  nqf            );
   }
   om->allocQ16  = nqb;
   om->allocQ8   = nqw;
@@ -225,11 +225,11 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->tf     = NULL;
 
   /* level 1 */
-  ESL_ALLOC(om2->rb_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
-  ESL_ALLOC(om2->rw_mem, sizeof(__m128i) * nqw  * abc->Kp    +15);                     
-  ESL_ALLOC(om2->tw_mem, sizeof(__m128i) * nqw  * p7O_NTRANS +15);   
-  ESL_ALLOC(om2->rf_mem, sizeof(__m128)  * nqf  * abc->Kp    +15);                     
-  ESL_ALLOC(om2->tf_mem, sizeof(__m128)  * nqf  * p7O_NTRANS +15);    
+  ESL_ALLOC(om2->rb_mem, sizeof(__m128i) * (nqb + EXTRA_RB)  * abc->Kp          +15);	/* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om2->rw_mem, sizeof(__m128i) *  nqw              * abc->Kp          +15);                     
+  ESL_ALLOC(om2->tw_mem, sizeof(__m128i) *  nqw              * p7O_NTRANS       +15);   
+  ESL_ALLOC(om2->rf_mem, sizeof(__m128)  *  nqf              * abc->Kp          +15);                     
+  ESL_ALLOC(om2->tf_mem, sizeof(__m128)  *  nqf              * p7O_NTRANS       +15);    
 
   ESL_ALLOC(om2->rb, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om2->rw, sizeof(__m128i *) * abc->Kp); 
@@ -433,11 +433,15 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   /* striped match costs: start at k=1.  */
   for (x = 0; x < gm->abc->Kp; x++)
-    for (q = 0, k = 1; q < nq; q++, k++)
-      {
-	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
-	om->rb[x][q]   = tmp.v;	
-      }
+    {
+      for (q = 0, k = 1; q < nq; q++, k++)
+        {
+          for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
+          om->rb[x][q]   = tmp.v;	
+        }
+
+      for (q = nq; q < nq + EXTRA_RB; q++) om->rb[x][q] = om->rb[x][q % nq];
+    }
 
   /* transition costs */
   om->tbm_b = unbiased_byteify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
