@@ -99,7 +99,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   int status;
 
   /* Try fast version first */
-  status = p7_MSVFilter_fast2(dsq, L, om, ox, ret_sc);
+  status = p7_MSVFilter_fast(dsq, L, om, ret_sc);
   if (status != eslENORESULT) return status;
 
   /* Check that the DP matrix is ok for us. */

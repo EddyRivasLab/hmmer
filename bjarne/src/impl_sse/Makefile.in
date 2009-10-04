@@ -33,6 +33,7 @@ OBJS =  decoding.o\
 	fwdback.o\
 	io.o\
 	msvfilter.o\
+	msvfilter_fast.o\
 	null2.o\
 	optacc.o\
 	stotrace.o\
