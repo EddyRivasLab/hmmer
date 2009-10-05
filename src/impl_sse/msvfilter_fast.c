@@ -12,13 +12,18 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define  MAX_BANDS 12
+#define  MAX_BANDS 14
+#ifdef __INTEL_COMPILER
+#define  OPT_BANDS 12  /* icc */
+#else
+#define  OPT_BANDS 9   /* e.g. gcc */
+#endif
 
 
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_max_epu8(sv, beginv);              \
-  sv   = _mm_adds_epu8(sv, biasv);              \
-  sv   = _mm_subs_epu8(sv, *rsc); rsc++;        \
+  /*  sv   = _mm_adds_epu8(sv, biasv);   */     \
+  sv   = _mm_sub_epi8(sv, *rsc); rsc++;        \
   xEv  = _mm_max_epu8(xEv, sv);
 
 
@@ -87,7 +92,7 @@
 
 #define CONVERT_STEP(step, LENGTH_CHECK, label, sv, pos)        \
   LENGTH_CHECK(label)                                           \
-  rsc = om->rb[dsq[i]] + pos;                                   \
+  rsc = om->sb[dsq[i]] + pos;                                   \
   step();                                                       \
   sv = _mm_slli_si128(sv, 1);                                   \
   i++;
@@ -219,7 +224,7 @@
                                                 \
   for (i = 0; i < L && i < Q - q - w; i++)      \
     {                                           \
-      rsc = om->rb[dsq[i]] + i + q;             \
+      rsc = om->sb[dsq[i]] + i + q;             \
       step();                                   \
     }                                           \
                                                 \
@@ -231,7 +236,7 @@ done1:                                          \
    {                                            \
      for (i = 0; i < Q - w; i++)                \
        {                                        \
-         rsc = om->rb[dsq[i2 + i]] + i;         \
+         rsc = om->sb[dsq[i2 + i]] + i;         \
          step();                                \
        }                                        \
                                                 \
@@ -241,7 +246,7 @@ done1:                                          \
                                                 \
  for (i = 0; i2 + i < L && i < Q - w; i++)      \
    {                                            \
-     rsc = om->rb[dsq[i2 + i]] + i;             \
+     rsc = om->sb[dsq[i2 + i]] + i;             \
      step();                                    \
    }                                            \
                                                 \
@@ -356,6 +361,11 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 
   int w;
 
+  int div = 1;
+
+  int last_q = 0;
+  int i;
+
   w = get_max_band_width();
 
   biasv = _mm_set1_epi8((int8_t) om->bias_b);
@@ -363,15 +373,20 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 
   xEv = _mm_setzero_si128();      
 
-  for (q = 0; q < Q - w; q += w)
-    {
-      xEv = fs[w](dsq, L, om, q, biasv, beginv, xEv);
+  for (;;)  {
+    if ((Q + div - 1) / div <= MAX_BANDS && Q - OPT_BANDS * div < OPT_BANDS / 2) {
+      break;
     }
+    div++;
+  }
 
-  /* Do the remaining Q - q diagonal seqs. Q - q is between 1 and w (both included). */
-  w = Q - q;
+  for (i = 0; i < div; i++) {
+    q = (Q * (i + 1)) / div;
 
-  xEv = fs[w](dsq, L, om, q, biasv, beginv, xEv);
+    xEv = fs[q-last_q](dsq, L, om, last_q, biasv, beginv, xEv);
+
+    last_q = q;
+  }
 
   return esl_sse_hmax_epu8(xEv);
 }
@@ -384,6 +399,11 @@ p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
   uint8_t  xJ;
 
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+
+  if (L > 1000000) {
+    /* the scoring scheme is only guaranteed to work for sequences up to 1,000,000 residues */
+    return eslENORESULT;
+  }
 
   xE = get_xE(dsq, L, om);
 

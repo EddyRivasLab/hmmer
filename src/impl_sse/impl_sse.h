@@ -72,6 +72,7 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
   __m128i **rb;     		/* match scores [x][q]: rm, rm[0] are allocated      */
+  __m128i **sb;     		/* match scores for fast msvfilter                   */
   uint8_t   tbm_b;		/* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;		/* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;		/* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -95,6 +96,7 @@ typedef struct p7_oprofile_s {
 
   /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rb_mem;
+  __m128i  *sb_mem;
   __m128i  *rw_mem;
   __m128i  *tw_mem;
   __m128   *tf_mem;
