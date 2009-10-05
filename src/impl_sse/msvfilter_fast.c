@@ -20,10 +20,21 @@
 #endif
 
 
-#define STEP_SINGLE(sv)                         \
+#define STEP_SINGLE_OLD_OLD(sv)                 \
   sv   = _mm_max_epu8(sv, beginv);              \
-  /*  sv   = _mm_adds_epu8(sv, biasv);   */     \
-  sv   = _mm_sub_epi8(sv, *rsc); rsc++;        \
+  sv   = _mm_adds_epu8(sv, biasv);              \
+  sv   = _mm_subs_epu8(sv, *rsc); rsc++;        \
+  xEv  = _mm_max_epu8(xEv, sv);
+
+
+#define STEP_SINGLE_OLD(sv)                     \
+  sv   = _mm_max_epu8(sv, beginv);              \
+  sv   = _mm_sub_epi8(sv, *rsc); rsc++;         \
+  xEv  = _mm_max_epu8(xEv, sv);
+
+
+#define STEP_SINGLE(sv)                         \
+  sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
   xEv  = _mm_max_epu8(xEv, sv);
 
 
@@ -95,6 +106,7 @@
   rsc = om->sb[dsq[i]] + pos;                                   \
   step();                                                       \
   sv = _mm_slli_si128(sv, 1);                                   \
+  sv = _mm_or_si128(sv, beginv);                                \
   i++;
 
 
@@ -369,7 +381,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   w = get_max_band_width();
 
   biasv = _mm_set1_epi8((int8_t) om->bias_b);
-  beginv = _mm_set1_epi8((int8_t) om->base_b - om->tjb_b - om->tbm_b);
+  beginv = _mm_set1_epi8(128);
 
   xEv = _mm_setzero_si128();      
 
@@ -406,6 +418,9 @@ p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
   }
 
   xE = get_xE(dsq, L, om);
+
+  xE += om->base_b - om->tjb_b - om->tbm_b;
+  xE -= 128;
 
   if (xE >= 255 - om->bias_b)
     {

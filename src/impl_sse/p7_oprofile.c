@@ -451,7 +451,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     {
       for (q = 0, k = 1; q < nq; q++, k++)
         {
-          for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
+          for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : om->bias_b);
           om->rb[x][q]   = tmp.v;	
         }
     }
