@@ -905,8 +905,6 @@ p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 
   xJ = xE - om->tec_b;
 
-  printf("%d", xJ);
-
   if (xJ > om->base_b)  return eslENORESULT; /* The J state could have been used, so doubt about score */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
