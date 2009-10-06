@@ -272,6 +272,8 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   __m128 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
   __m128 *rp;			   /* will point at om->rf[x] for residue x[i]                  */
   __m128 *tp;			   /* will point into (and step thru) om->tf                    */
+  __m128 *tp2;			   /* will point into (and step thru) om->tf for DD's           */
+  __m128 factor;                   /* for long DD jumps                                         */
 
   /* Initialization. */
   ox->M  = om->M;
@@ -293,12 +295,19 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
+  factor = _mm_set_ps(1.0f, 1.0f, 1.0f, 1.0f);
+  tp2  = om->tf + 7*Q;   /* set tp2 to start of the DD's */
+  for (q = 0; q < Q; q++) factor = _mm_mul_ps(factor, *tp2); tp2++;
+
   for (i = 1; i <= L; i++)
     {
+      __m128 dcv2;                      /* adjusted value of dcv */
+
       dpp   = dpc;                      
       dpc   = ox->dpf[do_full * i];     /* avoid conditional, use do_full as kronecker delta */
       rp    = om->rf[dsq[i]];
       tp    = om->tf;
+      tp2   = om->tf + 7*Q;             /* set tp2 to start of the DD's */
       dcv   = _mm_setzero_ps();
       xEv   = _mm_setzero_ps();
       xBv   = _mm_set1_ps(xB);
@@ -332,74 +341,30 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	  /* Calculate the next D(i,q+1) partially: M->D only;
            * delay storage, holding it in dcv
 	   */
-	  dcv   = _mm_mul_ps(sv, *tp); tp++;
+	  dcv   = _mm_add_ps(_mm_mul_ps(dcv, *tp2), _mm_mul_ps(sv, *tp)); tp++; tp2++;
 
 	  /* Calculate and store I(i,q); assumes odds ratio for emission is 1.0 */
 	  sv         =                _mm_mul_ps(mpv, *tp);  tp++;
 	  IMO(dpc,q) = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
 	}	  
 
-      /* Now the DD paths. We would rather not serialize them but 
-       * in an accurate Forward calculation, we have few options.
-       */
-      /* dcv has carried through from end of q loop above; store it 
-       * in first pass, we add M->D and D->D path into DMX
-       */
-      /* We're almost certainly're obligated to do at least one complete 
-       * DD path to be sure: 
-       */
-      dcv        = esl_sse_rightshift_ps(dcv, zerov);
-      DMO(dpc,0) = zerov;
-      tp         = om->tf + 7*Q;	/* set tp to start of the DD's */
+
+      dcv = esl_sse_rightshift_ps(dcv, zerov);
+      dcv2 = _mm_mul_ps(dcv, factor);
+      dcv2 = esl_sse_rightshift_ps(dcv2, zerov);
+
+      dcv = _mm_add_ps(dcv, dcv2);
+
+      tp2 = om->tf + 7*Q;   /* set tp2 to start of the DD's */
+
       for (q = 0; q < Q; q++) 
-	{
-	  DMO(dpc,q) = _mm_add_ps(dcv, DMO(dpc,q));	
-	  dcv        = _mm_mul_ps(DMO(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
-	}
+        { /* note, extend dcv, not DMO(q); only adding DD paths now */
+          DMO(dpc,q) = _mm_add_ps(dcv,  DMO(dpc,q)); 
 
-      /* now. on small models, it seems best (empirically) to just go
-       * ahead and serialize. on large models, we can do a bit better,
-       * by testing for when dcv (DD path) accrued to DMO(q) is below
-       * machine epsilon for all q, in which case we know DMO(q) are all
-       * at their final values. The tradeoff point is (empirically) somewhere around M=100,
-       * at least on my desktop. We don't worry about the conditional here;
-       * it's outside any inner loops.
-       */
-      if (om->M < 100)
-	{			/* Fully serialized version */
-	  for (j = 1; j < 4; j++)
-	    {
-	      dcv = esl_sse_rightshift_ps(dcv, zerov);
-	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
-	      for (q = 0; q < Q; q++) 
-		{ /* note, extend dcv, not DMO(q); only adding DD paths now */
-		  DMO(dpc,q) = _mm_add_ps(dcv, DMO(dpc,q));	
-		  dcv        = _mm_mul_ps(dcv, *tp);   tp++; 
-		}	    
-	    }
-	} 
-      else
-	{			/* Slightly parallelized version, but which incurs some overhead */
-	  for (j = 1; j < 4; j++)
-	    {
-	      register __m128 cv;	/* keeps track of whether any DD's change DMO(q) */
-
-	      dcv = esl_sse_rightshift_ps(dcv, zerov);
-	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
-	      cv  = zerov;
-	      for (q = 0; q < Q; q++) 
-		{ /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
-		  sv         = _mm_add_ps(dcv, DMO(dpc,q));	
-		  cv         = _mm_or_ps(cv, _mm_cmpgt_ps(sv, DMO(dpc,q))); 
-		  DMO(dpc,q) = sv;	                                    /* store new DMO(q) */
-		  dcv        = _mm_mul_ps(dcv, *tp);   tp++;            /* note, extend dcv, not DMO(q) */
-		}	    
-	      if (! _mm_movemask_ps(cv)) break; /* DD's didn't change any DMO(q)? Then done, break out. */
-	    }
-	}
-
-      /* Add D's to xEv */
-      for (q = 0; q < Q; q++) xEv = _mm_add_ps(DMO(dpc,q), xEv);
+          dcv  = _mm_mul_ps(dcv, *tp2); tp2++; 
+            
+          xEv = _mm_add_ps(DMO(dpc,q), xEv);
+        }
 
       /* Finally the "special" states, which start from Mk->E (->C, ->J->B) */
       /* The following incantation is a horizontal sum of xEv's elements  */
