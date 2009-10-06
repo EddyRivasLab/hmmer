@@ -31,7 +31,7 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define EXTRA_SB 13
+#define EXTRA_SB 17
 
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
@@ -448,28 +448,44 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   /* striped match costs: start at k=1.  */
   for (x = 0; x < gm->abc->Kp; x++)
-    {
-      for (q = 0, k = 1; q < nq; q++, k++)
-        {
-          for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : om->bias_b);
-          om->rb[x][q]   = tmp.v;	
-        }
-    }
+    for (q = 0, k = 1; q < nq; q++, k++)
+      {
+	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
+	om->rb[x][q]   = tmp.v;	
+      }
 
   /* transition costs */
   om->tbm_b = unbiased_byteify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
   om->tec_b = unbiased_byteify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
   om->tjb_b = unbiased_byteify(om, logf(3.0f / (float) (gm->L+3))); /* this adopts the L setting of the parent profile */
 
-  int tjb = unbiased_byteify(om, logf(3.0f / (float) (1000000+3)));
-  int d = 255 - (om->base_b - tjb - om->tbm_b) - om->bias_b;
+  /* We now want to fill out om->sb with om->rb - bias for use in the
+   * fast MSV filter. The only challenge is that the om->rb values are
+   * unsigned and generally use the whole scale while the om->sb
+   * values are signed. To solve that problem we perform the following
+   * calculation:
+   *
+   *   ((127 + bias) - rb) ^ 127
+   *
+   * where the subtraction is unsigned saturated and the addition is
+   * unsigned (it will not overflow, since bias is a small positive
+   * number). The f(x) = x ^ 127 combined with a change from unsigned
+   * to signed numbers have the same effect as f(x) = -x + 127. So if
+   * we regard the above as signed instead of unsigned it is equal to:
+   *
+   *   -((127 + bias) - rb) + 127 = rb - bias
+   *
+   * which is what we want. The reason for this slightly complex idea
+   * is that we wish the transformation to be fast, especially for
+   * hmmscan where many models are loaded.
+   */
 
-  tmp.v = _mm_set1_epi8((int8_t) om->bias_b + d);
-  tmp2 = _mm_set1_epi8(d);
+  tmp.v = _mm_set1_epi8((int8_t) (om->bias_b + 127));
+  tmp2  = _mm_set1_epi8(127);
 
   for (x = 0; x < gm->abc->Kp; x++)
     {
-      for (q = 0;  q < nq;            q++) om->sb[x][q] = _mm_sub_epi8(_mm_adds_epu8(om->rb[x][q], tmp2), tmp.v);
+      for (q = 0;  q < nq;            q++) om->sb[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp.v, om->rb[x][q]), tmp2);
       for (q = nq; q < nq + EXTRA_SB; q++) om->sb[x][q] = om->sb[x][q % nq];
     }
 
