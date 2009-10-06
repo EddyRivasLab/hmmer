@@ -1,12 +1,59 @@
 /*
+ * Here is a description of the major ides going into this
+ * implementation of the MSV filter.
+ *
  *
  * REMOVING THE J STATE
  * ====================
  *
- * 
+ * The original MSV filter allows use of the J state to chain together
+ * multiple matches in different diagonals. Thus, a full match can
+ * consist of diagonal match followed by the J state and then another
+ * diagonal match later in the sequence.  Going through the J state
+ * has a certain price so for the full match to contain two different
+ * diagonal matches connected by the J state, each of the individual
+ * diagonal matches must score higher than the cost of going through
+ * the J state.
  *
+ * It turns out that even the best match in a model-sequence
+ * comparison rarely scores higher than the cost of going through the
+ * J state. This is the basis of the idea used here, which is to
+ * completely ignore the J state. To avoid this leading to false
+ * negatives, we check the resulting maximum score against the cost of
+ * the going through the J state. In the rare cases where the J state
+ * may in fact have been used, we return eslNORESULT. This indicates
+ * to the original J state that it should recalculate the score.
  *
+ * Since removing the J state allows significant improvements in
+ * speed, the extra overhead of having to go through the original MSV
+ * filter in about 1% of the cases is not a problem.
  *
+ * Note that for the score to actually be different, we need two
+ * diagonals to have a high scoring match, but we cannot easily check
+ * for that. Thus, oftentimes the re-calculated score in the original
+ * MSV filter will be the same as without the J state.
+ *
+ * The code governing the use of the J state in the original filter is:
+ *
+ *   xEv = _mm_subs_epu8(xEv, tecv);
+ *   xJv = _mm_max_epu8(xJv,xEv);
+ *   xBv = _mm_max_epu8(basev, xJv);
+ *
+ * So for an xE value to be high enough to affect xJ, the following
+ * inequality must be true:
+ *
+ *   xJ = xE - om->tec_b > om->base_b
+ *
+ * We defer this check until the final maximal xE value has been
+ * calculated. If the above holds true, we return eslNORESULT.
+ *
+ * Since the J state is removed, the xBv vector is constant, so we can
+ * set it once an for all to a vector where all entries are:
+ *
+ *   om->base_b - om->tjb_b - om->tbm_b
+ *
+ * But see the following section for why this is changed for other
+ * reasons.
  *
  *
  * INTERNAL LOOP ADJUSTMENT AND IMPLICATIONS
@@ -53,7 +100,6 @@
  * attained. In the original MSV filter this score would only have
  * affected the begin scores if this xJ value exceeded
  * om->base_b. This explains the check.
- *
  *
  * Now, we optimize this internal loop by using two ideas:
  *
@@ -111,7 +157,7 @@
  *
  *   xE > om->tjb_b + om->tbm_b + om->tec_b - 128  (possible J state)
  *
- * To avoid having to call too many false positivies, we do not want
+ * To avoid having to call too many false positives, we do not want
  * the overflow to occur before the J state becomes possible. This
  * mean that we want:
  *
@@ -131,8 +177,8 @@
  * model where the above holds true is M = 482. If the model size is M
  * = 2,295 (the largest in Pfam 23.0), the longest sequence length
  * where the condition is true is L = 43,786. So, the condition is not
- * always true, but typically, it is. And, importantly, it is
- * checkable.
+ * always true, but typically, it is. And, importantly, it can be
+ * checked.
  *
  * A final thing to consider is what to do on an overflow. Since we
  * shifted the baseline for the calculation, the question is if an
@@ -146,6 +192,11 @@
  * If it does not hold, we are not sure what the true result is and we
  * have to indicate that in the return value.
  *
+ * Since we perform a single signed subtraction instead of an unsigned
+ * addition followed by in unsigned subtraction, a new set of match
+ * scores have been introduced in the P7_OPROFILE structure. These are
+ * called sb where the originals are rb.
+ *
  *
  * EXPLANATION OF THE CODE
  * =======================
@@ -156,7 +207,7 @@
  * this is still worth it due to reduced memory access.
  *
  * So we have a basic calculation concept where we fill out some
- * number of adjacent striped diagonal vectors thorughout the whole
+ * number of adjacent striped diagonal vectors throughout the whole
  * sequence. Consider a simple case where we have two registers, A and
  * B and they each have only two fields instead of 16. In one sweep of
  * a sequence we calculate the following matrix cells:
@@ -302,7 +353,7 @@
  *
  * First a check is made. This is sometimes used to check whether the
  * sequence is done. Then the match score pointer is set. After this,
- * STEP_BANDS is called using the step paremeter of this
+ * STEP_BANDS is called using the step parameter of this
  * macro. Finally one vector is shifted and or'ed with the begin
  * vector of (128, 128, ... ). This ensures that the zero that was
  * shifted in is converted to the needed base line of 128. Other
@@ -311,13 +362,17 @@
  * and it does not matter.
  *
  * Notice that the CONVERT macro ends up stepping the diagonals w
- * times, so it handles the whole of phase two.
+ * times, so it handles the whole of phase two. Note also that the
+ * macro may let rsc overflow since it does not reset rsc after a
+ * shift operation. This is handled by extending the match score array
+ * in the P7_OPROFILE by MAX_BANDS - 1 = 17 as defined by the EXTRA_SB
+ * constant in that file.
  *
  * The only macro remaining is the CALC macro which just contains the
  * overall function for going through the various phases. Due to the
  * starting offset (q), the first Q - q sequence positions have to be
  * handled separately. After this follows a number of blocks of length
- * Q where we can be effecient and not do a check of whether the
+ * Q where we can be efficient and not do a check of whether the
  * sequence stops (the NO_CHECK macro indicates this). Finally, at the
  * end of the sequence we have to be careful and stop at the right
  * time, again using LENGTH_CHECK.
@@ -328,7 +383,7 @@
  * present once in this file. The object file is still not
  * ridiculously large.
  *
- * To better see what is going on, run this:
+ * To better see what is going on, run the preprocessor on this file:
  *
  *   gcc -E msvfilter_fast.c | sed 's/[;:]/&\n/g' | less
  *
@@ -850,7 +905,9 @@ p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 
   xJ = xE - om->tec_b;
 
-  if (om->base_b < xJ)  return eslENORESULT; /* The J state could have been used, so doubt about score */
+  printf("%d", xJ);
+
+  if (xJ > om->base_b)  return eslENORESULT; /* The J state could have been used, so doubt about score */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
