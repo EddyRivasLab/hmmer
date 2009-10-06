@@ -55,6 +55,7 @@
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
 
+#include "fast_hmm.h"
 
 /* Search modes. */
 #define p7_NO_MODE   0
@@ -273,6 +274,7 @@ typedef struct p7_bg_s {
   float   *f;			/* residue frequencies [0..K-1]                 */
 
   ESL_HMM *fhmm;		/* 2-state HMM filter null model in prefilters  */
+  FAST_HMM *ffhmm;		/* fast HMM filter null model in prefilters     */
 
   float    omega;		/* "prior" on the null2 score correction        */
 
