@@ -353,16 +353,17 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       dcv2 = _mm_mul_ps(dcv, factor);
       dcv2 = esl_sse_rightshift_ps(dcv2, zerov);
 
-      dcv = _mm_add_ps(dcv, dcv2);
-
       tp2 = om->tf + 7*Q;   /* set tp2 to start of the DD's */
 
       for (q = 0; q < Q; q++) 
         { /* note, extend dcv, not DMO(q); only adding DD paths now */
           DMO(dpc,q) = _mm_add_ps(dcv,  DMO(dpc,q)); 
+          DMO(dpc,q) = _mm_add_ps(dcv2, DMO(dpc,q)); 
 
-          dcv  = _mm_mul_ps(dcv, *tp2); tp2++; 
-            
+          dcv  = _mm_mul_ps(dcv,  *tp2);
+          dcv2 = _mm_mul_ps(dcv2, *tp2);
+          tp2++;
+
           xEv = _mm_add_ps(DMO(dpc,q), xEv);
         }
 
