@@ -322,9 +322,9 @@
  * end of the sequence we have to be careful and stop at the right
  * time, again using LENGTH_CHECK.
  *
- * Even though the code is only around 450 lines, it expands to a
+ * Even though the code is only around 500 lines, it expands to a
  * fairly large file when the macros are parsed. For example,
- * _mm_subs_epi8() is called 3,360 times even though it is only
+ * _mm_subs_epi8() is called 6,840 times even though it is only
  * present once in this file. The object file is still not
  * ridiculously large.
  *
@@ -350,11 +350,19 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define  MAX_BANDS 14
+#define  MAX_BANDS 18
+#ifdef __x86_64__ /* 64 bit version */
+#ifdef __INTEL_COMPILER
+#define  OPT_BANDS 14    /* icc */
+#else
+#define  OPT_BANDS 9   /* e.g. gcc */
+#endif
+#else /* 32 bit version */
 #ifdef __INTEL_COMPILER
 #define  OPT_BANDS 12  /* icc */
 #else
 #define  OPT_BANDS 9   /* e.g. gcc */
+#endif
 #endif
 
 
@@ -438,6 +446,22 @@
   STEP_BANDS_13()                               \
   STEP_SINGLE(sv13)
 
+#define STEP_BANDS_15()                         \
+  STEP_BANDS_14()                               \
+  STEP_SINGLE(sv14)
+
+#define STEP_BANDS_16()                         \
+  STEP_BANDS_15()                               \
+  STEP_SINGLE(sv15)
+
+#define STEP_BANDS_17()                         \
+  STEP_BANDS_16()                               \
+  STEP_SINGLE(sv16)
+
+#define STEP_BANDS_18()                         \
+  STEP_BANDS_17()                               \
+  STEP_SINGLE(sv17)
+
 
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
@@ -503,6 +527,22 @@
   CONVERT_STEP(step, LENGTH_CHECK, label, sv13, Q - 14) \
   CONVERT_13(step, LENGTH_CHECK, label)
 
+#define CONVERT_15(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv14, Q - 15) \
+  CONVERT_14(step, LENGTH_CHECK, label)
+
+#define CONVERT_16(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv15, Q - 16) \
+  CONVERT_15(step, LENGTH_CHECK, label)
+
+#define CONVERT_17(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv16, Q - 17) \
+  CONVERT_16(step, LENGTH_CHECK, label)
+
+#define CONVERT_18(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv17, Q - 18) \
+  CONVERT_17(step, LENGTH_CHECK, label)
+
 
 #define RESET_1()                               \
   register __m128i sv00 = beginv;
@@ -559,6 +599,22 @@
   RESET_13()                                    \
   register __m128i sv13 = beginv;
 
+#define RESET_15()                              \
+  RESET_14()                                    \
+  register __m128i sv14 = beginv;
+
+#define RESET_16()                              \
+  RESET_15()                                    \
+  register __m128i sv15 = beginv;
+
+#define RESET_17()                              \
+  RESET_16()                                    \
+  register __m128i sv16 = beginv;
+
+#define RESET_18()                              \
+  RESET_17()                                    \
+  register __m128i sv17 = beginv;
+
 
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
@@ -608,87 +664,111 @@ done2:                                          \
 
 
 __m128i
-calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
 }
 
 __m128i
-calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
 }
 
 __m128i
-calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
 }
 
 __m128i
-calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
 }
 
 __m128i
-calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
 }
 
 __m128i
-calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
 __m128i
-calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
 }
 
 __m128i
-calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
 }
 
 __m128i
-calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
 }
 
 __m128i
-calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
 }
 
 __m128i
-calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
 }
 
 __m128i
-calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }
 
 __m128i
-calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
 }
 
 __m128i
-calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register __m128i beginv, __m128i xEv)
+calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
+}
+
+__m128i
+calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
+}
+
+__m128i
+calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
+}
+
+__m128i
+calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
+}
+
+__m128i
+calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
 
 
@@ -702,10 +782,11 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
 
   /* function pointers for the various number of vectors to use */
-  __m128i (*fs[15]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
+  __m128i (*fs[19]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
     = {NULL,
        calc_band_1, calc_band_2, calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6,  calc_band_7,
-       calc_band_8, calc_band_9, calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14};
+       calc_band_8, calc_band_9, calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14,
+       calc_band_15, calc_band_16, calc_band_17, calc_band_18};
 
   int div = 1;
 
