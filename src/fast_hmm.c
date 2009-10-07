@@ -18,25 +18,22 @@
 FAST_HMM *
 fast_hmm_Create(const ESL_ALPHABET *abc)
 {
-  int           alpha_size = abc->Kp;
-  void         *ptr;
+  int       alpha_size = abc->Kp;
+  void     *ptr;
   FAST_HMM *hmm = NULL;
-  int           status;
+  int       status;
 
   ESL_ALLOC(ptr, sizeof(FAST_HMM) + 15);
   hmm =  (FAST_HMM*) (((size_t) ptr + 15) & ~15);
 
   ESL_ALLOC(hmm->prob_ptr, 5 * alpha_size * sizeof(__m128) + 15);
 
-  hmm->emission_probs = (__m128*) (((size_t) hmm->prob_ptr + 15) & ~15);
-
-  hmm->combined_probs = hmm->emission_probs + 2 * alpha_size;
-
-  hmm->start_probs = hmm->emission_probs + 4 * alpha_size;
-
-  hmm->alpha_size = alpha_size;
-
-  hmm->up_to_date = 0;
+  hmm->emission_probs  =  (__m128*) (((size_t) hmm->prob_ptr + 15) & ~15);
+  hmm->combined_probs  =  hmm->emission_probs + 2 * alpha_size;
+  hmm->start_probs     =  hmm->emission_probs + 4 * alpha_size;
+  hmm->alpha_size      =  alpha_size;
+  hmm->up_to_date      =  0;
+  hmm->ptr             =  ptr;
 
   return hmm;
 
@@ -83,8 +80,8 @@ fast_hmm_Destroy(FAST_HMM *hmm)
 int
 fast_hmm_SetEmissions(FAST_HMM *hmm, float *emissions_0, float *emissions_1)
 {
-  int          i;
-  float        factor = 0.0;
+  int   i;
+  float factor = 0.0;
 
   for (i = 0; i < hmm->alpha_size; i++)
     {
@@ -126,7 +123,7 @@ fast_hmm_SetEmissions(FAST_HMM *hmm, float *emissions_0, float *emissions_1)
 int
 fast_hmm_SetTransitions(FAST_HMM *hmm, float t_s0, float t_s1, float t_00, float t_01, float t_0e, float t_10, float t_11, float t_1e)
 {
-  float        factor = 0.0;
+  float factor = 0.0;
 
   if (t_s0 > factor) factor = t_s0;
   if (t_s1 > factor) factor = t_s1;
@@ -207,14 +204,14 @@ set_probs(FAST_HMM *hmm)
 int
 fast_hmm_GetLogProb(const ESL_DSQ *dsq, int L, FAST_HMM *hmm, float* p)
 {
-  int      i;
-  __m128   fwd;
-  __m128*  combined_probs  =  hmm->combined_probs;
-  __m128   tmp;
-  float    factor = 1e30;
-  int      adj_count = 0;
-  __m128   adj_vector;
-  float    res;
+  int     i;
+  __m128  fwd;
+  __m128 *combined_probs  =  hmm->combined_probs;
+  __m128  tmp;
+  float   factor = 1e30;
+  int     adj_count = 0;
+  __m128  adj_vector;
+  float   res;
 
   // let the sequence start at zero
   dsq++;
@@ -274,11 +271,9 @@ fast_hmm_GetLogProb(const ESL_DSQ *dsq, int L, FAST_HMM *hmm, float* p)
 
 
 
-
-
 #ifdef FAST_HMM_EXAMPLE
 /*::cexcerpt::fast_hmm_example::begin::*/
-/* compile: gcc -g -Wall -I. -L. -o fast_hmm_example -DFAST_HMM_EXAMPLE fast_hmm.c -leasel -lm
+/* compile: gcc -Wall -I../easel -L../easel -msse2 -o fast_hmm_example -DFAST_HMM_EXAMPLE fast_hmm.c -leasel -lm
  * run:     ./hmm_example <sequence file>
  */
 #include "easel.h"
@@ -293,7 +288,7 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-static char usage[]  = "[-options] <seqfile>";
+static char usage[]  = "[-options]";
 static char banner[] = "example of the HMM module";
 
 
@@ -301,22 +296,26 @@ static char banner[] = "example of the HMM module";
 int
 main(int argc, char **argv)
 {
+  ESL_GETOPTS  *go  = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_ALPHABET *abc = esl_alphabet_Create(eslDICE);
-  FAST_HMM *hmm = fast_hmm_Create(abc);
+  FAST_HMM     *hmm = fast_hmm_Create(abc);
   int           i;
   float        *fair = NULL;
   float        *loaded = NULL;
   ESL_DSQ      *dsq  = NULL;
+  int           status;
+  float         log_prob;
 
-  ESL_ALLOC(dsq,  sizeof(ESL_DSQ) * 256);
-  ESL_ALLOC(fair,   abc->K * sizeof(float));
-  ESL_ALLOC(loaded, abc->K * sizeof(float));
+  ESL_ALLOC(dsq,    sizeof(ESL_DSQ) * 5);
+  ESL_ALLOC(fair,   abc->Kp * sizeof(float));
+  ESL_ALLOC(loaded, abc->Kp * sizeof(float));
 
-  for (i = 0; i < abc->K; i++)
-    fair[i] = 1.0 / (float) abc->K;
+  for (i = 0; i < abc->K;  i++)     fair[i]   = 1.0f /  abc->K;
+  for (     ; i < abc->Kp; i++)     fair[i]   = 0.0f;
 
-  for (i = 0; i < abc->K-1; i++) loaded[i] = 0.5 / ((float) abc->K-1);
-  loaded[abc->K-1] = 0.5;
+  for (i = 0; i < abc->K - 1; i++) loaded[i] = 0.5f / (abc->K - 1);
+  for (     ; i < abc->Kp;    i++) loaded[i]   = 0.0f;
+  loaded[abc->K-1] = 0.5f;
 
   fast_hmm_SetEmissions(hmm, fair, loaded);
   
@@ -325,7 +324,32 @@ main(int argc, char **argv)
                           0.96, 0.03, 0.01,
                           0.05, 0.95, 0.00);
 
+  printf("\n");
+  printf(" Series       NLL      Probability\n");
+  printf(" =======  ==========   ==========\n");
+
+  dsq[1] = 0; dsq[2] = 0; dsq[3] = 0; dsq[4] = 0;
+
+  fast_hmm_GetLogProb(dsq, 4, hmm, &log_prob);
+
+  for (i = 1; i < 5; i++) printf(" %c", abc->sym[dsq[i]]);
+  printf("  %10.4f   %10.8f\n", log_prob, expf(log_prob));
+
+  dsq[1] = 5; dsq[2] = 5; dsq[3] = 5; dsq[4] = 5;
+
+  fast_hmm_GetLogProb(dsq, 4, hmm, &log_prob);
+
+  for (i = 1; i < 5; i++) printf(" %c", abc->sym[dsq[i]]);
+  printf("  %10.4f   %10.8f\n", log_prob, expf(log_prob));
+
+  printf("\n");
+
   fast_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  free(dsq);
+  free(loaded);
+  free(fair);
 
   return 0;
 
