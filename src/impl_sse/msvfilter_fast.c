@@ -393,7 +393,6 @@
 
 #include "p7_config.h"
 
-#include <stdio.h>
 #include <math.h>
 
 #include <xmmintrin.h>		/* SSE  */
