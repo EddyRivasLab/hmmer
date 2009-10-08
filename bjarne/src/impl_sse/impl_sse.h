@@ -278,6 +278,7 @@ extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *ab
 extern int          p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
+extern int          p7_profile_FinishMSVScores(P7_OPROFILE *om);
 
 
 

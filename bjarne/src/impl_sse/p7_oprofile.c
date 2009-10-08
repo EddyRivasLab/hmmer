@@ -413,6 +413,64 @@ wordify(P7_OPROFILE *om, float sc)
   else return (int16_t) sc;
 }
 
+
+/* Function:  p7_profile_FinishMSVScores()
+ * Synopsis:  Finish the work on the MSV scores in an optimized profile.
+ * Incept:    BK, Thu Oct  8 15:02:43 2009 [Aarhus]
+ *
+ * Purpose:   Finish the work on the MSV scores in an optimized profile
+ *            <om>. This includes calculating special versions of the
+ *            match scores for using the the fast MSV filter.
+ *
+ * Args:      om - profile to finish
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_profile_FinishMSVScores(P7_OPROFILE *om)
+{
+  int     M   = om->M;		/* length of the query                                          */
+  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int     x;			/* counter over residues                                        */
+  int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
+  __m128i tmp;
+  __m128i tmp2;
+
+  /* We now want to fill out om->sb with om->rb - bias for use in the
+   * fast MSV filter. The only challenge is that the om->rb values are
+   * unsigned and generally use the whole scale while the om->sb
+   * values are signed. To solve that problem we perform the following
+   * calculation:
+   *
+   *   ((127 + bias) - rb) ^ 127
+   *
+   * where the subtraction is unsigned saturated and the addition is
+   * unsigned (it will not overflow, since bias is a small positive
+   * number). The f(x) = x ^ 127 combined with a change from unsigned
+   * to signed numbers have the same effect as f(x) = -x + 127. So if
+   * we regard the above as signed instead of unsigned it is equal to:
+   *
+   *   -((127 + bias) - rb) + 127 = rb - bias
+   *
+   * which is what we want. The reason for this slightly complex idea
+   * is that we wish the transformation to be fast, especially for
+   * hmmscan where many models are loaded.
+   */
+
+  tmp = _mm_set1_epi8((int8_t) (om->bias_b + 127));
+  tmp2  = _mm_set1_epi8(127);
+
+  for (x = 0; x < om->abc->Kp; x++)
+    {
+      for (q = 0;  q < nq;            q++) om->sb[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rb[x][q]), tmp2);
+      for (q = nq; q < nq + EXTRA_SB; q++) om->sb[x][q] = om->sb[x][q % nq];
+    }
+
+  return eslOK;
+}
+
 /* mf_conversion(): 
  * 
  * This builds the MSVFilter() parts of the profile <om>, scores
@@ -433,7 +491,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   int     k;			/* the usual counter over model nodes 1..M                      */
   int     z;			/* counter within elements of one SIMD minivector               */
   union { __m128i v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
-  __m128i tmp2;
+
 
   if (nq > om->allocQ16) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
@@ -459,35 +517,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->tec_b = unbiased_byteify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
   om->tjb_b = unbiased_byteify(om, logf(3.0f / (float) (gm->L+3))); /* this adopts the L setting of the parent profile */
 
-  /* We now want to fill out om->sb with om->rb - bias for use in the
-   * fast MSV filter. The only challenge is that the om->rb values are
-   * unsigned and generally use the whole scale while the om->sb
-   * values are signed. To solve that problem we perform the following
-   * calculation:
-   *
-   *   ((127 + bias) - rb) ^ 127
-   *
-   * where the subtraction is unsigned saturated and the addition is
-   * unsigned (it will not overflow, since bias is a small positive
-   * number). The f(x) = x ^ 127 combined with a change from unsigned
-   * to signed numbers have the same effect as f(x) = -x + 127. So if
-   * we regard the above as signed instead of unsigned it is equal to:
-   *
-   *   -((127 + bias) - rb) + 127 = rb - bias
-   *
-   * which is what we want. The reason for this slightly complex idea
-   * is that we wish the transformation to be fast, especially for
-   * hmmscan where many models are loaded.
-   */
-
-  tmp.v = _mm_set1_epi8((int8_t) (om->bias_b + 127));
-  tmp2  = _mm_set1_epi8(127);
-
-  for (x = 0; x < gm->abc->Kp; x++)
-    {
-      for (q = 0;  q < nq;            q++) om->sb[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp.v, om->rb[x][q]), tmp2);
-      for (q = nq; q < nq + EXTRA_SB; q++) om->sb[x][q] = om->sb[x][q % nq];
-    }
+  p7_profile_FinishMSVScores(om);
 
   return eslOK;
 }
@@ -694,6 +724,12 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int status, z;
 
+  /* Set these first so they are available in the following calls */
+  om->mode = gm->mode;
+  om->L    = gm->L;
+  om->M    = gm->M;
+  om->nj   = gm->nj;
+
   if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
   if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");  
 
@@ -714,10 +750,6 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) om->compo[z]   = gm->compo[z];
 
-  om->mode = gm->mode;
-  om->L    = gm->L;
-  om->M    = gm->M;
-  om->nj   = gm->nj;
   return eslOK;
 
  ERROR:
