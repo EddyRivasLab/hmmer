@@ -19,6 +19,26 @@
  * high-probability "regions" are, the first step of identifying the
  * domain structure of a target sequence.
  * 
+ * The D->D transitions are incorporated in the following way: First
+ * the transitions are applied within each block defined by striping
+ * and then the remaining transitions are applied in a single
+ * pass. The first pass is done in the same loop as the match and
+ * insert states to save overhead. To be able to finish all the D->D
+ * transitions in a single pass afterwards, we have to make special
+ * accomodations for long deletes that skip one or more entire
+ * blocks. This is done by precalculating the probability of skipping
+ * entire blocks in the variable called factor.
+ *
+ * If the delete probability vector is [v0 v1 v2 v3] after the first
+ * pass, we would normally shift it to [0 v0 v1 v2] and run the delete
+ * pass again and repeat up to three times. In the each such pass the
+ * v entries would end up being multiplied by the full delete path
+ * through a block. We use this fact to instead transform [v0 v1 v2
+ * v3] to [0; v0; f1*v0 + v1; f2*f1*v0 + f2*v1 + v2], where the f's
+ * are probabilities of deleting full blocks. With this tranformed
+ * vector as input to the second pass, all deletions are considered at
+ * once.
+ * 
  * Contents:
  *   1. Forward/Backward wrapper API
  *   2. Forward and Backward engine implementations
@@ -266,14 +286,13 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   float    xN, xE, xB, xC, xJ;	   /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over quads 0..nq-1                                */
-  int j;			   /* counter over DD iterations (4 is full serialization)      */
   int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
   __m128 *dpc = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
   __m128 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
   __m128 *rp;			   /* will point at om->rf[x] for residue x[i]                  */
   __m128 *tp;			   /* will point into (and step thru) om->tf                    */
   __m128 *tp2;			   /* will point into (and step thru) om->tf for DD's           */
-  __m128 factor;                   /* for long DD jumps                                         */
+  union {__m128 v; float f[4];} factor; /* for long DD jumps                                    */
 
   /* Initialization. */
   ox->M  = om->M;
@@ -295,9 +314,15 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
-  factor = _mm_set_ps(1.0f, 1.0f, 1.0f, 1.0f);
+  factor.v = _mm_set_ps(0.0f, 1.0f, 1.0f, 0.0f);
   tp2  = om->tf + 7*Q;   /* set tp2 to start of the DD's */
-  for (q = 0; q < Q; q++) factor = _mm_mul_ps(factor, *tp2); tp2++;
+  for (q = 0; q < Q; q++)
+    {
+      factor.v = _mm_mul_ps(factor.v, *tp2);
+      tp2++;
+    }
+  factor.f[0] = factor.f[1];
+  factor.f[1] = factor.f[2] * factor.f[1];
 
   for (i = 1; i <= L; i++)
     {
@@ -346,24 +371,36 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	  /* Calculate and store I(i,q); assumes odds ratio for emission is 1.0 */
 	  sv         =                _mm_mul_ps(mpv, *tp);  tp++;
 	  IMO(dpc,q) = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
-	}	  
+	}
 
+      /* Remember that the convention used in this code for right and left
+         is opposite of _MM_SHUFFLE index order */
+      /*                                                           factor = [           f1     f2*f1          f2                      0]
+                                                                     dcv  = [           v0        v1          v2                     v3] */
+      dcv  = _mm_shuffle_ps(dcv, dcv, _MM_SHUFFLE(2, 1, 0, 0));   /* dcv  = [           v0        v0          v1                     v2] */
+      dcv2 = _mm_mul_ps(dcv, factor.v);                           /* dcv2 = [        f1*v0  f2*f1*v0       f2*v1                      0] */
+      dcv2 = _mm_shuffle_ps(dcv2, dcv2, _MM_SHUFFLE(2, 0, 3, 1)); /* dcv2 = [     f2*f1*v0         0       f1*v0                  f2*v1] */
+      dcv  = _mm_add_ps(dcv, dcv2);                               /* dcv  = [f2*f1*v0 + v0        v0  f1*v0 + v1             f2*v1 + v2] */
+      dcv2 = _mm_shuffle_ps(dcv2, dcv2, _MM_SHUFFLE(0, 1, 1, 1)); /* dcv2 = [            0         0           0               f2*f1*v0] */
+      dcv  = _mm_move_ss(dcv, dcv2);                              /* dcv  = [            0        v0  f1*v0 + v1             f2*v1 + v2] */
+      dcv  = _mm_add_ps(dcv, dcv2);                               /* dcv  = [            0        v0  f1*v0 + v1  f2*f1*v0 + f2*v1 + v2] */
 
-      dcv = esl_sse_rightshift_ps(dcv, zerov);
-      dcv2 = _mm_mul_ps(dcv, factor);
-      dcv2 = esl_sse_rightshift_ps(dcv2, zerov);
-
+      /* This is simpler to understand, but has one more multiplication, one more shuffle and two more move_ss (factor is [f0 f1 f2 f3])
+      dcv  = esl_sse_rightshift_ps(dcv, zerov);
+      dcv2 = dcv;
+      dcv = _mm_mul_ps(dcv, factor);
+      dcv  = esl_sse_rightshift_ps(dcv, zerov);
+      dcv2 = _mm_add_ps(dcv2, dcv);
+      dcv = _mm_mul_ps(dcv, factor);
+      dcv  = esl_sse_rightshift_ps(dcv, zerov);
+      dcv = _mm_add_ps(dcv2, dcv);
+      */
+      
       tp2 = om->tf + 7*Q;   /* set tp2 to start of the DD's */
-
       for (q = 0; q < Q; q++) 
         { /* note, extend dcv, not DMO(q); only adding DD paths now */
           DMO(dpc,q) = _mm_add_ps(dcv,  DMO(dpc,q)); 
-          DMO(dpc,q) = _mm_add_ps(dcv2, DMO(dpc,q)); 
-
-          dcv  = _mm_mul_ps(dcv,  *tp2);
-          dcv2 = _mm_mul_ps(dcv2, *tp2);
-          tp2++;
-
+          dcv = _mm_mul_ps(dcv,  *tp2); tp2++;
           xEv = _mm_add_ps(DMO(dpc,q), xEv);
         }
 
