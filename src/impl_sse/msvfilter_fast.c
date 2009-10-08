@@ -875,8 +875,6 @@ p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
   uint8_t  xE;
   uint8_t  xJ;
 
-  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
-
   if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
     /* the optimizations are not guaranteed to work under these
        conditions (see comments at start of file) */
