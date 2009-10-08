@@ -34,6 +34,15 @@ fast_hmm_Create(const ESL_ALPHABET *abc)
   hmm->alpha_size      =  alpha_size;
   hmm->up_to_date      =  0;
   hmm->ptr             =  ptr;
+  hmm->t_s0            =  0.0;
+  hmm->t_s1            =  0.0;
+  hmm->t_se            =  0.0;
+  hmm->t_00            =  0.0;
+  hmm->t_01            =  0.0;
+  hmm->t_0e            =  0.0;
+  hmm->t_10            =  0.0;
+  hmm->t_11            =  0.0;
+  hmm->t_1e            =  0.0;
 
   return hmm;
 
@@ -111,7 +120,7 @@ fast_hmm_SetEmissions(FAST_HMM *hmm, float *emissions_0, float *emissions_1)
 
 
 /* Function:  fast_hmm_SetTransitions()
- * Synopsis:  Set transition probabilities for an HMM.
+ * Synopsis:  Set the transition probabilities for an HMM.
  * Incept:    BK, Wed Aug  3 12:00:00 2009 [Benasque]
  *
  * Purpose:   Set the transition probabilities for an HMM.
@@ -121,10 +130,11 @@ fast_hmm_SetEmissions(FAST_HMM *hmm, float *emissions_0, float *emissions_1)
  * Throws:    (no abnormal error conditions)
  */
 int
-fast_hmm_SetTransitions(FAST_HMM *hmm, float t_s0, float t_s1, float t_00, float t_01, float t_0e, float t_10, float t_11, float t_1e)
+fast_hmm_SetTransitions(FAST_HMM *hmm, float t_s0, float t_s1, float t_se, float t_00, float t_01, float t_0e, float t_10, float t_11, float t_1e)
 {
   float factor = 0.0;
 
+  /* Do not include t_se in factor since it is not used in the vectors */
   if (t_s0 > factor) factor = t_s0;
   if (t_s1 > factor) factor = t_s1;
   if (t_00 > factor) factor = t_00;
@@ -136,6 +146,7 @@ fast_hmm_SetTransitions(FAST_HMM *hmm, float t_s0, float t_s1, float t_00, float
 
   hmm->t_s0 = t_s0 / factor;
   hmm->t_s1 = t_s1 / factor;
+  hmm->t_se = t_se / factor;
   hmm->t_00 = t_00 / factor;
   hmm->t_01 = t_01 / factor;
   hmm->t_0e = t_0e / factor;
@@ -224,7 +235,7 @@ fast_hmm_GetLogProb(const ESL_DSQ *dsq, int L, FAST_HMM *hmm, float* p)
   if (!hmm->up_to_date) set_probs(hmm);
 
   if (L == 0) {
-    *p = logf(hmm->t_s0 * hmm->t_0e + hmm->t_s1 * hmm->t_1e);
+    *p = logf(hmm->t_se);
     return eslOK;
   }
 
@@ -320,7 +331,7 @@ main(int argc, char **argv)
   fast_hmm_SetEmissions(hmm, fair, loaded);
   
   fast_hmm_SetTransitions(hmm,
-                          1.00, 0.00,
+                          1.00, 0.00, 0.00,
                           0.96, 0.03, 0.01,
                           0.05, 0.95, 0.00);
 

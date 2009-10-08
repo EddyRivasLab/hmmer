@@ -165,10 +165,9 @@ p7_bg_SetLength(P7_BG *bg, int L)
   bg->fhmm->t[0][1] = 1.0f - bg->p1;
 
   fast_hmm_SetTransitions(bg->ffhmm,
-                          bg->fhmm->pi[0], bg->fhmm->pi[1],
-                          bg->fhmm->t[0][0], bg->fhmm->t[0][1], bg->fhmm->t[0][2],
-                          bg->fhmm->t[1][0], bg->fhmm->t[1][1], bg->fhmm->t[1][2]);
- 
+                          bg->ffhmm->t_s0, bg->ffhmm->t_s1, bg->ffhmm->t_se,
+                          bg->p1,          1.0f - bg->p1,   bg->ffhmm->t_0e,
+                          bg->ffhmm->t_10, bg->ffhmm->t_11, bg->ffhmm->t_1e);
 
   return eslOK;
 }
@@ -265,6 +264,12 @@ p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)
 
   bg->fhmm->pi[0] = 0.999;
   bg->fhmm->pi[1] = 0.001;
+
+  fast_hmm_SetTransitions(bg->ffhmm,
+                          bg->fhmm->pi[0],   bg->fhmm->pi[1],   bg->fhmm->pi[2],
+                          bg->fhmm->t[0][0], bg->fhmm->t[0][1], bg->fhmm->t[0][2],
+                          bg->fhmm->t[1][0], bg->fhmm->t[1][1], bg->fhmm->t[1][2]);
+
 
   esl_hmm_Configure(bg->fhmm, bg->f);
  

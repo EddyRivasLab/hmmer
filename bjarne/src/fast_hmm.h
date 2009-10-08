@@ -17,6 +17,7 @@ typedef struct {
   __m128 *start_probs;          /* A set of vectors of combined start and emission probabilities */
   float   t_s0;                 /* Individual transition probabilities */
   float   t_s1;
+  float   t_se;
   float   t_00;
   float   t_01;
   float   t_0e;
@@ -35,7 +36,7 @@ typedef struct {
 extern FAST_HMM *fast_hmm_Create(const ESL_ALPHABET *abc);
 extern void      fast_hmm_Destroy(FAST_HMM *hmm);
 extern int       fast_hmm_SetEmissions(FAST_HMM *hmm, float *emissions_0, float *emissions_1);
-extern int       fast_hmm_SetTransitions(FAST_HMM *hmm, float t_s0, float t_s1, float t_00, float t_01, float t_0e, float t_10, float t_11, float t_1e);
+extern int       fast_hmm_SetTransitions(FAST_HMM *hmm, float t_s0, float t_s1, float t_se, float t_00, float t_01, float t_0e, float t_10, float t_11, float t_1e);
 extern int       fast_hmm_GetLogProb(const ESL_DSQ *dsq, int L, FAST_HMM *hmm, float *p);
 
 
