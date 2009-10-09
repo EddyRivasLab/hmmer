@@ -273,8 +273,7 @@ typedef struct p7_bg_s {
   float    p1;			/* null model's self-loop probability           */
   float   *f;			/* residue frequencies [0..K-1]                 */
 
-  ESL_HMM *fhmm;		/* 2-state HMM filter null model in prefilters  */
-  FAST_HMM *ffhmm;		/* fast HMM filter null model in prefilters     */
+  FAST_HMM *ffhmm;		/* fast 2 state HMM filter null model           */
 
   float    omega;		/* "prior" on the null2 score correction        */
 
