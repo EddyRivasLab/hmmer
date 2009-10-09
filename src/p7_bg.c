@@ -54,12 +54,9 @@ p7_bg_Create(const ESL_ALPHABET *abc)
 
   ESL_ALLOC(bg, sizeof(P7_BG));
   bg->f     = NULL;
-  bg->fhmm  = NULL;
   bg->ffhmm = NULL;
 
   ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
-  if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
-
   if ((bg->ffhmm = fast_hmm_Create(abc)) == NULL) goto ERROR;
 
   if       (abc->type == eslAMINO)
@@ -95,10 +92,10 @@ p7_bg_CreateUniform(const ESL_ALPHABET *abc)
 
   ESL_ALLOC(bg, sizeof(P7_BG));
   bg->f     = NULL;
-  bg->fhmm  = NULL;
+  bg->ffhmm  = NULL;
 
   ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
-  if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
+  if ((bg->ffhmm = fast_hmm_Create(abc)) == NULL) goto ERROR;
 
   esl_vec_FSet(bg->f, abc->K, 1. / (float) abc->K);
   bg->p1    = 350./351.;
@@ -141,7 +138,6 @@ p7_bg_Destroy(P7_BG *bg)
 {
   if (bg != NULL) {
     if (bg->f     != NULL) free(bg->f);
-    if (bg->fhmm  != NULL) esl_hmm_Destroy(bg->fhmm);
     if (bg->ffhmm != NULL) fast_hmm_Destroy(bg->ffhmm);
     free(bg);
   }
@@ -161,9 +157,6 @@ p7_bg_SetLength(P7_BG *bg, int L)
 {
   bg->p1 = (float) L / (float) (L+1);
   
-  bg->fhmm->t[0][0] = bg->p1;
-  bg->fhmm->t[0][1] = 1.0f - bg->p1;
-
   fast_hmm_SetTransitions(bg->ffhmm,
                           bg->ffhmm->t_s0, bg->ffhmm->t_s1, bg->ffhmm->t_se,
                           bg->p1,          1.0f - bg->p1,   bg->ffhmm->t_0e,
@@ -205,6 +198,39 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  * 3. Filter null model
  *****************************************************************/
 
+void
+configure_dist(const ESL_ALPHABET *abc, const float *in, float *out, float *fq)
+{
+  int   Kp = abc->Kp;
+  int   K  = abc->K;
+  int   x,y;
+  float uniform = 1.0f / (float) K;
+  float use_fq;
+  float denom;
+
+  for (x = 0; x < K; x++) {
+    use_fq = (fq == NULL) ? uniform : fq[x];
+    out[x] = in[x] / use_fq;
+  }
+
+  out[K]    = 1.0;	/* gap char */
+  out[Kp-2] = 1.0;	/* nonresidue */
+  out[Kp-1] = 1.0;	/* missing data char */
+  
+  for (x = K+1; x <= Kp-3; x++) {
+    out[x] = 0.0f;
+    denom  = 0.0f;
+    for (y = 0; y < K; y++) 
+      if (abc->degen[x][y]) 
+        {
+          out[x] += in[y];  
+          denom  += (fq == NULL) ? uniform : fq[y];
+        }
+    out[x] = ((denom > 0.0f) ? out[x] / denom : 0.0f);
+  }
+}
+
+
 /* Function:  p7_bg_SetFilter()
  * Synopsis:  Configure filter HMM with new model composition.
  * Incept:    SRE, Fri Dec  5 09:08:15 2008 [Janelia]
@@ -244,43 +270,24 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 int
 p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)
 {
-  float L0 = 400.0;		/* mean length in state 0 of filter HMM (normal background) */
-  float L1 = (float) M / 8.0; 	/* mean length in state 1 of filter HMM (biased segment) */
-
-  float *e0;
-  float *e1;
-
-  /* State 0 is the normal iid model. */
-  bg->fhmm->t[0][0] =   L0 / (L0+1.0f);
-  bg->fhmm->t[0][1] = 1.0f / (L0+1.0f);
-  bg->fhmm->t[0][2] = 1.0f;          	/* 1.0 transition to E means we'll set length distribution externally. */
-  esl_vec_FCopy(bg->f, bg->abc->K, bg->fhmm->e[0]);
-
-  /* State 1 is the potentially biased model composition. */
-  bg->fhmm->t[1][0] = 1.0f / (L1+1.0f);
-  bg->fhmm->t[1][1] =   L1 / (L1+1.0f);
-  bg->fhmm->t[1][2] = 1.0f;         	/* 1.0 transition to E means we'll set length distribution externally. */
-  esl_vec_FCopy(compo, bg->abc->K, bg->fhmm->e[1]);
-
-  bg->fhmm->pi[0] = 0.999;
-  bg->fhmm->pi[1] = 0.001;
-
+  float  L0 = 400.0;		/* mean length in state 0 of filter HMM (normal background) */
+  float  L1 = (float) M / 8.0; 	/* mean length in state 1 of filter HMM (biased segment) */
+  float *e0;                    /* emissions from state 0 */
+  float *e1;                    /* emissions from state 1 */
+  /* State 0 is the normal iid model. State 1 is the potentially
+   * biased model composition.  1.0 transition to E means we'll set
+   * length distribution externally.
+   */
   fast_hmm_SetTransitions(bg->ffhmm,
-                          bg->fhmm->pi[0],   bg->fhmm->pi[1],   bg->fhmm->pi[2],
-                          bg->fhmm->t[0][0], bg->fhmm->t[0][1], bg->fhmm->t[0][2],
-                          bg->fhmm->t[1][0], bg->fhmm->t[1][1], bg->fhmm->t[1][2]);
+                          0.999f,           0.001f,           0.000f,
+                          L0   / (L0+1.0f), 1.0f / (L0+1.0f), 1.0f,
+                          1.0f / (L1+1.0f), L1   / (L1+1.0f), 1.0f);
 
-
-  esl_hmm_Configure(bg->fhmm, bg->f);
- 
   e0 = (float*) malloc(bg->abc->Kp * sizeof(float));
   e1 = (float*) malloc(bg->abc->Kp * sizeof(float));
- 
-  int i;
-  for (i = 0; i < bg->abc->Kp; i++) {
-    e0[i] = bg->fhmm->eo[i][0];
-    e1[i] = bg->fhmm->eo[i][1];
-  }
+
+  configure_dist(bg->abc, bg->f, e0, bg->f);
+  configure_dist(bg->abc, compo, e1, bg->f);
  
   fast_hmm_SetEmissions(bg->ffhmm, e0, e1);
  
@@ -311,10 +318,8 @@ p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)
 int
 p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc)
 {
-  //  ESL_HMX *hmx = esl_hmx_Create(L, bg->fhmm->M); /* optimization target: this can be a 2-row matrix, and it can be stored in <bg>. */
   float nullsc;		                  	 /* (or it could be passed in as an arg, but for sure it shouldn't be alloc'ed here */
   
-  //  esl_hmm_Forward(dsq, L, bg->fhmm, hmx, &nullsc);
   fast_hmm_GetLogProb(dsq, L, bg->ffhmm, &nullsc);
 
   /* impose the length distribution */
@@ -376,7 +381,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
 
   esl_stopwatch_Start(w);
-  for (i = 0; i < N; i++)
+  for (i = 0; i < N; i+)
     p7_bg_SetFilterByHMM(bg, hmm);
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
