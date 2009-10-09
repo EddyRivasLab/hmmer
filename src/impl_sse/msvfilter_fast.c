@@ -404,19 +404,15 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define  MAX_BANDS 18
+/* Note that some ifdefs below has to be changed if these values are
+   changed. These values are chosen based on some simple speed
+   tests. Apparently, two registers are generally used for something
+   else, leaving 14 registers on 64 bit versions and 6 registers on 32
+   bit versions. */
 #ifdef __x86_64__ /* 64 bit version */
-#ifdef __INTEL_COMPILER
-#define  OPT_BANDS 14    /* icc */
+#define  MAX_BANDS 14
 #else
-#define  OPT_BANDS 9   /* e.g. gcc */
-#endif
-#else /* 32 bit version */
-#ifdef __INTEL_COMPILER
-#define  OPT_BANDS 12  /* icc */
-#else
-#define  OPT_BANDS 9   /* e.g. gcc */
-#endif
+#define  MAX_BANDS 6
 #endif
 
 
@@ -753,6 +749,7 @@ calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beg
   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
+#if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
 __m128i
 calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
@@ -800,7 +797,8 @@ calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
 {
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
-
+#endif /* MAX_BANDS > 6 */
+#if MAX_BADNS > 14
 __m128i
 calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
@@ -824,6 +822,7 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
 {
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
+#endif /* MAX_BANDS > 14 */
 
 
 uint8_t
@@ -835,30 +834,31 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
 
+  int bands;                       /* the number of bands (rounds) to use                       */
+
+  int last_q = 0;                  /* for saving the last q value to find band width            */
+  int i;                           /* counter for bands                                         */
+
   /* function pointers for the various number of vectors to use */
-  __m128i (*fs[19]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
-    = {NULL,
-       calc_band_1, calc_band_2, calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6,  calc_band_7,
-       calc_band_8, calc_band_9, calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14,
-       calc_band_15, calc_band_16, calc_band_17, calc_band_18};
-
-  int div = 1;
-
-  int last_q = 0;
-  int i;
+  __m128i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
+    = {NULL
+       , calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
+#if MAX_BANDS > 6
+       , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
+#endif
+#if MAX_BADNS > 14
+       , calc_band_15, calc_band_16, calc_band_17, calc_band_18
+#endif
+  };
 
   beginv =  _mm_set1_epi8(128);
   xEv    =  beginv;
 
-  for (;;)  {
-    if ((Q + div - 1) / div <= MAX_BANDS && Q - OPT_BANDS * div < OPT_BANDS / 2) {
-      break;
-    }
-    div++;
-  }
+  /* Use the highest number of bands but no more than MAX_BADNS */
+  bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
 
-  for (i = 0; i < div; i++) {
-    q = (Q * (i + 1)) / div;
+  for (i = 0; i < bands; i++) {
+    q = (Q * (i + 1)) / bands;
 
     xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
 
