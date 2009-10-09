@@ -416,19 +416,6 @@
 #endif
 
 
-#define STEP_SINGLE_OLD_OLD(sv)                 \
-  sv   = _mm_max_epu8(sv, beginv);              \
-  sv   = _mm_adds_epu8(sv, biasv);              \
-  sv   = _mm_subs_epu8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epu8(xEv, sv);
-
-
-#define STEP_SINGLE_OLD(sv)                     \
-  sv   = _mm_max_epu8(sv, beginv);              \
-  sv   = _mm_sub_epi8(sv, *rsc); rsc++;         \
-  xEv  = _mm_max_epu8(xEv, sv);
-
-
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
   xEv  = _mm_max_epu8(xEv, sv);
@@ -872,8 +859,9 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 int
 p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
-  uint8_t  xE;
-  uint8_t  xJ;
+  /* Use 16 bit values to avoid overflow due to moved baseline */
+  uint16_t  xE;
+  uint16_t  xJ;
 
   if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
     /* the optimizations are not guaranteed to work under these
@@ -899,6 +887,13 @@ p7_MSVFilter_fast(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 
   xE += om->base_b - om->tjb_b - om->tbm_b;
   xE -= 128;
+
+  if (xE >= 255 - om->bias_b)
+    {
+      /* We know that the result will overflow in the original MSV filter */
+      *ret_sc = eslINFINITY;
+      return eslERANGE;
+    }
 
   xJ = xE - om->tec_b;
 
