@@ -16,16 +16,19 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
+#ifdef HAVE_MPI
+#include "mpi.h"
+#include "esl_mpi.h"
+
+/* at the moment we don't support threads running on mpi clients */
+#undef HMMER_THREADS
+#endif 
+
 #ifdef HMMER_THREADS
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
 #endif
-
-#ifdef HAVE_MPI
-#include "mpi.h"
-#include "esl_mpi.h"
-#endif 
 
 #include "hmmer.h"
 
@@ -33,21 +36,11 @@ typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
 #endif
-  P7_BG            *bg;
-  P7_PIPELINE      *pli;
-  P7_TOPHITS       *th;
-  P7_OPROFILE      *om;
+  P7_BG            *bg;	         /* null model                              */
+  P7_PIPELINE      *pli;         /* work pipeline                           */
+  P7_TOPHITS       *th;          /* top hit results                         */
+  P7_OPROFILE      *om;          /* optimized query profile                 */
 } WORKER_INFO;
-
-#ifdef HMMER_THREADS
-#define BLOCK_SIZE 2500
-
-static int  threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
-static void pipelineThread(void *arg);
-
-#else
-static int serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp);
-#endif
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles  reqs   incomp  help   docgroup*/
@@ -88,15 +81,47 @@ static ESL_OPTIONS options[] = {
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",     "set max width of ASCII text output lines",                     6 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",       "unlimit ASCII text output line width",                         6 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,   NULL,           "assert target <seqfile> is in format <s>>: no autodetection",  6 },
+  { "--stall",      eslARG_NONE,    FALSE, NULL, NULL,     NULL,  NULL,  NULL,            "arrest after start: for debugging MPI under gdb",              6 },  
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU", "n>0", NULL,  NULL,  NULL,            "number of worker threads",                                     6 },
+  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU", "n>0", NULL,  NULL,  NULL,         "number of worker threads",                                     6 },
+#endif
+#ifdef HAVE_MPI
+  { "--mpi",        eslARG_NONE,    FALSE, NULL, NULL,     NULL,  NULL,  NULL,            "run as an MPI parallel program",                               6 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+
+/* struct cfg_s : "Global" application configuration shared by all threads/processes
+ * 
+ * This structure is passed to routines within main.c, as a means of semi-encapsulation
+ * of shared data amongst different parallel processes (threads or MPI processes).
+ */
+struct cfg_s {
+  char            *dbfile;            /* target sequence database file                   */
+  char            *hmmfile;           /* query HMM file                                  */
+
+  int              do_mpi;            /* TRUE if we're doing MPI parallelization         */
+  int              nproc;             /* how many MPI processes, total                   */
+  int              my_rank;           /* who am I, in 0..nproc-1                         */
 };
 
 static char usage[]  = "[options] <query hmmfile> <target seqfile>";
 static char banner[] = "search profile HMM(s) against a sequence database";
 
+static int serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
+#ifdef HMMER_THREADS
+#define BLOCK_SIZE 1000
+
+static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
+static void pipeline_thread(void *arg);
+#endif
+
+static int  serial_master (ESL_GETOPTS *go, struct cfg_s *cfg);
+#ifdef HAVE_MPI
+static int  mpi_master    (ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  mpi_worker    (ESL_GETOPTS *go, struct cfg_s *cfg);
+#endif
 
 
 static void
@@ -148,7 +173,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 }
 
 static int
-output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
+output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 {
   p7_banner(ofp, go->argv[0], banner);
   
@@ -194,21 +219,79 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS     *go	    = NULL;              /* command line processing                         */
+  int              status   = eslOK;
+
+  ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
+  struct cfg_s     cfg;         /* configuration data                      */
+
+  /* Initialize what we can in the config structure (without knowing the alphabet yet) 
+   */
+  cfg.hmmfile    = NULL;
+  cfg.dbfile     = NULL;
+
+  cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
+  cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
+  cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
+
+  /* Initializations */
+  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
+  process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
+
+  /* pause the execution of the programs execution until the user has a
+   * chance to attach with a debugger and send a signal to resume execution
+   * i.e. (gdb) signal SIGCONT
+   */
+  if (esl_opt_GetBoolean(go, "--stall")) pause();
+
+  /* Figure out who we are, and send control there: 
+   * we might be an MPI master, an MPI worker, or a serial program.
+   */
+#ifdef HAVE_MPI
+  if (esl_opt_GetBoolean(go, "--mpi")) 
+    {
+      cfg.do_mpi     = TRUE;
+      MPI_Init(&argc, &argv);
+      MPI_Comm_rank(MPI_COMM_WORLD, &(cfg.my_rank));
+      MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
+
+      if (cfg.my_rank > 0)  status = mpi_worker(go, &cfg);
+      else 		    status = mpi_master(go, &cfg);
+
+      MPI_Finalize();
+    }
+  else
+#endif /*HAVE_MPI*/
+    {
+      status = serial_master(go, &cfg);
+    }
+
+  esl_getopts_Destroy(go);
+
+  return status;
+}
+
+
+/* serial_master()
+ * The serial version of hmmsearch.
+ * For each query HMM in <hmmfile> search the database for hits.
+ * 
+ * A master can only return if it's successful. All errors are handled immediately and fatally with p7_Fail().
+ */
+static int
+serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
+{
   FILE            *ofp      = stdout;            /* results output file (-o)                        */
   FILE            *afp      = NULL;              /* alignment output file (-A)                      */
-  FILE            *tblfp    = NULL;		 /* output stream for tabular per-seq (--tblout)    */
-  FILE            *domtblfp = NULL;		 /* output stream for tabular per-seq (--domtblout) */
-  char            *hmmfile  = NULL;              /* query HMM file                                  */
+  FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)    */
+  FILE            *domtblfp = NULL;              /* output stream for tabular per-seq (--domtblout) */
   P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
-  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
-  char            *dbfile   = NULL;              /* target sequence database file                   */
-  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
   ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
+  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
   ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
-  ESL_STOPWATCH   *w        = NULL;              /* for clocking performance                        */
+  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
+  ESL_STOPWATCH   *w;
+  int              textw    = 0;
   int              nquery   = 0;
-  int              textw;
   int              status   = eslOK;
   int              hstatus  = eslOK;
   int              sstatus  = eslOK;
@@ -223,10 +306,8 @@ main(int argc, char **argv)
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
 
-  /* Initializations */
-  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
-  process_commandline(argc, argv, &go, &hmmfile, &dbfile);    
   w = esl_stopwatch_Create();
+
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
 
@@ -236,17 +317,17 @@ main(int argc, char **argv)
   }
 
   /* Open the target sequence database */
-  status = esl_sqfile_Open(dbfile, dbfmt, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          dbfile);
-  else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            dbfile);
+  status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          cfg->dbfile);
+  else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            cfg->dbfile);
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, dbfile);  
+  else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
 
   /* Open the query profile HMM file */
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                      hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          hmmfile);  
+  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
+  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
@@ -257,9 +338,9 @@ main(int argc, char **argv)
 #ifdef HMMER_THREADS
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                           esl_threads_CPUCount(&ncpus);
+  else                                   esl_threads_CPUCount(&ncpus);
 
-  threadObj = esl_threads_Create(&pipelineThread);
+  threadObj = esl_threads_Create(&pipeline_thread);
   queue = esl_workqueue_Create(ncpus * 2);
 #else
   ncpus = 1;
@@ -272,7 +353,7 @@ main(int argc, char **argv)
   if (hstatus == eslOK)
     {
       /* One-time initializations after alphabet <abc> becomes known */
-      output_header(ofp, go, hmmfile, dbfile);
+      output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
 
       for (i = 0; i < ncpus; ++i)
 	{
@@ -286,16 +367,10 @@ main(int argc, char **argv)
       for (i = 0; i < ncpus * 2; ++i)
 	{
 	  block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
-	  if (block == NULL) 
-	    {
-	      esl_fatal("Failed to allocate sequence block");
-	    }
+	  if (block == NULL) 	      esl_fatal("Failed to allocate sequence block");
 
  	  status = esl_workqueue_Init(queue, block);
-	  if (status != eslOK) 
-	    {
-	      esl_fatal("Failed to add block to work queue");
-	    }
+	  if (status != eslOK)	      esl_fatal("Failed to add block to work queue");
 	}
 #endif
     }
@@ -313,7 +388,7 @@ main(int argc, char **argv)
       if (nquery > 1)
 	{
 	  if (! esl_sqfile_IsRewindable(dbfp)) 
-	    esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", dbfile);
+	    esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
 	  esl_sqfile_Position(dbfp, 0);
 	}
 
@@ -341,22 +416,20 @@ main(int argc, char **argv)
 	}
 
 #ifdef HMMER_THREADS
-      sstatus = threadedLoop(threadObj, queue, dbfp);
+      sstatus = thread_loop(threadObj, queue, dbfp);
 #else
-      sstatus = serialLoop(info, dbfp);
+      sstatus = serial_loop(info, dbfp);
 #endif
       switch(sstatus)
 	{
 	case eslEFORMAT: 
-	  esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-		    dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	  esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", dbfp->filename, dbfp->linenumber, dbfp->errbuf);
 	  break;
 	case eslEOF:
 	  /* do nothing */
 	  break;
 	default:
-	  esl_fatal("Unexpected error %d reading sequence file %s",
-		    sstatus, dbfp->filename);
+	  esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
 	}
 
       /* merge the results of the search results */
@@ -412,19 +485,19 @@ main(int argc, char **argv)
   switch(hstatus)
     {
     case eslEOD:
-      p7_Fail("read failed, HMM file %s may be truncated?", hmmfile);
+      p7_Fail("read failed, HMM file %s may be truncated?", cfg->hmmfile);
       break;
     case eslEFORMAT:
-      p7_Fail("bad file format in HMM file %s", hmmfile);
+      p7_Fail("bad file format in HMM file %s", cfg->hmmfile);
       break;
     case eslEINCOMPAT:
-      p7_Fail("HMM file %s contains different alphabets", hmmfile);
+      p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
       break;
     case eslEOF:
       /* do nothing */
       break;
     default:
-      p7_Fail("Unexpected error (%d) in reading HMMs from %s", hstatus, hmmfile);
+      p7_Fail("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
     }
 
   for (i = 0; i < ncpus; ++i)
@@ -447,22 +520,643 @@ main(int argc, char **argv)
   p7_hmmfile_Close(hfp);
   esl_sqfile_Close(dbfp);
   esl_stopwatch_Destroy(w);
-  esl_alphabet_Destroy(abc);
 
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
-  esl_getopts_Destroy(go);
+
   return eslOK;
 
  ERROR:
   return eslFAIL;
 }
 
+#ifdef HAVE_MPI
+
+/* Define common tags used by the MPI master/slave processes */
+#define HMMER_ERROR_TAG          1
+#define HMMER_HMM_TAG            2
+#define HMMER_SEQUENCE_TAG       3
+#define HMMER_BLOCK_TAG          4
+#define HMMER_PIPELINE_TAG       5
+#define HMMER_TOPHITS_TAG        6
+#define HMMER_HIT_TAG            7
+#define HMMER_TERMINATING_TAG    8
+#define HMMER_READY_TAG          9
+
+/* mpi_failure()
+ * Generate an error message.  If the clients rank is not 0, a
+ * message is created with the error message and sent to the
+ * master process for handling.
+ */
+static void
+mpi_failure(char *format, ...)
+{
+  va_list  argp;
+  int      status = eslFAIL;
+  int      len;
+  int      rank;
+  char     str[512];
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  /* format the error mesg */
+  va_start(argp, format);
+  len = vsnprintf(str, sizeof(str), format, argp);
+  va_end(argp);
+
+  /* make sure the error string is terminated */
+  str[sizeof(str)-1] = '\0';
+
+  /* if the caller is the master, print the results and abort */
+  if (rank == 0)
+    {
+      fprintf(stderr, "\nError: ");
+      fprintf(stderr, "%s", str);
+      fprintf(stderr, "\n");
+      fflush(stderr);
+
+      MPI_Abort(MPI_COMM_WORLD, status);
+      exit(1);
+    }
+  else
+    {
+      MPI_Send(str, len, MPI_CHAR, 0, HMMER_ERROR_TAG, MPI_COMM_WORLD);
+      pause();
+    }
+}
+
+#define MAX_BLOCK_SIZE (512*1024)
+
+typedef struct {
+  uint64_t  offset;
+  uint64_t  length;
+  uint64_t  count;
+} SEQ_BLOCK;
+
+typedef struct {
+  int        complete;
+  int        size;
+  int        current;
+  int        last;
+  SEQ_BLOCK *blocks;
+} BLOCK_LIST;
+
+/* this routine parses the database keeping track of the blocks
+ * offset within the file, number of sequences and the length
+ * of the block.  These blocks are passed as work units to the
+ * MPI workers.  If multiple hmm's are in the query file, the
+ * blocks are reused without parsing the database a second time.
+ */
+int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block)
+{
+  int      status   = eslOK;
+
+  /* if the list has been calculated, use it instead of parsing the database */
+  if (list->complete)
+    {
+      if (list->current == list->last)
+	{
+	  block->offset = 0;
+	  block->length = 0;
+	  block->count  = 0;
+
+	  status = eslEOF;
+	}
+      else
+	{
+	  int inx = list->current++;
+
+	  block->offset = list->blocks[inx].offset;
+	  block->length = list->blocks[inx].length;
+	  block->count  = list->blocks[inx].count;
+
+	  status = eslOK;
+	}
+
+      return status;
+    }
+
+  block->offset = 0;
+  block->length = 0;
+  block->count = 0;
+
+  esl_sq_Reuse(sq);
+  while (block->length < MAX_BLOCK_SIZE && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
+    {
+      if (block->count == 0) block->offset = sq->roff;
+      block->length = sq->roff - block->offset + 1;
+      block->count++;
+      esl_sq_Reuse(sq);
+    }
+
+  if (status == eslEOF && block->count > 0) status = eslOK;
+  if (status == eslEOF) list->complete = 1;
+
+  /* add the block to the list of known blocks */
+  if (status == eslOK)
+    {
+      int inx;
+
+      if (list->last >= list->size)
+	{
+	  void *tmp;
+	  list->size += 500;
+	  ESL_RALLOC(list->blocks, tmp, sizeof(SEQ_BLOCK) * list->size);
+	}
+
+      inx = list->last++;
+      list->blocks[inx].offset = block->offset;
+      list->blocks[inx].length = block->length;
+      list->blocks[inx].count  = block->count;
+    }
+
+  return status;
+
+ ERROR:
+  return eslEMEM;
+}
+
+/* mpi_master()
+ * The MPI version of hmmbuild.
+ * Follows standard pattern for a master/worker load-balanced MPI program (J1/78-79).
+ * 
+ * A master can only return if it's successful. 
+ * Errors in an MPI master come in two classes: recoverable and nonrecoverable.
+ * 
+ * Recoverable errors include all worker-side errors, and any
+ * master-side error that do not affect MPI communication. Error
+ * messages from recoverable messages are delayed until we've cleanly
+ * shut down the workers.
+ * 
+ * Unrecoverable errors are master-side errors that may affect MPI
+ * communication, meaning we cannot count on being able to reach the
+ * workers and shut them down. Unrecoverable errors result in immediate
+ * p7_Fail()'s, which will cause MPI to shut down the worker processes
+ * uncleanly.
+ */
+static int
+mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
+{
+  FILE            *ofp      = stdout;            /* results output file (-o)                        */
+  FILE            *afp      = NULL;              /* alignment output file (-A)                      */
+  FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)    */
+  FILE            *domtblfp = NULL;              /* output stream for tabular per-seq (--domtblout) */
+  P7_BG           *bg       = NULL;	         /* null model                                      */
+  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
+  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
+  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
+  ESL_SQ          *dbsq     = NULL;              /* one target sequence (digital)                   */
+  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
+  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
+  ESL_STOPWATCH   *w;
+  int              textw    = 0;
+  int              nquery   = 0;
+  int              status   = eslOK;
+  int              hstatus  = eslOK;
+  int              sstatus  = eslOK;
+  int              dest;
+
+  char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures */
+  int              mpi_size = 0;                 /* size of the allocated buffer */
+  BLOCK_LIST      *list     = NULL;
+  SEQ_BLOCK        block;
+
+  int              i;
+  int              size;
+  int              count;
+  MPI_Status       mpistatus;
+
+  w = esl_stopwatch_Create();
+
+  if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
+  else                                     textw = esl_opt_GetInteger(go, "--textw");
+
+  if (esl_opt_IsOn(go, "--tformat")) {
+    dbfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    if (dbfmt == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
+  }
+
+  /* Open the target sequence database */
+  status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
+  if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
+  else if (status == eslEFORMAT)   mpi_failure("Sequence file %s is empty or misformatted\n",            cfg->dbfile);
+  else if (status == eslEINVAL)    mpi_failure("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        mpi_failure("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
+
+  /* Open the query profile HMM file */
+  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
+  if      (status == eslENOTFOUND) mpi_failure("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
+  else if (status == eslEFORMAT)   mpi_failure("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
+  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
+
+  /* Open the results output files */
+  if (esl_opt_IsOn(go, "-o") && (ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL)
+    mpi_failure("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o"));
+
+  if (esl_opt_IsOn(go, "-A") && (afp = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) 
+    mpi_failure("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A"));
+
+  if (esl_opt_IsOn(go, "--tblout") && (tblfp = fopen(esl_opt_GetString(go, "--tblout"), "w")) == NULL)
+    mpi_failure("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp"));
+
+  if (esl_opt_IsOn(go, "--domtblout") && (domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)
+    mpi_failure("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp"));
+
+  ESL_ALLOC(list, sizeof(SEQ_BLOCK));
+  list->complete = 0;
+  list->size     = 0;
+  list->current  = 0;
+  list->last     = 0;
+  list->blocks   = NULL;
+
+  /* <abc> is not known 'til first HMM is read. */
+  hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
+  if (hstatus == eslOK)
+    {
+      /* One-time initializations after alphabet <abc> becomes known */
+      output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
+      dbsq = esl_sq_CreateDigital(abc);
+      bg = p7_bg_Create(abc);
+    }
+  
+  /* Outer loop: over each query HMM in <hmmfile>. */
+  while (hstatus == eslOK) 
+    {
+      P7_PROFILE      *gm    = NULL;
+      P7_OPROFILE     *om    = NULL;       /* optimized query profile                  */
+      P7_PIPELINE     *pli   = NULL;
+      P7_TOPHITS      *th    = NULL;
+
+      nquery++;
+      esl_stopwatch_Start(w);
+
+      /* seqfile may need to be rewound (multiquery mode) */
+      if (nquery > 1) list->current = 0;
+
+      fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
+      if (hmm->acc  != NULL) fprintf(ofp, "Accession:   %s\n", hmm->acc);
+      if (hmm->desc != NULL) fprintf(ofp, "Description: %s\n", hmm->desc);
+
+      /* Convert to an optimized model */
+      gm = p7_profile_Create (hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc);
+      p7_ProfileConfig(hmm, bg, gm, 100, p7_LOCAL);
+      p7_oprofile_Convert(gm, om);
+
+      /* Create processing pipeline and hit list */
+      th  = p7_tophits_Create(); 
+      pli = p7_pipeline_Create(go, hmm->M, 100, p7_SEARCH_SEQS);
+      p7_pli_NewModel(pli, om, bg);
+
+      /* Main loop: */
+      while ((sstatus = next_block(dbfp, dbsq, list, &block)) == eslOK)
+	{
+	  if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
+	    mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
+
+	  MPI_Get_count(&mpistatus, MPI_PACKED, &size);
+	  if (mpi_buf == NULL || size > mpi_size) {
+	    void *tmp;
+	    ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
+	    mpi_size = size; 
+	  }
+
+	  dest = mpistatus.MPI_SOURCE;
+	  MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
+
+	  if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
+	    mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
+	  if (mpistatus.MPI_TAG != HMMER_READY_TAG)
+	    mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
+      
+	  MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
+	}
+      switch(sstatus)
+	{
+	case eslEFORMAT: 
+	  mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	  break;
+	case eslEOF:
+	  break;
+	default:
+	  mpi_failure("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
+	}
+
+      block.offset = 0;
+      block.length = 0;
+      block.count  = 0;
+
+      /* wait for all workers to finish up their work blocks */
+      for (i = 1; i < cfg->nproc; ++i)
+	{
+	  if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
+	    mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
+
+	  MPI_Get_count(&mpistatus, MPI_PACKED, &size);
+	  if (mpi_buf == NULL || size > mpi_size) {
+	    void *tmp;
+	    ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
+	    mpi_size = size; 
+	  }
+
+	  dest = mpistatus.MPI_SOURCE;
+	  MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
+
+	  if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
+	    mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
+	  if (mpistatus.MPI_TAG != HMMER_READY_TAG)
+	    mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
+	}
+
+      /* merge the results of the search results */
+      for (dest = 1; dest < cfg->nproc; ++dest)
+	{
+	  P7_PIPELINE     *mpi_pli   = NULL;
+	  P7_TOPHITS      *mpi_th    = NULL;
+
+	  /* send an empty block to signal the worker they are done */
+	  MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
+
+	  /* wait for the results */
+	  if ((status = p7_tophits_MPIRecv(dest, HMMER_TOPHITS_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_th)) != eslOK)
+	    mpi_failure("Unexpected error %d receiving tophits from %d", status, dest);
+
+	  if ((status = p7_pipeline_MPIRecv(dest, HMMER_PIPELINE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, go, &mpi_pli)) != eslOK)
+	    mpi_failure("Unexpected error %d receiving pipeline from %d", status, dest);
+
+	  p7_tophits_Merge(th, mpi_th);
+	  p7_pipeline_Merge(pli, mpi_pli);
+
+	  p7_pipeline_Destroy(mpi_pli);
+	  p7_tophits_Destroy(mpi_th);
+	}
+
+      /* Print the results.  */
+      p7_tophits_Sort(th);
+      p7_tophits_Threshold(th, pli);
+      p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+      p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+
+      if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, (nquery == 1));
+      if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, (nquery == 1));
+  
+      esl_stopwatch_Stop(w);
+      p7_pli_Statistics(ofp, pli, w);
+      fprintf(ofp, "//\n");
+
+      /* Output the results in an MSA (-A option) */
+      if (afp) {
+	ESL_MSA *msa = NULL;
+
+	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK)
+	  {
+	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
+	  
+	    fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
+	  } 
+	else fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n");
+	  
+	esl_msa_Destroy(msa);
+      }
+
+      p7_pipeline_Destroy(pli);
+      p7_tophits_Destroy(th);
+      p7_hmm_Destroy(hmm);
+
+      hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
+    } /* end outer loop over query HMMs */
+
+  switch(hstatus)
+    {
+    case eslEOD:
+      mpi_failure("read failed, HMM file %s may be truncated?", cfg->hmmfile);
+      break;
+    case eslEFORMAT:
+      mpi_failure("bad file format in HMM file %s", cfg->hmmfile);
+      break;
+    case eslEINCOMPAT:
+      mpi_failure("HMM file %s contains different alphabets", cfg->hmmfile);
+      break;
+    case eslEOF:
+      break;
+    default:
+      mpi_failure("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
+    }
+
+  /* monitor all the workers to make sure they have ended */
+  for (i = 1; i < cfg->nproc; ++i)
+    {
+      if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
+	mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
+
+      MPI_Get_count(&mpistatus, MPI_PACKED, &size);
+      if (mpi_buf == NULL || size > mpi_size) {
+	void *tmp;
+	ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
+	mpi_size = size; 
+      }
+
+      dest = mpistatus.MPI_SOURCE;
+      MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
+
+      if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
+	mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
+      if (mpistatus.MPI_TAG != HMMER_TERMINATING_TAG)
+	mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
+    }
+
+  if (mpi_buf != NULL) free(mpi_buf);
+
+  esl_sq_Destroy(dbsq);
+  esl_stopwatch_Destroy(w);
+
+  return eslOK;
+
+ ERROR:
+
+  return eslEMEM;
+}
+
+
+static int
+mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
+{
+  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
+  ESL_SQ          *dbsq     = NULL;              /* one target sequence (digital)                   */
+  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
+  P7_BG           *bg       = NULL;	         /* null model                                      */
+  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
+  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
+  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
+  ESL_STOPWATCH   *w;
+  int              status   = eslOK;
+  int              hstatus  = eslOK;
+  int              sstatus  = eslOK;
+
+  char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures           */
+  int              mpi_size = 0;                 /* size of the allocated buffer                    */
+
+  MPI_Status       mpistatus;
+
+  w = esl_stopwatch_Create();
+
+  /* Open the target sequence database */
+  status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
+  if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
+  else if (status == eslEFORMAT)   mpi_failure("Sequence file %s is empty or misformatted\n",            cfg->dbfile);
+  else if (status == eslEINVAL)    mpi_failure("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        mpi_failure("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
+
+  /* Open the query profile HMM file */
+  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
+  if      (status == eslENOTFOUND) mpi_failure("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
+  else if (status == eslEFORMAT)   mpi_failure("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
+  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
+
+  /* <abc> is not known 'til first HMM is read. */
+  hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
+  if (hstatus == eslOK)
+    {
+      /* One-time initializations after alphabet <abc> becomes known */
+      dbsq = esl_sq_CreateDigital(abc);
+      bg = p7_bg_Create(abc);
+    }
+  
+  /* Outer loop: over each query HMM in <hmmfile>. */
+  while (hstatus == eslOK) 
+    {
+      P7_PROFILE      *gm      = NULL;
+      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
+      P7_PIPELINE     *pli     = NULL;
+      P7_TOPHITS      *th      = NULL;
+
+      SEQ_BLOCK        block;
+
+      esl_stopwatch_Start(w);
+
+      status = 0;
+      MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
+
+      /* Convert to an optimized model */
+      gm = p7_profile_Create (hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc);
+      p7_ProfileConfig(hmm, bg, gm, 100, p7_LOCAL);
+      p7_oprofile_Convert(gm, om);
+
+      th  = p7_tophits_Create(); 
+      pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+      p7_pli_NewModel(pli, om, bg);
+
+      /* receive a sequence block from the master */
+      MPI_Recv(&block, 3, MPI_LONG_LONG_INT, 0, HMMER_BLOCK_TAG, MPI_COMM_WORLD, &mpistatus);
+      while (block.count > 0)
+	{
+	  uint64_t length = 0;
+	  uint64_t count  = block.count;
+
+	  esl_sqfile_Position(dbfp, block.offset);
+	  while (count > 0 && (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+	    {
+	      length = dbsq->roff - block.offset + 1;
+
+	      p7_pli_NewSeq(pli, dbsq);
+	      p7_bg_SetLength(bg, dbsq->n);
+	      p7_oprofile_ReconfigLength(om, dbsq->n);
+      
+	      p7_Pipeline(pli, om, bg, dbsq, th);
+
+	      esl_sq_Reuse(dbsq);
+	      p7_pipeline_Reuse(pli);
+
+	      --count;
+	    }
+
+	  /* lets do a little bit of sanity checking here to make sure the blocks are the same */
+	  if (count > 0)              mpi_failure("Block count mismatch - expected %ld found %ld at offset %ld\n",  block.count,  block.count - count, block.offset);
+	  if (block.length != length) mpi_failure("Block length mismatch - expected %ld found %ld at offset %ld\n", block.length, length,              block.offset);
+
+	  /* inform the master we need another block of sequences */
+	  status = 0;
+	  MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
+
+	  /* wait for the next block of sequences */
+	  MPI_Recv(&block, 3, MPI_LONG_LONG_INT, 0, HMMER_BLOCK_TAG, MPI_COMM_WORLD, &mpistatus);
+	}
+
+      esl_stopwatch_Stop(w);
+
+      /* Send the top hits back to the master. */
+      p7_tophits_MPISend(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
+      p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
+
+      p7_pipeline_Destroy(pli);
+      p7_tophits_Destroy(th);
+      p7_oprofile_Destroy(om);
+      p7_profile_Destroy(gm);
+      p7_hmm_Destroy(hmm);
+
+      hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
+    } /* end outer loop over query HMMs */
+
+  switch(hstatus)
+    {
+    case eslEOF:
+      /* do nothing */
+      break;
+    case eslEFORMAT:
+      mpi_failure("bad file format in HMM file %s", cfg->hmmfile);
+      break;
+    case eslEINCOMPAT:
+      mpi_failure("HMM file %s contains different alphabets", cfg->hmmfile);
+      break;
+    default:
+      mpi_failure("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
+    }
+
+  status = 0;
+  MPI_Send(&status, 1, MPI_INT, 0, HMMER_TERMINATING_TAG, MPI_COMM_WORLD);
+
+  p7_bg_Destroy(bg);
+  esl_stopwatch_Destroy(w);
+
+  return eslOK;
+}
+#endif /*HAVE_MPI*/
+
+
+/* serial_loop() */
+static int
+serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
+{
+  int      sstatus;
+  ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
+
+  dbsq = esl_sq_CreateDigital(info->om->abc);
+
+  /* Main loop: */
+  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+    {
+      p7_pli_NewSeq(info->pli, dbsq);
+      p7_bg_SetLength(info->bg, dbsq->n);
+      p7_oprofile_ReconfigLength(info->om, dbsq->n);
+      
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  
+      esl_sq_Reuse(dbsq);
+      p7_pipeline_Reuse(info->pli);
+    }
+
+  esl_sq_Destroy(dbsq);
+
+  return sstatus;
+}
+
 #ifdef HMMER_THREADS
 static int
-threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
+thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
   int  status  = eslOK;
   int  sstatus = eslOK;
@@ -508,7 +1202,7 @@ threadedLoop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 }
 
 static void 
-pipelineThread(void *arg)
+pipeline_thread(void *arg)
 {
   int i;
   int status;
@@ -558,35 +1252,8 @@ pipelineThread(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
-#else
-static int
-serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp)
-{
-  int      sstatus;
-  ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
-
-  dbsq = esl_sq_CreateDigital(info->om->abc);
-
-  /* Main loop: */
-  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
-    {
-      p7_pli_NewSeq(info->pli, dbsq);
-      p7_bg_SetLength(info->bg, dbsq->n);
-      p7_oprofile_ReconfigLength(info->om, dbsq->n);
-      
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
-	  
-      esl_sq_Reuse(dbsq);
-      p7_pipeline_Reuse(info->pli);
-    }
-
-  esl_sq_Destroy(dbsq);
-
-  return sstatus;
-}
-#endif
+#endif   /* HMMER_THREADS */
  
-
 
 /*****************************************************************
  * @LICENSE@

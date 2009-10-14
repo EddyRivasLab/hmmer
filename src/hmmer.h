@@ -530,6 +530,7 @@ typedef struct p7_alidisplay_s {
   long  sqto;		        /* end position on sequence   (1..L)    */
   long  L;			/* length of sequence                   */
 
+  int   memsize;                /* size of allocated block of memory    */
   char *mem;			/* memory used for the char data above  */
 } P7_ALIDISPLAY;
 
@@ -920,6 +921,12 @@ extern int p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *n
 extern int p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
 extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, const P7_BG *bg,
 			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
+
+extern int p7_pipeline_MPISend(P7_PIPELINE *pli, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
+extern int p7_pipeline_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_GETOPTS *go, P7_PIPELINE **ret_pli);
+
+extern int p7_tophits_MPISend(P7_TOPHITS *th, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
+extern int p7_tophits_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_TOPHITS **ret_th);
 #endif /*HAVE_MPI*/
 
 /* tracealign.c */

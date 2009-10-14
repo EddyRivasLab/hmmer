@@ -101,7 +101,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mem = NULL;
 
   pos = 0; 
-  ESL_ALLOC(ad->mem, sizeof(char) * n);
+  ad->memsize = sizeof(char) * n;
+  ESL_ALLOC(ad->mem, ad->memsize);
   if (om->ref[0] != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
   if (om->cs[0]  != 0) { ad->csline = ad->mem + pos; pos += z2-z1+2; } else { ad->csline = NULL; }
   ad->model   = ad->mem + pos;  pos += z2-z1+2;
