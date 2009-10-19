@@ -2,6 +2,7 @@
 \section{Other topics}
 \label{section:more}
 
+
 \subsection{Null hypotheses in play}
 
 \subsubsection{null1 model}
@@ -223,24 +224,52 @@ One comparison: one sequence to one HMM.
 
 
 
-\subsection{Tabular output}
+\subsection{Tabular output formats}
 
-\subsubsection{Target hits table}
+\subsubsection{The target hits table}
 
-The sequence target hits table has \textbf{16 whitespace-delimited
-  fields} followed by a free text target sequence description, as
-follows:
+The target hits table consists of one line for each different
+query/target comparison that met the reporting thresholds, ranked by
+decreasing statistical significance (increasing E-value).  Each line
+consists of \textbf{16 space-delimited fields} followed by a free text
+target sequence description, as follows:
 
 \begin{description}
 \item[\emprog{(1) target:}]
+  The name of the target sequence or
+  profile.  (If a \ccode{--acc} option was used, and an accession is
+  available for the sequence or profile, the accession is shown
+  instead of the name.) 
 
 \item[\emprog{(2) query:}] 
+  The name of the query sequence or profile.
+  (If a \ccode{--acc} option was used, and an accession is
+  available for the sequence or profile, the accession is shown
+  instead of the name.) 
 
-\item[\emprog{(3) E-value (full sequence):}] 
+\item[\emprog{(3) E-value (full sequence):}] The expectation value
+  (statistical significance) of the comparison.  This is a \emph{per
+  query} E-value; i.e.\ calculated as the expected number of false
+  positives achieving this comparison's score for a \emph{single}
+  query against the $Z$ sequences in the target dataset.  If you
+  search with multiple queries and if you want to control the
+  \emph{overall} false positive rate of that search rather than the
+  false positive rate per query, you will want to multiply this
+  per-query E-value by how many queries you're doing.
 
 \item[\emprog{(4) score (full sequence):}] 
+  The score (in bits) for this target/query comparison. It includes
+  a biased-composition correction (the ``null2'' model). 
 
-\item[\emprog{(5) Bias (full sequence):}] 
+\item[\emprog{(5) Bias (full sequence):}] The biased-composition
+  correction: the bit score difference contributed by the null2
+  model. High bias scores may be a red flag for a false positive,
+  especially when the bias score is as large or larger than the
+  overall bit score. It is difficult to correct for all possible ways
+  in which a nonrandom but nonhomologous biological sequences can
+  appear to be similar, such as short-period tandem repeats, so there
+  are cases where the bias correction is not strong enough (creating
+  false positives).
 
 \item[\emprog{(6) E-value (best 1 domain):}] 
 
@@ -273,6 +302,14 @@ follows:
 \item[\emprog{(17) description of target:}] 
 \end{description}
 
+This table is columnated neatly for human readability, but do not
+write parsers that rely on this columnation; rely on space-delimited
+fields. The pretty columnation assumes fixed maximum widths for each
+field. If a field exceeds its allotted width, it will still be fully
+represented and space-delimited, but the columnation will be disrupted
+on the rest of the row.
+
+
 
 
 
@@ -286,7 +323,10 @@ The domain table has \textbf{20 whitespace-delimited fields} followed
 by a free text target sequence description, as follows:
 
 \begin{description}
-\item[\emprog{(1) target:}]
+\item[\emprog{(1) target:}] The name of the target sequence or
+  profile.  (If a \ccode{--acc} option was used, and an accession is
+  available for the sequence or profile, the accession is shown
+  instead of the name.) 
 
 \item[\emprog{(2) tlen:}]
 
@@ -328,3 +368,7 @@ by a free text target sequence description, as follows:
 
 \item[\emprog{(21) description of target:}]
 \end{description}
+
+As with the target hits table (above), this table is columnated neatly
+for human readability, but you should not write parsers that rely on
+this columnation; parse based on space-delimited fields instead.
