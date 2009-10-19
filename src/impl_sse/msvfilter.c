@@ -581,6 +581,7 @@ main(int argc, char **argv)
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
      p7_oprofile_SameMSV(om, gm);
   */
+  p7_oprofile_Dump(stdout, om);
   p7_omx_SetDumpMode(stdout, ox, TRUE);    
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)

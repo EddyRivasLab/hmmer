@@ -686,6 +686,7 @@ p7_pipeline_MPISend(P7_PIPELINE *pli, int dest, int tag, MPI_Comm comm, char **b
    * Indeed there are some hints in the spec that that's *not* true.
    * So we assume we must match our Pack_size calls exactly to our Pack calls.
    */
+  n = 0;
   if (MPI_Pack_size(1, MPI_LONG_INT,      comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
   if (MPI_Pack_size(1, MPI_LONG_INT,      comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
   if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
@@ -708,8 +709,8 @@ p7_pipeline_MPISend(P7_PIPELINE *pli, int dest, int tag, MPI_Comm comm, char **b
   /* if no pipeline was defined, return zeros for the stats */
   if (pli == NULL) 
     {
-      bogus.mode        = 0;
-      bogus.Z_setby     = 0;
+      bogus.mode        = p7_SEARCH_SEQS;     /* that's 0. (some compilers complain if you set 0 directly. */
+      bogus.Z_setby     = p7_ZSETBY_NTARGETS; /* ditto. */
       bogus.nmodels     = 0;
       bogus.nseqs       = 0;
       bogus.nres        = 0;
@@ -794,7 +795,7 @@ p7_pipeline_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc,
 
   /* Unpack it - watching out for the EOD signal of M = -1. */
   pos = 0;
-  if ((pli = p7_pipeline_Create(go, 0, 0, 0)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((pli = p7_pipeline_Create(go, 0, 0, p7_SEARCH_SEQS)) == NULL) { status = eslEMEM; goto ERROR; } /* mode will be immediately overwritten */
   if (MPI_Unpack(*buf, n, &pos, &(pli->mode),        1, MPI_LONG_INT,      comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
   if (MPI_Unpack(*buf, n, &pos, &(pli->Z_setby),     1, MPI_LONG_INT,      comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
   if (MPI_Unpack(*buf, n, &pos, &(pli->nmodels),     1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 

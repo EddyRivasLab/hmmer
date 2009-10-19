@@ -8,7 +8,7 @@ top_srcdir = @top_srcdir@
 VPATH      = @srcdir@ @top_srcdir@/src
 
 CC             = @CC@
-CFLAGS         = @CFLAGS@
+CFLAGS         = @CFLAGS@ @PTHREAD_CFLAGS@
 SIMDFLAGS      = @SIMD_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@

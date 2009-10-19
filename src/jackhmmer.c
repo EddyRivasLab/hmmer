@@ -49,92 +49,97 @@ static int serialLoop(WORKER_INFO *info, ESL_SQFILE *dbfp);
 static void checkpoint_hmm(int nquery, P7_HMM *hmm,  char *basename, int iteration);
 static void checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iteration);
 
-#define CONOPTS "--fast,--hand"                            /* Exclusive options for model construction                    */
-#define EFFOPTS "--eent,--eclust,--eset,--enone"           /* Exclusive options for effective sequence number calculation */
-#define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"  /* Exclusive options for relative weighting                    */
+#define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
+#define DOMREPOPTS  "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
+#define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
+#define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define CONOPTS     "--fast,--hand"                            /* Exclusive options for model construction                    */
+#define EFFOPTS     "--eent,--eclust,--eset,--enone"           /* Exclusive options for effective sequence number calculation */
+#define WGTOPTS     "--wgsc,--wblosum,--wpb,--wnone,--wgiven"  /* Exclusive options for relative weighting                    */
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles     reqs   incomp                             help                                                  docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,                          "show brief help on version and usage",                         1 },
-  { "-N",           eslARG_INT,      "5", NULL, NULL,      NULL,    NULL,  NULL,                          "set maximum number of iterations to <n>",                      1 },
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "-N",           eslARG_INT,      "5", NULL, NULL,      NULL,    NULL,  NULL,            "set maximum number of iterations to <n>",                      1 },
 /* Control of output */
-  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "direct output to file <f>, not stdout",                        10 },
-  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save multiple alignment of hits to file <s>",                  10 },
-  { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save parseable table of per-sequence hits to file <s>",        10 },
-  { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save parseable table of per-domain hits to file <s>",          10 },
-  { "--chkhmm",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save HMM checkpoints to files <s>-<iteration>.hmm",            10 },
-  { "--chkali",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "save alignment checkpoints to files <s>-<iteration>.sto",      10 },
+  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
+  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save multiple alignment of hits to file <s>",                  2 },
+  { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save parseable table of per-sequence hits to file <s>",        2 },
+  { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save parseable table of per-domain hits to file <s>",          2 },
+  { "--chkhmm",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save HMM checkpoints to files <s>-<iteration>.hmm",            2 },
+  { "--chkali",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save alignment checkpoints to files <s>-<iteration>.sto",      2 },
+  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "prefer accessions over names in output",                       2 },
+  { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
+  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
+  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,    NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
 /* Control of scoring system */
-  { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,    NULL,  NULL,                          "gap open probability",                                         2 },
-  { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,    NULL,  NULL,                          "gap extend probability",                                       2 },
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,    NULL,  NULL,                          "substitution score matrix [default: BLOSUM62]",                2 },
+  { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,    NULL,  NULL,            "gap open probability",                                         3 },
+  { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,    NULL,  NULL,            "gap extend probability",                                       3 },
+  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "substitution score matrix [default: BLOSUM62]",                3 },
 /* Control of reporting thresholds */
-  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,    NULL,  "--cut_ga,--cut_nc,--cut_tc",  "report sequences <= this E-value threshold in output",         3 },
-  { "-T",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  "--cut_ga,--cut_nc,--cut_tc",  "report sequences >= this score threshold in output",           3 },
-  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           3 },
-  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",     NULL,    NULL,  "--cut_ga,--cut_nc,--cut_tc",  "report domains <= this E-value threshold in output",           3 },
-  { "--domT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  "--cut_ga,--cut_nc,--cut_tc",  "report domains >= this score cutoff in output",                3 },
-  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,                          "set # of significant seqs, for domain E-value calculation",    3 },
-  { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  "-E,-T,--domE,--domT",         "use profile's GA gathering cutoffs to set -T, --domT",         99 },
-  { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  "-E,-T,--domE,--domT",         "use profile's NC noise cutoffs to set -T, --domT",             99 },
-  { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  "-E,-T,--domE,--domT",         "use profile's TC trusted cutoffs to set -T, --domT",           99 },
-/* Control of inclusion thresholds */
-  { "--incE",       eslARG_REAL, "0.001", NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include sequences <= this E-value threshold in output ali",    4 },
-  { "--incT",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include sequences >= this score threshold in output ali",      4 },
-  { "--incdomE",    eslARG_REAL, "0.001", NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include domains <= this E-value threshold in output ali",      4 },
-  { "--incdomT",    eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL, "--inc_ga,--inc_nc,--inc_tc",        "include domains >= this score threshold in output ali",        4 },
-  { "--inc_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--incE,--incT,--incdomE,--incdomT", "use profile's GA gathering cutoffs to set --incT, --incdomT",  99 },
-  { "--inc_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--incE,--incT,--incdomE,--incdomT", "use profile's NC noise cutoffs to set --incT, --incdomT",      99 },
-  { "--inc_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--incE,--incT,--incdomE,--incdomT", "use profile's TC trusted cutoffs to set --incT, --incdomT",    99 },
-/* Control of filter pipeline */
-  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL, "--F1,--F2,--F3",               "Turn all heuristic filters off (less speed, more power)",      5 },
-  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,    NULL, "--max",                        "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             5 },
-  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,    NULL, "--max",                        "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             5 },
-  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,    NULL, "--max",                        "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             5 },
-  { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL, "--max",                        "turn off composition bias filter",                             5 },
-  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,    NULL,                        "turn off biased composition score corrections",                5 },
+  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,    NULL,  REPOPTS,         "report sequences <= this E-value threshold in output",         4 },
+  { "-T",           eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  REPOPTS,         "report sequences >= this score threshold in output",           4 },
+  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",     NULL,    NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",           4 },
+  { "--domT",       eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  DOMREPOPTS,      "report domains >= this score cutoff in output",                4 },
+/* Control of inclusion (significance) thresholds */
+  { "--incE",       eslARG_REAL, "0.001", NULL, "x>0",     NULL,    NULL,  INCOPTS,         "consider sequences <= this E-value threshold as significant",  5 },
+  { "--incT",       eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
+  { "--incdomE",    eslARG_REAL, "0.001", NULL, "x>0",     NULL,    NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
+  { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
+/* Model-specific thresholding for both reporting and inclusion */
+  { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",  99 },
+  { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",      99 },
+  { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",    99 },
+/* Control of acceleration pipeline */
+  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      7 },
+  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,    NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
+  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,    NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
+  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,    NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
+  { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL, "--max",          "turn off composition bias filter",                             7 },
+  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,  NULL,            "turn off biased composition score corrections",                7 },
 /* Alternate model construction strategies */
-  { "--fast",       eslARG_NONE,   FALSE, NULL, NULL,   CONOPTS,    NULL,    NULL, "assign cols w/ >= symfrac residues as consensus",       6 },
-  { "--hand",       eslARG_NONE,"default",NULL, NULL,   CONOPTS,    NULL,    NULL, "manual construction (requires reference annotation)",   6 },
-  { "--symfrac",    eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,"--fast",    NULL, "sets sym fraction controlling --fast construction",     6 },
-  { "--fragthresh", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,    NULL,    NULL, "if L < x<L>, tag sequence as a fragment",               6 },
+  { "--fast",       eslARG_NONE,   FALSE, NULL, NULL,   CONOPTS,    NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              8 },
+  { "--hand",       eslARG_NONE,"default",NULL, NULL,   CONOPTS,    NULL,  NULL,            "manual construction (requires reference annotation)",          8 },
+  { "--symfrac",    eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,"--fast",  NULL,            "sets sym fraction controlling --fast construction",            8 },
+  { "--fragthresh", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L < x<L>, tag sequence as a fragment",                      8 },
 /* Alternate relative sequence weighting strategies */
-  { "--wpb",        eslARG_NONE,"default",NULL, NULL,   WGTOPTS,    NULL,    NULL, "Henikoff position-based weights",                      7 },
-  { "--wgsc",       eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "Gerstein/Sonnhammer/Chothia tree weights",             7 },
-  { "--wblosum",    eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "Henikoff simple filter weights",                       7 },
-  { "--wnone",      eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "don't do any relative weighting; set all to 1",        7 },
-  { "--wgiven",     eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,    NULL, "use weights as given in MSA file",                    99 }, /* no-op in jackhmmer */
-  { "--wid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--wblosum", NULL, "for --wblosum: set identity cutoff",                   7 },
+  { "--wpb",        eslARG_NONE,"default",NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff position-based weights",                              9 },
+  { "--wgsc",       eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
+  { "--wblosum",    eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff simple filter weights",                               9 },
+  { "--wnone",      eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "don't do any relative weighting; set all to 1",                9 },
+  { "--wgiven",     eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "use weights as given in MSA file",                            99 }, /* no-op in jackhmmer */
+  { "--wid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1", NULL,"--wblosum",NULL,            "for --wblosum: set identity cutoff",                           9 },
 /* Alternate effective sequence weighting strategies */
-  { "--eent",       eslARG_NONE,"default",NULL, NULL,   EFFOPTS,    NULL,    NULL, "adjust eff seq # to achieve relative entropy target",  8 },
-  { "--eclust",     eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,    NULL, "eff seq # is # of single linkage clusters",            8 },
-  { "--enone",      eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,    NULL, "no effective seq # weighting: just use nseq",          8 },
-  { "--eset",       eslARG_REAL,    NULL, NULL, NULL,   EFFOPTS,    NULL,    NULL, "set eff seq # for all models to <x>",                  8 },
-  { "--ere",        eslARG_REAL,    NULL, NULL,"x>0",      NULL, "--eent",   NULL, "for --eent: set minimum rel entropy/position to <x>",  8 },
-  { "--esigma",     eslARG_REAL,  "45.0", NULL,"x>0",      NULL, "--eent",   NULL, "for --eent: set sigma param to <x>",                   8 },
-  { "--eid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--eclust",  NULL, "for --eclust: set fractional identity cutoff to <x>",  8 },
+  { "--eent",       eslARG_NONE,"default",NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",         10 },
+  { "--eclust",     eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                   10 },
+  { "--enone",      eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                 10 },
+  { "--eset",       eslARG_REAL,    NULL, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "set eff seq # for all models to <x>",                         10 },
+  { "--ere",        eslARG_REAL,    NULL, NULL,"x>0",      NULL, "--eent", NULL,            "for --eent: set minimum rel entropy/position to <x>",         10 },
+  { "--esigma",     eslARG_REAL,  "45.0", NULL,"x>0",      NULL, "--eent", NULL,            "for --eent: set sigma param to <x>",                          10 },
+  { "--eid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--eclust",NULL,            "for --eclust: set fractional identity cutoff to <x>",         10 },
 /* Control of E-value calibration */
-  { "--EmL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for MSV Gumbel mu fit",                    9 },   
-  { "--EmN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for MSV Gumbel mu fit",                    9 },   
-  { "--EvL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Viterbi Gumbel mu fit",                9 },   
-  { "--EvN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Viterbi Gumbel mu fit",                9 },   
-  { "--EfL",         eslARG_INT,   "100", NULL,"n>0",      NULL,    NULL,    NULL, "length of sequences for Forward exp tail tau fit",             9 },   
-  { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,    NULL, "number of sequences for Forward exp tail tau fit",             9 },   
-  { "--Eft",         eslARG_REAL, "0.04", NULL,"0<x<1",    NULL,    NULL,    NULL, "tail mass for Forward exponential tail tau fit",               9 },   
+  { "--EmL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "length of sequences for MSV Gumbel mu fit",                   11 },   
+  { "--EmN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "number of sequences for MSV Gumbel mu fit",                   11 },   
+  { "--EvL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "length of sequences for Viterbi Gumbel mu fit",               11 },   
+  { "--EvN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "number of sequences for Viterbi Gumbel mu fit",               11 },   
+  { "--EfL",         eslARG_INT,   "100", NULL,"n>0",      NULL,    NULL,  NULL,            "length of sequences for Forward exp tail tau fit",            11 },   
+  { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "number of sequences for Forward exp tail tau fit",            11 },   
+  { "--Eft",         eslARG_REAL, "0.04", NULL,"0<x<1",    NULL,    NULL,  NULL,            "tail mass for Forward exponential tail tau fit",              11 },   
 /* Other options */
-  { "--acc",        eslARG_NONE,  FALSE,  NULL, NULL,      NULL,    NULL,    NULL,   "output target accessions instead of names if possible",     11 },
-  { "--seed",        eslARG_INT,    "42", NULL, "n>=0",    NULL,    NULL,    NULL,   "set RNG seed to <n> (if 0: one-time arbitrary seed)",       11 },
-  { "--textw",       eslARG_INT,   "120", NULL, "n>=120",  NULL,    NULL,"--notextw","set max width of ASCII text output lines",                  11 },
-  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,"--textw",  "unlimit ASCII text output line width",                      11 },
-  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,   NULL,    "assert query <seqfile> is in format <s>: no autodetection", 11 },
-  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,   NULL,    "assert target <seqdb> is in format <s>>: no autodetection", 11 },
+  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
+  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
+  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "output target accessions instead of names if possible",       12 },
+  { "--seed",       eslARG_INT,     "42", NULL, "n>=0",    NULL,    NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
+  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   12 },
+  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",   12 },
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU", "n>0",      NULL,    NULL,   NULL,    "number of worker threads",                                  11 },
+  { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU","n>0",  NULL,    NULL,  NULL,            "number of parallel CPU workers to use for multithreads",      12 },
 #endif
 #ifdef HAVE_MPI
-  // { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "arrest after start: for debugging MPI under gdb",          4 },  
-  // { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL, "run as an MPI parallel program",                           4 },
-#endif 
+//{ "--stall",      eslARG_NONE,  FALSE, NULL,  NULL,      NULL,  "--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
+//{ "--mpi",        eslARG_NONE,  FALSE, NULL,  NULL,      NULL,    NULL,  NULL,            "run as an MPI parallel program",                              12 },
+#endif  
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <query seqfile> <target seqdb>";
@@ -159,37 +164,37 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
       puts("\nwhere basic options are:");
-      esl_opt_DisplayHelp(stdout, go, 1, 2, 120); /* 1= group; 2 = indentation; 120=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
-      puts("\nOptions directing output:");
+      puts("\noptions directing output:");
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
+
+      puts("\noptions controlling scoring system in first iteration:");
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
+
+      puts("\noptions controlling reporting thresholds:");
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
+
+      puts("\noptions controlling significance thresholds for inclusion in next round:");
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
+
+      puts("\noptions controlling acceleration heuristics:");
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
+
+      puts("\noptions controlling model construction after first iteration:");
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 80); 
+
+      puts("\noptions controlling relative weights in models after first iteration:");
+      esl_opt_DisplayHelp(stdout, go, 9, 2, 80); 
+
+      puts("\noptions controlling effective seq number in models after first iteration:");
       esl_opt_DisplayHelp(stdout, go, 10, 2, 80); 
 
-      puts("\nOptions controlling scoring system in iteration one:");
-      esl_opt_DisplayHelp(stdout, go, 2, 2, 120); 
-
-      puts("\nOptions controlling significance thresholds for reporting:");
-      esl_opt_DisplayHelp(stdout, go, 3, 2, 120); 
-
-      puts("\nOptions controlling significance thresholds for inclusion in next round:");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 120); 
-
-      puts("\nOptions controlling acceleration heuristics:");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 120); 
-
-      puts("\nOptions controlling model construction after first iteration:");
-      esl_opt_DisplayHelp(stdout, go, 6, 2, 120); 
-
-      puts("\nOptions controlling relative weights in models after first iteration:");
-      esl_opt_DisplayHelp(stdout, go, 7, 2, 120); 
-
-      puts("\nOptions controlling effective seq number in models after first iteration:");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 120); 
-
       puts("\nOptions controlling E value calibration:");
-      esl_opt_DisplayHelp(stdout, go, 9, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 11, 2, 80); 
 
       puts("\nOther expert options:");
-      esl_opt_DisplayHelp(stdout, go, 11, 2, 120); 
+      esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
     }
 
@@ -222,25 +227,24 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--domtblout")) fprintf(ofp, "# per-dom hits tabular output:     %s\n",      esl_opt_GetString(go, "--domtblout"));
   if (esl_opt_IsUsed(go, "--chkhmm"))    fprintf(ofp, "# HMM checkpoint files output:     %s-<i>.hmm\n", esl_opt_GetString(go, "--chkhmm"));
   if (esl_opt_IsUsed(go, "--chkali"))    fprintf(ofp, "# MSA checkpoint files output:     %s-<i>.sto\n", esl_opt_GetString(go, "--chkali"));
-  if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",      esl_opt_GetReal  (go, "--popen"));
-  if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",      esl_opt_GetReal  (go, "--pextend"));
-  if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",      esl_opt_GetString(go, "--mxfile"));
-  if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence E-value threshold:   <= %g\n",      esl_opt_GetReal(go, "-E"));
-  if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence bit score threshold: <= %g\n",      esl_opt_GetReal(go, "-T"));
-  if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
-  if (esl_opt_IsUsed(go, "--domE"))      fprintf(ofp, "# domain E-value threshold:     <= %g\n",      esl_opt_GetReal(go, "--domE"));
-  if (esl_opt_IsUsed(go, "--domT"))      fprintf(ofp, "# domain bit score threshold:   <= %g\n",      esl_opt_GetReal(go, "--domT"));
-  if (esl_opt_IsUsed(go, "--domZ"))      fprintf(ofp, "# domain search space set to:      %.0f\n",    esl_opt_GetReal(go, "--domZ"));
-//if (esl_opt_IsUsed(go, "--cut_ga"))    fprintf(ofp, "# set reporting thresholds to:     GA cutoffs\n"); 
-//if (esl_opt_IsUsed(go, "--cut_nc"))    fprintf(ofp, "# set reporting thresholds to:     NC cutoffs\n"); 
-//if (esl_opt_IsUsed(go, "--cut_tc"))    fprintf(ofp, "# set reporting thresholds to:     TC cutoffs\n"); 
-  if (esl_opt_IsUsed(go, "--incE"))      fprintf(ofp, "# seq inclusion E-val thresh:   <= %g\n",      esl_opt_GetReal(go, "--incE"));
-  if (esl_opt_IsUsed(go, "--incT"))      fprintf(ofp, "# seq inclusion score thresh:   >= %g\n",      esl_opt_GetReal(go, "--incT"));
-  if (esl_opt_IsUsed(go, "--incdomE"))   fprintf(ofp, "# dom inclusion E-val thresh:   <= %g\n",      esl_opt_GetReal(go, "--incdomE"));
-  if (esl_opt_IsUsed(go, "--incdomT"))   fprintf(ofp, "# dom inclusion score thresh:   >= %g\n",      esl_opt_GetReal(go, "--incdomT"));
-//if (esl_opt_IsUsed(go, "--inc_ga"))    fprintf(ofp, "# set inclusion thresholds to:     GA cutoffs\n"); 
-//if (esl_opt_IsUsed(go, "--inc_nc"))    fprintf(ofp, "# set inclusion thresholds to:     NC cutoffs\n"); 
-//if (esl_opt_IsUsed(go, "--inc_tc"))    fprintf(ofp, "# set inclusion thresholds to:     TC cutoffs\n"); 
+  if (esl_opt_IsUsed(go, "--acc"))       fprintf(ofp, "# prefer accessions over names:    yes\n");
+  if (esl_opt_IsUsed(go, "--noali"))     fprintf(ofp, "# show alignments in output:       no\n");
+  if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
+  if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"));  
+  if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal  (go, "--popen"));
+  if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal  (go, "--pextend"));
+  if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
+  if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"));
+  if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score <= %g\n",    esl_opt_GetReal(go, "-T"));
+  if (esl_opt_IsUsed(go, "--domE"))      fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal(go, "--domE"));
+  if (esl_opt_IsUsed(go, "--domT"))      fprintf(ofp, "# domain reporting threshold:      score <= %g\n",    esl_opt_GetReal(go, "--domT"));
+  if (esl_opt_IsUsed(go, "--incE"))      fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "--incE"));
+  if (esl_opt_IsUsed(go, "--incT"))      fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal(go, "--incT"));
+  if (esl_opt_IsUsed(go, "--incdomE"))   fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal(go, "--incdomE"));
+  if (esl_opt_IsUsed(go, "--incdomT"))   fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal(go, "--incdomT"));
+//if (esl_opt_IsUsed(go, "--cut_ga"))    fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n"); 
+//if (esl_opt_IsUsed(go, "--cut_nc"))    fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n"); 
+//if (esl_opt_IsUsed(go, "--cut_tc"))    fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n"); 
   if (esl_opt_IsUsed(go, "--max"))       fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n");
   if (esl_opt_IsUsed(go, "--F1"))        fprintf(ofp, "# MSV filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F1"));
   if (esl_opt_IsUsed(go, "--F2"))        fprintf(ofp, "# Vit filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F2"));
@@ -270,14 +274,20 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));
   if (esl_opt_IsUsed(go, "--EfN") )      fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfN"));
   if (esl_opt_IsUsed(go, "--Eft") )      fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",     esl_opt_GetReal   (go, "--Eft"));
+  if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
+  if (esl_opt_IsUsed(go, "--domZ"))      fprintf(ofp, "# domain search space set to:      %.0f\n",    esl_opt_GetReal(go, "--domZ"));
   if (esl_opt_IsUsed(go, "--seed"))  {
     if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(ofp, "# random number seed:              one-time arbitrary\n");
     else                                       fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(go, "--seed"));
   }
-  if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",     esl_opt_GetInteger(go, "--textw"));
-  if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
   if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
+#ifdef HMMER_THREADS
+  if (esl_opt_IsUsed(go, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(go, "--cpu"));  
+#endif
+#ifdef HAVE_MPI
+//if (esl_opt_IsUsed(go, "--mpi"))       fprintf(ofp, "# MPI:                             on\n");
+#endif 
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }

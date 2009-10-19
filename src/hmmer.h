@@ -725,7 +725,6 @@ typedef struct p7_pipeline_s {
   int     incdom_by_E;		/* TRUE to threshold domain inclusion by E  */
   double  incdomE;		/* per-domain inclusion E-value threshold   */
   double  incdomT;		/* per-domain inclusion E-value threshold   */
-  int     incuse_bit_cutoffs;	/* (FALSE | p7H_GA | p7H_TC | p7H_NC)       */
 
   /* Tracking search space sizes for E value calculations                   */
   double  Z;			/* eff # targs searched (per-target E-val)  */
@@ -753,6 +752,7 @@ typedef struct p7_pipeline_s {
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           show_accessions;/* TRUE to output accessions not names      */
+  int           show_alignments;/* TRUE to output alignments (default)      */
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   char          errbuf[eslERRBUFSIZE];
@@ -1034,13 +1034,14 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_TargetReportable(P7_PIPELINE *pli, float score,     float Pval);
-extern int p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, float Pval);
-extern int p7_pli_TargetIncludable(P7_PIPELINE *pli, float score,     float Pval);
-extern int p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, float Pval);
-extern int p7_pli_NewModel        (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
-extern int p7_pli_NewSeq          (P7_PIPELINE *pli, const ESL_SQ *sq);
-extern int p7_Pipeline            (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
+extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     float Pval);
+extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, float Pval);
+extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     float Pval);
+extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, float Pval);
+extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
+extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
+extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
+extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 

@@ -293,6 +293,11 @@ fi
 # Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
 #
 AC_PROG_CC
+# MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
+if test "$enable_mpi" = "yes"; then
+   ACX_MPI(,AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+   CC=$MPICC
+fi
 AC_PROG_CPP
 AX_COMPILER_VENDOR
 # AC_PROG_CC_STDC wants to append -c99 to icc; icc doesn't like this.
@@ -321,15 +326,6 @@ else
    # user (in the environment), but that's not so; it gets set
    # by AC_PROG_CC. Instead of rewriting AX_CC_MAXOPT, we fool
    # it.
-fi
-
-# MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
-if test "$enable_mpi" = "yes"; then
-   ACX_MPI(,AC_MSG_ERROR([MPI library not found for --enable-mpi]))
-   CC=$MPICC
-   if test "$ax_cv_c_compiler_vendor" != "intel"; then
-     AC_PROG_CC_STDC
-   fi
 fi
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@

@@ -55,22 +55,20 @@
  *            following options:
  *            
  *            || option      ||            description                    || usually  ||
+ *            | --noali      |  don't output alignments (smaller output)   |   FALSE   |
  *            | -E           |  report hits <= this E-value threshold      |    10.0   |
  *            | -T           |  report hits >= this bit score threshold    |    NULL   |
  *            | -Z           |  set initial hit search space size          |    NULL   |
  *            | --domZ       |  set domain search space size               |    NULL   |
  *            | --domE       |  report domains <= this E-value threshold   |    10.0   |
  *            | --domT       |  report domains <= this bit score threshold |    NULL   |
- *            | --cut_ga     |  set -T, --domT using model's GA thresholds |   FALSE   |
- *            | --cut_nc     |  set -T, --domT using model's NC thresholds |   FALSE   |
- *            | --cut_tc     |  set -T, --domT using model's TC thresholds |   FALSE   |
  *            | --incE       |  include hits <= this E-value threshold     |    0.01   |
  *            | --incT       |  include hits >= this bit score threshold   |    NULL   |
  *            | --incdomE    |  include domains <= this E-value threshold  |    0.01   |
  *            | --incdomT    |  include domains <= this score threshold    |    NULL   |
- *            | --inc_ga     |  set --incT, --incdomT using GA thresholds  |   FALSE   |
- *            | --inc_nc     |  set --incT, --incdomT using NC thresholds  |   FALSE   |
- *            | --inc_tc     |  set --incT, --incdomT using TC thresholds  |   FALSE   |
+ *            | --cut_ga     |  model-specific thresholding using GA       |   FALSE   |
+ *            | --cut_nc     |  model-specific thresholding using NC       |   FALSE   |
+ *            | --cut_tc     |  model-specific thresholding using TC       |   FALSE   |
  *            | --max        |  turn all heuristic filters off             |   FALSE   |
  *            | --F1         |  Stage 1 (MSV) thresh: promote hits P <= F1 |    0.02   |
  *            | --F2         |  Stage 2 (Vit) thresh: promote hits P <= F2 |    1e-3   |
@@ -79,6 +77,7 @@
  *            | --nonull2    |  turn OFF biased comp score correction      |   FALSE   |
  *            | --seed       |  RNG seed (0=use arbitrary seed)            |      42   |
  *            | --acc        |  prefer accessions over names in output     |   FALSE   |
+
  *
  * Returns:   ptr to new <P7_PIPELINE> object on success. Caller frees this
  *            with <p7_pipeline_Destroy()>.
@@ -104,12 +103,12 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
    * variability. As a special case, if seed==0, we choose an arbitrary one-time 
    * seed: time() sets the seed, and we turn off the reinitialization.
    */
-  pli->r            =  esl_randomness_CreateFast(seed);
-  pli->do_reseeding = (seed == 0) ? FALSE : TRUE;
-  pli->ddef         = p7_domaindef_Create(pli->r);
+  pli->r                  =  esl_randomness_CreateFast(seed);
+  pli->do_reseeding       = (seed == 0) ? FALSE : TRUE;
+  pli->ddef               = p7_domaindef_Create(pli->r);
   pli->ddef->do_reseeding = pli->do_reseeding;
 
-  /* Configure threshold settings for reporting hits  */
+  /* Configure reporting thresholds */
   pli->by_E            = TRUE;
   pli->E               = esl_opt_GetReal(go, "-E");
   pli->T               = 0.0;
@@ -117,7 +116,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   pli->domE            = esl_opt_GetReal(go, "--domE");
   pli->domT            = 0.0;
   pli->use_bit_cutoffs = FALSE;
-
   if (esl_opt_IsOn(go, "-T")) 
     {
       pli->T    = esl_opt_GetReal(go, "-T"); 
@@ -128,36 +126,15 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
       pli->domT     = esl_opt_GetReal(go, "--domT"); 
       pli->dom_by_E = FALSE;
     }
-  if (esl_opt_GetBoolean(go, "--cut_ga"))
-    {
-      pli->T    = pli->domT     = 0.0;
-      pli->by_E = pli->dom_by_E = FALSE;
-      pli->use_bit_cutoffs = p7H_GA;
-    }
-  if (esl_opt_GetBoolean(go, "--cut_nc"))
-    {
-      pli->T    = pli->domT     = 0.0;
-      pli->by_E = pli->dom_by_E = FALSE;
-      pli->use_bit_cutoffs = p7H_NC;
-    }
-  if (esl_opt_GetBoolean(go, "--cut_tc"))
-    {
-      pli->T    = pli->domT     = 0.0;
-      pli->by_E = pli->dom_by_E = FALSE;
-      pli->use_bit_cutoffs = p7H_TC;
-    }
 
 
-  /* Configure threshold settings for including hits 
-   */
+  /* Configure inclusion thresholds */
   pli->inc_by_E           = TRUE;
   pli->incE               = esl_opt_GetReal(go, "--incE");
   pli->incT               = 0.0;
   pli->incdom_by_E        = TRUE;
   pli->incdomE            = esl_opt_GetReal(go, "--incdomE");
   pli->incdomT            = 0.0;
-  pli->incuse_bit_cutoffs = FALSE;
-
   if (esl_opt_IsOn(go, "--incT")) 
     {
       pli->incT     = esl_opt_GetReal(go, "--incT"); 
@@ -168,28 +145,36 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
       pli->incdomT     = esl_opt_GetReal(go, "--incdomT"); 
       pli->incdom_by_E = FALSE;
     }
-  if (esl_opt_GetBoolean(go, "--inc_ga"))
+
+
+  /* Configure for one of the model-specific thresholding options */
+  if (esl_opt_GetBoolean(go, "--cut_ga"))
     {
+      pli->T        = pli->domT        = 0.0;
+      pli->by_E     = pli->dom_by_E    = FALSE;
       pli->incT     = pli->incdomT     = 0.0;
       pli->inc_by_E = pli->incdom_by_E = FALSE;
-      pli->incuse_bit_cutoffs = p7H_GA;
+      pli->use_bit_cutoffs = p7H_GA;
     }
-  if (esl_opt_GetBoolean(go, "--inc_nc"))
+  if (esl_opt_GetBoolean(go, "--cut_nc"))
     {
+      pli->T        = pli->domT        = 0.0;
+      pli->by_E     = pli->dom_by_E    = FALSE;
       pli->incT     = pli->incdomT     = 0.0;
       pli->inc_by_E = pli->incdom_by_E = FALSE;
-      pli->incuse_bit_cutoffs = p7H_NC;
+      pli->use_bit_cutoffs = p7H_NC;
     }
-  if (esl_opt_GetBoolean(go, "--inc_tc"))
+  if (esl_opt_GetBoolean(go, "--cut_tc"))
     {
+      pli->T        = pli->domT        = 0.0;
+      pli->by_E     = pli->dom_by_E    = FALSE;
       pli->incT     = pli->incdomT     = 0.0;
       pli->inc_by_E = pli->incdom_by_E = FALSE;
-      pli->incuse_bit_cutoffs = p7H_TC;
+      pli->use_bit_cutoffs = p7H_TC;
     }
 
 
-  /* Configure search space sizes for E value calculations   
-   */
+  /* Configure search space sizes for E value calculations  */
   pli->Z       = pli->domZ       = 0.0;
   pli->Z_setby = pli->domZ_setby = p7_ZSETBY_NTARGETS;
   if (esl_opt_IsOn(go, "-Z")) 
@@ -203,7 +188,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
       pli->domZ       = esl_opt_GetReal(go, "--domZ");
     }
 
-  /* Configure accelaration pipeline thresholds */
+
+  /* Configure acceleration pipeline thresholds */
   pli->do_max        = FALSE;
   pli->do_biasfilter = TRUE;
   pli->do_null2      = TRUE;
@@ -219,6 +205,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   if (esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
   if (esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
+
   /* Accounting as we collect results */
   pli->nmodels     = 0;
   pli->nseqs       = 0;
@@ -230,7 +217,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
   pli->n_past_fwd  = 0;
   
   pli->mode            = mode;
-  pli->show_accessions = (esl_opt_GetBoolean(go, "--acc") ? TRUE : FALSE);
+  pli->show_accessions = (esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
+  pli->show_alignments = (esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
   pli->hfp             = NULL;
   pli->errbuf[0]       = '\0';
 
@@ -374,59 +362,74 @@ p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, float Pval)
 int
 p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 {
+  int status = eslOK;
+
   pli->nmodels++;
   pli->nnodes += om->M;
   if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SCAN_MODELS) pli->Z = pli->nmodels;
 
   if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
 
+  if (pli->mode == p7_SEARCH_SEQS) 
+    status = p7_pli_NewModelThresholds(pli, om);
+
+  return status;
+}
+
+/* Function:  p7_pli_NewModelThresholds()
+ * Synopsis:  Set reporting and inclusion bit score thresholds on a new model.
+ * Incept:    SRE, Sat Oct 17 12:07:43 2009 [Janelia]
+ *
+ * Purpose:   Set the bit score thresholds on a new model, if we're 
+ *            using Pfam GA, TC, or NC cutoffs for reporting or
+ *            inclusion.
+ *            
+ *            In a "search" pipeline, this only needs to be done once
+ *            per query model, so <p7_pli_NewModelThresholds()> gets 
+ *            called by <p7_pli_NewModel()>.
+ *            
+ *            In a "scan" pipeline, this needs to be called for each
+ *            model, and it needs to be called after
+ *            <p7_oprofile_ReadRest()>, because that's when the bit
+ *            score thresholds get read.
+ *
+ * Returns:   <eslOK> on success. 
+ *            
+ *            <eslEINVAL> if pipeline expects to be able to use a
+ *            model's bit score thresholds, but this model does not
+ *            have the appropriate ones set.
+ *
+ * Xref:      Written to fix bug #h60.
+ */
+int
+p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
+{
+
   if (pli->use_bit_cutoffs)
     {
       if (pli->use_bit_cutoffs == p7H_GA)
 	{
 	  if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
-	  pli->T    = om->cutoff[p7_GA1];  
-	  pli->domT = om->cutoff[p7_GA2]; 
+	  pli->T    = pli->incT    = om->cutoff[p7_GA1];  
+	  pli->domT = pli->incdomT = om->cutoff[p7_GA2]; 
 	}
       else if  (pli->use_bit_cutoffs == p7H_TC)
 	{
 	  if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
-	  pli->T    = om->cutoff[p7_TC1];  
-	  pli->domT = om->cutoff[p7_TC2]; 
+	  pli->T    = pli->incT    = om->cutoff[p7_TC1];  
+	  pli->domT = pli->incdomT = om->cutoff[p7_TC2]; 
 	}
       else if (pli->use_bit_cutoffs == p7H_NC)
 	{
 	  if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
-	  pli->T    = om->cutoff[p7_NC1]; 
-	  pli->domT = om->cutoff[p7_NC2]; 
+	  pli->T    = pli->incT    = om->cutoff[p7_NC1]; 
+	  pli->domT = pli->incdomT = om->cutoff[p7_NC2]; 
 	}
     }
-
-  if (pli->incuse_bit_cutoffs)
-    {
-      if (pli->incuse_bit_cutoffs == p7H_GA)
-	{
-	  if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
-	  pli->incT    = om->cutoff[p7_GA1];  
-	  pli->incdomT = om->cutoff[p7_GA2]; 
-	}
-      else if  (pli->incuse_bit_cutoffs == p7H_TC)
-	{
-	  if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
-	  pli->incT    = om->cutoff[p7_TC1];  
-	  pli->incdomT = om->cutoff[p7_TC2]; 
-	}
-      else if (pli->incuse_bit_cutoffs == p7H_NC)
-	{
-	  if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
-	  pli->incT    = om->cutoff[p7_NC1]; 
-	  pli->incdomT = om->cutoff[p7_NC2]; 
-	}
-    }
-
 
   return eslOK;
 }
+
 
 /* Function:  p7_pli_NewSeq()
  * Synopsis:  Prepare pipeline for a new sequence (target or query)
@@ -510,6 +513,10 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>. 
  *            
+ *            <eslEINVAL> if (in a scan pipeline) we're supposed to
+ *            set GA/TC/NC bit score thresholds but the model doesn't
+ *            have any.
+ *            
  *            <eslERANGE> on numerical overflow errors in the
  *            optimized vector implementations; particularly in
  *            posterior decoding. I don't believe this is possible for
@@ -566,6 +573,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   if (pli->hfp) {
     p7_oprofile_ReadRest(pli->hfp, om);
     p7_oprofile_ReconfigRestLength(om, sq->n);
+    if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
   }
 
   /* Second level filter: ViterbiFilter(), multihit with <om> */
@@ -680,7 +688,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
       hit->score      = seq_score;
       hit->pvalue     = P;
-      hit->sortkey    = -log(P);
+      hit->sortkey    = pli->inc_by_E ? -log(P) : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
 
       hit->sum_score  = sum_score;
       hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
@@ -705,6 +713,50 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 	  
 	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
+	}
+
+      /* If we're using model-specific bit score thresholds (GA | TC |
+       * NC) and we're in an hmmscan pipeline (mode = p7_SCAN_MODELS),
+       * then we *must* apply those reporting or inclusion thresholds
+       * now, because this model is about to go away; we won't have
+       * its thresholds after all targets have been processed.
+       * 
+       * If we're using E-value thresholds and we don't know the
+       * search space size (Z_setby or domZ_setby =
+       * p7_ZSETBY_NTARGETS), we *cannot* apply those thresholds now,
+       * and we *must* wait until all targets have been processed
+       * (see p7_tophits_Threshold()).
+       * 
+       * For any other thresholding, it doesn't matter whether we do
+       * it here (model-specifically) or at the end (in
+       * p7_tophits_Threshold()). 
+       * 
+       * What we actually do, then, is to set the flags if we're using
+       * model-specific score thresholds (regardless of whether we're
+       * in a scan or a search pipeline); otherwise we leave it to 
+       * p7_tophits_Threshold(). p7_tophits_Threshold() is always
+       * responsible for *counting* the reported, included sequences.
+       * 
+       * [xref J5/92]
+       */
+      if (pli->use_bit_cutoffs)
+	{
+	  if (p7_pli_TargetReportable(pli, hit->score, hit->pvalue))
+	    {
+	      hit->flags |= p7_IS_REPORTED;
+	      if (p7_pli_TargetIncludable(pli, hit->score, hit->pvalue))
+		hit->flags |= p7_IS_INCLUDED;
+	    }
+
+	  for (d = 0; d < hit->ndom; d++)
+	    {
+	      if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].pvalue))
+		{
+		  hit->dcl[d].is_reported = TRUE;
+		  if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].pvalue))
+		    hit->dcl[d].is_included = TRUE;
+		}
+	    }	  
 	}
     }
 

@@ -500,12 +500,19 @@ p7_tophits_Destroy(P7_TOPHITS *h)
  *            the targets and domains that are "significant" (satisfying
  *            the reporting thresholds set for the pipeline). 
  *            
- *            Also sets the final total number of reported targets
- *            <th->nreported> and the size of the search space for
- *            per-domain conditional E-value calculations,
+ *            Also sets the final total number of reported and
+ *            included targets, the number of reported and included
+ *            targets in each target, and the size of the search space
+ *            for per-domain conditional E-value calculations,
  *            <pli->domZ>. By default, <pli->domZ> is the number of
  *            significant targets reported.
  *
+ *            If model-specific thresholds were used in the pipeline,
+ *            we cannot apply those thresholds now. They were already
+ *            applied in the pipeline. In this case all we're
+ *            responsible for here is counting them (setting
+ *            nreported, nincluded counters).
+ *            
  * Returns:   <eslOK> on success.
  */
 int
@@ -513,47 +520,65 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 {
   int h, d;	/* counters over sequence hits, domains in sequences */
   
-  /* First pass over sequences: flag all reportable, includable ones */
+  /* Flag reported, included targets (if we're using general thresholds) */
+  if (! pli->use_bit_cutoffs) 
+    {
+      for (h = 0; h < th->N; h++)
+	{
+	  if (p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->pvalue))
+	    {
+	      th->hit[h]->flags |= p7_IS_REPORTED;
+	      if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->pvalue))
+		th->hit[h]->flags |= p7_IS_INCLUDED;
+	    }
+	}
+    }
+
+  /* Count reported, included targets */
   th->nreported = 0;
+  th->nincluded = 0;
   for (h = 0; h < th->N; h++)
     {
-      if (p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->pvalue))
-	{
-	  th->hit[h]->flags |= p7_IS_REPORTED;
-	  th->nreported++;
-	}
-      if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->pvalue))
-	{
-	  th->hit[h]->flags |= p7_IS_INCLUDED;
-	  th->nincluded++;
-	}
+      if (th->hit[h]->flags & p7_IS_REPORTED)  th->nreported++;
+      if (th->hit[h]->flags & p7_IS_INCLUDED)  th->nincluded++;
     }
   
   /* Now we can determined domZ, the effective search space in which additional domains are found */
   if (pli->domZ_setby == p7_ZSETBY_NTARGETS) pli->domZ = (double) th->nreported;
 
-  /* Second pass is over domains, flagging reportable/includable ones. */
-  for (h = 0; h < th->N; h++)  
+
+  /* Second pass is over domains, flagging reportable/includable ones. 
+   * Depends on knowing the domZ we just set.
+   * Note how this enforces a hierarchical logic of 
+   * (sequence|domain) must be reported to be included, and
+   * domain can only be (reported|included) if whole sequence is too.
+   */
+  if (! pli->use_bit_cutoffs) 
     {
-      if (th->hit[h]->flags & p7_IS_REPORTED)
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  {
-	    if (p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
-	      {
-		th->hit[h]->nreported++;
-		th->hit[h]->dcl[d].is_reported = TRUE;
-	      }
-	  }
-      if (th->hit[h]->flags & p7_IS_INCLUDED)
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  {
-	    if (p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
-	      {
-		th->hit[h]->nincluded++;
-		th->hit[h]->dcl[d].is_included = TRUE;
-	      }
-	  }
+      for (h = 0; h < th->N; h++)  
+	{
+	  if (th->hit[h]->flags & p7_IS_REPORTED)
+	    {
+	      for (d = 0; d < th->hit[h]->ndom; d++)
+		{
+		  if (p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+		    th->hit[h]->dcl[d].is_reported = TRUE;
+		  if ((th->hit[h]->flags & p7_IS_INCLUDED) &&
+		      p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+		    th->hit[h]->dcl[d].is_included = TRUE;
+		}
+	    }
+	}
     }
+
+  /* Count the reported, included domains */
+  for (h = 0; h < th->N; h++)  
+    for (d = 0; d < th->hit[h]->ndom; d++)
+      {
+	if (th->hit[h]->dcl[d].is_reported) th->hit[h]->nreported++;
+	if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
+      }
+
   return eslOK;
 }
 
@@ -698,7 +723,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
       {
 	d    = th->hit[h]->best_domain;
 
-	if (! (th->hit[h]->flags & p7_IS_INCLUDED) && h < th->N-1 && ! have_printed_incthresh) {
+	if (! (th->hit[h]->flags & p7_IS_INCLUDED) && ! have_printed_incthresh) {
 	  fprintf(ofp, "  ------ inclusion threshold ------\n");
 	  have_printed_incthresh = TRUE;
 	}
@@ -752,7 +777,9 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int namew, descw;
   char *showname;
 
-  fprintf(ofp, "Domain and alignment annotation for each %s:\n", pli->mode == p7_SEARCH_SEQS ? "sequence" : "model");
+  fprintf(ofp, "Domain annotation for each %s%s:\n", 
+	  pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
+	  pli->show_alignments ? " (and alignments)" : "");
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
@@ -771,6 +798,11 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	descw = (textw > 0 ?  ESL_MAX(32, textw - namew - 5) : INT_MAX);
 
 	fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+
+	if (th->hit[h]->nreported == 0) {
+	  fprintf(ofp,"   [No individual domains that satisfy reporting thresholds (although complete target did)]\n\n");
+	  continue;
+	}
 
 	/* The domain table is 101 char wide:
           #     score  bias  c-Evalue  i-Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
@@ -807,22 +839,30 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
 	    }
 
-	
-	fprintf(ofp, "\n  Alignments for each domain:\n");
-	nd = 0;
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  if (th->hit[h]->dcl[d].is_reported) 
-	    {
-	      nd++;
-	      fprintf(ofp, "  == domain %d    score: %.1f bits;  conditional E-value: %.2g\n",
-		      nd, 
-		      th->hit[h]->dcl[d].bitscore,
-		      th->hit[h]->dcl[d].pvalue * pli->domZ);
-	      p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli->show_accessions);
-	      fprintf(ofp, "\n");
-	    }
+	if (pli->show_alignments) 
+	  {
+	    fprintf(ofp, "\n  Alignments for each domain:\n");
+	    nd = 0;
+	    for (d = 0; d < th->hit[h]->ndom; d++)
+	      if (th->hit[h]->dcl[d].is_reported) 
+		{
+		  nd++;
+		  fprintf(ofp, "  == domain %d    score: %.1f bits;  conditional E-value: %.2g\n",
+			  nd, 
+			  th->hit[h]->dcl[d].bitscore,
+			  th->hit[h]->dcl[d].pvalue * pli->domZ);
+		  p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli->show_accessions);
+		  fprintf(ofp, "\n");
+		}
+	  }
+	else
+	  fprintf(ofp, "\n");
+
+
+
+
       }
-  if (th->nreported == 0) { fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n"); return eslOK; }
+  if (th->nreported == 0) { fprintf(ofp, "\n   [No targets detected that satisfy reporting thresholds]\n"); return eslOK; }
   return eslOK;
 }
 

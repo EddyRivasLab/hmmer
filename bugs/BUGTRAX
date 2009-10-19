@@ -1,3 +1,40 @@
+ID              h61
+TITLE           hmmscan --cut_{ga,nc,tc} fails to impose correct thresholds
+AFFECTS         3.0{a1,a2,b1,b2}
+FIXED_IN
+STATUS          CLOSED
+XREF            J5/92
+REPORTED_BY     Sarah Hunter <hunter@ebi.ac.uk>
+OPENED_DATE     18 October 2009
+CLOSED_DATE     19 October 2009
+DESCRIPTION     
+  Model-specific score thresholds were being imposed by p7_tophits_Threshold(),
+  which is stupid, because by the end of all the targets in hmmscan,
+  we don't know what the thresholds of anything but the final target model.
+
+  Model-specific thresholds are now applied in the pipeline itself,
+  and the overall thresholding system is rethought and slightly improved.
+
+  [Sarah reported that hmmscan GA thresholds don't work. This turns out
+  to be two bugs (see also #h60).]
+//
+ID              h60
+TITLE	        hmmbuild --mpi fails to record GA,TC,NC thresholds
+AFFECTS		3.0{a1,a2,b1,b2}
+FIXED_IN
+STATUS          CLOSED
+XREF            J5/92
+REPORTED_BY     Sarah Hunter <hunter@ebi.ac.uk>
+OPENED_DATE     18 Oct 2009
+CLOSED_DATE     19 Oct 2009
+DESCRIPTION     
+  Profile files built with hmmbuild --mpi do not record GA, TC, NC
+  cutoffs. The MPI send/recv for esl_msa was not including the cutoff
+  data.
+
+  [Sarah reported that hmmscan GA thresholds don't work. This turns
+  out to be two bugs (see also #h61).]  
+//
 ID		h59
 TITLE           seq descriptions containing '%' cause segfault
 STATUS          CLOSED

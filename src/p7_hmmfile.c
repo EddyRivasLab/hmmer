@@ -173,17 +173,17 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
     {
       if ((hfp->f = fopen(filename, "r")) != NULL) 
 	{
-	  if ((status = esl_strdup(filename, n, &(hfp->fname)))       != eslOK) goto ERROR;
+	  if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) goto ERROR;
 	}
       else if (esl_FileEnvOpen(filename, env, &(hfp->f), &envfile) == eslOK)
 	{
 	  n = strlen(envfile);
-	  if ((status = esl_strdup(envfile, n, &(hfp->fname)))       != eslOK) goto ERROR;
+	  if ((status = esl_strdup(envfile, n, &(hfp->fname)))     != eslOK) goto ERROR;
 	  free(envfile); envfile = NULL;
 	}
       else
 	{
-	  if ((status = esl_strdup(filename, n, &(hfp->fname)))       != eslOK) goto ERROR;
+	  if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) goto ERROR;
 	}
     }
   /* <hfp->f> may *still* be NULL, if <filename> is a press'ed database and ASCII file is deleted */

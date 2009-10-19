@@ -428,8 +428,8 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
    */
   for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (M+1)*2));
   om->scale_b = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
-  om->base_b  = 195;
-  om->bias_b  = -1 * unbiased_byteify(om, max);
+  om->base_b  = 190;
+  om->bias_b  = unbiased_byteify(om, -1.0 * max);
 
   /* striped match costs: start at k=1.  */
   for (x = 0; x < gm->abc->Kp; x++)

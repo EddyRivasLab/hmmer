@@ -447,10 +447,11 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (xstatus == eslOK) { bn = 4096; if ((buf = malloc(sizeof(char) * bn)) == NULL) { sprintf(errmsg, "allocation failed"); xstatus = eslEMEM; } }
   if (xstatus == eslOK) { if ((msalist = malloc(sizeof(ESL_MSA *) * cfg->nproc)) == NULL) { sprintf(errmsg, "allocation failed"); xstatus = eslEMEM; } }
   if (xstatus == eslOK) { if ((msaidx  = malloc(sizeof(int)       * cfg->nproc)) == NULL) { sprintf(errmsg, "allocation failed"); xstatus = eslEMEM; } }
-  for (wi = 0; wi < cfg->nproc; wi++) { msalist[wi] = NULL; msaidx[wi] = 0; }
   MPI_Bcast(&xstatus, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  if (xstatus != eslOK) p7_Fail(errmsg);
+  if (xstatus != eslOK) {  MPI_Finalize(); p7_Fail(errmsg); }
   ESL_DPRINTF1(("MPI master is initialized\n"));
+
+  for (wi = 0; wi < cfg->nproc; wi++) { msalist[wi] = NULL; msaidx[wi] = 0; } 
 
   /* Worker initialization:
    * Because we've already successfully initialized the master before we start
@@ -460,7 +461,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   MPI_Bcast(&(cfg->abc->type), 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Reduce(&xstatus, &status, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-  if (status != eslOK) p7_Fail("One or more MPI worker processes failed to initialize.");
+  if (status != eslOK) { MPI_Finalize(); p7_Fail("One or more MPI worker processes failed to initialize."); }
   ESL_DPRINTF1(("%d workers are initialized\n", cfg->nproc-1));
 
 
@@ -497,8 +498,8 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if ((have_work && nproc_working == cfg->nproc-1) || (!have_work && nproc_working > 0))
 	{
-	  if (MPI_Probe(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &mpistatus) != 0) p7_Fail("mpi probe failed");
-	  if (MPI_Get_count(&mpistatus, MPI_PACKED, &n)                != 0) p7_Fail("mpi get count failed");
+	  if (MPI_Probe(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &mpistatus) != 0) { MPI_Finalize(); p7_Fail("mpi probe failed"); }
+	  if (MPI_Get_count(&mpistatus, MPI_PACKED, &n)                != 0) { MPI_Finalize(); p7_Fail("mpi get count failed"); }
 	  wi = mpistatus.MPI_SOURCE;
 	  ESL_DPRINTF1(("MPI master sees a result of %d bytes from worker %d\n", n, wi));
 
@@ -506,7 +507,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 	    if ((buf = realloc(buf, sizeof(char) * n)) == NULL) p7_Fail("reallocation failed");
 	    bn = n; 
 	  }
-	  if (MPI_Recv(buf, bn, MPI_PACKED, wi, 0, MPI_COMM_WORLD, &mpistatus) != 0) p7_Fail("mpi recv failed");
+	  if (MPI_Recv(buf, bn, MPI_PACKED, wi, 0, MPI_COMM_WORLD, &mpistatus) != 0) { MPI_Finalize(); p7_Fail("mpi recv failed"); }
 	  ESL_DPRINTF1(("MPI master has received the buffer\n"));
 
 	  /* If we're in a recoverable error state, we're only clearing worker results;
@@ -516,15 +517,15 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (xstatus == eslOK)	
 	    {
 	      pos = 0;
-	      if (MPI_Unpack(buf, bn, &pos, &xstatus, 1, MPI_INT, MPI_COMM_WORLD)     != 0)     p7_Fail("mpi unpack failed");
+	      if (MPI_Unpack(buf, bn, &pos, &xstatus, 1, MPI_INT, MPI_COMM_WORLD)     != 0) { MPI_Finalize();  p7_Fail("mpi unpack failed");}
 	      if (xstatus == eslOK) /* worker reported success. Get the HMM. */
 		{
 		  ESL_DPRINTF1(("MPI master sees that the result buffer contains an HMM\n"));
-		  if (p7_hmm_MPIUnpack(buf, bn, &pos, MPI_COMM_WORLD, &(cfg->abc), &hmm) != eslOK) p7_Fail("HMM unpack failed");
+		  if (p7_hmm_MPIUnpack(buf, bn, &pos, MPI_COMM_WORLD, &(cfg->abc), &hmm) != eslOK) {  MPI_Finalize(); p7_Fail("HMM unpack failed"); }
 		  ESL_DPRINTF1(("MPI master has unpacked the HMM\n"));
 
 		  if (cfg->postmsafile != NULL) {
-		    if (esl_msa_MPIUnpack(cfg->abc, buf, bn, &pos, MPI_COMM_WORLD, &postmsa) != eslOK) p7_Fail("postmsa unpack failed");
+		    if (esl_msa_MPIUnpack(cfg->abc, buf, bn, &pos, MPI_COMM_WORLD, &postmsa) != eslOK) { MPI_Finalize(); p7_Fail("postmsa unpack failed");}
 		  } 
 
 		  if ((status = output_result(go, cfg, errmsg, msaidx[wi], msalist[wi], hmm, postmsa)) != eslOK) xstatus = status;
@@ -534,7 +535,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 		}
 	      else	/* worker reported an error. Get the errmsg. */
 		{
-		  if (MPI_Unpack(buf, bn, &pos, errmsg, eslERRBUFSIZE, MPI_CHAR, MPI_COMM_WORLD) != 0) p7_Fail("mpi unpack of errmsg failed");
+		  if (MPI_Unpack(buf, bn, &pos, errmsg, eslERRBUFSIZE, MPI_CHAR, MPI_COMM_WORLD) != 0) { MPI_Finalize(); p7_Fail("mpi unpack of errmsg failed"); }
 		  ESL_DPRINTF1(("MPI master sees that the result buffer contains an error message\n"));
 		}
 	    }
@@ -564,7 +565,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
     if (esl_msa_MPISend(NULL, wi, 0, MPI_COMM_WORLD, &buf, &bn) != eslOK) p7_Fail("MPI msa send failed");
   free(buf);
 
-  if (xstatus != eslOK) p7_Fail(errmsg);
+  if (xstatus != eslOK) { MPI_Finalize(); p7_Fail(errmsg); }
   else                  return;
 }
 
