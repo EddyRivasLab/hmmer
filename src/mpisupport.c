@@ -18,6 +18,7 @@
 #ifdef HAVE_MPI
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "mpi.h"
 
@@ -980,10 +981,6 @@ p7_tophits_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, 
   for (inx = 0; inx < nhits; ++inx) {
       if ((status = p7_tophits_CreateNextHit(th, &hit))                  != eslOK) goto ERROR;
       if ((status = p7_hit_MPIRecv(source, tag, comm, buf, nalloc, hit)) != eslOK) goto ERROR;
-
-      if ((status = esl_strdup(hit->dcl->ad->sqname, -1, &(hit->name)))  != eslOK) goto ERROR;
-      if ((status = esl_strdup(hit->dcl->ad->sqacc,  -1, &(hit->acc)))   != eslOK) goto ERROR;
-      if ((status = esl_strdup(hit->dcl->ad->sqdesc, -1, &(hit->desc)))  != eslOK) goto ERROR;
     }
 
   *ret_th = th;
@@ -1069,6 +1066,7 @@ p7_hit_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_H
   if ((status = p7_hit_MPIUnpack(*buf, n, &pos, comm, hit)) != eslOK) goto ERROR;
   ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) * hit->ndom);
 
+
   /* loop through all of the hits sent */
   for (inx = 0; inx < hit->ndom; ++inx) {
      if ((status = p7_dcl_MPIRecv(source, tag, comm, buf, nalloc, hit->dcl + inx)) != eslOK) goto ERROR;
@@ -1097,6 +1095,7 @@ int
 p7_hit_MPIPackSize(P7_HIT *hit, MPI_Comm comm, int *ret_n)
 {
   int   status;
+  int   len = 0;
   int   n = 0;
   int   sz;
 
@@ -1107,6 +1106,13 @@ p7_hit_MPIPackSize(P7_HIT *hit, MPI_Comm comm, int *ret_n)
   if (MPI_Pack_size(1,            MPI_FLOAT,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed"); n += sz;  /* expected                */
   if (MPI_Pack_size(5,            MPI_INT,    comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed"); n += sz;  /* region, envelopes, ndom */
   if (MPI_Pack_size(4,            MPI_INT,    comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed"); n += sz;  /* report info             */
+
+  len += strlen(hit->name) + 1;
+  len += strlen(hit->acc)  + 1;
+  len += strlen(hit->desc) + 1;
+
+  if (MPI_Pack_size(3,            MPI_INT,    comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed"); n += sz;  /* string lengths          */
+  if (MPI_Pack_size(len,          MPI_CHAR,   comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed"); n += sz;  /* strings                 */
 
   *ret_n = n;
   return eslOK;
@@ -1146,6 +1152,7 @@ int
 p7_hit_MPIPack(P7_HIT *hit, char *buf, int n, int *pos, MPI_Comm comm)
 {
   int             status;
+  int             len;
 
   if (MPI_Pack(&hit->sortkey,        1, MPI_DOUBLE,   buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
   if (MPI_Pack(&hit->score,          1, MPI_FLOAT,    buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
@@ -1164,6 +1171,16 @@ p7_hit_MPIPack(P7_HIT *hit, char *buf, int n, int *pos, MPI_Comm comm)
   if (MPI_Pack(&hit->nreported,      1, MPI_INT,      buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
   if (MPI_Pack(&hit->nincluded,      1, MPI_INT,      buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
   if (MPI_Pack(&hit->best_domain,    1, MPI_INT,      buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
+
+  len = strlen(hit->name) + 1;
+  if (MPI_Pack(&len,                 1, MPI_INT,      buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
+  if (MPI_Pack( hit->name,         len, MPI_CHAR,     buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
+  len = strlen(hit->acc) + 1;
+  if (MPI_Pack(&len,                 1, MPI_INT,      buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
+  if (MPI_Pack( hit->acc,          len, MPI_CHAR,     buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
+  len = strlen(hit->desc) + 1;
+  if (MPI_Pack(&len,                 1, MPI_INT,      buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
+  if (MPI_Pack( hit->desc,         len, MPI_CHAR,     buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed");
 
   if (*pos > n) ESL_EXCEPTION(eslEMEM, "buffer overflow");
   return eslOK;
@@ -1193,6 +1210,7 @@ int
 p7_hit_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, P7_HIT *hit)
 {
   int  status;
+  int  len;
 
   if (MPI_Unpack(buf, n, pos, &hit->sortkey,     1, MPI_DOUBLE, comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack(buf, n, pos, &hit->score,       1, MPI_FLOAT,  comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
@@ -1211,6 +1229,21 @@ p7_hit_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, P7_HIT *hit)
   if (MPI_Unpack(buf, n, pos, &hit->nreported,   1, MPI_INT,    comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   if (MPI_Unpack(buf, n, pos, &hit->nincluded,   1, MPI_INT,    comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   if (MPI_Unpack(buf, n, pos, &hit->best_domain, 1, MPI_INT,    comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+
+  if (MPI_Unpack(buf, n, pos, &len,              1, MPI_INT,    comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  ESL_ALLOC(hit->name, sizeof(char) * len);
+  if (MPI_Unpack(buf, n, pos,  hit->name,      len, MPI_CHAR,   comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  hit->name[len-1] = '\0';
+  
+  if (MPI_Unpack(buf, n, pos, &len,              1, MPI_INT,    comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  ESL_ALLOC(hit->acc, sizeof(char) * len);
+  if (MPI_Unpack(buf, n, pos,  hit->acc,       len, MPI_CHAR,   comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  hit->acc[len-1] = '\0';
+  
+  if (MPI_Unpack(buf, n, pos, &len,              1, MPI_INT,    comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  ESL_ALLOC(hit->desc, sizeof(char) * len);
+  if (MPI_Unpack(buf, n, pos,  hit->desc,      len, MPI_CHAR,   comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  hit->desc[len-1] = '\0';
 
   return eslOK;
 

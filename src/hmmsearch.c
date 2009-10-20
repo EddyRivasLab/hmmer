@@ -85,11 +85,11 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>>: no autodetection", 12 },
 #ifdef HMMER_THREADS 
-  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>0", NULL,  NULL, "--mpi",          "number of parallel CPU workers to use for multithreads",      12 },
+  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>0", NULL,  NULL,  NULL,            "number of parallel CPU workers to use for multithreads",      12 },
 #endif
 #ifdef HAVE_MPI
   { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,"--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
-  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL, "--cpu",          "run as an MPI parallel program",                              12 },
+  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "run as an MPI parallel program",                              12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -121,10 +121,10 @@ static void pipeline_thread(void *arg);
 static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
 #endif
 
-static int  serial_master (ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 #ifdef HAVE_MPI
-static int  mpi_master    (ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  mpi_worker    (ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
 
@@ -658,7 +658,7 @@ int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block)
   while (block->length < MAX_BLOCK_SIZE && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
     {
       if (block->count == 0) block->offset = sq->roff;
-      block->length = sq->roff - block->offset + 1;
+      block->length = sq->eoff - block->offset + 1;
       block->count++;
       esl_sq_Reuse(sq);
     }
@@ -737,7 +737,6 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   int              i;
   int              size;
-  int              count;
   MPI_Status       mpistatus;
 
   w = esl_stopwatch_Create();
@@ -980,15 +979,24 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
     }
 
+  free(list);
   if (mpi_buf != NULL) free(mpi_buf);
 
+  p7_hmmfile_Close(hfp);
+  esl_sqfile_Close(dbfp);
+
+  p7_bg_Destroy(bg);
   esl_sq_Destroy(dbsq);
   esl_stopwatch_Destroy(w);
+
+  if (ofp != stdout) fclose(ofp);
+  if (afp)           fclose(afp);
+  if (tblfp)         fclose(tblfp);
+  if (domtblfp)      fclose(domtblfp);
 
   return eslOK;
 
  ERROR:
-
   return eslEMEM;
 }
 
@@ -1069,10 +1077,12 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  uint64_t length = 0;
 	  uint64_t count  = block.count;
 
-	  esl_sqfile_Position(dbfp, block.offset);
+	  status = esl_sqfile_Position(dbfp, block.offset);
+	  if (status != eslOK) mpi_failure("Cannot position sequence database to %ld\n", block.offset);
+
 	  while (count > 0 && (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
 	    {
-	      length = dbsq->roff - block.offset + 1;
+	      length = dbsq->eoff - block.offset + 1;
 
 	      p7_pli_NewSeq(pli, dbsq);
 	      p7_bg_SetLength(bg, dbsq->n);
@@ -1131,7 +1141,13 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   status = 0;
   MPI_Send(&status, 1, MPI_INT, 0, HMMER_TERMINATING_TAG, MPI_COMM_WORLD);
 
+  if (mpi_buf != NULL) free(mpi_buf);
+
+  p7_hmmfile_Close(hfp);
+  esl_sqfile_Close(dbfp);
+
   p7_bg_Destroy(bg);
+  esl_sq_Destroy(dbsq);
   esl_stopwatch_Destroy(w);
 
   return eslOK;
