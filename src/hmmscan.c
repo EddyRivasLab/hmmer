@@ -369,7 +369,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                           esl_threads_CPUCount(&ncpus);
 
-  threadObj = esl_threads_Create(&pipelineThread);
+  threadObj = esl_threads_Create(&pipeline_thread);
   queue = esl_workqueue_Create(ncpus * 2);
 #else
   ncpus = 1;
