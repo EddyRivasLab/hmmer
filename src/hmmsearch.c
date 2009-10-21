@@ -112,20 +112,20 @@ struct cfg_s {
 static char usage[]  = "[options] <query hmmfile> <target seqfile>";
 static char banner[] = "search profile HMM(s) against a sequence database";
 
+static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
-#else
-static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
-#endif
+#else /* non-threads i.e. mpi or serial */
+static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
+#endif /*HMMER_THREADS*/
 
-static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 #ifdef HAVE_MPI
 static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
-#endif
+#endif /*HAVE_MPI*/
 
 
 static void
@@ -1154,8 +1154,6 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 }
 #endif /*HAVE_MPI*/
 
-
-/* serial_loop() */
 #ifndef HMMER_THREADS
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
