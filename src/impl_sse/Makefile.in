@@ -40,7 +40,8 @@ OBJS =  decoding.o\
 	stotrace.o\
 	vitfilter.o\
 	p7_omx.o\
-	p7_oprofile.o
+	p7_oprofile.o\
+	mpi.o
 
 HDRS =  impl_sse.h
 
@@ -52,7 +53,8 @@ UTESTS = \
 	null2_utest\
 	optacc_utest\
 	stotrace_utest\
-	vitfilter_utest
+	vitfilter_utest\
+	mpi_utest
 
 BENCHMARKS =\
 	decoding_benchmark\
@@ -61,7 +63,8 @@ BENCHMARKS =\
 	null2_benchmark\
 	optacc_benchmark\
 	stotrace_benchmark\
-	vitfilter_benchmark
+	vitfilter_benchmark\
+	mpi_benchmark
 
 EXAMPLES =\
 	fwdback_example\
