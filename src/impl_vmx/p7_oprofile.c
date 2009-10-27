@@ -245,11 +245,16 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->rf[0] = (vector float *)         (((unsigned long int) om2->rf_mem + 15) & (~0xf));
   om2->tf    = (vector float *)         (((unsigned long int) om2->tf_mem + 15) & (~0xf));
 
+  /* copy the vector data */
+  memcpy(om2->rb[0], om1->rb[0], sizeof(__m128i) * nqb  * abc->Kp);
+  memcpy(om2->rw[0], om1->rw[0], sizeof(__m128i) * nqw  * abc->Kp);
+  memcpy(om2->rf[0], om1->rf[0], sizeof(__m128i) * nqf  * abc->Kp);
+
   /* set the rest of the row pointers for match emissions */
-  for (x = 0; x < abc->Kp; x++) {
-    om2->rb[x] = om1->rb[x];
-    om2->rw[x] = om1->rw[x];
-    om2->rf[x] = om1->rf[x];
+  for (x = 1; x < abc->Kp; x++) {
+    om2->rb[x] = om2->rb[0] + (x * nqb);
+    om2->rw[x] = om2->rw[0] + (x * nqw);
+    om2->rf[x] = om2->rf[0] + (x * nqf);
   }
   om2->allocQ16  = nqb;
   om2->allocQ8   = nqw;
@@ -1617,6 +1622,7 @@ main(int argc, char **argv)
     printf ("ERROR %s\n", errmsg);
 
   p7_oprofile_Destroy(om1);
+  p7_oprofile_Destroy(om2);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
