@@ -531,6 +531,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   p7_hmmfile_Close(hfp);
   esl_sqfile_Close(dbfp);
+  esl_alphabet_Destroy(abc);
   esl_stopwatch_Destroy(w);
 
   if (ofp != stdout) fclose(ofp);

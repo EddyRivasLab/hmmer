@@ -672,6 +672,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Destroy(info->th);
       p7_oprofile_Destroy(info->om);
 
+      info->pli = NULL;
+      info->th  = NULL;
+      info->om  = NULL;
+
       esl_msa_Destroy(msa);
       p7_oprofile_Destroy(om);
       p7_trace_Destroy(qtr);
