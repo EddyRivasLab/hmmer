@@ -54,14 +54,6 @@ static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs
 static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
 
 
-#ifdef HMMER_THREADS
-#define CHECK(cond,fmt)		\
-  if (cond) esl_fatal("(%s:%d) - " fmt ": %s (%d)", \
-		      __FUNCTION__, __LINE__, \
-		      strerror (cond), cond)
-#endif
-
-
 /*****************************************************************
  *# 1. Writing optimized profiles to two files.
  *****************************************************************/
@@ -483,8 +475,7 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
    */
   if (hfp->syncRead)
     {
-      int status = pthread_mutex_lock (&hfp->readMutex);
-      CHECK(status, "Lock mutex failed");
+      if (pthread_mutex_lock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex lock failed");
     }
 #endif
 
@@ -550,8 +541,7 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 #ifdef HMMER_THREADS
   if (hfp->syncRead)
     {
-      int sstatus = pthread_mutex_unlock (&hfp->readMutex);
-      CHECK(sstatus, "Unlock mutex failed");
+      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
     }
 #endif
 
@@ -563,8 +553,7 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 #ifdef HMMER_THREADS
   if (hfp->syncRead)
     {
-      int sstatus = pthread_mutex_unlock (&hfp->readMutex);
-      CHECK(sstatus, "Unlock mutex failed");
+      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
     }
 #endif
 
