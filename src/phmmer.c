@@ -20,7 +20,6 @@
 #ifdef HAVE_MPI
 #include "mpi.h"
 #include "esl_mpi.h"
-#undef HMMER_THREADS  /* at the moment we don't support threads running on mpi clients */
 #endif /*HAVE_MPI*/
 
 #ifdef HMMER_THREADS
@@ -46,6 +45,14 @@ typedef struct {
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+
+#if defined (HMMER_THREADS) && defined (HAVE_MPI)
+#define CPUOPTS     "--mpi"
+#define MPIOPTS     "--cpu"
+#else
+#define CPUOPTS     NULL
+#define MPIOPTS     NULL
+#endif
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
@@ -99,11 +106,11 @@ static ESL_OPTIONS options[] = {
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU", "n>0", NULL,  NULL,  NULL,               "number of parallel CPU workers to use for multithreads",     12 },
+  { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,           "number of parallel CPU workers to use for multithreads",      12 },
 #endif
 #ifdef HAVE_MPI
-  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--mpi", NULL,               "arrest after start: for debugging MPI under gdb",            12 },  
-  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,               "run as an MPI parallel program",                             12 },
+  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--mpi", NULL,              "arrest after start: for debugging MPI under gdb",             12 },  
+  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  MPIOPTS,           "run as an MPI parallel program",                              12 },
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -127,13 +134,12 @@ static char usage[]  = "[-options] <query seqfile> <target seqdb>";
 static char banner[] = "search a protein sequence against a protein database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
-#else /* non-threads i.e. mpi or serial */
-static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
 #endif /*HMMER_THREADS*/
 
 #ifdef HAVE_MPI
@@ -345,8 +351,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              sstatus  = eslOK;
   int              i;
 
-  int              ncpus    = 1;
+  int              ncpus    = 0;
 
+  int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
 #ifdef HMMER_THREADS
   ESL_SQ_BLOCK    *block    = NULL;
@@ -418,18 +425,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                           esl_threads_CPUCount(&ncpus);
 
-  threadObj = esl_threads_Create(&pipeline_thread);
-  queue = esl_workqueue_Create(ncpus * 2);
-#else
-  ncpus = 1;
+  if (ncpus > 0)
+    {
+      threadObj = esl_threads_Create(&pipeline_thread);
+      queue = esl_workqueue_Create(ncpus * 2);
+    }
 #endif
 
-  ESL_ALLOC(info, sizeof(*info) * ncpus);
+  infocnt = (ncpus == 0) ? 1 : ncpus;
+  ESL_ALLOC(info, sizeof(*info) * infocnt);
 
   /* Show header output */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
 
-  for (i = 0; i < ncpus; ++i)
+  for (i = 0; i < infocnt; ++i)
     {
       info[i].pli   = NULL;
       info[i].th    = NULL;
@@ -482,7 +491,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Build the model */
       p7_SingleBuilder(bld, qsq, info->bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
-      for (i = 0; i < ncpus; ++i)
+      for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
 	  info[i].th  = p7_tophits_Create(); 
@@ -491,12 +500,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
-	  esl_threads_AddThread(threadObj, &info[i]);
+	  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
 	}
 
 #ifdef HMMER_THREADS
-      sstatus = thread_loop(threadObj, queue, dbfp);
+      if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp);
+      else           sstatus = serial_loop(info, dbfp);
 #else
       sstatus = serial_loop(info, dbfp);
 #endif
@@ -516,7 +526,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* merge the results of the search results */
-      for (i = 1; i < ncpus; ++i)
+      for (i = 1; i < infocnt; ++i)
 	{
 	  p7_tophits_Merge(info[0].th, info[i].th);
 	  p7_pipeline_Merge(info[0].pli, info[i].pli);
@@ -566,19 +576,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
-  for (i = 0; i < ncpus; ++i)
+  for (i = 0; i < infocnt; ++i)
     {
       p7_bg_Destroy(info[i].bg);
     }
 
 #ifdef HMMER_THREADS
-  esl_workqueue_Reset(queue);
-  while (esl_workqueue_Remove(queue, (void **) &block) == eslOK)
+  if (ncpus > 0)
     {
-      esl_sq_DestroyBlock(block);
+      esl_workqueue_Reset(queue);
+      while (esl_workqueue_Remove(queue, (void **) &block) == eslOK)
+	{
+	  esl_sq_DestroyBlock(block);
+	}
+      esl_workqueue_Destroy(queue);
+      esl_threads_Destroy(threadObj);
     }
-  esl_workqueue_Destroy(queue);
-  esl_threads_Destroy(threadObj);
 #endif
 
   free(info);
@@ -1237,7 +1250,6 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 }
 #endif /*HAVE_MPI*/
 
-#ifndef HMMER_THREADS
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
@@ -1263,7 +1275,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
   return sstatus;
 }
-#endif /*! HMMER_THREADS*/
 
 #ifdef HMMER_THREADS
 static int
