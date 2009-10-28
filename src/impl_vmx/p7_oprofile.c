@@ -246,9 +246,9 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->tf    = (vector float *)         (((unsigned long int) om2->tf_mem + 15) & (~0xf));
 
   /* copy the vector data */
-  memcpy(om2->rb[0], om1->rb[0], sizeof(__m128i) * nqb  * abc->Kp);
-  memcpy(om2->rw[0], om1->rw[0], sizeof(__m128i) * nqw  * abc->Kp);
-  memcpy(om2->rf[0], om1->rf[0], sizeof(__m128i) * nqf  * abc->Kp);
+  memcpy(om2->rb[0], om1->rb[0], sizeof(vector unsigned char) * nqb  * abc->Kp);
+  memcpy(om2->rw[0], om1->rw[0], sizeof(vector signed short)  * nqw  * abc->Kp);
+  memcpy(om2->rf[0], om1->rf[0], sizeof(vector float)         * nqf  * abc->Kp);
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
