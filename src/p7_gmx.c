@@ -335,6 +335,8 @@ utest_GrowTo(void)
   p7_gmx_GrowTo(gx,  80,  10);  gmx_testpattern(gx);	/* grow in M, but with enough ncells */
   p7_gmx_GrowTo(gx,  10,  80);  gmx_testpattern(gx);	/* grow in L, but with enough ncells */
   p7_gmx_GrowTo(gx, 160, 160);  gmx_testpattern(gx);	/* grow in both L and M */
+
+  p7_gmx_Destroy(gx);
 }
 
 static void

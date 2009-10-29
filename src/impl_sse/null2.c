@@ -113,8 +113,10 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
 
   /* make valid scores for all degeneracies, by averaging the odds ratios. */
   esl_abc_FAvgScVec(om->abc, null2);
+  null2[om->abc->K]    = 1.0;        /* gap character    */
+  null2[om->abc->Kp-2] = 1.0;	     /* nonresidue "*"   */
+  null2[om->abc->Kp-1] = 1.0;	     /* missing data "~" */
 
-  /* ta-da */
   return eslOK;
 }
 
@@ -205,7 +207,6 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       esl_sse_hsum_ps(sv, &(null2[x]));
       null2[x] += xfactor;
     }
-
   /* now null2[x] = \frac{f_d(x)}{f_0(x)} for all x in alphabet,
    * 0..K-1, where f_d(x) are the ad hoc "null2" residue frequencies
    * for this envelope.
@@ -213,6 +214,9 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
 
   /* make valid scores for all degeneracies, by averaging the odds ratios. */
   esl_abc_FAvgScVec(om->abc, null2);
+  null2[om->abc->K]    = 1.0;        /* gap character    */
+  null2[om->abc->Kp-2] = 1.0;	     /* nonresidue "*"   */
+  null2[om->abc->Kp-1] = 1.0;	     /* missing data "~" */
 
   return eslOK;
 }

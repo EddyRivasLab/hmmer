@@ -1570,7 +1570,7 @@ utest_faux(ESL_MSA *msa, int *matassign, int M)
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
 /*
-  gcc -o p7_trace_utest -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TRACE_TESTDRIVE p7_trace.c -lhmmer -leasel -lm 
+  gcc -o p7_trace_utest -msse2 -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TRACE_TESTDRIVE p7_trace.c -lhmmer -leasel -lm 
   ./p7_trace_utest
 */
 #include "p7_config.h"
@@ -1620,6 +1620,7 @@ main(int argc, char **argv)
 
   free(matassign);
   esl_msa_Destroy(msa);
+  esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
   return eslOK;

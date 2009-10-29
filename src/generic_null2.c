@@ -123,9 +123,11 @@ p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2)
    */
 
   /* make valid scores for all degeneracies, by averaging the odds ratios. */
-  esl_abc_FAvgScVec(gm->abc, null2);
+  esl_abc_FAvgScVec(gm->abc, null2); /* does not set gap, nonres, missing  */
+  null2[gm->abc->K]    = 1.0;        /* gap character    */
+  null2[gm->abc->Kp-2] = 1.0;	     /* nonresidue "*"   */
+  null2[gm->abc->Kp-1] = 1.0;	     /* missing data "~" */
 
-  /* ta-da */
   return eslOK;
 }
 
@@ -211,6 +213,10 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
 
   /* make valid scores for all degeneracies, by averaging the odds ratios. */
   esl_abc_FAvgScVec(gm->abc, null2);
+  null2[gm->abc->K]    = 1.0;        /* gap character    */
+  null2[gm->abc->Kp-2] = 1.0;	     /* nonresidue "*"   */
+  null2[gm->abc->Kp-1] = 1.0;	     /* missing data "~" */
+
   return eslOK;
 }
 

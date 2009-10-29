@@ -197,6 +197,7 @@ clean:
 	if test -d easel;     then (cd easel;     ${MAKE} clean); fi
 	if test -d profmark;  then (cd profmark;  ${MAKE} clean); fi
 	if test -d testsuite; then (cd testsuite; ${MAKE} clean); fi
+	if test -d documentation/alphaguide; then (cd documentation/alphaguide; ${MAKE} clean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
 # "make distclean" leaves a pristine source distribution.
@@ -211,6 +212,7 @@ distclean:
 	if test -d easel;         then (cd easel;     ${MAKE} distclean); fi
 	if test -d profmark;      then (cd profmark;  ${MAKE} distclean); fi
 	if test -d testsuite;     then (cd testsuite; ${MAKE} distclean); fi
+	if test -d documentation/alphaguide; then (cd documentation/alphaguide; ${MAKE} distclean); fi
 	-rm Makefile
 
 # "make binclean" is special: it cleans up and leaves only a binary

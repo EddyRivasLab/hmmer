@@ -205,6 +205,11 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
  * 
  * Note:      Is this actually used anywhere? (SRE, 10 Dec 08) 
  *            I think it's not up to date.
+ *            
+ *            That's right. This function is completely obsolete.
+ *            It is used in benchmark and test code, so you can't
+ *            delete it yet; benchmarks and test code should be
+ *            revised (SRE, 26 Oct 09)
  */
 int
 p7_tophits_Add(P7_TOPHITS *h,
@@ -223,9 +228,24 @@ p7_tophits_Add(P7_TOPHITS *h,
   if ((status = esl_strdup(name, -1, &(h->unsrt[h->N].name))) != eslOK) return status;
   if ((status = esl_strdup(acc,  -1, &(h->unsrt[h->N].acc)))  != eslOK) return status;
   if ((status = esl_strdup(desc, -1, &(h->unsrt[h->N].desc))) != eslOK) return status;
-  h->unsrt[h->N].sortkey  = sortkey;
-  h->unsrt[h->N].score    = score;
-  h->unsrt[h->N].pvalue   = pvalue;
+  h->unsrt[h->N].sortkey    = sortkey;
+  h->unsrt[h->N].score      = score;
+  h->unsrt[h->N].pre_score  = 0.0;
+  h->unsrt[h->N].sum_score  = 0.0;
+  h->unsrt[h->N].pvalue     = pvalue;
+  h->unsrt[h->N].pre_pvalue = 0.0;
+  h->unsrt[h->N].sum_pvalue = 0.0;
+  h->unsrt[h->N].nexpected  = 0;
+  h->unsrt[h->N].nregions   = 0;
+  h->unsrt[h->N].nclustered = 0;
+  h->unsrt[h->N].noverlaps  = 0;
+  h->unsrt[h->N].nenvelopes = 0;
+  h->unsrt[h->N].ndom       = ndom;
+  h->unsrt[h->N].flags      = 0;
+  h->unsrt[h->N].nreported  = 0;
+  h->unsrt[h->N].nincluded  = 0;
+  h->unsrt[h->N].best_domain= 0;
+  h->unsrt[h->N].dcl        = NULL;
   h->N++;
 
   if (h->N >= 2) h->is_sorted = FALSE;
