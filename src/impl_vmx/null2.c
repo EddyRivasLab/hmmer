@@ -102,7 +102,7 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
   for (x = 0; x < om->abc->K; x++)
     {
       sv = (vector float) vec_splat_u32(0);
-      rp = om->rf[x];
+      rp = om->rfv[x];
       for (q = 0; q < Q; q++)
 	{
 	  sv = vec_madd(pp->dpf[0][q*3 + p7X_M], *rp, sv); rp++;
@@ -208,7 +208,7 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
   for (x = 0; x < om->abc->K; x++)
     {
       sv = (vector float) vec_splat_u32(0);
-      rp = om->rf[x];
+      rp = om->rfv[x];
       for (q = 0; q < Q; q++)
 	{
 	  sv = vec_madd(wrk->dpf[0][q*3 + p7X_M], *rp, sv); rp++;

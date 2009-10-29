@@ -127,8 +127,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   for (i = 1; i <= L; i++)
     {
-      rsc   = om->rw[dsq[i]];
-      tsc   = om->tw;
+      rsc   = om->rwv[dsq[i]];
+      tsc   = om->twv;
       dcv   = _mm_set1_epi16(-32768);      /* "-infinity" */
       xEv   = _mm_set1_epi16(-32768);     
       Dmaxv = _mm_set1_epi16(-32768);     
@@ -204,7 +204,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* dcv has carried through from end of q loop above */
 	  dcv = _mm_slli_si128(dcv, 2); 
 	  dcv = _mm_or_si128(dcv, negInfv);
-	  tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
+	  tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
 	      DMXo(q) = _mm_max_epi16(dcv, DMXo(q));	
@@ -218,7 +218,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  do {
 	    dcv = _mm_slli_si128(dcv, 2);
 	    dcv = _mm_or_si128(dcv, negInfv);
-	    tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
+	    tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
 		if (! esl_sse_any_gt_epi16(dcv, DMXo(q))) break;

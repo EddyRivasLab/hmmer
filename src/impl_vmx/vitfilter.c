@@ -129,8 +129,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   for (i = 1; i <= L; i++)
     {
-      rsc   = om->rw[dsq[i]];
-      tsc   = om->tw;
+      rsc   = om->rwv[dsq[i]];
+      tsc   = om->twv;
       dcv   = negInfv;               /* "-infinity" */
       xEv   = negInfv;
       Dmaxv = negInfv;
@@ -205,7 +205,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  dcv = vec_sld(negInfv, dcv, 14); 
-	  tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
+	  tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
 	      DMXo(q) = vec_max(dcv, DMXo(q));	
@@ -218,7 +218,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   */
 	  do {
 	    dcv = vec_sld(negInfv, dcv, 14); 
-	    tsc = om->tw + 7*Q;	/* set tsc to start of the DD's */
+	    tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
 		if (! vec_any_gt(dcv, DMXo(q))) break;

@@ -69,7 +69,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
   vector float *dpc = ox->dpf[0];  /* current row, for use in {MDI}MO(dpp,q) access macro       */
   vector float *dpp;               /* previous row, for use in {MDI}MO(dpp,q) access macro      */
   vector float *ppp;		   /* quads in the <pp> posterior probability matrix            */
-  vector float *tp;		   /* quads in the <om->tf> transition scores                   */
+  vector float *tp;		   /* quads in the <om->tfv> transition scores                  */
   vector float zerov;
   vector float infv;
   int M = om->M;
@@ -96,7 +96,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       dpp = dpc;		/* previous DP row in OA matrix */
       dpc = ox->dpf[i];   	/* current DP row in OA matrix  */
       ppp = pp->dpf[i];		/* current row in the posterior probabilities per position */
-      tp  = om->tf;		/* transition probabilities */
+      tp  = om->tfv;		/* transition probabilities */
       dcv = infv;
       xEv = infv;
       xBv = esl_vmx_set_float(XMXo(i-1, p7X_B));
@@ -131,7 +131,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
        * in first pass, we add M->D and D->D path into DMX
        */
       dcv = vec_sld(infv, dcv, 12);
-      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
+      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++)
 	{
 	  DMO(dpc, q) = vec_max(dcv, DMO(dpc, q));
@@ -142,7 +142,7 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       for (j = 1; j < 4; j++)
 	{
 	  dcv = vec_sld(infv, dcv, 12);
-	  tp  = om->tf + 7*Q;	
+	  tp  = om->tfv + 7*Q;	
 	  for (q = 0; q < Q; q++)
 	    {
 	      DMO(dpc, q) = vec_max(dcv, DMO(dpc, q));
@@ -293,7 +293,7 @@ select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   int     Q     = p7O_NQF(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
-  vector float *tp    = om->tf + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
+  vector float *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
   vector float  xBv;
   vector float  zerov;
   vector float  mpv, dpv, ipv;
@@ -339,13 +339,13 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   if (q > 0) {
     mpv.v  = ox->dpf[i][(q-1)*3 + p7X_M];
     dpv.v  = ox->dpf[i][(q-1)*3 + p7X_D];
-    tmdv.v = om->tf[7*(q-1) + p7O_MD];
-    tddv.v = om->tf[7*Q + (q-1)];
+    tmdv.v = om->tfv[7*(q-1) + p7O_MD];
+    tddv.v = om->tfv[7*Q + (q-1)];
   } else {
     mpv.v  = vec_sld(zerov, ox->dpf[i][(Q-1)*3 + p7X_M], 12);
     dpv.v  = vec_sld(zerov, ox->dpf[i][(Q-1)*3 + p7X_D], 12);
-    tmdv.v = vec_sld(zerov, om->tf[7*(Q-1) + p7O_MD],    12);
-    tddv.v = vec_sld(zerov, om->tf[8*Q-1],               12);
+    tmdv.v = vec_sld(zerov, om->tfv[7*(Q-1) + p7O_MD],   12);
+    tddv.v = vec_sld(zerov, om->tfv[8*Q-1],              12);
   }	  
 
   path[0] = ((tmdv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);
@@ -360,7 +360,7 @@ select_i(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   int     Q    = p7O_NQF(ox->M);
   int     q    = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r    = (k-1) / Q;
-  vector float *tp   = om->tf + 7*q + p7O_MI;
+  vector float *tp   = om->tfv + 7*q + p7O_MI;
   union { vector float v; float p[4]; } tv, mpv, ipv;
   float   path[2];
 

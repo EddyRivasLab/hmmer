@@ -72,7 +72,7 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
-  vector unsigned char **rb;    /* match scores [x][q]: rm, rm[0] are allocated      */
+  vector unsigned char **rbv;   /* match scores [x][q]: rm, rm[0] are allocated      */
   uint8_t   tbm_b;		/* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;		/* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;		/* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -81,8 +81,8 @@ typedef struct p7_oprofile_s {
   uint8_t   bias_b;		/* positive bias to emission scores, make them >=0   */
 
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
-  vector signed short **rw;	/* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
-  vector signed short  *tw;	/* transition score blocks          [8*Q8]           */
+  vector signed short **rwv;	/* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  vector signed short  *twv;	/* transition score blocks          [8*Q8]           */
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
@@ -90,16 +90,16 @@ typedef struct p7_oprofile_s {
   float     ncj_roundoff;	/* missing precision on NN,CC,JJ after rounding      */
 
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
-  vector float **rf;            /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
-  vector float  *tf;	    	/* transition probability blocks    [8*Q4]           */
+  vector float **rfv;           /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  vector float  *tfv;	    	/* transition probability blocks    [8*Q4]           */
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ transition costs                   */
 
   /* Our actual vector mallocs, before we align the memory                           */
-  vector unsigned char  *rb_mem;
-  vector signed short   *rw_mem;
-  vector signed short   *tw_mem;
-  vector float          *tf_mem;
-  vector float          *rf_mem;
+  vector unsigned char  *rbv_mem;
+  vector signed short   *rwv_mem;
+  vector signed short   *twv_mem;
+  vector float          *tfv_mem;
+  vector float          *rfv_mem;
   
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
@@ -112,7 +112,7 @@ typedef struct p7_oprofile_s {
   char  *name;			/* unique name of model                              */
   char  *acc;			/* unique accession of model, or NULL                */
   char  *desc;                  /* brief (1-line) description of model, or NULL      */
-  char  *ref;                   /* reference line           1..M; *ref=0: unused     */
+  char  *rf;                    /* reference line           1..M; *ref=0: unused     */
   char  *cs;                    /* consensus structure line 1..M, *cs=0: unused      */
   char  *consensus;		/* consensus residues for ali display, 1..M          */
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET     */
@@ -150,7 +150,7 @@ p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
   int   Q = p7O_NQF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
-  u.v = om->rf[x][q];
+  u.v = om->rfv[x][q];
   return u.p[r];
 }
 

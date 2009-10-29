@@ -87,7 +87,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
    * bookkeeping.  
    */
   n = (z2-z1+2) * 3;                     /* model, mline, aseq mandatory         */
-  if (om->ref[0] != 0)    n += z2-z1+2;  /* optional reference line              */
+  if (om->rf[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
   if (om->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
   if (tr->pp     != NULL) n += z2-z1+2;  /* optional posterior prob line         */
   hmm_namelen = strlen(om->name);                           n += hmm_namelen + 1;
@@ -103,7 +103,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   pos = 0; 
   ad->memsize = sizeof(char) * n;
   ESL_ALLOC(ad->mem, ad->memsize);
-  if (om->ref[0] != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
+  if (om->rf[0]  != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
   if (om->cs[0]  != 0) { ad->csline = ad->mem + pos; pos += z2-z1+2; } else { ad->csline = NULL; }
   ad->model   = ad->mem + pos;  pos += z2-z1+2;
   ad->mline   = ad->mem + pos;  pos += z2-z1+2;
@@ -133,7 +133,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
 
   /* optional rf line */
   if (ad->rfline != NULL) {
-    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->ref[tr->k[z]]);
+    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->rf[tr->k[z]]);
     ad->rfline[z-z1] = '\0';
   }
 

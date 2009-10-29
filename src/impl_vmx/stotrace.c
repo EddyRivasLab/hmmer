@@ -130,7 +130,7 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int     Q     = p7O_NQF(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
-  vector float *tp = om->tf + 7*q;    	/* *tp now at start of transitions to cur cell M(i,k) */
+  vector float *tp = om->tfv + 7*q;    	/* *tp now at start of transitions to cur cell M(i,k) */
   vector float  xBv;
   vector float  zerov;
   vector float  mpv, dpv, ipv;
@@ -178,13 +178,13 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   if (q > 0) {
     mpv  = ox->dpf[i][(q-1)*3 + p7X_M];
     dpv  = ox->dpf[i][(q-1)*3 + p7X_D];
-    tmdv = om->tf[7*(q-1) + p7O_MD];
-    tddv = om->tf[7*Q + (q-1)];
+    tmdv = om->tfv[7*(q-1) + p7O_MD];
+    tddv = om->tfv[7*Q + (q-1)];
   } else {
     mpv  = vec_sld(zerov, ox->dpf[i][(Q-1)*3 + p7X_M], 12);
     dpv  = vec_sld(zerov, ox->dpf[i][(Q-1)*3 + p7X_D], 12);
-    tmdv = vec_sld(zerov, om->tf[7*(Q-1) + p7O_MD],    12);
-    tddv = vec_sld(zerov, om->tf[8*Q-1],               12);
+    tmdv = vec_sld(zerov, om->tfv[7*(Q-1) + p7O_MD],   12);
+    tddv = vec_sld(zerov, om->tfv[8*Q-1],              12);
   }	  
 
   u.v = vec_madd(mpv, tmdv, zerov); path[0] = u.p[r];
@@ -203,7 +203,7 @@ select_i(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   vector float  zerov;
   vector float  mpv  = ox->dpf[i-1][q*3 + p7X_M];
   vector float  ipv  = ox->dpf[i-1][q*3 + p7X_I];
-  vector float *tp   = om->tf + 7*q + p7O_MI;
+  vector float *tp   = om->tfv + 7*q + p7O_MI;
   union { vector float v; float p[4]; } u;
   float   path[2];
   int     state[2] = { p7T_M, p7T_I };

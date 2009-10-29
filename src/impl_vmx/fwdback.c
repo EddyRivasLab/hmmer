@@ -271,8 +271,8 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
   vector float *dpc = ox->dpf[0];  /* current row, for use in {MDI}MO(dpp,q) access macro       */
   vector float *dpp;               /* previous row, for use in {MDI}MO(dpp,q) access macro      */
-  vector float *rp;		   /* will point at om->rf[x] for residue x[i]                  */
-  vector float *tp;		   /* will point into (and step thru) om->tf                    */
+  vector float *rp;		   /* will point at om->rfv[x] for residue x[i]                 */
+  vector float *tp;		   /* will point into (and step thru) om->tfv                   */
 
   /* Initialization. */
   ox->M  = om->M;
@@ -298,8 +298,8 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
     {
       dpp   = dpc;                      
       dpc   = ox->dpf[do_full * i];     /* avoid conditional, use do_full as kronecker delta */
-      rp    = om->rf[dsq[i]];
-      tp    = om->tf;
+      rp    = om->rfv[dsq[i]];
+      tp    = om->tfv;
       dcv   = (vector float) vec_splat_u32(0);
       xEv   = (vector float) vec_splat_u32(0);
       xBv   = esl_vmx_set_float(xB);
@@ -352,7 +352,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
        */
       dcv        = vec_sld(zerov, dcv, 12);
       DMO(dpc,0) = (vector float) vec_splat_u32(0);
-      tp         = om->tf + 7*Q;	/* set tp to start of the DD's */
+      tp         = om->tfv + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
 	{
 	  DMO(dpc,q) = vec_add(dcv, DMO(dpc,q));	
@@ -372,7 +372,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	  for (j = 1; j < 4; j++)
 	    {
 	      dcv = vec_sld(zerov, dcv, 12);
-	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
+	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{ /* note, extend dcv, not DMO(q); only adding DD paths now */
 		  DMO(dpc,q) = vec_add(dcv, DMO(dpc,q));	
@@ -387,7 +387,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	      vector bool int cv;	/* keeps track of whether any DD's change DMO(q) */
 
 	      dcv = vec_sld(zerov, dcv, 12);
-	      tp  = om->tf + 7*Q;	/* set tp to start of the DD's */
+	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      cv  = (vector bool int) vec_splat_u32(0);
 	      for (q = 0; q < Q; q++) 
 		{ /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
@@ -483,8 +483,8 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   int      j;			      /* DD segment iteration counter (4 = full serialization)     */
   vector float  *dpc;                 /* current DP row                                            */
   vector float  *dpp;	              /* next ("previous") DP row                                  */
-  vector float  *rp;		      /* will point into om->rf[x] for residue x[i+1]              */
-  vector float  *tp;		      /* will point into (and step thru) om->tf transition scores  */
+  vector float  *rp;		      /* will point into om->rfv[x] for residue x[i+1]             */
+  vector float  *tp;		      /* will point into (and step thru) om->tfv transition scores */
 
   /* initialize the L row. */
   bck->M = om->M;
@@ -503,7 +503,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   for (q = 0; q < Q; q++) IMO(dpc,q) = zerov;
 
   /* init row L's DD paths, 1) first segment includes xE, from DMO(q) */
-  tp  = om->tf + 8*Q - 1;	                        /* <*tp> now the [4 8 12 x] TDD quad         */
+  tp  = om->tfv + 8*Q - 1;	                        /* <*tp> now the [4 8 12 x] TDD quad         */
   dpv = vec_sld(DMO(dpc,Q-1), zerov, 4);
   for (q = Q-1; q >= 1; q--)
     {
@@ -516,7 +516,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMO(q)) */
   for (j = 1; j < 4; j++)
     {
-      tp  = om->tf + 8*Q - 1;	                        /* <*tp> now the [4 8 12 x] TDD quad         */
+      tp  = om->tfv + 8*Q - 1;	                        /* <*tp> now the [4 8 12 x] TDD quad         */
       dcv = vec_sld(dcv, zerov, 4);
       for (q = Q-1; q >= 0; q--)
 	{
@@ -526,7 +526,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
     }
 
   /* now MD init */
-  tp  = om->tf + 7*Q - 3;	                        /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
+  tp  = om->tfv + 7*Q - 3;	                        /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
   dcv = vec_sld(DMO(dpc,0), zerov, 4);
   for (q = Q-1; q >= 0; q--)
     {
@@ -571,15 +571,15 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
        */
       dpc = bck->dpf[i     * do_full];
       dpp = bck->dpf[(i+1) * do_full];
-      rp  = om->rf[dsq[i+1]] + Q-1; /* <*rp> is now the [4 8 12 x] match emission quad */
-      tp  = om->tf + 7*Q - 1;	    /* <*tp> is now the [4 8 12 x] TII transition quad  */
+      rp  = om->rfv[dsq[i+1]] + Q-1; /* <*rp> is now the [4 8 12 x] match emission quad */
+      tp  = om->tfv + 7*Q - 1;	    /* <*tp> is now the [4 8 12 x] TII transition quad  */
 
       /* leftshift the first transition quads */
-      tmmv = vec_sld(om->tf[1], zerov, 4);
-      timv = vec_sld(om->tf[2], zerov, 4);
-      tdmv = vec_sld(om->tf[3], zerov, 4);
+      tmmv = vec_sld(om->tfv[1], zerov, 4);
+      timv = vec_sld(om->tfv[2], zerov, 4);
+      tdmv = vec_sld(om->tfv[3], zerov, 4);
 
-      mpv = vec_madd(MMO(dpp,0), om->rf[dsq[i+1]][0], zerov); /* precalc M(i+1,k+1)*e(M_k+1,x_{i+1}) */
+      mpv = vec_madd(MMO(dpp,0), om->rfv[dsq[i+1]][0], zerov); /* precalc M(i+1,k+1)*e(M_k+1,x_{i+1}) */
       mpv = vec_sld(mpv, zerov, 4);
 
       xBv = zerov;
@@ -616,7 +616,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 
 
       /* phase 3: {MD}->E paths and one step of the D->D paths */
-      tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
+      tp  = om->tfv + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
       dpv = vec_add(DMO(dpc,0), xEv);
       dpv = vec_sld(dpv, zerov, 4);
       for (q = Q-1; q >= 1; q--)
@@ -635,7 +635,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       for (j = 1; j < 4; j++)	/* three passes: we've already done 1 segment, we need 4 total */
 	{
 	  dcv = vec_sld(dcv, zerov, 4);
-	  tp  = om->tf + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
+	  tp  = om->tfv + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
 	  for (q = Q-1; q >= 0; q--)
 	    {
 	      dcv        = vec_madd(dcv, *tp, zerov); tp--;
@@ -645,7 +645,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 
       /* phase 5: add M->D paths */
       dcv = vec_sld(DMO(dpc,0), zerov, 4);
-      tp  = om->tf + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
+      tp  = om->tfv + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
       for (q = Q-1; q >= 0; q--)
 	{
 	  MMO(dpc,q) = vec_madd(dcv, *tp, MMO(dpc,q)); tp -= 7;
@@ -698,8 +698,8 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 
   /* Termination at i=0, where we can only reach N,B states. */
   dpp = bck->dpf[1 * do_full];
-  tp  = om->tf;	        /* <*tp> is now the [1 5 9 13] TBMk transition quad  */
-  rp  = om->rf[dsq[1]];	/* <*rp> is now the [1 5 9 13] match emission quad   */
+  tp  = om->tfv;	        /* <*tp> is now the [1 5 9 13] TBMk transition quad  */
+  rp  = om->rfv[dsq[1]];	/* <*rp> is now the [1 5 9 13] match emission quad   */
   xBv = (vector float) vec_splat_u32(0);
   for (q = 0; q < Q; q++)
     {

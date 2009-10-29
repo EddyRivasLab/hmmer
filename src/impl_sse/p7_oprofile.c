@@ -57,41 +57,41 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(om, sizeof(P7_OPROFILE));
-  om->rb_mem = NULL;
-  om->rw_mem = NULL;
-  om->tw_mem = NULL;
-  om->rf_mem = NULL;
-  om->tf_mem = NULL;
-  om->rb     = NULL;
-  om->rw     = NULL;
-  om->tw     = NULL;
-  om->rf     = NULL;
-  om->tf     = NULL;
-  om->clone  = 0;
+  om->rbv_mem = NULL;
+  om->rwv_mem = NULL;
+  om->twv_mem = NULL;
+  om->rfv_mem = NULL;
+  om->tfv_mem = NULL;
+  om->rbv     = NULL;
+  om->rwv     = NULL;
+  om->twv     = NULL;
+  om->rfv     = NULL;
+  om->tfv     = NULL;
+  om->clone   = 0;
 
   /* level 1 */
-  ESL_ALLOC(om->rb_mem, sizeof(__m128i) * nqb  * abc->Kp          +15);	/* +15 is for manual 16-byte alignment */
-  ESL_ALLOC(om->rw_mem, sizeof(__m128i) * nqw  * abc->Kp          +15);                     
-  ESL_ALLOC(om->tw_mem, sizeof(__m128i) * nqw  * p7O_NTRANS       +15);   
-  ESL_ALLOC(om->rf_mem, sizeof(__m128)  * nqf  * abc->Kp          +15);                     
-  ESL_ALLOC(om->tf_mem, sizeof(__m128)  * nqf  * p7O_NTRANS       +15);    
+  ESL_ALLOC(om->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp          +15); /* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp          +15);                     
+  ESL_ALLOC(om->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS       +15);   
+  ESL_ALLOC(om->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp          +15);                     
+  ESL_ALLOC(om->tfv_mem, sizeof(__m128)  * nqf  * p7O_NTRANS       +15);    
 
-  ESL_ALLOC(om->rb, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->rw, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->rf, sizeof(__m128  *) * abc->Kp); 
+  ESL_ALLOC(om->rbv, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om->rwv, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om->rfv, sizeof(__m128  *) * abc->Kp); 
 
   /* align vector memory on 16-byte boundaries */
-  om->rb[0] = (__m128i *) (((unsigned long int) om->rb_mem + 15) & (~0xf));
-  om->rw[0] = (__m128i *) (((unsigned long int) om->rw_mem + 15) & (~0xf));
-  om->tw    = (__m128i *) (((unsigned long int) om->tw_mem + 15) & (~0xf));
-  om->rf[0] = (__m128  *) (((unsigned long int) om->rf_mem + 15) & (~0xf));
-  om->tf    = (__m128  *) (((unsigned long int) om->tf_mem + 15) & (~0xf));
+  om->rbv[0] = (__m128i *) (((unsigned long int) om->rbv_mem + 15) & (~0xf));
+  om->rwv[0] = (__m128i *) (((unsigned long int) om->rwv_mem + 15) & (~0xf));
+  om->twv    = (__m128i *) (((unsigned long int) om->twv_mem + 15) & (~0xf));
+  om->rfv[0] = (__m128  *) (((unsigned long int) om->rfv_mem + 15) & (~0xf));
+  om->tfv    = (__m128  *) (((unsigned long int) om->tfv_mem + 15) & (~0xf));
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
-    om->rb[x] = om->rb[0] + (x * nqb);
-    om->rw[x] = om->rw[0] + (x * nqw);
-    om->rf[x] = om->rf[0] + (x * nqf);
+    om->rbv[x] = om->rbv[0] + (x * nqb);
+    om->rwv[x] = om->rwv[0] + (x * nqw);
+    om->rfv[x] = om->rfv[0] + (x * nqf);
   }
   om->allocQ16  = nqb;
   om->allocQ8   = nqw;
@@ -124,10 +124,10 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
    * we initialize all this memory to zeros to shut valgrind up about 
    * fwrite'ing uninitialized memory in the io functions.
    */
-  ESL_ALLOC(om->ref,         sizeof(char) * (allocM+2)); 
+  ESL_ALLOC(om->rf,          sizeof(char) * (allocM+2)); 
   ESL_ALLOC(om->cs,          sizeof(char) * (allocM+2));
   ESL_ALLOC(om->consensus,   sizeof(char) * (allocM+2));
-  memset(om->ref,      '\0', sizeof(char) * (allocM+2));
+  memset(om->rf,      '\0',  sizeof(char) * (allocM+2));
   memset(om->cs,       '\0', sizeof(char) * (allocM+2));
   memset(om->consensus,'\0', sizeof(char) * (allocM+2));
 
@@ -168,18 +168,18 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 
   if (om->clone == 0)
     {
-      if (om->rb_mem    != NULL) free(om->rb_mem);
-      if (om->rw_mem    != NULL) free(om->rw_mem);
-      if (om->tw_mem    != NULL) free(om->tw_mem);
-      if (om->rf_mem    != NULL) free(om->rf_mem);
-      if (om->tf_mem    != NULL) free(om->tf_mem);
-      if (om->rb        != NULL) free(om->rb);
-      if (om->rw        != NULL) free(om->rw);
-      if (om->rf        != NULL) free(om->rf);
+      if (om->rbv_mem   != NULL) free(om->rbv_mem);
+      if (om->rwv_mem   != NULL) free(om->rwv_mem);
+      if (om->twv_mem   != NULL) free(om->twv_mem);
+      if (om->rfv_mem   != NULL) free(om->rfv_mem);
+      if (om->tfv_mem   != NULL) free(om->tfv_mem);
+      if (om->rbv       != NULL) free(om->rbv);
+      if (om->rwv       != NULL) free(om->rwv);
+      if (om->rfv       != NULL) free(om->rfv);
       if (om->name      != NULL) free(om->name);
       if (om->acc       != NULL) free(om->acc);
       if (om->desc      != NULL) free(om->desc);
-      if (om->ref       != NULL) free(om->ref);
+      if (om->rf        != NULL) free(om->rf);
       if (om->cs        != NULL) free(om->cs);
       if (om->consensus != NULL) free(om->consensus);
     }
@@ -213,45 +213,45 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
 
   /* level 0 */
   ESL_ALLOC(om2, sizeof(P7_OPROFILE));
-  om2->rb_mem = NULL;
-  om2->rw_mem = NULL;
-  om2->tw_mem = NULL;
-  om2->rf_mem = NULL;
-  om2->tf_mem = NULL;
-  om2->rb     = NULL;
-  om2->rw     = NULL;
-  om2->tw     = NULL;
-  om2->rf     = NULL;
-  om2->tf     = NULL;
+  om2->rbv_mem = NULL;
+  om2->rwv_mem = NULL;
+  om2->twv_mem = NULL;
+  om2->rfv_mem = NULL;
+  om2->tfv_mem = NULL;
+  om2->rbv     = NULL;
+  om2->rwv     = NULL;
+  om2->twv     = NULL;
+  om2->rfv     = NULL;
+  om2->tfv     = NULL;
 
   /* level 1 */
-  ESL_ALLOC(om2->rb_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
-  ESL_ALLOC(om2->rw_mem, sizeof(__m128i) * nqw  * abc->Kp    +15);                     
-  ESL_ALLOC(om2->tw_mem, sizeof(__m128i) * nqw  * p7O_NTRANS +15);   
-  ESL_ALLOC(om2->rf_mem, sizeof(__m128)  * nqf  * abc->Kp    +15);                     
-  ESL_ALLOC(om2->tf_mem, sizeof(__m128)  * nqf  * p7O_NTRANS +15);    
+  ESL_ALLOC(om2->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om2->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp    +15);                     
+  ESL_ALLOC(om2->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS +15);   
+  ESL_ALLOC(om2->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp    +15);                     
+  ESL_ALLOC(om2->tfv_mem, sizeof(__m128)  * nqf  * p7O_NTRANS +15);    
 
-  ESL_ALLOC(om2->rb, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om2->rw, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om2->rf, sizeof(__m128  *) * abc->Kp); 
+  ESL_ALLOC(om2->rbv, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om2->rwv, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om2->rfv, sizeof(__m128  *) * abc->Kp); 
 
   /* align vector memory on 16-byte boundaries */
-  om2->rb[0] = (__m128i *) (((unsigned long int) om2->rb_mem + 15) & (~0xf));
-  om2->rw[0] = (__m128i *) (((unsigned long int) om2->rw_mem + 15) & (~0xf));
-  om2->tw    = (__m128i *) (((unsigned long int) om2->tw_mem + 15) & (~0xf));
-  om2->rf[0] = (__m128  *) (((unsigned long int) om2->rf_mem + 15) & (~0xf));
-  om2->tf    = (__m128  *) (((unsigned long int) om2->tf_mem + 15) & (~0xf));
+  om2->rbv[0] = (__m128i *) (((unsigned long int) om2->rbv_mem + 15) & (~0xf));
+  om2->rwv[0] = (__m128i *) (((unsigned long int) om2->rwv_mem + 15) & (~0xf));
+  om2->twv    = (__m128i *) (((unsigned long int) om2->twv_mem + 15) & (~0xf));
+  om2->rfv[0] = (__m128  *) (((unsigned long int) om2->rfv_mem + 15) & (~0xf));
+  om2->tfv    = (__m128  *) (((unsigned long int) om2->tfv_mem + 15) & (~0xf));
 
   /* copy the vector data */
-  memcpy(om2->rb[0], om1->rb[0], sizeof(__m128i) * nqb  * abc->Kp);
-  memcpy(om2->rw[0], om1->rw[0], sizeof(__m128i) * nqw  * abc->Kp);
-  memcpy(om2->rf[0], om1->rf[0], sizeof(__m128i) * nqf  * abc->Kp);
+  memcpy(om2->rbv[0], om1->rbv[0], sizeof(__m128i) * nqb  * abc->Kp);
+  memcpy(om2->rwv[0], om1->rwv[0], sizeof(__m128i) * nqw  * abc->Kp);
+  memcpy(om2->rfv[0], om1->rfv[0], sizeof(__m128i) * nqf  * abc->Kp);
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
-    om2->rb[x] = om2->rb[0] + (x * nqb);
-    om2->rw[x] = om2->rw[0] + (x * nqw);
-    om2->rf[x] = om2->rf[0] + (x * nqf);
+    om2->rbv[x] = om2->rbv[0] + (x * nqb);
+    om2->rwv[x] = om2->rwv[0] + (x * nqw);
+    om2->rfv[x] = om2->rfv[0] + (x * nqf);
   }
   om2->allocQ16  = nqb;
   om2->allocQ8   = nqw;
@@ -275,8 +275,8 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   for (x = 0; x < p7_NCUTOFFS; x++) om2->cutoff[x]  = om1->cutoff[x];
   for (x = 0; x < p7_MAXABET;  x++) om2->compo[x]   = om1->compo[x];
 
-  for (x = 0; x < nqw  * p7O_NTRANS; ++x) om2->tw[x] = om1->tw[x];
-  for (x = 0; x < nqf  * p7O_NTRANS; ++x) om2->tf[x] = om1->tf[x];
+  for (x = 0; x < nqw  * p7O_NTRANS; ++x) om2->twv[x] = om1->twv[x];
+  for (x = 0; x < nqf  * p7O_NTRANS; ++x) om2->tfv[x] = om1->tfv[x];
 
   for (x = 0; x < p7O_NXSTATES; x++)
     for (y = 0; y < p7O_NXTRANS; y++)
@@ -294,11 +294,11 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
    * we initialize all this memory to zeros to shut valgrind up about 
    * fwrite'ing uninitialized memory in the io functions.
    */
-  ESL_ALLOC(om2->ref,         size); 
+  ESL_ALLOC(om2->rf,          size); 
   ESL_ALLOC(om2->cs,          size);
   ESL_ALLOC(om2->consensus,   size);
 
-  memcpy(om2->ref,       om1->ref,       size);
+  memcpy(om2->rf,        om1->rf,        size);
   memcpy(om2->cs,        om1->cs,        size);
   memcpy(om2->consensus, om1->consensus, size);
 
@@ -441,7 +441,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     for (q = 0, k = 1; q < nq; q++, k++)
       {
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
-	om->rb[x][q]   = tmp.v;	
+	om->rbv[x][q]   = tmp.v;	
       }
 
   /* transition costs */
@@ -494,7 +494,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     for (k = 1, q = 0; q < nq; q++, k++)
       {
 	for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, p7P_MSC(gm, k+z*nq, x)) : -32768);
-	om->rw[x][q]   = tmp.v;
+	om->rwv[x][q]   = tmp.v;
       }
 
   /* Transition costs, all but the DD's. */
@@ -516,7 +516,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	    val      = ((kb+ z*nq < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq, tg)) : -32768);
 	    tmp.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
 	  }
-	  om->tw[j++] = tmp.v;
+	  om->twv[j++] = tmp.v;
 	}
     }
 
@@ -524,7 +524,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (k = 1, q = 0; q < nq; q++, k++)
     {
       for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq < M) ? wordify(om, p7P_TSC(gm, k+ z*nq, p7P_DD)) : -32768);
-      om->tw[j++] = tmp.v;
+      om->twv[j++] = tmp.v;
     }
 
   /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)  */
@@ -587,7 +587,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     for (k = 1, q = 0; q < nq; q++, k++)
       {
 	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
-	om->rf[x][q] = esl_sse_expf(tmp.v);
+	om->rfv[x][q] = esl_sse_expf(tmp.v);
       }
 
   /* Transition scores, all but the DD's. */
@@ -606,7 +606,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	  }
 
 	  for (z = 0; z < 4; z++) tmp.x[z] = (kb+z*nq < M) ? p7P_TSC(gm, kb+z*nq, tg) : -eslINFINITY;
-	  om->tf[j++] = esl_sse_expf(tmp.v);
+	  om->tfv[j++] = esl_sse_expf(tmp.v);
 	}
     }
 
@@ -614,7 +614,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (k = 1, q = 0; q < nq; q++, k++)
     {
       for (z = 0; z < 4; z++) tmp.x[z] = (k+z*nq < M) ? p7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
-      om->tf[j++] = esl_sse_expf(tmp.v);
+      om->tfv[j++] = esl_sse_expf(tmp.v);
     }
 
   /* Specials. (These are actually in exactly the same order in om and
@@ -667,7 +667,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->acc,  -1, &(om->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->desc, -1, &(om->desc))) != eslOK) goto ERROR;
-  strcpy(om->ref,       gm->rf);
+  strcpy(om->rf,        gm->rf);
   strcpy(om->cs,        gm->cs);
   strcpy(om->consensus, gm->consensus);
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
@@ -872,7 +872,7 @@ oprofile_dump_mf(FILE *fp, const P7_OPROFILE *om)
       for (q = 0; q < nq; q++)
 	{
 	  fprintf(fp, "[ ");
-	  _mm_store_si128(&tmp.v, om->rb[x][q]);
+	  _mm_store_si128(&tmp.v, om->rbv[x][q]);
 	  for (z = 0; z < 16; z++) fprintf(fp, "%4d ", tmp.i[z]);
 	  fprintf(fp, "]");
 	}
@@ -932,7 +932,7 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
       for (q = 0; q < nq; q++)
 	{
 	  fprintf(fp, "[ ");
-	  _mm_store_si128(&tmp.v, om->rw[x][q]);
+	  _mm_store_si128(&tmp.v, om->rwv[x][q]);
 	  for (z = 0; z < 8; z++) fprintf(fp, "%6d ", tmp.i[z]);
 	  fprintf(fp, "]");
 	}
@@ -974,7 +974,7 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
       for (q = 0; q < nq; q++)
 	{
 	  fprintf(fp, "[ ");
-	  _mm_store_si128(&tmp.v, om->tw[q*7 + t]);
+	  _mm_store_si128(&tmp.v, om->twv[q*7 + t]);
 	  for (z = 0; z < 8; z++) fprintf(fp, "%6d ", tmp.i[z]);
 	  fprintf(fp, "]");
 	}
@@ -995,7 +995,7 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
   for (j = nq*7, q = 0; q < nq; q++, j++)
     {
       fprintf(fp, "[ ");
-      _mm_store_si128(&tmp.v, om->tw[j]);
+      _mm_store_si128(&tmp.v, om->twv[j]);
       for (z = 0; z < 8; z++) fprintf(fp, "%6d ", tmp.i[z]);
       fprintf(fp, "]");
     }
@@ -1052,7 +1052,7 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
       for (q = 0; q < nq; q++)
 	{
 	  fprintf(fp, "[ ");
-	  tmp.v = om->rf[x][q];
+	  tmp.v = om->rfv[x][q];
 	  for (z = 0; z < 4; z++) fprintf(fp, "%*.*f ", width, precision, tmp.x[z]);
 	  fprintf(fp, "]");
 	}
@@ -1092,7 +1092,7 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
       for (q = 0; q < nq; q++)
 	{
 	  fprintf(fp, "[ ");
-	  tmp.v = om->tf[q*7 + t];
+	  tmp.v = om->tfv[q*7 + t];
 	  for (z = 0; z < 4; z++) fprintf(fp, "%*.*f ", width, precision, tmp.x[z]);
 	  fprintf(fp, "]");
 	}
@@ -1113,7 +1113,7 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   for (j = nq*7, q = 0; q < nq; q++, j++)
     {
       fprintf(fp, "[ ");
-      tmp.v = om->tf[j];
+      tmp.v = om->tfv[j];
       for (z = 0; z < 4; z++) fprintf(fp, "%*.*f ", width, precision, tmp.x[z]);
       fprintf(fp, "]");
     }
@@ -1263,7 +1263,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
   for (x = 0; x < om1->abc->Kp; x++)
     for (q = 0; q < Q16; q++)
       {
-	a16.v = om1->rb[x][q]; b16.v = om2->rb[x][q];
+	a16.v = om1->rbv[x][q]; b16.v = om2->rbv[x][q];
 	for (r = 0; r < 16; r++) if (a16.c[r] != b16.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rb[%d] elem %d", q, r);
       }
   if (om1->tbm_b     != om2->tbm_b)     ESL_FAIL(eslFAIL, errmsg, "comparison failed: tbm_b");
@@ -1277,12 +1277,12 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
   for (x = 0; x < om1->abc->Kp; x++)
     for (q = 0; q < Q8; q++)
       {
-	a8.v = om1->rw[x][q]; b8.v = om2->rw[x][q];
+	a8.v = om1->rwv[x][q]; b8.v = om2->rwv[x][q];
 	for (r = 0; r < 8; r++) if (a8.w[r] != b8.w[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rw[%d] elem %d", q, r);
       }
   for (q = 0; q < 8*Q16; q++)
     {
-      a8.v = om1->tw[q]; b8.v = om2->tw[q];
+      a8.v = om1->twv[q]; b8.v = om2->twv[q];
       for (r = 0; r < 8; r++) if (a8.w[r] != b8.w[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: tw[%d] elem %d", q, r);
     }
   for (x = 0; x < p7O_NXSTATES; x++)
@@ -1297,12 +1297,12 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
   for (x = 0; x < om1->abc->Kp; x++)
     for (q = 0; q < Q4; q++)
       {
-	a4.v = om1->rf[x][q]; b4.v = om2->rf[x][q];
+	a4.v = om1->rfv[x][q]; b4.v = om2->rfv[x][q];
 	for (r = 0; r < 4; r++) if (esl_FCompare(a4.x[r], b4.x[r], tol) != eslOK)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: rf[%d] elem %d", q, r);
       }
   for (q = 0; q < 8*Q4; q++)
     {
-      a4.v = om1->tf[q]; b4.v = om2->tf[q];
+      a4.v = om1->tfv[q]; b4.v = om2->tfv[q];
       for (r = 0; r < 4; r++) if (a4.x[r] != b4.x[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: tf[%d] elem %d", q, r);
     }
   for (x = 0; x < p7O_NXSTATES; x++)
@@ -1314,7 +1314,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
    if (esl_strcmp(om1->name,      om2->name)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: name");
    if (esl_strcmp(om1->acc,       om2->acc)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: acc");
    if (esl_strcmp(om1->desc,      om2->desc)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: desc");
-   if (esl_strcmp(om1->ref,       om2->ref)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ref");
+   if (esl_strcmp(om1->rf,        om2->rf)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ref");
    if (esl_strcmp(om1->cs,        om2->cs)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cs");
    if (esl_strcmp(om1->consensus, om2->consensus) != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: consensus");
    

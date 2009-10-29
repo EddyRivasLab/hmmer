@@ -84,7 +84,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
-  __m128i *rsc;			   /* will point at om->rb[x] for residue x[i]                  */
+  __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
 
   __m128i xJv;                     /* vector for states score                                   */
   __m128i tbmv;                    /* vector for B->Mk cost                                     */
@@ -130,7 +130,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   for (i = 1; i <= L; i++)
     {
-      rsc = om->rb[dsq[i]];
+      rsc = om->rbv[dsq[i]];
       xEv = _mm_setzero_si128();      
       xBv = _mm_subs_epu8(xBv, tbmv);
 
