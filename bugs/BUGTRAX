@@ -1,7 +1,36 @@
+ID              h62
+TITLE           hmmscan segfaults on sequences containing * characters
+AFFECTS         3.0b2 for sure; probably earlier too
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/98
+REPORTED_BY     Francisco J. Ossandon <fossandon@vtr.net>, Santiago, Chile
+OPENED_DATE     SRE, Sat Oct 24 10:53:21 2009
+CLOSED_DATE     SRE, Thu Oct 29 09:04:33 2009
+DESCRIPTION     
+
+  Ossandon reports a segfault when running hmmscan of Pfam24 on a
+  sequence file with * residue characters. The fault reproduces
+  sporadically here, suggesting a memory corruption. valgrind sees
+  uninitialized memory problems. 
+
+  Problem traced to failure to initialize * (and ~, and -) odds ratios
+  in null2 model.
+
+  Decreed these odds ratios to be 1.0 (i.e. it isn't clear what the
+  probabilities should be, but whatever they are, they're the same in
+  null1 and null2 models, and we're only operating with odds ratios
+  anyway; so the odds ratios are 1.0). 
+
+  Unit tests should have caught this - and would have, if they'd been
+  checking with valgrind (null2_utest fails under valgrind). Added
+  valgrind tests to test suite. Added i8-nonresidues.pl to regression
+  test the handling of * residues.
+//
 ID              h61
 TITLE           hmmscan --cut_{ga,nc,tc} fails to impose correct thresholds
 AFFECTS         3.0{a1,a2,b1,b2}
-FIXED_IN
+FIXED_IN        -
 STATUS          CLOSED
 XREF            J5/92
 REPORTED_BY     Sarah Hunter <hunter@ebi.ac.uk>
@@ -21,7 +50,7 @@ DESCRIPTION
 ID              h60
 TITLE	        hmmbuild --mpi fails to record GA,TC,NC thresholds
 AFFECTS		3.0{a1,a2,b1,b2}
-FIXED_IN
+FIXED_IN        -
 STATUS          CLOSED
 XREF            J5/92
 REPORTED_BY     Sarah Hunter <hunter@ebi.ac.uk>
@@ -37,6 +66,8 @@ DESCRIPTION
 //
 ID		h59
 TITLE           seq descriptions containing '%' cause segfault
+AFFECTS         3.0b2
+FIXED_IN        -
 STATUS          CLOSED
 XREF            J5/75
 REPORTED_BY     Michael Remmert <remmert@genzentrum.lmu.de> 11 Aug 2009
@@ -58,6 +89,8 @@ DESCRIPTION
 //
 ID              h58
 TITLE           hmmscan tabular domain output reverses target, query lengths
+AFFECTS         3.0b2
+FIXED_IN        -
 STATUS          CLOSED
 XREF            J5/69
 REPORTED_BY     Phil Jones <pjones@ebi.ac.uk> 30 Jul 2009
@@ -74,6 +107,8 @@ DESCRIPTION
 //
 ID              h57
 TITLE           jackhmmer fails: "backconverted subseq didn't end at expected length"
+AFFECTS         3.0b2
+FIXED_IN        -
 STATUS          CLOSED
 XREF            J5/52
 REPORTED_BY     Michael Seidl <m.f.seidl@uu.nl>, 22 June 2009
@@ -92,8 +127,13 @@ DESCRIPTION
   was getting the wrong length.
 
 //
+####
+####  beta2 release: 21 June 2009
+####
 ID              h56
 TITLE           hmmbuild fails trace validation on frag-rich MSA
+AFFECTS         3.0b1
+FIXED_IN        3.0b2
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     Peter Williams (LBL)
@@ -108,7 +148,7 @@ DESCRIPTION
 
 //
 ####
-####  beta1 release
+####  beta1 release: 17 June 2009
 ####
 ID              h55
 TITLE           hmmbuild fails to build reasonable model on frag-rich MSA

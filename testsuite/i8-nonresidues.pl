@@ -1,7 +1,17 @@
 #! /usr/bin/perl
 
-# Example:  ./i8-nonresidues.pl ../src/hmmsearch ./20aa.hmm tmpfoo
+# Regression test of handling a nonresidue '*' character. By design,
+# '*' residues score 0 in insert states and N,C,J; and -inf in match
+# states. Test case verifies that an inserted * is handled within one
+# alignment, and a consensus * breaks an alignment in two.
+# Implemented as a regression test against specific scores (in domtbl
+# output) of a small manually checked example.
 #
+# Usage:    ./i8-nonresidues.pl <hmmsearch binary> <20aa.hmm> <tmpfile prefix>
+# Example:  ./i8-nonresidues.pl ../src/hmmsearch   ./20aa.hmm tmpfoo
+#
+# SRE, Thu Oct 29 08:38:09 2009
+# SVN $Id$
 
 use h3;
 

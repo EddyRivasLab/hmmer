@@ -117,7 +117,7 @@
 3 exercise  jackhmmer_variation   @i3-seqsearch-variation.sh@ @jackhmmer@  %TESTSEQ%       %TESTDB%  %OUTFILES%
 1 exercise  mapali                @i6-hmmalign-mapali.pl@     @hmmalign@   @esl-reformat@  !.!       %OUTFILES%
 1 exercise  fragments             @i7-hmmbuild-fragments.pl@  @hmmbuild@                             %OUTFILES%
-
+1 exercise  nonresidues           @i8-nonresidues.pl@         @hmmsearch@  !20aa.hmm!                %OUTFILES%
 
 
 
@@ -131,8 +131,6 @@
 1 exercise  h45                  @i4-zerolength-seqs.sh@ @hmmscan@  @hmmsearch@ @phmmer@ @jackhmmer@ %MINIFAM.HMM% %OUTFILES%
 1 exercise  h50                  @i5-hmmbuild-naming.pl@ @hmmbuild@ !.! !../tutorial! %OUTFILES%
 
-
-# Clean up after minifam's index files, which hmmpress created (not the sqc script)
 
 
 ################################################################
@@ -162,3 +160,7 @@
 3 valgrind optacc             @optacc_utest@
 3 valgrind stotrace           @stotrace_utest@
 3 valgrind vitfilter          @vitfilter_utest@
+
+
+
+# Clean up after minifam's index files, which hmmpress created (not the sqc script)
