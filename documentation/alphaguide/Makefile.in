@@ -53,3 +53,6 @@ distclean:
 	-rm Alphaguide.pdf
 	-rm -f titlepage.tex copyright.tex manpages.tex
 	-rm -f Makefile
+
+TAGS:
+	etags *.tex Makefile.in

@@ -1,6 +1,6 @@
 \section{File formats}
 \label{section:formats}
-
+\setcounter{footnote}{0}
 
 \subsection{HMMER profile HMM files}
 \label{section:savefiles}
@@ -231,16 +231,22 @@ order. \textbf{Optional.}
 
 All the remaining fields are \textbf{mandatory}.
 
-The first two lines in the main model section are atypical. They
+The first two lines in the main model section are
+atypical.\footnote{That is, the first two lines after the optional
+  COMPO line. Don't be confused by the presence of an optional COMPO
+  line here. The COMPO line is placed in the model section, below the
+  residue column headers, because it's an array of numbers much like
+  residue scores, but it's not really part of the model.}  They
 contain information for the core model's BEGIN node. This is stored as
 model node 0, and match state 0 is treated as the BEGIN state.  The
 begin state is mute, so there are no match emission probabilities. The
 first line is the insert 0 emissions. The second line contains the
 transitions from the begin state and insert state 0.  These seven
 numbers are: $B \rightarrow M_1$, $B \rightarrow I_0$, $B \rightarrow
-D_1$; $I_0 \rightarrow M_1$, $I_0 \rightarrow I_0$; and by convention,
-nonexistent transitions from the nonexistent delete state 0 are set to
-$\log 1 = 0$ and $\log 0 = -\infty = $ `*'.
+D_1$; $I_0 \rightarrow M_1$, $I_0 \rightarrow I_0$; then a 0.0 and a
+'*', because by convention, nonexistent transitions from the
+nonexistent delete state 0 are set to $\log 1 = 0$ and $\log 0 =
+-\infty = $ `*'.
 
 The remainder of the model has three lines per node, for $M$ nodes
 (where $M$ is the number of match states, as given by the \prog{LENG}

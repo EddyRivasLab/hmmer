@@ -415,6 +415,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
 {
   P7_GMX   *gx  = NULL;
   P7_OMX   *ox  = NULL;
+  P7_TRACE *vtr = NULL;
   P7_TRACE *tr  = NULL;
   char      errbuf[eslERRBUFSIZE];
   int       idx;
@@ -424,8 +425,10 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
   if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("generic DP matrix creation failed");
   if ((ox     = p7_omx_Create(gm->M, L, L))     == NULL)  esl_fatal("optimized DP matrix create failed");
   if ((tr     = p7_trace_Create())              == NULL)  esl_fatal("trace creation failed");
+  if ((vtr    = p7_trace_Create())              == NULL)  esl_fatal("trace creation failed");
 
   if (p7_GViterbi(dsq, L, gm, gx, &vsc)         != eslOK) esl_fatal("viterbi failed");
+  if (p7_GTrace  (dsq, L, gm, gx, vtr)          != eslOK) esl_fatal("viterbi trace failed");
   if (p7_Forward (dsq, L, om, ox, NULL)         != eslOK) esl_fatal("forward failed");
 
   for (idx = 0; idx < ntrace; idx++)
@@ -435,12 +438,17 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
       if (p7_trace_Score(tr, dsq, gm, &sc)            != eslOK) esl_fatal("trace scoring failed"); 
 
       maxsc = ESL_MAX(sc, maxsc);
-      if (sc > vsc) esl_fatal("sampled trace has score > optimal Viterbi path; not possible");
+      if (sc > vsc + 0.001){	/* need a little tolerance of floating point math here  */
+	//p7_trace_Dump(stdout, vtr, gm, dsq);
+	//p7_trace_Dump(stdout, tr,  gm, dsq);
+	esl_fatal("sampled trace has score > optimal Viterbi path; not possible (%f > %f)", sc, vsc);
+      }
       p7_trace_Reuse(tr);
     }
   if (esl_FCompare(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
   
   p7_trace_Destroy(tr);
+  p7_trace_Destroy(vtr);
   p7_omx_Destroy(ox);
   p7_gmx_Destroy(gx);
 }
@@ -453,7 +461,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
  * 5. Test driver 
  *****************************************************************/
 #ifdef p7STOTRACE_TESTDRIVE
-/* gcc -g -Wall -o stotrace_utest -Dp7STOTRACE_TESTDRIVE -I.. -L.. -I../../easel -L../../easel stotrace.c -lhmmer -leasel -lm
+/* gcc -std=gnu99 -msse2 -g -Wall -o stotrace_utest -Dp7STOTRACE_TESTDRIVE -I.. -L.. -I../../easel -L../../easel stotrace.c -lhmmer -leasel -lm
  */
 #include "easel.h"
 #include "esl_getopts.h"
@@ -471,7 +479,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "unit test driver for stochastic Viterbi traceback (generic version)";
+static char banner[] = "unit test driver for stochastic Viterbi traceback (optimized version)";
 
 int
 main(int argc, char **argv)

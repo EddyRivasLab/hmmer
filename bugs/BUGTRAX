@@ -1,3 +1,22 @@
+ID              h63
+TITLE           stotrace unit test may fail on i686 platforms
+AFFECTS         3.0b2
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Serdar Dalgic <dalgic.srdr@gmail.com>
+OPENED_DATE     SRE, Fri Oct 30 10:39:00 2009
+CLOSED_DATE     SRE, Fri Oct 30 10:39:02 2009
+DESCRIPTION     
+  "make check" shows a stotrace unit test failure. Does not occur on
+  x86_64, but reproduced on cf-debian, one of our i686 platforms.
+  Issue is a harmless floating point comparison; gets (sc > vsc)
+  when really (sc == vsc). That is, the sampled trace is identical
+  to the Viterbi optimal path, but due to floating point roundoff,
+  the score of the sampled trace is a teensy bit more than the Viterbi
+  score, and this triggers test failure. Fixed by adding some
+  slop/tolerance to the test.
+//
 ID              h62
 TITLE           hmmscan segfaults on sequences containing * characters
 AFFECTS         3.0b2 for sure; probably earlier too
@@ -8,7 +27,6 @@ REPORTED_BY     Francisco J. Ossandon <fossandon@vtr.net>, Santiago, Chile
 OPENED_DATE     SRE, Sat Oct 24 10:53:21 2009
 CLOSED_DATE     SRE, Thu Oct 29 09:04:33 2009
 DESCRIPTION     
-
   Ossandon reports a segfault when running hmmscan of Pfam24 on a
   sequence file with * residue characters. The fault reproduces
   sporadically here, suggesting a memory corruption. valgrind sees

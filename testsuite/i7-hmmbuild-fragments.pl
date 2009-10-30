@@ -7,6 +7,7 @@
 # Example:  ./i7-hmmbuild-fragments.pl ../src/hmmbuild   foo
 # 
 # SRE, Tue Jun 16 13:37:05 2009
+# SVN $Id$
 
 $hmmbuild = shift;
 $tmppfx   = shift;

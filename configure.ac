@@ -289,6 +289,8 @@ if test "$impl_choice" = "none"; then
   esac
 fi
 
+
+
 ################################################################
 # Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
 #
@@ -362,8 +364,10 @@ fi
 
 # check if the SSE2 implementation support cast functions
 if test "$impl_choice" = "sse"; then
-  AC_MSG_CHECKING([checking compiler support for sse2 cast functions])
+  AC_MSG_CHECKING([compiler support for sse2 cast functions])
   ssecast=no
+  sre_save_cflags="$CFLAGS"
+  CFLAGS="$CFLAGS $SIMD_CFLAGS"
   AC_LANG(C)
   AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],
                                      [[__m128 a;
@@ -373,7 +377,37 @@ a = _mm_castsi128_ps(b);]])],
                     [AC_DEFINE([HAVE_SSE2_CAST])
                      ssecast=yes])
   AC_MSG_RESULT([$ssecast])
+  CFLAGS="$sre_save_cflags"
 fi
+
+# Verify that we can actually build the chosen implementation; else
+# default to dummy.
+# (For example, Athlon reports as i686-*, so will get assigned to 
+# sse impl, but does not support SSE2 instructions.)
+# The test here is cribbed from the Apache configure.ac file.
+#
+if test "$impl_choice" = "sse"; then
+  AC_MSG_CHECKING([whether SSE2 is supported])
+  sre_save_cflags="$CFLAGS"
+  CFLAGS="$CFLAGS $SIMD_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <emmintrin.h>]],
+ 				 [[__m128i* one=(__m128i*)_mm_malloc(4, 16);
+				   __m128i* two=(__m128i*)_mm_malloc(4, 16);
+				   __m128i xmm1 = _mm_load_si128(one);
+				   __m128i xmm2 = _mm_load_si128(two);
+				   __m128i xmm3 = _mm_or_si128(xmm1, xmm2);
+				   _mm_store_si128(one, xmm3);
+				   _mm_free(one);
+				   _mm_free(two);
+				 ]])],
+	[ AC_MSG_RESULT([yes])],
+	[ AC_MSG_RESULT([no; reverting to dummy implementation])
+	  impl_choice=dummy
+	]
+  )
+  CFLAGS="$sre_save_cflags"
+fi
+
 
 # Now, we can enable the appropriate optimized implementation.
 case "$impl_choice" in 
@@ -391,7 +425,7 @@ vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
       IMPL_CHOICE="vmx"
       ;;
 
-*)    AC_MSG_NOTICE([No optimized DP implementation available])
+*)    AC_MSG_NOTICE([Activating "dummy" implementation])
       AC_DEFINE([p7_IMPL_DUMMY])
       IMPL_CHOICE="dummy"
       ;;
@@ -515,6 +549,10 @@ HMMER configuration:
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
 "
+
+if test "$impl_choice" = "dummy"; then
+  AC_MSG_WARN([It appears your platform will not fully support H3. The "dummy" DP implementation is very slow.])
+fi
 
 
 

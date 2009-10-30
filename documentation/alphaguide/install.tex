@@ -1,5 +1,6 @@
 \section{Installation}
 \label{section:installation}
+\setcounter{footnote}{0}
 
 \subsection{Quick installation instructions}
 
@@ -76,20 +77,29 @@ MacOS/X. We aim to be portable to all other POSIX platforms. We
 currently do not develop or test on Windows.
 
 
-\textbf{Processor:} HMMER3 currently runs effectively only on x86
-(IA32/IA64) processors that support the SSE2 vector instruction set.
-This includes all Intel processors from the Pentium 4 on, and all AMD
-processors from the K8 (Athlon) on. We believe this includes almost
-all Intel and AMD x86 processors produced since about 1999.
+\textbf{Processor:} HMMER3 depends on SIMD vector parallelization
+methods that are supported on most modern processors.  H3 requires
+either an x86-compatible (IA32/IA64) processor that supports the SSE2
+vector instruction set, or a PowerPC processor that supports the
+Altivec/VMX instruction set. SSE2 is supported on Intel processors
+from Pentium 4 on, and AMD processors from K8 (Athlon 64) on; we
+believe this includes almost all Intel processors since 2000 and AMD
+processors since 2003. Altivec/VMX is supported on Motorola G4, IBM
+G5, and IBM Power6 processors, which we believe includes almost all
+PowerPC-based desktop systems since 1999 and servers since 2007.
 
-We aim to be portable to all modern processors. The acceleration
+If your platform does not support one of these vector instruction
+sets, the configure script will revert to an unoptimized
+implementation called the ``dummy'' implementation. This
+implementation is two orders of magnitude slower. It will enable you
+to see H3's features on a much wider range of processors, but is not
+suited for real production work.
+
+We do aim to be portable to all modern processors. The acceleration
 algorithms are designed to be portable despite their use of
-specialized SIMD vector instructions. In the future we plan to to
-support processors that use VMX/Altivec vector instructions, including
-PowerPC processors and the Cell processor, and hope to be able to add
-support for the Sun SPARC VIS instruction set as well. We believe that
-the code will be able to take advantage of GP-GPUs and FPGAs in the
-future.
+specialized SIMD vector instructions. We hope to add support for the
+Sun SPARC VIS instruction set, for example. We believe that the code
+will be able to take advantage of GP-GPUs and FPGAs in the future.
 
 \textbf{Compiler:} The source code is C, conforming to POSIX and ANSI
 C99 standards. It should compile with any ANSI C99 compliant compiler,
