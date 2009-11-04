@@ -453,21 +453,28 @@ static void
 utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_PROFILE *gm, int nseq, int L)
 {
   float     avg_sc;
-  ESL_DSQ  *dsq = NULL;
-  P7_GMX   *gx  = NULL;
+  ESL_DSQ  *dsq  = NULL;
+  P7_GMX   *fwd  = NULL;
+  P7_GMX   *bck  = NULL;
   int       idx;
-  float     vsc, fsc, nullsc;
+  float     fsc, bsc;
+  float     vsc, nullsc;
 
   if ((dsq    = malloc(sizeof(ESL_DSQ) *(L+2))) == NULL)  esl_fatal("malloc failed");
-  if ((gx     = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
+  if ((fwd    = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
+  if ((bck    = p7_gmx_Create(gm->M, L))        == NULL)  esl_fatal("matrix creation failed");
 
   avg_sc = 0.;
   for (idx = 0; idx < nseq; idx++)
     {
       if (esl_rsq_xfIID(r, bg->f, abc->K, L, dsq) != eslOK) esl_fatal("seq generation failed");
-      if (p7_GViterbi(dsq, L, gm, gx, &vsc)       != eslOK) esl_fatal("viterbi failed");
-      if (p7_GForward(dsq, L, gm, gx, &fsc)       != eslOK) esl_fatal("forward failed");
-      if (fsc < vsc) esl_fatal("Forward score can't be less than Viterbi score");
+      if (p7_GViterbi(dsq, L, gm, fwd, &vsc)      != eslOK) esl_fatal("viterbi failed");
+      if (p7_GForward(dsq, L, gm, fwd, &fsc)      != eslOK) esl_fatal("forward failed");
+      if (p7_GBackward(dsq, L, gm, bck, &bsc)     != eslOK) esl_fatal("backward failed");
+
+      if (fsc < vsc)             esl_fatal("Foward score can't be less than Viterbi score");
+      if (fabs(fsc-bsc) > 0.001) esl_fatal("Forward/Backward failed: %f %f\n", fsc, bsc);
+
       if (p7_bg_NullOne(bg, dsq, L, &nullsc)      != eslOK) esl_fatal("null score failed");
 
       avg_sc += fsc - nullsc;
@@ -479,7 +486,8 @@ utest_forward(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
   avg_sc /= (float) nseq;
   if (avg_sc > 0.) esl_fatal("Forward scores have positive expectation (%f nats)", avg_sc);
 
-  p7_gmx_Destroy(gx);
+  p7_gmx_Destroy(fwd);
+  p7_gmx_Destroy(bck);
   free(dsq);
   return;
 }
