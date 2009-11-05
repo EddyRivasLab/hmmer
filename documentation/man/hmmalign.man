@@ -6,8 +6,8 @@ hmmalign - align sequences to a profile HMM
 .SH SYNOPSIS
 .B hmmalign
 .I [options]
-.I hmmfile
-.I seqfile
+.I <hmmfile>
+.I <seqfile>
 
 .SH DESCRIPTION
 

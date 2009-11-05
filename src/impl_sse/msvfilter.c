@@ -181,7 +181,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
       xEv = _mm_subs_epu8(xEv, tecv);
       xJv = _mm_max_epu8(xJv,xEv);
-
+      
       xBv = _mm_max_epu8(basev, xJv);
       xBv = _mm_subs_epu8(xBv, tjbv);
 	  
@@ -581,8 +581,8 @@ main(int argc, char **argv)
      p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
      p7_oprofile_SameMSV(om, gm);
   */
-  p7_oprofile_Dump(stdout, om);
-  p7_omx_SetDumpMode(stdout, ox, TRUE);    
+  //p7_oprofile_Dump(stdout, om);
+  //p7_omx_SetDumpMode(stdout, ox, TRUE);    
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {

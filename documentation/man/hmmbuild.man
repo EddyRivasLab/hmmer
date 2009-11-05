@@ -1,8 +1,7 @@
 .TH "hmmbuild" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmbuild - profile HMM construction from multiple sequence alignments
-
+hmmbuild - construct profile HMM(s) from multiple sequence alignment(s)
 
 .SH SYNOPSIS
 .B hmmbuild

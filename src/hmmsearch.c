@@ -117,7 +117,7 @@ struct cfg_s {
 };
 
 static char usage[]  = "[options] <query hmmfile> <target seqfile>";
-static char banner[] = "search profile HMM(s) against a sequence database";
+static char banner[] = "search profile(s) against a sequence database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);

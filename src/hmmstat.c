@@ -25,7 +25,7 @@ static ESL_OPTIONS options[] = {
 };
 
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "display summary statistics for an HMM database";
+static char banner[] = "display summary statistics for a profile file";
 
 int
 main(int argc, char **argv)
