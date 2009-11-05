@@ -73,39 +73,16 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file: "h3ps" = 0
 int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-  int n   = strlen(om->name);
-
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
   if (fwrite((char *) &(v3b_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           return eslFAIL;
-  if (fwrite((char *) &n,               sizeof(int),      1,           ffp) != 1)           return eslFAIL;
-  if (fwrite((char *) om->name,         sizeof(char),     n+1,         ffp) != n+1)         return eslFAIL;
+  if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) return eslFAIL;
 
   /* <pfp> gets the rest of the oprofile */
   if (fwrite((char *) &(v3b_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-  if (fwrite((char *) &n,               sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-  if (fwrite((char *) om->name,         sizeof(char),     n+1,         pfp) != n+1)         return eslFAIL;
-
-  if (om->acc == NULL) {
-    n = 0;
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-  } else {
-    n = strlen(om->acc);
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-    if (fwrite((char *) om->acc,        sizeof(char),     n+1,         pfp) != n+1)         return eslFAIL;
-  }
-
-  if (om->desc == NULL) {
-    n = 0;
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-  } else {
-    n = strlen(om->desc);
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-    if (fwrite((char *) om->desc,       sizeof(char),     n+1,         pfp) != n+1)         return eslFAIL;
-  }
   
   return eslOK;
 }
@@ -166,31 +143,45 @@ int
 p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
   uint32_t       magic;
-  char          *name    = NULL;
   P7_BG         *bg      = NULL;
   P7_PROFILE    *gm      = NULL;
   P7_OPROFILE   *om      = NULL;
   ESL_ALPHABET  *abc     = NULL;
   P7_HMM        *hmm     = NULL;
-  int            M;
-  int            n;
   int            alphatype;
+  off_t          offs[p7_NOFFSETS];
+  off_t          roff;
+  int            M;
+  int            i;
   int            status;
+
+  if (hfp->errbuf != NULL) hfp->errbuf[0] = '\0';
+  if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
+  if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
+  
+  /* keep track of the starting offset of the MSV model */
+  roff = ftello(hfp->ffp);
 
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
   if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
   if (magic != v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
-  if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
-  if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
+  if (! fread( (char *) &M,         sizeof(int),    1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
+  if (! fread( (char *) &alphatype, sizeof(int),    1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alpha type");
+  if (! fread( (char *) offs,       sizeof(off_t),  p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
 
-  if (! fread((char *) &n,          sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
-  ESL_ALLOC(name, sizeof(char) * (n+1));
-  if (! fread((char *) name,        sizeof(char),    n+1,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");
-  free(name);
-  name = NULL;
+  /* Set or verify alphabet. */
+  if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
+    if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
+  } else {			/* alphabet already known: verify it against what we see in the HMM */
+    abc = *byp_abc;
+    if (abc->type != alphatype) 
+      ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
+		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
+  }
 
-  if ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslOK) goto ERROR;
+  if ((status = p7_hmmfile_Position(hfp, offs[p7_MOFFSET])) != eslOK) goto ERROR;
+  if ((status = p7_hmmfile_Read(hfp, &abc, &hmm))           != eslOK) goto ERROR;
 
   bg  = p7_bg_Create(hmm->abc);
   gm = p7_profile_Create(hmm->M, hmm->abc);
@@ -199,8 +190,14 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 
   if ((status = p7_oprofile_Convert(gm, om)) != eslOK) goto ERROR;
 
+  om->M     = M;
+  om->roff  = roff;
+  for (i = 0; i < p7_NOFFSETS; ++i)  om->offs[i] = offs[i];
+
+  /* keep track of the ending offset of the MSV model */
+  om->eoff = ftello(hfp->ffp) - 1;;
+
   if (byp_abc != NULL)  *byp_abc = abc;
-  else if (abc != NULL) esl_alphabet_Destroy(abc);
 
   if (gm != NULL) p7_oprofile_Destroy(gm);
 
@@ -208,9 +205,105 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   return eslOK;
 
  ERROR:
-  if (name != NULL) free(name);
-  if (abc  != NULL) esl_alphabet_Destroy(abc);
-  if (gm   != NULL) p7_oprofile_Destroy(gm);
+  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
+  if (gm  != NULL) p7_oprofile_Destroy(gm);
+  *ret_om = NULL;
+  return status;
+}
+
+
+/* Function:  p7_oprofile_ReadMSVInfo()
+ * Synopsis:  Read MSV filter info, but not the scores.
+ * Incept:    MSF, Wed Nov 4, 2009 [Janelia]
+ *
+ * Purpose:   Read just enough of the MSV filter header from the
+ *            <.h3f> file associated with an open HMM file <hfp>
+ *            to skip ahead to the next MSV filter. Allocate a new
+ *            model, populate it with just the file offsets of this
+ *            model and return a pointer to it in <*ret_om>. 
+ *            
+ *            The <.h3f> file was opened automatically, if it existed,
+ *            when the HMM file was opened with <p7_hmmfile_Open()>.
+ *            
+ *            When no more HMMs remain in the file, return <eslEOF>.
+ *
+ * Args:      hfp     - open HMM file, with associated .h3p file
+ *            byp_abc - BYPASS: <*byp_abc == ESL_ALPHABET *> if known; 
+ *                              <*byp_abc == NULL> if desired; 
+ *                              <NULL> if unwanted.
+ *            ret_om  - RETURN: newly allocated <om> with partial MSV
+ *                      filter data filled in.
+ *            
+ * Returns:   <eslOK> on success. <*ret_om> is allocated here;
+ *            caller free's with <p7_oprofile_Destroy()>.
+ *            <*byp_abc> is allocated here if it was requested;
+ *            caller free's with <esl_alphabet_Destroy()>.
+ *            
+ *            Returns <eslEFORMAT> if <hfp> has no <.h3f> file open,
+ *            or on any parsing error.
+ *            
+ *            Returns <eslEINCOMPAT> if the HMM we read is incompatible
+ *            with the existing alphabet <*byp_abc> led us to expect.
+ *            
+ *            On any returned error, <hfp->errbuf> contains an
+ *            informative error message.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
+{
+  uint32_t       magic;
+  P7_OPROFILE   *om      = NULL;
+  ESL_ALPHABET  *abc     = NULL;
+  int            alphatype;
+  off_t          offs[p7_NOFFSETS];
+  off_t          roff;
+  int            M;
+  int            i;
+  int            status;
+
+  if (hfp->errbuf != NULL) hfp->errbuf[0] = '\0';
+  if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
+  if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
+  
+  /* keep track of the starting offset of the MSV model */
+  roff = ftello(hfp->ffp);
+
+  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
+  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
+  if (magic != v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+
+  if (! fread( (char *) &M,         sizeof(int),      1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
+  if (! fread( (char *) &alphatype, sizeof(int),      1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alpha type");
+  if (! fread( (char *) offs,       sizeof(off_t),    p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
+
+  /* Set or verify alphabet. */
+  if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
+    if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
+  } else {			/* alphabet already known: verify it against what we see in the HMM */
+    abc = *byp_abc;
+    if (abc->type != alphatype) 
+      ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
+		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
+  }
+
+  om = p7_oprofile_Create(M, abc);
+
+  om->M     = M;
+  om->roff  = roff;
+  for (i = 0; i < p7_NOFFSETS; ++i)  om->offs[i] = offs[i];
+
+  /* keep track of the ending offset of the MSV model */
+  om->eoff = ftello(hfp->ffp) - 1;;
+
+  if (byp_abc != NULL)  *byp_abc = abc;
+
+  *ret_om = om;
+  return eslOK;
+
+ ERROR:
+  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
   *ret_om = NULL;
   return status;
 }
@@ -286,11 +379,19 @@ int
 p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
   uint32_t       magic;
-  char          *name    = NULL;
   int            M;
-  int            n;
   int            alphatype;
-  int            status;
+  int            status = eslOK;
+
+#ifdef HMMER_THREADS
+  /* lock the mutex to prevent other threads from reading from the optimized
+   * profile at the same time.
+   */
+  if (hfp->syncRead)
+    {
+      if (pthread_mutex_lock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex lock failed");
+    }
+#endif
 
   if (! fread( (char *) &magic,          sizeof(uint32_t), 1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read magic");
   if (magic == v3a_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
@@ -298,34 +399,26 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 
   if (! fread( (char *) &M,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  if (! fread( (char *) &n,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");  
   if (M         != om->M)                                                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f model length mismatch");
   if (alphatype != om->abc->type)                                                  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f alphabet type mismatch");
 
-  ESL_ALLOC(name, sizeof(char) * (n+1));
-  if (! fread( (char *) name,            sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");  
-  if (strcmp(name, om->name) != 0)                                                 ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f name mismatch");  
-  free(name);
-
-  if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read accession length");
-  if (n > 0) {
-    ESL_ALLOC(name, sizeof(char) * (n+1));
-    if (! fread( (char *) name,          sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read accession");      
-    free(name);
-    name = NULL;
-  }
-  if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read description length");
-  if (n > 0) {
-    ESL_ALLOC(name, sizeof(char) * (n+1));
-    if (! fread( (char *) name,          sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read description");      
-    free(name);
-    name = NULL;
-  }
+#ifdef HMMER_THREADS
+  if (hfp->syncRead)
+    {
+      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
+    }
+#endif
 
   return eslOK;
 
  ERROR:
-  if (name != NULL) free(name);
+#ifdef HMMER_THREADS
+  if (hfp->syncRead)
+    {
+      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
+    }
+#endif
+
   return status;
 }
 /*----------- end, reading optimized profiles -------------------*/
@@ -404,6 +497,35 @@ p7_oprofile_DestroyBlock(P7_OM_BLOCK *block)
   free(block);
   return;
 }
+
+/* Function:  p7_oprofile_Position()
+ * Synopsis:  Reposition an open hmm file to an offset.
+ * Incept:    MSF, Wed Nov 4, 2009 [Janelia]
+ *
+ * Purpose:   Reposition an open <hfp> to offset <offset>.
+ *            <offset> would usually be the first byte of a
+ *            desired hmm record.
+ *            
+ * Returns:   <eslOK>     on success;
+ *            <eslEOF>    if no data can be read from this position.
+ *
+ * Throws:    <eslEINVAL>  if the <sqfp> is not positionable.
+ *            <eslEFORMAT> if no msv profile opened.
+ *            <eslESYS>    if the fseeko() call fails.
+ */
+int
+p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset)
+{
+  if (hfp->ffp == NULL)  ESL_EXCEPTION(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
+  if (hfp->do_stdin)     ESL_EXCEPTION(eslEINVAL, "can't Position() in standard input");
+  if (hfp->do_gzip)      ESL_EXCEPTION(eslEINVAL, "can't Position() in a gzipped file");
+  if (offset < 0)        ESL_EXCEPTION(eslEINVAL, "bad offset");
+
+  if (fseeko(hfp->ffp, offset, SEEK_SET) != 0) ESL_EXCEPTION(eslESYS, "fseeko() failed");
+
+  return eslOK;
+}
+
 /*-------------------- end, utility routines ---------------------*/
 
 

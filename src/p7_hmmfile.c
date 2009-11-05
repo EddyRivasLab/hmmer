@@ -647,6 +647,30 @@ p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
   hfp->newly_opened = FALSE;	/* because we're poised on the magic number, and must read it */
   return eslOK;
 }
+
+
+/* Function:  p7_hmmfile_Position()
+ * Synopsis:  Reposition file to start of named HMM.
+ * Incept:    MSF Wed Nov 4, 2009 [Janelia]
+ *
+ * Purpose:   Reposition <hfp> so tha start of the requested HMM.
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ *            In the event of either error, the state of <hfp> is left
+ *            unchanged.
+ *
+ * Throws:    <eslESYS> on system i/o call failure, or <eslEINVAL> if
+ *            <hfp> is not a seekable stream. 
+ */
+int
+p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset)
+{
+  if (fseeko(hfp->f, offset, SEEK_SET) != 0)    ESL_EXCEPTION(eslESYS, "fseek failed");
+
+  hfp->newly_opened = FALSE;	/* because we're poised on the magic number, and must read it */
+  return eslOK;
+}
 /*------------------- end, input API ----------------------------*/
 
 

@@ -78,11 +78,11 @@ main(int argc, char **argv)
       om = p7_oprofile_Create(gm->M, abc);
       p7_oprofile_Convert(gm, om);
       
-#ifndef p7_IMPL_DUMMY
       if ((om->offs[p7_MOFFSET] = ftello(mfp)) == -1) p7_Fail("Failed to ftello() current disk position of HMM db file");
       if ((om->offs[p7_FOFFSET] = ftello(ffp)) == -1) p7_Fail("Failed to ftello() current disk position of MSV db file");
       if ((om->offs[p7_POFFSET] = ftello(pfp)) == -1) p7_Fail("Failed to ftello() current disk position of profile db file");
 
+#ifndef p7_IMPL_DUMMY
       if (esl_newssi_AddKey(nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK)	p7_Fail("Failed to add key %s to SSI index", hmm->name);
       if (hmm->flags & p7H_ACC) {
 	if (esl_newssi_AddAlias(nssi, hmm->acc, hmm->name) != eslOK) p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);

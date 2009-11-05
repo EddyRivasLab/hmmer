@@ -636,6 +636,7 @@ p7_oprofile_DestroyBlock(P7_OM_BLOCK *block)
   free(block);
   return;
 }
+
 /* Function:  p7_oprofile_Position()
  * Synopsis:  Reposition an open hmm file to an offset.
  * Incept:    MSF, Thu Oct 15, 2009 [Janelia]

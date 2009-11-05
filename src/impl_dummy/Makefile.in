@@ -8,7 +8,7 @@ top_srcdir = @top_srcdir@
 VPATH      = @srcdir@ @top_srcdir@/src
 
 CC             = @CC@
-CFLAGS         = @CFLAGS@
+CFLAGS         = @CFLAGS@ @PTHREAD_CFLAGS@
 SIMDFLAGS      = @SIMD_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
@@ -40,11 +40,12 @@ OBJS =  decoding.o\
 	stotrace.o\
 	vitfilter.o\
 	p7_omx.o\
-	p7_oprofile.o
+	p7_oprofile.o\
+	mpi.o
 
 HDRS =  impl_dummy.h
 
-UTESTS = \
+UTESTS = @MPI_UTESTS@\
 	decoding_utest\
 	fwdback_utest\
 	io_utest\
@@ -54,7 +55,7 @@ UTESTS = \
 	stotrace_utest\
 	vitfilter_utest
 
-BENCHMARKS =\
+BENCHMARKS = @MPI_BENCHMARKS@\
 	decoding_benchmark\
 	fwdback_benchmark\
 	msvfilter_benchmark\

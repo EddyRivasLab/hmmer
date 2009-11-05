@@ -45,7 +45,7 @@ OBJS =  decoding.o\
 
 HDRS =  impl_vmx.h
 
-UTESTS = \
+UTESTS = @MPI_UTESTS@\
 	decoding_utest\
 	fwdback_utest\
 	io_utest\
@@ -53,18 +53,16 @@ UTESTS = \
 	null2_utest\
 	optacc_utest\
 	stotrace_utest\
-	vitfilter_utest\
-	mpi_utest
+	vitfilter_utest
 
-BENCHMARKS =\
+BENCHMARKS = @MPI_BENCHMARKS@\
 	decoding_benchmark\
 	fwdback_benchmark\
 	msvfilter_benchmark\
 	null2_benchmark\
 	optacc_benchmark\
 	stotrace_benchmark\
-	vitfilter_benchmark\
-	mpi_benchmark
+	vitfilter_benchmark
 
 EXAMPLES =\
 	fwdback_example\

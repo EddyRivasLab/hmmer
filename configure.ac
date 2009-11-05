@@ -297,7 +297,10 @@ fi
 AC_PROG_CC
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
-   ACX_MPI(,AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+   ACX_MPI([AC_DEFINE(HAVE_MPI)
+            AC_SUBST([MPI_UTESTS], ["mpi_utest"])
+            AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
+           AC_MSG_ERROR([MPI library not found for --enable-mpi]))
    CC=$MPICC
 fi
 AC_PROG_CPP
@@ -427,6 +430,7 @@ vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
 
 *)    AC_MSG_NOTICE([Activating "dummy" implementation])
       AC_DEFINE([p7_IMPL_DUMMY])
+      AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
       IMPL_CHOICE="dummy"
       ;;
 esac

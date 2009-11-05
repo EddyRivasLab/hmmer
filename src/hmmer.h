@@ -260,6 +260,12 @@ typedef struct p7_profile_s {
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain bit score cutoffs, or UNSET         */
   float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET             */
 
+  /* Disk offset information for hmmpfam's fast model retrieval                           */
+  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                                  */
+
+  off_t  roff;                  /* record offset (start of record); -1 if none            */
+  off_t  eoff;                  /* offset to last byte of record; -1 if unknown           */
+
   const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet                */
 } P7_PROFILE;
 
@@ -1033,6 +1039,7 @@ extern int  p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_WriteASCII (FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
+extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_pipeline.c */
 extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e mode);
