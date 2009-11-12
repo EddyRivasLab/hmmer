@@ -1,6 +1,44 @@
+ID              h65
+TITLE           hmmpress -f corrupts HMM database instead of overwriting it
+AFFECTS         3.0b2 and earlier
+FIXED_IN        -
+STATUS          OPEN
+XREF            -
+REPORTED_BY     Rob Finn <rdf@sanger.ac.uk> 30 Sept 2009
+OPENED_DATE     SRE, Thu Nov 12 09:16:39 2009
+CLOSED_DATE     SRE, Thu Nov 12 09:33:55 2009
+DESCRIPTION     
+  hmmpress -f destroys the previous index and fails, rather than
+  cleanly overwriting.
+
+  Problem is that p7_hmmfile_Open() sees the press'ed database and
+  opens it, because it's supposed to use the binary db if available;
+  but unfortunately the db is about to be overwritten.
+ 
+  Fix is to implement p7_hmmfile_OpenNoDB(), which opens only the
+  <hmmfile>, even if a press'ed db is available for it.
+//
+ID              h64
+TITLE           traces containing X (fragments) are misaligned
+AFFECTS         3.0b2 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Elena Rivas
+OPENED_DATE     6 Nov 2009
+CLOSED_DATE     SRE, Thu Nov 12 08:34:23 2009
+DESCRIPTION     
+  Core traces from model construction involving fragments may result
+  in B->X->{MDI}k and {MDI}k->X->E entry/exit transitions, not just
+  B->X->Mk and Mk->X->E. Elena saw one bug having to do with X state
+  handling in p7_tracealign_MSA(). There were in fact several bugs,
+  there and elsewhere. The problem has not manifested itself in any
+  bug reports yet. If it did, it would manifest as odd placement of
+  N/C terminal residues in hmmbuild -O resaved alignments. 
+//
 ID              h63
 TITLE           stotrace unit test may fail on i686 platforms
-AFFECTS         3.0b2
+AFFECTS         3.0b2 and earlier
 FIXED_IN        -
 STATUS          CLOSED
 XREF            -

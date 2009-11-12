@@ -120,6 +120,8 @@
 1 exercise  nonresidues           @i8-nonresidues.pl@         @hmmsearch@  !20aa.hmm!                %OUTFILES%
 
 
+1 exercise  hmmpress-itest        @hmmpress.itest.pl@ @hmmpress@ %MINIFAM.HMM% %TMPPFX%
+
 
 
 ################################################################

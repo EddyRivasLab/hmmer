@@ -46,7 +46,7 @@ main(int argc, char **argv)
   uint64_t       totM    = 0;
   int            status;
 
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
+  status = p7_hmmfile_OpenNoDB(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
   else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  

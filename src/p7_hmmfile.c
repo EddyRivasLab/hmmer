@@ -64,6 +64,9 @@ static float h2ascii2prob(char *s, float null);
  * 1. The P7_HMMFILE object for reading HMMs.
  *****************************************************************/
 
+static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only);
+
+
 /* Function:  p7_hmmfile_Open()
  * Incept:    SRE, Wed Jan  3 18:38:10 2007 [Casa de Gatos]
  *
@@ -109,6 +112,36 @@ static float h2ascii2prob(char *s, float null);
  */
 int
 p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
+{
+  return open_engine(filename, env, ret_hfp, FALSE);
+}
+
+
+/* Function:  p7_hmmfile_OpenNoDB()
+ * Synopsis:  Open only an HMM flatfile, even if pressed db exists.
+ * Incept:    SRE, Thu Nov 12 09:26:04 2009 [Janelia]
+ *
+ * Purpose:   Same as <p7_hmmfile_Open()> except that if a pressed
+ *            database exists for <filename>, it is ignored. Only
+ *            <filename> itself is opened.
+ *            
+ *            hmmpress needs this call. Otherwise, it opens a press'ed
+ *            database that it may be about to overwrite.
+ */
+int
+p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
+{
+  return open_engine(filename, env, ret_hfp, TRUE);
+}
+
+
+/* open_engine()
+ *
+ * Implements both p7_hmmfile_Open() and p7_hmmfile_OpenNoDB(). 
+ * See their comments above.
+ */
+static int 
+open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
 {
   P7_HMMFILE *hfp     = NULL;
   char       *envfile = NULL;	/* full path to filename after using environment  */
@@ -194,8 +227,11 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
    *    If <hfp->f> is still NULL, this is our last chance to find it. 
    *    (The ASCII base file may have been deleted to save space, leaving
    *    binary press'ed files.)
+   *    
+   * If we've been asked to open only an ASCII file -- because we're being
+   * called by hmmpress, for example! -- then don't do this.   
    */
-  if (! hfp->do_stdin && ! hfp->do_gzip)
+  if (! do_ascii_only && ! hfp->do_stdin && ! hfp->do_gzip)
     {
       FILE *tmpfp;
       esl_sprintf(&dbfile, "%s.h3m", hfp->fname);
@@ -222,7 +258,7 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 
 
   /* 5. If we found and opened a binary model file .h3m, open the rest of 
-   *     the press'd model files.
+   *     the press'd model files. (this can't be true if do_ascii_only is set)
    */
   if (hfp->is_pressed) 
     {
