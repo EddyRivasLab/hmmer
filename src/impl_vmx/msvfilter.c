@@ -111,7 +111,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   /* saturate simd register for overflow test */
   tempv = vec_splat_u8(1);
-  ceilingv = vec_cmpeq(biasv, biasv);
+  ceilingv = (vector unsigned char)vec_cmpeq(biasv, biasv);
   ceilingv = vec_subs(ceilingv, biasv);
   ceilingv = vec_subs(ceilingv, tempv);
 

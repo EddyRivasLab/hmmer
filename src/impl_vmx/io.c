@@ -370,13 +370,13 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   /* calculate the remaining length of the msv model */
   om->name = NULL;
   if (!fread((char *) &n, sizeof(int), 1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
-  roff += (sizeof(int) * 3);                          /* magic, model size, and alphabet type    */
-  roff += sizeof(int) + n + 1;                        /* length, name string and terminator '\0' */
-  roff += (sizeof(float) + sizeof(uint8_t) * 5);      /* transition  costs, bias, scale and base */
-  roff += (sizeof(vector char) * abc->Kp * Q16);      /* msv scores                              */
-  roff += (sizeof(float) * p7_NEVPARAM);              /* stat params                             */
-  roff += (sizeof(off_t) * p7_NOFFSETS);              /* hmmpfam offsets                         */
-  roff += (sizeof(float) * p7_MAXABET);               /* model composition                       */
+  roff += (sizeof(int) * 3);                            /* magic, model size, and alphabet type    */
+  roff += sizeof(int) + n + 1;                          /* length, name string and terminator '\0' */
+  roff += (sizeof(float) + sizeof(uint8_t) * 5);        /* transition  costs, bias, scale and base */
+  roff += (sizeof(vector signed char) * abc->Kp * Q16); /* msv scores                              */
+  roff += (sizeof(float) * p7_NEVPARAM);                /* stat params                             */
+  roff += (sizeof(off_t) * p7_NOFFSETS);                /* hmmpfam offsets                         */
+  roff += (sizeof(float) * p7_MAXABET);                 /* model composition                       */
 
   /* keep track of the ending offset of the MSV model */
   p7_oprofile_Position(hfp, roff);
@@ -392,7 +392,6 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   *ret_om = NULL;
   return status;
 }
-
 
 /* Function:  p7_oprofile_ReadBlockMSV()
  * Synopsis:  Read the next block of optimized profiles from a hmm file.
