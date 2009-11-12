@@ -1,9 +1,47 @@
+ID              h67
+TITLE           H2 models produced by H2 hmmconvert aren't readable
+AFFECTS         3.0b2 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/105
+REPORTED_BY     Lorenzo Cerutti <lorenzo.cerutti@unil.ch> 23 Sept 2009
+OPENED_DATE     12 Nov 2009
+CLOSED_DATE     SRE, Thu Nov 12 13:34:17 2009
+DESCRIPTION     
+  Cerutti takes H1 models and converts them to H2 models using H2's
+  hmmconvert, and wants to use them with H3. But H3, despite having
+  a read_asc20hmm() for backwards compat with H2, won't read them.
+
+  Two tweaks made in read_asc20hmm(): accept NSEQ 0 in header, and
+  don't look for a map character for nodes if MAP is "no".
+//
+
+ID              h66
+TITLE           hmmscan output of HMM names/descriptions corrupted somehow
+AFFECTS         3.0b2?
+FIXED_IN        -
+STATUS          OPEN
+XREF            J5/105
+REPORTED_BY     Jaina Mistry <jm14@sanger.ac.uk> 11 Nov 2009
+OPENED_DATE     SRE, Thu Nov 12 10:40:50 2009
+CLOSED_DATE     -
+DESCRIPTION     
+   Under circumstances that have not been identified:
+   hmmscan ASCII output replaces HMM "<name> <description>\n" with
+   "<name>"; the loss of the newline corrupts the output and breaks
+   parsers including pfam_scan.pl.
+
+   Jaina reports an example of it occurring on an "older" Opteron
+   running SUSE Linux. It does not happen on our Opteron/SUSE system.
+   There is no apparent problem in the source. One suspicion is the
+   crossplatform binary compatibility of press'ed HMM databases.
+//
 ID              h65
 TITLE           hmmpress -f corrupts HMM database instead of overwriting it
 AFFECTS         3.0b2 and earlier
 FIXED_IN        -
-STATUS          OPEN
-XREF            -
+STATUS          CLOSED
+XREF            J5/105
 REPORTED_BY     Rob Finn <rdf@sanger.ac.uk> 30 Sept 2009
 OPENED_DATE     SRE, Thu Nov 12 09:16:39 2009
 CLOSED_DATE     SRE, Thu Nov 12 09:33:55 2009
@@ -23,7 +61,7 @@ TITLE           traces containing X (fragments) are misaligned
 AFFECTS         3.0b2 and earlier
 FIXED_IN        -
 STATUS          CLOSED
-XREF            -
+XREF            J5/105
 REPORTED_BY     Elena Rivas
 OPENED_DATE     6 Nov 2009
 CLOSED_DATE     SRE, Thu Nov 12 08:34:23 2009

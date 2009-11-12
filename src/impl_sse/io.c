@@ -287,7 +287,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 }
 
 
-/* Function:  p7_oprofile_ReadMSVInfo()
+/* Function:  p7_oprofile_ReadInfoMSV()
  * Synopsis:  Read MSV filter info, but not the scores.
  * Incept:    MSF, Thu Oct 15, 2009 [Janelia]
  *
