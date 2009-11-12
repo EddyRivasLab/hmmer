@@ -117,12 +117,15 @@
   sense). However, because a single structural domain may be detected
   in two or more pieces, the correspondence is not necessarily one to
   one; HMMER may call two or more ``domains'' in its output that
-  correspond to a single domain. Sorry, was that confusing? we
+  correspond to a single domain. Sorry, was that confusing? We
   probably should have used a name other than ``domain''.
 
 \item[\textbf{domain post-processing}] The steps that the pipeline
   goes through to identify individual domains, once it has decided
-  that a 
+  that a comparison is probably above reporting threshold. 
+  A Forward/Backward calculation is used to identify the probability
+  distribution over domain endpoints on the target sequence.
+
 
 \item[\textbf{envelope}]
 

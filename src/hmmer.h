@@ -303,12 +303,15 @@ typedef struct p7_bg_s {
  * 
  * A "profile" trace uniquely has S,N,C,T,J states and their
  * transitions; it also can have B->Mk and Mk->E internal entry/exit
- * transitions for local alignments. A "core" trace uniquely has I0,
- * IM, and D1 states and their transitions. A "core" trace can also
- * have B->X->Mk and Mk->X->E transitions as a special hack in a build
- * procedure, to deal with the case of a local alignment fragment
- * implied by an input alignment, which is "impossible" for a core
- * model.
+ * transitions for local alignments. 
+ *
+ * A "core" trace may contain I0, IM, and D1 states and their
+ * transitions. A "core" trace can also have B->X->{MDI}k and
+ * {MDI}k->X->E transitions as a special hack in a build procedure, to
+ * deal with the case of a local alignment fragment implied by an
+ * input alignment, which is "impossible" for a core model.
+ * X "states" only appear in core traces, and only at these
+ * entry/exit places; some code depends on this.
  *   
  * A profile's N,C,J states emit on transition, not on state, so a
  * path of N emits 0 residues, NN emits 1 residue, NNN emits 2

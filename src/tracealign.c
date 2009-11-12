@@ -277,6 +277,7 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
   for (idx = 0; idx < nseq; idx++) 
     {
       nins = 0;
+      k    = 0;
       for (z = 1; z < tr[idx]->N; z++) 
 	{
 	  switch (tr[idx]->st[z]) {
@@ -285,16 +286,24 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
 	  case p7T_C: if (tr[idx]->st[z-1] == p7T_C) nins++; break;
 	    
 	  case p7T_M: /* M,D: record max. reset ctr; M only: set matuse[] */
-	    matuse[tr[idx]->k[z]] = TRUE;
-	    /* fallthru */
+	    k             = tr[idx]->k[z];	/* k++ doesn't work. May be a B->X->Mk fragment entry */
+	    inscount[k-1] = ESL_MAX(nins, inscount[k-1]); 
+	    matuse[k]     = TRUE;
+	    nins          = 0;
+	    break;
+
 	  case p7T_D: /* Can handle I->D transitions even though currently not in H3 models */
-	    inscount[tr[idx]->k[z]-1] = ESL_MAX(nins, inscount[tr[idx]->k[z]-1]); 
-	    nins = 0;
+	    k             = tr[idx]->k[z];      /* k++ doesn't work; see above */
+	    inscount[k-1] = ESL_MAX(nins, inscount[k-1]); 
+	    nins          = 0;
 	    break;
 
 	  case p7T_T: /* T: record C-tail max, for a profile trace */
+	    inscount[M] = ESL_MAX(nins, inscount[M]);
+	    break;
+
 	  case p7T_E: /* this handles case of core traces, which do have I_M state  */
-	    inscount[M] = ESL_MAX(nins, inscount[M]); 
+	    inscount[k] = ESL_MAX(nins, inscount[k]); /* [M] doesn't work, because of {DMI}k->X->E frag exit */
 	    break;
 
 	  case p7T_B: /* B: record N-tail max for a profile trace; I0 for a core trace  */
@@ -302,7 +311,7 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
 	    nins = 0;
 	    break;
 
-	  case p7T_S: break;	/* don't need to do anything on S, X states */
+	  case p7T_S: break;	/* don't need to do anything on S,X states */
 	  case p7T_X: break;
 
 	  case p7T_J: p7_Die("J state unsupported");
@@ -351,9 +360,13 @@ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z)
 }
 
 /* make_digital_msa()
- * Create a new digital MSA, given traces <tr> for digital <sq> or for a digital <premsa>.
- * (One and only one of <sq>,<premsa> are non-<NULL>.
+ * Create a new digital MSA, given traces <tr> for digital <sq> or for
+ * a digital <premsa>.  (One and only one of <sq>,<premsa> are
+ * non-<NULL>.
+ * The traces may either be profile traces or core traces;
+ * core traces may contain X "states" for fragments.
  */
+
 static int
 make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
 {
@@ -380,7 +393,7 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    msa->ax[idx][matmap[tr[idx]->k[z]]] = get_dsq_z(sq, premsa, tr, idx, z);
 	    apos = matmap[tr[idx]->k[z]] + 1;
 	    break;
-	    /* fallthru */
+
 	  case p7T_D:
 	    apos = matmap[tr[idx]->k[z]] + 1;
 	    break;
@@ -402,6 +415,10 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    apos = matmap[M]+1;	/* set position for C-terminal tail */
 	    break;
 	    
+	  case p7T_X:  /* peek at next state for B->X->Ik; superfluous for ->{DM}k; harmless for {MDI}k->X->E  */
+	    apos = matmap[tr[idx]->k[z+1]] + 1; /* this works because all other cases except B->X->Ik set their own apos */
+	    break;
+
 	  default:
 	    break;
 	  }
@@ -421,13 +438,15 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 
   
 /* make_text_msa()
- * Create a new digital MSA, given traces <tr> for digital <sq> or for a digital <premsa>.
+ * Create a new text MSA, given traces <tr> for digital <sq> or for a digital <premsa>.
  * (One and only one of <sq>,<premsa> are non-<NULL>.
  * 
  * The reason to make a text-mode MSA rather than let Easel handle printing a digital
  * MSA is to impose HMMER's standard representation on gap characters and insertions:
  * at inserts, gaps are '.' and residues are lower-case, whereas at matches, gaps are '-'
  * and residues are upper case.
+ *
+ * Also see comments in make_digital_msa(), above.
  */
 static int
 make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa)
@@ -454,7 +473,9 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	  switch (tr[idx]->st[z]) {
 	  case p7T_M:
 	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = toupper(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
-	    /*fallthru*/
+	    apos = matmap[tr[idx]->k[z]]; /* i.e. one past the match column. remember, text mode is 0..alen-1 */
+	    break;
+
 	  case p7T_D:
 	    apos = matmap[tr[idx]->k[z]];
 	    break;
@@ -474,6 +495,10 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    
 	  case p7T_E:
 	    apos = matmap[M];	/* set position for C-terminal tail */
+	    break;
+
+	  case p7T_X: /* see comments in make_digital_msa(); handling of B->X entry and X->E exit is tricky */
+	    apos = matmap[tr[idx]->k[z+1]]; 
 	    break;
 
 	  default:

@@ -556,10 +556,9 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
       for (; dsq[i] != eslDSQ_SENTINEL; i++) /* find next non-gap residue in dsq */
 	if (esl_abc_XIsResidue(abc, dsq[i]) || esl_abc_XIsNonresidue(abc, dsq[i])) break; /* '*' included as emitted "residue"  */
 
-      /* Handle missing data states: can only be one.
+      /* watch out for missing data states X: can only be one.
        * prv state might have to skip over one (but not more) missing data states
        */
-      if (tr->st[z]   == p7T_X) continue; /* the main tests below will catch X->X cases. */
       prv = (tr->st[z-1] == p7T_X)? tr->st[z-2] : tr->st[z-1];
 
       switch (tr->st[z]) {
@@ -567,6 +566,12 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 	ESL_FAIL(eslFAIL, errbuf, "S must be first state");
 	break;
 	
+      case p7T_X:
+	if (! is_core)       ESL_FAIL(eslFAIL, errbuf, "X state (missing data) only appears in core traces");
+	if (prv != p7T_B && tr->st[z+1] != p7T_E)	/* only B->X and X->E are possible */
+	  ESL_FAIL(eslFAIL, errbuf, "bad transition involving missing data (X state) not at start/end");
+	break;
+
       case p7T_N:
 	if (is_core)       ESL_FAIL(eslFAIL, errbuf, "core trace can't contain N");
 	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "no N should have k set");
@@ -599,6 +604,7 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 
       case p7T_D:
 	k++;
+	if (tr->st[z-1] == p7T_X)  k = tr->k[z]; /* with fragments, a X->Ik case is possible */
 	if (tr->k[z] != k)                      ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "D shouldn't have i set");
 	if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "D can't have nonzero post prob");
@@ -1230,7 +1236,7 @@ p7_trace_Index(P7_TRACE *tr)
  *            transitions to be encoded in the trace as B->X->{MDI}k
  *            and {MDI}k->X->E, rather than B->DDDD->Mk, Mk->DDDDD->E
  *            paths involving terminal deletions, and all functions
- *            that use traces (should), such as <p7_trace_Count()>,
+ *            that use traces, such as <p7_trace_Count()>, (should)
  *            ignore transitions involving <p7T_X> states.
  *            
  *            By default (<optflags = p7_DEFAULT>), the <i> coordinate
@@ -1427,11 +1433,11 @@ p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid)
  *           
  *           This is one of the purposes of the special p7T_X
  *           'missing data' state in tracebacks. Local alignment entry
- *           is indicated by a B->X->M_k 'missing data' path, and
+ *           is indicated by a B->X->{MDI}_k 'missing data' path, and
  *           direct B->M_k or M_k->E transitions in a traceback are
  *           interpreted as wing retraction in a glocal model.
  * 
- *           The STX state is also used in core traces in model
+ *           The <p7T_X> state is also used in core traces in model
  *           construction literally to mean missing data, in the
  *           treatment of sequence fragments.
  *

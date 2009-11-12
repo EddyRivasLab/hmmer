@@ -263,7 +263,7 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
 
       status = p7_MSVFilter(dsq, L, om, ox, &sc); 
 #ifndef p7_IMPL_DUMMY
-      if (status == eslERANGE) { sc = maxsc; status == eslOK; }
+      if (status == eslERANGE) { sc = maxsc; status = eslOK; }
 #endif
       if (status != eslOK)     goto ERROR;
 
@@ -336,7 +336,7 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
 
       status = p7_ViterbiFilter(dsq, L, om, ox, &sc); 
 #ifndef p7_IMPL_DUMMY
-      if (status == eslERANGE) { sc = maxsc; status == eslOK; }
+      if (status == eslERANGE) { sc = maxsc; status = eslOK; }
 #endif
       if (status != eslOK)     goto ERROR;
 

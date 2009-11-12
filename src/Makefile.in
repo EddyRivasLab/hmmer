@@ -119,6 +119,7 @@ UTESTS =\
 	p7_trace_utest
 
 EXAMPLES = \
+	build_example\
 	generic_fwdback_example\
 	generic_msv_example\
 	generic_optacc_example\

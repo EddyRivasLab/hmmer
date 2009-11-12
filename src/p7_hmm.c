@@ -400,6 +400,7 @@ p7_hmm_DecodeStatetype(char st)
   case p7T_C: return "C";
   case p7T_T: return "T";
   case p7T_J: return "J";
+  case p7T_X: return "X";
   default:    break;
   }
   esl_exception(eslEINVAL, __FILE__, __LINE__, "no such statetype code %d", st);

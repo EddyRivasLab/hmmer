@@ -872,7 +872,11 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
 #endif /*p7MODELCONFIG_STATS*/
 
 
-
+/* All the commentary below here is archaic and obsolete.
+ * It is only a shadow of the current truth, and may mislead.
+ * It is of archaeological interest only; needs to be whipped back
+ * into shape in real documentation.
+ */
 
 /*----------------------------------------------------------------------
  * Preamble.
