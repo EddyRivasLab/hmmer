@@ -73,7 +73,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
   if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) return status;
   sprv = p7T_C;
   while (sprv != p7T_S) {
-    float const *rsc = gm->rsc[dsq[i]];
+    float const *rsc = (i>0 ? gm->rsc[dsq[i]] : NULL);
 
     switch (sprv) {
     case p7T_C:		/* C(i) comes from C(i-1) or E(i) */

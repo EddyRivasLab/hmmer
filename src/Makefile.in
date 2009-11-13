@@ -3,8 +3,8 @@
 # SRE, Mon Jan  1 19:05:39 2007 [Casa de Gatos]
 # SVN $Id$
 
-srcdir     = @srcdir@
 top_srcdir = @top_srcdir@
+srcdir     = @srcdir@
 VPATH      = @srcdir@ @top_srcdir@
 
 CC       = @CC@
@@ -183,7 +183,7 @@ ${PROGS}: @EXEC_DEPENDENCY@  ${LIBDEP}
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 .c.o:
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -c $<
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
 
 .a:	libraries
 

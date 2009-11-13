@@ -5,8 +5,8 @@
 # SRE, Mon Mar 31 09:12:28 2008 [Janelia]
 # SVN $Id$
 
-srcdir     = @srcdir@
 top_srcdir = @top_srcdir@
+srcdir     = @srcdir@
 VPATH      = @srcdir@ @top_srcdir@
 
 CC       = @CC@
@@ -38,7 +38,7 @@ all: ${PROGS}
 profmark_progs: ${PROGS}
 
 .c.o: 
-	${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -c $<		
+	${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -o $@ -c $<		
 
 ${PROGS}: @EXEC_DEPENDENCY@  ${SRCDIR}/libhmmer.a ${ESLDIR}/libeasel.a
 	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L${ESLDIR} -L${SRCDIR} -o $@ $@.o -lhmmer -leasel ${LIBS}

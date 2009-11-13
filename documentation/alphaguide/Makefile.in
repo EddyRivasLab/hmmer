@@ -5,6 +5,10 @@
 # SRE, Tue Mar 10 08:56:51 2009 [Janelia]
 # SVN $Id$
 
+# VPATH and shell configuration
+top_srcdir     = @top_srcdir@
+srcdir         = @srcdir@
+VPATH          = @srcdir@
 
 HMMER_VERSION   =  @HMMER_VERSION@
 HMMER_DATE      = "@HMMER_DATE@"

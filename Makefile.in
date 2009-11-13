@@ -21,11 +21,15 @@
 #
 # SVN $Id$
 
-VPATH=@srcdir@
 
-SHELL       = /bin/sh
-SUFFIXES    = 
-SUFFIXES    = .c .o
+# VPATH and shell configuration
+top_srcdir     = @top_srcdir@
+srcdir         = @srcdir@
+VPATH          = @srcdir@
+
+SHELL          = /bin/sh
+SUFFIXES       = 
+SUFFIXES       = .c .o
 
 # Installation targets
 #
