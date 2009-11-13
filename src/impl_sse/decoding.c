@@ -68,6 +68,10 @@
  *            or biased-composition junk that we want to ignore anyway.
  *            Therefore the caller should be safe in ignoring any domain
  *            for which <p7_Decoding()> returns <eslERANGE>.
+ *            
+ *            Exception (bug #h68): see hmmalign.c, where the model is
+ *            in unilocal mode, and it is entirely possible for the
+ *            user to give us a multidomain protein.
  *
  * Throws:    (no abnormal error conditions)
  * 

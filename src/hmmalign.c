@@ -92,6 +92,8 @@ main(int argc, char **argv)
   P7_OPROFILE  *om      = NULL;
   P7_OMX       *oxf     = NULL;	/* optimized Forward matrix        */
   P7_OMX       *oxb     = NULL;	/* optimized Backward matrix       */
+  P7_GMX       *gxf     = NULL;	/* generic Forward mx for failover */
+  P7_GMX       *gxb     = NULL;	/* generic Backward mx for failover*/
   P7_TRACE    **tr      = NULL;	/* array of tracebacks             */
   ESL_MSA      *msa     = NULL;	/* resulting multiple alignment    */
   int           msaopts = 0;	/* flags to p7_MultipleAlignment() */
@@ -218,10 +220,53 @@ main(int argc, char **argv)
       p7_Backward(sq[idx]->dsq, sq[idx]->n, om, oxf, oxb, NULL);
 
       status = p7_Decoding(om, oxf, oxb, oxb);      /* <oxb> is now overwritten with post probabilities     */
-      if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow, generally on repetitive garbage [J3/119-212] */
 
-      p7_OptimalAccuracy(om, oxb, oxf, &oasc);      /* <oxf> is now overwritten with OA scores              */
-      p7_OATrace        (om, oxb, oxf, tr[idx]);    /* tr[idx] is now an OA traceback for seq #idx          */
+      if (status == eslOK) 
+	{
+	  p7_OptimalAccuracy(om, oxb, oxf, &oasc);      /* <oxf> is now overwritten with OA scores              */
+	  p7_OATrace        (om, oxb, oxf, tr[idx]);    /* tr[idx] is now an OA traceback for seq #idx          */
+	}
+      else if (status == eslERANGE)
+	{	
+	  /* Work around the numeric overflow problem in Decoding()
+	   * xref J3/119-121 for commentary;
+	   * also the note in impl_sse/decoding.c::p7_Decoding().
+	   * 
+	   * In short: p7_Decoding() can overflow in cases where the
+	   * model is in unilocal mode (expects to see a single
+	   * "domain") but the target contains more than one domain.
+	   * In searches, I believe this only happens on repetitive
+	   * garbage, because the domain postprocessor is very good
+	   * about identifying single domains before doing posterior
+	   * decoding. But in hmmalign, we're in unilocal mode
+	   * to begin with, and the user can definitely give us a
+	   * multidomain protein.
+	   * 
+	   * We need to make this far more robust; but that's probably
+	   * an issue to deal with when we really spend some time
+	   * looking hard at hmmalign performance. For now (Nov 2009;
+	   * in beta tests leading up to 3.0 release) I'm more
+	   * concerned with stabilizing the search programs.
+	   * 
+	   * The workaround is to detect the overflow and fail over to
+	   * slow generic routines.
+	   */
+	  if (gxf == NULL) gxf = p7_gmx_Create(hmm->M, sq[idx]->n);
+	  else             p7_gmx_GrowTo(gxf,  hmm->M, sq[idx]->n);
+
+	  if (gxb == NULL) gxb = p7_gmx_Create(hmm->M, sq[idx]->n);
+	  else             p7_gmx_GrowTo(gxb,  hmm->M, sq[idx]->n);
+
+	  p7_ReconfigLength(gm, sq[idx]->n);
+
+	  p7_GForward (sq[idx]->dsq, sq[idx]->n, gm, gxf, &fwdsc);
+	  p7_GBackward(sq[idx]->dsq, sq[idx]->n, gm, gxb, NULL);
+	  p7_GDecoding(gm, gxf, gxb, gxb);
+	  p7_GOptimalAccuracy(gm, gxb, gxf, &oasc);
+	  p7_GOATrace        (gm, gxb, gxf, tr[idx]);
+	  p7_gmx_Reuse(gxf);
+	  p7_gmx_Reuse(gxb);
+	}
  
       p7_omx_Reuse(oxf);
       p7_omx_Reuse(oxb);
@@ -246,6 +291,8 @@ main(int argc, char **argv)
   p7_oprofile_Destroy(om);
   p7_omx_Destroy(oxf);
   p7_omx_Destroy(oxb);
+  p7_gmx_Destroy(gxf);
+  p7_gmx_Destroy(gxb);
   p7_hmm_Destroy(hmm);
   if (ofp != stdout) fclose(ofp);
   esl_alphabet_Destroy(abc);

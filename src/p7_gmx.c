@@ -157,6 +157,24 @@ p7_gmx_GrowTo(P7_GMX *gx, int M, int L)
   return status;
 }
 
+/* Function:  p7_gmx_Reuse()
+ * Synopsis:  Recycle a generic DP matrix.
+ * Incept:    SRE, Fri Nov 13 08:48:52 2009 [Janelia]
+ *
+ * Purpose:   Recycles <gx> for reuse.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_gmx_Reuse(P7_GMX *gx)
+{
+  /* not much to do here. The memory rearrangement for a new seq is all in GrowTo(). */
+  gx->M = 0;
+  gx->L = 0;
+  return eslOK;
+}
+
+
 /* Function:  p7_gmx_Destroy()
  * Synopsis:  Frees a DP matrix.
  * Incept:    SRE, Tue Jan 30 11:17:36 2007 [Einstein's, in St. Louis]

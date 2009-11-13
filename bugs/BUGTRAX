@@ -1,3 +1,32 @@
+ID              h68
+TITLE           hmmalign fails on some seqs: Decoding ERANGE error
+AFFECTS         3.0b2 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/105
+REPORTED_BY     Jordan Fish <jrdn.fish@gmail.com> 12 Nov 2009
+OPENED_DATE     SRE, Fri Nov 13 08:29:32 2009
+CLOSED_DATE     SRE, Fri Nov 13 08:59:56 2009
+DESCRIPTION     
+  Fish provides an example of an rpoB HMM and a high-scoring sequence.
+  hmmalign silently fails on this sequence because p7_Decoding()
+  returns an ERANGE error.
+
+  The ERANGE error is documented in [J3/119-121] and in the
+  impl_sse/decoding.c::p7_Decoding() code. Models in unilocal mode may
+  have numeric overflow on targets containing more than one
+  "domain". Search progams avoid this problem because of careful
+  domain postprocessing; it is rare for p7_Decoding() to see a
+  multidomain target, except in unusual situations that I believe
+  always involve garbage repetitive sequences, and therefore the
+  failure can be silently ignored. 
+
+  But in hmmalign, we are in unilocal mode to begin with, and a user
+  may provide us with a "multidomain" target. 
+
+  This needs more thought, but for now, the fix is to detect the
+  overflow in hmmalign and fail over to slow generic routines.
+//
 ID              h67
 TITLE           H2 models produced by H2 hmmconvert aren't readable
 AFFECTS         3.0b2 and earlier
