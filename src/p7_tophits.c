@@ -728,7 +728,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   else                      namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(th));
 
   if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
-  else                      descw = INT_MAX;
+  else                      descw = 0;                               /* unlimited desc length is handled separately */
 
   fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", 
 	  pli->mode == p7_SEARCH_SEQS ? "s" : "");
@@ -761,7 +761,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	else                                        newness = ' ';
 
 
-	fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-.*s\n",
+	fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
 		newness,
 		th->hit[h]->pvalue * pli->Z,
 		th->hit[h]->score,
@@ -771,8 +771,14 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 		th->hit[h]->dcl[d].dombias,
 		th->hit[h]->nexpected,
 		th->hit[h]->nreported,
-		namew, showname,
-		descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+		namew, showname);
+
+	if (textw > 0) fprintf(ofp, "%-.*s\n", descw, th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
+	else           fprintf(ofp, "%s\n",           th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
+	/* do NOT use *s with unlimited (INT_MAX) line length. Some systems
+         * have an fprintf() bug here (we found one on an Opteron/SUSE Linux
+	 * system (#h66)
+	 */
       }
   if (th->nreported == 0) fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n");
   return eslOK;
@@ -815,9 +821,12 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	    namew = strlen(th->hit[h]->name);
 	  }
 
-	descw = (textw > 0 ?  ESL_MAX(32, textw - namew - 5) : INT_MAX);
-
-	fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+	if (textw > 0) {
+	  descw = ESL_MAX(32, textw - namew - 5);
+	  fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+	} else {
+	  fprintf(ofp, ">> %s  %s\n",    showname,        (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+	}
 
 	if (th->hit[h]->nreported == 0) {
 	  fprintf(ofp,"   [No individual domains that satisfy reporting thresholds (although complete target did)]\n\n");

@@ -20,11 +20,11 @@ ID              h66
 TITLE           hmmscan output of HMM names/descriptions corrupted somehow
 AFFECTS         3.0b2?
 FIXED_IN        -
-STATUS          OPEN
+STATUS          CLOSED
 XREF            J5/105
 REPORTED_BY     Jaina Mistry <jm14@sanger.ac.uk> 11 Nov 2009
 OPENED_DATE     SRE, Thu Nov 12 10:40:50 2009
-CLOSED_DATE     -
+CLOSED_DATE     SRE, Fri Nov 13 07:27:14 2009
 DESCRIPTION     
    Under circumstances that have not been identified:
    hmmscan ASCII output replaces HMM "<name> <description>\n" with
@@ -35,6 +35,12 @@ DESCRIPTION
    running SUSE Linux. It does not happen on our Opteron/SUSE system.
    There is no apparent problem in the source. One suspicion is the
    crossplatform binary compatibility of press'ed HMM databases.
+
+   This appears to be a bug on the Opteron/SUSE, with its handling
+   of the "%-.*s" precision in fprintf() when the precision is set
+   to INT_MAX. OK, maybe that was asking a little much of it. Changed
+   the way unlimited line length is handled; now it formats
+   unlimited desc lines simply as "%s".
 //
 ID              h65
 TITLE           hmmpress -f corrupts HMM database instead of overwriting it
