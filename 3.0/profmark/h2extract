@@ -1,0 +1,17 @@
+#! /usr/bin/perl
+
+while (<>)
+{
+    if (/^Query HMM:\s+(\S+)\s*$/) { $querymodel = $1; }
+
+    if ($in_seq) {
+	if (/^\s*$/) { exit; }
+
+	if (/^(\S+)\s+.+\s+(\d+\.\d+)\s+(\S+)\s+\d+\s*$/)
+	{
+	    printf("%s\t%s\t%s\t%s\n", $3, $2, $1, $querymodel);
+	}
+    }
+    if (/^Scores for complete sequences /) { $in_seq = 1; }
+}
+	    
