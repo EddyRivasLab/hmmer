@@ -62,12 +62,12 @@ hidden Markov models are so theoretically attractive for sequence
 analysis is that they are good probabilistic models for explicitly
 dealing with alignment uncertainty. The SAM profile HMM software from
 UC Santa Cruz has always used full probabilistic inference (the HMM
-``Forward'' and ``Backward'' algorithms) as opposed to optimal
-alignment scores (the HMM ``Viterbi'' algorithm). HMMER2 had the full
-HMM inference algorithms available as command-line options, but used
-Viterbi alignment by default, in part for speed reasons. Calculating
-alignment ensembles is even more computationally intensive than
-calculating single optimal alignments.
+Forward and Backward algorithms) as opposed to optimal alignment
+scores (the HMM Viterbi algorithm). HMMER2 had the full HMM inference
+algorithms available as command-line options, but used Viterbi
+alignment by default, in part for speed reasons. Calculating alignment
+ensembles is even more computationally intensive than calculating
+single optimal alignments.
 
 One reason why it's been hard to deploy sequence scores for practical
 large-scale use is that we haven't known how to accurately calculate
@@ -149,19 +149,6 @@ distribution.
 \subsection{What's still missing}
 
 Oh, lots. The most egregious lacunae include:
-
-\textbf{More parallelization.} HMMER3 is designed to be parallelized
-at three levels: SIMD vector instructions within the CPU,
-multithreaded (probably using OpenMP) across processor cores, and MPI
-across individual nodes of a cluster. Relatively little of this
-potential has been realized. The SIMD parallelization is part of
-what's scientifically new and perhaps most interesting in HMMER3,
-because SIMD parallelization is at the heart of the new acceleration
-algorithm. However, for now HMMER's new SIMD ``MSV'' algorithm is
-implemented only for Intel x86 compatible architectures. We will port
-it to other SIMD vector architectures soon. No multithreading is
-implemented yet; and MPI parallelization is only implemented in
-\prog{hmmbuild}.
 
 \textbf{More processor support.} One of the attractive features of the
 MSV algorithm is that it is a very tight and efficient piece of code,
