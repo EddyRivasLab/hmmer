@@ -27,7 +27,7 @@ are:
   \prog{globins4.sto}, in HMMER3 ASCII text format.
 %
 \item[\emprog{globins4.out}] An example \prog{hmmsearch} output file that results
-  from searching the \prog{globins4.hmm} against Uniprot 7.0.
+  from searching the \prog{globins4.hmm} against Uniprot 15.7.
 %
 \item[\emprog{fn3.sto}] An example alignment of 106 fibronectin type III
   domains. This is the Pfam 22.0 \prog{fn3} seed alignment. It provides an
@@ -110,8 +110,8 @@ and you'll see some output that looks like:
 
 % tutorial regression: glb-build.out
 \begin{sreoutput}
-# hmmbuild :: profile HMM construction from a multiple sequence alignment
-# HMMER 3.0b2 (June 2009); http://hmmer.org/
+# hmmbuild :: profile HMM construction from multiple sequence alignments
+# HMMER 3.0b3 (November 2009); http://hmmer.org/
 # Copyright (C) 2009 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -123,7 +123,7 @@ and you'll see some output that looks like:
 #---- -------------------- ----- ----- ----- -------- ------ -----------
 1     globins4                 4   171   149     0.96  0.589 
 
-# CPU time: 0.33u 0.00s 00:00:00.33 Elapsed: 00:00:00
+# CPU time: 0.55u 0.00s 00:00:00.55 Elapsed: 00:00:00.56
 \end{sreoutput}
 
 If your input file had contained more than one alignment, you'd get
@@ -153,17 +153,17 @@ consumption, not yours), you'd see something like:
 
 % tutorial regression: globins4.hmm, edited down
 \begin{sreoutput}
-HMMER3/b [3.0b2 | June 2009]
+HMMER3/b [3.0b3 | November 2009]
 NAME  globins4
 LENG  149
 ALPH  amino
 RF    no
 CS    no
 MAP   yes
-DATE  Wed Jun 17 08:53:53 2009
+DATE  Sat Nov 14 10:47:39 2009
 NSEQ  4
 EFFN  0.964844
-CKSUM 247350336
+CKSUM 2027839109
 STATS LOCAL MSV       -9.9014  0.70957
 STATS LOCAL VITERBI  -10.7224  0.70957
 STATS LOCAL FORWARD   -4.1637  0.70957
@@ -205,7 +205,7 @@ local alignment.
 \subsubsection{Step 2: search the sequence database with hmmsearch}
 
 Presumably you have a sequence database to search. Here I'll use the
-Uniprot 7.0 Swissprot FASTA format flatfile (not provided in the
+Uniprot 15.7 Swissprot FASTA format flatfile (not provided in the
 tutorial, because of its large size), \prog{uniprot\_sprot.fasta}.  If
 you don't have a sequence database handy, run your example search
 against \prog{tutorial/globins45.fa} instead, which is a FASTA format
@@ -227,8 +227,8 @@ ran, on what, and with what options:
 
 % tutorial regression: globins4.out
 \begin{sreoutput}
-# hmmsearch :: search profile HMM(s) against a sequence database
-# HMMER 3.0b2 (June 2009); http://hmmer.org/
+# hmmsearch :: search profile(s) against a sequence database
+# HMMER 3.0b3 (November 2009); http://hmmer.org/
 # Copyright (C) 2009 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -240,22 +240,20 @@ Query:       globins4  [M=149]
 Scores for complete sequences (score includes all domains):
 \end{sreoutput}
 
-The second section is the \emph{ sequence top hits} list. It is a list
+The second section is the \emph{sequence top hits} list. It is a list
 of ranked top hits (sorted by E-value, most significant hit first),
 formatted in a BLAST-like style:
 
 \begin{sreoutput}
-  --- full sequence ---   --- best 1 domain ---    -#dom-
-    E-value  score  bias    E-value  score  bias    exp  N  Sequence    Description
-    ------- ------ -----    ------- ------ -----   ---- --  --------    -----------
-    3.7e-65  222.2   3.2    4.2e-65  222.0   2.2    1.0  1  MYG_PHYCA   (P02185) Myoglobin
-    1.3e-63  217.2   0.1    1.4e-63  217.1   0.0    1.0  1  HBB_GORGO   (P02024) Hemoglobin beta subunit (Hemoglobin bet
-    1.8e-63  216.7   0.0      2e-63  216.5   0.0    1.0  1  HBB_HUMAN   (P68871) Hemoglobin beta subunit (Hemoglobin bet
-    1.8e-63  216.7   0.0      2e-63  216.5   0.0    1.0  1  HBB_PANPA   (P68872) Hemoglobin beta subunit (Hemoglobin bet
-    1.8e-63  216.7   0.0      2e-63  216.5   0.0    1.0  1  HBB_PANTR   (P68873) Hemoglobin beta subunit (Hemoglobin bet
-    2.9e-63  216.0   0.1    3.2e-63  215.9   0.1    1.0  1  HBB_HYLLA   (P02025) Hemoglobin beta subunit (Hemoglobin bet
-      4e-63  215.6   2.9    4.5e-63  215.4   2.0    1.0  1  MYG_ESCGI   (P02177) Myoglobin
-      4e-63  215.6   0.2    4.5e-63  215.4   0.1    1.0  1  HBB_COLBA   (P02033) Hemoglobin beta subunit (Hemoglobin bet
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence              Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------              -----------
+      6e-65  222.7   3.2    6.7e-65  222.6   2.2    1.0  1  sp|P02185|MYG_PHYCA   Myoglobin OS=Physeter catodon GN=MB PE
+    3.1e-63  217.2   0.1    3.4e-63  217.0   0.0    1.0  1  sp|P02024|HBB_GORGO   Hemoglobin subunit beta OS=Gorilla gor
+    4.5e-63  216.6   0.0      5e-63  216.5   0.0    1.0  1  sp|P68871|HBB_HUMAN   Hemoglobin subunit beta OS=Homo sapien
+    4.5e-63  216.6   0.0      5e-63  216.5   0.0    1.0  1  sp|P68872|HBB_PANPA   Hemoglobin subunit beta OS=Pan paniscu
+    4.5e-63  216.6   0.0      5e-63  216.5   0.0    1.0  1  sp|P68873|HBB_PANTR   Hemoglobin subunit beta OS=Pan troglod
+    6.4e-63  216.1   3.0    7.1e-63  216.0   2.0    1.0  1  sp|P02177|MYG_ESCGI   Myoglobin OS=Eschrichtius gibbosus GN=
  \end{sreoutput}
 
 The last two columns, obviously, are the name of each target sequence
@@ -307,7 +305,7 @@ An example of what that output file will look like is provided in
 
 % tutorial regression: fn3.out
 \begin{sreoutput}
-  --- full sequence ---   --- best 1 domain ---    -#dom-
+   --- full sequence ---   --- best 1 domain ---    -#dom-
     E-value  score  bias    E-value  score  bias    exp  N  Sequence    Description
     ------- ------ -----    ------- ------ -----   ---- --  --------    -----------
     1.9e-57  178.0   0.4    1.2e-16   47.2   0.7    9.4  9  7LESS_DROME RecName: Full=Protein sevenless;          EC=2.7
@@ -345,13 +343,13 @@ So operationally:
 OK, the sharp eyed reader asks, if that's so, then why in the globin4
 output (all of which have only a single domain) do the full sequence
 bit scores and best single domain bit scores not exactly agree? For
-example, the top ranked hit, \prog{HBB\_GORGO} (gorilla
-$\beta$-hemoglobin) has a full sequence score of 217.2 and a single
-best domain score of 217.1. What's going on? What's going on is that
+example, the top ranked hit, \prog{MYG\_PHYCA} (sperm whale myoglobin,
+if you're curious) has a full sequence score of 222.7 and a single
+best domain score of 222.6. What's going on? What's going on is that
 the position and alignment of that domain is uncertain -- in this
 case, only very slightly so, but nonetheless uncertain. The full
 sequence score is summed over all possible alignments of the globin
-model to the \prog{HBB\_GORGO} sequence. When HMMER3 identifies
+model to the \prog{MYG\_PHYCA} sequence. When HMMER3 identifies
 domains, it identifies what it calls an \textbf{envelope} bounding
 where the domain's alignment most probably lies. (More on this later,
 when we discuss the reported coordinates of domains and alignments in
@@ -388,7 +386,7 @@ E-value of 10.0 or less.
 Then comes the third output section, which starts with
 
 \begin{sreoutput}
-Domain and alignment annotation for each sequence:
+Domain annotation for each sequence (and alignments):
 \end{sreoutput}
 
 Now for each sequence in the top hits list, there will be a section 
@@ -455,7 +453,8 @@ independent/best single domain E-value depends on). There's one
 sequence reported as a putative homolog in the sequence top hits list
 (that's the size of the search space that the conditional E-value
 depends on). A better example is to see what happens when we search
-Uniprot (7.0 contains 207132 sequences) with the \prog{fn3} model:
+Uniprot (15.7 contains 497293 sequences) with the \prog{fn3} model:
+%        ^^^^          ^^^^^^   VERIFY WHEN UPDATING
 
 \user{hmmsearch fn3.hmm uniprot\_sprot.fasta}
 
@@ -467,39 +466,53 @@ report for \prog{7LESS\_DROME} looks like:
 \begin{sreoutput}
    #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
  ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
-   1 !   40.7   0.0   6.7e-12   2.6e-09       2      84 ..     439     520 ..     437     521 .. 0.95
-   2 !   14.4   0.0    0.0011      0.42      13      85 ..     836     913 ..     826     914 .. 0.73
-   3 ?    5.1   0.0      0.84   3.3e+02      10      36 ..    1209    1235 ..    1203    1259 .. 0.82
-   4 !   24.3   0.0   8.9e-07   0.00035      14      80 ..    1313    1380 ..    1304    1386 .. 0.82
-   5 !   47.2   0.7   6.2e-14   2.4e-11       1      85 [.    1799    1890 ..    1799    1891 .. 0.91
-   6 !   17.8   0.0   9.7e-05     0.038       6      74 ..    1904    1966 ..    1901    1976 .. 0.90
-   7 !   12.8   0.0    0.0035       1.4       1      86 []    1993    2107 ..    1993    2107 .. 0.89
+   1 !   40.7   0.0   9.1e-12   6.4e-09       2      84 ..     439     520 ..     437     521 .. 0.95
+   2 !   14.4   0.0    0.0014         1      13      85 ..     836     913 ..     826     914 .. 0.73
+   3 ?    5.1   0.0       1.1   7.9e+02      10      36 ..    1209    1235 ..    1203    1259 .. 0.82
+   4 !   24.3   0.0   1.2e-06   0.00084      14      80 ..    1313    1380 ..    1304    1386 .. 0.82
+   5 !   47.2   0.7   8.3e-14   5.8e-11       1      85 [.    1799    1890 ..    1799    1891 .. 0.91
+   6 !   17.8   0.0   0.00013     0.091       6      74 ..    1904    1966 ..    1901    1976 .. 0.90
+   7 !   12.8   0.0    0.0047       3.3       1      86 []    1993    2107 ..    1993    2107 .. 0.89
 \end{sreoutput}
 
 Notice that \emph{almost} everything's the same (it's the same target
 sequence, after all) \emph{except} for what happens with E-values. The
 independent E-value is calculated assuming a search space of all
-207132 sequences. For example, look at the highest scoring domain
+497293 sequences. For example, look at the highest scoring domain
+%^^^^^
 (domain 5 here; domain 7 above). When we only looked at a single
-sequence, its score of 47.2 bits has an E-value of 1.2e-16. When we
-search a database of 207132 sequences, a hit scoring 47.2 bits would
-be expected to happen 207132 times as often: 1.2e-16 $\times$ 207132
-$=$ 2.5e-11 (it's showing 2.4e-11 because of roundoff issues; the
-1.2e-16 in fact isn't exactly 1.7e-16 inside HMMER). In this Uniprot
-search, 528 sequences were reported in the top hits list (with
-E-values $\leq 10$). If we were to assume that all 528 are true
+sequence, its score of 47.2 bits has an E-value of 5.8e-11. When we
+%                      ^^^^                        ^^^^^^^
+search a database of 497293 sequences, a hit scoring 47.2 bits would
+%                    ^^^^^^                          ^^^^
+be expected to happen 497293 times as often: 1.2e-16 $\times$ 497293
+%                     ^^^^^^                 ^^^^^^^          ^^^^^^
+$=$ 5.97e-11 (it's showing 5.8e-11 because of roundoff issues; the
+%   ^^^^^^^
+1.2e-16 in fact isn't exactly 1.2e-16 inside HMMER). In this Uniprot
+%^^^^^^                       ^^^^^^^   
+search, 711 sequences were reported in the top hits list (with
+%       ^^^ 
+E-values $\leq 10$). If we were to assume that all 711 are true
+%                                                  ^^^
 homologs, x out the domain(s) that made us think that, and then went
-looking for \emph{additional} domains in those 528 sequences, we'd be
-searching a smaller database of 528 sequences: the expected number of
+looking for \emph{additional} domains in those 711 sequences, we'd be
+%                                              ^^^
+searching a smaller database of 711 sequences: the expected number of
+%                               ^^^
 times we'd see a hit of 47.2 bits or better is now 1.2e-16 $\times$
-528 $=$ 6.3e-14. That's where the conditional E-value (c-Evalue) is
+%                       ^^^^                       ^^^^^^^                           
+711 $=$ 8.3e-14. That's where the conditional E-value (c-Evalue) is
+%^^     ^^^^^^^
 coming from.
 
 Notice that a couple of domains disappeared in the Uniprot search,
 because now, in this larger search space size, they're not
 significant. Domain 1 (the one with the score of -1.3 bits) got a
-conditional E-value of 0.17 $\times$ 528 = 90, and domain 6 (with a
-bit score of 0.0) got a c-Evalue of 0.063 $\times$ 528 = 33. These
+conditional E-value of 0.17 $\times$ 711 = 121, and domain 6 (with a
+%                                    ^^^
+bit score of 0.0) got a c-Evalue of 0.063 $\times$ 711 = 45. These
+%                                                  ^^^
 fail the default reporting threshold of 10.0. The domain with a score
 of 5.1 bits also shifted from being above to below the default
 inclusion thresholds, so now it's marked with a \ccode{?} instead of a
@@ -565,7 +578,7 @@ overlapping uncertainty of where one domain ends and another begins.
 In contrast, alignment coordinates generally do not overlap (though
 there are cases where even they will overlap\footnote{Not to mention
   one (mercifully rare) bug/artifact that I'm betting is so unusual
-  that alpha testers don't even see an example of it -- but we'll
+  that testers don't even see an example of it -- but we'll
   see.}).
 
 The last column is the average posterior probability of the aligned
@@ -600,6 +613,7 @@ displayed. For example, (skipping domain 1 because it's weak and
 unconvincing), fibronectin III domain 2 in your \prog{7LESS\_DROME}
 output is shown as:
 
+% tutorial regressions: fn3.out
 \begin{sreoutput}
  == domain 2    score: 40.7 bits;  conditional E-value: 1.3e-14
                   ---CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTEE.E CS
@@ -666,20 +680,21 @@ you'll find something like:
 Internal pipeline statistics summary:
 -------------------------------------
 Query model(s):                            1  (149 nodes)
-Target sequences:                     207132  (75438310 residues)
-Passed MSV filter:                      8296  (0.0400518); expected 4142.6 (0.02)
-Passed bias filter:                     6852  (0.0330804); expected 4142.6 (0.02)
-Passed Vit filter:                      1485  (0.00716934); expected 207.1 (0.001)
-Passed Fwd filter:                      1115  (0.00538304); expected 2.1 (1e-05)
-Initial search space (Z):             207132  [actual number of targets]
-Domain search space  (domZ):            1037  [number of targets reported over threshold]
-# CPU time: 6.99u 0.15s 00:00:07.14 Elapsed: 00:00:07
-# Mc/sec: 1608.06
+Target sequences:                     497293  (175274722 residues)
+Passed MSV filter:                     19416  (0.0390434); expected 9945.9 (0.02)
+Passed bias filter:                    15929  (0.0320314); expected 9945.9 (0.02)
+Passed Vit filter:                      2207  (0.00443803); expected 497.3 (0.001)
+Passed Fwd filter:                      1076  (0.00216371); expected 5.0 (1e-05)
+Initial search space (Z):             497293  [actual number of targets]
+Domain search space  (domZ):            1075  [number of targets reported over threshold]
+# CPU time: 7.08u 0.09s 00:00:07.17 Elapsed: 00:00:02.95
+# Mc/sec: 8852.86
 //
 \end{sreoutput}
 
 This gives you some idea of what's going on in HMMER3's acceleration
-pipeline. You've got one query HMM, and the database has 207,132
+pipeline. You've got one query HMM, and the database has 497,293
+%                                                        ^^^^^^^
 target sequences. Each sequence goes through a gauntlet of three
 scoring algorithms called MSV, Viterbi, and Forward, in order of 
 increasing sensitivity and increasing computational requirement. 
@@ -690,7 +705,7 @@ BLAST's sum score -- an optimal sum of ungapped high-scoring alignment
 segments. Unlike BLAST, it does this calculation directly, without
 BLAST's word hit or hit extension step, using a SIMD vector-parallel
 algorithm. By default, HMMER3 is configured to allow sequences with a
-P-value of $\leq 2$\% through the MSV score filter (thus, if the
+P-value of $\leq 0.02$ through the MSV score filter (thus, if the
 database contained no homologs and P-values were accurately
 calculated, the highest scoring 2\% of the sequences will pass the
 filter). Here, about 4\% of the database got through the MSV filter.
@@ -699,7 +714,8 @@ A quick check is then done to see if the target sequence is
 ``obviously'' so biased in its composition that it's unlikely to be a
 true homolog. This is called the ``bias filter''. If you don't like it
 (it can occasionally be overaggressive) you can shut it off with the
-\prog{--nobias} option. Here, 6852 sequence pass through the bias
+\prog{--nobias} option. Here, 15929 sequences pass through the bias
+%                             ^^^^^
 filter.
 
 The Viterbi filter then calculates a gapped optimal alignment score.
@@ -707,11 +723,13 @@ This is a bit more sensitive than the MSV score, but the Viterbi
 filter is about four-fold slower than MSV. By default, HMMER3 lets
 sequences with a P-value of $\leq 0.001$ through this stage. Here
 (because there's a little over a thousand true globin homologs in this
-database), much more than that gets through - 1485 sequences.
+database), much more than that gets through - 2207 sequences.
+%                                             ^^^^
 
 Then the full Forward score is calculated, which sums over all
 possible alignments of the profile to the target sequence. The default
-allows sequences with a P-value of $\leq 10^{-5}$\% through; 1115
+allows sequences with a P-value of $\leq 10^{-5}$\% through; 1076
+%                                                            ^^^^
 sequences passed.
 
 All sequences that make it through the three filters are then
@@ -728,12 +746,12 @@ with their two different search space sizes. These search space sizes
 are reported in the statistics summary.
 
 Finally, it reports the speed of the search in units of Mc/sec
-(million dynamic programming cells per second), and the CPU time.
-This search took about 7 seconds. That's in the same ballpark as
-BLAST, depending on which BLAST you compare to. On the same machine,
-an NCBI BLAST with one of these globin sequences took 3.7 seconds, and
-WU-BLAST took 8.5 seconds.
-
+(million dynamic programming cells per second), the CPU time, and the
+elapsed time. This search took about 2.95 seconds of elapsed (wall
+clock time) (running with \ccode{--cpu 2} on two cores). That's in the
+same ballpark as BLAST, depending on which BLAST you compare to. On
+the same machine, also running dual-core, NCBI BLAST with one of these
+globin sequences took 3.8 seconds, and WU-BLAST took 7.4 seconds.
 
 \subsection{Searching a profile HMM database with a query sequence}
 
@@ -796,11 +814,11 @@ With our scheduler (SGE, the Sun Grid Engine) and our MPI distro
 (OpenMPI), an example incantation for building \prog{Pfam.hmm} from
 \prog{Pfam-A.seed} is:
 
-\user{qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe openmpi 128\\
-     'mpirun -mca btl self,tcp --prefix /usr/local/openmpi -np 128 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'}
+% check
+\user{qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe openmpi 128 \ \\
+      'mpirun -mca btl self,openib,sm -np 128 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'}
 
-This reduces the time to build Pfam from about 2.5 hours to a little
-more than a minute.
+This reduces the time to build all of Pfam to about 40 seconds.
 
 \subsubsection{Step 2: compress and index the flatfile with hmmpress}
 
@@ -853,13 +871,15 @@ The header and the first section of the output will look like:
 
 % tutorial regression: 7LESS.out
 \begin{sreoutput}
-# hmmscan :: search sequence(s) against a profile HMM database
-# HMMER 3.0b2 (June 2009); http://hmmer.org/
+# hmmscan :: search sequence(s) against a profile database
+# HMMER 3.0b3 (November 2009); http://hmmer.org/
 # Copyright (C) 2009 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query sequence file:             7LESS_DROME
 # target HMM database:             minifam
+# per-seq hits tabular output:     7LESS.tbl
+# per-dom hits tabular output:     7LESS.domtbl
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Query:       7LESS_DROME  [L=2554]
@@ -870,7 +890,7 @@ Scores for complete sequence (score includes all domains):
     E-value  score  bias    E-value  score  bias    exp  N  Model    Description
     ------- ------ -----    ------- ------ -----   ---- --  -------- -----------
     5.6e-57  178.0   0.4    3.5e-16   47.2   0.7    9.4  9  fn3      Fibronectin type III domain
-    1.1e-43  137.1   0.0    1.7e-43  136.5   0.0    1.3  1  Pkinase  Protein kinase domain
+    1.1e-43  137.2   0.0    1.7e-43  136.5   0.0    1.3  1  Pkinase  Protein kinase domain
 \end{sreoutput}
 
 The output fields are in the same order and have the same meaning as
@@ -1087,12 +1107,14 @@ thresholds is marked with a \ccode{+}, and nothing is marked with a
 % tutorial regression: hbb-jack.out
 \begin{sreoutput}
 # jackhmmer :: iteratively search a protein sequence against a protein database
-# HMMER 3.0b2 (June 2009); http://hmmer.org/
+# HMMER 3.0b3 (November 2009); http://hmmer.org/
 # Copyright (C) 2009 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query sequence file:             HBB_HUMAN
 # target sequence database:        uniprot_sprot.fasta
+# per-seq hits tabular output:     hbb-jack.tbl
+# per-dom hits tabular output:     hbb-jack.domtbl
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Query:       HBB_HUMAN  [L=146]
@@ -1100,13 +1122,14 @@ Description: Human beta hemoglobin.
 
 Scores for complete sequences (score includes all domains):
    --- full sequence ---   --- best 1 domain ---    -#dom-
-    E-value  score  bias    E-value  score  bias    exp  N  Sequence    Description
-    ------- ------ -----    ------- ------ -----   ---- --  --------    -----------
-+   9.2e-99  331.4   0.0      1e-98  331.3   0.0    1.0  1  HBB_HUMAN   (P68871) Hemoglobin beta subunit (Hemoglobin bet
-+   9.2e-99  331.4   0.0      1e-98  331.3   0.0    1.0  1  HBB_PANPA   (P68872) Hemoglobin beta subunit (Hemoglobin bet
-+   9.2e-99  331.4   0.0      1e-98  331.3   0.0    1.0  1  HBB_PANTR   (P68873) Hemoglobin beta subunit (Hemoglobin bet
-+   3.7e-98  329.5   0.0    4.1e-98  329.3   0.0    1.0  1  HBB_GORGO   (P02024) Hemoglobin beta subunit (Hemoglobin bet
-+   2.6e-97  326.7   0.0    2.9e-97  326.6   0.0    1.0  1  HBB2_PANLE  (P18988) Hemoglobin beta-2 subunit (Hemoglobin b
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence              Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------              -----------
++   2.3e-98  331.4   0.0    2.5e-98  331.2   0.0    1.0  1  sp|P68871|HBB_HUMAN   Hemoglobin subunit beta OS=Homo sapien
++   2.3e-98  331.4   0.0    2.5e-98  331.2   0.0    1.0  1  sp|P68872|HBB_PANPA   Hemoglobin subunit beta OS=Pan paniscu
++   2.3e-98  331.4   0.0    2.5e-98  331.2   0.0    1.0  1  sp|P68873|HBB_PANTR   Hemoglobin subunit beta OS=Pan troglod
++   9.1e-98  329.4   0.0      1e-97  329.3   0.0    1.0  1  sp|P02024|HBB_GORGO   Hemoglobin subunit beta OS=Gorilla gor
++     2e-96  325.1   0.0    2.2e-96  324.9   0.0    1.0  1  sp|P02025|HBB_HYLLA   Hemoglobin subunit beta OS=Hylobates l
++     2e-95  321.8   0.0    2.2e-95  321.7   0.0    1.0  1  sp|P02032|HBB_SEMEN   Hemoglobin subunit beta OS=Semnopithec
 ...
 \end{sreoutput}
 
@@ -1115,11 +1138,11 @@ point you see a tagline ``inclusion threshold'' indicating where the
 threshold was set:
 
 \begin{sreoutput}
-+   0.00055   23.3   0.3     0.0086   19.4   0.2    2.1  1  HBAZ_MACEU  (P81044) Hemoglobin zeta subunit (Hemoglobin zet
-+   0.00095   22.6   0.0     0.0011   22.4   0.0    1.0  1  MYG_ZIPCA   (P02182) Myoglobin
++   0.00076   24.1   0.0    0.00083   24.0   0.0    1.0  1  sp|P02180|MYG_BALPH   Myoglobin OS=Balaenoptera physalus GN=
++   0.00087   23.9   0.0     0.0009   23.9   0.0    1.0  1  sp|P02148|MYG_PONPY   Myoglobin OS=Pongo pygmaeus GN=MB PE=1
   ------ inclusion threshold ------
-      0.001   22.5   0.0     0.0011   22.4   0.0    1.0  1  NGB_OCHCU   (Q6ITZ4) Neuroglobin
-     0.0012   22.3   0.1     0.0015   21.9   0.1    1.3  1  GLB4_CHITH  (P02230) Globin CTT-IV precursor
+     0.0013   23.3   0.3      0.021   19.4   0.2    2.1  1  sp|P81044|HBAZ_MACEU  Hemoglobin subunit zeta (Fragments) OS
+     0.0021   22.7   0.0     0.0022   22.6   0.0    1.0  1  sp|P02182|MYG_ZIPCA   Myoglobin OS=Ziphius cavirostris GN=MB
 \end{sreoutput}
 
 The domain output and search statistics are then shown just as in
@@ -1129,19 +1152,19 @@ search through the file to find the end of one iteration and the
 beginning of another):
 
 \begin{sreoutput}
-@@ New targets included:   853
-@@ New alignment includes: 854 subseqs (was 1), including original query
+@@ New targets included:   894
+@@ New alignment includes: 895 subseqs (was 1), including original query
 @@ Continuing to next round.
 
 @@
 @@ Round:                  2
-@@ Included in MSA:        854 subsequences (query + 853 subseqs from 853 targets)
+@@ Included in MSA:        895 subsequences (query + 894 subseqs from 894 targets)
 @@ Model size:             146 positions
 @@
 \end{sreoutput}
 
-This (obviously) is telling you that the new alignment contains 854
-sequences, your query plus 853 significant matches. For round two,
+This (obviously) is telling you that the new alignment contains 895
+sequences, your query plus 894 significant matches. For round two,
 it's built a new model from this alignment. Now for round two, it
 fires off what's essentially an \prog{hmmsearch} of the target
 database with this new model:
@@ -1149,12 +1172,12 @@ database with this new model:
 \begin{sreoutput}
 Scores for complete sequences (score includes all domains):
    --- full sequence ---   --- best 1 domain ---    -#dom-
-    E-value  score  bias    E-value  score  bias    exp  N  Sequence    Description
-    ------- ------ -----    ------- ------ -----   ---- --  --------    -----------
-    2.8e-68  232.1   0.2    3.1e-68  232.0   0.2    1.0  1  HBB_MELME   (P02055) Hemoglobin beta subunit (Hemoglobin bet
-    3.3e-68  231.9   0.4    3.6e-68  231.8   0.3    1.0  1  HBE_MACEU   (P81042) Hemoglobin epsilon subunit (Hemoglobin 
-    4.2e-68  231.5   0.3    4.7e-68  231.4   0.2    1.0  1  HBB_MELCA   (P15449) Hemoglobin beta subunit (Hemoglobin bet
-    5.8e-68  231.1   0.2    6.5e-68  230.9   0.2    1.0  1  HBB_ARCGA   (P68047) Hemoglobin beta subunit (Hemoglobin bet
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence              Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------              -----------
+    1.5e-67  231.0   0.2    1.7e-67  230.8   0.1    1.0  1  sp|P02055|HBB_MELME   Hemoglobin subunit beta OS=Meles meles
+    2.3e-67  230.4   0.4    2.6e-67  230.2   0.3    1.0  1  sp|P81042|HBE_MACEU   Hemoglobin subunit epsilon OS=Macropus
+    2.7e-67  230.2   0.3    2.9e-67  230.0   0.2    1.0  1  sp|P15449|HBB_MELCA   Hemoglobin subunit beta OS=Mellivora c
+    3.3e-67  229.9   0.2    3.7e-67  229.7   0.2    1.0  1  sp|P68046|HBB_ODORO   Hemoglobin subunit beta OS=Odobenus ro
 ...
 \end{sreoutput}
 
@@ -1163,13 +1186,16 @@ included sequences marked with \ccode{+}'s, such as:
 
 \begin{sreoutput}
 ...
-    1.2e-29  106.8   0.0    1.3e-29  106.7   0.0    1.0  1  MYG_CRYAN   (Q9DEP0) Myoglobin
-+   1.5e-29  106.5   0.2    1.7e-29  106.3   0.2    1.0  1  MYG_MUSAN   (P14399) Myoglobin
-    2.3e-29  105.9   0.0    2.5e-29  105.8   0.0    1.0  1  HBAM_RANCA  (P02022) Hemoglobin alpha-type subunit, heart mu
-+   1.5e-28  103.2   0.2    1.7e-28  103.1   0.1    1.0  1  MYG_GALGA   (P14397) Myoglobin
-    2.1e-28  102.8   0.0    2.5e-28  102.5   0.0    1.0  1  HBAT_PAPAN  (P09106) Hemoglobin theta-1 subunit (Hemoglobin 
-+   3.5e-28  102.1   0.1    3.8e-28  101.9   0.1    1.0  1  MYG_GALJA   (P14398) Myoglobin
-      3e-26   95.8   0.0    3.3e-26   95.6   0.0    1.0  1  GLBP1_GLYDI (P23216) Globin, major polymeric component P1
+    9.8e-30  108.3   0.0    1.1e-29  108.2   0.0    1.0  1  sp|P87497|MYG_CHIRA   Myoglobin OS=Chionodraco rastrospinosu
++   1.4e-29  107.8   0.3    1.5e-29  107.7   0.2    1.0  1  sp|P14399|MYG_MUSAN   Myoglobin OS=Mustelus antarcticus GN=m
+    1.5e-29  107.7   0.3      2e-29  107.3   0.2    1.0  1  sp|P80017|GLBD_CAUAR  Globin D, coelomic OS=Caudina arenicol
+      3e-29  106.8   0.0    3.3e-29  106.6   0.0    1.0  1  sp|P02022|HBAM_RANCA  Hemoglobin heart muscle subunit alpha-
+      4e-29  106.3   0.0    4.4e-29  106.2   0.0    1.0  1  sp|Q9DEP0|MYG_CRYAN   Myoglobin OS=Cryodraco antarcticus GN=
++   9.3e-29  105.2   0.2      1e-28  105.0   0.1    1.0  1  sp|P14397|MYG_GALGA   Myoglobin OS=Galeorhinus galeus GN=mb 
+    1.3e-28  104.7   0.0    1.6e-28  104.4   0.0    1.0  1  sp|P0C227|GLB_NERAL   Globin OS=Nerita albicilla PE=1 SV=1
+      2e-28  104.1   0.0    2.4e-28  103.8   0.0    1.0  1  sp|P09106|HBAT_PAPAN  Hemoglobin subunit theta-1 OS=Papio an
++   2.8e-28  103.6   0.1    3.1e-28  103.5   0.1    1.0  1  sp|P14398|MYG_GALJA   Myoglobin OS=Galeorhinus japonicus GN=
+    7.9e-26   95.7   0.0    8.8e-26   95.5   0.0    1.0  1  sp|P23216|GLBP1_GLYDI Globin, major polymeric component P1 O
 ...
 \end{sreoutput}
 
@@ -1179,28 +1205,26 @@ but it can happen; it doesn't happen in this globin example.
 After round 2, many more globin sequences have been found:
 
 \begin{sreoutput}
-@@ New targets included:   170
-@@ New alignment includes: 1025 subseqs (was 854), including original query
+@@ New targets included:   167
+@@ New alignment includes: 1064 subseqs (was 895), including original query
 @@ Continuing to next round.
 
 @@
 @@ Round:                  3
-@@ Included in MSA:        1025 subsequences (query + 1024 subseqs from 1023 targets)
+@@ Included in MSA:        1064 subsequences (query + 1063 subseqs from 1061 targets)
 @@ Model size:             146 positions
 @@
 \end{sreoutput}
 
 Because new sequences were included, it keeps going to round three,
-and then again to round four. At round four (where this example has
-found 1060 included hits in the database), the search converges, and
-you get:
+and then again to round four, then again to round five. After round
+five (where this example has found 1113 included hits in the
+database), the search ends quietly because there's a default maximum
+of five iterations, and you get:
 
 \begin{sreoutput}
-@@ New targets included:   0
-@@ New alignment includes: 1061 subseqs (was 1061), including original query
-@@
-@@ CONVERGED (in 4 rounds). 
-@@
+@@ New targets included:   1
+@@ New alignment includes: 1114 subseqs (was 1113), including original query
 //
 \end{sreoutput}
 

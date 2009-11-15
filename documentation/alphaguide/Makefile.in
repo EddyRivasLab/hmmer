@@ -29,7 +29,7 @@ pdf:   titlepage.tex copyright.tex manpages
 	bibtex main
 	pdflatex main
 	pdflatex main
-	mv main.pdf Alphaguide.pdf
+	mv main.pdf Userguide.pdf
 
 titlepage.tex: titlepage.tex.in
 	cp -f titlepage.tex.in titlepage.tex
@@ -50,11 +50,11 @@ manpages:
 
 clean:
 	-rm -f main.aux main.bbl main.blg main.log main.toc *~
-	-rm Alphaguide.pdf
+	-rm Userguide.pdf
 
 distclean:
 	-rm -f main.aux main.bbl main.blg main.log main.toc *~
-	-rm Alphaguide.pdf
+	-rm Userguide.pdf
 	-rm -f titlepage.tex copyright.tex manpages.tex
 	-rm -f Makefile
 
