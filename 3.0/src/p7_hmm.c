@@ -585,7 +585,7 @@ p7_hmm_SetCtime(P7_HMM *hmm)
   time_t   date;
 
   if ((date   = time(NULL))                       == -1) { status = eslESYS; goto ERROR; }
-  if ((status = esl_strdup(ctime(&date), -1, &s)) != eslOK) goto ERROR;
+  if ((status = esl_strdup(ctime(&date), -1, &s)) != eslOK) goto ERROR; 
   if ((status = esl_strchop(s, -1))               != eslOK) goto ERROR;
   
   if (hmm->ctime != NULL) free(hmm->ctime);

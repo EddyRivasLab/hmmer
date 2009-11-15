@@ -48,7 +48,7 @@ for profiling:       ./configure CFLAGS="-g -pg -O"
                      (run benchmark program; then gprof the program)
 
 -------------------------------------------------------------
-Sean Eddy
+The HMMER development team
 HHMI Janelia Farm Research Campus
 http://hmmer.org/
 

@@ -4,16 +4,16 @@
 
 \subsection{Quick installation instructions}
 
-Download \prog{hmmer-3.0b2.tar.gz} from
+Download \prog{hmmer-3.0b3.tar.gz} from
 \url{http://hmmer.org/}, or directly from
-\url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0b2.tar.gz};
-untar; and change into the newly created directory \prog{hmmer-3.0b2}:
+\url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0b3.tar.gz};
+untar; and change into the newly created directory \prog{hmmer-3.0b3}:
 
-\user{wget ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0b2.tar.gz}\\
-\user{tar xf hmmer-3.0b2.tar.gz}\\
-\user{cd hmmer-3.0b2}
+\user{wget ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0b3.tar.gz}\\
+\user{tar xf hmmer-3.0b3.tar.gz}\\
+\user{cd hmmer-3.0b3}
 
-The alpha test code includes precompiled binaries for x86/Linux
+The beta test code includes precompiled binaries for x86/Linux
 platforms. These are in the \prog{binaries} directory. You can just
 stop here if you like, if you're on a x86/Linux machine and you want
 to try the programs out without installing them.
@@ -54,14 +54,17 @@ For example, on our systems, we would do:
 \user{make check}\\
 \user{make install}
 
+That's it.  You can keep reading if you want to know more about
+customizing a HMMER3 installation, or you can skip ahead to the next
+chapter, the tutorial.
+
 
 \subsection{System requirements}
 
-\textbf{Operating system:} HMMER is designed to run on
+\paragraph{Operating system:} HMMER is designed to run on
 POSIX-compatible platforms, including UNIX, Linux and MacOS/X.  The
 POSIX standard essentially includes all operating systems except
-Microsoft Windows.
-\footnote{There are add-on products available for making Windows more
+Microsoft Windows.\footnote{There are add-on products available for making Windows more
   POSIX-compliant and more compatible with GNU-ish configures and
   builds. One such product is Cygwin, \url{http:www.cygwin.com}, which
   is freely available. Although we do not test on Windows platforms,
@@ -77,16 +80,16 @@ MacOS/X. We aim to be portable to all other POSIX platforms. We
 currently do not develop or test on Windows.
 
 
-\textbf{Processor:} HMMER3 depends on SIMD vector parallelization
-methods that are supported on most modern processors.  H3 requires
-either an x86-compatible (IA32/IA64) processor that supports the SSE2
-vector instruction set, or a PowerPC processor that supports the
-Altivec/VMX instruction set. SSE2 is supported on Intel processors
-from Pentium 4 on, and AMD processors from K8 (Athlon 64) on; we
-believe this includes almost all Intel processors since 2000 and AMD
-processors since 2003. Altivec/VMX is supported on Motorola G4, IBM
-G5, and IBM Power6 processors, which we believe includes almost all
-PowerPC-based desktop systems since 1999 and servers since 2007.
+\paragraph{Processor:} HMMER3 depends on vector parallelization methods
+that are supported on most modern processors. H3 requires either an
+x86-compatible (IA32/IA64) processor that supports the SSE2 vector
+instruction set, or a PowerPC processor that supports the Altivec/VMX
+instruction set. SSE2 is supported on Intel processors from Pentium 4
+on, and AMD processors from K8 (Athlon 64) on; we believe this
+includes almost all Intel processors since 2000 and AMD processors
+since 2003. Altivec/VMX is supported on Motorola G4, IBM G5, and IBM
+Power6 processors, which we believe includes almost all PowerPC-based
+desktop systems since 1999 and servers since 2007.
 
 If your platform does not support one of these vector instruction
 sets, the configure script will revert to an unoptimized
@@ -101,44 +104,90 @@ specialized SIMD vector instructions. We hope to add support for the
 Sun SPARC VIS instruction set, for example. We believe that the code
 will be able to take advantage of GP-GPUs and FPGAs in the future.
 
-\textbf{Compiler:} The source code is C, conforming to POSIX and ANSI
+\paragraph{Compiler:} The source code is C, conforming to POSIX and ANSI
 C99 standards. It should compile with any ANSI C99 compliant compiler,
-including the GNU C compiler \prog{gcc}. We have tested the code
-using both the \prog{gcc} and \prog{icc} compilers.
+including the GNU C compiler \prog{gcc}. We test the code using both
+the \prog{gcc} and \prog{icc} compilers.
 
 If you compile HMMER from source, we strongly recommend using the
 Intel C compiler \prog{icc} rather than \prog{gcc}. \prog{icc} is free
-for noncommercial use and heavily discounted for academic use.  HMMER3
-makes extensive use of SIMD vector instructions (SSE, Intel's
-Streaming SIMD Extensions). \prog{gcc} is not as effective at
-compiling SSE code. It produces HMMER programs that are significantly
-slower than what \prog{icc} produces.
+for noncommercial use and heavily discounted for academic use.  GNU
+\prog{gcc} generates HMMER3 code that is significantly slower than
+\prog{icc} code.\footnote{Bjarne Knudsen has identified what's
+  probably the main reason, and it's not gcc's fault. We'll be able
+  to address the speed difference in the near future.} If you find
+yourself saying, hey, those guys said this program's supposed to be as
+fast as BLAST, but it only seems half as fast -- odds are you
+recompiled from source with gcc.
 
-\textbf{Libraries and other installation requirements:} HMMER includes
+
+\paragraph{Libraries and other installation requirements:} HMMER includes
 a software library called Easel, which it will automatically compile
 during its installation process.  By default, HMMER3 does not require
 any additional libraries to be installed by you, other than standard
 ANSI C99 libraries that should already be present on a system that can
-compile C code.
+compile C code. Bundling Easel instead of making it a separate
+installation requirement is a deliberate design decision to simplify
+the installation process.\footnote{If you install more than one
+  package that uses the Easel library, it may become an annoyance;
+  you'll have multiple instantiations of Easel lying around. The Easel
+  API is not yet stable enough to decouple it from the applications
+  that use it, like HMMER and Infernal.}
 
 \begin{sidebar}
 One of the objectives of the alpha test is to identify portability
-issues. If HMMER3 fails to compile and/or run under a POSIX-compliant
-OS, on an x86 processor, using an ANSI C99-compliant compiler, please
-report the problem.
+issues. If HMMER3 fails to compile and/or run fast under a
+POSIX-compliant OS, on an x86 or PowerPC processor that supports SSE2
+or Altivec/VMX, using an ANSI C99-compliant compiler, please report
+the problem. If it fails at \emph{all} (with the portable ``dummy''
+implementation) on any POSIX/ANSI C99 compatible platform regardless
+of processor type, please report the problem.
 \end{sidebar}
 
 
-\subsection{Experimental: MPI support}
+\subsection{Multithreaded parallelization for multicores by default}
 
-Optionally, a couple of programs in HMMER3 include support for MPI
-(Message Passing Interface) parallelization. To use MPI, you first
-need to have MPI installed, such as OpenMPI (\url{www.open-mpi.org}),
-and you add \ccode{--enable-mpi} to the \ccode{./configure} command
-line. HMMER3's MPI support is not completely written at this time, and
-has not been extensively tested yet. 
+The four search programs support multicore parallelization. This is
+implemented using POSIX threads. By default, the configure script will
+identify whether your platform supports POSIX threads (almost all
+platforms do), and will automatically compile in multithreading
+support.
 
-One place it's useful is in parallelizing \prog{hmmbuild}.
+If you want to disable multithreading at compile time, recompile from
+source after giving the \ccode{--disable-threads} flag to
+\ccode{./configure}.
+
+By default, the search programs will use all available cores on your
+machine.  You can control the number of cores each HMMER process will
+use with the \ccode{--cpu <x>} command line option or the
+\ccode{HMMER\_NCPU} environment variable. Accordingly, you should
+observe about a 2x or 4x speedup on dual-core or quad-core machines,
+relative to previous releases. Even with a single CPU (\ccode{--cpu
+  1}), HMMER will devote a separate execution thread to database
+input, resulting in significant speedup over serial execution.  
+
+If you specify \ccode{--cpu 0}, the program will run in serial-only
+mode, with no threads. This might be useful if you suspect something
+is awry with the threaded parallel implementation.
+
+\subsection{MPI parallelization for clusters is optional}
+
+The four search programs and hmmbuild now also support MPI (Message
+Passing Interface) parallelization on clusters.  To use MPI, you first
+need to have an MPI library installed, such as OpenMPI
+(\url{www.open-mpi.org}).
+
+MPI support is not enabled by default, and it is not compiled into the
+precompiled binaries that we supply with HMMER. To enable MPI support
+at compile time, give the \ccode{--enable-mpi} option to the
+\ccode{./configure} command.
+
+To use MPI parallelization, each program that has an MPI-parallel mode
+has an \ccode{--mpi} command line option. This option activates a
+master/worker parallelization mode. (Without the \ccode{--mpi} option,
+if you run a program under \ccode{mpirun} on N nodes, you'll be
+running N independent duplicate commands, not a single MPI-enabled
+command. Don't do that.)
 
 It's highly advantageous to get \prog{mpicc} to use the Intel C
 compiler rather than its default, which is often \prog{gcc}. Different
@@ -151,6 +200,24 @@ using:
 \user{setenv OMPI\_CFLAGS  "-O3"}\\
 \user{./configure --enable-mpi --prefix=/usr/local/hmmer3}\\
 \user{make}
+
+
+\subsection{Using build directories}
+
+The installation process from source now supports using separate build
+directories, using the GNU-standard VPATH mechanism. This allows you
+to maintain separate builds for different processors or with different
+configuration/compilation options. All you have to do is run the
+configure script from the directory you want to be the root of the
+build directory.  For example:
+
+\user{mkdir my-hmmer-build}\\
+\user{cd my-hmmer-build}\\
+\user{/path/to/hmmer/configure}\\
+\user{make}
+
+You'd probably only use this feature if you're a developer,
+maintaining several different builds for testing purposes.
 
 
 \subsection{Makefile targets}

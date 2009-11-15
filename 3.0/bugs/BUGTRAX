@@ -1,7 +1,10 @@
+####
+####  beta3 release: 13 Nov 2009
+####
 ID              h68
 TITLE           hmmalign fails on some seqs: Decoding ERANGE error
 AFFECTS         3.0b2 and earlier
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/105
 REPORTED_BY     Jordan Fish <jrdn.fish@gmail.com> 12 Nov 2009
@@ -30,7 +33,7 @@ DESCRIPTION
 ID              h67
 TITLE           H2 models produced by H2 hmmconvert aren't readable
 AFFECTS         3.0b2 and earlier
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/105
 REPORTED_BY     Lorenzo Cerutti <lorenzo.cerutti@unil.ch> 23 Sept 2009
@@ -48,7 +51,7 @@ DESCRIPTION
 ID              h66
 TITLE           hmmscan output of HMM names/descriptions corrupted somehow
 AFFECTS         3.0b2?
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/105
 REPORTED_BY     Jaina Mistry <jm14@sanger.ac.uk> 11 Nov 2009
@@ -74,7 +77,7 @@ DESCRIPTION
 ID              h65
 TITLE           hmmpress -f corrupts HMM database instead of overwriting it
 AFFECTS         3.0b2 and earlier
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/105
 REPORTED_BY     Rob Finn <rdf@sanger.ac.uk> 30 Sept 2009
@@ -94,7 +97,7 @@ DESCRIPTION
 ID              h64
 TITLE           traces containing X (fragments) are misaligned
 AFFECTS         3.0b2 and earlier
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/105
 REPORTED_BY     Elena Rivas
@@ -112,7 +115,7 @@ DESCRIPTION
 ID              h63
 TITLE           stotrace unit test may fail on i686 platforms
 AFFECTS         3.0b2 and earlier
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     Serdar Dalgic <dalgic.srdr@gmail.com>
@@ -131,7 +134,7 @@ DESCRIPTION
 ID              h62
 TITLE           hmmscan segfaults on sequences containing * characters
 AFFECTS         3.0b2 for sure; probably earlier too
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/98
 REPORTED_BY     Francisco J. Ossandon <fossandon@vtr.net>, Santiago, Chile
@@ -159,7 +162,7 @@ DESCRIPTION
 ID              h61
 TITLE           hmmscan --cut_{ga,nc,tc} fails to impose correct thresholds
 AFFECTS         3.0{a1,a2,b1,b2}
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/92
 REPORTED_BY     Sarah Hunter <hunter@ebi.ac.uk>
@@ -179,7 +182,7 @@ DESCRIPTION
 ID              h60
 TITLE	        hmmbuild --mpi fails to record GA,TC,NC thresholds
 AFFECTS		3.0{a1,a2,b1,b2}
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/92
 REPORTED_BY     Sarah Hunter <hunter@ebi.ac.uk>
@@ -196,7 +199,7 @@ DESCRIPTION
 ID		h59
 TITLE           seq descriptions containing '%' cause segfault
 AFFECTS         3.0b2
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/75
 REPORTED_BY     Michael Remmert <remmert@genzentrum.lmu.de> 11 Aug 2009
@@ -219,7 +222,7 @@ DESCRIPTION
 ID              h58
 TITLE           hmmscan tabular domain output reverses target, query lengths
 AFFECTS         3.0b2
-FIXED_IN        -
+FIXED_IN        3.0b3
 STATUS          CLOSED
 XREF            J5/69
 REPORTED_BY     Phil Jones <pjones@ebi.ac.uk> 30 Jul 2009

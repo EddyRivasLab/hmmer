@@ -8,20 +8,35 @@ Copyright (C) 2000-2009 Howard Hughes Medical Institute
 Copyright (C) 1992-2004 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
 
+The code includes contributions and input from the members of the
+HMMER development team and the Eddy/Rivas laboratories at HHMI Janelia
+Farm, whose current members include:
+
+   Sean Eddy          Janelia Farm 
+   Sergi Castellano   Janelia Farm 
+   Goran Ceric        Janelia Farm
+   Michael Farrar     Janelia Farm 
+   Rob Finn           Wellcome Trust Sanger Institute
+   Bjarne Knudsen     CLC bio
+   Diana Kolbe        Washington University/Janelia Farm
+   Eric Nawrocki      Janelia Farm
+   Elena Rivas        Janelia Farm
+   Travis Wheeler     Janelia Farm
+
 HMMER also includes contributions from others, including copyrighted
 and licensed code and technology. These are noted in the appropriate
 places in source files. Contributors include:
 
-   Jeremy Buhler (Washington University)
-   Michael Farrar (Amherst, New Hampshire)
-   Ian Holmes (UC Berkeley)
-   Bjarne Knudsen (CLCbio)
-   Erik Lindahl (Stanford University)
-   Graeme Mitchison (Cambridge University)	
-   Apple Computer (Cupertino, CA)
-   Free Software Foundation, Inc. (Cambridge, MA)
-   IBM TJ Watson Research Center (Yorktown Heights, NY)
-   X Consortium (Cambridge, MA)
+   Jeremy Buhler                   Washington University
+   Ian Holmes                      UC Berkeley
+   Erik Lindahl                    Stanford University
+   Graeme Mitchison                Cambridge University
+   Lee Newberg                     Rensselaer Polytechnic Institute
+
+   Apple Computer                  Cupertino, CA
+   Free Software Foundation, Inc.  Cambridge, MA
+   IBM TJ Watson Research Center   Yorktown Heights, NY
+   X Consortium                    Cambridge, MA
    
 HMMER uses the Easel software library, which has its own license and
 copyright information. See easel/COPYRIGHT and easel/LICENSE.
@@ -55,9 +70,10 @@ of the GPL), but we ask that you name it something that would not be
 confused with HMMER itself.
 
 ------------------------------------------------------------------
-
-Sean Eddy
+The HMMER development team
 HHMI Janelia Farm Research Campus
+http://hmmer.org/
+
 
    
 
