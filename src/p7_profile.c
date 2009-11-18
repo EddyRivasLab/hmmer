@@ -331,7 +331,7 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 
 
 
-/* Function:  p7_profile_GetTScore()
+/* Function:  p7_profile_GetT()
  * Incept:    SRE, Wed Apr 12 14:20:18 2006 [St. Louis]
  *
  * Purpose:   Convenience function that looks up a transition score in
@@ -349,6 +349,8 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
  *            can contain <p7T_X> "states" used solely to signal
  *            a sequence fragment, treated as missing data. Transitions
  *            involving <p7T_X> states are assigned zero score here.
+ *            Other transitions that occur only in core traces
+ *            (B->I0, B->D1, I_M->E) also silently get a zero score.
  *            This is safe, because we would only ever use this number
  *            for display, not as a log probability somewhere.
  *
@@ -362,8 +364,8 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 int
 p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float *ret_tsc)
 {
-  int   status;
   float tsc = 0.0f;
+  int   status;
 
   switch (st1) {
   case p7T_S:  break;
@@ -382,6 +384,14 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_M:  tsc = p7P_TSC(gm, k2-1, p7P_BM); break; /* remember, B->Mk is stored in [k-1][p7P_BM] */
     case p7T_X:  tsc = 0.0;                       break; /* should only happen in a core trace, with missing data or fragment */
+    case p7T_D:  		/* core traces only */
+      if (k2 != 1) ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s%d", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2), k2);
+      tsc = 0.0f;
+      break;
+    case p7T_I:  		/* core traces only */
+      if (k2 != 0) ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s%d", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2), k2);
+      tsc = 0.0f;
+      break;
     default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
@@ -417,6 +427,10 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_M: tsc = p7P_TSC(gm, k1, p7P_IM); break;
     case p7T_I: tsc = p7P_TSC(gm, k1, p7P_II); break;
+    case p7T_E:
+      if (k1 != gm->M)  ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
+      tsc = 0.0f; 
+      break;
     case p7T_X: tsc = 0.0f; break;
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
