@@ -160,16 +160,25 @@ p7_prior_CreateAmino(void)
   return NULL;
 }
 
-
-/* Function:  p7_prior_CreateNucleic()
- * Synopsis:  Creates the default DNA/RNA prior.
- * Incept:    SRE, Tue Jun 12 11:19:53 2007 [Janelia]
+/* Function:  p7_prior_CreateNucleicNew()
+ * Incept:    TJW, Thu Nov 12 21:15:11 EST 2009 [Couch at home]
  *
- * Purpose:   Creates the default DNA/RNA prior.
- * 
- *            Currently this is an uninformative plus-one
- *            Laplace prior, for both emissions and transitions.
- *            This should be changed to an informative prior.
+ * Purpose:   Creates the default mixture Dirichlet prior for nucleotiden
+ *            sequences.
+ *
+ *            The transition priors (match, insert, delete) are all
+ *            single Dirichlets, originally trained by Graeme
+ *            Mitchison in the mid-1990's. Notes have been lost, but
+ *            we believe they were trained on an early version of
+ *            Pfam.
+ *
+ *            The match emission prior is an eight-component mixture
+ *            trained against a portion of the rmark dataset
+ *
+ *            The insert emission prior is a single Dirichlet with
+ *            high $|\alpha|$, such that insert emission probabilities
+ *            are essentially fixed by the prior, regardless of
+ *            observed count data.
  *
  * Returns:   a pointer to the new <P7_PRIOR> structure.
  */
@@ -178,32 +187,113 @@ p7_prior_CreateNucleic(void)
 {
   int status;
   P7_PRIOR *pri = NULL;
+  int q;
+
+
+  /* Match emission priors are trained on rmark database [Nawrocki 08]
+   */
+
+  /* Plus-1 Laplace prior
+  int num_comp = 1;
+  static double defmq[2] =  { 1.0  };
+  static double defm[1][4] = {
+         { 1.0, 1.0, 1.0, 1.0} //
+  };
+*/
+/*
+  int num_comp = 2;
+  static double defmq[2] =  { 0.42,  0.58   };
+  static double defm[2][4] = {
+         { 0.94,   0.90,   0.89,   1.13}, //
+         { 0.096,  0.078,  0.093,   0.089} //
+  };
+*/
+/*
+   //weird - but this performs marginally better than the best 2- 5- or 8-component mixtures tested
+  // (on rmark - MER: 2 better than 5/8-comp  , 3 better than 2-comp )
+   int num_comp = 4;
+   static double defmq[4] = { 0.16, 0.29, 0.12, 0.43  };
+   static double defm[4][4] = {
+         { 0.36,   0.10,   5.3,   0.13}, // G
+         { 0.05,  0.18,  0.03,   0.19}, // CT
+         { 7.1,  0.13,  0.35,   0.17}, // A
+         { 0.96,  0.92,  0.91,   1.19} // uniform
+	};
+ */
+
+   /*On rmark, this model does only slightly better than the 2-component model
+     It's chosen as the default on grounds of reasonableness, given that it shows
+     a non-uniform transition:transversion ratio. It's based on the results
+     of training against a portion of rmark, but the overspecified numbers
+     resulting from that training have been rounded/simplified.
+   */
+   int num_comp = 5;
+   static double defmq[5] = { 0.16, 0.13, 0.17, 0.15, 0.39 };
+   static double defm[5][4] = {
+         { 6.0,   0.2,  0.5,   0.2}, // A
+         { 0.2,  8.0,  0.2,   0.5}, // C
+         { 0.5,  0.2,  8.0,   0.2}, // G
+         { 0.2,  0.5,  0.2,   4.0}, // T
+         { 1.3,  1.2,  1.2,   1.4}   // uniform
+	};
+
+
+/* gives no improved performance in my hands over the 5-component model
+  int num_comp = 8;
+  static double defmq[8] = { 0.13, 0.08, 0.08, 0.13, 0.08, 0.08, 0.17, 0.25 } ;
+  static double defm[8][4] = {
+       { 4.0,   0.3,   0.5,   0.4}, // A
+       { 0.3,   22.0,  0.3,   0.8}, // C
+       { 1.0,   0.4,   28.0,  0.4}, // G
+       { 0.5,   0.8,   0.3,   6.0}, // T
+       { 1.8,   0.8,   6.0,   1.0}, // AG
+       { 0.6,   6.0,   0.6,   2.4}, // CT
+       { 0.03,  0.01,  0.02,  0.02}, // anything, but highly conserved
+       { 2.0,   2.0,   2.0,   2.0}  // anything, not much conservation
+       };
+ */
 
   ESL_ALLOC(pri, sizeof(P7_PRIOR));
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
 
-  pri->tm = esl_mixdchlet_Create(1, 3);	 /* single component; 3 params */
-  pri->ti = esl_mixdchlet_Create(1, 2);	 /* single component; 2 params */
-  pri->td = esl_mixdchlet_Create(1, 2);	 /* single component; 2 params */
-  pri->em = esl_mixdchlet_Create(1, 4);  /* single component; 4 params */
-  pri->ei = esl_mixdchlet_Create(1, 4);  /* single component; 4 params */
 
+  pri->tm = esl_mixdchlet_Create(1, 3);  // match transitions; single component; 3 params
+  pri->ti = esl_mixdchlet_Create(1, 2);  // insert transitions; single component; 2 params
+  pri->td = esl_mixdchlet_Create(1, 2);  // delete transitions; single component; 2 params
+  pri->em = esl_mixdchlet_Create(num_comp, 4); // match emissions; X component; 4 params
+  pri->ei = esl_mixdchlet_Create(1, 4); // insert emissions; single component; 4 params
+
+
+  if (pri->tm == NULL || pri->ti == NULL || pri->td == NULL || pri->em == NULL || pri->ei == NULL) goto ERROR;
+
+  /* Transition priors: roughly, learned from rmark benchmark - hand-beautified (trimming overspecified significant digits)
+   */
   pri->tm->pq[0]       = 1.0;
-  pri->tm->alpha[0][0] = 1.0; /* TMM */
-  pri->tm->alpha[0][1] = 1.0; /* TMI */ 
-  pri->tm->alpha[0][2] = 1.0; /* TMD */ 
+  pri->tm->alpha[0][0] = 2.0; // TMM
+  pri->tm->alpha[0][1] = 0.1; // TMI
+  pri->tm->alpha[0][2] = 0.1; // TMD
+
 
   pri->ti->pq[0]       = 1.0;
-  pri->ti->alpha[0][0] = 1.0; /* TIM */
-  pri->ti->alpha[0][1] = 1.0; /* TII */
+  pri->ti->alpha[0][0] = 0.06; // TIM
+  pri->ti->alpha[0][1] = 0.2; // TII
 
   pri->td->pq[0]       = 1.0;
-  pri->td->alpha[0][0] = 1.0; /* TDM */
-  pri->td->alpha[0][1] = 1.0; /* TDD */
+  pri->td->alpha[0][0] = 0.1; // TDM
+  pri->td->alpha[0][1] = 0.2; // TDD
 
-  pri->em->pq[0] = 1.0;
-  esl_vec_DSet(pri->em->alpha[0], 4, 1.0);
 
+
+  /* Match emission priors  */
+  for (q = 0; q < num_comp; q++)
+    {
+      pri->em->pq[q] = defmq[q];
+      esl_vec_DCopy(defm[q], 4, pri->em->alpha[q]);
+    }
+
+
+  /* Insert emission priors. Should that alphas be lower? higher?
+   */
   pri->ei->pq[0] = 1.0;
   esl_vec_DSet(pri->ei->alpha[0], 4, 1.0);
 
@@ -213,6 +303,8 @@ p7_prior_CreateNucleic(void)
   if (pri != NULL) p7_prior_Destroy(pri);
   return NULL;
 }
+
+
 
 /* Function:  p7_prior_CreateLaplace()
  * Synopsis:  Creates Laplace plus-one prior.
@@ -339,6 +431,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
   }
   return eslOK;
 }
+
 
 
 /*****************************************************************
