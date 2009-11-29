@@ -271,9 +271,10 @@ p7_hmm_Clone(const P7_HMM *hmm)
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
   p7_hmm_CopyParameters(hmm, new);
   
-  if (hmm->name != NULL      && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_ACC) && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_DESC)&& (status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+
   if ((hmm->flags & p7H_RF)  && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
   if ((hmm->flags & p7H_CS)  && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
   if ((hmm->flags & p7H_CA)  && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
@@ -472,13 +473,13 @@ p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
   if (acc == NULL) {
     if (hmm->acc != NULL) free(hmm->acc); 
     hmm->acc = NULL;
-    hmm->flags &= ~p7H_ACC;
+    hmm->flags &= ~p7H_ACC;	/* legacy */
   } else {
     n = strlen(acc);
     ESL_RALLOC(hmm->acc, tmp, sizeof(char)*(n+1));
     strcpy(hmm->acc, acc);
     if ((status = esl_strchop(hmm->acc, n)) != eslOK) goto ERROR;
-    hmm->flags |= p7H_ACC;
+    hmm->flags |= p7H_ACC;	/* legacy */
   }
   return eslOK;
 
@@ -503,7 +504,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
     {
       if (hmm->desc != NULL) free(hmm->desc); 
       hmm->desc   = NULL;
-      hmm->flags &= ~p7H_DESC;
+      hmm->flags &= ~p7H_DESC;	/* legacy */
     }
   else
     {
@@ -511,7 +512,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
       ESL_RALLOC(hmm->desc, tmp, sizeof(char)*(n+1));
       strcpy(hmm->desc, desc);
       if ((status = esl_strchop(hmm->desc, n)) != eslOK) goto ERROR;
-      hmm->flags |= p7H_DESC;
+      hmm->flags |= p7H_DESC;	/* legacy */
     }
   return eslOK;
 
@@ -1044,15 +1045,17 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
   if (strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
   if (strcmp(h1->ctime,  h2->ctime)  != 0) return eslFAIL;
+
   if (h1->nseq     != h2->nseq)            return eslFAIL;
   if (h1->eff_nseq != h2->eff_nseq)        return eslFAIL;
   if (h1->checksum != h2->checksum)        return eslFAIL;
 
-  if ((h1->flags & p7H_ACC)  && strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
-  if ((h1->flags & p7H_DESC) && strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
-  if ((h1->flags & p7H_RF)   && strcmp(h1->rf,   h2->rf)   != 0) return eslFAIL;
-  if ((h1->flags & p7H_CS)   && strcmp(h1->cs,   h2->cs)   != 0) return eslFAIL;
-  if ((h1->flags & p7H_CA)   && strcmp(h1->ca,   h2->ca)   != 0) return eslFAIL;
+  if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
+  if (esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
+
+  if ((h1->flags & p7H_RF)   && esl_strcmp(h1->rf,   h2->rf)                != 0) return eslFAIL;
+  if ((h1->flags & p7H_CS)   && esl_strcmp(h1->cs,   h2->cs)                != 0) return eslFAIL;
+  if ((h1->flags & p7H_CA)   && esl_strcmp(h1->ca,   h2->ca)                != 0) return eslFAIL;
   if ((h1->flags & p7H_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
 
   if (h1->flags & p7H_GA) {
@@ -1114,10 +1117,6 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
   if (hmm->t[hmm->M][p7H_DD] != 0.0)                       ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
 
   if (hmm->name == NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "name is NULL: this field is mandatory");
-  if ( (hmm->flags & p7H_ACC)    && hmm->acc  == NULL)     ESL_XFAIL(eslFAIL, errbuf, "accession null but p7H_ACC flag is up");
-  if (!(hmm->flags & p7H_ACC)    && hmm->acc  != NULL)     ESL_XFAIL(eslFAIL, errbuf, "accession present but p7H_ACC flag is down");
-  if ( (hmm->flags & p7H_DESC)   && hmm->desc == NULL)     ESL_XFAIL(eslFAIL, errbuf, "description null but p7H_DESC flag is up");
-  if (!(hmm->flags & p7H_DESC)   && hmm->desc != NULL)     ESL_XFAIL(eslFAIL, errbuf, "description present but p7H_DESC flag is down");
   /* comlog is either NULL or a free text string: hard to validate */
   /* ctime, ditto */
   if ( (hmm->nseq     != -1)     && hmm->nseq     <= 0)    ESL_XFAIL(eslFAIL, errbuf, "invalid nseq");

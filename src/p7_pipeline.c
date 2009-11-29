@@ -524,7 +524,7 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  *            anyway. We may emit a warning to the user, but cleanly
  *            skip the problematic sequence and continue.
  *
- * Throws:    (no abnormal error conditions)
+ * Throws:    <eslEMEM> on allocation failure.
  *
  * Xref:      J4/25.
  */
@@ -668,9 +668,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
     {
       p7_tophits_CreateNextHit(hitlist, &hit);
       if (pli->mode == p7_SEARCH_SEQS) {
-	if ((status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
-	if ((status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
-	if ((status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+	if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+	if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+	if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
       } else {
 	if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
 	if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");

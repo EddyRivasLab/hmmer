@@ -62,8 +62,8 @@ p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm)
 
   fprintf(fp, "HMMER2.0  [converted from %s]\n", HMMER_VERSION);  /* magic header */
   fprintf(fp, "NAME  %s\n", hmm->name);
-  if (hmm->flags & p7H_ACC)  fprintf(fp, "ACC   %s\n", hmm->acc);
-  if (hmm->flags & p7H_DESC) fprintf(fp, "DESC  %s\n", hmm->desc);
+  if (hmm->acc)  fprintf(fp, "ACC   %s\n", hmm->acc);
+  if (hmm->desc) fprintf(fp, "DESC  %s\n", hmm->desc);
   fprintf(fp, "LENG  %d\n", hmm->M);
 
   if      (hmm->abc->type == eslAMINO)   fprintf(fp, "ALPH  Amino\n");  

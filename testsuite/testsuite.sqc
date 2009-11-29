@@ -118,7 +118,7 @@
 1 exercise  mapali                @i6-hmmalign-mapali.pl@     @hmmalign@   @esl-reformat@  !.!       %OUTFILES%
 1 exercise  fragments             @i7-hmmbuild-fragments.pl@  @hmmbuild@                             %OUTFILES%
 1 exercise  nonresidues           perl -I !.! @i8-nonresidues.pl@  @hmmsearch@  !20aa.hmm!           %OUTFILES%
-
+1 exercise  opt-annotation        perl -I !.! @i9-optional-annotation.pl@ ../src %OUTFILES%
 
 1 exercise  hmmpress-itest        !../src/hmmpress.itest.pl! @hmmpress@ %MINIFAM.HMM% %TMPPFX%
 

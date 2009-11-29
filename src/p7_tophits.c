@@ -206,8 +206,8 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
  * Note:      Is this actually used anywhere? (SRE, 10 Dec 08) 
  *            I think it's not up to date.
  *            
- *            That's right. This function is completely obsolete.
- *            It is used in benchmark and test code, so you can't
+ *            That's right. This function is obsolete.
+ *            But it is used in benchmark and test code, so you can't
  *            delete it yet; benchmarks and test code should be
  *            revised (SRE, 26 Oct 09)
  */
@@ -1041,7 +1041,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 	fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n", 
 		tnamew, th->hit[h]->name,
-		taccw,  th->hit[h]->acc[0] != '\0' ?  th->hit[h]->acc : "-",
+		taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
 		qnamew, qname, 
 		qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
 		th->hit[h]->pvalue * pli->Z,
@@ -1058,7 +1058,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 		th->hit[h]->ndom,
 		th->hit[h]->nreported,
 		th->hit[h]->nincluded,
-		(th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));
+		th->hit[h]->desc ?  th->hit[h]->desc : "-");
       }
   return eslOK;
 }
@@ -1083,7 +1083,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 {
   int qnamew = ESL_MAX(20, strlen(qname));
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
-  int qaccw  = ( (qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
+  int qaccw  = (qacc ? ESL_MAX(10, strlen(qacc)) : 10);
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int tlen, qlen;
   int h,d,nd;
@@ -1116,7 +1116,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 	      fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n", 
 		      tnamew, th->hit[h]->name,
-		      taccw,  th->hit[h]->acc[0] != '\0' ?  th->hit[h]->acc : "-",
+		      taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
 		      tlen,
 		      qnamew, qname,     
 		      qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
@@ -1137,7 +1137,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 		      th->hit[h]->dcl[d].ienv,
 		      th->hit[h]->dcl[d].jenv,
 		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
-		      (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));		      
+		      (th->hit[h]->desc ?  th->hit[h]->desc : "-"));		      
 	    }
       }
   return eslOK;

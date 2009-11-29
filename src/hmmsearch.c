@@ -414,8 +414,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	}
 
       fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
-      if (hmm->acc  != NULL) fprintf(ofp, "Accession:   %s\n", hmm->acc);
-      if (hmm->desc != NULL) fprintf(ofp, "Description: %s\n", hmm->desc);
+      if (hmm->acc)  fprintf(ofp, "Accession:   %s\n", hmm->acc);
+      if (hmm->desc) fprintf(ofp, "Description: %s\n", hmm->desc);
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
@@ -821,8 +821,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (nquery > 1) list->current = 0;
 
       fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
-      if (hmm->acc  != NULL) fprintf(ofp, "Accession:   %s\n", hmm->acc);
-      if (hmm->desc != NULL) fprintf(ofp, "Description: %s\n", hmm->desc);
+      if (hmm->acc)  fprintf(ofp, "Accession:   %s\n", hmm->acc);
+      if (hmm->desc) fprintf(ofp, "Description: %s\n", hmm->desc);
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);

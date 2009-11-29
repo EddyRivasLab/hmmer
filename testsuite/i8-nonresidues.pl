@@ -40,7 +40,7 @@ ACDEFGHIKL*MNPQRSTVWY
 EOF
 
 system("$hmmsearch --domtblout $tmppfx.dom $hmm20aa $tmppfx.1 > $tmppfx.out 2>&1");
-if ($? != 0) { print "FAIL: hmmsearch failed on first test sequence"; }
+if ($? != 0) { die "FAIL: hmmsearch failed on first test sequence\n"; }
 &h3::ParseDomTbl("$tmppfx.dom");
 
 # Verify.

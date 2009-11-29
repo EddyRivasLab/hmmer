@@ -27,13 +27,14 @@ sub ParseDomTbl {
     @ienv     = ();
     @jenv     = ();
     @accuracy = ();
-    
+    @tdesc    = ();    
 
     if (! open(DOMFILE, $domtblfile)) { print "FAIL: couldn't open first domain table file"; exit 1 ; }
     while (<DOMFILE>)
     {
 	if (/^\#/) { next; }
-	@fields = split(' ', $_);
+	chop;
+	@fields = split(' ', $_, 23);
 
 	$tname[$ndomtbl]   = $fields[0];
 	$tacc[$ndomtbl]    = $fields[1];
@@ -56,8 +57,8 @@ sub ParseDomTbl {
 	$jali[$ndomtbl]    = $fields[18];
 	$ienv[$ndomtbl]    = $fields[19];
 	$jenv[$ndomtbl]    = $fields[20];
-	$acc[$ndomtbl]     = $fields[21];
-	$desc[$ndomtbl]    = $fields[22];
+	$accuracy[$ndomtbl]= $fields[21];
+	$tdesc[$ndomtbl]   = $fields[22];
 	$ndomtbl++;
     }
     close DOMFILE;
