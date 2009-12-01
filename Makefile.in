@@ -105,12 +105,13 @@ all: libraries programs
 check:
 			${MAKE} all
 			${MAKE} utests
+			${MAKE} itests
 			${MAKE} testsuite
 	cd ${ESLDIR};   ${MAKE} run_sqc
 	cd ${TESTDIR};  ${MAKE} run_sqc
 
 # dev: compile all executables, including drivers.
-dev: libraries programs utests misc
+dev: libraries programs utests itests misc
 
 Makefile:  configure
 	./configure
@@ -145,11 +146,16 @@ profmark_progs: libraries
 # rules to build the unit tests
 utests: easel_utests hmmer_utests
 
+itests:              hmmer_itests
+
 easel_utests: libraries
 	cd ${ESLDIR};   ${MAKE} easel_utests
 
 hmmer_utests: libraries
 	cd ${SRCDIR};   ${MAKE} hmmer_utests
+
+hmmer_itests: libraries
+	cd ${SRCDIR};   ${MAKE} hmmer_itests
 
 # rules to build the miscellaneous programs
 misc: hmmer_stats hmmer_benchmarks hmmer_benchmarks hmmer_examples testsuite
@@ -256,8 +262,9 @@ TAGS:
 	etags -a documentation/alphaguide/*.tex documentation/alphaguide/Makefile.in
 #	etags -a documentation/man/*.man  documentation/man/boilerplate
 #	etags -a documentation/devguide/*.tex 
-	etags -a ${SRCDIR}/impl_sse/*.c ${SRCDIR}/impl_sse/*.h ${SRCDIR}/impl_sse/Makefile.in 
-	etags -a ${SRCDIR}/impl_vmx/*.c ${SRCDIR}/impl_vmx/*.h ${SRCDIR}/impl_vmx/Makefile.in 
+	etags -a ${SRCDIR}/impl_sse/*.c   ${SRCDIR}/impl_sse/*.h   ${SRCDIR}/impl_sse/Makefile.in 
+	etags -a ${SRCDIR}/impl_vmx/*.c   ${SRCDIR}/impl_vmx/*.h   ${SRCDIR}/impl_vmx/Makefile.in 
+	etags -a ${SRCDIR}/impl_dummy/*.c ${SRCDIR}/impl_dummy/*.h ${SRCDIR}/impl_dummy/Makefile.in 
 	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
 
 

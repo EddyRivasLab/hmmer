@@ -39,7 +39,6 @@
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "impl_jb.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -96,7 +95,7 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   P7_BG          *bg       = p7_bg_Create(abc);
   P7_GMX         *gx       = p7_gmx_Create(3, 4); /* M=3, L up to 4. */
-  P7_OMX         *ox       = p7_omx_Create(3, 4); 
+  P7_OMX         *ox       = p7_omx_Create(3, 4, 4); 
   P7_HMM         *hmm      = NULL;
   P7_PROFILE     *gm       = NULL;
   P7_OPROFILE    *om       = p7_oprofile_Create(3, abc);
@@ -113,7 +112,7 @@ main(int argc, char **argv)
   float           vprecision, fprecision; /* expected bound on absolute accuracy for viterbi, forward */
 
   for (do_alternate_implementation = 0; do_alternate_implementation <= 1; do_alternate_implementation++)
-    for (do_local = 0; do_local <= 1; do_local++) /* run tests in both glocal and local mode   */
+    for (do_local = 1; do_local <= 1; do_local++) /* run tests in both glocal and local mode   */
       for (j = 0; j <= N; j++)	                /* #0 = fixed params; #1..N = sampled params */
 	{
 	  if (esl_opt_GetBoolean(go, "-v")) 
@@ -131,22 +130,18 @@ main(int argc, char **argv)
 	  for (L = 0; L <= 4; L++)
 	    {
 	      p7_gmx_GrowTo(gx, 3, L);
-	      p7_omx_GrowTo(ox, 3, L);
+	      p7_omx_GrowTo(ox, 3, L, L);
 	      
 	      dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;       /* Initialize dsq of length L at 0000... (all A) */
 	      for (i = 1; i <= L; i++) dsq[i] = 0;
 	    
 	      if (do_alternate_implementation) 
 		{
-		  if (p7_Viterbi(dsq, L, om, ox, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
-
 		  if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
-		    p7_omx_Dump(stdout, ox);
+		    p7_omx_SetDumpMode(stdout, ox, TRUE);
 
-		  if (p7_Forward(dsq, L, om, ox, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
-
-		  if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
-		    p7_omx_Dump(stdout, ox);
+		  if (p7_ViterbiFilter(dsq, L, om, ox, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
+		  if (p7_Forward      (dsq, L, om, ox, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
 
 		  vprecision = 0.01;    /* some optimized impl use SILO, may err due to integer discretization */
 		  fprecision = 0.01;    /* default impl uses FLogsum, tolerate e^0.1 ~= 1% error in Forward probs */
@@ -187,7 +182,7 @@ main(int argc, char **argv)
 	      if (esl_opt_GetBoolean(go, "-v")) 
 		printf("%-6s %6s %6s %1d %8.4f %8.4f %8.4f %8.4f\n",
 		       do_local ? "local" : "glocal",
-		       do_alternate_implementation ? "default" : "alt",
+		       do_alternate_implementation ? "alt" : "default",
 		       (j > 0)  ? "random": "fixed",
 		       L, 
 		       brute_fwd[L], fsc[L], 
@@ -253,7 +248,7 @@ sample_zeropeppered_probvector(ESL_RANDOMNESS *r, double *p, int n)
   esl_dirichlet_DSampleUniform(r, n, p);
   if (esl_rnd_Roll(r, 2))	/* coin flip */
     {
-      p[esl_rnd_Roll(r, n)] == 0.0;
+      p[esl_rnd_Roll(r, n)] = 0.0;
       esl_vec_DNorm(p, n);
     }
 }
@@ -344,7 +339,7 @@ create_brute_hmm(ESL_ALPHABET *abc, struct p7_bruteparam_s *prm)
   }
   
   /* Add mandatory annotation */
-  p7_hmm_SetName(hmm, "brute-test");
+  p7_hmm_SetName(hmm, "itest-brute");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   hmm->nseq     = 0;
   hmm->eff_nseq = 0;
