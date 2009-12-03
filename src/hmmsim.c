@@ -697,6 +697,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	   */
 	  /* alilens[i] = scounts[p7T_D] + scounts[p7T_I]; SRE: temporarily testing this instead */
 	  alilens[i] = scounts[p7T_M] + scounts[p7T_D] + scounts[p7T_I];
+
+	  p7_trace_Reuse(tr);
 	}
 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
