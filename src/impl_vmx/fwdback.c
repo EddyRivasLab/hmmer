@@ -457,9 +457,9 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   /* On an underflow (which shouldn't happen), we counterintuitively return infinity:
    * the effect of this is to force the caller to rescore us with full range.
    */
-  if       (isnan(xC))      ESL_EXCEPTION(eslERANGE, "forward score is NaN");
-  else if  (xC == 0.0)      ESL_EXCEPTION(eslERANGE, "forward score underflow (is 0.0)");
-  else if  (isinf(xC) == 1) ESL_EXCEPTION(eslERANGE, "forward score overflow (is infinity)");
+  if       (isnan(xC))        ESL_EXCEPTION(eslERANGE, "forward score is NaN");
+  else if  (L>0 && xC == 0.0) ESL_EXCEPTION(eslERANGE, "forward score underflow (is 0.0)");     /* [J5/118] */
+  else if  (isinf(xC) == 1)   ESL_EXCEPTION(eslERANGE, "forward score overflow (is infinity)");
 
   if (opt_sc != NULL) *opt_sc = ox->totscale + log(xC * om->xf[p7O_C][p7O_MOVE]);
   return eslOK;
@@ -725,9 +725,9 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E], bck->xmx[p7X_N],  bck->xmx[p7X_J], bck->xmx[p7X_B],  bck->xmx[p7X_C]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
 #endif
 
-  if       (isnan(xN))      ESL_EXCEPTION(eslERANGE, "backward score is NaN");
-  else if  (xN == 0.0)      ESL_EXCEPTION(eslERANGE, "backward score underflow (is 0.0)");
-  else if  (isinf(xN) == 1) ESL_EXCEPTION(eslERANGE, "backward score overflow (is infinity)");
+  if       (isnan(xN))         ESL_EXCEPTION(eslERANGE, "backward score is NaN");
+  else if  (L>0 && xN == 0.0)  ESL_EXCEPTION(eslERANGE, "backward score underflow (is 0.0)");    /* [J5/118] */
+  else if  (isinf(xN) == 1)    ESL_EXCEPTION(eslERANGE, "backward score overflow (is infinity)");
 
   if (opt_sc != NULL) *opt_sc = bck->totscale + log(xN);
   return eslOK;

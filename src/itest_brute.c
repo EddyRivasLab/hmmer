@@ -21,15 +21,20 @@
  * exactly (within machine precision). Forward scores should match
  * "closely", with some error introduced by the discretization in
  * FLogsum()'s table lookup.
+ *
+ * This is an important test of correctness for the generic Viterbi
+ * and Forward implementations. Optimized implementations (impl_sse,
+ * etc) are then verified against the generic implementations. 
  * 
  * SRE, Tue Jul 17 08:17:36 2007 [Janelia]
  * SVN $Id$
- * xref J1/106-109
+ * xref J1/106-109: original implementation
+ * xref J5/118:     revival; brought up to date with H3's assumptions of zero insert scores.
  */
 
-/*  gcc -std=c99 -g -Wall -I. -I../easel -L. -L../easel -o itest_brute itest_brute.c impl_jb.c -lhmmer -leasel -lm
+/*  gcc -std=c99 -g -Wall -I. -I../easel -L. -L../easel -o itest_brute itest_brute.c  -lhmmer -leasel -lm
  * or
- *  gcc -std=c99 -g -Wall -I. -I../easel -L. -L../easel -o itest_brute itest_brute.c impl_h2.c -lhmmer -leasel -lm
+ *  gcc -std=c99 -g -Wall -I. -I../easel -L. -L../easel -o itest_brute itest_brute.c  -lhmmer -leasel -lm
  */
 #include "p7_config.h"
 
@@ -95,13 +100,10 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   P7_BG          *bg       = p7_bg_Create(abc);
   P7_GMX         *gx       = p7_gmx_Create(3, 4); /* M=3, L up to 4. */
-  P7_OMX         *ox       = p7_omx_Create(3, 4, 4); 
   P7_HMM         *hmm      = NULL;
   P7_PROFILE     *gm       = NULL;
-  P7_OPROFILE    *om       = p7_oprofile_Create(3, abc);
   int             N        = esl_opt_GetInteger(go, "-N");
   int             do_local;
-  int             do_alternate_implementation;
   double          brute_fwd[5];	/* lod Forward scores for seqs L=0..4 calculated by brute force path enumeration */
   double          brute_vit[5];	/* lod Viterbi scores for seqs L=0..4 calculated by brute force path enumeration */
   float           fsc[5];	/* lod scores for seqs L=0..4 calculated by GForward() DP */
@@ -111,94 +113,75 @@ main(int argc, char **argv)
   int             i,j;
   float           vprecision, fprecision; /* expected bound on absolute accuracy for viterbi, forward */
 
-  for (do_alternate_implementation = 0; do_alternate_implementation <= 1; do_alternate_implementation++)
-    for (do_local = 1; do_local <= 1; do_local++) /* run tests in both glocal and local mode   */
-      for (j = 0; j <= N; j++)	                /* #0 = fixed params; #1..N = sampled params */
-	{
-	  if (esl_opt_GetBoolean(go, "-v")) 
-	    printf("%s\n", do_local ? "Local mode (implicit model)" : "Glocal mode (wing retracted)");
+  for (do_local = 0; do_local <= 1; do_local++) /* run tests in both glocal and local mode   */
+    for (j = 0; j <= N; j++)	                /* #0 = fixed params; #1..N = sampled params */
+      {
+	if (esl_opt_GetBoolean(go, "-v")) 
+	  printf("%s\n", do_local ? "Local mode (implicit model)" : "Glocal mode (wing retracted)");
 	  
-	  if (j == 0)      set_bruteparams(&prm);
-	  else             sample_bruteparams(r, &prm);
+	if (j == 0)      set_bruteparams(&prm);
+	else             sample_bruteparams(r, &prm);
 
-	  hmm = create_brute_hmm(abc, &prm);
-	  gm  = create_brute_profile(&prm, hmm, bg, do_local);
-	  score_brute_profile(&prm, bg, TRUE,  brute_vit);
-	  score_brute_profile(&prm, bg, FALSE, brute_fwd);
-	  p7_oprofile_Convert(gm, om);
+	hmm = create_brute_hmm(abc, &prm);
+	gm  = create_brute_profile(&prm, hmm, bg, do_local);
+	score_brute_profile(&prm, bg, TRUE,  brute_vit);
+	score_brute_profile(&prm, bg, FALSE, brute_fwd);
   
-	  for (L = 0; L <= 4; L++)
-	    {
-	      p7_gmx_GrowTo(gx, 3, L);
-	      p7_omx_GrowTo(ox, 3, L, L);
+	for (L = 0; L <= 4; L++)
+	  {
+	    p7_gmx_GrowTo(gx, 3, L);
 	      
-	      dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;       /* Initialize dsq of length L at 0000... (all A) */
-	      for (i = 1; i <= L; i++) dsq[i] = 0;
+	    dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;       /* Initialize dsq of length L at 0000... (all A) */
+	    for (i = 1; i <= L; i++) dsq[i] = 0;
 	    
-	      if (do_alternate_implementation) 
-		{
-		  if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
-		    p7_omx_SetDumpMode(stdout, ox, TRUE);
+	    if (p7_GViterbi(dsq, L, gm, gx, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
 
-		  if (p7_ViterbiFilter(dsq, L, om, ox, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
-		  if (p7_Forward      (dsq, L, om, ox, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
+	    if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
+	      p7_gmx_Dump(stdout, gx);
 
-		  vprecision = 0.01;    /* some optimized impl use SILO, may err due to integer discretization */
-		  fprecision = 0.01;    /* default impl uses FLogsum, tolerate e^0.1 ~= 1% error in Forward probs */
-		}
-	      else
-		{
-		  if (p7_GViterbi(dsq, L, gm, gx, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
+	    if (p7_GForward(dsq, L, gm, gx, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
 
-		  if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
-		    p7_gmx_Dump(stdout, gx);
+	    if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
+	      p7_gmx_Dump(stdout, gx);
 
-		  if (p7_GForward(dsq, L, gm, gx, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
+	    vprecision = 1e-5;    /* default impl uses fp, should be accurate within machine precision      */
+	    fprecision = 0.01;    /* default impl uses FLogsum, tolerate e^0.1 ~= 1% error in Forward probs */
 
-		  if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
-		    p7_gmx_Dump(stdout, gx);
 
-		  vprecision = 1e-5;    /* default impl uses fp, should be accurate within machine precision      */
-		  fprecision = 0.01;    /* default impl uses FLogsum, tolerate e^0.1 ~= 1% error in Forward probs */
-		}
+	    if (fabs(vsc[L] - brute_vit[L]) > vprecision)
+	      esl_fatal("Viterbi scores mismatched: %-6s %s  L=%1d brute=%8.4f GViterbi()=%8.4f (difference %g)",
+			do_local ? "local" : "glocal",
+			(j > 0)  ? "random": "fixed",
+			L, 
+			brute_vit[L], vsc[L], fabs(brute_vit[L] - vsc[L]));
 
-	      if (fabs(vsc[L] - brute_vit[L]) > vprecision)
-		esl_fatal("Viterbi scores mismatched: %-6s %s %6s L=%1d brute=%8.4f GViterbi()=%8.4f (difference %g)",
-			  do_local ? "local" : "glocal",
-			  do_alternate_implementation ? "alt" : "default",
-			  (j > 0)  ? "random": "fixed",
-			  L, 
-			  brute_vit[L], vsc[L], fabs(brute_vit[L] - vsc[L]));
+	    /* verify that Forward scores match closely (within error introduced by FLogsum() */
+	    if (fabs(fsc[L] - brute_fwd[L]) > fprecision) 
+	      esl_fatal("Forward scores mismatched: %-6s %s L=%1d brute=%8.4f GForward()=%8.4f",
+			do_local ? "local" : "glocal",
+			(j > 0)  ? "random": "fixed",
+			L, 
+			brute_fwd[L], fsc[L]);
 
-	      /* verify that Forward scores match closely (within error introduced by FLogsum() */
-	      if (fabs(fsc[L] - brute_fwd[L]) > fprecision) 
-		esl_fatal("Forward scores mismatched: %-6s %s %6s L=%1d brute=%8.4f GForward()=%8.4f",
-			  do_local ? "local" : "glocal",
-			  do_alternate_implementation ? "alt" : "default",
-			  (j > 0)  ? "random": "fixed",
-			  L, 
-			  brute_fwd[L], fsc[L]);
-
-	      if (esl_opt_GetBoolean(go, "-v")) 
-		printf("%-6s %6s %6s %1d %8.4f %8.4f %8.4f %8.4f\n",
-		       do_local ? "local" : "glocal",
-		       do_alternate_implementation ? "alt" : "default",
-		       (j > 0)  ? "random": "fixed",
-		       L, 
-		       brute_fwd[L], fsc[L], 
-		       brute_vit[L], vsc[L]);
-	    }
-	  p7_profile_Destroy(gm);
-	  p7_hmm_Destroy(hmm);
-	}
+	    if (esl_opt_GetBoolean(go, "-v")) 
+	      printf("%-6s %6s %1d %8.4f %8.4f %8.4f %8.4f\n",
+		     do_local ? "local" : "glocal",
+		     (j > 0)  ? "random": "fixed",
+		     L, 
+		     brute_fwd[L], fsc[L], 
+		     brute_vit[L], vsc[L]);
+	  }
+	p7_profile_Destroy(gm);
+	p7_hmm_Destroy(hmm);
+      }
 
   p7_gmx_Destroy(gx);
-  p7_omx_Destroy(ox);
-  p7_oprofile_Destroy(om);
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
+
+  printf("ok\n");
   return 0;
 }
     
@@ -236,8 +219,8 @@ set_bruteparams(struct p7_bruteparam_s *prm)
   prm->q = 0.45;      /* C->T   exp(gm->xsc[p7P_C][p7P_MOVE]) */
   prm->r = 0.47;      /* J->B   exp(gm->xsc[p7P_J][p7P_MOVE]) */
 
-  prm->alpha = 0.7;   /* hmm->mat[k][A] for all k  */
-  prm->beta  = 0.3;   /* hmm->ins[k][A] for all k  */
+  prm->alpha = 0.7;    /* hmm->mat[k][A] for all k  */
+  prm->beta  = 0.25;   /* hmm->ins[k][A] for all k [MUST be 0.25, equal to background; H3 assumes insert score 0; xref J5/118 */
   return;
 }
 
@@ -283,7 +266,7 @@ sample_bruteparams(ESL_RANDOMNESS *r, struct p7_bruteparam_s *prm)
 
   /* make sure x=A emissions for match, insert are nonzero */
   prm->alpha = esl_rnd_UniformPositive(r);
-  prm->beta  = esl_rnd_UniformPositive(r);
+  prm->beta  = 0.25;		/* MUST match background; H3 assumes isc=0; xref J5/118 */
   return;
 }
 

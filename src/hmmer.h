@@ -642,10 +642,10 @@ typedef struct p7_domaindef_s {
  * complements have sqfrom > sqto
  */
 typedef struct p7_hit_s {
-  char   *name;			/* name of the target                  */
-  char   *acc;			/* accession of the target;   or NULL  */
-  char   *desc;			/* description of the target; or NULL  */
-  double sortkey;		/* number to sort by; big is better    */
+  char   *name;			/* name of the target               (mandatory)           */
+  char   *acc;			/* accession of the target          (optional; else NULL) */
+  char   *desc;			/* description of the target        (optional; else NULL) */
+  double sortkey;		/* number to sort by; big is better                       */
 
   float  score;			/* bit score of the sequence (all domains, w/ correction) */
   float  pre_score;		/* bit score of sequence before null2 correction          */
