@@ -270,6 +270,7 @@ p7_builder_Destroy(P7_BUILDER *bld)
  * 2. Standardized model construction API.
  *****************************************************************/
 
+static int    validate_msa         (P7_BUILDER *bld, ESL_MSA *msa);
 static int    relative_weights     (P7_BUILDER *bld, ESL_MSA *msa);
 static int    build_model          (P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int    effective_seqnumber  (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg);
@@ -325,6 +326,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   P7_TRACE ***tr_ptr = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
   int         status;
 
+  if ((status =  validate_msa       (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  relative_weights   (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))         != eslOK) goto ERROR;
   if ((status =  build_model        (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
@@ -418,6 +420,40 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
  *****************************************************************/
 
 
+/* validate_msa:
+ * SRE, Thu Dec  3 16:10:31 2009 [J5/119; bug #h70 fix]
+ * 
+ * HMMER uses a convention for missing data characters: they
+ * indicate that a sequence is a fragment.  (See
+ * esl_msa_MarkFragments()).
+ *
+ * Because of the way these fragments will be handled in tracebacks,
+ * we reject any alignment that uses missing data characters in any
+ * other way.
+ * 
+ * This validation step costs negligible time.
+ */
+static int
+validate_msa(P7_BUILDER *bld, ESL_MSA *msa)
+{
+  int     idx;
+  int64_t apos;
+  int     status;
+
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      apos = 1;
+      while (  esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]) && apos <= msa->alen) apos++;
+      while (! esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]) && apos <= msa->alen) apos++;
+      while (  esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]) && apos <= msa->alen) apos++;
+      if (apos != msa->alen+1) ESL_FAIL(eslEINVAL, bld->errbuf, "msa %s; sequence %s\nhas missing data chars (~) other than at fragment edges", msa->name, msa->sqname[idx]);
+    }
+  
+  return eslOK;
+}
+
+
 /* set_relative_weights():
  * Set msa->wgt vector, using user's choice of relative weighting algorithm.
  */
@@ -432,12 +468,8 @@ relative_weights(P7_BUILDER *bld, ESL_MSA *msa)
   else if (bld->wgt_strategy == p7_WGT_GSC)                     status = esl_msaweight_GSC(msa); 
   else if (bld->wgt_strategy == p7_WGT_BLOSUM)                  status = esl_msaweight_BLOSUM(msa, bld->wid); 
 
-  if (status != eslOK) ESL_XFAIL(status, bld->errbuf, "failed to set relative weights in alignment");
-
+  if (status != eslOK) ESL_FAIL(status, bld->errbuf, "failed to set relative weights in alignment");
   return eslOK;
-
- ERROR:
-  return status;
 }
 
 

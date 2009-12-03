@@ -1,3 +1,22 @@
+ID              h70
+TITLE           hmmbuild gives cryptic error on msa containing internal ~ chars
+AFFECTS         3.0b3 and earlier (reported against 3.0b2)
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/119
+REPORTED_BY     Erick Matsen <ematsen@gmail.com>; 20 Nov 2009
+OPENED_DATE     SRE, Thu Dec  3 16:12:31 2009
+CLOSED_DATE     SRE, Thu Dec  3 16:30:54 2009
+DESCRIPTION     
+  If the input MSA contains an internal ~ character, H3 throws a confusing error:
+  Fatal exception (source file build.c, line 247):
+  validation failed: expected k doesn't match trace's k
+
+  Rejecting the internal ~ is correct, but the error should be more
+  informative. 
+
+  Added validate_msa() step to p7_Builder.
+//
 ID              h69
 TITLE           hmmscan --tblout segfaults if HMM lacks accession/description
 AFFECTS         3.0b3 (and earlier?)
