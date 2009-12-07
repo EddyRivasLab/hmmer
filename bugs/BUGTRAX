@@ -1,3 +1,31 @@
+ID              h71
+TITLE           hmm->compo calculation was wrong, bug in iocc[] calculation
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/120
+REPORTED_BY     Elena Rivas
+OPENED_DATE     4 Dec 2009
+CLOSED_DATE     7 Dec 2009
+DESCRIPTION     
+  Elena reports a bug in p7_hmm_CalculateOccupancy. Mean of the insert geometric 
+  is 1/t_IM, not 1/t_II. 
+
+  This affects the calculation of hmm->compo, the model mean
+  composition, which is used to construct the two-state HMM used by
+  the bias filter. Therefore the bugfix had the potential to alter
+  results. Verified that a benchmark (profmark) is essentially
+  unchanged -- there is a tiny change, insignificant but unfortunately
+  detrimental (by about 1%). 
+
+  This bugfix may change results, because targers can appear/disappear
+  due to the alteration in the bias filter.
+
+  Added a unit test, utest_composition(), to verify that compo is
+  correctly calculated -- validation against composition of large set
+  of sampled emitted seqs.
+
+//
 ID              h70
 TITLE           hmmbuild gives cryptic error on msa containing internal ~ chars
 AFFECTS         3.0b3 and earlier (reported against 3.0b2)
