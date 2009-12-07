@@ -44,7 +44,7 @@ p7_MeanMatchInfo(const P7_HMM *hmm, const P7_BG *bg)
  *            distribution, in bits:
  *            
  *            \[
- *              \frac{1}{M} \sum_{k=1}^{M} -\sum_x p_k(x) \log_2 p_k(x)
+ *              - \frac{1}{M} \sum_{k=1}^{M} \sum_x p_k(x) \log_2 p_k(x)
  *            \]
  *       
  *            where $p_k(x)$ is emission probability for symbol $x$
