@@ -438,8 +438,6 @@ validate_msa(P7_BUILDER *bld, ESL_MSA *msa)
 {
   int     idx;
   int64_t apos;
-  int     status;
-
 
   for (idx = 0; idx < msa->nseq; idx++)
     {
