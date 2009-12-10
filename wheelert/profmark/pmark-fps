@@ -1,0 +1,66 @@
+#! /usr/bin/perl
+
+# Usage: pmark-fps <dir> <index-table> <msafile> <seqfile>  <outfile>
+
+$dir        = shift;
+$table      = shift;
+$msafile    = shift;
+$seqfile    = shift;
+$outfile    = shift;
+
+$blastp     = "/usr/local/wublast/blastp";
+$blastopts  = "cpus=1 filter=seg+xnu V=9999 B=0";
+
+open(OUTFILE,">$outfile") || die "failed to open $outfile";
+open(TABLE, "$table")     || die "failed to open $table";
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    %seen          = ();
+    %best_pval     = ();
+    %best_bitscore = ();
+
+    `esl-afetch -o $dir/$msaname.sto $msafile $msaname`;
+    if ($? != 0) { die "FAILED: esl-afetch -o $dir/$msaname.sto $msafile $msaname"; }
+
+    # Extract a list of individual sequence names from the multiple alignment.
+    $output = `esl-seqstat -a $dir/$msaname.sto | grep "^=" | awk '{print \$2}'`;
+    if ($? != 0) { die "FAILED: esl-seqstat -a $dir/$msaname.sto"; }
+
+    @qnames = split(/^/,$output);
+    chop (@qnames);
+
+    # Loop over each query; blast; accumulate best pval for each target
+    foreach $qname (@qnames) 
+    {
+	$output = `esl-sfetch -o $dir/$msaname.query.fa $dir/$msaname.sto $qname`;
+	if ($? != 0) { die "FAILED: esl-sfetch -o $dir/$msaname.query.fa $dir/$msaname.sto $qname"; }
+
+	$output = `$blastp $seqfile $dir/$msaname.query.fa $blastopts | ./wublast2profmark`;
+	if ($? != 0) { die "FAILED: $blastp $seqfile $dir/$msaname.query.fa $blastopts | ./wublast2profmark"; }
+
+	@lines  = split(/^/,$output);
+	foreach $line (@lines) 
+	{
+	    ($pval, $bitscore, $target, $query) = split(' ', $line);
+	    
+	    if (! $seen{$target} || $pval < $best_pval{$target})
+	    { 		
+		$seen{$target}          = 1;
+		$best_pval{$target}     = $pval; 
+		$best_bitscore{$target} = $bitscore; 
+	    }
+	}
+    }
+
+    # Append to the outfile.
+    foreach $target (keys(%seen)) 
+    {
+	printf OUTFILE "%g %.1f %s %s\n", $best_pval{$target}, $best_bitscore{$target}, $target, $msaname;
+    }
+    unlink "$dir/$msaname.query.fa";
+    unlink "$dir/$msaname.sto";
+}
+close TABLE;
+close OUTFILE;
