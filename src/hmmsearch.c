@@ -101,6 +101,8 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
+static char usage[]  = "[options] <query hmmfile> <target seqfile>";
+static char banner[] = "search profile(s) against a sequence database";
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
@@ -115,9 +117,6 @@ struct cfg_s {
   int              nproc;             /* how many MPI processes, total                   */
   int              my_rank;           /* who am I, in 0..nproc-1                         */
 };
-
-static char usage[]  = "[options] <query hmmfile> <target seqfile>";
-static char banner[] = "search profile(s) against a sequence database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
