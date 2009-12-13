@@ -1,3 +1,21 @@
+ID              h72
+TITLE           jackhmmer segfaults if target seqdb contains duplicate names
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/122
+REPORTED_BY     James Wasmuth <besnoitia@gmail.com>
+OPENED_DATE     SRE, Sun Dec 13 15:24:30 2009
+CLOSED_DATE     SRE, Sun Dec 13 15:24:24 2009
+DESCRIPTION     
+  A small bug in esl_keyhash_Store(). opt_index is optional; but was
+  not checking before storing to *opt_index on a duplicate key. 
+  jackhmmer (unique among the search programs) uses keyhashes to
+  mark new target sequences in each iteration.
+
+  fixed in Easel, and added a test (i10-duplicate-names.pl) to test this
+  in future.
+//
 ID              h71
 TITLE           hmm->compo calculation was wrong, bug in iocc[] calculation
 AFFECTS         3.0b3 and earlier
