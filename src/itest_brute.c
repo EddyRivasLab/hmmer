@@ -48,6 +48,7 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,  NULL,  NULL, NULL, "save each tested HMM to file <f>",               0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of randomly sampled HMMs",                0 },
@@ -102,6 +103,7 @@ main(int argc, char **argv)
   P7_GMX         *gx       = p7_gmx_Create(3, 4); /* M=3, L up to 4. */
   P7_HMM         *hmm      = NULL;
   P7_PROFILE     *gm       = NULL;
+  char           *hmmfile  = esl_opt_GetString (go, "-o");
   int             N        = esl_opt_GetInteger(go, "-N");
   int             do_local;
   double          brute_fwd[5];	/* lod Forward scores for seqs L=0..4 calculated by brute force path enumeration */
@@ -127,25 +129,44 @@ main(int argc, char **argv)
 	score_brute_profile(&prm, bg, TRUE,  brute_vit);
 	score_brute_profile(&prm, bg, FALSE, brute_fwd);
   
+	if (hmmfile)
+	  {
+	    FILE *ofp = fopen(hmmfile, "w");
+	    p7_hmmfile_WriteASCII(ofp, -1, hmm);
+	    fclose(ofp);
+	  }
+
 	for (L = 0; L <= 4; L++)
 	  {
 	    p7_gmx_GrowTo(gx, 3, L);
-	      
+
 	    dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;       /* Initialize dsq of length L at 0000... (all A) */
 	    for (i = 1; i <= L; i++) dsq[i] = 0;
 	    
 	    if (p7_GViterbi(dsq, L, gm, gx, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
 
-	    if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
+	    if (esl_opt_GetBoolean(go, "--vv")) 
 	      p7_gmx_Dump(stdout, gx);
+	    p7_gmx_Reuse(gx);
 
+	    p7_gmx_GrowTo(gx, 3, L);
 	    if (p7_GForward(dsq, L, gm, gx, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
-
-	    if (j == 0 && esl_opt_GetBoolean(go, "--vv")) 
+	    if (esl_opt_GetBoolean(go, "--vv")) 
 	      p7_gmx_Dump(stdout, gx);
+	    p7_gmx_Reuse(gx);
 
-	    vprecision = 1e-5;    /* default impl uses fp, should be accurate within machine precision      */
+	    vprecision = 1e-4;    /* default impl uses fp, should be accurate within machine precision      */
 	    fprecision = 0.01;    /* default impl uses FLogsum, tolerate e^0.1 ~= 1% error in Forward probs */
+
+
+	    if (esl_opt_GetBoolean(go, "-v")) 
+	      printf("%d %-6s %6s %1d %8.4f %8.4f %8.4f %8.4f\n",
+		     j,
+		     do_local ? "local" : "glocal",
+		     (j > 0)  ? "random": "fixed",
+		     L, 
+		     brute_fwd[L], fsc[L], 
+		     brute_vit[L], vsc[L]);
 
 
 	    if (fabs(vsc[L] - brute_vit[L]) > vprecision)
@@ -163,13 +184,7 @@ main(int argc, char **argv)
 			L, 
 			brute_fwd[L], fsc[L]);
 
-	    if (esl_opt_GetBoolean(go, "-v")) 
-	      printf("%-6s %6s %1d %8.4f %8.4f %8.4f %8.4f\n",
-		     do_local ? "local" : "glocal",
-		     (j > 0)  ? "random": "fixed",
-		     L, 
-		     brute_fwd[L], fsc[L], 
-		     brute_vit[L], vsc[L]);
+
 	  }
 	p7_profile_Destroy(gm);
 	p7_hmm_Destroy(hmm);
@@ -248,11 +263,11 @@ sample_bruteparams(ESL_RANDOMNESS *r, struct p7_bruteparam_s *prm)
   do { sample_zeropeppered_probvector(r, tmp, 3);  prm->c = tmp[0]; prm->g = tmp[1]; } while (prm->c == 0.0);
   do { sample_zeropeppered_probvector(r, tmp, 2);  prm->d = tmp[0]; }                  while (prm->d == 0.0);
 
-  /* pepper any D, I transition */
+  /* pepper any D, I transition. [3][II] cannot be 1.0 (k param)*/
   sample_zeropeppered_probvector(r, tmp, 2);  prm->h = tmp[0];
   sample_zeropeppered_probvector(r, tmp, 2);  prm->i = tmp[0];
   sample_zeropeppered_probvector(r, tmp, 2);  prm->j = tmp[0];
-  sample_zeropeppered_probvector(r, tmp, 2);  prm->k = tmp[0];
+  do { sample_zeropeppered_probvector(r, tmp, 2);  prm->k = tmp[0]; } while (prm->k == 1.0);
   sample_zeropeppered_probvector(r, tmp, 2);  prm->l = tmp[0];
   sample_zeropeppered_probvector(r, tmp, 2);  prm->m = tmp[0];
 
@@ -270,7 +285,8 @@ sample_bruteparams(ESL_RANDOMNESS *r, struct p7_bruteparam_s *prm)
   return;
 }
 
-
+/* 1.0-a-b operations below can result in -epsilon or +epsilon. Round these to 0. */
+static float zerofy(float p) { return (p < 1e-6) ? 0.0 : p; }
 
 static P7_HMM *
 create_brute_hmm(ESL_ALPHABET *abc, struct p7_bruteparam_s *prm)
@@ -285,30 +301,30 @@ create_brute_hmm(ESL_ALPHABET *abc, struct p7_bruteparam_s *prm)
   hmm = p7_hmm_Create(M, abc);
   hmm->t[0][p7H_MM] = prm->a;
   hmm->t[0][p7H_MI] = prm->e;
-  hmm->t[0][p7H_MD] = 1.0 - (prm->a+prm->e);
+  hmm->t[0][p7H_MD] = zerofy(1.0 - (prm->a+prm->e));
   hmm->t[0][p7H_IM] = prm->h;
-  hmm->t[0][p7H_II] = 1.0 - prm->h;
+  hmm->t[0][p7H_II] = zerofy(1.0 - prm->h);
   hmm->t[0][p7H_DM] = 1.0;	/* D0 doesn't exist; 1.0 is a convention */
   hmm->t[0][p7H_DD] = 0.0;	/* D0 doesn't exist; 0.0 is a convention */
   hmm->t[1][p7H_MM] = prm->b;
   hmm->t[1][p7H_MI] = prm->f;
-  hmm->t[1][p7H_MD] = 1.0 - (prm->b+prm->f);
+  hmm->t[1][p7H_MD] = zerofy(1.0 - (prm->b+prm->f));
   hmm->t[1][p7H_IM] = prm->i;
-  hmm->t[1][p7H_II] = 1.0 - prm->i;
-  hmm->t[1][p7H_DM] = 1.0 - prm->l;
+  hmm->t[1][p7H_II] = zerofy(1.0 - prm->i);
+  hmm->t[1][p7H_DM] = zerofy(1.0 - prm->l);
   hmm->t[1][p7H_DD] = prm->l;
   hmm->t[2][p7H_MM] = prm->c;
   hmm->t[2][p7H_MI] = prm->g;
-  hmm->t[2][p7H_MD] = 1.0 - (prm->c+prm->g);
+  hmm->t[2][p7H_MD] = zerofy(1.0 - (prm->c+prm->g));
   hmm->t[2][p7H_IM] = prm->j;
-  hmm->t[2][p7H_II] = 1.0 - prm->j;
-  hmm->t[2][p7H_DM] = 1.0 - prm->m;
+  hmm->t[2][p7H_II] = zerofy(1.0 - prm->j);
+  hmm->t[2][p7H_DM] = zerofy(1.0 - prm->m);
   hmm->t[2][p7H_DD] = prm->m;
   hmm->t[3][p7H_MM] = prm->d;	               /* M3->E */
-  hmm->t[3][p7H_MI] = 1.0 - prm->d;
+  hmm->t[3][p7H_MI] = zerofy(1.0 - prm->d);
   hmm->t[3][p7H_MD] = 0.0;	               /* no D_M+1 state to move to */
   hmm->t[3][p7H_IM] = prm->k;
-  hmm->t[3][p7H_II] = 1.0 - prm->k;
+  hmm->t[3][p7H_II] = zerofy(1.0 - prm->k);
   hmm->t[3][p7H_DM] = 1.0;	               /* forced transition to E */
   hmm->t[3][p7H_DD] = 0.0;
 
@@ -350,8 +366,8 @@ create_brute_profile(struct p7_bruteparam_s *prm, P7_HMM *hmm, P7_BG *bg, int do
          * reduces to uniform 2/(M(M+1)) for uniform match occupancy 
 	 */
       occ[1] = prm->a+prm->e;
-      occ[2] = occ[1] * (prm->b+prm->f) + (1.0-occ[1]) * (1.0-prm->l);
-      occ[3] = occ[2] * (prm->c+prm->g) + (1.0-occ[2]) * (1.0-prm->m);
+      occ[2] = occ[1] * (prm->b+prm->f) + zerofy(1.0-occ[1]) * zerofy(1.0-prm->l);
+      occ[3] = occ[2] * (prm->c+prm->g) + zerofy(1.0-occ[2]) * zerofy(1.0-prm->m);
       Z = occ[1] * 3.0 + occ[2] * 2.0 + occ[3];
       prm->begin[1] = occ[1] / Z;
       prm->begin[2] = occ[2] / Z;
@@ -361,20 +377,20 @@ create_brute_profile(struct p7_bruteparam_s *prm, P7_HMM *hmm, P7_BG *bg, int do
   else
     {				/* glocal modes: right wing retraction and no internal exit */
       prm->begin[1] = (prm->a + prm->e);
-      prm->begin[2] = (1. - (prm->a+prm->e)) * (1.-prm->l);
-      prm->begin[3] = (1. - (prm->a+prm->e)) * prm->l * (1.-prm->m);
+      prm->begin[2] = zerofy(1. - (prm->a+prm->e)) * zerofy(1.-prm->l);
+      prm->begin[3] = zerofy(1. - (prm->a+prm->e)) * prm->l * zerofy(1.-prm->m);
       prm->end = 0.0;
     }
 
   /* Replace profile's configured length and multihit modeling. */
   gm->xsc[p7P_N][p7P_MOVE] = log(prm->n);
-  gm->xsc[p7P_N][p7P_LOOP] = log(1. - prm->n);
+  gm->xsc[p7P_N][p7P_LOOP] = log(zerofy(1. - prm->n));
   gm->xsc[p7P_E][p7P_MOVE] = log(prm->p);
-  gm->xsc[p7P_E][p7P_LOOP] = log(1. - prm->p);
+  gm->xsc[p7P_E][p7P_LOOP] = log(zerofy(1. - prm->p));
   gm->xsc[p7P_C][p7P_MOVE] = log(prm->q);
-  gm->xsc[p7P_C][p7P_LOOP] = log(1. - prm->q);
+  gm->xsc[p7P_C][p7P_LOOP] = log(zerofy(1. - prm->q));
   gm->xsc[p7P_J][p7P_MOVE] = log(prm->r);
-  gm->xsc[p7P_J][p7P_LOOP] = log(1. - prm->r);
+  gm->xsc[p7P_J][p7P_LOOP] = log(zerofy(1. - prm->r));
 
   return gm;
 }
@@ -412,28 +428,28 @@ score_brute_profile(struct p7_bruteparam_s *prm, P7_BG *bg, int do_viterbi, doub
   /* 1. There are 19 possible paths that up to L=4 residues can align
         to the core model.
    */
-  cp[0] = msc * prm->begin[1] * prm->end;	        /* B M1 E             (L=1) */
-  cp[1] = msc * prm->begin[2] * prm->end;	        /* B M2 E             (L=1) */
-  cp[2] = msc * prm->begin[3];                          /* B M3 E             (L=1) */
-  cp[3] = msc * prm->begin[1] * (1. - (b+f)) * prm->end;/* B M1 D2 E          (L=1) */
-  cp[4] = msc * prm->begin[2] * (1. - (c+g));           /* B M2 D3 E          (L=1) */
-  cp[5] = msc * prm->begin[1] * (1. - (b+f)) * m;       /* B M1 D2 D3 E       (L=1) */
+  cp[0] = msc * prm->begin[1] * prm->end;	              /* B M1 E             (L=1) */
+  cp[1] = msc * prm->begin[2] * prm->end;	              /* B M2 E             (L=1) */
+  cp[2] = msc * prm->begin[3];                                /* B M3 E             (L=1) */
+  cp[3] = msc * prm->begin[1] * zerofy(1. - (b+f)) * prm->end;/* B M1 D2 E          (L=1) */
+  cp[4] = msc * prm->begin[2] * zerofy(1. - (c+g));           /* B M2 D3 E          (L=1) */
+  cp[5] = msc * prm->begin[1] * zerofy(1. - (b+f)) * m;       /* B M1 D2 D3 E       (L=1) */
   
-  cp[6] = msc * msc * prm->begin[1] * b * prm->end;	   /* B M1 M2 E          (L=2) */
-  cp[7] = msc * msc * prm->begin[2] * c;                   /* B M2 M3 E          (L=2) */
-  cp[8] = msc * msc * prm->begin[1] * b * (1.-(c+g));      /* B M1 M2 D3 E       (L=2) */
-  cp[9] = msc * msc * prm->begin[1] * (1.-(b+f)) * (1.-m); /* B M1 D2 M3 E       (L=2) */
+  cp[6] = msc * msc * prm->begin[1] * b * prm->end;	               /* B M1 M2 E          (L=2) */
+  cp[7] = msc * msc * prm->begin[2] * c;                               /* B M2 M3 E          (L=2) */
+  cp[8] = msc * msc * prm->begin[1] * b * zerofy(1.-(c+g));            /* B M1 M2 D3 E       (L=2) */
+  cp[9] = msc * msc * prm->begin[1] * zerofy(1.-(b+f)) * zerofy(1.-m); /* B M1 D2 M3 E       (L=2) */
   
   cp[10]= msc * msc * msc * prm->begin[1] * b * c;	                  /* B M1 M2 M3 E       (L=3) */
-  cp[11]= msc * isc * msc * prm->begin[1] * f * i * (1.-(c+g));           /* B M1 I1 M2 D3 E    (L=3) */
+  cp[11]= msc * isc * msc * prm->begin[1] * f * i * zerofy(1.-(c+g));     /* B M1 I1 M2 D3 E    (L=3) */
   cp[12]= msc * isc * msc * prm->begin[1] * f * i * prm->end;	          /* B M1 I1 M2 E       (L=3) */
   cp[13]= msc * isc * msc * prm->begin[2] * g * j;	                  /* B M2 I2 M3 E       (L=3) */
 
-  cp[14] = msc * isc * msc * msc * prm->begin[1] * f * i * c;	                 /* B M1 I1 M2 M3 E    (L=4) */
-  cp[15] = msc * isc * isc * msc * prm->begin[1] * f * (1.-i) * i * (1.-(c+g));  /* B M1 I1 I1 M2 D3 E (L=4) */
-  cp[16] = msc * msc * isc * msc * prm->begin[1] * b * g * j;      	         /* B M1 M2 I2 M3 E    (L=4) */
-  cp[17] = msc * isc * isc * msc * prm->begin[1] * f * (1.-i) * i * prm->end;    /* B M1 I1 I1 M2 E    (L=4) */
-  cp[18] = msc * isc * isc * msc * prm->begin[2] * g * (1.-j) * j;               /* B M2 I2 I2 M3 E    (L=4) */
+  cp[14] = msc * isc * msc * msc * prm->begin[1] * f * i * c;	                             /* B M1 I1 M2 M3 E    (L=4) */
+  cp[15] = msc * isc * isc * msc * prm->begin[1] * f * zerofy(1.-i) * i * zerofy(1.-(c+g));  /* B M1 I1 I1 M2 D3 E (L=4) */
+  cp[16] = msc * msc * isc * msc * prm->begin[1] * b * g * j;      	                     /* B M1 M2 I2 M3 E    (L=4) */
+  cp[17] = msc * isc * isc * msc * prm->begin[1] * f * zerofy(1.-i) * i * prm->end;          /* B M1 I1 I1 M2 E    (L=4) */
+  cp[18] = msc * isc * isc * msc * prm->begin[2] * g * zerofy(1.-j) * j;                     /* B M2 I2 I2 M3 E    (L=4) */
 
   /* 2. Sum or max the total probability of L={1..4} aligned to one pass
         through the core model
@@ -459,30 +475,30 @@ score_brute_profile(struct p7_bruteparam_s *prm, P7_BG *bg, int do_viterbi, doub
    *    jL={1..4} total residues in one or more passes through the
    *    core model: 21 such paths.
    */
-  jp[0] = cL[4];			                                         /* B [4] E                    (jL=4, 0 in J) */
-  jp[1] = cL[3] * (1.-p) * r * cL[1];                                            /* B [3] J [1] E              (jL=4, 0 in J) */
-  jp[2] = cL[2] * (1.-p) * r * cL[2];                                            /* B [2] J [2] E              (jL=4, 0 in J) */        
-  jp[3] = cL[2] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];                       /* B [2] J [1] J [1] E        (jL=4, 0 in J) */
-  jp[4] = cL[1] * (1.-p) * r * cL[3];                                            /* B [1] J [3] E              (jL=4, 0 in J) */
-  jp[5] = cL[1] * (1.-p) * r * cL[2] * (1.-p) * r * cL[1];                       /* B [1] J [2] J [1] E        (jL=4, 0 in J) */
-  jp[6] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[2];                       /* B [1] J [1] J [2] E        (jL=4, 0 in J) */
-  jp[7] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];  /* B [1] J [1] J [1] J [1] E  (jL=4, 0 in J) */
-  jp[8]  = cL[2] * (1.-p) * (1.-r) * r * cL[1];                                  /* B [2] JJ [1] E             (jL=4, 1 in J) */
-  jp[9]  = cL[1] * (1.-p) * (1.-r) * r * cL[2];                                  /* B [1] JJ [2] E             (jL=4, 1 in J) */
-  jp[10] = cL[1] * (1.-p) * (1.-r) * r * cL[1] * (1.-p) * r * cL[1];             /* B [1] JJ [1] J [1] E       (jL=4, 1 in J) */
-  jp[11] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * (1.-r) * r * cL[1];             /* B [1] J [1] JJ [1] E       (jL=4, 1 in J) */
-  jp[12] = cL[1] * (1.-p) * (1.-r) * (1.-r) * r * cL[1];                         /* B [1] JJJ [1] E            (jL=4, 2 in J) */
+  jp[0]  = cL[4];			                                                            /* B [4] E                    (jL=4, 0 in J) */
+  jp[1]  = cL[3] * zerofy(1.-p) * r * cL[1];                                                        /* B [3] J [1] E              (jL=4, 0 in J) */
+  jp[2]  = cL[2] * zerofy(1.-p) * r * cL[2];                                                        /* B [2] J [2] E              (jL=4, 0 in J) */        
+  jp[3]  = cL[2] * zerofy(1.-p) * r * cL[1] * zerofy(1.-p) * r * cL[1];                             /* B [2] J [1] J [1] E        (jL=4, 0 in J) */
+  jp[4]  = cL[1] * zerofy(1.-p) * r * cL[3];                                                        /* B [1] J [3] E              (jL=4, 0 in J) */
+  jp[5]  = cL[1] * zerofy(1.-p) * r * cL[2] * zerofy(1.-p) * r * cL[1];                             /* B [1] J [2] J [1] E        (jL=4, 0 in J) */
+  jp[6]  = cL[1] * zerofy(1.-p) * r * cL[1] * zerofy(1.-p) * r * cL[2];                             /* B [1] J [1] J [2] E        (jL=4, 0 in J) */
+  jp[7]  = cL[1] * zerofy(1.-p) * r * cL[1] * zerofy(1.-p) * r * cL[1] * zerofy(1.-p) * r * cL[1];  /* B [1] J [1] J [1] J [1] E  (jL=4, 0 in J) */
+  jp[8]  = cL[2] * zerofy(1.-p) * zerofy(1.-r) * r * cL[1];                                         /* B [2] JJ [1] E             (jL=4, 1 in J) */
+  jp[9]  = cL[1] * zerofy(1.-p) * zerofy(1.-r) * r * cL[2];                                         /* B [1] JJ [2] E             (jL=4, 1 in J) */
+  jp[10] = cL[1] * zerofy(1.-p) * zerofy(1.-r) * r * cL[1] * zerofy(1.-p) * r * cL[1];              /* B [1] JJ [1] J [1] E       (jL=4, 1 in J) */
+  jp[11] = cL[1] * zerofy(1.-p) * r * cL[1] * zerofy(1.-p) * zerofy(1.-r) * r * cL[1];              /* B [1] J [1] JJ [1] E       (jL=4, 1 in J) */
+  jp[12] = cL[1] * zerofy(1.-p) * zerofy(1.-r) * zerofy(1.-r) * r * cL[1];                          /* B [1] JJJ [1] E            (jL=4, 2 in J) */
 
-  jp[13] = cL[3];		                                               /* B [3] E                    (jL=3, 0 in J) */
-  jp[14] = cL[2] * (1.-p) * r * cL[1];                                         /* B [2] J [1] E              (jL=3, 0 in J) */
-  jp[15] = cL[1] * (1.-p) * r * cL[2];                                         /* B [1] J [2] E              (jL=3, 0 in J) */
-  jp[16] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];                    /* B [1] J [1] J [1] E        (jL=3, 0 in J) */
-  jp[17] = cL[1] * (1.-p) * (1.-r) * r * cL[1];                                /* B [1] JJ [1] E             (jL=3, 1 in J) */
+  jp[13] = cL[3];		                                                                    /* B [3] E                    (jL=3, 0 in J) */
+  jp[14] = cL[2] * zerofy(1.-p) * r * cL[1];                                                        /* B [2] J [1] E              (jL=3, 0 in J) */
+  jp[15] = cL[1] * zerofy(1.-p) * r * cL[2];                                                        /* B [1] J [2] E              (jL=3, 0 in J) */
+  jp[16] = cL[1] * zerofy(1.-p) * r * cL[1] * zerofy(1.-p) * r * cL[1];                             /* B [1] J [1] J [1] E        (jL=3, 0 in J) */
+  jp[17] = cL[1] * zerofy(1.-p) * zerofy(1.-r) * r * cL[1];                                         /* B [1] JJ [1] E             (jL=3, 1 in J) */
 
-  jp[18] = cL[2];                                                             /* B [2] E                    (jL=2, 0 in J) */
-  jp[19] = cL[1] * (1.-p) * r * cL[1];                                        /* B [1] J [1] E              (jL=2, 0 in J) */
+  jp[18] = cL[2];                                                                                   /* B [2] E                    (jL=2, 0 in J) */
+  jp[19] = cL[1] * zerofy(1.-p) * r * cL[1];                                                        /* B [1] J [1] E              (jL=2, 0 in J) */
   
-  jp[20] = cL[1];		                                             /* B [1] E                    (jL=1, 0 in J) */
+  jp[20] = cL[1];		                                                                    /* B [1] E                    (jL=1, 0 in J) */
 
   /* 4. Sum or max the total path probability of jL={1..4} 
    */
@@ -507,15 +523,15 @@ score_brute_profile(struct p7_bruteparam_s *prm, P7_BG *bg, int do_viterbi, doub
    *    10 possible paths accounting for 0..3 residues in the flanks.
    */
   ap[0] = n * p * q;
-  ap[1] = (1.-n) * n * p * q;
-  ap[2] = n * p * (1.-q) * q;
-  ap[3] = (1.-n) * (1.-n) * n * p * q;
-  ap[4] = (1.-n) * n * p * (1.-q) * q;
-  ap[5] = n * p * (1.-q) * (1.-q) * q;
-  ap[6] = (1.-n) * (1.-n) * (1.-n) * n * p * q;
-  ap[7] = (1.-n) * (1.-n) * n * p * (1.-q) * q;
-  ap[8] = (1.-n) * n * p * (1.-q) * (1.-q) * q;
-  ap[9] = n * p * (1.-q) * (1.-q) * (1.-q) * q;
+  ap[1] = zerofy(1.-n) * n * p * q;
+  ap[2] = n * p * zerofy(1.-q) * q;
+  ap[3] = zerofy(1.-n) * zerofy(1.-n) * n * p * q;
+  ap[4] = zerofy(1.-n) * n * p * zerofy(1.-q) * q;
+  ap[5] = n * p * zerofy(1.-q) * zerofy(1.-q) * q;
+  ap[6] = zerofy(1.-n) * zerofy(1.-n) * zerofy(1.-n) * n * p * q;
+  ap[7] = zerofy(1.-n) * zerofy(1.-n) * n * p * zerofy(1.-q) * q;
+  ap[8] = zerofy(1.-n) * n * p * zerofy(1.-q) * zerofy(1.-q) * q;
+  ap[9] = n * p * zerofy(1.-q) * zerofy(1.-q) * zerofy(1.-q) * q;
 
   /* 6. Sum or max the total path probability for the flanks generating
    *     0..3 residues
