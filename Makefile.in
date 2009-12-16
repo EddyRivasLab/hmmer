@@ -83,7 +83,8 @@ IMPLDIR     = ${SRCDIR}/impl_@IMPL_CHOICE@
 # package will install. Eventually there will be a man page for each one of them
 # in the appropriate places (documentation/man for HMMER)
 #
-PROGS = hmmalign\
+PROGS = \
+	hmmalign\
 	hmmbuild\
 	hmmconvert\
 	hmmemit\
@@ -260,7 +261,7 @@ TAGS:
 	etags ${SRCDIR}/*.c ${SRCDIR}/*.h ${SRCDIR}/p7_config.h.in Makefile.in 
 	etags -a profmark/*.c profmark/Makefile.in 
 	etags -a documentation/alphaguide/*.tex documentation/alphaguide/Makefile.in
-#	etags -a documentation/man/*.man  documentation/man/boilerplate
+	etags -a documentation/man/*.man 
 #	etags -a documentation/devguide/*.tex 
 	etags -a ${SRCDIR}/impl_sse/*.c   ${SRCDIR}/impl_sse/*.h   ${SRCDIR}/impl_sse/Makefile.in 
 	etags -a ${SRCDIR}/impl_vmx/*.c   ${SRCDIR}/impl_vmx/*.h   ${SRCDIR}/impl_vmx/Makefile.in 

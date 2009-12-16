@@ -1,32 +1,25 @@
-.TH "hmmsearch" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "phmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmsearch - search profile(s) against a sequence database
+phmmer - search protein sequence(s) against a protein sequence database
 
 
 .SH SYNOPSIS
-.B hmmsearch
+.B phmmer
 .I [options]
-.I <hmmfile>
+.I <seqfile>
 .I <seqdb>
 
 
 .SH DESCRIPTION
-.B hmmsearch 
-is used to search one or more profiles against a sequence database.
-For each profile in 
-.I <hmmfile>,
-use that query profile to search the target database of profiles in
+.B phmmer
+is used to search one or more query protein sequences against a protein sequence database.
+For each query sequence in 
+.I <seqfile>,
+use that sequence to search the target database of sequences in
 .I <seqdb>,
 and output ranked lists of the sequences with the most significant
-matches to the profile.
-
-The 
-.I <hmmfile>
-may contain more than one profile. To build profiles from multiple
-alignments, see
-.B hmmbuild.
-
+matches to the query.
 
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The
@@ -42,11 +35,9 @@ in /dev/null.
 
 .SH OPTIONS
 
-.TP
 .B -h
 Help; print a brief reminder of command line usage and all available
 options.
-
 
 
 .SH OPTIONS FOR CONTROLLING OUTPUT
@@ -60,9 +51,10 @@ instead of the default stdout.
 .TP
 .BI -A " <f>"
 Save a multiple alignment of all significant hits (those satisfying
-.I inclusion thresholds)
+inclusion thresholds)
 to the file 
-.I <f>.
+.I <f>
+in Stockholm format.
 
 .TP 
 .BI --tblout " <f>"
@@ -101,7 +93,45 @@ characters per line. The default is 120.
 
 
 
-.SH OPTIONS CONTROLLING REPORTING THRESHOLDS
+.SH OPTIONS CONTROLLING SCORING SYSTEM
+
+The probability model in
+.B phmmer
+is constructed by inferring residue probabilities from a standard
+20x20 substitution score matrix, plus two additional parameters for
+position-independent gap open and gap extend probabilities.
+
+.TP
+.BI --popen " <x>"
+Set the gap open probability for a single sequence query model to 
+.I <x>.
+The default is 0.02. 
+.I <x> 
+must be >= 0 and < 0.5.
+
+.TP
+.BI --pextend " <x>"
+Set the gap extend probability for a single sequence query model to 
+.I <x>.
+The default is 0.4. 
+.I <x> 
+must be >= 0 and < 1.0.
+
+.TP
+.BI --mxfile " <mxfile>"
+Obtain residue alignment probabilities from the substitution matrix
+in file
+.I <mxfile>.
+The default score matrix is BLOSUM62 (this matrix is internal to
+HMMER and does not have to be available as a file). 
+The format of a substitution matrix
+.I <mxfile>
+is the standard format accepted by BLAST, FASTA, and other sequence 
+analysis software.
+
+
+
+.SH  OPTIONS CONTROLLING REPORTING THRESHOLDS
 
 "Reporting" thresholds control which hits are reported in output files
 (the main output,
@@ -145,23 +175,19 @@ positive domains in the smaller search space of those comparisons that
 already satisfied the per-target reporting threshold (and thus must
 have at least one homologous domain already).
 
-
 .TP
 .BI --domT " <x>"
 Instead of thresholding per-domain output on E-value, instead
 report domains with a bit score of >=
 .I <x>.
 
+.SH  OPTIONS CONTROLLING INCLUSION THRESHOLDS
 
-
-
-.SH OPTIONS FOR INCLUSION THRESHOLDS
-
-"Inclusion" thresholds are stricter than reporting thresholds.
-Inclusion thresholds control which hits are considered to be reliable
-enough to be included in an output alignment or a subsequent search
-round, or marked as significant ("!") as opposed to questionable ("?")
-in domain output.
+Inclusion thresholds are stricter than reporting thresholds. They
+control which hits are included in any output multiple alignment (the
+.I -A 
+option) and which domains are marked as significant ("!") as opposed
+to questionable ("?")  in domain output.
 
 .TP
 .BI --incE " <x>"
@@ -194,52 +220,7 @@ Instead of using E-values,
 use a bit score of >=
 .I <x>
 as the per-domain inclusion threshold.
-
-
-
-.SH OPTIONS FOR MODEL-SPECIFIC SCORE THRESHOLDING
-
-Curated profile databases may define specific bit score thresholds for
-each profile, superseding any thresholding based on statistical
-significance alone.
-
-To use these options, the profile must contain the appropriate (GA,
-TC, and/or NC) optional score threshold annotation; this is picked up
-by 
-.B hmmbuild
-from Stockholm format alignment files. Each thresholding option has
-two scores: the per-sequence threshold <x1> and the per-domain
-threshold <x2>
-These act as if
-.BI -T <x1>
-.BI --incT <x1>
-.BI --domT <x2>
-.BI --incdomT <x2>
-has been applied specifically using each model's curated thresholds.
-
-.TP
-.B --cut_ga
-Use the GA (gathering) bit scores in the model to set
-per-sequence (GA1) and per-domain (GA2) reporting and inclusion
-thresholds. GA thresholds are generally considered to be the
-reliable curated thresholds defining family membership; for example,
-in Pfam, these thresholds define what gets included in Pfam Full
-alignments based on searches with Pfam Seed models.
-
-.TP
-.B --cut_nc
-Use the NC (noise cutoff) bit score thresholds in the model to set
-per-sequence (NC1) and per-domain (NC2) reporting and inclusion
-thresholds. NC thresholds are generally considered to be the score of
-the highest-scoring known false positive.
-
-.TP
-.B --cut_tc
-Use the NC (trusted cutoff) bit score thresholds in the model to set
-per-sequence (TC1) and per-domain (TC2) reporting and inclusion
-thresholds. TC thresholds are generally considered to be the score of
-the lowest-scoring known true positive that is above all known false
-positives. 
+By default this option is unset.
 
 
 
@@ -249,10 +230,21 @@ positives.
 HMMER3 searches are accelerated in a three-step filter pipeline: the
 MSV filter, the Viterbi filter, and the Forward filter. The first
 filter is the fastest and most approximate; the last is the full
-Forward scoring algorithm. There is also a "bias filter" step between
-MSV and Viterbi. Targets that pass all the steps in the acceleration
-pipeline are then subjected to "postprocessing" -- domain
-identification and scoring using the Forward/Backward algorithm.
+Forward scoring algorithm, slowest but most accurate. There is also a
+"bias filter" step between MSV and Viterbi. Targets that pass all the
+steps in the acceleration pipeline are then subjected to
+"postprocessing" -- domain identification and scoring using the
+Forward/Backward algorithm.
+
+Essentially the only free parameters that control HMMER's heuristic
+filters are the P-value thresholds controlling the expected fraction
+of nonhomologous sequences that pass the filters. Setting the default
+thresholds higher will pass a higher proportion of nonhomologous
+sequence, increasing sensitivity at the expense of speed; conversely,
+setting lower P-value thresholds will pass a smaller proportion,
+decreasing sensitivity and increasing speed. Setting a filter's
+P-value threshold to 1.0 means it will passing all sequences, and
+effectively disables the filter.
 
 Changing filter thresholds only removes or includes targets from
 consideration; changing filter thresholds does not alter bit scores,
@@ -261,25 +253,25 @@ E-values, or alignments, all of which are determined solely in
 
 .TP
 .B --max
-Turn off all filters, including the bias filter, and run full
-Forward/Backward postprocessing on every target. This increases
-sensitivity somewhat, at a large cost in speed.
+Maximum sensitivity.  Turn off all filters, including the bias filter,
+and run full Forward/Backward postprocessing on every target. This
+increases sensitivity slightly, at a large cost in speed.
 
 .TP
 .BI --F1 " <x>"
-Set the P-value threshold for the MSV filter step.  The default is
-0.02, meaning that roughly 2% of the highest scoring nonhomologous
-targets are expected to pass the filter.
+First filter threshold; set the P-value threshold for the MSV filter
+step.  The default is 0.02, meaning that roughly 2% of the highest
+scoring nonhomologous targets are expected to pass the filter.
 
 .TP
 .BI --F2 " <x>"
-Set the P-value threshold for the Viterbi filter step.
-The default is 0.001. 
+Second filter threshold; set the P-value threshold for the Viterbi
+filter step.  The default is 0.001.
 
 .TP
 .BI --F3 " <x>"
-Set the P-value threshold for the Forward filter step.
-The default is 1e-5.
+Third filter threshold; set the P-value threshold for the Forward
+filter step.  The default is 1e-5.
 
 .TP
 .B --nobias
@@ -291,6 +283,51 @@ bias filter, too many sequences may pass the filter with biased
 queries, leading to slower than expected performance as the
 computationally intensive Forward/Backward algorithms shoulder an
 abnormally heavy load.
+
+
+
+
+.SH OPTIONS CONTROLLING E-VALUE CALIBRATION
+
+Estimating the location parameters for the expected score
+distributions for MSV filter scores, Viterbi filter scores, and
+Forward scores requires three short random sequence simulations.
+
+.TP
+.BI --EmL " <n>"
+Sets the sequence length in simulation that estimates the location
+parameter mu for MSV filter E-values. Default is 200.
+
+.TP
+.BI --EmN " <n>"
+Sets the number of sequences in simulation that estimates the location
+parameter mu for MSV filter E-values. Default is 200.
+
+.TP
+.BI --EvL " <n>"
+Sets the sequence length in simulation that estimates the location
+parameter mu for Viterbi filter E-values. Default is 200.
+
+.TP
+.BI --EvN " <n>"
+Sets the number of sequences in simulation that estimates the location
+parameter mu for Viterbi filter E-values. Default is 200.
+
+.TP
+.BI --EfL " <n>"
+Sets the sequence length in simulation that estimates the location
+parameter tau for Forward E-values. Default is 100.
+
+.TP
+.BI --EfN " <n>"
+Sets the number of sequences in simulation that estimates the location
+parameter tau for Forward E-values. Default is 200.
+
+.TP
+.BI --Eft " <x>"
+Sets the tail mass fraction to fit in the simulation that estimates
+the location parameter tau for Forward evalues. Default is 0.04.
+
 
 
 
@@ -314,19 +351,27 @@ Assert that the total number of targets in your searches is
 for the purposes of per-domain conditional E-value calculations,
 rather than the number of targets that passed the reporting thresholds.
 
-.TP
+.TP 
 .BI --seed " <n>"
-Set the random number seed to 
-.I <n>.
-Some steps in postprocessing require Monte Carlo simulation.  The
-default is to use a fixed seed (42), so that results are exactly
-reproducible. Any other positive integer will give different (but also
-reproducible) results. A choice of 0 uses a "randomly chosen" seed.
+Seed the random number generator with
+.I <n>,
+an integer >= 0. 
+If 
+.I <n> 
+is >0, any stochastic simulations will be reproducible; the same
+command will give the same results.
+If 
+.I <n>
+is 0, the random number generator is seeded arbitrarily, and
+stochastic simulations will vary from run to run of the same command.
+The default seed is 42.
 
-.TP
+.TP 
 .BI --qformat " <s>"
-Assert that the query sequence file is in format 
-.I <s>. 
+Declare that the input
+.I <seqfile>
+is in format 
+.I <s>.
 Accepted formats include 
 .I fasta, 
 .I embl, 
@@ -340,6 +385,24 @@ and
 .I afa.
 The default is to autodetect the format of the file.
 
+.TP 
+.BI --tformat " <s>"
+Declare that the input
+.I <seqdb>
+is in format 
+.I <s>.
+Accepted formats include 
+.I fasta, 
+.I embl, 
+.I genbank,
+.I ddbj, 
+.I uniprot,
+.I stockholm, 
+.I pfam, 
+.I a2m, 
+and 
+.I afa.
+The default is to autodetect the format of the file.
 
 .TP
 .BI --cpu " <n>"
@@ -359,7 +422,6 @@ support. This is the default, but it may have been turned off at
 compile-time for your site or machine for some reason.
 
 
-.TP
 .BI --stall
 For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
@@ -373,9 +435,6 @@ worker(s) processes. Send SIGCONT signal to release the pause.
 Run in MPI master/worker mode, using
 .I mpirun.
 (Only available if optional MPI support was enabled at compile-time.)
-
-
-
 
 
 
@@ -416,6 +475,4 @@ Janelia Farm Research Campus
 Ashburn VA 20147 USA
 http://eddylab.org
 .fi
-
-
 

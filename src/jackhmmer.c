@@ -87,7 +87,7 @@ static ESL_OPTIONS options[] = {
   { "--incT",       eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
   { "--incdomE",    eslARG_REAL, "0.001", NULL, "x>0",     NULL,    NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
   { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
-/* Model-specific thresholding for both reporting and inclusion */
+/* Model-specific thresholding for both reporting and inclusion (unused in jackhmmer) */
   { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",  99 },
   { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",      99 },
   { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",    99 },
@@ -129,7 +129,6 @@ static ESL_OPTIONS options[] = {
   { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,  NULL,            "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "output target accessions instead of names if possible",       12 },
   { "--seed",       eslARG_INT,     "42", NULL, "n>=0",    NULL,    NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",   12 },
@@ -143,6 +142,8 @@ static ESL_OPTIONS options[] = {
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
+static char usage[]  = "[-options] <query seqfile> <target seqdb>";
+static char banner[] = "iteratively search a protein sequence against a protein database";
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
@@ -158,8 +159,7 @@ struct cfg_s {
   int              my_rank;           /* who am I, in 0..nproc-1                         */
 };
 
-static char usage[]  = "[-options] <query seqfile> <target seqdb>";
-static char banner[] = "iteratively search a protein sequence against a protein database";
+
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);

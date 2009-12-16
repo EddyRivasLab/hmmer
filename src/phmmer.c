@@ -114,7 +114,8 @@ static ESL_OPTIONS options[] = {
 #endif 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-
+static char usage[]  = "[-options] <query seqfile> <target seqdb>";
+static char banner[] = "search a protein sequence against a protein database";
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
@@ -129,9 +130,6 @@ struct cfg_s {
   int              nproc;             /* how many MPI processes, total                   */
   int              my_rank;           /* who am I, in 0..nproc-1                         */
 };
-
-static char usage[]  = "[-options] <query seqfile> <target seqdb>";
-static char banner[] = "search a protein sequence against a protein database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);

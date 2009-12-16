@@ -94,7 +94,7 @@ web page
 .SH AUTHOR
 
 .nf
-Eddy Laboratory
+Eddy/Rivas Laboratory
 Janelia Farm Research Campus
 19700 Helix Drive
 Ashburn VA 20147 USA

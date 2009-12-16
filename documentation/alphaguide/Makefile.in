@@ -19,8 +19,16 @@ SEDITION      = ../../easel/devkit/sedition
 HMMERMANS     =\
 	hmmalign\
 	hmmbuild\
-	hmmemit
-
+	hmmconvert\
+	hmmemit\
+	hmmfetch\
+	hmmpress\
+	hmmscan\
+	hmmsearch\
+	hmmsim\
+	hmmstat\
+	jackhmmer\
+	phmmer
 
 all:    pdf
 

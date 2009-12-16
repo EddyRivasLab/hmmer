@@ -11,9 +11,12 @@ hmmemit - sample sequences from a profile HMM
 
 .SH DESCRIPTION
 
-Sample (emit) sequences from the profile HMM in
+The 
+.B hmmemit
+program 
+samples (emit) sequences from the profile HMM in
 .I hmmfile,
-and output them.
+and outputs them.
 The
 .I hmmfile 
 should contain only a single HMM, not a library of them; only the
@@ -150,7 +153,7 @@ web page
 .SH AUTHOR
 
 .nf
-Eddy Laboratory
+Eddy/Rivas Laboratory
 Janelia Farm Research Campus
 19700 Helix Drive
 Ashburn VA 20147 USA
