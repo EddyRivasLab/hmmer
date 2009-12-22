@@ -59,7 +59,8 @@ static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *
  *            at least one residue in them.
  *            
  *            <p7_TRIM>: trim off any residues that get assigned to
- *            flanking N,C states.
+ *            flanking N,C states (in profile traces) or I_0 and I_M
+ *            (in core traces).
  *            
  *            The <optflags> can be combined by logical OR; for
  *            example, <p7_DIGITIZE | p7_ALL_CONSENSUS_COLS>.
@@ -407,8 +408,10 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    break;
 
 	  case p7T_I:
-	    msa->ax[idx][apos] = get_dsq_z(sq, premsa, tr, idx, z);
-	    apos++;
+	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
+	      msa->ax[idx][apos] = get_dsq_z(sq, premsa, tr, idx, z);
+	      apos++;
+	    }
 	    break;
 	    
 	  case p7T_N:
@@ -507,8 +510,10 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    break;
 
 	  case p7T_I:
-	    msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
-	    apos++;
+	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
+	      msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
+	      apos++;
+	    }
 	    break;
 	    
 	  case p7T_N:
@@ -646,8 +651,10 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, i
 	    break;
 
 	  case p7T_I:
-	    msa->pp[idx][apos] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);  
-	    apos++;
+	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
+	      msa->pp[idx][apos] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);  
+	      apos++;
+	    }
 	    break;
 
 	  case p7T_N:
