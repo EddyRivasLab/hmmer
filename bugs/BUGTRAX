@@ -1,3 +1,28 @@
+ID              h74
+TITLE           Different envelopes, identical alignment
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/130; notebook/1222-hmmer-bug-h74
+REPORTED_BY     Craig McAnulla <craigm@ebi.ac.uk>, 26 Nov 2009
+OPENED_DATE     SRE, Tue Dec 22 15:36:03 2009
+CLOSED_DATE     
+DESCRIPTION     
+  Rarely, two different (overlapping) envelopes can produce the
+  same OA alignment. 
+
+  McAnulla's example is the Pfam_B model Pfam-B_9291 against 
+  Uniparc UPI0000022264.
+
+  Implemented workaround_bug_h74() in p7_tophits.c. This hides all but
+  one envelope containing a duplicate alignment.
+
+  A better fix is to define envelope by profile endpoints in addition
+  to sequence endpoints, revise rescore_isolated_domain() to take
+  profile endpoints into account, and write versions of Forward and
+  Backward that limit the calculation to an envelope on the profile.
+  Defer this to future.
+//
 ID              h73
 TITLE           hmmalign --mapali fails if msa contains fragments
 AFFECTS         3.0b3 and earlier

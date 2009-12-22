@@ -512,6 +512,65 @@ p7_tophits_Destroy(P7_TOPHITS *h)
  * 2. Standard (human-readable) output of pipeline results
  *****************************************************************/
 
+/* workaround_bug_h74(): 
+ * Different envelopes, identical alignment
+ * 
+ * Bug #h74, though extremely rare, arises from a limitation in H3's
+ * implementation of Forward/Backward, as follows:
+ * 
+ *  1. A multidomain region is analyzed by stochastic clustering
+ *  2. Overlapping envelopes are found (w.r.t sequence coords), though
+ *     trace clusters are distinct if HMM endpoints are also considered.
+ *  3. We have no facility for limiting Forward/Backward to a specified
+ *     range of profile coordinates, so each envelope is passed to
+ *     rescore_isolated_domain() and analyzed independently.
+ *  4. Optimal accuracy alignment may identify exactly the same alignment
+ *     in the overlap region shared by the two envelopes.
+ *     
+ * The disturbing result is two different envelopes that have
+ * identical alignments and alignment endpoints.
+ * 
+ * The correct fix is to define envelopes not only by sequence
+ * endpoints but also by profile endpoints, passing them to
+ * rescore_isolated_domain(), and limiting F/B calculations to this
+ * pieces of the DP lattice. This requires a fair amount of work,
+ * adding to the optimized API.
+ * 
+ * The workaround is to detect when there are duplicate alignments,
+ * and only display one. We show the one with the best bit score.
+ * 
+ * If we ever implement envelope-limited versions of F/B, revisit this
+ * fix.
+ *
+ * SRE, Tue Dec 22 16:27:04 2009
+ * xref J5/130; notebook/2009/1222-hmmer-bug-h74
+ */
+static int
+workaround_bug_h74(P7_TOPHITS *th)
+{
+  int h;
+  int d1, d2;
+  int dremoved;
+
+  for (h = 0; h < th->N; h++)  
+    if (th->hit[h]->noverlaps)
+      {
+	for (d1 = 0; d1 < th->hit[h]->ndom; d1++)
+	  for (d2 = d1+1; d2 < th->hit[h]->ndom; d2++)
+	    if (th->hit[h]->dcl[d1].iali == th->hit[h]->dcl[d2].iali &&
+		th->hit[h]->dcl[d1].jali == th->hit[h]->dcl[d2].jali)
+	      {
+		dremoved = (th->hit[h]->dcl[d1].bitscore >= th->hit[h]->dcl[d2].bitscore) ? d2 : d1;
+		if (th->hit[h]->dcl[dremoved].is_reported) { th->hit[h]->dcl[dremoved].is_reported = FALSE; th->hit[h]->nreported--; }
+		if (th->hit[h]->dcl[dremoved].is_included) { th->hit[h]->dcl[dremoved].is_included = FALSE; th->hit[h]->nincluded--; }
+	      }
+      }
+  return eslOK;
+}
+
+
+
+
 /* Function:  p7_tophits_Threshold()
  * Synopsis:  Apply score and E-value thresholds to a hitlist before output.
  * Incept:    SRE, Tue Dec  9 09:04:55 2008 [Janelia]
@@ -599,8 +658,13 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 	if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
       }
 
+  workaround_bug_h74(th);  /* blech. This function is defined above; see commentary and crossreferences there. */
+
   return eslOK;
 }
+
+
+
 
 
 /* Function:  p7_tophits_CompareRanking()
