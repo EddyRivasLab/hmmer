@@ -1,3 +1,20 @@
+ID              h73
+TITLE           hmmalign --mapali fails if msa contains fragments
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/129
+REPORTED_BY     Elena Rivas, 17 Nov 2009 
+OPENED_DATE     21 Dec 2009
+CLOSED_DATE     SRE, Mon Dec 21 16:20:14 2009
+DESCRIPTION     
+   If MSA contains fragments, fragments get marked, then checksum is calculated; 
+   thus checksum in HMM file doesn't match checksum of original (unmarked) MSA,
+   and hmmalign --mapali throws a fault.
+
+   Rearranged order of checksum determination in p7_Builder();
+   checksum is calculated on original MSA, before any manipiulation.
+//
 ID              h72
 TITLE           jackhmmer segfaults if target seqdb contains duplicate names
 AFFECTS         3.0b3 and earlier

@@ -303,7 +303,7 @@ typedef struct p7_bg_s {
  * 
  * A "profile" trace uniquely has S,N,C,T,J states and their
  * transitions; it also can have B->Mk and Mk->E internal entry/exit
- * transitions for local alignments. 
+ * transitions for local alignments. It may not contain X states.
  *
  * A "core" trace may contain I0, IM, and D1 states and their
  * transitions. A "core" trace can also have B->X->{MDI}k and

@@ -341,6 +341,13 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
 
   p7_trace_FauxFromMSA(msa, matassign, p7_DEFAULT, tr);
 
+  /* The 'faux' core traces constructed by FauxFromMSA() may contain
+   * D->I and I->D transitions.  They may *only* now be passed to
+   * p7_tracealign_Seqs(), which can deal with these 'illegal'
+   * transitions, in order to exactly reproduce the input --mapali
+   * alignment.
+   */
+
   for (i = 0; i < msa->nseq; i++)
     esl_sq_FetchFromMSA(msa, i, &(sq[i]));
       

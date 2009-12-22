@@ -23,8 +23,8 @@ if (! -x "$bindir/hmmscan")    { die "FAIL: didn't find hmmscan binary in $bindi
 
 
 # Create our test files.
-if (! open(ALI1, ">$tmppfx.sto")) { print "FAIL: couldn't open $tmppfx.sto for write";  exit 1; }
-if (! open(SEQ1, ">$tmppfx.seq")) { print "FAIL: couldn't open $tmppfx.seq for write";  exit 1; }
+if (! open(ALI1, ">$tmppfx.sto")) { die "FAIL: couldn't open $tmppfx.sto for write\n";  }
+if (! open(SEQ1, ">$tmppfx.seq")) { die "FAIL: couldn't open $tmppfx.seq for write\n";  }
 
 print ALI1 <<"EOF";
 # STOCKHOLM 1.0

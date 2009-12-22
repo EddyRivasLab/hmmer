@@ -321,20 +321,25 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
 	   ESL_MSA **opt_postmsa)
 {
-  P7_HMM     *hmm    = NULL;
-  P7_TRACE  **tr     = NULL;
-  P7_TRACE ***tr_ptr = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
+  uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
+  P7_HMM     *hmm      = NULL;
+  P7_TRACE  **tr       = NULL;
+  P7_TRACE ***tr_ptr   = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
   int         status;
 
-  if ((status =  validate_msa       (bld, msa))                       != eslOK) goto ERROR;
-  if ((status =  relative_weights   (bld, msa))                       != eslOK) goto ERROR;
-  if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))         != eslOK) goto ERROR;
-  if ((status =  build_model        (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
-  if ((status =  effective_seqnumber(bld, msa, hmm, bg))              != eslOK) goto ERROR;
-  if ((status =  parameterize       (bld, hmm))                       != eslOK) goto ERROR;
-  if ((status =  annotate           (bld, msa, hmm))                  != eslOK) goto ERROR;
-  if ((status =  calibrate          (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
-  if ((status =  make_post_msa      (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
+  if ((status =  validate_msa         (bld, msa))                       != eslOK) goto ERROR;
+  if ((status =  esl_msa_Checksum     (msa, &checksum))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to calculate checksum"); 
+  if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
+  if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
+  if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
+  if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
+  if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
+  if ((status =  annotate             (bld, msa, hmm))                  != eslOK) goto ERROR;
+  if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
+  if ((status =  make_post_msa        (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
+
+  hmm->checksum = checksum;
+  hmm->flags   |= p7H_CHKSUM;
 
   if (opt_hmm   != NULL) *opt_hmm   = hmm; else p7_hmm_Destroy(hmm);
   if (opt_trarr != NULL) *opt_trarr = tr;  else p7_trace_DestroyArray(tr, msa->nseq);
@@ -593,9 +598,7 @@ annotate(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm)
   if ((status = p7_hmm_SetDescription(hmm, msa->desc))          != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record MSA description");
   //  if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv))   != eslOK) ESL_XFAIL(status, errbuf, "Failed to record command log");
   if ((status = p7_hmm_SetCtime(hmm))                           != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record timestamp");
-  if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))        != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record checksum"); 
   if ((status = p7_hmm_SetComposition(hmm))                     != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to determine model composition");
-  hmm->flags |= p7H_CHKSUM;
   hmm->flags |= p7H_COMPO;
 
   if (msa->cutset[eslMSA_GA1] && msa->cutset[eslMSA_GA2]) { hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1]; hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2]; hmm->flags |= p7H_GA; }

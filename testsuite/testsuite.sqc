@@ -120,6 +120,7 @@
 1 exercise  nonresidues           perl -I !.! @i8-nonresidues.pl@  @hmmsearch@  !20aa.hmm!           %OUTFILES%
 1 exercise  opt-annotation        perl -I !.! @i9-optional-annotation.pl@ ../src %OUTFILES%
 1 exercise  dup-names             perl -I !.! @i10-duplicate-names.pl@    ../src %OUTFILES%
+1 exercise  mapali-again          @i11-hmmalign-mapali.pl@                ../src %OUTFILES%
 
 1 exercise  brute-itest           @itest_brute@  
 1 exercise  hmmpress-itest        !../src/hmmpress.itest.pl! @hmmpress@ %MINIFAM.HMM% %TMPPFX%

@@ -22,8 +22,8 @@
  *            \[
  *              \frac{1}{M} \sum_{k=1}^{M}
  *                \left[ 
- *                   - \sum_x p_k(x) \log_2 p_k(x) 
- *                   + \sum_x f(x) \log_2 f(x)
+ *                     \sum_x p_k(x) \log_2 p_k(x) 
+ *                   - \sum_x f(x) \log_2 f(x)
  *                \right] 
  *            \]
  *            

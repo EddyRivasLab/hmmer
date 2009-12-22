@@ -70,6 +70,13 @@ is exactly the same alignment that was used to build the model in
 This is done using a "map" of alignment columns to consensus 
 profile positions that is stored in the
 .I hmmfile.
+The multiple alignment in 
+.I <f>
+will be exactly reproduced in its consensus columns (as defined by the
+profile), but the displayed alignment in insert columns may be
+altered, because insertions relative to a profile are considered by
+convention to be unaligned data.
+
 
 .TP
 .B --trim
