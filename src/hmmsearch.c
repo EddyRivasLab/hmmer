@@ -444,7 +444,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       switch(sstatus)
 	{
 	case eslEFORMAT: 
-	  esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	  esl_fatal("Parse failed (sequence file %s):\n%s\n", 
+		    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 	  break;
 	case eslEOF:
 	  /* do nothing */
@@ -860,7 +861,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       switch(sstatus)
 	{
 	case eslEFORMAT: 
-	  mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	  mpi_failure("Parse failed (sequence file %s):\n%s\n", dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 	  break;
 	case eslEOF:
 	  break;

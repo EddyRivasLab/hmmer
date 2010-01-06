@@ -297,7 +297,7 @@ process_dbfile(struct cfg_s *cfg, char *dbfile, int dbfmt)
 
   /* Open SSI index */
   if (esl_sqfile_OpenSSI(cfg->dbfp, NULL) != eslOK) esl_fatal("Failed to open SSI index file");
-  if (cfg->dbfp->ssi->nprimary != cfg->db_nseq)     esl_fatal("oops, nprimary != nseq");
+  if (cfg->dbfp->data.ascii.ssi->nprimary != cfg->db_nseq)     esl_fatal("oops, nprimary != nseq");
 
   esl_sq_Destroy(sq);
   return eslOK;
@@ -460,7 +460,7 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
       /* Select a random total sequence length */
       if (d1n+d2n > cfg->db_maxL) esl_fatal("can't construct test seq; no db seq >= %d residues\n", d1n+d2n);
       do {                                                     
-	if (esl_ssi_FindNumber(cfg->dbfp->ssi, esl_rnd_Roll(cfg->r, cfg->db_nseq), NULL, NULL, NULL, &L, NULL) != eslOK)
+	if (esl_ssi_FindNumber(cfg->dbfp->data.ascii.ssi, esl_rnd_Roll(cfg->r, cfg->db_nseq), NULL, NULL, NULL, &L, NULL) != eslOK)
 	  esl_fatal("failed to look up a random seq");
       } while (L < d1n+d2n);
 
@@ -537,7 +537,7 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
       cfg->ntest++;
       ntest++;
 
-      esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA);
+      esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA, FALSE);
 
       esl_sq_Destroy(domain1);
       if (ndomains == 2) esl_sq_Destroy(domain2);
@@ -591,7 +591,7 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
 
       fprintf(cfg->negsummfp, "\n");
   
-      esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA);
+      esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA, FALSE);
 
       esl_sq_Reuse(sq);
     }
@@ -632,7 +632,7 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
     {
       do {                                                     
 	if (pkey != NULL) free(pkey);
-	if (esl_ssi_FindNumber(cfg->dbfp->ssi, esl_rnd_Roll(cfg->r, cfg->db_nseq), NULL, NULL, NULL, &Lseq, &pkey) != eslOK)
+	if (esl_ssi_FindNumber(cfg->dbfp->data.ascii.ssi, esl_rnd_Roll(cfg->r, cfg->db_nseq), NULL, NULL, NULL, &Lseq, &pkey) != eslOK)
 	  esl_fatal("failed to look up a random seq");
       } while (Lseq < L);
 

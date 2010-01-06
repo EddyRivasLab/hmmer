@@ -493,8 +493,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Destroy(info->th);
       esl_sq_Reuse(qsq);
     }
-  if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
+					    sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    sstatus, sqfp->filename);
 
@@ -915,7 +915,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sq_Reuse(qsq);
     }
   if (sstatus == eslEFORMAT) 
-    mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+    mpi_failure("Parse failed (sequence file %s):\n%s\n", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (sstatus != eslEOF)     
     mpi_failure("Unexpected error %d reading sequence file %s", sstatus, sqfp->filename);
 
@@ -1103,7 +1103,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sq_Reuse(qsq);
     } /* end outer loop over query HMMs */
   if (sstatus == eslEFORMAT) 
-    mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+    mpi_failure("Parse failed (sequence file %s):\n%s\n", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (sstatus != eslEOF)
     mpi_failure("Unexpected error %d reading sequence file %s", sstatus, sqfp->filename);
 

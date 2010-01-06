@@ -604,8 +604,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  switch(sstatus)
 	    {
 	    case eslEFORMAT: 
-	      esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-			dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	      esl_fatal("Parse failed (sequence file %s):\n%s\n",
+			dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 	      break;
 	    case eslEOF:
 	      /* do nothing */
@@ -692,8 +692,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_keyhash_Reuse(kh);
       esl_sqfile_Position(dbfp, 0);
     }
-  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
+					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
@@ -1153,7 +1153,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		      }
 		    else if (sstatus == eslEFORMAT)
 		      {
-			mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+			mpi_failure("Parse failed (sequence file %s):\n%s\n", 
+				    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 		      }
 		    else
 		      {
@@ -1242,8 +1243,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_keyhash_Reuse(kh);
       esl_sqfile_Position(dbfp, 0);
     }
-  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s):\n%s\n",
+					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     mpi_failure("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
@@ -1458,8 +1459,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_keyhash_Reuse(kh);
       esl_sqfile_Position(dbfp, 0);
     }
-  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s):\n%s\n",
+					      qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     mpi_failure("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 

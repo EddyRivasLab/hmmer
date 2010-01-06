@@ -125,7 +125,7 @@ main(int argc, char **argv)
     {
       if (p7_emit_SimpleConsensus(hmm, sq)                 != eslOK) esl_fatal("failed to create simple consensus seq");
       if (esl_sq_FormatName(sq, "%s-consensus", hmm->name) != eslOK) esl_fatal("Failed to set sequence name");
-      if (esl_sqio_Write(ofp, sq, eslSQFILE_FASTA)         != eslOK) esl_fatal("Failed to write sequence");
+      if (esl_sqio_Write(ofp, sq, eslSQFILE_FASTA, FALSE)  != eslOK) esl_fatal("Failed to write sequence");
     }
   else
     {
@@ -151,7 +151,7 @@ main(int argc, char **argv)
 	  status = esl_sq_FormatName(sq, "%s-sample%d", hmm->name, nseq);
 	  if (status != eslOK) esl_fatal("Failed to set sequence name\n");
 
-	  status = esl_sqio_Write(ofp, sq, outfmt);
+	  status = esl_sqio_Write(ofp, sq, outfmt, FALSE);
 	  if (status != eslOK) esl_fatal("Failed to write sequence\n");
 	}
 
