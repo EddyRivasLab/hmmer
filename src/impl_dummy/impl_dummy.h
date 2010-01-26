@@ -123,6 +123,15 @@ extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
+/*****************************************************************
+ * 4. Implementation specific initialization
+ *****************************************************************/
+static inline void
+impl_Init(void)
+{
+}
+  
+
 #endif /* P7_IMPL_DUMMY_INCLUDED */
 
 /*****************************************************************

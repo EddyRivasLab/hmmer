@@ -326,6 +326,22 @@ extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
+/*****************************************************************
+ * 4. Implementation specific initialization
+ *****************************************************************/
+static inline void
+impl_Init(void)
+{
+#ifdef HAVE_FLUSH_ZERO_MODE
+  /* In order to avoid the performance penalty dealing with sub-normal
+   * values in the floating point calculations, set the processor flag
+   * so sub-normals are "flushed" immediately to zero.
+   */
+  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+#endif
+}
+  
+
 #endif /* P7_IMPL_SSE_INCLUDED */
 
 /*****************************************************************

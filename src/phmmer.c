@@ -274,6 +274,9 @@ main(int argc, char **argv)
   ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
   struct cfg_s     cfg;         /* configuration data                      */
 
+  /* Set processor specific flags */
+  impl_Init();
+
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
   cfg.qfile      = NULL;
