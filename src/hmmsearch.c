@@ -139,8 +139,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
   ESL_GETOPTS *go = NULL;
 
   if ((go = esl_getopts_Create(options))     == NULL)     p7_Die("Internal failure creating options object");
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
  
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 

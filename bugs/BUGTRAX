@@ -1,3 +1,16 @@
+ID              h75
+TITLE           HMMER_NCPU environment variable has no effect
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Olli Tourunen <olli.tourunen@csc.fi>, 19 Jan 2010
+OPENED_DATE     SRE, Sat Jan 30 10:31:15 2010
+CLOSED_DATE     SRE, Sat Jan 30 10:31:16 2010
+DESCRIPTION     
+  HMMER_NCPU environment variable had no effect in the four search
+  programs because they never called esl_opt_ProcessEnvironment.
+//
 ID              h74
 TITLE           Different envelopes, identical alignment
 AFFECTS         3.0b3 and earlier
