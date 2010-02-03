@@ -429,12 +429,20 @@ if test "$impl_choice" = "sse"; then
 fi
 
 # Now, we can enable the appropriate optimized implementation.
+#
+# We need to create a symlink "impl" to the appropriate directory,
+# because the testsuite.sqc isn't smart enough to handle variable
+# directories; it needs to be able to locate each test program 
+# in a fixed srcdir/builddir tree location. I'm a little concerned
+# that "ln -s" isn't portable. [SRE 3 Feb 10].
+#
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
       AC_DEFINE([HAVE_SSE2])
       AC_DEFINE([p7_IMPL_SSE])
       AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
       IMPL_CHOICE="sse"
+      (cd src; ln -s impl_sse impl)
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
@@ -442,12 +450,13 @@ vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
       AC_DEFINE([p7_IMPL_VMX])
       AC_SUBST([HMMERIMPLLIB], ["impl_vmx/libhmmerimpl.a"])
       IMPL_CHOICE="vmx"
+      (cd src; ln -s impl_vmx impl)
       ;;
 
 *)    AC_MSG_NOTICE([Activating "dummy" implementation])
       AC_DEFINE([p7_IMPL_DUMMY])
       AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
-      IMPL_CHOICE="dummy"
+      (cd src; ln -s impl_dummy impl)
       ;;
 esac
 AC_SUBST(IMPL_CHOICE)
@@ -566,6 +575,7 @@ echo "
 HMMER configuration:
 
      compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS}
+     linker:               ${LDFLAGS}
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
 "

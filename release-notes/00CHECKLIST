@@ -50,6 +50,7 @@ development of the next main release.
 *  First test the development trunk.
    Compile should be entirely clean when compiled -Wall.
    'make check' should be clean.
+   'make dev' should be clean.
    '(cd documentation/alphaguide; make)' should work
 
    When trunk is clean, 
@@ -68,6 +69,14 @@ development of the next main release.
 
    [or, svn merge from trunk to existing branch. Write these instructions next time.]
 
+ Alternatively, if branch already exists: svn merge trunk to release branch.
+
+   cd ~/releases
+   svn checkout https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 hmmer-release
+   cd hmmer-release
+   svn merge https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0   https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
+   cd easel
+   svn merge https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 https://svn.janelia.org/eddylab/eddys/easel/trunk
 
 
 ================================================================

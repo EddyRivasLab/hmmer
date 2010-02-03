@@ -1,20 +1,60 @@
 #! /usr/bin/perl
 
-
-# Example of a HMMER benchmark:
-#   ./pmark-master.pl h3-results    100 pmark ./pmark-h3
-#   ./pmark-master.pl h2-results-ls 100 pmark ./pmark-h2-ls
-#   ./pmark-master.pl h2-results-fs 100 pmark ./pmark-h2-fs
+# Driver for a pmark benchmark.
+#
+# Usage:
+#   ./pmark-master.pl <top_builddir> <top_srcdir> <resultdir> <nproc> <benchmark prefix> <benchmark script>
+# 
+# <top_builddir>: Top level directory for finding executables to
+#    be benchmarked. This is passed on to the <benchmark script>
+#    without modification. How the script uses it will depend
+#    on where the executables are expected to be found, relative
+#    to this top level directory. For example, for HMMER3 benchmarks,
+#    we might pass ~/releases/hmmer-release/build-icc or
+#    ~/releases/hmmer-3.0xx/build-icc for testing a release candidate
+#    or an existing release.
+#
+# <top_srcdir>: Top level directory for finding scripts or data files.
+#    This too will simply be passed on to the <benchmark script>
+#    without modification.  For example, for HMMER benchmarks, we
+#    might pass ~/releases/hmmer-release/ or ~/releases/hmmer-3.0xx.
+#    For installed packages like BLAST, it's likely that <top_srcdir>
+#    would be the same as <top_builddir>, because we will not have
+#    multiple build directories.
+#
+# <resultdir>: A directory for holding all <nproc> temporary files
+#   created by the benchmark. This name should be short and unique;
+#   it will also be used to construct job names on the cluster, as
+#   <resultdir.$i>.
+#
+# <nproc>: how many processes to parallelize over in our cluster.
+#
+# <benchmark prefix>:  The script will look for files <prefix>.tbl,
+#    <prefix>.msa, and <prefix>.fa, defining a PMARK benchmark set.
+#
+# <benchmark script>: This script is executed on each of <nproc>
+#    processes, on an appropriately constructed subset of the 
+#    benchmark queries.
+#
+#    It must take the following arguments:
+#    <top_srcdir> <top_builddir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
+#
+# Examples of HMMER3 benchmark:
+#   ./pmark-master.pl ~/releases/hmmer-release/build-icc ~/releases/hmmer-release h3-results    100 pmark ./pmark-h3
+#   ./pmark-master.pl ~/releases/hmmer-release/build-icc ~/releases/hmmer-release h2-results-ls 100 pmark ./pmark-h2-ls
+#   ./pmark-master.pl ~/releases/hmmer-release/build-icc ~/releases/hmmer-release h2-results-fs 100 pmark ./pmark-h2-fs
 #
 
-$resultdir    = shift;
-$ncpu         = shift;
-$benchmark    = shift;
-$pmark        = shift;
+$top_builddir  = shift;
+$top_srcdir    = shift;
+$resultdir     = shift;
+$ncpu          = shift;
+$benchmark_pfx = shift;
+$pmark_script  = shift;
 
-$tbl          = "$benchmark.tbl";
-$msafile      = "$benchmark.msa";
-$fafile       = "$benchmark.fa";
+$tbl          = "$benchmark_pfx.tbl";
+$msafile      = "$benchmark_pfx.msa";
+$fafile       = "$benchmark_pfx.fa";
 
 if (-e $resultdir) { die("$resultdir exists");}
 system("mkdir $resultdir");
@@ -52,6 +92,6 @@ for ($i = 0; $i < $ncpu; $i++)
 # Submit all the individual profmark jobs
 for ($i = 0; $i < $ncpu; $i++)
 {
-   system("qsub -V -cwd -b y -N tbl$i -j y -o $resultdir/tbl$i.sge '$pmark $resultdir $resultdir/tbl.$i $msafile $fafile $resultdir/tbl$i.out'");
+   system("qsub -V -cwd -b y -N $resultdir.$i -j y -o $resultdir/tbl$i.sge '$pmark_script $top_builddir $top_srcdir $resultdir $resultdir/tbl.$i $msafile $fafile $resultdir/tbl$i.out'");
 }
 

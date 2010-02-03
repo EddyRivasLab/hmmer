@@ -7,18 +7,23 @@
 # Implemented as a regression test against specific scores (in domtbl
 # output) of a small manually checked example.
 #
-# Usage:    ./i8-nonresidues.pl <hmmsearch binary> <20aa.hmm> <tmpfile prefix>
-# Example:  ./i8-nonresidues.pl ../src/hmmsearch   ./20aa.hmm tmpfoo
+# Usage:    ./i8-nonresidues.pl <builddir> <srcdir> <tmpfile prefix>
+# Example:  ./i8-nonresidues.pl ..         ..        tmpfoo
 #
 # SRE, Thu Oct 29 08:38:09 2009
 # SVN $Id$
 
+BEGIN {
+    $builddir = shift;
+    $srcdir   = shift;
+    $tmppfx   = shift;
+}
+
+use lib "$srcdir/testsuite";
 use h3;
 
-$hmmsearch = shift;
-$hmm20aa   = shift;
-$tmppfx    = shift;
-
+$hmmsearch = "$builddir/src/hmmsearch";
+$hmm20aa   = "$srcdir/testsuite/20aa.hmm";
 
 # Two test sequences, to be aligned to 20aa.hmm
 # First one will get parsed into two domains (consensus L replaced by '*')
