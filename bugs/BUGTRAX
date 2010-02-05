@@ -1,3 +1,25 @@
+ID              h76
+TITLE           esl_tmpfile*() string must be modifiable; char tmpfile[] = "tmpXXXXXX" insufficient
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/148
+REPORTED_BY     Sebastien Moretti <sebastien.moretti@unil.ch>   
+OPENED_DATE     SRE, Fri Feb  5 11:10:53 2010
+CLOSED_DATE     SRE, Fri Feb  5 11:27:13 2010
+DESCRIPTION     
+   Moretti reports a number of unit test failures. We asked for a 
+   gdb stack trace, which he provided; it shows a failure in 
+   esl_dirichlet.c, utest_io, esl_tmpfile_named(). Here we
+   are assigning char tmpfile[] = "esltmpXXXXXX". This may be
+   insufficient to make the compiler give a modifiable string;
+   it should be char tmpfile[16] or some such.
+
+   Replace tmpfile[] with tmpfile[16] in esl_dirichlet.c; this
+   is the only place that this error appears to occur. (And thus,
+   this bug cannot account for all of Moretti's observed test
+   failures.)
+//
 ID              h75
 TITLE           HMMER_NCPU environment variable has no effect
 AFFECTS         3.0b3 and earlier
