@@ -23,12 +23,45 @@
 #include "esl_stopwatch.h"
 #include "esl_vectorops.h"
 
+#ifdef HMMER_THREADS
+#include <unistd.h>
+#include "esl_threads.h"
+#include "esl_workqueue.h"
+#endif /*HMMER_THREADS*/
+
 #include "hmmer.h"
+
+typedef struct {
+#ifdef HMMER_THREADS
+  ESL_WORK_QUEUE   *queue;
+#endif /*HMMER_THREADS*/
+  P7_BG	           *bg;
+  P7_BUILDER       *bld;
+} WORKER_INFO;
+
+#ifdef HMMER_THREADS
+typedef struct {
+  int         nali;
+  int         processed;
+  ESL_MSA    *postmsa;
+  ESL_MSA    *msa;
+  P7_HMM     *hmm;
+  double      entropy;
+} WORK_ITEM;
+#endif /*HMMER_THREADS*/
 
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 #define CONOPTS "--fast,--hand"                                /* Exclusive options for model construction                    */
 #define EFFOPTS "--eent,--eclust,--eset,--enone"               /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"      /* Exclusive options for relative weighting                    */
+
+#if defined (HMMER_THREADS) && defined (HAVE_MPI)
+#define CPUOPTS     "--mpi,-n"
+#define MPIOPTS     "--cpu,-n"
+#else
+#define CPUOPTS     "-n"
+#define MPIOPTS     "-n"
+#endif
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
@@ -70,13 +103,16 @@ static ESL_OPTIONS options[] = {
   { "--EfN",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "number of sequences for Forward exp tail tau fit",     6 },   
   { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail tau fit",       6 },   
 /* Other options */
-#ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    "-n",  "run as an MPI parallel program",                       8 },  
+#ifdef HMMER_THREADS 
+  { "--cpu",     eslARG_INT,    NULL,"HMMER_NCPU","n>=0",NULL,     NULL, CPUOPTS, "number of parallel CPU workers for multithreads",       8 },
 #endif
+#ifdef HAVE_MPI
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, MPIOPTS, "run as an MPI parallel program",                        8 },
+#endif
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,   "--mpi",    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   { "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
   { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
   { "--laplace", eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "use a Laplace +1 prior",                                8 },
-  { "--stall",   eslARG_NONE,  FALSE, NULL, NULL,       NULL,      NULL,    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -94,14 +130,12 @@ struct cfg_s {
   ESL_MSAFILE  *afp;            /* open alifile  */
   ESL_ALPHABET *abc;		/* digital alphabet */
 
+  char         *hmmName;        /* hmm file name supplied from -n          */
   char         *hmmfile;        /* file to write HMM to                    */
   FILE         *hmmfp;          /* HMM output file handle                  */
 
   char         *postmsafile;	/* optional file to resave annotated, modified MSAs to  */
   FILE         *postmsafp;	/* open <postmsafile>, or NULL */
-
-  P7_BG	       *bg;		/* null model                              */
-  P7_PRIOR     *pri;		/* mixture Dirichlet prior for the HMM     */
 
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
   int           nnamed;		/* number of alignments that had their own names */
@@ -117,37 +151,35 @@ static char usage[]  = "[-options] <hmmfile output> <alignment file input>";
 static char banner[] = "profile HMM construction from multiple sequence alignments";
 
 static int  init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg);
-static int  init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg);
 
-static void  serial_master (const ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  serial_loop  (WORKER_INFO *info, struct cfg_s *cfg);
+#ifdef HMMER_THREADS
+static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg);
+static void pipeline_thread(void *arg);
+#endif /*HMMER_THREADS*/
+
 #ifdef HAVE_MPI
 static void  mpi_master    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif
 
 static int output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg);
-static int output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa);
-static int set_msa_name (const ESL_GETOPTS *go,       struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
+static int output_result(const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa, double entropy);
+static int set_msa_name (      struct cfg_s *cfg, char *errbuf, ESL_MSA *msa);
 
 
-int
-main(int argc, char **argv)
+static void
+process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmfile, char **ret_alifile)
 {
-  ESL_GETOPTS     *go = NULL;	/* command line processing                 */
-  ESL_STOPWATCH   *w  = esl_stopwatch_Create();
-  struct cfg_s     cfg;
+  ESL_GETOPTS *go = NULL;
 
-  /* Parse the command line
-   */
-  if ((go = esl_getopts_Create(options)) == NULL) esl_fatal("problem with options structure");
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||
-      esl_opt_VerifyConfig(go)               != eslOK) 
-    {
-      printf("Failed to parse command line: %s\n", go->errbuf);
-      esl_usage(stdout, argv[0], usage);
-      printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
-      exit(1);
-    }
+  if ((go = esl_getopts_Create(options))     == NULL)    p7_Die("problem with options structure");
+  if (esl_opt_ProcessEnvironment(go)         != eslOK) { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK) { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+
+  /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);
@@ -168,30 +200,102 @@ main(int argc, char **argv)
       esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
       exit(0);
     }
-  if (esl_opt_ArgNumber(go) != 2) 
-    {
-      puts("Incorrect number of command line arguments.");
-      esl_usage(stdout, argv[0], usage);
-      puts("\nwhere basic options are:");
-      esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
-      printf("\nTo see more help on other available options, do %s -h\n\n", argv[0]);
-      exit(1);
-    }
 
+  if (esl_opt_ArgNumber(go)                  != 2)    { puts("Incorrect number of command line arguments.");      goto ERROR; }
+  if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL) { puts("Failed to get <hmmfile> argument on command line"); goto ERROR; }
+  if ((*ret_alifile = esl_opt_GetArg(go, 2)) == NULL) { puts("Failed to get <alifile> argument on command line"); goto ERROR; }
+  *ret_go = go;
+  return;
+  
+ ERROR:  /* all errors handled here are user errors, so be polite.  */
+  esl_usage(stdout, argv[0], usage);
+  puts("\nwhere basic options are:");
+  esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
+  printf("\nTo see more help on other available options, do %s -h\n\n", argv[0]);
+  exit(1);  
+}
+
+static int
+output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
+{
+  if (cfg->my_rank > 0)  return eslOK;
+  /*  if (! cfg->be_verbose) return eslOK; */
+  p7_banner(cfg->ofp, go->argv[0], banner);
+  
+  fprintf(cfg->ofp, "# input alignment file:             %s\n", cfg->alifile);
+  fprintf(cfg->ofp, "# output HMM file:                  %s\n", cfg->hmmfile);
+
+  if (esl_opt_IsUsed(go, "-n"))          fprintf(cfg->ofp, "# name (the single) HMM:            %s\n",   esl_opt_GetString(go, "-n"));
+  if (esl_opt_IsUsed(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:          %s\n",   esl_opt_GetString(go, "-o"));
+  if (esl_opt_IsUsed(go, "-O"))          fprintf(cfg->ofp, "# processed alignment resaved to:   %s\n",   esl_opt_GetString(go, "-O"));
+  if (esl_opt_IsUsed(go, "--amino"))     fprintf(cfg->ofp, "# input alignment is asserted as:   protein\n");
+  if (esl_opt_IsUsed(go, "--dna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   DNA\n");
+  if (esl_opt_IsUsed(go, "--rna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   RNA\n");
+  if (esl_opt_IsUsed(go, "--fast"))      fprintf(cfg->ofp, "# model architecture construction:  fast/heuristic\n");
+  if (esl_opt_IsUsed(go, "--hand"))      fprintf(cfg->ofp, "# model architecture construction:  hand-specified by RF annotation\n");
+  if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(cfg->ofp, "# sym fraction for model structure: %.3f\n", esl_opt_GetReal(go, "--symfrac"));
+  if (esl_opt_IsUsed(go, "--fragthresh"))fprintf(cfg->ofp, "# seq called fragment if < xL    :  %.3f\n", esl_opt_GetReal(go, "--fragthresh"));
+  if (esl_opt_IsUsed(go, "--wpb"))       fprintf(cfg->ofp, "# relative weighting scheme:        Henikoff PB\n");
+  if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(cfg->ofp, "# relative weighting scheme:        G/S/C\n");
+  if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(cfg->ofp, "# relative weighting scheme:        BLOSUM filter\n");
+  if (esl_opt_IsUsed(go, "--wnone"))     fprintf(cfg->ofp, "# relative weighting scheme:        none\n");
+  if (esl_opt_IsUsed(go, "--wid"))       fprintf(cfg->ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",   esl_opt_GetReal(go, "--wid"));
+  if (esl_opt_IsUsed(go, "--eent"))      fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting\n");
+  if (esl_opt_IsUsed(go, "--eclust"))    fprintf(cfg->ofp, "# effective seq number scheme:      single linkage clusters\n");
+  if (esl_opt_IsUsed(go, "--enone"))     fprintf(cfg->ofp, "# effective seq number scheme:      none\n");
+  if (esl_opt_IsUsed(go, "--eset"))      fprintf(cfg->ofp, "# effective seq number:             set to %f\n", esl_opt_GetReal(go, "--eset"));
+  if (esl_opt_IsUsed(go, "--ere") )      fprintf(cfg->ofp, "# minimum rel entropy target:       %f bits\n",   esl_opt_GetReal(go, "--ere"));
+  if (esl_opt_IsUsed(go, "--esigma") )   fprintf(cfg->ofp, "# entropy target sigma parameter:   %f bits\n",   esl_opt_GetReal(go, "--esigma"));
+  if (esl_opt_IsUsed(go, "--eid") )      fprintf(cfg->ofp, "# frac id cutoff for --eclust:      %f\n",        esl_opt_GetReal(go, "--eid"));
+  if (esl_opt_IsUsed(go, "--EmL") )      fprintf(cfg->ofp, "# seq length for MSV Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EmL"));
+  if (esl_opt_IsUsed(go, "--EmN") )      fprintf(cfg->ofp, "# seq number for MSV Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EmN"));
+  if (esl_opt_IsUsed(go, "--EvL") )      fprintf(cfg->ofp, "# seq length for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvL"));
+  if (esl_opt_IsUsed(go, "--EvN") )      fprintf(cfg->ofp, "# seq number for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvN"));
+  if (esl_opt_IsUsed(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
+  if (esl_opt_IsUsed(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
+  if (esl_opt_IsUsed(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
+#ifdef HMMER_THREADS
+  if (esl_opt_IsUsed(go, "--cpu"))       fprintf(cfg->ofp, "# number of worker threads:         %d\n", esl_opt_GetInteger(go, "--cpu"));  
+#endif
+#ifdef HAVE_MPI
+  if (esl_opt_IsUsed(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
+#endif
+  if (esl_opt_IsUsed(go, "--seed"))  {
+    if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(cfg->ofp,"# random number seed:               one-time arbitrary\n");
+    else                                       fprintf(cfg->ofp,"# random number seed set to:        %d\n", esl_opt_GetInteger(go, "--seed"));
+  }
+  if (esl_opt_IsUsed(go, "--laplace") )  fprintf(cfg->ofp, "# prior:                            Laplace +1\n");
+  fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+
+  return eslOK;
+}
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS     *go = NULL;	/* command line processing                 */
+  ESL_STOPWATCH   *w  = esl_stopwatch_Create();
+  struct cfg_s     cfg;
+
+  /* Set processor specific flags */
+  impl_Init();
+
+  cfg.alifile     = NULL;
+  cfg.hmmfile     = NULL;
+
+  /* Parse the command line
+   */
+  process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.alifile);    
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
   cfg.ofp         = NULL;	           /* opened in init_master_cfg() */
-  cfg.alifile     = esl_opt_GetArg(go, 2);
   cfg.fmt         = eslMSAFILE_UNKNOWN;     /* autodetect alignment format by default. */ 
   cfg.afp         = NULL;	           /* created in init_master_cfg() */
   cfg.abc         = NULL;	           /* created in init_master_cfg() in masters, or in mpi_worker() in workers */
-  cfg.hmmfile     = esl_opt_GetArg(go, 1); 
   cfg.hmmfp       = NULL;	           /* opened in init_master_cfg() */
   cfg.postmsafile = esl_opt_GetString(go, "-O"); /* NULL by default */
   cfg.postmsafp   = NULL;                  /* opened in init_master_cfg() */
-  cfg.bg          = NULL;	           /* created in init_shared_cfg() */
-  cfg.pri         = NULL;                  /* created in init_shared_cfg() */
 
   cfg.nali       = 0;		           /* this counter is incremented in masters */
   cfg.nnamed     = 0;		           /* 0 or 1 if a single MSA; == nali if multiple MSAs */
@@ -199,6 +303,7 @@ main(int argc, char **argv)
   cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
   cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
   cfg.do_stall   = esl_opt_GetBoolean(go, "--stall");
+  cfg.hmmName    = esl_opt_GetString(go, "-n"); /* NULL by default */
 
   if (esl_opt_IsOn(go, "--informat")) {
     cfg.fmt = esl_msa_EncodeFormat(esl_opt_GetString(go, "--informat"));
@@ -253,8 +358,6 @@ main(int argc, char **argv)
     if (cfg.abc   != NULL) esl_alphabet_Destroy(cfg.abc);
     if (cfg.hmmfp != NULL) fclose(cfg.hmmfp);
   }
-  p7_bg_Destroy(cfg.bg);
-  p7_prior_Destroy(cfg.pri);
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);
   return 0;
@@ -317,44 +420,9 @@ init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
   output_header(go, cfg);
 
   /* with msa == NULL, output_result() prints the tabular results header, if needed */
-  output_result(go, cfg, errmsg, 0, NULL, NULL, NULL);
+  output_result(cfg, errmsg, 0, NULL, NULL, NULL, 0.0);
   return eslOK;
 }
-
-/* init_shared_cfg() 
- * Shared initialization of cfg, after alphabet is known
- * Already set:
- *    cfg->abc
- * Sets:
- *    cfg->bg
- *    cfg->pri
- *    
- * Because this is called from an MPI worker, it cannot print; 
- * it must return error messages, not print them.
- */
-static int
-init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
-{
-  if (esl_opt_GetBoolean(go, "--laplace"))
-    {
-      cfg->pri = p7_prior_CreateLaplace(cfg->abc);
-    }
-  else 
-    {
-      if      (cfg->abc->type == eslAMINO) cfg->pri = p7_prior_CreateAmino();
-      else if (cfg->abc->type == eslDNA)   cfg->pri = p7_prior_CreateNucleic();  
-      else if (cfg->abc->type == eslRNA)   cfg->pri = p7_prior_CreateNucleic();  
-      else    ESL_FAIL(eslEINVAL, errmsg, "invalid alphabet type");
-    }
-
-  cfg->bg = p7_bg_Create(cfg->abc);
-  
-  if (cfg->pri == NULL) ESL_FAIL(eslEINVAL, errmsg, "alphabet initialization failed");
-  if (cfg->bg  == NULL) ESL_FAIL(eslEINVAL, errmsg, "null model initialization failed");
-  return eslOK;
-}
-
-
 
 /* serial_master()
  * The serial version of hmmbuild.
@@ -362,42 +430,104 @@ init_shared_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg)
  * 
  * A master can only return if it's successful. All errors are handled immediately and fatally with p7_Fail().
  */
-static void
+static int
 serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  P7_BUILDER *bld         = NULL;
-  ESL_MSA    *msa         = NULL;
-  ESL_MSA    *postmsa     = NULL;
-  ESL_MSA   **postmsa_ptr = (cfg->postmsafile != NULL) ? &postmsa : NULL;
-  P7_HMM     *hmm         = NULL;
-  char        errmsg[eslERRBUFSIZE];
-  int         status;
+  int              status;
+
+  int              i;
+  int              ncpus    = 0;
+
+  int              infocnt  = 0;
+  WORKER_INFO     *info     = NULL;
+#ifdef HMMER_THREADS
+  WORK_ITEM       *item     = NULL;
+  ESL_THREADS     *threadObj= NULL;
+  ESL_WORK_QUEUE  *queue    = NULL;
+#endif
+
+  char             errmsg[eslERRBUFSIZE];
 
   if ((status = init_master_cfg(go, cfg, errmsg)) != eslOK) p7_Fail(errmsg);
-  if ((status = init_shared_cfg(go, cfg, errmsg)) != eslOK) p7_Fail(errmsg);
   
-  if ((bld    = p7_builder_Create(go, cfg->abc))  == NULL)  p7_Fail("p7_builder_Create failed");
+#ifdef HMMER_THREADS
+  /* initialize thread data */
+  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
+  else                                   esl_threads_CPUCount(&ncpus);
 
-  cfg->nali = 0;
-  while ((status = esl_msa_Read(cfg->afp, &msa)) != eslEOF)
+  if (ncpus > 0)
     {
-      if      (status == eslEFORMAT) esl_fatal("Alignment file parse error:\n%s\n", cfg->afp->errbuf);
-      else if (status == eslEINVAL)  esl_fatal("Alignment file parse error:\n%s\n", cfg->afp->errbuf);
-      else if (status != eslOK)      esl_fatal("Alignment file read failed with error code %d\n", status);
-      cfg->nali++;  
+      threadObj = esl_threads_Create(&pipeline_thread);
+      queue = esl_workqueue_Create(ncpus * 2);
+    }
+#endif
 
-      if ((status = set_msa_name(go, cfg, errmsg, msa)) != eslOK) p7_Fail("%s\n", errmsg); /* cfg->nnamed gets incremented in this call */
+  infocnt = (ncpus == 0) ? 1 : ncpus;
+  ESL_ALLOC(info, sizeof(*info) * infocnt);
 
-                /*         bg   new-HMM trarr gm   om  */
-      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
-      if ((status = output_result(go, cfg, errmsg, cfg->nali, msa, hmm, postmsa))       != eslOK) p7_Fail(errmsg);
-
-      p7_hmm_Destroy(hmm);
-      esl_msa_Destroy(msa);
-      esl_msa_Destroy(postmsa);
+  for (i = 0; i < infocnt; ++i)
+    {
+      info[i].bg = p7_bg_Create(cfg->abc);
+      info[i].bld = p7_builder_Create(go, cfg->abc);
+      if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
+#ifdef HMMER_THREADS
+      info[i].queue = queue;
+      if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+#endif
     }
 
-  p7_builder_Destroy(bld);
+#ifdef HMMER_THREADS
+  for (i = 0; i < ncpus * 2; ++i)
+    {
+      ESL_ALLOC(item, sizeof(*item));
+
+      item->nali      = 0;
+      item->processed = FALSE;
+      item->postmsa   = NULL;
+      item->msa       = NULL;
+      item->hmm       = NULL;
+      item->entropy   = 0.0;
+
+      status = esl_workqueue_Init(queue, item);
+      if (status != eslOK) esl_fatal("Failed to add block to work queue");
+    }
+#endif
+
+#ifdef HMMER_THREADS
+  if (ncpus > 0)  status = thread_loop(threadObj, queue, cfg);
+  else            status = serial_loop(info, cfg);
+#else
+  status = serial_loop(info, cfg);
+#endif
+
+  if      (status == eslEFORMAT) esl_fatal("Alignment file parse error:\n%s\n", cfg->afp->errbuf);
+  else if (status == eslEINVAL)  esl_fatal("Alignment file parse error:\n%s\n", cfg->afp->errbuf);
+  else if (status != eslEOF)     esl_fatal("Alignment file read failed with error code %d\n", status);
+
+  for (i = 0; i < infocnt; ++i)
+    {
+      p7_bg_Destroy(info[i].bg);
+      p7_builder_Destroy(info[i].bld);
+    }
+
+#ifdef HMMER_THREADS
+  if (ncpus > 0)
+    {
+      esl_workqueue_Reset(queue);
+      while (esl_workqueue_Remove(queue, (void **) &item) == eslOK)
+	{
+	  free(item);
+	}
+      esl_workqueue_Destroy(queue);
+      esl_threads_Destroy(threadObj);
+    }
+#endif
+
+  free(info);
+  return eslOK;
+
+ ERROR:
+  return eslFAIL;
 }
 
 #ifdef HAVE_MPI
@@ -422,34 +552,38 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 static void
 mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  int      xstatus       = eslOK;	/* changes from OK on recoverable error */
-  int      status;
-  int      have_work     = TRUE;	/* TRUE while alignments remain  */
-  int      nproc_working = 0;	        /* number of worker processes working, up to nproc-1 */
-  int      wi;          	        /* rank of next worker to get an alignment to work on */
-  char    *buf           = NULL;	/* input/output buffer, for packed MPI messages */
-  int      bn            = 0;
-  ESL_MSA *msa           = NULL;
-  P7_HMM  *hmm           = NULL;
-  ESL_MSA **msalist      = NULL;
-  ESL_MSA  *postmsa      = NULL;
-  int      *msaidx       = NULL;
-  char     errmsg[eslERRBUFSIZE];
-  MPI_Status mpistatus; 
-  int      n;
-  int      pos;
+  int         xstatus       = eslOK;	/* changes from OK on recoverable error */
+  int         status;
+  int         have_work     = TRUE;	/* TRUE while alignments remain  */
+  int         nproc_working = 0;	        /* number of worker processes working, up to nproc-1 */
+  int         wi;          	        /* rank of next worker to get an alignment to work on */
+  char       *buf           = NULL;	/* input/output buffer, for packed MPI messages */
+  int         bn            = 0;
+  ESL_MSA    *msa           = NULL;
+  P7_HMM     *hmm           = NULL;
+  P7_BG      *bg            = NULL;
+  ESL_MSA   **msalist       = NULL;
+  ESL_MSA    *postmsa       = NULL;
+  int        *msaidx        = NULL;
+  char        errmsg[eslERRBUFSIZE];
+  MPI_Status  mpistatus; 
+  int         n;
+  int         pos;
+
+  double      entropy;
   
   /* Master initialization: including, figure out the alphabet type.
    * If any failure occurs, delay printing error message until we've shut down workers.
    */
   if (xstatus == eslOK) { if ((status = init_master_cfg(go, cfg, errmsg)) != eslOK) xstatus = status; }
-  if (xstatus == eslOK) { if ((status = init_shared_cfg(go, cfg, errmsg)) != eslOK) xstatus = status; }
   if (xstatus == eslOK) { bn = 4096; if ((buf = malloc(sizeof(char) * bn)) == NULL) { sprintf(errmsg, "allocation failed"); xstatus = eslEMEM; } }
   if (xstatus == eslOK) { if ((msalist = malloc(sizeof(ESL_MSA *) * cfg->nproc)) == NULL) { sprintf(errmsg, "allocation failed"); xstatus = eslEMEM; } }
   if (xstatus == eslOK) { if ((msaidx  = malloc(sizeof(int)       * cfg->nproc)) == NULL) { sprintf(errmsg, "allocation failed"); xstatus = eslEMEM; } }
   MPI_Bcast(&xstatus, 1, MPI_INT, 0, MPI_COMM_WORLD);
   if (xstatus != eslOK) {  MPI_Finalize(); p7_Fail(errmsg); }
   ESL_DPRINTF1(("MPI master is initialized\n"));
+
+  bg = p7_bg_Create(cfg->abc);
 
   for (wi = 0; wi < cfg->nproc; wi++) { msalist[wi] = NULL; msaidx[wi] = 0; } 
 
@@ -528,7 +662,8 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 		    if (esl_msa_MPIUnpack(cfg->abc, buf, bn, &pos, MPI_COMM_WORLD, &postmsa) != eslOK) { MPI_Finalize(); p7_Fail("postmsa unpack failed");}
 		  } 
 
-		  if ((status = output_result(go, cfg, errmsg, msaidx[wi], msalist[wi], hmm, postmsa)) != eslOK) xstatus = status;
+		  entropy = p7_MeanMatchRelativeEntropy(hmm, bg);
+		  if ((status = output_result(cfg, errmsg, msaidx[wi], msalist[wi], hmm, postmsa, entropy)) != eslOK) xstatus = status;
 
 		  esl_msa_Destroy(postmsa); postmsa = NULL;
 		  p7_hmm_Destroy(hmm);      hmm     = NULL;
@@ -581,6 +716,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_MSA      *postmsa     = NULL;
   ESL_MSA     **postmsa_ptr = (cfg->postmsafile != NULL) ? &postmsa : NULL;
   P7_HMM       *hmm         = NULL;
+  P7_BG        *bg          = NULL;
   char         *wbuf        = NULL;	/* packed send/recv buffer  */
   void         *tmp;			/* for reallocation of wbuf */
   int           wn          = 0;	/* allocation size for wbuf */
@@ -602,7 +738,6 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   MPI_Bcast(&type, 1, MPI_INT, 0, MPI_COMM_WORLD);
   if (xstatus == eslOK) { if ((cfg->abc = esl_alphabet_Create(type))      == NULL)    xstatus = eslEMEM; }
-  if (xstatus == eslOK) { if ((status = init_shared_cfg(go, cfg, errmsg)) != eslOK)   xstatus = status;  }
   if (xstatus == eslOK) { wn = 4096;  if ((wbuf = malloc(wn * sizeof(char))) == NULL) xstatus = eslEMEM; }
   if (xstatus == eslOK) { if ((bld = p7_builder_Create(go, cfg->abc))     == NULL)    xstatus = eslEMEM; }
   MPI_Reduce(&xstatus, &status, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD); /* everyone sends xstatus back to master */
@@ -612,6 +747,8 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
     return; /* shutdown; we passed the error back for the master to deal with. */
   }
 
+  bg = p7_bg_Create(cfg->abc);
+
   ESL_DPRINTF2(("worker %d: initialized\n", cfg->my_rank));
 
                       /* source = 0 (master); tag = 0 */
@@ -619,7 +756,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       /* Build the HMM */
       ESL_DPRINTF2(("worker %d: has received MSA %s (%d columns, %d seqs)\n", cfg->my_rank, msa->name, msa->alen, msa->nseq));
-      if ((status = p7_Builder(bld, msa, cfg->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
+      if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       ESL_DPRINTF2(("worker %d: has produced an HMM %s\n", cfg->my_rank, hmm->name));
 
       /* Calculate upper bound on size of sending status, HMM, and optional postmsa; make sure wbuf can hold it. */
@@ -662,62 +799,153 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif /*HAVE_MPI*/
 
 
-
 static int
-output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
+serial_loop(WORKER_INFO *info, struct cfg_s *cfg)
 {
-  if (cfg->my_rank > 0)  return eslOK;
-  /*  if (! cfg->be_verbose) return eslOK; */
-  p7_banner(cfg->ofp, go->argv[0], banner);
-  
-  fprintf(cfg->ofp, "# input alignment file:             %s\n", cfg->alifile);
-  fprintf(cfg->ofp, "# output HMM file:                  %s\n", cfg->hmmfile);
+  P7_BUILDER *bld         = NULL;
+  ESL_MSA    *msa         = NULL;
+  ESL_MSA    *postmsa     = NULL;
+  ESL_MSA   **postmsa_ptr = (cfg->postmsafile != NULL) ? &postmsa : NULL;
+  P7_HMM     *hmm         = NULL;
+  char        errmsg[eslERRBUFSIZE];
+  int         status;
 
-  if (esl_opt_IsUsed(go, "-n"))          fprintf(cfg->ofp, "# name (the single) HMM:            %s\n",   esl_opt_GetString(go, "-n"));
-  if (esl_opt_IsUsed(go, "-o"))          fprintf(cfg->ofp, "# output directed to file:          %s\n",   esl_opt_GetString(go, "-o"));
-  if (esl_opt_IsUsed(go, "-O"))          fprintf(cfg->ofp, "# processed alignment resaved to:   %s\n",   esl_opt_GetString(go, "-O"));
-  if (esl_opt_IsUsed(go, "--amino"))     fprintf(cfg->ofp, "# input alignment is asserted as:   protein\n");
-  if (esl_opt_IsUsed(go, "--dna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   DNA\n");
-  if (esl_opt_IsUsed(go, "--rna"))       fprintf(cfg->ofp, "# input alignment is asserted as:   RNA\n");
-  if (esl_opt_IsUsed(go, "--fast"))      fprintf(cfg->ofp, "# model architecture construction:  fast/heuristic\n");
-  if (esl_opt_IsUsed(go, "--hand"))      fprintf(cfg->ofp, "# model architecture construction:  hand-specified by RF annotation\n");
-  if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(cfg->ofp, "# sym fraction for model structure: %.3f\n", esl_opt_GetReal(go, "--symfrac"));
-  if (esl_opt_IsUsed(go, "--fragthresh"))fprintf(cfg->ofp, "# seq called fragment if < xL    :  %.3f\n", esl_opt_GetReal(go, "--fragthresh"));
-  if (esl_opt_IsUsed(go, "--wpb"))       fprintf(cfg->ofp, "# relative weighting scheme:        Henikoff PB\n");
-  if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(cfg->ofp, "# relative weighting scheme:        G/S/C\n");
-  if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(cfg->ofp, "# relative weighting scheme:        BLOSUM filter\n");
-  if (esl_opt_IsUsed(go, "--wnone"))     fprintf(cfg->ofp, "# relative weighting scheme:        none\n");
-  if (esl_opt_IsUsed(go, "--wid"))       fprintf(cfg->ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",   esl_opt_GetReal(go, "--wid"));
-  if (esl_opt_IsUsed(go, "--eent"))      fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting\n");
-  if (esl_opt_IsUsed(go, "--eclust"))    fprintf(cfg->ofp, "# effective seq number scheme:      single linkage clusters\n");
-  if (esl_opt_IsUsed(go, "--enone"))     fprintf(cfg->ofp, "# effective seq number scheme:      none\n");
-  if (esl_opt_IsUsed(go, "--eset"))      fprintf(cfg->ofp, "# effective seq number:             set to %f\n", esl_opt_GetReal(go, "--eset"));
-  if (esl_opt_IsUsed(go, "--ere") )      fprintf(cfg->ofp, "# minimum rel entropy target:       %f bits\n",   esl_opt_GetReal(go, "--ere"));
-  if (esl_opt_IsUsed(go, "--esigma") )   fprintf(cfg->ofp, "# entropy target sigma parameter:   %f bits\n",   esl_opt_GetReal(go, "--esigma"));
-  if (esl_opt_IsUsed(go, "--eid") )      fprintf(cfg->ofp, "# frac id cutoff for --eclust:      %f\n",        esl_opt_GetReal(go, "--eid"));
-  if (esl_opt_IsUsed(go, "--EmL") )      fprintf(cfg->ofp, "# seq length for MSV Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EmL"));
-  if (esl_opt_IsUsed(go, "--EmN") )      fprintf(cfg->ofp, "# seq number for MSV Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EmN"));
-  if (esl_opt_IsUsed(go, "--EvL") )      fprintf(cfg->ofp, "# seq length for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvL"));
-  if (esl_opt_IsUsed(go, "--EvN") )      fprintf(cfg->ofp, "# seq number for Vit Gumbel mu fit: %d\n",        esl_opt_GetInteger(go, "--EvN"));
-  if (esl_opt_IsUsed(go, "--EfL") )      fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"));
-  if (esl_opt_IsUsed(go, "--EfN") )      fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"));
-  if (esl_opt_IsUsed(go, "--Eft") )      fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"));
-#ifdef HAVE_MPI
-  if (esl_opt_IsUsed(go, "--mpi") )      fprintf(cfg->ofp, "# parallelization mode:             MPI\n");
-#endif
-  if (esl_opt_IsUsed(go, "--seed"))  {
-    if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(cfg->ofp,"# random number seed:               one-time arbitrary\n");
-    else                                       fprintf(cfg->ofp,"# random number seed set to:        %d\n", esl_opt_GetInteger(go, "--seed"));
-  }
-  if (esl_opt_IsUsed(go, "--laplace") )  fprintf(cfg->ofp, "# prior:                            Laplace +1\n");
-  fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  double      entropy;
 
-  return eslOK;
+  cfg->nali = 0;
+  while ((status = esl_msa_Read(cfg->afp, &msa)) == eslOK)
+    {
+      cfg->nali++;  
+
+      if ((status = set_msa_name(cfg, errmsg, msa)) != eslOK) p7_Fail("%s\n", errmsg); /* cfg->nnamed gets incremented in this call */
+
+                /*         bg   new-HMM trarr gm   om  */
+      if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+
+      entropy = p7_MeanMatchRelativeEntropy(hmm, info->bg);
+      if ((status = output_result(cfg, errmsg, cfg->nali, msa, hmm, postmsa, entropy))         != eslOK) p7_Fail(errmsg);
+
+      p7_hmm_Destroy(hmm);
+      esl_msa_Destroy(msa);
+      esl_msa_Destroy(postmsa);
+    }
+
+  return status;
 }
 
+#ifdef HMMER_THREADS
+static int
+thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
+{
+  int         status    = eslOK;
+  int         sstatus   = eslOK;
+  int         processed = 0;
+  int         nali      = 0;
+  WORK_ITEM  *item;
+  void       *newItem;
+
+  char        errmsg[eslERRBUFSIZE];
+
+  esl_workqueue_Reset(queue);
+  esl_threads_WaitForStart(obj);
+
+  status = esl_workqueue_ReaderUpdate(queue, NULL, &newItem);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+      
+  /* Main loop: */
+  item = (WORK_ITEM *) newItem;
+  while (sstatus == eslOK) {
+    sstatus = esl_msa_Read(cfg->afp, &item->msa);
+    item->nali = (sstatus == eslOK) ? ++nali : 0;
+    if (sstatus == eslEOF && processed < nali) sstatus = eslOK;
+	  
+    if (sstatus == eslOK) {
+      status = esl_workqueue_ReaderUpdate(queue, item, &newItem);
+      if (status != eslOK) esl_fatal("Work queue reader failed");
+
+      /* process any results */
+      item = (WORK_ITEM *) newItem;
+      if (item->processed == TRUE) {
+	++processed;
+	sstatus = output_result(cfg, errmsg, item->nali, item->msa, item->hmm, item->postmsa, item->entropy);
+	if (sstatus != eslOK) p7_Fail(errmsg);
+
+	p7_hmm_Destroy(item->hmm);
+	esl_msa_Destroy(item->msa);
+	esl_msa_Destroy(item->postmsa);
+
+	item->nali      = 0;
+	item->processed = FALSE;
+	item->hmm       = NULL;
+	item->msa       = NULL;
+	item->postmsa   = NULL;
+	item->entropy   = 0.0;
+      }
+    }
+  }
+
+  status = esl_workqueue_ReaderUpdate(queue, item, NULL);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+
+  if (sstatus == eslEOF)
+    {
+      /* wait for all the threads to complete */
+      esl_threads_WaitForFinish(obj);
+      esl_workqueue_Complete(queue);  
+    }
+
+  return sstatus;
+}
+
+static void 
+pipeline_thread(void *arg)
+{
+  int           workeridx;
+  int           status;
+
+  WORK_ITEM    *item;
+  void         *newItem;
+
+  WORKER_INFO  *info;
+  ESL_THREADS  *obj;
+
+  obj = (ESL_THREADS *) arg;
+  esl_threads_Started(obj, &workeridx);
+
+  info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+
+  status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newItem);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  /* loop until all blocks have been processed */
+  item = (WORK_ITEM *) newItem;
+  while (item->msa != NULL)
+    {
+      status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa);
+      if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
+
+      item->entropy   = p7_MeanMatchRelativeEntropy(item->hmm, info->bg);
+      item->processed = TRUE;
+
+      status = esl_workqueue_WorkerUpdate(info->queue, item, &newItem);
+      if (status != eslOK) esl_fatal("Work queue worker failed");
+
+      item = (WORK_ITEM *) newItem;
+    }
+
+  status = esl_workqueue_WorkerUpdate(info->queue, item, NULL);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_threads_Finished(obj, workeridx);
+  return;
+}
+#endif   /* HMMER_THREADS */
+ 
+
+
 
 static int
-output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa)
+output_result(const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P7_HMM *hmm, ESL_MSA *postmsa, double entropy)
 {
   int status;
 
@@ -743,7 +971,7 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
 	  msa->alen,
 	  hmm->M,
 	  hmm->eff_nseq,
-	  p7_MeanMatchRelativeEntropy(hmm, cfg->bg),
+	  entropy,
 	  (msa->desc != NULL) ? msa->desc : "");
   
   if (cfg->postmsafp != NULL && postmsa != NULL) {
@@ -783,16 +1011,16 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
  * Oh well.
  */
 static int
-set_msa_name(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
+set_msa_name(struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
 {
   char *name = NULL;
   int   status;
 
   if (cfg->do_mpi == FALSE && cfg->nali == 1) /* first (only?) HMM in file: */
     {
-      if  (esl_opt_GetString(go, "-n") != NULL)
+      if  (cfg->hmmName != NULL)
 	{
-	  if ((status = esl_msa_SetName(msa, esl_opt_GetString(go, "-n"))) != eslOK) return status;
+	  if ((status = esl_msa_SetName(msa, cfg->hmmName)) != eslOK) return status;
 	}
       else if (msa->name != NULL) 
 	{
@@ -808,9 +1036,9 @@ set_msa_name(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, ESL_MSA *ms
     }
   else 
     {
-      if (esl_opt_GetString(go, "-n") != NULL) ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. You can't use -n with an alignment database.");
-      else if (msa->name              != NULL) cfg->nnamed++;
-      else                                     ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment in a multi MSA file; failed on #%d", cfg->nali+1);
+      if (cfg->hmmName   != NULL) ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. You can't use -n with an alignment database.");
+      else if (msa->name != NULL) cfg->nnamed++;
+      else                        ESL_FAIL(eslEINVAL, errbuf, "Oops. Wait. I need name annotation on each alignment in a multi MSA file; failed on #%d", cfg->nali+1);
 
       /* special kind of failure: the *first* alignment didn't have a name, and we used the filename to
        * construct one; now that we see a second alignment, we realize this was a boo-boo*/
