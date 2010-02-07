@@ -87,7 +87,7 @@ static ESL_OPTIONS options[] = {
   { "--incT",       eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
   { "--incdomE",    eslARG_REAL, "0.001", NULL, "x>0",     NULL,    NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
   { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,      NULL,    NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
-/* Model-specific thresholding for both reporting and inclusion */
+/* Model-specific thresholding for both reporting and inclusion (unused in jackhmmer) */
   { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",  99 },
   { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",      99 },
   { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",    99 },
@@ -97,7 +97,6 @@ static ESL_OPTIONS options[] = {
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,    NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,    NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL, "--max",          "turn off composition bias filter",                             7 },
-  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,  NULL,            "turn off biased composition score corrections",                7 },
 /* Alternate model construction strategies */
   { "--fast",       eslARG_NONE,   FALSE, NULL, NULL,   CONOPTS,    NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              8 },
   { "--hand",       eslARG_NONE,"default",NULL, NULL,   CONOPTS,    NULL,  NULL,            "manual construction (requires reference annotation)",          8 },
@@ -127,9 +126,9 @@ static ESL_OPTIONS options[] = {
   { "--EfN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "number of sequences for Forward exp tail tau fit",            11 },   
   { "--Eft",         eslARG_REAL, "0.04", NULL,"0<x<1",    NULL,    NULL,  NULL,            "tail mass for Forward exponential tail tau fit",              11 },   
 /* Other options */
+  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL,  NULL,            "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,    NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "output target accessions instead of names if possible",       12 },
   { "--seed",       eslARG_INT,     "42", NULL, "n>=0",    NULL,    NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",   12 },
@@ -143,6 +142,8 @@ static ESL_OPTIONS options[] = {
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
+static char usage[]  = "[-options] <query seqfile> <target seqdb>";
+static char banner[] = "iteratively search a protein sequence against a protein database";
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
@@ -158,8 +159,7 @@ struct cfg_s {
   int              my_rank;           /* who am I, in 0..nproc-1                         */
 };
 
-static char usage[]  = "[-options] <query seqfile> <target seqdb>";
-static char banner[] = "iteratively search a protein sequence against a protein database";
+
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
@@ -188,8 +188,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
   ESL_GETOPTS *go = NULL;
 
   if ((go = esl_getopts_Create(options))     == NULL)     esl_fatal("Internal failure creating options object");
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
 
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
@@ -283,7 +284,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--F2"))        fprintf(ofp, "# Vit filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F2"));
   if (esl_opt_IsUsed(go, "--F3"))        fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F3"));
   if (esl_opt_IsUsed(go, "--nobias"))    fprintf(ofp, "# biased composition HMM filter:   off\n");
-  if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
   if (esl_opt_IsUsed(go, "--fast"))      fprintf(ofp, "# model architecture construction: fast/heuristic\n");
   if (esl_opt_IsUsed(go, "--hand"))      fprintf(ofp, "# model architecture construction: hand-specified by RF annotation\n");
   if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(ofp, "# sym frac for model structure:    %.3f\n", esl_opt_GetReal(go, "--symfrac"));
@@ -307,6 +307,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));
   if (esl_opt_IsUsed(go, "--EfN") )      fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfN"));
   if (esl_opt_IsUsed(go, "--Eft") )      fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",     esl_opt_GetReal   (go, "--Eft"));
+  if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
   if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
   if (esl_opt_IsUsed(go, "--domZ"))      fprintf(ofp, "# domain search space set to:      %.0f\n",    esl_opt_GetReal(go, "--domZ"));
   if (esl_opt_IsUsed(go, "--seed"))  {
@@ -332,6 +333,9 @@ main(int argc, char **argv)
 
   ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
   struct cfg_s     cfg;         /* configuration data                      */
+
+  /* Set processor specific flags */
+  impl_Init();
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
@@ -604,8 +608,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  switch(sstatus)
 	    {
 	    case eslEFORMAT: 
-	      esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-			dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+	      esl_fatal("Parse failed (sequence file %s):\n%s\n",
+			dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 	      break;
 	    case eslEOF:
 	      /* do nothing */
@@ -692,8 +696,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_keyhash_Reuse(kh);
       esl_sqfile_Position(dbfp, 0);
     }
-  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
+					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
@@ -1153,7 +1157,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		      }
 		    else if (sstatus == eslEFORMAT)
 		      {
-			mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", dbfp->filename, dbfp->linenumber, dbfp->errbuf);
+			mpi_failure("Parse failed (sequence file %s):\n%s\n", 
+				    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 		      }
 		    else
 		      {
@@ -1242,8 +1247,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_keyhash_Reuse(kh);
       esl_sqfile_Position(dbfp, 0);
     }
-  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s):\n%s\n",
+					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     mpi_failure("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
@@ -1458,8 +1463,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_keyhash_Reuse(kh);
       esl_sqfile_Position(dbfp, 0);
     }
-  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    qfp->filename, qfp->linenumber, qfp->errbuf);     
+  if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s):\n%s\n",
+					      qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     mpi_failure("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 

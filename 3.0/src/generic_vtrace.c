@@ -60,8 +60,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
   float      **dp  = gx->dp;	/* so {MDI}MX() macros work       */
   float       *xmx = gx->xmx;	/* so XMX() macro works           */
   float        tol = 1e-5;	/* floating point "equality" test */
-  float        esc = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
-  float const *tsc  = gm->tsc;
+  float const *tsc = gm->tsc;
   int     sprv, scur;		/* previous, current state in trace */
   int     status;
 
@@ -87,15 +86,19 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     case p7T_E:		/* E connects from any M state. k set here */
       if (XMX(i, p7G_E) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
 
-      scur = p7T_M;		/* can't come from D, in a Viterbi trace. */
-      if (esl_FCompare(XMX(i, p7G_E), MMX(i,M), tol) == eslOK) { k = M; }
-      else 
+      if (p7_profile_IsLocal(gm))
 	{
-	  for (k = M-1; k >= 1; k--)
-	    if (esl_FCompare(XMX(i, p7G_E), MMX(i,k) + esc, tol) == eslOK) break;
-	  if (k < 0) ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
+	  scur = p7T_M;		/* can't come from D, in a *local* Viterbi trace. */
+	  for (k = M; k >= 1; k--) if (esl_FCompare(XMX(i, p7G_E), MMX(i,k), tol) == eslOK) break;
+	  if (k == 0) ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
 	}
-      break;
+      else 			/* glocal mode: we either come from D_M or M_M */
+	{
+	  if      (esl_FCompare(XMX(i, p7G_E), MMX(i,M), tol) == eslOK) { scur = p7T_M; k = M; }
+	  else if (esl_FCompare(XMX(i, p7G_E), DMX(i,M), tol) == eslOK) { scur = p7T_D; k = M; }
+	  else    ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
+	}
+      break;      
 
     case p7T_M:			/* M connects from i-1,k-1, or B */
       if (MMX(i,k) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);

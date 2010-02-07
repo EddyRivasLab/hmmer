@@ -190,7 +190,7 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
   esl_vec_FScale(wrk->dp[0], (M+1)*p7G_NSCELLS, (1.0 / (float) Ld));
   esl_vec_FScale(wrk->xmx,   p7G_NXCELLS,       (1.0 / (float) Ld));
   
-  /* Calculate null2's log odds emission probabilities, by taking
+  /* Calculate null2's odds ratio emission probabilities, by taking
    * posterior weighted sum over all emission vectors used in paths
    * explaining the domain.
    */
@@ -203,7 +203,7 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
 	  null2[x] += MMX(0,k) * expf(p7P_MSC(gm, k, x));
 	  null2[x] += IMX(0,k) * expf(p7P_ISC(gm, k, x));
 	}
-      null2[x] += MMX(0,M);
+      null2[x] += MMX(0,M) * expf(p7P_MSC(gm, M, x));
       null2[x] += xfactor;
     }
   /* now null2[x] = \frac{f_d(x)}{f_0(x)} odds ratios for all x in alphabet,

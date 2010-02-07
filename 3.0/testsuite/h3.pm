@@ -2,6 +2,64 @@
 
 package h3;
 
+sub ParseTbl {
+    my ($tblfile)    = @_;
+    my (@fields);
+
+    $ntbl     = 0;
+    @tname    = ();
+    @tacc     = ();
+    @qname    = ();
+    @qacc     = ();
+    @fullE    = ();
+    @fullsc   = ();
+    @fullbias = ();
+    @best1E   = ();
+    @best1sc  = ();
+    @best1bias= ();
+    @nexp     = ();
+    @nreg     = ();
+    @nclu     = ();
+    @nov      = ();
+    @nenv     = ();
+    @ndom     = ();
+    @nrep     = ();
+    @ninc     = ();
+    @tdesc    = ();
+    
+    if (! open(TBLFILE, $tblfile)) { print "FAIL: couldn't open table file"; exit 1 ; }
+    while (<TBLFILE>)
+    {
+	if (/^\#/) { next; }
+	chop;
+	@fields = split(' ', $_, 19);
+
+	$tname[$ntbl]     = $fields[0];
+	$tacc[$ntbl]      = $fields[1];
+	$qname[$ntbl]     = $fields[2];
+	$qacc[$ntbl]      = $fields[3];
+	$fullE[$ntbl]     = $fields[4];
+	$fullsc[$ntbl]    = $fields[5];
+	$fullbias[$ntbl]  = $fields[6];
+	$best1E[$ntbl]    = $fields[7];
+	$best1sc[$ntbl]   = $fields[8];
+	$best1bias[$ntbl] = $fields[9];
+	$nexp[$ntbl]      = $fields[10];
+	$nreg[$ntbl]      = $fields[11];
+	$nclu[$ntbl]      = $fields[12];
+	$nov[$ntbl]       = $fields[13];
+	$nenv[$ntbl]      = $fields[14];	
+	$ndom[$ntbl]      = $fields[15];
+	$nrep[$ntbl]      = $fields[16];
+	$ninc[$ntbl]      = $fields[17];
+	$tdesc[$ntbl]     = $fields[18];
+	$ntbl++;
+    }
+    close TBLFILE;
+    1;
+}
+
+
 sub ParseDomTbl {
     my ($domtblfile) = @_;
     my (@fields);
@@ -10,6 +68,7 @@ sub ParseDomTbl {
     @tname    = ();
     @tacc     = ();
     @qname    = ();
+    @qacc     = ();
     @qlen     = ();
     @seqE     = ();
     @seqsc    = ();
@@ -27,13 +86,14 @@ sub ParseDomTbl {
     @ienv     = ();
     @jenv     = ();
     @accuracy = ();
-    
+    @tdesc    = ();    
 
-    if (! open(DOMFILE, $domtblfile)) { print "FAIL: couldn't open first domain table file"; exit 1 ; }
+    if (! open(DOMFILE, $domtblfile)) { print "FAIL: couldn't open domain table file"; exit 1 ; }
     while (<DOMFILE>)
     {
 	if (/^\#/) { next; }
-	@fields = split(' ', $_);
+	chop;
+	@fields = split(' ', $_, 23);
 
 	$tname[$ndomtbl]   = $fields[0];
 	$tacc[$ndomtbl]    = $fields[1];
@@ -56,8 +116,8 @@ sub ParseDomTbl {
 	$jali[$ndomtbl]    = $fields[18];
 	$ienv[$ndomtbl]    = $fields[19];
 	$jenv[$ndomtbl]    = $fields[20];
-	$acc[$ndomtbl]     = $fields[21];
-	$desc[$ndomtbl]    = $fields[22];
+	$accuracy[$ndomtbl]= $fields[21];
+	$tdesc[$ndomtbl]   = $fields[22];
 	$ndomtbl++;
     }
     close DOMFILE;

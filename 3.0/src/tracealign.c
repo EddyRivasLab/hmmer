@@ -40,6 +40,11 @@ static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *
  *            The new alignment structure is allocated here, and returned
  *            in <*ret_msa>.
  *            
+ *            As a special case, the traces may contain I->D and D->I
+ *            transitions. This feature is used by <hmmalign --mapali>
+ *            to reconstruct an input alignment without modification
+ *            from trace doctoring.
+ *            
  *            <optflags> controls some optional behaviors in producing
  *            the alignment, as follows:
  *            
@@ -54,7 +59,8 @@ static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *
  *            at least one residue in them.
  *            
  *            <p7_TRIM>: trim off any residues that get assigned to
- *            flanking N,C states.
+ *            flanking N,C states (in profile traces) or I_0 and I_M
+ *            (in core traces).
  *            
  *            The <optflags> can be combined by logical OR; for
  *            example, <p7_DIGITIZE | p7_ALL_CONSENSUS_COLS>.
@@ -365,6 +371,8 @@ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z)
  * non-<NULL>.
  * The traces may either be profile traces or core traces;
  * core traces may contain X "states" for fragments.
+ * 
+ *  matmap[k] = apos of match k, in digital coords:  matmap[1..M] = [1..alen]
  */
 
 static int
@@ -395,12 +403,15 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    break;
 
 	  case p7T_D:
+	    msa->ax[idx][matmap[tr[idx]->k[z]]] = esl_abc_XGetGap(abc); /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]] + 1;
 	    break;
 
 	  case p7T_I:
-	    msa->ax[idx][apos] = get_dsq_z(sq, premsa, tr, idx, z);
-	    apos++;
+	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
+	      msa->ax[idx][apos] = get_dsq_z(sq, premsa, tr, idx, z);
+	      apos++;
+	    }
 	    break;
 	    
 	  case p7T_N:
@@ -415,8 +426,25 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    apos = matmap[M]+1;	/* set position for C-terminal tail */
 	    break;
 	    
-	  case p7T_X:  /* peek at next state for B->X->Ik; superfluous for ->{DM}k; harmless for {MDI}k->X->E  */
-	    apos = matmap[tr[idx]->k[z+1]] + 1; /* this works because all other cases except B->X->Ik set their own apos */
+	  case p7T_X: 
+	    /* Mark fragments (B->X and X->E containing core traces): 
+	     * convert flanks from gaps to ~ 
+	     */
+	    if (tr[idx]->st[z-1] == p7T_B)
+	      { /* B->X leader. This is a core trace and a fragment. Convert leading gaps to ~ */
+		/* to set apos for an initial Ik: peek at next state for B->X->Ik; superfluous for ->{DM}k: */
+		for (apos = 1; apos <= matmap[tr[idx]->k[z+1]]; apos++)
+		  msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
+		/* tricky! apos is now exactly where it needs to be for X->Ik. all other cases except B->X->Ik set their own apos */
+	      }
+	    else if (tr[idx]->st[z+1] == p7T_E) 
+	      { /* X->E trailer. This is a core trace and a fragment. Convert trailing gaps to ~ */
+		/* don't need to set apos for trailer. There can't be any more residues in a core trace once we hit X->E */
+		for (; apos <= alen; apos++)
+		  msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
+	      }
+	    else ESL_XEXCEPTION(eslECORRUPT, "make_digital_msa(): X state in unexpected position in trace"); 
+	      
 	    break;
 
 	  default:
@@ -477,12 +505,15 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    break;
 
 	  case p7T_D:
+	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = '-';  /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]];
 	    break;
 
 	  case p7T_I:
-	    msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
-	    apos++;
+	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
+	      msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
+	      apos++;
+	    }
 	    break;
 	    
 	  case p7T_N:
@@ -497,8 +528,23 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    apos = matmap[M];	/* set position for C-terminal tail */
 	    break;
 
-	  case p7T_X: /* see comments in make_digital_msa(); handling of B->X entry and X->E exit is tricky */
-	    apos = matmap[tr[idx]->k[z+1]]; 
+	  case p7T_X:
+	    /* Mark fragments (B->X and X->E containing core traces): 
+	     * convert flanks from gaps to ~ 
+	     */
+	    if (tr[idx]->st[z-1] == p7T_B)
+	      { /* B->X leader. This is a core trace and a fragment. Convert leading gaps to ~ */
+		for (apos = 0; apos < matmap[tr[idx]->k[z+1]]; apos++)
+		  msa->aseq[idx][apos] = '~';
+		/* tricky; apos exactly where it must be for X->Ik; see comments in make_digital_msa() */
+	      }
+	    else if (tr[idx]->st[z+1] == p7T_E) 
+	      { /* X->E trailer. This is a core trace and a fragment. Convert trailing gaps to ~ */
+		for (;  apos < alen; apos++)
+		  msa->aseq[idx][apos] = '~';
+	      }
+	    else ESL_XEXCEPTION(eslECORRUPT, "make_text_msa(): X state in unexpected position in trace"); 
+	 
 	    break;
 
 	  default:
@@ -605,8 +651,10 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, i
 	    break;
 
 	  case p7T_I:
-	    msa->pp[idx][apos] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);  
-	    apos++;
+	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
+	      msa->pp[idx][apos] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);  
+	      apos++;
+	    }
 	    break;
 
 	  case p7T_N:

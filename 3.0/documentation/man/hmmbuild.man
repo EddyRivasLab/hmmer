@@ -133,6 +133,16 @@ as consensus, which may be useful in some cases. Setting it to 0.0 is
 a bad idea, because no columns will be assigned as consensus, and
 you'll get a model of zero length.
 
+.TP
+.BI --fragthresh " <x>"
+We only want to count terminal gaps as deletions if the aligned
+sequence is known to be full-length, not if it is a fragment (for
+instance, because only part of it was sequenced). HMMER uses a simple
+rule to infer fragments: if the sequence length L is less than 
+a fraction
+.I <x> 
+times the mean sequence length of all the sequences in the alignment,
+then the sequence is handled as a fragment. The default is 0.5.
 
 
 
@@ -372,7 +382,7 @@ web page
 .SH AUTHOR
 
 .nf
-Eddy Laboratory
+Eddy/Rivas Laboratory
 Janelia Farm Research Campus
 19700 Helix Drive
 Ashburn VA 20147 USA

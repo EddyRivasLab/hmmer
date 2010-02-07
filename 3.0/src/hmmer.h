@@ -104,7 +104,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
  *      for backwards compatibility; so we may as well keep using them.
  */
 #define p7H_HASBITS (1<<0)    /* obsolete (was: model has log-odds scores)       !*/
-#define p7H_DESC    (1<<1)    /* description exists                              !*/
+#define p7H_DESC    (1<<1)    /* description exists (legacy; xref J5/114)        !*/
 #define p7H_RF      (1<<2)    /* #RF annotation available                        !*/
 #define p7H_CS      (1<<3)    /* #CS annotation available                        !*/
 #define p7H_XRAY    (1<<4)    /* obsolete (was: structural data available)       !*/
@@ -112,7 +112,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7H_HASDNA  (1<<6)    /* obsolete (was: protein HMM->DNA seq params set) !*/
 #define p7H_STATS   (1<<7)    /* model has E-value statistics calibrated         !*/
 #define p7H_MAP     (1<<8)    /* alignment map is available                      !*/
-#define p7H_ACC     (1<<9)    /* accession number is available                   !*/
+#define p7H_ACC     (1<<9)    /* accession is available (legacy; xref J5/114)    !*/
 #define p7H_GA      (1<<10)   /* gathering thresholds available                  !*/
 #define p7H_TC      (1<<11)   /* trusted cutoffs available                       !*/
 #define p7H_NC      (1<<12)   /* noise cutoffs available                         !*/
@@ -166,8 +166,8 @@ typedef struct p7_hmm_s {
    * strings, not just arrays. (hmm->map is an int array).
    */
   char    *name;                 /* name of the model                     (mandatory)      */ /* String, \0-terminated   */
-  char    *acc;	                 /* accession number of model (Pfam)      (p7H_ACC)        */ /* String, \0-terminated   */
-  char    *desc;                 /* brief (1-line) description of model   (p7H_DESC)       */ /* String, \0-terminated   */
+  char    *acc;	                 /* accession number of model (Pfam)      (optional: NULL) */ /* String, \0-terminated   */
+  char    *desc;                 /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
   char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
   char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
   char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
@@ -303,7 +303,7 @@ typedef struct p7_bg_s {
  * 
  * A "profile" trace uniquely has S,N,C,T,J states and their
  * transitions; it also can have B->Mk and Mk->E internal entry/exit
- * transitions for local alignments. 
+ * transitions for local alignments. It may not contain X states.
  *
  * A "core" trace may contain I0, IM, and D1 states and their
  * transitions. A "core" trace can also have B->X->{MDI}k and
@@ -642,10 +642,10 @@ typedef struct p7_domaindef_s {
  * complements have sqfrom > sqto
  */
 typedef struct p7_hit_s {
-  char   *name;			/* name of the target               */
-  char   *acc;			/* accession of the target          */
-  char   *desc;			/* description of the target        */
-  double sortkey;		/* number to sort by; big is better    */
+  char   *name;			/* name of the target               (mandatory)           */
+  char   *acc;			/* accession of the target          (optional; else NULL) */
+  char   *desc;			/* description of the target        (optional; else NULL) */
+  double sortkey;		/* number to sort by; big is better                       */
 
   float  score;			/* bit score of the sequence (all domains, w/ correction) */
   float  pre_score;		/* bit score of sequence before null2 correction          */

@@ -90,8 +90,8 @@ main(int argc, char **argv)
   /* Main body: read HMMs one at a time, print one line of stats
    */
   printf("#\n");
-  printf("# %-4s %-20s %8s %8s %6s %6s %6s %6s %6s\n", "idx",  "name",                 "nseq",     "eff_nseq", "M",      "relent", "info",   "p relE", "compKL");
-  printf("# %-4s %-20s %8s %8s %6s %6s %6s %6s %6s\n", "----", "--------------------", "--------", "--------", "------", "------", "------", "------", "------");
+  printf("# %-4s %-20s %-12s %8s %8s %6s %6s %6s %6s %6s\n", "idx",  "name",                 "accession",    "nseq",     "eff_nseq", "M",      "relent", "info",   "p relE", "compKL");
+  printf("# %-4s %-20s %-12s %8s %8s %6s %6s %6s %6s %6s\n", "----", "--------------------", "------------", "--------", "--------", "------", "------", "------", "------", "------");
 
   nhmm = 0;
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
@@ -107,9 +107,10 @@ main(int argc, char **argv)
       p7_MeanPositionRelativeEntropy(hmm, bg, &x); 
       p7_hmm_CompositionKLDist(hmm, bg, &KL, NULL);
 
-      printf("%-6d %-20s %8d %8.2f %6d %6.2f %6.2f %6.2f %6.2f\n",
+      printf("%-6d %-20s %-12s %8d %8.2f %6d %6.2f %6.2f %6.2f %6.2f\n",
 	     nhmm,
 	     hmm->name,
+	     hmm->acc == NULL ? "-" : hmm->acc,
 	     hmm->nseq,
 	     hmm->eff_nseq,
 	     hmm->M,

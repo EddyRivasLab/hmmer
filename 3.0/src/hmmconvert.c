@@ -25,7 +25,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "convert profile HMM file to a HMMER format";
+static char banner[] = "convert profile file to a HMMER format";
 
 
 int 

@@ -103,15 +103,18 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   /* Entry scores. */
   if (p7_profile_IsLocal(gm))
     {
-      /* Local mode entry:  occ[k] /( \sum_i occ[i] * (M-k+1))
+      /* Local mode entry:  occ[k] /( \sum_i occ[i] * (M-i+1))
        * (Reduces to uniform 2/(M(M+1)) for occupancies of 1.0)  */
       Z = 0.;
       ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
+
       if ((status = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) goto ERROR;
       for (k = 1; k <= hmm->M; k++) 
 	Z += occ[k] * (float) (hmm->M-k+1);
       for (k = 1; k <= hmm->M; k++) 
 	p7P_TSC(gm, k-1, p7P_BM) = log(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
+
+      free(occ);
     }
   else	/* glocal modes: left wing retraction; must be in log space for precision */
     {
@@ -201,8 +204,6 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
    */
   gm->L = 0;			/* force ReconfigLength to reconfig */
   if ((status = p7_ReconfigLength(gm, L)) != eslOK) goto ERROR;
-  free(occ);
-
   return eslOK;
 
  ERROR:

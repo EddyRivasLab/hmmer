@@ -411,6 +411,22 @@ if test "$impl_choice" = "sse"; then
   CFLAGS="$sre_save_cflags"
 fi
 
+# For x86 processors check if the flush to zero macro is available
+# in order to avoid the performance penalty dealing with sub-normal
+# values in the floating point calculations.
+if test "$impl_choice" = "sse"; then
+  AC_MSG_CHECKING([whether _MM_SET_FLUSH_ZERO_MODE is supported])
+  sre_save_cflags="$CFLAGS"
+  CFLAGS="$CFLAGS $SIMD_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <xmmintrin.h>]],
+ 				 [[_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
+				 ]])],
+	[ AC_MSG_RESULT([yes])
+          AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
+	[ AC_MSG_RESULT([no])]
+  )
+  CFLAGS="$sre_save_cflags"
+fi
 
 # Now, we can enable the appropriate optimized implementation.
 case "$impl_choice" in 
@@ -469,7 +485,7 @@ AS_IF([test "x$with_gsl" != xno],
 
 # Checks for headers
 #
-AC_CHECK_HEADERS([sys/types.h sys/sysctl.h unistd.h stdint.h inttypes.h])
+AC_CHECK_HEADERS([sys/types.h sys/sysctl.h unistd.h stdint.h inttypes.h endian.h])
 
 # altivec.h requires the simd cflags
 # For reasons I don't understand, this needs to come after any other CHECK_HEADERS().
@@ -533,6 +549,10 @@ AC_CONFIG_FILES([easel/miniapps/Makefile])
 AC_CONFIG_FILES([easel/testsuite/Makefile])
 AC_CONFIG_FILES([easel/Makefile])
 
+# the following incantation establishes a symlink of
+# src/impl_{whatever} to src/impl in the *build* directory.
+# Testsuite sqc tests rely on it.
+AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
 ################################################################
 # 13. AC_OUTPUT
@@ -550,6 +570,7 @@ echo "
 HMMER configuration:
 
      compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS}
+     linker:               ${LDFLAGS}
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
 "

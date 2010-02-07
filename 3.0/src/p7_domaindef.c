@@ -434,13 +434,22 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
 		if (i2 <= last_j2) ddef->noverlaps++;
 
-		/* Note that k..m coords on model are available, but we're currently ignoring them. 
-		   This leads to a rare clustering bug that we eventually need to fix [xref J3/32]:
-		   two different regions in one profile HMM might have hit same seq domain,
-		   and when we now go to calculate an OA trace, nothing constrains us to find the
-                   two different alignments to the HMM; in fact, because OA is optimal, we'll 
-                   find one and the *same* alignment, leading to an apparent duplicate alignment 
-		   in the output.
+		/* Note that k..m coords on model are available, but
+                 * we're currently ignoring them.  This leads to a
+                 * rare clustering bug that we eventually need to fix
+                 * properly [xref J3/32]: two different regions in one
+                 * profile HMM might have hit same seq domain, and
+                 * when we now go to calculate an OA trace, nothing
+                 * constrains us to find the two different alignments
+                 * to the HMM; in fact, because OA is optimal, we'll
+                 * find one and the *same* alignment, leading to an
+                 * apparent duplicate alignment in the output.
+                 * 
+                 * Registered as #h74, Dec 2009, after EBI finds and
+                 * reports it.  #h74 is worked around in p7_tophits.c
+                 * by hiding all but one envelope with an identical
+                 * alignment, in the rare event that this
+                 * happens. [xref J5/130].
 		 */
 		ddef->nenvelopes++;
 		if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE) == eslOK) 

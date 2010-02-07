@@ -270,6 +270,7 @@ p7_builder_Destroy(P7_BUILDER *bld)
  * 2. Standardized model construction API.
  *****************************************************************/
 
+static int    validate_msa         (P7_BUILDER *bld, ESL_MSA *msa);
 static int    relative_weights     (P7_BUILDER *bld, ESL_MSA *msa);
 static int    build_model          (P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int    effective_seqnumber  (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg);
@@ -320,19 +321,25 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
 	   ESL_MSA **opt_postmsa)
 {
-  P7_HMM     *hmm    = NULL;
-  P7_TRACE  **tr     = NULL;
-  P7_TRACE ***tr_ptr = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
+  uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
+  P7_HMM     *hmm      = NULL;
+  P7_TRACE  **tr       = NULL;
+  P7_TRACE ***tr_ptr   = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
   int         status;
 
-  if ((status =  relative_weights   (bld, msa))                       != eslOK) goto ERROR;
-  if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))         != eslOK) goto ERROR;
-  if ((status =  build_model        (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
-  if ((status =  effective_seqnumber(bld, msa, hmm, bg))              != eslOK) goto ERROR;
-  if ((status =  parameterize       (bld, hmm))                       != eslOK) goto ERROR;
-  if ((status =  annotate           (bld, msa, hmm))                  != eslOK) goto ERROR;
-  if ((status =  calibrate          (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
-  if ((status =  make_post_msa      (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
+  if ((status =  validate_msa         (bld, msa))                       != eslOK) goto ERROR;
+  if ((status =  esl_msa_Checksum     (msa, &checksum))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to calculate checksum"); 
+  if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
+  if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
+  if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
+  if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
+  if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
+  if ((status =  annotate             (bld, msa, hmm))                  != eslOK) goto ERROR;
+  if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
+  if ((status =  make_post_msa        (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
+
+  hmm->checksum = checksum;
+  hmm->flags   |= p7H_CHKSUM;
 
   if (opt_hmm   != NULL) *opt_hmm   = hmm; else p7_hmm_Destroy(hmm);
   if (opt_trarr != NULL) *opt_trarr = tr;  else p7_trace_DestroyArray(tr, msa->nseq);
@@ -418,6 +425,38 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
  *****************************************************************/
 
 
+/* validate_msa:
+ * SRE, Thu Dec  3 16:10:31 2009 [J5/119; bug #h70 fix]
+ * 
+ * HMMER uses a convention for missing data characters: they
+ * indicate that a sequence is a fragment.  (See
+ * esl_msa_MarkFragments()).
+ *
+ * Because of the way these fragments will be handled in tracebacks,
+ * we reject any alignment that uses missing data characters in any
+ * other way.
+ * 
+ * This validation step costs negligible time.
+ */
+static int
+validate_msa(P7_BUILDER *bld, ESL_MSA *msa)
+{
+  int     idx;
+  int64_t apos;
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      apos = 1;
+      while (  esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]) && apos <= msa->alen) apos++;
+      while (! esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]) && apos <= msa->alen) apos++;
+      while (  esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]) && apos <= msa->alen) apos++;
+      if (apos != msa->alen+1) ESL_FAIL(eslEINVAL, bld->errbuf, "msa %s; sequence %s\nhas missing data chars (~) other than at fragment edges", msa->name, msa->sqname[idx]);
+    }
+  
+  return eslOK;
+}
+
+
 /* set_relative_weights():
  * Set msa->wgt vector, using user's choice of relative weighting algorithm.
  */
@@ -432,12 +471,8 @@ relative_weights(P7_BUILDER *bld, ESL_MSA *msa)
   else if (bld->wgt_strategy == p7_WGT_GSC)                     status = esl_msaweight_GSC(msa); 
   else if (bld->wgt_strategy == p7_WGT_BLOSUM)                  status = esl_msaweight_BLOSUM(msa, bld->wid); 
 
-  if (status != eslOK) ESL_XFAIL(status, bld->errbuf, "failed to set relative weights in alignment");
-
+  if (status != eslOK) ESL_FAIL(status, bld->errbuf, "failed to set relative weights in alignment");
   return eslOK;
-
- ERROR:
-  return status;
 }
 
 
@@ -563,9 +598,7 @@ annotate(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm)
   if ((status = p7_hmm_SetDescription(hmm, msa->desc))          != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record MSA description");
   //  if ((status = p7_hmm_AppendComlog(hmm, go->argc, go->argv))   != eslOK) ESL_XFAIL(status, errbuf, "Failed to record command log");
   if ((status = p7_hmm_SetCtime(hmm))                           != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record timestamp");
-  if ((status = esl_msa_Checksum(msa, &(hmm->checksum)))        != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to record checksum"); 
   if ((status = p7_hmm_SetComposition(hmm))                     != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to determine model composition");
-  hmm->flags |= p7H_CHKSUM;
   hmm->flags |= p7H_COMPO;
 
   if (msa->cutset[eslMSA_GA1] && msa->cutset[eslMSA_GA2]) { hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1]; hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2]; hmm->flags |= p7H_GA; }
