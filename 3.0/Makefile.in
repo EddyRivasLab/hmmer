@@ -114,11 +114,6 @@ check:
 # dev: compile all executables, including drivers.
 dev: libraries programs utests itests misc
 
-Makefile:  configure
-	./configure
-
-configure: configure.ac
-	autoconf
 
 # rules to build the libraries
 libraries: easel_lib impl_lib hmmer_lib
