@@ -48,6 +48,15 @@ typedef struct {
   P7_HMM     *hmm;
   double      entropy;
 } WORK_ITEM;
+
+typedef struct _pending_s {
+  int         nali;
+  ESL_MSA    *postmsa;
+  ESL_MSA    *msa;
+  P7_HMM     *hmm;
+  double      entropy;
+  struct _pending_s *next;
+} PENDING_ITEM;
 #endif /*HMMER_THREADS*/
 
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
@@ -837,11 +846,16 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg)
 static int
 thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
 {
-  int         status    = eslOK;
-  int         sstatus   = eslOK;
-  int         processed = 0;
-  WORK_ITEM  *item;
-  void       *newItem;
+  int          status    = eslOK;
+  int          sstatus   = eslOK;
+  int          processed = 0;
+  WORK_ITEM   *item;
+  void        *newItem;
+
+  int           next     = 1;
+  PENDING_ITEM *top      = NULL;
+  PENDING_ITEM *empty    = NULL;
+  PENDING_ITEM *tmp      = NULL;
 
   char        errmsg[eslERRBUFSIZE];
 
@@ -869,12 +883,67 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
       item = (WORK_ITEM *) newItem;
       if (item->processed == TRUE) {
 	++processed;
-	sstatus = output_result(cfg, errmsg, item->nali, item->msa, item->hmm, item->postmsa, item->entropy);
-	if (sstatus != eslOK) p7_Fail(errmsg);
 
-	p7_hmm_Destroy(item->hmm);
-	esl_msa_Destroy(item->msa);
-	esl_msa_Destroy(item->postmsa);
+	/* try to keep the input output order the same */
+	if (item->nali == next) {
+	  sstatus = output_result(cfg, errmsg, item->nali, item->msa, item->hmm, item->postmsa, item->entropy);
+	  if (sstatus != eslOK) p7_Fail(errmsg);
+
+	  p7_hmm_Destroy(item->hmm);
+	  esl_msa_Destroy(item->msa);
+	  esl_msa_Destroy(item->postmsa);
+
+	  ++next;
+
+	  /* output any pending msa as long as the order
+	   * remains the same as read in.
+	   */
+	  while (top != NULL && top->nali == next) {
+	    sstatus = output_result(cfg, errmsg, top->nali, top->msa, top->hmm, top->postmsa, top->entropy);
+	    if (sstatus != eslOK) p7_Fail(errmsg);
+
+	    p7_hmm_Destroy(top->hmm);
+	    esl_msa_Destroy(top->msa);
+	    esl_msa_Destroy(top->postmsa);
+
+	    tmp = top;
+	    top = tmp->next;
+
+	    tmp->next = empty;
+	    empty     = tmp;
+	    
+	    ++next;
+	  }
+	} else {
+	  /* queue up the msa so the sequence order is the same in
+	   * the .sto and .hmm
+	   */
+	  if (empty != NULL) {
+	    tmp   = empty;
+	    empty = tmp->next;
+	  } else {
+	    ESL_ALLOC(tmp, sizeof(PENDING_ITEM));
+	  }
+
+	  tmp->nali     = item->nali;
+	  tmp->hmm      = item->hmm;
+	  tmp->msa      = item->msa;
+	  tmp->postmsa  = item->postmsa;
+	  tmp->entropy  = item->entropy;
+
+	  /* add the msa to the pending list */
+	  if (top == NULL || tmp->nali < top->nali) {
+	    tmp->next = top;
+	    top       = tmp;
+	  } else {
+	    PENDING_ITEM *ptr = top;
+	    while (ptr->next != NULL && tmp->nali > ptr->next->nali) {
+	      ptr = ptr->next;
+	    }
+	    tmp->next = ptr->next;
+	    ptr->next = tmp;
+	  }
+	}
 
 	item->nali      = 0;
 	item->processed = FALSE;
@@ -884,6 +953,14 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
 	item->entropy   = 0.0;
       }
     }
+  }
+
+  if (top != NULL) esl_fatal("Top is not empty\n");
+
+  while (empty != NULL) {
+    tmp   = empty;
+    empty = tmp->next;
+    free(tmp);
   }
 
   status = esl_workqueue_ReaderUpdate(queue, item, NULL);
@@ -897,6 +974,9 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
     }
 
   return sstatus;
+
+ ERROR:
+  return eslEMEM;
 }
 
 static void 
