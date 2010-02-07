@@ -5,7 +5,7 @@
  *     <E-value> <bitscore> <target_sequence> <query_model>
  * Target sequence names are either
  *   decoy\d+                    for negatives (decoys); example: decoy75382
- *   <model>/<L>[/<to>-<from>]+  for positives;          example: CHP02677/1296/297-773/781-1257
+ *   <model>/<#>[/<to>-<from>]+  for positives;          example: CHP02677/42/297-773/781-1257
  *    
  * The <.out> file (or stream) must be sorted by E-value, with best
  * (lowest) E-values first.
@@ -320,7 +320,7 @@ weighted_total_positives(int **pni, double *queryp, int nq, double *seqp, int np
  *
  * Target sequence names are either
  *   decoy\d+                    for negatives (decoys); example: decoy75382
- *   <model>/<L>[/<to>-<from>]+  for positives;          example: CHP02677/1296/297-773/781-1257
+ *   <model>/<#>[/<to>-<from>]+  for positives;          example: CHP02677/42/297-773/781-1257
  *   
  * A hit is a positive if <query_model> matches the <model> component of the
  * target name - i.e. the embedded domains in the target are homologous to this 

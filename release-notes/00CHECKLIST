@@ -1,14 +1,13 @@
 Checklist for a HMMER release
-SRE, Tue Mar 25 14:34:33 2008
+SRE, Thu Feb  4 10:56:25 2010
 --------------------------------------------------------
 When editing this 00CHECKLIST, edit it in the trunk, not in a release
 branch; it isn't included in releases anyway.
 
 Subversion repository:  https://svn.janelia.org/eddylab/eddys/src/hmmer
 
-HMMER follows an 'unstable trunk' policy.
-Each major release goes onto a stable branch.
-Every release (even minor ones) is tagged.
+HMMER follows an 'unstable trunk' policy.  Each major release goes
+onto a stable branch.  Every release (even minor ones) is tagged.
 
 Release types: major releases, minor releases, and snapshots. A major
 release gets its own branch. A minor release puts bug fixes into a
@@ -46,7 +45,6 @@ For major public releases (3.0, 3.1): we create a Subversion branch,
 so we can continue support (with bugfixes) without disrupting
 development of the next main release.
 
-
 *  First test the development trunk.
    Compile should be entirely clean when compiled -Wall.
    'make check' should be clean.
@@ -69,13 +67,18 @@ development of the next main release.
 
    [or, svn merge from trunk to existing branch. Write these instructions next time.]
 
- Alternatively, if branch already exists: svn merge trunk to release branch.
+ Alternatively, if branch already exists: svn merge trunk to release
+ branch. Beware, merges will destroy the svn:externals property that
+ connects us to the H3 Easel branch instead of the Easel trunk.
 
    cd ~/releases
    svn checkout https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 hmmer-release
    cd hmmer-release
    svn merge https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0   https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
-   cd easel
+   cd ..
+   svn propedit svn:externals hmmer-release
+     easel   https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0
+   cd hmmer-release/easel
    svn merge https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 https://svn.janelia.org/eddylab/eddys/easel/trunk
 
 

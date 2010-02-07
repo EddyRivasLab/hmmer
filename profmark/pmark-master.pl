@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-# Driver for a pmark benchmark.
+# The top level script that runs a pmark benchmark.
 #
 # Usage:
 #   ./pmark-master.pl <top_builddir> <top_srcdir> <resultdir> <nproc> <benchmark prefix> <benchmark script>

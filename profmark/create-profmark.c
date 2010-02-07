@@ -1,6 +1,6 @@
 /* Construct a training alignment/test sequences set from an MSA.
  *
-     gcc -g -Wall -I ../src -I ../easel -L ../src -L ../easel -o create-profmark create-profmark.c -lhmmer -leasel -lm
+ * Usage:
      ./create-profmark <basename> <msa Stockholm file> <FASTA db>
    For example:
      ./create-profmark pmark /misc/data0/databases/Pfam/Pfam-A.seed /misc/data0/databases/uniprot-7.0/uniprot_sprot.fasta
@@ -63,7 +63,7 @@ static ESL_OPTIONS options[] = {
   /* Other options */
   { "--single", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "embed one, not two domains in each positive",             4 },
   { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                 4 },
-  { "--seed",   eslARG_INT,    "42", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                    4 },
+  { "--seed",   eslARG_INT,     "0", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                    4 },
 
   { 0,0,0,0,0,0,0,0,0,0 },
 };
@@ -238,7 +238,7 @@ main(int argc, char **argv)
 	  esl_msa_MinimGaps(trainmsa, NULL, NULL);
 	  esl_msa_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
-	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid);
+	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
 	  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
 	  nali++;
 	}
