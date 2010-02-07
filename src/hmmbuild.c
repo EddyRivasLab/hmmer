@@ -840,7 +840,6 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
   int         status    = eslOK;
   int         sstatus   = eslOK;
   int         processed = 0;
-  int         nali      = 0;
   WORK_ITEM  *item;
   void       *newItem;
 
@@ -856,8 +855,11 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg)
   item = (WORK_ITEM *) newItem;
   while (sstatus == eslOK) {
     sstatus = esl_msa_Read(cfg->afp, &item->msa);
-    item->nali = (sstatus == eslOK) ? ++nali : 0;
-    if (sstatus == eslEOF && processed < nali) sstatus = eslOK;
+    if (sstatus == eslOK) {
+      item->nali = ++cfg->nali;
+      if (set_msa_name(cfg, errmsg, item->msa) != eslOK) p7_Fail("%s\n", errmsg);
+    }
+    if (sstatus == eslEOF && processed < cfg->nali) sstatus = eslOK;
 	  
     if (sstatus == eslOK) {
       status = esl_workqueue_ReaderUpdate(queue, item, &newItem);
