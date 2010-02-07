@@ -331,7 +331,7 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 
 
 
-/* Function:  p7_profile_GetTScore()
+/* Function:  p7_profile_GetT()
  * Incept:    SRE, Wed Apr 12 14:20:18 2006 [St. Louis]
  *
  * Purpose:   Convenience function that looks up a transition score in
@@ -349,6 +349,8 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
  *            can contain <p7T_X> "states" used solely to signal
  *            a sequence fragment, treated as missing data. Transitions
  *            involving <p7T_X> states are assigned zero score here.
+ *            Other transitions that occur only in core traces
+ *            (B->I0, B->D1, I_M->E) also silently get a zero score.
  *            This is safe, because we would only ever use this number
  *            for display, not as a log probability somewhere.
  *
@@ -362,27 +364,34 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 int
 p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float *ret_tsc)
 {
-  int   status;
   float tsc = 0.0f;
+  int   status;
 
+  /* Detect transitions that can only come from core traces;
+   * return 0.0 as a special case (this is only done for displaying
+   * "scores" in trace dumps, during debugging.)
+   */
+  if (st1 == p7T_X || st2 == p7T_X) return eslOK;
+  if (st1 == p7T_B && st2 == p7T_I) return eslOK;
+  if (st1 == p7T_B && st2 == p7T_D) return eslOK;
+  if (st1 == p7T_I && st1 == p7T_E) return eslOK;
+
+  /* Now we're sure this is a profile trace, as it should usually be. */
   switch (st1) {
   case p7T_S:  break;
   case p7T_T:  break;
-  case p7T_X:  break; 		/* should only happen on a core trace, with missing data or a fragment. */
-
   case p7T_N:
     switch (st2) {
     case p7T_B: tsc =  gm->xsc[p7P_N][p7P_MOVE]; break;
     case p7T_N: tsc =  gm->xsc[p7P_N][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
+    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
   case p7T_B:
     switch (st2) {
-    case p7T_M:  tsc = p7P_TSC(gm, k2-1, p7P_BM); break; /* remember, B->Mk is stored in [k-1][p7P_BM] */
-    case p7T_X:  tsc = 0.0;                       break; /* should only happen in a core trace, with missing data or fragment */
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
+    case p7T_M: tsc = p7P_TSC(gm, k2-1, p7P_BM); break; /* remember, B->Mk is stored in [k-1][p7P_BM] */
+    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
@@ -395,7 +404,6 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
       if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (M%d of %d) in non-local model", k1, gm->M);
       tsc = 0.0f;		/* by def'n in H3 local alignment */
       break;
-    case p7T_X: tsc = 0.0f; break;
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;
@@ -408,7 +416,6 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
       if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (D%d of %d) in non-local model", k1, gm->M);
       tsc = 0.0f;		/* by def'n in H3 local alignment */
       break;
-    case p7T_X: tsc = 0.0f; break;
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;
@@ -417,7 +424,6 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
     switch (st2) {
     case p7T_M: tsc = p7P_TSC(gm, k1, p7P_IM); break;
     case p7T_I: tsc = p7P_TSC(gm, k1, p7P_II); break;
-    case p7T_X: tsc = 0.0f; break;
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;

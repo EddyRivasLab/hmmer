@@ -78,16 +78,21 @@ static ESL_OPTIONS options[] = {
   { "--EfN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for Forward exp tail tau fit",  6 },   
   { "--Eft",    eslARG_REAL,   "0.04", NULL, "0<x<1",   NULL,  NULL, NULL, "tail mass for Forward exponential tail tau fit",    6 },   
 
-  { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                7 },  
-  { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 7 },
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   7 },  
   { "--seed",    eslARG_INT,      "0", NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
 
+  { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                8 },  
+  { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 8 },
   { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      8 },
   { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",    8 },  
   { "--pthresh", eslARG_REAL,   "0.02",NULL, NULL,     NULL,"--ffile", NULL, "set P-value threshold for --ffile",               8 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
+
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "collect profile HMM score distributions on random sequences";
+
+
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes.
  * 
@@ -116,9 +121,6 @@ struct cfg_s {
   FILE           *xfp;		/* optional output for binary score vectors */
   FILE           *alfp;		/* optional output for alignment lengths */
 };
-
-static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "collect profile HMM score distributions on random sequences";
 
 
 static int  init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf);
@@ -697,6 +699,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	   */
 	  /* alilens[i] = scounts[p7T_D] + scounts[p7T_I]; SRE: temporarily testing this instead */
 	  alilens[i] = scounts[p7T_M] + scounts[p7T_D] + scounts[p7T_I];
+
+	  p7_trace_Reuse(tr);
 	}
 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);

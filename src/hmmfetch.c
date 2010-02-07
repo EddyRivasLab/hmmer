@@ -167,7 +167,7 @@ create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
       if (esl_newssi_AddKey(ns, hmm->name, fh, hmm->offset, 0, 0) != eslOK)
 	p7_Fail("Failed to add key %s to SSI index", hmm->name);
 
-      if (hmm->flags & p7H_ACC) {
+      if (hmm->acc) {
 	if (esl_newssi_AddAlias(ns, hmm->acc, hmm->name) != eslOK)
 	  p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);
       }
@@ -241,7 +241,7 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
 	  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hfp->fname);
 
 	  if (esl_key_Lookup(keys, hmm->name, &keyidx) == eslOK || 
-	      ((hmm->flags & p7H_ACC) && esl_key_Lookup(keys, hmm->acc, &keyidx) == eslOK))
+	      ((hmm->acc) && esl_key_Lookup(keys, hmm->acc, &keyidx) == eslOK))
 	    {
 	      p7_hmmfile_WriteASCII(ofp, -1, hmm);
 	      nhmm++;
@@ -288,8 +288,7 @@ onefetch(ESL_GETOPTS *go, FILE *ofp, char *key, P7_HMMFILE *hfp)
       else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hfp->fname);
       else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hfp->fname);
 
-      if (strcmp(key, hmm->name) == 0 || ((hmm->flags & p7H_ACC) && strcmp(key, hmm->acc) == 0))
-	break;
+      if (strcmp(key, hmm->name) == 0 || (hmm->acc && strcmp(key, hmm->acc) == 0)) break;
       p7_hmm_Destroy(hmm);
       hmm = NULL;
     }

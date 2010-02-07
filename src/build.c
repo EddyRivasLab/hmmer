@@ -428,18 +428,20 @@ utest_fragments(void)
    * The first two cases can arise from fragment definition in
    * model construction, or in an input file. 
    *
-   * The X->Dk and Dk->X cases can only arise in an input file, because
-   * esl_msa_MarkFragments() converts everything before/after first/last
-   * residue to ~, and won't leave a gap character in between.
+   * The X->Dk and Dk->X cases should never happen, but we don't
+   * prohibit them. They can only arise in an input file, because
+   * esl_msa_MarkFragments() converts everything before/after
+   * first/last residue to ~, and won't leave a gap character in
+   * between.
    *
    * There's nothing being tested by seq4 and seq5; they're just there.
    */
   if (esl_tmpfile_named(msafile, &ofp) != eslOK) esl_fatal(failmsg);
   fprintf(ofp, "# STOCKHOLM 1.0\n");
   fprintf(ofp, "#=GC RF xxxxx.xxxxxxxxxxxx.xxx\n");
-  fprintf(ofp, "seq1    ~~~~~.GHIKLMNPQRST.~~~\n");
+  fprintf(ofp, "seq1    ~~~~~~GHIKLMNPQRST~~~~\n");
   fprintf(ofp, "seq2    ~~~~~aGHIKLMNPQRSTa~~~\n");
-  fprintf(ofp, "seq3    ~~~~~.-HIKLMNPQRS-.~~~\n");
+  fprintf(ofp, "seq3    ~~~~~~-HIKLMNPQRS-~~~~\n");
   fprintf(ofp, "seq4    ACDEF.GHIKLMNPQRST.VWY\n");
   fprintf(ofp, "seq5    ACDEF.GHIKLMNPQRST.VWY\n");
   fprintf(ofp, "//\n");
@@ -455,13 +457,12 @@ utest_fragments(void)
   for (i = 0; i < dmsa->nseq; i++)
     if (p7_trace_Validate(trarr[i], abc, dmsa->ax[i], NULL)                 != eslOK) esl_fatal(failmsg);
 
-  /* The example is constructed such that the traces should give exactly the
+  /* The example is contrived such that the traces should give exactly the
    * same (text) alignment as the input alignment; no tracedoctoring.
    * Not a trivial test; for example, sequence 2 has a B->X->I transition that 
    * can be problematic to handle.
    */
   if (p7_tracealign_MSA(dmsa, trarr, hmm->M, p7_DEFAULT, &postmsa)          != eslOK) esl_fatal(failmsg);
-  if (esl_msa_SymConvert(msa, "~", "-")                                     != eslOK) esl_fatal(failmsg);
   for (i = 0; i < msa->nseq; i++)
     if (strcmp(msa->aseq[i], postmsa->aseq[i]) != 0) esl_fatal(failmsg);
 

@@ -84,7 +84,7 @@ main(int argc, char **argv)
 
 #ifndef p7_IMPL_DUMMY
       if (esl_newssi_AddKey(nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK)	p7_Fail("Failed to add key %s to SSI index", hmm->name);
-      if (hmm->flags & p7H_ACC) {
+      if (hmm->acc) {
 	if (esl_newssi_AddAlias(nssi, hmm->acc, hmm->name) != eslOK) p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);
       }
 #endif

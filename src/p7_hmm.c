@@ -271,9 +271,10 @@ p7_hmm_Clone(const P7_HMM *hmm)
   if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
   p7_hmm_CopyParameters(hmm, new);
   
-  if (hmm->name != NULL      && (status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_ACC) && (status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_DESC)&& (status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+
   if ((hmm->flags & p7H_RF)  && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
   if ((hmm->flags & p7H_CS)  && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
   if ((hmm->flags & p7H_CA)  && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
@@ -472,13 +473,13 @@ p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
   if (acc == NULL) {
     if (hmm->acc != NULL) free(hmm->acc); 
     hmm->acc = NULL;
-    hmm->flags &= ~p7H_ACC;
+    hmm->flags &= ~p7H_ACC;	/* legacy */
   } else {
     n = strlen(acc);
     ESL_RALLOC(hmm->acc, tmp, sizeof(char)*(n+1));
     strcpy(hmm->acc, acc);
     if ((status = esl_strchop(hmm->acc, n)) != eslOK) goto ERROR;
-    hmm->flags |= p7H_ACC;
+    hmm->flags |= p7H_ACC;	/* legacy */
   }
   return eslOK;
 
@@ -503,7 +504,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
     {
       if (hmm->desc != NULL) free(hmm->desc); 
       hmm->desc   = NULL;
-      hmm->flags &= ~p7H_DESC;
+      hmm->flags &= ~p7H_DESC;	/* legacy */
     }
   else
     {
@@ -511,7 +512,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
       ESL_RALLOC(hmm->desc, tmp, sizeof(char)*(n+1));
       strcpy(hmm->desc, desc);
       if ((status = esl_strchop(hmm->desc, n)) != eslOK) goto ERROR;
-      hmm->flags |= p7H_DESC;
+      hmm->flags |= p7H_DESC;	/* legacy */
     }
   return eslOK;
 
@@ -1044,15 +1045,17 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
   if (strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
   if (strcmp(h1->ctime,  h2->ctime)  != 0) return eslFAIL;
+
   if (h1->nseq     != h2->nseq)            return eslFAIL;
   if (h1->eff_nseq != h2->eff_nseq)        return eslFAIL;
   if (h1->checksum != h2->checksum)        return eslFAIL;
 
-  if ((h1->flags & p7H_ACC)  && strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
-  if ((h1->flags & p7H_DESC) && strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
-  if ((h1->flags & p7H_RF)   && strcmp(h1->rf,   h2->rf)   != 0) return eslFAIL;
-  if ((h1->flags & p7H_CS)   && strcmp(h1->cs,   h2->cs)   != 0) return eslFAIL;
-  if ((h1->flags & p7H_CA)   && strcmp(h1->ca,   h2->ca)   != 0) return eslFAIL;
+  if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
+  if (esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
+
+  if ((h1->flags & p7H_RF)   && esl_strcmp(h1->rf,   h2->rf)                != 0) return eslFAIL;
+  if ((h1->flags & p7H_CS)   && esl_strcmp(h1->cs,   h2->cs)                != 0) return eslFAIL;
+  if ((h1->flags & p7H_CA)   && esl_strcmp(h1->ca,   h2->ca)                != 0) return eslFAIL;
   if ((h1->flags & p7H_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
 
   if (h1->flags & p7H_GA) {
@@ -1114,10 +1117,6 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
   if (hmm->t[hmm->M][p7H_DD] != 0.0)                       ESL_XFAIL(eslFAIL, errbuf, "TDD should be 0 for last node");
 
   if (hmm->name == NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "name is NULL: this field is mandatory");
-  if ( (hmm->flags & p7H_ACC)    && hmm->acc  == NULL)     ESL_XFAIL(eslFAIL, errbuf, "accession null but p7H_ACC flag is up");
-  if (!(hmm->flags & p7H_ACC)    && hmm->acc  != NULL)     ESL_XFAIL(eslFAIL, errbuf, "accession present but p7H_ACC flag is down");
-  if ( (hmm->flags & p7H_DESC)   && hmm->desc == NULL)     ESL_XFAIL(eslFAIL, errbuf, "description null but p7H_DESC flag is up");
-  if (!(hmm->flags & p7H_DESC)   && hmm->desc != NULL)     ESL_XFAIL(eslFAIL, errbuf, "description present but p7H_DESC flag is down");
   /* comlog is either NULL or a free text string: hard to validate */
   /* ctime, ditto */
   if ( (hmm->nseq     != -1)     && hmm->nseq     <= 0)    ESL_XFAIL(eslFAIL, errbuf, "invalid nseq");
@@ -1181,16 +1180,16 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
 {
   int k;
 
-  mocc[0] = 0.;			                    /* no M_0 state */
+  mocc[0] = 0.;			                     /* no M_0 state */
   mocc[1] = hmm->t[0][p7H_MI] + hmm->t[0][p7H_MM];   /* initialize w/ 1 - B->D_1 */
   for (k = 2; k <= hmm->M; k++)
     mocc[k] = mocc[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
       (1.0-mocc[k-1]) * hmm->t[k-1][p7H_DM];  
 
   if (iocc != NULL) {
-    iocc[0] = hmm->t[0][p7H_MI] / hmm->t[0][p7H_II];
+    iocc[0] = hmm->t[0][p7H_MI] / hmm->t[0][p7H_IM];
     for (k = 1; k <= hmm->M; k++)
-      iocc[k] = mocc[k] * hmm->t[k][p7H_MI] / hmm->t[k][p7H_II];
+      iocc[k] = mocc[k] * hmm->t[k][p7H_MI] / hmm->t[k][p7H_IM];
   }
 
   return eslOK;
@@ -1206,22 +1205,84 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
  *****************************************************************/
 #ifdef p7HMM_TESTDRIVE
 
-/* The occupancy test is based on the principle that
+/* The occupancy unit test is based on the principle that
  * the stationary match occupancy probability in a random HMM 
  * converges to 0.6, for long enough M (STL11/138)
  */
 static void
-utest_occupancy(P7_HMM *hmm)
+utest_occupancy(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 {
-  char  *msg = "p7_hmm.c:: occupancy unit test failed";
-  float *occ;
-  float  x;
+  char    *msg = "p7_hmm.c:: occupancy unit test failed";
+  P7_HMM  *hmm = NULL;
+  int        M = 200;
+  float   *occ = malloc(sizeof(float) * (M+1));
+  float      x;
 
-  occ = malloc(sizeof(float) * (hmm->M+1));
-  p7_hmm_CalculateOccupancy(hmm, occ, NULL);
+  if (p7_hmm_Sample(r, M, abc, &hmm)            != eslOK) esl_fatal(msg);
+  if (p7_hmm_CalculateOccupancy(hmm, occ, NULL) != eslOK) esl_fatal(msg);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
-  if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
+
+  if (esl_opt_GetBoolean(go, "-v") == TRUE)
+    {
+      printf("occupancy unit test:\n");
+      printf("expected 0.6; got %.3f\n\n", x);
+    }
+
+  if (esl_FCompare(x, 0.6, 0.1)                 != eslOK) esl_fatal(msg);
+
   free(occ);
+  p7_hmm_Destroy(hmm);
+  return;
+}
+
+/* The composition unit test validates the SetComposition()
+ * calculation against the composition of a large number of sampled
+ * core HMM traces. This also exercises the correctness of
+ * p7_hmm_Sample() and p7_hmm_SetOccupancy(). 
+ * 
+ * SRE, Fri Dec  4 13:04:52 2009 [#h71; J5/120]
+ */
+static void
+utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
+{
+  char           *msg  = "p7_hmm.c:: composition unit test failed";
+  P7_HMM         *hmm  = NULL;
+  ESL_SQ         *sq   = esl_sq_CreateDigital(abc);
+  int             M    = 3;
+  int             N    = 100000;
+  float          *fq   = malloc(sizeof(float) * abc->K);
+  int             i,pos;
+
+  if (p7_hmm_Sample(r, M, abc, &hmm) != eslOK)  esl_fatal(msg);
+  if (p7_hmm_SetComposition(hmm)     != eslOK)  esl_fatal(msg);
+
+  esl_vec_FSet(fq, abc->K, 0.0);
+  for (i = 0; i < N; i++)
+    {
+      p7_CoreEmit(r, hmm, sq, NULL);
+
+      for (pos = 1; pos <= sq->n; pos++)
+	fq[sq->dsq[pos]] += 1.0;
+
+      esl_sq_Reuse(sq);
+    }  
+  esl_vec_FNorm(fq, abc->K);
+
+  if (esl_opt_GetBoolean(go, "-v") == TRUE)
+    {
+      printf("composition unit test:\n");
+      printf("  %6s %6s\n", "calced", "sample");
+      printf("  %6s %6s\n", "------", "------");
+      for (i = 0; i < abc->K; i++)
+	printf("%c %6.3f %6.3f\n", abc->sym[i], hmm->compo[i], fq[i]);
+      printf("\n");
+    }
+
+  if (esl_vec_FCompare(fq, hmm->compo, abc->K, 0.03) != eslOK) esl_fatal(msg); 
+
+  free(fq);
+  esl_sq_Destroy(sq);
+  p7_hmm_Destroy(hmm);
   return;
 }
 
@@ -1241,19 +1302,26 @@ utest_occupancy(P7_HMM *hmm)
 #include "esl_random.h"
 #include "hmmer.h"
 
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for the p7_hmm.c: core model routines";
+
 int
 main(int argc, char **argv)
 {
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(42);
+  ESL_GETOPTS    *go   = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
-  P7_HMM         *hmm  = NULL;
-  int             M    = 100;
 
-  p7_hmm_Sample(r, M, abc, &hmm);
+  utest_occupancy  (go, r, abc);
+  utest_composition(go, r, abc);
 
-  utest_occupancy(hmm);
-
-  p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
   exit(0); /* success */

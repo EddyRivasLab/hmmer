@@ -1,3 +1,167 @@
+ID              h76
+TITLE           esl_tmpfile*() string must be modifiable; char tmpfile[] = "tmpXXXXXX" insufficient
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/148
+REPORTED_BY     Sebastien Moretti <sebastien.moretti@unil.ch>   
+OPENED_DATE     SRE, Fri Feb  5 11:10:53 2010
+CLOSED_DATE     SRE, Fri Feb  5 11:27:13 2010
+DESCRIPTION     
+   Moretti reports a number of unit test failures. We asked for a 
+   gdb stack trace, which he provided; it shows a failure in 
+   esl_dirichlet.c, utest_io, esl_tmpfile_named(). Here we
+   are assigning char tmpfile[] = "esltmpXXXXXX". This may be
+   insufficient to make the compiler give a modifiable string;
+   it should be char tmpfile[16] or some such.
+
+   Replace tmpfile[] with tmpfile[16] in esl_dirichlet.c; this
+   is the only place that this error appears to occur. (And thus,
+   this bug cannot account for all of Moretti's observed test
+   failures.)
+//
+ID              h75
+TITLE           HMMER_NCPU environment variable has no effect
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Olli Tourunen <olli.tourunen@csc.fi>, 19 Jan 2010
+OPENED_DATE     SRE, Sat Jan 30 10:31:15 2010
+CLOSED_DATE     SRE, Sat Jan 30 10:31:16 2010
+DESCRIPTION     
+  HMMER_NCPU environment variable had no effect in the four search
+  programs because they never called esl_opt_ProcessEnvironment.
+//
+ID              h74
+TITLE           Different envelopes, identical alignment
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/130; notebook/1222-hmmer-bug-h74
+REPORTED_BY     Craig McAnulla <craigm@ebi.ac.uk>, 26 Nov 2009
+OPENED_DATE     SRE, Tue Dec 22 15:36:03 2009
+CLOSED_DATE     
+DESCRIPTION     
+  Rarely, two different (overlapping) envelopes can produce the
+  same OA alignment. 
+
+  McAnulla's example is the Pfam_B model Pfam-B_9291 against 
+  Uniparc UPI0000022264.
+
+  Implemented workaround_bug_h74() in p7_tophits.c. This hides all but
+  one envelope containing a duplicate alignment.
+
+  A better fix is to define envelope by profile endpoints in addition
+  to sequence endpoints, revise rescore_isolated_domain() to take
+  profile endpoints into account, and write versions of Forward and
+  Backward that limit the calculation to an envelope on the profile.
+  Defer this to future.
+//
+ID              h73
+TITLE           hmmalign --mapali fails if msa contains fragments
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/129
+REPORTED_BY     Elena Rivas, 17 Nov 2009 
+OPENED_DATE     21 Dec 2009
+CLOSED_DATE     SRE, Mon Dec 21 16:20:14 2009
+DESCRIPTION     
+   If MSA contains fragments, fragments get marked, then checksum is calculated; 
+   thus checksum in HMM file doesn't match checksum of original (unmarked) MSA,
+   and hmmalign --mapali throws a fault.
+
+   Rearranged order of checksum determination in p7_Builder();
+   checksum is calculated on original MSA, before any manipiulation.
+//
+ID              h72
+TITLE           jackhmmer segfaults if target seqdb contains duplicate names
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/122
+REPORTED_BY     James Wasmuth <besnoitia@gmail.com>
+OPENED_DATE     SRE, Sun Dec 13 15:24:30 2009
+CLOSED_DATE     SRE, Sun Dec 13 15:24:24 2009
+DESCRIPTION     
+  A small bug in esl_keyhash_Store(). opt_index is optional; but was
+  not checking before storing to *opt_index on a duplicate key. 
+  jackhmmer (unique among the search programs) uses keyhashes to
+  mark new target sequences in each iteration.
+
+  fixed in Easel, and added a test (i10-duplicate-names.pl) to test this
+  in future.
+//
+ID              h71
+TITLE           hmm->compo calculation was wrong, bug in iocc[] calculation
+AFFECTS         3.0b3 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/120
+REPORTED_BY     Elena Rivas
+OPENED_DATE     4 Dec 2009
+CLOSED_DATE     7 Dec 2009
+DESCRIPTION     
+  Elena reports a bug in p7_hmm_CalculateOccupancy. Mean of the insert geometric 
+  is 1/t_IM, not 1/t_II. 
+
+  This affects the calculation of hmm->compo, the model mean
+  composition, which is used to construct the two-state HMM used by
+  the bias filter. Therefore the bugfix had the potential to alter
+  results. Verified that a benchmark (profmark) is essentially
+  unchanged -- there is a tiny change, insignificant but unfortunately
+  detrimental (by about 1%). 
+
+  This bugfix may change results, because targers can appear/disappear
+  due to the alteration in the bias filter.
+
+  Added a unit test, utest_composition(), to verify that compo is
+  correctly calculated -- validation against composition of large set
+  of sampled emitted seqs.
+
+//
+ID              h70
+TITLE           hmmbuild gives cryptic error on msa containing internal ~ chars
+AFFECTS         3.0b3 and earlier (reported against 3.0b2)
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/119
+REPORTED_BY     Erick Matsen <ematsen@gmail.com>; 20 Nov 2009
+OPENED_DATE     SRE, Thu Dec  3 16:12:31 2009
+CLOSED_DATE     SRE, Thu Dec  3 16:30:54 2009
+DESCRIPTION     
+  If the input MSA contains an internal ~ character, H3 throws a confusing error:
+  Fatal exception (source file build.c, line 247):
+  validation failed: expected k doesn't match trace's k
+
+  Rejecting the internal ~ is correct, but the error should be more
+  informative. 
+
+  Added validate_msa() step to p7_Builder.
+//
+ID              h69
+TITLE           hmmscan --tblout segfaults if HMM lacks accession/description
+AFFECTS         3.0b3 (and earlier?)
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J5/114
+REPORTED_BY     Jordan Fish <jrdn.fish@gmail.com> 19 Nov 2009
+OPENED_DATE     SRE, 21 Nov 2009
+CLOSED_DATE     SRE, Sun Nov 29 15:02:10 2009
+DESCRIPTION     
+   hmmscan --tblout seg faults if it tries to write information for an
+   HMM that lacks optional accession or description information.
+
+   The problem is a lack of consistency (and documentation) in how
+   P7_HIT handles optional information. hit->acc and hit->desc should
+   be NULL. But p7_pipeline.c was just strdup'ing different
+   conventions: ESL_SQ (in hmmsearch mode) uses \0 convention,
+   P7_OPROFILE (in hmmscan mode) uses NULL convention.
+   TabularTargets() and TabularDomains() were checking against the \0
+   convention, which meant that they'd access a NULL ptr and segfault
+   in hmmscan mode.
+//
 ####
 ####  beta3 release: 13 Nov 2009
 ####

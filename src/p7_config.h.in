@@ -130,6 +130,10 @@
 #undef HAVE_PTHREAD_ATTR_SETSCOPE
 #undef HAVE_PTHREAD_SETCONCURRENCY
 
+/* Optional processor specific support
+ */
+#undef HAVE_FLUSH_ZERO_MODE
+
 /* Debugging hooks
  */
 #undef p7_DEBUGGING

@@ -422,8 +422,8 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
   
   fprintf(fp, "NAME  %s\n", hmm->name);
-  if (hmm->flags & p7H_ACC)  fprintf(fp, "ACC   %s\n", hmm->acc);
-  if (hmm->flags & p7H_DESC) fprintf(fp, "DESC  %s\n", hmm->desc);
+  if (hmm->acc)  fprintf(fp, "ACC   %s\n", hmm->acc);
+  if (hmm->desc) fprintf(fp, "DESC  %s\n", hmm->desc);
   fprintf(fp, "LENG  %d\n", hmm->M);
   fprintf(fp, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type));
   fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)  ? "yes" : "no");
@@ -521,6 +521,26 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
 
   if (format == -1) format = p7_HMMFILE_3b;
 
+  /* Legacy: p7H_{ACC, DESC} flags used to be used to indicate
+   * whether optional acc, desc were present. Now we just use
+   * the <NULL> convention. The reason to use the flags was for
+   * saving binary files - we thought we needed to know whether
+   * the acc, desc were present in the binary file before trying
+   * to read them, and having <flags> as one of the first 
+   * data fields in the file solved that problem. It's not
+   * necessary - the {read,write}_bin_string() convention is fine.                      
+   * But write_bin_string() writes a 0 for length for a NULL string,
+   * whereas we weren't writing anything with the previous
+   * flag convention - so to maintain consistency with previous
+   * HMMER binary save files, we use the HMM flags fields here
+   * and in binary file reads. [xref J5/114]
+   * 
+   * If binary format is ever revised substantially - revisit this
+   * issue too - and remove the flags.
+   */
+  if (hmm->desc == NULL) hmm->flags &= ~p7H_DESC;  else hmm->flags |= p7H_DESC;
+  if (hmm->acc == NULL)  hmm->flags &= ~p7H_ACC;   else hmm->flags |= p7H_ACC;
+
   /* ye olde magic number */
   if      (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
   else if (format == p7_HMMFILE_3a) { if (fwrite((char *) &(v3a_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
@@ -543,18 +563,18 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
 
   /* annotation section
    */
-  write_bin_string(fp, hmm->name);
-  if (hmm->flags & p7H_ACC)  write_bin_string(fp, hmm->acc);
-  if (hmm->flags & p7H_DESC) write_bin_string(fp, hmm->desc);
-  if ((hmm->flags & p7H_RF) && (fwrite((char *) hmm->rf,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL; /* +2: 1..M and trailing \0 */
-  if ((hmm->flags & p7H_CS) && (fwrite((char *) hmm->cs,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
-  if ((hmm->flags & p7H_CA) && (fwrite((char *) hmm->ca,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
-  write_bin_string(fp, hmm->comlog);
-  if (fwrite((char *) &(hmm->nseq),     sizeof(int),    1,   fp) != 1) return eslFAIL;
-  if (fwrite((char *) &(hmm->eff_nseq), sizeof(float),  1,   fp) != 1) return eslFAIL;
-  write_bin_string(fp, hmm->ctime);
-  if ((hmm->flags & p7H_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1)) return eslFAIL;
-  if (fwrite((char *) &(hmm->checksum), sizeof(uint32_t),1,  fp) != 1) return eslFAIL;
+  if (                            write_bin_string(fp, hmm->name) != eslOK)                           return eslFAIL;
+  if ((hmm->flags & p7H_ACC)  && (write_bin_string(fp, hmm->acc)  != eslOK))                          return eslFAIL;             
+  if ((hmm->flags & p7H_DESC) && (write_bin_string(fp, hmm->desc) != eslOK))                          return eslFAIL;
+  if ((hmm->flags & p7H_RF)   && (fwrite((char *) hmm->rf,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL; /* +2: 1..M and trailing \0 */
+  if ((hmm->flags & p7H_CS)   && (fwrite((char *) hmm->cs,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
+  if ((hmm->flags & p7H_CA)   && (fwrite((char *) hmm->ca,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
+  if (write_bin_string(fp, hmm->comlog) != eslOK)                                                     return eslFAIL;
+  if (fwrite((char *) &(hmm->nseq),     sizeof(int),    1,   fp) != 1)                                return eslFAIL;
+  if (fwrite((char *) &(hmm->eff_nseq), sizeof(float),  1,   fp) != 1)                                return eslFAIL;
+  if (write_bin_string(fp, hmm->ctime) != eslOK)                                                      return eslFAIL;
+  if ((hmm->flags & p7H_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1))   return eslFAIL;
+  if (fwrite((char *) &(hmm->checksum), sizeof(uint32_t),1,  fp) != 1)                                return eslFAIL;
 
   /* E-value parameters and Pfam cutoffs */
   if (format == p7_HMMFILE_3a)
@@ -1045,11 +1065,11 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 {
   ESL_ALPHABET *abc = NULL;
   P7_HMM       *hmm = NULL;
-  uint32_t magic;
-  int     alphabet_type;
-  int     k;
-  int     status;
-  off_t   offset = 0;
+  uint32_t      magic;
+  int           alphabet_type;
+  int           k;
+  off_t         offset = 0;
+  int           status;
 
   hfp->errbuf[0] = '\0';
   if (feof(hfp->f))                                             { status = eslEOF;       goto ERROR; }
@@ -1079,6 +1099,7 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   hmm->offset = offset;
 
   /* Get sizes of things */
+  /* xref J5/114 for a legacy use of <flags> for optional acc, desc annotation */
   if (! fread((char *) &(hmm->flags),  sizeof(int), 1, hfp->f)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read flags");
   if (! fread((char *) &(hmm->M),      sizeof(int), 1, hfp->f)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread((char *) &alphabet_type, sizeof(int), 1, hfp->f)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet_type");
@@ -1104,18 +1125,18 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
     if (! fread((char *) hmm->t[k],   sizeof(float), p7H_NTRANSITIONS, hfp->f))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read t[%d]", k);
   
   /* Annotations. */
-  if ((status = read_bin_string(hfp->f, &(hmm->name))) != eslOK)                                     ESL_XFAIL(status,     hfp->errbuf, "failed to read name");
-  if ((hmm->flags & p7H_ACC)  && (status = read_bin_string(hfp->f, &(hmm->acc)))   != eslOK)         ESL_XFAIL(status,     hfp->errbuf, "failed to read acc");
-  if ((hmm->flags & p7H_DESC) && (status = read_bin_string(hfp->f, &(hmm->desc)))  != eslOK)         ESL_XFAIL(status,     hfp->errbuf, "failed to read desc");
-  if ((hmm->flags & p7H_RF)   && ! fread((char *) hmm->rf, sizeof(char), hmm->M+2, hfp->f))          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read rf");   /* +2: 1..M and trailing \0 */
-  if ((hmm->flags & p7H_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+2, hfp->f))          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs");
-  if ((hmm->flags & p7H_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+2, hfp->f))          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ca");
-  if ((status = read_bin_string(hfp->f, &(hmm->comlog))) != eslOK)                                   ESL_XFAIL(status,     hfp->errbuf, "failed to read comlog");
-  if (! fread((char *) &(hmm->nseq),     sizeof(int),   1, hfp->f))                                  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nseq");
-  if (! fread((char *) &(hmm->eff_nseq), sizeof(float), 1, hfp->f))                                  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read eff_nseq");
-  if ((status = read_bin_string(hfp->f, &(hmm->ctime)))  != eslOK)                                   ESL_XFAIL(status,     hfp->errbuf, "failed to read ctime");
-  if ((hmm->flags & p7H_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read map");
-  if (! fread((char *) &(hmm->checksum), sizeof(uint32_t),1,hfp->f))                                 ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read checksum");
+  if (read_bin_string(hfp->f, &(hmm->name)) != eslOK)                                         ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");
+  if ((hmm->flags & p7H_ACC)  && read_bin_string(hfp->f, &(hmm->acc))  != eslOK)              ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read acc");
+  if ((hmm->flags & p7H_DESC) && read_bin_string(hfp->f, &(hmm->desc)) != eslOK)              ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read desc");
+  if ((hmm->flags & p7H_RF)   && ! fread((char *) hmm->rf, sizeof(char), hmm->M+2, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read rf");   /* +2: 1..M and trailing \0 */
+  if ((hmm->flags & p7H_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+2, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs");
+  if ((hmm->flags & p7H_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+2, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ca");
+  if (read_bin_string(hfp->f, &(hmm->comlog)) != eslOK)                                       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read comlog");
+  if (! fread((char *) &(hmm->nseq),     sizeof(int),   1, hfp->f))                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nseq");
+  if (! fread((char *) &(hmm->eff_nseq), sizeof(float), 1, hfp->f))                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read eff_nseq");
+  if (read_bin_string(hfp->f, &(hmm->ctime))  != eslOK)                                       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ctime");
+  if ((hmm->flags & p7H_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read map");
+  if (! fread((char *) &(hmm->checksum), sizeof(uint32_t),1,hfp->f))                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read checksum");
 
   /* E-value parameters and Pfam cutoffs */
   if (hfp->format == p7_HMMFILE_3b) {
@@ -1503,12 +1524,20 @@ write_bin_string(FILE *fp, char *s)
  * Purpose:  Read in a string from a binary file, where
  *           the first integer is the length (including '\0').
  *           If the length is 0, <*ret_s> is set to <NULL>.
- *           
+ *
+ *           This is a reasonable convention for storing/ reading
+ *           strings in binary files. Note that because the length is
+ *           inclusive of '\0', there's a difference between a NULL
+ *           string and an empty string.
  *           
  * Args:     fp       - FILE to read from
  *           ret_s    - string to read into
  *                             
  * Return:   <eslOK> on success. ret_s is malloc'ed here.
+ *           <eslEOD> if a read fails - likely because no more
+ *             data in file.
+ * 
+ * Throws    <eslEMEM> on allocation error.
  */                            
 static int
 read_bin_string(FILE *fp, char **ret_s)

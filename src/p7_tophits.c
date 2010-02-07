@@ -206,8 +206,8 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
  * Note:      Is this actually used anywhere? (SRE, 10 Dec 08) 
  *            I think it's not up to date.
  *            
- *            That's right. This function is completely obsolete.
- *            It is used in benchmark and test code, so you can't
+ *            That's right. This function is obsolete.
+ *            But it is used in benchmark and test code, so you can't
  *            delete it yet; benchmarks and test code should be
  *            revised (SRE, 26 Oct 09)
  */
@@ -512,6 +512,65 @@ p7_tophits_Destroy(P7_TOPHITS *h)
  * 2. Standard (human-readable) output of pipeline results
  *****************************************************************/
 
+/* workaround_bug_h74(): 
+ * Different envelopes, identical alignment
+ * 
+ * Bug #h74, though extremely rare, arises from a limitation in H3's
+ * implementation of Forward/Backward, as follows:
+ * 
+ *  1. A multidomain region is analyzed by stochastic clustering
+ *  2. Overlapping envelopes are found (w.r.t sequence coords), though
+ *     trace clusters are distinct if HMM endpoints are also considered.
+ *  3. We have no facility for limiting Forward/Backward to a specified
+ *     range of profile coordinates, so each envelope is passed to
+ *     rescore_isolated_domain() and analyzed independently.
+ *  4. Optimal accuracy alignment may identify exactly the same alignment
+ *     in the overlap region shared by the two envelopes.
+ *     
+ * The disturbing result is two different envelopes that have
+ * identical alignments and alignment endpoints.
+ * 
+ * The correct fix is to define envelopes not only by sequence
+ * endpoints but also by profile endpoints, passing them to
+ * rescore_isolated_domain(), and limiting F/B calculations to this
+ * pieces of the DP lattice. This requires a fair amount of work,
+ * adding to the optimized API.
+ * 
+ * The workaround is to detect when there are duplicate alignments,
+ * and only display one. We show the one with the best bit score.
+ * 
+ * If we ever implement envelope-limited versions of F/B, revisit this
+ * fix.
+ *
+ * SRE, Tue Dec 22 16:27:04 2009
+ * xref J5/130; notebook/2009/1222-hmmer-bug-h74
+ */
+static int
+workaround_bug_h74(P7_TOPHITS *th)
+{
+  int h;
+  int d1, d2;
+  int dremoved;
+
+  for (h = 0; h < th->N; h++)  
+    if (th->hit[h]->noverlaps)
+      {
+	for (d1 = 0; d1 < th->hit[h]->ndom; d1++)
+	  for (d2 = d1+1; d2 < th->hit[h]->ndom; d2++)
+	    if (th->hit[h]->dcl[d1].iali == th->hit[h]->dcl[d2].iali &&
+		th->hit[h]->dcl[d1].jali == th->hit[h]->dcl[d2].jali)
+	      {
+		dremoved = (th->hit[h]->dcl[d1].bitscore >= th->hit[h]->dcl[d2].bitscore) ? d2 : d1;
+		if (th->hit[h]->dcl[dremoved].is_reported) { th->hit[h]->dcl[dremoved].is_reported = FALSE; th->hit[h]->nreported--; }
+		if (th->hit[h]->dcl[dremoved].is_included) { th->hit[h]->dcl[dremoved].is_included = FALSE; th->hit[h]->nincluded--; }
+	      }
+      }
+  return eslOK;
+}
+
+
+
+
 /* Function:  p7_tophits_Threshold()
  * Synopsis:  Apply score and E-value thresholds to a hitlist before output.
  * Incept:    SRE, Tue Dec  9 09:04:55 2008 [Janelia]
@@ -599,8 +658,13 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 	if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
       }
 
+  workaround_bug_h74(th);  /* blech. This function is defined above; see commentary and crossreferences there. */
+
   return eslOK;
 }
+
+
+
 
 
 /* Function:  p7_tophits_CompareRanking()
@@ -1041,7 +1105,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 	fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n", 
 		tnamew, th->hit[h]->name,
-		taccw,  th->hit[h]->acc[0] != '\0' ?  th->hit[h]->acc : "-",
+		taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
 		qnamew, qname, 
 		qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
 		th->hit[h]->pvalue * pli->Z,
@@ -1058,7 +1122,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 		th->hit[h]->ndom,
 		th->hit[h]->nreported,
 		th->hit[h]->nincluded,
-		(th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));
+		th->hit[h]->desc ?  th->hit[h]->desc : "-");
       }
   return eslOK;
 }
@@ -1083,7 +1147,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 {
   int qnamew = ESL_MAX(20, strlen(qname));
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
-  int qaccw  = ( (qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
+  int qaccw  = (qacc ? ESL_MAX(10, strlen(qacc)) : 10);
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int tlen, qlen;
   int h,d,nd;
@@ -1116,7 +1180,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 	      fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n", 
 		      tnamew, th->hit[h]->name,
-		      taccw,  th->hit[h]->acc[0] != '\0' ?  th->hit[h]->acc : "-",
+		      taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
 		      tlen,
 		      qnamew, qname,     
 		      qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
@@ -1137,7 +1201,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 		      th->hit[h]->dcl[d].ienv,
 		      th->hit[h]->dcl[d].jenv,
 		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
-		      (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));		      
+		      (th->hit[h]->desc ?  th->hit[h]->desc : "-"));		      
 	    }
       }
   return eslOK;

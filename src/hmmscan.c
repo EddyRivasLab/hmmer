@@ -84,8 +84,8 @@ static ESL_OPTIONS options[] = {
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Vit threshold: promote hits w/ P <= F2",                        7 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Fwd threshold: promote hits w/ P <= F3",                        7 },
   { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                              7 },
-  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 7 },
   /* Other options */
+  { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",           12 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",    12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
@@ -144,8 +144,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
   ESL_GETOPTS *go = NULL;
 
   if ((go = esl_getopts_Create(options))     == NULL)     p7_Die("Internal failure creating options object");
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
  
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
@@ -219,7 +220,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--F1"))        fprintf(ofp, "# MSV filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F1"));
   if (esl_opt_IsUsed(go, "--F2"))        fprintf(ofp, "# Vit filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F2"));
   if (esl_opt_IsUsed(go, "--F3"))        fprintf(ofp, "# Fwd filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F3"));
-  if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
   if (esl_opt_IsUsed(go, "--nobias"))    fprintf(ofp, "# biased composition HMM filter:   off\n");
   if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
   if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
@@ -247,6 +247,9 @@ main(int argc, char **argv)
 
   ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
   struct cfg_s     cfg;         /* configuration data                      */
+
+  /* Set processor specific flags */
+  impl_Init();
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
@@ -494,8 +497,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Destroy(info->th);
       esl_sq_Reuse(qsq);
     }
-  if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
+					    sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    sstatus, sqfp->filename);
 
@@ -916,7 +919,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sq_Reuse(qsq);
     }
   if (sstatus == eslEFORMAT) 
-    mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+    mpi_failure("Parse failed (sequence file %s):\n%s\n", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (sstatus != eslEOF)     
     mpi_failure("Unexpected error %d reading sequence file %s", sstatus, sqfp->filename);
 
@@ -1104,7 +1107,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sq_Reuse(qsq);
     } /* end outer loop over query HMMs */
   if (sstatus == eslEFORMAT) 
-    mpi_failure("Parse failed (sequence file %s line %" PRId64 "):\n%s\n", sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+    mpi_failure("Parse failed (sequence file %s):\n%s\n", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (sstatus != eslEOF)
     mpi_failure("Unexpected error %d reading sequence file %s", sstatus, sqfp->filename);
 

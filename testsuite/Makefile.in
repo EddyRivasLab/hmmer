@@ -58,7 +58,7 @@ run_sqc:
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${top_srcdir}/easel/devkit/sqc -D ${srcdir} ${SQCLEVEL} ${srcdir}/testsuite.sqc . ../src ${IMPLDIR} ${ESLDIR}/miniapps ${srcdir}
+	@${srcdir}/../easel/devkit/sqc ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
 
 hmms:
 	for ali in ${ALIS}; do\
