@@ -1,0 +1,52 @@
+#! /usr/bin/perl
+
+$top_builddir = shift;
+$top_srcdir   = shift;
+$resultdir    = shift;
+$tblfile      = shift;
+$nthreads     = shift;
+$querydb      = shift;
+$targetdb     = shift;
+$outfile      = shift;
+
+$esl_afetch  = "$top_builddir/easel/miniapps/esl-afetch";
+$hmmbuild    = "$top_builddir/src/hmmbuild";
+$hmmsearch   = "$top_builddir/src/hmmsearch";
+
+open(OUTFILE,">$outfile") || die "failed to open $outfile";
+open(TABLE, "$tblfile")   || die "failed to open $tblfile";
+
+MSA:
+while (<TABLE>) 
+{
+    if (/(\S+)/) 
+    {
+	$msaname = $1;
+
+	# Fetch the query MSA (.sto file)
+	$output = `$esl_afetch -o $resultdir/$msaname.sto $querydb $msaname`;
+	if ($? != 0) { print "FAILED: $esl_afetch on $msaname\n"; next MSA; }
+
+	# Build a model (.hmm file)
+	$output = `$hmmbuild $resultdir/$msaname.hmm $resultdir/$msaname.sto`;
+	if ($?) { print("FAILED: $hmmbuild  on $msaname\n"); next MSA; }
+
+	# Time hmmsearch (running the requested number of threads)
+	$output = `$hmmsearch --cpu $nthreads $resultdir/$msaname.hmm $targetdb`;
+	if ($?) { print("FAILED: $hmmsearch on $msaname\n"); next MSA; }
+
+	if ($output =~ /Query model\(s\):?\s+\d+\s+\((\d+) nodes/){ $M = $1; }
+	if ($output =~ /Passed MSV filter:\s+(\d+) /)            { $passed_msv = $1; }
+	if ($output =~ /Passed Vit filter:\s+(\d+) /)            { $passed_vit = $1; }
+	if ($output =~ /Passed Fwd filter:\s+(\d+) /)            { $passed_fwd = $1; }
+	if ($output =~ /\# Mc\/sec:\s+(\S+)/)                    { $mcs        = $1; }  
+	if ($output =~ /\# CPU time:\s+(\S+).+Elapsed:\s+(\S+)/) { $cpu        = $1; $elapsed = $2; }
+
+	printf OUTFILE "%-15s %5d %10s %12s %s\n", $msaname, $M, $mcs, $cpu, $elapsed;
+	
+	unlink "$resultdir/$msaname.sto";
+	unlink "$resultdir/$msaname.hmm";
+    }
+}
+close TABLE;
+close OUTFILE;
