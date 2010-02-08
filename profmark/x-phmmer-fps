@@ -52,10 +52,10 @@ while (<TABLE>)
 	$output = `$esl_sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname`;
 	if ($? != 0) { die "FAILED: esl-sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname"; }
 
-	`$phmmer --tblout $resultdir/$msaname.tmp $opts $resultdir/$msaname.query.fa $fafile > /dev/null`;
+	`$phmmer --cpu 1 --tblout $resultdir/$msaname.tmp $opts $resultdir/$msaname.query.fa $fafile > /dev/null`;
 	if ($? != 0) { die "FAILED: $phmmer --tblout $msaname.tmp $opts $resultdir/$msaname.query.fa $seqfile"; }
 
-	open(OUTPUT, "$msaname.tmp") || die "FAILED: to open $msaname.tmp tabular output file"; 
+	open(OUTPUT, "$resultdir/$msaname.tmp") || die "FAILED: to open $resultdir/$msaname.tmp tabular output file"; 
         while (<OUTPUT>)
 	{
 	    if (/^\#/) { next; }
