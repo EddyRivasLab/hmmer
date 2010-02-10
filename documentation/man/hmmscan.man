@@ -14,6 +14,7 @@ hmmscan - search sequence(s) against a profile database
 
 .SH DESCRIPTION
 
+.PP
 .B hmmscan 
 is used to search sequences against collections of profiles.
 For each sequence in 
@@ -24,6 +25,7 @@ profiles in
 and output ranked lists of the profiles with the
 most significant matches to the sequence.
 
+.PP
 The 
 .I <seqfile> 
 may contain more than one query sequence. It can be in FASTA format,
@@ -33,14 +35,17 @@ aligned fasta, and others). See the
 .I --qformat 
 option for a complete list.
 
+.PP
 The
 .I <hmmdb>
 needs to be "press'ed" using 
 .B hmmpress
 before it can be searched with 
-.B hmmscan. This creates four binary files,
+.B hmmscan. 
+This creates four binary files,
 suffixed .h3{fimp}.
 
+.PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The
 .B --tblout 

@@ -241,7 +241,8 @@ Explicitly set the effective sequence number for all models to
 Set the minimum relative entropy/position target to 
 .I <x>.
 Requires
-.B --eent. Default depends on the sequence alphabet; for protein
+.B --eent. 
+Default depends on the sequence alphabet; for protein
 sequences, it is 0.59 bits/position.
 
 .TP

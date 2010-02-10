@@ -114,11 +114,6 @@ check:
 # dev: compile all executables, including drivers.
 dev: libraries programs utests itests misc
 
-Makefile:  configure
-	./configure
-
-configure: configure.ac
-	autoconf
 
 # rules to build the libraries
 libraries: easel_lib impl_lib hmmer_lib
@@ -208,7 +203,7 @@ clean:
 	if test -d easel;     then (cd easel;     ${MAKE} clean); fi
 	if test -d profmark;  then (cd profmark;  ${MAKE} clean); fi
 	if test -d testsuite; then (cd testsuite; ${MAKE} clean); fi
-	if test -d documentation/alphaguide; then (cd documentation/alphaguide; ${MAKE} clean); fi
+	if test -d documentation/userguide; then (cd documentation/userguide; ${MAKE} clean); fi
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
 # "make distclean" leaves a pristine source distribution.
@@ -223,7 +218,7 @@ distclean:
 	if test -d easel;         then (cd easel;     ${MAKE} distclean); fi
 	if test -d profmark;      then (cd profmark;  ${MAKE} distclean); fi
 	if test -d testsuite;     then (cd testsuite; ${MAKE} distclean); fi
-	if test -d documentation/alphaguide; then (cd documentation/alphaguide; ${MAKE} distclean); fi
+	if test -d documentation/userguide; then (cd documentation/userguide; ${MAKE} distclean); fi
 	-rm Makefile
 
 # "make binclean" is special: it cleans up and leaves only a binary
@@ -260,7 +255,7 @@ distclean:
 TAGS:
 	etags ${SRCDIR}/*.c ${SRCDIR}/*.h ${SRCDIR}/p7_config.h.in Makefile.in 
 	etags -a profmark/*.c profmark/Makefile.in 
-	etags -a documentation/alphaguide/*.tex documentation/alphaguide/Makefile.in
+	etags -a documentation/userguide/*.tex documentation/userguide/Makefile.in
 	etags -a documentation/man/*.man 
 #	etags -a documentation/devguide/*.tex 
 	etags -a ${SRCDIR}/impl_sse/*.c   ${SRCDIR}/impl_sse/*.h   ${SRCDIR}/impl_sse/Makefile.in 

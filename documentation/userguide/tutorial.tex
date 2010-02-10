@@ -4,10 +4,49 @@
 \setcounter{footnote}{0}
 
 Here's a tutorial walk-through of some small projects with
-HMMER3. This should suffice to get you oriented to a ``safe path''
-through HMMER3 alpha test code that should work as advertised -- before
-you start boldly exploring later-to-be-documented command line options
-that might or might not be doing anything sensible yet.
+HMMER3. This should suffice to get you started on work of your own,
+and you can (at least temporarily) skip the rest of the Guide,
+such as all the nitty-gritty details of available command line
+options.
+
+\subsection {The programs in HMMER}
+
+\begin{tabular}{ll}
+\multicolumn{2}{c}{\textbf{Single sequence queries: new to HMMER3}} \\ 
+ & \\ 
+\textbf{phmmer}    & Search a sequence against a sequence database. (BLASTP-like) \\
+\textbf{jackhmmer} & Iteratively search a sequence against a sequence database. (PSIBLAST-like) \\
+ & \\ 
+\multicolumn{2}{c}{\textbf{Replacements for HMMER2's functionality}}  \\
+ & \\ 
+\textbf{hmmbuild}  & Build a profile HMM from an input multiple alignment.\\
+\textbf{hmmsearch} & Search a profile HMM against a sequence database.\\
+\textbf{hmmscan}   & Search a sequence against a profile HMM database.\\
+\textbf{hmmalign}  & Make a multiple alignment of many sequences to a common profile HMM.\\
+ & \\ 
+\multicolumn{2}{c}{\textbf{Other utilities}}\\ 
+ & \\ 
+\textbf{hmmconvert} & Convert profile formats to/from HMMER3 format.\\ 
+\textbf{hmmemit}    & Generate (sample) sequences from a profile HMM.\\
+\textbf{hmmfetch}   & Get a profile HMM by name or accession from an HMM database.\\
+\textbf{hmmpress}   & Format an HMM database into a binary format for \prog{hmmscan}.\\
+\textbf{hmmstat}    & Show summary statistics for each profile in an HMM database.\\ 
+\end{tabular} \\
+\\
+
+The quadrumvirate of \prog{hmmbuild/hmmsearch/hmmscan/hmmalign} is the
+core functionality for protein domain analysis and annotation
+pipelines, for instance using profile databases like Pfam or
+SMART. 
+
+The \prog{phmmer} and \prog{jackhmmer} programs are new to
+HMMER3. They searches a single sequence against a sequence database,
+akin to BLASTP and PSIBLAST, respectively. (Internally, they just
+produce a profile HMM from the query sequence, then run HMM searches.)
+
+In the Tutorial section, I'll show examples of running each of these
+programs, using examples in the \ccode{tutorial/} subdirectory of the
+distribution.
 
 
 \subsection{Files used in the tutorial}
@@ -16,7 +55,6 @@ The subdirectory \prog{/tutorial} in the HMMER distribution contains the
 files used in the tutorial, as well as a number of examples of various
 file formats that HMMER reads. The important files for the tutorial
 are:
-
 
 \begin{sreitems}{\emprog{minifam.h3\{m,i,f,p\}}}
 \item[\emprog{globins4.sto}] An example alignment of four globin sequences, in
@@ -66,9 +104,11 @@ are:
 \subsubsection{Step 1: build a profile HMM with hmmbuild}
 
 HMMER starts with a multiple sequence alignment file that you
-provide. Currently HMMER3 only reads Stockholm
-alignments.\footnote{I'm lying. It can read more. I just don't trust
-its other parsers yet.} The file \prog{tutorial/globins4.sto} is an
+provide. Currently HMMER3 can read Stockholm or aligned FASTA
+alignments.\footnote{It expects Stockholm by default. To read aligned
+  FASTA files, which HMMER calls ``afa'' format, specify
+  \ccode{--informat afa} on the command line of any program that reads
+  an input alignment.} The file \prog{tutorial/globins4.sto} is an
 example of a simple Stockholm file. It looks like this:
 
 \begin{sreoutput}
@@ -91,14 +131,12 @@ GLB5_PETMA  RSAY.......
 //
 \end{sreoutput}
 
-
 Most popular alignment formats are similar block-based formats, and
 can be turned into Stockholm format with a little editing or
 scripting. Don't forget the \prog{\# STOCKHOLM 1.0} line at the start
 of the alignment, nor the \prog{//} at the end. Stockholm alignments
 can be concatenated to create an alignment database flatfile
 containing many alignments.
-
 
 The \prog{hmmbuild} command builds a profile HMM from an alignment (or
 HMMs for each of many alignments in a Stockholm file), and saves the
@@ -111,8 +149,8 @@ and you'll see some output that looks like:
 % tutorial regression: glb-build.out
 \begin{sreoutput}
 # hmmbuild :: profile HMM construction from multiple sequence alignments
-# HMMER 3.0b3 (November 2009); http://hmmer.org/
-# Copyright (C) 2009 Howard Hughes Medical Institute.
+# HMMER 3.0rc1 (February 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # input alignment file:             globins4.sto
@@ -123,7 +161,7 @@ and you'll see some output that looks like:
 #---- -------------------- ----- ----- ----- -------- ------ -----------
 1     globins4                 4   171   149     0.96  0.589 
 
-# CPU time: 0.55u 0.00s 00:00:00.55 Elapsed: 00:00:00.56
+# CPU time: 0.23u 0.00s 00:00:00.23 Elapsed: 00:00:00.25
 \end{sreoutput}
 
 If your input file had contained more than one alignment, you'd get
@@ -153,31 +191,31 @@ consumption, not yours), you'd see something like:
 
 % tutorial regression: globins4.hmm, edited down
 \begin{sreoutput}
-HMMER3/b [3.0b3 | November 2009]
+HMMER3/b [3.0rc1 | February 2010]
 NAME  globins4
 LENG  149
 ALPH  amino
 RF    no
 CS    no
 MAP   yes
-DATE  Sat Nov 14 10:47:39 2009
+DATE  Wed Feb 10 07:19:09 2010
 NSEQ  4
 EFFN  0.964844
 CKSUM 2027839109
 STATS LOCAL MSV       -9.9014  0.70957
 STATS LOCAL VITERBI  -10.7224  0.70957
 STATS LOCAL FORWARD   -4.1637  0.70957
-HMM          A        C        D        E        F        G        H        I    ...     W        Y   
+HMM          A        C        D        E        F        G        H        I    ...    W        Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
-  COMPO   2.36614  4.52553  2.96662  2.70479  3.20868  3.02051  3.41129  2.90113 ...  4.55399  3.62918
-          2.68640  4.42247  2.77497  2.73145  3.46376  2.40504  3.72516  3.29302 ...  4.58499  3.61525
+  COMPO   2.36553  4.52577  2.96709  2.70473  3.20818  3.02239  3.41069  2.90041 ... 4.55393  3.62921
+          2.68640  4.42247  2.77497  2.73145  3.46376  2.40504  3.72516  3.29302 ... 4.58499  3.61525
           0.57544  1.78073  1.31293  1.75577  0.18968  0.00000        *
-      1   1.70038  4.17733  3.76164  3.36686  3.72281  3.29583  4.27570  2.40482 ...  5.32720  4.10031      9 - -
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 ...  4.58477  3.61503
+      1   1.70038  4.17733  3.76164  3.36686  3.72281  3.29583  4.27570  2.40482 ... 5.32720  4.10031      9 - -
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 ... 4.58477  3.61503
           0.03156  3.86736  4.58970  0.61958  0.77255  0.34406  1.23405
 ...
-    149   2.92198  5.11574  3.28049  2.65489  4.47826  3.59727  2.51142  3.88373 ...  5.42147  4.18835    165 - -
-          2.68634  4.42241  2.77536  2.73098  3.46370  2.40469  3.72511  3.29370 ...  4.58493  3.61418
+    149   2.92198  5.11574  3.28049  2.65489  4.47826  3.59727  2.51142  3.88373 ... 5.42147  4.18835    165 - -
+          2.68634  4.42241  2.77536  2.73098  3.46370  2.40469  3.72511  3.29370 ... 4.58493  3.61418
           0.22163  1.61553        *  1.50361  0.25145  0.00000        *
 //
 \end{sreoutput}
@@ -228,8 +266,8 @@ ran, on what, and with what options:
 % tutorial regression: globins4.out
 \begin{sreoutput}
 # hmmsearch :: search profile(s) against a sequence database
-# HMMER 3.0b3 (November 2009); http://hmmer.org/
-# Copyright (C) 2009 Howard Hughes Medical Institute.
+# HMMER 3.0rc1 (February 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  globins4.hmm
@@ -244,6 +282,7 @@ The second section is the \emph{sequence top hits} list. It is a list
 of ranked top hits (sorted by E-value, most significant hit first),
 formatted in a BLAST-like style:
 
+% tutorial regression: globins4.out
 \begin{sreoutput}
    --- full sequence ---   --- best 1 domain ---    -#dom-
     E-value  score  bias    E-value  score  bias    exp  N  Sequence              Description
@@ -682,13 +721,13 @@ Internal pipeline statistics summary:
 Query model(s):                            1  (149 nodes)
 Target sequences:                     497293  (175274722 residues)
 Passed MSV filter:                     19416  (0.0390434); expected 9945.9 (0.02)
-Passed bias filter:                    15929  (0.0320314); expected 9945.9 (0.02)
+Passed bias filter:                    15923  (0.0320194); expected 9945.9 (0.02)
 Passed Vit filter:                      2207  (0.00443803); expected 497.3 (0.001)
 Passed Fwd filter:                      1076  (0.00216371); expected 5.0 (1e-05)
 Initial search space (Z):             497293  [actual number of targets]
 Domain search space  (domZ):            1075  [number of targets reported over threshold]
-# CPU time: 7.08u 0.09s 00:00:07.17 Elapsed: 00:00:02.95
-# Mc/sec: 8852.86
+# CPU time: 6.02u 0.07s 00:00:06.09 Elapsed: 00:00:02.43
+# Mc/sec: 10747.30
 //
 \end{sreoutput}
 
@@ -714,7 +753,7 @@ A quick check is then done to see if the target sequence is
 ``obviously'' so biased in its composition that it's unlikely to be a
 true homolog. This is called the ``bias filter''. If you don't like it
 (it can occasionally be overaggressive) you can shut it off with the
-\prog{--nobias} option. Here, 15929 sequences pass through the bias
+\prog{--nobias} option. Here, 15923 sequences pass through the bias
 %                             ^^^^^
 filter.
 
@@ -747,11 +786,12 @@ are reported in the statistics summary.
 
 Finally, it reports the speed of the search in units of Mc/sec
 (million dynamic programming cells per second), the CPU time, and the
-elapsed time. This search took about 2.95 seconds of elapsed (wall
+elapsed time. This search took about 2.43 seconds of elapsed (wall
+%                                     ^^^^
 clock time) (running with \ccode{--cpu 2} on two cores). That's in the
 same ballpark as BLAST, depending on which BLAST you compare to. On
 the same machine, also running dual-core, NCBI BLAST with one of these
-globin sequences took 3.8 seconds, and WU-BLAST took 7.4 seconds.
+globin sequences took 2.3 seconds, and WU-BLAST took 4.8 seconds.
 
 \subsection{Searching a profile HMM database with a query sequence}
 
@@ -811,12 +851,12 @@ your job scheduler and MPI distribution. We can't really help you with
 this -- different sites have different cluster environments.
 
 With our scheduler (SGE, the Sun Grid Engine) and our MPI distro
-(OpenMPI), an example incantation for building \prog{Pfam.hmm} from
+(Intel MPI), an example incantation for building \prog{Pfam.hmm} from
 \prog{Pfam-A.seed} is:
 
 % check
-\user{qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe openmpi 128 \ \\
-      'mpirun -mca btl self,openib,sm -np 128 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'}
+\user{qsub -N hmmbuild -j y -o errors.out -b y -cwd -V -pe impi 128 \ \\
+      'mpirun -np 128 ./hmmbuild --mpi Pfam.hmm Pfam-A.seed > hmmbuild.out'}
 
 This reduces the time to build all of Pfam to about 40 seconds.
 
@@ -872,8 +912,8 @@ The header and the first section of the output will look like:
 % tutorial regression: 7LESS.out
 \begin{sreoutput}
 # hmmscan :: search sequence(s) against a profile database
-# HMMER 3.0b3 (November 2009); http://hmmer.org/
-# Copyright (C) 2009 Howard Hughes Medical Institute.
+# HMMER 3.0rc1 (February 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query sequence file:             7LESS_DROME
@@ -907,6 +947,7 @@ For domain, there then follows a domain table and alignment output,
 just as in \prog{hmmsearch}. The \prog{fn3} annotation, for example,
 looks like:
 
+% tutorial regression: 7LESS.out
 \begin{sreoutput}
 Domain and alignment annotation for each model:
 >> fn3  Fibronectin type III domain
@@ -925,6 +966,7 @@ Domain and alignment annotation for each model:
 
 and an example alignment (of that second domain again):
 
+% tutorial regression: 7LESS.out
 \begin{sreoutput}
   == domain 2    score: 40.7 bits;  conditional E-value: 2.6e-14
                   ---CEEEEEEECTTEEEEEEE--S..SS--SEEEEEEEETTTCCGCEEEEEETTTSEEEEES--TT-EEEEEEEEEETTEE.E CS
@@ -1107,8 +1149,8 @@ thresholds is marked with a \ccode{+}, and nothing is marked with a
 % tutorial regression: hbb-jack.out
 \begin{sreoutput}
 # jackhmmer :: iteratively search a protein sequence against a protein database
-# HMMER 3.0b3 (November 2009); http://hmmer.org/
-# Copyright (C) 2009 Howard Hughes Medical Institute.
+# HMMER 3.0rc1 (February 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query sequence file:             HBB_HUMAN
@@ -1137,6 +1179,7 @@ That continues until the inclusion threshold is reached, at which
 point you see a tagline ``inclusion threshold'' indicating where the
 threshold was set:
 
+% tutorial regression: hbb-jack.out
 \begin{sreoutput}
 +   0.00076   24.1   0.0    0.00083   24.0   0.0    1.0  1  sp|P02180|MYG_BALPH   Myoglobin OS=Balaenoptera physalus GN=
 +   0.00087   23.9   0.0     0.0009   23.9   0.0    1.0  1  sp|P02148|MYG_PONPY   Myoglobin OS=Pongo pygmaeus GN=MB PE=1
@@ -1151,6 +1194,7 @@ output that starts with \ccode{@@} (this is a simple tag that lets you
 search through the file to find the end of one iteration and the
 beginning of another):
 
+% tutorial regression: hbb-jack.out
 \begin{sreoutput}
 @@ New targets included:   894
 @@ New alignment includes: 895 subseqs (was 1), including original query
@@ -1169,6 +1213,7 @@ it's built a new model from this alignment. Now for round two, it
 fires off what's essentially an \prog{hmmsearch} of the target
 database with this new model:
 
+% tutorial regression: hbb-jack.out
 \begin{sreoutput}
 Scores for complete sequences (score includes all domains):
    --- full sequence ---   --- best 1 domain ---    -#dom-
@@ -1184,6 +1229,7 @@ Scores for complete sequences (score includes all domains):
 If you skim down through this output, you'll start seeing newly
 included sequences marked with \ccode{+}'s, such as:
 
+% tutorial regression: hbb-jack.out
 \begin{sreoutput}
 ...
     9.8e-30  108.3   0.0    1.1e-29  108.2   0.0    1.0  1  sp|P87497|MYG_CHIRA   Myoglobin OS=Chionodraco rastrospinosu
@@ -1204,6 +1250,7 @@ but it can happen; it doesn't happen in this globin example.
 
 After round 2, many more globin sequences have been found:
 
+% tutorial regression: hbb-jack.out
 \begin{sreoutput}
 @@ New targets included:   167
 @@ New alignment includes: 1064 subseqs (was 895), including original query

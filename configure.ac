@@ -42,7 +42,7 @@
 
 # Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
 AC_PREREQ(2.63)
-AC_INIT(HMMER, 3.0b3, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, 3.0rc1, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -73,14 +73,14 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="November 2009"
-HMMER_COPYRIGHT="Copyright (C) 2009 Howard Hughes Medical Institute."
+HMMER_DATE="February 2010"
+HMMER_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 
-EASEL_DATE="November 2009"
-EASEL_COPYRIGHT="Copyright (C) 2009 Howard Hughes Medical Institute."
+EASEL_DATE="February 2010"
+EASEL_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
 EASEL_URL="http://bioeasel.org/"
@@ -545,8 +545,8 @@ AC_SYS_LARGEFILE
 if test -d release-notes; then
   AC_CONFIG_FILES(release-notes/LICENSE.csh)
 fi
-if test -d documentation/alphaguide; then  
-  AC_CONFIG_FILES([documentation/alphaguide/Makefile])
+if test -d documentation/userguide; then  
+  AC_CONFIG_FILES([documentation/userguide/Makefile])
 fi
 AC_CONFIG_FILES([src/Makefile testsuite/Makefile profmark/Makefile])
 

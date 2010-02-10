@@ -11,16 +11,19 @@ hmmalign - align sequences to a profile HMM
 
 .SH DESCRIPTION
 
+.PP
 Perform a multiple sequence alignment of all the sequences in
 .I seqfile,
 by aligning them individually to the profile HMM in
 .I hmmfile.
 
+.PP
 The new alignment is output to 
 .I stdout
 in Stockholm format.
 
 
+.PP
 The sequences in 
 .I seqfile
 are aligned in unihit local alignment mode.  Therefore they should

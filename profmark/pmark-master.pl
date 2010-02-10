@@ -37,7 +37,7 @@
 #    benchmark queries.
 #
 #    It must take the following arguments:
-#    <top_srcdir> <top_builddir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
+#    <top_builddir> <top_srcdir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
 #
 # Examples of HMMER3 benchmark:
 #   ./pmark-master.pl ~/releases/hmmer-release/build-icc ~/releases/hmmer-release h3-results    100 pmark ./pmark-h3

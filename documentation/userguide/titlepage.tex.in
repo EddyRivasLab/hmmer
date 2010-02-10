@@ -4,7 +4,7 @@
 \vspace*{\fill}
 
 \noindent
-{\Huge {HMMER3 beta test: User's Guide}} \vspace{-8.0pt} \\ 
+{\Huge {HMMER User's Guide}} \vspace{-8.0pt} \\ 
 \rule[2pt]{\textwidth}{1pt} \\
 \hspace*{\fill} {\large {Biological sequence analysis using
 profile hidden Markov models} \\ }
@@ -18,8 +18,8 @@ Version @HMMER_VERSION@; @HMMER_DATE@ \\
 \vspace*{\fill}
 
 Sean R. Eddy\\
+for the HMMER Development Team\\
 Janelia Farm Research Campus\\
-Howard Hughes Medical Institute\\
 19700 Helix Drive\\
 Ashburn VA 20147 USA\\
 \url{http://eddylab.org/} \\

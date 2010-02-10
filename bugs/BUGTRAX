@@ -1,7 +1,10 @@
+####
+####  3.0rc1 release: 9 Feb 2010
+####
 ID              h76
 TITLE           esl_tmpfile*() string must be modifiable; char tmpfile[] = "tmpXXXXXX" insufficient
 AFFECTS         3.0b3 and earlier
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/148
 REPORTED_BY     Sebastien Moretti <sebastien.moretti@unil.ch>   
@@ -23,7 +26,7 @@ DESCRIPTION
 ID              h75
 TITLE           HMMER_NCPU environment variable has no effect
 AFFECTS         3.0b3 and earlier
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     Olli Tourunen <olli.tourunen@csc.fi>, 19 Jan 2010
@@ -36,7 +39,7 @@ DESCRIPTION
 ID              h74
 TITLE           Different envelopes, identical alignment
 AFFECTS         3.0b3 and earlier
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/130; notebook/1222-hmmer-bug-h74
 REPORTED_BY     Craig McAnulla <craigm@ebi.ac.uk>, 26 Nov 2009
@@ -61,7 +64,7 @@ DESCRIPTION
 ID              h73
 TITLE           hmmalign --mapali fails if msa contains fragments
 AFFECTS         3.0b3 and earlier
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/129
 REPORTED_BY     Elena Rivas, 17 Nov 2009 
@@ -78,7 +81,7 @@ DESCRIPTION
 ID              h72
 TITLE           jackhmmer segfaults if target seqdb contains duplicate names
 AFFECTS         3.0b3 and earlier
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/122
 REPORTED_BY     James Wasmuth <besnoitia@gmail.com>
@@ -96,7 +99,7 @@ DESCRIPTION
 ID              h71
 TITLE           hmm->compo calculation was wrong, bug in iocc[] calculation
 AFFECTS         3.0b3 and earlier
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/120
 REPORTED_BY     Elena Rivas
@@ -124,7 +127,7 @@ DESCRIPTION
 ID              h70
 TITLE           hmmbuild gives cryptic error on msa containing internal ~ chars
 AFFECTS         3.0b3 and earlier (reported against 3.0b2)
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/119
 REPORTED_BY     Erick Matsen <ematsen@gmail.com>; 20 Nov 2009
@@ -143,7 +146,7 @@ DESCRIPTION
 ID              h69
 TITLE           hmmscan --tblout segfaults if HMM lacks accession/description
 AFFECTS         3.0b3 (and earlier?)
-FIXED_IN        -
+FIXED_IN        3.0rc1
 STATUS          CLOSED
 XREF            J5/114
 REPORTED_BY     Jordan Fish <jrdn.fish@gmail.com> 19 Nov 2009
