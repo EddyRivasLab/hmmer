@@ -19242,11 +19242,11 @@ Internal pipeline statistics summary:
 Query model(s):                            1  (149 nodes)
 Target sequences:                     497293  (175274722 residues)
 Passed MSV filter:                     19416  (0.0390434); expected 9945.9 (0.02)
-Passed bias filter:                    15929  (0.0320314); expected 9945.9 (0.02)
+Passed bias filter:                    15923  (0.0320194); expected 9945.9 (0.02)
 Passed Vit filter:                      2207  (0.00443803); expected 497.3 (0.001)
 Passed Fwd filter:                      1076  (0.00216371); expected 5.0 (1e-05)
 Initial search space (Z):             497293  [actual number of targets]
 Domain search space  (domZ):            1075  [number of targets reported over threshold]
-# CPU time: 7.08u 0.09s 00:00:07.17 Elapsed: 00:00:02.95
-# Mc/sec: 8852.86
+# CPU time: 6.02u 0.07s 00:00:06.09 Elapsed: 00:00:02.43
+# Mc/sec: 10747.30
 //
