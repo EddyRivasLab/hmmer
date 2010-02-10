@@ -7,6 +7,7 @@
 # target sequence database:        7LESS_DROME
 # per-seq hits tabular output:     fn3.tbl
 # per-dom hits tabular output:     fn3.domtbl
+# number of worker threads:        2
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Query:       fn3  [M=86]
@@ -115,6 +116,6 @@ Passed Vit filter:                         1  (1); expected 0.0 (0.001)
 Passed Fwd filter:                         1  (1); expected 0.0 (1e-05)
 Initial search space (Z):                  1  [actual number of targets]
 Domain search space  (domZ):               1  [number of targets reported over threshold]
-# CPU time: 0.01u 0.00s 00:00:00.01 Elapsed: 00:00:00.02
-# Mc/sec: 10.98
+# CPU time: 0.00u 0.00s 00:00:00.00 Elapsed: 00:00:00.01
+# Mc/sec: 21.96
 //
