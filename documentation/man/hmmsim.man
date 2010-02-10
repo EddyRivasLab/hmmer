@@ -11,6 +11,7 @@ hmmsim - collect score distributions on random sequences
 
 .SH DESCRIPTION
 
+.PP
 The 
 .B hmmsim 
 program generates random sequences, scores them with the model(s) in 
@@ -18,6 +19,7 @@ program generates random sequences, scores them with the model(s) in
 and outputs various sorts of histograms, plots, and fitted
 distributions for the resulting scores.
 
+.PP
 .B hmmsim
 is not a mainstream part of the HMMER package. Most users would have
 no reason to use it. It is used to develop and test the statistical
@@ -26,17 +28,20 @@ example, it was used to generate most of the results in a 2008 paper
 on H3's local alignment statistics (PLoS Comp Bio 4:e1000069, 2008;
 http://www.ploscompbiol.org/doi/pcbi.1000069). 
 
+.PP
 Because it is a research testbed, you should not expect it to be as
 robust as other programs in the package. For example, options may
 interact in weird ways; we haven't tested nor tried to anticipate all
 different possible combinations.
 
+.PP
 The main task is to fit a maximum likelihood Gumbel distribution to
 Viterbi scores or an maximum likelihood exponential tail to
 high-scoring Forward scores, and to test that these fitted
 distributions obey the conjecture that lambda ~ log_2 for both the
 Viterbi Gumbel and the Forward exponential tail. 
 
+.PP
 The output is a table of numbers, one row for each model. Four
 different parametric fits to the score data are tested: (1) maximum
 likelihood fits to both location (mu/tau) and slope (lambda)
@@ -48,6 +53,7 @@ simple, quick and dirty statistic for goodness-of-fit is "E@10", the
 calculated E-value of the 10th ranked top hit, which we expect to be
 about 10. 
 
+.PP
 In detail, the columns of the output are:
 
 .TP
@@ -109,10 +115,12 @@ Slope parameter as determined by H3's estimation procedures.
 .B pE@10
 The E-value calculated for the 10th ranked score using pmu, plambda.
 
+
 .PP
 At the end of this table, one more line is printed, starting with #
 and summarizing the overall CPU time used by the simulations.
 
+.PP
 Some of the optional output files are in xmgrace xy format. xmgrace is
 powerful and freely available graph-plotting software.
 

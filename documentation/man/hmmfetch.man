@@ -25,10 +25,12 @@ hmmfetch - retrieve profile HMM(s) from a file
 
 .SH DESCRIPTION
 
+.PP
 Quickly retrieves one or more profile HMMs from an
 .I <hmmfile>
 (a large Pfam database, for example). 
 
+.PP
 The 
 .I <hmmfile>
 must be indexed first, using
@@ -36,14 +38,18 @@ must be indexed first, using
 The index is a binary file named
 .I <hmmfile>.ssi.
 
+.PP
 The default mode is to retrieve a single profile by name or
 accession, called the
 .I <key>.
 For example:
 
+.nf
   % hmmfetch Pfam-A.hmm Caudal_act
   % hmmfetch Pfam-A.hmm PF00045
+.fi
 
+.PP
 With the
 .I -f
 option, a 
@@ -66,6 +72,7 @@ the
 is read from standard input; this allows unix ninjas to
 construct sophisticated invocations using pipes.
 
+.PP
 By default, the HMM is printed to standard output in HMMER3 format.
 
 .SH OPTIONS

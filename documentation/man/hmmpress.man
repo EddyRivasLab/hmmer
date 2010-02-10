@@ -12,6 +12,7 @@ hmmpress - prepare an HMM database for hmmscan
 
 .SH DESCRIPTION
 
+.PP
 Starting from a profile database
 .I <hmmfile>
 in standard HMMER3 format,
@@ -23,6 +24,7 @@ step is required for
 .B hmmscan
 to work.
 
+.PP
 Four files are created:
 .I <hmmfile>.h3m,
 .I <hmmfile>.h3i,
