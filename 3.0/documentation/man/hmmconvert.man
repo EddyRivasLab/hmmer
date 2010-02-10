@@ -12,11 +12,13 @@ hmmconvert - convert profile file to a HMMER format
 
 .SH DESCRIPTION
 
+.PP
 The
 .B hmmconvert 
 utility
 converts an input profile file to different HMMER formats.
 
+.PP
 By default, the input profile can be in any HMMER format, including
 old/obsolete formats from HMMER2, ASCII or binary; the output profile
 is a current HMMER3 ASCII format.

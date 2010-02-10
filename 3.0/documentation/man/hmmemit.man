@@ -11,6 +11,7 @@ hmmemit - sample sequences from a profile HMM
 
 .SH DESCRIPTION
 
+.PP
 The 
 .B hmmemit
 program 
@@ -22,9 +23,11 @@ The
 should contain only a single HMM, not a library of them; only the
 first HMM will be read.
 
+.PP
 The default is to sample a sequence sequence from the core probability
 model.
 
+.PP
 Sampling sequences may be useful for a variety of purposes, including
 creating synthetic true positives for benchmarks or tests.
 

@@ -12,6 +12,8 @@ phmmer - search protein sequence(s) against a protein sequence database
 
 
 .SH DESCRIPTION
+
+.PP
 .B phmmer
 is used to search one or more query protein sequences against a protein sequence database.
 For each query sequence in 
@@ -21,6 +23,7 @@ use that sequence to search the target database of sequences in
 and output ranked lists of the sequences with the most significant
 matches to the query.
 
+.PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The
 .B --tblout 
@@ -35,6 +38,7 @@ in /dev/null.
 
 .SH OPTIONS
 
+.TP
 .B -h
 Help; print a brief reminder of command line usage and all available
 options.
@@ -131,7 +135,7 @@ analysis software.
 
 
 
-.SH  OPTIONS CONTROLLING REPORTING THRESHOLDS
+.SH OPTIONS CONTROLLING REPORTING THRESHOLDS
 
 "Reporting" thresholds control which hits are reported in output files
 (the main output,
@@ -181,7 +185,7 @@ Instead of thresholding per-domain output on E-value, instead
 report domains with a bit score of >=
 .I <x>.
 
-.SH  OPTIONS CONTROLLING INCLUSION THRESHOLDS
+.SH OPTIONS CONTROLLING INCLUSION THRESHOLDS
 
 Inclusion thresholds are stricter than reporting thresholds. They
 control which hits are included in any output multiple alignment (the

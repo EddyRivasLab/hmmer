@@ -12,6 +12,8 @@ hmmsearch - search profile(s) against a sequence database
 
 
 .SH DESCRIPTION
+
+.PP
 .B hmmsearch 
 is used to search one or more profiles against a sequence database.
 For each profile in 
@@ -21,13 +23,14 @@ use that query profile to search the target database of profiles in
 and output ranked lists of the sequences with the most significant
 matches to the profile.
 
+.PP
 The 
 .I <hmmfile>
 may contain more than one profile. To build profiles from multiple
 alignments, see
 .B hmmbuild.
 
-
+.PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The
 .B --tblout 
@@ -39,6 +42,8 @@ The
 .B -o
 option allows redirecting the main output, including throwing it away
 in /dev/null.
+
+
 
 .SH OPTIONS
 
