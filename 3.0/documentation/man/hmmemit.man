@@ -1,0 +1,167 @@
+.TH "hmmemit" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+
+.SH NAME
+hmmemit - sample sequences from a profile HMM
+
+.SH SYNOPSIS
+.B hmmemit
+.I [options]
+.I hmmfile
+
+
+.SH DESCRIPTION
+
+.PP
+The 
+.B hmmemit
+program 
+samples (emit) sequences from the profile HMM in
+.I hmmfile,
+and outputs them.
+The
+.I hmmfile 
+should contain only a single HMM, not a library of them; only the
+first HMM will be read.
+
+.PP
+The default is to sample a sequence sequence from the core probability
+model.
+
+.PP
+Sampling sequences may be useful for a variety of purposes, including
+creating synthetic true positives for benchmarks or tests.
+
+
+.SH COMMON OPTIONS
+
+.TP
+.B -h
+Help; print a brief reminder of command line usage and all available
+options.
+
+.TP
+.B -c
+Emit a consensus sequence, instead of sampling a sequence from the
+profile HMM's probability distribution. The consensus sequence is
+formed by selecting the maximum probability residue at each match
+state.
+
+.TP
+.BI -o " <f>"
+Direct the output sequences to file
+.I <f>,
+rather than to
+.I stdout.
+
+.TP
+.B -p
+Sample sequences from the implicit profile, not from the core model.
+The core model consists only of the homologous states (between the
+begin and end states of a HMMER Plan7 model). The profile includes the
+nonhomologous N, C, and J states, local/glocal and uni/multihit
+algorithm configuration, and the target length model.  Therefore
+sequences sampled from a profile may include nonhomologous as well as
+homologous sequences, and may contain more than one homologous
+sequence segment. By default, the profile is in multihit local mode,
+and the target sequence length is configured for L=400. To change
+these defaults, see Options Controlling Emission from Profiles, below.
+
+.TP
+.BI -N " <n>"
+Sample
+.I <n>
+sequences, rather than just one.
+
+
+
+.SH OPTIONS CONTROLLING EMISSION FROM PROFILES
+
+All these options require that the
+.I -p
+option is also set.
+
+
+.TP
+.BI -L " <n>"
+Configure the profile's target sequence length model to generate a
+mean length of approximately <n> rather than the default of 400.
+
+.TP
+.B --local
+Configure the profile for multihit local alignment.
+
+.TP
+.B --unilocal
+Configure the profile for unihit local alignment (Smith/Waterman).
+
+.TP
+.B --glocal
+Configure the profile for multihit glocal alignment.
+
+.TP
+.B --uniglocal
+Configure the profile for unihit glocal alignment.
+
+
+.SH OTHER OPTIONS
+
+.TP
+.BI --seed " <n>"
+Seed the random number generator with
+.I <n>,
+an integer >= 0. 
+If 
+.I <n> 
+is nonzero, any stochastic simulations will be reproducible; the same
+command will give the same results.
+If 
+.I <n>
+is 0, the random number generator is seeded arbitrarily, and
+stochastic simulations will vary from run to run of the same command.
+The default is 0: use an arbitrary seed, so different
+.B hmmemit
+runs will generate different samples.
+
+
+
+
+
+.SH SEE ALSO 
+
+See 
+.B hmmer(1)
+for a master man page with a list of all the individual man pages
+for programs in the HMMER package.
+
+.PP
+For complete documentation, see the user guide that came with your
+HMMER distribution (Userguide.pdf); or see the HMMER web page
+(@HMMER_URL@).
+
+
+
+.SH COPYRIGHT
+
+.nf
+@HMMER_COPYRIGHT@
+@HMMER_LICENSE@
+.fi
+
+For additional information on copyright and licensing, see the file
+called COPYRIGHT in your HMMER source distribution, or see the HMMER
+web page 
+(@HMMER_URL@).
+
+
+.SH AUTHOR
+
+.nf
+Eddy/Rivas Laboratory
+Janelia Farm Research Campus
+19700 Helix Drive
+Ashburn VA 20147 USA
+http://eddylab.org
+.fi
+
+
+

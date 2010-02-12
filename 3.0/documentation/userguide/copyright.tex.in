@@ -1,0 +1,21 @@
+\vspace*{\fill}
+\begin{flushleft}
+@HMMER_COPYRIGHT@\vspace{5mm}
+
+\vspace{5mm}
+Permission is granted to make and distribute verbatim copies of this
+manual provided the copyright notice and this permission notice are
+retained on all copies.\vspace{5mm}
+
+\vspace{5mm} HMMER is licensed and freely distributed under the GNU
+General Public License version 3 (GPLv3). For a copy of the License,
+see \url{http://www.gnu.org/licenses/}.
+
+\vspace{5mm}
+HMMER is a trademark of the Howard Hughes Medical Institute.
+
+\vspace{5mm}
+\end{flushleft}
+
+
+

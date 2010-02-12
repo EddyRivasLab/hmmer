@@ -1,0 +1,79 @@
+HMMER 3.0b2 release notes (HMMER3 beta test, release 2)
+http://hmmer.org/
+SRE, Wed Jun 17 17:08:22 2009
+________________________________________________________________
+# Previous release: 3.0b1; 17 June 2009
+# This is a temporrary issue-tracking document
+# Before release, print for posterity; delete xref's; 
+#    move this note and TO-DO to next notes
+# After release, this becomes the release notes document
+
+
+
+
+
+
+
+
+================================================================
+= TO DO: short term
+================================================================
+
+-:- finish outlining/drafting MSV paper
+
+-:- finish writeup of numerical accuracy analysis of MSV, ViterbiFilter
+    [J4/138-139]
+
+-:- write man pages;
+    including boilerplate for version, date, url, copyright, license
+    w/ conversion to userguide PDF
+
+-:- zf-C2H2 and other small Pfam models are missing many sequences.
+    Appear to be relying on H2 glocal power. Need to come up with a
+    fix.
+    [J5/15]
+
+-:- esl_normal is messed up
+
+-:- esl_hmm isn't reliable
+
+-:- more regression testing to catch subtle changes (c.f. the
+    19.9->25.8 score shift detailed on J5/13).
+    
+
+================================================================
+= TO DO: long term
+================================================================
+
+-:- threads implementation
+-:- MPI implementation
+-:- SSE 4.1 implementation: is it worth using epi8 for MSV? (no bias term needed)
+-:- port to Windows; work with CLCbio, UGENE
+
+-:- DNA implementation; requires filters to be regional, more finegrained.
+
+-:- Some banding should be possible. Reverse DP to identify i, rather
+    than traceback; compare to genefinding (Brent). Especially useful 
+    for DNA.
+    [J4/128]
+
+-:- context sensitive scores P(y | xxx) for phmmer (160K param)
+    [J4/128]
+
+-:- look into Lee Newberg's importance sampling; application to glocal
+    statistics; see contrib/p7_thermo.[ch]
+    [J4/128]
+
+-:- Follow up Olga's project: HMMs for null hypothesis; think about
+    replacing NJC states with more complex multistate null models (or
+    make them metastates).
+
+-:- Can the target sequence database be preclustered into deBruijn
+    graphs, and can we define an upper bound score against a graph;
+    if so, acceleration by branch&bound on structured database.
+
+-:- benchmark jackhmmer vs. psiblast, SAM-Txx
+-:- benchmark per-residue coverage, in addition to per-seq
+-:- benchmark domain bounds calls
+-:- benchmark alignment accuracy
+-:- FDR statistics

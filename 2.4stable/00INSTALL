@@ -1,0 +1,50 @@
+Brief installation instructions for HMMER @RELEASE@
+SRE, Tue Dec  5 13:09:31 2006
+------------------------------------------
+
+These are quick installation instructions for the source code. For
+complete documentation, see the Installation chapter in the HMMER
+User's Guide (Userguide.pdf). 
+
+The installation is a standard GNU-style install, except for some
+special ./configure arguments you probably want to pay attention to.
+
+
+1. Unpack the tarball.
+    % uncompress hmmer-@RELEASE@.tar.gz  
+    % tar xf hmmer-@RELEASE@.tar         
+    % cd hmmer-@RELEASE@   
+
+2. Configure.
+   If you just do ./configure, it'll work, but the default
+   configuration will give you unoptimized code and it won't
+   include useful optional features like multithreading and
+   the ability to deal with large files (>2GB).
+   You really want to do something like:
+
+    % env CC=gcc CFLAGS="-O3" ./configure --enable-threads --enable-lfs
+
+   You can use whatever CC and CFLAGS are appropriate for your
+   favorite optimizing compiler. 
+
+   If you're on a PowerPC (Mac or IBM), add --enable-altivec and
+   you'll get very fast Altivec code thanks to Erik Lindahl. 
+ 
+   If you have PVM installed, add --enable-pvm and you'll get
+   PVM parallelization for running on clusters.
+
+
+3. Compile, test, and install.
+    % make                         
+    % make check 
+    % make install
+
+  The 'make check' runs a set of exercises. All should pass.
+
+  You might need to be root to do 'make install'. The default install
+  goes to /usr/local/bin/
+
+
+
+
+

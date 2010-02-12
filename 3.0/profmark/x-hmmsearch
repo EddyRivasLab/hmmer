@@ -1,0 +1,55 @@
+#! /usr/bin/perl
+
+# Do a piece of a profmark benchmark, for hmmsearch.
+#
+# This script is normally called by pmark_master.pl; its command line
+# syntax is tied to pmark_master.pl.
+#
+# Usage: x-hmmsearch <top_builddir> <top_srcdir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
+
+$top_builddir  = shift;
+$top_srcdir    = shift;
+$resultdir     = shift;
+$tblfile       = shift;
+$msafile       = shift;
+$fafile        = shift;
+$outfile       = shift;
+
+$hmmbuild    = "$top_builddir/src/hmmbuild";
+$hmmsearch   = "$top_builddir/src/hmmsearch -E 200";
+$esl_afetch  = "$top_builddir/easel/miniapps/esl-afetch";
+
+open(OUTFILE,">$outfile") || die "failed to open $outfile";
+open(TABLE, "$tblfile")   || die "failed to open $tblfile";
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    $output = `$esl_afetch -o $resultdir/$msaname.sto $msafile $msaname`;
+    if ($? != 0) { die "FAILED: esl-afetch -o $resultdir/$msaname.sto $msafile $msaname"; }
+
+    $output = `$hmmbuild $resultdir/$msaname.hmm $resultdir/$msaname.sto`;
+    if ($? != 0) { die "FAILED: $hmmbuild $resultdir/$msaname.hmm $resultdir/$msaname.sto"; }
+
+    $status = system("$hmmsearch --cpu 1 --tblout $resultdir/$msaname.tmp $resultdir/$msaname.hmm $fafile > /dev/null");
+    if ($status != 0) { die "FAILED: $hmmsearch --tblout $resultdir/$msaname.tmp $resultdir/$msaname.hmm $fafile"; }
+
+    open(OUTPUT, "$resultdir/$msaname.tmp") || die "FAILED: to open $resultdir/$msaname.tmp tabular output file"; 
+    while (<OUTPUT>)
+    {
+	if (/^\#/) { next; }
+	($target, $tacc, $query, $qacc, $pval, $bitscore, $remainder) = split(' ', $_, 7);
+	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname;
+    }
+
+    unlink "$resultdir/$msaname.hmm";
+    unlink "$resultdir/$msaname.sto";
+}
+close TABLE;
+close OUTFILE;
+
+    
+
+    
+    
+

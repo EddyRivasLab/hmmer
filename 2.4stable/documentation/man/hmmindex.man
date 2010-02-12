@@ -1,0 +1,76 @@
+.TH "hmmindex" 1 "@RELEASEDATE@" "@PACKAGE@ @RELEASE@" "@PACKAGE@ Manual"
+
+.SH NAME
+.TP 
+hmmindex - create a binary SSI index for an HMM database
+
+.SH SYNOPSIS
+.B hmmindex
+.I [options]
+.I database
+
+.SH DESCRIPTION
+
+.B hmmindex
+is a utility that creates a binary SSI ("squid sequence index"
+format) index for an HMM database file called
+.I database.
+The new index file is named
+.IR database.ssi.
+An SSI index file is required for 
+.B hmmfetch
+to work, and also for the PVM implementation of 
+.B hmmpfam.
+
+The HMM's name is stored as the primary retrieval key. If it has an
+optional accession, the accession is used as a secondary retrieval
+key. For Pfam HMMs, which have accessions structured as
+.I <accession>.<version>, 
+the default is to store the full
+.I <accession>.<version>
+as the retrieval key, so you would have to do 
+.B hmmfetch 
+.I <database> 
+.I <accession>.<version>
+to retrieve an HMM by its accession.
+
+It is also useful to be able to retrieve the appropriate version
+without having to keep track of what version is in the current Pfam
+release, by
+.B hmmfetch 
+.I <database> <accession>.
+The 
+.B --av
+option is provided for indexing 
+.I <accession> 
+by itself. This is
+not the default, because it assumes that accessions obey the
+specific Pfam structure of 
+.I <accession>.<version>,
+and that
+the 
+.I <accession> 
+has one and only one version in the indexed
+.I database.
+
+.SH OPTIONS
+
+.TP
+.B -h
+Print brief help; includes version number and summary of
+all options, including expert options.
+
+.SH EXPERT OPTIONS
+
+.TP
+.B --av
+Index both <accession>.<version> and <accession> as secondary
+retrieval keys. For example, model PF00069.15 is indexed and may be
+retreived by its name (Pkinase), its accession (PF00069), and its full
+accession.version (PF00069.15); all three must be unique in the 
+indexed
+.I database.
+
+
+
+

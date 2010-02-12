@@ -1,0 +1,169 @@
+# HMMER's test suite, in sqc command format
+#
+# See the ../easel/devkit/sqc script for documentation
+# of how sqc works.
+#
+# SRE, Sat Feb 16 10:38:21 2008 [Janelia]
+# SVN $Id$
+
+################################################################
+# Unit test drivers for each .c file
+################################################################
+
+1 exercise hmmer              @src/hmmer_utest@
+1 exercise build              @src/build_utest@
+1 exercise generic_fwdback    @src/generic_fwdback_utest@
+1 exercise generic_msv        @src/generic_msv_utest@
+1 exercise generic_stotrace   @src/generic_stotrace_utest@
+1 exercise generic_viterbi    @src/generic_viterbi_utest@
+1 exercise logsum             @src/logsum_utest@
+1 exercise modelconfig        @src/modelconfig_utest@
+1 exercise p7_gmx             @src/p7_gmx_utest@
+1 exercise p7_hmm             @src/p7_hmm_utest@
+1 exercise p7_hmmfile         @src/p7_hmmfile_utest@
+1 exercise p7_profile         @src/p7_profile_utest@
+1 exercise p7_tophits         @src/p7_tophits_utest@
+1 exercise p7_trace           @src/p7_trace_utest@
+
+1 exercise decoding           @src/impl/decoding_utest@
+1 exercise fwdback            @src/impl/fwdback_utest@
+1 exercise io                 @src/impl/io_utest@
+1 exercise msvfilter          @src/impl/msvfilter_utest@
+1 exercise null2              @src/impl/null2_utest@
+1 exercise optacc             @src/impl/optacc_utest@
+1 exercise stotrace           @src/impl/stotrace_utest@
+1 exercise vitfilter          @src/impl/vitfilter_utest@
+
+# Still to come, unit tests for
+#   emit.c
+#   errors.c
+#   evalues.c
+#   eweight.c
+#   heatmap.c
+#   hmmer.c
+#   island.c
+#   modelstats.c
+#   mpisupport.c     (MPI testing needs to be handled specially)
+#   p7_alidisplay.c
+#   p7_bg.c
+#   p7_domaindef.c
+#   p7_prior.c
+#   p7_spensemble.c
+#   seqmodel.c
+
+
+################################################################
+# Option tests
+################################################################
+
+# hmmalign  xxxxxxxxxxxxxxxxxxxx
+1 prep      testseq              @src/hmmemit@  -p --unilocal -L0 -N 4 --seed 42 !testsuite/Caudal_act.hmm! > %TESTSEQ%
+1 exercise  hmmalign             @src/hmmalign@ !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/-h          @src/hmmalign@ -h
+1 exercise  hmmalign/-o          @src/hmmalign@ -o /dev/null                         !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--allcol    @src/hmmalign@ --allcol                             !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--mapali    @src/hmmalign@ --mapali !testsuite/Caudal_act.sto!  !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--trim      @src/hmmalign@ --trim                               !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--amino     @src/hmmalign@ --amino                              !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--informat  @src/hmmalign@ --informat fasta                     !testsuite/Caudal_act.hmm! %TESTSEQ%
+1 exercise  hmmalign/--outformat @src/hmmalign@ --outformat a2m                      !testsuite/Caudal_act.hmm! %TESTSEQ%
+
+# hmmemit   xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-h           @src/hmmemit@ -h
+1 exercise  hmmemit/-c           @src/hmmemit@ -c             !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-o           @src/hmmemit@ -o /dev/null   !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-p           @src/hmmemit@ -p             !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-N           @src/hmmemit@ -N 10          !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-L           @src/hmmemit@ -p -L 50       !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--local      @src/hmmemit@ -p --local     !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--unilocal   @src/hmmemit@ -p --unilocal  !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--glocal     @src/hmmemit@ -p --glocal    !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--uniglocal  @src/hmmemit@ -p --uniglocal !testsuite/Caudal_act.hmm!
+
+
+
+
+################################################################
+# Integration tests
+################################################################
+
+# Prep a press'ed "minifam" that's used in several integration tests,
+# and extract an individual 'typical' model Caudal_act.
+1 prep      Caudal                @easel/miniapps/esl-afetch@ !testsuite/minifam! Caudal_act > %CAUDAL.STO%
+1 prep      hmm                   @src/hmmbuild@ %CAUDAL.HMM% %CAUDAL.STO%
+1 prep      minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
+1 prep      minifam_press         @src/hmmpress@ %MINIFAM.HMM% 
+
+# Run-to-run variation tests
+# By default, stochastic simulations are seeded reproducibly, so there
+# is no run-to-run variation; whereas with different RNG seeds,
+# run-to-run variation does occur. [xref J5/99]
+# The hmmemit seed of 35 is carefully chosen to generate a target sequence
+# that requires stochastic clustering when aligned to the Caudal_act.hmm test
+# To search for new seeds, the command line is something like:
+# ( ../src/hmmemit --seed 35 -p Caudal_act.hmm | ../src/hmmsearch --seed 2 --tblout foo.out Caudal_act.hmm - > /dev/null ; cat foo.out )
+# looking for high scoring sequences that force a stochastic clustering step.
+#
+#           xxxxxxxxxxxxxxxxxxxx
+1 prep      seq                   @src/hmmemit@  --seed 35 -p %CAUDAL.HMM% > %TESTSEQ%
+1 prep      db_1                  @src/hmmemit@  --seed 35 -p %CAUDAL.HMM% > %TESTDB%
+1 prep      db_2                  @easel/miniapps/esl-reformat@ fasta !testsuite/Caudal_act.sto! >> %TESTDB%
+1 prep      db_3                  @easel/miniapps/esl-shuffle@ -G --amino -N 100 -L 350 >> %TESTDB%
+1 exercise  hmmbuild_variation    !testsuite/i1-build-variation.sh!     @src/hmmbuild@   !testsuite/Caudal_act.sto!          %OUTFILES%
+1 exercise  hmmscan_variation     !testsuite/i2-search-variation.sh!    @src/hmmscan@    %MINIFAM.HMM%   %TESTSEQ% %OUTFILES%
+1 exercise  hmmsearch_variation   !testsuite/i2-search-variation.sh!    @src/hmmsearch@  %CAUDAL.HMM%    %TESTDB%  %OUTFILES%
+1 exercise  phmmer_variation      !testsuite/i3-seqsearch-variation.sh! @src/phmmer@     %TESTSEQ%       %TESTDB%  %OUTFILES%
+3 exercise  jackhmmer_variation   !testsuite/i3-seqsearch-variation.sh! @src/jackhmmer@  %TESTSEQ%       %TESTDB%  %OUTFILES%
+1 exercise  mapali                !testsuite/i6-hmmalign-mapali.pl!     @src/hmmalign@   @easel/miniapps/esl-reformat@  !testsuite!  %OUTFILES%
+1 exercise  fragments             !testsuite/i7-hmmbuild-fragments.pl!  @src/hmmbuild@               %OUTFILES%
+1 exercise  nonresidues           !testsuite/i8-nonresidues.pl!         @@ !! %OUTFILES%
+1 exercise  opt-annotation        !testsuite/i9-optional-annotation.pl! @@ !! %OUTFILES%
+1 exercise  dup-names             !testsuite/i10-duplicate-names.pl!    @@ !! %OUTFILES%
+1 exercise  mapali-again          !testsuite/i11-hmmalign-mapali.pl!    @@ !! %OUTFILES%
+
+1 exercise  brute-itest           @src/itest_brute@  
+1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
+
+
+
+################################################################
+# Fixed bug tests
+################################################################
+
+#           xxxxxxxxxxxxxxxxxxxx
+1 exercise  h39                  @src/hmmsearch@ !testsuite/M1.hmm! !testsuite/M1.sto!
+1 exercise  h45                  !testsuite/i4-zerolength-seqs.sh! @@ !! %MINIFAM.HMM% %OUTFILES%
+1 exercise  h50                  !testsuite/i5-hmmbuild-naming.pl! @@ !! %OUTFILES%
+
+
+################################################################
+# valgrind tests  (optional. 'make SQCLEVEL=3 check')
+################################################################
+
+3 valgrind hmmer              @src/hmmer_utest@
+3 valgrind build              @src/build_utest@
+3 valgrind generic_fwdback    @src/generic_fwdback_utest@
+3 valgrind generic_msv        @src/generic_msv_utest@
+3 valgrind generic_stotrace   @src/generic_stotrace_utest@
+3 valgrind generic_viterbi    @src/generic_viterbi_utest@
+3 valgrind logsum             @src/logsum_utest@
+3 valgrind modelconfig        @src/modelconfig_utest@
+3 valgrind p7_gmx             @src/p7_gmx_utest@
+3 valgrind p7_hmm             @src/p7_hmm_utest@
+3 valgrind p7_hmmfile         @src/p7_hmmfile_utest@
+3 valgrind p7_profile         @src/p7_profile_utest@
+3 valgrind p7_tophits         @src/p7_tophits_utest@
+3 valgrind p7_trace           @src/p7_trace_utest@
+
+3 valgrind decoding           @src/impl/decoding_utest@
+3 valgrind fwdback            @src/impl/fwdback_utest@
+3 valgrind io                 @src/impl/io_utest@
+3 valgrind msvfilter          @src/impl/msvfilter_utest@
+3 valgrind null2              @src/impl/null2_utest@
+3 valgrind optacc             @src/impl/optacc_utest@
+3 valgrind stotrace           @src/impl/stotrace_utest@
+3 valgrind vitfilter          @src/impl/vitfilter_utest@
+
+
+# Clean up after minifam's index files, which hmmpress created (not the sqc script)

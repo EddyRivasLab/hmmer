@@ -1,0 +1,31 @@
+
+.SH SEE ALSO
+
+Master man page, with full list of and guide to the individual man
+pages: see 
+.B hmmer(1).
+.PP
+For complete documentation, see the user guide that came with the
+distribution (Userguide.pdf); or see the HMMER web page,
+http://hmmer.janelia.org/
+
+.SH COPYRIGHT
+
+.nf
+Copyright (C) 1992-2006 HHMI Janelia Farm.
+Freely distributed under the GNU General Public License (GPL).
+.fi
+See the file COPYING in your distribution for details on redistribution
+conditions.
+
+.SH AUTHOR 
+
+.nf
+Sean Eddy
+HHMI Janelia Farm
+19700 Helix Drive
+Ashburn VA 20147
+http://selab.janelia.org/
+.fi
+
+

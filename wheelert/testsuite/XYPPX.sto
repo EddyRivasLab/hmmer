@@ -1,0 +1,48 @@
+# STOCKHOLM 1.0
+#=GF ID   XYPPX
+#=GF AC   PF02162.8
+#=GF DE   XYPPX repeat
+#=GF PI   Rhodopsin_C;
+#=GF AU   Mian N, Bateman A
+#=GF SE   IPR000216
+#=GF GA   14.30 0.70; 10.00 0.00;
+#=GF TC   14.40 0.70; 10.00 0.00;
+#=GF NC   14.20 4.00; 9.70 2.00;
+#=GF TP   Repeat
+#=GF BM   hmmbuild -F HMM_ls SEED
+#=GF BM   hmmcalibrate --seed 0 HMM_ls
+#=GF BM   hmmbuild -f -F HMM_fs SEED
+#=GF BM   hmmcalibrate --seed 0 HMM_fs
+#=GF AM   globalfirst
+#=GF DR   PRINTS; PR00239;
+#=GF DC   The following Pfam-B family may contain sequences that according to Prodom
+#=GF DC   are members of this Pfam-A family.
+#=GF DR   PFAMB; PB146642;
+#=GF DR   INTERPRO; IPR006031;
+#=GF CC   This repeat is found in a wide variety of proteins and
+#=GF CC   generally consists of the motif XYPPX where X can be any amino
+#=GF CC   acid. The family includes annexin VII Swiss:P24639, the
+#=GF CC   carboxy tail of certain rhodopsins Swiss:Q17094. This family
+#=GF CC   also includes plaque matrix proteins, however this motif is
+#=GF CC   embedded in a ten residue repeat in Swiss:Q25460. The molecular
+#=GF CC   function of this repeat is unknown. It is also not clear is all
+#=GF CC   the members of this family share a common evolutionary
+#=GF CC   ancestor due to its short length and biased amino acid
+#=GF CC   composition.
+#=GF SQ   7
+#=GS OPSD_SEPOF/451-455  AC O16005.1
+#=GS OPSD_SEPOF/441-445  AC O16005.1
+#=GS OPSD_SEPOF/424-428  AC O16005.1
+#=GS OPSD_OCTDO/406-410  AC P09241.1
+#=GS OPSD_SEPOF/403-407  AC O16005.1
+#=GS OPSD_SEPOF/412-416  AC O16005.1
+#=GS OPSD_TODPA/387-391  AC P31356.2
+OPSD_SEPOF/451-455             AAPPQ
+OPSD_SEPOF/441-445             GAPPQ
+OPSD_SEPOF/424-428             GYPPA
+OPSD_OCTDO/406-410             AYPPP
+OPSD_SEPOF/403-407             GYPPP
+OPSD_SEPOF/412-416             GYPPQ
+OPSD_TODPA/387-391             AYPPQ
+#=GC seq_cons                  uYPPt
+//

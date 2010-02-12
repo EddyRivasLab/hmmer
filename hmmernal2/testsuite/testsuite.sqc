@@ -1,0 +1,57 @@
+# HMMER's test suite, in sqc command format
+#
+# See the ../easel/devkit/sqc script for documentation
+# of how sqc works.
+#
+# SRE, Sat Feb 16 10:38:21 2008 [Janelia]
+# SVN $Id$
+
+
+
+################################################################
+# Unit test drivers for each .c file
+################################################################
+
+1 exercise build              @build_utest@
+1 exercise generic_fwdback    @generic_fwdback_utest@
+1 exercise generic_msv        @generic_msv_utest@
+1 exercise generic_stotrace   @generic_stotrace_utest@
+1 exercise generic_viterbi    @generic_viterbi_utest@
+
+1 exercise logsum             @logsum_utest@
+1 exercise modelconfig        @modelconfig_utest@
+1 exercise p7_hmm             @p7_hmm_utest@
+1 exercise p7_hmmfile         @p7_hmmfile_utest@
+1 exercise p7_profile         @p7_profile_utest@
+1 exercise p7_tophits         @p7_tophits_utest@
+
+1 exercise fwdback            @fwdback_utest@
+1 exercise msvfilter          @msvfilter_utest@
+1 exercise vitfilter          @vitfilter_utest@
+1 exercise vitscore           @vitscore_utest@
+
+
+# Still to come, unit tests for
+#   dp_optaccuracy.c
+#   emit.c
+#   errors.c
+#   evalues.c
+#   eweight.c
+# 1 exercise generic_vtrace     @generic_vtrace_utest@
+#   heatmap.c
+#   hmmer.c
+#   impl_fp.c
+#   impl_h2.c
+#   impl_jb.c
+#   impl_vmx.c
+#   island.c
+#   modelstats.c
+#   mpisupport.c     (MPI testing needs to be handled specially)
+#   p7_alidisplay.c
+#   p7_bg.c
+#   p7_domaindef.c
+#   p7_gmx.c
+#   p7_prior.c
+#   p7_spensemble.c
+#   p7_trace.c
+#   seqmodel.c

@@ -1,0 +1,33 @@
+HMMER 2 code development diary.
+------------------------------
+
+- Fri Jan 10 12:09:17 1997 4737 lines
+  Forward() in place. 
+   timing: on 200 random seqs of length 150, globin model M=151:
+     2.0a1 hmms:  14.052u    300K cells/sec  (Forward)
+      1.9m hmms:   3.259u   1400K cells/sec
+  ILogsum() may be giving something like a 5x speed hit, which is
+  bad but not awful. Will know better after a Viterbi implementation.
+
+  Viterbi() in place.	
+     2.0a1 hmms:   6.865u    650K cells/sec  (Viterbi) 	
+  Getting hit with only a 2x factor by ILogsum(); another 2x by
+  other stuff. Profiling shows no obvious offending lines; 2x maybe
+  coming from array dereferencing.
+
+- Thu Dec 19 14:20:06 1996 3495 lines
+  maxmodelmaker prototype in place.
+  kinase.ALIGN timing: ~50 sec. (cc -O2). profile with prof -pixie -h
+  added build_cij() -1 return code -> 7.811u  
+  MAP hmmb's run on all PFAM .ALIGN files.
+  no code breaks. appears reasonably close to 1.8.1.
+
+- Mon Nov 25 11:43:38 1996   2981 lines
+  Shiva/ subdirectory created for "destructive" testing.
+  hmmb-all-pfam.pl test written.
+  1 code break: wnt.ALIGN : B->E transition, WNT5_DROME/553-704, all N assigned.
+  large deviations in min scores prob. caused by fragments in .ALIGN
+  insert justification in Traces2Alignment() 
+
+
+

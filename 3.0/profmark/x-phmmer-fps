@@ -1,0 +1,84 @@
+#! /usr/bin/perl
+
+# Do a piece of a profmark benchmark, for phmmer searches by FPS
+# (family-pairwise-search; best E-value of all individual queries).
+#
+# This script is normally called by pmark_master.pl; its command line
+# syntax is tied to pmark_master.pl.
+#
+# Usage: x-phmmer-fps <top_builddir> <top_srcdir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
+#        
+# SRE, Sun Feb  7 08:54:28 2010 [Casa de Gatos]
+# SVN $Id$
+
+
+$top_builddir  = shift;
+$top_srcdir    = shift;
+$resultdir     = shift;
+$tblfile       = shift;
+$msafile       = shift;
+$fafile        = shift;
+$outfile       = shift;
+
+$phmmer      = "$top_builddir/src/phmmer";
+$esl_afetch  = "$top_builddir/easel/miniapps/esl-afetch";
+$esl_seqstat = "$top_builddir/easel/miniapps/esl-seqstat";
+$esl_sfetch  = "$top_builddir/easel/miniapps/esl-sfetch";
+$opts        = "";
+
+open(OUTFILE,">$outfile") || die "failed to open $outfile";
+open(TABLE, "$tblfile")   || die "failed to open $tblfile";
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    %seen          = ();
+    %best_pval     = ();
+    %best_bitscore = ();
+
+    `$esl_afetch -o $resultdir/$msaname.sto $msafile $msaname`;
+    if ($? != 0) { die "FAILED: esl-afetch -o $dir/$msaname.sto $msafile $msaname"; }
+
+    # Extract a list of individual sequence names from the multiple alignment.
+    $output = `$esl_seqstat -a $resultdir/$msaname.sto | grep "^=" | awk '{print \$2}'`;
+    if ($? != 0) { die "FAILED: esl-seqstat -a $resultdir/$msaname.sto"; }
+
+    @qnames = split(/^/,$output);
+    chop (@qnames);
+
+    # Loop over each query; blast; accumulate best pval for each target
+    foreach $qname (@qnames) 
+    {
+	$output = `$esl_sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname`;
+	if ($? != 0) { die "FAILED: esl-sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname"; }
+
+	`$phmmer --cpu 1 --tblout $resultdir/$msaname.tmp $opts $resultdir/$msaname.query.fa $fafile > /dev/null`;
+	if ($? != 0) { die "FAILED: $phmmer --tblout $msaname.tmp $opts $resultdir/$msaname.query.fa $seqfile"; }
+
+	open(OUTPUT, "$resultdir/$msaname.tmp") || die "FAILED: to open $resultdir/$msaname.tmp tabular output file"; 
+        while (<OUTPUT>)
+	{
+	    if (/^\#/) { next; }
+	    ($target, $tacc, $query, $qacc, $pval, $bitscore, $remainder) = split(' ', $_, 7);
+	    if (! $seen{$target} || $pval < $best_pval{$target})
+	    { 		
+		$seen{$target}          = 1;
+		$best_pval{$target}     = $pval; 
+		$best_bitscore{$target} = $bitscore; 
+	    }
+	}
+	close OUTPUT;
+    }
+
+    # Append to the outfile.
+    foreach $target (keys(%seen)) 
+    {
+	printf OUTFILE "%g %.1f %s %s\n", $best_pval{$target}, $best_bitscore{$target}, $target, $msaname;
+    }
+
+    unlink "$resultdir/$msaname.tmp";
+    unlink "$resultdir/$msaname.query.fa";
+    unlink "$resultdir/$msaname.sto";
+}
+close TABLE;
+close OUTFILE;

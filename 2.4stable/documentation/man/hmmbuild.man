@@ -1,0 +1,422 @@
+.TH "hmmbuild" 1 "@RELEASEDATE@" "@PACKAGE@ @RELEASE@" "@PACKAGE@ Manual"
+
+.SH NAME
+.TP 
+hmmbuild - build a profile HMM from an alignment
+
+.SH SYNOPSIS
+.B hmmbuild
+.I [options]
+.I hmmfile
+.I alignfile
+
+.SH DESCRIPTION
+
+.B hmmbuild 
+reads a multiple sequence alignment file 
+.I alignfile
+, builds a new profile HMM, and saves the HMM in 
+.I hmmfile.
+
+.PP
+.I alignfile
+may be in ClustalW, GCG MSF, SELEX, Stockholm, or aligned FASTA
+alignment format. The format is automatically detected.
+
+.PP
+By default, the model is configured to find one or more
+nonoverlapping alignments to the complete model: multiple
+global alignments with respect to the model, and local with
+respect to the sequence.
+This
+is analogous to the behavior of the 
+.B hmmls 
+program of HMMER 1. 
+To configure the model for multiple 
+.I local 
+alignments
+with respect to the model and local with respect to
+the sequence,
+a la the old program
+.B hmmfs,
+use the
+.B -f 
+(fragment) option. More rarely, you may want to 
+configure the model for a single
+global alignment (global with respect to both
+model and sequence), using the 
+.B -g
+option;
+or to configure the model for a single local/local alignment
+(a la standard Smith/Waterman, or the old
+.B hmmsw
+program), use the
+.B -s 
+option.
+
+.SH OPTIONS
+
+.TP 
+.B -f
+Configure the model for finding multiple domains per sequence,
+where each domain can be a local (fragmentary) alignment. This
+is analogous to the old
+.B hmmfs
+program of HMMER 1.
+
+.TP
+.B -g
+Configure the model for finding a single global alignment to
+a target sequence, analogous to
+the old
+.B hmms
+program of HMMER 1.
+
+.TP
+.B -h
+Print brief help; includes version number and summary of
+all options, including expert options.
+
+.TP
+.BI -n " <s>" 
+Name this HMM
+.I <s>. 
+.I <s>
+can be any string of non-whitespace characters (e.g. one "word").
+There is no length limit (at least not one imposed by HMMER;
+your shell will complain about command line lengths first).
+
+.TP
+.BI -o " <f>"
+Re-save the starting alignment to 
+.I <f>,
+in Stockholm format.
+The columns which were assigned to match states will be
+marked with x's in an #=RF annotation line. 
+If either the
+.B --hand 
+or 
+.B --fast
+construction options were chosen, the alignment may have
+been slightly altered to be compatible with Plan 7 transitions,
+so saving the final alignment and comparing to the 
+starting alignment can let you view these alterations.
+See the User's Guide for more information on this arcane
+side effect.
+
+.TP
+.B -s 
+Configure the model for finding a single local alignment per
+target sequence. This is analogous to the standard Smith/Waterman
+algorithm or the 
+.B hmmsw
+program of HMMER 1. 
+
+.TP
+.B -A
+Append this model to an existing
+.I hmmfile
+rather than creating 
+.I hmmfile.
+Useful for building HMM libraries (like Pfam).
+
+.TP 
+.B -F
+Force overwriting of an existing 
+.I hmmfile.
+Otherwise HMMER will refuse to clobber your existing HMM files,
+for safety's sake.
+
+.SH EXPERT OPTIONS
+
+.TP
+.B --amino
+Force the sequence alignment to be interpreted as amino acid
+sequences. Normally HMMER autodetects whether the alignment is
+protein or DNA, but sometimes alignments are so small that
+autodetection is ambiguous. See
+.B --nucleic.
+
+.TP
+.B --binary
+Write the HMM to
+.I hmmfile
+in HMMER binary format instead of readable ASCII text.
+
+.TP
+.BI --cfile " <f>"
+Save the observed emission and transition counts to 
+.I <f> 
+after the architecture has been determined (e.g. after residues/gaps
+have been assigned to match, delete, and insert states).
+This option is used in HMMER development for generating data files
+useful for training new Dirichlet priors. The format of
+count files is documented in the User's Guide.
+
+.TP
+.B --effclust
+[This is the default.] Calculate the effective sequence number
+as the number of clusters in a single-linkage clustering at
+the threshold set by
+.I --eidlevel.
+
+.TP
+.B --effent
+Use 'entropy weighting' to calculate effective sequence number. This
+is currently experimental code in 2.4x releases, and it will only work
+on protein sequence alignments.
+
+.TP
+.BI --effloss " <x>"
+Undocumented option controlling experimental 
+.I --effent
+entropy weighting behavior.
+
+.TP
+.B --effnone
+Turn off the effective sequence number calculation, and use the
+true number of sequences instead. This will usually reduce the
+sensitivity of the final model (so don't do it without good reason!)
+
+.TP
+.BI --effset " <x>"
+Set the effective sequence number to
+.I <x>,
+overriding other possible calculations.
+
+.TP 
+.BI --eidlevel " <x>"
+Controls the determination of effective sequence number
+(but otherwise, behaves the same as 
+.I --widlevel,
+which controls optional BLOSUM weights.)
+The sequence alignment is clustered by percent
+identity, and the number of clusters at a cutoff threshold of 
+.I <x> 
+is used to determine the effective sequence number.
+Higher values of 
+.I <x> 
+give more clusters and higher effective sequence
+numbers; lower values of 
+.I <x> 
+give fewer clusters and lower effective sequence numbers.
+.I <x> 
+is a fraction from 0 to 1, and 
+by default is set to 0.62 (corresponding to the clustering level used
+in constructing the BLOSUM62 substitution matrix).
+
+.TP
+.B --evolve
+Undocumented experimental option.
+
+.TP
+.BI --evolveic " <x>"
+Undocumented experimental option.
+
+.TP
+.BI --matrix " <f>"
+Undocumented experimental option.
+
+
+.TP
+.B --fast
+Quickly and heuristically determine the architecture of the model by
+assigning all columns with at least a certain fraction of residues
+(non-gaps) to match states. By default this fraction is 0.5, and it
+can be changed using the
+.B --symfrac
+option.
+This is the default construction algorithm.
+
+.TP
+.B --hand
+Specify the architecture of the model by hand: the alignment file must
+be in SELEX or Stockholm format, and the reference annotation
+line (#=RF in SELEX, #=GC RF in Stockholm) is used to specify
+the architecture. Any column marked with a non-gap symbol (such
+as an 'x', for instance) is assigned as a consensus (match) column in
+the model.
+
+.TP
+.BI --informat " <s>"
+Assert that the input 
+.I seqfile
+is in format
+.I <s>;
+do not run Babelfish format autodection. This increases
+the reliability of the program somewhat, because 
+the Babelfish can make mistakes; particularly
+recommended for unattended, high-throughput runs
+of HMMER. Valid format strings include FASTA,
+GENBANK, EMBL, GCG, PIR, STOCKHOLM, SELEX, MSF,
+CLUSTAL, and PHYLIP. See the User's Guide for a complete
+list.
+
+.TP
+.B --nucleic
+Force the alignment to be interpreted as nucleic acid sequence,
+either RNA or DNA. Normally HMMER autodetects whether the alignment is
+protein or DNA, but sometimes alignments are so small that
+autodetection is ambiguous. See
+.B --amino.
+
+.TP
+.BI --null " <f>"
+Read a null model from 
+.I <f>.
+The default for protein is to use average amino acid frequencies from
+Swissprot 34 and p1 = 350/351; for nucleic acid, the default is
+to use 0.25 for each base and p1 = 1000/1001. For documentation
+of the format of the null model file and further explanation
+of how the null model is used, see the User's Guide.
+
+.TP
+.BI --pam " <f>"
+Apply a heuristic PAM- (substitution matrix-) based prior on match
+emission probabilities instead of
+the default mixture Dirichlet. The substitution matrix is read
+from 
+.I <f>. 
+See 
+.B --pamwgt. 
+
+The default Dirichlet state transition prior and insert emission prior
+are unaffected. Therefore in principle you could combine 
+.B --prior
+with
+.B --pam
+but this isn't recommended, as it hasn't been tested. (
+.B --pam
+itself hasn't been tested much!)
+
+.TP 
+.BI --pamwgt " <x>"
+Controls the weight on a PAM-based prior. Only has effect if
+.B --pam 
+option is also in use. 
+.I <x>
+is a positive real number, 20.0 by default. 
+.I <x>
+is the number of "pseudocounts" contriubuted by the heuristic
+prior. Very high values of 
+.I <x> 
+can force a scoring system that is entirely driven by the
+substitution matrix, making
+HMMER somewhat approximate Gribskov profiles.
+
+.TP
+.BI --pbswitch " <n>"
+For alignments with a very large number of sequences, 
+the GSC, BLOSUM, and Voronoi weighting schemes are slow;
+they're O(N^2) for N sequences. Henikoff position-based
+weights (PB weights) are more efficient. At or above a certain
+threshold sequence number
+.I <n> 
+.B hmmbuild 
+will switch from GSC, BLOSUM, or Voronoi weights to
+PB weights. To disable this switching behavior (at the cost
+of compute time, set 
+.I <n>
+to be something larger than the number of sequences in
+your alignment.
+.I <n>
+is a positive integer; the default is 1000.
+
+.TP
+.BI --prior " <f>"
+Read a Dirichlet prior from 
+.I <f>, 
+replacing the default mixture Dirichlet.
+The format of prior files is documented in the User's Guide,
+and an example is given in the Demos directory of the HMMER
+distribution.
+
+.TP
+.BI --symfrac " <x>"
+Controls the 
+.I --fast
+model construction algorithm, but if 
+.I --fast
+is not being used, has no effect.
+If a column contains at least fraction
+.I <x>
+of residues, it 
+gets assigned to a match column.
+The calculation of <x> uses relative sequence weighting (if any is
+set), and it is fragment-tolerant (leading and trailing gaps in
+sequence fragments are ignored).
+.I <x> 
+is a frequency from 0 to 1, and by default is set
+to 0.5. Lower values of
+.I <x>
+mean more columns get assigned to consensus, and models get
+longer; higher values of 
+.I <x> 
+mean fewer columns get assigned to consensus, and models get
+smaller.
+.I <x>
+
+.TP 
+.B --verbose 
+Print more possibly useful stuff, such as the individual scores for
+each sequence in the alignment.
+
+.TP 
+.B --wblosum
+Use the BLOSUM filtering algorithm to weight the sequences,
+instead of the default.
+Cluster the sequences at a given percentage identity
+(see
+.B --widlevel);
+assign each cluster a total weight of 1.0, distributed equally
+amongst the members of that cluster.
+
+.TP 
+.BI --widlevel " <x>"
+Controls the 
+behavior of the 
+.I --wblosum 
+weighting option. The sequence alignment is clustered by percent
+identity, and the number of clusters at a cutoff threshold of 
+.I <x> 
+is used to determine the effective sequence number.
+Higher values of 
+.I <x> 
+give more clusters and higher effective sequence
+numbers; lower values of 
+.I <x> 
+give fewer clusters and lower effective sequence numbers.
+.I <x> 
+is a fraction from 0 to 1, and 
+by default is set to 0.62 (corresponding to the clustering level used
+in constructing the BLOSUM62 substitution matrix).
+
+.TP
+.B --wgsc
+Use the Gerstein/Sonnhammer/Chothia ad hoc sequence weighting
+algorithm. This is already the default, so this option has no effect
+(unless it follows another option in the --w family, in which case it
+overrides it).
+
+.TP
+.B --wme
+Use the Krogh/Mitchison maximum entropy algorithm to "weight"
+the sequences. This supercedes the Eddy/Mitchison/Durbin
+maximum discrimination algorithm, which gives almost
+identical weights but is less robust. ME weighting seems 
+to give a marginal increase in sensitivity
+over the default GSC weights, but takes a fair amount of time.
+
+.TP 
+.B --wnone
+Turn off all sequence weighting.
+
+.TP
+.B --wpb
+Use the Henikoff position-based weighting scheme. 
+
+.TP
+.B --wvoronoi
+Use the Sibbald/Argos Voronoi sequence weighting algorithm
+in place of the default GSC weighting.
+

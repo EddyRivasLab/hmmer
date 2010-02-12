@@ -1,0 +1,427 @@
+!!AA_MULTIPLE_ALIGNMENT 1.0
+PileUp of: *.pep
+
+ Symbol comparison table: GenRunData:blosum62.cmp  CompCheck: 6430
+
+                   GapWeight: 12
+             GapLengthWeight: 4 
+
+ pileup.msf  MSF: 308  Type: P  August 16, 1999 09:09  Check: 9858 ..
+
+ Name: lgb1_pea         Len:   308  Check: 2200  Weight:  1.00
+ Name: lgb1_vicfa       Len:   308  Check:  214  Weight:  1.00
+ Name: myg_escgi        Len:   308  Check: 3961  Weight:  1.00
+ Name: myg_horse        Len:   308  Check: 5619  Weight:  1.00
+ Name: myg_progu        Len:   308  Check: 6401  Weight:  1.00
+ Name: myg_saisc        Len:   308  Check: 6606  Weight:  1.00
+ Name: myg_lycpi        Len:   308  Check: 6090  Weight:  1.00
+ Name: myg_mouse        Len:   308  Check: 6613  Weight:  1.00
+ Name: myg_musan        Len:   308  Check: 3942  Weight:  1.00
+ Name: hba_ailme        Len:   308  Check: 4558  Weight:  1.00
+ Name: hba_prolo        Len:   308  Check: 5054  Weight:  1.00
+ Name: hba_pagla        Len:   308  Check: 5383  Weight:  1.00
+ Name: hba_macfa        Len:   308  Check: 5135  Weight:  1.00
+ Name: hba_macsi        Len:   308  Check: 5198  Weight:  1.00
+ Name: hba_ponpy        Len:   308  Check: 5050  Weight:  1.00
+ Name: hba2_galcr       Len:   308  Check: 5609  Weight:  1.00
+ Name: hba_mesau        Len:   308  Check: 4702  Weight:  1.00
+ Name: hba2_bosmu       Len:   308  Check: 4241  Weight:  1.00
+ Name: hba_erieu        Len:   308  Check: 4680  Weight:  1.00
+ Name: hba_frapo        Len:   308  Check: 3549  Weight:  1.00
+ Name: hba_phaco        Len:   308  Check: 4440  Weight:  1.00
+ Name: hba_trioc        Len:   308  Check: 5465  Weight:  1.00
+ Name: hba_ansse        Len:   308  Check: 3300  Weight:  1.00
+ Name: hba_colli        Len:   308  Check: 3816  Weight:  1.00
+ Name: hbad_chlme       Len:   308  Check: 4571  Weight:  1.00
+ Name: hbad_pasmo       Len:   308  Check: 6777  Weight:  1.00
+ Name: hbaz_horse       Len:   308  Check: 7187  Weight:  1.00
+ Name: hba4_salir       Len:   308  Check: 7329  Weight:  1.00
+ Name: hbb_ornan        Len:   308  Check: 2667  Weight:  1.00
+ Name: hbb_tacac        Len:   308  Check: 4356  Weight:  1.00
+ Name: hbe_ponpy        Len:   308  Check: 3827  Weight:  1.00
+ Name: hbb_speci        Len:   308  Check: 1556  Weight:  1.00
+ Name: hbb_speto        Len:   308  Check: 2051  Weight:  1.00
+ Name: hbb_equhe        Len:   308  Check: 3414  Weight:  1.00
+ Name: hbb_sunmu        Len:   308  Check: 2927  Weight:  1.00
+ Name: hbb_calar        Len:   308  Check: 3836  Weight:  1.00
+ Name: hbb_mansp        Len:   308  Check: 4322  Weight:  1.00
+ Name: hbb_ursma        Len:   308  Check: 4428  Weight:  1.00
+ Name: hbb_rabit        Len:   308  Check: 4190  Weight:  1.00
+ Name: hbb_tupgl        Len:   308  Check: 4185  Weight:  1.00
+ Name: hbb_triin        Len:   308  Check: 1163  Weight:  1.00
+ Name: hbb_colli        Len:   308  Check: 3958  Weight:  1.00
+ Name: hbb_larri        Len:   308  Check: 3517  Weight:  1.00
+ Name: hbb1_varex       Len:   308  Check: 6009  Weight:  1.00
+ Name: hbb2_xentr       Len:   308  Check: 7617  Weight:  1.00
+ Name: hbbl_ranca       Len:   308  Check: 5606  Weight:  1.00
+ Name: hbb2_tricr       Len:   308  Check: 8767  Weight:  1.00
+ Name: glb2_mormr       Len:   308  Check: 6103  Weight:  1.00
+ Name: glbz_chith       Len:   308  Check: 8634  Weight:  1.00
+ Name: hbf1_ureca       Len:   308  Check: 9035  Weight:  1.00
+
+//
+
+            1                                                   50
+  lgb1_pea  ~~~~~~~~~G FTDKQEALVN SSSE.FKQNL PGYSILFYTI VLEKAPAAKG 
+lgb1_vicfa  ~~~~~~~~~G FTEKQEALVN SSSQLFKQNP SNYSVLFYTI ILQKAPTAKA 
+ myg_escgi  ~~~~~~~~~V LSDAEWQLVL NIWAKVEADV AGHGQDILIR LFKGHPETLE 
+ myg_horse  ~~~~~~~~~G LSDGEWQQVL NVWGKVEADI AGHGQEVLIR LFTGHPETLE 
+ myg_progu  ~~~~~~~~~G LSDGEWQLVL NVWGKVEGDL SGHGQEVLIR LFKGHPETLE 
+ myg_saisc  ~~~~~~~~~G LSDGEWQLVL NIWGKVEADI PSHGQEVLIS LFKGHPETLE 
+ myg_lycpi  ~~~~~~~~~G LSDGEWQIVL NIWGKVETDL AGHGQEVLIR LFKNHPETLD 
+ myg_mouse  ~~~~~~~~~G LSDGEWQLVL NVWGKVEADL AGHGQEVLIG LFKTHPETLD 
+ myg_musan  ~~~~~~~~~~ ~~~VDWEKVN SVWSAVESDL TAIGQNILLR LFEQYPESQN 
+ hba_ailme  ~~~~~~~~~V LSPADKTNVK ATWDKIGGHA GEYGGEALER TFASFPTTKT 
+ hba_prolo  ~~~~~~~~~V LSPADKANIK ATWDKIGGHA GEYGGEALER TFASFPTTKT 
+ hba_pagla  ~~~~~~~~~V LSSADKNNIK ATWDKIGSHA GEYGAEALER TFISFPTTKT 
+ hba_macfa  ~~~~~~~~~V LSPADKTNVK AAWGKVGGHA GEYGAEALER MFLSFPTTKT 
+ hba_macsi  ~~~~~~~~~V LSPADKTNVK DAWGKVGGHA GEYGAEALER MFLSFPTTKT 
+ hba_ponpy  ~~~~~~~~~V LSPADKTNVK TAWGKVGAHA GDYGAEALER MFLSFPTTKT 
+hba2_galcr  ~~~~~~~~~V LSPTDKSNVK AAWEKVGAHA GDYGAEALER MFLSFPTTKT 
+ hba_mesau  ~~~~~~~~~V LSAKDKTNIS EAWGKIGGHA GEYGAEALER MFFVYPTTKT 
+hba2_bosmu  ~~~~~~~~~V LSAADKGNVK AAWGKVGGHA AEYGAEALER MFLSFPTTKT 
+ hba_erieu  ~~~~~~~~~V LSATDKANVK TFWGKLGGHG GEYGGEALDR MFQAHPTTKT 
+ hba_frapo  ~~~~~~~~~V LSAADKNNVK GIFGKISSHA EDYGAEALER MFITYPSTKT 
+ hba_phaco  ~~~~~~~~~V LSAADKNNVK GIFTKIAGHA EEYGAEALER MFITYPSTKT 
+ hba_trioc  ~~~~~~~~~V LSANDKTNVK TVFTKITGHA EDYGAETLER MFITYPPTKT 
+ hba_ansse  ~~~~~~~~~V LSAADKGNVK TVFGKIGGHA EEYGAETLQR MFQTFPQTKT 
+ hba_colli  ~~~~~~~~~V LSANDKSNVK AVFAKIGGQA GDLGGEALER LFITYPQTKT 
+hbad_chlme  ~~~~~~~~~M LTADDKKLLT QLWEKVAGHQ EEFGSEALQR MFLTYPQTKT 
+hbad_pasmo  ~~~~~~~~~M LTAEDKKLIQ QIWGKLGGAE EEIGADALWR MFHSYPSTKT 
+hbaz_horse  ~~~~~~~~~S LTKAERTMVV SIWGKISMQA DAVGTEALQR LFSSYPQTKT 
+hba4_salir  ~~~~~~~~~S LSAKDKANVK AIWGKILPKS DEIGEQALSR MLVVYPQTKA 
+ hbb_ornan  ~~~~~~~~VH LSGGEKSAVT NLWGKV..NI NELGGEALGR LLVVYPWTQR 
+ hbb_tacac  ~~~~~~~~VH LSGSEKTAVT NLWGHV..NV NELGGEALGR LLVVYPWTQR 
+ hbe_ponpy  ~~~~~~~~VH FTAEEKAAVT SLWSKM..NV EEAGGEALGR LLVVYPWTQR 
+ hbb_speci  ~~~~~~~~VH LSDGEKNAIS TAWGKV..HA AEVGAEALGR LLVVYPWTQR 
+ hbb_speto  ~~~~~~~~VH LTDGEKNAIS TAWGKV..NA AEIGAEALGR LLVVYPWTQR 
+ hbb_equhe  ~~~~~~~~VQ LSGEEKAAVL ALWDKV..NE EEVGGEALGR LLVVYPWTQR 
+ hbb_sunmu  ~~~~~~~~VH LSGEEKACVT GLWGKV..NE DEVGAEALGR LLVVYPWTQR 
+ hbb_calar  ~~~~~~~~VH LTGEEKSAVT ALWGKV..NV DEVGGEALGR LLVVYPWTQR 
+ hbb_mansp  ~~~~~~~~VH LTPEEKTAVT TLWGKV..NV DEVGGEALGR LLVVYPWTQR 
+ hbb_ursma  ~~~~~~~~VH LTGEEKSLVT GLWGKV..NV DEVGGEALGR LLVVYPWTQR 
+ hbb_rabit  ~~~~~~~~VH LSSEEKSAVT ALWGKV..NV EEVGGEALGR LLVVYPWTQR 
+ hbb_tupgl  ~~~~~~~~VH LSGEEKAAVT GLWGKV..DL EKVGGQSLGS LLIVYPWTQR 
+ hbb_triin  ~~~~~~~~VH LTPEEKALVI GLWAKV..NV KEYGGEALGR LLVVYPWTQR 
+ hbb_colli  ~~~~~~~~VH WSAEEKQLIT SIWGKV..NV ADCGAEALAR LLIVYPWTQR 
+ hbb_larri  ~~~~~~~~VH WSAEEKQLIT GLWGKV..NV ADCGAEALAR LLIVYPWTQR 
+hbb1_varex  ~~~~~~~~VH WTAEEKQLIC SLWGKI..DV GLIGGETLAG LLVIYPWTQR 
+hbb2_xentr  ~~~~~~~~VH WTAEEKATIA SVWGKV..DI EQDGHDALSR LLVVYPWTQR 
+hbbl_ranca  ~~~~~~~~VH WTAEEKAVIN SVWQKV..DV EQDGHEALTR LFIVYPWTQR 
+hbb2_tricr  ~~~~~~~~VH LTAEDRKEIA AILGKV..NV DSLGGQCLAR LIVVNPWSRR 
+glb2_mormr  PIVDSGSVSP LSDAEKNKIR AAWDIVYKNY EKNGVDILVK FFTGTPAAQA 
+glbz_chith  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbf1_ureca  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+
+            51                                                 100
+  lgb1_pea  LFSFLKD... TAGVEDSPKL QAHAEQVFGL VRDSAAQLRT KGEVVLGNAT 
+lgb1_vicfa  MFSFLKD... SAGVVDSPKL GAHAEKVFGM VRDSAVQLRA TGEVVLDGKD 
+ myg_escgi  KFDKFKHLKT EAEMKASEDL KKHGNTVLTA LGGILKKKGH ...HEAELKP 
+ myg_horse  KFDKFKHLKT EAEMKASEDL KKHGTVVLTA LGGILKKKGH ...HEAELKP 
+ myg_progu  KFDKFKHLKA EDEMRASEEL KKHGTTVLTA LGGILKKKGQ ...HAAELAP 
+ myg_saisc  KFDKFKHLKS EDEMKASEEL KKHGTTVLTA LGGILKKKGQ ...HEAELKP 
+ myg_lycpi  KFDKFKHLKT EDEMKGSEDL KKHGNTVLTA LGGILKKKGH ...HEAELKP 
+ myg_mouse  KFDKFKNLKS EEDMKGSEDL KKHGCTVLTA LGTILKKKGQ ...HAAEIQP 
+ myg_musan  HFPKFKN.KS LGELKDTADI KAQADTVLSA LGNIVKKKGS ...HSQPVKA 
+ hba_ailme  YFPHF.DLSP .....GSAQV KAHGKKVADA LTTAVGHLDD ...LPGALSA 
+ hba_prolo  YFPHF.DLSP .....GSAQV KAHGKKVADA LTLAVGHLDD ...LPGALSA 
+ hba_pagla  YFPHF.DLSH .....GSAQV KAHGKKVADA LTLAVGHLED ...LPNALSA 
+ hba_macfa  YFPHF.DLSH .....GSAQV KGHGKKVADA LTLAVGHVDD ...MPQALSA 
+ hba_macsi  YFPHF.DLSH .....GSAQV KGHGKKVADA LTLAVGHVDD ...MPQALSA 
+ hba_ponpy  YFPHF.DLSH .....GSAQV KDHGKKVADA LTNAVAHVDD ...MPNALSA 
+hba2_galcr  YFPHF.DLSH .....GSTQV KGHGKKVADA LTNAVLHVDD ...MPSALSA 
+ hba_mesau  YFPHF.DVSH .....GSAQV KGHGKKVADA LTNAVGHLDD ...LPGALSA 
+hba2_bosmu  YFPHF.DLSH .....GSAQV KGHGAKVAAA LTKAVGHLDD ...LPGALSE 
+ hba_erieu  YFPHF.DLNP .....GSAQV KGHGKKVADA LTTAVNNLDD ...VPGALSA 
+ hba_frapo  YFPHF.DLSH .....GSAQV KGHGKKVVAA LIEAANHIDD ...IAGTLSK 
+ hba_phaco  YFPHF.DLSH .....GSAQI KGHGKKVVAA LIEAVNHIDD ...ITGTLSK 
+ hba_trioc  YFPHF.DLHH .....GSAQI KAHGKKVVGA LIEAVNHIDD ...IAGALSK 
+ hba_ansse  YFPHF.DLQP .....GSAQI KAHGKKVAAA LVEAANHIDD ...IAGALSK 
+ hba_colli  YFPHF.DLSH .....GSAQI KGHGKKVAEA LVEAANHIDD ...IAGALSK 
+hbad_chlme  YFPHF.DLHP .....GSEQV RGHGKKVAAA LGNAVKSLDN ...LSQALSE 
+hbad_pasmo  YFPHF.DLSQ .....GSDQI RGHGKKVVAA LSNAIKNLDN ...LSQALSE 
+hbaz_horse  YFPHF.DLHE .....GSPQL RAHGSKVAAA VGDAVKSIDN ...VAGALAK 
+hba4_salir  YFSHWASVAP .....GSAPV KKHGITIMNQ IDDCVGHMDD ...LFGFLTK 
+ hbb_ornan  FFEAFGDLSS AGAVMGNPKV KAHGAKVLTS FGDALKNLDD ...LKGTFAK 
+ hbb_tacac  FFESFGDLSS ADAVMGNAKV KAHGAKVLTS FGDALKNLDN ...LKGTFAK 
+ hbe_ponpy  FFDSFGNLSS PSAILGNPKV KAHGKKVLTS FGDAIKNMDN ...LKTTFAK 
+ hbb_speci  FFDSFGDLSS ASAVMGNAKV KAHGKKVIDS FSNGLKHLDN ...LKGTFAS 
+ hbb_speto  FFDSFGDLSS ASAVMGNAKV KAHGKKVIDS FSNGLKHLDN ...LKGTFAS 
+ hbb_equhe  FFDSFGDLSN PAAVMGNPKV KAHGKKVLHS FGEGVHHLDN ...LKGTFAQ 
+ hbb_sunmu  FFDSFGDLSS ASAVMGNPKV KAHGKKVLHS LGEGVANLDN ...LKGTFAK 
+ hbb_calar  FFESFGDLST PDAVMNNPKV KAHGKKVLGA FSDGLTHLDN ...LKGTFAH 
+ hbb_mansp  FFDSFGDLSS PDAVMGNPKV KAHGKKVLGA FSDGLNHLDN ...LKGTFAQ 
+ hbb_ursma  FFDSFGDLSS ADAIMNNPKV KAHGKKVLNS FSDGLKNLDN ...LKGTFAK 
+ hbb_rabit  FFESFGDLSS ANAVMNNPKV KAHGKKVLAA FSEGLSHLDN ...LKGTFAK 
+ hbb_tupgl  FFDSFGDLSS PSAVMSNPKV KAHGKKVLTS FSDGLNHLDN ...LKGTFAK 
+ hbb_triin  FFEHFGDLSS ASAIMNNPKV KAHGEKVFTS FGDGLKHLED ...LKGAFAE 
+ hbb_colli  FFSSFGNLSS ATAISGNPNV KAHGKKVLTS FGDAVKNLDN ...IKGTFAQ 
+ hbb_larri  FFASFGNLSS PTAINGNPMV RAHGKKVLTS FGEAVKNLDN ...IKNTFAQ 
+hbb1_varex  QFSHFGNLSS PTAIAGNPRV KAHGKKVLTS FGDAIKNLDN ...IKDTFAK 
+hbb2_xentr  YFSSFGNLSN VSAVSGNVKV KAHGNKVLSA VGSAIQHLDD ...VKSHLKG 
+hbbl_ranca  YFSTFGDLSS PAAIAGNPKV HAHGKKILGA IDNAIHNLDD ...VKGTLHD 
+hbb2_tricr  YFHDFGDLSS CDAICRNPKV LAHGAKVMRS IVEATKHLDN ...LREYYAD 
+glb2_mormr  FFPKFKGLTT ADALKKSSDV RWHAERIINA VNDAVKSMDD TEKMSMKLQE 
+glbz_chith  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbf1_ureca  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+
+            101                                                150
+  lgb1_pea  LGAIHVQKGV TNP.HFVVVK EALLQTIKKA SGNNWSEELN TAWEVAYDGL 
+lgb1_vicfa  .GSIHIQKGV LDP.HFVVVK EALLKTIKEA SGDKWSEELS AAWEVAYDGL 
+ myg_escgi  LAQSHATKHK IPIKYLEFIS DAIIHVLHSR HPGDFGADAQ AAMNKALELF 
+ myg_horse  LAQSHATKHK IPIKYLEFIS DAIIHVLHSK HPGNFGADAQ GAMTKALELF 
+ myg_progu  LAQSHATKHK IPVKYLEFIS EAIIQVLQSK HPGDFGADAQ GAMSKALELF 
+ myg_saisc  LAQSHATKHK IPVKYLELIS DAIVHVLQKK HPGDFGADAQ GAMKKALELF 
+ myg_lycpi  LAQSHATKHK IPVKYLEFIS DAIIQVLQNK HSGDFHADTE AAMKKALELF 
+ myg_mouse  LAQSHATKHK IPVKYLEFIS EIIIEVLKKR HSGDFGADAQ GAMSKALELF 
+ myg_musan  LAATHITTHK IPPHYFTKIT TIAVDVLSEM YPSEMNAQVQ AAFSGAFKII 
+ hba_ailme  LSDLHAHKLR VDPVNFKLLS HCLLVTLASH HPAEFTPAVH ASLDKFFSAV 
+ hba_prolo  LSDLHAYKLR VDPVNFKLLS HCLLVTLACH HPAEFTPAVH ASLDKFFTSV 
+ hba_pagla  LSDLHAYKLR VDPVNFKLLS HCLLVTLACH HPAEFTPAVH SALDKFFSAV 
+ hba_macfa  LSDLHAHKLR VDPVNFKLLS HCLLVTLAAH LPAEFTPAVH ASLDKFLASV 
+ hba_macsi  LSDLHAHKLR VDPVNFKLLS HCLLVTLAAH LPAEFTPAVH ASLDKFLASV 
+ hba_ponpy  LSDLHAHKLR VDPVNFKLLS HCLLVTLAAH LPAEFTPAVH ASLDKFLASV 
+hba2_galcr  LSDLHAHKLR VDPVNFKLLR HCLLVTLACH HPAEFTPAVH ASLDKFMASV 
+ hba_mesau  LSDLHAHKLR VDPVNFKLLS HCLLVTLANH HPADFTPAVH ASLDKFFASV 
+hba2_bosmu  LSDLHAHKLR VDPVNFKLLS HSLLVTLASH LPSDFTPAVH ASLDKFLANV 
+ hba_erieu  LSDLHAHKLR VDPVNFKLLS HCLLVTLALH HPADFTPAVH ASLDKFLATV 
+ hba_frapo  LSDLHAHKLR VDPVNFKLLG QCFLVVVAIH HPSALTPEVH ASLDKFLCAV 
+ hba_phaco  LSDLHAHKLR VDPVNFKLLG QCFLVVVAIH HPSALTPEVH ASLDKFLCAV 
+ hba_trioc  LSDLHAQKLR VDPVNFKLLG QCFLVVVAIH HPSVLTPEVH ASLDKFLCAV 
+ hba_ansse  LSDLHAQKLR VDPVNFKFLG HCFLVVLAIH HPSLLTPEVH ASMDKFLCAV 
+ hba_colli  LSDLHAQKLR VDPVNFKLLG HCFLVVVAVH FPSLLTPEVH ASLDKFVLAV 
+hbad_chlme  LSNLHAYNLR VDPANFKLLA QCFQVVLATH LGKDYSPEMH AAFDKFLSAV 
+hbad_pasmo  LSNLHAYNLR VDPVNFKFLS QCLQVSLATR LGKEYSPEVH SAVDKFMSAV 
+hbaz_horse  LSELHAYILR VDPVNFKFLS HCLLVTLASR LPADFTADAH AAWDKFLSIV 
+hba4_salir  LSELHATKLR VDPTNFKILA HNLIVVIAAY FPAEFTPEIH LSVDKFLQQL 
+ hbb_ornan  LSELHCDKLH VDPENFNRLG NVLIVVLARH FSKDFSPEVQ AAWQKLVSGV 
+ hbb_tacac  LSELHCDKLH VDPENFNRLG NVLVVVLARH FSKEFTPEAQ AAWQKLVSGV 
+ hbe_ponpy  LSELHCDKLH VDPENFKLLG NVMVIILATH FGKEFTPEVQ AAWQKLVSAV 
+ hbb_speci  LSELHCDKLH VDPENFKLLG NMIVIVMAHH LGKDFTPEAQ AAFQKVVAGV 
+ hbb_speto  LSELHCDKLH VDPENFKLLG NMIVIVMAHH LGKDFTPEAQ AAFQKVVAGV 
+ hbb_equhe  LSELHCDKLH VDPENFRLLG NVLVVVLARH FGKDFTPELQ ASYQKVVAGV 
+ hbb_sunmu  LSELHCDKLH VDPENFRLLG NVLVVVLASK FGKEFTPPVQ AAFQKVVAGV 
+ hbb_calar  LSELHCDKLH VDPENFRLLG NVLVCVLAHH FGKEFTPVVQ AAYQKVVAGV 
+ hbb_mansp  LSELHCDKLH VDPENFKLLG NVLVCVLAHH FGKEFTPQVQ AAYQKVVAGV 
+ hbb_ursma  LSELHCDKLH VDPENFKLLG NVLVCVLAHH FGKEFTPQVQ AAYQKVVAGV 
+ hbb_rabit  LSELHCDKLH VDPENFRLLG NVLVIVLSHH FGKEFTPQVQ AAYQKVVAGV 
+ hbb_tupgl  LSELHCDKLH VDPENFRLLG NVLVRVLACN FGPEFTPQVQ AAFQKVVAGV 
+ hbb_triin  LSELHCDKLH VDPENFRLLG NVLVCVLARH FGKEFSPEAQ AAYQKVVAGV 
+ hbb_colli  LSELHCDKLH VDPENFRLLG DILVIILAAH FGKDFTPECQ AAWQKLVRVV 
+ hbb_larri  LSELHCDKLH VDPENFRLLG DILIIVLAAH FAKDFTPDSQ AAWQKLVRVV 
+hbb1_varex  LSELHCDKLH VDPTNFKLLG NVLVIVLADH HGKEFTPAHH AAYQKLVNVV 
+hbb2_xentr  LSKSHAEDLH VDPENFKRLA DVLVIVLAAK LGSAFTPQVQ AVWEKLNATL 
+hbbl_ranca  LSEEHANELH VDPENFRRLG EVLIVVLGAK LGKAFSPQVQ HVWEKFIAVL 
+hbb2_tricr  LSVTHSLKFY VDPENFKLFS GIVIVCLALT LQTDFSCHKQ LAFEKLMKGV 
+glb2_mormr  LSVKHAQSFY VDRQYFKVLA GII....... ..ADTTAPGD AGFEKLMSMI 
+glbz_chith  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbf1_ureca  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+
+            151                                                200
+  lgb1_pea  ATAIKKAMKT A~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+lgb1_vicfa  ATAIKAA~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_escgi  RKDIAAKYKE LGFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_horse  RNDIAAKYKE LGFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_progu  RNDIAAKYKE LGFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_saisc  RNDMAAKYKE LGFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_lycpi  RNDIAAKYKE LGFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_mouse  RNDIAAKYKE LGFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_musan  CSDIEKEYKA ANFQG~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ailme  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_prolo  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_pagla  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_macfa  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_macsi  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ponpy  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba2_galcr  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_mesau  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba2_bosmu  STVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_erieu  ATVLTSKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_frapo  GNVLTAKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_phaco  GTVLTAKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_trioc  GNVLSAKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ansse  ATVLTAKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_colli  GTVLTAKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbad_chlme  AAVLAEKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbad_pasmo  ASVLAEKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbaz_horse  SSVLTEKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba4_salir  ALALAEKYR~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_ornan  AHALGHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_tacac  SHALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbe_ponpy  AIALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_speci  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_speto  ANALSHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_equhe  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_sunmu  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_calar  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_mansp  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_ursma  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_rabit  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_tupgl  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_triin  ANALAHKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_colli  AHALARKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_larri  AHALARKYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb1_varex  SHSLARRYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb2_xentr  VAALSHGYF~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbbl_ranca  VDALSHSYH~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb2_tricr  SHALGHGY~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+glb2_mormr  CILLSSAY~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+glbz_chith  ~~~~~MKFII LALCVAAASA LSGDQIGLVQ STYGKVKGDS VGILYAVFKA 
+hbf1_ureca  ~~~~~~~~~~ ~~~~GLTTAQ IKAIQDHWFL NIKGCLQAAA DSIFFKYLTA 
+
+            201                                                250
+  lgb1_pea  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+lgb1_vicfa  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_escgi  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_horse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_progu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_saisc  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_lycpi  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_mouse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_musan  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ailme  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_prolo  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_pagla  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_macfa  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_macsi  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ponpy  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba2_galcr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_mesau  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba2_bosmu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_erieu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_frapo  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_phaco  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_trioc  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ansse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_colli  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbad_chlme  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbad_pasmo  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbaz_horse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba4_salir  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_ornan  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_tacac  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbe_ponpy  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_speci  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_speto  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_equhe  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_sunmu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_calar  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_mansp  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_ursma  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_rabit  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_tupgl  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_triin  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_colli  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_larri  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb1_varex  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb2_xentr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbbl_ranca  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb2_tricr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+glb2_mormr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+glbz_chith  DPTIQAAFPQ FVGKDLDAIK GGAEFSTHAG RIVGFLGGVI DDL.PNIGKH 
+hbf1_ureca  YPGDLAFFHK FSSVPLYGLR SNPAYKAQTL TVINYLDKVV DALGGNAGAL 
+
+            251                                                300
+  lgb1_pea  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+lgb1_vicfa  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_escgi  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_horse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_progu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_saisc  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_lycpi  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_mouse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ myg_musan  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ailme  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_prolo  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_pagla  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_macfa  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_macsi  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ponpy  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba2_galcr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_mesau  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba2_bosmu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_erieu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_frapo  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_phaco  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_trioc  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_ansse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hba_colli  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbad_chlme  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbad_pasmo  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbaz_horse  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hba4_salir  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_ornan  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_tacac  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbe_ponpy  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_speci  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_speto  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_equhe  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_sunmu  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_calar  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_mansp  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_ursma  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_rabit  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_tupgl  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_triin  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_colli  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+ hbb_larri  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb1_varex  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb2_xentr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbbl_ranca  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+hbb2_tricr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+glb2_mormr  ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ ~~~~~~~~~~ 
+glbz_chith  VDALVATHKP RGVTHAQFNN FRAAFIAYLK GHVDYTAAVE AAWGATFDAF 
+hbf1_ureca  MKAKVPSHDA MGITPKHFGQ LLKLVGGVFQ EEFSADPTTV AAWGDAAGVL 
+
+            301  
+  lgb1_pea  ~~~~~~~~
+lgb1_vicfa  ~~~~~~~~
+ myg_escgi  ~~~~~~~~
+ myg_horse  ~~~~~~~~
+ myg_progu  ~~~~~~~~
+ myg_saisc  ~~~~~~~~
+ myg_lycpi  ~~~~~~~~
+ myg_mouse  ~~~~~~~~
+ myg_musan  ~~~~~~~~
+ hba_ailme  ~~~~~~~~
+ hba_prolo  ~~~~~~~~
+ hba_pagla  ~~~~~~~~
+ hba_macfa  ~~~~~~~~
+ hba_macsi  ~~~~~~~~
+ hba_ponpy  ~~~~~~~~
+hba2_galcr  ~~~~~~~~
+ hba_mesau  ~~~~~~~~
+hba2_bosmu  ~~~~~~~~
+ hba_erieu  ~~~~~~~~
+ hba_frapo  ~~~~~~~~
+ hba_phaco  ~~~~~~~~
+ hba_trioc  ~~~~~~~~
+ hba_ansse  ~~~~~~~~
+ hba_colli  ~~~~~~~~
+hbad_chlme  ~~~~~~~~
+hbad_pasmo  ~~~~~~~~
+hbaz_horse  ~~~~~~~~
+hba4_salir  ~~~~~~~~
+ hbb_ornan  ~~~~~~~~
+ hbb_tacac  ~~~~~~~~
+ hbe_ponpy  ~~~~~~~~
+ hbb_speci  ~~~~~~~~
+ hbb_speto  ~~~~~~~~
+ hbb_equhe  ~~~~~~~~
+ hbb_sunmu  ~~~~~~~~
+ hbb_calar  ~~~~~~~~
+ hbb_mansp  ~~~~~~~~
+ hbb_ursma  ~~~~~~~~
+ hbb_rabit  ~~~~~~~~
+ hbb_tupgl  ~~~~~~~~
+ hbb_triin  ~~~~~~~~
+ hbb_colli  ~~~~~~~~
+ hbb_larri  ~~~~~~~~
+hbb1_varex  ~~~~~~~~
+hbb2_xentr  ~~~~~~~~
+hbbl_ranca  ~~~~~~~~
+hbb2_tricr  ~~~~~~~~
+glb2_mormr  ~~~~~~~~
+glbz_chith  FGAVFAKM
+hbf1_ureca  VAAMK~~~
+
