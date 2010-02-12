@@ -1,4 +1,0 @@
-
-
-- afetch --index was segfaulting on Pfam 6.6 flatfiles
-  [M. Tang, UTSW]
