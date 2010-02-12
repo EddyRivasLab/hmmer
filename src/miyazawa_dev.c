@@ -1,5 +1,8 @@
 /* miyazawa: partition function on exponential scores
  * 
+ * In this file, I remove all I don't need for a simple
+ * implementation of Miyazawa's partition function
+ *
  * SC, Fri Feb 12 11:47:01 EST 2010 [Janelia] [Come And Find Me]
  * SVN $Id: phmmer.c 3143 2010-01-30 15:59:57Z eddys $
  */
@@ -497,9 +500,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
-
-    	  /* PIPELINE HERE IS CONFUSING ME, I DON'T REALLY NEEDED */
-
 	  info[i].th  = p7_tophits_Create(); 
 	  info[i].om  = p7_oprofile_Clone(om);
 	  info[i].pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
