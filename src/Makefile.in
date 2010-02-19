@@ -13,7 +13,7 @@ SIMDFLAGS= @SIMD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
 DEFS     = @DEFS@
-LIBS     = @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+LIBS     = @GROUPHMMERLIBS@ -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 
 AR       = @AR@ rcv 
 RANLIB   = @RANLIB@
@@ -32,7 +32,6 @@ MYINCDIRS = -I${ESLDIR} \
 	    -I. \
 	    -I${srcdir}
 
-LIBS  += @GROUPHMMERLIBS@ -leasel
 LIBDEP = ./libhmmer.a @HMMERIMPLLIB@ ${ESLDIR}/libeasel.a
 
 PROGS = hmmalign\

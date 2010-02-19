@@ -13,7 +13,7 @@ SIMDFLAGS      = @SIMD_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
-LIBS           = @LIBS@ -lm
+LIBS           = @GROUPHMMERLIBS@ -leasel @LIBS@ -lm
 AR             = @AR@ rcv
 RANLIB         = @RANLIB@
 
@@ -28,7 +28,6 @@ MYINCDIRS      = -I${ESLDIR} \
 		 -I${srcdir} \
 		 -I${top_srcdir}/src
 
-LIBS  += @GROUPHMMERLIBS@ -leasel
 LIBDEP = ../libhmmer.a ./libhmmerimpl.a ${ESLDIR}/libeasel.a
 
 OBJS =  decoding.o\

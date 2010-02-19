@@ -210,6 +210,19 @@ fi
 AC_ARG_ENABLE(mpi,[AS_HELP_STRING([--enable-mpi],[enable MPI parallelization])], enable_mpi=$enableval, enable_mpi=no)
 
 
+# --enable-xlc-arch  Set the code generation for a particular architecture
+#
+# The xlc compiler on AIX seems to need the -qarch flag to be set for a processor
+# that is VMX enabled.  Otherwise a warning is issued that states the -qenablevmx
+# and -qaltivec flags are ignored.
+AX_COMPILER_VENDOR
+if test "${ax_cv_c_compiler_vendor}" = "ibm"; then
+  AC_ARG_WITH(xlc-arch, 
+              [AC_HELP_STRING([--with-xlc-arch=<arch>], [specify architecture <arch> for xlc -qarch])],
+              XLC_ARCH=$withval, 
+              XLC_ARCH=no)
+fi
+
 # --enable-threads      Enable POSIX multithreading
 #
 # Uses ACX_PTHREAD macro from the GNU macro archive.
@@ -358,7 +371,17 @@ if test "$impl_choice" = "vmx"; then
 	        [AX_CHECK_COMPILER_FLAGS(-fvec, [SIMD_CFLAGS="-fvec"],
 		   [AC_MSG_ERROR([Need a version of gcc with -maltivec])])])])
       elif test "${ax_cv_c_compiler_vendor}" = "ibm"; then
-        AX_CHECK_COMPILER_FLAGS(-qaltivec, [SIMD_CFLAGS="-qaltivec"],[])
+        SIMD_CFLAGS=""
+        # if debugging is enabled and the xlc_arch flag is set, we need to
+        # set the qarch flag here.  if debugging is NOT enabled, the arch
+        # flag is set in AX_CC_MAXOPT.
+        if test "x$XLC_ARCH" != x; then
+           if test "x$enable_debugging" = xyes; then
+              AX_CHECK_COMPILER_FLAGS(-qarch=$XLC_ARCH, [SIMD_CFLAGS="-qarch=$XLC_ARCH"],[])
+           fi
+        fi
+        AX_CHECK_COMPILER_FLAGS(-qenablevmx, [SIMD_CFLAGS="$SIMD_CFLAGS -qenablevmx"],[])
+        AX_CHECK_COMPILER_FLAGS(-qaltivec, [SIMD_CFLAGS="$SIMD_CFLAGS -qaltivec"],[])
       else
         AX_CHECK_COMPILER_FLAGS(-faltivec, [SIMD_CFLAGS="-faltivec"],[])
       fi
@@ -374,9 +397,9 @@ if test "$impl_choice" = "sse"; then
   AC_LANG(C)
   AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],
                                      [[__m128 a;
-__m128i b;
-b = _mm_castps_si128(a);
-a = _mm_castsi128_ps(b);]])],
+                                       __m128i b;
+                                       b = _mm_castps_si128(a);
+                                       a = _mm_castsi128_ps(b);]])],
                     [AC_DEFINE([HAVE_SSE2_CAST])
                      ssecast=yes])
   AC_MSG_RESULT([$ssecast])
@@ -411,6 +434,38 @@ if test "$impl_choice" = "sse"; then
   CFLAGS="$sre_save_cflags"
 fi
 
+if test "$impl_choice" = "vmx"; then
+  AC_MSG_CHECKING([whether Altivec/VMX is supported])
+  sre_save_cflags="$CFLAGS"
+  CFLAGS="$CFLAGS $SIMD_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <altivec.h>]],
+ 				 [[vector unsigned char zerov;
+                                   vector unsigned char onev;
+                                   zerov = vec_splat_u8(0);
+                                   onev = vec_splat_u8(1);
+                                   onev = vec_adds(onev, zerov);
+				 ]])],
+	[ AC_MSG_RESULT([yes])],
+	[ AC_MSG_RESULT([no; reverting to dummy implementation])
+	  impl_choice=dummy
+          if test "${ax_cv_c_compiler_vendor}" = "ibm"; then
+             echo "******************************************************"
+             echo "*  You seem to have the IBM  C compiler.  If your    *"
+             echo "*  processor supports vector instructions it is      *"
+             echo "*  possible specifying an architecture would enable  *"
+             echo "*  vector support, i.e.                              *"
+             echo "*                                                    *"
+             echo "*    --with-xlc-arch=XXX                             *"
+             echo "*                                                    *"
+             echo "*  where XXX is pwr6, auto or whatever kind of CPU   *"
+             echo "*  you have.                                         *"
+             echo "******************************************************"
+          fi
+ 	]
+  )
+  CFLAGS="$sre_save_cflags"
+fi
+
 # For x86 processors check if the flush to zero macro is available
 # in order to avoid the performance penalty dealing with sub-normal
 # values in the floating point calculations.
@@ -429,20 +484,12 @@ if test "$impl_choice" = "sse"; then
 fi
 
 # Now, we can enable the appropriate optimized implementation.
-#
-# We need to create a symlink "impl" to the appropriate directory,
-# because the testsuite.sqc isn't smart enough to handle variable
-# directories; it needs to be able to locate each test program 
-# in a fixed srcdir/builddir tree location. I'm a little concerned
-# that "ln -s" isn't portable. [SRE 3 Feb 10].
-#
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
       AC_DEFINE([HAVE_SSE2])
       AC_DEFINE([p7_IMPL_SSE])
       AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
       IMPL_CHOICE="sse"
-      (cd src; ln -s impl_sse impl)
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
@@ -450,13 +497,12 @@ vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
       AC_DEFINE([p7_IMPL_VMX])
       AC_SUBST([HMMERIMPLLIB], ["impl_vmx/libhmmerimpl.a"])
       IMPL_CHOICE="vmx"
-      (cd src; ln -s impl_vmx impl)
       ;;
 
 *)    AC_MSG_NOTICE([Activating "dummy" implementation])
       AC_DEFINE([p7_IMPL_DUMMY])
       AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
-      (cd src; ln -s impl_dummy impl)
+      IMPL_CHOICE="dummy"
       ;;
 esac
 AC_SUBST(IMPL_CHOICE)
@@ -558,6 +604,10 @@ AC_CONFIG_FILES([easel/miniapps/Makefile])
 AC_CONFIG_FILES([easel/testsuite/Makefile])
 AC_CONFIG_FILES([easel/Makefile])
 
+# the following incantation establishes a symlink of
+# src/impl_{whatever} to src/impl in the *build* directory.
+# Testsuite sqc tests rely on it.
+AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
 ################################################################
 # 13. AC_OUTPUT
