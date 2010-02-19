@@ -534,7 +534,7 @@ AC_SYS_LARGEFILE
 # Config subdirs and files (except main Makefile, which we defer)
 #
 if test -d release-notes; then
-  AC_CONFIG_FILES(release-notes/LICENSE.csh)
+  AC_CONFIG_FILES(release-notes/LICENSE.sh)
 fi
 if test -d documentation/userguide; then  
   AC_CONFIG_FILES([documentation/userguide/Makefile])
@@ -576,7 +576,8 @@ HMMER configuration:
 "
 
 if test "$impl_choice" = "dummy"; then
-  AC_MSG_WARN([It appears your platform will not fully support H3. The "dummy" DP implementation is very slow.])
+  AC_MSG_WARN([It appears your platform will not fully support H3.])
+  AC_MSG_WARN([The "dummy" DP implementation is very slow.])
 fi
 
 
