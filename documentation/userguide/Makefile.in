@@ -58,11 +58,11 @@ manpages:
 
 clean:
 	-rm -f main.aux main.bbl main.blg main.log main.toc *~
-	-rm Userguide.pdf
+	-rm -f Userguide.pdf
 
 distclean:
 	-rm -f main.aux main.bbl main.blg main.log main.toc *~
-	-rm Userguide.pdf
+	-rm -f Userguide.pdf
 	-rm -f titlepage.tex copyright.tex manpages.tex
 	-rm -f Makefile
 
