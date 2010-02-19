@@ -1163,15 +1163,14 @@ extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
-
-
-
-
-
 /* seqmodel.c */
 extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 		       ESL_DMATRIX *P, float *f, double popen, double pextend,
 		       P7_HMM **ret_hmm);
+
+/* generic_pfunction.c */
+extern int pfunction(ESL_DSQ *qsq, int N, ESL_DSQ *dbsq, int M, double popen,
+				double pextend, double lambda, ESL_SCOREMATRIX *SMX, double **ret_zscore);
 
 #endif /*P7_HMMERH_INCLUDED*/
 

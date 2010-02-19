@@ -1,14 +1,14 @@
 /* miyazawa: partition function on exponential scores
  * 
- * In this file, I remove all I don't need for a simple
- * implementation of Miyazawa's partition function
+ * In this file, I remove all I don't need from phmmer.c for
+ * a simple implementation of Miyazawa's partition function
  *
- * SC, Fri Feb 12 11:47:01 EST 2010 [Janelia] [Come And Find Me]
+ * SC, Fri Feb 12 11:47:01 EST 2010 [Janelia] [Josh Ritter, Come And Find Me]
  * SVN $Id: phmmer.c 3143 2010-01-30 15:59:57Z eddys $
  */
 
 /*
- * gcc -o miyazawa_dev miyazawa_dev.c -g -W -Wall -Wstrict-prototypes -Wconversion -Wshadow -Wcast-qual -Wwrite-strings -ansi -pedantic -std=c99 -O2 -I. -L. -lhmmer -I./impl -L./impl -lhmmerimpl -I../easel -L../easel -leasel -lm
+ * gcc -o miyazawa_dev miyazawa_dev.c generic_pfunction.c -g -W -Wall -Wstrict-prototypes -Wconversion -Wshadow -Wcast-qual -Wwrite-strings -ansi -pedantic -std=c99 -O2 -I. -L. -lhmmer -I./impl -L./impl -lhmmerimpl -I../easel -L../easel -leasel -lm
  *
  * Note the linking order of the libraries (they call each other from left to right)
  *
@@ -30,6 +30,13 @@
 
 #include "hmmer.h"
 
+typedef struct {
+	double popen;
+	double pextend;
+	double lambda;
+	char   *SMX;    /* score matrix */
+} WORKER_INFO;
+
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show brief help on version and usage",                         1 },
@@ -40,7 +47,7 @@ static ESL_OPTIONS options[] = {
 /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "substitution score matrix [default: BLOSUM62]",                3 },
+//  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "substitution score matrix [default: BLOSUM62]",                3 },
   { "--lambda",     eslARG_REAL, "0.6931", NULL, NULL, NULL,  NULL,  NULL,                 "base of the score matrix [default: BLOSUM62]",                  3 }, /* WHAT IS THE BASE OF BLOSUM62, BITS OR HALF-BITS? */
   /* other options */
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
@@ -55,7 +62,7 @@ static char banner[] = "partition function";
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
  * We use it to provide configuration options to serial_master. serial_loop gets the
- * WORKER_INFO object. Not sure I need to do it this way.
+ * WORKER_INFO object.
  *
  * This structure is passed to routines within main.c, as a means of semi-encapsulation
  * of shared data amongst different parallel processes (threads or MPI processes).
@@ -70,7 +77,7 @@ struct cfg_s {
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (ESL_ALPHABET *abc, double popen, double pextend, double lambda, char* mxfile, ESL_SQFILE *dbfp);        /* WORKER_INFO SHOULD HAVE SEQUENCE AND SCORE SYSTEM */
+static int  serial_loop  (ESL_ALPHABET *abc, ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp);        /* WORKER_INFO SHOULD HAVE SEQUENCE AND SCORE SYSTEM */
 
 /* process_commandline()
  * Take argc, argv, and options; parse the command line;
@@ -100,18 +107,6 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       puts("\noptions controlling scoring system:");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
-      puts("\noptions controlling reporting thresholds:");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
-
-      puts("\noptions controlling inclusion (significance) thresholds:");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
-
-      puts("\noptions controlling acceleration heuristics:");
-      esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
-
-      puts("\noptions controlling E value calibration:");
-      esl_opt_DisplayHelp(stdout, go, 11, 2, 80); 
-
       puts("\nother expert options:");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
@@ -132,12 +127,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
   exit(1);  
 }
 
-/* HEADER */
-
-/* We call in serial_master just before starting the computation */
-
-/* Only prints options set to a non-default value */
-
+/* HEADER  (prints options set to a non-default value) */
 static int
 output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
 {
@@ -150,8 +140,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"));  
   if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal  (go, "--popen"));
   if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal  (go, "--pextend"));
-  if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
-  if (esl_opt_IsUsed(go, "--lambda"))    fprintf(ofp, "# lambda:              %f\n",             esl_opt_GetString(go, "--lambda"));
+ // if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
+  if (esl_opt_IsUsed(go, "--lambda"))    fprintf(ofp, "# lambda:              %f\n",             esl_opt_GetReal(go, "--lambda"));
   if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
 
@@ -184,29 +174,25 @@ main(int argc, char **argv)
   cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
 
   /* PROCESS COMMAND-LINE  */
-
   process_commandline(argc, argv, &go, &cfg.qfile, &cfg.dbfile);    
 
   /* STATUS IS SERIAL */
-
   status = serial_master(go, &cfg);
 
+  /* CLEANUP */
   esl_getopts_Destroy(go);
 
   return status;
 }
 
 /* serial_master()
- * The serial version of hmmsearch.
- * For each query HMM in <hmmfile> search the database for hits.
- * 
  * A master can only return if it's successful. All errors are handled immediately and fatally with p7_Fail().
  */
 static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   FILE            *ofp      = stdout;             /* output file for results (default stdout)         */
-  int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile (it will autodetect the format unless it is asserted */
+  int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
   ESL_SQFILE      *qfp      = NULL;		 		  /* open qfile                                       */
   ESL_SQ          *qsq      = NULL;               /* query sequence                                   */
   int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
@@ -214,25 +200,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                                */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                                       */
   int              nquery   = 0;
-  int              seed;
-  int              textw;                        /* set max width of ASCII text output lines */
-  int              status   = eslOK;
-  int              qstatus  = eslOK;             /* WHAT IS Q? */
-  int              sstatus  = eslOK;             /* WHAT IS S? */
-  int              i;
+  int              textw;                        /* set max width of ASCII text output lines   */
+  int              status   = eslOK;             /* general status of different function calls */
+  int              qstatus  = eslOK;             /* status of the query being read             */
+  int              sstatus  = eslOK;             /* status of the target being read            */
 
-  double           popen;
-  double           pextend;
-  double           lambda;
-  char             *mxfile;
+  ESL_SCOREMATRIX *SMX = NULL;
 
-  int              ncpus    = 0;
+  WORKER_INFO     *info     = NULL;
 
-  int              infocnt  = 0;                 /* WHAT IS THIS? */
- // WORKER_INFO     *info     = NULL;
-
-  /* Initializations */
-  abc     = esl_alphabet_Create(eslAMINO);      /* returns a pointer to a ESL_ALPHABET object */
+  /* INITIALIZATIONS */
+  abc     = esl_alphabet_Create(eslAMINO);      /* The resulting ESL_ALPHABET object includes input map for digitalization */
   w       = esl_stopwatch_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
@@ -242,35 +220,33 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* INPUT FORMATS */
   /* Query */
-
   if (esl_opt_IsOn(go, "--qformat")) {
-    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat")); /* Here we autodetect the format if no option --qformat is given */
     if (qformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
   /* Target */
-
   if (esl_opt_IsOn(go, "--tformat")) {
     dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
-    if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat")); /* target format */
+    if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
   /* SCORE SYSTEM */
+  ESL_ALLOC(info, sizeof(*info));
 
-  popen = esl_opt_GetReal(go, "--popen");
-  pextend = esl_opt_GetReal(go, "--pextend");
-  lambda = esl_opt_GetReal(go, "--lambda");
-  mxfile = esl_opt_GetString(go, "--mxfile");
+  info->popen = esl_opt_GetReal(go, "--popen");
+  info->pextend = esl_opt_GetReal(go, "--pextend");
+  info->lambda = esl_opt_GetReal(go, "--lambda");    /* Where should I get this lambda from? BLOSUM62 matrix file or calculated from matrix with esl_sco_Probify? */
+//info->mxfile = esl_opt_GetString(go, "--mxfile");
+
+  /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
+  SMX = esl_scorematrix_Create(abc);
+  esl_scorematrix_SetBLOSUM62(SMX);
 
   /* OPEN OUTPUT FILES */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); } 
-  /*
-  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"),          "w")) == NULL)  esl_fatal("Failed to open alignment output file %s for writing\n",       esl_opt_GetString(go, "-A")); } 
-  if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
-  if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
-   */
 
-  /* OPEN TARGET FILE (autodetecting format unless given) */ /* contrary to documentation, if I open digital, I need to read digital. Otherwise, it compiles but get no sequence */
+  /* OPEN TARGET FILE */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
   else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
@@ -287,21 +263,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* CREATE DIGITAL QUERY SEQUENCE */
   qsq  = esl_sq_CreateDigital(abc);
 
-//  infocnt = (ncpus == 0) ? 1 : ncpus;        /* not sure what this is doing here! */
-//  ESL_ALLOC(info, sizeof(*info) * infocnt);  /* not sure what this is doing here! */
-
   /* HEADER (INPUT FILES AND OTHER OPTIONS) */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
-
-  /*
-  for (i = 0; i < infocnt; ++i)
-    {
-      info[i].pli   = NULL;
-      info[i].th    = NULL;
-      info[i].om    = NULL;
-      info[i].bg    = p7_bg_Create(abc);
-    }
-*/
 
   /* OUTER LOOP OVER SEQUENCE QUERIES */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK) /* qsq is set for digital, but I am not sure at which point the conversion is made */
@@ -323,19 +286,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
-      /*
-      for (i = 0; i < infocnt; ++i)
-	{*/
-	  /* Create processing pipeline and hit list */
-	 /* info[i].th  = p7_tophits_Create();
-	  info[i].om  = p7_oprofile_Clone(om);
-	  info[i].pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); */ /* L_hint = 100 is just a dummy for now */
-	  /*p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
-	}*/
-
       /* INNER LOOP OVER SEQUENCE TARGETS */
-
-      sstatus = serial_loop(abc, popen, pextend, lambda, mxfile, dbfp);
+      sstatus = serial_loop(abc, qsq, info, dbfp);
 
       switch(sstatus)
 	{
@@ -351,37 +303,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		    sstatus, dbfp->filename);
 	}
 
-
-      /* merge the results of the search results */
-/*      for (i = 1; i < infocnt; ++i)
-	{
-	  p7_tophits_Merge(info[0].th, info[i].th);
-	  p7_pipeline_Merge(info[0].pli, info[i].pli);
-
-	  p7_pipeline_Destroy(info[i].pli);
-	  p7_tophits_Destroy(info[i].th);
-	  p7_oprofile_Destroy(info[i].om);
-	}
-*/
-      /* Print the results.  */
-/*      p7_tophits_Sort(info->th);
-      p7_tophits_Threshold(info->th, info->pli);
-      p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
-      p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
-  
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
-*/
 	  /* STOP WATCH */
       esl_stopwatch_Stop(w);
-/*      p7_pli_Statistics(ofp, info->pli, w); */
+
       fprintf(ofp, "//\n");
 
-/*      p7_tophits_Destroy(info->th);
-      p7_pipeline_Destroy(info->pli);
-      p7_oprofile_Destroy(info->om);
-      p7_oprofile_Destroy(om);
-*/
       esl_sq_Reuse(qsq);
     } /* end outer loop over query sequences */
 
@@ -390,18 +316,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
-/*  for (i = 0; i < infocnt; ++i)
-    {
-      p7_bg_Destroy(info[i].bg);
-    }
-*/
-
-//  free(info);
+  /* CLEAN UP */
+  free(info);    /* info is dangling here, should I set it to NULL? */
 
   esl_sqfile_Close(dbfp);
   esl_sqfile_Close(qfp);
   esl_stopwatch_Destroy(w);
   esl_sq_Destroy(qsq);
+  esl_scorematrix_Destroy(SMX);
   esl_alphabet_Destroy(abc);
 
   if (ofp      != stdout) fclose(ofp);
@@ -412,43 +334,28 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 }
 
 /************************************/
-/* OUTER LOOP OVER SEQUENCE TARGETS */
+/* INNER LOOP OVER SEQUENCE TARGETS */
 /************************************/
 
 static int
-serial_loop(ESL_ALPHABET *abc, double popen, double pextend, double lambda, char *mxfile, ESL_SQFILE *dbfp)
+serial_loop(ESL_ALPHABET *abc,  ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
   int      sstatus;
-  ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
+  ESL_SQ   *dbsq     = NULL;   /* one target sequence object (digital)  */
+  double *zscore;
 
-  dbsq = esl_sq_CreateDigital(abc);  /* Going digital here! deal with it! */
+  dbsq = esl_sq_CreateDigital(abc);
 
-  printf("popen: %f\n", popen);
-  printf("pextend: %f\n", pextend);
-  printf("lambda: %f\n", lambda);
-  printf("mxfile: %s\n", mxfile);
-
-  /* Main loop: */
+  /* INNER LOOP OVER SEQUENCE TARGETS */
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
 
-	  /*
-	   * HERE I WANT THE ZCORE COMPUTATION -need to call a zcore() function-
-	   *
-	   * zscore()
-	   *
-	   */
-
-	  /*
-      p7_pli_NewSeq(info->pli, dbsq);
-      p7_bg_SetLength(info->bg, dbsq->n);
-      p7_oprofile_ReconfigLength(info->om, dbsq->n);
-      
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  pfunction(qsq->dsq, qsq->n, dbsq->dsq, dbsq->n, info->popen, info->pextend, info->lambda, info->SMX, &zscore); /* CHECK RETURN STATUS!!! */
 	  
+	  /* Do something with the zscore (like printing it!) */
+
       esl_sq_Reuse(dbsq);
-      p7_pipeline_Reuse(info->pli);
-      */
+
     }
 
   esl_sq_Destroy(dbsq);
