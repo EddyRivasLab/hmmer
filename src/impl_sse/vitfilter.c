@@ -176,7 +176,10 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       xE = esl_sse_hmax_epi16(xEv);
-      if (xE >= 32767) { *ret_sc = eslINFINITY; return eslERANGE; }	/* immediately detect overflow */
+      if (xE >= 32767) {
+    	  xE += 10000;
+    	  *ret_sc = eslINFINITY; return eslERANGE;
+      }	/* immediately detect overflow */
       xN = xN + om->xw[p7O_N][p7O_LOOP];
       xC = ESL_MAX(xC + om->xw[p7O_C][p7O_LOOP], xE + om->xw[p7O_E][p7O_MOVE]);
       xJ = ESL_MAX(xJ + om->xw[p7O_J][p7O_LOOP], xE + om->xw[p7O_E][p7O_LOOP]);

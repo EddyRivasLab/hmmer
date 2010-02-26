@@ -35,6 +35,59 @@
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
 
+/* Function:  extract_16()
+ * Synopsis:  Return the i'th 16-bit int (i in 0-7)
+ * Incept:    TW, Mon Feb  1 21:48:37 EST 2010 [Tucson, Don's house]
+ *
+ * This is necessary because _mm_extract_epi16 takes only constant ints
+ * for the 2nd arg
+ */
+uint16_t extract_16 (__m128i vec, int i) {
+	switch (i) {
+		case 0 : return _mm_extract_epi16(vec, 0); break;
+		case 1 : return _mm_extract_epi16(vec, 1); break;
+		case 2 : return _mm_extract_epi16(vec, 2); break;
+		case 3 : return _mm_extract_epi16(vec, 3); break;
+		case 4 : return _mm_extract_epi16(vec, 4); break;
+		case 5 : return _mm_extract_epi16(vec, 5); break;
+		case 6 : return _mm_extract_epi16(vec, 6); break;
+		case 7 : return _mm_extract_epi16(vec, 7); break;
+		default : return -1; break;
+	}
+}
+
+
+void tw_unpack_print (__m128i * arr, int Q, int M, int shift, int mult) {
+	  int      q,z,k;
+	  union { __m128i v; uint8_t i[16]; } tmp;
+	  uint8_t *v  = NULL;		/* array of unstriped scores  */
+	  int      status;
+
+
+	  ESL_ALLOC(v, sizeof(unsigned char) * ((Q*16)+1));
+	  v[0] = 0;
+
+	/* Unpack and unstripe, then print M's. */
+	  for (q = 0; q < Q; q++) {
+	    tmp.v = arr[q];
+	    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
+	  }
+	  for (k = 0; k <= M; k++)
+		  fprintf(stdout, "%3d ", mult * (v[k]-shift));
+
+	  fprintf(stdout, "\n" );
+
+	  ERROR:
+	    free(v);
+	    return;
+
+}
+
+
+/*****************************************************************
+ * 1. The p7_MSVFilter() DP implementation.
+ *****************************************************************/
+
 /* Function:  p7_MSVFilter()
  * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  * Incept:    SRE, Wed Dec 26 15:12:25 2007 [Janelia]
@@ -120,7 +173,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
 #if p7_DEBUGGING
   if (ox->debugging)
-    { 
+    {
       uint8_t xB;
       xB = _mm_extract_epi16(xBv, 0);
       xJ = _mm_extract_epi16(xJv, 0);
@@ -131,25 +184,25 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   for (i = 1; i <= L; i++)
     {
       rsc = om->rbv[dsq[i]];
-      xEv = _mm_setzero_si128();      
+      xEv = _mm_setzero_si128();
       xBv = _mm_subs_epu8(xBv, tbmv);
 
-      /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
+      /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
-      mpv = _mm_slli_si128(dp[Q-1], 1);   
+      mpv = _mm_slli_si128(dp[Q-1], 1);
       for (q = 0; q < Q; q++)
 	{
 	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
 	  sv   = _mm_max_epu8(mpv, xBv);
-	  sv   = _mm_adds_epu8(sv, biasv);      
+	  sv   = _mm_adds_epu8(sv, biasv);
 	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
-	  xEv  = _mm_max_epu8(xEv, sv);	
+	  xEv  = _mm_max_epu8(xEv, sv);
 
 	  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
 	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
-	}	  
+	}
 
       /* test for the overflow condition */
       tempv = _mm_adds_epu8(xEv, biasv);
@@ -172,19 +225,20 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xEv = _mm_max_epu8(xEv, tempv);
       xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
 
-      /* immediately detect overflow */
+
+      /* detect if pthresh has been reached */
       if (cmp != 0x0000)
-	{ 
-	  *ret_sc = eslINFINITY; 
-	  return eslERANGE; 
+	{
+	  *ret_sc = eslINFINITY;
+	  return eslERANGE;
 	}
 
       xEv = _mm_subs_epu8(xEv, tecv);
       xJv = _mm_max_epu8(xJv,xEv);
-      
+
       xBv = _mm_max_epu8(basev, xJv);
       xBv = _mm_subs_epu8(xBv, tjbv);
-	  
+
 #if p7_DEBUGGING
       if (ox->debugging)
 	{
@@ -192,7 +246,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 	  xB = _mm_extract_epi16(xBv, 0);
 	  xE = _mm_extract_epi16(xEv, 0);
 	  xJ = _mm_extract_epi16(xJv, 0);
-	  p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);   
+	  p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);
 	}
 #endif
     } /* end loop over sequence residues 1..L */
@@ -207,6 +261,361 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   return eslOK;
 }
 /*------------------ end, p7_MSVFilter() ------------------------*/
+
+
+
+
+/* Function:  p7_SSVFilter_longseq()
+ * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
+ * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
+ *
+ * Purpose:   Calculates an approximation of the SSV score for a subsequence
+ *            <dsq> of length <L> residues, using optimized profile <om>,
+ *            and a preallocated one-row DP matrix <ox>, and captures the
+ *            positions at which such subsequences exceed the score
+ *            required to be significant in the eyes of the calling function
+ *            (usually p=0.05)
+ *
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            pthresh -
+ *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
+ *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
+ *
+ * Note:      We misuse the matrix <ox> here, using only a third of the
+ *            first dp row, accessing it as <dp[0..Q-1]> rather than
+ *            in triplets via <{MDI}MX(q)> macros, since we only need
+ *            to store M state values. We know that if <ox> was big
+ *            enough for normal DP calculations, it must be big enough
+ *            to hold the MSVFilter calculation.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_SSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int** ends)
+{
+
+  register __m128i mpv;            /* previous row values                                       */
+  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m128i biasv;	   /* emission bias in a vector                                 */
+  uint8_t  xJ;                     /* special states' scores                                    */
+  int i;			   /* counter over sequence positions 1..L                      */
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
+
+  __m128i tecv;                    /* vector for E->C  cost                                     */
+  __m128i tjbmv;                    /* vector for J->B move cost + B->M move costs              */
+  __m128i basev;                   /* offset for scores                                         */
+  __m128i pthreshv;                /* pushes value to saturation if it's above pthresh  */
+  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i tempv;                   /* work vector                                               */
+
+  int cmp;
+  int      status;
+
+  int hit_arr_size = 10; // usually won't get more than 10 hits per sequence, so this should be plenty ... but check later just in case
+  int* hits;
+  ESL_ALLOC(hits, hit_arr_size * sizeof(int));
+
+  int hit_cnt = 0;
+
+  // convert pthresh to an int that's necessary to meet threshold.
+  // see notes: Wed Feb 24 13:50:29 EST 2010
+  pthresh += 3.0;
+  pthresh *= om->scale_b;
+  pthresh += om->base_b + om->tjb_b + om->tec_b;
+  pthresh = ceil(pthresh);
+  pthreshv = _mm_set1_epi8((int8_t) 255 - (int)pthresh);
+  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  ox->M   = om->M;
+
+
+  /* Initialization. In offset unsigned  arithmetic, -infinity is 0, and 0 is om->base.
+   */
+  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
+  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+  xJ   = 0;
+
+  basev = _mm_set1_epi8((int8_t) om->base_b);
+  tecv = _mm_set1_epi8((int8_t) om->tec_b);
+  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
+
+  xBv = _mm_subs_epu8(basev, tjbmv);
+
+  for (i = 1; i <= L; i++)
+    {
+      rsc = om->rbv[dsq[i]];
+      xEv = _mm_setzero_si128();
+
+      /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
+       * Because ia32 is littlendian, this means a left bit shift.
+       * Zeros shift on automatically, which is our -infinity.
+       */
+      mpv = _mm_slli_si128(dp[Q-1], 1);
+      for (q = 0; q < Q; q++)
+	{
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+	  sv   = _mm_max_epu8(mpv, xBv);
+	  sv   = _mm_adds_epu8(sv, biasv);
+	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+	  xEv  = _mm_max_epu8(xEv, sv);	
+
+	  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
+	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
+	}	  
+
+      /* test if the significance threshold has been reached */
+      tempv = _mm_adds_epu8(xEv, pthreshv);
+      tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+      cmp = _mm_movemask_epi8(tempv);
+
+
+      if (cmp != 0x0000)
+      {
+
+    	  return eslEOL; // misusing this return value, so pipeline can get a "hit" response
+
+    	  //add position to list, and reset values
+    	  if (hit_cnt == hit_arr_size ) {
+    		  hit_arr_size *= 10;
+    		  void* tmp; // why doesn't ESL_RALLOC just declare its own tmp ptr?
+    		  ESL_RALLOC(hits, tmp, hit_arr_size * sizeof(int));
+    	  }
+    	  hits[hit_cnt++] = i;
+
+          for (q = 0; q < Q; q++)
+        	  dp[q] = _mm_set1_epi8(0); // this will cause values to get reset to xB in next iteration
+
+      }
+
+
+    } /* end loop over sequence residues 1..L */
+
+
+  return eslOK;
+
+  ERROR:
+  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+}
+/*------------------ end, p7_SSVFilter_longseq() ------------------------*/
+
+
+
+/* Function:  p7_MSVFilter_longseq()
+ * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
+ * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
+ *
+ * Purpose:   Calculates an approximation of the SSV score for a subsequence
+ *            <dsq> of length <L> residues, using optimized profile <om>,
+ *            and a preallocated one-row DP matrix <ox>, and captures the
+ *            positions at which such subsequences exceed the score
+ *            required to be significant in the eyes of the calling function
+ *            (usually p=0.05)
+ *
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            pthresh -
+ *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
+ *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
+ *
+ * Note:      We misuse the matrix <ox> here, using only a third of the
+ *            first dp row, accessing it as <dp[0..Q-1]> rather than
+ *            in triplets via <{MDI}MX(q)> macros, since we only need
+ *            to store M state values. We know that if <ox> was big
+ *            enough for normal DP calculations, it must be big enough
+ *            to hold the MSVFilter calculation.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int** ends)
+{
+  register __m128i mpv;            /* previous row values                                       */
+  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m128i biasv;	   /* emission bias in a vector                                 */
+  uint8_t  xJ;                     /* special states' scores                                    */
+  int i;			   /* counter over sequence positions 1..L                      */
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
+
+  __m128i xJv;                     /* vector for states score                                   */
+  __m128i tbmv;                    /* vector for B->Mk cost                                     */
+  __m128i tecv;                    /* vector for E->C  cost                                     */
+  __m128i tjbv;                    /* vector for NCJ move cost                                  */
+  __m128i tjbmv;                    /* vector for J->B->M move cost                                  */
+  __m128i basev;                   /* offset for scores                                         */
+  __m128i pthreshv;                /* pushes value to saturation if it's above pthresh  */
+  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i tempv;                   /* work vector                                               */
+
+  // convert pthresh to an int that's necessary to meet threshold.
+  // see notes: Wed Feb 24 13:50:29 EST 2010
+  float pthresh_loc = pthresh + 3.0;
+  pthresh_loc *= om->scale_b;
+  pthresh_loc += om->base_b + om->tjb_b + om->tec_b;
+  pthresh_loc = ceil(pthresh_loc);
+
+  if ( pthresh_loc < om->base_b + om->tec_b +1) {
+	  //e.g. if base=190, tec=3, then a score of 194 would be required for a
+	  //second ssv-hit to improve the score of an earlier one. So only bother
+	  //with msv if pthresh is that high
+	  return p7_SSVFilter_longseq(dsq, L, om, ox, pthresh, starts, ends);
+  }
+
+
+  int cmp;
+  int      status;
+
+  int hit_arr_size = 10; // usually won't get more than 10 hits per sequence, except for long sequences, so this should be plenty ... but check later just in case
+  int* hits;
+  ESL_ALLOC(hits, hit_arr_size * sizeof(int));
+  int hit_cnt = 0;
+
+
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  ox->M   = om->M;
+
+  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
+   */
+  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
+  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+  xJ   = 0;
+
+  /* saturate simd register for overflow test */
+  pthreshv = _mm_set1_epi8((int8_t) 255 - (int)pthresh_loc);
+  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
+
+  basev = _mm_set1_epi8((int8_t) om->base_b);
+
+  tbmv = _mm_set1_epi8((int8_t) om->tbm_b);
+  tecv = _mm_set1_epi8((int8_t) om->tec_b);
+  tjbv = _mm_set1_epi8((int8_t) om->tjb_b);
+  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b); //TW
+
+  xJv = _mm_subs_epu8(biasv, biasv);
+  xBv = _mm_subs_epu8(basev, tjbv);
+
+
+
+#if p7_DEBUGGING
+  if (ox->debugging)
+    {
+      uint8_t xB;
+      xB = _mm_extract_epi16(xBv, 0);
+      xJ = _mm_extract_epi16(xJv, 0);
+      p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+    }
+#endif
+
+
+  int max_xE = 0;
+
+  for (i = 1; i <= L; i++)
+    {
+      rsc = om->rbv[dsq[i]];
+      xEv = _mm_setzero_si128();
+      xBv = _mm_subs_epu8(xBv, tbmv);
+
+      /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
+       * Because ia32 is littlendian, this means a left bit shift.
+       * Zeros shift on automatically, which is our -infinity.
+       */
+      mpv = _mm_slli_si128(dp[Q-1], 1);
+      for (q = 0; q < Q; q++)
+	{
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+	  sv   = _mm_max_epu8(mpv, xBv);
+	  sv   = _mm_adds_epu8(sv, biasv);
+	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+	  xEv  = _mm_max_epu8(xEv, sv);
+
+	  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
+	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
+	}
+
+
+      /* test if the significance threshold has been reached */
+      tempv = _mm_adds_epu8(xEv, pthreshv);
+      tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+      cmp = _mm_movemask_epi8(tempv);
+
+
+      /* Now the "special" states, which start from Mk->E (->C, ->J->B)
+       * Use shuffles instead of shifts so when the last max has completed,
+       * the last four elements of the simd register will contain the
+       * max value.  Then the last shuffle will broadcast the max value
+       * to all simd elements.
+       */
+      tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(2, 3, 0, 1));
+      xEv = _mm_max_epu8(xEv, tempv);
+      tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 1, 2, 3));
+      xEv = _mm_max_epu8(xEv, tempv);
+      tempv = _mm_shufflelo_epi16(xEv, _MM_SHUFFLE(2, 3, 0, 1));
+      xEv = _mm_max_epu8(xEv, tempv);
+      tempv = _mm_srli_si128(xEv, 1);
+      xEv = _mm_max_epu8(xEv, tempv);
+      xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
+
+      /* immediately detect overflow */
+      if (cmp != 0x0000)
+	   {
+    	  return eslEOL; // misusing this return value, so pipeline can get a "hit" response
+
+    	  if (hit_cnt == hit_arr_size ) {
+    		  hit_arr_size *= 10;
+    		  void* tmp; // why doesn't ESL_RALLOC just declare its own tmp ptr?
+    		  ESL_RALLOC(hits, tmp, hit_arr_size * sizeof(int));
+    	  }
+    	  hits[hit_cnt++] = i;
+
+          //reset xE, xJ, and xB (via dp)
+          xJv = _mm_subs_epu8(biasv, biasv);
+          xBv = _mm_subs_epu8(basev, tjbmv);
+          for (q = 0; q < Q; q++)
+        	  dp[q] = _mm_set1_epi8(0); // this will cause values to get reset to xB in next iteration
+
+	  }
+
+
+      xEv = _mm_subs_epu8(xEv, tecv);
+      xJv = _mm_max_epu8(xJv,xEv);
+
+      xBv = _mm_max_epu8(basev, xJv);
+      xBv = _mm_subs_epu8(xBv, tjbv);
+
+  }
+
+  return eslOK;
+
+
+  ERROR:
+  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+
+}
+/*------------------ end, p7_MSVFilter_longseq() ------------------------*/
 
 
 
@@ -318,7 +727,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_MSVFilter    (dsq, L, om, ox, &sc1);   
+      p7_MSVFilter    (dsq, L, om, ox, &sc1);
 
       /* -c option: compare generic to fast score */
       if (esl_opt_GetBoolean(go, "-c")) 
@@ -592,7 +1001,7 @@ main(int argc, char **argv)
       p7_omx_GrowTo(ox, om->M, 0,    sq->n); 
       p7_gmx_GrowTo(gx, gm->M,       sq->n); 
 
-      p7_MSVFilter   (sq->dsq, sq->n, om, ox, &msvraw);  
+      p7_MSVFilter   (sq->dsq, sq->n, om, ox, &msvraw);
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
       msvscore = (msvraw - nullsc) / eslCONST_LOG2;
       P        = esl_gumbel_surv(msvscore,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);

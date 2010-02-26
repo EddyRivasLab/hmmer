@@ -278,6 +278,7 @@ static int    parameterize         (P7_BUILDER *bld, P7_HMM *hmm);
 static int    annotate             (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm);
 static int    calibrate            (P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om);
 static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRACE **tr, ESL_MSA **opt_postmsa);
+static int    calc_max_length      (P7_HMM *hmm, P7_BG *bg);
 
 /* Function:  p7_Builder()
  * Synopsis:  Build a new HMM from an MSA.
@@ -335,6 +336,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  annotate           (bld, msa, hmm))                  != eslOK) goto ERROR;
   if ((status =  calibrate          (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
   if ((status =  make_post_msa      (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
+  if ((status =  calc_max_length    (hmm, bg))                   != eslOK) goto ERROR;
 
   if (opt_hmm   != NULL) *opt_hmm   = hmm; else p7_hmm_Destroy(hmm);
   if (opt_trarr != NULL) *opt_trarr = tr;  else p7_trace_DestroyArray(tr, msa->nseq);
@@ -347,6 +349,8 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if (opt_om    != NULL) p7_oprofile_Destroy(*opt_om);
   return status;
 }
+
+
 
 
 /* Function:  p7_SingleBuilder()
@@ -655,6 +659,141 @@ make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRAC
   if (postmsa != NULL) esl_msa_Destroy(postmsa);
   return status;
 }
+
+
+/* Function:  calc_max_length()
+ * Synopsis:  Compute the maximum likely length of an emitted sequence
+ * Incept:    TJW, Mon Jan 18 12:48:57 EST 2010 [Janelia]
+ *
+ * Computes a fairly tight upper bound on domain length, by computing the
+ * probability of the model emitting sequences of all lengths up to some
+ * threshold, based on a dynamic-programming approach.  See 01/14/2010 notes (p1)
+ *
+ * The idea is to find the length such that all but e.g. 1e-7 sequences emitted
+ * by the model are at most that long. The method fills in a table of length
+ * dependent on compute_max_pthresh_length(); if this proves not to be long enough
+ * to reach the threshold, then that threshold can be doubled, and the method run again.
+ *
+ * Letting i correspond to the ith state of the model,
+ *         j to an emitted sequence of length j, and
+ *    T[i][P7H_*M]  := transition prob from *_i to M_{i+1}
+ *    T[i][P7H_*I]  := transition prob from *_i to I_i
+ *    T[i][P7H_*D]  := transition prob from *_i to D_{i+1}
+ *
+ *
+ * in general,
+ * M(i,j) = T[i-1][P7H_MM] * M(i-1,j-1) + T[i-1][P7H_DM] * D(i-1,j-1) + T[i-1][P7H_IM] * I(i-1,j-1);
+ * I(i,j) = T[i][P7H_MI] * M(i,j-1) + T[i][P7H_II] * I(i,j-1);
+ * D(i,j) = T[i-1][P7H_MD] * M(i-1,j) + T[i-1][P7H_DD] * D(i-1,j);
+ *
+ * The process of filling in the dp table is done for only the full core model.
+ * We want to minimize memory consumption, so this is handled column-by-column,
+ * storing only 2 columns at a time.
+ *
+ * Initial values must be set.
+ * This is simple: suppose the current path starts at position x and ends at position y. Then,
+ *   M(x,1) = 2/m(m+1);
+ *   I(x,1) = 0;
+ *   D(x,1) = 0;
+ * Fill in the remainder of rows r for column 1, until reaching row y
+ *   M(r,1) = I(r,1) = 0;
+ *   D(r,1) = dd * D(r-1,1)
+
+ * Then the next column:
+ *   M(x,2) = D(x,2) = 0;
+ *   I(x,2) = mi * M(x,1);
+ * Fill in the remainder of rows r for column 1, until reaching row y,
+ * based on the default formulas above
+ *
+ * Then for each column c after that,
+ *   M(x,c) = D(x,c) = 0;
+ *   I(x,c) =  ii * I(i,j-1)
+ * Fill in the remainder of rows r for column 1, until reaching row y,
+ * based on the default formulas above
+ *
+ * We could track the probability of emitting at each length, and accumulate those
+ * probabilities until the threshold is met, but rounding errors in multiplication
+ * and addition can lead the sum of all lengths - up to infinity - to be <0.99999
+ * or >1.0 ... so instead we just add up the survivor probability -- which
+ * is the sum of all M_i+D_i+I_i (i<model_length) + I_i (i==model length) -- and
+ * stop when that number is < 1e-7
+ *
+ * Args:      hmm         - p7_HMM (required for the transition probabilities)
+ *            bg          - required for background transition probabilities
+ *
+ * Returns:   <eslOK> on success. The max length is returned in hmm->max_length.
+
+ */
+int
+calc_max_length (P7_HMM *hmm, P7_BG *bg) {
+
+	float emit_thresh =  1e-7;
+
+	int model_len = hmm->M; //model length
+    double I[model_len][2], M[model_len][2], D[model_len][2]; //2 columns for each way of ending a subpath
+    //double I[86][2], M[86][2], D[86][2];
+    int col_ptr; //which true column in above 2d-arrays is active
+    int col; //which conceptual column in above 2d-arrays is active (up to table_len)
+
+    int k; //i:model-position,   j:sequence-length,   k:active-state-in-model
+
+
+    // START DP
+
+	// special case for filling in 1st column of DP table,  col=1;
+	M[1][0] = 1.0;// 1./path_cnt;
+	I[1][0] = D[1][0] = 0;
+	for (k=2; k<=model_len; k++){
+		M[k][0] = I[k][0] = 0;
+		D[k][0] = hmm->t[k-1][p7H_MD] * M[k-1][0]    +    hmm->t[k-1][p7H_DD] * D[k-1][0];
+	}
+
+
+	//special case for 2nd column
+	M[1][1] = D[1][1] = D[2][1] = I[2][1] = 0;
+	I[1][1] = hmm->t[1][p7H_MI] * M[1][0];
+	M[2][1] = hmm->t[1][p7H_MM] * M[1][0] ; //   D[k-1][0] ,  I[k-1][0] are both zero
+	for (k=3; k<=model_len; k++){
+		M[k][1] = hmm->t[k-1][p7H_DM] * D[k-1][0] ; //   D[k-1][0] ,  I[k-1][0] are both zero
+		I[k][1] = 0;
+		D[k][1] = hmm->t[k-1][p7H_MD] * M[k-1][1]  +  hmm->t[k-1][p7H_DD] * D[k-1][1];
+	}
+
+	//general case for all remaining columns
+
+	double surv; //for each column, tally up M[i]+D[i]+I[i] for all states.  Stop if under threshold
+
+	col_ptr = 0;
+	for (col=3; col<=10000000; col++) { // default cap on # iterations
+		int prev_col_ptr = 1-col_ptr;
+		surv = 0.0;
+		M[1][col_ptr] = D[1][col_ptr] = 0;
+		I[1][col_ptr] =  hmm->t[1][p7H_II] * I[1][prev_col_ptr]; //M[i][prev_col_ptr] is zero :  no way the first M state could have emitted >=2 chars
+		surv += I[1][col_ptr];
+
+		for (k=2; k<=model_len; k++){
+			M[k][col_ptr] = hmm->t[k-1][p7H_MM] * M[k-1][prev_col_ptr]  +  hmm->t[k-1][p7H_DM] * D[k-1][prev_col_ptr]  +  hmm->t[k-1][p7H_IM] * I[k-1][prev_col_ptr];
+			I[k][col_ptr] = hmm->t[k][p7H_MI] * M[k][prev_col_ptr]    +  hmm->t[k][p7H_II] * I[k][prev_col_ptr];
+			D[k][col_ptr] = hmm->t[k-1][p7H_MD] * M[k-1][col_ptr]  +  hmm->t[k-1][p7H_DD] * D[k-1][col_ptr];
+
+			surv += M[k][col_ptr] + D[k][col_ptr] + I[k][col_ptr];
+		}
+		surv -= M[model_len][col_ptr] + D[model_len][col_ptr]; // didn't really want to include those, since they are forced to go to E state.
+
+//		printf("col %4d : surv = %.9f\n", col, surv);
+		if (surv < emit_thresh) break;
+
+		col_ptr = 1-col_ptr; // alternating between 0 and 1
+	}
+
+
+
+	hmm->max_length = col;
+	return eslOK;
+}
+
+
+
 /*---------------- end, internal functions ----------------------*/
 
 

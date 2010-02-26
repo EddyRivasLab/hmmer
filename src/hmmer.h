@@ -174,6 +174,7 @@ typedef struct p7_hmm_s {
   char    *comlog;               /* command line(s) that built model      (optional: NULL) */ /* String, \0-terminated   */
   int      nseq;	         /* number of training sequences          (optional: -1)   */
   float    eff_nseq;             /* effective number of seqs (<= nseq)    (optional: -1)   */
+  int	   max_length;            /* the length that contains all but 1e-7 of the prob mass, based on the model */
   char    *ctime;	         /* creation date                         (optional: NULL) */
   int     *map;	                 /* map of alignment cols onto model 1..M (p7H_MAP)        */ /* Array; map[0]=0 */
   uint32_t checksum;             /* checksum of training sequences        (p7H_CHKSUM)     */
@@ -184,6 +185,7 @@ typedef struct p7_hmm_s {
   off_t    offset;               /* HMM record offset on disk                              */
   const ESL_ALPHABET *abc;       /* ptr to alphabet info (hmm->abc->K is alphabet size)    */
   int      flags;                /* status flags                                           */
+
 } P7_HMM;
 
 
@@ -247,6 +249,7 @@ typedef struct p7_profile_s {
   int     L;		/* current configured target seq length                    */
   int     allocM;	/* max # of nodes allocated in this structure              */
   int     M;		/* number of nodes in the model                            */
+  int     max_length;		/* bound on the length of sequence emitted by single pass though model      */
   float   nj;		/* expected # of uses of J; precalculated from loop config */
 
   /* Info, most of which is a copy from parent HMM:                                       */
@@ -811,7 +814,7 @@ typedef struct p7_builder_s {
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
   /* Optional: information used for parameterizing single sequence queries                         */
-  ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
+  ESL_SCOREMATRIX     *S;		     /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
   double               popen;         	 /* gap open probability                                   */
   double               pextend;          /* gap extend probability                                 */

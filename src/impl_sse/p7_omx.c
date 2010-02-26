@@ -139,6 +139,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
 int
 p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 {
+
   void  *p;
   int    nqf  = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
   int    nqw  = p7O_NQW(allocM);	       /* segment length; total # of striped vectors for float */
@@ -426,7 +427,8 @@ p7_omx_DumpMFRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8
   /* D's are all 0's too */
   fprintf(ox->dfp, "%4d D ", rowi);
   for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
-  fprintf(ox->dfp, "\n\n");
+  //fprintf(ox->dfp, "\n\n");  TW ... put this back, and remove the next one!
+  fprintf(ox->dfp, "\n");
 
   free(v);
   return eslOK;

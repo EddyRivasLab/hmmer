@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -15,6 +16,8 @@
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
+#include "esl_gumbel.h"
+#include "esl_vectorops.h"
 
 #ifdef HAVE_MPI
 #include "mpi.h"
@@ -1168,15 +1171,16 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 }
 #endif /*HAVE_MPI*/
 
+
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
   int      sstatus;
-  ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
+  ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
 
-  dbsq = esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
+
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
       p7_pli_NewSeq(info->pli, dbsq);
@@ -1192,6 +1196,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   esl_sq_Destroy(dbsq);
 
   return sstatus;
+
+
 }
 
 #ifdef HMMER_THREADS

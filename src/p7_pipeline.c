@@ -23,7 +23,6 @@
 
 #include "hmmer.h"
 
-
 /*****************************************************************
  * 1. The P7_PIPELINE object: allocation, initialization, destruction.
  *****************************************************************/
@@ -551,40 +550,69 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
+
   /* First level filter: the MSV filter, multihit with <om> */
+  int* window_starts;
+  int* window_ends;
+  float invsurv = esl_gumbel_invsurv(pli->F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  float pthresh = nullsc  + (invsurv * eslCONST_LOG2);
+
+  //int ret = p7_SSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends);
+  int ret = p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends);
+  if (ret == eslOK) return eslOK;
+
+
+
+ // old msv filter
+/*
   p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P > pli->F1) return eslOK;
+*/
   pli->n_past_msv++;
 
+
+
+
   /* biased composition HMM filtering */
+  /*
   if (pli->do_biasfilter)
-    {
-      p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
-      seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1) return eslOK;
-    }
+	{
+	  p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
+
+	  //have to run msvfilter again.  This time, it should just be on the windows passed in from above
+	  float pthresh2 = filtersc  + (invsurv * eslCONST_LOG2);
+	  int ret = p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh2, &window_starts, &window_ends);
+	  if (ret == eslOK) return eslOK;
+
+
+//	  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+//	  if (P > pli->F1) return eslOK;
+
+	}
   else filtersc = nullsc;
   pli->n_past_bias++;
+*/
 
   /* In scan mode, if it passes the MSV filter, read the rest of the profile */
   if (pli->hfp) {
-    p7_oprofile_ReadRest(pli->hfp, om);
-    p7_oprofile_ReconfigRestLength(om, sq->n);
-    if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
+	p7_oprofile_ReadRest(pli->hfp, om);
+	p7_oprofile_ReconfigRestLength(om, sq->n);
+	if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
   }
 
+
   /* Second level filter: ViterbiFilter(), multihit with <om> */
-  if (P > pli->F2) 		
-    {
-      p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);  
-      seq_score = (vfsc-filtersc) / eslCONST_LOG2;
-      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-      if (P > pli->F2) return eslOK;
-    }
+  //if (P > pli->F2 )
+	{
+	  p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
+	  seq_score = (vfsc-filtersc) / eslCONST_LOG2;
+	  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+	  if (P > pli->F2) return eslOK;
+	}
   pli->n_past_vit++;
+
 
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);

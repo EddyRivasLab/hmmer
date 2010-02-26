@@ -677,6 +677,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->mode = gm->mode;
   om->L    = gm->L;
   om->M    = gm->M;
+  om->max_length = gm->max_length;
   om->nj   = gm->nj;
   return eslOK;
 
@@ -956,13 +957,17 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
       for (k = 1, q = 0; q < nq; q++, k++)
 	{
 	  switch (t) {
-	  case p7O_BM: kb = k;                 break; 
-	  case p7O_MM: kb = (1 + (nq+k-2)) % nq; break; /* MM, DM, IM quads rotated by +1  */
-	  case p7O_IM: kb = (1 + (nq+k-2)) % nq; break;  
-	  case p7O_DM: kb = (1 + (nq+k-2)) % nq; break;  
-	  case p7O_MD: kb = k;                 break; /* the remaining ones are straight up  */
-	  case p7O_MI: kb = k;                 break; 
-	  case p7O_II: kb = k;                 break; 
+	  case p7O_MM:/* MM, DM, IM quads rotated by +1  */
+	  case p7O_IM:
+	  case p7O_DM:
+		  kb = (1 + (nq+k-2)) % nq;
+		  break;
+	  case p7O_BM:/* the remaining ones are straight up  */
+	  case p7O_MD:
+	  case p7O_MI:
+	  case p7O_II:
+		  kb = k;
+		  break;
 	  }
 	  fprintf(fp, "[ ");
 	  for (z = 0; z < 8; z++) 
@@ -1074,13 +1079,17 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
       for (k = 1, q = 0; q < nq; q++, k++)
 	{
 	  switch (t) {
-	  case p7O_BM: kb = k;                 break; 
-	  case p7O_MM: kb = 1 + (nq+k-2) % nq; break; /* MM, DM, IM quads rotated by +1  */
-	  case p7O_IM: kb = 1 + (nq+k-2) % nq; break;  
-	  case p7O_DM: kb = 1 + (nq+k-2) % nq; break;  
-	  case p7O_MD: kb = k;                 break; /* the remaining ones are straight up  */
-	  case p7O_MI: kb = k;                 break; 
-	  case p7O_II: kb = k;                 break; 
+	  case p7O_MM:/* MM, DM, IM quads rotated by +1  */
+	  case p7O_IM:
+	  case p7O_DM:
+		  kb = (1 + (nq+k-2)) % nq;
+		  break;
+	  case p7O_BM:/* the remaining ones are straight up  */
+	  case p7O_MD:
+	  case p7O_MI:
+	  case p7O_II:
+		  kb = k;
+		  break;
 	  }
 	  fprintf(fp, "[ ");
 	  for (z = 0; z < 4; z++) 
@@ -1088,6 +1097,8 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 	    else              fprintf(fp, "%*s ", width, "xx");
 	  fprintf(fp, "]");
 	}
+
+
       fprintf(fp, "\n     ");	  
       for (q = 0; q < nq; q++)
 	{

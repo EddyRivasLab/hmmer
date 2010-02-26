@@ -726,8 +726,8 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
    */
   if (msa == NULL)
     {
-      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %8s %6s %s\n", " idx", "name",                 "nseq",  "alen",  "mlen",  "eff_nseq",  "re/pos",  "description");
-      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %8s %6s %s\n", "----", "--------------------", "-----", "-----", "-----", "--------",  "------",  "-----------");
+      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %5s %8s %6s %s\n", " idx", "name",                 "nseq",  "alen",  "mlen", "W ", "eff_nseq",  "re/pos",  "description");
+      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %5s %8s %6s %s\n", "----", "--------------------", "-----", "-----", "-----", "-----", "--------",  "------",  "-----------");
       return eslOK;
     }
 
@@ -735,12 +735,13 @@ output_result(const ESL_GETOPTS *go, const struct cfg_s *cfg, char *errbuf, int 
   if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
 	             /* #   name nseq alen M eff_nseq re/pos description*/
-  fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %8.2f %6.3f %s\n",
+  fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %5d %8.2f %6.3f %s\n",
 	  msaidx,
 	  (msa->name != NULL) ? msa->name : "",
 	  msa->nseq,
 	  msa->alen,
 	  hmm->M,
+	  hmm->max_length,
 	  hmm->eff_nseq,
 	  p7_MeanMatchRelativeEntropy(hmm, cfg->bg),
 	  (msa->desc != NULL) ? msa->desc : "");
