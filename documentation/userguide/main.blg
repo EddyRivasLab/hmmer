@@ -1,0 +1,75 @@
+This is BibTeX, Version 0.99c (Web2C 7.5.4)
+The top-level auxiliary file: main.aux
+The style file: apalike.bst
+I couldn't open database file master.bib
+---line 97 of file main.aux
+ : \bibdata{master
+ :                ,lab,books}
+I'm skipping whatever remains of this command
+I found no database files---while reading file main.aux
+Warning--I didn't find a database entry for "Krogh94"
+Warning--I didn't find a database entry for "Eddy98"
+Warning--I didn't find a database entry for "Durbin98"
+Warning--I didn't find a database entry for "Churchill89"
+Warning--I didn't find a database entry for "Gribskov87"
+Warning--I didn't find a database entry for "Gribskov90"
+Warning--I didn't find a database entry for "Barton90"
+Warning--I didn't find a database entry for "Bashford87"
+Warning--I didn't find a database entry for "Taylor86"
+Warning--I didn't find a database entry for "Altschul97"
+Warning--I didn't find a database entry for "Altschul90"
+Warning--I didn't find a database entry for "Pearson88"
+Warning--I didn't find a database entry for "Smith81"
+Warning--I didn't find a database entry for "Sonnhammer97"
+Warning--I didn't find a database entry for "Finn10"
+Warning--I didn't find a database entry for "Mulder03"
+Warning--I didn't find a database entry for "Letunic06"
+Warning--I didn't find a database entry for "Karlin90"
+Warning--I didn't find a database entry for "KarlinAltschul93"
+Warning--I didn't find a database entry for "Eddy08"
+Warning--I didn't find a database entry for "Eddy96"
+Warning--I didn't find a database entry for "Krogh98"
+Warning--I didn't find a database entry for "Rabiner89"
+Warning--I didn't find a database entry for "Holmes98"
+You've used 0 entries,
+            1935 wiz_defined-function locations,
+            519 strings with 4084 characters,
+and the built_in function-call counts, 17 in all, are:
+= -- 0
+> -- 0
+< -- 0
++ -- 0
+- -- 0
+* -- 0
+:= -- 7
+add.period$ -- 0
+call.type$ -- 0
+change.case$ -- 0
+chr.to.int$ -- 0
+cite$ -- 0
+duplicate$ -- 0
+empty$ -- 1
+format.name$ -- 0
+if$ -- 1
+int.to.chr$ -- 1
+int.to.str$ -- 0
+missing$ -- 0
+newline$ -- 3
+num.names$ -- 0
+pop$ -- 0
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 0
+skip$ -- 1
+stack$ -- 0
+substring$ -- 0
+swap$ -- 0
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 0
+while$ -- 0
+width$ -- 0
+write$ -- 2
+(There were 2 error messages)

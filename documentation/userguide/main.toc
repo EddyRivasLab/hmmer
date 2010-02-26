@@ -1,0 +1,53 @@
+\contentsline {section}{\numberline {1}Introduction}{3}
+\contentsline {subsection}{How to avoid reading this manual}{3}
+\contentsline {subsection}{How to avoid using this software (links to similar software)}{3}
+\contentsline {subsection}{What profile HMMs are}{3}
+\contentsline {subsection}{Applications of profile HMMs}{4}
+\contentsline {subsection}{Design goals of HMMER3}{5}
+\contentsline {subsection}{What's still missing in HMMER3}{6}
+\contentsline {paragraph}{DNA sequence comparison.}{6}
+\contentsline {paragraph}{Translated comparisons.}{6}
+\contentsline {paragraph}{Profile/profile comparison.}{6}
+\contentsline {paragraph}{More sequence input formats.}{6}
+\contentsline {paragraph}{More alignment modes.}{7}
+\contentsline {paragraph}{More speed.}{7}
+\contentsline {paragraph}{More processor support.}{7}
+\contentsline {subsection}{How to learn more about profile HMMs}{7}
+\contentsline {section}{\numberline {2}Installation}{8}
+\contentsline {subsection}{Quick installation instructions}{8}
+\contentsline {subsection}{System requirements}{8}
+\contentsline {paragraph}{Operating system:}{8}
+\contentsline {paragraph}{Processor:}{8}
+\contentsline {paragraph}{Compiler:}{9}
+\contentsline {paragraph}{Libraries and other installation requirements:}{9}
+\contentsline {subsection}{Multithreaded parallelization for multicores is the default}{9}
+\contentsline {subsection}{MPI parallelization for clusters is optional}{9}
+\contentsline {subsection}{Using build directories}{10}
+\contentsline {subsection}{Makefile targets}{10}
+\contentsline {section}{\numberline {3}Tutorial}{11}
+\contentsline {subsection}{The programs in HMMER}{11}
+\contentsline {subsection}{Files used in the tutorial}{11}
+\contentsline {subsection}{Searching a sequence database with a single profile HMM}{12}
+\contentsline {subsubsection}{Step 1: build a profile HMM with hmmbuild}{12}
+\contentsline {subsubsection}{Step 2: search the sequence database with hmmsearch}{14}
+\contentsline {subsection}{Searching a profile HMM database with a query sequence}{20}
+\contentsline {subsubsection}{Step 1: create an HMM database flatfile}{20}
+\contentsline {subsubsection}{Step 2: compress and index the flatfile with hmmpress}{20}
+\contentsline {subsubsection}{Step 3: search the HMM database with hmmscan}{21}
+\contentsline {subsection}{Creating multiple alignments with hmmalign}{22}
+\contentsline {subsection}{Single sequence queries using phmmer}{23}
+\contentsline {subsection}{Iterative searches using jackhmmer}{23}
+\contentsline {section}{\numberline {4}Manual pages}{26}
+\contentsline {section}{\numberline {5}File formats}{27}
+\contentsline {subsection}{HMMER profile HMM files}{27}
+\contentsline {subsubsection}{header section}{27}
+\contentsline {subsubsection}{main model section}{29}
+\contentsline {subsection}{Stockholm, the recommended multiple sequence alignment format}{30}
+\contentsline {subsubsection}{syntax of Stockholm markup}{31}
+\contentsline {subsubsection}{semantics of Stockholm markup}{31}
+\contentsline {subsubsection}{recognized \#=GF annotations}{32}
+\contentsline {subsubsection}{recognized \#=GS annotations}{32}
+\contentsline {subsubsection}{recognized \#=GC annotations}{32}
+\contentsline {subsubsection}{recognized \#=GR annotations}{33}
+\contentsline {section}{\numberline {6}Acknowledgements and history}{34}
+\contentsline {subsection}{Thanks}{34}

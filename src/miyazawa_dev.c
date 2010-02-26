@@ -8,7 +8,7 @@
  */
 
 /*
- * gcc -o miyazawa_dev miyazawa_dev.c generic_pfunction.c -g -W -Wall -Wstrict-prototypes -Wconversion -Wshadow -Wcast-qual -Wwrite-strings -ansi -pedantic -std=c99 -O2 -I. -L. -lhmmer -I./impl -L./impl -lhmmerimpl -I../easel -L../easel -leasel -lm
+ * gcc -g -W -Wall -Wstrict-prototypes -Wconversion -Wshadow -Wcast-qual -Wwrite-strings -ansi -pedantic -std=c99 -O2 -I. -L. -I./impl -L./impl -I../easel -L../easel -o miyazawa_dev miyazawa_dev.c generic_pfunction.c -lhmmer  -lhmmerimpl -leasel -lm
  *
  * Note the linking order of the libraries (they call each other from left to right)
  *
@@ -34,7 +34,7 @@ typedef struct {
 	double popen;
 	double pextend;
 	double lambda;
-	char   *SMX;    /* score matrix */
+	ESL_SCOREMATRIX   *SMX;
 } WORKER_INFO;
 
 static ESL_OPTIONS options[] = {
@@ -45,10 +45,10 @@ static ESL_OPTIONS options[] = {
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL, "--textw",          "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL, "--notextw",        "set max width of ASCII text output lines",                     2 },
 /* Control of scoring system */
-  { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
-  { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },
-//  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "substitution score matrix [default: BLOSUM62]",                3 },
-  { "--lambda",     eslARG_REAL, "0.6931", NULL, NULL, NULL,  NULL,  NULL,                 "base of the score matrix [default: BLOSUM62]",                  3 }, /* WHAT IS THE BASE OF BLOSUM62, BITS OR HALF-BITS? */
+  { "--popen",      eslARG_REAL,  "11", NULL, "0<=x<100",NULL,  NULL,  NULL,                "gap open penalty",                                         3 },
+  { "--pextend",    eslARG_REAL,   "1", NULL, "0<=x<100",  NULL,  NULL,  NULL,              "gap extend penalty",                                       3 },
+// { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,             "substitution score matrix [default: BLOSUM62]",                3 },
+// { "--lambda",     eslARG_REAL, "0.3466", NULL, NULL, NULL,  NULL,  NULL,                 "base of the score matrix [default: BLOSUM62]",                  3 },
   /* other options */
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
@@ -77,7 +77,7 @@ struct cfg_s {
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (ESL_ALPHABET *abc, ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp);        /* WORKER_INFO SHOULD HAVE SEQUENCE AND SCORE SYSTEM */
+static int  serial_loop  (ESL_ALPHABET *abc, ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp);
 
 /* process_commandline()
  * Take argc, argv, and options; parse the command line;
@@ -99,7 +99,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
       puts("\nwhere basic options are:");
-      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth */
 
       puts("\noptions directing output:");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
@@ -140,8 +140,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"));  
   if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal  (go, "--popen"));
   if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal  (go, "--pextend"));
- // if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
-  if (esl_opt_IsUsed(go, "--lambda"))    fprintf(ofp, "# lambda:              %f\n",             esl_opt_GetReal(go, "--lambda"));
+// if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
+// if (esl_opt_IsUsed(go, "--lambda"))    fprintf(ofp, "# lambda:              %f\n",             esl_opt_GetReal(go, "--lambda"));
   if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
 
@@ -164,8 +164,7 @@ main(int argc, char **argv)
   /* Set processor specific flags */
   impl_Init();
 
-  /* Initialize what we can in the config structure (without knowing the alphabet yet) 
-   */
+  /* Initialize what we can in the config structure (without knowing the alphabet yet) */
   cfg.qfile      = NULL;
   cfg.dbfile     = NULL;
 
@@ -200,12 +199,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                                */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                                       */
   int              nquery   = 0;
-  int              textw;                        /* set max width of ASCII text output lines   */
-  int              status   = eslOK;             /* general status of different function calls */
-  int              qstatus  = eslOK;             /* status of the query being read             */
-  int              sstatus  = eslOK;             /* status of the target being read            */
-
-  ESL_SCOREMATRIX *SMX = NULL;
+  int              textw;                         /* set max width of ASCII text output lines   */
+  int              status   = eslOK;              /* general status of different function calls */
+  int              qstatus  = eslOK;              /* status of the query being read             */
+  int              sstatus  = eslOK;              /* status of the target being read            */
 
   WORKER_INFO     *info     = NULL;
 
@@ -221,7 +218,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* INPUT FORMATS */
   /* Query */
   if (esl_opt_IsOn(go, "--qformat")) {
-    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat")); /* Here we autodetect the format if no option --qformat is given */
+    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat")); /* Here we autodetect the format if no --qformat option is given */
     if (qformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
@@ -236,27 +233,30 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   info->popen = esl_opt_GetReal(go, "--popen");
   info->pextend = esl_opt_GetReal(go, "--pextend");
-  info->lambda = esl_opt_GetReal(go, "--lambda");    /* Where should I get this lambda from? BLOSUM62 matrix file or calculated from matrix with esl_sco_Probify? */
-//info->mxfile = esl_opt_GetString(go, "--mxfile");
+// info->lambda = esl_opt_GetReal(go, "--lambda");
+// info->mxfile = esl_opt_GetString(go, "--mxfile");
+
+  /* Set lambda to the original value used to create BLOSUM62 */
+  info->lambda = 0.3466; /* in half-bits */
 
   /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
-  SMX = esl_scorematrix_Create(abc);
-  esl_scorematrix_SetBLOSUM62(SMX);
+  info->SMX = esl_scorematrix_Create(abc);
+  esl_scorematrix_SetBLOSUM62(info->SMX);
 
   /* OPEN OUTPUT FILES */
-  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); } 
+  if (esl_opt_IsOn(go, "-o")) { if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) esl_fatal("Failed to open output file %s for writing\n", esl_opt_GetString(go, "-o")); }
 
   /* OPEN TARGET FILE */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
-  else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n", cfg->dbfile);
+  else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n", cfg->dbfile);
   else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        esl_fatal("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
 
   /* OPEN QUERY FILE (autodetecting format unless given) */
   status = esl_sqfile_OpenDigital(abc, cfg->qfile, qformat, NULL, &qfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open sequence file %s for reading\n",      cfg->qfile);
-  else if (status == eslEFORMAT)   esl_fatal("Sequence file %s is empty or misformatted\n",        cfg->qfile);
+  if      (status == eslENOTFOUND) esl_fatal("Failed to open sequence file %s for reading\n", cfg->qfile);
+  else if (status == eslEFORMAT)   esl_fatal("Sequence file %s is empty or misformatted\n", cfg->qfile);
   else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        esl_fatal ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
 
@@ -282,7 +282,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  esl_sqfile_Position(dbfp, 0);
 	}
 
-      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
+      fprintf(ofp, "Query:  %s  [L=%ld]\n", qsq->name, (long) qsq->n);
       if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
@@ -290,18 +290,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       sstatus = serial_loop(abc, qsq, info, dbfp);
 
       switch(sstatus)
-	{
-	case eslEFORMAT: 
-	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
-		    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-	  break;
-	case eslEOF:
-	  /* do nothing */
-	  break;
-	default:
-	  esl_fatal("Unexpected error %d reading sequence file %s",
-		    sstatus, dbfp->filename);
-	}
+      {
+      case eslEFORMAT:
+    	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
+    			  dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+    	  break;
+      case eslEOF:
+    	  /* do nothing */
+    	  break;
+      default:
+    	  esl_fatal("Unexpected error %d reading sequence file %s",
+    			  sstatus, dbfp->filename);
+      }
 
 	  /* STOP WATCH */
       esl_stopwatch_Stop(w);
@@ -316,15 +316,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
-  /* CLEAN UP */
-  free(info);    /* info is dangling here, should I set it to NULL? */
+  /* CLEANUP */
+  esl_scorematrix_Destroy(info->SMX);
+  free(info); info = NULL;
 
-  esl_sqfile_Close(dbfp);
-  esl_sqfile_Close(qfp);
-  esl_stopwatch_Destroy(w);
-  esl_sq_Destroy(qsq);
-  esl_scorematrix_Destroy(SMX);
-  esl_alphabet_Destroy(abc);
+  esl_sqfile_Close(dbfp); dbfp = NULL;
+  esl_sqfile_Close(qfp); qfp = NULL;
+  esl_stopwatch_Destroy(w); w =NULL;
+  esl_sq_Destroy(qsq); qsq = NULL;
+  esl_alphabet_Destroy(abc); abc = NULL;
 
   if (ofp      != stdout) fclose(ofp);
   return eslOK;
@@ -341,8 +341,9 @@ static int
 serial_loop(ESL_ALPHABET *abc,  ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
   int      sstatus;
+  int      dpstatus;
   ESL_SQ   *dbsq     = NULL;   /* one target sequence object (digital)  */
-  double *zscore;
+  double zscore;
 
   dbsq = esl_sq_CreateDigital(abc);
 
@@ -350,15 +351,24 @@ serial_loop(ESL_ALPHABET *abc,  ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
 
-	  pfunction(qsq->dsq, qsq->n, dbsq->dsq, dbsq->n, info->popen, info->pextend, info->lambda, info->SMX, &zscore); /* CHECK RETURN STATUS!!! */
-	  
-	  /* Do something with the zscore (like printing it!) */
+	  printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
+	  if (qsq->acc[0]  != '\0') printf("Accession:   %s\n", qsq->acc);
+	  if (qsq->desc[0] != '\0') printf("Description: %s\n", qsq->desc);
 
+	  dpstatus = pfunction(qsq->dsq, qsq->n, dbsq->dsq, dbsq->n, info->popen, info->pextend, info->lambda, info->SMX, &zscore);
+
+	  if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
+
+	  /* REPORT */
+	  printf("Zscore: %g\n", zscore); /* this should be printed to ofp */
+	  
+	  /* REUSE */
       esl_sq_Reuse(dbsq);
 
     }
 
-  esl_sq_Destroy(dbsq);
+  /* CLEANUP */
+  esl_sq_Destroy(dbsq); dbsq = NULL;
 
   return sstatus;
 }

@@ -746,6 +746,7 @@ typedef struct p7_pipeline_s {
   double  F1;		        /* MSV filter threshold                     */
   double  F2;		        /* Viterbi filter threshold                 */
   double  F3;		        /* uncorrected Forward filter threshold     */
+  int     do_vit;	        /* TRUE to report Viterbi scores             */
   int     do_biasfilter;	/* TRUE to use biased comp HMM filter       */
   int     do_null2;		/* TRUE to use null2 score corrections      */
 
@@ -1170,7 +1171,7 @@ extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 
 /* generic_pfunction.c */
 extern int pfunction(ESL_DSQ *qsq, int N, ESL_DSQ *dbsq, int M, double popen,
-				double pextend, double lambda, ESL_SCOREMATRIX *SMX, double **ret_zscore);
+				double pextend, double lambda, ESL_SCOREMATRIX *SMX, double *ret_zscore);
 
 #endif /*P7_HMMERH_INCLUDED*/
 

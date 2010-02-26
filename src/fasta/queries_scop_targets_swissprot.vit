@@ -1,0 +1,241 @@
+# phmmer :: search a protein sequence against a protein database
+# HMMER 3.0rc1 (February 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query sequence file:             fasta/queries_scop.fa
+# target sequence database:        fasta/targets_swissprot.fa
+# number of worker threads:        0
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       d1dlwa_@a#1#1#1  [L=116]
+Scores for complete sequences (score includes all domains):
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence        Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------        -----------
+          0    inf   nan          0  242.1   4.5    1.0  1  d1dlwa_@a#1#1#1 
+          0    inf   nan          0   79.3   0.0    1.0  1  d1idra_@a#1#1#1 
+          0    inf   nan          0   48.4   0.0    1.0  1  d1s69a_@a#1#1#1 
+
+
+Domain annotation for each sequence (and alignments):
+>> d1dlwa_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !  242.1   4.5         0         0       1     116 []       1     116 []       1     116 [] 0.99
+
+  Alignments for each domain:
+  == domain 1    score: 242.1 bits;  conditional E-value: 0
+  d1dlwa_@a#1#1#1   1 slfeqlggqaavqavtaqfyaniqadatvatffngidlpnqtnktaaflcaalggpnawtgrnlkevhanlgvsnaqfttvighlrsaltgagv 94 
+                      slfeqlggqaavqavtaqfyaniqadatvatffngid+pnqtnktaaflcaalggpnawtgrnlkevhan+gvsnaqfttvighlrsaltgagv
+  d1dlwa_@a#1#1#1   1 SLFEQLGGQAAVQAVTAQFYANIQADATVATFFNGIDMPNQTNKTAAFLCAALGGPNAWTGRNLKEVHANMGVSNAQFTTVIGHLRSALTGAGV 94 
+                      79******************************************************************************************** PP
+
+  d1dlwa_@a#1#1#1  95 aaalveqtvavaetvrgdvvtv 116
+                      aaalveqtvavaetvrgdvvtv
+  d1dlwa_@a#1#1#1  95 AAALVEQTVAVAETVRGDVVTV 116
+                      ********************97 PP
+
+>> d1idra_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   79.3   0.0         0         0       1     111 [.      13     123 ..      13     127 .] 0.94
+
+  Alignments for each domain:
+  == domain 1    score: 79.3 bits;  conditional E-value: 0
+  d1dlwa_@a#1#1#1   1 slfeqlggqaavqavtaqfyaniqadatvatffngidlpnqtnktaaflcaalggpnawtgrnlkevhanlgvsnaqfttvighlrsaltgagv 94 
+                      s+++++gg+ a++ v  +fy ++ ad  ++ ff+g ++ +  +k   f+ aalggp  +tg  +k+vh + g++  +f+ v ghl +alt agv
+  d1idra_@a#1#1#1  13 SIYDKIGGHEAIEVVVEDFYVRVLADDQLSAFFSGTNMSRLKGKQVEFFAAALGGPEPYTGAPMKQVHQGRGITMHHFSLVAGHLADALTAAGV 106
+                      6899****************************************************************************************** PP
+
+  d1dlwa_@a#1#1#1  95 aaalveqtvavaetvrg 111
+                       +  + + ++v   +  
+  d1idra_@a#1#1#1 107 PSETITEILGVIAPLAV 123
+                      99999888877666555 PP
+
+>> d1s69a_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   48.4   0.0         0         0       2     107 ..       3     112 ..       2     121 .. 0.93
+
+  Alignments for each domain:
+  == domain 1    score: 48.4 bits;  conditional E-value: 0
+  d1dlwa_@a#1#1#1   2 lfeqlggqaavqavtaqfyaniqadatvatffngidlpnqtnktaaflcaalggpnawtgrnlkevha....nlgvsnaqfttvighlrsaltg 91 
+                      l+e+lgg  av+    +fy ++  d  +  ff  +d+  q     afl  a+gg + + gr ++e h     n g+++ +f  v   l + l  
+  d1s69a_@a#1#1#1   3 LYEKLGGTTAVDLAVDKFYERVLQDDRIKHFFADVDMAKQRAHQKAFLTYAFGGTDKYDGRYMREAHKelveNHGLNGEHFDAVAEDLLATLKE 96 
+                      89****************************************************************96444488******************** PP
+
+  d1dlwa_@a#1#1#1  92 agvaaalveqtvavae 107
+                       gv   l+ +  ava 
+  d1s69a_@a#1#1#1  97 MGVPEDLIAEVAAVAG 112
+                      ********99999885 PP
+
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (116 nodes)
+Target sequences:                          9  (2343 residues)
+Passed MSV filter:                         3  (0.333333); expected 0.2 (0.02)
+Passed bias filter:                        3  (0.333333); expected 0.2 (0.02)
+Passed Vit filter:                         3  (0.333333); expected 0.0 (0.001)
+Passed Fwd filter:                         0  (0); expected 0.0 (1e-05)
+Initial search space (Z):                  9  [actual number of targets]
+Domain search space  (domZ):               3  [number of targets reported over threshold]
+# CPU time: 0.03u 0.00s 00:00:00.03 Elapsed: 00:00:00.03
+# Mc/sec: 9.06
+//
+Query:       d1s69a_@a#1#1#1  [L=123]
+Scores for complete sequences (score includes all domains):
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence        Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------        -----------
+          0    inf   nan          0   50.7   0.0    1.0  1  d1dlwa_@a#1#1#1 
+          0    inf   nan          0   66.8   0.0    1.0  1  d1idra_@a#1#1#1 
+          0    inf   nan          0  269.4   0.7    1.0  1  d1s69a_@a#1#1#1 
+
+
+Domain annotation for each sequence (and alignments):
+>> d1dlwa_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   50.7   0.0         0         0       3     111 ..       2     106 ..       1     114 [. 0.95
+
+  Alignments for each domain:
+  == domain 1    score: 50.7 bits;  conditional E-value: 0
+  d1s69a_@a#1#1#1   3 lyeklggttavdlavdkfyervlqddrikhffadvdlakqrahqkafltyafggtdkydgrylreahkelvenhglngehfdavaedllatlke 96 
+                      l+e+lgg  av+    +fy  +  d  +  ff  +d+  q     afl+ a gg + + gr l+e h     n g++  +f  v   l + l  
+  d1dlwa_@a#1#1#1   2 LFEQLGGQAAVQAVTAQFYANIQADATVATFFNGIDMPNQTNKTAAFLCAALGGPNAWTGRNLKEVHA----NMGVSNAQFTTVIGHLRSALTG 91 
+                      89*************************************************************99996....789999**************** PP
+
+  d1s69a_@a#1#1#1  97 lgvpedliaevaava 111
+                       gv   l+ +  ava
+  d1dlwa_@a#1#1#1  92 AGVAAALVEQTVAVA 106
+                      ********9999987 PP
+
+>> d1idra_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   66.8   0.0         0         0       2     111 ..      13     118 ..      12     124 .. 0.95
+
+  Alignments for each domain:
+  == domain 1    score: 66.8 bits;  conditional E-value: 0
+  d1s69a_@a#1#1#1   2 tlyeklggttavdlavdkfyervlqddrikhffadvdlakqrahqkafltyafggtdkydgrylreahkelvenhglngehfdavaedllatlk 95 
+                      ++y+k+gg  a+++ v+ fy rvl dd++  ff+  ++++ ++ q  f+  a gg + y g  +++ h+    ++g+  +hf  va  l   l 
+  d1idra_@a#1#1#1  13 SIYDKIGGHEAIEVVVEDFYVRVLADDQLSAFFSGTNMSRLKGKQVEFFAAALGGPEPYTGAPMKQVHQ----GRGITMHHFSLVAGHLADALT 102
+                      58**************************************************************99995....79******************* PP
+
+  d1s69a_@a#1#1#1  96 elgvpedliaevaava 111
+                        gvp + i e+ +v 
+  d1idra_@a#1#1#1 103 AAGVPSETITEILGVI 118
+                      ***********98875 PP
+
+>> d1s69a_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !  269.4   0.7         0         0       1     123 []       1     123 []       1     123 [] 0.99
+
+  Alignments for each domain:
+  == domain 1    score: 269.4 bits;  conditional E-value: 0
+  d1s69a_@a#1#1#1   1 stlyeklggttavdlavdkfyervlqddrikhffadvdlakqrahqkafltyafggtdkydgrylreahkelvenhglngehfdavaedllatl 94 
+                      stlyeklggttavdlavdkfyervlqddrikhffadvd+akqrahqkafltyafggtdkydgry+reahkelvenhglngehfdavaedllatl
+  d1s69a_@a#1#1#1   1 STLYEKLGGTTAVDLAVDKFYERVLQDDRIKHFFADVDMAKQRAHQKAFLTYAFGGTDKYDGRYMREAHKELVENHGLNGEHFDAVAEDLLATL 94 
+                      79******************************************************************************************** PP
+
+  d1s69a_@a#1#1#1  95 kelgvpedliaevaavagapahkrdvlnq 123
+                      ke+gvpedliaevaavagapahkrdvlnq
+  d1s69a_@a#1#1#1  95 KEMGVPEDLIAEVAAVAGAPAHKRDVLNQ 123
+                      ****************************8 PP
+
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (123 nodes)
+Target sequences:                          9  (2343 residues)
+Passed MSV filter:                         3  (0.333333); expected 0.2 (0.02)
+Passed bias filter:                        3  (0.333333); expected 0.2 (0.02)
+Passed Vit filter:                         3  (0.333333); expected 0.0 (0.001)
+Passed Fwd filter:                         0  (0); expected 0.0 (1e-05)
+Initial search space (Z):                  9  [actual number of targets]
+Domain search space  (domZ):               3  [number of targets reported over threshold]
+# CPU time: 0.03u 0.00s 00:00:00.03 Elapsed: 00:00:00.03
+# Mc/sec: 9.61
+//
+Query:       d1idra_@a#1#1#1  [L=127]
+Scores for complete sequences (score includes all domains):
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence        Description
+    ------- ------ -----    ------- ------ -----   ---- --  --------        -----------
+          0    inf   nan          0   81.7   0.1    1.0  1  d1dlwa_@a#1#1#1 
+          0    inf   nan          0  272.8   0.1    1.0  1  d1idra_@a#1#1#1 
+          0    inf   nan          0   66.9   0.0    1.0  1  d1s69a_@a#1#1#1 
+
+
+Domain annotation for each sequence (and alignments):
+>> d1dlwa_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   81.7   0.1         0         0      13     121 ..       1     109 [.       1     115 [. 0.94
+
+  Alignments for each domain:
+  == domain 1    score: 81.7 bits;  conditional E-value: 0
+  d1idra_@a#1#1#1  13 siydkiggheaievvvedfyvrvladdqlsaffsgtnlsrlkgkqveffaaalggpepytgaplkqvhqgrgitlhhfslvaghladaltaagv 106
+                      s+++++gg+ a++ v  +fy  + ad  ++ ff+g ++     k   f +aalggp  +tg  lk+vh   g++  +f+ v ghl  alt+agv
+  d1dlwa_@a#1#1#1   1 SLFEQLGGQAAVQAVTAQFYANIQADATVATFFNGIDMPNQTNKTAAFLCAALGGPNAWTGRNLKEVHANMGVSNAQFTTVIGHLRSALTGAGV 94 
+                      6899****************************************************************************************** PP
+
+  d1idra_@a#1#1#1 107 psetiteilgviapl 121
+                       +  + + + v   +
+  d1dlwa_@a#1#1#1  95 AAALVEQTVAVAETV 109
+                      999888887776555 PP
+
+>> d1idra_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !  272.8   0.1         0         0       1     127 []       1     127 []       1     127 [] 0.99
+
+  Alignments for each domain:
+  == domain 1    score: 272.8 bits;  conditional E-value: 0
+  d1idra_@a#1#1#1   1 gllsrlrkrepisiydkiggheaievvvedfyvrvladdqlsaffsgtnlsrlkgkqveffaaalggpepytgaplkqvhqgrgitlhhfslva 94 
+                      gllsrlrkrepisiydkiggheaievvvedfyvrvladdqlsaffsgtn+srlkgkqveffaaalggpepytgap+kqvhqgrgit+hhfslva
+  d1idra_@a#1#1#1   1 GLLSRLRKREPISIYDKIGGHEAIEVVVEDFYVRVLADDQLSAFFSGTNMSRLKGKQVEFFAAALGGPEPYTGAPMKQVHQGRGITMHHFSLVA 94 
+                      89******************************************************************************************** PP
+
+  d1idra_@a#1#1#1  95 ghladaltaagvpsetiteilgviaplavdvts 127
+                      ghladaltaagvpsetiteilgviaplavdvts
+  d1idra_@a#1#1#1  95 GHLADALTAAGVPSETITEILGVIAPLAVDVTS 127
+                      *******************************97 PP
+
+>> d1s69a_@a#1#1#1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   66.9   0.0         0         0      13     118 ..       2     111 ..       1     119 [. 0.93
+
+  Alignments for each domain:
+  == domain 1    score: 66.9 bits;  conditional E-value: 0
+  d1idra_@a#1#1#1  13 siydkiggheaievvvedfyvrvladdqlsaffsgtnlsrlkgkqveffaaalggpepytgaplkqvh....qgrgitlhhfslvaghladalt 102
+                      ++y+k+gg  a+++ v+ fy rvl dd++  ff+  ++++ +  q  f   a+gg + y g  +++ h    + +g+   hf+ va  l   l 
+  d1s69a_@a#1#1#1   2 TLYEKLGGTTAVDLAVDKFYERVLQDDRIKHFFADVDMAKQRAHQKAFLTYAFGGTDKYDGRYMREAHkelvENHGLNGEHFDAVAEDLLATLK 95 
+                      58****************************************************************994444489******************* PP
+
+  d1idra_@a#1#1#1 103 aagvpsetiteilgvi 118
+                        gvp + i e+  v 
+  d1s69a_@a#1#1#1  96 EMGVPEDLIAEVAAVA 111
+                      ***********98875 PP
+
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (127 nodes)
+Target sequences:                          9  (2343 residues)
+Passed MSV filter:                         3  (0.333333); expected 0.2 (0.02)
+Passed bias filter:                        3  (0.333333); expected 0.2 (0.02)
+Passed Vit filter:                         3  (0.333333); expected 0.0 (0.001)
+Passed Fwd filter:                         0  (0); expected 0.0 (1e-05)
+Initial search space (Z):                  9  [actual number of targets]
+Domain search space  (domZ):               3  [number of targets reported over threshold]
+# CPU time: 0.03u 0.00s 00:00:00.03 Elapsed: 00:00:00.03
+# Mc/sec: 9.92
+//

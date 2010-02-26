@@ -202,10 +202,10 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e 
       pli->do_biasfilter = FALSE;
       pli->F1 = pli->F2 = pli->F3 = 1.0; 
     }
+  if (esl_opt_GetBoolean(go, "--vit")) pli->do_vit = TRUE;              /* Reporting Viterbi scores */
   if (esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
   if (esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
-
   /* Accounting as we collect results */
   pli->nmodels     = 0;
   pli->nseqs       = 0;
@@ -551,47 +551,71 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
-  /* First level filter: the MSV filter, multihit with <om> */
-  p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
-  seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  if (P > pli->F1) return eslOK;
-  pli->n_past_msv++;
+  if (pli->do_max)
+  {
+	  pli->n_past_msv++;    /* All sequences passed all filters */
+	  pli->n_past_bias++;
+	  pli->n_past_vit++;
 
-  /* biased composition HMM filtering */
-  if (pli->do_biasfilter)
-    {
-      p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
-      seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1) return eslOK;
-    }
-  else filtersc = nullsc;
-  pli->n_past_bias++;
+	  filtersc = 0;         /* do_biasfilter is FALSE in --max, so filtersc = 0 */
+  }
+  else /* do filters */
+  {
+	  /* First level filter: the MSV filter, multihit with <om> */
+	  p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
+	  seq_score = (usc - nullsc) / eslCONST_LOG2;
+	  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+	  if (P > pli->F1) return eslOK;                                                  /* WITH --MAX, P1=1, SO WE'LL NEVER RETURN FROM HERE AND ALL SEQUENCES GO THROUGH */
+	  pli->n_past_msv++;                                                              /* This sequence passed the filter */
 
-  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
-  if (pli->hfp) {
-    p7_oprofile_ReadRest(pli->hfp, om);
-    p7_oprofile_ReconfigRestLength(om, sq->n);
-    if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
+	  /* biased composition HMM filtering */
+	  if (pli->do_biasfilter)                                /* WE DON'T DO THIS WITH --MAX, WHY? */
+		{
+		  p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);  /* filtersc is set here! */
+		  seq_score = (usc - filtersc) / eslCONST_LOG2;
+		  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+		  if (P > pli->F1) return eslOK;
+		}
+	  else filtersc = nullsc;
+	  pli->n_past_bias++;     /* This sequence passed the filter */
+
+	  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
+	  if (pli->hfp) {
+		p7_oprofile_ReadRest(pli->hfp, om);
+		p7_oprofile_ReconfigRestLength(om, sq->n);
+		if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
+	  }
+
+	  /* Second level filter: ViterbiFilter(), multihit with <om> */
+	  if (P > pli->F2)
+		{
+		  p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
+		  seq_score = (vfsc-filtersc) / eslCONST_LOG2;
+		  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+		  if (P > pli->F2) return eslOK;
+		}
+	  pli->n_past_vit++;
   }
 
-  /* Second level filter: ViterbiFilter(), multihit with <om> */
-  if (P > pli->F2) 		
-    {
-      p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);  
-      seq_score = (vfsc-filtersc) / eslCONST_LOG2;
-      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-      if (P > pli->F2) return eslOK;
-    }
-  pli->n_past_vit++;
+  if (pli->do_vit) /* Viterbi Filter score */ /* IMPORTANT: THIS IS A TEST. IT MAY OVERFLOW AND NOT BE CORRECT FOR OUR PURPOSES */
+  {
+	  p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
+	  seq_score = (vfsc-filtersc) / eslCONST_LOG2;
+	  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
 
+	  /* Parse it also with Forward (We'll need the Forward matrix for domain definition) */
+	  p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
+  }
+
+  else /* Forward score */
+  {
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > pli->F3) return eslOK;
   pli->n_past_fwd++;
+  }
 
   /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
@@ -610,10 +634,19 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);
     }
   else seqbias = 0.0;
-  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
-  seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
-
   
+  if (pli->do_vit) /* Viterbi score */ /* IMPORTANT: THIS IS THE FILTER SCORE (MAY NOT WORK FOR OUR PURPOSES!!!)*/
+	{
+	  pre_score =  (vfsc - nullsc) / eslCONST_LOG2;
+	  seq_score =  (vfsc - (nullsc + seqbias)) / eslCONST_LOG2; /* This is the final Viterbi Filter seq-score */
+	}
+
+  else /* Forward score */
+  {
+	  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2;
+	  seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2; /* This is the final Forward seq-score */
+  }
+
   /* Calculate the "reconstruction score": estimated
    * per-sequence score as sum of individual domains,
    * discounting domains that aren't significant after they're
@@ -663,7 +696,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
    * only be a lower bound for now, so this list may be longer
    * than eventually reported.
    */
-  P =  esl_exp_surv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+  if (pli->do_vit) P = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);  /* Viterbi score */
+  else P =  esl_exp_surv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);           /* Forward score */
+
   if (p7_pli_TargetReportable(pli, seq_score, P))
     {
       p7_tophits_CreateNextHit(hitlist, &hit);
@@ -684,14 +719,16 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       hit->nenvelopes = pli->ddef->nenvelopes;
 
       hit->pre_score  = pre_score;
-      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      if (pli->do_vit) hit->pre_pvalue = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);  /* Viterbi score */
+      else hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);           /* Forward score */
 
       hit->score      = seq_score;
       hit->pvalue     = P;
       hit->sortkey    = pli->inc_by_E ? -log(P) : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
 
       hit->sum_score  = sum_score;
-      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      if (pli->do_vit) hit->sum_pvalue = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);  /* Viterbi score */
+      else hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);           /* Forward score */
 
       /* Transfer all domain coordinates (unthresholded for
        * now) with their alignment displays to the hit list,
@@ -710,7 +747,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
 	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0);
 	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2;
-	  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+	  if (pli->do_vit) hit->dcl[d].pvalue = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);  /* Viterbi score */
+	  else hit->dcl[d].pvalue = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);     /* Forward score */
 	  
 	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
 	}

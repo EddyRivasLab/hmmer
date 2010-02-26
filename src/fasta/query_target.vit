@@ -1,0 +1,72 @@
+# phmmer :: search a protein sequence against a protein database
+# HMMER 3.0rc1 (February 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query sequence file:             fasta/query.fa
+# target sequence database:        fasta/target.fa
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       query1  [L=1]
+Scores for complete sequences (score includes all domains):
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence Description
+    ------- ------ -----    ------- ------ -----   ---- --  -------- -----------
+
+   [No hits detected that satisfy reporting thresholds]
+
+
+Domain annotation for each sequence (and alignments):
+
+   [No targets detected that satisfy reporting thresholds]
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (1 nodes)
+Target sequences:                          3  (14 residues)
+Passed MSV filter:                         1  (0.333333); expected 0.1 (0.02)
+Passed bias filter:                        1  (0.333333); expected 0.1 (0.02)
+Passed Vit filter:                         1  (0.333333); expected 0.0 (0.001)
+Passed Fwd filter:                         0  (0); expected 0.0 (1e-05)
+Initial search space (Z):                  3  [actual number of targets]
+Domain search space  (domZ):               0  [number of targets reported over threshold]
+# CPU time: 0.01u 0.00s 00:00:00.01 Elapsed: 00:00:00.01
+# Mc/sec: 0.00
+//
+Query:       query2  [L=5]
+Scores for complete sequences (score includes all domains):
+   --- full sequence ---   --- best 1 domain ---    -#dom-
+    E-value  score  bias    E-value  score  bias    exp  N  Sequence Description
+    ------- ------ -----    ------- ------ -----   ---- --  -------- -----------
+      7e-06    9.0   0.1      7e-06    9.0   0.1    1.1  1  target1  
+
+
+Domain annotation for each sequence (and alignments):
+>> target1  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !    9.0   0.1   2.3e-06     7e-06       1       5 []       1       5 []       1       5 [] 0.93
+
+  Alignments for each domain:
+  == domain 1    score: 9.0 bits;  conditional E-value: 2.3e-06
+   query2 1 slith 5
+            s+ith
+  target1 1 SMITH 5
+            8***9 PP
+
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (5 nodes)
+Target sequences:                          3  (14 residues)
+Passed MSV filter:                         1  (0.333333); expected 0.1 (0.02)
+Passed bias filter:                        1  (0.333333); expected 0.1 (0.02)
+Passed Vit filter:                         1  (0.333333); expected 0.0 (0.001)
+Passed Fwd filter:                         0  (0); expected 0.0 (1e-05)
+Initial search space (Z):                  3  [actual number of targets]
+Domain search space  (domZ):               1  [number of targets reported over threshold]
+# CPU time: 0.01u 0.00s 00:00:00.01 Elapsed: 00:00:00.01
+# Mc/sec: 0.01
+//

@@ -86,7 +86,8 @@ OBJS =  build.o\
 	p7_profile.o\
 	p7_spensemble.o\
 	p7_tophits.o\
-	p7_trace.o
+	p7_trace.o\
+	generic_pfunction.o
 #	island.o\
 
 
