@@ -8,7 +8,7 @@
  */
 
 /*
- * gcc -g -W -Wall -Wstrict-prototypes -Wconversion -Wshadow -Wcast-qual -Wwrite-strings -ansi -pedantic -std=c99 -O2 -I. -L. -I./impl -L./impl -I../easel -L../easel -o miyazawa_dev miyazawa_dev.c generic_pfunction.c -lhmmer  -lhmmerimpl -leasel -lm
+ * gcc -g -W -Wall -Wstrict-prototypes -Wconversion -Wshadow -Wcast-qual -Wwrite-strings -ansi -pedantic -std=c99 -O2 -I. -L. -I./impl -L./impl -I../easel -L../easel -o miyazawa miyazawa.c generic_pfunction.c -lhmmer  -lhmmerimpl -leasel -lm
  *
  * Note the linking order of the libraries (they call each other from left to right)
  *
