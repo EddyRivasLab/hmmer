@@ -183,9 +183,9 @@ fi
 #
 # These set $impl_choice to one of sse, vmx, dummy, or none.
 #
-AC_ARG_ENABLE(sse,[AS_HELP_STRING([--enable-sse],[enable SSE implementation])],          enable_sse=$enableval,   enable_sse=no)
-AC_ARG_ENABLE(vmx,[AS_HELP_STRING([--enable-vmx],[enable Altivec/VMX implementation])],  enable_vmx=$enableval,   enable_vmx=no)
-AC_ARG_ENABLE(dummy,[AS_HELP_STRING([--enable-dummy],[enable portable implementation])], enable_dummy=$enableval, enable_dummy=no)
+AC_ARG_ENABLE(sse,[AS_HELP_STRING([--enable-sse],[enable SSE implementation])],          enable_sse=$enableval,   enable_sse=check)
+AC_ARG_ENABLE(vmx,[AS_HELP_STRING([--enable-vmx],[enable Altivec/VMX implementation])],  enable_vmx=$enableval,   enable_vmx=check)
+AC_ARG_ENABLE(dummy,[AS_HELP_STRING([--enable-dummy],[enable portable implementation])], enable_dummy=$enableval, enable_dummy=check)
 if test "$enable_sse" = "yes"; then
    if test "$enable_vmx" = "yes" || test "$enable_dummy" = "yes"; then
       AC_MSG_ERROR([Select only one implementation of sse, vmx, or dummy])
@@ -291,7 +291,10 @@ AC_ARG_WITH([gsl],
 	    [with_gsl=no])
 
 
-# If the user didn't force an implementation on us, select a default
+################################################################
+# Select the vector implementation we'll use
+# (if user didn't already configure one)
+#
 if test "$impl_choice" = "none"; then
   case $host in 
     ia64-*-*)      impl_choice=sse;;
@@ -302,6 +305,22 @@ if test "$impl_choice" = "none"; then
   esac
 fi
 
+if test "$impl_choice" = "dummy"; then
+  AC_MSG_WARN([It appears your platform will not fully support H3.])
+  AC_MSG_WARN([We'll use the 'dummy' implementation, a slow reference implementation.])
+fi
+
+if test "$impl_choice" = "sse" && test "$enable_sse" = "no"; then
+  AC_MSG_WARN([You disabled the SSE implementation: I'll use the dummy impl instead.])
+  impl_choice=dummy
+fi
+if test "$impl_choice" = "vmx" && test "$enable_vmx" = "no"; then
+  AC_MSG_WARN([You disabled the VMX implementation: I'll use the dummy impl instead.])
+  impl_choice=vmx
+fi
+if test "$impl_choice" = "dummy" && test "$enable_dummy" = "no"; then
+  AC_MSG_ERROR([No vector impl configured; and you disabled the dummy implementation.])
+fi
 
 
 ################################################################
@@ -631,8 +650,8 @@ HMMER configuration:
 "
 
 if test "$impl_choice" = "dummy"; then
-  AC_MSG_WARN([It appears your platform will not fully support H3.])
-  AC_MSG_WARN([The "dummy" DP implementation is very slow.])
+  AC_MSG_WARN([The "dummy" implementation is a portable ANSI C reference implementation.])
+  AC_MSG_WARN([It is slow, and is not intended for production use.])
 fi
 
 

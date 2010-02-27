@@ -1,24 +1,24 @@
 \section{Introduction}
 \setcounter{footnote}{0}
 
-HMMER is used for searching sequence databases for homologs of protein
-sequences, and for making protein sequence alignments. HMMER can be
-used to search sequence databases with single query sequences but it
+HMMER is used to search sequence databases for homologs of protein
+sequences, and to make protein sequence alignments. HMMER can be used
+to search sequence databases with single query sequences but it
 becomes particularly powerful when the query is a multiple sequence
 alignment of a sequence family. HMMER makes a \emph{profile} of the
-query, a probabilistic consensus with a position-specific scoring
-system for substitutions, insertions, and deletions. HMMER profiles
-are probabilistic models called ``profile hidden Markov models''
-(profile HMMs) \citep{Krogh94,Eddy98,Durbin98}.
+query that assigns a position-specific scoring system for
+substitutions, insertions, and deletions. HMMER profiles are
+probabilistic models called ``profile hidden Markov models'' (profile
+HMMs) \citep{Krogh94,Eddy98,Durbin98}.
 
 Compared to BLAST, FASTA, and other sequence alignment and database
 search tools based on older scoring methodology, HMMER aims to be
 significantly more accurate and more able to detect remote homologs,
-because of the strength of its underlying mathematical models. In the
+because of the strength of its underlying probability models. In the
 past, this strength came at a significant computational cost, with
 profile HMM implementations running about 100x slower than comparable
-BLAST searches. With the release of HMMER3 in 2010, HMMER is now
-essentially as fast as BLAST.
+BLAST searches. With HMMER3, HMMER is now essentially as fast as
+BLAST.
 
 
 \subsection{How to avoid reading this manual}
@@ -35,8 +35,8 @@ work:
 \item Follow the quick installation instructions on page
       \pageref{section:installation}. An automated test suite
       is included, so you will know immediately if something
-      went wrong.
-\item Go to the tutorial, section on page
+      went wrong.\footnote{Nothing should go wrong.}
+\item Go to the tutorial section on page
 \pageref{section:tutorial}, which walks you through some examples of
 using HMMER on real data.
 \end{itemize}
@@ -185,9 +185,8 @@ HMMER3 has already been used to model mouse song [Elena Rivas,
   personal communication] and in the past HMMER has reportedly been
 used to model music, speech, and even automobile engine telemetry. If
 you use it for something particularly strange, I'd be curious to hear
-about it (but I never, ever want to see my error messages showing up
-on the console of my Saab).
-
+about it -- but I never, ever want to see my error messages showing up
+on the console of my Saab.
 
 
 
