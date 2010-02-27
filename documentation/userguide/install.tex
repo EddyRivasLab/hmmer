@@ -74,21 +74,22 @@ all POSIX platforms. We currently do not develop or test on Windows.
 
 \paragraph{Processor:} HMMER3 depends on vector parallelization methods
 that are supported on most modern processors. H3 requires either an
-x86-compatible (IA32/IA64) processor that supports the SSE2 vector
-instruction set, or a PowerPC processor that supports the Altivec/VMX
-instruction set. SSE2 is supported on Intel processors from Pentium 4
-on, and AMD processors from K8 (Athlon 64) on; we believe this
-includes almost all Intel processors since 2000 and AMD processors
-since 2003. Altivec/VMX is supported on Motorola G4, IBM G5, and IBM
-Power6 processors, which we believe includes almost all PowerPC-based
-desktop systems since 1999 and servers since 2007.
+x86-compatible (IA32, IA64, or Intel64) processor that supports the
+SSE2 vector instruction set, or a PowerPC processor that supports the
+Altivec/VMX instruction set. SSE2 is supported on Intel processors
+from Pentium 4 on, and AMD processors from K8 (Athlon 64) on; we
+believe this includes almost all Intel processors since 2000 and AMD
+processors since 2003. Altivec/VMX is supported on Motorola G4, IBM
+G5, and IBM PowerPC processors starting with the Power6, which we
+believe includes almost all PowerPC-based desktop systems since 1999
+and servers since 2007.
 
 If your platform does not support one of these vector instruction
 sets, the configure script will revert to an unoptimized
 implementation called the ``dummy'' implementation. This
 implementation is two orders of magnitude slower. It will enable you
-to see H3's features on a much wider range of processors, but is not
-suited for real production work.
+to see H3's scientific features on a much wider range of processors,
+but is not suited for real production work.
 
 We do aim to be portable to all modern processors. The acceleration
 algorithms are designed to be portable despite their use of
@@ -114,6 +115,15 @@ the installation process.\footnote{If you install more than one
   you'll have multiple instantiations of Easel lying around. The Easel
   API is not yet stable enough to decouple it from the applications
   that use it, like HMMER and Infernal.}
+
+Configuration and compilation use several UNIX utilities. Although
+these utilities are available on all UNIX/Linux/MacOS systems, old
+versions may not support all the features the \ccode{./configure}
+script and Makefiles are hoping to find. We aim to build on anything,
+even old Ebay'ed junk, but if you have an old system, you may want to
+hedge your bets and install up-to-date versions of GNU tools such as
+GNU make and GNU grep.
+
 
 \subsection{Multithreaded parallelization for multicores is the default}
 
@@ -167,21 +177,20 @@ at most. Improving MPI scaling is one of our goals.
 
 \subsection{Using build directories}
 
-The installation process from source supports using separate build
-directories, using the GNU-standard VPATH mechanism. This allows you
-to maintain separate builds for different processors or with different
-configuration/compilation options. All you have to do is run the
-configure script from the directory you want to be the root of the
-build directory.  For example:
+The configuration and compilation process from source supports using
+separate build directories, using the GNU-standard VPATH
+mechanism. This allows you to maintain separate builds for different
+processors or with different configuration/compilation options. All
+you have to do is run the configure script from the directory you want
+to be the root of your build directory.  For example:
 
 \user{mkdir my-hmmer-build}\\
 \user{cd my-hmmer-build}\\
 \user{/path/to/hmmer/configure}\\
 \user{make}
 
-You'd probably only use this feature if you're a developer,
-maintaining several different builds for testing purposes.
-
+This assumes you have a \ccode{make} that supports VPATH. If your
+system's \ccode{make} does not, you can always install GNU make.
 
 \subsection{Makefile targets}
 
@@ -209,5 +218,57 @@ maintaining several different builds for testing purposes.
 \end{sreitems}
 
 
+\subsection{Workarounds for some unusual configure/compilation problems}
 
+\paragraph{Configuration or compilation fails when trying to use a
+  separate build directory.}  If you try to build in a build tree
+(other than the source tree) and you have any trouble in configuration
+or compilation, try just building in the source tree instead. Some
+\ccode{make} versions don't support the VPATH mechanism needed to use
+separate build trees. Another workaround is to install GNU make.
+
+\paragraph{Configuration fails, complaining that the CFLAGS don't
+  work.} Our configure script uses an Autoconf macro,
+  \ccode{AX\_CC\_MAXOPT}, that tries to guess good optimization flags
+  for your compiler. In very rare cases, we've seen it guess wrong.
+  You can always set \ccode{CFLAGS} yourself with something like:
+
+\user{./configure CFLAGS=-O}
+
+\paragraph{Configuration fails, complaining ``no acceptable grep could
+  be found''.} We've seen this happen on our Sun Sparc/Solaris
+machine. It's a known issue in GNU autoconf. You can either install
+GNU grep, or you can insist to \ccode{./configure} that the Solaris
+grep (or whatever grep you have) is ok by explicitly setting
+\ccode{GREP}:
+
+\user{./configure GREP=/usr/xpg4/bin/grep}
+
+\paragraph{Configuration warns that it's using the ``dummy''
+implementation and H3 is going to be very slow.} This is normal, if
+your system has a processor that we don't yet support with a fast
+vector-parallel implementation. We currently support Intel/AMD
+compatible processors and PowerPC compatible processors.  H3 will
+revert to a portable but slow version on other processors.
+
+\paragraph{Many 'make check' tests fail.} We have one report of a
+system that failed to link multithread-capable system C libraries
+correctly, and instead linked to one or more serial-only
+libraries.\footnote{The telltale phenotype of this failure is to
+  configure with debugging flags on and recompile, run one of the
+  failed unit test drivers (such as \ccode{easel/easel\_utest})
+  yourself and let it dump core; and use a debugger to examine the
+  stack trace in the core. If it's failed in
+  \ccode{\_\_errno\_location()}, it's linked a non-thread-capable
+  system C library.} We've been unable to reproduce the problem here,
+and are not sure what could cause it -- we optimistically believe it's
+a messed-up system instead of our fault. If it does happen, it screws
+all kinds of things up with the multithreaded implementation. A
+workaround is to shut threading off:
+
+\user{./configure --disable-threads}
+
+This will compile code won't parallelize across multiple cores, of
+course, but it will still work fine on a single processor at a time
+(and MPI, if you build with MPI enabled).
 
