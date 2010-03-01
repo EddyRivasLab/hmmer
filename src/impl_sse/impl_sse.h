@@ -307,7 +307,7 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int**ends);
+extern int p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int**ends, int debug);
 extern int p7_SSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int**ends);
 
 /* null2.c */
