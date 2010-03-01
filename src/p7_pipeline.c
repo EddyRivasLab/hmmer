@@ -550,6 +550,13 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
+  p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
+  seq_score = (usc - nullsc) / eslCONST_LOG2;
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+
+  int debug_tw = 0;
+if (P == 0.0026976459855718726)
+	debug_tw = 1;
 
   /* First level filter: the MSV filter, multihit with <om> */
   int* window_starts;
@@ -558,18 +565,28 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   float pthresh = nullsc  + (invsurv * eslCONST_LOG2);
 
   //int ret = p7_SSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends);
-  int ret = p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends);
-  if (ret == eslOK) return eslOK;
+  int ret = p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends, debug_tw);
+  int ret2 = p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends, debug_tw);
+  //if (ret == eslOK) return eslOK;
 
 
 
  // old msv filter
-/*
-  p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
-  seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+
+
+  if (ret == eslOK && P <= pli->F1 ) {
+
+	  printf ("old works, new fails: \n");
+
+	  ret2 = p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends, 0);
+
+	  printf ("old works, new fails: %d, %d\n", ret, ret2);
+
+  }
+
+
   if (P > pli->F1) return eslOK;
-*/
+
   pli->n_past_msv++;
 
 
