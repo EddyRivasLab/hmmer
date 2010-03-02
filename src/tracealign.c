@@ -403,7 +403,8 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    break;
 
 	  case p7T_D:
-	    msa->ax[idx][matmap[tr[idx]->k[z]]] = esl_abc_XGetGap(abc); /* overwrites ~ in Dk column on X->Dk */
+	    if (matuse[tr[idx]->k[z]]) /* bug h77: if all col is deletes, do nothing; do NOT overwrite a column */
+	      msa->ax[idx][matmap[tr[idx]->k[z]]] = esl_abc_XGetGap(abc); /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]] + 1;
 	    break;
 
@@ -505,7 +506,8 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    break;
 
 	  case p7T_D:
-	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = '-';  /* overwrites ~ in Dk column on X->Dk */
+	    if (matuse[tr[idx]->k[z]]) /* bug #h77: if all column is deletes, do nothing; do NOT overwrite a column */
+	      msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = '-';  /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]];
 	    break;
 
