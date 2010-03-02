@@ -1,3 +1,24 @@
+ID              h77
+TITLE           hmmalign corrupts column before an all-deleted column
+AFFECTS         3.0rc1
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE J6/8; SRE 2010/0302-hmmer-bug-h77
+REPORTED_BY     Denis Schmidt  <Denis.Schmidt@merck.de>
+OPENED_DATE     SRE, Tue Mar  2 11:06:49 2010
+CLOSED_DATE     SRE, Tue Mar  2 11:47:25 2010
+DESCRIPTION     
+   hmmalign corrupts sequences, overwriting column with -'s if an
+   all-delete column occurs.
+
+   Bug was introduced in svn r3041, in fixing problems handling 
+   X states, detected by Elena.
+
+   Fix: in tracealign.c::make_{digital,text}_msa, test for matuse[k]
+   before writing a delete '-'. 
+  
+   i12-delete-corruption.pl in testsuite tests for this bug.
+//
 ####
 ####  3.0rc1 release: 9 Feb 2010
 ####

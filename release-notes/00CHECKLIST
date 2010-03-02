@@ -131,7 +131,6 @@ Write the release notes in releases/.
 Check that the user guide is up to date.
 Revise the tutorial section. See last ~/notebook entry for scripts.
 Don't slack off on this step - it's a useful regression test as well.
-  
 
 Finally,
   make distclean
@@ -146,9 +145,8 @@ from the release directory
 
 ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Makefile
 
-
 * You can put it in the environment and everything will work as cut/paste:
-   setenv HMMER_VERSION  3.0b3
+   setenv HMMER_VERSION  3.0rc1
    cd ~/releases
 
 * Delete any old releases of the same number
@@ -164,11 +162,11 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 hmmer-${HMMER_VERSION}
    cd hmmer-${HMMER_VERSION}
 
-  3.0b3: exported 3051/442
+  3.0rc1: exported 3160/510
+  3.0b3:  exported 3051/442
 
 * Edit configure.ac: make sure version, date, copyright info is set correctly
    emacs configure.ac
-   ln -s easel/aclocal.m4 .
    autoconf; (cd easel; autoconf)
    ./configure
    source release-notes/LICENSE.csh
@@ -192,65 +190,45 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" release-notes/LICENSE.tag
    find .     -type f -exec easel/devkit/sedition-pp LICENSE release-notes/LICENSE.tag {} \;
 
+
 * compile documentation
-  Beta Guide:
-   cd documentation/alphaguide
+   cd documentation/userguide
    make
    mv Userguide.pdf ../../Userguide.pdf
    cd ../..
 
-  User Guide (not ready yet)
-   cd documentation/userguide
-   ln -s plan7-core.ai plan7-core.pdf
-   ln -s plan7-search.ai  plan7-search.pdf
-   make
-   pdflatex main
-   mv Userguide.pdf ../../
-   cd ../..	 
-
-* In Makefile.in, comment out Makefile and configure targets - 
-  users may not have autoconf installed.
-
 
 * compile Linux binaries with icc
   Each build can run in a separate terminal; we're using independent build directories
+  My .bashrc contains two functions for configuring icc paths properly:
+   setup_icc_intel64
+   setup_icc_ia32
 
+x86-64 (intel64) build:
    ssh login-eddy
-   setenv HMMER_VERSION  3.0b3
-   source /usr/local/intel/current/bin/iccvars.csh intel64
+   export HMMER_VERSION=3.0rc1
    cd releases/hmmer-${HMMER_VERSION}
-   source release-notes/LICENSE.csh
+   setup_icc_intel64
    mkdir build-x86_64
    cd    build-x86_64
    ../configure CC=icc LDFLAGS=-static-intel  --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64
    make
-   make check
    make dev
+   make check
    make install
    (cd easel/miniapps; make install)
 
- Building ia32 is a little tricky, because our environment is so thoroughly x86_64.
- First go to .cshrc and comment out the
-   source /usr/local/INTEL.csh line
- Then:
-
+ia32 build:
    ssh login-eddy
-   setenv HMMER_VERSION  3.0b3
-   source /usr/local/intel/ictce/current/ictce/3.2.0.020/ictvars.csh
-   source /usr/local/intel/ictce/current/cc/11.0.074/bin/ia32/idbvars.csh
-   source /usr/local/intel/ictce/current/cc/11.0.074/bin/iccvars.csh ia32
-   source /usr/local/intel/ictce/current/fc/11.0.074/bin/ifortvars.csh ia32
-   source /usr/local/intel/ictce/current/itac/7.2.0.011/bin/itacvars.csh
-   source /usr/local/intel/ictce/current/impi/3.2.0.011/bin64/mpivars.csh
-   setenv INTEL_LICENSE_FILE 28518@b03u25.int.janelia.org
+   export HMMER_VERSION=3.0rc1
    cd releases/hmmer-${HMMER_VERSION}
-   source release-notes/LICENSE.csh
+   setup_icc_ia32
    mkdir build-ia32
    cd    build-ia32
    ../configure CC=icc LDFLAGS=-static-intel --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32
    make
-   make check
    make dev
+   make check
    make install
    (cd easel/miniapps; make install)
 
@@ -259,14 +237,13 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
    make distclean
    cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES
+   rm -rf bugs
    rm -rf build-ia32   
-   rm -rf build-ia32-debug
    rm -rf build-x86_64
    rm -rf contrib
+   rm -rf documentation/userguide
    rm -rf release-notes
-   rm -rf bugs
-
-   rm -rf documentation
+   rm -rf test-speed
 
    cd easel
    rm -f  00CHECKLIST LICENSE.csh.in LICENSE.tag 
@@ -277,7 +254,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
    cat RELEASE-NOTES | dumpnotes
    emacs RELEASE-NOTES
-   emacs ~/src/hmmer/release-notes/RELEASE-3.0b2
+Delete TO-DO sections and clean up for public consumption.
    texclean
 
 * package
@@ -286,7 +263,8 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
-   3.0b3: 17.1 Mb
+   3.0rc1: 21.0 Mb
+   3.0b3:  17.1 Mb
 
 * test again
    cd hmmer-${HMMER_VERSION}
@@ -308,20 +286,30 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    cd ~/releases/hmmer-release
 
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
-            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0b3\
-            -m "tagged 3.0b3 release, from 3.0 branch"          
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0rc1\
+            -m "tagged 3.0rc1 release, from 3.0 branch"          
    svn copy https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0\
-            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0b3\
-            -m "tagged Easel for HMMER 3.0b3 release, from HMMER 3.0 branch"          
+            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0rc1\
+            -m "tagged Easel for HMMER 3.0rc1 release, from HMMER 3.0 branch"          
 
 * Merge the branch's changes back to the trunk
+  You must do this by diff of specific revisions in the branch.
+  Do *not* diff the branch against the trunk; if the trunk has its own
+  changes that should be retained, you'll revert them to the branch
+  version!
 
-  HMMER: -r 3050:3051
-  Easel: no changes
+  HMMER: -r 3152:3161
+  Easel: -r 509:511
 
   cd ~/src/hmmer
+  svn diff  -r 3152:3161 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 | more
+  cd easel
+  svn diff -r 509:511    https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 | more
+  cd ..
+No changes in Easel 
+
   svn update
-  svn merge -r 3050:3051 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
+  svn merge -r 3152:3161 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
   
   This screws up the Easel externals on the trunk, so fix:
  
@@ -349,3 +337,4 @@ Release           Date            SVN (HMMER/Easel)
 3.0b1             17 Jun 2009     r2831/r345
 3.0b2             21 Jun 2009     r2837/r350
 3.0b3             15 Nov 2009     r3051/r442
+3.0rc1            10 Feb 2010     r3161/r511
