@@ -1,4 +1,4 @@
-/* phmmer: search a protein sequence against a protein database
+/* shmmer: search a protein sequence against a target database with different score systems
  * 
  * SRE, Sun Dec  7 11:19:05 2008 [Janelia] [Requiem for a Dream]
  * SVN $Id: phmmer.c 3152 2010-02-07 22:55:22Z eddys $
