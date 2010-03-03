@@ -586,7 +586,16 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
     }
   pli->n_past_vit++;
 
-  /* Parse it with Forward and obtain its real Forward score. */
+  /* Parse it with Viterbi and obtain its real Viterbi score */
+
+  /*            The model <om> must be configured specially to have
+   *            lspace float scores, not its usual pspace float scores for
+   *            <p7_ForwardFilter()>.
+   */
+
+  //p7_ViterbiScore()
+
+  /* Parse it with Forward and obtain its real Forward score */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
