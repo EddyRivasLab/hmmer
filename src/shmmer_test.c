@@ -30,13 +30,14 @@
 #include "hmmer.h"
 
 typedef struct {
+  char           *alg;
   P7_BG          *bg;
   P7_PROFILE     *gm;
   P7_OPROFILE    *om;
-  P7_GMX         *gx;
 } WORKER_PINFO;
 
 typedef struct {
+  char             *alg;
   ESL_ALPHABET     *abc;
   ESL_SQ           *sq;
   double           sopen;
@@ -338,22 +339,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
       /* INNER LOOP OVER SEQUENCE TARGETS */
-      if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
+      if (esl_opt_GetBoolean(go, "--fwd"))
         {
-          P7_OPROFILE     *gm       = NULL;           /* optimized query profile */
-          P7_OPROFILE     *om       = NULL;           /* optimized query profile */
+          p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* Better just do the Viterbi and Forward calibration steps and then set pinfo->alg */
 
-
-          p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &gm, &om);
-
-
+          /* need to create the gx and ox DP matrices but need the target sequence for that*/
           sstatus = serial_ploop(pinfo, dbfp);
         }
-
-      else
+      else if (esl_opt_GetBoolean(go, "--vit"));
+      else if (esl_opt_GetBoolean(go, "--sw"));
+      else if (esl_opt_GetBoolean(go, "--miy"));
         {
-          sinfo->sq = qsq;
-          sstatus = serial_sloop(sinfo, dbfp);
+          sinfo->alg = esl_opt_GetString(go, "--miy");
+          sinfo->sq  = qsq;
+          sstatus    = serial_sloop(sinfo, dbfp);
         }
 
       /* CHECK SEARCH STATUS */
@@ -411,7 +410,7 @@ serial_ploop(WORKER_PINFO *pinfo, ESL_SQFILE *dbfp)
   int      sstatus;
   int      dpstatus;
   ESL_SQ   *dbsq     = NULL;   /* one target sequence object (digital)  */
-  double zscore;
+  double sc;
 
   dbsq = esl_sq_CreateDigital(abc);
 
@@ -419,34 +418,47 @@ serial_ploop(WORKER_PINFO *pinfo, ESL_SQFILE *dbfp)
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
 
-	  printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
-	  if (qsq->acc[0]  != '\0') printf("Accession:   %s\n", qsq->acc);
-	  if (qsq->desc[0] != '\0') printf("Description: %s\n", qsq->desc);
+    printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
+    if (qsq->acc[0]  != '\0') printf("Accession:   %s\n", qsq->acc);
+    if (qsq->desc[0] != '\0') printf("Description: %s\n", qsq->desc);
 
-	  dpstatus = pfunction(qsq->dsq, qsq->n, dbsq->dsq, dbsq->n, info->popen, info->pextend, info->lambda, info->SMX, &zscore);
+    if   (FORWARD || VITERBI)
+      {
+      /* Allocate the gx and ox dynamic programming matrices (we now have model and target length) */
 
-	  if   (FORWARD)
-	    {
+      /*
+       * MAKE SURE THE MODEL IS IN LOCAL MODE!
+       * MAKE SURE UNALIGNED TRANSITIONS ARE SET TO MATCH EACH TARGET LENGTH
+       * FOR BOTH HOMOLOGY AND BACKGROUND MODEL  USE: p7_bg_SetLength(cfg->bg, L) for random model
+       *
+       */
 
+      if (FORWARD)
+        {
+        dpstatus = p7_ForwardParser(dsq, L, om, ox, &sc);
 
+        /* note, if a filter overflows, failover to slow versions */
+        if (sc == eslINFINITY) dpstatus = p7_GForward(dsq, L, gm, gx, &sc);
+        }
 
-	    }
+      else
+        {
+        dpstatus = p7_ViterbiFilter(dsq, L, om, ox, &sc);
+        /* note, if a filter overflows, failover to slow versions */
 
-	  else if (VITERBI)
+        if (sc == eslINFINITY) dpstatus = p7_GViterbi(dsq, L, gm, gx, &sc);
+        }
+      }
 
+    if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
 
+    /* REPORT */
+    printf("Score: %g\n", sc); /* this should be printed to ofp */
 
+    /* REUSE */
+    esl_sq_Reuse(dbsq);
 
-
-	  if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
-
-	  /* REPORT */
-	  printf("Zscore: %g\n", zscore); /* this should be printed to ofp */
-	  
-	  /* REUSE */
-      esl_sq_Reuse(dbsq);
-
-    }
+    } /* end loop over seq. targets */
 
   /* CLEANUP */
   esl_sq_Destroy(dbsq); dbsq = NULL;
