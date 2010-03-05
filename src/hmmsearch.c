@@ -469,8 +469,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	}
 
       /* Print the results.  */
+      //dedup hits here
+      // also, modify e-values here, based on full length of db
+
       p7_tophits_Sort(info->th);
       p7_tophits_Threshold(info->th, info->pli);
+
+      for (i=0; i< info->th->N; i++) {
+    	  info->th->hit[i]->dcl[0].pvalue = info->th->hit[i]->sum_pvalue =  info->th->hit[i]->pvalue =  info->th->hit[i]->pvalue * info->th->hit[i]->window_length / info->pli->nres;
+      }
+
       p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
 
@@ -1175,27 +1183,71 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
-  int      sstatus;
+  int      wstatus, wstatus_next;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
-
+  ESL_SQ   *dbsq_next  =  esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
+  //while ((wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, p7_PIPELINE_READWINDOW_LEN, dbsq)) == eslOK || wstatus == eslEOD)
 
-  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
-    {
+  //read first window into buffer
+  if ( (wstatus = esl_sqio_ReadWindow(dbfp, 0, p7_PIPELINE_READWINDOW_LEN, dbsq)) != eslOK && wstatus != eslEOD)
+	  return wstatus;
+
+  //read second window into buffer (if it exists)
+  esl_sq_Copy(dbsq, dbsq_next); // necessary to set up initialized meta data
+  wstatus_next = esl_sqio_ReadWindow(dbfp, info->om->max_length, p7_PIPELINE_READWINDOW_LEN - info->om->max_length, dbsq_next);
+
+  while (wstatus == eslOK || wstatus == eslEOD )
+  {
+
+	  if (dbsq->n == p7_PIPELINE_READWINDOW_LEN ) { // more windows from the current sequence probably follow this one
+
+		  if (dbsq_next->n < p7_PIPELINE_READWINDOW_LEN/3 ){ // if that next window is pretty short, just append it to the current one
+															  // Only possible if the next window is the final of the sequence
+
+			  //copy the next one over
+			  esl_sq_GrowTo(dbsq, p7_PIPELINE_READWINDOW_LEN + dbsq_next->n );
+			  memcpy((void*)(dbsq->dsq) + 1 + p7_PIPELINE_READWINDOW_LEN, (void*)(dbsq_next->dsq) + 1 + info->om->max_length , dbsq_next->n * sizeof(uint8_t) );
+			  dbsq->n = p7_PIPELINE_READWINDOW_LEN + dbsq_next->n - info->om->max_length;
+			  dbsq->dsq[1 + dbsq->n]= eslDSQ_SENTINEL;
+
+
+
+
+			  // call ReadWindow once to finish off the (now empty) sequence.  Should just return eslEOD
+			  if ( (wstatus_next = esl_sqio_ReadWindow(dbfp, 0, p7_PIPELINE_READWINDOW_LEN, dbsq_next)) != eslEOD)
+				  esl_fatal("Unexpected error while reading window");
+
+			  //go get the beginning of the next sequence
+			  esl_sq_Reuse(dbsq_next);
+			  wstatus_next = esl_sqio_ReadWindow(dbfp, 0, p7_PIPELINE_READWINDOW_LEN, dbsq_next);
+
+
+		  }
+
+	  }
+
       p7_pli_NewSeq(info->pli, dbsq);
+      info->pli->nres -= dbsq->C; // to account for overlapping region of windows
+
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
       p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
 	  
-      esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
+
+      esl_sq_Copy(dbsq_next, dbsq); // necessary to set up initialized meta data
+      wstatus = wstatus_next;
+
+      wstatus_next = esl_sqio_ReadWindow(dbfp, info->om->max_length, p7_PIPELINE_READWINDOW_LEN - info->om->max_length, dbsq_next);
     }
 
   esl_sq_Destroy(dbsq);
+  esl_sq_Destroy(dbsq_next);
 
-  return sstatus;
+  return wstatus;
 
 
 }
