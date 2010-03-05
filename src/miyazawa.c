@@ -352,8 +352,6 @@ serial_loop(ESL_ALPHABET *abc,  ESL_SQ *qsq, WORKER_INFO *info, ESL_SQFILE *dbfp
     {
 
 	  printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
-	  if (qsq->acc[0]  != '\0') printf("Accession:   %s\n", qsq->acc);
-	  if (qsq->desc[0] != '\0') printf("Description: %s\n", qsq->desc);
 
 	  dpstatus = pfunction(qsq->dsq, qsq->n, dbsq->dsq, dbsq->n, info->popen, info->pextend, info->lambda, info->SMX, &zscore);
 

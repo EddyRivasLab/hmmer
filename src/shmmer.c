@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -198,7 +199,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
 int
 main(int argc, char **argv)
 {
-  int              status   = eslOK;
+  int             status   = eslOK;
 
   ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
   struct cfg_s     cfg;         /* configuration data                      */
@@ -228,16 +229,17 @@ main(int argc, char **argv)
 static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  FILE            *ofp      = stdout;             /* output file for results (default stdout)         */
-  int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
-  ESL_SQFILE      *qfp      = NULL;	          /* open qfile                                       */
-  ESL_SQ          *qsq      = NULL;               /* query sequence                                   */
-  int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
-  ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                      */
-  ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                                */
-  P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                   */
-  ESL_STOPWATCH   *w        = NULL;               /* for timing                                       */
-  int              nquery   = 0;
+  FILE            *ofp      = stdout;             /* output file for results (default stdout)  */
+  int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                           */
+  ESL_SQFILE      *qfp      = NULL;	          /* open qfile                                */
+  ESL_SQ          *qsq      = NULL;               /* query sequence                            */
+  int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                          */
+  ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                               */
+  ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                         */
+  P7_BUILDER      *bld      = NULL;               /* HMM construction configuration            */
+  ESL_STOPWATCH   *w        = NULL;               /* for timing                                */
+  int              seed;
+  int              nquery   = 0;                  /* number of queries processex                */
   int              textw;                         /* set max width of ASCII text output lines   */
   int              status   = eslOK;              /* general status of different function calls */
   int              qstatus  = eslOK;              /* status of the query being read             */
@@ -289,7 +291,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
     /* Allocate pinfo */
     ESL_ALLOC(pinfo, sizeof(*pinfo));
-    pinfo.bg    = p7_bg_Create(abc);
+    pinfo->bg    = p7_bg_Create(abc);
     }
 
   /* Non-probabilistic score system */
@@ -303,7 +305,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     sinfo->lambda  = 0.3466; /* in half-bits */
 
     sinfo->SMX = esl_scorematrix_Create(sinfo->abc);
-    esl_scorematrix_SetBLOSUM62(info->SMX);   /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
+    esl_scorematrix_SetBLOSUM62(sinfo->SMX);   /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
     }
 
   /* Open output files */
@@ -356,6 +358,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         pinfo->alg = "--fwd";
         p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default */
         sstatus = serial_ploop(pinfo, dbfp);
+        printf("sstatus: %d\n", sstatus);
+        printf("HI\n");
         }
       else if (esl_opt_GetBoolean(go, "--vit"))
         {
@@ -376,20 +380,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         sstatus    = serial_sloop(sinfo, dbfp);
         }
 
-      /* Search status */
-      switch(sstatus)
-      {
-      case eslEFORMAT:
-    	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
-    			  dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-    	  break;
-      case eslEOF:
-    	  /* do nothing */
-    	  break;
-      default:
-    	  esl_fatal("Unexpected error %d reading sequence file %s",
-    			  sstatus, dbfp->filename);
-      }
+//      /* Search status */
+//      switch(sstatus)
+//      {
+//      case eslEFORMAT:
+//    	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
+//    			  dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+//    	  break;
+//      case eslEOF:
+//    	  /* do nothing */
+//    	  break;
+//      default:
+//    	  esl_fatal("Unexpected error %d reading sequence file %s",
+//    			  sstatus, dbfp->filename);
+//      }
 
       /* Stop watch */
       esl_stopwatch_Stop(w);
@@ -400,8 +404,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sq_Reuse(qsq);
 
       /* Cleanup */
-
-
+      if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
+        {
+        p7_profile_Destroy(pinfo->gm);
+        p7_oprofile_Destroy(pinfo->om);
+        }
+      else
+        {
+        sinfo->sq = NULL; /* this is wasteful with a proper allocation above */
+        }
     } /* end outer loop over query sequences */
 
   /* Query status */
@@ -409,18 +420,26 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",qstatus, qfp->filename);
 
   /* Cleanup */
-  esl_scorematrix_Destroy(sinfo->SMX);
-
-
-
-  free(pinfo); pinfo = NULL;
-  free(sinfo); sinfo = NULL;
+  if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
+    {
+    p7_builder_Destroy(bld); bld = NULL;
+    free(pinfo->alg);
+    p7_bg_Destroy(pinfo->bg);
+    free(pinfo); pinfo = NULL;
+    }
+  else
+    {
+    free(sinfo->alg);
+    esl_sq_Destroy(sinfo->sq);
+    esl_alphabet_Destroy(sinfo->abc);
+    esl_scorematrix_Destroy(sinfo->SMX);
+    free(sinfo); sinfo = NULL;
+    }
 
   esl_sqfile_Close(dbfp); dbfp = NULL;
   esl_sqfile_Close(qfp); qfp = NULL;
   esl_stopwatch_Destroy(w); w =NULL;
   esl_sq_Destroy(qsq); qsq = NULL;
-  p7_builder_Destroy(bld); bld = NULL;
   esl_alphabet_Destroy(abc); abc = NULL;
 
   if (ofp      != stdout) fclose(ofp);
@@ -439,12 +458,12 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 {
   P7_GMX         *gx  = NULL;
   P7_OMX         *ox  = NULL;
-  int      sstatus;
+  int       sstatus;
   int      dpstatus;
-  ESL_SQ   *dbsq     = NULL;   /* one target sequence object (digital)  */
-  double sc;
+  ESL_SQ       *dbsq  = NULL;   /* one target sequence object (digital)  */
+  float sc;
 
-  dbsq = esl_sq_CreateDigital(abc);
+  dbsq = esl_sq_CreateDigital(info->gm->abc);
 
   /* INNER LOOP OVER SEQUENCE TARGETS */
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
@@ -456,22 +475,19 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
     p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
     /* Allocate DP matrices */
-    gx = p7_gmx_Create(gm->M, dbsq->n);
-    ox = p7_omx_Create(gm->M, 0, dbsq->n); /* allocate memory efficient linar arrays */
+    gx = p7_gmx_Create(info->gm->M, dbsq->n);
+    ox = p7_omx_Create(info->gm->M, 0, dbsq->n); /* allocate memory efficient linar arrays */
 
     printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
-    if (qsq->acc[0]  != '\0') printf("Accession:   %s\n", qsq->acc);
-    if (qsq->desc[0] != '\0') printf("Description: %s\n", qsq->desc);
 
       if (strcmp(info->alg,"--fwd") == 0)
         {
         dpstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &sc);
 
         /* note, if a filter overflows, failover to slow versions */
-        if (sc == eslINFINITY) dpstatus = p7_GForward(dbsq->dsq, dbsq->dsq, info->gm, gx, &sc);
+        if (sc == eslINFINITY) dpstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &sc);
         }
-
-      else
+      else /* --vit */
         {
         dpstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &sc);
         /* note, if a filter overflows, failover to slow versions */
@@ -482,52 +498,54 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 
     if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
 
-    /* REPORT */
+    /* Report */
     printf("Score: %g\n", sc); /* this should be printed to ofp */
 
-    /* REUSE */
+    /* Reuse */
     esl_sq_Reuse(dbsq);
+
+    /* Cleanup */
+    p7_gmx_Destroy(gx); gx = NULL;
+    p7_omx_Destroy(ox); ox = NULL;
 
     } /* end loop over seq. targets */
 
-  /* CLEANUP */
+  /* Cleanup */
   esl_sq_Destroy(dbsq); dbsq = NULL;
 
-  return sstatus;
+  return sstatus; /* RETURNING SSTATUS =3 ???*/
 }
 
 static int
 serial_sloop(WORKER_SINFO *info, ESL_SQFILE *dbfp)
 {
   int      sstatus;
-   int      dpstatus;
-   ESL_SQ   *dbsq     = NULL;   /* one target sequence object (digital)  */
-   double sc;
+  int      dpstatus;
+  ESL_SQ   *dbsq     = NULL;   /* one target sequence object (digital)  */
+  double sc;
 
-   dbsq = esl_sq_CreateDigital(abc);
+  dbsq = esl_sq_CreateDigital(info->abc);
 
-   /* INNER LOOP OVER SEQUENCE TARGETS */
-   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
-     {
+  /* INNER LOOP OVER SEQUENCE TARGETS */
+  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+    {
 
-     printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
-     if (qsq->acc[0]  != '\0') printf("Accession:   %s\n", qsq->acc);
-     if (qsq->desc[0] != '\0') printf("Description: %s\n", qsq->desc);
+    printf("Target:  %s  [L=%ld] ", dbsq->name, (long) dbsq->n);
 
 
 
 
 
 
-     if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
+    if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
 
-      /* REPORT */
-      printf("Score: %g\n", sc); /* this should be printed to ofp */
+    /* REPORT */
+ //   printf("Score: %g\n", sc); /* this should be printed to ofp */
 
-      /* REUSE */
-      esl_sq_Reuse(dbsq);
+    /* REUSE */
+    esl_sq_Reuse(dbsq);
 
-      } /* end loop over seq. targets */
+    } /* end loop over seq. targets */
 
   /* CLEANUP */
   esl_sq_Destroy(dbsq); dbsq = NULL;
