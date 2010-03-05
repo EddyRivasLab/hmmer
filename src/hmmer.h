@@ -52,6 +52,7 @@
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
 #include "esl_sq.h"		/* ESL_SQ                */
+#include "esl_sqio.h"		/* ESL_SQ                */
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
 
@@ -648,6 +649,7 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
+  int    window_length; /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
   float  score;			/* bit score of the sequence (all domains, w/ correction) */
@@ -705,6 +707,9 @@ typedef struct p7_tophits_s {
 /*****************************************************************
  * 13. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
+//#define p7_PIPELINE_READWINDOW_LEN  MAX_RESIDUE_COUNT // 1 MB at a time
+#define p7_PIPELINE_READWINDOW_LEN  (1200) // 2^20 1 MB at a time
+
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
