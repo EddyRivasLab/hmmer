@@ -210,13 +210,13 @@ main(int argc, char **argv)
   cfg.qfile      = NULL;
   cfg.dbfile     = NULL;
 
-  /* PROCESS COMMAND-LINE  */
+  /* Process command-line */
   process_commandline(argc, argv, &go, &cfg.qfile, &cfg.dbfile);    
 
-  /* STATUS IS SERIAL */
+  /* Serial */
   status = serial_master(go, &cfg);
 
-  /* CLEANUP */
+  /* Cleanup */
   esl_getopts_Destroy(go);
 
   return status;
@@ -246,29 +246,28 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   WORKER_PINFO     *pinfo   = NULL;
   WORKER_SINFO     *sinfo   = NULL;
 
-  /* INITIALIZATIONS */
+  /* Initialization */
   abc     = esl_alphabet_Create(eslAMINO);      /* The resulting ESL_ALPHABET object includes input map for digitalization */
   w       = esl_stopwatch_Create();
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
 
-  /* START WATCH */
+  /* Start watch */
   esl_stopwatch_Start(w);
 
-  /* INPUT FORMATS */
-  /* Query */
+  /* Query format */
   if (esl_opt_IsOn(go, "--qformat")) {
     qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat")); /* Here we autodetect the format if no --qformat option is given */
     if (qformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
-  /* Target */
+  /* Target format */
   if (esl_opt_IsOn(go, "--tformat")) {
     dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
-  /* SCORE SYSTEM */
+  /* Probabilistic score system */
   if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
     {
     /* Allocate builder */
@@ -278,7 +277,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_randomness_Init(bld->r, seed);
       bld->do_reseeding = TRUE;
       }
-    /* Initialize only what we need for single sequence search */
+    /* Initialize builder for single sequence search */
     bld->EvL = esl_opt_GetInteger(go, "--EvL");
     bld->EvN = esl_opt_GetInteger(go, "--EvN");
     bld->EfL = esl_opt_GetInteger(go, "--EfL");
@@ -293,7 +292,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     pinfo.bg    = p7_bg_Create(abc);
     }
 
-  else /* --sw or --miy */
+  /* Non-probabilistic score system */
+  else
     {
     /* Allocate sinfo */
     ESL_ALLOC(sinfo, sizeof(*sinfo));
@@ -306,36 +306,36 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     esl_scorematrix_SetBLOSUM62(info->SMX);   /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
     }
 
-  /* OPEN OUTPUT FILES */
+  /* Open output files */
   if (esl_opt_IsOn(go, "-o")) { if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) esl_fatal("Failed to open output file %s for writing\n", esl_opt_GetString(go, "-o")); }
 
-  /* OPEN TARGET FILE (autodetecting format unless given) */
+  /* Open target file (autodetect format unless given) */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n", cfg->dbfile);
   else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n", cfg->dbfile);
   else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        esl_fatal("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
 
-  /* OPEN QUERY FILE (autodetecting format unless given) */
+  /* Open query file (autodetect format unless given) */
   status = esl_sqfile_OpenDigital(abc, cfg->qfile, qformat, NULL, &qfp);
   if      (status == eslENOTFOUND) esl_fatal("Failed to open sequence file %s for reading\n", cfg->qfile);
   else if (status == eslEFORMAT)   esl_fatal("Sequence file %s is empty or misformatted\n", cfg->qfile);
   else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        esl_fatal ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
 
-  /* CREATE DIGITAL QUERY SEQUENCE */
+  /* Create digital query sequence */
   qsq  = esl_sq_CreateDigital(abc);
 
-  /* HEADER (INPUT FILES AND OTHER OPTIONS) */
+  /* Output header (non-default options) */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
 
-  /* OUTER LOOP OVER SEQUENCE QUERIES */
+  /* Outer loop over sequence queries */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK) /* qsq is set for digital, but I am not sure at which point the conversion is made */
     {
       nquery++;
       if (qsq->n == 0) continue; /* skip zero length seqs as if they aren't even present */
 
-      /* START WATCH */
+      /* Start watch */
       esl_stopwatch_Start(w);
 
       /* seqfile may need to be rewound (multiquery mode) */
@@ -350,7 +350,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
       if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
 
-      /* INNER LOOP OVER SEQUENCE TARGETS */
+      /* Inner loop over sequence targets */
       if (esl_opt_GetBoolean(go, "--fwd"))
         {
         pinfo->alg = "--fwd";
@@ -367,7 +367,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         {
         sinfo->alg = "--sw";
         sinfo->sq  = qsq;
-        sstatus    = serial_sloop(sinfo, dbfp);
+        sstatus = serial_sloop(sinfo, dbfp);
         }
       else if (esl_opt_GetBoolean(go, "--miy"));
         {
@@ -376,7 +376,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         sstatus    = serial_sloop(sinfo, dbfp);
         }
 
-      /* CHECK SEARCH STATUS */
+      /* Search status */
       switch(sstatus)
       {
       case eslEFORMAT:
@@ -391,27 +391,36 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     			  sstatus, dbfp->filename);
       }
 
-      /* STOP WATCH */
+      /* Stop watch */
       esl_stopwatch_Stop(w);
 
       fprintf(ofp, "//\n");
 
+      /* Reuse*/
       esl_sq_Reuse(qsq);
+
+      /* Cleanup */
+
+
     } /* end outer loop over query sequences */
 
-  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
-					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
-  else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-					    qstatus, qfp->filename);
+  /* Query status */
+  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",qfp->filename, esl_sqfile_GetErrorBuf(qfp));
+  else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",qstatus, qfp->filename);
 
-  /* CLEANUP */
-  esl_scorematrix_Destroy(info->SMX);
-  free(info); info = NULL;
+  /* Cleanup */
+  esl_scorematrix_Destroy(sinfo->SMX);
+
+
+
+  free(pinfo); pinfo = NULL;
+  free(sinfo); sinfo = NULL;
 
   esl_sqfile_Close(dbfp); dbfp = NULL;
   esl_sqfile_Close(qfp); qfp = NULL;
   esl_stopwatch_Destroy(w); w =NULL;
   esl_sq_Destroy(qsq); qsq = NULL;
+  p7_builder_Destroy(bld); bld = NULL;
   esl_alphabet_Destroy(abc); abc = NULL;
 
   if (ofp      != stdout) fclose(ofp);
