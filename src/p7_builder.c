@@ -150,7 +150,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
 
 
 /* Function:  p7_builder_SetScoreSystem()
- * Synopsis:  Initialize score system for single sequence queries.
+ * Synopsis:  Initialize probabilistic score system for single sequence queries.
  * Incept:    SRE, Fri Dec 12 10:04:36 2008 [Janelia]
  *
  * Purpose:   Initialize the builder <bld> to be able to parameterize
@@ -240,7 +240,6 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   if (fb  != NULL) free(fb);
   return status;
 }
-
 
 /* Function:  p7_builder_Destroy()
  * Synopsis:  Free a <P7_BUILDER>
@@ -630,6 +629,7 @@ calibrate(P7_BUILDER *bld, P7_HMM *hmm, P7_BG *bg, P7_PROFILE **opt_gm, P7_OPROF
 
  ERROR:
   return status;
+
 }
 
 

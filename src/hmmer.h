@@ -811,12 +811,11 @@ typedef struct p7_builder_s {
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
   /* Optional: information used for parameterizing single sequence queries                         */
-  ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
-  ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
+  ESL_SCOREMATRIX     *S;		         /* residue score matrix                                   */
+  ESL_DMATRIX         *Q;	             /* Q->mx[a][b] = P(b|a) residue probabilities             */
   double               popen;         	 /* gap open probability                                   */
   double               pextend;          /* gap extend probability                                 */
-
-  const ESL_ALPHABET  *abc;		 /* COPY of alphabet                                       */
+  const ESL_ALPHABET  *abc;		         /* COPY of alphabet                                       */
   char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
 } P7_BUILDER;
 
