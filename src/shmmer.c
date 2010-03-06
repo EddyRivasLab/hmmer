@@ -393,9 +393,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     			  sstatus, dbfp->filename);
       }
 
+      /* Time to call p7_tophits
+       *
+       * Sort hits, get E-values and print
+       *
+       */
+
       /* Stop watch */
       esl_stopwatch_Stop(w);
 
+      /* End query report */
       fprintf(ofp, "//\n");
 
       /* Reuse*/
