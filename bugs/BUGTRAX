@@ -1,3 +1,19 @@
+ID              h78
+TITLE           phmmer --acc segfaults when no accession is available
+AFFECTS         3.0rc1
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE J6/13
+REPORTED_BY     Eric Pelletier <ericp@genoscope.cns.fr>, 23 Feb 2010
+OPENED_DATE     SRE, Sat Mar  6 08:58:51 2010
+CLOSED_DATE     SRE, Sat Mar  6 11:12:13 2010
+DESCRIPTION     
+  phmmer --acc segfaults after "Domain annotation" header if targets
+  contain no accessions.
+
+  p7_tophits.c::p7_tophits_Domains() was failing to check for NULL
+  accession.
+//
 ID              h77
 TITLE           hmmalign corrupts column before an all-deleted column
 AFFECTS         3.0rc1

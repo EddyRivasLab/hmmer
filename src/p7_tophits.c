@@ -874,7 +874,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
       {
-	if (pli->show_accessions && th->hit[h]->acc[0] != '\0')
+	if (pli->show_accessions && th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0')
 	  {
 	    showname = th->hit[h]->acc;
 	    namew    = strlen(th->hit[h]->acc);

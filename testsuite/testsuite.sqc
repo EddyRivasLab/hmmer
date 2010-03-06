@@ -68,6 +68,43 @@
 1 exercise  hmmalign/--informat  @src/hmmalign@ --informat fasta                     !testsuite/Caudal_act.hmm! %TESTSEQ%
 1 exercise  hmmalign/--outformat @src/hmmalign@ --outformat a2m                      !testsuite/Caudal_act.hmm! %TESTSEQ%
 
+# hmmbuild  xxxxxxxxxxxxxxxxxxxx
+1 exercise  build                @src/hmmbuild@                    %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/-h             @src/hmmbuild@  -h
+1 exercise  build/-n             @src/hmmbuild@  -n foo            %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/-o             @src/hmmbuild@  -o %HMMBUILD.out% %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/-O             @src/hmmbuild@  -O %HMMBUILD.sto% %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--amino        @src/hmmbuild@  --amino           %HMMBUILD.hmm% !testsuite/M1.sto!
+1 exercise  build/--dna          @src/hmmbuild@  --dna             %HMMBUILD.hmm% !testsuite/M1.sto!
+1 exercise  build/--rna          @src/hmmbuild@  --rna             %HMMBUILD.hmm% !testsuite/M1.sto!
+1 exercise  build/--fast         @src/hmmbuild@  --fast            %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--hand         @src/hmmbuild@  --hand            %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--symfrac      @src/hmmbuild@  --symfrac 1.0     %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--fragthresh   @src/hmmbuild@  --fragthresh 0.4  %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--wpb          @src/hmmbuild@  --wpb             %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--wgsc         @src/hmmbuild@  --wgsc            %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--wblosum      @src/hmmbuild@  --wblosum         %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--wnone        @src/hmmbuild@  --wnone           %HMMBUILD.hmm% !testsuite/20aa.sto!
+# --wgiven not tested
+1 exercise  build/--wid          @src/hmmbuild@  --wblosum --wid 0.5 %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--eent         @src/hmmbuild@  --eent            %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--eclust       @src/hmmbuild@  --eclust          %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--enone        @src/hmmbuild@  --enone           %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--eset         @src/hmmbuild@  --eset 1.0        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--ere          @src/hmmbuild@  --eent --ere  0.55   %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--esigma       @src/hmmbuild@  --eent --esigma 44.0 %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--eid          @src/hmmbuild@  --eclust --eid 0.60  %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--EmL          @src/hmmbuild@  --EmL 100        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--EmN          @src/hmmbuild@  --EmN 250        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--EvL          @src/hmmbuild@  --EvL 100        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--EvN          @src/hmmbuild@  --EvN 250        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--EfL          @src/hmmbuild@  --EfL 100        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--EfN          @src/hmmbuild@  --EfN 250        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--Eft          @src/hmmbuild@  --Eft 0.045      %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--informat     @src/hmmbuild@  --informat stockholm %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--seed         @src/hmmbuild@  --seed 42        %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--laplace      @src/hmmbuild@  --laplace        %HMMBUILD.hmm% !testsuite/20aa.sto!
+
 # hmmemit   xxxxxxxxxxxxxxxxxxxx
 1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
 1 exercise  hmmemit/-h           @src/hmmemit@ -h
@@ -81,6 +118,133 @@
 1 exercise  hmmemit/--glocal     @src/hmmemit@ -p --glocal    !testsuite/Caudal_act.hmm!
 1 exercise  hmmemit/--uniglocal  @src/hmmemit@ -p --uniglocal !testsuite/Caudal_act.hmm!
 
+# hmmsearch xxxxxxxxxxxxxxxxxxxx
+1 exercise  search               @src/hmmsearch@                            !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/-h            @src/hmmsearch@  -h
+1 exercise  search/-o            @src/hmmsearch@  -o          %HMMSEARCH.out%  !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/-A            @src/hmmsearch@  -A          %HMMSEARCH.sto%  !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--tblout      @src/hmmsearch@  --tblout    %HMMSEARCH.tbl%  !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--domtblout   @src/hmmsearch@  --domtblout %HMMSEARCH.dtbl% !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--acc         @src/hmmsearch@  --acc                     !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--noali       @src/hmmsearch@  --noali                   !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--notextw     @src/hmmsearch@  --notextw                 !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--textw       @src/hmmsearch@  --textw 256               !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/-E            @src/hmmsearch@  -E 0.01                   !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/-T            @src/hmmsearch@  -T 20                     !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--domE        @src/hmmsearch@  --domE 0.01               !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--domT        @src/hmmsearch@  --domT 20                 !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--incE        @src/hmmsearch@  --incE 0.01               !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--incT        @src/hmmsearch@  --incT 20                 !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--incdomE     @src/hmmsearch@  --incdomE 0.01            !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--incdomT     @src/hmmsearch@  --incdomT 20              !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--cut_ga      @src/hmmsearch@  --cut_ga                  !tutorial/fn3.hmm!      !tutorial/globins45.fa!
+1 exercise  search/--cut_nc      @src/hmmsearch@  --cut_nc                  !tutorial/fn3.hmm!      !tutorial/globins45.fa!
+1 exercise  search/--cut_tc      @src/hmmsearch@  --cut_tc                  !tutorial/fn3.hmm!      !tutorial/globins45.fa!
+1 exercise  search/--max         @src/hmmsearch@  --max                     !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--F1          @src/hmmsearch@  --F1 0.03                 !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--F2          @src/hmmsearch@  --F2 0.002                !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--F3          @src/hmmsearch@  --F3 0.0002               !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--nobias      @src/hmmsearch@  --nobias                  !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--nonull2     @src/hmmsearch@  --nonull2                 !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/-Z            @src/hmmsearch@  -Z 45000000               !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--domZ        @src/hmmsearch@  --domZ 45000000           !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--seed        @src/hmmsearch@  --seed 42                 !tutorial/globins4.hmm! !tutorial/globins45.fa!
+1 exercise  search/--tformat     @src/hmmsearch@  --tformat fasta           !tutorial/globins4.hmm! !tutorial/globins45.fa!
+# --cpu: threads only
+# --mpi: MPI only
+
+
+# jackhmmer xxxxxxxxxxxxxxxxxxxx
+1 exercise  jackhmmer           @src/jackhmmer@                            !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/-h                @src/jackhmmer@  -h
+1 exercise  j/-N                @src/jackhmmer@  -N 2                      !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/-o                @src/jackhmmer@  -o          %PHMMER.out%  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/-A                @src/jackhmmer@  -A          %PHMMER.sto%  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--tblout          @src/jackhmmer@  --tblout    %PHMMER.tbl%  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--domtblout       @src/jackhmmer@  --domtblout %PHMMER.dtbl% !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--chkhmm          @src/jackhmmer@  --chkhmm    %PHMMER.ch%   !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--chkali          @src/jackhmmer@  --chkali    %PHMMER.ca%   !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--acc             @src/jackhmmer@  --acc                     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--noali           @src/jackhmmer@  --noali                   !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--notextw         @src/jackhmmer@  --notextw                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--textw           @src/jackhmmer@  --textw 256               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--popen           @src/jackhmmer@  --popen 0.4               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--pextend         @src/jackhmmer@  --pextend 0.6             !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--mxfile          @src/jackhmmer@  --mxfile !easel/formats/BLOSUM62! !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/-E                @src/jackhmmer@  -E 0.01                   !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/-T                @src/jackhmmer@  -T 20                     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--domE            @src/jackhmmer@  --domE 0.01               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--domT            @src/jackhmmer@  --domT 20                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--incE            @src/jackhmmer@  --incE 0.01               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--incT            @src/jackhmmer@  --incT 20                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--incdomE         @src/jackhmmer@  --incdomE 0.01            !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--incdomT         @src/jackhmmer@  --incdomT 20              !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--max             @src/jackhmmer@  --max                     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--F1              @src/jackhmmer@  --F1 0.03                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--F2              @src/jackhmmer@  --F2 0.002                !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--F3              @src/jackhmmer@  --F3 0.0002               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--nobias          @src/jackhmmer@  --nobias                  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+# builder options untested
+1 exercise  j/--EmL             @src/jackhmmer@  --EmL 100                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--EmN             @src/jackhmmer@  --EmN 250                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--EvL             @src/jackhmmer@  --EvL 100                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--EvN             @src/jackhmmer@  --EvN 250                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--EfL             @src/jackhmmer@  --EfL 100                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--EfN             @src/jackhmmer@  --EfN 250                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--Eft             @src/jackhmmer@  --Eft 0.045               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--nonull2         @src/jackhmmer@  --nonull2                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/-Z                @src/jackhmmer@  -Z 45000000               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--domZ            @src/jackhmmer@  --domZ 45000000           !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--seed            @src/jackhmmer@  --seed 42                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--qformat         @src/jackhmmer@  --qformat fasta           !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  j/--tformat         @src/jackhmmer@  --tformat fasta           !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+# --cpu: threads only
+# --mpi: MPI only
+
+
+
+# phmmer    xxxxxxxxxxxxxxxxxxxx
+1 exercise  phmmer               @src/phmmer@                            !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/-h            @src/phmmer@  -h
+1 exercise  phmmer/-o            @src/phmmer@  -o          %PHMMER.out%  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/-A            @src/phmmer@  -A          %PHMMER.sto%  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--tblout      @src/phmmer@  --tblout    %PHMMER.tbl%  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--domtblout   @src/phmmer@  --domtblout %PHMMER.dtbl% !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--acc         @src/phmmer@  --acc                     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--noali       @src/phmmer@  --noali                   !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--notextw     @src/phmmer@  --notextw                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--textw       @src/phmmer@  --textw 256               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--popen       @src/phmmer@  --popen 0.4               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--pextend     @src/phmmer@  --pextend 0.6             !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--mxfile      @src/phmmer@  --mxfile !easel/formats/BLOSUM62! !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/-E            @src/phmmer@  -E 0.01                   !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/-T            @src/phmmer@  -T 20                     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--domE        @src/phmmer@  --domE 0.01               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--domT        @src/phmmer@  --domT 20                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--incE        @src/phmmer@  --incE 0.01               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--incT        @src/phmmer@  --incT 20                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--incdomE     @src/phmmer@  --incdomE 0.01            !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--incdomT     @src/phmmer@  --incdomT 20              !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--max         @src/phmmer@  --max                     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--F1          @src/phmmer@  --F1 0.03                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--F2          @src/phmmer@  --F2 0.002                !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--F3          @src/phmmer@  --F3 0.0002               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--nobias      @src/phmmer@  --nobias                  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--EmL         @src/phmmer@  --EmL 100                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--EmN         @src/phmmer@  --EmN 250                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--EvL         @src/phmmer@  --EvL 100                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--EvN         @src/phmmer@  --EvN 250                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--EfL         @src/phmmer@  --EfL 100                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--EfN         @src/phmmer@  --EfN 250                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--Eft         @src/phmmer@  --Eft 0.045               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--nonull2     @src/phmmer@  --nonull2                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/-Z            @src/phmmer@  -Z 45000000               !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--domZ        @src/phmmer@  --domZ 45000000           !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--seed        @src/phmmer@  --seed 42                 !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--qformat     @src/phmmer@  --qformat fasta           !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+1 exercise  phmmer/--tformat     @src/phmmer@  --tformat fasta           !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+# --cpu: threads only
+# --mpi: MPI only
 
 
 
