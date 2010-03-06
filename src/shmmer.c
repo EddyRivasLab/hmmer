@@ -359,7 +359,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default */
         sstatus = serial_ploop(pinfo, dbfp);
         printf("sstatus: %d\n", sstatus);
-        printf("HI\n");
         }
       else if (esl_opt_GetBoolean(go, "--vit"))
         {
@@ -373,27 +372,27 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         sinfo->sq  = qsq;
         sstatus = serial_sloop(sinfo, dbfp);
         }
-      else if (esl_opt_GetBoolean(go, "--miy"));
+      else //(esl_opt_GetBoolean(go, "--miy"));
         {
         sinfo->alg = "--miy";
         sinfo->sq  = qsq;
         sstatus    = serial_sloop(sinfo, dbfp);
         }
 
-//      /* Search status */
-//      switch(sstatus)
-//      {
-//      case eslEFORMAT:
-//    	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
-//    			  dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-//    	  break;
-//      case eslEOF:
-//    	  /* do nothing */
-//    	  break;
-//      default:
-//    	  esl_fatal("Unexpected error %d reading sequence file %s",
-//    			  sstatus, dbfp->filename);
-//      }
+      /* Search status */
+      switch(sstatus)
+      {
+      case eslEFORMAT:
+    	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
+    			  dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+    	  break;
+      case eslEOF:
+    	  /* do nothing */
+    	  break;
+      default:
+    	  esl_fatal("Unexpected error %d reading sequence file %s",
+    			  sstatus, dbfp->filename);
+      }
 
       /* Stop watch */
       esl_stopwatch_Stop(w);
@@ -513,7 +512,7 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
   /* Cleanup */
   esl_sq_Destroy(dbsq); dbsq = NULL;
 
-  return sstatus; /* RETURNING SSTATUS =3 ???*/
+  return sstatus; /* RETURNING SSTATUS = 3 end-of-file (often normal) */
 }
 
 static int
