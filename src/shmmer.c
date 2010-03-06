@@ -358,7 +358,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         pinfo->alg = "--fwd";
         p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default */
         sstatus = serial_ploop(pinfo, dbfp);
-        printf("sstatus: %d\n", sstatus);
         }
       else if (esl_opt_GetBoolean(go, "--vit"))
         {
@@ -408,10 +407,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         p7_profile_Destroy(pinfo->gm);
         p7_oprofile_Destroy(pinfo->om);
         }
-      else
-        {
-        sinfo->sq = NULL; /* this is wasteful with a proper allocation above */
-        }
+
     } /* end outer loop over query sequences */
 
   /* Query status */
@@ -427,8 +423,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
   else
     {
-    esl_sq_Destroy(sinfo->sq);
     esl_alphabet_Destroy(sinfo->abc);
+    sinfo->sq = NULL; /* pointing to qsq, which is destroyed below */
+    esl_sq_Destroy(sinfo->sq);
     esl_scorematrix_Destroy(sinfo->SMX);
     free(sinfo); sinfo = NULL;
     }
@@ -492,11 +489,14 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
         if (sc == eslINFINITY) dpstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &sc);
         }
 
-
     if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
 
+    /* Calculate the null2-corrected per-seq score */
+
+    /* Calculate pvalue                            */
+
     /* Report */
-    printf("Score: %g\n", sc); /* this should be printed to ofp */
+ //   printf("Score: %g\n", sc); /* this should be printed to ofp */
 
     /* Reuse */
     esl_sq_Reuse(dbsq);
