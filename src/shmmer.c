@@ -422,13 +422,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
     {
     p7_builder_Destroy(bld); bld = NULL;
-    free(pinfo->alg);
     p7_bg_Destroy(pinfo->bg);
     free(pinfo); pinfo = NULL;
     }
   else
     {
-    free(sinfo->alg);
     esl_sq_Destroy(sinfo->sq);
     esl_alphabet_Destroy(sinfo->abc);
     esl_scorematrix_Destroy(sinfo->SMX);
