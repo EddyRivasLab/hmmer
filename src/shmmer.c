@@ -12,12 +12,15 @@
 #include <string.h>
 
 #include "easel.h"
+#include "esl_getopts.h"
+#include "esl_sqio.h"
+#include "esl_sq.h"
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"
-#include "esl_getopts.h"
 #include "esl_scorematrix.h"
-#include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_exponential.h"
+#include "esl_gumbel.h"
+#include "esl_vectorops.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
@@ -27,6 +30,7 @@ typedef struct {
   P7_BG          *bg;
   P7_PROFILE     *gm;
   P7_OPROFILE    *om;
+  P7_TOPHITS     *th;
 } WORKER_PINFO;
 
 typedef struct {
@@ -291,7 +295,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
     /* Allocate pinfo */
     ESL_ALLOC(pinfo, sizeof(*pinfo));
-    pinfo->bg    = p7_bg_Create(abc);
+    pinfo->bg  = p7_bg_Create(abc);
+    pinfo->th  = p7_tophits_Create();
     }
 
   /* Non-probabilistic score system */
@@ -356,13 +361,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (esl_opt_GetBoolean(go, "--fwd"))
         {
         pinfo->alg = "--fwd";
-        p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default */
+        p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default; SHOULD IT BE P7_UNILOCAL? FAIR COMPARISON TO S/W AND MIY */
         sstatus = serial_ploop(pinfo, dbfp);
         }
       else if (esl_opt_GetBoolean(go, "--vit"))
         {
         pinfo->alg = "--vit";
-        p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default */
+        p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default; FAIR COMPARISON TO S/W AND MIY */
         sstatus = serial_ploop(pinfo, dbfp);
         }
       else if (esl_opt_GetBoolean(go, "--sw"))
@@ -393,9 +398,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     			  sstatus, dbfp->filename);
       }
 
-      /* Time to call p7_tophits
-       *
-       * Sort hits, get E-values and print
+      /* Time Sort hits, get E-values and print
        *
        */
 
@@ -461,8 +464,11 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
   P7_OMX         *ox  = NULL;
   int       sstatus;
   int      dpstatus;
-  ESL_SQ       *dbsq  = NULL;   /* one target sequence object (digital)  */
-  float sc;
+  ESL_SQ       *dbsq  = NULL;
+  float       nullsc;           /* null model score in nats (only transitions in the null model)     */
+  float          rsc;           /* raw lod sequence score in nats (only emissions in the null model) */
+  float           sc;           /* final lod sequence score in bits                                  */
+  double          P;            /* P-value of a score in bits                                        */
 
   dbsq = esl_sq_CreateDigital(info->gm->abc);
 
@@ -483,27 +489,49 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 
       if (strcmp(info->alg,"--fwd") == 0)
         {
-        dpstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &sc);
+        dpstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
 
         /* note, if a filter overflows, failover to slow versions */
-        if (sc == eslINFINITY) dpstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &sc);
+        if (rsc == eslINFINITY)
+          dpstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* rsc is in nats */ /* make sure you understand how emission in the null model fit in the profile score */
+
+        /* Base null model score */
+         p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc); /* nullsc is in nats? only scores transitions!!! */
+
+        /* Biased composition HMM filtering */
+
+        /* Calculate the null2-corrected per-seq score */
+
+        /* Calculate P-value */
+        sc = (rsc - nullsc) / eslCONST_LOG2;
+        P =  esl_exp_surv (sc,info->gm->evparam[p7_FTAU], info->gm->evparam[p7_FLAMBDA]);
         }
+
       else /* --vit */
         {
-        dpstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &sc);
-        /* note, if a filter overflows, failover to slow versions */
+        dpstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &rsc);
 
-        if (sc == eslINFINITY) dpstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &sc);
+        /* note, if a filter overflows, failover to slow versions */
+        if (rsc == eslINFINITY)
+          dpstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc);
+
+        /* Base null model score */
+        p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc);
+
+        /* Biased composition HMM filtering */
+
+        /* Calculate the null2-corrected per-seq score */
+
+        /* Calculate P-value */
+        sc = (rsc - nullsc) / eslCONST_LOG2;
+        P  = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]); /* ARE MU AND LAMBDA THE SAME FOR gm AND om??? they should be! */
         }
 
     if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
 
-    /* Calculate the null2-corrected per-seq score */
+    printf("Score: %f P-value: %f\n", sc, P);
 
-    /* Calculate pvalue                            */
-
-    /* Report */
- //   printf("Score: %g\n", sc); /* this should be printed to ofp */
+    /* Hitlist */
 
     /* Reuse */
     esl_sq_Reuse(dbsq);
@@ -517,7 +545,7 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
   /* Cleanup */
   esl_sq_Destroy(dbsq); dbsq = NULL;
 
-  return sstatus; /* RETURNING SSTATUS = 3 end-of-file (often normal) */
+  return sstatus;
 }
 
 static int
