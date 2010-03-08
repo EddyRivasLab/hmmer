@@ -1,7 +1,10 @@
+####
+####  3.0rc2 release: 6 March 2010
+####
 ID              h78
 TITLE           phmmer --acc segfaults when no accession is available
 AFFECTS         3.0rc1
-FIXED_IN        -
+FIXED_IN        3.0rc2
 STATUS          CLOSED
 XREF            SRE J6/13
 REPORTED_BY     Eric Pelletier <ericp@genoscope.cns.fr>, 23 Feb 2010
@@ -17,7 +20,7 @@ DESCRIPTION
 ID              h77
 TITLE           hmmalign corrupts column before an all-deleted column
 AFFECTS         3.0rc1
-FIXED_IN        -
+FIXED_IN        3.0rc2
 STATUS          CLOSED
 XREF            SRE J6/8; SRE 2010/0302-hmmer-bug-h77
 REPORTED_BY     Denis Schmidt  <Denis.Schmidt@merck.de>

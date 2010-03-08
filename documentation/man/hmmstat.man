@@ -38,7 +38,7 @@ The number of sequences that the profile was estimated from.
 
 .TP
 .B eff_nseq
-The "effective number" of sequences that the profile was estimated
+The effective number of sequences that the profile was estimated
 from, after HMMER applied an effective sequence number calculation
 such as the default entropy weighting.
 
@@ -48,7 +48,7 @@ The length of the model in consensus residues (match states).
 
 .TP
 .B relent
-"Mean relative entropy" per match state, in bits. This is the expected
+Mean relative entropy per match state, in bits. This is the expected
 (mean) score per consensus position. This is what the default
 entropy-weighting method for effective sequence number estimation
 focuses on, so for default HMMER3 models, you expect this value to
@@ -56,13 +56,13 @@ reflect the default target for entropy-weighting.
 
 .TP
 .B info
-"Mean information content" per match state, in bits.
+Mean information content per match state, in bits.
 Probably not useful. Information content is a slightly
 different calculation than relative entropy. 
 
 .TP
 .B p relE
-"Mean positional relative entropy", in bits.
+Mean positional relative entropy, in bits.
 This is a fancier version of the per-match-state relative entropy,
 taking into account the transition (insertion/deletion) probabilities;
 it may be a more accurate estimation of the average score contributed
