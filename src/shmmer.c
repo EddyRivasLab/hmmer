@@ -32,8 +32,6 @@ typedef struct {
   P7_OPROFILE    *om;
   P7_TOPHITS     *th;
   double         E;    /* per-target E-value threshold   */
-  double         T;    /* per-target bit score threshold */
-  int            by_E; /* TRUE to cut per-target report off by E   */
 } WORKER_PINFO;
 
 typedef struct {
@@ -45,6 +43,7 @@ typedef struct {
   double           lambda;
   ESL_SCOREMATRIX  *SMX;
   P7_TOPHITS       *th;
+  double           E;    /* per-target E-value threshold   */
 } WORKER_SINFO;
 
 #define ALGORITHMS "--fwd,--vit,--sw,--miy"
@@ -72,7 +71,7 @@ static ESL_OPTIONS options[] = {
   { "--miy",        eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  PGAPS,             "score seqs with the Miyazawa algorithm",                       3 },
   /* Control of reporting thresholds */
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  REPOPTS,           "report sequences <= this E-value threshold in output",         4 },
-  { "-T",           eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  REPOPTS,           "report sequences >= this score threshold in output",           4 },
+//{ "-T",           eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  REPOPTS,           "report sequences >= this score threshold in output",           4 }, /* I only assess performance based on E-values */
   /* Control of E-value calibration */
   { "--EvL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Viterbi Gumbel mu fit",               11 }, /* For Viterbi and S/W scores */
   { "--EvN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Viterbi Gumbel mu fit",               11 }, /* For Viterbi and S/W scores */
@@ -183,7 +182,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--sw"))        fprintf(ofp, "# Computing Smith-Waterman scores    \n");
   if (esl_opt_IsUsed(go, "--miy"))       fprintf(ofp, "# Computing Miyazawa scores          \n");
   if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"));
-  if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
+//if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
   if (esl_opt_IsUsed(go, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvL"));
   if (esl_opt_IsUsed(go, "--EvN") )      fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvN"));
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));
@@ -301,6 +300,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     ESL_ALLOC(pinfo, sizeof(*pinfo));
     pinfo->bg  = p7_bg_Create(abc);
     pinfo->th  = p7_tophits_Create();
+    pinfo->E   = esl_opt_GetReal(go, "--E");
     }
 
   /* Non-probabilistic score system */
@@ -312,10 +312,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     sinfo->sopen   = esl_opt_GetReal(go, "--sopen");
     sinfo->sextend = esl_opt_GetReal(go, "--sextend");
     sinfo->lambda  = 0.3466; /* in half-bits */
-
     sinfo->SMX = esl_scorematrix_Create(sinfo->abc);
     esl_scorematrix_SetBLOSUM62(sinfo->SMX);   /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
     sinfo->th  = p7_tophits_Create();
+    pinfo->E   = esl_opt_GetReal(go, "--E");
     }
 
   /* Open output files */
@@ -403,18 +403,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     			  sstatus, dbfp->filename);
       }
 
-      /* Sort hits */
+      /* Sort and pritn hits */
       if (esl_opt_GetBoolean(go, "--fwd") || (esl_opt_GetBoolean(go, "--vit")))
         {
         p7_tophits_Sort(pinfo->th);
-
+        //print hits
 
         }
 
       else /* --sw or --miy */
         {
         p7_tophits_Sort(sinfo->th);
-
+        //print hits
         }
 
       /* Stop watch */
@@ -548,17 +548,19 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
         P  = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]); /* ARE MU AND LAMBDA THE SAME FOR gm AND om??? they should be! */
         }
 
-    /* Hitlist */
-        if ((pinfo->by_E && P * Z <= pinfo->E) || (!pinfo->by_E && sc >= pinfo->T))
-          {
-          p7_tophits_CreateNextHit(hitlist, &hit);
-          hit->score = sc;
-          hit->pvalue     = P;
-          }
+      /* Hitlist */
+      if (P * Z <= pinfo->E) /* Calculated E-value is a lower bound because we haven't yet read the full target database */
+        {
+        p7_tophits_CreateNextHit(pinfo->th, &hit); /* allocates hit structure */
+
+        hit->score   = sc;
+        hit->pvalue  = P;
+        hit->sortkey = -log(P); /* most significant hits will be highest (more positive) in the top hitlist */
+        }
 
 
 
-  //    printf("Raw Score: %f Score: %f P-value: %f\n", rsc, sc, P);
+  //    printf("Raw Score: %f Score: %f P-value: %f\n", rsc, hit->sc, P);
 
     /* Reuse */
     esl_sq_Reuse(dbsq);
