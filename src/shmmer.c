@@ -31,6 +31,9 @@ typedef struct {
   P7_PROFILE     *gm;
   P7_OPROFILE    *om;
   P7_TOPHITS     *th;
+  double         E;    /* per-target E-value threshold   */
+  double         T;    /* per-target bit score threshold */
+  int            by_E; /* TRUE to cut per-target report off by E   */
 } WORKER_PINFO;
 
 typedef struct {
@@ -41,6 +44,7 @@ typedef struct {
   double           sextend;
   double           lambda;
   ESL_SCOREMATRIX  *SMX;
+  P7_TOPHITS       *th;
 } WORKER_SINFO;
 
 #define ALGORITHMS "--fwd,--vit,--sw,--miy"
@@ -311,6 +315,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
     sinfo->SMX = esl_scorematrix_Create(sinfo->abc);
     esl_scorematrix_SetBLOSUM62(sinfo->SMX);   /* Set score matrix to BLOSUM62 (do not read file in command-line for now) */
+    sinfo->th  = p7_tophits_Create();
     }
 
   /* Open output files */
@@ -376,7 +381,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         sinfo->sq  = qsq;
         sstatus = serial_sloop(sinfo, dbfp);
         }
-      else //(esl_opt_GetBoolean(go, "--miy"));
+      else /* --miy */
         {
         sinfo->alg = "--miy";
         sinfo->sq  = qsq;
@@ -398,9 +403,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     			  sstatus, dbfp->filename);
       }
 
-      /* Time Sort hits, get E-values and print
-       *
-       */
+      /* Sort hits */
+      if (esl_opt_GetBoolean(go, "--fwd") || (esl_opt_GetBoolean(go, "--vit")))
+        {
+        p7_tophits_Sort(pinfo->th);
+
+
+        }
+
+      else /* --sw or --miy */
+        {
+        p7_tophits_Sort(sinfo->th);
+
+        }
 
       /* Stop watch */
       esl_stopwatch_Stop(w);
@@ -460,21 +475,25 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 static int
 serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 {
-  P7_GMX         *gx  = NULL;
-  P7_OMX         *ox  = NULL;
+  P7_GMX         *gx    = NULL;
+  P7_OMX         *ox    = NULL;
+  P7_HIT         *hit   = NULL;     /* ptr to the current hit output data */
+  ESL_SQ         *dbsq  = NULL;
   int       sstatus;
   int      dpstatus;
-  ESL_SQ       *dbsq  = NULL;
   float       nullsc;           /* null model score in nats (only transitions in the null model)     */
   float          rsc;           /* raw lod sequence score in nats (only emissions in the null model) */
   float           sc;           /* final lod sequence score in bits                                  */
   double          P;            /* P-value of a score in bits                                        */
+  int             Z = 0;        /* number of sequences processed                                     */
 
   dbsq = esl_sq_CreateDigital(info->gm->abc);
 
   /* INNER LOOP OVER SEQUENCE TARGETS */
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
+    /* Count target sequences */
+    Z++;
 
     /* Reconfig all models using target length  */
     p7_bg_SetLength(info->bg, dbsq->n);
@@ -490,10 +509,11 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
       if (strcmp(info->alg,"--fwd") == 0)
         {
         dpstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
+        if (dpstatus != eslOK)  esl_fatal ("Failed to compute fast Forward score!\n");
 
         /* note, if a filter overflows, failover to slow versions */
-        if (rsc == eslINFINITY)
-          dpstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* rsc is in nats */ /* make sure you understand how emission in the null model fit in the profile score */
+        if (rsc == eslINFINITY) dpstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* rsc is in nats */ /* make sure you understand how emission in the null model fit in the profile score */
+        if (dpstatus != eslOK)  esl_fatal ("Failed to compute slow Forward score!\n");
 
         /* Base null model score */
          p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc); /* nullsc is in nats? only scores transitions!!! */
@@ -510,10 +530,11 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
       else /* --vit */
         {
         dpstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &rsc);
+        if (dpstatus != eslOK)  esl_fatal ("Failed to compute fast Viterbi score!\n");
 
         /* note, if a filter overflows, failover to slow versions */
-        if (rsc == eslINFINITY)
-          dpstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc);
+        if (rsc == eslINFINITY) dpstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc);
+        if (dpstatus != eslOK)  esl_fatal ("Failed to compute slow Viterbi score!\n");
 
         /* Base null model score */
         p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc);
@@ -527,11 +548,17 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
         P  = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]); /* ARE MU AND LAMBDA THE SAME FOR gm AND om??? they should be! */
         }
 
-    if (dpstatus != eslOK)  esl_fatal ("DP error!\n");
-
-    printf("Score: %f P-value: %f\n", sc, P);
-
     /* Hitlist */
+        if ((pinfo->by_E && P * Z <= pinfo->E) || (!pinfo->by_E && sc >= pinfo->T))
+          {
+          p7_tophits_CreateNextHit(hitlist, &hit);
+          hit->score = sc;
+          hit->pvalue     = P;
+          }
+
+
+
+  //    printf("Raw Score: %f Score: %f P-value: %f\n", rsc, sc, P);
 
     /* Reuse */
     esl_sq_Reuse(dbsq);
