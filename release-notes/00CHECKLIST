@@ -13,12 +13,13 @@ Release types: major releases, minor releases, and snapshots. A major
 release gets its own branch. A minor release puts bug fixes into a
 major branch. A snapshot is from the development trunk.
 
-Version naming:                                        example
-major    <lineage>.<major-release>                      3.0
-minor    <lineage>.<major-release>.<minor-release>      3.0.1
-alpha    <lineage>.<major-release>a<n>                  3.0a1 
-beta     <lineage>.<major-release>b<n>                  3.0b3 
-snapshot <lineage>.<major-release>.snap<yyyymmdd>       3.0.snap20080325
+Version naming:                                               example
+major             <lineage>.<major-release>                   3.0
+minor             <lineage>.<major-release>.<minor-release>   3.0.1
+alpha             <lineage>.<major-release>a<n>               3.0a1 
+beta              <lineage>.<major-release>b<n>               3.0b3 
+release candidate <lineage>.<major-release>rc<n>              3.0rc2 
+snapshot          <lineage>.<major-release>.snap<yyyymmdd>    3.0.snap20080325
 
 
 1. Announce intent to release to all developers. 
@@ -30,11 +31,6 @@ snapshot <lineage>.<major-release>.snap<yyyymmdd>       3.0.snap20080325
 	 svn status
    Clean up any stray files identified by 'svn status'.
    'svn add' and 'svn commit' as needed to commit new or modified files.
-
-
-
-
-
 
 
 ================================================================
@@ -65,25 +61,8 @@ development of the next main release.
             https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0\
             -m "created HMMER 3.0 release branch"          
 
-   [or, svn merge from trunk to existing branch. Write these instructions next time.]
-
- Alternatively, if branch already exists: svn merge trunk to release
- branch. Beware, merges will destroy the svn:externals property that
- connects us to the H3 Easel branch instead of the Easel trunk.
-
-   cd ~/releases
-   svn checkout https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 hmmer-release
-   cd hmmer-release
-   svn merge https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0   https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
-   cd ..
-   svn propedit svn:externals hmmer-release
-     easel   https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0
-   cd hmmer-release/easel
-   svn merge https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 https://svn.janelia.org/eddylab/eddys/easel/trunk
-
-
 ================================================================
-= Stabilizing a release branch: a working copy in ~/releases/hmmer-release
+= Work in the current release branch (~/releases/hmmer-release)
 ================================================================
 
 Once a release branch has been taken (either new, or by a merge from
@@ -91,11 +70,10 @@ the trunk destined to become a release), work only in the release
 branch. We'll merge changes back to the trunk when the release cycle
 is complete.
 
-Put the directory in releases/
+* Checking out a release branch for the first time, in ~/releases/
+    cd ~/releases
+    svn checkout https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0  hmmer-release
 
-  cd ~/releases
-  svn checkout https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0  hmmer-release
-  
 Don't call this working directory hmmer-3.0, nor hmmer! Call it
 hmmer-release, because later "make dist" is going to try to create
 hmmer-xx as its release, and because you want to recognize that it's
@@ -105,22 +83,56 @@ If this is the first time (a new release branch), you also need to
 update the "svn:externals" so Easel is checked out from the
 appropriate stable branch too.
 
-  svn proplist --verbose https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
-  svn propedit svn:externals hmmer-release
-     easel   https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0
-  cd hmmer-release
-  svn update
-  svn commit
+   svn proplist --verbose https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
+   svn propedit svn:externals hmmer-release
+      easel   https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0
+   cd hmmer-release
+   svn update
+   svn commit
 
 Note the hassle with svn:externals, because it currently only accepts
 absolute URLs. Relative paths are supposed to become available in
-Subversion 1.5, which may help. Later when we merge the branch back to
+Subversion 1.5, which may help. Later if we merge the branch back to
 the trunk, the merge will mess up easel's externals, and we'll have to
 propedit the trunk.
 
-Write the release notes in releases/.
-  To gather information, check:
 
+================================================================
+= Large merges from the trunk: try to avoid
+================================================================
+
+It's preferable to add bug fixes to the release branch, then merge
+them one at a time back to the trunk.
+
+However, there may be times when we merge the trunk to the branch in
+toto, as one big diff. To do that, if you must:
+
+first merge hmmer trunk in:
+   cd ~/releases
+   svn checkout https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 hmmer-release
+   cd hmmer-release
+   svn merge https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0   https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
+
+now fix the svn:externals:
+   svn propedit svn:externals hmmer-release
+     easel   https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0
+
+now merge into easel:
+   cd hmmer-release/easel
+   svn merge https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 https://svn.janelia.org/eddylab/eddys/easel/trunk
+
+
+================================================================
+= Preparing a distribution
+================================================================
+
+We prepare and make a distro; later we test it thoroughly. This way
+we'll test exactly the version that's rolling out. If something goes
+wrong, it's easy enough to come back and make a new tarball.
+
+
+* Write the release notes in releases/.
+  To gather information, check:
    HMMER bugs/BUGTRAX - update this file to mark release that fixed
                         bugs, and divider indicating release.
    Paper notebook since last release
@@ -128,25 +140,103 @@ Write the release notes in releases/.
    svn log -r2837:HEAD https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
    svn log  -r350:HEAD https://svn.janelia.org/eddylab/eddys/easel/trunk
 
-Check that the user guide is up to date.
-Revise the tutorial section. See last ~/notebook entry for scripts.
-Don't slack off on this step - it's a useful regression test as well.
+   When done, svn add the new RELEASE-xxx file.
 
-Finally,
+
+* Edit configure.ac: make sure version, date, copyright info is set correctly
+   emacs configure.ac
+   autoconf; (cd easel; autoconf)
+   ./configure
+   . release-notes/LICENSE.sh
+
+* Build versions for the Tutorial runs.
+
+This needs to be an icc/MPI version - mpi tests are included. 
+Build a previous version (3.0rc1) in addition to the release candidate.
+
+icc 11.1 with IntelMPI; on login-eddy
+gcc 4.1.2 without mpi;  on login-eddy
+
+Note that my .bashrc includes some configuration of the compilation
+environment. I have functions "setup_icc_intel64" and "setup_icc_ia32"
+for setting up the appropriate icc. I also have a number of Intel MPI
+environment variables set.
+
+On login-eddy (our compile host):
+  ssh login-eddy
+  cd releases/hmmer-release
+  autoconf
+  mkdir build-gcc
+  cd build-gcc
+  ../configure    2>&1  > build.out
+  make            2>&1 >> build.out
+  make dev        2>&1 >> build.out
+  make check      2>&1 >> build.out
+
+  ssh login-eddy
+  cd releases/hmmer-release
   make distclean
-  svn status
-do any cleanup... and
-  svn commit
-from the release directory
+  mkdir build-icc-mpi
+  cd build-icc-mpi
+  setup_icc_intel64
+  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi   2>&1 > build.out
+  make            2>&1 >> build.out
+  make dev        2>&1 >> build.out
+  make check      2>&1 >> build.out
+
+  ssh login-eddy
+  cd releases/hmmer-3.0rc1
+  make distclean
+  mkdir build-gcc
+  cd build-gcc
+  ../configure  2>&1  > build.out
+  make          2>&1 >> build.out
+  make dev      2>&1 >> build.out
+  make check    2>&1 >> build.out
+
+  ssh login-eddy
+  cd releases/hmmer-3.0rc1
+  mkdir build-icc-mpi
+  cd build-icc-mpi
+  setup_icc_intel64
+  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi 2>&1 > build.out
+  make          2>&1 >> build.out
+  make dev      2>&1 >> build.out
+  make check    2>&1 >> build.out
+
+This sets up:
+
+Release candidate:
+  srcdir              ~/releases/hmmer-release
+  builddir (gcc)      ~/releases/hmmer-release/build-gcc
+  builddir (icc,MPI)  ~/releases/hmmer-release/build-icc-mpi
+
+3.0rc1 (old version for regression):
+  srcdir              ~/releases/hmmer-3.0rc1
+  builddir (gcc)      ~/releases/hmmer-3.0rc1/build-gcc
+  builddir (icc,MPI)  ~/releases/hmmer-3.0rc1/build-icc-mpi
+
+
+* Update the user guide - including the tutorial section, and
+  version numbers in the installation section.
+  See last ~/notebook entry for scripts.
+  Don't slack off on this step - it's a useful regression test as well.
+
+* Clean up.
+    make distclean
+    svn status
+do any cleanup... 
+    svn commit
+
 
 ================================================================
-= Creating a distribution
+= Creating a source distribution
 ================================================================
 
 ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Makefile
 
 * You can put it in the environment and everything will work as cut/paste:
-   setenv HMMER_VERSION  3.0rc1
+   export HMMER_VERSION=3.0rc2
    cd ~/releases
 
 * Delete any old releases of the same number
@@ -161,15 +251,13 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
   or: Export a major or minor release from its branch
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 hmmer-${HMMER_VERSION}
    cd hmmer-${HMMER_VERSION}
-
-  3.0rc1: exported 3160/510
-  3.0b3:  exported 3051/442
-
-* Edit configure.ac: make sure version, date, copyright info is set correctly
-   emacs configure.ac
    autoconf; (cd easel; autoconf)
    ./configure
-   source release-notes/LICENSE.csh
+   . release-notes/LICENSE.sh
+
+  3.0rc2: exported 3224/554
+  3.0rc1: exported 3160/510
+  3.0b3:  exported 3051/442
 
 * Check that svn has file permissions right
    find . ! -perm -u+r -print
@@ -198,48 +286,10 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    cd ../..
 
 
-* compile Linux binaries with icc
-  Each build can run in a separate terminal; we're using independent build directories
-  My .bashrc contains two functions for configuring icc paths properly:
-   setup_icc_intel64
-   setup_icc_ia32
-
-x86-64 (intel64) build:
-   ssh login-eddy
-   export HMMER_VERSION=3.0rc1
-   cd releases/hmmer-${HMMER_VERSION}
-   setup_icc_intel64
-   mkdir build-x86_64
-   cd    build-x86_64
-   ../configure CC=icc LDFLAGS=-static-intel  --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64
-   make
-   make dev
-   make check
-   make install
-   (cd easel/miniapps; make install)
-
-ia32 build:
-   ssh login-eddy
-   export HMMER_VERSION=3.0rc1
-   cd releases/hmmer-${HMMER_VERSION}
-   setup_icc_ia32
-   mkdir build-ia32
-   cd    build-ia32
-   ../configure CC=icc LDFLAGS=-static-intel --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32
-   make
-   make dev
-   make check
-   make install
-   (cd easel/miniapps; make install)
-
-
 * clean up files that don't belong in the distro
-
    make distclean
    cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES
    rm -rf bugs
-   rm -rf build-ia32   
-   rm -rf build-x86_64
    rm -rf contrib
    rm -rf documentation/userguide
    rm -rf release-notes
@@ -258,20 +308,48 @@ Delete TO-DO sections and clean up for public consumption.
    texclean
 
 * package
-
    cd ..
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
+   3.0rc2:  3.9 Mb (source only)
    3.0rc1: 21.0 Mb
    3.0b3:  17.1 Mb
 
-* test again
-   cd hmmer-${HMMER_VERSION}
-   ./configure
-   make
-   make dev
-   make check
+All subsequent tests are on this source distro.
+
+================================================================
+= Build for testing
+================================================================
+
+On login-eddy (our compile host):
+  ssh login-eddy
+  export HMMER_VERSION=3.0rc2
+  cd releases/hmmer-${HMMER_VERSION}
+  mkdir build-gcc
+  cd build-gcc
+  ../configure    2>&1  > build.out
+  make            2>&1 >> build.out
+  make dev        2>&1 >> build.out
+  make check      2>&1 >> build.out
+
+  ssh login-eddy
+  export HMMER_VERSION=3.0rc2
+  cd releases/hmmer-${HMMER_VERSION}
+  make distclean
+  mkdir build-icc-mpi
+  cd build-icc-mpi
+  setup_icc_intel64
+  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi   2>&1 > build.out
+  make            2>&1 >> build.out
+  make dev        2>&1 >> build.out
+  make check      2>&1 >> build.out
+
+
+
+================================================================
+= Distribution
+================================================================
 
 * copy to ftp site
 
@@ -338,3 +416,40 @@ Release           Date            SVN (HMMER/Easel)
 3.0b2             21 Jun 2009     r2837/r350
 3.0b3             15 Nov 2009     r3051/r442
 3.0rc1            10 Feb 2010     r3161/r511
+
+
+* compile Linux binaries with icc
+  Each build can run in a separate terminal; we're using independent build directories
+  My .bashrc contains two functions for configuring icc paths properly:
+   setup_icc_intel64
+   setup_icc_ia32
+
+x86-64 (intel64) build:
+   ssh login-eddy
+   export HMMER_VERSION=3.0rc2
+   cd releases/hmmer-${HMMER_VERSION}
+   setup_icc_intel64
+   mkdir build-x86_64
+   cd    build-x86_64
+   ../configure CC=icc LDFLAGS=-static-intel  --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64
+   make
+   make dev
+   make check
+   make install
+   (cd easel/miniapps; make install)
+
+ia32 build:
+   ssh login-eddy
+   export HMMER_VERSION=3.0rc2
+   cd releases/hmmer-${HMMER_VERSION}
+   setup_icc_ia32
+   mkdir build-ia32
+   cd    build-ia32
+   ../configure CC=icc LDFLAGS=-static-intel --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32
+   make
+   make dev
+   make check
+   make install
+   (cd easel/miniapps; make install)
+
+

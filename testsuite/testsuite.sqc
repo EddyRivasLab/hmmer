@@ -286,6 +286,7 @@
 1 exercise  dup-names             !testsuite/i10-duplicate-names.pl!    @@ !! %OUTFILES%
 1 exercise  mapali-again          !testsuite/i11-hmmalign-mapali.pl!    @@ !! %OUTFILES%
 1 exercise  delete-corruption     !testsuite/i12-delete-corruption.pl!  @@ !! %OUTFILES%
+1 exercise  msa-integrity         !testsuite/i13-msa-integrity.pl!      @@ !! %OUTFILES%
 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
