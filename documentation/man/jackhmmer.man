@@ -188,14 +188,14 @@ analysis software.
 
 .SH OPTIONS CONTROLLING REPORTING THRESHOLDS 
 
-"Reporting" thresholds control which hits are reported in output files
+Reporting thresholds control which hits are reported in output files
 (the main output,
 .I --tblout,
 and 
 .I --domtblout).
 In each iteration, sequence hits and domain hits are ranked by
 statistical significance (E-value) and output is generated in two
-sections called "per-target" and "per-domain" output. In per-target
+sections called per-target and per-domain output. In per-target
 output, by default, all sequence hits with an E-value <= 10 are
 reported. In the per-domain output, for each target that has passed
 per-target reporting thresholds, all domains satisfying per-domain
@@ -267,7 +267,7 @@ By default,
 a sequence must have a per-sequence
 E-value of <= 0.001 (see
 .B -E 
-option) to be "included", and any additional domains in it besides the
+option) to be included, and any additional domains in it besides the
 top-scoring one must have a conditional E-value of <= 0.001 (see 
 .B --domE 
 option). The difference between reporting thresholds and inclusion
@@ -324,9 +324,9 @@ HMMER3 searches are accelerated in a three-step filter pipeline: the
 MSV filter, the Viterbi filter, and the Forward filter. The first
 filter is the fastest and most approximate; the last is the full
 Forward scoring algorithm, slowest but most accurate. There is also a
-"bias filter" step between MSV and Viterbi. Targets that pass all the
+bias filter step between MSV and Viterbi. Targets that pass all the
 steps in the acceleration pipeline are then subjected to
-"postprocessing" -- domain identification and scoring using the
+postprocessing -- domain identification and scoring using the
 Forward/Backward algorithm.
 
 Essentially the only free parameters that control HMMER's heuristic
@@ -342,7 +342,7 @@ effectively disables the filter.
 Changing filter thresholds only removes or includes targets from
 consideration; changing filter thresholds does not alter bit scores,
 E-values, or alignments, all of which are determined solely in
-"postprocessing".
+postprocessing.
 
 .TP
 .B --max
@@ -616,7 +616,7 @@ the location parameter tau for Forward evalues. Default is 0.04.
 
 .TP
 .B --nonull2
-Turn off the "null2" score corrections for biased composition.
+Turn off the null2 score corrections for biased composition.
 
 .TP
 .BI -Z " <x>"

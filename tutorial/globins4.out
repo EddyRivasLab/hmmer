@@ -1,6 +1,6 @@
 # hmmsearch :: search profile(s) against a sequence database
-# HMMER 3.0b3 (November 2009); http://hmmer.org/
-# Copyright (C) 2009 Howard Hughes Medical Institute.
+# HMMER 3.0rc2 (March 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  globins4.hmm
@@ -19247,6 +19247,6 @@ Passed Vit filter:                      2207  (0.00443803); expected 497.3 (0.00
 Passed Fwd filter:                      1076  (0.00216371); expected 5.0 (1e-05)
 Initial search space (Z):             497293  [actual number of targets]
 Domain search space  (domZ):            1075  [number of targets reported over threshold]
-# CPU time: 6.02u 0.07s 00:00:06.09 Elapsed: 00:00:02.43
-# Mc/sec: 10747.30
+# CPU time: 5.66u 0.07s 00:00:05.73 Elapsed: 00:00:02.29
+# Mc/sec: 11354.75
 //

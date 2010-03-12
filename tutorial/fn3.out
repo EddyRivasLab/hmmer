@@ -1,6 +1,6 @@
 # hmmsearch :: search profile(s) against a sequence database
-# HMMER 3.0b3 (November 2009); http://hmmer.org/
-# Copyright (C) 2009 Howard Hughes Medical Institute.
+# HMMER 3.0rc2 (March 2010); http://hmmer.org/
+# Copyright (C) 2010 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  fn3.hmm

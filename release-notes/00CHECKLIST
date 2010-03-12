@@ -346,6 +346,103 @@ On login-eddy (our compile host):
   make check      2>&1 >> build.out
 
 
+================================================================
+= Testing
+================================================================
+
+See latest e-notebook for tests.
+[TODO: Organize/systematize this better.]
+
+They include:
+  Anecdotes:  more-or-less manual runs of some large example jobs;
+              regressions, timings, MPI.
+  ROC:        profmark benchmarks, regressed against prev version.
+  Speed:      speed benchmarks, regressed against prev version.
+
+
+================================================================
+= Binary distros
+================================================================
+  
+  cd ${HMMER_RELEASE_NOTEBOOK}
+  mkdir Distros; cd Distros
+
+  linux-intel-ia32
+  linux-intel-x86_64
+  macosx-intel
+
+ia32 build:
+  ssh login-eddy
+  export HMMER_DISTRO=linux-intel-ia32
+  cd ${HMMER_RELEASE_NOTEBOOK}/Distros
+  tar zxf ~/releases/hmmer-${HMMER_VERSION}.tar.gz
+  mv hmmer-${HMMER_VERSION} hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  cd hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  setup_icc_ia32
+  mkdir build-${HMMER_DISTRO}
+  cd build-${HMMER_DISTRO}
+  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  2>&1 > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make                             2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make dev                         2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make check                       2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make install                     2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  (cd easel/miniapps; make install 2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out)
+
+  cd ..
+  rm -rf build-${HMMER_DISTRO}
+  cd .. 
+  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
+
+intel64 build:
+  ssh login-eddy
+  export HMMER_DISTRO=linux-intel-x86_64
+  cd ${HMMER_RELEASE_NOTEBOOK}/Distros
+  tar zxf ~/releases/hmmer-${HMMER_VERSION}.tar.gz
+  mv hmmer-${HMMER_VERSION} hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  cd hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  setup_icc_intel64
+  mkdir build-${HMMER_DISTRO}
+  cd build-${HMMER_DISTRO}
+  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  2>&1 > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make                             2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make dev                         2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make check                       2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make install                     2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  (cd easel/miniapps; make install 2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out)
+
+  cd ..
+  rm -rf build-${HMMER_DISTRO}
+  cd .. 
+  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
+  
+macosx-intel build:
+  export HMMER_DISTRO=macosx-intel
+
+  cd ${HMMER_RELEASE_NOTEBOOK}/Distros
+  tar zxf ~/releases/hmmer-${HMMER_VERSION}.tar.gz
+  mv hmmer-${HMMER_VERSION} hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  cd hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+
+  mkdir build-${HMMER_DISTRO}
+  cd build-${HMMER_DISTRO}
+  ../configure --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  2>&1 > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make                             2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make dev                         2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make check                       2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  make install                     2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
+  (cd easel/miniapps; make install 2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out)
+
+  cd ..
+  rm -rf build-${HMMER_DISTRO}
+  cd .. 
+  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
+
+
+  
+  
 
 ================================================================
 = Distribution
@@ -353,22 +450,36 @@ On login-eddy (our compile host):
 
 * copy to ftp site
 
+   ssh selab mkdir /opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}
+
    cd ~/releases
-   scp hmmer-${HMMER_VERSION}.tar.gz        selab:/opt/www/ftp/pub/software/hmmer3/
-   scp hmmer-${HMMER_VERSION}/RELEASE-NOTES selab:/opt/www/ftp/pub/software/hmmer3/
-   scp hmmer-${HMMER_VERSION}/Userguide.pdf selab:/opt/www/ftp/pub/software/hmmer3/
-   echo ftp://selab.janelia.org/pub/software/hmmer3/hmmer-${HMMER_VERSION}.tar.gz
+   scp hmmer-${HMMER_VERSION}.tar.gz        selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
+   scp hmmer-${HMMER_VERSION}/RELEASE-NOTES selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
+   scp hmmer-${HMMER_VERSION}/Userguide.pdf selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
+   echo ftp://selab.janelia.org/pub/software/hmmer3/${HMMER_VERSION}/hmmer-${HMMER_VERSION}.tar.gz
    
+   cd ${HMMER_RELEASE_NOTEBOOK}/Distros
+   for distro in linux-intel-ia32  linux-intel-x86_64  macosx-intel
+   do  
+     scp hmmer-${HMMER_VERSION}-${distro}.tar.gz    selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
+   done
+
+* Update the web site and the blog
+
+
    
 * tag the release. Replace version # below!
    cd ~/releases/hmmer-release
 
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
-            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0rc1\
-            -m "tagged 3.0rc1 release, from 3.0 branch"          
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0rc2\
+            -m "tagged 3.0rc2 release, from 3.0 branch"          
    svn copy https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0\
-            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0rc1\
-            -m "tagged Easel for HMMER 3.0rc1 release, from HMMER 3.0 branch"          
+            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0rc2\
+            -m "tagged Easel for HMMER 3.0rc2 release, from HMMER 3.0 branch"          
+
+   3.0rc2: svn r3224/557
+
 
 * Merge the branch's changes back to the trunk
   You must do this by diff of specific revisions in the branch.
@@ -376,30 +487,28 @@ On login-eddy (our compile host):
   changes that should be retained, you'll revert them to the branch
   version!
 
-  HMMER: -r 3152:3161
-  Easel: -r 509:511
+  HMMER: -r 3223:3224   (edits made in updating Tutorial)
+  Easel:  (no revs in 3.0rc2 release cycle)
 
   cd ~/src/hmmer
-  svn diff  -r 3152:3161 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 | more
+  svn diff  -r 3223:3224 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 | more
   cd easel
-  svn diff -r 509:511    https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 | more
+  svn diff -r XXX:XXX  https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 | more
   cd ..
 No changes in Easel 
 
   svn update
-  svn merge -r 3152:3161 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
+  svn merge -r 3223:3224 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
   
-  This screws up the Easel externals on the trunk, so fix:
- 
+  This may screw up the Easel externals on the trunk; if it did, fix:
+  svn propget svn:externals .
+    easel   https://svn.janelia.org/eddylab/eddys/easel/trunk
+If it doesn't show the trunk, then:
+
   svn propedit svn:externals .
     easel   https://svn.janelia.org/eddylab/eddys/easel/trunk
 
   svn commit
-
- 
-* Update the web site and the blog
-
-
    
    
 Release history
@@ -416,40 +525,6 @@ Release           Date            SVN (HMMER/Easel)
 3.0b2             21 Jun 2009     r2837/r350
 3.0b3             15 Nov 2009     r3051/r442
 3.0rc1            10 Feb 2010     r3161/r511
-
-
-* compile Linux binaries with icc
-  Each build can run in a separate terminal; we're using independent build directories
-  My .bashrc contains two functions for configuring icc paths properly:
-   setup_icc_intel64
-   setup_icc_ia32
-
-x86-64 (intel64) build:
-   ssh login-eddy
-   export HMMER_VERSION=3.0rc2
-   cd releases/hmmer-${HMMER_VERSION}
-   setup_icc_intel64
-   mkdir build-x86_64
-   cd    build-x86_64
-   ../configure CC=icc LDFLAGS=-static-intel  --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-x86_64
-   make
-   make dev
-   make check
-   make install
-   (cd easel/miniapps; make install)
-
-ia32 build:
-   ssh login-eddy
-   export HMMER_VERSION=3.0rc2
-   cd releases/hmmer-${HMMER_VERSION}
-   setup_icc_ia32
-   mkdir build-ia32
-   cd    build-ia32
-   ../configure CC=icc LDFLAGS=-static-intel --bindir=${HOME}/releases/hmmer-${HMMER_VERSION}/binaries/intel-linux-ia32
-   make
-   make dev
-   make check
-   make install
-   (cd easel/miniapps; make install)
+3.0rc2            11 Mar 2010     r3228/r557
 
 

@@ -70,7 +70,7 @@ into the result, where
 .I <f> 
 is exactly the same alignment that was used to build the model in  
 .I hmmfile.
-This is done using a "map" of alignment columns to consensus 
+This is done using a map of alignment columns to consensus 
 profile positions that is stored in the
 .I hmmfile.
 The multiple alignment in 

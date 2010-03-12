@@ -66,7 +66,7 @@ as
 .I <keyfile>s.
 The
 .I <keyfile> 
-argument can be a "-" (dash) character, in which case
+argument can be a '-' (dash) character, in which case
 the 
 .I keyfile 
 is read from standard input; this allows unix ninjas to
