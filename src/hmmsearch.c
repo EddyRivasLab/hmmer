@@ -469,15 +469,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	}
 
       /* Print the results.  */
-      //dedup hits here
-      // also, modify e-values here, based on full length of db
-
       p7_tophits_Sort(info->th);
-      p7_tophits_Threshold(info->th, info->pli);
+      p7_tophits_RemoveDuplicates(info->th);
 
-      for (i=0; i< info->th->N; i++) {
-    	  info->th->hit[i]->dcl[0].pvalue = info->th->hit[i]->sum_pvalue =  info->th->hit[i]->pvalue =  info->th->hit[i]->pvalue * info->th->hit[i]->window_length / info->pli->nres;
-      }
+      p7_tophits_Threshold(info->th, info->pli);
 
       p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
@@ -1186,6 +1181,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   int      wstatus, wstatus_next;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
   ESL_SQ   *dbsq_next  =  esl_sq_CreateDigital(info->om->abc);
+  int i;
 
   /* Main loop: */
   //while ((wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, p7_PIPELINE_READWINDOW_LEN, dbsq)) == eslOK || wstatus == eslEOD)
@@ -1233,10 +1229,35 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
-      
+
       p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
-	  
       p7_pipeline_Reuse(info->pli);
+
+
+#ifdef eslAUGMENT_ALPHABET
+      if (dbsq->abc->complement != NULL)
+      {
+		  //reverse complement, run pipeline, then fix positions
+		  int prev_hit_cnt = info->th->N;
+		  esl_sq_ReverseComplement(dbsq);
+		  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+		  p7_pipeline_Reuse(info->pli);
+
+		  P7_DOMAIN *dcl;
+		  for (i=prev_hit_cnt; i < info->th->N ; i++) {
+			  dcl = info->th->unsrt[i].dcl;
+			  int tmp = dcl->iali;
+			  dcl->iali = dbsq->n - dcl->jali + 1 ;
+			  dcl->jali = dbsq->n - tmp + 1;
+
+			  tmp = dcl->ienv;
+			  dcl->ienv = dbsq->n - dcl->jenv + 1 ;
+			  dcl->jenv = dbsq->n - tmp + 1;
+		  }
+
+		  info->pli->nres += dbsq->W;
+      }
+#endif /*eslAUGMENT_ALPHABET*/
 
       esl_sq_Copy(dbsq_next, dbsq); // necessary to set up initialized meta data
       wstatus = wstatus_next;

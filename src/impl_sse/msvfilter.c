@@ -297,7 +297,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_SSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int** ends, int *hit_cnt)
+p7_SSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int** ends, int *hit_cnt)
 {
 
   register __m128i mpv;            /* previous row values                                       */
@@ -391,8 +391,8 @@ p7_SSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *o
 			  ESL_RALLOC(*starts, tmp, hit_arr_size * sizeof(int));
 			  ESL_RALLOC(*ends, tmp, hit_arr_size * sizeof(int));
 		  }
-		  (*starts)[*hit_cnt] = offset + i - om->max_length +1;
-		  (*ends)[*hit_cnt] = offset + i + om->max_length;
+		  (*starts)[*hit_cnt] = i - om->max_length +1;
+		  (*ends)[*hit_cnt] =  i + om->max_length;
 		  (*hit_cnt)++;
 
 		  for (q = 0; q < Q; q++)
@@ -447,7 +447,7 @@ p7_SSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *o
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int** ends, int *hit_cnt)
+p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float pthresh, int **starts, int** ends, int *hit_cnt)
 {
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
@@ -486,7 +486,7 @@ p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *o
 	  //e.g. if base=190, tec=3, then a score of 194 would be required for a
 	  //second ssv-hit to improve the score of an earlier one. So only bother
 	  //with msv if pthresh is that high
-	   p7_SSVFilter_longseq(dsq, L, offset, om, ox, pthresh, starts, ends, hit_cnt);
+	   p7_SSVFilter_longseq(dsq, L, om, ox, pthresh, starts, ends, hit_cnt);
 
   } else {
 
@@ -632,8 +632,8 @@ p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *o
 						  ESL_RALLOC(*ends, tmp, hit_arr_size * sizeof(int));
 					  }
 
-					  (*starts)[*hit_cnt] = offset + (first_peak == -1 ? i : first_peak) - om->max_length + 1 ;
-					  (*ends)[*hit_cnt] = offset + i + om->max_length - 1;
+					  (*starts)[*hit_cnt] = (first_peak == -1 ? i : first_peak) - om->max_length + 1 ;
+					  (*ends)[*hit_cnt] = i + om->max_length - 1;
 					  (*hit_cnt)++;
 
 					  // there's one peak.  Start scanning for the next one
@@ -691,11 +691,11 @@ p7_MSVFilter_longseq(const ESL_DSQ *dsq, int L, int offset, const P7_OPROFILE *o
 	  }
 	  *hit_cnt = new_hit_cnt + 1;
 
-	  if ((*starts)[0] < offset + 1)
-		  (*starts)[0] = offset + 1;
+	  if ((*starts)[0] <  1)
+		  (*starts)[0] =  1;
 
-	  if ((*ends)[*hit_cnt - 1] > offset + L)
-		  (*ends)[*hit_cnt - 1] = offset + L;
+	  if ((*ends)[*hit_cnt - 1] >  L)
+		  (*ends)[*hit_cnt - 1] =  L;
 
   }
   return eslOK;

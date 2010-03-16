@@ -707,8 +707,8 @@ typedef struct p7_tophits_s {
 /*****************************************************************
  * 13. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
-//#define p7_PIPELINE_READWINDOW_LEN  MAX_RESIDUE_COUNT // 1 MB at a time
-#define p7_PIPELINE_READWINDOW_LEN  (1200) // 2^20 1 MB at a time
+#define p7_PIPELINE_READWINDOW_LEN  (1024 * 1024) // 1 MB at a time
+//#define p7_PIPELINE_READWINDOW_LEN  (1200) // 2^20 1 MB at a time
 
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
@@ -1126,6 +1126,7 @@ extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
+extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th);
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
 extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);

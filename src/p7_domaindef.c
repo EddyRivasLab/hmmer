@@ -393,6 +393,8 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
   ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
   p7_oprofile_ReconfigUnihit(om, saveL);	   /* process each domain in unilocal mode                           */
+
+
   i     = -1;
   triggered = FALSE;
   for (j = 1; j <= sq->n; j++)
@@ -431,20 +433,20 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
 	      last_j2 = 0;
 	      for (d = 0; d < nc; d++) {
-		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
-		if (i2 <= last_j2) ddef->noverlaps++;
+			p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
+			if (i2 <= last_j2) ddef->noverlaps++;
 
-		/* Note that k..m coords on model are available, but we're currently ignoring them. 
-		   This leads to a rare clustering bug that we eventually need to fix [xref J3/32]:
-		   two different regions in one profile HMM might have hit same seq domain,
-		   and when we now go to calculate an OA trace, nothing constrains us to find the
-                   two different alignments to the HMM; in fact, because OA is optimal, we'll 
-                   find one and the *same* alignment, leading to an apparent duplicate alignment 
-		   in the output.
-		 */
-		ddef->nenvelopes++;
-		if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE) == eslOK) 
-		  last_j2 = j2;
+			/* Note that k..m coords on model are available, but we're currently ignoring them.
+			   This leads to a rare clustering bug that we eventually need to fix [xref J3/32]:
+			   two different regions in one profile HMM might have hit same seq domain,
+			   and when we now go to calculate an OA trace, nothing constrains us to find the
+					   two different alignments to the HMM; in fact, because OA is optimal, we'll
+					   find one and the *same* alignment, leading to an apparent duplicate alignment
+			   in the output.
+			 */
+			ddef->nenvelopes++;
+			if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE) == eslOK)
+			  last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
 	      p7_trace_Reuse(ddef->tr);
@@ -757,6 +759,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   dom->iali          = dom->ad->sqfrom;
   dom->jali          = dom->ad->sqto;
+
+
 
   ddef->ndom++;
 

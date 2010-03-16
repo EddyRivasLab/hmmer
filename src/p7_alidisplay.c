@@ -310,6 +310,8 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
   ESL_ALLOC(buf, sizeof(char) * (aliwidth+1));
   buf[aliwidth] = 0;
 
+
+
   /* Break the alignment into multiple blocks of width aliwidth for printing */
   i1 = ad->sqfrom;
   k1 = ad->hmmfrom;
@@ -322,7 +324,9 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 	if (ad->model[z] != '.') nk++; /* k advances except on insert states */
 	if (ad->aseq[z]  != '-') ni++; /* i advances except on delete states */
       }
-      i2 = i1+ni-1;
+
+
+      i2 = (ad->sqfrom < ad->sqto ? i1+ni-1 : i1-ni+1) ;
       k2 = k1+nk-1;
 
       if (ad->csline != NULL) { strncpy(buf, ad->csline+pos, aliwidth); fprintf(fp, "  %*s %s CS\n", namewidth+coordwidth+1, "", buf); }
@@ -336,7 +340,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 
       if (ad->ppline != NULL) { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
 
-      i1 += ni;
+      i1 += ni * (ad->sqfrom < ad->sqto ? 1 : -1);
       k1 += nk;
     }
   fflush(fp);
@@ -388,6 +392,9 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   char      st;			/* state type: MDI                   */
   int       status;
   
+  if (ad->sqfrom > ad->sqto)
+	  printf ("here\n");
+
   /* Make a first pass over <ad> just to calculate subseq length */
   for (a = 0; a < ad->N; a++)
     if (! esl_abc_CIsGap(abc, ad->aseq[a])) subL++;

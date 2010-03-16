@@ -512,6 +512,61 @@ p7_tophits_Destroy(P7_TOPHITS *h)
  * 2. Standard (human-readable) output of pipeline results
  *****************************************************************/
 
+/* Function:  p7_tophits_RemoveDuplicates()
+ * Synopsis:  Remove overlapping hits.
+ * Incept:    TJW, Wed Mar 10 13:38:36 EST 2010 [Janelia]
+ *
+ * Purpose:   After a pipeline has completed, the TopHits object may
+ * 			  contain duplicates if the target was broken into overlapping
+ * 			  windows. Scan through, and remove duplicates.  Since the
+ * 			  duplicates may be incomplete (one sequence is a partial
+ * 			  hit because it's window didn't cover the full length of
+ * 			  the hit), keep the one with better p-value
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
+{
+  int i,j;	/* counters over hits */
+
+  if (th->N<2)
+	  return eslOK;
+
+  for (i = 0; i < th->N - 1; i++)
+  {
+
+	  int s_i = th->hit[i]->dcl[0].ienv; // start of envelope
+	  int e_i = th->hit[i]->dcl[0].jenv; // end of envelope
+	  double p_i = th->hit[i]->pvalue;
+
+		for (j = i+1; j < th->N; j++) {
+
+		  int s_j = th->hit[j]->dcl[0].ienv;
+		  int e_j = th->hit[j]->dcl[0].jenv;
+		  double p_j = th->hit[j]->pvalue;
+
+		  if ( 0==esl_strcmp(th->hit[i]->acc, th->hit[j]->acc)  &&
+				  ((s_j >= s_i && s_j <= e_i) || (s_i >= s_j && s_i <= e_j) )
+			  ){
+			  //force one to go unreported by changing pvalue.
+			  // make it the one with higher p-value (lower significance ... more conservative)
+			  if (p_i < p_j) {
+				  th->hit[j]->pvalue = 100000;
+				  th->hit[j]->score = -100;
+			  } else {
+				  th->hit[i]->pvalue = 100000;
+				  th->hit[i]->score = -100;
+			  }
+		  }
+		}
+  }
+  return eslOK;
+}
+
+
+
+
 /* Function:  p7_tophits_Threshold()
  * Synopsis:  Apply score and E-value thresholds to a hitlist before output.
  * Incept:    SRE, Tue Dec  9 09:04:55 2008 [Janelia]
@@ -759,6 +814,10 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	if      (th->hit[h]->flags & p7_IS_NEW)     newness = '+';
 	else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
 	else                                        newness = ' ';
+
+	//pli->Z = (float)(pli->nres) / (float)(th->hit[h]->window_length);
+	int hit_len = th->hit[h]->dcl[0].jali - th->hit[h]->dcl[0].iali + 1;
+	pli->Z = (float)pli->nres / (float)(th->hit[h]->window_length - hit_len); // added by TW for DNA HMMER
 
 
 	fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",

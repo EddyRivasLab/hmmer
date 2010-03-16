@@ -572,18 +572,12 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   float invsurv = esl_gumbel_invsurv(pli->F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   float pthresh = nullsc  + (invsurv * eslCONST_LOG2);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
-  p7_MSVFilter_longseq(sq->dsq, sq->n, sq->start-1, om, pli->oxf, pthresh, &window_starts, &window_ends, &hit_cnt);
+  p7_MSVFilter_longseq(sq->dsq, sq->n, om, pli->oxf, pthresh, &window_starts, &window_ends, &hit_cnt);
 
   //if (ret == eslOK) return eslOK;
   if (hit_cnt == 0 ) return eslOK;
 
-/*
-  printf("initial hits:\n") ;
-  for (i=0; i<hit_cnt; i++) {
-	  printf ("%d: %5d -> %5d\n", i, window_starts[i], window_ends[i]);
-  }
-  printf ("\n");
-*/
+
   pli->n_past_msv += hit_cnt;
 
 
@@ -592,7 +586,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
 	  int window_len = window_ends[i] - window_starts[i] + 1;
 	  esl_sq_GrowTo(subseq, window_len);
-	  memcpy((void*)(subseq->dsq), (void*)(sq->dsq) + window_starts[i] - sq->start, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
+	  memcpy((void*)(subseq->dsq), (void*)(sq->dsq) + window_starts[i] - 1, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
 	  subseq->dsq[window_len+1]= eslDSQ_SENTINEL;
 	  subseq->n = window_len;
 
@@ -607,16 +601,17 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	  if (pli->do_biasfilter)
 	  {
 		  //have to run msvfilter again.  This time, it should just be on the windows passed in from above,
-		  // and will just be the standard msv filter
+		  // and will be the standard msv filter, to get the full score
 		  p7_MSVFilter(subseq->dsq, subseq->n, om, pli->oxf, &usc);
 
 	      p7_bg_FilterScore(bg, subseq->dsq, subseq->n, &filtersc);
 	      seq_score = (usc - filtersc) / eslCONST_LOG2;
 	      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-	      if (P > pli->F1) return eslOK;
+	      if (P > pli->F1) continue;
 	  }
 	  else
 	  {
+
 		  filtersc = nullsc;
 		  P = 1; // to ensure that ViterbiFilter gets run
 	  }
@@ -637,7 +632,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 		  p7_ViterbiFilter(subseq->dsq, subseq->n, om, pli->oxf, &vfsc);
 		  seq_score = (vfsc-filtersc) / eslCONST_LOG2;
 		  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-		  if (P > pli->F2) return eslOK;
+		  if (P > pli->F2) continue;
 		}
 	  pli->n_past_vit++;
 
@@ -646,7 +641,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	  p7_ForwardParser(subseq->dsq, subseq->n, om, pli->oxf, &fwdsc);
 	  seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
 	  P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-	  if (P > pli->F3) return eslOK;
+	  if (P > pli->F3)  continue;
 	  pli->n_past_fwd++;
 
 
@@ -656,8 +651,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
 	  status = p7_domaindef_ByPosteriorHeuristics(subseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef);
 	  if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
-	  if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
-	  if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
+	  if (pli->ddef->nregions   == 0)  continue; /* score passed threshold but there's no discrete domains here       */
+	  if (pli->ddef->nenvelopes == 0)  continue; /* rarer: region was found, stochastic clustered, no envelopes found */
 
 
 	  /* Calculate the null2-corrected per-seq score */
@@ -753,38 +748,57 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 			  hit->noverlaps  = 0;
 			  hit->nenvelopes = 0;
 			  hit->best_domain = 0;
-			  hit->window_length = subseq->n;
+			  hit->window_length = window_len;
+
+
 
 
 			  ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
 			  hit->dcl[0] = pli->ddef->dcl[d];
-			  hit->dcl[0].ienv +=  window_starts[i] - 1;
-			  hit->dcl[0].jenv +=  window_starts[i] - 1;
-			  hit->dcl[0].iali +=  window_starts[i] - 1;
-			  hit->dcl[0].jali +=  window_starts[i] - 1;
-			  hit->dcl[0].ad->sqfrom +=  window_starts[i] - 1;
-			  hit->dcl[0].ad->sqto +=  window_starts[i] - 1;
 
 
-			  if (pli->mode == p7_SEARCH_SEQS) {
-				if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-				if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-				//if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-				asprintf( &(hit->desc), "target positions %d -> %d", hit->dcl[0].iali, hit->dcl[0].jali);
-			  } else {
-				if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
-				if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
-				//if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
-				asprintf( &(hit->desc), "target positions %d -> %d", hit->dcl[0].iali, hit->dcl[0].jali);
+			  hit->dcl[0].ienv += window_starts[i] - 1; // represents the real position within the sequence handed to the pipeline
+			  hit->dcl[0].jenv += window_starts[i] - 1;
+			  hit->dcl[0].iali += window_starts[i] - 1;
+			  hit->dcl[0].jali += window_starts[i] - 1;
+			  hit->dcl[0].ad->sqfrom += window_starts[i] - 1;
+			  hit->dcl[0].ad->sqto += window_starts[i] - 1;
+
+			  // now account for the position of the given sequence, and its orientation
+			  if (sq->start < sq->end) {
+				  hit->dcl[0].ienv += sq->start - 1;
+				  hit->dcl[0].jenv += sq->start - 1;
+				  hit->dcl[0].iali += sq->start - 1;
+				  hit->dcl[0].jali += sq->start - 1;
+				  hit->dcl[0].ad->sqfrom += sq->start - 1;
+				  hit->dcl[0].ad->sqto += sq->start - 1;
+			  } else { // rev comp
+				  hit->dcl[0].ienv = sq->start - hit->dcl[0].ienv + 1;
+				  hit->dcl[0].jenv = sq->start - hit->dcl[0].jenv + 1;
+				  hit->dcl[0].iali = sq->start - hit->dcl[0].iali + 1;
+				  hit->dcl[0].jali = sq->start - hit->dcl[0].jali + 1;
+				  hit->dcl[0].ad->sqfrom = sq->start - hit->dcl[0].ad->sqfrom + 1;
+				  hit->dcl[0].ad->sqto = sq->start - hit->dcl[0].ad->sqto + 1;
+
 			  }
 
 
 
 
-			  Ld = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
-			  hit->dcl[0].bitscore = hit->dcl[0].envsc + (subseq->n-Ld) * log((float) subseq->n / (float) (subseq->n+3));
 
-			  hit->pre_score  = hit->dcl[0].bitscore / eslCONST_LOG2;
+			  int env_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
+			  hit->dcl[0].bitscore = hit->dcl[0].envsc + (window_len - env_len) * log((float) window_len / (float) (window_len+3));
+
+
+
+			  //TW: This is the contribution that the aligned bases didn't make to the score ... and it's responsible
+		 	  //  for the fact that scores don't change by 1 bit per doubling.
+			  //The p-values aren't tuned to handle this modification, but it seems like the fair (conservative) thing to do.
+			  //int ali_len = hit->dcl[0].jali - hit->dcl[0].iali + 1;
+			  //hit->dcl[0].bitscore += ali_len * log((float) subseq->n / (float) (subseq->n+3));
+
+
+			  hit->pre_score  = hit->dcl[0].bitscore  / eslCONST_LOG2;
 			  hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
 
@@ -792,11 +806,26 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 			  hit->dcl[0].bitscore = (hit->dcl[0].bitscore - (nullsc + hit->dcl[0].dombias)) / eslCONST_LOG2;
 			  hit->dcl[0].pvalue   = esl_exp_surv (hit->dcl[0].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
+
+			  if (pli->mode == p7_SEARCH_SEQS) {
+				if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+				if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+				//if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+				//asprintf( &(hit->desc), "(%4d->%4d, env=%.2f, p=%.3E, W=%d)", hit->dcl[0].iali, hit->dcl[0].jali,  hit->dcl[0].envsc, hit->dcl[0].pvalue, hit->window_length);
+				asprintf( &(hit->desc), "(target positions %4d->%4d %c)", hit->dcl[0].iali, hit->dcl[0].jali,  hit->dcl[0].iali < hit->dcl[0].jali ? '+' : '-' );
+			  } else {
+				if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
+				if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+				//if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+				asprintf( &(hit->desc), "(target positions %4d->%4d)", hit->dcl[0].iali, hit->dcl[0].jali);
+			  }
+
+
 			  hit->sum_score  = hit->score  = hit->dcl[0].bitscore;
 			  hit->sum_pvalue = hit->pvalue     = hit->dcl[0].pvalue;
 			  hit->sortkey    = pli->inc_by_E ? -log(hit->dcl[0].pvalue) : hit->score; /* per-seq output sorts on bit score if inclusion is by score  */
+			  //hit->sortkey    = pli->inc_by_E ? -log(hit->dcl[0].pvalue/(float)(hit->window_length-(hit->dcl[0].jali - hit->dcl[0].iali + 1))) : hit->score; /* per-seq output sorts on bit score if inclusion is by score  */
 
-			  hit->sortkey = hit->sortkey;
 
 		  }
 
@@ -849,13 +878,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 		}
   }// end of sub sequence loop
 
-
-/*
-  for (d = 0; d < hit->ndom; d++)
-  {
-	  printf("dom %d:  ali %4d->%4d  ;  env %4d->%4d\n", d,  hit->dcl[d].iali, hit->dcl[d].jali, hit->dcl[d].ienv, hit->dcl[d].jenv  );
-  }
-*/
   return eslOK;
 
 
