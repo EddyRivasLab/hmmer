@@ -1,7 +1,7 @@
 # Makefile for HMMER src directory
 #
 # SRE, Mon Jan  1 19:05:39 2007 [Casa de Gatos]
-# SVN $Id: Makefile.in 3152 2010-02-07 22:55:22Z eddys $
+# SVN $Id: Makefile.in 3209 2010-03-05 20:27:21Z castellanos $
 
 top_srcdir = ..
 srcdir     = .
@@ -65,6 +65,8 @@ OBJS =  build.o\
 	generic_stotrace.o\
 	generic_viterbi.o\
 	generic_vtrace.o\
+	generic_smithwaterman.o\
+	generic_miyazawa.o\
 	h2_io.o\
 	heatmap.o\
 	hmmer.o\

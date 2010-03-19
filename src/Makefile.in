@@ -65,6 +65,8 @@ OBJS =  build.o\
 	generic_stotrace.o\
 	generic_viterbi.o\
 	generic_vtrace.o\
+	generic_smithwaterman.o\
+	generic_miyazawa.o\
 	h2_io.o\
 	heatmap.o\
 	hmmer.o\

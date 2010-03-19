@@ -819,6 +819,32 @@ typedef struct p7_builder_s {
   char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
 } P7_BUILDER;
 
+/*****************************************************************
+ * 14. P7_SCORESYS: sequence and score system for S/W searches
+ *****************************************************************/
+
+typedef struct p7_scoresys_s {
+		/* sequence */
+		ESL_DSQ          *dsq;        /* Could just have the sequence and its length           */
+		int64_t           n;          /* length of seq (or dsq) and ss                         */
+		ESL_ALPHABET     *abc;        /* sequence alphabet                                     */
+
+		/* score system */
+		double            sopen;
+		double            sextend;
+	  ESL_SCOREMATRIX  *S;          /* substitution matrix                                      */
+		double            slambda;    /* base of the score system in substitution matrix          */
+		double            lopen;      /* slambda * sopen (weighted Miyazawa's gap open cost)      */
+		double            lextend;    /* slambda * sextend (weighted Miyazawa's gap ext cost)     */
+		ESL_DMATRIX      *Q;	        /* S[][] * slambda (weighted Miyazawa's substitution score) */
+
+	  /* E-value parameter calibration */
+	  double           lambda;      /* need to estimate this for both sw and miy scores      */
+	  double           mu;          /* need to estimate this for sw scores                   */
+	  double           tau;         /* need to estimate this for miy scores                  */
+
+	  char errbuf[eslERRBUFSIZE];   /* informative message on score system failure           */
+} P7_SCORESYS;
 
 
 /*****************************************************************
@@ -872,11 +898,16 @@ extern int p7_GOATrace        (const P7_PROFILE *gm, const P7_GMX *pp, const P7_
 extern int p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 
 /* generic_viterbi.c */
-extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,       P7_GMX *gx, float *ret_sc);
+extern int p7_GViterbi      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *ret_sc);
 
 /* generic_vtrace.c */
-extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+extern int p7_GTrace        (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 
+/* generic_swat.c */
+extern int p7_GSmithWaterman(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float *ret_sc);
+
+/* generic_pfunction.c */
+extern int p7_GMiyazawa(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float *ret_sc);
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future) */
 extern double dmx_upper_max(ESL_DMATRIX *D);
@@ -1161,11 +1192,6 @@ extern int  p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_
 extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
-
-
-
-
-
 
 /* seqmodel.c */
 extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,

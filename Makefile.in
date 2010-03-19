@@ -95,7 +95,8 @@ PROGS = \
 	hmmsim\
 	hmmstat\
 	jackhmmer\
-	phmmer
+	phmmer\
+	shmmer
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
