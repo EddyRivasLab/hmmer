@@ -1230,22 +1230,40 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
+      int prev_hit_cnt = info->th->N;
       p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
       p7_pipeline_Reuse(info->pli);
+
+      P7_DOMAIN *dcl;
+	  // now account for the position of the given sequence
+	  for (i=prev_hit_cnt; i < info->th->N ; i++) {
+		  dcl = info->th->unsrt[i].dcl;
+		  dcl->ienv += dbsq->start - 1;
+		  dcl->jenv += dbsq->start - 1;
+		  dcl->iali += dbsq->start - 1;
+		  dcl->jali += dbsq->start - 1;
+		  dcl->ad->sqfrom += dbsq->start - 1;
+		  dcl->ad->sqto += dbsq->start - 1;
+
+		  asprintf( &(info->th->unsrt[i].desc), "(target %d->%d)", dcl->iali, dcl->jali);
+	  }
+
 
 
 #ifdef eslAUGMENT_ALPHABET
       if (dbsq->abc->complement != NULL)
       {
 		  //reverse complement, run pipeline, then fix positions
-		  int prev_hit_cnt = info->th->N;
+		  prev_hit_cnt = info->th->N;
 		  esl_sq_ReverseComplement(dbsq);
 		  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
 		  p7_pipeline_Reuse(info->pli);
 
-		  P7_DOMAIN *dcl;
+
 		  for (i=prev_hit_cnt; i < info->th->N ; i++) {
 			  dcl = info->th->unsrt[i].dcl;
+
+			  //invert "from" and "to", based on sequence length
 			  int tmp = dcl->iali;
 			  dcl->iali = dbsq->n - dcl->jali + 1 ;
 			  dcl->jali = dbsq->n - tmp + 1;
@@ -1253,6 +1271,20 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 			  tmp = dcl->ienv;
 			  dcl->ienv = dbsq->n - dcl->jenv + 1 ;
 			  dcl->jenv = dbsq->n - tmp + 1;
+
+			  tmp = dcl->ad->sqfrom;
+			  dcl->ad->sqfrom = dbsq->n - dcl->ad->sqto + 1 ;
+			  dcl->ad->sqto = dbsq->n - tmp + 1;
+
+			  // now account for the position of the given sequence
+			  dcl->ienv = dbsq->start - dcl->ienv + 1;
+			  dcl->jenv = dbsq->start - dcl->jenv + 1;
+			  dcl->iali = dbsq->start - dcl->iali + 1;
+			  dcl->jali = dbsq->start - dcl->jali + 1;
+			  dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
+			  dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
+
+			  asprintf( &(info->th->unsrt[i].desc), "(target %d->%d)", dcl->iali, dcl->jali);
 		  }
 
 		  info->pli->nres += dbsq->W;

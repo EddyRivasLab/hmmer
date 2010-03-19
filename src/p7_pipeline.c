@@ -549,7 +549,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
-
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_SetLength(bg, om->max_length);
   p7_bg_NullOne  (bg, sq->dsq, om->max_length, &nullsc);
@@ -581,6 +580,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   pli->n_past_msv += hit_cnt;
 
 
+
   ESL_SQ *subseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<hit_cnt; i++){
 
@@ -598,6 +598,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
 
 	  /* biased composition HMM filtering */
+
 	  if (pli->do_biasfilter)
 	  {
 		  //have to run msvfilter again.  This time, it should just be on the windows passed in from above,
@@ -618,6 +619,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	  pli->n_past_bias++;
 
 
+
 	  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
 	  if (pli->hfp) {
 		p7_oprofile_ReadRest(pli->hfp, om);
@@ -635,6 +637,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 		  if (P > pli->F2) continue;
 		}
 	  pli->n_past_vit++;
+
+
 
 
 	  /* Parse it with Forward and obtain its real Forward score. */
@@ -764,27 +768,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 			  hit->dcl[0].ad->sqfrom += window_starts[i] - 1;
 			  hit->dcl[0].ad->sqto += window_starts[i] - 1;
 
-			  // now account for the position of the given sequence, and its orientation
-			  if (sq->start < sq->end) {
-				  hit->dcl[0].ienv += sq->start - 1;
-				  hit->dcl[0].jenv += sq->start - 1;
-				  hit->dcl[0].iali += sq->start - 1;
-				  hit->dcl[0].jali += sq->start - 1;
-				  hit->dcl[0].ad->sqfrom += sq->start - 1;
-				  hit->dcl[0].ad->sqto += sq->start - 1;
-			  } else { // rev comp
-				  hit->dcl[0].ienv = sq->start - hit->dcl[0].ienv + 1;
-				  hit->dcl[0].jenv = sq->start - hit->dcl[0].jenv + 1;
-				  hit->dcl[0].iali = sq->start - hit->dcl[0].iali + 1;
-				  hit->dcl[0].jali = sq->start - hit->dcl[0].jali + 1;
-				  hit->dcl[0].ad->sqfrom = sq->start - hit->dcl[0].ad->sqfrom + 1;
-				  hit->dcl[0].ad->sqto = sq->start - hit->dcl[0].ad->sqto + 1;
-
-			  }
-
-
-
-
 
 			  int env_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
 			  hit->dcl[0].bitscore = hit->dcl[0].envsc + (window_len - env_len) * log((float) window_len / (float) (window_len+3));
@@ -812,12 +795,12 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 				if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
 				//if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
 				//asprintf( &(hit->desc), "(%4d->%4d, env=%.2f, p=%.3E, W=%d)", hit->dcl[0].iali, hit->dcl[0].jali,  hit->dcl[0].envsc, hit->dcl[0].pvalue, hit->window_length);
-				asprintf( &(hit->desc), "(target positions %4d->%4d %c)", hit->dcl[0].iali, hit->dcl[0].jali,  hit->dcl[0].iali < hit->dcl[0].jali ? '+' : '-' );
+				//asprintf( &(hit->desc), "(target positions %4d->%4d %c)", hit->dcl[0].iali, hit->dcl[0].jali,  hit->dcl[0].iali < hit->dcl[0].jali ? '+' : '-' );
 			  } else {
 				if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
 				if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
 				//if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
-				asprintf( &(hit->desc), "(target positions %4d->%4d)", hit->dcl[0].iali, hit->dcl[0].jali);
+				//asprintf( &(hit->desc), "(target positions %4d->%4d)", hit->dcl[0].iali, hit->dcl[0].jali);
 			  }
 
 
