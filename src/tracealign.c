@@ -385,7 +385,7 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
   int           z;
   int           status;
 
-  if ((msa = esl_msa_CreateDigital(abc, nseq, alen)) == NULL) goto ERROR; 
+  if ((msa = esl_msa_CreateDigital(abc, nseq, alen)) == NULL) { status = eslEMEM; goto ERROR;  }
   
   for (idx = 0; idx < nseq; idx++)
     {
@@ -460,7 +460,7 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
   return eslOK;
 
  ERROR:
-  if (msa != NULL) esl_msa_Destroy(msa);
+  if (msa) esl_msa_Destroy(msa);
   *ret_msa = NULL;
   return status;
 }
@@ -488,7 +488,7 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
   int           k;
   int           status;
 
-  if ((msa = esl_msa_Create(nseq, alen)) == NULL) goto ERROR;
+  if ((msa = esl_msa_Create(nseq, alen)) == NULL) { status = eslEMEM; goto ERROR; }
 
   for (idx = 0; idx < nseq; idx++)
     {
