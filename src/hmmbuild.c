@@ -707,7 +707,11 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_DPRINTF1(("MPI master is done. Shutting down all the workers cleanly\n"));
   for (wi = 1; wi < cfg->nproc; wi++) 
     if (esl_msa_MPISend(NULL, wi, 0, MPI_COMM_WORLD, &buf, &bn) != eslOK) p7_Fail("MPI msa send failed");
+
   free(buf);
+  free(msaidx);
+  free(msalist);
+  p7_bg_Destroy(bg);
 
   if (xstatus != eslOK) { MPI_Finalize(); p7_Fail(errmsg); }
   else                  return;

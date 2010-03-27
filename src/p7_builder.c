@@ -463,13 +463,14 @@ validate_msa(P7_BUILDER *bld, ESL_MSA *msa)
 static int
 relative_weights(P7_BUILDER *bld, ESL_MSA *msa)
 {
-  int status;
+  int status = eslOK;
 
-  if      (bld->wgt_strategy == p7_WGT_NONE)                    { esl_vec_DSet(msa->wgt, msa->nseq, 1.); status = eslOK; }
-  else if (bld->wgt_strategy == p7_WGT_GIVEN)                   status = eslOK;
+  if      (bld->wgt_strategy == p7_WGT_NONE)                    { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
+  else if (bld->wgt_strategy == p7_WGT_GIVEN)                   ;
   else if (bld->wgt_strategy == p7_WGT_PB)                      status = esl_msaweight_PB(msa); 
   else if (bld->wgt_strategy == p7_WGT_GSC)                     status = esl_msaweight_GSC(msa); 
   else if (bld->wgt_strategy == p7_WGT_BLOSUM)                  status = esl_msaweight_BLOSUM(msa, bld->wid); 
+  else ESL_EXCEPTION(eslEINCONCEIVABLE, "no such weighting strategy");
 
   if (status != eslOK) ESL_FAIL(status, bld->errbuf, "failed to set relative weights in alignment");
   return eslOK;
