@@ -1,11 +1,11 @@
-HMMER3/b [3.0rc2 | March 2010]
+HMMER3/b [3.0 | March 2010]
 NAME  globins4
 LENG  149
 ALPH  amino
 RF    no
 CS    no
 MAP   yes
-DATE  Mon Mar  8 09:04:26 2010
+DATE  Sun Mar 28 09:50:46 2010
 NSEQ  4
 EFFN  0.964844
 CKSUM 2027839109

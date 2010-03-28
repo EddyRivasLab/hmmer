@@ -1,11 +1,11 @@
-HMMER3/b [3.0rc2 | March 2010]
+HMMER3/b [3.0 | March 2010]
 NAME  globins4
 LENG  149
 ALPH  amino
 RF    no
 CS    no
 MAP   yes
-DATE  Mon Mar  8 09:04:26 2010
+DATE  Sun Mar 28 09:50:46 2010
 NSEQ  4
 EFFN  0.964844
 CKSUM 2027839109
@@ -465,7 +465,7 @@ HMM          A        C        D        E        F        G        H        I   
           2.68634  4.42241  2.77536  2.73098  3.46370  2.40469  3.72511  3.29370  2.67757  2.69331  4.24706  2.90363  2.73756  3.18097  2.89817  2.37903  2.77536  2.98535  4.58493  3.61418
           0.22163  1.61553        *  1.50361  0.25145  0.00000        *
 //
-HMMER3/b [3.0rc2 | March 2010]
+HMMER3/b [3.0 | March 2010]
 NAME  fn3
 ACC   PF00041.13
 DESC  Fibronectin type III domain
@@ -474,7 +474,7 @@ ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Mon Mar  8 09:04:26 2010
+DATE  Sun Mar 28 09:50:46 2010
 NSEQ  106
 EFFN  11.415833
 CKSUM 3564431818
@@ -748,7 +748,7 @@ HMM          A        C        D        E        F        G        H        I   
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  2.67741  2.69355  4.24690  2.90347  2.73739  3.18146  2.89801  2.37887  2.77519  2.98518  4.58477  3.61503
           0.00227  6.08723        *  0.61958  0.77255  0.00000        *
 //
-HMMER3/b [3.0rc2 | March 2010]
+HMMER3/b [3.0 | March 2010]
 NAME  Pkinase
 ACC   PF00069.17
 DESC  Protein kinase domain
@@ -757,7 +757,7 @@ ALPH  amino
 RF    no
 CS    yes
 MAP   yes
-DATE  Mon Mar  8 09:04:26 2010
+DATE  Sun Mar 28 09:50:47 2010
 NSEQ  54
 EFFN  3.358521
 CKSUM 3106786190

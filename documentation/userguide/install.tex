@@ -4,14 +4,14 @@
 
 \subsection{Quick installation instructions}
 
-Download \prog{hmmer-3.0rc2.tar.gz} from
+Download \prog{hmmer-3.0.tar.gz} from
 \url{http://hmmer.org/}, or directly from
-\url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0rc2.tar.gz};
-untar; and change into the newly created directory \prog{hmmer-3.0rc2}:
+\url{ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0.tar.gz};
+untar; and change into the newly created directory \prog{hmmer-3.0}:
 
-\user{wget ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0rc2.tar.gz}\\
-\user{tar xf hmmer-3.0rc2.tar.gz}\\
-\user{cd hmmer-3.0rc2}
+\user{wget ftp://selab.janelia.org/pub/software/hmmer3/hmmer-3.0.tar.gz}\\
+\user{tar xf hmmer-3.0.tar.gz}\\
+\user{cd hmmer-3.0}
 
 The tarball includes precompiled binaries for x86/Linux
 platforms. These are in the \prog{binaries} directory. You can just
@@ -245,7 +245,7 @@ grep (or whatever grep you have) is ok by explicitly setting
 \user{./configure GREP=/usr/xpg4/bin/grep}
 
 \paragraph{Configuration warns that it's using the ``dummy''
-implementation and H3 is going to be very slow.} This is normal, if
+implementation and H3 is going to be very slow.} This is what you get if
 your system has a processor that we don't yet support with a fast
 vector-parallel implementation. We currently support Intel/AMD
 compatible processors and PowerPC compatible processors.  H3 will
