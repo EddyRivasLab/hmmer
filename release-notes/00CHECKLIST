@@ -22,7 +22,7 @@ release candidate <lineage>.<major-release>rc<n>              3.0rc2
 snapshot          <lineage>.<major-release>.snap<yyyymmdd>    3.0.snap20080325
 
 
-1. Announce intent to release to all developers. 
+* Announce intent to release to all developers. 
    Commit working copies on all machines.
    Check for stray uncommitted files:
 	 ./configure
@@ -149,10 +149,23 @@ wrong, it's easy enough to come back and make a new tarball.
    ./configure
    . release-notes/LICENSE.sh
 
+
+* Edit .bashrc
+  I use the following environment variables in the scripting below:
+    HMMER_VERSION     The current version.  
+    HMMER_OLDVERSION  The version we regress against. (found in ~releases/hmmer-${HMMER_OLDVERSION}
+    HMMER_RELEASE_NOTEBOOK  The e-notebook dir        ({HOME}/notebook/xxx)
+
+  Having these set everywhere, in all the ssh'ing you're about to 
+  do, simplifies the scripting below, and reduces the odds of 
+  cut/paste errors.
+
+   . ~/.bashrc
+
 * Build versions for the Tutorial runs.
 
 This needs to be an icc/MPI version - mpi tests are included. 
-Build a previous version (3.0rc1) in addition to the release candidate.
+Build a previous version (${HMMER_OLDVERSION}) in addition to the release candidate.
 
 icc 11.1 with IntelMPI; on login-eddy
 gcc 4.1.2 without mpi;  on login-eddy
@@ -164,8 +177,9 @@ environment variables set.
 
 On login-eddy (our compile host):
   ssh login-eddy
-  cd releases/hmmer-release
-  autoconf
+  cd ~/releases/hmmer-release
+  make distclean
+  rm -rf build-gcc
   mkdir build-gcc
   cd build-gcc
   ../configure    2>&1  > build.out
@@ -174,8 +188,8 @@ On login-eddy (our compile host):
   make check      2>&1 >> build.out
 
   ssh login-eddy
-  cd releases/hmmer-release
-  make distclean
+  cd ~/releases/hmmer-release
+  rm -rf build-icc-mpi
   mkdir build-icc-mpi
   cd build-icc-mpi
   setup_icc_intel64
@@ -185,8 +199,9 @@ On login-eddy (our compile host):
   make check      2>&1 >> build.out
 
   ssh login-eddy
-  cd releases/hmmer-3.0rc1
+  cd ~/releases/hmmer-${HMMER_OLDVERSION}
   make distclean
+  rm -rf build-gcc
   mkdir build-gcc
   cd build-gcc
   ../configure  2>&1  > build.out
@@ -195,7 +210,8 @@ On login-eddy (our compile host):
   make check    2>&1 >> build.out
 
   ssh login-eddy
-  cd releases/hmmer-3.0rc1
+  cd ~/releases/hmmer-${HMMER_OLDVERSION}
+  rm -rf build-icc-mpi
   mkdir build-icc-mpi
   cd build-icc-mpi
   setup_icc_intel64
@@ -211,10 +227,10 @@ Release candidate:
   builddir (gcc)      ~/releases/hmmer-release/build-gcc
   builddir (icc,MPI)  ~/releases/hmmer-release/build-icc-mpi
 
-3.0rc1 (old version for regression):
-  srcdir              ~/releases/hmmer-3.0rc1
-  builddir (gcc)      ~/releases/hmmer-3.0rc1/build-gcc
-  builddir (icc,MPI)  ~/releases/hmmer-3.0rc1/build-icc-mpi
+~/releases/hmmer-${HMMER_OLDVERSION} (old version for regression):
+  srcdir              ~/releases/hmmer-${HMMER_OLDVERSION}
+  builddir (gcc)      ~/releases/hmmer-${HMMER_OLDVERSION}/build-gcc
+  builddir (icc,MPI)  ~/releases/hmmer-${HMMER_OLDVERSION}/build-icc-mpi
 
 
 * Update the user guide - including the tutorial section, and
@@ -235,8 +251,7 @@ do any cleanup...
 
 ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Makefile
 
-* You can put it in the environment and everything will work as cut/paste:
-   export HMMER_VERSION=3.0rc2
+*
    cd ~/releases
 
 * Delete any old releases of the same number
@@ -255,6 +270,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    ./configure
    . release-notes/LICENSE.sh
 
+  3.0:    exported 3243/575
   3.0rc2: exported 3224/554
   3.0rc1: exported 3160/510
   3.0b3:  exported 3051/442
@@ -294,6 +310,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    rm -rf documentation/userguide
    rm -rf release-notes
    rm -rf test-speed
+   rm -rf autom4te.cache
 
    cd easel
    rm -f  00CHECKLIST LICENSE.csh.in LICENSE.tag 
@@ -312,6 +329,7 @@ Delete TO-DO sections and clean up for public consumption.
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
+   3.0:     4.0 Mb (source only)
    3.0rc2:  3.9 Mb (source only)
    3.0rc1: 21.0 Mb
    3.0b3:  17.1 Mb
@@ -324,8 +342,7 @@ All subsequent tests are on this source distro.
 
 On login-eddy (our compile host):
   ssh login-eddy
-  export HMMER_VERSION=3.0rc2
-  cd releases/hmmer-${HMMER_VERSION}
+  cd ~/releases/hmmer-${HMMER_VERSION}
   mkdir build-gcc
   cd build-gcc
   ../configure    2>&1  > build.out
@@ -334,9 +351,7 @@ On login-eddy (our compile host):
   make check      2>&1 >> build.out
 
   ssh login-eddy
-  export HMMER_VERSION=3.0rc2
-  cd releases/hmmer-${HMMER_VERSION}
-  make distclean
+  cd ~/releases/hmmer-${HMMER_VERSION}
   mkdir build-icc-mpi
   cd build-icc-mpi
   setup_icc_intel64
@@ -472,14 +487,14 @@ macosx-intel build:
    cd ~/releases/hmmer-release
 
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
-            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/3.0rc2\
-            -m "tagged 3.0rc2 release, from 3.0 branch"          
+            https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION}\
+            -m "tagged 3.0 release, from 3.0 branch"          
    svn copy https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0\
-            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/3.0rc2\
-            -m "tagged Easel for HMMER 3.0rc2 release, from HMMER 3.0 branch"          
+            https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/${HMMER_VERSION}\
+            -m "tagged Easel for HMMER 3.0 release, from HMMER 3.0 branch"          
 
+   3.0:    svn r3244/576
    3.0rc2: svn r3224/557
-
 
 * Merge the branch's changes back to the trunk
   You must do this by diff of specific revisions in the branch.
@@ -487,26 +502,18 @@ macosx-intel build:
   changes that should be retained, you'll revert them to the branch
   version!
 
-  HMMER: -r 3223:3224   (edits made in updating Tutorial)
+  HMMER: -r 3242:3243   (edits made in updating Tutorial)
   Easel:  (no revs in 3.0rc2 release cycle)
 
   cd ~/src/hmmer
-  svn diff  -r 3223:3224 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 | more
+  svn diff  -r 3242:3243 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0 | more
   cd easel
   svn diff -r XXX:XXX  https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 | more
   cd ..
 No changes in Easel 
 
   svn update
-  svn merge -r 3223:3224 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
-  
-  This may screw up the Easel externals on the trunk; if it did, fix:
-  svn propget svn:externals .
-    easel   https://svn.janelia.org/eddylab/eddys/easel/trunk
-If it doesn't show the trunk, then:
-
-  svn propedit svn:externals .
-    easel   https://svn.janelia.org/eddylab/eddys/easel/trunk
+  svn merge -r 3242:3243 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
 
   svn commit
    
