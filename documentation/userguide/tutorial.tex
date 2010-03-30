@@ -1032,10 +1032,69 @@ MYG_MUSAN          v------DWEKVNSVWSAVESDLTAIGQNILLRLFEQYPESQNHFPKFKN
 
 and so on. 
 
-Notice those \prog{PP} annotation lines. That's posterior probability
-annotation, as in the single sequence alignments that \prog{hmmscan}
-and \prog{hmmsearch} showed. This essentially represents the
-confidence that each residue is aligned where it should be.
+First thing to notice here is that \prog{hmmalign} uses both lower
+case and upper case residues, and it uses two different characters for
+gaps.  This is because there are two different kinds of columns:
+``match'' columns in which residues are assigned to match states and
+gaps are treated as deletions relative to consensus, and ``insert''
+columns where residues are assigned to insert states and gaps in other
+sequences are just padding for the alignment to accomodate those
+insertions. In a match column, residues are upper case, and a '-'
+character means a deletion relative to the consensus. In an insert
+column, residues are lower case, and a '.' is padding.  A '-' deletion
+has a cost: transition probabilities were assessed, penalizing the
+transition into and out of a deletion. A '.' pad has no cost per se;
+instead, the sequence(s) with insertions are paying transition
+probabilities into and out of their inserted residue.
+
+This notation is only for your convenience in output files: you can
+see the structure of the profile HMM reflected in the pattern of
+residues and gap characters \footnote{By default, \prog{hmmalign}
+  removes any columns that are all deletion characters, so the number
+  of apparent match columns in a displayed alignment is $\leq$ the
+  actual number of match states in the profile. To prevent this
+  trimming and see columns for all match states, use the
+  \prog{--allcol} option. This can be helpful if you're writing some
+  postprocessor that's trying to keep track of what columns are
+  assigned to what match states in the profile.}  In input files, in
+most alignment formats\footnote{A2M format is the exception.} HMMER is
+case-insensitive, and it does not distinguish between different gap
+characters: '-' (dash), '.' (period), or even '\_' (underscore) are
+accepted as gap characters.
+
+Important: insertions in a profile HMM are \emph{unaligned}. Suppose
+one sequence has an insertion of length 10 and another has an
+insertion of length 2 in the same place in the profile. The alignment
+will show ten insert columns, to accomodate the longest insertion.
+The residues of the shorter insertion are thrown down in an arbitrary
+order. (If you must know: by arbitrary HMMER convention, the insertion
+is divided in half; half is left-justified, and the other half is
+right-justified, leaving '.' characters in the middle.)  Notice that
+in the previous paragraph I oh-so-carefully said residues are
+``assigned'' to a state, not ``aligned''. For match states, assigned
+and aligned are the same thing: a one-to-one correspondence between a
+residue and a consensus match state in the model. But there may be one
+\emph{or more} residues assigned to the same insert state.
+
+Don't be confused by the unaligned nature of profile HMM
+insertions. You're sure to see cases where lower-case inserted
+residues are ``obviously misaligned''.  This is just because HMMER
+isn't trying to ``align'' them in the first place: it is assigning
+them to unaligned insertions.
+
+Enough about the sequences in the alignment. Now notice all those
+\prog{PP} annotation lines. That's posterior probability annotation,
+as in the single sequence alignments that \prog{hmmscan} and
+\prog{hmmsearch} showed. This essentially represents the confidence
+that each residue is aligned where it should be. 
+
+Er, I mean, ``assigned'', not ``aligned''. The posterior probability
+assigned to an inserted residue is the probability that it is assigned
+to the insert state that corresponds to that column. Because the same
+insert state might correspond to more than one column, the probability
+on an insert residue is \emph{not} the probability that it belongs in
+that particular column; again, where there's a choice of column for
+inserted residues, that choice is arbitrary.
 
 \prog{hmmalign} currently has a ``feature'' that we're aware
 of. Recall that HMMER3 only does local alignments. Here, we know that
