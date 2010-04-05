@@ -189,11 +189,11 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
 {
   p7_banner (stdout, argv0, banner);
   esl_usage (stdout, argv0, usage);
-  puts("\n Common options are:");
+  puts("\nCommon options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
-  puts("\n Options controlling emission from profiles (with -p):");
+  puts("\nOptions controlling emission from profiles (with -p):");
   esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
-  puts("\n Other options::");
+  puts("\nOther options::");
   esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
   exit(0);
 }

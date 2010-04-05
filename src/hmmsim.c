@@ -163,21 +163,21 @@ main(int argc, char **argv)
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nwhere general options are:");
+      puts("\nCommon options:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1=docgroup, 2 = indentation; 80=textwidth*/
-      puts("\noutput options (only in serial mode, for single HMM input):");
+      puts("\nOutput options (only in serial mode, for single HMM input):");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
-      puts("\nalternative alignment styles :");
+      puts("\nAlternative alignment styles :");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
-      puts("\nalternative scoring algorithms :");
+      puts("\nAlternative scoring algorithms :");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
-      puts("\ncontrolling range of fitted tail masses :");
+      puts("\nControlling range of fitted tail masses :");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
-      puts("\ncontrolling E-value calibration :");
+      puts("\nControlling E-value calibration :");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
-      puts("\ndebugging :");
+      puts("\nDebugging :");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
-      puts("\nexperiments :");
+      puts("\nExperiments :");
       esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
       exit(0);
     }

@@ -95,7 +95,7 @@ static ESL_OPTIONS options[] = {
   { "--wnone",   eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "don't do any relative weighting; set all to 1",        4 },
   { "--wgiven",  eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "use weights as given in MSA file",                     4 },
   { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",                   4 },
-/* Alternate effective sequence weighting strategies */
+/* Alternative effective sequence weighting strategies */
   { "--eent",    eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to achieve relative entropy target",  5 },
   { "--eclust",  eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "eff seq # is # of single linkage clusters",            5 },
   { "--enone",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "no effective seq # weighting: just use nseq",          5 },
@@ -193,7 +193,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nwhere basic options are:");
+      puts("\nBasic options:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
       puts("\nOptions for selecting alphabet rather than guessing it:");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
@@ -201,7 +201,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
       puts("\nAlternative relative sequence weighting strategies:");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
-      puts("\nAlternate effective sequence weighting strategies:");
+      puts("\nAlternative effective sequence weighting strategies:");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
       puts("\nControl of E-value calibration:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80);

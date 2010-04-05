@@ -197,31 +197,31 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nwhere basic options are:");
+      puts("\nBasic options:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
-      puts("\noptions directing output:");
+      puts("\nOptions directing output:");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
 
-      puts("\noptions controlling scoring system in first iteration:");
+      puts("\nOptions controlling scoring system in first iteration:");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
-      puts("\noptions controlling reporting thresholds:");
+      puts("\nOptions controlling reporting thresholds:");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
 
-      puts("\noptions controlling significance thresholds for inclusion in next round:");
+      puts("\nOptions controlling significance thresholds for inclusion in next round:");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
 
-      puts("\noptions controlling acceleration heuristics:");
+      puts("\nOptions controlling acceleration heuristics:");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
 
-      puts("\noptions controlling model construction after first iteration:");
+      puts("\nOptions controlling model construction after first iteration:");
       esl_opt_DisplayHelp(stdout, go, 8, 2, 80); 
 
-      puts("\noptions controlling relative weights in models after first iteration:");
+      puts("\nOptions controlling relative weights in models after first iteration:");
       esl_opt_DisplayHelp(stdout, go, 9, 2, 80); 
 
-      puts("\noptions controlling effective seq number in models after first iteration:");
+      puts("\nOptions controlling effective seq number in models after first iteration:");
       esl_opt_DisplayHelp(stdout, go, 10, 2, 80); 
 
       puts("\nOptions controlling E value calibration:");

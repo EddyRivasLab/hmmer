@@ -44,7 +44,7 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   esl_usage (stdout, argv0, usage1);
   esl_usage (stdout, argv0, usage2);
   esl_usage (stdout, argv0, usage3);
-  puts("\n where options are:");
+  puts("\nOptions:");
   esl_opt_DisplayHelp(stdout, go, 0, 2, 80);
   exit(0);
 }

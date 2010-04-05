@@ -153,25 +153,25 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nwhere basic options are:");
+      puts("\nBasic options:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
 
-      puts("\noptions controlling output:");
+      puts("\nOptions controlling output:");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
 
-      puts("\noptions controlling reporting thresholds:");
+      puts("\nOptions controlling reporting thresholds:");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
 
-      puts("\noptions controlling inclusion (significance) thresholds:");
+      puts("\nOptions controlling inclusion (significance) thresholds:");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
 
-      puts("\noptions for model-specific thresholding:");
+      puts("\nOptions for model-specific thresholding:");
       esl_opt_DisplayHelp(stdout, go, 6, 2, 80); 
 
-      puts("\noptions controlling acceleration heuristics:");
+      puts("\nOptions controlling acceleration heuristics:");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
 
-      puts("\nother expert options:");
+      puts("\nOther expert options:");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
     }
