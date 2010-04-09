@@ -28,13 +28,17 @@
  * Viterbi scores
  */
 typedef struct {
-  char           *alg;        /* --fwd or --vit */
+  enum            p7_palg_e alg_mode;    /* FWD or VIT */
   P7_BG          *bg;
   P7_PROFILE     *gm;
   P7_OPROFILE    *om;
   P7_TOPHITS     *th;
-  int            ntargets;    /* number of target sequences     */
-  double         E;           /* per-target E-value threshold   */
+  int             ntargets;             /* number of target sequences    */
+  int             by_E;		              /* use E-value as threshold      */
+  double          E;                    /* per-target E-value threshold  */
+  enum            p7_evsetby_e E_setby; /* --Erank or --Edist            */
+  double          T;                    /* per-target score threshold    */
+  FILE           *rsfp;                 /* scores from random sequences  */
 } WORKER_PINFO;
 
 /* Worker information
@@ -42,18 +46,23 @@ typedef struct {
  * and Miyazawa scores
  */
 typedef struct {
-  char             *alg;        /* --sw or --miy */
-  P7_SCORESYS      *sm;
-  P7_TOPHITS       *th;
-  int              ntargets;    /* number of target sequences   */
-  double           E;           /* per-target E-value threshold */
-
+	enum            p7_salg_e alg_mode;   /* SW or MIY */
+  P7_SCORESYS    *sm;
+  P7_TOPHITS     *th;
+  int             ntargets;             /* number of target sequences   */
+  int             by_E;		              /* use E-value as threshold     */
+  double          E;                    /* per-target E-value threshold */
+  enum            p7_evsetby_e E_setby; /* --Erank only                 */
+  double          T;                    /* per-target score threshold   */
+  FILE           *rsfp;                 /* scores from random sequences */
 } WORKER_SINFO;
 
-#define ALGORITHMS "--fwd,--vit,--sw,--miy"
-#define PGAPS      "--popen,--pextend"
-#define SGAPS      "--sopen,--sextend"
-#define REPOPTS     "-E,-T"             /* I am disabling T for now as I just need to rank hits by E-value */
+#define ALGORITHMS  "--fwd,--vit,--sw,--miy"
+#define PALGORITHMS "--fwd,--vit"
+#define SALGORITHMS "--sw,--miy"
+#define PGAPS       "--popen,--pextend"
+#define SGAPS       "--sopen,--sextend"
+#define REPOPTS     "-E,-T"
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
@@ -63,19 +72,23 @@ static ESL_OPTIONS options[] = {
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",         "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",       "set max width of ASCII text output lines",                     2 },
   /* Control of scoring system */
+  { "--fwd",        eslARG_NONE,"default",NULL, NULL,ALGORITHMS,  NULL,  SGAPS,             "score seqs with the Forward algorithm",                        3 },
+  { "--vit",        eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  SGAPS,             "score seqs with the Viterbi algorithm",                        3 },
+  { "--sw",         eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  PGAPS,             "score seqs with the Smith-Waterman algorithm",                 3 },
+  { "--miy",        eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  PGAPS,             "score seqs with the Miyazawa algorithm",                       3 },
   { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,  NULL,  SGAPS,             "gap open probability",                                         3 }, /* pHMMER default    */
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL,  SGAPS,             "gap extend probability",                                       3 }, /* pHMMER default    */
   { "--sopen",      eslARG_REAL,  "11.0", NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap open score",                                               3 }, /* NCBI-BLAST default for BLOSUM62 */
   { "--sextend",    eslARG_REAL,   "1.0", NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap extend score",                                             3 }, /* NCBI-BLAST default for BLOSUM62 */
   { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "substitution score matrix [default: BLOSUM62]",                3 },
-  { "--fwd",        eslARG_NONE,"default",NULL, NULL,ALGORITHMS,  NULL,  SGAPS,             "score seqs with the Forward algorithm",                        3 },
-  { "--vit",        eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  SGAPS,             "score seqs with the Viterbi algorithm",                        3 },
-  { "--sw",         eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  PGAPS,             "score seqs with the Smith-Waterman algorithm",                 3 },
-  { "--miy",        eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,  PGAPS,             "score seqs with the Miyazawa algorithm",                       3 },
+
   /* Control of reporting thresholds */
-  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  NULL,              "report sequences <= this E-value threshold in output",         4 },
-//{ "-T",           eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  REPOPTS,           "report sequences >= this score threshold in output",           4 }, /* I only assess performance based on E-values */
-  /* Control of E-value calibration */
+  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  NULL,              "report sequences <= this E-value threshold in output",         4 }, /* and they are sorted from low to high E-values */
+  { "-T",           eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  REPOPTS,           "report sequences >= this score threshold in output",           4 }, /* and they are sorted from high to low scores   */
+  /* Control of E-value calculation */
+  { "--Erank",      eslARG_NONE,"default",NULL, NULL, "--Edist","--Efile",NULL,             "use rank order statistics to compute E-values",               11 },
+  { "--Efile",      eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  "--Edist",         "Scores from random sequences for rank order statistics",      11 }, /* CHECK reqs and incomp for this option */
+  { "--Edist",      eslARG_NONE,   FALSE, NULL, NULL, "--Erank",  NULL,  SALGORITHMS,       "use fitted distribution to compute E-values",                 11 },
   { "--EvL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Viterbi Gumbel mu fit",               11 }, /* For Viterbi and S/W scores */
   { "--EvN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Viterbi Gumbel mu fit",               11 }, /* For Viterbi and S/W scores */
   { "--EfL",        eslARG_INT,    "100", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Forward exp tail tau fit",            11 }, /* For Forward and (hopefully) Miy scores */
@@ -95,7 +108,7 @@ static char banner[] = "search a protein sequence against a protein database wit
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
  * We use it to provide configuration options to serial_master. serial_ploop
- * and serial_slooop get their WORKER_INFO objects.
+ * and serial_slooop get their own WORKER_INFO objects.
  *
  * This structure is passed to routines within main.c, as a means of semi-encapsulation
  * of shared data amongst different parallel processes (threads or MPI processes).
@@ -108,9 +121,8 @@ struct cfg_s {
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_ploop  (WORKER_PINFO *info, ESL_SQFILE *dbfp);     /* computes F or V scores          */
-static int  serial_sloop  (WORKER_SINFO *info, ESL_SQFILE *dbfp);     /* computes S/W or Miyazawa scores */
-static int  SetSWScoreSystem(WORKER_SINFO *info, const char *mxfile, const char *env, double sopen, double sextend);
+static int  serial_ploop (WORKER_PINFO *info, ESL_SQFILE *dbfp);     /* computes F or V scores          */
+static int  serial_sloop (WORKER_SINFO *info, ESL_SQFILE *dbfp);     /* computes S/W or Miyazawa scores */
 
 /* process_commandline()
  * Take argc, argv, and options; parse the command line;
@@ -143,7 +155,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       puts("\noptions controlling reporting thresholds:");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
 
-      puts("\noptions controlling E-value calibration:");
+      puts("\noptions controlling E-value calculation:");
        esl_opt_DisplayHelp(stdout, go, 11, 2, 80);
 
       puts("\nother expert options:");
@@ -187,7 +199,9 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--sw"))        fprintf(ofp, "# Computing Smith-Waterman scores    \n");
   if (esl_opt_IsUsed(go, "--miy"))       fprintf(ofp, "# Computing Miyazawa scores          \n");
   if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"));
-//if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
+  if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
+  if (esl_opt_IsUsed(go, "--Erank"))     fprintf(ofp, "# using rank order statistics to compute E-values    \n");
+  if (esl_opt_IsUsed(go, "--Edist"))     fprintf(ofp, "# using fitted distribution to compute E-values      \n");
   if (esl_opt_IsUsed(go, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvL"));
   if (esl_opt_IsUsed(go, "--EvN") )      fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvN"));
   if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));
@@ -241,8 +255,9 @@ static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   FILE            *ofp      = stdout;             /* output file for results (default stdout)  */
+	FILE            *rsfp     = NULL;               /* input file of scores from random seqs.    */
   int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                           */
-  ESL_SQFILE      *qfp      = NULL;	          /* open qfile                                */
+  ESL_SQFILE      *qfp      = NULL;	              /* open qfile                                */
   ESL_SQ          *qsq      = NULL;               /* query sequence                            */
   int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                          */
   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                               */
@@ -285,36 +300,48 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Probabilistic score system
    */
   if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
-    {
-    /* Allocate builder */
-    bld = p7_builder_Create(NULL, abc);                 /* P7_BUILDER is not initialized because go = NULL */
-    if ((seed = esl_opt_GetInteger(go, "--seed")) > 0)
-      {                           /* a little wasteful - we're blowing a couple of usec by reinitializing */
-      esl_randomness_Init(bld->r, seed);
-      bld->do_reseeding = TRUE;
-      }
-    /* Initialize builder for single sequence search */
-    bld->EvL = esl_opt_GetInteger(go, "--EvL");
-    bld->EvN = esl_opt_GetInteger(go, "--EvN");
-    bld->EfL = esl_opt_GetInteger(go, "--EfL");
-    bld->EfN = esl_opt_GetInteger(go, "--EfN");
-    bld->Eft = esl_opt_GetReal   (go, "--Eft");
+  {
+  	/* Allocate builder */
+  	bld = p7_builder_Create(NULL, abc);                 /* P7_BUILDER is not initialized because go = NULL */
+  	if ((seed = esl_opt_GetInteger(go, "--seed")) > 0)
+  	{                           /* a little wasteful - we're blowing a couple of usec by reinitializing */
+  		esl_randomness_Init(bld->r, seed);
+  		bld->do_reseeding = TRUE;
+  	}
+  	/* Initialize builder for single sequence search */
+  	bld->EvL = esl_opt_GetInteger(go, "--EvL");
+  	bld->EvN = esl_opt_GetInteger(go, "--EvN");
+  	bld->EfL = esl_opt_GetInteger(go, "--EfL");
+  	bld->EfN = esl_opt_GetInteger(go, "--EfN");
+  	bld->Eft = esl_opt_GetReal   (go, "--Eft");
 
-    /* Set score system */
-    status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
-    if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
+  	/* Set score system */
+  	status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
+  	if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
-    /* Allocate pinfo */
-    ESL_ALLOC(pinfo, sizeof(*pinfo));
+  	/* Allocate pinfo */
+  	ESL_ALLOC(pinfo, sizeof(*pinfo));
 
-    /* Initialize pinfo */
-    if (esl_opt_GetBoolean(go, "--fwd")) pinfo->alg = "--fwd";
-    else                                 pinfo->alg = "--vit";
+  	/* Initialize pinfo */
+  	if (esl_opt_GetBoolean(go, "--fwd")) pinfo->alg_mode = FWD;
+  	else                                 pinfo->alg_mode = VIT;
 
-    pinfo->bg         = p7_bg_Create(abc);
-    pinfo->ntargets   = 0;
-    pinfo->E          = esl_opt_GetReal(go, "-E");
-    }
+  	pinfo->bg         = p7_bg_Create(abc);
+  	pinfo->ntargets   = 0;
+  	if ( esl_opt_IsOn(go,"-T") )                           /* set threshold to scores   */
+  	{
+  		pinfo->T = esl_opt_GetReal(go, "-T");
+  		pinfo->by_E = FALSE;
+  	}
+  	else                                                   /* set threshold to E-values */
+  		{
+  		pinfo->by_E = TRUE;
+  		pinfo->E    = esl_opt_GetReal(go, "-E");
+  		}
+
+  	if (esl_opt_GetBoolean(go, "--Erank")) pinfo->E_setby =  RANK_ORDER; /* note, we still compute E-values when using a score threshold */
+  	else                                   pinfo->E_setby =  FIT_DIST;
+  }
 
   /* Non-probabilistic score system
    */
@@ -323,23 +350,45 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   	/* Allocate sinfo */
   	ESL_ALLOC(sinfo, sizeof(*sinfo));
 
-  	/* Initialize sinfo */
-  	if (esl_opt_GetBoolean(go, "--sw")) sinfo->alg = "--sw";
-  	else                                sinfo->alg = "--miy";
-
   	/* Set score system */
   	ESL_ALLOC(sinfo->sm, sizeof(*sinfo->sm));
-   	sinfo->sm->abc    = abc;                  /* set the alphabet before setting the score matrix below */
+   	sinfo->sm->abc = abc;                     /* set the alphabet before setting the score matrix below */
 
-  	status = SetSWScoreSystem(sinfo, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--sopen"), esl_opt_GetReal(go, "--sextend"));
-  	if (status != eslOK) esl_fatal("Failed to set single seq score system:\n%s\n", sinfo->sm->errbuf);
+  	if (esl_opt_GetBoolean(go, "--sw"))
+  	{
+  		sinfo->alg_mode = SW;
+    	status = p7_builder_SetSWScoreSystem(sinfo->sm, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--sopen"), esl_opt_GetReal(go, "--sextend"));
+    	if (status != eslOK) esl_fatal("Failed to set single seq score system:\n%s\n", sinfo->sm->errbuf);
+  	}
+
+  	else
+  	{
+  		sinfo->alg_mode = MIY;
+    	status = p7_builder_SetMiyScoreSystem(sinfo->sm, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--sopen"), esl_opt_GetReal(go, "--sextend"));
+    	if (status != eslOK) esl_fatal("Failed to set single seq score system:\n%s\n", sinfo->sm->errbuf);
+  	}
 
   	sinfo->ntargets   = 0;
-  	sinfo->E          = esl_opt_GetReal(go, "-E");
+   	if ( esl_opt_IsOn(go,"-T") )                    /* set threshold to scores   */
+  	{
+   		sinfo->T = esl_opt_GetReal(go, "-T");
+   		sinfo->by_E = FALSE;
+  	}
+    	else                                          /* set threshold to E-values */
+    		{
+    		sinfo->by_E = TRUE;
+    		sinfo->E    = esl_opt_GetReal(go, "-E");
+    		}
+
+    if (esl_opt_GetBoolean(go, "--Erank")) sinfo->E_setby =  RANK_ORDER;
+    else                                   sinfo->E_setby =  FIT_DIST;
   }
 
   /* Open output files */
   if (esl_opt_IsOn(go, "-o")) { if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) esl_fatal("Failed to open output file %s for writing\n", esl_opt_GetString(go, "-o")); }
+
+  /* Open random scores file */
+  if (esl_opt_IsOn(go, "--Efile")) {if ((rsfp = fopen(esl_opt_GetString(go, "--Efile"), "r")) == NULL) esl_fatal("Failed to open random scores file %s for reading\n", esl_opt_GetString(go, "--Efile")); }
 
   /* Open target file (autodetect format unless given) */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
@@ -389,6 +438,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       {
       	pinfo->th = p7_tophits_Create();
       	p7_SingleBuilder(bld, qsq, pinfo->bg, NULL, NULL, &pinfo->gm, &pinfo->om); /* profile is P7_LOCAL by default, This is changed later to P7_UNILOCAL */
+    	  pinfo->rsfp     = rsfp;
       	sstatus = serial_ploop(pinfo, dbfp);
       }
       else /* --sw or --miy */
@@ -396,6 +446,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         sinfo->th       = p7_tophits_Create();
     	  sinfo->sm->dsq  = qsq->dsq;
     	  sinfo->sm->n    = qsq->n;
+    	  sinfo->rsfp     = rsfp;
     	  sstatus         = serial_sloop(sinfo, dbfp);
       }
 
@@ -415,21 +466,28 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Sort and print hits */
       if (esl_opt_GetBoolean(go, "--fwd") || (esl_opt_GetBoolean(go, "--vit")))
       {
-      	p7_tophits_Sort(pinfo->th);
+      	p7_tophits_Sort(pinfo->th); /* sorting by pvalue or score */
 
       	for (h = 0; h < pinfo->th->N; h++)
       	{
-      		evalue = pinfo->th->hit[h]->pvalue * pinfo->ntargets;  /* MAKE SURE THIS IS PROPERLY CALCULATED!!! */
-      		fprintf(ofp, "Score: %6.1f   P-value: %9.2g   E-value: %9.2g   %s\n", pinfo->th->hit[h]->score, pinfo->th->hit[h]->pvalue, evalue, pinfo->th->hit[h]->name);
+      		evalue = pinfo->th->hit[h]->pvalue * pinfo->ntargets;
+
+      		if ( (pinfo->by_E && evalue <= pinfo->E) || !pinfo->by_E ) /* if by score, already filtered */
+      		fprintf(ofp, "Score: %9.3f   P-value: %9.3g   E-value: %9.3g   %s\n", pinfo->th->hit[h]->score, pinfo->th->hit[h]->pvalue, evalue, pinfo->th->hit[h]->name);
       	}
       }
+
       else /* --sw or --miy */
       {
-    	  p7_tophits_Sort(sinfo->th);
+    	  p7_tophits_Sort(sinfo->th); /* sorting by pvalue or score */
+
         for (h = 0; h < sinfo->th->N; h++)
-       {
-        fprintf(ofp, "Score: %6.1f %s\n", sinfo->th->hit[h]->score, sinfo->th->hit[h]->name);
-       }
+        {
+        	evalue = sinfo->th->hit[h]->pvalue * sinfo->ntargets;
+
+       		if ( (pinfo->by_E && evalue <= pinfo->E) || !pinfo->by_E ) /* if by score, already filtered */
+        	fprintf(ofp, "Score: %9.3f   P-value: %9.3g   E-value: %9.3g   %s\n", sinfo->th->hit[h]->score, sinfo->th->hit[h]->pvalue, evalue, sinfo->th->hit[h]->name);
+        }
       }
 
       /* Stop watch */
@@ -471,6 +529,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   	/* careful here: sinfo->sm->sq points to qsq destroyed below */
     esl_scorematrix_Destroy(sinfo->sm->S);
     if (sinfo->sm->Q != NULL) free(sinfo->sm->Q);
+    free(sinfo->sm);
     free(sinfo);
     }
 
@@ -480,7 +539,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_sq_Destroy(qsq);
   esl_alphabet_Destroy(abc);
 
-  if (ofp      != stdout) fclose(ofp);
+  if (rsfp != NULL)   fclose(rsfp);
+  if (ofp  != stdout) fclose(ofp);
   return eslOK;
 
  ERROR:
@@ -494,23 +554,23 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 static int
 serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 {
-	ESL_SQ         *dbsq  = NULL;
-	P7_GMX         *gx    = NULL;
-	P7_OMX         *ox    = NULL;
-	P7_HIT         *hit   = NULL;     /* ptr to the current hit output data */
-	int        status;                /* reusable function status           */
-	int       rstatus;                /* read status                        */
-	int       sstatus;                /* search status                      */
-	float       nullsc;               /* null model score in nats (only transitions in the null model)     */
-	float          rsc;               /* raw lod sequence score in nats (only emissions in the null model) */
-	float           sc;               /* final lod sequence score in bits                                  */
-	double          P;                /* P-value of a score in bits                                        */
+	ESL_SQ         *dbsq     = NULL;
+	P7_GMX         *gx       = NULL;
+	P7_OMX         *ox       = NULL;
+	P7_HIT         *hit      = NULL;     /* ptr to the current hit output data */
+	int             status;              /* generic (reusable) function status */
+	int             rstatus;             /* read status                        */
+	int             cstatus;             /* computation status                 */
+	float           nullsc;              /* null model score in nats (only transitions in the null model)     */
+	float           rsc;                 /* raw lod sequence score in nats (only emissions in the null model) */
+	float           sc;                  /* final lod sequence score in bits                                  */
+	double           P;                  /* P-value of a score (in bits)         */
 
 	dbsq = esl_sq_CreateDigital(info->gm->abc);
 
 	/* Create dynamic programming matrices */
 	gx = p7_gmx_Create(info->gm->M, 100);    /* target length of 100 is a dummy for now */
-	ox = p7_omx_Create(info->om->M, 0, 100); /* target length of 100 is a dummy for now */  /* allocate memory efficient linar arrays */
+	ox = p7_omx_Create(info->om->M, 0, 100); /* target length of 100 is a dummy for now */  /* allocate memory efficient linear arrays */
 
 	/* INNER LOOP OVER SEQUENCE TARGETS */
 	while ((rstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
@@ -529,12 +589,11 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 		p7_gmx_GrowTo(gx, info->gm->M, dbsq->n);
 		p7_omx_GrowTo(ox, info->om->M, 0, dbsq->n);         /* NOT SURE I NEED TO DO THIS FOR ox */
 
-		if (esl_strcmp(info->alg,"--fwd") == 0)
+		if (info->alg_mode == FWD)  /* I may want to move the if outside the target sequence loop!!! */
 		{
-			sstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
-
-			/* note, if a filter overflows, failover to slow versions */
-			if (rsc == eslINFINITY) sstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* rsc is in nats */ /* make sure you understand how emission in the null model fit in the profile score */
+			cstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
+			if (cstatus == eslERANGE) cstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
+			else if (cstatus != eslOK) esl_fatal ("Failed to compute Forward scores!\n");
 
 			/* Base null model score */
 			p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc); /* nullsc is in nats? only scores transitions!!! */
@@ -547,17 +606,19 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 			 * DISABLED
 			 */
 
-			/* Calculate P-value */
+			/* Score (in bits) */
 			sc = (rsc - nullsc) / eslCONST_LOG2;
-			P =  esl_exp_surv(sc,info->gm->evparam[p7_FTAU], info->gm->evparam[p7_FLAMBDA]);
-		}
 
-		else /* --vit */
+			/* Calculate P-value */
+			if (info->E_setby == RANK_ORDER) P = rank_order(info->rsfp, sc);
+			else P = esl_exp_surv(sc,info->gm->evparam[p7_FTAU], info->gm->evparam[p7_FLAMBDA]);
+		} /* end forward computation */
+
+		else /* VIT */
 		{
-			sstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &rsc);
-
-			/* note, if a filter overflows, failover to slow versions */
-			if (rsc == eslINFINITY) sstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc);
+			cstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
+			if (cstatus == eslERANGE) cstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
+			else if (cstatus != eslOK) esl_fatal ("Failed to compute Viterbi scores!\n");
 
 			/* Base null model score */
 			p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc);
@@ -570,22 +631,37 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 			 * DISABLED
 			 */
 
-			/* Calculate P-value */
+			/* Score (in bits) */
 			sc = (rsc - nullsc) / eslCONST_LOG2;
-			P  = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]); /* ARE MU AND LAMBDA THE SAME FOR gm AND om??? they should be! */ /* GOT THE CORRECTED LAMBDA??? */
-		}
 
-		/* Check status */
-		if (sstatus != eslOK)  esl_fatal ("Failed to compute the score!\n");
+			/* Calculate P-value */
+			if (info->E_setby == RANK_ORDER) P = rank_order(info->rsfp, sc);
+			else P = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]);  /* ARE MU AND LAMBDA THE SAME FOR gm AND om??? they should be! */ /* GOT THE CORRECTED LAMBDA??? */
+		} /* end viterbi computation */
 
 		/* Hitlist */
-		if (P * info->ntargets <= info->E) /* Calculated E-value is a lower bound because we haven't yet read the full target database */
+		if (info->by_E == TRUE) /* threshold and sort by E-values */
 		{
-			p7_tophits_CreateNextHit(info->th, &hit); /* allocates new hit structure */
-			if ((status  = esl_strdup(dbsq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure"); /* CHECK I AM USING THIS FUNCTION PROPERLY!!! */
-			hit->score   = sc;
-			hit->pvalue  = P;
-			hit->sortkey = -log(P); /* most significant hits will be highest (more positive) in the top hitlist */
+			if (P * info->ntargets <= info->E) /* Calculated E-value is a lower bound because we haven't yet read the full target database */
+			{
+				p7_tophits_CreateNextHit(info->th, &hit); /* allocates new hit structure */
+				if ((status  = esl_strdup(dbsq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure"); /* CHECK I AM USING THIS FUNCTION PROPERLY!!! */
+				hit->score   = sc;
+				hit->pvalue  = P;
+				hit->sortkey = -log(P); /* per-seq output sorts on bit score if inclusion is by score  */
+			}
+		}
+
+		else /* threshold and sort by scores */
+		{
+			if (sc >= info->T)
+			{
+				p7_tophits_CreateNextHit(info->th, &hit); /* allocates new hit structure */
+				if ((status  = esl_strdup(dbsq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure"); /* CHECK I AM USING THIS FUNCTION PROPERLY!!! */
+				hit->score   = sc;
+				hit->pvalue  = P;
+				hit->sortkey = sc; /* per-seq output sorts on bit score if inclusion is by score  */
+			}
 		}
 
 		/* Reuse */
@@ -600,7 +676,7 @@ serial_ploop(WORKER_PINFO *info, ESL_SQFILE *dbfp)
 	p7_gmx_Destroy(gx);
 	p7_omx_Destroy(ox);
 
-	return rstatus;
+	return rstatus; /* read status */
 }
 
 static int
@@ -609,17 +685,18 @@ serial_sloop(WORKER_SINFO *info, ESL_SQFILE *dbfp)
 	ESL_SQ   *dbsq     = NULL;
 	P7_GMX   *gx       = NULL;
 	P7_HIT   *hit      = NULL;     /* ptr to the current hit output data   */
-	int      status;               /* reusable function status             */
+	int      status;               /* generic (reusable) function status   */
 	int      rstatus;              /* read status                          */
-	int      sstatus;              /* search status                        */
+	int      cstatus;              /* computation status                   */
 
 	float    rsc;                  /* raw sequence score                   */
 	float    sc;                   /* final sequence score in bits         */
+	double    P;                   /* P-value of a score (in bits)         */
 
 	dbsq = esl_sq_CreateDigital(info->sm->abc);
 
 	/* Create dynamic programming matrices */
-	if ((gx = p7_gmx_Create(info->sm->n, 100)) == NULL) esl_fatal("Dynamic programming matrix allocation failure");; /* Length target (dummy 100 here) is the number of rows in the matrix*/
+	if ((gx = p7_gmx_Create(info->sm->n, 100)) == NULL) esl_fatal("Dynamic programming matrix allocation failure");; /* Length target (dummy 100 here) is the number of rows in the matrix */
 
 	/* INNER LOOP OVER SEQUENCE TARGETS */
 	while ((rstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
@@ -632,56 +709,65 @@ serial_sloop(WORKER_SINFO *info, ESL_SQFILE *dbfp)
 		/* Reconfig dp matrices using target length */
 		if ((status = p7_gmx_GrowTo(gx, info->sm->n, dbsq->n)) != eslOK) esl_fatal("Dynamic programming matrix reallocation failure");
 
-		if (esl_strcmp(info->alg,"--sw") == 0)
+		if (info->alg_mode == SW)
 		{
 
 			/* Fast sse S/W implementation here (I could use Farrar's implementation)
 			 */
 
 			/* Slow S/W implementation (it will do for now!) */
-			sstatus = p7_GSmithWaterman(dbsq->dsq, dbsq->n, info->sm, gx, &rsc);
+			cstatus = p7_GSmithWaterman(dbsq->dsq, dbsq->n, info->sm, gx, &rsc);
+			if (cstatus != eslOK)  esl_fatal ("Failed to compute slow Smith-Waterman scores!\n");
 
-			sc = rsc; // / eslCONST_LOG2; /* in bits? */
+			/* Score (units unchanged) */
+			sc = rsc;
 
-			/* Calculate P-value
-			 * Sure, but first I need mu and lambda
-			 *
-			 * Let's try rank statistics!
-			 */
+			/* Calculate P-value */
+			if (info->E_setby == RANK_ORDER) P = rank_order(info->rsfp, sc);
+			else esl_fatal ("P-values for Smith-Waterman scores can only be computed with rank order statistics for now!\n");
 		}
 
-		else /* --miy */
+		else /* MIY */
 		{
-
-			/* Fast Miyazawa implementation
+			/* Fast Miyazawa implementation (not implemented)
 			 */
 
 			/* Slow Miyazawa implementation (it will do for now!) */
-			sstatus = p7_GMiyazawa(dbsq->dsq, dbsq->n, info->sm, gx, &rsc);
+			cstatus = p7_GMiyazawa(dbsq->dsq, dbsq->n, info->sm, gx, &rsc);
+			if (cstatus != eslOK)  esl_fatal ("Failed to compute slow Miyazawa scores!\n");
 
-			sc = rsc; // / eslCONST_LOG2; /* in bits? */
+			/* Score (units unchanged) */
+			sc = rsc;
 
-			/* Calculate P-value
-			 * Easy to say, but I need tau and lambda
-			 * and that is assuming high miy scores
-			 * follow an exponential (good luck with that!)
-			 *
-			 * Let's try rank statistics!
-			 */
+			/* Calculate P-value */
+			if (info->E_setby == RANK_ORDER) P = rank_order(info->rsfp, sc);
+			else esl_fatal ("P-values for Miyazawa scores can only be computed with rank order statistics for now!\n");
 		}
 
-		/* Check status */
-		if (sstatus != eslOK)  esl_fatal ("Failed to compute the score!\n");
-
 		/* Hitlist */
-		//     if (P * info->ntargets <= info->E) /* Calculated E-value is a lower bound because we haven't yet read the full target database */
-		//             {
-		if ((status  = p7_tophits_CreateNextHit(info->th, &hit)) != eslOK) esl_fatal("Next hit allocation failure"); /* allocates new hit structure */
-		if ((status  = esl_strdup(dbsq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure"); /* CHECK I AM USING THIS FUNCTION PROPERLY!!! */
-		hit->score   = sc;
-		//             hit->pvalue  = P;
-		hit->sortkey = sc;
-		//             }
+			if (info->by_E == TRUE) /* threshold and sort by E-values */
+			{
+				if (P * info->ntargets <= info->E) /* Calculated E-value is a lower bound because we haven't yet read the full target database */
+				{
+					p7_tophits_CreateNextHit(info->th, &hit); /* allocates new hit structure */
+					if ((status  = esl_strdup(dbsq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure"); /* CHECK I AM USING THIS FUNCTION PROPERLY!!! */
+					hit->score   = sc;
+					hit->pvalue  = P;
+					hit->sortkey = -log(P); /* per-seq output sorts on bit score if inclusion is by score  */
+				}
+			}
+
+			else /* threshold and sort by scores */
+			{
+				if (sc >= info->T)
+				{
+					p7_tophits_CreateNextHit(info->th, &hit); /* allocates new hit structure */
+					if ((status  = esl_strdup(dbsq->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure"); /* CHECK I AM USING THIS FUNCTION PROPERLY!!! */
+					hit->score   = sc;
+					hit->pvalue  = P;
+					hit->sortkey = sc; /* per-seq output sorts on bit score if inclusion is by score  */
+				}
+			}
 
 		/* Reuse */
 		esl_sq_Reuse(dbsq);
@@ -693,71 +779,8 @@ serial_sloop(WORKER_SINFO *info, ESL_SQFILE *dbfp)
 	esl_sq_Destroy(dbsq);
 	p7_gmx_Destroy(gx);
 
-	return rstatus;
+	return rstatus; /* read status */
 }
-
-static int
-SetSWScoreSystem(WORKER_SINFO *info, const char *mxfile, const char *env, double sopen, double sextend)
-{
-	ESL_FILEPARSER   *efp      = NULL;
-	ESL_SCOREMATRIX  *S        = NULL;
-	ESL_DMATRIX      *Q        = NULL;
-	double            slambda;
-	int               status;
-	int               i,j;
-
-	info->sm->errbuf[0] = '\0';
-
-	/* If a score system is already set, delete it. */
-	if (S != NULL) esl_scorematrix_Destroy(S);
-
-	/* Get the scoring matrix */
-	if ((S  = esl_scorematrix_Create(info->sm->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-
-	if (mxfile == NULL)
-	{
-		if ((status = esl_scorematrix_SetBLOSUM62(S)) != eslOK) goto ERROR;
-	}
-	else
-	{
-		if ((status = esl_fileparser_Open(mxfile, env, &efp)) != eslOK) ESL_XFAIL(status, info->sm->errbuf, "Failed to find or open matrix file %s", mxfile);
-		if ((status = esl_sco_Read(efp, info->sm->abc, &S)) != eslOK) ESL_XFAIL(status, info->sm->errbuf, "Failed to read matrix from %s:\n%s", mxfile, efp->errbuf);
-		esl_fileparser_Close(efp); efp = NULL;
-	}
-	if (! esl_scorematrix_IsSymmetric(S))
-		ESL_XFAIL(eslEINVAL, info->sm->errbuf, "Matrix isn't symmetric");
-
-	/* S/W score system */
-	info->sm->S       = S;
-	info->sm->sopen   = sopen;
-	info->sm->sextend = sextend;
-
-	/* Miyazawa's weighted scores */
-	if (info->alg == "--miy")
-	{
-		if ((status = esl_sco_Probify(S, NULL, NULL, NULL, &slambda)) != eslOK)
-			ESL_XFAIL(eslEINVAL, info->sm->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
-
-		/* Allocate Q */
-		Q = esl_dmatrix_Create(S->Kp, S->Kp);
-
-		for (i = 0; i <= S->Kp - 1; i++)
-			for (j = 0; j <= S->Kp - 1; j++)
-				Q->mx[i][j] = (double)S->s[i][j] * slambda;
-
-		info->sm->slambda = slambda;
-		info->sm->lopen   = slambda * sopen;
-		info->sm->lextend = slambda * sextend;
-		info->sm->Q       = Q;
-	} /* end Miyazawa's weighted scores */
-
-	return eslOK;
-
-	ERROR:
-	if (efp != NULL) esl_fileparser_Close(efp);
-	return status;
-}
-
 
 /*****************************************************************
  * @LICENSE@

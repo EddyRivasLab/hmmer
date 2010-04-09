@@ -31,7 +31,7 @@
  * Synopsis:  The Miyazawa's partition function algorithm.
  * Incept:    SC, Wed Mar 17 11:37:34 EDT 2010
  *
- * Purpose:   The standard Smith-Waterman dynamic programming algorithm.
+ * Purpose:   The standard Miyazawa's dynamic programming algorithm.
  *
  *            Given a digital target sequence <dsq> of length <L>, a
  *            query sequence and score system <sm>, and DP matrix <gx>

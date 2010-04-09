@@ -86,6 +86,15 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 /* Option flags when creating faux traces with p7_trace_FauxFromMSA() */
 #define p7_MSA_COORDS	       (1<<0) /* default: i = unaligned seq residue coords     */
 
+/* Score systems in shmmer */
+enum p7_palg_e { FWD = 0, VIT = 1 }; /* probabilistic algorithms                 */
+enum p7_salg_e { SW  = 0, MIY = 1 }; /* non-probabilistic (score) algorithms     */
+
+enum p7_evsetby_e { RANK_ORDER = 0, FIT_DIST = 1 }; /* E-value computation modes */
+
+/* Rank order */
+#define p7_RANKORDER_LIMIT 10000000                 /* Number of scores from random sequences */
+
 /*****************************************************************
  * 1. P7_HMM: a core model.
  *****************************************************************/
@@ -838,11 +847,6 @@ typedef struct p7_scoresys_s {
 		double            lextend;    /* slambda * sextend (weighted Miyazawa's gap ext cost)     */
 		ESL_DMATRIX      *Q;	        /* S[][] * slambda (weighted Miyazawa's substitution score) */
 
-	  /* E-value parameter calibration */
-	  double           lambda;      /* need to estimate this for both sw and miy scores      */
-	  double           mu;          /* need to estimate this for sw scores                   */
-	  double           tau;         /* need to estimate this for miy scores                  */
-
 	  char errbuf[eslERRBUFSIZE];   /* informative message on score system failure           */
 } P7_SCORESYS;
 
@@ -1000,6 +1004,8 @@ extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
 /* p7_builder.c */
 extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc);
 extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
+extern int         p7_builder_SetSWScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend);
+extern int         p7_builder_SetMiyScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
 extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
@@ -1158,8 +1164,6 @@ extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 extern int p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
 extern int p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
 
-
-
 /* p7_trace.c */
 extern P7_TRACE *p7_trace_Create(void);
 extern P7_TRACE *p7_trace_CreateWithPP(void);
@@ -1192,6 +1196,9 @@ extern int  p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_
 extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
+
+/* rankorder.c */
+extern double rank_order(FILE *rsfp, float sc); /* computes rank order statistics for shmmer scores */
 
 /* seqmodel.c */
 extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
