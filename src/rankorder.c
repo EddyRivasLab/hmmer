@@ -45,6 +45,8 @@ static int
 binary_search(float random_scores[], int left, int right, float sc)
 {
 
+	int k;
+
 	/* Check whether our score is greater or lower
 	 * than any score from random sequences
 	 */
@@ -66,6 +68,11 @@ binary_search(float random_scores[], int left, int right, float sc)
 		 */
 		else if (sc < random_scores[mid]) left  = mid;
 		else if (sc > random_scores[mid]) right = mid;
+		else if (sc == random_scores[mid] && sc == random_scores[mid+1]) /* sc is within a patch of duplicate scores */ /* CHECK THIS IS CORRECT!!! */
+		{
+			for (k = 2; k <= right; k++)
+				if (sc > random_scores[mid + k]) return (mid + k - 1);       /* find the rightmost duplicate score        */
+		}
 		else return mid;                               /* sc = random_scores[mid] */
 	}
 
