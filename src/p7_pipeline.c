@@ -602,6 +602,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   if (P > pli->F3) return eslOK;
   pli->n_past_fwd++;
 
+  printf("Score %d: %6.1f %6.1f %6.1f\n", pli->n_past_fwd, fwdsc, filtersc, seq_score);
+
   /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
@@ -621,7 +623,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   else seqbias = 0.0;
   pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
   seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
-
   
   /* Calculate the "reconstruction score": estimated
    * per-sequence score as sum of individual domains,

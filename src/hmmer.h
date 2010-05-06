@@ -93,7 +93,7 @@ enum p7_salg_e { SW  = 0, MIY = 1 }; /* non-probabilistic (score) algorithms    
 enum p7_evsetby_e { RANK_ORDER = 0, FIT_DIST = 1 }; /* E-value computation modes */
 
 /* Rank order */
-#define p7_RANKORDER_LIMIT 10000000                 /* Number of scores from random sequences */
+#define p7_RANKORDER_LIMIT 1000000                  /* Number of scores from random sequences (10^6 gives me enough precission)*/
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
@@ -782,9 +782,10 @@ typedef struct p7_pipeline_s {
  * 14. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
-enum p7_archchoice_e { p7_ARCH_FAST = 0, p7_ARCH_HAND = 1 };
-enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
-enum p7_effnchoice_e { p7_EFFN_NONE = 0, p7_EFFN_SET  = 1, p7_EFFN_CLUST = 2, p7_EFFN_ENTROPY = 3 };
+enum p7_archchoice_e { p7_ARCH_FAST = 0, p7_ARCH_HAND   = 1 };
+enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN   = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
+enum p7_effnchoice_e { p7_EFFN_NONE = 0, p7_EFFN_SET    = 1, p7_EFFN_CLUST = 2, p7_EFFN_ENTROPY = 3 };
+enum p7_s2pchoice_e  { p7_S2P_NONE  = 0, p7_S2P_CONVERT = 1, p7_S2P_COLLAPSE = 2 }; /* gap open/extension scores to probabilities */
 
 typedef struct p7_builder_s {
   /* Model architecture                                                                            */
@@ -819,11 +820,15 @@ typedef struct p7_builder_s {
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
+  /* Search mode */
+  int                  mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */
+
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		         /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	             /* Q->mx[a][b] = P(b|a) residue probabilities             */
   double               popen;         	 /* gap open probability                                   */
   double               pextend;          /* gap extend probability                                 */
+  enum p7_s2pchoice_e  s2p_strategy;   /* choice of method for gap open/extension scores to probabilities */
   const ESL_ALPHABET  *abc;		         /* COPY of alphabet                                       */
   char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
 } P7_BUILDER;
@@ -910,7 +915,7 @@ extern int p7_GTrace        (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, co
 /* generic_swat.c */
 extern int p7_GSmithWaterman(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float *ret_sc);
 
-/* generic_pfunction.c */
+/* generic_miyazawa.c */
 extern int p7_GMiyazawa(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float *ret_sc);
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future) */
@@ -1004,7 +1009,7 @@ extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
 /* p7_builder.c */
 extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc);
 extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
-extern int         p7_builder_SetSWScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend);
+extern int         p7_builder_SetSWScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend); /* may want to do this within p7_builder_SetSWScoreSystem */
 extern int         p7_builder_SetMiyScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
@@ -1198,7 +1203,7 @@ extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 /* rankorder.c */
-extern double rank_order(FILE *rsfp, float sc); /* computes rank order statistics for shmmer scores */
+extern double rank_order(float random_scores[], float sc); /* computes rank order statistics for shmmer scores */
 
 /* seqmodel.c */
 extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,

@@ -1,4 +1,11 @@
-/* Smith-Waterman algorithm (non-sse version) */
+/* Smith-Waterman algorithm; generic (non-SIMD) version.
+ *
+ *
+ *
+ *  SC, Fri Mar 12 10:30:19 EST 2010
+ *  $Id$
+ *
+ */
 
 #include "p7_config.h"
 

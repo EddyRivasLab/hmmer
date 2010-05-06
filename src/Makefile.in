@@ -74,6 +74,7 @@ OBJS =  build.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
+	rankorder.o\
 	seqmodel.o\
 	tracealign.o\
 	p7_alidisplay.o\
@@ -108,6 +109,7 @@ BENCHMARKS = \
 UTESTS =\
 	build_utest\
 	generic_fwdback_utest\
+	generic_miyazawa_utest\
 	generic_msv_utest\
 	generic_stotrace_utest\
 	generic_viterbi_utest\

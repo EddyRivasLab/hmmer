@@ -335,10 +335,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   FILE            *ofp      = stdout;             /* output file for results (default stdout)         */
   FILE            *afp      = NULL;               /* alignment output file (-A option)                */
-  FILE            *tblfp    = NULL;		  /* output stream for tabular per-seq (--tblout)     */
-  FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (--domtblout)  */
+  FILE            *tblfp    = NULL;		  /* output stream for tabular per-seq (--tblout)               */
+  FILE            *domtblfp = NULL;		  /* output stream for tabular per-seq (--domtblout)            */
   int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
-  ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                       */
+  ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                                 */
   ESL_SQ          *qsq      = NULL;               /* query sequence                                   */
   int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                      */
@@ -358,7 +358,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
 #ifdef HMMER_THREADS
-  ESL_SQ_BLOCK    *block    = NULL;
+  ESL_SQ_BLOCK    *block    = NULL;  /* contains blocks of target sequences */
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
@@ -425,11 +425,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #ifdef HMMER_THREADS
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                           esl_threads_CPUCount(&ncpus);
+  else                           esl_threads_CPUCount(&ncpus);            /* usually, we don't want more threads than cpus (but see hyperthreading) */
 
   if (ncpus > 0)
     {
-      threadObj = esl_threads_Create(&pipeline_thread);
+      threadObj = esl_threads_Create(&pipeline_thread); /* pointer to the function to run */
       queue = esl_workqueue_Create(ncpus * 2);
     }
 #endif
@@ -440,7 +440,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Show header output */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
 
-  for (i = 0; i < infocnt; ++i)
+  for (i = 0; i < infocnt; ++i) /* infocnt = number of cpus */
     {
       info[i].pli   = NULL;
       info[i].th    = NULL;
@@ -493,6 +493,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Build the model */
       p7_SingleBuilder(bld, qsq, info->bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
+  		printf("Search mode: %d\n", om->mode);
+
       for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
@@ -502,7 +504,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
-	  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+	  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]); /* putting together info with a newly created thread */
 #endif
 	}
 
@@ -573,6 +575,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Destroy(om);
       esl_sq_Reuse(qsq);
     } /* end outer loop over query sequences */
+
   if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
 					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
@@ -1299,7 +1302,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   while (sstatus == eslOK)
     {
       block = (ESL_SQ_BLOCK *) newBlock;
-      sstatus = esl_sqio_ReadBlock(dbfp, block);
+      sstatus = esl_sqio_ReadBlock(dbfp, block); /* new target database block */
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
@@ -1326,6 +1329,9 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   return sstatus;
 }
 
+/* This function will be
+ * run by each thread
+ */
 static void 
 pipeline_thread(void *arg)
 {

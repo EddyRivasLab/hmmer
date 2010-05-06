@@ -190,7 +190,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend)
+p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double open, double extend)
 {
   ESL_FILEPARSER  *efp      = NULL;
   double          *fa       = NULL;
@@ -223,12 +223,34 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
 
+  /* Set probabilities in bld */
   for (a = 0; a < bld->abc->K; a++)
     for (b = 0; b < bld->abc->K; b++)
       bld->Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
 
-  bld->popen   = popen;
-  bld->pextend = pextend;
+  /* Set popen/pextend probabilities in bld */
+   if (bld->s2p_strategy == p7_S2P_CONVERT)
+   {
+  	 bld->popen   = exp(slambda * -open);
+  	 bld->pextend = exp(slambda * -extend);
+
+   }
+   else if (bld->s2p_strategy == p7_S2P_COLLAPSE)
+   {
+  	 bld->popen   = (exp(slambda * -open) + exp(slambda * -extend)) / 3;
+   	 bld->pextend = exp(slambda * -extend);
+   }
+   else /* bld->s2p_strategy = p7_S2P_NONE */
+   {
+  	 bld->popen   = open;
+  	 bld->pextend = extend;
+   }
+
+   /* Check range */
+   if ( !(bld->popen >= 0 && bld->popen < 0.5) )
+     ESL_XFAIL(eslERANGE, bld->errbuf, "Out of range gap open probability from score");
+   else if ( !(bld->pextend >= 0 && bld->pextend < 1) )
+     ESL_XFAIL(eslERANGE, bld->errbuf, "Out of range gap extend probability from score");
 
   free(fa);
   free(fb);
@@ -239,6 +261,191 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   if (fa  != NULL) free(fa);
   if (fb  != NULL) free(fb);
   return status;
+}
+
+
+
+/* Function:  p7_builder_SetSWScoreSystem()
+ * Synopsis:  Initialize SW score system for single sequence queries.
+ * Incept:    SC, Fri Mar 26 16:50:04 EDT 2010 [Janelia]
+ *
+ * Purpose:   Initialize the score system <sm> to be able to parameterize
+ *            smith-waterman single sequence queries.
+ *
+ *            Read a standard substitution score matrix from file
+ *            <mxfile>. If <mxfile> is <NULL>, default to BLOSUM62
+ *            scores. If <mxfile> is "-", read score matrix from
+ *            <stdin> stream. If <env> is non-<NULL> and <mxfile> is
+ *            not found in the current working directory, look for
+ *            <mxfile> in colon-delimited directory list contained in
+ *            environment variable <env>.
+ *
+ *            Set the gap-open and gap-extend scores to
+ *            <sopen>, <sextend>, respectively.
+ *
+ *
+ * Args:      sm      - <P7_SCORESYS> to initialize
+ *            mxfile   - score matrix file to use, or NULL for BLOSUM62 default
+ *            env      - env variable containing directory list where <mxfile> may reside
+ *            sopen    - gap open score
+ *            sextend  - gap extend score
+ *
+ * Returns:   <eslOK> on success.
+ *
+ *            <eslENOTFOUND> if <mxfile> can't be found or opened, even
+ *            in any of the directories specified by the <env> variable.
+ *
+ *            <eslEINVAL> if the score matrix isn't a symmetric matrix.
+ *
+ *            On either error, <sm->errbuf> contains a useful error message
+ *            for the user.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_builder_SetSWScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend)
+{
+	ESL_FILEPARSER   *efp      = NULL;
+	ESL_SCOREMATRIX  *S        = NULL;
+	int               status;
+
+	sm->errbuf[0] = '\0';
+
+	/* If a score system is already set, delete it. */
+	if (S != NULL) esl_scorematrix_Destroy(S);
+
+	/* Get the scoring matrix */
+	if ((S  = esl_scorematrix_Create(sm->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+
+	if (mxfile == NULL)
+	{
+		if ((status = esl_scorematrix_SetBLOSUM62(S)) != eslOK) goto ERROR;
+	}
+	else
+	{
+		if ((status = esl_fileparser_Open(mxfile, env, &efp)) != eslOK) ESL_XFAIL(status, sm->errbuf, "Failed to find or open matrix file %s", mxfile);
+		if ((status = esl_sco_Read(efp, sm->abc, &S)) != eslOK) ESL_XFAIL(status, sm->errbuf, "Failed to read matrix from %s:\n%s", mxfile, efp->errbuf);
+		esl_fileparser_Close(efp); efp = NULL;
+	}
+	if (! esl_scorematrix_IsSymmetric(S))
+		ESL_XFAIL(eslEINVAL, sm->errbuf, "Matrix isn't symmetric");
+
+	/* S/W score system */
+	sm->S       = S;
+	sm->sopen   = sopen;
+	sm->sextend = sextend;
+
+	/* Miyazawa scores are undefined */
+	sm->Q = NULL;
+
+	return eslOK;
+
+	ERROR:
+	if (efp != NULL) esl_fileparser_Close(efp);
+	return status;
+}
+
+
+
+
+/* Function:  p7_builder_SetMiyScoreSystem()
+ * Synopsis:  Initialize SW score system for single sequence queries.
+ * Incept:    SC, Fri Mar 26 16:50:04 EDT 2010 [Janelia]
+ *
+ * Purpose:   Initialize the score system <sm> to be able to parameterize
+ *            Miyazawa single sequence queries.
+ *
+ *            Read a standard substitution score matrix from file
+ *            <mxfile>. If <mxfile> is <NULL>, default to BLOSUM62
+ *            scores. If <mxfile> is "-", read score matrix from
+ *            <stdin> stream. If <env> is non-<NULL> and <mxfile> is
+ *            not found in the current working directory, look for
+ *            <mxfile> in colon-delimited directory list contained in
+ *            environment variable <env>.
+ *
+ *            Set the gap-open and gap-extend scores to
+ *            <sopen>, <sextend>, respectively.
+ *
+ *
+ * Args:      sm      - <P7_SCORESYS> to initialize
+ *            mxfile   - score matrix file to use, or NULL for BLOSUM62 default
+ *            env      - env variable containing directory list where <mxfile> may reside
+ *            sopen    - gap open score
+ *            sextend  - gap extend score
+ *
+ * Returns:   <eslOK> on success.
+ *
+ *            <eslENOTFOUND> if <mxfile> can't be found or opened, even
+ *            in any of the directories specified by the <env> variable.
+ *
+ *            <eslEINVAL> if the score matrix can't be converted into
+ *            conditional probabilities by the Yu and Altschul method,
+ *            either because it isn't a symmetric matrix or because
+ *            the Yu/Altschul numerical method fails to converge.
+ *
+ *            On either error, <sm->errbuf> contains a useful error message
+ *            for the user.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_builder_SetMiyScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend)
+{
+	ESL_FILEPARSER   *efp      = NULL;
+	ESL_SCOREMATRIX  *S        = NULL;
+	ESL_DMATRIX      *Q        = NULL;
+	double            slambda;
+	int               status;
+	int               i,j;
+
+	sm->errbuf[0] = '\0';
+
+	/* If a score system is already set, delete it. */
+	if (S != NULL) esl_scorematrix_Destroy(S);
+
+	/* Get the scoring matrix */
+	if ((S  = esl_scorematrix_Create(sm->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+
+	if (mxfile == NULL)
+	{
+		if ((status = esl_scorematrix_SetBLOSUM62(S)) != eslOK) goto ERROR;
+	}
+	else
+	{
+		if ((status = esl_fileparser_Open(mxfile, env, &efp)) != eslOK) ESL_XFAIL(status, sm->errbuf, "Failed to find or open matrix file %s", mxfile);
+		if ((status = esl_sco_Read(efp, sm->abc, &S)) != eslOK) ESL_XFAIL(status, sm->errbuf, "Failed to read matrix from %s:\n%s", mxfile, efp->errbuf);
+		esl_fileparser_Close(efp); efp = NULL;
+	}
+	if (! esl_scorematrix_IsSymmetric(S))
+		ESL_XFAIL(eslEINVAL, sm->errbuf, "Matrix isn't symmetric");
+
+	/* S/W score system */
+	sm->S       = S;
+	sm->sopen   = sopen;
+	sm->sextend = sextend;
+
+	/* Miyazawa's weighted scores */
+
+	if ((status = esl_sco_Probify(S, NULL, NULL, NULL, &slambda)) != eslOK)
+		ESL_XFAIL(eslEINVAL, sm->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+	/* Allocate Q */
+	Q = esl_dmatrix_Create(S->Kp, S->Kp);
+
+	for (i = 0; i <= S->Kp - 1; i++)
+		for (j = 0; j <= S->Kp - 1; j++)
+			Q->mx[i][j] = (double)S->s[i][j] * slambda;
+
+	sm->slambda = slambda;
+	sm->lopen   = slambda * sopen;
+	sm->lextend = slambda * sextend;
+	sm->Q       = Q;
+
+	return eslOK;
+
+	ERROR:
+	if (efp != NULL) esl_fileparser_Close(efp);
+	return status;
 }
 
 /* Function:  p7_builder_Destroy()
