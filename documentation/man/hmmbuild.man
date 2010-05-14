@@ -262,6 +262,24 @@ single linkage clustering with the
 option. The default is 0.62.
 
 
+.SH OPTIONS CONTROLLING PRIORS
+
+By default, weighted counts are converted to mean posterior
+probability parameter estimates using mixture Dirichlet priors.
+Default mixture Dirichlet prior parameters for protein models and for
+nucleic acid (RNA and DNA) models are built in. The following options
+allow you to override the default priors.
+
+.B --pnone
+Don't use any priors. Probability parameters will simply be the
+observed frequencies, after relative sequence weighting. 
+
+.B --plaplace
+Use a Laplace +1 prior in place of the default mixture Dirichlet
+prior.
+
+
+
 .SH OPTIONS CONTROLLING E-VALUE CALIBRATION
 
 The location parameters for the expected score distributions for MSV
@@ -340,9 +358,7 @@ is 0, the random number generator is seeded arbitrarily, and
 stochastic simulations will vary from run to run of the same command.
 The default seed is 42.
 
-.B --laplace
-Experimental only: use a Laplace +1 prior in place of the default
-mixture Dirichlet prior.
+
 
 .TP 
 .B --stall

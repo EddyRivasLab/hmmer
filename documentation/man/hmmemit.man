@@ -56,18 +56,6 @@ each HMM will be used in turn.
 Help; print a brief reminder of command line usage and all available
 options.
 
-.TP
-.B -a
-Emit an alignment for each HMM in the 
-.I hmmfile
-rather than sampling unaligned sequences one at a time.
-
-.TP
-.B -c
-Emit a consensus sequence, instead of sampling a sequence from the
-profile HMM's probability distribution. The consensus sequence is
-formed by selecting the maximum probability residue at each match
-state.
 
 .TP
 .BI -o " <f>"
@@ -84,7 +72,53 @@ sequences per model, rather than just one.
 
 
 
-.SH OPTIONS CONTROLLING EMISSION FROM PROFILES
+.SH OPTIONS CONTROLLING WHAT TO EMIT
+
+The default is to sample
+.B N
+sequences from the core model. Alternatively,
+you may choose one (and only one) of the following alternatives.
+
+
+.TP
+.B -a
+Emit an alignment for each HMM in the 
+.I hmmfile
+rather than sampling unaligned sequences one at a time.
+
+.TP
+.B -c
+Emit a plurality-rule consensus sequence, instead of sampling a
+sequence from the profile HMM's probability distribution. The
+consensus sequence is formed by selecting the maximum probability
+residue at each match state.
+
+.TP
+.B -C
+Emit a fancier plurality-rule consensus sequence than the
+.B -c
+option. If the maximum probability residue has p < 
+.B minl
+show it as a lower case 'any' residue (n or x); if p >= 
+.B minl 
+and < 
+.B minu 
+show it as a lower case residue; and if p >= 
+.B minu
+show it as an upper case residue.
+The default settings of 
+.B minu
+and 
+.B minl 
+are both 0.0, which means
+.B -C 
+gives the same output as 
+.B -c 
+unless you also set 
+.B minu
+and
+.B minl 
+to what you want.
 
 .TP
 .B -p
@@ -97,12 +131,15 @@ Therefore sequences sampled from a profile may include nonhomologous
 as well as homologous sequences, and may contain more than one
 homologous sequence segment. By default, the profile is in multihit
 local mode, and the target sequence length is configured for L=400. 
-With profile emission, you can only sample unaligned sequences;
+
+
+
+
+.SH OPTIONS CONTROLLING EMISSION FROM PROFILES
+
+All these options require that you have set the
 .B -p
-is incompatible with 
-.B -c
-or 
-.B -a.
+option.
 
 .TP
 .BI -L " <n>"
@@ -124,6 +161,27 @@ Configure the profile for multihit glocal alignment.
 .TP
 .B --uniglocal
 Configure the profile for unihit glocal alignment.
+
+
+.SH OPTIONS FOR FANCY CONSENSUS EMISSION
+
+These options require that you have set the
+.B -C option.
+
+.TP
+.BI --minl " <x>"
+Sets the 
+.B minl
+threshold for showing weakly conserved residues as lower case.
+(0 <= x <= 1)
+
+.TP
+.BI --minu " <x>"
+Sets the 
+.B minu 
+threshold for showing strongly conserved residues as upper case.
+(0 <= x <= 1)
+
 
 
 .SH OTHER OPTIONS

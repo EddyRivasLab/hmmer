@@ -20,24 +20,30 @@
 
 #include "hmmer.h"
 
+#define EMITOPTS "-a,-c,-C,-p"
 #define MODEOPTS "--local,--unilocal,--glocal,--uniglocal"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                   1 },
-  { "-a",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-c,-p", "emit alignment",                                         1 },
-  { "-c",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, "-a,-p", "emit simple consensus sequence",                         1 },
-  { "-o",          eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "send sequence output to file <f>, not stdout",           1 },
-  { "-N",          eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,    "-c", "number of seqs to sample",                               1 },
+  { "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "show brief help on version and usage",                   1 },
+  { "-o",          eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "send sequence output to file <f>, not stdout",           1 },
+  { "-N",          eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,  "-c,-C", "number of seqs to sample",                               1 },
+/* what to emit */
+  { "-a",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit alignment",                                         2 },
+  { "-c",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit simple majority-rule consensus sequence",           2 },
+  { "-C",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit fancier consensus sequence (req's --minl, --minu)", 2 },
+  { "-p",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "sample sequences from profile, not core model",          2 },
 /* options for profile emission, with -p  */
-  { "-p",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,  "-a,-c", "sample sequences from profile, not core model",         2 },
-  { "-L",          eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",  "-a,-c", "set expected length from profile to <n>",               2 },
-  { "--local",     eslARG_NONE,"default",NULL, NULL,    MODEOPTS,    "-p",  "-a,-c", "configure profile in local mode",                       2 }, 
-  { "--unilocal",  eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",  "-a,-c", "configure profile in unilocal mode",                    2 }, 
-  { "--glocal",    eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",  "-a,-c", "configure profile in glocal mode",                      2 }, 
-  { "--uniglocal", eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",  "-a,-c", "configure profile in glocal mode",                      2 }, 
+  { "-L",          eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",               3 },
+  { "--local",     eslARG_NONE,"default",NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in local mode",                       3 }, 
+  { "--unilocal",  eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in unilocal mode",                    3 }, 
+  { "--glocal",    eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in glocal mode",                      3 }, 
+  { "--uniglocal", eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in glocal mode",                      3 }, 
+/* options for fancy consensus emission, with -C */
+  { "--minl",      eslARG_REAL,  "0.0",  NULL, "0<=x<=1", NULL,      "-C",    NULL, "show consensus as 'any' (X/N) unless >= this fraction", 4 },
+  { "--minu",      eslARG_REAL,  "0.0",  NULL, "0<=x<=1", NULL,      "-C",    NULL, "show consensus as upper case if >= this fraction",      4 },
 /* other options */
-  { "--seed",      eslARG_INT,      "0", NULL, "n>=0",    NULL,      NULL,    NULL, "set RNG seed to <n>",                                    3 },
+  { "--seed",      eslARG_INT,      "0", NULL, "n>=0",    NULL,      NULL,    NULL, "set RNG seed to <n>",                                    5 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -48,6 +54,7 @@ static void cmdline_failure(char *argv0, char *format, ...);
 static void cmdline_help(char *argv0, ESL_GETOPTS *go);
 
 static void emit_consensus(ESL_GETOPTS *go, FILE *ofp, int outfmt,                    P7_HMM *hmm);
+static void emit_fancycons(ESL_GETOPTS *go, FILE *ofp, int outfmt,                    P7_HMM *hmm);
 static void emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM *hmm);
 static void emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM *hmm);
 
@@ -77,9 +84,8 @@ main(int argc, char **argv)
     if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) esl_fatal("Failed to open output file %s", esl_opt_GetString(go, "-o"));
   } else ofp = stdout;
 
-  if      (esl_opt_GetBoolean(go, "-c"))  outfmt = eslSQFILE_FASTA;
-  else if (esl_opt_GetBoolean(go, "-a"))  outfmt = eslMSAFILE_STOCKHOLM;
-  else                                    outfmt = eslSQFILE_FASTA;
+  if (esl_opt_GetBoolean(go, "-a"))  outfmt = eslMSAFILE_STOCKHOLM;
+  else                               outfmt = eslSQFILE_FASTA;
 
   r = esl_randomness_CreateFast(esl_opt_GetInteger(go, "--seed"));
 
@@ -96,6 +102,7 @@ main(int argc, char **argv)
       nhmms++;
 
       if      (esl_opt_GetBoolean(go, "-c"))  emit_consensus(go, ofp, outfmt,    hmm);
+      else if (esl_opt_GetBoolean(go, "-C"))  emit_fancycons(go, ofp, outfmt,    hmm);
       else if (esl_opt_GetBoolean(go, "-a"))  emit_alignment(go, ofp, outfmt, r, hmm); 
       else                                    emit_sequences(go, ofp, outfmt, r, hmm);
 
@@ -147,6 +154,23 @@ emit_consensus(ESL_GETOPTS *go, FILE *ofp, int outfmt, P7_HMM *hmm)
   if ((sq = esl_sq_CreateDigital(hmm->abc))             == NULL) esl_fatal("failed to allocate sequence");
 
   if (p7_emit_SimpleConsensus(hmm, sq)                 != eslOK) esl_fatal("failed to create simple consensus seq");
+  if (esl_sq_FormatName(sq, "%s-consensus", hmm->name) != eslOK) esl_fatal("failed to set sequence name");
+  if (esl_sqio_Write(ofp, sq, outfmt, FALSE)           != eslOK) esl_fatal("failed to write sequence");
+
+  esl_sq_Destroy(sq);
+  return;
+}
+
+static void
+emit_fancycons(ESL_GETOPTS *go, FILE *ofp, int outfmt, P7_HMM *hmm)
+{
+  ESL_SQ  *sq   = NULL;
+  float    minl = esl_opt_GetReal(go, "--minl");
+  float    minu = esl_opt_GetReal(go, "--minu");
+
+  if ((sq = esl_sq_Create()) == NULL) esl_fatal("failed to allocate sequence");
+
+  if (p7_emit_FancyConsensus(hmm, minl, minu, sq)      != eslOK) esl_fatal("failed to create consensus seq");
   if (esl_sq_FormatName(sq, "%s-consensus", hmm->name) != eslOK) esl_fatal("failed to set sequence name");
   if (esl_sqio_Write(ofp, sq, outfmt, FALSE)           != eslOK) esl_fatal("failed to write sequence");
 

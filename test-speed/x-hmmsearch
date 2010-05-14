@@ -1,4 +1,5 @@
 #! /usr/bin/perl
+use Benchmark qw(:hireswallclock) ;
 
 $top_builddir = shift;
 $top_srcdir   = shift;
@@ -16,11 +17,17 @@ $hmmsearch   = "$top_builddir/src/hmmsearch";
 open(OUTFILE,">$outfile") || die "failed to open $outfile";
 open(TABLE, "$tblfile")   || die "failed to open $tblfile";
 
+$output = `esl-seqstat $targetdb | grep "^Total"`;
+if ($?) { die("esl-seqstat failed"); }
+if ($output =~ /^Total \# residues:\s+(\d+)/) { $L = $1; }
+
+$n=0;
 MSA:
 while (<TABLE>) 
 {
     if (/(\S+)/) 
     {
+	$n++;
 	$msaname = $1;
 
 	# Fetch the query MSA (.sto file)
@@ -31,18 +38,26 @@ while (<TABLE>)
 	$output = `$hmmbuild $resultdir/$msaname.hmm $resultdir/$msaname.sto`;
 	if ($?) { print("FAILED: $hmmbuild  on $msaname\n"); next MSA; }
 
+	# Warmup. (An untimed run, to encourage filesystem to cache the target database.)
+	if ($n==1) { $output = `$hmmsearch --cpu $nthreads $resultdir/$msaname.hmm $targetdb`; }
+
 	# Time hmmsearch (running the requested number of threads)
+	$t0 = Benchmark->new;
 	$output = `$hmmsearch --cpu $nthreads $resultdir/$msaname.hmm $targetdb`;
 	if ($?) { print("FAILED: $hmmsearch on $msaname\n"); next MSA; }
+	$t1 = Benchmark->new;
 
 	if ($output =~ /Query model\(s\):?\s+\d+\s+\((\d+) nodes/){ $M = $1; }
 	if ($output =~ /Passed MSV filter:\s+(\d+) /)            { $passed_msv = $1; }
 	if ($output =~ /Passed Vit filter:\s+(\d+) /)            { $passed_vit = $1; }
 	if ($output =~ /Passed Fwd filter:\s+(\d+) /)            { $passed_fwd = $1; }
-	if ($output =~ /\# Mc\/sec:\s+(\S+)/)                    { $mcs        = $1; }  
-	if ($output =~ /\# CPU time:\s+(\S+).+Elapsed:\s+(\S+)/) { $cpu        = $1; $elapsed = $2; }
 
-	printf OUTFILE "%-15s %5d %10s %12s %s\n", $msaname, $M, $mcs, $cpu, $elapsed;
+	# Get the wall clock time.
+	$td = timediff($t1, $t0);
+	$walltime = $td->real;
+
+	$mcs = $L / 1000000 / $walltime * $M;
+	printf OUTFILE "%-15s %5d %10.1f %12.2f\n", $msaname, $M, $mcs, $walltime;
 	
 	unlink "$resultdir/$msaname.sto";
 	unlink "$resultdir/$msaname.hmm";

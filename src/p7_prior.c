@@ -364,11 +364,17 @@ p7_prior_Destroy(P7_PRIOR *pri)
 /* Function:  p7_ParameterEstimation()
  * Incept:    SRE, Sat Mar 24 10:15:37 2007 [Janelia]
  *
- * Purpose:   Given an <hmm> containing collected, weighted counts;
- *            and given a mixture Dirichlet prior <pri>;
- *            calculate mean posterior parameter estimates for 
- *            all model parameters, converting the 
- *            HMM to a parameterized probabilistic model.
+ * Purpose:   Given an <hmm> containing weighted counts, and
+ *            a mixture Dirichlet prior <pri>: calculate mean
+ *            posterior parameter estimates for all model parameters,
+ *            converting the HMM to a parameterized probabilistic
+ *            model.
+ *            
+ *            If <pri> is <NULL>, then model parameters are calculated
+ *            as frequencies, by normalization of <hmm>.
+ *            
+ * Args:      hmm - profile structure, containing counts.
+ *            pri - mixture Dirichlet prior structure, or <NULL>.
  *            
  * Returns:   <eslOK> on success.
  */
@@ -380,6 +386,9 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
   double p[p7_MAXABET];
   double mix[p7_MAXDCHLET];
   
+  /* Special case of pri=NULL: convert to frequencies.*/  
+  if (pri==NULL) return p7_hmm_Renormalize(hmm);
+
   /* Match transitions 0,1..M: 0 is the B state
    * TMD at node M is 0.
    */

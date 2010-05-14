@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/perl -w
 
 # Do a piece of a profmark benchmark, for phmmer searches by FPS
 # (family-pairwise-search; best E-value of all individual queries).
@@ -6,28 +6,33 @@
 # This script is normally called by pmark_master.pl; its command line
 # syntax is tied to pmark_master.pl.
 #
-# Usage: x-phmmer-fps <top_builddir> <top_srcdir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
+# Usage:     x-phmmer-fps <top_builddir>                     <top_srcdir> <resultdir> <tblfile> <msafile> <fafile> <outfile>
+# Example: ./x-phmmer-fps ~/releases/hmmer-3.0/build-icc-mpi ~/src/hmmer  testdir     test.tbl  pmark.msa test.fa  test.out
 #        
 # SRE, Sun Feb  7 08:54:28 2010 [Casa de Gatos]
 # SVN $Id$
 
-
-$top_builddir  = shift;
-$top_srcdir    = shift;
-$resultdir     = shift;
-$tblfile       = shift;
-$msafile       = shift;
-$fafile        = shift;
-$outfile       = shift;
+BEGIN {
+    $top_builddir  = shift;
+    $top_srcdir    = shift;
+    $wrkdir     = shift;
+    $tblfile       = shift;
+    $msafile       = shift;
+    $fafile        = shift;
+    $outfile       = shift;
+}
 
 $phmmer      = "$top_builddir/src/phmmer";
-$esl_afetch  = "$top_builddir/easel/miniapps/esl-afetch";
-$esl_seqstat = "$top_builddir/easel/miniapps/esl-seqstat";
-$esl_sfetch  = "$top_builddir/easel/miniapps/esl-sfetch";
 $opts        = "";
+
+if (! -d $top_builddir)                                 { die "didn't find build directory $top_builddir"; }
+if (! -d $top_srcdir)                                   { die "didn't find source directory $top_srcdir"; }
+if (! -x $phmmer)                                       { die "didn't find executable $phmmer"; }
+if (! -e $wrkdir)                                       { die "$wrkdir doesn't exist"; }
 
 open(OUTFILE,">$outfile") || die "failed to open $outfile";
 open(TABLE, "$tblfile")   || die "failed to open $tblfile";
+MSA:
 while (<TABLE>)
 {
     ($msaname) = split;
@@ -36,30 +41,33 @@ while (<TABLE>)
     %best_pval     = ();
     %best_bitscore = ();
 
-    `$esl_afetch -o $resultdir/$msaname.sto $msafile $msaname`;
-    if ($? != 0) { die "FAILED: esl-afetch -o $dir/$msaname.sto $msafile $msaname"; }
+    `esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname`;
+    if ($?) { print "FAILED: esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname\n"; next MSA; }
 
     # Extract a list of individual sequence names from the multiple alignment.
-    $output = `$esl_seqstat -a $resultdir/$msaname.sto | grep "^=" | awk '{print \$2}'`;
-    if ($? != 0) { die "FAILED: esl-seqstat -a $resultdir/$msaname.sto"; }
+    $output = `esl-seqstat -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'`;
+    if ($?) { print "FAILED: esl-seqstat\n"; next MSA; }
 
     @qnames = split(/^/,$output);
     chop (@qnames);
 
-    # Loop over each query; blast; accumulate best pval for each target
+    # Loop over each query; phmmer; accumulate best pval for each target
     foreach $qname (@qnames) 
     {
-	$output = `$esl_sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname`;
-	if ($? != 0) { die "FAILED: esl-sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname"; }
+	$output = `esl-sfetch -o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname`;
+	if ($?) { print "FAILED: esl-sfetch-o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname\n"; next MSA; }
 
-	`$phmmer --cpu 1 --tblout $resultdir/$msaname.tmp $opts $resultdir/$msaname.query.fa $fafile > /dev/null`;
-	if ($? != 0) { die "FAILED: $phmmer --tblout $msaname.tmp $opts $resultdir/$msaname.query.fa $seqfile"; }
+	`$phmmer --cpu 1 --tblout $wrkdir/$msaname.tmp $opts $wrkdir/$msaname.query.fa $fafile > /dev/null`;
+	if ($?) { print "FAILED: $phmmer --tblout $msaname.tmp $opts $wrkdir/$msaname.query.fa $fafile\n"; next MSA; }
 
-	open(OUTPUT, "$resultdir/$msaname.tmp") || die "FAILED: to open $resultdir/$msaname.tmp tabular output file"; 
+	open(OUTPUT, "$wrkdir/$msaname.tmp") || die "FAILED: to open $wrkdir/$msaname.tmp tabular output file"; 
         while (<OUTPUT>)
 	{
 	    if (/^\#/) { next; }
-	    ($target, $tacc, $query, $qacc, $pval, $bitscore, $remainder) = split(' ', $_, 7);
+	    @fields   = split(' ', $_, 7);
+	    $target   = $fields[0];
+	    $pval     = $fields[4];
+	    $bitscore = $fields[5];
 	    if (! $seen{$target} || $pval < $best_pval{$target})
 	    { 		
 		$seen{$target}          = 1;
@@ -76,9 +84,9 @@ while (<TABLE>)
 	printf OUTFILE "%g %.1f %s %s\n", $best_pval{$target}, $best_bitscore{$target}, $target, $msaname;
     }
 
-    unlink "$resultdir/$msaname.tmp";
-    unlink "$resultdir/$msaname.query.fa";
-    unlink "$resultdir/$msaname.sto";
+    unlink "$wrkdir/$msaname.tmp";
+    unlink "$wrkdir/$msaname.query.fa";
+    unlink "$wrkdir/$msaname.sto";
 }
 close TABLE;
 close OUTFILE;

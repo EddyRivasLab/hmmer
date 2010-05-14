@@ -40,11 +40,12 @@
  *            An application configuration <go> may optionally be
  *            provided. If <go> is <NULL>, default parameters are
  *            used. If <go> is non-<NULL>, it must include appropriate
- *            settings for all 24 ``standard build options'':
+ *            settings for all of the following ``standard build options'':
  *            
  *            Model construction:   --fast --hand --symfrac --fragthresh
  *            Relative weighting:   --wgsc --wblosum --wpb --wgiven --wid
  *            Effective seq #:      --eent --eclust --enone --eset --ere --esigma --eid
+ *            Prior scheme:         --pnone --plaplace
  *            E-val calibration:    --EmL --EmN --EvL --EvN --EfL --EfN --Eft
  *            run-to-run variation: --seed
  *            
@@ -129,13 +130,18 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->r            = esl_randomness_CreateFast(seed);
   bld->do_reseeding = (seed == 0) ? FALSE : TRUE;
 
-  switch (abc->type) {
-  case eslAMINO: bld->prior = p7_prior_CreateAmino();      break;
-  case eslDNA:   bld->prior = p7_prior_CreateNucleic();    break;
-  case eslRNA:   bld->prior = p7_prior_CreateNucleic();    break;
-  default:       bld->prior = p7_prior_CreateLaplace(abc); break;
-  }
-  if (bld->prior == NULL) goto ERROR;
+  if      (go && esl_opt_GetBoolean(go, "--pnone") )     bld->prior = NULL;
+  else if (go && esl_opt_GetBoolean(go, "--plaplace") )  bld->prior = p7_prior_CreateLaplace(abc);
+  else
+    {
+      switch (abc->type) {
+      case eslAMINO: bld->prior = p7_prior_CreateAmino();      break;
+      case eslDNA:   bld->prior = p7_prior_CreateNucleic();    break;
+      case eslRNA:   bld->prior = p7_prior_CreateNucleic();    break;
+      default:       bld->prior = p7_prior_CreateLaplace(abc); break;
+      }
+      if (bld->prior == NULL) goto ERROR;
+    }
 
   bld->abc       = abc;
   bld->errbuf[0] = '\0';

@@ -292,7 +292,11 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
  *
  * Purpose:   Generate a simple consensus sequence for model <hmm>
  *            consisting of the maximum probability residue in each
- *            match state; store this consensus in <sq>.
+ *            match state; store this consensus in digital <sq>.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if the <sq> isn't in digital mode.
  */
 int
 p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq)
@@ -301,6 +305,7 @@ p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq)
   int x;
   int status;
   
+  if (! esl_sq_IsDigital(sq)) ESL_EXCEPTION(eslEINVAL, "p7_emit_SimpleConsensus() expects a digital-mode <sq>");
   if ((status = esl_sq_GrowTo(sq, hmm->M)) != eslOK) return status;
 
   for (k = 1; k <= hmm->M; k++)
@@ -309,6 +314,55 @@ p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq)
       if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) return status;
     }
   if ((status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) return status;
+  return eslOK;
+}
+
+
+/* Function:  p7_emit_FancyConsensus()
+ * Synopsis:  Emit a fancier consensus with upper/lower case and N/X's.
+ * Incept:    SRE, Fri May 14 09:33:10 2010 [Janelia]
+ *
+ * Purpose:   Generate a consensus sequence for model <hmm>, consisting
+ *            of the maximum probability residue in each match state;
+ *            store this sequence in text-mode <sq> provided by the caller.
+ *            
+ *            If the probability of the consensus residue is less than
+ *            <min_lower>, show an ``any'' residue (N or X) instead.
+ *            If the probability of the consensus residue is $\geq$
+ *            <min_lower>  and less than <min_upper>, show the residue
+ *            as lower case; if it is $\geq$ <min_upper>, show it as
+ *            upper case.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if the <sq> isn't in text mode.
+ *
+ * Xref:      SRE:J6/59.
+ */
+int
+p7_emit_FancyConsensus(const P7_HMM *hmm, float min_lower, float min_upper, ESL_SQ *sq)
+{
+  int   k, x;
+  float p;
+  char  c;
+  int   status;
+
+  if (! esl_sq_IsText(sq)) ESL_EXCEPTION(eslEINVAL, "p7_emit_FancyConsensus() expects a text-mode <sq>");
+
+  if ((status = esl_sq_GrowTo(sq, hmm->M)) != eslOK) return status;
+
+  for (k = 1; k <= hmm->M; k++)
+    {
+      p = esl_vec_FMax(   hmm->mat[k], hmm->abc->K);
+      x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
+  
+      if      (p <  min_lower)  c = tolower(esl_abc_CGetUnknown(hmm->abc));
+      else if (p >= min_upper)  c = toupper(hmm->abc->sym[x]);
+      else                      c = tolower(hmm->abc->sym[x]);
+
+      if ((status = esl_sq_CAddResidue(sq, c)) != eslOK) return status;
+    }
+  if ((status = esl_sq_CAddResidue(sq, '\0')) != eslOK) return status;
   return eslOK;
 }
 

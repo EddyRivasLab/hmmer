@@ -226,6 +226,8 @@ main(int argc, char **argv)
   nali = 0;
   while ((status = esl_msa_Read(afp, &origmsa)) == eslOK)
     {
+      esl_msa_ConvertDegen2X(origmsa); 
+
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
       separate_sets   (&cfg, msa, &trainmsa, &teststack);
       ntestdom = esl_stack_ObjectCount(teststack);
@@ -639,6 +641,7 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
       start = 1 + esl_rnd_Roll(cfg->r, Lseq-L);              
       end   = start + L - 1;
       if (esl_sqio_FetchSubseq(cfg->dbfp, pkey, start, end, sq) != eslOK) esl_fatal("failed to fetch subseq");
+      esl_sq_ConvertDegen2X(sq);
     }
 
   /* log sequence source info: <name> <start> <end> */

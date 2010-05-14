@@ -565,8 +565,21 @@ option. The default is 0.62.
 
 
 
+.SH OPTIONS CONTROLLING PRIORS
 
+In profile construction, by default, weighted counts are converted to
+mean posterior probability parameter estimates using mixture Dirichlet
+priors.  Default mixture Dirichlet prior parameters for protein models
+and for nucleic acid (RNA and DNA) models are built in. The following
+options allow you to override the default priors.
 
+.B --pnone
+Don't use any priors. Probability parameters will simply be the
+observed frequencies, after relative sequence weighting. 
+
+.B --plaplace
+Use a Laplace +1 prior in place of the default mixture Dirichlet
+prior.
 
 
 

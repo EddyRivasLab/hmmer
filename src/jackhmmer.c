@@ -97,19 +97,19 @@ static ESL_OPTIONS options[] = {
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,    NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,    NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,      NULL,    NULL, "--max",          "turn off composition bias filter",                             7 },
-/* Alternate model construction strategies */
+/* Alternative model construction strategies */
   { "--fast",       eslARG_NONE,   FALSE, NULL, NULL,   CONOPTS,    NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              8 },
   { "--hand",       eslARG_NONE,"default",NULL, NULL,   CONOPTS,    NULL,  NULL,            "manual construction (requires reference annotation)",          8 },
   { "--symfrac",    eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,"--fast",  NULL,            "sets sym fraction controlling --fast construction",            8 },
   { "--fragthresh", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L < x<L>, tag sequence as a fragment",                      8 },
-/* Alternate relative sequence weighting strategies */
+/* Alternative relative sequence weighting strategies */
   { "--wpb",        eslARG_NONE,"default",NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff position-based weights",                              9 },
   { "--wgsc",       eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
   { "--wblosum",    eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff simple filter weights",                               9 },
   { "--wnone",      eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "don't do any relative weighting; set all to 1",                9 },
   { "--wgiven",     eslARG_NONE,    NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "use weights as given in MSA file",                            99 }, /* no-op in jackhmmer */
   { "--wid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1", NULL,"--wblosum",NULL,            "for --wblosum: set identity cutoff",                           9 },
-/* Alternate effective sequence weighting strategies */
+/* Alternative effective sequence weighting strategies */
   { "--eent",       eslARG_NONE,"default",NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",         10 },
   { "--eclust",     eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                   10 },
   { "--enone",      eslARG_NONE,   FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                 10 },
@@ -117,6 +117,9 @@ static ESL_OPTIONS options[] = {
   { "--ere",        eslARG_REAL,    NULL, NULL,"x>0",      NULL, "--eent", NULL,            "for --eent: set minimum rel entropy/position to <x>",         10 },
   { "--esigma",     eslARG_REAL,  "45.0", NULL,"x>0",      NULL, "--eent", NULL,            "for --eent: set sigma param to <x>",                          10 },
   { "--eid",        eslARG_REAL,  "0.62", NULL,"0<=x<=1",  NULL,"--eclust",NULL,            "for --eclust: set fractional identity cutoff to <x>",         10 },
+/* Alternative prior strategies */
+  { "--pnone",       eslARG_NONE,  FALSE, NULL, NULL,      NULL,    NULL,"--plaplace",      "don't use any prior; parameters are frequencies",             13 },
+  { "--plaplace",    eslARG_NONE,  FALSE, NULL, NULL,      NULL,    NULL,   "--pnone",      "use a Laplace +1 prior",                                      13 },
 /* Control of E-value calibration */
   { "--EmL",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "length of sequences for MSV Gumbel mu fit",                   11 },   
   { "--EmN",         eslARG_INT,   "200", NULL,"n>0",      NULL,    NULL,  NULL,            "number of sequences for MSV Gumbel mu fit",                   11 },   
@@ -224,6 +227,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       puts("\nOptions controlling effective seq number in models after first iteration:");
       esl_opt_DisplayHelp(stdout, go, 10, 2, 80); 
 
+      puts("\nOptions controlling prior strategy in models after first iteration:");
+      esl_opt_DisplayHelp(stdout, go, 13, 2, 80); 
+
       puts("\nOptions controlling E value calibration:");
       esl_opt_DisplayHelp(stdout, go, 11, 2, 80); 
 
@@ -300,6 +306,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--ere") )      fprintf(ofp, "# minimum rel entropy target:      %f bits\n",   esl_opt_GetReal(go, "--ere"));
   if (esl_opt_IsUsed(go, "--esigma") )   fprintf(ofp, "# entropy target sigma parameter:  %f bits\n",   esl_opt_GetReal(go, "--esigma"));
   if (esl_opt_IsUsed(go, "--eid") )      fprintf(ofp, "# frac id cutoff for --eclust:     %f\n",        esl_opt_GetReal(go, "--eid"));
+  if (esl_opt_IsUsed(go, "--pnone") )    fprintf(ofp, "# prior scheme:                    none\n");
+  if (esl_opt_IsUsed(go, "--plaplace") ) fprintf(ofp, "# prior scheme:                    Laplace +1\n");
   if (esl_opt_IsUsed(go, "--EmL") )      fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EmL"));
   if (esl_opt_IsUsed(go, "--EmN") )      fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EmN"));
   if (esl_opt_IsUsed(go, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvL"));

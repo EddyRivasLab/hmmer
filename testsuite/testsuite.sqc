@@ -94,6 +94,8 @@
 1 exercise  build/--ere          @src/hmmbuild@  --eent --ere  0.55   %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--esigma       @src/hmmbuild@  --eent --esigma 44.0 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--eid          @src/hmmbuild@  --eclust --eid 0.60  %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--pnone        @src/hmmbuild@  --pnone          %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  build/--plaplace     @src/hmmbuild@  --plaplace       %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--EmL          @src/hmmbuild@  --EmL 100        %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--EmN          @src/hmmbuild@  --EmN 250        %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--EvL          @src/hmmbuild@  --EvL 100        %HMMBUILD.hmm% !testsuite/20aa.sto!
@@ -103,7 +105,6 @@
 1 exercise  build/--Eft          @src/hmmbuild@  --Eft 0.045      %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--informat     @src/hmmbuild@  --informat stockholm %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--seed         @src/hmmbuild@  --seed 42        %HMMBUILD.hmm% !testsuite/20aa.sto!
-1 exercise  build/--laplace      @src/hmmbuild@  --laplace        %HMMBUILD.hmm% !testsuite/20aa.sto!
 
 # hmmemit   xxxxxxxxxxxxxxxxxxxx
 1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
@@ -287,6 +288,7 @@
 1 exercise  mapali-again          !testsuite/i11-hmmalign-mapali.pl!    @@ !! %OUTFILES%
 1 exercise  delete-corruption     !testsuite/i12-delete-corruption.pl!  @@ !! %OUTFILES%
 1 exercise  msa-integrity         !testsuite/i13-msa-integrity.pl!      @@ !! %OUTFILES%
+1 exercise  hmmemit-consensus     !testsuite/i14-hmmemit-consensus.pl!  @@ !! %OUTFILES%
 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%

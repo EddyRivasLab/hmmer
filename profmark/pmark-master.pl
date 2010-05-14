@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/perl -w
 
 # The top level script that runs a pmark benchmark.
 #

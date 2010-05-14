@@ -257,11 +257,12 @@ TAGS:
 	etags -a profmark/*.c profmark/Makefile.in 
 	etags -a documentation/userguide/*.tex documentation/userguide/Makefile.in
 	etags -a documentation/man/*.man 
+	etags -a testsuite/*.sqc testsuite/Makefile.in
 #	etags -a documentation/devguide/*.tex 
 	etags -a ${SRCDIR}/impl_sse/*.c   ${SRCDIR}/impl_sse/*.h   ${SRCDIR}/impl_sse/Makefile.in 
 	etags -a ${SRCDIR}/impl_vmx/*.c   ${SRCDIR}/impl_vmx/*.h   ${SRCDIR}/impl_vmx/Makefile.in 
 	etags -a ${SRCDIR}/impl_dummy/*.c ${SRCDIR}/impl_dummy/*.h ${SRCDIR}/impl_dummy/Makefile.in 
-	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man Makefile.in)
+	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man testsuite/*.sqc Makefile.in)
 
 
 ###########
