@@ -1,3 +1,39 @@
+ID              h79
+TITLE           Memory corruption in resized generic P7_GMX
+AFFECTS         3.0 and earlier.
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J6/61
+REPORTED_BY     Elena Rivas
+OPENED_DATE     SRE, Tue May 18 11:50:02 2010
+CLOSED_DATE     SRE, Tue May 18 11:50:03 2010
+DESCRIPTION     
+   p7_gmx_GrowTo() could get into a situation where it is required to
+   shrink allocW to set enough valid rows, but it does
+   not. Specifically, in Elena's example, a sequence of GrowTo calls
+   results in a situation where ncells and allocR are sufficient for
+   the new M,L request, but validR is not, and allocW is too large to
+   be able to set enough rows:
+
+   1. M=100, L=100  =>  ncells=10201,allocW=101,allocL=101,validR=101
+   2. M=179, L=55   =>  ncells=10201,allocW=180,allocL=101,validR=56
+   3. M=87,  L=57   =>  bug:
+       88*58 will fit (5104 cells < 10201), but 180*58 does not (10440
+       cells > 10201), so allocW must shrink to be able to use the same
+       10201 cell allocation.
+
+   The unit test failed to detect the bug, partly because it didn't
+   exercise this particular kind of call sequence, and partly because 
+   gmx_testpattern() used allocR, allocW when it fills, not M,L;
+   the unit test didn't detect that validR < L+1 upon "successful"
+   return from p7_gmx_GrowTo().
+
+   Fixed unit test: it now detects the bug;
+   Fixed p7_gmx_GrowTo(): it now always resizes the rows to allocW=M+1
+   when it resets row pointers. This is what p7_omx implementations do.
+   (Which is why this bug went undetected; p7_gmx is only used in
+   internal testing, not in production H3.)
+//
 #### 
 ####  3.0 release: 28 March 2010
 ####
