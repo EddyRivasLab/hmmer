@@ -125,25 +125,20 @@ p7_gmx_GrowTo(P7_GMX *gx, int M, int L)
     {
       ESL_RALLOC(gx->xmx, p, sizeof(float)   * (L+1) * p7G_NXCELLS);
       ESL_RALLOC(gx->dp,  p, sizeof(float *) * (L+1));
-      gx->allocR = L+1;
-      gx->allocW = M+1;
+      gx->allocR = L+1;		/* allocW will also get set, in the do_reset block */
       do_reset   = TRUE;
     }
 
   /* must we widen the rows? */
-  if (M >= gx->allocW)
-    {
-      gx->allocW = M+1;
-      do_reset   = TRUE;
-    }
+  if (M >= gx->allocW) do_reset = TRUE;
 
   /* must we set some more valid row pointers? */
-  if (L >= gx->validR)
-    do_reset   = TRUE;
+  if (L >= gx->validR) do_reset = TRUE;
 
-  /* reset all the row pointers.*/
+  /* resize the rows and reset all the valid row pointers.*/
   if (do_reset)
     {
+      gx->allocW = M+1;
       gx->validR = ESL_MIN(gx->ncells / gx->allocW, gx->allocR);
       for (i = 0; i < gx->validR; i++) 
 	gx->dp[i] = gx->dp_mem + i * (gx->allocW) * p7G_NSCELLS;
@@ -305,21 +300,21 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
 #include "esl_randomseq.h"
 
 static void
-gmx_testpattern(P7_GMX *gx)
+gmx_testpattern(P7_GMX *gx, int M, int L)
 {
   int i,k,s,n, n2;
 
   /* Write a test pattern, via the dp[i] pointers */
   n = 0;
-  for (i = 0; i < gx->validR; i++)
-    for (k = 0; k < gx->allocW; k++)
+  for (i = 0; i <= L; i++)
+    for (k = 0; k <= M; k++)
       for (s = 0; s < p7G_NSCELLS; s++)
 	gx->dp[i][k*p7G_NSCELLS+s] = n++;
 
   /* Read it back, via the dp[i] pointers */
   n = 0;
-  for (i = 0; i < gx->validR; i++)
-    for (k = 0; k < gx->allocW; k++)
+  for (i = 0; i <= L; i++)
+    for (k = 0; k <= M; k++)
       for (s = 0; s < p7G_NSCELLS; s++)
 	{
 	  if (gx->dp[i][k*p7G_NSCELLS+s] != n) esl_fatal("gmx unit test failed: test pattern corrupted");
@@ -345,14 +340,21 @@ gmx_testpattern(P7_GMX *gx)
 static void
 utest_GrowTo(void)
 {
-  P7_GMX *gx = p7_gmx_Create(20, 20);
-  gmx_testpattern(gx);
+  int     M, L;
+  P7_GMX *gx = NULL;
 
-  p7_gmx_GrowTo(gx,  40,  20);  gmx_testpattern(gx);	/* grow in M, not L */
-  p7_gmx_GrowTo(gx,  40,  40);  gmx_testpattern(gx);	/* grow in L, not M */
-  p7_gmx_GrowTo(gx,  80,  10);  gmx_testpattern(gx);	/* grow in M, but with enough ncells */
-  p7_gmx_GrowTo(gx,  10,  80);  gmx_testpattern(gx);	/* grow in L, but with enough ncells */
-  p7_gmx_GrowTo(gx, 160, 160);  gmx_testpattern(gx);	/* grow in both L and M */
+  M = 20;  L = 20;  gx= p7_gmx_Create(M, L);  gmx_testpattern(gx, M, L);
+  M = 40;  L = 20;  p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  /* grow in M, not L */
+  M = 40;  L = 40;  p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  /* grow in L, not M */
+  M = 80;  L = 10;  p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  /* grow in M, but with enough ncells */
+  M = 10;  L = 80;  p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  /* grow in L, but with enough ncells */
+  M = 100; L = 100; p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  /* grow in both L and M */
+
+ /* The next two calls are carefully constructed to exercise bug #h79. 
+  * GrowTo() must shrink allocW, if M shrinks and L grows enough to force increase in allocR, with sufficient ncells.
+  */
+  M = 179; L = 55;  p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
+  M = 87;  L = 57;  p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
 
   p7_gmx_Destroy(gx);
 }
