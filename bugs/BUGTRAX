@@ -1,3 +1,21 @@
+ID              h80
+TITLE           hmmconvert can't read H2 "Nucleic" save files
+AFFECTS         3.0 and earlier.
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J6/61
+REPORTED_BY     Martin Hartmann <martinha@interchange.ubc.ca>
+OPENED_DATE     SRE, Tue May 18 14:16:19 2010
+CLOSED_DATE     SRE, Tue May 18 14:16:20 2010
+DESCRIPTION     
+  H2 save files use the tag "nucleic" on their ALPH line. Modern
+  Easel/H3 expects "DNA" or "RNA". p7_hmmfile.c::read_asc20hmm()
+  was passing the token to esl_abc_EncodeType(), which then failed
+  to recognize "nucleic".
+
+  Fix is for read_asc20hmm() to decode the tag itself: "nucleic"
+  mapped to eslDNA, "amino" mapped to eslAMINO.
+//
 ID              h79
 TITLE           Memory corruption in resized generic P7_GMX
 AFFECTS         3.0 and earlier.

@@ -1239,7 +1239,13 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 
       else if (strcmp(tag, "ALPH") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
-	if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
+	/* Bug #h80: H2 tags DNA/RNA files as "Nucleic"; modern Easel/H3
+	 * expects tag "DNA" or "RNA", so you can't pass tok1 to esl_abc_EncodeType().
+	 */
+	if      (strcasecmp(tok1, "nucleic") == 0) alphatype = eslDNA;
+	else if (strcasecmp(tok1, "amino")   == 0) alphatype = eslAMINO;
+	else    ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
+
 	if (*ret_abc == NULL) {
 	  if ((abc = esl_alphabet_Create(alphatype))                        == NULL) 	 ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");        
 	} else {
