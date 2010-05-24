@@ -1,0 +1,12 @@
+Interim notes for upcoming 3.1 release
+so stuff doesn't get forgotten that needs to be noted...
+
+
+Small changes that nonetheless affect output:
+(watch out for, if you are running regression tests)
+
+-:- The "bias" score values in all output formats, for both
+    per-sequence and per-domain outputs, were erroneously
+    reported in nat units in 3.0, whereas all other scores are
+    bit scores. 3.1 now corrects this; the bias values
+    are in units of bits.
