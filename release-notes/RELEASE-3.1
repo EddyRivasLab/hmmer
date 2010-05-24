@@ -5,6 +5,18 @@ so stuff doesn't get forgotten that needs to be noted...
 Small changes that nonetheless affect output:
 (watch out for, if you are running regression tests)
 
+-:- Multiple alignment outputs now always include all consensus
+    columns, even if that column is all gaps. This simplifies
+    downstream processing for a lot of people's parsers, who may be
+    expecting to be able to map a query's consensus coordinate system
+    unambiguously onto a new alignment.
+ 
+    The hmmalign --allcol option (which did the above as an option)
+    has been removed.
+
+    To get the original behavior, you can use esl-reformat --mingap to
+    remove all-gap columns from an alignment.
+
 -:- The "bias" score values in all output formats, for both
     per-sequence and per-domain outputs, were erroneously
     reported in nat units in 3.0, whereas all other scores are

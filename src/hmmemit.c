@@ -185,7 +185,7 @@ emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   ESL_SQ   **sq        = NULL;
   P7_TRACE **tr        = NULL;
   int         N        = esl_opt_GetInteger(go, "-N");
-  int         optflags = 0;
+  int         optflags = p7_ALL_CONSENSUS_COLS;
   int         i;
   
   if ((tr = malloc(sizeof(P7_TRACE *) * N)) == NULL) esl_fatal("failed to allocate trace array");

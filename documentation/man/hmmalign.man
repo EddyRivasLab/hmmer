@@ -52,17 +52,6 @@ rather than to
 .I stdout.
 
 .TP
-.B --allcol
-Include columns in the output alignment for every match (consensus)
-state in the 
-.I hmmfile,
-even if it means having all-gap columns. This is useful in analysis 
-pipelines that need to be able to maintain a predetermined profile HMM 
-architecture (with an unchanging number of consensus columns) through an
-.B hmmalign
-step.
-
-.TP
 .BI --mapali " <f>"
 Merge the existing alignment in file 
 .I <f>

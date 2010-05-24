@@ -486,7 +486,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (afp) {
 	ESL_MSA *msa = NULL;
 
-	if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK)
+	if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
 	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
@@ -939,7 +939,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (afp) {
 	ESL_MSA *msa = NULL;
 
-	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK)
+	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
 	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);

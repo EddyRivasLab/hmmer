@@ -26,7 +26,6 @@ static ESL_OPTIONS options[] = {
   { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help on version and usage",                        1 },
   { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                    1 },
 
-  { "--allcol",    eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "include all consensus columns in ali, even if all gaps",      2 },
   { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> (same ali that HMM came from)", 2 },
   { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",   2 },
   { "--amino",     eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
@@ -96,7 +95,7 @@ main(int argc, char **argv)
   P7_GMX       *gxb     = NULL;	/* generic Backward mx for failover*/
   P7_TRACE    **tr      = NULL;	/* array of tracebacks             */
   ESL_MSA      *msa     = NULL;	/* resulting multiple alignment    */
-  int           msaopts = 0;	/* flags to p7_MultipleAlignment() */
+  int           msaopts = 0;	/* flags to p7_tracealign_Seqs()   */
   int           idx;		/* counter over seqs, traces       */
   float         fwdsc;		/* Forward score                   */
   float         oasc;		/* optimal accuracy score          */
@@ -113,8 +112,8 @@ main(int argc, char **argv)
   hmmfile = esl_opt_GetArg(go, 1);
   seqfile = esl_opt_GetArg(go, 2);
 
+  msaopts |= p7_ALL_CONSENSUS_COLS; /* default as of 3.1 */
   if (esl_opt_GetBoolean(go, "--trim"))    msaopts |= p7_TRIM;
-  if (esl_opt_GetBoolean(go, "--allcol"))  msaopts |= p7_ALL_CONSENSUS_COLS;
 
   /* If caller declared an input format, decode it 
    */

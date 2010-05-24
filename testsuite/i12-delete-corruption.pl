@@ -4,6 +4,11 @@
 #
 # Usage:   ./i12-delete-corruption.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i12-delete-corruption.pl ..         ..       tmpfoo
+##
+#
+# This test is now obsolete. hmmalign by default now saves all
+# consensus columns, which removes the problematic execution path.
+# The hmmalign --allcol option is gone (as of 25 May 2010).
 #
 # SRE, Tue Mar  2 11:11:07 2010 [Janelia]
 # SVN $Id$
@@ -49,13 +54,13 @@ $output = `$builddir/src/hmmalign $tmppfx.hmm $tmppfx.fa 2>&1`;
 if ($? != 0) { die "FAIL: hmmalign failed\n"; }
 
 ($testseq) = ($output =~ /\ntest1\s+(\S+)/);
-if ($testseq ne "ACDEFGHILMNPQRSTVWY") { die "FAIL: test sequence corrupted by hmmalign\n"; }
+if ($testseq ne "ACDEFGHI-LMNPQRSTVWY") { die "FAIL: test sequence corrupted by hmmalign\n"; }
 
-$output = `$builddir/src/hmmalign --allcol $tmppfx.hmm $tmppfx.fa 2>&1`;
-if ($? != 0) { die "FAIL: hmmalign failed\n"; }
-
-($testseq) = ($output =~ /\ntest1\s+(\S+)/);
-if ($testseq ne "ACDEFGHI-LMNPQRSTVWY") { die "FAIL: hmmalign --allcol produced unexpected result\n"; }
+#$output = `$builddir/src/hmmalign --allcol $tmppfx.hmm $tmppfx.fa 2>&1`;
+#if ($? != 0) { die "FAIL: hmmalign failed\n"; }
+#
+#($testseq) = ($output =~ /\ntest1\s+(\S+)/);
+#if ($testseq ne "ACDEFGHI-LMNPQRSTVWY") { die "FAIL: hmmalign --allcol produced unexpected result\n"; }
 
 print "ok\n";
 unlink "$tmppfx.sto";

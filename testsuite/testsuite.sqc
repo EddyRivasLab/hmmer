@@ -61,7 +61,6 @@
 1 exercise  hmmalign             @src/hmmalign@ !testsuite/Caudal_act.hmm! %TESTSEQ%
 1 exercise  hmmalign/-h          @src/hmmalign@ -h
 1 exercise  hmmalign/-o          @src/hmmalign@ -o /dev/null                         !testsuite/Caudal_act.hmm! %TESTSEQ%
-1 exercise  hmmalign/--allcol    @src/hmmalign@ --allcol                             !testsuite/Caudal_act.hmm! %TESTSEQ%
 1 exercise  hmmalign/--mapali    @src/hmmalign@ --mapali !testsuite/Caudal_act.sto!  !testsuite/Caudal_act.hmm! %TESTSEQ%
 1 exercise  hmmalign/--trim      @src/hmmalign@ --trim                               !testsuite/Caudal_act.hmm! %TESTSEQ%
 1 exercise  hmmalign/--amino     @src/hmmalign@ --amino                              !testsuite/Caudal_act.hmm! %TESTSEQ%
