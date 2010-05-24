@@ -6,7 +6,6 @@
  *    2. Routines inferring domain structure of a target sequence
  *    3. Internal routines 
  *    
- *
  * Exegesis:
  * 
  * The key function here is <p7_domaindef_ByPosteriorHeuristics()>.
@@ -734,7 +733,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
   }
     
   for (pos = i; pos <= j; pos++) 
-    domcorrection   += ddef->n2sc[pos];
+    domcorrection   += ddef->n2sc[pos];	        /* domcorrection is in units of NATS */
 
   /* Find an optimal accuracy alignment */
   p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
@@ -755,9 +754,9 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
   /* store the results in it */
   dom->ienv          = i;
   dom->jenv          = j;
-  dom->envsc         = envsc;
-  dom->domcorrection = domcorrection;
-  dom->oasc          = oasc;
+  dom->envsc         = envsc;         /* in units of NATS */
+  dom->domcorrection = domcorrection; /* in units of NATS */
+  dom->oasc          = oasc;	      /* in units of expected # of correctly aligned residues */
   dom->dombias       = 0.0;	/* gets set later, using bg->omega and dombias */
   dom->bitscore      = 0.0;	/* gets set later by caller, using envsc, null score, and dombias */
   dom->pvalue        = 1.0;	/* gets set later by caller, using bitscore */

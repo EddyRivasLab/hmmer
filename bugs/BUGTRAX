@@ -1,3 +1,15 @@
+ID              h81
+TITLE           dombias output was in nats, not bits
+AFFECTS         3.0 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J6/53
+REPORTED_BY     Elena Rivas
+OPENED_DATE     SRE, 6 May 2010
+CLOSED_DATE     SRE, Mon May 24 15:57:18 2010
+DESCRIPTION     
+  "dombias" field in output was in nats, not bits.
+//
 ID              h80
 TITLE           hmmconvert can't read H2 "Nucleic" save files
 AFFECTS         3.0 and earlier.

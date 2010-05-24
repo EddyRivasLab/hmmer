@@ -832,7 +832,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
 		th->hit[h]->dcl[d].pvalue * pli->Z,
 		th->hit[h]->dcl[d].bitscore,
-		th->hit[h]->dcl[d].dombias,
+		eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
 		th->hit[h]->nexpected,
 		th->hit[h]->nreported,
 		namew, showname);
@@ -914,7 +914,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 		      nd,
 		      th->hit[h]->dcl[d].is_included ? '!' : '?',
 		      th->hit[h]->dcl[d].bitscore,
-		      th->hit[h]->dcl[d].dombias,
+		      th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
 		      th->hit[h]->dcl[d].pvalue * pli->domZ,
 		      th->hit[h]->dcl[d].pvalue * pli->Z,
 		      th->hit[h]->dcl[d].ad->hmmfrom,
@@ -1113,7 +1113,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
 		th->hit[h]->dcl[d].pvalue * pli->Z,
 		th->hit[h]->dcl[d].bitscore,
-		th->hit[h]->dcl[d].dombias,
+		th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
 		th->hit[h]->nexpected,
 		th->hit[h]->nregions,
 		th->hit[h]->nclustered,
@@ -1193,7 +1193,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 		      th->hit[h]->dcl[d].pvalue * pli->domZ,
 		      th->hit[h]->dcl[d].pvalue * pli->Z,
 		      th->hit[h]->dcl[d].bitscore,
-		      th->hit[h]->dcl[d].dombias,
+		      th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
 		      th->hit[h]->dcl[d].ad->hmmfrom,
 		      th->hit[h]->dcl[d].ad->hmmto,
 		      th->hit[h]->dcl[d].ad->sqfrom,
