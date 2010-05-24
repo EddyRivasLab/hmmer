@@ -331,7 +331,8 @@ int
 p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef) 
 {
   int            d;
-  int            saveL = gm->L;
+  int            saveL     = gm->L;    /* need to be able to restore original <gm> config */
+  int            save_mode = gm->mode;
 
   p7_domaindef_GrowTo(ddef, sq->n);
   p7_GTrace  (sq->dsq, sq->n, gm, gx1, ddef->gtr);
@@ -341,7 +342,10 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
 
   for (d = 0; d < ddef->gtr->ndom; d++)
     rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE);
-  p7_ReconfigMultihit(gm, saveL); /* restore original profile configuration */
+
+  /* Restore original model configuration, including length */
+  if (p7_IsMulti(save_mode))  p7_ReconfigMultihit(gm, saveL); 
+  else                        p7_ReconfigUnihit(  gm, saveL); 
   return eslOK;
 }
 #endif
@@ -381,8 +385,9 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
   int d;
   int i2,j2;
   int last_j2;
-  int saveL = om->L;
   int nc;
+  int saveL     = om->L;	/* Save the length config of <om>; will restore upon return */
+  int save_mode = om->mode;	/* Likewise for the mode. */
   int status;
 
   if ((status = p7_domaindef_GrowTo(ddef, sq->n))      != eslOK) return status;  /* ddef's btot,etot,mocc now ready for seq of length n */
@@ -391,7 +396,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
   esl_vec_FSet(ddef->n2sc, sq->n+1, 0.0);          /* ddef->n2sc null2 scores are initialized                        */
   ddef->nexpected = ddef->btot[sq->n];             /* posterior expectation for # of domains (same as etot[sq->n])   */
 
-  p7_oprofile_ReconfigUnihit(om, saveL);	   /* process each domain in unilocal mode                           */
+  p7_oprofile_ReconfigUnihit(om, saveL);	   /* process each domain in unihit mode, regardless of om->mode     */
   i     = -1;
   triggered = FALSE;
   for (j = 1; j <= sq->n; j++)
@@ -468,7 +473,9 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 	}
     }
 
-  p7_oprofile_ReconfigMultihit(om, saveL); /* restore original profile configuration */
+  /* Restore model to uni/multihit mode, and to its original length model */
+  if (p7_IsMulti(save_mode)) p7_oprofile_ReconfigMultihit(om, saveL); 
+  else                       p7_oprofile_ReconfigUnihit  (om, saveL); 
   return eslOK;
 }
 

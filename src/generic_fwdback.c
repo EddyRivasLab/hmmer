@@ -246,7 +246,7 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
   XMX(i,p7G_N) = p7_FLogsum( XMX(1, p7G_N) + gm->xsc[p7P_N][p7P_LOOP],
 			     XMX(0, p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
   for (k = M; k >= 1; k--)
-    MMX(i,M) = IMX(i,M) = DMX(i,M) = -eslINFINITY;
+    MMX(i,k) = IMX(i,k) = DMX(i,k) = -eslINFINITY;
 
 
   if (opt_sc != NULL) *opt_sc = XMX(0,p7G_N);
