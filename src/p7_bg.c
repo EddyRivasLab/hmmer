@@ -227,10 +227,23 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *                   
  * Note:      This looks like a two-state HMM, but if you start thinking
  *            about its length distribution ("oh my god, L0 assumes a
- *            fixed L=400 expectation, it's all wrong, it's not conditional
- *            on the target sequence length and length modeling's messed
- *            up!"), don't panic. It's set up as a conditional-on-L model;
- *            the P(L) term is added in p7_bg_FilterScore() below.                  
+ *            fixed L=400 expectation, it's all wrong, it's not
+ *            conditional on the target sequence length and length
+ *            modeling's messed up!"), don't panic. It's set up as a
+ *            conditional-on-L model that generates accordint to P(x |
+ *            model, L) P(L); the P(L) term is added in
+ *            p7_bg_FilterScore() below.
+ *            
+ *            Additionally, and not to confuse you further, but the
+ *            t[0][0] transition is dependent on L.  The initial
+ *            setting here is just a dummy. When p7_bg_SetLength()
+ *            sets p1 for the null1 model length distribution, it sets
+ *            t[0][0] to the same thing. This is controlling the
+ *            relative expected balance of background sequence to
+ *            biased sequence, not the overall length distribution.
+ *            
+ *            All of this is ad hoc, and little of it has been
+ *            optimized against data.
  */
 int
 p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)

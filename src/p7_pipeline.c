@@ -628,12 +628,12 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	{
 	  if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0) 
 	    {
-	      sum_score += pli->ddef->dcl[d].envsc;
+	      sum_score += pli->ddef->dcl[d].envsc;         /* NATS */
 	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
-	      seqbias   += pli->ddef->dcl[d].domcorrection;
+	      seqbias   += pli->ddef->dcl[d].domcorrection; /* NATS */
 	    }
 	}
-      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);
+      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);  /* NATS */
     }
   else 
     {
@@ -641,15 +641,15 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 	{
 	  if (pli->ddef->dcl[d].envsc > 0.0) 
 	    {
-	      sum_score += pli->ddef->dcl[d].envsc;
+	      sum_score += pli->ddef->dcl[d].envsc;      /* NATS */
 	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
 	    }
 	}
       seqbias = 0.0;
     }    
-  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;
-  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;
+  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS */
+  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;                /* BITS */
+  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;    /* BITS */
 
   /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
   if (Ld > 0 && sum_score > seq_score)
@@ -683,14 +683,14 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       hit->noverlaps  = pli->ddef->noverlaps;
       hit->nenvelopes = pli->ddef->nenvelopes;
 
-      hit->pre_score  = pre_score;
+      hit->pre_score  = pre_score; /* BITS */
       hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
-      hit->score      = seq_score;
+      hit->score      = seq_score; /* BITS */
       hit->pvalue     = P;
       hit->sortkey    = pli->inc_by_E ? -log(P) : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
 
-      hit->sum_score  = sum_score;
+      hit->sum_score  = sum_score; /* BITS */
       hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       /* Transfer all domain coordinates (unthresholded for
@@ -707,9 +707,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       for (d = 0; d < hit->ndom; d++)
 	{
 	  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
-	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); 
-	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0);
-	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2;
+	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
+	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
+	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
 	  hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 	  
 	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
@@ -946,7 +946,7 @@ main(int argc, char **argv)
 	     hitlist->hit[h]->score,
 	     hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
 	     hitlist->hit[h]->dcl[d].bitscore,
-	     p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
+	     eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of bits */
 	     hitlist->hit[h]->dcl[d].pvalue * (double) pli->Z,
 	     hitlist->hit[h]->nexpected,
 	     hitlist->hit[h]->nreported,
@@ -1087,7 +1087,7 @@ main(int argc, char **argv)
 	     hitlist->hit[h]->score,
 	     hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
 	     hitlist->hit[h]->dcl[d].bitscore,
-	     p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection),
+	     eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of BITS */
 	     hitlist->hit[h]->dcl[d].pvalue * (double) pli->Z,
 	     hitlist->hit[h]->nexpected,
 	     hitlist->hit[h]->nreported,
