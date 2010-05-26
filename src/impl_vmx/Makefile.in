@@ -17,7 +17,7 @@ LIBS           = @GROUPHMMERLIBS@ -leasel @LIBS@ -lm
 AR             = @AR@ rcv
 RANLIB         = @RANLIB@
 
-ESLDIR         = ../../easel
+ESLDIR         = ../../@HMMER_ESLDIR@
 
 SHELL          = /bin/sh
 MYLIBDIRS      = -L${ESLDIR} -L.. -L.

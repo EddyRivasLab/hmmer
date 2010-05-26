@@ -18,7 +18,7 @@ LIBS     = @GROUPHMMERLIBS@ -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 AR       = @AR@ rcv 
 RANLIB   = @RANLIB@
 
-ESLDIR    = ../easel
+ESLDIR    = ../@HMMER_ESLDIR@
 IMPLDIR   = impl_@IMPL_CHOICE@
 
 # Configuration for optional pthreads multiprocessor support

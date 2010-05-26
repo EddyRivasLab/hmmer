@@ -20,7 +20,7 @@ MPILIBS  = @MPILIBS@
 IMPLDIR  = impl_@IMPL_CHOICE@
 
 SRCDIR   = ../src
-ESLDIR   = ../easel
+ESLDIR   = ../@HMMER_ESLDIR@
 
 ESLINC   = -I${ESLDIR} -I${top_srcdir}/easel
 SRCINC   = -I${SRCDIR} -I${top_srcdir}/src

@@ -72,7 +72,7 @@ LICENSELINE = "@HMMER_LICENSE@"
 LICENSETAG  = gnu
 REPOSITORY  = https://svn.janelia.org/eddylab/eddys/src/
 
-ESLDIR      = easel
+ESLDIR      = @HMMER_ESLDIR@
 SRCDIR      = src
 TESTDIR     = testsuite
 PMARKDIR    = profmark

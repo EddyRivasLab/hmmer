@@ -13,7 +13,7 @@ srcdir         = @srcdir@
 VPATH          = @srcdir@ @top_srcdir@
 
 SRCDIR   = ../src
-ESLDIR   = ../easel
+ESLDIR   = ../@HMMER_ESLDIR@
 IMPLDIR  = ${SRCDIR}/impl_@IMPL_CHOICE@
 SQCLEVEL = 2
 
