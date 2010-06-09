@@ -1,0 +1,646 @@
+\section{File formats}
+\label{section:formats}
+\setcounter{footnote}{0}
+
+\subsection{HMMER profile HMM files}
+\label{section:savefiles}
+
+The file \prog{tutorial/fn3.hmm} gives an example of a HMMER3 ASCII
+save file. An abridged version is shown here, where (\ldots) mark
+deletions made for clarity and space:
+
+\begin{tinysreoutput}
+HMMER3/b [3.0b2 | June 2009]
+NAME  fn3
+ACC   PF00041.12
+DESC  Fibronectin type III domain
+LENG  86
+ALPH  amino
+RF    no
+CS    yes
+MAP   yes
+DATE  Mon Jun 15 09:39:41 2009
+NSEQ  106
+EFFN  11.415833
+CKSUM 72638555
+GA    8.00 7.20
+TC    8.00 7.20
+NC    7.90 7.90
+STATS LOCAL MSV       -9.4043  0.71847
+STATS LOCAL VITERBI   -9.7737  0.71847
+STATS LOCAL FORWARD   -3.8341  0.71847
+HMM          A        C        D        E        F        G        H        I     (...)    Y   
+            m->m     m->i     m->d     i->m     i->i     d->m     d->d
+  COMPO   2.70271  4.89246  3.02314  2.64362  3.59817  2.82566  3.74147  3.08574  (...) 3.22607
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+          0.00338  6.08833  6.81068  0.61958  0.77255  0.00000        *
+      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801  (...) 3.93889      1 - -
+          2.68629  4.42236  2.77530  2.73088  3.46365  2.40512  3.72505  3.29365  (...) 3.61514
+          0.09796  2.38361  6.81068  0.10064  2.34607  0.48576  0.95510
+      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731  (...) 4.25623      3 - -
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+          0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
+(...)
+     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898  (...) 3.43366    120 - B
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+          0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
+     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840  (...) 4.99111    121 - E
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+          0.00227  6.08723        *  0.61958  0.77255  0.00000        *
+//
+\end{tinysreoutput}
+
+An HMM file consists of one or more HMMs.  Each HMM starts with the
+identifier \prog{HMMER3/b} and ends with \prog{//} on a line by
+itself.  The identifier allows backward compatibility as the HMMER
+software evolves: it tells the parser this file is from HMMER3's save
+file format version b. (The 3/a format was used in alpha test versions
+of HMMER3.)  The closing \prog{//} allows multiple HMMs to be
+concatenated.
+
+The format is divided into two regions. The first region contains
+textual information and miscalleneous parameters in a roughly
+tag-value scheme.  This section ends with a line beginning with the
+keyword \prog{HMM}. The second region is a tabular, whitespace-limited
+format for the main model parameters.
+
+All probability parameters are all stored as negative natural log
+probabilities with five digits of precision to the right of the
+decimal point, rounded. For example, a probability of $0.25$ is stored
+as $-\log 0.25 = 1.38629$. The special case of a zero probability is
+stored as '*'.
+
+Spacing is arranged for human readability, but the parser only cares
+that fields are separated by at least one space character.
+
+A more detailed description of the format follows.
+
+\subsubsection{header section}
+
+The header section is parsed line by line in a tag/value format. Each
+line type is either \textbf{mandatory} or \textbf{optional} as
+indicated. 
+
+\begin{sreitems}{\emprog{STATS <s1> <s2> <f>}}
+
+\item [\emprog{HMMER3/b}] Unique identifier for the save file format
+  version; the \prog{/b} means that this is HMMER3 HMM file format
+  version b. When HMMER3 changes its save file format, the revision
+  code advances. This way, parsers may easily remain backwards
+  compatible. The remainder of the line after the \prog{HMMER3/b} tag
+  is free text that is ignored by the parser. HMMER currently writes
+  its version number and release date in brackets here,
+  e.g. \prog{[3.0b2 | June 2009]} in this
+  example. \textbf{Mandatory.}
+
+\item [\emprog{NAME <s>}] Model name; \prog{<s>} is a single word
+containing no spaces or tabs. The name is normally picked up from the
+\verb+#=GF ID+ line from a Stockholm alignment file.  If this is not
+present, the name is created from the name of the alignment file by
+removing any file type suffix. For example, an otherwise nameless HMM
+built from the alignment file \prog{rrm.slx} would be named
+\prog{rrm}.  \textbf{Mandatory.}
+
+\item [\emprog{ACC <s>}] Accession number; \prog{<s>} is a one-word
+accession number. This is picked up from the \verb+#=GF AC+ line in a
+Stockholm format alignment. \textbf{Optional.}
+
+\item [\emprog{DESC <s>}] Description line; \prog{<s>} is a one-line
+free text description. This is picked up from the \verb+#=GF DE+ line
+in a Stockholm alignment file. \textbf{Optional.}
+
+\item [\emprog{LENG <d>}] Model length; \prog{<d>}, a positive nonzero
+integer, is the number of match states in the model.
+\textbf{Mandatory.}
+
+\item [\emprog{ALPH <s>}] Symbol alphabet type. For biosequence
+analysis models, \prog{<s>} is \prog{amino}, \prog{DNA}, or \prog{RNA}
+(case insensitive). There are also other accepted alphabets for
+purposes beyond biosequence analysis, including \prog{coins},
+\prog{dice}, and \prog{custom}. This determines the symbol alphabet
+and the size of the symbol emission probability distributions.  If
+\prog{amino}, the alphabet size $K$ is set to 20 and the symbol
+alphabet to ``ACDEFGHIKLMNPQRSTVWY'' (alphabetic order); if
+\prog{DNA}, the alphabet size $K$ is set to 4 and the symbol alphabet
+to ``ACGT''; if \prog{RNA}, the alphabet size $K$ is set to 4 and the
+symbol alphabet to ``ACGU''. \textbf{Mandatory.}
+
+\item [\emprog{RF <s>}] Reference annotation flag; \prog{<s>} is
+either \prog{no} or \prog{yes} (case insensitive). If \prog{yes}, the
+reference annotation character field for each match state in the main
+model (see below) is valid; if \prog{no}, these characters are
+ignored.  Reference column annotation is picked up from a Stockholm
+alignment file's \verb+#=GC RF+ line. It is propagated to alignment
+outputs, and also may optionally be used to define consensus match
+columns in profile HMM construction. \textbf{Optional}; assumed to be
+no if not present.
+
+\item [\emprog{CS <s>}] Consensus structure annotation flag;
+\prog{<s>} is either \prog{no} or \prog{yes} (case insensitive). If
+\prog{yes}, the consensus structure character field for each match
+state in the main model (see below) is valid; if \prog{no} these
+characters are ignored. Consensus structure annotation is picked up
+from a Stockholm file's \verb+#=GC SS_cons+ line, and propagated to
+alignment displays.  \textbf{Optional}; assumed to be no if not
+present.
+
+\item [\emprog{MAP <s>}] Map annotation flag; \prog{<s>} is either
+\prog{no} or \prog{yes} (case insensitive).  If set to \prog{yes}, the
+map annotation field in the main model (see below) is valid; if
+\prog{no}, that field will be ignored.  The HMM/alignment map
+annotates each match state with the index of the alignment column from
+which it came. It can be used for quickly mapping any subsequent
+HMM alignment back to the original multiple alignment, via the model.
+\textbf{Optional}; assumed to be no if not present.
+
+\item [\emprog{DATE <s>}] Date the model was constructed; \prog{<s>}
+is a free text date string.  This field is only used for logging
+purposes.\footnote{HMMER does not use dates for any purpose other than
+human-readable annotation, so it is no more prone than you are to Y2K,
+Y2038, or any other date-related eschatology.} \textbf{Optional.}
+
+\item [\emprog{COM [<n>] <s>}] Command line log; \prog{<n>} counts
+command line numbers, and \prog{<s>} is a one-line command. There may
+be more than one \prog{COM} line per save file, each numbered starting
+from $n=1$. These lines record every HMMER command that modified the
+save file. This helps us reproducibly and automatically log how Pfam
+models have been constructed, for example. \textbf{Optional.}
+
+\item [\emprog{NSEQ  <d>}] Sequence number; \prog{<d>} is a nonzero
+positive integer, the number of sequences that the HMM was trained on.
+This field is only used for logging purposes.
+\textbf{Optional.}
+
+\item [\emprog{EFFN <f>}] Effective sequence number; \prog{<f>} is a
+nonzero positive real, the effective total number of sequences
+determined by \prog{hmmbuild} during sequence weighting, for combining
+observed counts with Dirichlet prior information in parameterizing the
+model. This field is only used for logging purposes.
+\textbf{Optional.}
+
+\item [\emprog{CKSUM <d>}] Training alignment checksum; \prog{<d>} is
+  a nonnegative unsigned 32-bit integer. This number is calculated
+  from the training sequence data, and used in conjunction with the
+  alignment map information to verify that a given alignment is indeed
+  the alignment that the map is for. \textbf{Optional.}
+
+\item [\emprog{GA    <f> <f>}] Pfam gathering thresholds GA1 and GA2.
+See Pfam documentation of GA lines. \textbf{Optional.}
+
+\item [\emprog{TC <f> <f>}] Pfam trusted cutoffs TC1 and TC2.  See
+Pfam documentation of TC lines. \textbf{Optional.}
+
+\item [\emprog{NC <f> <f>}] Pfam noise cutoffs NC1 and NC2.  See Pfam
+documentation of NC lines. \textbf{Optional.}
+
+\item [\emprog{STATS <s1> <s2> <f1> <f2>}] Statistical parameters
+  needed for E-value calculations. \prog{<s1>} is the model's
+  alignment mode configuration: currently only \prog{LOCAL} is
+  recognized. \prog{<s2>} is the name of the score distribution:
+  currently \prog{MSV}, \prog{VITERBI}, and \prog{FORWARD} are
+  recognized.  \prog{<f1>} and \prog{<f2>} are two real-valued
+  parameters controlling location and slope of each distribution,
+  respectively; $\mu$ and $\lambda$ for Gumbel distributions for MSV
+  and Viterbi scores, and $\tau$ and $\lambda$ for exponential tails
+  for Forward scores.  $\lambda$ values must be positive.  All three
+  lines or none of them must be present: when all three are present,
+  the model is considered to be calibrated for E-value
+  statistics. \textbf{Optional.}
+
+\item [\emprog{HMM }] Flags the start of the main model
+section. Solely for human readability of the tabular model data, the
+symbol alphabet is shown on the \prog{HMM} line, aligned to the fields
+of the match and insert symbol emission distributions in the main
+model below. The next line is also for human readability, providing
+column headers for the state transition probability fields in the main
+model section that follows. Though unparsed after the \prog{HMM} tag,
+the presence of two header lines is \textbf{mandatory:} the parser
+always skips the line after the \prog{HMM} tag line.
+
+\item [\emprog{COMPO <f>*K}] The first line in the main model section
+may be an optional line starting with \emprog{COMPO}: these are the
+model's overall average match state emission probabilities, which are
+used as a background residue composition in the ``filter null''
+model. The $K$ fields on this line are log probabilities for each
+residue in the appropriate biosequence alphabet's
+order. \textbf{Optional.}
+
+\end{sreitems}
+
+\subsubsection{main model section}
+
+All the remaining fields are \textbf{mandatory}.
+
+The first two lines in the main model section are
+atypical.\footnote{That is, the first two lines after the optional
+  COMPO line. Don't be confused by the presence of an optional COMPO
+  line here. The COMPO line is placed in the model section, below the
+  residue column headers, because it's an array of numbers much like
+  residue scores, but it's not really part of the model.}  They
+contain information for the core model's BEGIN node. This is stored as
+model node 0, and match state 0 is treated as the BEGIN state.  The
+begin state is mute, so there are no match emission probabilities. The
+first line is the insert 0 emissions. The second line contains the
+transitions from the begin state and insert state 0.  These seven
+numbers are: $B \rightarrow M_1$, $B \rightarrow I_0$, $B \rightarrow
+D_1$; $I_0 \rightarrow M_1$, $I_0 \rightarrow I_0$; then a 0.0 and a
+'*', because by convention, nonexistent transitions from the
+nonexistent delete state 0 are set to $\log 1 = 0$ and $\log 0 =
+-\infty = $ `*'.
+
+The remainder of the model has three lines per node, for $M$ nodes
+(where $M$ is the number of match states, as given by the \prog{LENG}
+line). These three lines are ($K$ is the alphabet size in residues):
+
+\begin{sreitems}{\textbf{State transition line}}
+
+\item [\textbf{Match emission line}] The first field is the node
+number ($1 \ldots M$).  The parser verifies this number as a
+consistency check (it expects the nodes to come in order). The next
+$K$ numbers for match emissions, one per symbol, in alphabetic order.
+
+The next field is the \prog{MAP} annotation for this node.  If
+\prog{MAP} was \prog{yes} in the header, then this is an integer,
+representing the alignment column index for this match state
+(1..alen); otherwise, this field is `-'.
+
+The next field is the \prog{RF} annotation for this node.  If
+\prog{RF} was \prog{yes} in the header, then this is a single
+character, representing the reference annotation for this match state;
+otherwise, this field is `-'.
+
+The next field is the \prog{CS} annotation for this node.  If
+\prog{CS} was \prog{yes}, then this is a single character,
+representing the consensus structure at this match state; otherwise
+this field is `-'.
+
+\item [\textbf{Insert emission line}] The $K$ fields on this line are
+the insert emission scores, one per symbol, in alphabetic order.
+
+\item [\textbf{State transition line}] The seven fields on this line
+are the transitions for node $k$, in the order shown by the transition
+header line: $M_k \rightarrow M_{k+1}, I_{k}, D_{k+1}$; $ I_k
+\rightarrow M_{k+1}, I_k$; $D_{k} \rightarrow M_{k+1}, D_{k+1}$.
+
+For transitions from the final node $M$, match state $M+1$ is
+interpreted as the END state $E$, and there is no delete state $M+1$;
+therefore the final $M_k \rightarrow D_{k+1}$ and $D_k \rightarrow
+D_{k+1}$ transitions are always * (zero probability), and the final
+$D_k \rightarrow M_{k+1}$ transition is always 0.0 (probability 1.0).
+\end{sreitems}
+
+Finally, the last line of the format is the ``//'' record separator.
+
+\subsection{Stockholm, the recommended multiple sequence alignment format}
+\label{section:stockholm}
+
+The Pfam and Rfam Consortiums have developed a multiple sequence
+alignment format called ``Stockholm format'' that allows rich and
+extensible annotation. 
+
+Most popular multiple alignment file formats can be changed into a
+minimal Stockholm format file just by adding a Stockholm header line
+and a trailing \prog{//} terminator:
+
+\begin{sreoutput}
+# STOCKHOLM 1.0
+
+seq1  ACDEF...GHIKL
+seq2  ACDEF...GHIKL
+seq3  ...EFMNRGHIKL
+
+seq1  MNPQTVWY
+seq2  MNPQTVWY
+seq3  MNPQT...
+//
+\end{sreoutput}
+
+The first line in the file must be \verb+# STOCKHOLM 1.x+, where
+\verb+x+ is a minor version number for the format specification
+(and which currently has no effect on my parsers). This line allows a
+parser to instantly identify the file format.
+
+In the alignment, each line contains a name, followed by the aligned
+sequence. A dash, period, underscore, or tilde (but not whitespace)
+denotes a gap. If the alignment is too long to fit on one line, the
+alignment may be split into multiple blocks, with blocks separated by
+blank lines. The number of sequences, their order, and their names
+must be the same in every block. Within a given block, each
+(sub)sequence (and any associated \verb+#=GR+ and \verb+#=GC+ markup,
+see below) is of equal length, called the \textit{block length}. Block
+lengths may differ from block to block. The block length must be at
+least one residue, and there is no maximum.
+
+Other blank lines are ignored. You can add comments anywhere to the
+file (even within a block) on lines starting with a \verb+#+.
+
+All other annotation is added using a tag/value comment style. The
+tag/value format is inherently extensible, and readily made
+backwards-compatible; unrecognized tags will simply be ignored. Extra
+annotation includes consensus and individual RNA or protein secondary
+structure, sequence weights, a reference coordinate system for the
+columns, and database source information including name, accession
+number, and coordinates (for subsequences extracted from a longer
+source sequence) See below for details.
+
+\subsubsection{syntax of Stockholm markup}
+
+There are four types of Stockholm markup annotation, for per-file,
+per-sequence, per-column, and per-residue annotation:
+
+\begin{sreitems}{\emprog{\#=GR <seqname> <tag> <..s..>}}
+\item [\emprog{\#=GF <tag> <s>}]
+        Per-file annotation. \prog{<s>} is a free format text line
+        of annotation type \prog{<tag>}. For example, \prog{\#=GF DATE
+        April 1, 2000}. Can occur anywhere in the file, but usually
+        all the \prog{\#=GF} markups occur in a header.
+
+\item [\emprog{\#=GS <seqname> <tag> <s>}]
+        Per-sequence annotation. \prog{<s>} is a free format text line
+        of annotation type \prog{tag} associated with the sequence
+        named \prog{<seqname>}. For example, \prog{\#=GS seq1
+        SPECIES\_SOURCE Caenorhabditis elegans}. Can occur anywhere
+        in the file, but in single-block formats (e.g. the Pfam
+        distribution) will typically follow on the line after the
+        sequence itself, and in multi-block formats (e.g. HMMER
+        output), will typically occur in the header preceding the
+        alignment but following the \prog{\#=GF} annotation.
+
+\item [\emprog{\#=GC <tag> <..s..>}]
+        Per-column annotation. \prog{<..s..>} is an aligned text line
+        of annotation type \prog{<tag>}.
+        \verb+#=GC+ lines are
+        associated with a sequence alignment block; \prog{<..s..>}
+        is aligned to the residues in the alignment block, and has
+        the same length as the rest of the block.
+        Typically \verb+#=GC+ lines are placed at the end of each block.
+
+\item [\emprog{\#=GR <seqname> <tag> <..s..>}]
+        Per-residue annotation. \prog{<..s..>} is an aligned text line
+        of annotation type \prog{<tag>}, associated with the sequence
+        named \prog{<seqname>}. 
+        \verb+#=GR+ lines are 
+        associated with one sequence in a sequence alignment block; 
+        \prog{<..s..>}
+        is aligned to the residues in that sequence, and has
+        the same length as the rest of the block.
+        Typically
+        \verb+#=GR+ lines are placed immediately following the
+        aligned sequence they annotate.
+\end{sreitems}
+
+\subsubsection{semantics of Stockholm markup}
+
+Any Stockholm parser will accept syntactically correct files, but is
+not obligated to do anything with the markup lines. It is up to the
+application whether it will attempt to interpret the meaning (the
+semantics) of the markup in a useful way. At the two extremes are the
+Belvu alignment viewer and the HMMER profile hidden Markov model
+software package.
+
+Belvu simply reads Stockholm markup and displays it, without trying to
+interpret it at all. The tag types (\prog{\#=GF}, etc.) are sufficient
+to tell Belvu how to display the markup: whether it is attached to the
+whole file, sequences, columns, or residues.
+
+HMMER uses Stockholm markup to pick up a variety of information from
+the Pfam multiple alignment database. The Pfam consortium therefore
+agrees on additional syntax for certain tag types, so HMMER can parse
+some markups for useful information. This additional syntax is imposed
+by Pfam, HMMER, and other software of mine, not by Stockholm format
+per se. You can think of Stockholm as akin to XML, and what my
+software reads as akin to an XML DTD, if you're into that sort of
+structured data format lingo.
+
+The Stockholm markup tags that are parsed semantically by my software
+are as follows:
+
+\subsubsection{recognized \#=GF annotations}
+\begin{sreitems}{\emprog{TC  <f> <f>}}
+\item [\emprog{ID  <s>}] 
+        Identifier. \emprog{<s>} is a name for the alignment;
+        e.g. ``rrm''. One word. Unique in file.
+
+\item [\emprog{AC  <s>}]
+        Accession. \emprog{<s>} is a unique accession number for the
+        alignment; e.g. 
+        ``PF00001''. Used by the Pfam database, for instance. 
+        Often a alphabetical prefix indicating the database
+        (e.g. ``PF'') followed by a unique numerical accession.
+        One word. Unique in file. 
+        
+\item [\emprog{DE  <s>}]
+        Description. \emprog{<s>} is a free format line giving
+        a description of the alignment; e.g.
+        ``RNA recognition motif proteins''. One line. Unique in file.
+
+\item [\emprog{AU  <s>}]
+        Author. \emprog{<s>} is a free format line listing the 
+        authors responsible for an alignment; e.g. 
+        ``Bateman A''. One line. Unique in file.
+
+\item [\emprog{GA  <f> <f>}]
+        Gathering thresholds. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs used in gathering the
+        members of Pfam full alignments. 
+        
+\item [\emprog{NC  <f> <f>}]
+        Noise cutoffs. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs, set according to the
+        highest scores seen for unrelated sequences when gathering
+        members of Pfam full alignments.
+
+\item [\emprog{TC  <f> <f>}]
+        Trusted cutoffs. Two real numbers giving HMMER bit score
+        per-sequence and per-domain cutoffs, set according to the
+        lowest scores seen for true homologous sequences that
+        were above the GA gathering thresholds, when gathering
+        members of Pfam full alignments. 
+\end{sreitems}
+
+\subsubsection{recognized \#=GS annotations}
+
+\begin{sreitems}{\emprog{WT  <f>}}
+\item [\emprog{WT  <f>}]
+        Weight. \emprog{<f>} is a positive real number giving the
+        relative weight for a sequence, usually used to compensate
+        for biased representation by downweighting similar sequences.   
+        Usually the weights average 1.0 (e.g. the weights sum to
+        the number of sequences in the alignment) but this is not
+        required. Either every sequence must have a weight annotated, 
+        or none of them can.  
+
+\item [\emprog{AC  <s>}]
+        Accession. \emprog{<s>} is a database accession number for 
+        this sequence. (Compare the \prog{\#=GF AC} markup, which gives
+        an accession for the whole alignment.) One word. 
+        
+\item [\emprog{DE  <s>}]
+        Description. \emprog{<s>} is one line giving a description for
+        this sequence. (Compare the \prog{\#=GF DE} markup, which gives
+        a description for the whole alignment.)
+\end{sreitems}
+
+
+\subsubsection{recognized \#=GC annotations}
+
+\begin{sreitems}{\emprog{SA\_cons}}
+
+\item [\emprog{RF}]
+        Reference line. Any character is accepted as a markup for a
+        column. The intent is to allow labeling the columns with some
+        sort of mark.
+        
+\item [\emprog{SS\_cons}]
+        Secondary structure consensus. For protein alignments,
+        DSSP codes or gaps are accepted as markup: [HGIEBTSCX.-\_], where
+        H is alpha helix, G is 3/10-helix, I is p-helix, E is extended
+        strand, B is a residue in an isolated b-bridge, T is a turn, 
+        S is a bend, C is a random coil or loop, and X is unknown
+        (for instance, a residue that was not resolved in a crystal
+        structure). 
+
+\item [\emprog{SA\_cons}]
+        Surface accessibility consensus. 0-9, gap symbols, or X are
+        accepted as markup. 0 means $<$10\% accessible residue surface
+        area, 1 means $<$20\%, 9 means $<$100\%, etc. X means unknown
+        structure.
+\end{sreitems}
+
+\subsubsection{recognized \#=GR annotations}
+\begin{sreitems}{\emprog{SA}}
+\item [\emprog{SS}]
+        Secondary structure consensus. See \prog{\#=GC SS\_cons} above.
+\item [\emprog{SA}]
+        Surface accessibility consensus. See \prog{\#=GC SA\_cons} above.
+\item [\emprog{PP}] Posterior probability for an aligned residue. This
+  represents the probability that this residue is assigned to the HMM
+  state corresponding to this alignment column, as opposed to some
+  other state. (Note that a residue can be confidently
+  \emph{unaligned}: a residue in an insert state or flanking N or C
+  state may have high posterior probability.) The posterior
+  probability is encoded as 11 possible characters \verb+0-9*+: $0.0
+  \leq p < 0.05$ is coded as 0, $0.05 \leq p < 0.15$ is coded as 1,
+  (... and so on ...), $0.85 \leq p < 0.95$ is coded as 9, and $0.95
+  \leq p \leq 1.0$ is coded as '*'. Gap characters appear in the PP
+  line where no residue has been assigned.
+\end{sreitems}
+
+
+% Adapted from Easel documentation's format_a2m.tex by:
+%  - including format_a2m.tex
+%  - add an extra level of \sub: \subsection -> \subsubsection
+%  - add the subsection header below
+%  - revise first pp to be about HMMER.
+
+\subsection{A2M multiple alignment format}
+
+HMMER's Easel library routines are capable of writing alignments in UC
+Santa Cruz ``A2M'' (alignment to model) format, the native input
+format for the UCSC SAM profile HMM software package. 
+
+To select A2M format, use the format code \ccode{a2m}: for example, 
+to reformat a Stockholm alignment to A2M:
+
+\user{esl-reformat a2m myali.sto}.
+
+Easel currently does not read A2M format, and it currently only writes
+in what UCSC calls ``dotless'' A2M format.
+
+The most official documentation for A2M format appears to be at
+\url{http://compbio.soe.ucsc.edu/a2m-desc.html}. You may refer to that
+document if anything in the brief description below is unclear.
+
+\subsection{An example A2M file}
+
+This alignment:
+
+\begin{cchunk}
+seq1  ACDEF...GHIKLMNPQTVWY
+seq2  ACDEF...GHIKLMNPQTVWY
+seq3  ---EFmnrGHIKLMNPQT---
+\end{cchunk}
+
+\noindent 
+is encoded in A2M format as:
+
+\begin{cchunk}
+>seq1  Sequence 1 description
+ACDEFGHIKLMNPQTVWY
+>seq2  Sequence 2 description
+ACDEFGHIKLMNPQTVWY
+>seq3  Sequence 3 description
+---EFmnrGHIKLMNPQT---
+\end{cchunk}
+
+A2M format looks a lot like aligned FASTA format. A crucial difference
+is that the aligned sequences in a ``dotless'' A2M file do not
+necessarily all have the same number of characters. The format
+distinguishes between ``consensus columns'' (where residues are in
+upper case and gaps are a dash, `-') and ``insert columns'' (where
+residues are in lower case and gaps are dots, `.', that aren't
+explicitly shown in the format -- hence ``dotless'' A2M). The position
+and number of gaps in insert columns (dots) is implicit in this
+representation.  An advantage of this format is its compactness.
+
+This representation only works if all insertions relative to consensus
+are considered to be unaligned characters. That is how insertions are
+handled by profile HMM implementations like SAM and HMMER, and profile
+SCFG implementations like Infernal.
+
+Thus every sequence must have the same number of consensus columns
+(upper case letters plus `-' characters), and may have additional lower
+case letters for insertions.
+
+\subsubsection{Legal characters}
+
+A2M (and SAM) do not support some special characters such as the `*'
+(not-a-residue) or `\verb+~+' (missing data) characters. Easel outputs these
+characters as gaps: either `-' in a consensus column, or nothing in an
+insert column.
+
+The SAM software parses only a subset of legal ambiguity codes for
+amino acids and nucleotides. For amino acids, it only reads \{BXZ\} in
+addition to the 20 standard one-letter codes. For nucleotides, it only
+reads \{NRY\} in addition to \{ACGTU\}. With one crucial exception, it
+treats all other letters as X or N. 
+
+The crucial exception is `O'. SAM reads an `O' as the position of a
+``free insertion module'' (FIM), a concept specific to SAM-style
+profile HMMs. This has no impact on nucleic acid sequences, where `O'
+is not a legal character. But in amino acid sequences, `O' means
+pyrrolysine, one of the unusual genetically-encoded amino acids.  This
+means that A2M format alignments must not contain pyrrolysine
+residues, lest they be read as FIMs. For this reason, Easel converts
+`O' residues to `X' when it writes an amino acid alignment in A2M
+format.
+
+\subsubsection{Determining consensus columns}
+
+Writing A2M format requires knowing which alignment columns are
+supposed to be considered consensus and which are considered
+inserts. If the alignment was produced by HMMER or Infernal, then the
+alignment has so-called ``reference annotation'' (what appears as a
+\verb+#=GC RF+ line in Stockholm format) marking the consensus
+columns. 
+
+Often, an alignment has no reference annotation; for example, if it
+has been read from an alignment format that has no reference
+annotation line (only Stockholm and SELEX formats support reference
+annotation). In this case, Easel internally generates a ``reasonable''
+guess at consensus columns, using essentially the same procedure that
+HMMER's \prog{hmmbuild} program uses by default: sequence fragments
+(sequences $<$50\% of the mean sequence length in the alignment
+overall) are ignored, and for the remaining sequences, any column
+containing $\geq$ 50\% residues is considered to be a consensus
+column.
+
+
+
+
+
+
+
+
+
+

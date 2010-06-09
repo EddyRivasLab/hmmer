@@ -1,0 +1,162 @@
+.TH "hmmfetch" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+
+.SH NAME
+hmmfetch - retrieve profile HMM(s) from a file
+
+.SH SYNOPSIS
+
+.B hmmfetch
+.I [options]
+.I <hmmfile>
+.I <key>
+ (retrieves HMM named <key>)
+
+.B hmmfetch -f
+.I [options]
+.I <hmmfile>
+.I <keyfile>
+ (retrieves all HMMs listed in <keyfile>)
+
+.B hmmfetch --index
+.I [options]
+.I <hmmfile>
+ (indexes <hmmfile> for fetching)
+
+
+.SH DESCRIPTION
+
+.PP
+Quickly retrieves one or more profile HMMs from an
+.I <hmmfile>
+(a large Pfam database, for example). 
+
+.PP
+The 
+.I <hmmfile>
+must be indexed first, using
+.B hmmfetch --index.
+The index is a binary file named
+.I <hmmfile>.ssi.
+
+.PP
+The default mode is to retrieve a single profile by name or
+accession, called the
+.I <key>.
+For example:
+
+.nf
+  % hmmfetch Pfam-A.hmm Caudal_act
+  % hmmfetch Pfam-A.hmm PF00045
+.fi
+
+.PP
+With the
+.I -f
+option, a 
+.I <keyfile> 
+containing a list of one or more keys is read instead. 
+The first whitespace-delimited field on each non-blank non-comment
+line of the
+.I <keyfile> 
+is used as a 
+.I <key>,
+and any remaining data on the line is ignored; this allows
+a variety of whitespace delimited datafiles to be used
+as 
+.I <keyfile>s.
+The
+.I <keyfile> 
+argument can be a '-' (dash) character, in which case
+the 
+.I keyfile 
+is read from standard input; this allows unix ninjas to
+construct sophisticated invocations using pipes.
+
+.PP
+By default, the HMM is printed to standard output in HMMER3 format.
+
+.SH OPTIONS
+
+.TP
+.B -h
+Help; print a brief reminder of command line usage and all available
+options.
+
+.TP
+.B -f
+The second commandline argument is a 
+.I <keyfile>
+instead of a single 
+.I <key>.
+The first field on each line of the
+.I <keyfile> 
+is used as a retrieval 
+.I <key>
+(an HMM name or accession). 
+Blank lines and comment lines (that start with
+a # character) are ignored. 
+
+.TP
+.BI -o " <f>"
+Output HMM(s) to file
+.I <f>
+instead of to standard output.
+
+.TP
+.B -O
+Output HMM(s) to individual file(s) named
+.I <key>
+instead of standard output. With the
+.B -f 
+option, this can result in many files
+being created.
+
+.TP
+.B --index
+Instead of retrieving one or more profiles from
+.I <hmmfile>,
+index the
+.I <hmmfile>
+for future retrievals.
+This creates a
+.I <hmmfile>.ssi
+binary index file.
+
+
+
+.SH SEE ALSO 
+
+See 
+.B hmmer(1)
+for a master man page with a list of all the individual man pages
+for programs in the HMMER package.
+
+.PP
+For complete documentation, see the user guide that came with your
+HMMER distribution (Userguide.pdf); or see the HMMER web page
+(@HMMER_URL@).
+
+
+
+.SH COPYRIGHT
+
+.nf
+@HMMER_COPYRIGHT@
+@HMMER_LICENSE@
+.fi
+
+For additional information on copyright and licensing, see the file
+called COPYRIGHT in your HMMER source distribution, or see the HMMER
+web page 
+(@HMMER_URL@).
+
+
+.SH AUTHOR
+
+.nf
+Eddy/Rivas Laboratory
+Janelia Farm Research Campus
+19700 Helix Drive
+Ashburn VA 20147 USA
+http://eddylab.org
+.fi

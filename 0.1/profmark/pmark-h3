@@ -1,0 +1,38 @@
+#! /usr/bin/perl
+
+# Usage: pmark-h3 <dir> <index-table> <msafile> <seqfile> <hmmbuild> <hmmsearch> <outfile>
+
+$hmmbuild   = "./hmmbuild";
+$hmmsearch  = "./hmmsearch -E 200";
+
+$dir        = shift;
+$table      = shift;
+$msafile    = shift;
+$seqfile    = shift;
+$outfile    = shift;
+
+open(TABLE, "$table") || die "failed to open $table";
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    $output = `esl-afetch -o $dir/$msaname.sto $msafile $msaname`;
+    if ($? != 0) { die "FAILED: esl-afetch -o $dir/$msaname.sto $msafile $msaname"; }
+
+    $output = `$hmmbuild  $dir/$msaname.hmm $dir/$msaname.sto`;
+    if ($? != 0) { die "FAILED: $hmmbuild  $dir/$msaname.hmm $dir/$msaname.sto"; }
+
+    $status = system("$hmmsearch $dir/$msaname.hmm $seqfile | ./hmmer2profmark >> $outfile");
+    if ($status != 0) { die "FAILED: $hmmsearch $dir/$msaname.hmm $seqfile | ./hmmer2profmark >> $outfile"; }
+
+    unlink "$dir/$msaname.hmm";
+    unlink "$dir/$msaname.sto";
+}
+close TABLE;
+
+
+    
+
+    
+    
+
