@@ -124,8 +124,8 @@ static ESL_OPTIONS options[] = {
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,   "--mpi",    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   { "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
   { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
-  { "--window_beta", eslARG_REAL,  NULL, NULL, NULL,    NULL,      NULL,    NULL, "tail mass at which window length is determined",        8 },
-  { "--window_length", eslARG_INT, NULL, NULL, NULL,    NULL,      NULL,    NULL, "window length ",                                        8 },
+  { "--w_beta",   eslARG_REAL,  NULL, NULL, NULL,       NULL,      NULL,    NULL, "tail mass at which window length is determined",        8 },
+  { "--w_length", eslARG_INT,   NULL, NULL, NULL,       NULL,      NULL,    NULL, "window length ",                                        8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -281,10 +281,10 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
     if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(cfg->ofp,"# random number seed:               one-time arbitrary\n");
     else                                       fprintf(cfg->ofp,"# random number seed set to:        %d\n", esl_opt_GetInteger(go, "--seed"));
   }
-  if (esl_opt_IsUsed(go, "--window_beta") )
-								         fprintf(cfg->ofp, "# window length beta value:         %g bits\n",  esl_opt_GetReal(go, "--window_beta"));
-  if (esl_opt_IsUsed(go, "--window_length") )
-    								     fprintf(cfg->ofp, "# window length :                   %d\n", esl_opt_GetInteger(go, "--window_length"));
+  if (esl_opt_IsUsed(go, "--w_beta") )
+								         fprintf(cfg->ofp, "# window length beta value:         %g bits\n",  esl_opt_GetReal(go, "--w_beta"));
+  if (esl_opt_IsUsed(go, "--w_length") )
+    								     fprintf(cfg->ofp, "# window length :                   %d\n", esl_opt_GetInteger(go, "--w_length"));
 
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
@@ -492,8 +492,8 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].bld = p7_builder_Create(go, cfg->abc);
 
       //special arguments for hmmbuild
-      info[i].bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--window_length")) ?  esl_opt_GetInteger(go, "--window_length"): -1;
-      info[i].bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--window_beta"))   ?  esl_opt_GetReal   (go, "--window_beta")    : p7_DEFAULT_WINDOW_BETA;
+      info[i].bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--w_length")) ?  esl_opt_GetInteger(go, "--w_length"): -1;
+      info[i].bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--w_beta"))   ?  esl_opt_GetReal   (go, "--w_beta")    : p7_DEFAULT_WINDOW_BETA;
       if ( info[i].bld->w_beta < 0 || info[i].bld->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
 
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
@@ -773,8 +773,8 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (xstatus == eslOK) { if ((bld = p7_builder_Create(go, cfg->abc))     == NULL)    xstatus = eslEMEM; }
 
   //special arguments for hmmbuild
-  bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--window_length")) ?  esl_opt_GetInteger(go, "--window_length"): -1;
-  bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--window_beta"))   ?  esl_opt_GetReal   (go, "--window_beta")    : p7_DEFAULT_WINDOW_BETA;
+  bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--w_length")) ?  esl_opt_GetInteger(go, "--w_length"): -1;
+  bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--w_beta"))   ?  esl_opt_GetReal   (go, "--w_beta")    : p7_DEFAULT_WINDOW_BETA;
   if ( bld->w_beta < 0 || bld->w_beta > 1  ) goto ERROR;
 
 

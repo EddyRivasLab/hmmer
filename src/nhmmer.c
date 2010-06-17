@@ -97,8 +97,8 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>>: no autodetection", 12 },
-  { "--window_beta", eslARG_REAL,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "tail mass at which window length is determined",               12 },
-  { "--window_length", eslARG_INT, NULL,  NULL, NULL,   NULL,  NULL,  NULL,            "window length ",                                              12 },
+  { "--w_beta",     eslARG_REAL,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "tail mass at which window length is determined",               12 },
+  { "--w_length",   eslARG_INT, NULL,  NULL, NULL,   NULL,  NULL,  NULL,            "window length ",                                              12 },
 
 
 #ifdef HMMER_THREADS 
@@ -241,10 +241,10 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   }
 //  if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# targ <seqfile> format asserted:  %s\n", esl_opt_GetString(go, "--tformat"));
-  if (esl_opt_IsUsed(go, "--window_beta"))
-  								         fprintf(ofp, "# window length beta value:        %g\n", esl_opt_GetReal(go, "--window_beta"));
-  if (esl_opt_IsUsed(go, "--window_length") )
-    								     fprintf(ofp, "# window length :                  %d\n", esl_opt_GetInteger(go, "--window_length"));
+  if (esl_opt_IsUsed(go, "--w_beta"))
+  								         fprintf(ofp, "# window length beta value:        %g\n", esl_opt_GetReal(go, "--w_beta"));
+  if (esl_opt_IsUsed(go, "--w_length") )
+    								     fprintf(ofp, "# window length :                  %d\n", esl_opt_GetInteger(go, "--w_length"));
   #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(go, "--cpu"));  
 #endif
@@ -359,8 +359,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   double window_beta = -1.0 ;
   int window_length  = -1;
-  if (esl_opt_IsUsed(go, "--window_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--window_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
-  if (esl_opt_IsUsed(go, "--window_length")) { if (( window_length = esl_opt_GetInteger(go, "--window_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
+  if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
+  if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
 
   w = esl_stopwatch_Create();
 
