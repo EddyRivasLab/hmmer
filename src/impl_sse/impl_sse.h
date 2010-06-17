@@ -122,6 +122,7 @@ typedef struct p7_oprofile_s {
   /* Information about current configuration, size, allocation                       */
   int    L;			/* current configured target seq length              */
   int    M;			/* model length                                      */
+  int    max_length;		/* bound on the length of sequence emitted by single pass though model      */
   int    allocM;		/* maximum model length currently allocated for      */
   int    allocQ4;		/* p7_NQF(allocM): alloc size for tf, rf             */
   int    allocQ8;		/* p7_NQW(allocM): alloc size for tw, rw             */
@@ -306,6 +307,8 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt);
+
 
 /* null2.c */
 extern int p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);

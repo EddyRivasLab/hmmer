@@ -68,6 +68,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
 
   /* Copy some pointer references and other info across from HMM  */
   gm->M      = hmm->M;
+  gm->max_length = hmm->max_length;
   gm->mode   = mode;
   gm->roff   = -1;
   gm->eoff   = -1;

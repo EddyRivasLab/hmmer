@@ -121,7 +121,11 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->EfL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfL")        : 100;
   bld->EfN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")        : 200;
   bld->Eft        = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")        : 0.04;
-    
+
+  bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--window_length")) ?  esl_opt_GetInteger(go, "--window_length"): -1;
+  bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--window_beta"))   ?  esl_opt_GetReal   (go, "--window_beta")    : p7_DEFAULT_WINDOW_BETA;
+  if ( bld->w_beta < 0 || bld->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
+
   /* Normally we reinitialize the RNG to original seed before calibrating each model.
    * This eliminates run-to-run variation.
    * As a special case, seed==0 means choose an arbitrary seed and shut off the
@@ -344,6 +348,10 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
   if ((status =  make_post_msa        (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
 
+  if (bld->w_len > 0)
+	  hmm->max_length = bld->w_len;
+  else if ((status =  p7_Builder_MaxLength      (hmm, bld->w_beta))               != eslOK) goto ERROR;
+
   hmm->checksum = checksum;
   hmm->flags   |= p7H_CHKSUM;
 
@@ -421,6 +429,188 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
   if (opt_om    != NULL) p7_oprofile_Destroy(*opt_om);
   return status;
 }
+
+
+/* Function:  calc_max_length()
+ * Synopsis:  Compute the maximum likely length of an emitted sequence
+ * Incept:    TJW, Mon Jan 18 12:48:57 EST 2010 [Janelia]
+ *
+ * Computes a fairly tight upper bound on domain length, by computing the
+ * probability of the model emitting sequences of all lengths up to some
+ * threshold, based on a dynamic-programming approach.  See TJW 01/14/2010 notes (p1)
+ *
+ * The idea is to find the length such that all but e.g. 1e-7 sequences emitted
+ * by the model are at most that long. The method conceptually fills in a table of
+ * length at most max_len (set to 100,000), though in practice, only two columns are
+ * used to store values;
+ *
+ * Letting i correspond to the ith state of the model,
+ *         j to a length j of emitted sequence, and
+ *    T[i][P7H_*M]  := transition prob from *_i to M_{i+1}
+ *    T[i][P7H_*I]  := transition prob from *_i to I_i
+ *    T[i][P7H_*D]  := transition prob from *_i to D_{i+1}
+ *
+ *
+ * in general,
+ * M(i,j) = T[i-1][P7H_MM] * M(i-1,j-1) + T[i-1][P7H_DM] * D(i-1,j-1) + T[i-1][P7H_IM] * I(i-1,j-1);
+ * I(i,j) = T[i][P7H_MI] * M(i,j-1) + T[i][P7H_II] * I(i,j-1);
+ * D(i,j) = T[i-1][P7H_MD] * M(i-1,j) + T[i-1][P7H_DD] * D(i-1,j);
+ *
+ * The process of filling in the dp table is done for only the full core model.
+ * We want to minimize memory consumption, so this is handled column-by-column,
+ * storing only 2 columns at a time.
+ *
+ * Initial values must be set.
+ * This is simple:
+ *   M(1,1) = 1;
+ *   I(1,1) = 0;
+ *   D(1,1) = 0;
+ *   D(2,1) = md;
+ * Fill in the remainder of rows
+ *   M(r,1) = I(r,1) = 0;
+ *   D(r,1) = dd * D(r-1,1)
+ *
+ *
+ * Then the next column:
+ *   M(1,2) = D(1,2) = 0;
+ *   I(1,2) = mi * M(1,1);
+ *   I(2,2) = D(2,2) = 0;
+ *   M(2,2) = mm * M(1,1);
+ *   D(3,2) = md * M(2,2);
+ * Fill in the remainder of rows r:
+ *   M(r,2) = dm * M(r-1,1);
+ *   D(r,2) = dd * D(r-1,2);
+ *   I(r,2) = 0;
+ *
+ *
+ *
+ * Then for each column c after that,
+ *   M(1,c) = D(1,c) = 0;
+ *   I(1,c) =  ii * I(1,c-1)
+ * Fill in the remainder of rows r based on the default formulas above
+ * Then:
+ *   M(i,j) = T[i-1][P7H_MM] * M(i-1,j-1) + T[i-1][P7H_DM] * D(i-1,j-1) + T[i-1][P7H_IM] * I(i-1,j-1);
+ *   D(i,j) = T[i-1][P7H_MD] * M(i-1,j) + T[i-1][P7H_DD] * D(i-1,j);
+ *   I(i,j) = T[i][P7H_MI] * M(i,j-1) + T[i][P7H_II] * I(i,j-1);
+ *
+ *
+ * We aim to find the length W s.t. nearly all (e.g. all but 1e-7) of the sequences
+ * emitted by the model are at most W long. Ideally, we could track the probability
+ * of emitting each length from 0 up, and accumulate those probabilities until the
+ * threshold is met. The probability of seeing a sequence of a given length emitted
+ * by the full model is simply the sum of the D[m] and M[m] values (for a model of
+ * length m). (I[m] is a false value - see below)
+ *
+ * I say "ideally", because numeric instability can lead the sum of all lengths - up
+ * to infinity - to be <0.99999 or >1.0 ... so instead we keep track of two things for
+ * each length L:
+ * (1) the sum of D[m] and M[m] prob masses for all lengths up to L  (call this X), and
+ * (2) the amount of the probability mass that belongs to all L-length-emitting states
+ * except the final M/D states.  That's the mass that will end up being spread across
+ * all lengths >L (call this Y).
+ *
+ * If not for numeric instability, X+Y=1, and we'd want to stop when Y <= 1e-7.  Because
+ * X+Y might not == 1, instead stop when Y/(X+Y) <= 1e-7.
+ *
+ * A note for computing X: the final position in the model does not actually include an
+ * I-state, so all of the final M state's probability mass should go to the E state.
+ * The value in I[m][] will suggest that some of that probability has gone to that state,
+ * but this will be ignored when tallying X = M[m]+D[m].
+ *
+ * A note on the calculation of Y: it's not quite as simple as adding up all pre-m
+ * states. For a given length j, the only way a D[i]-state can emit a sequence of length
+ * j is if an M[k] state emitted that sequence, with k<i.  If k<i-1, then other D states
+ * were also involved. The simplest way to account for this is to bleed the part of the
+ * M[i] or D[i] state that gets pushed forward into the next D state. That amount will
+ * end up being accounted for by either that later D state or (for the small part that
+ * bleeds all the way to the mth D state, it'll be added into X via D[m].  In other words:
+ * (1) each M[i] should contribute (1-t_md)M[i] to Y.
+ * (2) each D[i] should contribute (1-t_dd)D[i] to Y.
+ *
+ *
+ * Args:      hmm         - p7_HMM (required for the transition probabilities)
+ *
+ * Returns:   <eslOK> on success. The max length is returned in hmm->max_length.
+
+ */
+int
+p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
+{
+
+	int model_len = hmm->M; //model length
+    double I[model_len+1][2], M[model_len+1][2], D[model_len+1][2]; //2 columns for each way of ending a subpath
+    int col_ptr, prev_col_ptr; //which true column in above 2d-arrays is active
+    int col; //which conceptual column in above 2d-arrays is active (up to table_len)
+	double p_sum; // sum of probabilities for lengths <=L;  X from above
+    double surv; // surviving probability mass at length L; Y from above
+    int k; // k:active state in model
+    int length_bound = 200000; // default cap on # iterations (aka max model length)
+
+
+	/*  Compute max length and max prefix lengths*/
+	// special case for filling in 1st column of DP table,  col=1;
+	M[1][0] = 1.0;// 1st match state must emit a character
+	I[1][0] = D[1][0] = M[2][0] = I[2][0] = 0;
+	D[2][0] = hmm->t[1][p7H_MD];  // The 2nd delete state is reached, having emitted only 1 character
+	for (k=3; k<=model_len; k++){
+		M[k][0] = I[k][0] = 0;
+		D[k][0] = hmm->t[k-1][p7H_DD] * D[k-1][0];  // only way to get to the 3rd or greater state with only 1 character
+	}
+
+
+	//special case for 2nd column
+	M[1][1] = D[1][1] = D[2][1] = I[2][1] = 0;  //No way any of these states can be responsible for the second emitted character.
+	I[1][1] = hmm->t[1][p7H_MI] * M[1][0];  //1st insert state can emit char #2.
+	M[2][1] = hmm->t[1][p7H_MM] * M[1][0] ; //2nd match state can emit char #2.
+	for (k=3; k<=model_len; k++){
+		M[k][1] = hmm->t[k-1][p7H_DM] * D[k-1][0] ; //kth match state would have to follow the k-1th delete state, having emitted only 1 char so far
+		I[k][1] = 0;
+		D[k][1] = hmm->t[k-1][p7H_MD] * M[k-1][1]  +  hmm->t[k-1][p7H_DD] * D[k-1][1]; //in general only by extending a delete.  For k=3, this could be a transition from M=2, with 2 chars.
+	}
+
+	p_sum = M[model_len][0] + M[model_len][1] + D[model_len][0] + D[model_len][1];
+
+	//general case for all remaining columns
+	col_ptr = 0;
+	for (col=3; col<=length_bound; col++) {
+		prev_col_ptr = 1-col_ptr;
+		surv = 0.0;
+		M[1][col_ptr] = D[1][col_ptr] = 0; //M[i][prev_col_ptr] is zero :  no way the first M state could have emitted >=2 chars
+		I[1][col_ptr] =  hmm->t[1][p7H_II] * I[1][prev_col_ptr];  // 1st insert state can emit chars indefinitely
+		surv += I[1][col_ptr];
+
+		for (k=2; k<=model_len; k++){
+
+			M[k][col_ptr] = hmm->t[k-1][p7H_MM] * M[k-1][prev_col_ptr]  +  hmm->t[k-1][p7H_DM] * D[k-1][prev_col_ptr]  +  hmm->t[k-1][p7H_IM] * I[k-1][prev_col_ptr];
+			I[k][col_ptr] = hmm->t[k][p7H_MI] * M[k][prev_col_ptr]    +  hmm->t[k][p7H_II] * I[k][prev_col_ptr];
+			D[k][col_ptr] = hmm->t[k-1][p7H_MD] * M[k-1][col_ptr]  +  hmm->t[k-1][p7H_DD] * D[k-1][col_ptr];
+
+			if (k<=model_len) {
+				surv +=  I[k][col_ptr] +
+						 M[k][col_ptr] * ( 1 - hmm->t[k][p7H_MD] ) +  //this much of M[k]'s mass will bleed into D[k+1], and thus be added to surv then
+						 D[k][col_ptr] * ( 1 - hmm->t[k][p7H_DD] )  ; //this much of D[k]'s mass will bleed into D[k+1], and thus be added to surv then
+			}
+		}
+
+		p_sum += M[model_len][col_ptr] + D[model_len][col_ptr];
+
+		//printf ("L=%d : X=%.8f, Y=%.8f (X+Y=%.8f) Y/X+Y=%.8f\n", col, p_sum, surv, surv + p_sum, surv / ( surv + p_sum) );
+		surv /= surv + p_sum;
+
+		if (surv < emit_thresh) {
+			hmm->max_length = col;
+			break;
+		}
+
+		col_ptr = 1-col_ptr; // alternating between 0 and 1
+	}
+
+	if (hmm->max_length >= length_bound) return eslERANGE;
+
+	return eslOK;
+
+}
+
 /*------------- end, model construction API ---------------------*/
 
 
@@ -665,6 +855,10 @@ make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRAC
   if (postmsa != NULL) esl_msa_Destroy(postmsa);
   return status;
 }
+
+
+
+
 /*---------------- end, internal functions ----------------------*/
 
 

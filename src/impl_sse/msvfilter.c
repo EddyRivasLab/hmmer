@@ -27,6 +27,7 @@
 
 #include "easel.h"
 #include "esl_sse.h"
+#include "esl_gumbel.h"
 
 #include "hmmer.h"
 #include "impl_sse.h"
@@ -34,7 +35,7 @@
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
-
+ 
 /* Function:  p7_MSVFilter()
  * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  * Incept:    SRE, Wed Dec 26 15:12:25 2007 [Janelia]
@@ -87,9 +88,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
 
   __m128i xJv;                     /* vector for states score                                   */
-  __m128i tbmv;                    /* vector for B->Mk cost                                     */
+  __m128i tjbmv;                   /* vector for cost of moving from either J or N through B to an M state */
   __m128i tecv;                    /* vector for E->C  cost                                     */
-  __m128i tjbv;                    /* vector for NCJ move cost                                  */
   __m128i basev;                   /* offset for scores                                         */
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
@@ -108,15 +108,14 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   /* saturate simd register for overflow test */
   ceilingv = _mm_cmpeq_epi8(biasv, biasv);
-
   basev = _mm_set1_epi8((int8_t) om->base_b);
 
-  tbmv = _mm_set1_epi8((int8_t) om->tbm_b);
+  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
   tecv = _mm_set1_epi8((int8_t) om->tec_b);
-  tjbv = _mm_set1_epi8((int8_t) om->tjb_b);
+
 
   xJv = _mm_subs_epu8(biasv, biasv);
-  xBv = _mm_subs_epu8(basev, tjbv);
+  xBv = _mm_subs_epu8(basev, tjbmv);
 
 #if p7_DEBUGGING
   if (ox->debugging)
@@ -128,11 +127,11 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
     }
 #endif
 
+
   for (i = 1; i <= L; i++)
     {
       rsc = om->rbv[dsq[i]];
       xEv = _mm_setzero_si128();      
-      xBv = _mm_subs_epu8(xBv, tbmv);
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
@@ -172,6 +171,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xEv = _mm_max_epu8(xEv, tempv);
       xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
 
+
       /* immediately detect overflow */
       if (cmp != 0x0000)
 	{ 
@@ -183,7 +183,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xJv = _mm_max_epu8(xJv,xEv);
       
       xBv = _mm_max_epu8(basev, xJv);
-      xBv = _mm_subs_epu8(xBv, tjbv);
+      xBv = _mm_subs_epu8(xBv, tjbmv);
 	  
 #if p7_DEBUGGING
       if (ox->debugging)
@@ -208,6 +208,494 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 }
 /*------------------ end, p7_MSVFilter() ------------------------*/
 
+
+
+/* Function:  p7_SSVFilter_longtarget()
+ * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
+ * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
+ *
+ *
+ * Purpose:   Calculates an approximation of the MSV score for regions of
+ *            sequence <dsq> of length <L> residues, using optimized profile
+ *            <om>, and a preallocated one-row DP matrix <ox>, and captures
+ *            the positions at which such regions exceed the score required
+ *            to be significant in the eyes of the calling function (usually
+ *            p=0.02).  Note that this variant performs only SSV computations,
+ *            never passing through the J state. See comments in
+ *            p7_MSVFilter_longtarget() for details
+ *
+ *            Rather than simply capturing positions at which a score threshold
+ *            is reached, this function (and SSVFilter_longtarget) establishes
+ *            windows around those high-scoring positions. p7_MSVFilter_longtarget
+ *            then merges overlapping windows.
+ *
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            sc_threshv - a precomputed vector containing the score threshold required for a window to be considered "high-scoring"
+ *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
+ *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
+ *			  hit_cnt - RETURN: count of entries in the above two arrays
+ *
+ *
+ * Note:      We misuse the matrix <ox> here, using only a third of the
+ *            first dp row, accessing it as <dp[0..Q-1]> rather than
+ *            in triplets via <{MDI}MX(q)> macros, since we only need
+ *            to store M state values. We know that if <ox> was big
+ *            enough for normal DP calculations, it must be big enough
+ *            to hold the MSVFilter calculation.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, __m128i sc_threshv, int **starts, int** ends, int *hit_cnt)
+{
+
+  register __m128i mpv;        /* previous row values                                       */
+  register __m128i xEv;		   /* E state: keeps max for Mk->E for a single iteration       */
+  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m128i biasv;	   /* emission bias in a vector                                 */
+  uint8_t  xJ;                     /* special states' scores                                    */
+  int i;			   /* counter over sequence positions 1..L                      */
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  __m128i *rsc;			   		   /* will point at om->rbv[x] for residue x[i]                 */
+
+  __m128i tecv;                    /* vector for E->C  cost                                     */
+  __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs              */
+  __m128i basev;                   /* offset for scores                                         */
+  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i tempv;                   /* work vector                                               */
+
+  int cmp;
+  int status;
+
+  /* stuff used to keep track of hits (regions passing the p-threshold)*/
+  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
+  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
+  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
+  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
+  (*starts)[0] = (*ends)[0] = -1;
+  *hit_cnt = 0;
+
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  ox->M   = om->M;
+
+
+  /* Initialization. In offset unsigned  arithmetic, -infinity is 0, and 0 is om->base.
+   */
+  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
+  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
+  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+  xJ   = 0;
+
+  basev = _mm_set1_epi8((int8_t) om->base_b);
+  tecv = _mm_set1_epi8((int8_t) om->tec_b);
+  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
+
+  xBv = _mm_subs_epu8(basev, tjbmv);
+
+  for (i = 1; i <= L; i++) {
+	  rsc = om->rbv[dsq[i]];
+	  xEv = _mm_setzero_si128();
+
+	  /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
+	   * Because ia32 is littlendian, this means a left bit shift.
+	   * Zeros shift on automatically, which is our -infinity.
+	   */
+	  mpv = _mm_slli_si128(dp[Q-1], 1);
+	  for (q = 0; q < Q; q++) {
+		  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+		  sv   = _mm_max_epu8(mpv, xBv);
+		  sv   = _mm_adds_epu8(sv, biasv);
+		  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+		  xEv  = _mm_max_epu8(xEv, sv);
+
+		  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
+		  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
+	  }
+
+
+	  /* test if the pthresh significance threshold has been reached;
+	   * note: don't use _mm_cmpgt_epi8, because it's a signed comparison, which won't work on uint8s */
+	  tempv = _mm_adds_epu8(xEv, sc_threshv);
+	  tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+	  cmp = _mm_movemask_epi8(tempv);
+
+	  if (cmp != 0) {  //hit pthresh, so add position to list and reset values
+		  //ensure hit list is large enough
+		  if (*hit_cnt == hit_arr_size ) {
+			  hit_arr_size *= 10;
+			  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
+			  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
+		  }
+
+		  (*starts)[*hit_cnt] = i -  om->max_length + 1;
+		  (*ends)[*hit_cnt] = i + om->max_length - 1;
+		  (*hit_cnt)++;
+
+		  //we've captured that window, so skip over a bunch of it to avoid redundancy
+		  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
+		  i += om->max_length - om->M - 1;
+
+		  // this will cause values to get reset to xB in next iteration
+		  for (q = 0; q < Q; q++)
+			  dp[q] = _mm_setzero_si128();
+
+	  }
+
+  } /* end loop over sequence residues 1..L */
+
+  return eslOK;
+
+
+  ERROR:
+  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+
+}
+/*------------------ end, p7_SSVFilter_longtarget() ------------------------*/
+
+
+
+/* Function:  p7_MSVFilter_longtarget()
+ * Synopsis:  Finds windows with MSV scores above some threshold (vewy vewy fast, in limited precision)
+ * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
+ *
+ * Purpose:   Calculates an approximation of the MSV score for regions of
+ *            sequence <dsq> of length <L> residues, using optimized profile
+ *            <om>, and a preallocated one-row DP matrix <ox>, and captures
+ *            the positions at which such regions exceed the score required
+ *            to be significant in the eyes of the calling function (usually
+ *            p=0.02).  Note that this will typically simply call
+ *            p7_SSVFilter_longtarget(), as the score threshold is nearly
+ *            always lower than the score required for a pass through the
+ *            J-state to yield a positive score.
+ *
+ *            Rather than simply capturing positions at which a score threshold
+ *            is reached, this function (and SSVFilter_longtarget) establishes
+ *            windows around those high-scoring positions, and merges overlapping
+ *            windows.
+ *
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            bg      - the background model, required for translating a P-value threshold into a score threshold
+ *            P       - p-value below which a region is captured as being above threshold
+ *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
+ *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
+ *			  hit_cnt - RETURN: count of entries in the above two arrays
+ *
+ * Note:      We misuse the matrix <ox> here, using only a third of the
+ *            first dp row, accessing it as <dp[0..Q-1]> rather than
+ *            in triplets via <{MDI}MX(q)> macros, since we only need
+ *            to store M state values. We know that if <ox> was big
+ *            enough for normal DP calculations, it must be big enough
+ *            to hold the MSVFilter calculation.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+{
+  register __m128i mpv;        /* previous row values                                       */
+  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m128i biasv;	   /* emission bias in a vector                                 */
+  uint8_t  xJ;                 /* special states' scores                                    */
+  int i;			           /* counter over sequence positions 1..L                      */
+  int q;			           /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  __m128i *rsc;			        /* will point at om->rbv[x] for residue x[i]                 */
+
+  __m128i xEv_prev;            	 /* E state: keeps the max seen up to the current position i, for window overlap test.  Note that this will always just be xJv + tecv    */
+  __m128i xJv;                     /* vector for states score                                   */
+  __m128i tecv;                    /* vector for E->C  cost                                     */
+  __m128i tjbmv;                    /* vector for [JN]->B->M move cost                                  */
+  __m128i basev;                   /* offset for scores                                         */
+  __m128i sc_threshv;               /* pushes value to saturation if it's above pthresh  */
+  __m128i jthreshv;                /* pushes value to saturation if it's above pthresh  */
+  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i tempv;                   /* work vector                                               */
+
+  float nullsc;
+
+  /*
+   * Computing the score required to let P meet the F1 prob threshold
+   * In original code, converting from a scaled int MSV
+   * score S (the score getting to state E) to a probability goes like this:
+   *  usc =  S - om->tec_b - om->tjb_b - om->base_b;
+   *  usc /= om->scale_b;
+   *  usc -= 3.0;
+   *  P = f ( (usc - nullsc) / eslCONST_LOG2 , mu, lambda)
+   * and we're computing the threshold usc, so reverse it:
+   *  (usc - nullsc) /  eslCONST_LOG2 = inv_f( P, mu, lambda)
+   *  usc = nullsc + eslCONST_LOG2 * inv_f( P, mu, lambda)
+   *  usc += 3
+   *  usc *= om->scale_b
+   *  S = usc +  om->tjb_b + om->base_b
+   *
+   *  Here, I compute threshold with length model based on max_length.  Usually, the
+   *  length of a window returned by this scan will be 2*max_length-1 or longer.  Doesn't
+   *  really matter - in any case, both the bg and om models will change with roughly
+   *  1 bit for each doubling of the length model, so they offset.
+   */
+  float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  p7_bg_SetLength(bg, om->max_length);
+  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
+  int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b + om->tec_b );
+  sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
+
+  int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
+  jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
+
+  if ( sc_thresh < jthresh) {
+	   p7_SSVFilter_longtarget(dsq, L, om, ox, sc_threshv, starts, ends, hit_cnt);
+  } else {
+	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
+	   * second ssv-hit to improve the score of an earlier one. Usually,
+	   * sc_thresh < base. So only bother with msv if sc thresh is surprisingly
+	   *  high. This will require mu of something in the neighborhood of -6.4 bits
+	   *  (see TJW notes Mon Jun  7 10:19:34 EDT 2010 for details)
+	   */
+	  int hit_pthresh;
+	  int e_unchanged;
+	  int      status;
+
+	  //used to track neighboring MSV peaks
+	  int first_peak = -1;
+	  int last_peak = -1;
+	  int hit_jthresh;
+
+	  /* stuff used to keep track of hits (regions passing the p-threshold)*/
+	  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
+	  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
+	  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
+	  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
+	  (*starts)[0] = (*ends)[0] = -1;
+	  *hit_cnt = 0;
+
+	  /* Check that the DP matrix is ok for us. */
+	  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+	  ox->M   = om->M;
+
+	  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
+	   */
+	  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
+	  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+	  xJ   = 0;
+
+
+	  /* saturate simd register for overflow test */
+	  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
+
+	  basev = _mm_set1_epi8((int8_t) om->base_b);
+
+	  tecv = _mm_set1_epi8((int8_t) om->tec_b);
+	  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
+
+	  xJv = _mm_subs_epu8(biasv, biasv);
+	  xBv = _mm_subs_epu8(basev, tjbmv);
+
+	  xEv_prev = _mm_setzero_si128();
+
+
+	#if p7_DEBUGGING
+	  if (ox->debugging)
+		{
+		  uint8_t xB;
+		  xB = _mm_extract_epi16(xBv, 0);
+		  xJ = _mm_extract_epi16(xJv, 0);
+		  p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+		}
+	#endif
+
+
+	  for (i = 1; i <= L; i++)
+	  {
+
+		  rsc = om->rbv[dsq[i]];
+		  xEv = _mm_setzero_si128();
+
+		  /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
+		   * Because ia32 is littlendian, this means a left bit shift.
+		   * Zeros shift on automatically, which is our -infinity.
+		   */
+		  mpv = _mm_slli_si128(dp[Q-1], 1);
+		  for (q = 0; q < Q; q++)
+		  {
+			  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+			  sv   = _mm_max_epu8(mpv, xBv);
+			  sv   = _mm_adds_epu8(sv, biasv);
+			  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+			  xEv  = _mm_max_epu8(xEv, sv);
+
+			  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
+			  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
+		  }
+
+		  if (last_peak == -1) { // haven't seen an above-jthresh peak recently, check if we've hit jthresh now
+			  tempv = _mm_adds_epu8(xEv, jthreshv);
+			  tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+			  hit_jthresh = _mm_movemask_epi8(tempv);
+		  } else {
+			  hit_jthresh = 0xffff; // already passed some above-jthresh peak in the recent past
+		  }
+
+
+		  /* Now the "special" states, which start from Mk->E (->C, ->J->B)
+		   * Use shuffles instead of shifts so when the last max has completed,
+		   * the last four elements of the simd register will contain the
+		   * max value.  Then the last shuffle will broadcast the max value
+		   * to all simd elements.
+		   *
+		   * This is placed here so it can be run while movemask above is blocking
+		   */
+		  tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(2, 3, 0, 1));
+		  xEv = _mm_max_epu8(xEv, tempv);
+		  tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 1, 2, 3));
+		  xEv = _mm_max_epu8(xEv, tempv);
+		  tempv = _mm_shufflelo_epi16(xEv, _MM_SHUFFLE(2, 3, 0, 1));
+		  xEv = _mm_max_epu8(xEv, tempv);
+		  tempv = _mm_srli_si128(xEv, 1);
+		  xEv = _mm_max_epu8(xEv, tempv);
+		  xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
+
+
+		  if (hit_jthresh != 0x0000) {
+			  //test if xE has increased this iteration.  If we go a long way without increasing, then we'll give up on the current window
+			  tempv = _mm_max_epu8(xEv, xEv_prev);
+			  tempv = _mm_cmpeq_epi8(tempv, xEv_prev); //if these are equal, then xEv didn't go up
+			  e_unchanged = _mm_movemask_epi8(tempv);
+
+
+			  if (e_unchanged == 0x0000) { // there was an increase. Establish peaks
+				  xEv_prev = xEv;
+				  if (first_peak == -1)
+					  first_peak = i;
+				  last_peak = i;
+
+				  //check if we've hit pthresh.  If so, reset values and add this region to the list of hits
+				  tempv = _mm_adds_epu8(xEv, sc_threshv);
+				  tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+				  hit_pthresh = _mm_movemask_epi8(tempv);
+				  if (hit_pthresh != 0)
+				  {
+
+					  //ensure hit list is large enough
+					  if (*hit_cnt == hit_arr_size ) {
+						  hit_arr_size *= 10;
+						  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
+						  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
+					  }
+
+					  //add to hit list
+					  (*starts)[*hit_cnt] = first_peak - om->max_length + 1 ;
+					  (*ends)[*hit_cnt] = i + om->max_length - 1;
+					  (*hit_cnt)++;
+
+					  //we've captured that window, so skip over a bunch of it to avoid redundancy
+					  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
+					  i += om->max_length - om->M - 1;
+
+					  // got one peak.  Start scanning for the next one, as though starting from scratch
+					  first_peak = last_peak = -1;
+
+					  //reset xE, xJ, and xB
+					  xJv = _mm_setzero_si128();  //_mm_subs_epu8(biasv, biasv);
+					  xBv = _mm_subs_epu8(basev, tjbmv);
+					  for (q = 0; q < Q; q++)
+							dp[q] = _mm_set1_epi8(0); // this will cause values to get reset to xB in next iteration
+
+				  }
+			  } else if (i > last_peak + om->max_length) {
+				  //been a long time since the last above-jthresh peak was seen;
+				  // give up looking for a J-state-induced extension that will drive the score above sc_thresh
+
+				  first_peak = last_peak = -1;
+
+				  //reset xE, xJ, and xB
+				  xEv_prev = xEv = xJv = _mm_setzero_si128();
+				  xBv = _mm_subs_epu8(basev, tjbmv);
+
+				  //Reset values as if the previous peak hadn't existed, retaining the growth of the current peak
+				  //See end of TW notes feb 25, 2010
+				  tempv = _mm_subs_epu8(xEv_prev, basev);
+				  tempv = _mm_subs_epu8(tempv, tecv);
+				  for (q = 0; q < Q; q++)
+					  dp[q] = _mm_subs_epu8(dp[q], tempv);
+
+			  } //else ... nothing to do, just extend another step
+
+		  }
+
+
+		  xEv = _mm_subs_epu8(xEv, tecv);
+		  xJv = _mm_max_epu8(xJv,xEv);
+
+		  xBv = _mm_max_epu8(basev, xJv);
+		  xBv = _mm_subs_epu8(xBv, tjbmv);
+
+	  } /* end loop over sequence residues 1..L */
+  }
+
+
+  /* whether the window list comes from SSV or MSV computations, we now
+   * merge overlapping windows, compressing list in place.
+   */
+  if ( *hit_cnt > 0 ) {
+	  int merged = 0;
+	  do {
+		  merged = 0;
+
+		  int new_hit_cnt = 0;
+		  for (i=1; i<*hit_cnt; i++) {
+			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
+				  //merge windows
+				  merged = 1;
+				  if ( (*ends)[new_hit_cnt] < (*ends)[i])
+					  (*ends)[new_hit_cnt] = (*ends)[i];
+				  if ( (*starts)[new_hit_cnt] > (*starts)[i])
+  					  (*starts)[new_hit_cnt] = (*starts)[i];
+			  } else {
+				  //new window
+				  new_hit_cnt++;
+				  (*starts)[new_hit_cnt] = (*starts)[i];
+				  (*ends)[new_hit_cnt] = (*ends)[i];
+			  }
+		  }
+		  *hit_cnt = new_hit_cnt + 1;
+	  } while (merged > 0);
+
+	  if ((*starts)[0] <  1)
+		  (*starts)[0] =  1;
+
+	  if ((*ends)[*hit_cnt - 1] >  L)
+		  (*ends)[*hit_cnt - 1] =  L;
+
+  }
+  return eslOK;
+
+
+  ERROR:
+  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+
+}
+/*------------------ end, p7_MSVFilter_longtarget() ------------------------*/
 
 
 

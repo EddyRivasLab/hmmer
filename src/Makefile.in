@@ -45,7 +45,8 @@ PROGS = hmmalign\
 	hmmsim\
 	hmmstat\
 	jackhmmer\
-	phmmer
+	phmmer\
+	nhmmer
 
 HDRS =  hmmer.h\
 	p7_config.h

@@ -174,6 +174,7 @@ typedef struct p7_hmm_s {
   char    *comlog;               /* command line(s) that built model      (optional: NULL) */ /* String, \0-terminated   */
   int      nseq;	         /* number of training sequences          (optional: -1)   */
   float    eff_nseq;             /* effective number of seqs (<= nseq)    (optional: -1)   */
+  int	   max_length;            /* the length that contains all but 1e-7 of the prob mass, based on the model */
   char    *ctime;	         /* creation date                         (optional: NULL) */
   int     *map;	                 /* map of alignment cols onto model 1..M (p7H_MAP)        */ /* Array; map[0]=0 */
   uint32_t checksum;             /* checksum of training sequences        (p7H_CHKSUM)     */
@@ -247,6 +248,7 @@ typedef struct p7_profile_s {
   int     L;		/* current configured target seq length                    */
   int     allocM;	/* max # of nodes allocated in this structure              */
   int     M;		/* number of nodes in the model                            */
+  int     max_length;		/* bound on the length of sequence emitted by single pass though model      */
   float   nj;		/* expected # of uses of J; precalculated from loop config */
 
   /* Info, most of which is a copy from parent HMM:                                       */
@@ -645,6 +647,7 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
+  int    window_length; /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
   float  score;			/* bit score of the sequence (all domains, w/ correction) */
@@ -666,6 +669,8 @@ typedef struct p7_hit_s {
   int      nreported;	/* # of domains satisfying reporting thresholding  */
   int      nincluded;	/* # of domains satisfying inclusion thresholding */
   int      best_domain;	/* index of best-scoring domain in dcl */
+
+  int64_t  subseq_start; /*used to track which subsequence of a full_length target this hit came from, for purposes of removing duplicates */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
 } P7_HIT;
@@ -758,8 +763,17 @@ typedef struct p7_pipeline_s {
   uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
   uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
   uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
+  uint64_t      n_output;	    /* # alignments that make it to the final output (used for nhmmer) */
+  uint64_t      pos_past_msv;	/* # positions that pass MSVFilter()  (used for nhmmer) */
+  uint64_t      pos_past_bias;	/* # positions that pass bias filter  (used for nhmmer) */
+  uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()  (used for nhmmer) */
+  uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()  (used for nhmmer) */
+  uint64_t      pos_output;	    /* # positions that make it to the final output (used for nhmmer) */
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
+  int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
+  int 			W;              /* window length for nhmmer scan */
+
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
 
@@ -772,6 +786,8 @@ typedef struct p7_pipeline_s {
 /*****************************************************************
  * 14. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
+
+#define p7_DEFAULT_WINDOW_BETA  1e-7
 
 enum p7_archchoice_e { p7_ARCH_FAST = 0, p7_ARCH_HAND = 1 };
 enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
@@ -815,6 +831,9 @@ typedef struct p7_builder_s {
   ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
   double               popen;         	 /* gap open probability                                   */
   double               pextend;          /* gap extend probability                                 */
+
+  double               w_beta;    /*beta value used to compute W (window length)   */
+  int                  w_len;     /*W (window length)  explicitly set */
 
   const ESL_ALPHABET  *abc;		 /* COPY of alphabet                                       */
   char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
@@ -975,6 +994,7 @@ extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
 extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
+extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
@@ -1048,7 +1068,7 @@ extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_pipeline.c */
-extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, enum p7_pipemodes_e mode);
+extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
 extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
@@ -1061,6 +1081,7 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
@@ -1119,6 +1140,8 @@ extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
+extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N);
+extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th);
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
 extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);

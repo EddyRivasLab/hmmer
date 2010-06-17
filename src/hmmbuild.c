@@ -124,7 +124,8 @@ static ESL_OPTIONS options[] = {
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,   "--mpi",    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   { "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
   { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
-
+  { "--window_beta", eslARG_REAL,  NULL, NULL, NULL,    NULL,      NULL,    NULL, "tail mass at which window length is determined",        8 },
+  { "--window_length", eslARG_INT, NULL, NULL, NULL,    NULL,      NULL,    NULL, "window length ",                                        8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -280,6 +281,11 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
     if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(cfg->ofp,"# random number seed:               one-time arbitrary\n");
     else                                       fprintf(cfg->ofp,"# random number seed set to:        %d\n", esl_opt_GetInteger(go, "--seed"));
   }
+  if (esl_opt_IsUsed(go, "--window_beta") )
+								         fprintf(cfg->ofp, "# window length beta value:         %g bits\n",  esl_opt_GetReal(go, "--window_beta"));
+  if (esl_opt_IsUsed(go, "--window_length") )
+    								     fprintf(cfg->ofp, "# window length :                   %d\n", esl_opt_GetInteger(go, "--window_length"));
+
   fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
   return eslOK;
@@ -1047,8 +1053,8 @@ output_result(const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P
    */
   if (msa == NULL)
     {
-      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %8s %6s %s\n", " idx", "name",                 "nseq",  "alen",  "mlen",  "eff_nseq",  "re/pos",  "description");
-      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %8s %6s %s\n", "----", "--------------------", "-----", "-----", "-----", "--------",  "------",  "-----------");
+      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %5s %8s %6s %s\n", " idx", "name",                 "nseq",  "alen",  "mlen",  "W", "eff_nseq",  "re/pos",  "description");
+      fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %5s %8s %6s %s\n", "----", "--------------------", "-----", "-----", "-----", "-----", "--------",  "------",  "-----------");
       return eslOK;
     }
 
@@ -1056,12 +1062,13 @@ output_result(const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P
   if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
 	             /* #   name nseq alen M eff_nseq re/pos description*/
-  fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %8.2f %6.3f %s\n",
+  fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %5d %8.2f %6.3f %s\n",
 	  msaidx,
 	  (msa->name != NULL) ? msa->name : "",
 	  msa->nseq,
 	  msa->alen,
 	  hmm->M,
+	  hmm->max_length,
 	  hmm->eff_nseq,
 	  entropy,
 	  (msa->desc != NULL) ? msa->desc : "");

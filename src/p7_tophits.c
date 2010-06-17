@@ -261,7 +261,11 @@ hit_sorter(const void *vh1, const void *vh2)
 
   if      (h1->sortkey < h2->sortkey) return  1;
   else if (h1->sortkey > h2->sortkey) return -1;
-  else                                return  strcmp(h1->name, h2->name);
+  else {
+	  int c = strcmp(h1->name, h2->name);
+	  if (c != 0) 					  return c;
+	  else 							  return  (h1->dcl[0].iali < h2->dcl[0].iali ? 1 : -1 );
+  }
 }
 
 /* Function:  p7_tophits_Sort()
@@ -357,6 +361,41 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   return status;
 }
 
+/* Function:  p7_tophits_GetMaxPositionLength()
+ * Synopsis:  Returns maximum position length in hit list (targets).
+ * Incept:    TJW, Mon May 24 14:16:16 EDT 2010 [Janelia]
+ *
+ * Purpose:   Returns the length of the longest hit location (start/end)
+ * 			  of all the registered hits, in chars. This is useful when
+ * 			  deciding how to format output.
+ *
+ *            The maximum is taken over all registered hits. This
+ *            opens a possible side effect: caller might print only
+ *            the top hits, and the max name length in these top hits
+ *            may be different than the max length over all the hits.
+ *
+ *            Used specifically for nhmmer output, so expects only one
+ *            domain per hit
+ *
+ *            If there are no hits in <h>, or none of the
+ *            hits have names, returns 0.
+ */
+int
+p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
+{
+  int i, max, n;
+  char buffer [11];
+
+  for (max = 0, i = 0; i < h->N; i++) {
+    if (h->unsrt[i].dcl[0].iali > 0) {
+    	n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].iali);
+    	max = ESL_MAX(n, max);
+    	n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].jali);
+    	max = ESL_MAX(n, max);
+    }
+  }
+  return max;
+}
 
 /* Function:  p7_tophits_GetMaxNameLength()
  * Synopsis:  Returns maximum name length in hit list (targets).
@@ -568,6 +607,108 @@ workaround_bug_h74(P7_TOPHITS *th)
   return eslOK;
 }
 
+
+/* Function:  p7_tophits_ComputeEvalues()
+ * Synopsis:  Compute e-values based on pvalues and window sizes.
+ * Incept:    TJW, Thu Mar 25 15:00:52 EDT 2010 [Janelia]
+ *
+ * Purpose:   After nhmmer pipeline has completed, the TopHits object contains
+ * 			  objects with p-values that haven't yet been converted to e-values.
+ * 			  That modification is different for each sequence, and depends on the
+ * 			  size of the window the hit was found in. Set it here, and also
+ * 			  set the sortkey so the output will be sorted correctly.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N)
+{
+  int i, hit_len;	/* counters over hits */
+
+  for (i = 0; i < th->N ; i++)
+  {
+	  hit_len = th->unsrt[i].dcl[0].jali - th->unsrt[i].dcl[0].iali + 1;
+	  th->unsrt[i].pvalue *= (float)N / (float)(th->unsrt[i].window_length - hit_len);
+	  th->unsrt[i].sortkey = -th->unsrt[i].pvalue;
+  }
+  return eslOK;
+}
+
+;
+
+
+/* Function:  p7_tophits_RemoveDuplicates()
+ * Synopsis:  Remove overlapping hits.
+ * Incept:    TJW, Wed Mar 10 13:38:36 EST 2010 [Janelia]
+ *
+ * Purpose:   After nhmmer pipeline has completed, the TopHits object may
+ * 			  contain duplicates if the target was broken into overlapping
+ * 			  windows. Scan through, and remove duplicates.  Since the
+ * 			  duplicates may be incomplete (one sequence is a partial
+ * 			  hit because it's window didn't cover the full length of
+ * 			  the hit), keep the one with better p-value
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
+{
+  int i,j;	/* counters over hits */
+
+  if (th->N<2)
+	  return eslOK;
+
+  int s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
+  int64_t sub_i, sub_j;
+  double p_i, p_j;
+
+  for (i = 0; i < th->N - 1; i++)
+  {
+	  //s_i and e_i are the start and end of a window, regardless of orientation
+	  sub_i = th->hit[i]->subseq_start;
+	  p_i = th->hit[i]->pvalue;
+	  s_i = th->hit[i]->dcl[0].iali;
+	  e_i = th->hit[i]->dcl[0].jali;
+	  dir_i = s_i < e_i ? 1 : -1;
+	  len_i = 1 + dir_i * (e_i - s_i) ;
+
+	  for (j = i+1; j < th->N; j++) {
+		  sub_j = th->hit[j]->subseq_start;
+		  p_j = th->hit[j]->pvalue;
+		  s_j = th->hit[j]->dcl[0].iali;
+		  e_j = th->hit[j]->dcl[0].jali;
+		  dir_j = s_j < e_j ? 1 : -1;
+		  len_j = 1 + dir_j * (e_j - s_j) ;
+
+
+		  if ( 0==esl_strcmp(th->hit[i]->acc, th->hit[j]->acc)  && //same sequence
+				  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
+				  dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
+				  (
+				      ( s_i >= s_j-2 && s_i <= s_j+2) ||  // at least one side is essentially flush (
+					  ( e_i >= e_j-2 && e_i <= e_j+2)
+				  )
+			  ){
+
+			  //force one to go unreported by changing pvalue.
+			  int keep = 0; // 0 := keep i,  1 := keep j
+			  if (s_i==s_j && e_i==e_j) // if same length, choose the one with lower p-value (in case one has, for some unexpected reason, gotten a wildly worse e-value than the other )
+				  keep = p_i < p_j ? 0 : 1;
+			  else // otherwise remove the shorter one (assume that one was cut short by the end of a segment
+				  keep = len_i > len_j ? 0 : 1;
+
+			  if (keep == 0) {
+				  th->hit[j]->pvalue = 100000;
+				  th->hit[j]->score = -100;
+			  } else {
+				  th->hit[i]->pvalue = 100000;
+				  th->hit[i]->score = -100;
+			  }
+		  }
+		}
+  }
+  return eslOK;
+}
 
 
 
@@ -783,6 +924,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int    h;
   int    d;
   int    namew;
+  int    posw;
   int    descw;
   char  *showname;
   int    have_printed_incthresh = FALSE;
@@ -794,13 +936,22 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
   else                      descw = 0;                               /* unlimited desc length is handled separately */
 
-  fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", 
-	  pli->mode == p7_SEARCH_SEQS ? "s" : "");
+  if (pli->long_targets)    posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
 
-  /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
-  fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
-  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
-  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
+  if (pli->long_targets) {
+	  fprintf(ofp, "Scores for complete hit%s:\n",	 pli->mode == p7_SEARCH_SEQS ? "s" : "");
+	  /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
+	  fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", "E-value", " score", " bias", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), posw, "start", posw, "end", "Description");
+	  fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", "-------", "------", "-----", namew, "--------", posw, "-----", posw, "-----", "-----------");
+
+  } else {
+	  fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n",
+		  pli->mode == p7_SEARCH_SEQS ? "s" : "");
+	  /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
+	  fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
+	  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
+	  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
+  }
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
@@ -823,19 +974,30 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	if      (th->hit[h]->flags & p7_IS_NEW)     newness = '+';
 	else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
 	else                                        newness = ' ';
+	if (pli->long_targets) {
+		fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*d %*d ",
+			newness,
+			th->hit[h]->pvalue, // * pli->Z,
+			th->hit[h]->score,
+			eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // domain bias - seems like the right one to use, no?
+			//th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+			namew, showname,
+			posw, th->hit[h]->dcl[d].iali,
+			posw, th->hit[h]->dcl[d].jali);
+	} else {
+		fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
+			newness,
+			th->hit[h]->pvalue * pli->Z,
+			th->hit[h]->score,
+			th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+			th->hit[h]->dcl[d].pvalue / pli->Z,
+			th->hit[h]->dcl[d].bitscore,
+			eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
+			th->hit[h]->nexpected,
+			th->hit[h]->nreported,
+			namew, showname);
+	}
 
-
-	fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
-		newness,
-		th->hit[h]->pvalue * pli->Z,
-		th->hit[h]->score,
-		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
-		th->hit[h]->dcl[d].pvalue * pli->Z,
-		th->hit[h]->dcl[d].bitscore,
-		eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
-		th->hit[h]->nexpected,
-		th->hit[h]->nreported,
-		namew, showname);
 
 	if (textw > 0) fprintf(ofp, "%-.*s\n", descw, th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
 	else           fprintf(ofp, "%s\n",           th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
@@ -867,9 +1029,14 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int namew, descw;
   char *showname;
 
-  fprintf(ofp, "Domain annotation for each %s%s:\n", 
-	  pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
-	  pli->show_alignments ? " (and alignments)" : "");
+  if (pli->long_targets) {
+	  fprintf(ofp, "Annotation for each hit %s:\n",
+			  pli->show_alignments ? " (and alignments)" : "");
+  } else {
+	  fprintf(ofp, "Domain annotation for each %s%s:\n",
+		  pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
+		  pli->show_alignments ? " (and alignments)" : "");
+  }
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
@@ -898,52 +1065,91 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 	}
 
 	/* The domain table is 101 char wide:
-          #     score  bias  c-Evalue  i-Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
-         ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
-           1 ?  123.4  23.1   9.7e-11    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
-         123 ! 1234.5 123.4 123456789 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
+          #     score  bias    Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
+         ---   ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
+           1 ?  123.4  23.1    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
+         123 ! 1234.5 123.4 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
 	*/
-	fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
-	fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
+
+    if (pli->long_targets) {
+    	fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
+        fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
+    } else {
+    	fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
+    	fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
+    }
+
 	nd = 0;
 	for (d = 0; d < th->hit[h]->ndom; d++)
 	  if (th->hit[h]->dcl[d].is_reported) 
 	    {
 	      nd++;
-	      fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
-		      nd,
-		      th->hit[h]->dcl[d].is_included ? '!' : '?',
-		      th->hit[h]->dcl[d].bitscore,
-		      th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-		      th->hit[h]->dcl[d].pvalue * pli->domZ,
-		      th->hit[h]->dcl[d].pvalue * pli->Z,
-		      th->hit[h]->dcl[d].ad->hmmfrom,
-		      th->hit[h]->dcl[d].ad->hmmto,
-		      (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
-		      (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
-		      th->hit[h]->dcl[d].ad->sqfrom,
-		      th->hit[h]->dcl[d].ad->sqto,
-		      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-		      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-		      th->hit[h]->dcl[d].ienv,
-		      th->hit[h]->dcl[d].jenv,
-		      (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-		      (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
+	      if (pli->long_targets) {
+			  fprintf(ofp, " %c %6.1f %5.1f %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
+				  //nd,
+				  th->hit[h]->dcl[d].is_included ? '!' : '?',
+				  th->hit[h]->dcl[d].bitscore,
+				  th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+				  th->hit[h]->dcl[d].pvalue,
+				  th->hit[h]->dcl[d].ad->hmmfrom,
+				  th->hit[h]->dcl[d].ad->hmmto,
+				  (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+				  (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
+				  th->hit[h]->dcl[d].ad->sqfrom,
+				  th->hit[h]->dcl[d].ad->sqto,
+				  (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+				  (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+				  th->hit[h]->dcl[d].ienv,
+				  th->hit[h]->dcl[d].jenv,
+				  (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+				  (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+				  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
+	      } else {
+	    	  fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
+				  nd,
+				  th->hit[h]->dcl[d].is_included ? '!' : '?',
+				  th->hit[h]->dcl[d].bitscore,
+				  th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+				  th->hit[h]->dcl[d].pvalue * pli->domZ,
+				  th->hit[h]->dcl[d].pvalue * pli->Z,
+				  th->hit[h]->dcl[d].ad->hmmfrom,
+				  th->hit[h]->dcl[d].ad->hmmto,
+				  (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+				  (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
+				  th->hit[h]->dcl[d].ad->sqfrom,
+				  th->hit[h]->dcl[d].ad->sqto,
+				  (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+				  (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+				  th->hit[h]->dcl[d].ienv,
+				  th->hit[h]->dcl[d].jenv,
+				  (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+				  (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+				  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
+	      }
 	    }
 
 	if (pli->show_alignments) 
 	  {
-	    fprintf(ofp, "\n  Alignments for each domain:\n");
-	    nd = 0;
+		if (pli->long_targets) {
+			fprintf(ofp, "\n  Alignment:\n");
+		} else {
+			fprintf(ofp, "\n  Alignments for each domain:\n");
+			nd = 0;
+		}
+
 	    for (d = 0; d < th->hit[h]->ndom; d++)
 	      if (th->hit[h]->dcl[d].is_reported) 
 		{
 		  nd++;
-		  fprintf(ofp, "  == domain %d    score: %.1f bits;  conditional E-value: %.2g\n",
-			  nd, 
-			  th->hit[h]->dcl[d].bitscore,
-			  th->hit[h]->dcl[d].pvalue * pli->domZ);
+		  if (!pli->long_targets) {
+			  fprintf(ofp, "  == domain %d", nd );
+		  }
+		  fprintf(ofp, "  score: %.1f bits", th->hit[h]->dcl[d].bitscore);
+		  if (!pli->long_targets) {
+			  fprintf(ofp, ";  conditional E-value: %.2g\n",  th->hit[h]->dcl[d].pvalue * pli->domZ);
+		  } else {
+			  fprintf(ofp, "\n");
+		  }
 		  p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli->show_accessions);
 		  fprintf(ofp, "\n");
 		}
@@ -1087,42 +1293,68 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
   int qaccw  = ((qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
+  int posw;
+  if (pli->long_targets)    posw = ESL_MAX(7, p7_tophits_GetMaxPositionLength(th));
+
   int h,d;
-  
+
+
   if (show_header)
-    {  
-      fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
-      fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
-	      tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
-      fprintf(ofp, "#%*s %*s %*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n", 
-	      tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
+    {
+	  if (pli->long_targets) {
+	  	  fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %9s %6s %5s %s\n",
+			  tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to",  "  E-value", " score", " bias", "description of target");
+	  	  fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %9s %6s %5s %s\n",
+			  tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------", "---------", "------", "-----", "---------------------");
+	  } else {
+		  fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
+		  fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
+			  tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
+		  fprintf(ofp, "#%*s %*s %*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
+			  tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
+	  }
      }
 
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->flags & p7_IS_REPORTED)
-      {
-	d    = th->hit[h]->best_domain;
+    if (th->hit[h]->flags & p7_IS_REPORTED)	{
+    	d    = th->hit[h]->best_domain;
+    	if (pli->long_targets) {
+			fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %9.2g %6.1f %5.1f %s\n",
+				tnamew, th->hit[h]->name,
+				taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
+				qnamew, qname,
+				qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+				th->hit[h]->dcl[d].ad->hmmfrom,
+				th->hit[h]->dcl[d].ad->hmmto,
+				posw, th->hit[h]->dcl[d].iali,
+				posw, th->hit[h]->dcl[d].jali,
+				th->hit[h]->pvalue,
+				th->hit[h]->score,
+				th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+				th->hit[h]->desc ?  th->hit[h]->desc : "-");
+    	} else {
 
-	fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n", 
-		tnamew, th->hit[h]->name,
-		taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
-		qnamew, qname, 
-		qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
-		th->hit[h]->pvalue * pli->Z,
-		th->hit[h]->score,
-		th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
-		th->hit[h]->dcl[d].pvalue * pli->Z,
-		th->hit[h]->dcl[d].bitscore,
-		th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
-		th->hit[h]->nexpected,
-		th->hit[h]->nregions,
-		th->hit[h]->nclustered,
-		th->hit[h]->noverlaps,
-		th->hit[h]->nenvelopes,
-		th->hit[h]->ndom,
-		th->hit[h]->nreported,
-		th->hit[h]->nincluded,
-		th->hit[h]->desc ?  th->hit[h]->desc : "-");
+			fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n",
+				tnamew, th->hit[h]->name,
+				taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
+				qnamew, qname,
+				qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+				th->hit[h]->pvalue * pli->Z,
+				th->hit[h]->score,
+				th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+				th->hit[h]->dcl[d].pvalue * pli->Z,
+				th->hit[h]->dcl[d].bitscore,
+				th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+				th->hit[h]->nexpected,
+				th->hit[h]->nregions,
+				th->hit[h]->nclustered,
+				th->hit[h]->noverlaps,
+				th->hit[h]->nenvelopes,
+				th->hit[h]->ndom,
+				th->hit[h]->nreported,
+				th->hit[h]->nincluded,
+				(th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));
+			  }
       }
   return eslOK;
 }
@@ -1145,6 +1377,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 int
 p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header)
 {
+
   int qnamew = ESL_MAX(20, strlen(qname));
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
   int qaccw  = (qacc ? ESL_MAX(10, strlen(qacc)) : 10);

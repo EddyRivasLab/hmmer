@@ -135,6 +135,10 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,     "42", NULL, "n>=0",    NULL,    NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",   12 },
+
+  { "--window_beta", eslARG_REAL,  NULL, NULL, NULL,       NULL,    NULL,  NULL,           "not used", /* put here by TW to overcome esl_getopts error */ 999 },
+  { "--window_length", eslARG_INT, NULL, NULL, NULL,       NULL,    NULL,  NULL,           "not used",      	                                          999 },
+
 #ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU","n>=0", NULL,    NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
 #endif
@@ -599,7 +603,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    {
 	      info[i].th  = p7_tophits_Create(); 
 	      info[i].om  = p7_oprofile_Clone(om);
-	      info[i].pli = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	      info[i].pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	      p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
@@ -1105,7 +1109,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  th  = p7_tophits_Create(); 
-	  pli = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	  p7_pli_NewModel(pli, om, bg);
 
 	  /* Send to all the workers the optimized model to search with */
@@ -1410,7 +1414,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  th  = p7_tophits_Create(); 
-	  pli = p7_pipeline_Create(go, om->M, 400, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	  p7_pli_NewModel(pli, om, bg);
 
 	  /* receive a sequence block from the master */
@@ -1630,6 +1634,17 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
+#ifdef HAVE_FLUSH_ZERO_MODE
+  /* In order to avoid the performance penalty dealing with sub-normal
+   * values in the floating point calculations, set the processor flag
+   * so sub-normals are "flushed" immediately to zero.
+   * On OS X, need to reset this flag for each thread
+   * (see TW notes 05/08/10 for details)
+   */
+  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+#endif
+
+
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
 

@@ -425,6 +425,7 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->acc)  fprintf(fp, "ACC   %s\n", hmm->acc);
   if (hmm->desc) fprintf(fp, "DESC  %s\n", hmm->desc);
   fprintf(fp, "LENG  %d\n", hmm->M);
+  if (hmm->max_length > 0) fprintf(fp, "MAX_LENG  %d\n", hmm->max_length);
   fprintf(fp, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type));
   fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)  ? "yes" : "no");
   fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)  ? "yes" : "no");
@@ -838,6 +839,11 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((hmm->M = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
+      else if (strcmp(tag, "MAX_LENG") == 0) {
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAX_LENG line");
+	if ((hmm->max_length = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXLENG line", tok1);
+      }
+
       else if (strcmp(tag, "ALPH") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
 	if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
@@ -1236,6 +1242,11 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
 	if ((hmm->M = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
+
+      else if (strcmp(tag, "MAX_LENG") == 0) {
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAX_LENG line");
+	if ((hmm->max_length = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXLENG line", tok1);
+      }
 
       else if (strcmp(tag, "ALPH") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
