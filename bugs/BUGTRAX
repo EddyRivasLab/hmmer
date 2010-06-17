@@ -1,3 +1,20 @@
+ID              h82
+TITLE           hmmbuild corrupts resave alignment on all-insert seq
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J6/73
+REPORTED_BY     Kevin Horan <khoran@cs.ucr.edu>
+OPENED_DATE     SRE, Sun Jun 13 12:23:10 2010
+CLOSED_DATE     SRE, Sun Jun 13 12:23:12 2010
+DESCRIPTION     
+  hmmbuild crashed on a particular input alignment, with memory
+  corruption. Culprit is a sequence that is all insert states, all in
+  one insertion internal in the model.  Problem was in
+  tracealign.c:map_new_msa(), which only set k at first D or M
+  state. Fix was to rewrite (and greatly simplify) the calculation of
+  inscount[], using insnum[] array.
+//
 ID              h81
 TITLE           dombias output was in nats, not bits
 AFFECTS         3.0 and earlier
