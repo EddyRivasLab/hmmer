@@ -291,6 +291,7 @@
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
 
 
+
 ################################################################
 # Fixed bug tests
 ################################################################
@@ -299,7 +300,7 @@
 1 exercise  h39                  @src/hmmsearch@ !testsuite/M1.hmm! !testsuite/M1.sto!
 1 exercise  h45                  !testsuite/i4-zerolength-seqs.sh! @@ !! %MINIFAM.HMM% %OUTFILES%
 1 exercise  h50                  !testsuite/i5-hmmbuild-naming.pl! @@ !! %OUTFILES%
-1 exercise  h82                  !testsuite/i16-build-allins.pl!   @@ !! %OUTFILES%
+
 
 ################################################################
 # valgrind tests  (optional. 'make SQCLEVEL=3 check')
