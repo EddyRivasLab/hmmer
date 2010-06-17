@@ -264,6 +264,7 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
 	    int **ret_matuse, int **ret_matmap, int *ret_alen)
 {
   int *inscount = NULL;	  /* inscount[k=0..M] == max # of inserts in node k */
+  int *insnum   = NULL;   /* insct[k=0..M] == # of inserts in node k in current trace */
   int *matuse   = NULL;	  /* matuse[k=1..M] == TRUE|FALSE: does node k map to an alignment column */
   int *matmap   = NULL;	  /* matmap[k=1..M]: if matuse[k] TRUE, what column 1..alen does node k map to */
   int  idx;		  /* counter over sequences */
@@ -274,56 +275,32 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
   int  status;
   
   ESL_ALLOC(inscount, sizeof(int) * (M+1));   
+  ESL_ALLOC(insnum,   sizeof(int) * (M+1));   
   ESL_ALLOC(matuse,   sizeof(int) * (M+1)); matuse[0] = 0;
   ESL_ALLOC(matmap,   sizeof(int) * (M+1)); matmap[0] = 0;
   esl_vec_ISet(inscount, M+1, 0);
   if (optflags & p7_ALL_CONSENSUS_COLS) esl_vec_ISet(matuse+1, M, TRUE); 
   else                                  esl_vec_ISet(matuse+1, M, FALSE);
 
-  for (idx = 0; idx < nseq; idx++) 
+  /* Collect inscount[], matuse[] in a fairly general way 
+   * (either profile or core traces work)
+   */
+  for (idx = 0; idx < nseq; idx++)
     {
-      nins = 0;
-      k    = 0;
+      esl_vec_ISet(insnum, M+1, 0);
       for (z = 1; z < tr[idx]->N; z++) 
 	{
-	  switch (tr[idx]->st[z]) {
-	  case p7T_I:                                nins++; break;
-	  case p7T_N: if (tr[idx]->st[z-1] == p7T_N) nins++; break;
-	  case p7T_C: if (tr[idx]->st[z-1] == p7T_C) nins++; break;
-	    
-	  case p7T_M: /* M,D: record max. reset ctr; M only: set matuse[] */
-	    k             = tr[idx]->k[z];	/* k++ doesn't work. May be a B->X->Mk fragment entry */
-	    inscount[k-1] = ESL_MAX(nins, inscount[k-1]); 
-	    matuse[k]     = TRUE;
-	    nins          = 0;
-	    break;
-
-	  case p7T_D: /* Can handle I->D transitions even though currently not in H3 models */
-	    k             = tr[idx]->k[z];      /* k++ doesn't work; see above */
-	    inscount[k-1] = ESL_MAX(nins, inscount[k-1]); 
-	    nins          = 0;
-	    break;
-
-	  case p7T_T: /* T: record C-tail max, for a profile trace */
-	    inscount[M] = ESL_MAX(nins, inscount[M]);
-	    break;
-
-	  case p7T_E: /* this handles case of core traces, which do have I_M state  */
-	    inscount[k] = ESL_MAX(nins, inscount[k]); /* [M] doesn't work, because of {DMI}k->X->E frag exit */
-	    break;
-
-	  case p7T_B: /* B: record N-tail max for a profile trace; I0 for a core trace  */
-	    inscount[0] = ESL_MAX(nins, inscount[0]); 
-	    nins = 0;
-	    break;
-
-	  case p7T_S: break;	/* don't need to do anything on S,X states */
-	  case p7T_X: break;
-
+      	  switch (tr[idx]->st[z]) {
+	  case p7T_I:                                insnum[tr[idx]->k[z]]++; break;
+	  case p7T_N: if (tr[idx]->st[z-1] == p7T_N) insnum[0]++;             break;
+	  case p7T_C: if (tr[idx]->st[z-1] == p7T_C) insnum[M]++;             break;
+	  case p7T_M: matuse[tr[idx]->k[z]] = TRUE;                           break;
 	  case p7T_J: p7_Die("J state unsupported");
-	  default:    p7_Die("Unrecognized statetype %d", tr[idx]->st[z]);
+	  default:                                                            break;
 	  }
 	}
+      for (k = 0; k <= M; k++) 
+	inscount[k] = ESL_MAX(inscount[k], insnum[k]);
     }
 
   /* if we're trimming N and C off, reset inscount[0], inscount[M] to 0. */
@@ -336,6 +313,7 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
     else           { matmap[k] = alen;   alen +=   inscount[k]; }
   }
 
+  free(insnum);
   *ret_inscount = inscount;
   *ret_matuse   = matuse;
   *ret_matmap   = matmap;
@@ -343,9 +321,10 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
   return eslOK;
 
  ERROR:
-  if (inscount != NULL) free(inscount); 
-  if (matuse   != NULL) free(matuse);
-  if (matmap   != NULL) free(matmap);
+  if (inscount) free(inscount); 
+  if (insnum)   free(insnum);
+  if (matuse)   free(matuse);
+  if (matmap)   free(matmap);
   *ret_inscount = NULL;
   *ret_matuse   = NULL;
   *ret_matmap   = NULL;
@@ -578,7 +557,8 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
  *           msa->rf[0..alen-1] = 'x' | '.' is the simplest convention;
  *           msa->rf is a NUL-terminated string (msa->rf[alen] = '\0')
  *
- * Args:     M      - profile length
+ * Args:     msa    - alignment to annotate (<msa->rf> is allocated, set)
+ *           M      - profile length
  *           matuse - matuse[1..M] == TRUE | FALSE : is this match state represented
  *                    by a column in the alignment.
  *           matmap - matmap[1..M] == (1..alen): if matuse[k], then what alignment column
