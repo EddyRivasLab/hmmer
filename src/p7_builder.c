@@ -122,10 +122,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->EfN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")        : 200;
   bld->Eft        = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")        : 0.04;
 
-  bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--window_length")) ?  esl_opt_GetInteger(go, "--window_length"): -1;
-  bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--window_beta"))   ?  esl_opt_GetReal   (go, "--window_beta")    : p7_DEFAULT_WINDOW_BETA;
-  if ( bld->w_beta < 0 || bld->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
-
   /* Normally we reinitialize the RNG to original seed before calibrating each model.
    * This eliminates run-to-run variation.
    * As a special case, seed==0 means choose an arbitrary seed and shut off the
@@ -336,7 +332,6 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   P7_TRACE  **tr       = NULL;
   P7_TRACE ***tr_ptr   = (opt_trarr != NULL || opt_postmsa != NULL) ? &tr : NULL;
   int         status;
-
   if ((status =  validate_msa         (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  esl_msa_Checksum     (msa, &checksum))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to calculate checksum"); 
   if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
@@ -350,6 +345,8 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 
   if (bld->w_len > 0)
 	  hmm->max_length = bld->w_len;
+  else if (bld->w_beta == 0.0)
+	  hmm->max_length = hmm->M *4;
   else if ((status =  p7_Builder_MaxLength      (hmm, bld->w_beta))               != eslOK) goto ERROR;
 
   hmm->checksum = checksum;

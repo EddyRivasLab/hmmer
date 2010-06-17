@@ -490,6 +490,12 @@ serial_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       info[i].bg = p7_bg_Create(cfg->abc);
       info[i].bld = p7_builder_Create(go, cfg->abc);
+
+      //special arguments for hmmbuild
+      info[i].bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--window_length")) ?  esl_opt_GetInteger(go, "--window_length"): -1;
+      info[i].bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--window_beta"))   ?  esl_opt_GetReal   (go, "--window_beta")    : p7_DEFAULT_WINDOW_BETA;
+      if ( info[i].bld->w_beta < 0 || info[i].bld->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
+
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
 #ifdef HMMER_THREADS
       info[i].queue = queue;
@@ -765,6 +771,13 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (xstatus == eslOK) { if ((cfg->abc = esl_alphabet_Create(type))      == NULL)    xstatus = eslEMEM; }
   if (xstatus == eslOK) { wn = 4096;  if ((wbuf = malloc(wn * sizeof(char))) == NULL) xstatus = eslEMEM; }
   if (xstatus == eslOK) { if ((bld = p7_builder_Create(go, cfg->abc))     == NULL)    xstatus = eslEMEM; }
+
+  //special arguments for hmmbuild
+  bld->w_len      = (go != NULL && esl_opt_IsOn (go, "--window_length")) ?  esl_opt_GetInteger(go, "--window_length"): -1;
+  bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--window_beta"))   ?  esl_opt_GetReal   (go, "--window_beta")    : p7_DEFAULT_WINDOW_BETA;
+  if ( bld->w_beta < 0 || bld->w_beta > 1  ) goto ERROR;
+
+
   MPI_Reduce(&xstatus, &status, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD); /* everyone sends xstatus back to master */
   if (xstatus != eslOK) {
     if (wbuf != NULL) free(wbuf);
