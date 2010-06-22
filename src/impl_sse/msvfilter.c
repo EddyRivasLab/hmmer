@@ -225,9 +225,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  *            p7_MSVFilter_longtarget() for details
  *
  *            Rather than simply capturing positions at which a score threshold
- *            is reached, this function (and SSVFilter_longtarget) establishes
- *            windows around those high-scoring positions. p7_MSVFilter_longtarget
- *            then merges overlapping windows.
+ *            is reached, this function establishes windows around those
+ *            high-scoring positions. p7_MSVFilter_longtarget then merges
+ *            overlapping windows.
  *
  *
  * Args:      dsq     - digital target sequence, 1..L
@@ -272,6 +272,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i basev;                   /* offset for scores                                         */
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
+  __m128i tempv2;                   /* work vector                                               */
 
   int cmp;
   int status;
@@ -344,7 +345,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 		  //we've captured that window, so skip over a bunch of it to avoid redundancy
 		  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-		  i += om->max_length - om->M - 1;
+		 // i += om->max_length - om->M - 1;
 
 		  // this will cause values to get reset to xB in next iteration
 		  for (q = 0; q < Q; q++)
@@ -459,6 +460,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
   int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b + om->tec_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
+
+  float sc_thresh2 =  nullsc  + (invP * eslCONST_LOG2) + 3;
 
   int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
   jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
@@ -610,7 +613,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 					  //we've captured that window, so skip over a bunch of it to avoid redundancy
 					  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-					  i += om->max_length - om->M - 1;
+					  //i += om->max_length - om->M - 1;
 
 					  // got one peak.  Start scanning for the next one, as though starting from scratch
 					  first_peak = last_peak = -1;
@@ -1130,8 +1133,10 @@ main(int argc, char **argv)
 /*---------------------- end, example ---------------------------*/
 
 
-
-
 /*****************************************************************
  * @LICENSE@
  *****************************************************************/
+
+
+
+

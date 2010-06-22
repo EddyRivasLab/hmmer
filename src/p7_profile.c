@@ -159,6 +159,7 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   dst->L           = src->L;
   dst->allocM      = src->allocM;
   dst->M           = src->M;
+  dst->max_length  = src->max_length;
   dst->nj          = src->nj;
 
   dst->roff        = src->roff;

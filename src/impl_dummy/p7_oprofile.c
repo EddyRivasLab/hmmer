@@ -155,6 +155,28 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
   return p7_ReconfigLength(om, L);
 }
 
+/* Function:  p7_oprofile_ReconfigMSVLength()
+ * Synopsis:  Set the target sequence length of the MSVFilter part of the model.
+ * Incept:    SRE, Tue Dec 16 13:39:17 2008 [Janelia]
+ *
+ * Purpose:   Given an  already configured model <om>, quickly reset its
+ *            expected length distribution for a new mean target sequence
+ *            length of <L>, only for the part of the model that's used
+ *            for the accelerated MSV filter.
+ *
+ *            The acceleration pipeline uses this to defer reconfiguring the
+ *            length distribution of the main model, mostly because hmmscan
+ *            reads the model in two pieces, MSV part first, then the rest.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
+{
+	return p7_ReconfigLength(om, L);
+}
+
+
 /* Function:  p7_oprofile_ReconfigRestLength()
  * Synopsis:  Set the target sequence length of the main profile.
  * Incept:    MSF Tue Nov 3, 2009 [Janelia]

@@ -212,16 +212,16 @@ p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
   if (gx1->L != gx2->L) return eslFAIL;
   
   for (i = 0; i <= gx1->L; i++)
-    {
+  {
       for (k = 1; k <= gx1->M; k++) /* k=0 is a boundary; doesn't need to be checked */
-	{
-	  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_M],  gx2->dp[i][k * p7G_NSCELLS + p7G_M], tolerance) != eslOK) return eslFAIL;
-	  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_I],  gx2->dp[i][k * p7G_NSCELLS + p7G_I], tolerance) != eslOK) return eslFAIL;
-	  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
-	}
+      {
+		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_M],  gx2->dp[i][k * p7G_NSCELLS + p7G_M], tolerance) != eslOK) return eslFAIL;
+		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_I],  gx2->dp[i][k * p7G_NSCELLS + p7G_I], tolerance) != eslOK) return eslFAIL;
+		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
+      }
       for (x = 0; x < p7G_NXCELLS; x++)
-	if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
-    }
+    	  if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
+  }
   return eslOK;	
 }
 
@@ -273,11 +273,11 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
   
   /* DP matrix data */
   for (i = istart; i <= iend; i++)
-    {
+  {
       fprintf(ofp, "%3d M ", i);
       for (k = kstart; k <= kend;        k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_M]);
       if (show_specials) 
-	for (x = 0;    x <  p7G_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, gx->xmx[  i * p7G_NXCELLS + x]);
+    	  for (x = 0;    x <  p7G_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, gx->xmx[  i * p7G_NXCELLS + x]);
       fprintf(ofp, "\n");
 
       fprintf(ofp, "%3d I ", i);
@@ -287,7 +287,7 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
       fprintf(ofp, "%3d D ", i);
       for (k = kstart; k <= kend;        k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_D]);
       fprintf(ofp, "\n\n");
-    }
+  }
   return eslOK;
 }
 
@@ -316,24 +316,24 @@ gmx_testpattern(P7_GMX *gx, int M, int L)
   for (i = 0; i <= L; i++)
     for (k = 0; k <= M; k++)
       for (s = 0; s < p7G_NSCELLS; s++)
-	{
-	  if (gx->dp[i][k*p7G_NSCELLS+s] != n) esl_fatal("gmx unit test failed: test pattern corrupted");
-	  n++;
-	}
+		{
+		  if (gx->dp[i][k*p7G_NSCELLS+s] != n) esl_fatal("gmx unit test failed: test pattern corrupted");
+		  n++;
+		}
   
   /* Reading it back via the dp_mem vector itself ought to be the same */
   if (gx->allocR == gx->validR && gx->ncells == gx->validR*gx->allocW)
-    {
+  {
       n2 = 0;
       for (i = 0; i < gx->ncells; i++)
-	for (s = 0; s < p7G_NSCELLS; s++)
-	  {
-	    if (gx->dp_mem[i*p7G_NSCELLS+s] != n2) esl_fatal("gmx unit test failed: test pattern corrupted (2nd test)");
-	    n2++;
-	  }
+		for (s = 0; s < p7G_NSCELLS; s++)
+		  {
+			if (gx->dp_mem[i*p7G_NSCELLS+s] != n2) esl_fatal("gmx unit test failed: test pattern corrupted (2nd test)");
+			n2++;
+		  }
       /* and the number of cells ought to match too */
       if (n != n2) esl_fatal("gmx unit test failed: unexpected # of cells");
-    }
+  }
 }
 
 

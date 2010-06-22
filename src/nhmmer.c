@@ -30,11 +30,19 @@
 
 #include "hmmer.h"
 
+
+/* set the max residue count to 1 meg when reading a block */
+#ifdef P7_IMPL_DUMMY_INCLUDED
+#define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
+#else
+#define NHMMER_MAX_RESIDUE_COUNT MAX_RESIDUE_COUNT   /*from esl_sqio_(ascii|ncbi).c*/
+#endif
+
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
 #endif /*HMMER_THREADS*/
-  P7_BG            *bg;	         /* null model                              */
+  P7_BG            *bg;             /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
@@ -53,6 +61,7 @@ typedef struct {
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
 #endif
+
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
@@ -242,9 +251,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 //  if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# targ <seqfile> format asserted:  %s\n", esl_opt_GetString(go, "--tformat"));
   if (esl_opt_IsUsed(go, "--w_beta"))
-  								         fprintf(ofp, "# window length beta value:        %g\n", esl_opt_GetReal(go, "--w_beta"));
+                                           fprintf(ofp, "# window length beta value:        %g\n", esl_opt_GetReal(go, "--w_beta"));
   if (esl_opt_IsUsed(go, "--w_length") )
-    								     fprintf(ofp, "# window length :                  %d\n", esl_opt_GetInteger(go, "--w_length"));
+                                         fprintf(ofp, "# window length :                  %d\n", esl_opt_GetInteger(go, "--w_length"));
   #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(go, "--cpu"));  
 #endif
@@ -260,23 +269,23 @@ main(int argc, char **argv)
 {
   int              status   = eslOK;
 
-  ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
+  ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
   struct cfg_s     cfg;         /* configuration data                      */
 
   /* Set processor specific flags */
   impl_Init();
 
-  /* Initialize what we can in the config structure (without knowing the alphabet yet) 
+  /* Initialize what we can in the config structure (without knowing the alphabet yet)
    */
   cfg.hmmfile    = NULL;
   cfg.dbfile     = NULL;
 
-  cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
-  cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
-  cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
+  cfg.do_mpi     = FALSE;               /* this gets reset below, if we init MPI */
+  cfg.nproc      = 0;                   /* this gets reset below, if we init MPI */
+  cfg.my_rank    = 0;                   /* this gets reset below, if we init MPI */
 
   /* Initializations */
-  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
+  p7_FLogsumInit();        /* we're going to use table-driven Logsum() approximations at times */
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
   /* Figure out who we are, and send control there: 
@@ -296,7 +305,7 @@ main(int argc, char **argv)
       MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
 
       if (cfg.my_rank > 0)  status = mpi_worker(go, &cfg);
-      else 		    status = mpi_master(go, &cfg);
+      else             status = mpi_master(go, &cfg);
 
       MPI_Finalize();
   }
@@ -330,7 +339,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
   /*either the two above or ones below will be used*/
   //int              qhformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
-  //ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                       */
+  //ESL_SQFILE      *qfp      = NULL;          /* open qfile                                       */
   //ESL_SQ          *qsq      = NULL;               /* query sequence                                   */
 
   int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
@@ -393,7 +402,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status == eslEFORMAT)   esl_fatal("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
   else if (status != eslOK)        esl_fatal("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);
 
-
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
@@ -415,7 +423,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
-
   /* <abc> is not known 'til first HMM is read.   Could be DNA or RNA*/
   qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
   if (qhstatus == eslOK) {
@@ -423,23 +430,23 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
       dbfp->abc = abc;
 
-      for (i = 0; i < infocnt; ++i)	{
-		  info[i].pli   = NULL;
-		  info[i].th    = NULL;
-		  info[i].om    = NULL;
-		  info[i].bg    = p7_bg_Create(abc);
+      for (i = 0; i < infocnt; ++i)    {
+          info[i].pli   = NULL;
+          info[i].th    = NULL;
+          info[i].om    = NULL;
+          info[i].bg    = p7_bg_Create(abc);
 #ifdef HMMER_THREADS
-		  info[i].queue = queue;
+          info[i].queue = queue;
 #endif
       }
 
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i) {
-		  block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
-		  if (block == NULL) 	      esl_fatal("Failed to allocate sequence block");
+          block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
+          if (block == NULL)           esl_fatal("Failed to allocate sequence block");
 
-		  status = esl_workqueue_Init(queue, block);
-		  if (status != eslOK)	      esl_fatal("Failed to add block to work queue");
+          status = esl_workqueue_Init(queue, block);
+          if (status != eslOK)          esl_fatal("Failed to add block to work queue");
       }
 #endif
   }
@@ -448,11 +455,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   while (qhstatus == eslOK) {
 
       if (window_length > 0)
-    	  hmm->max_length = window_length;
+          hmm->max_length = window_length;
       else if (window_beta > 0)
-    	  p7_Builder_MaxLength(hmm, window_beta);
+          p7_Builder_MaxLength(hmm, window_beta);
       else if (hmm->max_length == 0 ) {
-    	  p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
+          p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
       }
 
       P7_PROFILE      *gm      = NULL;
@@ -463,9 +470,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1) {
-		  if (! esl_sqfile_IsRewindable(dbfp))
-			esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
-		  esl_sqfile_Position(dbfp, 0);
+          if (! esl_sqfile_IsRewindable(dbfp))
+            esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
+          esl_sqfile_Position(dbfp, 0);
       }
 
       fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M);
@@ -481,14 +488,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       for (i = 0; i < infocnt; ++i) {
-		  /* Create processing pipeline and hit list */
-		  info[i].th  = p7_tophits_Create();
-		  info[i].om  = p7_oprofile_Clone(om);
-		  info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-		  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+          /* Create processing pipeline and hit list */
+          info[i].th  = p7_tophits_Create();
+          info[i].om  = p7_oprofile_Clone(om);
+          info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+          p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
-		  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+          if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
       }
 
@@ -499,33 +506,32 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       sstatus = serial_loop(info, dbfp);
 #endif
       switch(sstatus) {
-		case eslEFORMAT:
-		  esl_fatal("Parse failed (sequence file %s):\n%s\n",
-				    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-		  break;
-		case eslEOF:
-		  /* do nothing */
-		  break;
-		default:
-		  esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
+        case eslEFORMAT:
+          esl_fatal("Parse failed (sequence file %s):\n%s\n",
+                    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+          break;
+        case eslEOF:
+          /* do nothing */
+          break;
+        default:
+          esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
       }
-
 
       //need to re-compute e-values before merging (when list will be sorted)
       int resCnt = 0;
       for (i = 0; i < infocnt; ++i)
-    	  resCnt += info[i].pli->nres;
+          resCnt += info[i].pli->nres;
       for (i = 0; i < infocnt; ++i)
-    	  p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt);
+          p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt);
 
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i) {
-		  p7_tophits_Merge(info[0].th, info[i].th);
-		  p7_pipeline_Merge(info[0].pli, info[i].pli);
+          p7_tophits_Merge(info[0].th, info[i].th);
+          p7_pipeline_Merge(info[0].pli, info[i].pli);
 
-		  p7_pipeline_Destroy(info[i].pli);
-		  p7_tophits_Destroy(info[i].th);
-		  p7_oprofile_Destroy(info[i].om);
+          p7_pipeline_Destroy(info[i].pli);
+          p7_tophits_Destroy(info[i].th);
+          p7_oprofile_Destroy(info[i].om);
       }
 
 
@@ -535,11 +541,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       p7_tophits_Threshold(info->th, info->pli);
 
+      //tally up total number of hits and target coverage
+      info->pli->n_output = info->pli->pos_output = 0;
+      for (i = 0; i < info->th->N; i++) {
+          if (info->th->hit[i]->dcl[0].is_reported || info->th->hit[i]->dcl[0].is_included) {
+              info->pli->n_output++;
+              info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
+          }
+      }
+
+
       p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
 
       if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, info->th, info->pli, (nquery == 1));
-      //if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, info->th, info->pli, (nquery == 1));
   
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, info->pli, w);
@@ -547,18 +562,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Output the results in an MSA (-A option) */
       if (afp) {
-    	  ESL_MSA *msa = NULL;
+          ESL_MSA *msa = NULL;
 
-    	  if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) {
-			if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-			else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
+          if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) {
+            if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+            else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
 
-			fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
-    	  }  else {
-    		  fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n");
-    	  }
-	  
-    	  esl_msa_Destroy(msa);
+            fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
+          }  else {
+              fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n");
+          }
+
+          esl_msa_Destroy(msa);
       }
 
       p7_pipeline_Destroy(info->pli);
@@ -596,7 +611,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (ncpus > 0) {
       esl_workqueue_Reset(queue);
       while (esl_workqueue_Remove(queue, (void **) &block) == eslOK) {
-    	  esl_sq_DestroyBlock(block);
+          esl_sq_DestroyBlock(block);
       }
       esl_workqueue_Destroy(queue);
       esl_threads_Destroy(threadObj);
@@ -634,11 +649,11 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
   if (dbsq->abc->complement != NULL)
-	  dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
+      dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
 #endif /*eslAUGMENT_ALPHABET*/
 
 
-  wstatus = esl_sqio_ReadWindow(dbfp, 0, MAX_RESIDUE_COUNT, dbsq);
+  wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 
   while (wstatus == eslOK ) {
 
@@ -648,51 +663,52 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
-      P7_DOMAIN *dcl;
-	  // modify hit positions to account for the position of the window in the full sequence
-	  for (i=prev_hit_cnt; i < info->th->N ; i++) {
-		  dcl = info->th->unsrt[i].dcl;
-		  dcl->ienv += dbsq->start - 1;
-		  dcl->jenv += dbsq->start - 1;
-		  dcl->iali += dbsq->start - 1;
-		  dcl->jali += dbsq->start - 1;
-		  dcl->ad->sqfrom += dbsq->start - 1;
-		  dcl->ad->sqto += dbsq->start - 1;
-	  }
 
+
+      P7_DOMAIN *dcl;
+      // modify hit positions to account for the position of the window in the full sequence
+      for (i=prev_hit_cnt; i < info->th->N ; i++) {
+          dcl = info->th->unsrt[i].dcl;
+          dcl->ienv += dbsq->start - 1;
+          dcl->jenv += dbsq->start - 1;
+          dcl->iali += dbsq->start - 1;
+          dcl->jali += dbsq->start - 1;
+          dcl->ad->sqfrom += dbsq->start - 1;
+          dcl->ad->sqto += dbsq->start - 1;
+      }
 
 #ifdef eslAUGMENT_ALPHABET
-	  //reverse complement
+      //reverse complement
       if (dbsq->abc->complement != NULL)
       {
-    	  prev_hit_cnt = info->th->N;
-    	  esl_sq_Copy(dbsq,dbsq_revcmp);
-		  esl_sq_ReverseComplement(dbsq_revcmp);
-		  p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq_revcmp, info->th);
-		  p7_pipeline_Reuse(info->pli); // prepare for next search
+          prev_hit_cnt = info->th->N;
+          esl_sq_Copy(dbsq,dbsq_revcmp);
+          esl_sq_ReverseComplement(dbsq_revcmp);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq_revcmp, info->th);
+          p7_pipeline_Reuse(info->pli); // prepare for next search
 
-		  for (i=prev_hit_cnt; i < info->th->N ; i++) {
-			  dcl = info->th->unsrt[i].dcl;
-			  // modify hit positions to account for the position of the window in the full sequence
-			  dcl->ienv = dbsq_revcmp->start - dcl->ienv + 1;
-			  dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
-			  dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
-			  dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
-			  dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
-			  dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
+          for (i=prev_hit_cnt; i < info->th->N ; i++) {
+              dcl = info->th->unsrt[i].dcl;
+              // modify hit positions to account for the position of the window in the full sequence
+              dcl->ienv = dbsq_revcmp->start - dcl->ienv + 1;
+              dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
+              dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
+              dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
+              dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
+              dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
 
-		  }
+          }
 
-		  info->pli->nres += dbsq_revcmp->W;
+          info->pli->nres += dbsq_revcmp->W;
 
       }
 #endif /*eslAUGMENT_ALPHABET*/
 
-      wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, MAX_RESIDUE_COUNT, dbsq);
+      wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, NHMMER_MAX_RESIDUE_COUNT, dbsq);
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
-    	  info->pli->nseqs++;
-    	  esl_sq_Reuse(dbsq);
-    	  wstatus = esl_sqio_ReadWindow(dbfp, 0, MAX_RESIDUE_COUNT, dbsq);
+          info->pli->nseqs++;
+          esl_sq_Reuse(dbsq);
+          wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
       }
     }
 
@@ -728,31 +744,31 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
 
       //reset block as an empty vessel, possibly keeping the first sq intact for reading in the next window
       if (block->count > 0 && block->complete)
-    	  esl_sq_Reuse(block->list);
+          esl_sq_Reuse(block->list);
       for (i=1; i<block->count; i++)
-    	  esl_sq_Reuse(block->list + i);
+          esl_sq_Reuse(block->list + i);
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT);
 
       info->pli->nseqs += block->count - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
 
       if (sstatus == eslEOF) {
-    	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
-		  ++eofCount;
+          if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
+          ++eofCount;
       }
 
       if (sstatus == eslOK) {
-		  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
-		  if (status != eslOK) esl_fatal("Work queue reader failed");
+          status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+          if (status != eslOK) esl_fatal("Work queue reader failed");
       }
 
       //newBlock needs all this information so the next ReadBlock call will know what to do
       ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
       if (!block->complete) {
-    	  // the final sequence on the block was a probably-incomplete window of the active sequence,
-    	  // so prep the next block to read in the next window
-    	  esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
-    	  ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
+          // the final sequence on the block was a probably-incomplete window of the active sequence,
+          // so prep the next block to read in the next window
+          esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
+          ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
       }
 
   }
@@ -806,8 +822,8 @@ pipeline_thread(void *arg)
     {
       /* Main loop: */
       for (i = 0; i < block->count; ++i)
-	{
-	  ESL_SQ *dbsq = block->list + i;
+    {
+      ESL_SQ *dbsq = block->list + i;
 
       p7_pli_NewSeq(info->pli, dbsq);
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
@@ -818,45 +834,45 @@ pipeline_thread(void *arg)
 
 
       P7_DOMAIN *dcl;
-	  // modify hit positions to account for the position of the window in the full sequence
-	  for (j=prev_hit_cnt; j < info->th->N ; ++j) {
-		  dcl = info->th->unsrt[j].dcl;
-		  dcl->ienv += dbsq->start - 1;
-		  dcl->jenv += dbsq->start - 1;
-		  dcl->iali += dbsq->start - 1;
-		  dcl->jali += dbsq->start - 1;
-		  dcl->ad->sqfrom += dbsq->start - 1;
-		  dcl->ad->sqto += dbsq->start - 1;
-	  }
+      // modify hit positions to account for the position of the window in the full sequence
+      for (j=prev_hit_cnt; j < info->th->N ; ++j) {
+          dcl = info->th->unsrt[j].dcl;
+          dcl->ienv += dbsq->start - 1;
+          dcl->jenv += dbsq->start - 1;
+          dcl->iali += dbsq->start - 1;
+          dcl->jali += dbsq->start - 1;
+          dcl->ad->sqfrom += dbsq->start - 1;
+          dcl->ad->sqto += dbsq->start - 1;
+      }
 
 
 #ifdef eslAUGMENT_ALPHABET
-	  //reverse complement
+      //reverse complement
       if (dbsq->abc->complement != NULL)
       {
-    	  prev_hit_cnt = info->th->N;
-		  esl_sq_ReverseComplement(dbsq);
-		  p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
-		  p7_pipeline_Reuse(info->pli); // prepare for next search
+          prev_hit_cnt = info->th->N;
+          esl_sq_ReverseComplement(dbsq);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
+          p7_pipeline_Reuse(info->pli); // prepare for next search
 
-		  for (j=prev_hit_cnt; j < info->th->N ; ++j) {
-			  dcl = info->th->unsrt[j].dcl;
-			  // modify hit positions to account for the position of the window in the full sequence
-			  dcl->ienv = dbsq->start - dcl->ienv + 1;
-			  dcl->jenv = dbsq->start - dcl->jenv + 1;
-			  dcl->iali = dbsq->start - dcl->iali + 1;
-			  dcl->jali = dbsq->start - dcl->jali + 1;
-			  dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
-			  dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
+          for (j=prev_hit_cnt; j < info->th->N ; ++j) {
+              dcl = info->th->unsrt[j].dcl;
+              // modify hit positions to account for the position of the window in the full sequence
+              dcl->ienv = dbsq->start - dcl->ienv + 1;
+              dcl->jenv = dbsq->start - dcl->jenv + 1;
+              dcl->iali = dbsq->start - dcl->iali + 1;
+              dcl->jali = dbsq->start - dcl->jali + 1;
+              dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
+              dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
 
-		  }
+          }
 
-		  info->pli->nres += dbsq->W;
+          info->pli->nres += dbsq->W;
       }
 
 #endif /*eslAUGMENT_ALPHABET*/
 
-	}
+    }
 
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
       if (status != eslOK) esl_fatal("Work queue worker failed");

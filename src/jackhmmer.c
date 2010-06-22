@@ -569,7 +569,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      prv_msa_nseq = 1;
 	    }
-	  else 
+	  else
 	    {
 	      /* Throw away old model. Build new one. */
 	      status = p7_Builder(bld, msa, info->bg, ret_hmm, NULL, NULL, &om, NULL);
@@ -579,11 +579,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      fprintf(ofp, "@@\n");
 	      fprintf(ofp, "@@ Round:                  %d\n", iteration);
-	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n", 
+	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
 		      msa->nseq, msa->nseq-1, kh->nkeys);
 	      fprintf(ofp, "@@ Model size:             %d positions\n", om->M);
 	      fprintf(ofp, "@@\n\n");
-	  
+
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
 	    }
@@ -598,7 +598,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  for (i = 0; i < infocnt; ++i)
 	    {
-	      info[i].th  = p7_tophits_Create(); 
+	      info[i].th  = p7_tophits_Create();
 	      info[i].om  = p7_oprofile_Clone(om);
 	      info[i].pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	      p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -616,7 +616,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 	  switch(sstatus)
 	    {
-	    case eslEFORMAT: 
+	    case eslEFORMAT:
 	      esl_fatal("Parse failed (sequence file %s):\n%s\n",
 			dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 	      break;
@@ -660,10 +660,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Convergence test */
 	  fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets);
-	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n", 
+	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
 		  msa->nseq, prv_msa_nseq);
-	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq) 
-	    { 
+	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq)
+	    {
 	      fprintf(ofp, "@@\n");
 	      fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration);
 	      fprintf(ofp, "@@\n\n");
@@ -1078,7 +1078,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      prv_msa_nseq = 1;
 	    }
-	  else 
+	  else
 	    {
 	      /* Throw away old model. Build new one. */
 	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL);
@@ -1088,11 +1088,11 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      fprintf(ofp, "@@\n");
 	      fprintf(ofp, "@@ Round:                  %d\n", iteration);
-	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n", 
+	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
 		      msa->nseq, msa->nseq-1, kh->nkeys);
 	      fprintf(ofp, "@@ Model size:             %d positions\n", om->M);
 	      fprintf(ofp, "@@\n\n");
-	  
+
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
 	    }
@@ -1105,7 +1105,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  }
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
-	  th  = p7_tophits_Create(); 
+	  th  = p7_tophits_Create();
 	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	  p7_pli_NewModel(pli, om, bg);
 
@@ -1116,7 +1116,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      P7_PIPELINE     *mpi_pli   = NULL;
 	      P7_TOPHITS      *mpi_th    = NULL;
 
-	      if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
+	      if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0)
 		mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
 
 	      tag  = mpistatus.MPI_TAG;
@@ -1145,7 +1145,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  if (mpi_buf == NULL || size > mpi_size) {
 		    void *tmp;
 		    ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
-		    mpi_size = size; 
+		    mpi_size = size;
 		  }
 
 		  MPI_Recv(mpi_buf, size, MPI_PACKED, dest, tag, MPI_COMM_WORLD, &mpistatus);
@@ -1166,7 +1166,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		      }
 		    else if (sstatus == eslEFORMAT)
 		      {
-			mpi_failure("Parse failed (sequence file %s):\n%s\n", 
+			mpi_failure("Parse failed (sequence file %s):\n%s\n",
 				    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 		      }
 		    else
@@ -1202,17 +1202,17 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Convergence test */
 	  fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets);
-	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n", 
+	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
 		  msa->nseq, prv_msa_nseq);
-	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq) 
-	    { 
+	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq)
+	    {
 	      fprintf(ofp, "@@\n");
 	      fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration);
 	      fprintf(ofp, "@@\n\n");
 	      break;
 	    }
 	  else if (iteration < maxiterations)
-	    { 
+	    {
 	      fprintf(ofp, "@@ Continuing to next round.\n\n");
 
 	      /* send all the workers a CONTINUE signal */
@@ -1271,7 +1271,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (mpi_buf == NULL || size > mpi_size) {
 	void *tmp;
 	ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
-	mpi_size = size; 
+	mpi_size = size;
       }
 
       dest = mpistatus.MPI_SOURCE;
@@ -1410,7 +1410,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
-	  th  = p7_tophits_Create(); 
+	  th  = p7_tophits_Create();
 	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	  p7_pli_NewModel(pli, om, bg);
 
@@ -1562,7 +1562,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
       p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
-	  
+
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
     }
@@ -1592,13 +1592,13 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   while (sstatus == eslOK)
     {
       block = (ESL_SQ_BLOCK *) newBlock;
-      sstatus = esl_sqio_ReadBlock(dbfp, block);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, -1);
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
 	  ++eofCount;
 	}
-	  
+
       if (sstatus == eslOK)
 	{
 	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
@@ -1662,9 +1662,9 @@ pipeline_thread(void *arg)
 	  p7_pli_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
-	  
+
 	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
-	  
+
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
 	}

@@ -52,8 +52,8 @@ p7_tophits_Create(void)
   h->N         = 0;
   h->nreported = 0;
   h->nincluded = 0;
-  h->is_sorted = TRUE;       	/* but only because there's 0 hits */
-  h->hit[0]    = h->unsrt;	/* if you're going to call it "sorted" when it contains just one hit, you need this */
+  h->is_sorted = TRUE;           /* but only because there's 0 hits */
+  h->hit[0]    = h->unsrt;    /* if you're going to call it "sorted" when it contains just one hit, you need this */
   return h;
 
  ERROR:
@@ -79,7 +79,7 @@ p7_tophits_Grow(P7_TOPHITS *h)
 {
   void   *p;
   P7_HIT *ori    = h->unsrt;
-  int     Nalloc = h->Nalloc * 2;	/* grow by doubling */
+  int     Nalloc = h->Nalloc * 2;    /* grow by doubling */
   int     i;
   int     status;
 
@@ -94,7 +94,7 @@ p7_tophits_Grow(P7_TOPHITS *h)
   if (h->is_sorted) 
     {
       for (i = 0; i < h->N; i++)
-	h->hit[i] = h->unsrt + (h->hit[i] - ori);
+    h->hit[i] = h->unsrt + (h->hit[i] - ori);
     }
 
   h->Nalloc = Nalloc;
@@ -213,14 +213,14 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
  */
 int
 p7_tophits_Add(P7_TOPHITS *h,
-	       char *name, char *acc, char *desc, 
-	       double sortkey, 
-	       float score,    double pvalue, 
-	       float mothersc, double motherp,
-	       int sqfrom, int sqto, int sqlen,
-	       int hmmfrom, int hmmto, int hmmlen, 
-	       int domidx, int ndom,
-	       P7_ALIDISPLAY *ali)
+           char *name, char *acc, char *desc,
+           double sortkey,
+           float score,    double pvalue,
+           float mothersc, double motherp,
+           int sqfrom, int sqto, int sqlen,
+           int hmmfrom, int hmmto, int hmmlen,
+           int domidx, int ndom,
+           P7_ALIDISPLAY *ali)
 {
   int status;
 
@@ -262,9 +262,9 @@ hit_sorter(const void *vh1, const void *vh2)
   if      (h1->sortkey < h2->sortkey) return  1;
   else if (h1->sortkey > h2->sortkey) return -1;
   else {
-	  int c = strcmp(h1->name, h2->name);
-	  if (c != 0) 					  return c;
-	  else 							  return  (h1->dcl[0].iali < h2->dcl[0].iali ? 1 : -1 );
+      int c = strcmp(h1->name, h2->name);
+      if (c != 0)                       return c;
+      else                               return  (h1->dcl[0].iali < h2->dcl[0].iali ? 1 : -1 );
   }
 }
 
@@ -310,7 +310,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 {
   void    *p;
   P7_HIT **new_hit = NULL;
-  P7_HIT  *ori1    = h1->unsrt;	/* original base of h1's data */
+  P7_HIT  *ori1    = h1->unsrt;    /* original base of h1's data */
   P7_HIT  *new2;
   int      i,j,k;
   int      Nalloc = h1->Nalloc + h2->Nalloc;
@@ -354,7 +354,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   h1->Nalloc = Nalloc;
   h1->N     += h2->N;
   /* and is_sorted is TRUE, as a side effect of p7_tophits_Sort() above. */
-  return eslOK;	
+  return eslOK;
   
  ERROR:
   if (new_hit != NULL) free(new_hit);
@@ -366,8 +366,8 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
  * Incept:    TJW, Mon May 24 14:16:16 EDT 2010 [Janelia]
  *
  * Purpose:   Returns the length of the longest hit location (start/end)
- * 			  of all the registered hits, in chars. This is useful when
- * 			  deciding how to format output.
+ *               of all the registered hits, in chars. This is useful when
+ *               deciding how to format output.
  *
  *            The maximum is taken over all registered hits. This
  *            opens a possible side effect: caller might print only
@@ -388,10 +388,10 @@ p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
 
   for (max = 0, i = 0; i < h->N; i++) {
     if (h->unsrt[i].dcl[0].iali > 0) {
-    	n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].iali);
-    	max = ESL_MAX(n, max);
-    	n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].jali);
-    	max = ESL_MAX(n, max);
+        n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].iali);
+        max = ESL_MAX(n, max);
+        n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].jali);
+        max = ESL_MAX(n, max);
     }
   }
   return max;
@@ -461,18 +461,18 @@ p7_tophits_GetMaxShownLength(P7_TOPHITS *h)
 {
   int i, max, n;
   for (max = 0, i = 0; i < h->N; i++)
+  {
+      if (h->unsrt[i].acc != NULL && h->unsrt[i].acc[0] != '\0')
     {
-      if (h->unsrt[i].acc != NULL && h->unsrt[i].acc[0] != '\0') 
-	{
-	  n   = strlen(h->unsrt[i].acc);
-	  max = ESL_MAX(n, max);
-	} 
-      else if (h->unsrt[i].name != NULL)
-	{
-	  n   = strlen(h->unsrt[i].name);
-	  max = ESL_MAX(n, max);
-	}
+      n   = strlen(h->unsrt[i].acc);
+      max = ESL_MAX(n, max);
     }
+      else if (h->unsrt[i].name != NULL)
+    {
+      n   = strlen(h->unsrt[i].name);
+      max = ESL_MAX(n, max);
+    }
+  }
   return max;
 }
 
@@ -493,19 +493,19 @@ p7_tophits_Reuse(P7_TOPHITS *h)
 
   if (h == NULL) return eslOK;
   if (h->unsrt != NULL) 
-    {
+  {
       for (i = 0; i < h->N; i++)
-	{
-	  if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
-	  if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
-	  if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
-	  if (h->unsrt[i].dcl  != NULL) {
-	    for (j = 0; j < h->unsrt[i].ndom; j++)
-	      if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
-	    free(h->unsrt[i].dcl);
-	  }
-	}
+    {
+      if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
+      if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
+      if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
+      if (h->unsrt[i].dcl  != NULL) {
+        for (j = 0; j < h->unsrt[i].ndom; j++)
+          if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
+        free(h->unsrt[i].dcl);
+      }
     }
+  }
   h->N         = 0;
   h->is_sorted = TRUE;
   h->hit[0]    = h->unsrt;
@@ -523,20 +523,20 @@ p7_tophits_Destroy(P7_TOPHITS *h)
   if (h == NULL) return;
   if (h->hit   != NULL) free(h->hit);
   if (h->unsrt != NULL) 
-    {
+  {
       for (i = 0; i < h->N; i++)
-	{
-	  if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
-	  if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
-	  if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
-	  if (h->unsrt[i].dcl  != NULL) {
-	    for (j = 0; j < h->unsrt[i].ndom; j++)
-	      if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
-	    free(h->unsrt[i].dcl);
-	  }
-	}
-      free(h->unsrt);
+    {
+      if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
+      if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
+      if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
+      if (h->unsrt[i].dcl  != NULL) {
+        for (j = 0; j < h->unsrt[i].ndom; j++)
+          if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
+        free(h->unsrt[i].dcl);
+      }
     }
+      free(h->unsrt);
+  }
   free(h);
   return;
 }
@@ -593,17 +593,17 @@ workaround_bug_h74(P7_TOPHITS *th)
 
   for (h = 0; h < th->N; h++)  
     if (th->hit[h]->noverlaps)
-      {
-	for (d1 = 0; d1 < th->hit[h]->ndom; d1++)
-	  for (d2 = d1+1; d2 < th->hit[h]->ndom; d2++)
-	    if (th->hit[h]->dcl[d1].iali == th->hit[h]->dcl[d2].iali &&
-		th->hit[h]->dcl[d1].jali == th->hit[h]->dcl[d2].jali)
-	      {
-		dremoved = (th->hit[h]->dcl[d1].bitscore >= th->hit[h]->dcl[d2].bitscore) ? d2 : d1;
-		if (th->hit[h]->dcl[dremoved].is_reported) { th->hit[h]->dcl[dremoved].is_reported = FALSE; th->hit[h]->nreported--; }
-		if (th->hit[h]->dcl[dremoved].is_included) { th->hit[h]->dcl[dremoved].is_included = FALSE; th->hit[h]->nincluded--; }
-	      }
-      }
+    {
+        for (d1 = 0; d1 < th->hit[h]->ndom; d1++)
+          for (d2 = d1+1; d2 < th->hit[h]->ndom; d2++)
+            if (th->hit[h]->dcl[d1].iali == th->hit[h]->dcl[d2].iali &&
+            th->hit[h]->dcl[d1].jali == th->hit[h]->dcl[d2].jali)
+              {
+                dremoved = (th->hit[h]->dcl[d1].bitscore >= th->hit[h]->dcl[d2].bitscore) ? d2 : d1;
+                if (th->hit[h]->dcl[dremoved].is_reported) { th->hit[h]->dcl[dremoved].is_reported = FALSE; th->hit[h]->nreported--; }
+                if (th->hit[h]->dcl[dremoved].is_included) { th->hit[h]->dcl[dremoved].is_included = FALSE; th->hit[h]->nincluded--; }
+              }
+    }
   return eslOK;
 }
 
@@ -613,23 +613,23 @@ workaround_bug_h74(P7_TOPHITS *th)
  * Incept:    TJW, Thu Mar 25 15:00:52 EDT 2010 [Janelia]
  *
  * Purpose:   After nhmmer pipeline has completed, the TopHits object contains
- * 			  objects with p-values that haven't yet been converted to e-values.
- * 			  That modification is different for each sequence, and depends on the
- * 			  size of the window the hit was found in. Set it here, and also
- * 			  set the sortkey so the output will be sorted correctly.
+ *               objects with p-values that haven't yet been converted to e-values.
+ *               That modification is different for each sequence, and depends on the
+ *               size of the window the hit was found in. Set it here, and also
+ *               set the sortkey so the output will be sorted correctly.
  *
  * Returns:   <eslOK> on success.
  */
 int
 p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N)
 {
-  int i, hit_len;	/* counters over hits */
+  int i, hit_len;    /* counters over hits */
 
   for (i = 0; i < th->N ; i++)
   {
-	  hit_len = th->unsrt[i].dcl[0].jali - th->unsrt[i].dcl[0].iali + 1;
-	  th->unsrt[i].pvalue *= (float)N / (float)(th->unsrt[i].window_length - hit_len);
-	  th->unsrt[i].sortkey = -th->unsrt[i].pvalue;
+      hit_len = th->unsrt[i].dcl[0].jali - th->unsrt[i].dcl[0].iali + 1;
+      th->unsrt[i].pvalue *= (float)N / (float)(th->unsrt[i].window_length - hit_len);
+      th->unsrt[i].sortkey = -th->unsrt[i].pvalue;
   }
   return eslOK;
 }
@@ -642,21 +642,21 @@ p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N)
  * Incept:    TJW, Wed Mar 10 13:38:36 EST 2010 [Janelia]
  *
  * Purpose:   After nhmmer pipeline has completed, the TopHits object may
- * 			  contain duplicates if the target was broken into overlapping
- * 			  windows. Scan through, and remove duplicates.  Since the
- * 			  duplicates may be incomplete (one sequence is a partial
- * 			  hit because it's window didn't cover the full length of
- * 			  the hit), keep the one with better p-value
+ *               contain duplicates if the target was broken into overlapping
+ *               windows. Scan through, and remove duplicates.  Since the
+ *               duplicates may be incomplete (one sequence is a partial
+ *               hit because it's window didn't cover the full length of
+ *               the hit), keep the one with better p-value
  *
  * Returns:   <eslOK> on success.
  */
 int
 p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
 {
-  int i,j;	/* counters over hits */
+  int i,j;    /* counters over hits */
 
   if (th->N<2)
-	  return eslOK;
+      return eslOK;
 
   int s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
   int64_t sub_i, sub_j;
@@ -664,48 +664,48 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
 
   for (i = 0; i < th->N - 1; i++)
   {
-	  //s_i and e_i are the start and end of a window, regardless of orientation
-	  sub_i = th->hit[i]->subseq_start;
-	  p_i = th->hit[i]->pvalue;
-	  s_i = th->hit[i]->dcl[0].iali;
-	  e_i = th->hit[i]->dcl[0].jali;
-	  dir_i = s_i < e_i ? 1 : -1;
-	  len_i = 1 + dir_i * (e_i - s_i) ;
+      //s_i and e_i are the start and end of a window, regardless of orientation
+      sub_i = th->hit[i]->subseq_start;
+      p_i = th->hit[i]->pvalue;
+      s_i = th->hit[i]->dcl[0].iali;
+      e_i = th->hit[i]->dcl[0].jali;
+      dir_i = s_i < e_i ? 1 : -1;
+      len_i = 1 + dir_i * (e_i - s_i) ;
 
-	  for (j = i+1; j < th->N; j++) {
-		  sub_j = th->hit[j]->subseq_start;
-		  p_j = th->hit[j]->pvalue;
-		  s_j = th->hit[j]->dcl[0].iali;
-		  e_j = th->hit[j]->dcl[0].jali;
-		  dir_j = s_j < e_j ? 1 : -1;
-		  len_j = 1 + dir_j * (e_j - s_j) ;
+      for (j = i+1; j < th->N; j++) {
+          sub_j = th->hit[j]->subseq_start;
+          p_j = th->hit[j]->pvalue;
+          s_j = th->hit[j]->dcl[0].iali;
+          e_j = th->hit[j]->dcl[0].jali;
+          dir_j = s_j < e_j ? 1 : -1;
+          len_j = 1 + dir_j * (e_j - s_j) ;
 
 
-		  if ( 0==esl_strcmp(th->hit[i]->acc, th->hit[j]->acc)  && //same sequence
-				  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
-				  dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
-				  (
-				      ( s_i >= s_j-2 && s_i <= s_j+2) ||  // at least one side is essentially flush (
-					  ( e_i >= e_j-2 && e_i <= e_j+2)
-				  )
-			  ){
+          if ( 0==esl_strcmp(th->hit[i]->acc, th->hit[j]->acc)  && //same sequence
+                  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
+                  dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
+                  (
+                      ( s_i >= s_j-2 && s_i <= s_j+2) ||  // at least one side is essentially flush (
+                      ( e_i >= e_j-2 && e_i <= e_j+2)
+                  )
+              ){
 
-			  //force one to go unreported by changing pvalue.
-			  int keep = 0; // 0 := keep i,  1 := keep j
-			  if (s_i==s_j && e_i==e_j) // if same length, choose the one with lower p-value (in case one has, for some unexpected reason, gotten a wildly worse e-value than the other )
-				  keep = p_i < p_j ? 0 : 1;
-			  else // otherwise remove the shorter one (assume that one was cut short by the end of a segment
-				  keep = len_i > len_j ? 0 : 1;
+              //force one to go unreported by changing pvalue.
+              int keep = 0; // 0 := keep i,  1 := keep j
+              if (s_i==s_j && e_i==e_j) // if same length, choose the one with lower p-value (in case one has, for some unexpected reason, gotten a wildly worse e-value than the other )
+                  keep = p_i < p_j ? 0 : 1;
+              else // otherwise remove the shorter one (assume that one was cut short by the end of a segment
+                  keep = len_i > len_j ? 0 : 1;
 
-			  if (keep == 0) {
-				  th->hit[j]->pvalue = 100000;
-				  th->hit[j]->score = -100;
-			  } else {
-				  th->hit[i]->pvalue = 100000;
-				  th->hit[i]->score = -100;
-			  }
-		  }
-		}
+              if (keep == 0) {
+                  th->hit[j]->pvalue = 100000;
+                  th->hit[j]->score = -100;
+              } else {
+                  th->hit[i]->pvalue = 100000;
+                  th->hit[i]->score = -100;
+              }
+          }
+        }
   }
   return eslOK;
 }
@@ -738,30 +738,30 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
 int
 p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
 {
-  int h, d;	/* counters over sequence hits, domains in sequences */
+  int h, d;    /* counters over sequence hits, domains in sequences */
   
   /* Flag reported, included targets (if we're using general thresholds) */
   if (! pli->use_bit_cutoffs) 
-    {
+  {
       for (h = 0; h < th->N; h++)
-	{
-	  if (p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->pvalue))
-	    {
-	      th->hit[h]->flags |= p7_IS_REPORTED;
-	      if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->pvalue))
-		th->hit[h]->flags |= p7_IS_INCLUDED;
-	    }
-	}
+    {
+      if (p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->pvalue))
+        {
+          th->hit[h]->flags |= p7_IS_REPORTED;
+          if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->pvalue))
+        th->hit[h]->flags |= p7_IS_INCLUDED;
+        }
     }
+  }
 
   /* Count reported, included targets */
   th->nreported = 0;
   th->nincluded = 0;
   for (h = 0; h < th->N; h++)
-    {
+  {
       if (th->hit[h]->flags & p7_IS_REPORTED)  th->nreported++;
       if (th->hit[h]->flags & p7_IS_INCLUDED)  th->nincluded++;
-    }
+  }
   
   /* Now we can determined domZ, the effective search space in which additional domains are found */
   if (pli->domZ_setby == p7_ZSETBY_NTARGETS) pli->domZ = (double) th->nreported;
@@ -774,29 +774,29 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
    * domain can only be (reported|included) if whole sequence is too.
    */
   if (! pli->use_bit_cutoffs) 
+  {
+      for (h = 0; h < th->N; h++)
     {
-      for (h = 0; h < th->N; h++)  
-	{
-	  if (th->hit[h]->flags & p7_IS_REPORTED)
-	    {
-	      for (d = 0; d < th->hit[h]->ndom; d++)
-		{
-		  if (p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
-		    th->hit[h]->dcl[d].is_reported = TRUE;
-		  if ((th->hit[h]->flags & p7_IS_INCLUDED) &&
-		      p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
-		    th->hit[h]->dcl[d].is_included = TRUE;
-		}
-	    }
-	}
+      if (th->hit[h]->flags & p7_IS_REPORTED)
+        {
+          for (d = 0; d < th->hit[h]->ndom; d++)
+        {
+          if (p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+            th->hit[h]->dcl[d].is_reported = TRUE;
+          if ((th->hit[h]->flags & p7_IS_INCLUDED) &&
+              p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].pvalue))
+            th->hit[h]->dcl[d].is_included = TRUE;
+        }
+        }
     }
+  }
 
   /* Count the reported, included domains */
   for (h = 0; h < th->N; h++)  
     for (d = 0; d < th->hit[h]->ndom; d++)
       {
-	if (th->hit[h]->dcl[d].is_reported) th->hit[h]->nreported++;
-	if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
+        if (th->hit[h]->dcl[d].is_reported) th->hit[h]->nreported++;
+        if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
       }
 
   workaround_bug_h74(th);  /* blech. This function is defined above; see commentary and crossreferences there. */
@@ -869,30 +869,30 @@ p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew)
    * and whether they've dropped off the included list.
    */
   for (h = 0; h < th->N; h++)
-    {
+  {
       esl_key_Lookup(kh, th->hit[h]->name, &oldrank);
       
       if (th->hit[h]->flags & p7_IS_INCLUDED) 
-	{
-	  if (oldrank == -1) { th->hit[h]->flags |= p7_IS_NEW; nnew++; }
-	}
+    {
+      if (oldrank == -1) { th->hit[h]->flags |= p7_IS_NEW; nnew++; }
+    }
       else 
-	{
-	  if (oldrank >=  0) th->hit[h]->flags |= p7_IS_DROPPED;
-	}
-    }	
+    {
+      if (oldrank >=  0) th->hit[h]->flags |= p7_IS_DROPPED;
+    }
+  }
 
   /* Replace the old rank list with the new one */
   esl_keyhash_Reuse(kh);
   for (h = 0; h < th->N; h++)
+  {
+      if (th->hit[h]->flags & p7_IS_INCLUDED)
     {
-      if (th->hit[h]->flags & p7_IS_INCLUDED) 
-	{
-	  /* What happens when the same sequence name appears twice? It gets stored with higher rank */
-	  status = esl_key_Store(kh, th->hit[h]->name, NULL);
-	  if (status != eslOK && status != eslEDUP) goto ERROR;
-	}
+      /* What happens when the same sequence name appears twice? It gets stored with higher rank */
+      status = esl_key_Store(kh, th->hit[h]->name, NULL);
+      if (status != eslOK && status != eslEDUP) goto ERROR;
     }
+  }
   
   if (opt_nnew != NULL) *opt_nnew = nnew;
   return eslOK;
@@ -939,73 +939,73 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   if (pli->long_targets)    posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
 
   if (pli->long_targets) {
-	  fprintf(ofp, "Scores for complete hit%s:\n",	 pli->mode == p7_SEARCH_SEQS ? "s" : "");
-	  /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
-	  fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", "E-value", " score", " bias", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), posw, "start", posw, "end", "Description");
-	  fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", "-------", "------", "-----", namew, "--------", posw, "-----", posw, "-----", "-----------");
+      fprintf(ofp, "Scores for complete hit%s:\n",     pli->mode == p7_SEARCH_SEQS ? "s" : "");
+      /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
+      fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", "E-value", " score", " bias", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), posw, "start", posw, "end", "Description");
+      fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", "-------", "------", "-----", namew, "--------", posw, "-----", posw, "-----", "-----------");
 
   } else {
-	  fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n",
-		  pli->mode == p7_SEARCH_SEQS ? "s" : "");
-	  /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
-	  fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
-	  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
-	  fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
+      fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n",
+          pli->mode == p7_SEARCH_SEQS ? "s" : "");
+      /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
+      fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-");
+      fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description");
+      fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n", "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------");
   }
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
-      {
-	d    = th->hit[h]->best_domain;
+    {
+        d    = th->hit[h]->best_domain;
 
-	if (! (th->hit[h]->flags & p7_IS_INCLUDED) && ! have_printed_incthresh) {
-	  fprintf(ofp, "  ------ inclusion threshold ------\n");
-	  have_printed_incthresh = TRUE;
-	}
+        if (! (th->hit[h]->flags & p7_IS_INCLUDED) && ! have_printed_incthresh) {
+          fprintf(ofp, "  ------ inclusion threshold ------\n");
+          have_printed_incthresh = TRUE;
+        }
 
-	if (pli->show_accessions) 
-	  {   /* the --acc option: report accessions rather than names if possible */
-	    if (th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0') showname = th->hit[h]->acc;
-	    else                                                       showname = th->hit[h]->name;
-	  }
-	else 
-	  showname = th->hit[h]->name;
+        if (pli->show_accessions)
+          {   /* the --acc option: report accessions rather than names if possible */
+            if (th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0') showname = th->hit[h]->acc;
+            else                                                       showname = th->hit[h]->name;
+          }
+        else
+          showname = th->hit[h]->name;
 
-	if      (th->hit[h]->flags & p7_IS_NEW)     newness = '+';
-	else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
-	else                                        newness = ' ';
-	if (pli->long_targets) {
-		fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*d %*d ",
-			newness,
-			th->hit[h]->pvalue, // * pli->Z,
-			th->hit[h]->score,
-			eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // domain bias - seems like the right one to use, no?
-			//th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
-			namew, showname,
-			posw, th->hit[h]->dcl[d].iali,
-			posw, th->hit[h]->dcl[d].jali);
-	} else {
-		fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
-			newness,
-			th->hit[h]->pvalue * pli->Z,
-			th->hit[h]->score,
-			th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
-			th->hit[h]->dcl[d].pvalue / pli->Z,
-			th->hit[h]->dcl[d].bitscore,
-			eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
-			th->hit[h]->nexpected,
-			th->hit[h]->nreported,
-			namew, showname);
-	}
+        if      (th->hit[h]->flags & p7_IS_NEW)     newness = '+';
+        else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
+        else                                        newness = ' ';
+        if (pli->long_targets) {
+            fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*d %*d ",
+                newness,
+                th->hit[h]->pvalue, // * pli->Z,
+                th->hit[h]->score,
+                eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // domain bias - seems like the right one to use, no?
+                //th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+                namew, showname,
+                posw, th->hit[h]->dcl[d].iali,
+                posw, th->hit[h]->dcl[d].jali);
+        } else {
+            fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
+                newness,
+                th->hit[h]->pvalue * pli->Z,
+                th->hit[h]->score,
+                th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+                th->hit[h]->dcl[d].pvalue / pli->Z,
+                th->hit[h]->dcl[d].bitscore,
+                eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
+                th->hit[h]->nexpected,
+                th->hit[h]->nreported,
+                namew, showname);
+        }
 
 
-	if (textw > 0) fprintf(ofp, "%-.*s\n", descw, th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
-	else           fprintf(ofp, "%s\n",           th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
-	/* do NOT use *s with unlimited (INT_MAX) line length. Some systems
-         * have an fprintf() bug here (we found one on an Opteron/SUSE Linux
-	 * system (#h66)
-	 */
-      }
+        if (textw > 0) fprintf(ofp, "%-.*s\n", descw, th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
+        else           fprintf(ofp, "%s\n",           th->hit[h]->desc == NULL ? "" : th->hit[h]->desc);
+        /* do NOT use *s with unlimited (INT_MAX) line length. Some systems
+             * have an fprintf() bug here (we found one on an Opteron/SUSE Linux
+         * system (#h66)
+         */
+    }
   if (th->nreported == 0) fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n");
   return eslOK;
 }
@@ -1030,137 +1030,140 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   char *showname;
 
   if (pli->long_targets) {
-	  fprintf(ofp, "Annotation for each hit %s:\n",
-			  pli->show_alignments ? " (and alignments)" : "");
+      fprintf(ofp, "Annotation for each hit %s:\n",
+              pli->show_alignments ? " (and alignments)" : "");
   } else {
-	  fprintf(ofp, "Domain annotation for each %s%s:\n",
-		  pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
-		  pli->show_alignments ? " (and alignments)" : "");
+      fprintf(ofp, "Domain annotation for each %s%s:\n",
+          pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
+          pli->show_alignments ? " (and alignments)" : "");
   }
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
-      {
-	if (pli->show_accessions && th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0')
-	  {
-	    showname = th->hit[h]->acc;
-	    namew    = strlen(th->hit[h]->acc);
-	  }
-	else
-	  {
-	    showname = th->hit[h]->name;
-	    namew = strlen(th->hit[h]->name);
-	  }
+    {
+        if (pli->show_accessions && th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0')
+        {
+            showname = th->hit[h]->acc;
+            namew    = strlen(th->hit[h]->acc);
+        }
+        else
+        {
+            showname = th->hit[h]->name;
+            namew = strlen(th->hit[h]->name);
+        }
 
-	if (textw > 0) {
-	  descw = ESL_MAX(32, textw - namew - 5);
-	  fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
-	} else {
-	  fprintf(ofp, ">> %s  %s\n",    showname,        (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
-	}
+        if (textw > 0)
+        {
+          descw = ESL_MAX(32, textw - namew - 5);
+          fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+        }
+        else
+        {
+          fprintf(ofp, ">> %s  %s\n",    showname,        (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc));
+        }
 
-	if (th->hit[h]->nreported == 0) {
-	  fprintf(ofp,"   [No individual domains that satisfy reporting thresholds (although complete target did)]\n\n");
-	  continue;
-	}
+        if (th->hit[h]->nreported == 0)
+        {
+          fprintf(ofp,"   [No individual domains that satisfy reporting thresholds (although complete target did)]\n\n");
+          continue;
+        }
 
-	/* The domain table is 101 char wide:
-          #     score  bias    Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
-         ---   ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
-           1 ?  123.4  23.1    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
-         123 ! 1234.5 123.4 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
-	*/
+        /* The domain table is 101 char wide:
+              #     score  bias    Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
+             ---   ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
+               1 ?  123.4  23.1    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
+             123 ! 1234.5 123.4 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
+        */
 
-    if (pli->long_targets) {
-    	fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
-        fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
-    } else {
-    	fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
-    	fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
+        if (pli->long_targets) {
+            fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
+            fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
+        } else {
+            fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc");
+            fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----");
+        }
+
+        nd = 0;
+        for (d = 0; d < th->hit[h]->ndom; d++)
+          if (th->hit[h]->dcl[d].is_reported)
+            {
+              nd++;
+              if (pli->long_targets) {
+                  fprintf(ofp, " %c %6.1f %5.1f %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
+                      //nd,
+                      th->hit[h]->dcl[d].is_included ? '!' : '?',
+                      th->hit[h]->dcl[d].bitscore,
+                      th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+                      th->hit[h]->dcl[d].pvalue,
+                      th->hit[h]->dcl[d].ad->hmmfrom,
+                      th->hit[h]->dcl[d].ad->hmmto,
+                      (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+                      (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
+                      th->hit[h]->dcl[d].ad->sqfrom,
+                      th->hit[h]->dcl[d].ad->sqto,
+                      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+                      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                      th->hit[h]->dcl[d].ienv,
+                      th->hit[h]->dcl[d].jenv,
+                      (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+                      (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
+              } else {
+                  fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
+                      nd,
+                      th->hit[h]->dcl[d].is_included ? '!' : '?',
+                      th->hit[h]->dcl[d].bitscore,
+                      th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+                      th->hit[h]->dcl[d].pvalue * pli->domZ,
+                      th->hit[h]->dcl[d].pvalue * pli->Z,
+                      th->hit[h]->dcl[d].ad->hmmfrom,
+                      th->hit[h]->dcl[d].ad->hmmto,
+                      (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+                      (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
+                      th->hit[h]->dcl[d].ad->sqfrom,
+                      th->hit[h]->dcl[d].ad->sqto,
+                      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+                      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                      th->hit[h]->dcl[d].ienv,
+                      th->hit[h]->dcl[d].jenv,
+                      (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+                      (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
+              }
+            }
+
+        if (pli->show_alignments)
+        {
+            if (pli->long_targets) {
+                fprintf(ofp, "\n  Alignment:\n");
+            } else {
+                fprintf(ofp, "\n  Alignments for each domain:\n");
+                nd = 0;
+            }
+
+            for (d = 0; d < th->hit[h]->ndom; d++)
+              if (th->hit[h]->dcl[d].is_reported)
+            {
+              nd++;
+              if (!pli->long_targets) {
+                  fprintf(ofp, "  == domain %d", nd );
+              }
+              fprintf(ofp, "  score: %.1f bits", th->hit[h]->dcl[d].bitscore);
+              if (!pli->long_targets) {
+                  fprintf(ofp, ";  conditional E-value: %.2g\n",  th->hit[h]->dcl[d].pvalue * pli->domZ);
+              } else {
+                  fprintf(ofp, "\n");
+              }
+              p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli->show_accessions);
+              fprintf(ofp, "\n");
+            }
+        }
+        else
+          fprintf(ofp, "\n");
+
+
+
     }
-
-	nd = 0;
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  if (th->hit[h]->dcl[d].is_reported) 
-	    {
-	      nd++;
-	      if (pli->long_targets) {
-			  fprintf(ofp, " %c %6.1f %5.1f %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
-				  //nd,
-				  th->hit[h]->dcl[d].is_included ? '!' : '?',
-				  th->hit[h]->dcl[d].bitscore,
-				  th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-				  th->hit[h]->dcl[d].pvalue,
-				  th->hit[h]->dcl[d].ad->hmmfrom,
-				  th->hit[h]->dcl[d].ad->hmmto,
-				  (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
-				  (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
-				  th->hit[h]->dcl[d].ad->sqfrom,
-				  th->hit[h]->dcl[d].ad->sqto,
-				  (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				  (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-				  th->hit[h]->dcl[d].ienv,
-				  th->hit[h]->dcl[d].jenv,
-				  (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-				  (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-				  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
-	      } else {
-	    	  fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
-				  nd,
-				  th->hit[h]->dcl[d].is_included ? '!' : '?',
-				  th->hit[h]->dcl[d].bitscore,
-				  th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-				  th->hit[h]->dcl[d].pvalue * pli->domZ,
-				  th->hit[h]->dcl[d].pvalue * pli->Z,
-				  th->hit[h]->dcl[d].ad->hmmfrom,
-				  th->hit[h]->dcl[d].ad->hmmto,
-				  (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
-				  (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
-				  th->hit[h]->dcl[d].ad->sqfrom,
-				  th->hit[h]->dcl[d].ad->sqto,
-				  (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				  (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-				  th->hit[h]->dcl[d].ienv,
-				  th->hit[h]->dcl[d].jenv,
-				  (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-				  (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-				  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))));
-	      }
-	    }
-
-	if (pli->show_alignments) 
-	  {
-		if (pli->long_targets) {
-			fprintf(ofp, "\n  Alignment:\n");
-		} else {
-			fprintf(ofp, "\n  Alignments for each domain:\n");
-			nd = 0;
-		}
-
-	    for (d = 0; d < th->hit[h]->ndom; d++)
-	      if (th->hit[h]->dcl[d].is_reported) 
-		{
-		  nd++;
-		  if (!pli->long_targets) {
-			  fprintf(ofp, "  == domain %d", nd );
-		  }
-		  fprintf(ofp, "  score: %.1f bits", th->hit[h]->dcl[d].bitscore);
-		  if (!pli->long_targets) {
-			  fprintf(ofp, ";  conditional E-value: %.2g\n",  th->hit[h]->dcl[d].pvalue * pli->domZ);
-		  } else {
-			  fprintf(ofp, "\n");
-		  }
-		  p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli->show_accessions);
-		  fprintf(ofp, "\n");
-		}
-	  }
-	else
-	  fprintf(ofp, "\n");
-
-
-
-
-      }
   if (th->nreported == 0) { fprintf(ofp, "\n   [No targets detected that satisfy reporting thresholds]\n"); return eslOK; }
   return eslOK;
 }
@@ -1198,8 +1201,8 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
  */
 int
 p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
-		     ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n,
-		     int optflags, ESL_MSA **ret_msa)
+             ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n,
+             int optflags, ESL_MSA **ret_msa)
 {
   ESL_SQ   **sqarr = NULL;
   P7_TRACE **trarr = NULL;
@@ -1214,11 +1217,11 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
    */
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_INCLUDED)
-      {
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  if (th->hit[h]->dcl[d].is_included) 
-	    ndom++;
-      }
+    {
+        for (d = 0; d < th->hit[h]->ndom; d++)
+          if (th->hit[h]->dcl[d].is_included)
+            ndom++;
+    }
   if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
 
   if (inc_n)     M = inc_trarr[0]->M;          
@@ -1235,14 +1238,14 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
   y = inc_n;
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_INCLUDED)
-      {
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  if (th->hit[h]->dcl[d].is_included) 
-	    {
-	      if ((status = p7_alidisplay_Backconvert(th->hit[h]->dcl[d].ad, abc, &(sqarr[y]), &(trarr[y]))) != eslOK) goto ERROR;
-	      y++;
-	    }
-      }
+    {
+        for (d = 0; d < th->hit[h]->ndom; d++)
+          if (th->hit[h]->dcl[d].is_included)
+            {
+              if ((status = p7_alidisplay_Backconvert(th->hit[h]->dcl[d].ad, abc, &(sqarr[y]), &(trarr[y]))) != eslOK) goto ERROR;
+              y++;
+            }
+    }
   
   /* Make the multiple alignment */
   if ((status = p7_tracealign_Seqs(sqarr, trarr, inc_n+ndom, M, optflags, &msa)) != eslOK) goto ERROR;
@@ -1300,61 +1303,61 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 
   if (show_header)
-    {
-	  if (pli->long_targets) {
-	  	  fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %9s %6s %5s %s\n",
-			  tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to",  "  E-value", " score", " bias", "description of target");
-	  	  fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %9s %6s %5s %s\n",
-			  tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------", "---------", "------", "-----", "---------------------");
-	  } else {
-		  fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
-		  fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
-			  tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
-		  fprintf(ofp, "#%*s %*s %*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
-			  tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
-	  }
-     }
+  {
+      if (pli->long_targets) {
+            fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %9s %6s %5s %s\n",
+              tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to",  "  E-value", " score", " bias", "description of target");
+            fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %9s %6s %5s %s\n",
+              tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------", "---------", "------", "-----", "---------------------");
+      } else {
+          fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
+          fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
+              tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target");
+          fprintf(ofp, "#%*s %*s %*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
+              tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------");
+      }
+  }
 
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->flags & p7_IS_REPORTED)	{
-    	d    = th->hit[h]->best_domain;
-    	if (pli->long_targets) {
-			fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %9.2g %6.1f %5.1f %s\n",
-				tnamew, th->hit[h]->name,
-				taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
-				qnamew, qname,
-				qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
-				th->hit[h]->dcl[d].ad->hmmfrom,
-				th->hit[h]->dcl[d].ad->hmmto,
-				posw, th->hit[h]->dcl[d].iali,
-				posw, th->hit[h]->dcl[d].jali,
-				th->hit[h]->pvalue,
-				th->hit[h]->score,
-				th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-				th->hit[h]->desc ?  th->hit[h]->desc : "-");
-    	} else {
+    if (th->hit[h]->flags & p7_IS_REPORTED)    {
+        d    = th->hit[h]->best_domain;
+        if (pli->long_targets) {
+            fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %9.2g %6.1f %5.1f %s\n",
+                tnamew, th->hit[h]->name,
+                taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
+                qnamew, qname,
+                qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+                th->hit[h]->dcl[d].ad->hmmfrom,
+                th->hit[h]->dcl[d].ad->hmmto,
+                posw, th->hit[h]->dcl[d].iali,
+                posw, th->hit[h]->dcl[d].jali,
+                th->hit[h]->pvalue,
+                th->hit[h]->score,
+                th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+                th->hit[h]->desc ?  th->hit[h]->desc : "-");
+        } else {
 
-			fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n",
-				tnamew, th->hit[h]->name,
-				taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
-				qnamew, qname,
-				qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
-				th->hit[h]->pvalue * pli->Z,
-				th->hit[h]->score,
-				th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
-				th->hit[h]->dcl[d].pvalue * pli->Z,
-				th->hit[h]->dcl[d].bitscore,
-				th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-				th->hit[h]->nexpected,
-				th->hit[h]->nregions,
-				th->hit[h]->nclustered,
-				th->hit[h]->noverlaps,
-				th->hit[h]->nenvelopes,
-				th->hit[h]->ndom,
-				th->hit[h]->nreported,
-				th->hit[h]->nincluded,
-				(th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));
-			  }
+            fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n",
+                tnamew, th->hit[h]->name,
+                taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
+                qnamew, qname,
+                qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+                th->hit[h]->pvalue * pli->Z,
+                th->hit[h]->score,
+                th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+                th->hit[h]->dcl[d].pvalue * pli->Z,
+                th->hit[h]->dcl[d].bitscore,
+                th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+                th->hit[h]->nexpected,
+                th->hit[h]->nregions,
+                th->hit[h]->nclustered,
+                th->hit[h]->noverlaps,
+                th->hit[h]->nenvelopes,
+                th->hit[h]->ndom,
+                th->hit[h]->nreported,
+                th->hit[h]->nincluded,
+                (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc));
+              }
       }
   return eslOK;
 }
@@ -1386,56 +1389,56 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int h,d,nd;
 
   if (show_header)
-    {
+  {
       fprintf(ofp, "#%*s %22s %40s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw, "",                                   "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord");
       fprintf(ofp, "#%-*s %-*s %5s %-*s %-*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
-	      tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen",  "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",   "from",   "to",    "acc",  "description of target");
+          tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen",  "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",   "from",   "to",    "acc",  "description of target");
       fprintf(ofp, "#%*s %*s %5s %*s %*s %5s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %4s %s\n", 
-	      tnamew-1, "-------------------", taccw, "----------", "-----", qnamew, "--------------------", qaccw, "----------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
-    }
+          tnamew-1, "-------------------", taccw, "----------", "-----", qnamew, "--------------------", qaccw, "----------", "-----", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "----", "---------------------");
+  }
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
-      {
-	nd = 0;
-	for (d = 0; d < th->hit[h]->ndom; d++)
-	  if (th->hit[h]->dcl[d].is_reported) 
-	    {
-	      nd++;
+    {
+        nd = 0;
+        for (d = 0; d < th->hit[h]->ndom; d++)
+          if (th->hit[h]->dcl[d].is_reported)
+            {
+              nd++;
 
-	      /* in hmmsearch, targets are seqs and queries are HMMs;
-	       * in hmmscan, the reverse.  but in the ALIDISPLAY
-	       * structure, lengths L and M are for seq and HMMs, not
-	       * for query and target, so sort it out.
-	       */
-	      if (pli->mode == p7_SEARCH_SEQS) { qlen = th->hit[h]->dcl[d].ad->M; tlen = th->hit[h]->dcl[d].ad->L;  }
-	      else                             { qlen = th->hit[h]->dcl[d].ad->L; tlen = th->hit[h]->dcl[d].ad->M;  }
+              /* in hmmsearch, targets are seqs and queries are HMMs;
+               * in hmmscan, the reverse.  but in the ALIDISPLAY
+               * structure, lengths L and M are for seq and HMMs, not
+               * for query and target, so sort it out.
+               */
+              if (pli->mode == p7_SEARCH_SEQS) { qlen = th->hit[h]->dcl[d].ad->M; tlen = th->hit[h]->dcl[d].ad->L;  }
+              else                             { qlen = th->hit[h]->dcl[d].ad->L; tlen = th->hit[h]->dcl[d].ad->M;  }
 
-	      fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n", 
-		      tnamew, th->hit[h]->name,
-		      taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
-		      tlen,
-		      qnamew, qname,     
-		      qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
-		      qlen,
-		      th->hit[h]->pvalue * pli->Z,
-		      th->hit[h]->score,
-		      th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
-		      nd, 
-		      th->hit[h]->nreported,
-		      th->hit[h]->dcl[d].pvalue * pli->domZ,
-		      th->hit[h]->dcl[d].pvalue * pli->Z,
-		      th->hit[h]->dcl[d].bitscore,
-		      th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
-		      th->hit[h]->dcl[d].ad->hmmfrom,
-		      th->hit[h]->dcl[d].ad->hmmto,
-		      th->hit[h]->dcl[d].ad->sqfrom,
-		      th->hit[h]->dcl[d].ad->sqto,
-		      th->hit[h]->dcl[d].ienv,
-		      th->hit[h]->dcl[d].jenv,
-		      (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
-		      (th->hit[h]->desc ?  th->hit[h]->desc : "-"));		      
-	    }
+              fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n",
+                  tnamew, th->hit[h]->name,
+                  taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
+                  tlen,
+                  qnamew, qname,
+                  qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+                  qlen,
+                  th->hit[h]->pvalue * pli->Z,
+                  th->hit[h]->score,
+                  th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+                  nd,
+                  th->hit[h]->nreported,
+                  th->hit[h]->dcl[d].pvalue * pli->domZ,
+                  th->hit[h]->dcl[d].pvalue * pli->Z,
+                  th->hit[h]->dcl[d].bitscore,
+                  th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
+                  th->hit[h]->dcl[d].ad->hmmfrom,
+                  th->hit[h]->dcl[d].ad->hmmto,
+                  th->hit[h]->dcl[d].ad->sqfrom,
+                  th->hit[h]->dcl[d].ad->sqto,
+                  th->hit[h]->dcl[d].ienv,
+                  th->hit[h]->dcl[d].jenv,
+                  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
+                  (th->hit[h]->desc ?  th->hit[h]->desc : "-"));
+            }
       }
   return eslOK;
 }
@@ -1505,12 +1508,12 @@ main(int argc, char **argv)
     {
       h[j] = p7_tophits_Create();
       for (i = 0; i < N; i++)
-	p7_tophits_Add(h[j], name, acc, desc, sortkeys[j*N + i], 
-		       (float) sortkeys[j*N+i], sortkeys[j*N+i],
-		       (float) sortkeys[j*N+i], sortkeys[j*N+i],
-		       i, i, N,
-		       i, i, N,
-		       i, N, NULL);
+          p7_tophits_Add(h[j], name, acc, desc, sortkeys[j*N + i],
+               (float) sortkeys[j*N+i], sortkeys[j*N+i],
+               (float) sortkeys[j*N+i], sortkeys[j*N+i],
+               i, i, N,
+               i, i, N,
+               i, N, NULL);
       p7_tophits_Sort(h[j]);
     }
   /* then merge them into one big list in h[0] */
@@ -1521,7 +1524,6 @@ main(int argc, char **argv)
     }      
 
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
 
   p7_tophits_Destroy(h[0]);
   status = eslOK;

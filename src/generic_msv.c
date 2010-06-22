@@ -16,6 +16,8 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_gumbel.h"
+
 
 #include "hmmer.h"
 
@@ -64,30 +66,35 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
   float        tec   = logf(1.0f / nu);
   int          i,k;
 
+
   XMX(0,p7G_N) = 0;
   XMX(0,p7G_B) = tmove;                                      /* S->N->B, no N-tail   */
   XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) =-eslINFINITY;  /* need seq to get here */
   for (k = 0; k <= gm->M; k++)
     MMX(0,k) = -eslINFINITY;                                 /* need seq to get here */
 
-  for (i = 1; i <= L; i++) 
-    {
-      float const *rsc = gm->rsc[dsq[i]];
 
+  for (i = 1; i <= L; i++)
+  {
+
+	  float const *rsc = gm->rsc[dsq[i]];
       MMX(i,0)     = -eslINFINITY;
       XMX(i,p7G_E) = -eslINFINITY;
-    
       for (k = 1; k <= gm->M; k++) 
-	{
-	  MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
-	  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
-	}
+		{
+		  MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
+		  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
+		}
+
    
       XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) + tloop,     XMX(i, p7G_E) + tej);
       XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) + tloop,     XMX(i, p7G_E) + tec);
       XMX(i,p7G_N) =          XMX(i-1,p7G_N) + tloop;
       XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i, p7G_J) + tmove);
-    }
+
+  }
+
+
   gx->M = gm->M;
   gx->L = L;
   if (opt_sc != NULL) *opt_sc = XMX(L,p7G_C) + tmove;
@@ -96,6 +103,196 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
 /*---------------------- end, msv -------------------------------*/ 
 
 
+
+
+/* Function:  p7_GMSV_longtarget()
+ * Synopsis:  Finds windows with MSV scores above some threshold (slow, correct version)
+ * Incept:    TJW, Thu Jun 17 14:32:08 EDT 2010 [Janelia]
+ *
+ *
+ * Purpose:   Calculates the MSV score for regions of sequence <dsq> of length <L>
+ * 			  residues, and captures the positions at which such regions exceed the
+ * 			  score required to be significant in the eyes of the calling function
+ * 			  (usually p=0.02).  Note that this variant performs MSV computations,
+ *            while the optimized versions typically perform SSV (never passing
+ *            through the J state). See comments in impl_sse/p7_MSVFilter_longtarget()
+ *            for details
+ *
+ *            Rather than simply capturing positions at which a score threshold
+ *            is reached, this function establishes windows around those
+ *            high-scoring positions, then merges overlapping windows.
+ *
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            gm      - profile (can be in any mode)
+ *            gx      - DP matrix
+ *            nu      - configuration: expected number of hits (use 2.0 as a default)
+ *            bg      - the background model, required for translating a P-value threshold into a score threshold
+ *            P       - p-value below which a region is captured as being above threshold
+ *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
+ *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
+ *			  hit_cnt - RETURN: count of entries in the above two arrays
+ *
+ *
+ * Note:      Not worried about speed here. Based on p7_GMSV
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+{
+
+  /* A couple differences between this MSV and the standard one:
+   *
+   * - the transitions are parameterized based on window length (gm->max_length), not target length.
+   * - because we're scanning along a sequence with the implicit assumption that each
+   *   point we're inspecting is part of a window, but we don't know where that window starts/ends,
+   *   we don't use the tloop cost in its proper form. Instead of incuring the tloop cost for
+   *   each pass through the N/C states, we simply build the whole chunk of loop cost into the
+   *   threshold (treating it as though it would've been added at the end of computation)
+   *
+   */
+
+
+
+  float      **dp    = gx->dp;
+  float       *xmx   = gx->xmx;
+  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+  float        tej   = logf((nu - 1.0f) / nu);
+  float        tec   = logf(1.0f / nu);
+  int          i,k;
+  int 	  	   status;
+
+  float 	   tloop_total = tloop * gm->max_length;
+  /*
+   * Computing the score required to let P meet the F1 prob threshold
+   * In original code, converting from an MSV score S (the score getting
+   * to state C) to a probability goes like this:
+   *  S = XMX(L,p7G_C)
+   *  usc = S + tmove + tloop_total
+   *  P = f ( (usc - nullsc) / eslCONST_LOG2 , mu, lambda)
+   * and we're computing the threshold score S, so reverse it:
+   *  (usc - nullsc) /  eslCONST_LOG2 = inv_f( P, mu, lambda)
+   *  usc = nullsc + eslCONST_LOG2 * inv_f( P, mu, lambda)
+   *  S = usc - tmove - tloop_total
+   *
+   *  Here, I compute threshold with length model based on max_length.  Usually, the
+   *  length of a window returned by this scan will be 2*max_length-1 or longer.  Doesn't
+   *  really matter - in any case, both the bg and om models will change with roughly
+   *  1 bit for each doubling of the length model, so they offset.
+   */
+  float nullsc;
+  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+  p7_bg_SetLength(bg, gm->max_length);
+  p7_ReconfigLength(gm, gm->max_length);
+  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+
+  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
+
+  /* stuff used to keep track of hits (regions passing the p-threshold)*/
+  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
+  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
+  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
+  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
+  (*starts)[0] = (*ends)[0] = -1;
+  *hit_cnt = 0;
+
+
+  XMX(0,p7G_N) = 0;
+  XMX(0,p7G_B) = tmove;                                      /* S->N->B, no N-tail   */
+  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) =-eslINFINITY;  /* need seq to get here */
+  for (k = 0; k <= gm->M; k++)
+	MMX(0,k) = -eslINFINITY;                                 /* need seq to get here */
+
+  for (i = 1; i <= L; i++)
+  {
+	  float const *rsc = gm->rsc[dsq[i]];
+
+	  MMX(i,0)     = -eslINFINITY;
+	  XMX(i,p7G_E) = -eslINFINITY;
+
+	  for (k = 1; k <= gm->M; k++)
+	  {
+		  MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
+		  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
+	  }
+
+      XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) /*+ tloop*/,     XMX(i, p7G_E) + tej);
+      XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) /*+ tloop*/,     XMX(i, p7G_E) + tec);
+      XMX(i,p7G_N) =          XMX(i-1,p7G_N) /*+ tloop*/;
+      XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i, p7G_J) + tmove);
+
+
+	  if (XMX(i,p7G_C) > sc_thresh)
+	  {
+		  //ensure hit list is large enough
+		  if (*hit_cnt == hit_arr_size ) {
+			  hit_arr_size *= 10;
+			  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
+			  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
+		  }
+		  (*starts)[*hit_cnt] = i -  gm->max_length + 1;
+		  (*ends)[*hit_cnt] = i + gm->max_length - 1;
+		  (*hit_cnt)++;
+
+		  //start the search all over again
+		  XMX(i,p7G_N) = 0;
+		  XMX(i,p7G_B) = tmove;                                      /* S->N->B, no N-tail   */
+		  XMX(i,p7G_E) = XMX(i,p7G_C) = XMX(i,p7G_J) =-eslINFINITY;  /* need seq to get here */
+		  for (k = 0; k <= gm->M; k++)
+			  MMX(i,k) = -eslINFINITY;
+
+	  }
+
+
+  }
+
+
+  /*
+   * merge overlapping windows, compressing list in place.
+   */
+  if ( *hit_cnt > 0 ) {
+	  int merged = 0;
+	  do {
+		  merged = 0;
+
+		  int new_hit_cnt = 0;
+		  for (i=1; i<*hit_cnt; i++) {
+			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
+				  //merge windows
+				  merged = 1;
+				  if ( (*ends)[new_hit_cnt] < (*ends)[i])
+					  (*ends)[new_hit_cnt] = (*ends)[i];
+				  if ( (*starts)[new_hit_cnt] > (*starts)[i])
+  					  (*starts)[new_hit_cnt] = (*starts)[i];
+			  } else {
+				  //new window
+				  new_hit_cnt++;
+				  (*starts)[new_hit_cnt] = (*starts)[i];
+				  (*ends)[new_hit_cnt] = (*ends)[i];
+			  }
+		  }
+		  *hit_cnt = new_hit_cnt + 1;
+	  } while (merged > 0);
+
+	  if ((*starts)[0] <  1)
+		  (*starts)[0] =  1;
+
+	  if ((*ends)[*hit_cnt - 1] >  L)
+		  (*ends)[*hit_cnt - 1] =  L;
+
+  }
+  return eslOK;
+  ERROR:
+  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+
+}
+/*------------------ end, p7_GMSV_longtarget() ------------------------*/
 
 
 
