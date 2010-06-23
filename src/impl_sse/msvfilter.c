@@ -447,7 +447,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
    *  usc = nullsc + eslCONST_LOG2 * inv_f( P, mu, lambda)
    *  usc += 3
    *  usc *= om->scale_b
-   *  S = usc +  om->tjb_b + om->base_b
+   *  S = usc + om->tec_b + om->tjb_b + om->base_b
    *
    *  Here, I compute threshold with length model based on max_length.  Usually, the
    *  length of a window returned by this scan will be 2*max_length-1 or longer.  Doesn't
@@ -458,10 +458,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   p7_bg_SetLength(bg, om->max_length);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
-  int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b + om->tec_b );
+  int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
-
-  float sc_thresh2 =  nullsc  + (invP * eslCONST_LOG2) + 3;
 
   int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
   jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
@@ -631,16 +629,16 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 				  first_peak = last_peak = -1;
 
-				  //reset xE, xJ, and xB
-				  xEv_prev = xEv = xJv = _mm_setzero_si128();
-				  xBv = _mm_subs_epu8(basev, tjbmv);
-
 				  //Reset values as if the previous peak hadn't existed, retaining the growth of the current peak
 				  //See end of TW notes feb 25, 2010
 				  tempv = _mm_subs_epu8(xEv_prev, basev);
 				  tempv = _mm_subs_epu8(tempv, tecv);
 				  for (q = 0; q < Q; q++)
 					  dp[q] = _mm_subs_epu8(dp[q], tempv);
+
+				  //reset xE, xJ, and xB
+				  xEv_prev = xEv = xJv = _mm_setzero_si128();
+				  xBv = _mm_subs_epu8(basev, tjbmv);
 
 			  } //else ... nothing to do, just extend another step
 
@@ -1136,7 +1134,6 @@ main(int argc, char **argv)
 /*****************************************************************
  * @LICENSE@
  *****************************************************************/
-
 
 
 

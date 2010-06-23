@@ -700,6 +700,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->mode = gm->mode;
   om->L    = gm->L;
   om->M    = gm->M;
+  om->max_length = gm->max_length;
   om->nj   = gm->nj;
 
   return eslOK;
