@@ -428,7 +428,7 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
 }
 
 
-/* Function:  calc_max_length()
+/* Function:  p7_Builder_MaxLength()
  * Synopsis:  Compute the maximum likely length of an emitted sequence
  * Incept:    TJW, Mon Jan 18 12:48:57 EST 2010 [Janelia]
  *
@@ -535,6 +535,12 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
 {
 
 	int model_len = hmm->M; //model length
+
+	if (model_len==1) {
+		hmm->max_length = 1;
+		return eslOK;
+	}
+
     double I[model_len+1][2], M[model_len+1][2], D[model_len+1][2]; //2 columns for each way of ending a subpath
     int col_ptr, prev_col_ptr; //which true column in above 2d-arrays is active
     int col; //which conceptual column in above 2d-arrays is active (up to table_len)
@@ -542,7 +548,6 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
     double surv; // surviving probability mass at length L; Y from above
     int k; // k:active state in model
     int length_bound = 200000; // default cap on # iterations (aka max model length)
-
 
 	/*  Compute max length and max prefix lengths*/
 	// special case for filling in 1st column of DP table,  col=1;
@@ -553,7 +558,6 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
 		M[k][0] = I[k][0] = 0;
 		D[k][0] = hmm->t[k-1][p7H_DD] * D[k-1][0];  // only way to get to the 3rd or greater state with only 1 character
 	}
-
 
 	//special case for 2nd column
 	M[1][1] = D[1][1] = D[2][1] = I[2][1] = 0;  //No way any of these states can be responsible for the second emitted character.
@@ -590,8 +594,6 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
 		}
 
 		p_sum += M[model_len][col_ptr] + D[model_len][col_ptr];
-
-		//printf ("L=%d : X=%.8f, Y=%.8f (X+Y=%.8f) Y/X+Y=%.8f\n", col, p_sum, surv, surv + p_sum, surv / ( surv + p_sum) );
 		surv /= surv + p_sum;
 
 		if (surv < emit_thresh) {
