@@ -150,11 +150,6 @@ static int  thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *que
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
-#ifdef HAVE_MPI
-static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
-#endif /*HAVE_MPI*/
-
 
 static void
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmfile, char **ret_seqfile)

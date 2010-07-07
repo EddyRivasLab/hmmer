@@ -1201,7 +1201,7 @@ main(int argc, char **argv)
   sq = esl_sq_CreateDigital(abc);
 
   /* Create a pipeline and a top hits list */
-  pli     = p7_pipeline_Create(go, hmm->M, 400, p7_SEARCH_SEQS);
+  pli     = p7_pipeline_Create(go, hmm->M, 400, FALSE, p7_SEARCH_SEQS);
   hitlist = p7_tophits_Create();
 
   /* Configure a profile from the HMM */
@@ -1340,7 +1340,7 @@ main(int argc, char **argv)
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
   /* Create a pipeline for the query sequence in scan mode */
-  pli      = p7_pipeline_Create(go, 100, sq->n, p7_SCAN_MODELS);
+  pli      = p7_pipeline_Create(go, 100, sq->n, FALSE, p7_SCAN_MODELS);
   p7_pli_NewSeq(pli, sq);
    
   /* Some additional config of the pipeline specific to scan mode */

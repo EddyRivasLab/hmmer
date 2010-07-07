@@ -838,7 +838,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Create processing pipeline and hit list */
       th  = p7_tophits_Create(); 
-      pli = p7_pipeline_Create(go, hmm->M, 100, p7_SEARCH_SEQS);
+      pli = p7_pipeline_Create(go, hmm->M, 100, FALSE, p7_SEARCH_SEQS);
       p7_pli_NewModel(pli, om, bg);
 
       /* Main loop: */
@@ -1087,7 +1087,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);
 
       th  = p7_tophits_Create(); 
-      pli = p7_pipeline_Create(go, om->M, 100, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
       p7_pli_NewModel(pli, om, bg);
 
       /* receive a sequence block from the master */
