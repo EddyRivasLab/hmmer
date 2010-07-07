@@ -17,10 +17,6 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#ifdef HAVE_MPI
-#include "mpi.h"
-#include "esl_mpi.h"
-#endif /*HAVE_MPI*/
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
@@ -54,13 +50,8 @@ typedef struct {
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
-#define CPUOPTS     "--mpi"
-#define MPIOPTS     "--cpu"
-#else
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
-#endif
 
 
 static ESL_OPTIONS options[] = {
@@ -112,10 +103,6 @@ static ESL_OPTIONS options[] = {
 
 #ifdef HMMER_THREADS 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
-#endif
-#ifdef HAVE_MPI
-  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,"--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
-  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  MPIOPTS,         "run as an MPI parallel program",                              12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -252,9 +239,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(go, "--cpu"));  
 #endif
-#ifdef HAVE_MPI
-  if (esl_opt_IsUsed(go, "--mpi"))       fprintf(ofp, "# MPI:                             on\n");
-#endif
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -283,32 +267,7 @@ main(int argc, char **argv)
   p7_FLogsumInit();        /* we're going to use table-driven Logsum() approximations at times */
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
-  /* Figure out who we are, and send control there: 
-   * we might be an MPI master, an MPI worker, or a serial program.
-   */
-#ifdef HAVE_MPI
-  /* pause the execution of the programs execution until the user has a
-   * chance to attach with a debugger and send a signal to resume execution
-   * i.e. (gdb) signal SIGCONT
-   */
-  if (esl_opt_GetBoolean(go, "--stall")) pause();
-
-  if (esl_opt_GetBoolean(go, "--mpi"))  {
-      cfg.do_mpi     = TRUE;
-      MPI_Init(&argc, &argv);
-      MPI_Comm_rank(MPI_COMM_WORLD, &(cfg.my_rank));
-      MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
-
-      if (cfg.my_rank > 0)  status = mpi_worker(go, &cfg);
-      else             status = mpi_master(go, &cfg);
-
-      MPI_Finalize();
-  }
-  else
-#endif /*HAVE_MPI*/
-  {
       status = serial_master(go, &cfg);
-  }
 
   esl_getopts_Destroy(go);
 
