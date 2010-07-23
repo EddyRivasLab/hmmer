@@ -772,6 +772,7 @@ typedef struct p7_pipeline_s {
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
+  int           single_strand;  /* TRUE if the search should ignore the revcomp (used for nhmmer only) */
   int 			W;              /* window length for nhmmer scan */
 
   int           show_accessions;/* TRUE to output accessions not names      */

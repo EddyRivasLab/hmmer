@@ -113,7 +113,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
   tecv = _mm_set1_epi8((int8_t) om->tec_b);
 
-
   xJv = _mm_subs_epu8(biasv, biasv);
   xBv = _mm_subs_epu8(basev, tjbmv);
 
@@ -170,6 +169,11 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       tempv = _mm_srli_si128(xEv, 1);
       xEv = _mm_max_epu8(xEv, tempv);
       xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
+
+//      if (L==2375) {
+ //   	  int tmp = (uint8_t) _mm_extract_epi16(xJv, 0);
+ //   	  printf ("%d:  \t%d\n", i, tmp );
+ //     }
 
 
       /* immediately detect overflow */
@@ -284,7 +288,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
   (*starts)[0] = (*ends)[0] = -1;
   *hit_cnt = 0;
-
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -432,6 +435,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
 
+
   float nullsc;
 
   /*
@@ -463,6 +467,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
   jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
+
 
   if ( sc_thresh < jthresh) {
 	   p7_SSVFilter_longtarget(dsq, L, om, ox, sc_threshv, starts, ends, hit_cnt);

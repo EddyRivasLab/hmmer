@@ -196,7 +196,7 @@ p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
 int
 p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
 {
-  return eslOK;
+	return p7_ReconfigLength(om, L);
 }
 
 /* Function:  p7_oprofile_ReconfigMultihit()
