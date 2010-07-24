@@ -73,13 +73,9 @@ static ESL_OPTIONS options[] = {
   /* Control of reporting thresholds */
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  REPOPTS,         "report sequences <= this E-value threshold in output",         4 },
   { "-T",           eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  REPOPTS,         "report sequences >= this score threshold in output",           4 },
-  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",           4 },
-  { "--domT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "report domains >= this score cutoff in output",                4 },
   /* Control of inclusion (significance) thresholds */
   { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCOPTS,         "consider sequences <= this E-value threshold as significant",  5 },
   { "--incT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
-  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
-  { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
   /* Model-specific thresholding for both reporting and inclusion */
   { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",   6 },
   { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",       6 },
@@ -92,13 +88,21 @@ static ESL_OPTIONS options[] = {
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
 /* Other options */
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
-  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
-  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
+  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size in *Mb* to <x> for E-value calculations",   12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
-  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   12 },
-  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>>: no autodetection", 12 },
   { "--w_beta",     eslARG_REAL,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "tail mass at which window length is determined",               12 },
   { "--w_length",   eslARG_INT, NULL,  NULL, NULL,   NULL,  NULL,  NULL,            "window length ",                                              12 },
+  { "--single",     eslARG_NONE, NULL,  NULL, NULL,   NULL,  NULL,  NULL,            "don't search reverse complement of database sequences ",         12 },
+
+/* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
+  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "Not used",   99 },
+  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
+  { "--domT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
+  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "Not used",    99 },
+  { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "Not used",      99 },
+/* will eventually bring these back, but store in group 99 for now, so they don't print to help*/
+  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   99 },
+  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>>: no autodetection", 99 },
 
 
 #ifdef HMMER_THREADS 
@@ -224,8 +228,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--F3"))        fprintf(ofp, "# Fwd filter P threshold:       <= %g\n", esl_opt_GetReal(go, "--F3"));
   if (esl_opt_IsUsed(go, "--nobias"))    fprintf(ofp, "# biased composition HMM filter:   off\n");
   if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
-  if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
-  if (esl_opt_IsUsed(go, "--domZ"))      fprintf(ofp, "# domain search space set to:      %.0f\n",    esl_opt_GetReal(go, "--domZ"));
+  if (esl_opt_IsUsed(go, "--single"))    fprintf(ofp, "# search reverse complement:       off\n");
+
+  if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# database size is set to:         %.1f Mb\n",    esl_opt_GetReal(go, "-Z"));
   if (esl_opt_IsUsed(go, "--seed"))  {
     if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(ofp, "# random number seed:              one-time arbitrary\n");
     else                                       fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(go, "--seed"));
@@ -360,7 +365,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
-  //if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
@@ -447,6 +451,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].om  = p7_oprofile_Clone(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+          info[i].pli->single_strand = esl_opt_IsUsed(go, "--single");
 
 #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
@@ -473,10 +478,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       //need to re-compute e-values before merging (when list will be sorted)
       int resCnt = 0;
-      for (i = 0; i < infocnt; ++i)
-          resCnt += info[i].pli->nres;
+      if (esl_opt_IsUsed(go, "-Z"))
+    	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
+      else
+    	  for (i = 0; i < infocnt; ++i)
+    		  resCnt += info[i].pli->nres;
+
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt);
+
 
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i) {
@@ -633,7 +643,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (dbsq->abc->complement != NULL)
+      if (!info->pli->single_strand && dbsq->abc->complement != NULL )
       {
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
@@ -802,7 +812,7 @@ pipeline_thread(void *arg)
 
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (dbsq->abc->complement != NULL)
+      if (!info->pli->single_strand && dbsq->abc->complement != NULL)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);

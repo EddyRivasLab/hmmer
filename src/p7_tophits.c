@@ -627,8 +627,7 @@ p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N)
 
   for (i = 0; i < th->N ; i++)
   {
-      hit_len = th->unsrt[i].dcl[0].jali - th->unsrt[i].dcl[0].iali + 1;
-      th->unsrt[i].pvalue *= (float)N / (float)(th->unsrt[i].window_length - hit_len);
+      th->unsrt[i].pvalue *= (float)N / (float)(th->unsrt[i].window_length);
       th->unsrt[i].sortkey = -th->unsrt[i].pvalue;
   }
   return eslOK;
