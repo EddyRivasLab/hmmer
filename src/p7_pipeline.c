@@ -865,28 +865,24 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
   if (hit_cnt == 0 ) return eslOK;
   pli->n_past_msv += hit_cnt;
-  ESL_SQ *subseq = esl_sq_CreateDigital(sq->abc);
-
+  ESL_SQ *tmpseq = esl_sq_CreateDigital(sq->abc);
+  ESL_DSQ* subseq;
   for (i=0; i<hit_cnt; i++){
 
       int window_len = window_ends[i] - window_starts[i] + 1;
       pli->pos_past_msv += window_len;
 
-      esl_sq_GrowTo(subseq, window_len);
-      memcpy((void*)(subseq->dsq), sq->dsq + window_starts[i] - 1, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
-      subseq->dsq[window_len+1]= eslDSQ_SENTINEL;
-      subseq->n = window_len;
-
-      p7_bg_SetLength(bg, subseq->n);
-      p7_bg_NullOne  (bg, subseq->dsq, subseq->n, &nullsc);
+      subseq = sq->dsq + window_starts[i] - 1;
+      p7_bg_SetLength(bg, window_len);
+      p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
 
       if (pli->do_biasfilter)
         {
           // Have to run msv again, to get the full score for the window.
           // (using the standard "per-sequence" msv filter this time).
-          p7_oprofile_ReconfigMSVLength(om, subseq->n);
-          p7_MSVFilter(subseq->dsq, subseq->n, om, pli->oxf, &usc);
-          p7_bg_FilterScore(bg, subseq->dsq, subseq->n, &filtersc);
+          p7_oprofile_ReconfigMSVLength(om, window_len);
+          p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
+          p7_bg_FilterScore(bg, subseq, window_len, &filtersc);
 
           seq_score = (usc - filtersc) / eslCONST_LOG2;
           P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
@@ -902,21 +898,21 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       pli->n_past_bias++;
       pli->pos_past_bias += window_len;
 
-      p7_oprofile_ReconfigRestLength(om, subseq->n);
+      p7_oprofile_ReconfigRestLength(om, window_len);
 
 
       /* In scan mode, if it passes the MSV filter, read the rest of the profile */
       if (pli->hfp)
         {
     	  p7_oprofile_ReadRest(pli->hfp, om);
-          p7_oprofile_ReconfigRestLength(om, subseq->n);
+          p7_oprofile_ReconfigRestLength(om, window_len);
           if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
         }
 
       /* Second level filter: ViterbiFilter(), multihit with <om> */
       if (P > pli->F2 )
         {
-          p7_ViterbiFilter(subseq->dsq, subseq->n, om, pli->oxf, &vfsc);
+          p7_ViterbiFilter(subseq, window_len, om, pli->oxf, &vfsc);
           seq_score = (vfsc-filtersc) / eslCONST_LOG2;
           P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
           if (P > pli->F2) continue;
@@ -925,7 +921,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       pli->pos_past_vit += window_len;
 
       /* Parse it with Forward and obtain its real Forward score. */
-      p7_ForwardParser(subseq->dsq, subseq->n, om, pli->oxf, &fwdsc);
+      p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
       seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
       P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
       if (P > pli->F3) continue;
@@ -934,13 +930,19 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       pli->pos_past_fwd += window_len;
 
 
+      /*now that almost everything has been filtered away, set up seq object for domaindef function*/
+      esl_sq_GrowTo(tmpseq, window_len);
+      memcpy((void*)(tmpseq->dsq), subseq, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
+      tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
+      tmpseq->n = window_len;
+
 
       /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow
        * In this case "domains" will end up being translated as independent "hits" */
-      p7_omx_GrowTo(pli->oxb, om->M, 0, subseq->n);
-      p7_BackwardParser(subseq->dsq, subseq->n, om, pli->oxf, pli->oxb, NULL);
+      p7_omx_GrowTo(pli->oxb, om->M, 0, window_len);
+      p7_BackwardParser(tmpseq->dsq, window_len, om, pli->oxf, pli->oxb, NULL);
 
-      status = p7_domaindef_ByPosteriorHeuristics(subseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef);
+      status = p7_domaindef_ByPosteriorHeuristics(tmpseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef);
       if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
       if (pli->ddef->nregions   == 0)  continue; /* score passed threshold but there's no discrete domains here       */
       if (pli->ddef->nenvelopes == 0)  continue; /* rarer: region was found, stochastic clustered, no envelopes found */
