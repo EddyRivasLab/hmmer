@@ -240,7 +240,7 @@ the highest-scoring known false positive.
 
 .TP
 .B --cut_tc
-Use the NC (trusted cutoff) bit score thresholds in the model to set
+Use the TC (trusted cutoff) bit score thresholds in the model to set
 per-sequence (TC1) and per-domain (TC2) reporting and inclusion
 thresholds. TC thresholds are generally considered to be the score of
 the lowest-scoring known true positive that is above all known false
