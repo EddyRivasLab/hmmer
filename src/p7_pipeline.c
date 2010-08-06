@@ -835,12 +835,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   float            usc, vfsc, fwdsc;   /* filter scores                           */
   float            filtersc;           /* HMM null filter score                   */
   float            nullsc;             /* null model score                        */
-  float            seqbias;
   float            seq_score;          /* the corrected per-seq bit score */
-  float            sum_score;           /* the corrected reconstruction score for the seq */
-  float            pre_score, pre2_score; /* uncorrected bit scores for seq */
   double           P;               /* P-value of a hit */
-  int              Ld;               /* # of residues in envelopes */
   int              d, i;
   int              status;
 
