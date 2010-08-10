@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -52,6 +53,12 @@ typedef struct {
 #else
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
+#endif
+
+#ifdef HAVE_MPI
+#define DAEMONOPTS  "-o,-A,--tblout,--domtblout,--mpi,--stall"
+#else
+#define DAEMONOPTS  "-o,-A,--tblout,--domtblout"
 #endif
 
 static ESL_OPTIONS options[] = {
@@ -105,6 +112,7 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,  NULL,              "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
+  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },
 
 #ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,           "number of parallel CPU workers to use for multithreads",      12 },
@@ -257,6 +265,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   }
   if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
+  if (esl_opt_IsUsed(go, "--daemon"))    fprintf(ofp, "run as a daemon process\n");
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(go, "--cpu"));  
 #endif
@@ -380,6 +389,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
+  /* validate options if running as a daemon */
+  if (esl_opt_IsOn(go, "--daemon")) {
+
+    /* running as a daemon, the input format must be type daemon */
+    if (qformat != eslSQFILE_UNKNOWN && qformat != eslSQFILE_DAEMON) 
+      esl_fatal("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
+    qformat = eslSQFILE_DAEMON;
+
+    if (strcmp(cfg->qfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
+  }
+
   /* Initialize a default builder configuration,
    * then set only the options we need for single sequence search
    */
@@ -399,14 +419,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
   if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
-
   /* Open results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); } 
   if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"),          "w")) == NULL)  esl_fatal("Failed to open alignment output file %s for writing\n",       esl_opt_GetString(go, "-A")); } 
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
     
-
   /* Open the target sequence database for sequential access. */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
@@ -549,7 +567,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, info->pli, w);
-      fprintf(ofp, "//\n");
+      fprintf(ofp, "//\n"); fflush(ofp);
 
       /* Output the results in an MSA (-A option) */
       if (afp) {
