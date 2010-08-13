@@ -13,6 +13,8 @@
 #include <ctype.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+
 
 #define MAX_ARGS       512
 #define MAX_BUFFER_LEN 2048
@@ -21,6 +23,19 @@
 
 #define SERVER_PORT      41139
 
+pthread_mutex_t  SEARCH_MUTEX;
+pthread_cond_t   SEARCH_COND;
+
+int              SEARCH_BUSY;
+
+typedef struct {
+  int     pfd1;
+  int     pfd2;
+
+  int     sock;
+
+} THREAD_ARGS;
+
 static void
 sig_pipe(int signo)
 {
@@ -28,27 +43,170 @@ sig_pipe(int signo)
   exit(1);
 }
 
+void *
+thread_main(void *args)
+{
+  int           i;
+  int           eod;
+  int           total;
+
+  int32_t       n;
+
+  int           clnt_sock;
+
+  char          seq[MAX_SEQ];
+  char          buffer[MAX_BUFFER_LEN];
+
+  THREAD_ARGS  *info = (THREAD_ARGS *)args;
+
+  /* Guarantees that thread resources are deallocated upon return */
+  pthread_detach(pthread_self()); 
+
+  /* Extract socket file descriptor from argument */
+  clnt_sock = info->sock;
+
+  /* Receive message from client */
+  if ((n = recv(clnt_sock, seq, MAX_SEQ-1, 0)) < 0) {
+    fprintf(stderr, "%08X: recv error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+    exit(1);
+  }
+  seq[n] = 0;
+
+  while (n > 0) {
+    printf("%08X: Received %d\n", (unsigned int)pthread_self(), n);
+    //printf("%s", seq);
+
+    /* wait for a phmmer to be free */
+    if (pthread_mutex_lock (&SEARCH_MUTEX) != 0) {
+      fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    while (SEARCH_BUSY) {
+      if (pthread_cond_wait (&SEARCH_COND, &SEARCH_MUTEX) != 0) {
+        fprintf(stderr, "%08X: cond wait error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+        exit(1);
+      }
+    }
+
+    SEARCH_BUSY = 1;
+
+    if (pthread_mutex_unlock (&SEARCH_MUTEX) != 0) {
+      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    printf("%08X: Starting phmmer search %d\n", (unsigned int)pthread_self(), n);
+
+    n = strlen(seq) + 1;
+    if (write(info->pfd1, seq, n) != n) {
+      fprintf(stderr, "%08X: write (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
+      exit(1);
+    }
+
+    eod = 0;
+    total = 0;
+    while (!eod) {
+      if ((n = read(info->pfd2, buffer, MAX_BUFFER_LEN-1)) == -1) {
+        fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+        exit(1);
+      }
+
+      if (n == 0) {
+        fprintf(stderr, "%08X: child pipe closed\n", (unsigned int)pthread_self());
+        break;
+      }
+
+      buffer[n] = 0;
+      total += ++n;
+
+      //printf("%6d\n", n);
+      //printf("%s", buffer);
+
+      /* Send the length of the output to the client */
+      if (send(clnt_sock, &n, sizeof(n), 0) != sizeof(n)) {
+        fprintf(stderr, "%08X: send (size %d) error %d - %s\n", (unsigned int)pthread_self(), (int)sizeof(n), errno, strerror(errno));
+        exit(1);
+      }
+
+      /* Send the output to the client */
+      if (send(clnt_sock, buffer, n, 0) != n) {
+        fprintf(stderr, "%08X: send (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
+        exit(1);
+      }
+
+      /* scan backwards looking for the end of the line */
+      i = n - 2;
+      while (i > 1 && isspace(buffer[i])) i--;
+
+      /* scan backwards looking for the start of the line */
+      while (i > 1 && buffer[i] != '\n' && buffer[i] != '\r') i--;
+      
+      eod = (buffer[i+1] == '/' && buffer[i+2] == '/');
+    }
+
+    printf ("%08X: Report sent: %d bytes\n", (unsigned int)pthread_self(), total);
+
+    /* Notify the client that we have seen the end of the report */
+    n = 0;
+    if (send(clnt_sock, &n, sizeof(n), 0) != sizeof(n)) {
+      fprintf(stderr, "%08X: send (size %d) error %d - %s\n", (unsigned int)pthread_self(), (int)sizeof(n), errno, strerror(errno));
+      exit(1);
+    }
+
+    /* signal that phmmer is available */
+    if (pthread_mutex_lock (&SEARCH_MUTEX) != 0) {
+      fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    SEARCH_BUSY = 0;
+
+    if (pthread_mutex_unlock (&SEARCH_MUTEX) != 0) {
+      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    if (pthread_cond_broadcast (&SEARCH_COND) != 0) {
+      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    /* Receive message from client */
+    if ((n = recv(clnt_sock, seq, MAX_SEQ-1, 0)) < 0) {
+      fprintf(stderr, "%08X: recv error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+    seq[n] = 0;
+  }
+
+  close(clnt_sock);
+
+  free(args);
+
+  return (NULL);
+}
+
 int
 main(int argc, char **argv)
 {
   int           i;
-  int           eod;
   int           pfd1[2];
   int           pfd2[2];
 
-  int           total;
+  pthread_t     threadID;
+
   int32_t       n;
 
   pid_t         pid;
-
-  char          buffer[MAX_BUFFER_LEN];
-  char          seq[MAX_SEQ];
 
   int                serv_sock;
   int                clnt_sock;
   unsigned short     serv_port;
   struct sockaddr_in serv_addr;
   struct sockaddr_in clnt_addr;
+
+  THREAD_ARGS *args;
 
   /* make sure the agguement list does not overflow */
   if (argc < 3 || (strcmp(argv[1], "-p") == 0 && argc < 5)) {
@@ -97,6 +255,16 @@ main(int argc, char **argv)
     exit(1);
   }
 
+  if (pthread_mutex_init(&SEARCH_MUTEX, NULL) != 0) {
+    fprintf(stderr, "%s: mutex_init error %d - %s\n", argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
+  if (pthread_cond_init(&SEARCH_COND, NULL) != 0) {
+    fprintf(stderr, "%s: cond_init error %d - %s\n", argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
   /* create the pipes for the parent and child to talk over */
   if (pipe(pfd1) != 0 || pipe(pfd2) != 0) {
     fprintf(stderr, "%s: pipe error %d - %s\n", argv[0], errno, strerror(errno));
@@ -126,84 +294,19 @@ main(int argc, char **argv)
 
       printf("Handling client %s\n", inet_ntoa(clnt_addr.sin_addr));
 
-      /* Receive message from client */
-      if ((n = recv(clnt_sock, seq, MAX_SEQ-1, 0)) < 0) {
-        fprintf(stderr, "%s: recv error %d - %s\n", argv[0], errno, strerror(errno));
+      args = malloc(sizeof(THREAD_ARGS));
+      if (args == NULL) {
+        fprintf(stderr, "%s: malloc error\n", argv[0]);
         exit(1);
       }
-      seq[n] = 0;
+      args->pfd1 = pfd1[1];
+      args->pfd2 = pfd2[0];
+      args->sock = clnt_sock;
 
-      while (n > 0) {
-        printf("Received %d\n", n);
-        //printf("%s", seq);
-
-        n = strlen(seq) + 1;
-        if (write(pfd1[1], seq, n) != n) {
-          fprintf(stderr, "%s: write (size %d) error %d - %s\n", argv[0], n, errno, strerror(errno));
-          exit(1);
-        }
-
-        eod = 0;
-        total = 0;
-        while (!eod) {
-          if ((n = read(pfd2[0], buffer, MAX_BUFFER_LEN-1)) == -1) {
-            fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-            exit(1);
-          }
-
-          if (n == 0) {
-            fprintf(stderr, "%s: child pipe closed\n", argv[0]);
-            break;
-          }
-
-          buffer[n] = 0;
-          total += ++n;
-
-          //printf("%6d\n", n);
-          //printf("%s", buffer);
-
-          /* Send the length of the output to the client */
-          if (send(clnt_sock, &n, sizeof(n), 0) != sizeof(n)) {
-            fprintf(stderr, "%s: send (size %d) error %d - %s\n", argv[0], (int)sizeof(n), errno, strerror(errno));
-            exit(1);
-          }
-
-          /* Send the output to the client */
-          if (send(clnt_sock, buffer, n, 0) != n) {
-            fprintf(stderr, "%s: send (size %d) error %d - %s\n", argv[0], n, errno, strerror(errno));
-            exit(1);
-          }
-
-          /* scan backwards looking for the end of the line */
-          i = n - 2;
-          while (i > 1 && isspace(buffer[i])) i--;
-
-          /* scan backwards looking for the start of the line */
-          while (i > 1 && buffer[i] != '\n' && buffer[i] != '\r') i--;
-
-          eod = (buffer[i+1] == '/' && buffer[i+2] == '/');
-        }
-
-        printf ("Report sent: %d bytes\n", total);
-
-        /* Notify the client that we have seen the end of the report */
-        n = 0;
-        if (send(clnt_sock, &n, sizeof(n), 0) != sizeof(n)) {
-          fprintf(stderr, "%s: send (size %d) error %d - %s\n", argv[0], (int)sizeof(n), errno, strerror(errno));
-          exit(1);
-        }
-
-        /* Receive message from client */
-        if ((n = recv(clnt_sock, seq, MAX_SEQ-1, 0)) < 0) {
-          fprintf(stderr, "%s: recv error %d - %s\n", argv[0], errno, strerror(errno));
-          exit(1);
-        }
-        seq[n] = 0;
+      if (pthread_create(&threadID, NULL, thread_main, (void *)args) != 0) {
+        fprintf(stderr, "%s: pthread_create error %d - %s\n", argv[0], errno, strerror(errno));
+        exit(1);
       }
-
-      printf("Closing client %s\n", inet_ntoa(clnt_addr.sin_addr));
-
-      close(clnt_sock);
     }
 
   } else {
