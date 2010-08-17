@@ -4,6 +4,8 @@
  * $Id$
  */
 
+/* test */
+
 #include "p7_config.h"
 
 #include <stdio.h>
