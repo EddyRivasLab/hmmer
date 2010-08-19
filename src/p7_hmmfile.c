@@ -135,6 +135,83 @@ p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
 }
 
 
+/* Function:  p7_hmmfile_OpenBuffer()
+ * Incept:    MSF, Thu Aug 19 2010 [Janelia]
+ *
+ * Purpose:   Perparse a buffer containing an ascii HMM for parsing.
+ *            
+ *            As another special case, if <filename> ends in a <.gz>
+ *            suffix, the file is assumed to be compressed by GNU
+ *            <gzip>, and it is opened for reading from a pipe with
+ *            <gunzip -dc>. This feature is only available on
+ *            POSIX-compliant systems that have a <popen()> call, and
+ *            <HAVE_POPEN> is defined by the configure script at
+ *            compile time. 
+ *            
+ * Args:      filename - HMM file to open; or "-" for <stdin>
+ *            env      - list of paths to look for <hmmfile> in, in 
+ *                       addition to current working dir; or <NULL>
+ *            ret_hfp  - RETURN: opened <P7_HMMFILE>.
+ *
+ * Returns:   <eslOK> on success, and the open <ESL_HMMFILE> is returned
+ *            in <*ret_hfp>.
+ *            
+ *            <eslENOTFOUND> if <filename> can't be opened for
+ *            reading, even after the list of directories in <env> (if
+ *            any) is checked.
+ *            
+ *            <eslEFORMAT> if <filename> is not in a recognized HMMER
+ *            HMM file format.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
+{
+  P7_HMMFILE *hfp     = NULL;
+  int         status;
+  char       *tok;
+  int         toklen;
+
+  ESL_ALLOC(hfp, sizeof(P7_HMMFILE));
+  hfp->f            = NULL;
+  hfp->fname        = NULL;
+  hfp->do_gzip      = FALSE;
+  hfp->do_stdin     = FALSE;
+  hfp->newly_opened = TRUE;	/* well, it will be, real soon now */
+  hfp->is_pressed   = FALSE;
+#ifdef HMMER_THREADS
+  hfp->syncRead     = FALSE;
+#endif
+  hfp->parser       = NULL;
+  hfp->efp          = NULL;
+  hfp->ffp          = NULL;
+  hfp->pfp          = NULL;
+  hfp->ssi          = NULL;
+  hfp->errbuf[0]    = '\0';
+
+  if ((hfp->efp = esl_fileparser_CreateMapped(buffer, size))         == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  goto ERROR;
+  if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  goto ERROR;
+
+  if      (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
+  else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
+  else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
+
+  if (hfp->parser == NULL) { status = eslEFORMAT; goto ERROR; }
+
+  *ret_hfp = hfp;
+  return eslOK;
+
+ ERROR:
+  if (hfp     != NULL) p7_hmmfile_Close(hfp);
+  *ret_hfp = NULL;
+  if      (status == eslEMEM)       return status;
+  else if (status == eslENOTFOUND)  return status;
+  else                              return eslEFORMAT;
+}
+
+
 /* open_engine()
  *
  * Implements both p7_hmmfile_Open() and p7_hmmfile_OpenNoDB(). 

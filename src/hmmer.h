@@ -1059,6 +1059,7 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 /* p7_hmmfile.c */
 extern int  p7_hmmfile_Open    (char *filename, char *env, P7_HMMFILE **ret_hfp);
 extern int  p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp);
+extern int  p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 #ifdef HMMER_THREADS
 extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
