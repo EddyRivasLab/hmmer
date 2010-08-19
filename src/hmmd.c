@@ -18,7 +18,7 @@
 
 #define MAX_ARGS       512
 #define MAX_BUFFER_LEN 2048
-#define MAX_SEQ        (64*1024)
+#define MAX_SEQ        (512*1024)
 #define MAX_PENDING    5
 
 #define SERVER_PORT      41139
@@ -54,7 +54,7 @@ thread_main(void *args)
 
   int           clnt_sock;
 
-  char          seq[MAX_SEQ];
+  char         *seq;
   char          buffer[MAX_BUFFER_LEN];
 
   THREAD_ARGS  *info = (THREAD_ARGS *)args;
@@ -64,6 +64,12 @@ thread_main(void *args)
 
   /* Extract socket file descriptor from argument */
   clnt_sock = info->sock;
+
+  seq = malloc(MAX_SEQ);
+  if (seq == NULL) {
+    fprintf(stderr, "%08X: malloc seq error\n", (unsigned int)pthread_self());
+    exit(1);
+  }
 
   /* Receive message from client */
   if ((n = recv(clnt_sock, seq, MAX_SEQ-1, 0)) < 0) {
@@ -311,6 +317,9 @@ main(int argc, char **argv)
 
   } else {
 
+    int len;
+    char *pgm;
+
     char **argp;
     char *arglist[MAX_ARGS];
     //char *arglist[] = { "./src/phmmer", "--daemon", "-", "../../sequences/sprot57", NULL };
@@ -340,14 +349,30 @@ main(int argc, char **argv)
     /* process the argument list */
     argp = arglist;
     i = (strcmp(argv[1], "-p") == 0) ? 3 : 1;
-    *argp++ = argv[i++];
+    *argp++ = pgm = argv[i++];
     *argp++ = "--daemon";
     while (i < argc-1) {
       *argp++ = argv[i++];
     }
-    *argp++ = "-";
-    *argp++ = argv[i];
-    *argp   = NULL;
+
+    /* if we are running hmmscan, the '-' is the last arguement */
+    len = strlen(pgm);
+    len -= strlen("hmmscan");
+    if (len < 0) len = 0;
+    if (strcmp(pgm+len, "hmmscan") == 0) {
+      *argp++ = argv[i];
+      *argp++ = "-";
+      *argp   = NULL;
+    } else {
+      *argp++ = "-";
+      *argp++ = argv[i];
+      *argp   = NULL;
+    }
+    
+    printf("Cmdline: ");
+    argp = arglist;
+    while (*argp) printf("%s ", *argp++);
+    printf("\n");
 
     /* start the hmmer program */
     if (execv(arglist[0], arglist) == -1) {
