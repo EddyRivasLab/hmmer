@@ -22,3 +22,38 @@ Small changes that nonetheless affect output:
     reported in nat units in 3.0, whereas all other scores are
     bit scores. 3.1 now corrects this; the bias values
     are in units of bits.
+
+
+Bugfixes:
+
+-:- #h79 Resizing a generic dynamic programming matrix with
+         p7_gmx_GrowTo() could result in memory corruption. This
+         function was not called in production H3 code, so the bug
+         only appears in test code or other H3-based code derivatives
+         (such as Elena Rivas' mouse vocalization recognizer, which is
+         where the bug was caught).
+
+-:- #h80 hmmconvert was unable to read HMMER2 "Nucleic" save files,
+	 because H3 uses "DNA" or "RNA" as an alphabet label rather
+	 than H2's generic old "Nucleic".
+
+-:- #h81 "dombias" value in output files was being reported in nats.
+         All score output is supposed to be reported in bits.
+
+-:- #h82 hmmbuild was corrupting resaved alignments if a target
+         sequence contained all insert residues and no consensus.
+
+-:- #h83 Command line E-value threshold options only worked down to
+         ~1e-30 or so because of some errant casts of internal
+         P-values to single-precision floats. All P-values are
+         supposed to be double precision, ranging down to ~1e-308.
+
+
+
+
+
+
+
+
+
+

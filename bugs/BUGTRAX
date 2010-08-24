@@ -1,3 +1,21 @@
+ID              h83
+TITLE           commandline E-value threshold options only work down to ~1e-30
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J6/120 
+REPORTED_BY     Marcelo Carlos Sousa <Marcelo.Sousa@Colorado.EDU>
+OPENED_DATE     SRE, Tue Aug 24 13:45:56 2010
+CLOSED_DATE     
+DESCRIPTION     
+  --incE option doesn't work below 1e-30 or so, as in:
+  jackhmmer --noali --incE 1.0e-40 ../nlpb_coli.fasta ../uniprot_trembl.fasta
+
+  p7_pli_TargetIncludable(), p7_pli_TargetReportable(),
+  p7_pli_DomainIncludable(), p7_pli_DomainReportable() were all taking
+  "float Pval" argument and casting the P-value to a float. Should be
+  double.
+//
 ID              h82
 TITLE           hmmbuild corrupts resave alignment on all-insert seq
 AFFECTS         3.0
