@@ -197,36 +197,9 @@ process_searchline(char *pgm, char *cmdstr, ESL_GETOPTS *go)
   if (esl_getopts_Reuse(go)            != eslOK)    p7_Die("Internal failure reusing options object");
   if (esl_opt_ProcessSpoof(go, cmdstr) != eslOK)  { printf("Failed to parse options string: %s\n",  go->errbuf); goto ERROR; }
   if (esl_opt_VerifyConfig(go)         != eslOK)  { printf("Failed to parse options string: %s\n",  go->errbuf); goto ERROR; }
- 
-  /* help format: */
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
-    p7_banner(stdout, pgm, banner);
-    esl_usage(stdout, pgm, usage);
-    puts("\nBasic options:");
-    esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
 
-    puts("\nOptions controlling scoring system:");
-    esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
-
-    puts("\nOptions controlling reporting thresholds:");
-    esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
-
-    puts("\nOptions controlling inclusion (significance) thresholds:");
-    esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
-
-    puts("\nOptions controlling model-specific thresholding:");
-    esl_opt_DisplayHelp(stdout, go, 6, 2, 80); 
-
-    puts("\nOptions controlling acceleration heuristics:");
-    esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
-
-    puts("\nOptions controlling E value calibration:");
-    esl_opt_DisplayHelp(stdout, go, 11, 2, 80); 
-
-    puts("\nOther expert options:");
-    esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
-    exit(0);
-  }
+  /* the options string can handle an optional database */
+  if (esl_opt_ArgNumber(go) > 1)                  { puts("Incorrect number of command line arguments.");         goto ERROR; }
 
   return;
   
@@ -285,11 +258,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *copt, const ESL_GETOPTS *sopt, char 
     if (esl_opt_GetInteger(sopt, "--seed") == 0) fprintf(ofp, "# random number seed:              one-time arbitrary\n");
     else                                       fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(sopt, "--seed"));
   }
-  //m/if (esl_opt_IsUsed(copt, "--tformat"))   fprintf(ofp, "# targ <seqfile> format asserted:  %s\n", esl_opt_GetString(copt, "--tformat"));
-  //m/if (esl_opt_IsUsed(copt, "--daemon"))    fprintf(ofp, "run as a daemon process\n");
-#ifdef HMMER_THREADS
-  //m/if (esl_opt_IsUsed(copt, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(copt, "--cpu"));  
-#endif
+
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
@@ -402,12 +371,6 @@ main(int argc, char **argv)
     for (j = 0 ; j < cache[i]->seq_count; ++j) sq[j].idx = j;
   }
 
-  //m//* Open the query profile HMM file */
-  //m/status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
-  //m/if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
-  //m/else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
-  //m/else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
-
   //m//* Open the results output files */
   //m/if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
   //m/if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
@@ -441,21 +404,42 @@ main(int argc, char **argv)
 
   /* read query hmm/sequence */
   while (read_QueryInfo(query, stdin) == eslOK) {
+    int dbx;
 
     /* process any run-time options */
     if (process_QueryInfo(query) == eslEOF) break;
+
+    /* figure out which cached database to use */
+    dbx = 0;
+    if (esl_opt_ArgNumber(query->opts) == 1) {
+      char *db  = esl_opt_GetArg(query->opts, 1);
+      int   len = strlen(db);
+      for (i = 0; i < esl_opt_ArgNumber(go); ++i) {
+        int n = strlen(cache[i]->filename);
+        if (n >= len) {
+          n = n - len;
+          if (strcmp(cache[i]->filename + n, db) == 0) {
+            dbx = i;
+            break;
+          }
+        }
+      }
+      if (i >= esl_opt_ArgNumber(go)) {
+        /* TODO report back an error that the db cannot be found */
+      }
+    }
 
     textw = (esl_opt_GetBoolean(query->opts, "--notextw")) ? 0 : esl_opt_GetInteger(query->opts, "--textw");
 
     esl_stopwatch_Start(w);
 
     if (query->hmm == NULL) {
-      output_header(ofp, go, query->opts, cache[0]->filename, banner_seq);
+      output_header(ofp, go, query->opts, cache[dbx]->filename, banner_seq);
       fprintf(ofp, "Query:       %s  [L=%ld]\n", query->seq->name, (long) query->seq->n);
       if (query->seq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", query->seq->acc);
       if (query->seq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", query->seq->desc);  
     } else {
-      output_header(ofp, go, query->opts, cache[0]->filename, banner_hmm);
+      output_header(ofp, go, query->opts, cache[dbx]->filename, banner_hmm);
       fprintf(ofp, "Query:       %s  [M=%d]\n", query->hmm->name, query->hmm->M);
       if (query->hmm->acc)  fprintf(ofp, "Accession:   %s\n", query->hmm->acc);
       if (query->hmm->desc) fprintf(ofp, "Description: %s\n", query->hmm->desc);
@@ -473,8 +457,8 @@ main(int argc, char **argv)
 
 #ifdef HMMER_THREADS
       if (ncpus > 0) {
-        info[i].sq_list = cache[0]->sq_list;
-        info[i].sq_cnt  = cache[0]->seq_count;
+        info[i].sq_list = cache[dbx]->sq_list;
+        info[i].sq_cnt  = cache[dbx]->seq_count;
         info[i].mutex   = mutex;
         info[i].sq_inx  = &current_index;
 
@@ -489,9 +473,9 @@ main(int argc, char **argv)
       sstatus = thread_loop(threadObj);
     } else            
 #endif
-      sstatus = serial_loop(info, cache[0]);
+      sstatus = serial_loop(info, cache[dbx]);
     if (status != eslOK) {
-      esl_fatal("Unexpected error %d reading sequence file %s", sstatus, cache[0]->filename);
+      esl_fatal("Unexpected error %d reading sequence file %s", sstatus, cache[dbx]->filename);
     }
 
     /* merge the results of the search results */
@@ -657,7 +641,7 @@ process_QueryInfo(QUERY_INFO *info)
     info->opts_ptr = ++ptr;
 
     /* skip to the end of the line */
-    while (*ptr && (*ptr != '\n' && *ptr == '\r')) ++ptr;
+    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
 
     /* skip remaining white spaces */
     if (*ptr) {
