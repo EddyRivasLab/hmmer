@@ -79,6 +79,8 @@ thread_main(void *args)
   seq[n] = 0;
 
   while (n > 0) {
+    char cache[32];
+
     printf("%08X: Received %d\n", (unsigned int)pthread_self(), n);
     //printf("%s", seq);
 
@@ -102,9 +104,9 @@ thread_main(void *args)
       exit(1);
     }
 
-    printf("%08X: Starting phmmer search %d\n", (unsigned int)pthread_self(), n);
+    printf("%08X: Starting search %d\n", (unsigned int)pthread_self(), n);
 
-    n = strlen(seq) + 1;
+    n = strlen(seq);
     if (write(info->pfd1, seq, n) != n) {
       fprintf(stderr, "%08X: write (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
       exit(1);
@@ -124,41 +126,43 @@ thread_main(void *args)
       }
 
       buffer[n] = 0;
-      total += ++n;
+      total += n;
 
       //printf("%6d\n", n);
-      //printf("%s", buffer);
-
-      /* Send the length of the output to the client */
-      if (send(clnt_sock, &n, sizeof(n), 0) != sizeof(n)) {
-        fprintf(stderr, "%08X: send (size %d) error %d - %s\n", (unsigned int)pthread_self(), (int)sizeof(n), errno, strerror(errno));
-        exit(1);
-      }
+      //i = n - 30;
+      //if (i < 0) i = 0;
+      //fprintf(stdout, "%8d: %s\n", total, buffer + i);
+      //fflush(stdout);
 
       /* Send the output to the client */
-      if (send(clnt_sock, buffer, n, 0) != n) {
+      if (send(clnt_sock, buffer, n, 0) == -1) {
         fprintf(stderr, "%08X: send (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
         exit(1);
       }
 
+      if (n < sizeof(cache)) {
+        int s = sizeof(cache)-n;
+        memmove(cache, cache+n, s);
+        memcpy(cache+s, buffer, n);
+      } else {
+        memcpy(cache, buffer+n-sizeof(cache), sizeof(cache));
+      }
+
+      //for (i = 0; i < sizeof(cache); ++i) fputc(cache[i], stdout);
+      //fputc('\n', stdout);
+      //fflush(stdout);
+
       /* scan backwards looking for the end of the line */
-      i = n - 2;
-      while (i > 1 && isspace(buffer[i])) i--;
+      i = sizeof(cache) - 1;
+      while (i > 1 && isspace(cache[i])) i--;
 
       /* scan backwards looking for the start of the line */
-      while (i > 1 && buffer[i] != '\n' && buffer[i] != '\r') i--;
+      while (i > 1 && cache[i] != '\n' && cache[i] != '\r') i--;
       
-      eod = (buffer[i+1] == '/' && buffer[i+2] == '/');
+      eod = (cache[i+1] == '/' && cache[i+2] == '/');
     }
 
     printf ("%08X: Report sent: %d bytes\n", (unsigned int)pthread_self(), total);
-
-    /* Notify the client that we have seen the end of the report */
-    n = 0;
-    if (send(clnt_sock, &n, sizeof(n), 0) != sizeof(n)) {
-      fprintf(stderr, "%08X: send (size %d) error %d - %s\n", (unsigned int)pthread_self(), (int)sizeof(n), errno, strerror(errno));
-      exit(1);
-    }
 
     /* signal that phmmer is available */
     if (pthread_mutex_lock (&SEARCH_MUTEX) != 0) {
@@ -189,6 +193,7 @@ thread_main(void *args)
   close(clnt_sock);
 
   free(args);
+  free(seq);
 
   return (NULL);
 }
@@ -350,7 +355,12 @@ main(int argc, char **argv)
     argp = arglist;
     i = (strcmp(argv[1], "-p") == 0) ? 3 : 1;
     *argp++ = pgm = argv[i++];
-    *argp++ = "--daemon";
+
+    len = strlen(pgm);
+    len -= strlen("hmmscan");
+    if (len < 0) len = 0;
+
+    if (strcmp(pgm+len, "hmmpgmd") != 0) *argp++ = "--daemon";
     while (i < argc-1) {
       *argp++ = argv[i++];
     }
@@ -359,7 +369,10 @@ main(int argc, char **argv)
     len = strlen(pgm);
     len -= strlen("hmmscan");
     if (len < 0) len = 0;
-    if (strcmp(pgm+len, "hmmscan") == 0) {
+    if (strcmp(pgm+len, "hmmpgmd") == 0) {
+      *argp++ = argv[i];
+      *argp   = NULL;
+    } else if (strcmp(pgm+len, "hmmscan") == 0) {
       *argp++ = argv[i];
       *argp++ = "-";
       *argp   = NULL;

@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
 
     /* send the sequence to the daemon and read the results */
     if (strncmp(seq, "//", 2) != 0) {
+      char cache[32];
       
       n = strlen(seq) + 1;
 
@@ -129,36 +130,44 @@ int main(int argc, char *argv[])
         exit(1);
       }
 
-      if ((n = recv(sock, &len, sizeof(len), 0)) != sizeof(len)) {
-        fprintf(stderr, "%s: recv error %d - %s\n", argv[0], errno, strerror(errno));
-        exit(1);
-      }
-
+      eod = 0;
       total = 0;
-      while (len != 0) {
+      while (!eod) {
 
-        total += len;
-        //printf ("received: %d\n", len);
-
-        while (len > 0) {
-          if ((n = recv(sock, report, len, 0)) <= 0) {
-            fprintf(stderr, "%s: recv report error %d - %s\n", argv[0], errno, strerror(errno));
-            exit(1);
-          }
-
-          report[n] = 0;
-          if (fputs(report, stdout) == EOF) {
-            fprintf(stderr, "%s: fputs error %d - %s\n", argv[0], errno, strerror(errno));
-            exit(1);
-          }
-          
-          len -= n;
-        }
-
-        if ((n = recv(sock, &len, sizeof(len), 0)) <= 0) {
-          fprintf(stderr, "%s: recv len error %d - %s\n", argv[0], errno, strerror(errno));
+        if ((n = recv(sock, report, sizeof(report), 0)) <= 0) {
+          fprintf(stderr, "%s: recv report error %d - %s\n", argv[0], errno, strerror(errno));
           exit(1);
         }
+
+        report[n] = 0;
+        if (fputs(report, stdout) == EOF) {
+          fprintf(stderr, "%s: fputs error %d - %s\n", argv[0], errno, strerror(errno));
+          exit(1);
+        }
+        fflush(stdout);
+          
+        total += n;
+
+        if (n < sizeof(cache)) {
+          int s = sizeof(cache)-n;
+          memmove(cache, cache+n, s);
+          memcpy(cache+s, report, n);
+        } else {
+          memcpy(cache, report+n-sizeof(cache), sizeof(cache));
+        }
+
+        //for (i = 0; i < sizeof(cache); ++i) fputc(cache[i], stdout);
+        //fputc('\n', stdout);
+        //fflush(stdout);
+
+        /* scan backwards looking for the end of the line */
+        i = sizeof(cache) - 1;
+        while (i > 1 && isspace(cache[i])) i--;
+
+        /* scan backwards looking for the start of the line */
+        while (i > 1 && cache[i] != '\n' && cache[i] != '\r') i--;
+      
+        eod = (cache[i+1] == '/' && cache[i+2] == '/');
       }
 
       //printf("Total: %d\n", total);
