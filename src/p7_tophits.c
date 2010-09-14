@@ -621,7 +621,7 @@ workaround_bug_h74(P7_TOPHITS *th)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N)
+p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N)
 {
   int i, hit_len;    /* counters over hits */
 

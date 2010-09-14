@@ -477,7 +477,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
       //need to re-compute e-values before merging (when list will be sorted)
-      int resCnt = 0;
+      double resCnt = 0;
       if (esl_opt_IsUsed(go, "-Z"))
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
       else
