@@ -329,8 +329,8 @@ reproducible. Any other positive integer will give different (but also
 reproducible) results. A choice of 0 uses a randomly chosen seed.
 
 .TP
-.BI --qformat " <s>"
-Assert that the query sequence file is in format 
+.BI --tformat " <s>"
+Assert that the target sequence database file is in format 
 .I <s>. 
 Accepted formats include 
 .I fasta, 
