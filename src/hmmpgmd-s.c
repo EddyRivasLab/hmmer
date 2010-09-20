@@ -11,9 +11,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <setjmp.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/sctp.h>
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
@@ -32,22 +32,19 @@
 
 #define MAX_BUFFER (4*1024)
 
-typedef struct queue_data_s {
-  P7_HMM             *hmm;         /* query HMM                   */
-  ESL_SQ             *seq;         /* query sequence              */
-  ESL_ALPHABET       *abc;         /* digital alphabet            */
-  ESL_GETOPTS        *opts;        /* search specific options     */
-
-  int                 sock;        /* socket descriptor of client */
-
-  struct queue_data_s *next;
-  struct queue_data_s *prev;
-
+typedef struct {
+  uint32_t                size;        /* size of the buffer          */
+  char                   *buffer;      /* search sequence/hmm/options */
+  struct sockaddr_in      addr;        /* address to send results     */
+  socklen_t               addr_len;    /* size of address structure   */
+  struct sctp_sndrcvinfo  sri;
 } QUEUE_DATA;
 
 typedef struct {
-  QUEUE_DATA      *head;
-  QUEUE_DATA      *tail;
+  uint32_t         head;
+  uint32_t         tail;
+  uint32_t         size;
+  QUEUE_DATA      *data;
   pthread_mutex_t  mutex;
   pthread_cond_t   cond;
 } SEARCH_QUEUE;
@@ -58,7 +55,6 @@ typedef struct {
   SEARCH_QUEUE  *queue;
 } CLIENTSIDE_ARGS;
 
-#if 0
 typedef struct {
   char               *pgm;         /* program name               */
   
@@ -66,14 +62,14 @@ typedef struct {
   ESL_SQ             *seq;         /* query sequence             */
   ESL_ALPHABET       *abc;         /* digital alphabet           */
   ESL_GETOPTS        *opts;        /* search specific options    */
+
+  uint32_t            size;        /* size of query buffer       */
+  char               *buffer;      /* query buffer               */
 } QUERY_INFO;
 
 static int read_QueryInfo(SEARCH_QUEUE *queue, QUERY_INFO *info);
 static int destroy_QueryInfo(QUERY_INFO *info);
 static int reuse_QueryInfo(SEARCH_QUEUE *queue, QUERY_INFO *info);
-#endif
-
-static QUEUE_DATA *read_Queue(SEARCH_QUEUE *queue);
 
 typedef struct {
   ESL_SQ           *sq_list;     /* list of sequences to process            */
@@ -180,49 +176,6 @@ static void pipeline_thread(void *arg);
 
 
 static void
-print_client_error(int fd, int status, char *format, va_list ap)
-{
-  int   n;
-  char  ebuf[512];
-
-  HMMER_SEARCH_STATUS s;
-
-  s.status  = status;
-  s.err_len = vsnprintf(ebuf, sizeof(ebuf), format, ap);
-
-  /* send back an unsuccessful status message */
-  n = sizeof(s);
-  if (writen(fd, &s, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-    exit(1);
-  }
-
-  writen(fd, ebuf, s.err_len);
-}
-
-static void
-client_error(int fd, int status, char *format, ...)
-{
-  va_list ap;
-
-  va_start(ap, format);
-  print_client_error(fd, status, format, ap);
-  va_end(ap);
-}
-
-static void
-client_error_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
-{
-  va_list ap;
-
-  va_start(ap, format);
-  print_client_error(fd, status, format, ap);
-  va_end(ap);
-
-  longjmp(*env, 1);
-}
-
-static void
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
 {
   ESL_GETOPTS *go = NULL;
@@ -255,6 +208,26 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   puts("\nwhere most common options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
   printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+  exit(1);  
+}
+
+static void
+process_searchline(char *pgm, char *cmdstr, ESL_GETOPTS *go)
+{
+  if (esl_getopts_Reuse(go)            != eslOK)    p7_Die("Internal failure reusing options object");
+  if (esl_opt_ProcessSpoof(go, cmdstr) != eslOK)  { printf("Failed to parse options string: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)         != eslOK)  { printf("Failed to parse options string: %s\n",  go->errbuf); goto ERROR; }
+
+  /* the options string can handle an optional database */
+  if (esl_opt_ArgNumber(go) > 1)                  { puts("Incorrect number of command line arguments.");         goto ERROR; }
+
+  return;
+  
+ ERROR:  /* all errors handled here are user errors, so be polite.  */
+  esl_usage(stdout, pgm, usage);
+  puts("\nwhere most common options are:");
+  esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
+  printf("\nTo see more help on available options, do %s -h\n\n", pgm);
   exit(1);  
 }
 
@@ -306,10 +279,9 @@ main(int argc, char **argv)
   int              current_index;
 
   ESL_SQCACHE    **cache      = NULL;
+  QUERY_INFO      *query      = NULL;
 
   SEARCH_QUEUE    *queue      = NULL;
-  QUEUE_DATA      *query      = NULL;
-
   CLIENTSIDE_ARGS  client_comm;
 
   /* Set processor specific flags */
@@ -376,8 +348,11 @@ main(int argc, char **argv)
     exit(1);
   }
 
-  queue->head = NULL;
-  queue->tail = NULL;
+  queue->head = 0;
+  queue->tail = 0;
+  queue->size = 4;
+  ESL_ALLOC(queue->data, sizeof(QUEUE_DATA) * queue->size);
+  memset(queue->data, 0, sizeof(QUEUE_DATA) * queue->size);
 
   /* start the communications with the web clients */
   setup_clientside_comm(go, queue, &client_comm);
@@ -394,16 +369,19 @@ main(int argc, char **argv)
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
-  ///* initialize the query information struction */
-  //ESL_ALLOC(query, sizeof(QUERY_INFO));
-  //query->pgm      = go->argv[0];
-  //query->opts     = NULL;
-  //query->abc      = NULL;
-  //query->seq      = NULL;
-  //query->hmm      = NULL;
+  /* initialize the query information struction */
+  ESL_ALLOC(query, sizeof(QUERY_INFO));
+  query->pgm      = go->argv[0];
+  query->opts     = esl_getopts_Create(searchOpts);
+
+  query->abc      = abc;
+  query->seq      = NULL;
+  query->hmm      = NULL;
+  query->size     = 0;
+  query->buffer   = NULL;
 
   /* read query hmm/sequence */
-  while ((query = read_Queue(queue)) != NULL) {
+  while (read_QueryInfo(queue, query) == eslOK) {
     int dbx;
 
     /* figure out which cached database to use */
@@ -513,6 +491,8 @@ main(int argc, char **argv)
 
     p7_pipeline_Destroy(info->pli);
     p7_tophits_Destroy(info->th);
+
+    reuse_QueryInfo(queue, query);
   } /* end outer loop over query HMMs */
 
   if (hstatus != eslOK) p7_Fail("Unexpected error (%d) parsing input buffer", hstatus);
@@ -531,6 +511,7 @@ main(int argc, char **argv)
   free(info);
   free(queue);
 
+  destroy_QueryInfo(query);
   esl_stopwatch_Destroy(w);
 
   if (ofp != stdout) fclose(ofp);
@@ -546,11 +527,16 @@ main(int argc, char **argv)
   return eslFAIL;
 }
 
-static QUEUE_DATA *
-read_Queue(SEARCH_QUEUE *queue)
+static int
+read_QueryInfo(SEARCH_QUEUE *queue, QUERY_INFO *info)
 {
-  int         n;
-  QUEUE_DATA *data;
+  int           n;
+  int           status  = eslOK;
+  char         *ptr     = NULL;
+
+  QUEUE_DATA   *data    = NULL;
+  P7_HMMFILE   *hfp     = NULL;        /* open input HMM file             */
+  ESL_SQ       *seq     = NULL;        /* one target sequence (digital)   */
 
   if ((n = pthread_mutex_lock (&queue->mutex)) != 0) {
     errno = n;
@@ -558,7 +544,7 @@ read_Queue(SEARCH_QUEUE *queue)
     exit(1);
   }
 
-  while (queue->head == NULL) {
+  while (queue->head == queue->tail) {
     if ((n = pthread_cond_wait (&queue->cond, &queue->mutex)) != 0) {
       errno = n;
       fprintf(stderr, "%08X: cond wait error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
@@ -566,7 +552,9 @@ read_Queue(SEARCH_QUEUE *queue)
     }
   }
 
-  data = queue->head;
+  data = queue->data + queue->head;
+  info->size   = data->size;
+  info->buffer = data->buffer;
 
   if ((n = pthread_mutex_unlock (&queue->mutex)) != 0) {
     errno = n;
@@ -574,7 +562,95 @@ read_Queue(SEARCH_QUEUE *queue)
     exit(1);
   }
 
-  return data;
+  /* skip all leading white spaces */
+  ptr = info->buffer;
+  while (*ptr && isspace(*ptr)) ++ptr;
+
+  /* process search specific options */
+  if (*ptr == '@') {
+    process_searchline(info->pgm, ++ptr, info->opts);
+
+    /* skip to the end of the line */
+    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
+
+    /* skip remaining white spaces */
+    while (*ptr && isspace(*ptr)) ++ptr;
+  }
+
+  if (*ptr) {
+    if (strncmp(ptr, "//", 2) == 0) return eslEOF;
+
+    /* try to parse the input buffer as a sequence */
+    seq = esl_sq_CreateDigital(info->abc);
+    status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
+    if (status == eslOK) {
+      info->seq = seq;
+    } else {
+      esl_sq_Destroy(seq);
+    }
+
+    /* now try to parse the buffer as an hmm */
+    if (status != eslOK) {
+      if ((status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp)) != eslOK) return status;
+      if ((status = p7_hmmfile_Read(hfp, &info->abc,  &info->hmm)) != eslOK) return status;
+      p7_hmmfile_Close(hfp);
+    }
+  }
+
+  return status;
+}
+
+static int
+reuse_QueryInfo(SEARCH_QUEUE *queue, QUERY_INFO *info)
+{
+  int n;
+  int inx;
+
+  if (info->hmm)  p7_hmm_Destroy(info->hmm);
+  if (info->seq)  esl_sq_Destroy(info->seq);
+
+  info->seq       = NULL;
+  info->hmm       = NULL;
+
+  /* remove the query that we just processed from the queue */
+  if ((n = pthread_mutex_lock (&queue->mutex)) != 0) {
+    errno = n;
+    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+    exit(1);
+  }
+
+  inx = queue->head;
+  queue->data[inx].size = 0;
+  free(queue->data[inx].buffer);
+  queue->data[inx].buffer = NULL;
+  queue->head = (queue->head + 1) %queue->size;
+
+  if ((n = pthread_mutex_unlock (&queue->mutex)) != 0) {
+    errno = n;
+    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+    exit(1);
+  }
+
+  return eslOK;
+}
+
+static int
+destroy_QueryInfo(QUERY_INFO *info)
+{
+  esl_getopts_Destroy(info->opts);
+
+  if (info->abc != NULL) esl_alphabet_Destroy(info->abc);
+  if (info->hmm != NULL) p7_hmm_Destroy(info->hmm);
+  if (info->seq != NULL) esl_sq_Destroy(info->seq);
+
+  info->opts      = NULL;
+  info->abc       = NULL;
+  info->seq       = NULL;
+  info->hmm       = NULL;
+
+  free(info);
+
+  return eslOK;
 }
 
 static int
@@ -796,20 +872,260 @@ pipeline_thread(void *arg)
   return;
 }
 
+typedef struct {
+  uint32_t   value;
+  char      *str;
+} CONST_TO_STR;
+
+CONST_TO_STR SCPT_STATE_STR[] = {
+  { SCTP_COMM_UP,          "SCTP_COMM_UP"        },
+  { SCTP_COMM_LOST,        "SCTP_COMM_LOST"      },
+  { SCTP_RESTART,          "SCTP_RESTART"        },
+  { SCTP_SHUTDOWN_COMP,    "SCTP_SHUTDOWN_COMP"  },
+  { SCTP_CANT_STR_ASSOC,   "SCTP_CANT_STR_ASSOC" },
+  { 0,                     "UNKNOWN"             },
+};
+
+static char *
+print_value(CONST_TO_STR *ptr, uint32_t value)
+{
+  while (ptr->value && ptr->value != value) ++ptr;
+  return ptr->str;
+}
+
+
+static void
+clientside_event(void *buf)
+{
+  struct sctp_assoc_change *sac;
+  struct sctp_send_failed *ssf;
+  struct sctp_paddr_change *spc;
+  struct sctp_remote_error *sre;
+  union sctp_notification *snp;
+  char addrbuf[INET6_ADDRSTRLEN];
+  const char *ap;
+  struct sockaddr_in *sin;
+  struct sockaddr_in6 *sin6;
+  char *s;
+
+  snp = (union sctp_notification *)buf;
+
+  switch (snp->sn_header.sn_type) {
+  case SCTP_ASSOC_CHANGE:
+    sac = &snp->sn_assoc_change;
+    s = print_value(SCPT_STATE_STR, sac->sac_state);
+    printf("^^^ assoc_change: %s, error=%hu, instr=%hu outstr=%hu\n", 
+           s, sac->sac_error, sac->sac_inbound_streams, sac->sac_outbound_streams);
+    break;
+    
+  case SCTP_SEND_FAILED:
+    ssf = &snp->sn_send_failed;
+    printf("^^^ sendfailed: len=%hu err=%d\n", ssf->ssf_length, ssf->ssf_error);
+    break;
+    
+  case SCTP_PEER_ADDR_CHANGE:
+    spc = &snp->sn_paddr_change;
+    if (spc->spc_aaddr.ss_family == AF_INET) {
+      sin = (struct sockaddr_in *)&spc->spc_aaddr;
+      ap = inet_ntop(AF_INET, &sin->sin_addr, addrbuf, INET6_ADDRSTRLEN);
+    } else {
+      sin6 = (struct sockaddr_in6 *)&spc->spc_aaddr;
+      ap = inet_ntop(AF_INET6, &sin6->sin6_addr, addrbuf, INET6_ADDRSTRLEN);
+    }
+    printf("^^^ intf_change: %s state=%d, error=%d\n", ap, spc->spc_state, spc->spc_error);
+    break;
+    
+  case SCTP_REMOTE_ERROR:
+    sre = &snp->sn_remote_error;
+    printf("^^^ remote_error: err=%hu len=%hu\n", ntohs(sre->sre_error), ntohs(sre->sre_length));
+    break;
+    
+  case SCTP_SHUTDOWN_EVENT:
+    printf("^^^ shutdown event\n");
+    break;
+    
+  default:
+    printf("unknown type: %hu\n", snp->sn_header.sn_type);
+    break;
+  }
+}
+
+static void *
+clientside_thread(void *arg)
+{
+  int          n;
+  int          inx;
+  int          flags;
+  size_t       size;
+  socklen_t    len;
+
+  int          bufsize;
+  char        *buffer;
+
+  struct sockaddr_in      addr;
+  struct sctp_sndrcvinfo  info;
+
+  CLIENTSIDE_ARGS   *data = (CLIENTSIDE_ARGS *)arg;
+  SEARCH_QUEUE      *queue = data->queue;
+
+  for ( ;; ) {
+
+    bufsize = MAX_BUFFER;
+    if ((buffer = malloc(bufsize)) == NULL) {
+      fprintf(stderr, "%s: malloc error (size %d)\n", data->pgm, bufsize);
+      exit(1);
+    }
+
+    /* Wait for a client message */
+    n = sizeof(addr);
+    if ((size = sctp_recvmsg(data->sock_fd, buffer, bufsize, (struct sockaddr *)&addr, &len, &info, &flags)) == -1) {
+      fprintf(stderr, "%s: sctp_recvmsg error %d - %s\n", data->pgm, errno, strerror(errno));
+      exit(1);
+    }
+
+    printf("Received message %d\n", (int)size);
+    if (flags & MSG_NOTIFICATION) {
+      clientside_event(buffer);
+      continue;
+    } else {
+      buffer[size] = 0;
+      //printf("%s\n", buffer);
+    }
+
+    /* add the search request to the queue */
+    if ((n = pthread_mutex_lock (&queue->mutex)) != 0) {
+      errno = n;
+      fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    inx = queue->tail;
+    queue->data[inx].sri = info;
+    queue->data[inx].size = size;
+    queue->data[inx].buffer = malloc(size+1);
+    if (queue->data[inx].buffer == NULL) {
+      fprintf(stderr, "%s: malloc error (size %d)\n", data->pgm, len);
+      exit(1);
+    }
+    memcpy(queue->data[inx].buffer, buffer, size+1);
+    queue->data[inx].buffer[size] = 0;
+
+    memcpy(&queue->data[inx].addr, &addr, len);
+    queue->data[inx].addr_len = len;
+
+    queue->tail = (queue->tail + 1) % queue->size;
+
+    /* if the queue is full, increase its size */
+    if (queue->head == queue->tail) {
+      int         i;
+      int         x;
+      int         sz;
+      QUEUE_DATA *tmp;
+
+      sz = queue->size * 2;
+      if ((tmp = malloc(sizeof(QUEUE_DATA) * sz)) == NULL) {
+        fprintf(stderr, "%s: realloc error (size %d)\n", data->pgm, len);
+        exit(1);
+      }
+
+      for (i = 0; i < queue->size; ++i) {
+        x = (queue->head + i) % queue->size;
+        tmp[i] = queue->data[x];
+      }
+
+      free(queue->data);
+
+      queue->head = 0;
+      queue->tail = queue->size;
+      queue->size = sz;
+      queue->data = tmp;
+    }
+
+    if ((n = pthread_mutex_unlock (&queue->mutex)) != 0) {
+      errno = n;
+      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+
+    /* if anyone is waiting, wake them up */
+    if ((n = pthread_cond_broadcast (&queue->cond)) != 0) {
+      errno = n;
+      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      exit(1);
+    }
+  }
+}
+
+static void 
+setup_clientside_comm(ESL_GETOPTS *opts, SEARCH_QUEUE *queue, CLIENTSIDE_ARGS *args)
+{
+  int                  n;
+  int                  sock_fd;
+  pthread_t            threadID;
+
+  struct sockaddr_in          addr;
+  struct sctp_event_subscribe events;
+
+  /* Create socket for incoming connections */
+  if ((sock_fd = socket(AF_INET, SOCK_SEQPACKET, IPPROTO_SCTP)) < 0) {
+    fprintf(stderr, "%s: socket error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+      
+  /* Construct local address structure */
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  addr.sin_port = htons(esl_opt_GetInteger(opts, "--cport"));
+
+  /* Bind to the local address */
+  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+    fprintf(stderr, "%s: bind error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
+  /* Setup notification events we are interested in */
+  memset(&events, 0, sizeof(events));
+  events.sctp_data_io_event      = 1;
+  events.sctp_association_event  = 1;
+  events.sctp_send_failure_event = 1;
+  events.sctp_shutdown_event     = 1;
+  if (setsockopt(sock_fd, IPPROTO_SCTP, SCTP_EVENTS, &events, sizeof(events)) < 0) {
+    fprintf(stderr, "%s: setsockopt error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
+  /* Mark the socket so it will listen for incoming connections */
+  if (listen(sock_fd, esl_opt_GetInteger(opts, "--ccncts")) < 0) {
+    fprintf(stderr, "%s: listen error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
+  args->pgm     = opts->argv[0];
+  args->sock_fd = sock_fd;
+  args->queue   = queue;
+
+  if ((n = pthread_create(&threadID, NULL, clientside_thread, (void *)args)) != 0) {
+    errno = n;
+    fprintf(stderr, "%s: pthread_create error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+}
+
 static void
 send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSIDE_ARGS *comm)
 {
   int i, j;
   int n;
-  int fd;
+  int inx;
 
   P7_HIT    *hit;
   P7_DOMAIN *dcl;
 
-  HMMER_SEARCH_STATS   stats;
-  HMMER_SEARCH_STATUS  status;
+  HMMER_SEARCH_STATS  stats;
 
-  QUEUE_DATA *data;
+  struct sockaddr_in      addr;
+  struct sctp_sndrcvinfo  sri;
 
   /* add the search request to the queue */
   if ((n = pthread_mutex_lock (&queue->mutex)) != 0) {
@@ -818,24 +1134,13 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
     exit(1);
   }
 
-  data = queue->head;
-  queue->head = data->next;
-  if (data->next == NULL) queue->tail = NULL;
+  inx = queue->head;
+  sri = queue->data[inx].sri;
+  addr = queue->data[inx].addr;
 
   if ((n = pthread_mutex_unlock (&queue->mutex)) != 0) {
     errno = n;
     fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
-
-  fd = data->sock;
-
-  /* send back a successful status message */
-  status.status  = eslOK;
-  status.err_len = 0;
-  n = sizeof(status);
-  if (writen(fd, &status, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
     exit(1);
   }
 
@@ -863,8 +1168,8 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
   stats.nincluded   = info->th->nincluded;
 
   n = sizeof(stats);
-  if (writen(fd, &stats, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
+  if (sctp_sendmsg(comm->sock_fd, &stats, n, (struct sockaddr *)&addr, sizeof(addr), sri.sinfo_ppid, sri.sinfo_flags, sri.sinfo_stream, 0, 0) != n) {
+    fprintf(stderr, "hmmpgmd: sctp_sendmsg (size %d) error %d - %s\n", n, errno, strerror(errno));
     exit(1);
   }
 
@@ -913,8 +1218,8 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
       p += l;
     }
 
-    if (writen(fd, h, n) != n) {
-      fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
+    if (sctp_sendmsg(comm->sock_fd, h, n, (struct sockaddr *)&addr, sizeof(addr), sri.sinfo_ppid, sri.sinfo_flags, sri.sinfo_stream, 0, 0) != n) {
+      fprintf(stderr, "hmmpgmd: sctp_sendmsg (size %d) error %d - %s\n", n, errno, strerror(errno));
       exit(1);
     }
 
@@ -934,8 +1239,8 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
       p += sizeof(P7_ALIDISPLAY);
       memcpy(p, dcl->ad->mem, dcl->ad->memsize);
 
-      if (writen(fd, h, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
+      if (sctp_sendmsg(comm->sock_fd, h, n, (struct sockaddr *)&addr, sizeof(addr), sri.sinfo_ppid, sri.sinfo_flags, sri.sinfo_stream, 0, 0) != n) {
+        fprintf(stderr, "hmmpgmd: sctp_sendmsg (size %d) error %d - %s\n", n, errno, strerror(errno));
         exit(1);
       }
 
@@ -943,334 +1248,6 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
     }
 
     ++hit;
-  }
-
-  esl_getopts_Destroy(data->opts);
-
-  if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
-  if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
-  if (data->seq != NULL) esl_sq_Destroy(data->seq);
-
-  data->opts      = NULL;
-  data->abc       = NULL;
-  data->seq       = NULL;
-  data->hmm       = NULL;
-
-  free(data);
-}
-
-static void
-process_searchline(int fd, char *cmdstr, ESL_GETOPTS *go)
-{
-  int status;
-
-  if ((status = esl_opt_ProcessSpoof(go, cmdstr)) != eslOK) client_error(fd, status, "Failed to parse options string: %s", go->errbuf);
-  if ((status = esl_opt_VerifyConfig(go))         != eslOK) client_error(fd, status, "Failed to parse options string: %s", go->errbuf);
-
-  /* the options string can handle an optional database */
-  if (esl_opt_ArgNumber(go) > 1)                 client_error(fd, eslFAIL, "Incorrect number of command line arguments.");
-}
-
-static int
-clientside_loop(CLIENTSIDE_ARGS *data)
-{
-  int                status;
-
-  char              *ptr;
-  char              *buffer;
-  char              *opt_ptr;
-
-  int                buf_size;
-  int                remaining;
-  int                amount;
-  int                eod;
-  int                n;
-
-  P7_HMM            *hmm     = NULL;         /* query HMM                   */
-  ESL_SQ            *seq     = NULL;         /* query sequence              */
-  ESL_ALPHABET      *abc     = NULL;         /* digital alphabet            */
-  ESL_GETOPTS       *opts    = NULL;         /* search specific options     */
-
-  SEARCH_QUEUE      *queue    = data->queue;
-
-  QUEUE_DATA        *parms;
-
-  jmp_buf            jmp_env;
-
-  buf_size = 4096;
-  buffer = malloc(buf_size);
-  if (buffer == NULL) {
-    fprintf(stderr, "%s: malloc error\n", data->pgm);
-    exit(1);
-  }
-
-  ptr = buffer;
-  remaining = buf_size;
-  amount = 0;
-
-  eod = 0;
-  while (!eod) {
-
-    /* Receive message from client */
-    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
-      fprintf(stderr, "%08X: recv error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
-
-    if (n == 0) return 1;
-
-    ptr += n;
-    amount += n;
-    remaining -= n;
-    eod = (amount > 1 && *(ptr - 2) == '/' && *(ptr - 2) == '/' );
-
-    /* if the buffer is full, make it larger */
-    if (!eod && remaining == 0) {
-      buffer = realloc(buffer, buf_size * 2);
-      if (buffer == NULL) {
-        fprintf(stderr, "%s: realloc error\n", data->pgm);
-        exit(1);
-      }
-
-      ptr = buffer + buf_size;
-      remaining = buf_size;
-      buf_size *= 2;
-    }
-  }
-
-  /* zero terminate the buffer */
-  if (remaining == 0) {
-    buffer = realloc(buffer, buf_size + 1);
-    if (buffer == NULL) {
-      fprintf(stderr, "%s: realloc error\n", data->pgm);
-      exit(1);
-    }
-
-    ptr = buffer + buf_size;
-  }
-  *ptr = 0;
-
-  /* skip all leading white spaces */
-  ptr = buffer;
-  while (*ptr && isspace(*ptr)) ++ptr;
-
-  /* process search specific options */
-  opt_ptr = NULL;
-  opts = esl_getopts_Create(searchOpts);
-  if (opts == NULL)  {
-    client_error(data->sock_fd, eslFAIL, "Internal failure creating options object");
-    free(buffer);
-    return 0;
-  }
-
-  if (*ptr == '@') {
-    opt_ptr = ptr;
-
-    /* skip to the end of the line */
-    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
-
-    /* skip remaining white spaces */
-    while (*ptr && isspace(*ptr)) ++ptr;
-  }
-
-  if (strncmp(ptr, "//", 2) == 0) {
-    client_error(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
-    free(buffer);
-    return 0;
-  }
-
-  if (!setjmp(jmp_env)) {
-    
-    if (opt_ptr != NULL) process_searchline(data->sock_fd, ++ptr, opts);
-
-    abc = esl_alphabet_Create(eslAMINO);
-
-    if (*ptr == '>') {
-      /* try to parse the input buffer as a FASTA sequence */
-      seq = esl_sq_CreateDigital(abc);
-      status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
-      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error %d parsing sequence", status);
-
-    } else if (strncmp(ptr, "HMM", 3) == 0) {
-      P7_HMMFILE   *hfp     = NULL;
-
-      /* try to parse the buffer as an hmm */
-      status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
-      if (status == eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error %d opening hmm", status);
-
-      status = p7_hmmfile_Read(hfp, &abc,  &hmm);
-      if (status == eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error %d reading hmm", status);
-
-      p7_hmmfile_Close(hfp);
-
-    } else {
-      /* no idea what we are trying to parse */
-      client_error_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error unknown sequence/hmm format");
-    }
-  } else {
-    /* an error occured some where, so try to clean up */
-    if (abc != NULL) esl_getopts_Destroy(opts);
-    if (abc != NULL) esl_alphabet_Destroy(abc);
-    if (hmm != NULL) p7_hmm_Destroy(hmm);
-    if (seq != NULL) esl_sq_Destroy(seq);
-
-    free(buffer);
-
-    return 0;
-  }
-
-  parms = malloc(sizeof(QUEUE_DATA));
-  if (parms == NULL) {
-    fprintf(stderr, "%s: malloc error\n", data->pgm);
-    exit(1);
-  }
-
-  parms->hmm  = hmm;
-  parms->seq  = seq;
-  parms->abc  = abc;
-  parms->opts = opts;
-
-  parms->sock = data->sock_fd;
-  parms->next = NULL;
-  parms->prev = NULL;
-
-  /* add the search request to the queue */
-  if ((n = pthread_mutex_lock (&queue->mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
-
-  if (queue->head == NULL) {
-    queue->head = parms;
-    queue->tail = parms;
-  } else {
-    queue->tail->next = parms;
-    parms->prev = queue->tail;
-  }
-
-  if ((n = pthread_mutex_unlock (&queue->mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
-
-  /* if anyone is waiting, wake them up */
-  if ((n = pthread_cond_broadcast (&queue->cond)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
-
-  free(buffer);
-  return 0;
-}
-
-static void *
-clientside_thread(void *arg)
-{
-  int eof;
-  CLIENTSIDE_ARGS   *data     = (CLIENTSIDE_ARGS *)arg;
-
-  /* Guarantees that thread resources are deallocated upon return */
-  pthread_detach(pthread_self()); 
-
-  eof = 0;
-  while (!eof) {
-    eof = clientside_loop(data);
-  }
-
-  printf("Closing socket %d\n", data->sock_fd);
-
-  close(data->sock_fd);
-  free(data);
-
-  pthread_exit(NULL);
-}
-
-static void *
-comm_thread(void *arg)
-{
-  int                  n;
-  int                  fd;
-  pthread_t            thread_id;
-
-  struct sockaddr_in   addr;
-
-  CLIENTSIDE_ARGS     *targs = NULL;
-  CLIENTSIDE_ARGS     *data  = (CLIENTSIDE_ARGS *)arg;
-  SEARCH_QUEUE        *queue = data->queue;
-
-  for ( ;; ) {
-
-    /* Wait for a client to connect */
-    n = sizeof(addr);
-    if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) {
-      fprintf(stderr, "%s: accept error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
-
-    printf("Handling client %s (%d)\n", inet_ntoa(addr.sin_addr), fd);
-
-    targs = malloc(sizeof(CLIENTSIDE_ARGS));
-    if (targs == NULL) {
-      fprintf(stderr, "%s: malloc error\n", data->pgm);
-      exit(1);
-    }
-    targs->pgm     = data->pgm;
-    targs->queue   = queue;
-    targs->sock_fd = fd;
-
-    if (pthread_create(&thread_id, NULL, clientside_thread, (void *)targs) != 0) {
-      fprintf(stderr, "%s: pthread_create error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
-  }
-  
-  pthread_exit(NULL);
-}
-
-static void 
-setup_clientside_comm(ESL_GETOPTS *opts, SEARCH_QUEUE *queue, CLIENTSIDE_ARGS *args)
-{
-  int                  n;
-  int                  sock_fd;
-  pthread_t            thread_id;
-
-  struct sockaddr_in   addr;
-
-  /* Create socket for incoming connections */
-  if ((sock_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-    fprintf(stderr, "%s: socket error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-      
-  /* Construct local address structure */
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  addr.sin_port = htons(esl_opt_GetInteger(opts, "--cport"));
-
-  /* Bind to the local address */
-  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "%s: bind error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-
-  /* Mark the socket so it will listen for incoming connections */
-  if (listen(sock_fd, esl_opt_GetInteger(opts, "--ccncts")) < 0) {
-    fprintf(stderr, "%s: listen error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-
-  args->pgm     = opts->argv[0];
-  args->sock_fd = sock_fd;
-  args->queue   = queue;
-
-  if ((n = pthread_create(&thread_id, NULL, comm_thread, (void *)args)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: pthread_create error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
   }
 }
 
