@@ -49,6 +49,7 @@ PROGS = hmmalign\
 	nhmmer\
 	hmmd\
 	hmmc\
+	hmmc2\
 	hmmpgmd
 
 HDRS =  hmmer.h\
@@ -88,7 +89,8 @@ OBJS =  build.o\
 	p7_profile.o\
 	p7_spensemble.o\
 	p7_tophits.o\
-	p7_trace.o
+	p7_trace.o\
+	commutils.o
 #	island.o\
 
 
