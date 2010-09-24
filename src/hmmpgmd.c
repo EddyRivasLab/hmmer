@@ -33,12 +33,13 @@
 #define MAX_BUFFER (4*1024)
 
 typedef struct queue_data_s {
-  P7_HMM             *hmm;         /* query HMM                   */
-  ESL_SQ             *seq;         /* query sequence              */
-  ESL_ALPHABET       *abc;         /* digital alphabet            */
-  ESL_GETOPTS        *opts;        /* search specific options     */
+  P7_HMM             *hmm;         /* query HMM                      */
+  ESL_SQ             *seq;         /* query sequence                 */
+  ESL_ALPHABET       *abc;         /* digital alphabet               */
+  ESL_GETOPTS        *opts;        /* search specific options        */
+  P7_BUILDER         *bld;         /* HMM construction configuration */
 
-  int                 sock;        /* socket descriptor of client */
+  int                 sock;        /* socket descriptor of client    */
 
   struct queue_data_s *next;
   struct queue_data_s *prev;
@@ -58,34 +59,20 @@ typedef struct {
   SEARCH_QUEUE  *queue;
 } CLIENTSIDE_ARGS;
 
-#if 0
-typedef struct {
-  char               *pgm;         /* program name               */
-  
-  P7_HMM             *hmm;         /* query HMM                  */
-  ESL_SQ             *seq;         /* query sequence             */
-  ESL_ALPHABET       *abc;         /* digital alphabet           */
-  ESL_GETOPTS        *opts;        /* search specific options    */
-} QUERY_INFO;
-
-static int read_QueryInfo(SEARCH_QUEUE *queue, QUERY_INFO *info);
-static int destroy_QueryInfo(QUERY_INFO *info);
-static int reuse_QueryInfo(SEARCH_QUEUE *queue, QUERY_INFO *info);
-#endif
-
 static QUEUE_DATA *read_Queue(SEARCH_QUEUE *queue);
 
 typedef struct {
-  ESL_SQ           *sq_list;     /* list of sequences to process            */
-  int               sq_cnt;      /* number of sequences                     */
+  ESL_SQ           *sq_list;     /* list of sequences to process     */
+  int               sq_cnt;      /* number of sequences              */
 
-  pthread_mutex_t   mutex;       /* protect data                            */
-  int              *sq_inx;      /* next sequence to process                */
+  pthread_mutex_t   mutex;       /* protect data                     */
+  int              *sq_inx;      /* next sequence to process         */
 
-  P7_HMM           *hmm;         /* query HMM                               */
-  ESL_SQ           *seq;         /* query sequence                          */
-  ESL_ALPHABET     *abc;         /* digital alphabet                        */
-  ESL_GETOPTS      *opts;
+  P7_HMM           *hmm;         /* query HMM                        */
+  ESL_SQ           *seq;         /* query sequence                   */
+  ESL_ALPHABET     *abc;         /* digital alphabet                 */
+  ESL_GETOPTS      *opts;        /* search specific options          */
+  P7_BUILDER       *bld;         /* HMM construction configuration   */
 
   double            elapsed;
 
@@ -293,8 +280,6 @@ main(int argc, char **argv)
   ESL_GETOPTS     *go         = NULL;              /* command line processing                         */
   int              textw      = 0;
   int              status     = eslOK;
-  int              hstatus    = eslOK;
-  int              sstatus    = eslOK;
   int              i, j, n;
 
   int              ncpus      = 0;
@@ -394,14 +379,6 @@ main(int argc, char **argv)
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
-  ///* initialize the query information struction */
-  //ESL_ALLOC(query, sizeof(QUERY_INFO));
-  //query->pgm      = go->argv[0];
-  //query->opts     = NULL;
-  //query->abc      = NULL;
-  //query->seq      = NULL;
-  //query->hmm      = NULL;
-
   /* read query hmm/sequence */
   while ((query = read_Queue(queue)) != NULL) {
     int dbx;
@@ -431,9 +408,9 @@ main(int argc, char **argv)
     esl_stopwatch_Start(w);
 
     if (query->hmm == NULL) {
-      fprintf(ofp, "Query:       %s  [L=%ld]\n", query->seq->name, (long) query->seq->n);
+      fprintf(ofp, "Query (%d):       %s  [L=%ld]\n", query->sock, query->seq->name, (long) query->seq->n);
     } else {
-      fprintf(ofp, "Query:       %s  [M=%d]\n", query->hmm->name, query->hmm->M);
+      fprintf(ofp, "Query (%d):       %s  [M=%d]\n", query->sock, query->hmm->name, query->hmm->M);
     }
 
     /* Create processing pipeline and hit list */
@@ -442,6 +419,7 @@ main(int argc, char **argv)
       info[i].hmm   = query->hmm;
       info[i].seq   = query->seq;
       info[i].opts  = query->opts;
+      info[i].bld   = query->bld;
 
       info[i].th    = NULL;
       info[i].pli   = NULL;
@@ -458,15 +436,14 @@ main(int argc, char **argv)
 
     if (ncpus > 0) {
       current_index = 0;
-      sstatus = thread_loop(threadObj);
+      thread_loop(threadObj);
     } else {
-      sstatus = serial_loop(info, cache[dbx]);
-    }
-    if (status != eslOK) {
-      esl_fatal("Unexpected error %d reading sequence file %s", sstatus, cache[dbx]->filename);
+      serial_loop(info, cache[dbx]);
     }
 
-    fprintf (ofp, "   Sequences  Residues                        Elapsed\n");
+    esl_stopwatch_Stop(w);
+#if 0
+    fprintf (ofp, "   Sequences  Residues                              Elapsed\n");
     for (i = 0; i < infocnt; ++i) {
       char buf1[16];
       int h, m, s, hs;
@@ -483,7 +460,7 @@ main(int argc, char **argv)
       fprintf (ofp, "%2d %9" PRId64 " %9" PRId64 " %7" PRId64 " %7" PRId64 " %6" PRId64 " %5" PRId64 " %s\n",
                i, pli->nseqs, pli->nres, pli->n_past_msv, pli->n_past_bias, pli->n_past_vit, pli->n_past_fwd, buf1);
     }
-
+#endif
     /* merge the results of the search results */
     for (i = 1; i < infocnt; ++i) {
       p7_tophits_Merge(info[0].th, info[i].th);
@@ -491,8 +468,6 @@ main(int argc, char **argv)
       p7_pipeline_Destroy(info[i].pli);
       p7_tophits_Destroy(info[i].th);
     }
-
-    esl_stopwatch_Stop(w);
 
     send_results(w, info, queue, &client_comm);
 
@@ -514,8 +489,6 @@ main(int argc, char **argv)
     p7_pipeline_Destroy(info->pli);
     p7_tophits_Destroy(info->th);
   } /* end outer loop over query HMMs */
-
-  if (hstatus != eslOK) p7_Fail("Unexpected error (%d) parsing input buffer", hstatus);
 
   if (ncpus > 0) {
     pthread_mutex_destroy(&mutex);
@@ -581,39 +554,20 @@ static int
 serial_loop(WORKER_INFO *info, ESL_SQCACHE *cache)
 {
   int               i;
-  int               seed;
-  int               status;
-  ESL_SQ           *dbsq     = NULL;         /* one target sequence (digital)  */
 
+  ESL_SQ           *dbsq     = NULL;         /* one target sequence (digital)  */
   P7_BG            *bg       = NULL;	     /* null model                     */
   P7_PIPELINE      *pli      = NULL;         /* work pipeline                  */
   P7_TOPHITS       *th       = NULL;         /* top hit results                */
   P7_PROFILE       *gm       = NULL;         /* generic model                  */
   P7_OPROFILE      *om       = NULL;         /* optimized query profile        */
 
-  P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
-
   /* Convert to an optimized model */
   bg = p7_bg_Create(info->abc);
 
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
-    bld = p7_builder_Create(NULL, info->abc);
-    if ((seed = esl_opt_GetInteger(info->opts, "--seed")) > 0) {
-      esl_randomness_Init(bld->r, seed);
-      bld->do_reseeding = TRUE;
-    }
-    bld->EmL = esl_opt_GetInteger(info->opts, "--EmL");
-    bld->EmN = esl_opt_GetInteger(info->opts, "--EmN");
-    bld->EvL = esl_opt_GetInteger(info->opts, "--EvL");
-    bld->EvN = esl_opt_GetInteger(info->opts, "--EvN");
-    bld->EfL = esl_opt_GetInteger(info->opts, "--EfL");
-    bld->EfN = esl_opt_GetInteger(info->opts, "--EfN");
-    bld->Eft = esl_opt_GetReal   (info->opts, "--Eft");
-    status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(info->opts, "--mxfile"), NULL, esl_opt_GetReal(info->opts, "--popen"), esl_opt_GetReal(info->opts, "--pextend"));
-    if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
-
-    p7_SingleBuilder(bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+    p7_SingleBuilder(info->bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
     om = p7_oprofile_Create(info->hmm->M, info->abc);
@@ -648,7 +602,6 @@ serial_loop(WORKER_INFO *info, ESL_SQCACHE *cache)
   p7_oprofile_Destroy(om);
 
   if (gm  != NULL) p7_profile_Destroy(gm);
-  if (bld != NULL) p7_builder_Destroy(bld);
 
   return eslOK;
 }
@@ -668,9 +621,7 @@ static void
 pipeline_thread(void *arg)
 {
   int               i;
-  int               seed;
   int               count;
-  int               status;
   int               workeridx;
   WORKER_INFO      *info;
   ESL_THREADS      *obj;
@@ -682,8 +633,6 @@ pipeline_thread(void *arg)
   P7_TOPHITS       *th       = NULL;         /* top hit results                */
   P7_PROFILE       *gm       = NULL;         /* generic model                  */
   P7_OPROFILE      *om       = NULL;         /* optimized query profile        */
-
-  P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
@@ -698,22 +647,7 @@ pipeline_thread(void *arg)
 
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
-    bld = p7_builder_Create(NULL, info->abc);
-    if ((seed = esl_opt_GetInteger(info->opts, "--seed")) > 0) {
-      esl_randomness_Init(bld->r, seed);
-      bld->do_reseeding = TRUE;
-    }
-    bld->EmL = esl_opt_GetInteger(info->opts, "--EmL");
-    bld->EmN = esl_opt_GetInteger(info->opts, "--EmN");
-    bld->EvL = esl_opt_GetInteger(info->opts, "--EvL");
-    bld->EvN = esl_opt_GetInteger(info->opts, "--EvN");
-    bld->EfL = esl_opt_GetInteger(info->opts, "--EfL");
-    bld->EfN = esl_opt_GetInteger(info->opts, "--EfN");
-    bld->Eft = esl_opt_GetReal   (info->opts, "--Eft");
-    status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(info->opts, "--mxfile"), NULL, esl_opt_GetReal(info->opts, "--popen"), esl_opt_GetReal(info->opts, "--pextend"));
-    if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
-
-    p7_SingleBuilder(bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+    p7_SingleBuilder(info->bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
     om = p7_oprofile_Create(info->hmm->M, info->abc);
@@ -784,7 +718,6 @@ pipeline_thread(void *arg)
   p7_oprofile_Destroy(om);
 
   if (gm != NULL)  p7_profile_Destroy(gm);
-  if (bld != NULL) p7_builder_Destroy(bld);
 
   esl_stopwatch_Stop(w);
   info->elapsed = w->elapsed;
@@ -793,6 +726,7 @@ pipeline_thread(void *arg)
 
   esl_threads_Finished(obj, workeridx);
 
+  pthread_exit(NULL);
   return;
 }
 
@@ -802,6 +736,8 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
   int i, j;
   int n;
   int fd;
+
+  int total = 0;
 
   P7_HIT    *hit;
   P7_DOMAIN *dcl;
@@ -834,6 +770,7 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
   status.status  = eslOK;
   status.err_len = 0;
   n = sizeof(status);
+  total += n;
   if (writen(fd, &status, n) != n) {
     fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
     exit(1);
@@ -863,6 +800,7 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
   stats.nincluded   = info->th->nincluded;
 
   n = sizeof(stats);
+  total += n;
   if (writen(fd, &stats, n) != n) {
     fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
     exit(1);
@@ -913,6 +851,7 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
       p += l;
     }
 
+    total += n;
     if (writen(fd, h, n) != n) {
       fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
       exit(1);
@@ -934,6 +873,7 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
       p += sizeof(P7_ALIDISPLAY);
       memcpy(p, dcl->ad->mem, dcl->ad->memsize);
 
+      total += n;
       if (writen(fd, h, n) != n) {
         fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
         exit(1);
@@ -950,11 +890,15 @@ send_results(ESL_STOPWATCH *w, WORKER_INFO *info, SEARCH_QUEUE *queue, CLIENTSID
   if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
   if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
   if (data->seq != NULL) esl_sq_Destroy(data->seq);
+  if (data->bld != NULL) p7_builder_Destroy(data->bld);
 
   data->opts      = NULL;
   data->abc       = NULL;
   data->seq       = NULL;
   data->hmm       = NULL;
+  data->bld       = NULL;
+
+  printf("Bytes %d sent on socket %d\n", total, data->sock);
 
   free(data);
 }
@@ -980,16 +924,18 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   char              *buffer;
   char              *opt_ptr;
 
+  int                seed;
   int                buf_size;
   int                remaining;
   int                amount;
   int                eod;
   int                n;
 
-  P7_HMM            *hmm     = NULL;         /* query HMM                   */
-  ESL_SQ            *seq     = NULL;         /* query sequence              */
-  ESL_ALPHABET      *abc     = NULL;         /* digital alphabet            */
-  ESL_GETOPTS       *opts    = NULL;         /* search specific options     */
+  P7_HMM            *hmm     = NULL;     /* query HMM                      */
+  ESL_SQ            *seq     = NULL;     /* query sequence                 */
+  ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
+  ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
+  P7_BUILDER        *bld     = NULL;     /* HMM construction configuration */
 
   SEARCH_QUEUE      *queue    = data->queue;
 
@@ -1091,6 +1037,21 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error %d parsing sequence", status);
 
+      bld = p7_builder_Create(NULL, abc);
+      if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
+        esl_randomness_Init(bld->r, seed);
+        bld->do_reseeding = TRUE;
+      }
+      bld->EmL = esl_opt_GetInteger(opts, "--EmL");
+      bld->EmN = esl_opt_GetInteger(opts, "--EmN");
+      bld->EvL = esl_opt_GetInteger(opts, "--EvL");
+      bld->EvN = esl_opt_GetInteger(opts, "--EvN");
+      bld->EfL = esl_opt_GetInteger(opts, "--EfL");
+      bld->EfN = esl_opt_GetInteger(opts, "--EfN");
+      bld->Eft = esl_opt_GetReal   (opts, "--Eft");
+      status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(opts, "--mxfile"), NULL, esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"));
+      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Failed to set single query seq score system: %s", bld->errbuf);
+
     } else if (strncmp(ptr, "HMM", 3) == 0) {
       P7_HMMFILE   *hfp     = NULL;
 
@@ -1113,6 +1074,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (abc != NULL) esl_alphabet_Destroy(abc);
     if (hmm != NULL) p7_hmm_Destroy(hmm);
     if (seq != NULL) esl_sq_Destroy(seq);
+    if (bld != NULL) p7_builder_Destroy(bld);
 
     free(buffer);
 
@@ -1129,10 +1091,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->seq  = seq;
   parms->abc  = abc;
   parms->opts = opts;
+  parms->bld  = bld;
 
   parms->sock = data->sock_fd;
   parms->next = NULL;
   parms->prev = NULL;
+
+  printf("Waiting to queued %s on %d\n", parms->seq->name, parms->sock);
 
   /* add the search request to the queue */
   if ((n = pthread_mutex_lock (&queue->mutex)) != 0) {
@@ -1147,6 +1112,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   } else {
     queue->tail->next = parms;
     parms->prev = queue->tail;
+    queue->tail = parms;
   }
 
   if ((n = pthread_mutex_unlock (&queue->mutex)) != 0) {
@@ -1161,6 +1127,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
     exit(1);
   }
+
+  printf("Queued %s on %d\n", parms->seq->name, parms->sock);
 
   free(buffer);
   return 0;
@@ -1234,9 +1202,11 @@ static void
 setup_clientside_comm(ESL_GETOPTS *opts, SEARCH_QUEUE *queue, CLIENTSIDE_ARGS *args)
 {
   int                  n;
+  int                  reuse;
   int                  sock_fd;
   pthread_t            thread_id;
 
+  struct linger        linger;
   struct sockaddr_in   addr;
 
   /* Create socket for incoming connections */
@@ -1245,6 +1215,25 @@ setup_clientside_comm(ESL_GETOPTS *opts, SEARCH_QUEUE *queue, CLIENTSIDE_ARGS *a
     exit(1);
   }
       
+  /* incase the server went down in an ungraceful way, allow the port to be
+   * reused avoiding the timeout.
+   */
+  reuse = 1;
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
+    fprintf(stderr, "%s: setsockopt error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
+  /* the sockets are never closed, so if the server exits, force the kernel to
+   * close the socket and clear it so the server can be restarted immediately.
+   */
+  linger.l_onoff = 1;
+  linger.l_linger = 0;
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) {
+    fprintf(stderr, "%s: setsockopt error %d - %s\n", opts->argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
   /* Construct local address structure */
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
