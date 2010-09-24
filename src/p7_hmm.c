@@ -585,9 +585,14 @@ p7_hmm_SetCtime(P7_HMM *hmm)
   char    *s = NULL;
   time_t   date;
 
-  if ((date   = time(NULL))                       == -1) { status = eslESYS; goto ERROR; }
-  if ((status = esl_strdup(ctime(&date), -1, &s)) != eslOK) goto ERROR; 
-  if ((status = esl_strchop(s, -1))               != eslOK) goto ERROR;
+  if ((date = time(NULL)) == -1) { status = eslESYS; goto ERROR; }
+
+  /* use a thread safe version of ctime to avoid possible memory
+   * corruption when called my a multi-threaded program.
+   */
+  ESL_ALLOC(s, 32);
+  ctime_r(&date, s);
+  esl_strchop(s, -1);
   
   if (hmm->ctime != NULL) free(hmm->ctime);
   hmm->ctime = s;
