@@ -72,6 +72,7 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
   __m128i **rbv;     		/* match scores [x][q]: rm, rm[0] are allocated      */
+  __m128i **sbv;     		/* match scores for ssvfilter                        */
   uint8_t   tbm_b;		/* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;		/* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;		/* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -95,6 +96,7 @@ typedef struct p7_oprofile_s {
 
   /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rbv_mem;
+  __m128i  *sbv_mem;
   __m128i  *rwv_mem;
   __m128i  *twv_mem;
   __m128   *tfv_mem;
@@ -304,6 +306,9 @@ extern int p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset);
 
 extern P7_OM_BLOCK *p7_oprofile_CreateBlock(int size);
 extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
+
+/* ssvfilter.c */
+extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
