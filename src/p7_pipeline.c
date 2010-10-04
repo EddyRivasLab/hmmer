@@ -987,7 +987,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
           //adjust the score of a hit to account for the full length model - the characters ouside the envelope but in the window
           int env_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
-          int ali_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
+          int ali_len = hit->dcl[0].jali - hit->dcl[0].iali + 1;
           hit->dcl[0].bitscore = hit->dcl[0].envsc ;
           //For these modifications, see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
           hit->dcl[0].bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
