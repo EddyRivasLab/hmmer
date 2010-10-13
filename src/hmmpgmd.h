@@ -19,7 +19,7 @@ typedef struct {
   uint32_t   status;            /* error status                             */
   uint32_t   err_len;           /* if status not zero, the stream will next */
                                 /* contain the error message.               */
-} HMMER_SEARCH_STATUS;
+} HMMD_SEARCH_STATUS;
 
 typedef struct {
   double     elapsed;         	/* elapsed time, seconds                    */
@@ -43,7 +43,22 @@ typedef struct {
   uint64_t   nhits;           	/* number of hits in list now               */
   uint64_t   nreported;       	/* number of hits that are reportable       */
   uint64_t   nincluded;       	/* number of hits that are includable       */
-} HMMER_SEARCH_STATS;
+} HMMD_SEARCH_STATS;
+
+#define HMMD_SEQUENCE   101
+
+#define HMMD_SEARCH     10001
+
+typedef struct {
+  uint32_t   length;            /* message length                           */
+  uint32_t   command;           /* message type                             */
+  uint32_t   db_inx;            /* database index to search                 */
+  uint32_t   start_inx;         /* index to begin search                    */
+  uint32_t   end_inx;           /* index to end search                      */
+  uint32_t   query_type;        /* sequence / hmm                           */
+  uint32_t   query_length;      /* length of the query data                 */
+  uint32_t   opts_length;       /* length of the options string             */
+} HMMD_SEARCH_CMD;
 
 #endif /*P7_HMMPGMD_INCLUDED*/
 

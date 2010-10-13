@@ -26,8 +26,7 @@
 #include "hmmpgmd.h"
 
 #define SERVER_PORT      41139
-#define MAX_BUF_LEN      (64*1024)
-#define MAX_READ_LEN     2048
+#define MAX_READ_LEN     4096
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
 #define DOMREPOPTS  "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
@@ -89,22 +88,6 @@ sig_int(int signo)
 {
   fprintf(stderr, "Exiting due to ctrl-c\n");
   exit(1);
-}
-
-static void
-process_searchline(char *cmdstr, ESL_GETOPTS *go)
-{
-  if (esl_getopts_Reuse(go)            != eslOK)    p7_Die("Internal failure reusing options object");
-  if (esl_opt_ProcessSpoof(go, cmdstr) != eslOK)  { printf("Failed to parse options string: %s\n",  go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)         != eslOK)  { printf("Failed to parse options string: %s\n",  go->errbuf); goto ERROR; }
-
-  /* the options string can handle an optional database */
-  if (esl_opt_ArgNumber(go) > 1)                  { puts("Incorrect number of command line arguments.");         goto ERROR; }
-
-  return;
-  
- ERROR:  /* all errors handled here are user errors, so be polite.  */
-  exit(1);  
 }
 
 static int
@@ -171,7 +154,10 @@ int main(int argc, char *argv[])
   int              eod;
   int              size;
 
-  char             seq[MAX_BUF_LEN];
+  char            *seq;
+  char            *opts;
+  int              seqlen;
+
   char             buffer[MAX_READ_LEN];
 
   int              status  = eslOK;
@@ -217,6 +203,17 @@ int main(int argc, char *argv[])
     ++i;
   }
 
+  seqlen = MAX_READ_LEN;
+  if ((seq = malloc(seqlen)) == NULL) {
+    fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
+  if ((opts = malloc(MAX_READ_LEN)) == NULL) {
+    fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+    exit(1);
+  }
+
   /* set up a signal handler for broken pipes */
   if (signal(SIGINT, sig_int) == SIG_ERR) {
     fprintf(stderr, "%s: signal error %d - %s\n", argv[0], errno, strerror(errno));
@@ -250,14 +247,27 @@ int main(int argc, char *argv[])
 
   seq[0] = 0;
   while (strncmp(seq, "//", 2) != 0) {
+    int rem;
     int total = 0;
 
     eod = 0;
     seq[0] = 0;
+    rem = seqlen - 1;
     fprintf(stdout, "\n\nEnter next sequence:\n");
     while (!eod) {
       if (fgets(buffer, MAX_READ_LEN, stdin) != NULL) {
+        int n = strlen(buffer);
+        if (n >= rem) {
+          if ((seq = realloc(seq, seqlen * 2)) == NULL) {
+            fprintf(stderr, "%s: realloc error %d - %s\n", argv[0], errno, strerror(errno));
+            exit(1);
+          }
+          rem += seqlen;
+          seqlen *= 2;
+        }
         strcat(seq, buffer);
+        rem -= n;
+
         eod = (strncmp(buffer, "//", 2) == 0);
       } else {
         eod = 1;
@@ -270,12 +280,40 @@ int main(int argc, char *argv[])
 
     /* process search specific options */
     if (*ptr == '@') {
-      process_searchline(++ptr, go);
+      char t;
+      char *s = ++ptr;
 
       /* skip to the end of the line */
       while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
+      t = *ptr;
+      *ptr = 0;
+
+      /* create a commandline string with dummy program name for
+       * the esl_opt_ProcessSpoof() function to parse.
+       */
+      strncpy(opts, "X ", MAX_READ_LEN);
+      strncat(opts, s,    MAX_READ_LEN);
+      strncat(opts, "\n", MAX_READ_LEN);
+      opts[MAX_READ_LEN-1] = 0;
+
+      if (esl_getopts_Reuse(go) != eslOK) p7_Die("Internal failure reusing options object");
+      if (esl_opt_ProcessSpoof(go, opts) != eslOK) { 
+        printf("Failed to parse options string: %s\n", go->errbuf); 
+        continue;
+      }
+      if (esl_opt_VerifyConfig(go) != eslOK) { 
+        printf("Failed to parse options string: %s\n", go->errbuf);
+        continue;
+      }
+
+      /* the options string can handle an optional database */
+      if (esl_opt_ArgNumber(go) > 1) { 
+        printf("Incorrect number of command line arguments.");
+        continue;
+      }
 
       /* skip remaining white spaces */
+      *ptr = t;
       while (*ptr && isspace(*ptr)) ++ptr;
     }
 
@@ -534,6 +572,9 @@ int main(int argc, char *argv[])
       if (sq  != NULL) esl_sq_Destroy(sq);
     }
   }
+
+  free(seq);
+  free(opts);
 
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);
