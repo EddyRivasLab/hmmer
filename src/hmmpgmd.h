@@ -53,8 +53,8 @@ typedef struct {
   uint32_t   length;            /* message length                           */
   uint32_t   command;           /* message type                             */
   uint32_t   db_inx;            /* database index to search                 */
-  uint32_t   start_inx;         /* index to begin search                    */
-  uint32_t   end_inx;           /* index to end search                      */
+  uint32_t   sq_inx;            /* index to begin search                    */
+  uint32_t   sq_cnt;            /* number of sequences to search            */
   uint32_t   query_type;        /* sequence / hmm                           */
   uint32_t   query_length;      /* length of the query data                 */
   uint32_t   opts_length;       /* length of the options string             */

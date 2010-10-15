@@ -170,8 +170,8 @@ int main(int argc, char *argv[])
   P7_HIT          *hit     = NULL;
   P7_DOMAIN       *dcl     = NULL;
 
-  HMMER_SEARCH_STATS  stats;
-  HMMER_SEARCH_STATUS sstatus;
+  HMMD_SEARCH_STATS   stats;
+  HMMD_SEARCH_STATUS  sstatus;
 
   int                 sock;
   char                serv_ip[64];

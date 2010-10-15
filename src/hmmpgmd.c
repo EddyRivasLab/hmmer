@@ -37,14 +37,16 @@ typedef struct queue_data_s {
   ESL_SQ             *seq;         /* query sequence                 */
   ESL_ALPHABET       *abc;         /* digital alphabet               */
   ESL_GETOPTS        *opts;        /* search specific options        */
-  P7_BUILDER         *bld;         /* HMM construction configuration */
   HMMD_SEARCH_CMD    *cmd;         /* workers search command         */
 
-  int                 dbx;         /* database index to search       */
   int                 sock;        /* socket descriptor of client    */
 
   int                 retry;
   int                 retry_count;
+
+  int                 dbx;         /* database index to search       */
+  int                 sq_cnt;
+  int                 sq_inx;
 
   struct queue_data_s *next;
   struct queue_data_s *prev;
@@ -96,8 +98,10 @@ typedef struct worker_s {
   struct worker_s      *next;
   struct worker_s      *prev;
 
+  int                   started;
   int                   completed;
-  HMMD_SEARCH_CMD      *query;
+  int                   terminated;
+  HMMD_SEARCH_CMD      *cmd;
 } WORKER_DATA;
 
 typedef struct {
@@ -351,7 +355,7 @@ cache_dbs(ESL_GETOPTS *go, ESL_ALPHABET *abc)
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, dbfile);
 
     sq  = cache[i]->sq_list;
-
+#if 0
     /* sort the cache on sequence size */
     qsort(sq, cache[i]->seq_count, sizeof(ESL_SQ), sort_seq_size);
 
@@ -372,10 +376,20 @@ cache_dbs(ESL_GETOPTS *go, ESL_ALPHABET *abc)
     qsort(sq, j, sizeof(ESL_SQ), sort_seq_inx);
     qsort(sq + j, cache[i]->seq_count - j, sizeof(ESL_SQ), sort_seq_inx);
     for (j = 0 ; j < cache[i]->seq_count; ++j) sq[j].idx = j;
+#endif
 
-#if 0
-    fprintf (ofp, "2d:  %9d  %8" PRId64 " %8" PRId64 " %8" PRId64 " %s\n",
-             i, cache->seq_count, cache[i]->hdr_size >> 10, cache[i]->res_size >> 10, cache[i]->filename);
+    rnd = esl_randomness_CreateFast(cache[i]->seq_count);
+    for (j = 0 ; j < cache[i]->seq_count; ++j) {
+      rnd->x = rnd->x * 69069 + 1;
+      sq[j].idx = rnd->x;
+    }
+    esl_randomness_Destroy(rnd);
+    qsort(sq, cache[i]->seq_count, sizeof(ESL_SQ), sort_seq_inx);
+    for (j = 0 ; j < cache[i]->seq_count; ++j) sq[j].idx = j;
+
+#if 1
+    fprintf (stdout, "%2d: %8d %5" PRId64 "M %5" PRId64 "M %5" PRId64 "M %s\n",
+             i, cache[i]->seq_count, (cache[i]->seq_count * sizeof(ESL_SQ)) >> 20, cache[i]->hdr_size >> 20, cache[i]->res_size >> 20, cache[i]->filename);
 #endif
   }
 
@@ -444,6 +458,7 @@ worker_process(ESL_GETOPTS *go)
     } else {
       fprintf(ofp, "Query (%d):       %s  [M=%d]\n", query->sock, query->hmm->name, query->hmm->M);
     }
+    fprintf(ofp, "Database %s [%d - %d]\n", cache[query->dbx]->filename, query->sq_inx, query->sq_inx + query->sq_cnt - 1);
 
     /* Create processing pipeline and hit list */
     for (i = 0; i < ncpus; ++i) {
@@ -451,13 +466,12 @@ worker_process(ESL_GETOPTS *go)
       info[i].hmm   = query->hmm;
       info[i].seq   = query->seq;
       info[i].opts  = query->opts;
-      info[i].bld   = query->bld;
 
       info[i].th    = NULL;
       info[i].pli   = NULL;
 
-      info[i].sq_list   = cache[query->dbx]->sq_list;
-      info[i].sq_cnt    = cache[query->dbx]->seq_count;
+      info[i].sq_list   = cache[query->dbx]->sq_list + query->sq_inx;
+      info[i].sq_cnt    = query->sq_cnt;
       info[i].inx_mutex = inx_mutex;
       info[i].sq_inx    = &current_index;
 
@@ -540,9 +554,13 @@ master_process(ESL_GETOPTS *go)
   int                 status     = eslOK;
   int                 i, n;
 
+  int                 inx;
+  int                 cnt;
+
   WORKER_INFO        *info       = NULL;
 
-  ESL_SQCACHE       **cache      = NULL;
+  int                cache_cnt   = 0;
+  ESL_SQCACHE      **cache       = NULL;
 
   SEARCH_QUEUE       *queue      = NULL;
   QUEUE_DATA         *query      = NULL;
@@ -560,7 +578,8 @@ master_process(ESL_GETOPTS *go)
   w = esl_stopwatch_Create();
   abc = esl_alphabet_Create(eslAMINO);
 
-  cache = cache_dbs(go, abc);
+  cache     = cache_dbs(go, abc);
+  cache_cnt = esl_opt_ArgNumber(go);
 
   /* initialize the search queue */
   ESL_ALLOC(queue, sizeof(SEARCH_QUEUE));
@@ -638,10 +657,38 @@ master_process(ESL_GETOPTS *go)
     while (worker != NULL) {
       ++worker_comm.started;
 
-      worker->query     = query->cmd;
-      worker->completed = 0;
-      worker->total     = 0;
+      if ((worker->cmd = malloc(query->cmd->length)) == NULL) {
+        fprintf(stderr, "hmmgpmd: malloc error %d - %s\n", errno, strerror(errno));
+        exit(1);
+      }
+      memcpy(worker->cmd, query->cmd, query->cmd->length);
+
+      worker->started    = 1;
+      worker->completed  = 0;
+      worker->terminated = 0;
+      worker->total      = 0;
+
       worker            = worker->next;
+    }
+
+    /* assign each worker a portion of the database */
+    inx = 0;
+    i = worker_comm.started;
+    cnt = cache[query->dbx]->seq_count;
+    printf ("DBX: %d - %d %d\n", query->dbx, i, cnt);
+    worker = worker_comm.head;
+    while (worker != NULL) {
+      if (worker->cmd != NULL) {
+        worker->cmd->sq_inx = inx;
+        worker->cmd->sq_cnt = cnt / i;
+        printf ("WORKER %d: %d - %d\n", worker_comm.started - i, worker->cmd->sq_inx, worker->cmd->sq_cnt);
+
+        inx += worker->cmd->sq_cnt;
+        cnt -= worker->cmd->sq_cnt;
+        --i;
+
+        worker = worker->next;
+      }
     }
 
     worker_comm.completed = worker_comm.started;
@@ -662,9 +709,9 @@ master_process(ESL_GETOPTS *go)
     esl_stopwatch_Start(w);
 
     if (query->hmm == NULL) {
-      fprintf(ofp, "Query (%d):       %s  [L=%ld]\n", query->sock, query->seq->name, (long) query->seq->n);
+      fprintf(ofp, "Query (%d):  %s  [L=%d]\n", query->sock, query->seq->name, (int)query->seq->n);
     } else {
-      fprintf(ofp, "Query (%d):       %s  [M=%d]\n", query->sock, query->hmm->name, query->hmm->M);
+      fprintf(ofp, "Query (%d):  %s  [M=%d]\n", query->sock, query->hmm->name, query->hmm->M);
     }
 
     /* Wait for all the workers to complete */
@@ -839,7 +886,6 @@ free_QueueData(QUEUE_DATA *data)
   if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
   if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
   if (data->seq != NULL) esl_sq_Destroy(data->seq);
-  if (data->bld != NULL) p7_builder_Destroy(data->bld);
   if (data->cmd != NULL) free(data->cmd);
   memset(data, 0, sizeof(*data));
   free(data);
@@ -850,8 +896,6 @@ read_QueryCmd(int fd)
 {
   int                n;
   int                size;
-  int                seed;
-  int                status;
 
   char              *p;
   char              *name;
@@ -874,7 +918,6 @@ read_QueryCmd(int fd)
     exit(1);
   }
 
-  
   *cmd = hdr;
   p = (char *)cmd;
   p += sizeof(hdr);
@@ -886,9 +929,13 @@ read_QueryCmd(int fd)
   }
 
   if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) {
+    fprintf(stderr, "hmmgpmd: malloc error %d - %s\n", errno, strerror(errno));
+    exit(1);
   }
 
   query->dbx         = cmd->db_inx;
+  query->sq_inx      = cmd->sq_inx;
+  query->sq_cnt      = cmd->sq_cnt;
   query->sock        = fd;
   query->retry       = 0;
   query->retry_count = 0;
@@ -914,28 +961,6 @@ read_QueryCmd(int fd)
   dsq  = (ESL_DSQ *) (desc + strlen(desc) + 1);
   query->seq = esl_sq_CreateDigitalFrom(query->abc, name, dsq, n, desc, NULL, NULL);
 
-  query->bld = p7_builder_Create(NULL, query->abc);
-  if ((seed = esl_opt_GetInteger(query->opts, "--seed")) > 0) {
-    esl_randomness_Init(query->bld->r, seed);
-    query->bld->do_reseeding = TRUE;
-  }
-  query->bld->EmL = esl_opt_GetInteger(query->opts, "--EmL");
-  query->bld->EmN = esl_opt_GetInteger(query->opts, "--EmN");
-  query->bld->EvL = esl_opt_GetInteger(query->opts, "--EvL");
-  query->bld->EvN = esl_opt_GetInteger(query->opts, "--EvN");
-  query->bld->EfL = esl_opt_GetInteger(query->opts, "--EfL");
-  query->bld->EfN = esl_opt_GetInteger(query->opts, "--EfN");
-  query->bld->Eft = esl_opt_GetReal   (query->opts, "--Eft");
-  status = p7_builder_SetScoreSystem(query->bld, 
-                                     esl_opt_GetString(query->opts, "--mxfile"), 
-                                     NULL, 
-                                     esl_opt_GetReal(query->opts, "--popen"), 
-                                     esl_opt_GetReal(query->opts, "--pextend"));
-  if (status != eslOK) {
-    client_error(fd, status, "hmmgpmd: failed to set single query sequence score system: %s", query->bld->errbuf);
-    return 0;
-  }
-
   free(cmd);
 
   return query;
@@ -947,12 +972,15 @@ pipeline_thread(void *arg)
 {
   int               i;
   int               count;
+  int               seed;
+  int               status;
   int               workeridx;
   WORKER_INFO      *info;
   ESL_THREADS      *obj;
 
   ESL_STOPWATCH    *w;
 
+  P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
   P7_BG            *bg       = NULL;         /* null model                     */
   P7_PIPELINE      *pli      = NULL;         /* work pipeline                  */
   P7_TOPHITS       *th       = NULL;         /* top hit results                */
@@ -972,7 +1000,30 @@ pipeline_thread(void *arg)
 
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
-    p7_SingleBuilder(info->bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+    bld = p7_builder_Create(NULL, info->abc);
+    if ((seed = esl_opt_GetInteger(info->opts, "--seed")) > 0) {
+      esl_randomness_Init(bld->r, seed);
+      bld->do_reseeding = TRUE;
+    }
+    bld->EmL = esl_opt_GetInteger(info->opts, "--EmL");
+    bld->EmN = esl_opt_GetInteger(info->opts, "--EmN");
+    bld->EvL = esl_opt_GetInteger(info->opts, "--EvL");
+    bld->EvN = esl_opt_GetInteger(info->opts, "--EvN");
+    bld->EfL = esl_opt_GetInteger(info->opts, "--EfL");
+    bld->EfN = esl_opt_GetInteger(info->opts, "--EfN");
+    bld->Eft = esl_opt_GetReal   (info->opts, "--Eft");
+    status = p7_builder_SetScoreSystem(bld, 
+                                       esl_opt_GetString(info->opts, "--mxfile"), 
+                                       NULL, 
+                                       esl_opt_GetReal(info->opts, "--popen"), 
+                                       esl_opt_GetReal(info->opts, "--pextend"));
+    if (status != eslOK) {
+      //client_error(info->sock, status, "hmmgpmd: failed to set single query sequence score system: %s", bld->errbuf);
+      fprintf(stderr, "hmmgpmd: failed to set single query sequence score system: %s", bld->errbuf);
+      pthread_exit(NULL);
+      return;
+    }
+    p7_SingleBuilder(bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
     om = p7_oprofile_Create(info->hmm->M, info->abc);
@@ -1691,7 +1742,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->seq  = seq;
   parms->abc  = abc;
   parms->opts = opts;
-  parms->bld  = bld;
   parms->dbx  = dbx;
   parms->cmd  = cmd;
 
@@ -1861,7 +1911,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     }
 
     /* wait for the master's signal to start the calculations */
-    while (worker->query == NULL) {
+    while (worker->cmd == NULL) {
       if ((n = pthread_cond_wait(&data->start_cond, &data->work_mutex)) != 0) {
         errno = n;
         fprintf(stderr, "%08X: mutex cond wait error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
@@ -1875,9 +1925,9 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       exit(1);
     }
 
-    n = worker->query->length;
+    n = worker->cmd->length;
     printf ("Sending data %d:\n", n);
-    if (writen(worker->sock_fd, worker->query, n) != n) {
+    if (writen(worker->sock_fd, worker->cmd, n) != n) {
       fprintf(stderr, "%08X: write (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
       exit(1);
     }
@@ -2022,7 +2072,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     }
 
     /* set the state of the worker to completed */
-    worker->query     = NULL;
+    worker->cmd       = NULL;
     worker->completed = 1;
     worker->total     = total;
     --data->completed;
@@ -2106,7 +2156,9 @@ workerside_thread(void *arg)
   }
 
   fd = worker->sock_fd;
-  worker->sock_fd = -1;
+
+  worker->sock_fd    = -1;
+  worker->terminated = 1;
 
   if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) {
     errno = n;
@@ -2159,7 +2211,7 @@ worker_comm_thread(void *arg)
     worker->hit_data   = NULL;
     worker->total      = 0;
     worker->completed  = 0;
-    worker->query      = NULL;
+    worker->cmd        = NULL;
 
     if (pthread_create(&thread_id, NULL, workerside_thread, (void *)worker) != 0) {
       fprintf(stderr, "%s: pthread_create error %d - %s\n", data->pgm, errno, strerror(errno));
