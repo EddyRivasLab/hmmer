@@ -21,8 +21,8 @@
 size_t
 writen(int fd, const void *vptr, size_t n)
 {
-  size_t      remaining;
-  size_t      outn;
+  ssize_t     remaining;
+  ssize_t     outn;
   const char *ptr;
 
   ptr = vptr;

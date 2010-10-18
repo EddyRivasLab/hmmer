@@ -10,6 +10,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <signal.h>
 #include <pthread.h>
 #include <setjmp.h>
 #include <sys/socket.h>
@@ -42,7 +43,7 @@ typedef struct queue_data_s {
   int                 sock;        /* socket descriptor of client    */
 
   int                 retry;
-  int                 retry_count;
+  int                 retry_cnt;
 
   int                 dbx;         /* database index to search       */
   int                 sq_cnt;
@@ -81,6 +82,7 @@ typedef struct {
   struct worker_s *tail;
 
   int              completed;
+  int              errors;
 } WORKERSIDE_ARGS;
 
 typedef struct worker_s {
@@ -137,6 +139,7 @@ static int  setup_masterside_comm(ESL_GETOPTS *opts);
 static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
 
+static void clear_results(WORKERSIDE_ARGS *comm);
 static void forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm);
 static void send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info);
 
@@ -215,6 +218,33 @@ static char banner[] = "search query against a sequence database";
 #define BLOCK_SIZE 1000
 static void pipeline_thread(void *arg);
 
+
+typedef void sig_func(int);
+
+sig_func *
+signal(int signo, sig_func *fn)
+{
+  struct sigaction act;
+  struct sigaction oact;
+
+  act.sa_handler = fn;
+  sigemptyset(&act.sa_mask);
+  act.sa_flags = 0;
+  if (signo == SIGALRM) {
+#ifdef SA_INTERRUMP
+    act.sa_flags |= SA_INTERRUPT;  /* SunOS 4.x */
+#endif
+  } else {
+#ifdef SA_RESTART
+    act.sa_flags |= SA_RESTART;  /* SVR4, 4.4BSD */
+#endif
+  }
+  if (sigaction(signo, &act, &oact) < 0) {
+    return SIG_ERR;
+  }
+
+  return oact.sa_handler;
+}
 
 static void
 print_client_error(int fd, int status, char *format, va_list ap)
@@ -692,6 +722,7 @@ master_process(ESL_GETOPTS *go)
     }
 
     worker_comm.completed = worker_comm.started;
+    worker_comm.errors    = 0;
 
     /* notify all the worker threads of the new query */
     if ((n = pthread_cond_broadcast(&worker_comm.start_cond)) != 0) {
@@ -739,11 +770,15 @@ master_process(ESL_GETOPTS *go)
 
     esl_stopwatch_Stop(w);
 
-    /* send the merged results to the web client */
-    forward_results(query, w, &worker_comm);
-
-    /* remove the query from the queue */
-    pop_Queue(queue);
+    if (worker_comm.errors == 0) {
+      /* send the merged results to the web client */
+      forward_results(query, w, &worker_comm);
+      pop_Queue(queue);
+    } else {
+      /* TODO: after how many retries should we just kill the query???? */
+      clear_results(&worker_comm);
+      ++query->retry_cnt;
+    }
   }
 
   for (i = 0; i < esl_opt_ArgNumber(go); ++i) {
@@ -774,6 +809,9 @@ main(int argc, char **argv)
   ESL_GETOPTS  *go = NULL;      /* command line processing */
 
   process_commandline(argc, argv, &go);    
+
+  /* if we write to a broken socket, ignore the signal and handle the error. */
+  signal(SIGPIPE, SIG_IGN);
 
   if (esl_opt_IsUsed(go, "--master")) master_process(go);
   if (esl_opt_IsUsed(go, "--worker")) worker_process(go);
@@ -933,15 +971,15 @@ read_QueryCmd(int fd)
     exit(1);
   }
 
-  query->dbx         = cmd->db_inx;
-  query->sq_inx      = cmd->sq_inx;
-  query->sq_cnt      = cmd->sq_cnt;
-  query->sock        = fd;
-  query->retry       = 0;
-  query->retry_count = 0;
-  query->cmd         = NULL;
-  query->next        = NULL;
-  query->prev        = NULL;
+  query->dbx       = cmd->db_inx;
+  query->sq_inx    = cmd->sq_inx;
+  query->sq_cnt    = cmd->sq_cnt;
+  query->sock      = fd;
+  query->retry     = 0;
+  query->retry_cnt = 0;
+  query->cmd       = NULL;
+  query->next      = NULL;
+  query->prev      = NULL;
 
   /* process search specific options */
   query->opts = esl_getopts_Create(searchOpts);
@@ -1308,6 +1346,94 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 }
 
 static void
+clear_results(WORKERSIDE_ARGS *comm)
+{
+  int i, j;
+  int inx;
+  int n;
+
+  WORKER_DATA *worker;
+
+  /* lock the workers until we have freed the results */
+  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) {
+    errno = n;
+    fprintf(stderr, "hmmpgmd: mutex lock error %d - %s\n", errno, strerror(errno));
+    exit(1);
+  }
+
+  /* free all the results */
+  worker = comm->head;
+  while (worker != NULL) {
+    if (worker->completed) {
+      if (worker->stats.nhits > 0) {
+        /* free all the data */
+        for (i = 0; i < worker->stats.nhits; ++i) {
+          for (j = 0; j < worker->hit[i]->ndom; ++j) {
+            P7_DOMAIN *dcl = &worker->hit[i]->dcl[j];
+            free (dcl->ad);
+            free (dcl->ad->mem);
+          }
+          free(worker->hit[i]->dcl);
+          free(worker->hit[i]);
+          
+          if (worker->hit_data[i] != NULL) free(worker->hit_data[i]);
+        }
+
+        memset(worker->hit, 0, sizeof(char *) * n);
+        memset(worker->hit_data, 0, sizeof(char *) * n);
+
+        free(worker->hit);
+        free(worker->hit_data);
+
+        worker->hit      = NULL;
+        worker->hit_data = NULL;
+
+        if (worker->err_buf != NULL) {
+          free(worker->err_buf);
+          worker->err_buf = NULL;
+        }
+
+        inx += worker->stats.nhits;
+      }
+
+      worker->completed = 0;
+    }
+
+    /* check if the worker node has terminated */
+    if (worker->terminated) {
+      WORKER_DATA *temp = worker;
+
+      worker = worker->next;
+
+      if (temp->prev == NULL) {
+        comm->head = temp->next;
+      } else {
+        temp->prev->next = temp->next;
+      }
+      if (temp->next == NULL) {
+        comm->tail = temp->prev;
+      } else {
+        temp->next->prev = temp->prev;
+      }
+
+      temp->prev   = NULL;
+      temp->next   = NULL;
+      temp->parent = NULL;
+
+      free(temp);
+    } else {
+      worker = worker->next;
+    }
+  }
+
+  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) {
+    errno = n;
+    fprintf(stderr, "hmmpgmd: mutex unlock error %d - %s\n", errno, strerror(errno));
+    exit(1);
+  }
+}
+
+static void
 send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 {
   int i, j;
@@ -1495,7 +1621,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   char              *opt_str;
 
   int                dbx;
-  int                seed;
   int                buf_size;
   int                remaining;
   int                amount;
@@ -1506,7 +1631,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   ESL_SQ            *seq     = NULL;     /* query sequence                 */
   ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
-  P7_BUILDER        *bld     = NULL;     /* HMM construction configuration */
   HMMD_SEARCH_CMD   *cmd     = NULL;     /* search cmd to send to workers  */
 
   SEARCH_QUEUE      *queue   = data->queue;
@@ -1644,21 +1768,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
 
-      bld = p7_builder_Create(NULL, abc);
-      if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
-        esl_randomness_Init(bld->r, seed);
-        bld->do_reseeding = TRUE;
-      }
-      bld->EmL = esl_opt_GetInteger(opts, "--EmL");
-      bld->EmN = esl_opt_GetInteger(opts, "--EmN");
-      bld->EvL = esl_opt_GetInteger(opts, "--EvL");
-      bld->EvN = esl_opt_GetInteger(opts, "--EvN");
-      bld->EfL = esl_opt_GetInteger(opts, "--EfL");
-      bld->EfN = esl_opt_GetInteger(opts, "--EfN");
-      bld->Eft = esl_opt_GetReal   (opts, "--Eft");
-      status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(opts, "--mxfile"), NULL, esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"));
-      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Failed to set single query sequence score system: %s", bld->errbuf);
-
     } else if (strncmp(ptr, "HMM", 3) == 0) {
       P7_HMMFILE   *hfp     = NULL;
 
@@ -1681,7 +1790,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (abc  != NULL) esl_alphabet_Destroy(abc);
     if (hmm  != NULL) p7_hmm_Destroy(hmm);
     if (seq  != NULL) esl_sq_Destroy(seq);
-    if (bld  != NULL) p7_builder_Destroy(bld);
 
     free(buffer);
 
@@ -1748,6 +1856,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->sock = data->sock_fd;
   parms->next = NULL;
   parms->prev = NULL;
+
+  parms->retry     = 0;
+  parms->retry_cnt = 0;
 
   printf("Waiting to queued %s on %d\n", parms->seq->name, parms->sock);
 
@@ -1929,7 +2040,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     printf ("Sending data %d:\n", n);
     if (writen(worker->sock_fd, worker->cmd, n) != n) {
       fprintf(stderr, "%08X: write (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
-      exit(1);
+      return 0;
     }
 
     total = 0;
@@ -1939,7 +2050,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     total += n;
     if ((size = readn(worker->sock_fd, &worker->status, n)) == -1) {
       fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
+      return 0;
     }
 
     if (worker->status.status != eslOK) {
@@ -1948,7 +2059,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       worker->err_buf = malloc(n);
       if ((size = readn(worker->sock_fd, worker->err_buf, n)) == -1) {
         fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-        exit(1);
+        return 0;
       }
       break;
     }
@@ -1957,7 +2068,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     total += n;
     if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
       fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
+      return 0;
     }
 
     stats = &worker->stats;
@@ -1969,13 +2080,13 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       n = sizeof(P7_HIT);
       if ((hit = malloc(n)) == NULL) {
         fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-        exit(1);
+        return 0;
       }
       worker->hit[i] = hit;
       total += n;
       if ((size = readn(worker->sock_fd, hit, n)) == -1) {
         fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-        exit(1);
+        return 0;
       }
 
       /* the hit string pointers contain the length of the string including
@@ -1992,18 +2103,18 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         total += n; 
         if ((worker->hit_data[i] = malloc(n)) == NULL) {
           fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-          exit(1);
+          return 0;
         }
         if ((size = readn(worker->sock_fd, worker->hit_data[i], n)) == -1) {
           fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-          exit(1);
+          return 0;
         }
       }
 
       n = sizeof(P7_DOMAIN) * hit->ndom;
       if ((hit->dcl = malloc(n)) == NULL) {
         fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-        exit(1);
+        return 0;
       }
 
       /* read the domains for this hit */
@@ -2016,18 +2127,18 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         total += n;
         if ((size = readn(worker->sock_fd, dcl, n)) == -1) {
           fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-          exit(1);
+          return 0;
         }
 
         n = (socklen_t)sizeof(P7_ALIDISPLAY);
         total += n;
         if ((dcl->ad = malloc(n)) == NULL) {
           fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-          exit(1);
+          return 0;
         }
         if ((size = readn(worker->sock_fd, dcl->ad, n)) == -1) {
           fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-          exit(1);
+          return 0;
         }
 
         /* save off the original mem pointer so all the pointers can be adjusted
@@ -2039,11 +2150,11 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         total += n;
         if ((dcl->ad->mem = malloc(n)) == NULL) {
           fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", n);
-          exit(1);
+          return 0;
         }
         if ((size = readn(worker->sock_fd, dcl->ad->mem, n)) == -1) {
           fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-          exit(1);
+          return 0;
         }
 
         /* readjust all the pointers to the new memory block */
@@ -2092,7 +2203,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
     printf ("WORKER COMPLETE: received %d bytes\n", total), fflush(stdout);
   }
-  
+
   return 1;
 }
 
@@ -2102,7 +2213,6 @@ workerside_thread(void *arg)
   int              n;
 
   int              fd;
-  int              eof;
 
   WORKER_DATA      *worker  = (WORKER_DATA *)arg;
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
@@ -2144,10 +2254,7 @@ workerside_thread(void *arg)
     exit(1);
   }
 
-  eof = 0;
-  while (!eof) {
-    eof = workerside_loop(parent, worker);
-  }
+  workerside_loop(parent, worker);
 
   if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) {
     errno = n;
@@ -2159,6 +2266,8 @@ workerside_thread(void *arg)
 
   worker->sock_fd    = -1;
   worker->terminated = 1;
+  --parent->completed;
+  ++parent->errors;
 
   if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) {
     errno = n;
@@ -2187,7 +2296,7 @@ worker_comm_thread(void *arg)
 
   for ( ;; ) {
 
-    /* Wait for a client to connect */
+    /* Wait for a worker to connect */
     n = sizeof(addr);
     if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) {
       fprintf(stderr, "%s: accept error %d - %s\n", data->pgm, errno, strerror(errno));
