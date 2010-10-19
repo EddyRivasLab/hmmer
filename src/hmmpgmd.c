@@ -265,6 +265,10 @@ print_client_error(int fd, int status, char *format, va_list ap)
   }
 
   writen(fd, ebuf, s.err_len);
+  if (writen(fd, ebuf, s.err_len) != s.err_len) {
+    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", s.err_len, errno, strerror(errno));
+    exit(1);
+  }
 }
 
 static void
@@ -932,6 +936,7 @@ free_QueueData(QUEUE_DATA *data)
 static QUEUE_DATA *
 read_QueryCmd(int fd)
 {
+  int                i;
   int                n;
   int                size;
 
@@ -991,13 +996,90 @@ read_QueryCmd(int fd)
   if (cmd->opts_length > 1) process_searchline(fd, p, query->opts);
 
   query->hmm = NULL;
+  query->seq = NULL;
   query->abc = esl_alphabet_Create(eslAMINO);
 
-  n    = cmd->query_length - 2;
-  name = p + cmd->opts_length;
-  desc = name + strlen(name) + 1;
-  dsq  = (ESL_DSQ *) (desc + strlen(desc) + 1);
-  query->seq = esl_sq_CreateDigitalFrom(query->abc, name, dsq, n, desc, NULL, NULL);
+  /* check if we are processing a sequence or hmm */
+  if (cmd->query_type == HMMD_SEQUENCE) {
+    n    = cmd->query_length - 2;
+    name = p + cmd->opts_length;
+    desc = name + strlen(name) + 1;
+    dsq  = (ESL_DSQ *) (desc + strlen(desc) + 1);
+    query->seq = esl_sq_CreateDigitalFrom(query->abc, name, dsq, n, desc, NULL, NULL);
+  } else {
+    P7_HMM *hmm = p7_hmm_CreateShell();
+    P7_HMM  thmm;
+
+    /* allocate memory for the hmm and initialize */
+    p += cmd->opts_length;
+    memcpy(&thmm, p, sizeof(P7_HMM));
+
+    hmm->flags = thmm.flags;
+    p7_hmm_CreateBody(hmm, cmd->query_length, query->abc);
+    p += sizeof(P7_HMM);
+
+    /* initialize fields */
+    hmm->nseq       = thmm.nseq;
+    hmm->eff_nseq   = thmm.eff_nseq;
+    hmm->max_length = thmm.max_length;
+    hmm->checksum   = thmm.checksum;
+    hmm->ctime      = NULL;
+    hmm->comlog     = NULL;
+
+    for (i = 0; i < p7_NCUTOFFS; i++) hmm->cutoff[i]  = thmm.cutoff[i];
+    for (i = 0; i < p7_NEVPARAM; i++) hmm->evparam[i] = thmm.evparam[i];
+    for (i = 0; i < p7_MAXABET;  i++) hmm->compo[i]   = thmm.compo[i];
+
+    /* fill in the hmm pointers */
+    n = sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
+    memcpy(*hmm->t, p, n);
+    p += n;
+
+    n = sizeof(float) * (hmm->M + 1) * query->abc->K;
+    memcpy(*hmm->mat, p, n);
+    p += n;
+    memcpy(*hmm->ins, p, n);
+    p += n;
+
+    if (thmm.name != NULL) {
+      hmm->name = strdup(p);
+      p += strlen(hmm->name) + 1;
+    }
+
+    if (thmm.acc != NULL) {
+      hmm->acc = strdup(p);
+      p += strlen(hmm->name) + 1;
+    }
+
+    if (thmm.desc != NULL) {
+      hmm->desc = strdup(p);
+      p += strlen(hmm->name) + 1;
+    }
+
+    n = hmm->M + 2;
+    if (hmm->flags & p7H_RF) {
+      memcpy(hmm->rf, p, n);
+      p += n;
+    }
+
+    if (hmm->flags & p7H_CS) {
+      memcpy(hmm->cs, p, n);
+      p += n;
+    }
+
+    if (hmm->flags & p7H_CA) {
+      memcpy(hmm->ca, p, n);
+      p += n;
+    }
+
+    if (hmm->flags & p7H_MAP) {
+      n = sizeof(int) * (hmm->M + 1);
+      memcpy(hmm->map, p, n);
+      p += n;
+    }
+
+    query->hmm = hmm;
+  }
 
   free(cmd);
 
@@ -1762,6 +1844,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     abc = esl_alphabet_Create(eslAMINO);
 
+    seq = NULL;
+    hmm = NULL;
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
       seq = esl_sq_CreateDigital(abc);
@@ -1773,10 +1857,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
       /* try to parse the buffer as an hmm */
       status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
-      if (status == eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error opening query hmm: %s", hfp->errbuf);
+      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error opening query hmm: %s", hfp->errbuf);
 
       status = p7_hmmfile_Read(hfp, &abc,  &hmm);
-      if (status == eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
+      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
 
       p7_hmmfile_Close(hfp);
 
@@ -1811,6 +1895,17 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     n = n + strlen(seq->desc) + 1;
     n = n + seq->n + 2;
   } else {
+    n = n + sizeof(P7_HMM);
+    n = n + sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
+    n = n + sizeof(float) * (hmm->M + 1) * abc->K;
+    n = n + sizeof(float) * (hmm->M + 1) * abc->K;
+    if (hmm->name   != NULL) n = n + strlen(hmm->name) + 1;
+    if (hmm->acc    != NULL) n = n + strlen(hmm->acc)  + 1;
+    if (hmm->desc   != NULL) n = n + strlen(hmm->desc) + 1;
+    if (hmm->flags & p7H_RF) n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CS) n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CA) n = n + hmm->M + 2;
+    if (hmm->flags & p7H_MAP) n = n + sizeof(int) * (hmm->M + 1);
   }
 
   cmd = malloc(n);
@@ -1822,8 +1917,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   cmd->length       = n;
   cmd->command      = HMMD_SEARCH;
   cmd->db_inx       = dbx;
-  cmd->query_type   = HMMD_SEQUENCE;
-  cmd->query_length = seq->n + 2;
   cmd->opts_length  = strlen(opt_str) + 1;
 
   ptr = (char *) cmd;
@@ -1833,6 +1926,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   ptr += cmd->opts_length;
   
   if (seq != NULL) {
+    cmd->query_type   = HMMD_SEQUENCE;
+    cmd->query_length = seq->n + 2;
+
     n = strlen(seq->name) + 1;
     memcpy(ptr, seq->name, n);
     ptr += n;
@@ -1844,6 +1940,63 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     n = seq->n + 2;
     memcpy(ptr, seq->dsq, n);
     ptr += n;
+  } else {
+    cmd->query_type   = HMMD_HMM;
+    cmd->query_length = hmm->M;
+
+    n = sizeof(P7_HMM);
+    memcpy(ptr, hmm, n);
+    ptr += n;
+
+    n = sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
+    memcpy(ptr, *hmm->t, n);
+    ptr += n;
+
+    n = sizeof(float) * (hmm->M + 1) * abc->K;
+    memcpy(ptr, *hmm->mat, n);
+    ptr += n;
+    memcpy(ptr, *hmm->ins, n);
+    ptr += n;
+
+    if (hmm->name != NULL) {
+      n = strlen(hmm->name) + 1;
+      memcpy(ptr, hmm->name, n);
+      ptr += n;
+    }
+
+    if (hmm->acc != NULL) {
+      n = strlen(hmm->acc)  + 1;
+      memcpy(ptr, hmm->name, n);
+      ptr += n;
+    }
+
+    if (hmm->desc != NULL) {
+      n = strlen(hmm->desc) + 1;
+      memcpy(ptr, hmm->desc, n);
+      ptr += n;
+    }
+
+    n = hmm->M + 2;
+    if (hmm->flags & p7H_RF) {
+      memcpy(ptr, hmm->rf, n);
+      ptr += n;
+    }
+
+    if (hmm->flags & p7H_CS) {
+      memcpy(ptr, hmm->cs, n);
+      ptr += n;
+    }
+
+    if (hmm->flags & p7H_CA) {
+      memcpy(ptr, hmm->ca, n);
+      ptr += n;
+    }
+
+    if (hmm->flags & p7H_MAP) {
+      n = sizeof(int) * (hmm->M + 1);
+      memcpy(ptr, hmm->map, n);
+      ptr += n;
+    }
   }
 
   parms->hmm  = hmm;
@@ -1860,11 +2013,19 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->retry     = 0;
   parms->retry_cnt = 0;
 
-  printf("Waiting to queued %s on %d\n", parms->seq->name, parms->sock);
+  if (parms->seq != NULL) {
+    printf("Waiting to queue sequence %s on %d\n", parms->seq->name, parms->sock);
+  } else {
+    printf("Waiting to queue hmm %s on %d\n", parms->hmm->name, parms->sock);
+  }
 
   push_Queue(parms, queue);
 
-  printf("Queued %s on %d\n", parms->seq->name, parms->sock);
+  if (parms->seq != NULL) {
+    printf("Queued sequence %s on %d\n", parms->seq->name, parms->sock);
+  } else {
+    printf("Queued hmm %s on %d\n", parms->hmm->name, parms->sock);
+  }
 
   free(buffer);
   return 0;

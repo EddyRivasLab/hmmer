@@ -46,6 +46,7 @@ typedef struct {
 } HMMD_SEARCH_STATS;
 
 #define HMMD_SEQUENCE   101
+#define HMMD_HMM        102
 
 #define HMMD_SEARCH     10001
 
