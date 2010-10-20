@@ -15,6 +15,7 @@
 #include <setjmp.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <syslog.h>
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
@@ -87,6 +88,7 @@ typedef struct {
 
 typedef struct worker_s {
   int                   sock_fd;
+  char                  ip_addr[INET_ADDRSTRLEN];
   
   HMMD_SEARCH_STATS     stats;
   HMMD_SEARCH_STATUS    status;
@@ -159,6 +161,7 @@ static ESL_OPTIONS cmdlineOpts[] = {
   { "--wport",      eslARG_INT,  "41023", NULL, "n>1024",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
   { "--ccncts",     eslARG_INT,     "16", NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
   { "--wcncts",     eslARG_INT,     "32", NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
+  { "--pid",        eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "write process id to file [default: /var/run/hmmpgmd.pid]",    12 },
 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>0", NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
 
@@ -218,6 +221,34 @@ static char banner[] = "search query against a sequence database";
 #define BLOCK_SIZE 1000
 static void pipeline_thread(void *arg);
 
+#define LOG_TO_STDOUT
+#ifdef LOG_TO_STDOUT
+void openlog(const char *ident, int option, int facility)
+{
+  /* do nothing */
+  return;
+}
+void syslog(int priority, const char *format, ...)
+{
+  va_list ap;
+
+  va_start(ap, format);
+  vprintf(format, ap);
+  va_end(ap);
+
+  return;
+}
+void closelog(void)
+{
+  /* do nothing */
+  return;
+}
+#endif
+
+#define LOG_FATAL_MSG(str, err) {                                               \
+    syslog(LOG_CRIT,"[%s:%d] - %s error %d - %s\n", __FILE__, __LINE__, str, err, strerror(err)); \
+    exit(0); \
+  }
 
 typedef void sig_func(int);
 
@@ -256,19 +287,12 @@ print_client_error(int fd, int status, char *format, va_list ap)
 
   s.status  = status;
   s.err_len = vsnprintf(ebuf, sizeof(ebuf), format, ap);
+  vsyslog(LOG_ERR, format, ap);
 
   /* send back an unsuccessful status message */
   n = sizeof(s);
-  if (writen(fd, &s, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-    exit(1);
-  }
-
-  writen(fd, ebuf, s.err_len);
-  if (writen(fd, ebuf, s.err_len) != s.err_len) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", s.err_len, errno, strerror(errno));
-    exit(1);
-  }
+  if (writen(fd, &s, n) != n)                    LOG_FATAL_MSG("write", errno);
+  if (writen(fd, ebuf, s.err_len) != s.err_len)  LOG_FATAL_MSG("write", errno);
 }
 
 static void
@@ -291,6 +315,26 @@ client_error_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
   va_end(ap);
 
   longjmp(*env, 1);
+}
+
+static void
+write_pid(ESL_GETOPTS *go)
+{
+  FILE   *fp;
+
+  pid_t   pid;
+
+  char   *file    = NULL;
+  char   *def_pid = "/var/run/hmmpgmd.pid";
+
+  file = esl_opt_GetString(go, "--pid");
+  if (file == NULL) file = def_pid;
+
+  if ((fp = fopen(file, "w")) == NULL) {
+  }
+
+  fprintf(fp,"%ld\n", (long)getpid());
+  fclose(fp);
 }
 
 static void
@@ -328,7 +372,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   puts("\nwhere most common options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
   printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
-  exit(1);  
+  exit(0);  
 }
 
 static void
@@ -430,8 +474,7 @@ cache_dbs(ESL_GETOPTS *go, ESL_ALPHABET *abc)
   return cache;
 
  ERROR:
-  fprintf(stderr, "%s: malloc error %d - %s\n", go->argv[0], errno, strerror(errno));
-  exit(1);
+  LOG_FATAL_MSG("malloc", errno);
 }
 
 
@@ -575,8 +618,7 @@ worker_process(ESL_GETOPTS *go)
   return;
 
  ERROR:
-  fprintf(stderr, "%s: malloc error %d - %s\n", go->argv[0], errno, strerror(errno));
-  exit(1);
+  LOG_FATAL_MSG("malloc", errno);
 }
 
 void
@@ -617,16 +659,8 @@ master_process(ESL_GETOPTS *go)
 
   /* initialize the search queue */
   ESL_ALLOC(queue, sizeof(SEARCH_QUEUE));
-  if ((n = pthread_mutex_init(&queue->queue_mutex, NULL)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: mutex_init error %d - %s\n", go->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-  if ((n = pthread_cond_init(&queue->queue_cond, NULL)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: mutex_init error %d - %s\n", go->argv[0], errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_init(&queue->queue_mutex, NULL)) != 0)  LOG_FATAL_MSG("mutex init", n);
+  if ((n = pthread_cond_init(&queue->queue_cond, NULL)) != 0)    LOG_FATAL_MSG("cond init", n);
 
   queue->head = NULL;
   queue->tail = NULL;
@@ -639,26 +673,10 @@ master_process(ESL_GETOPTS *go)
   setup_clientside_comm(go, &client_comm);
 
   /* initialize the worker structure */
-  if ((n = pthread_mutex_init(&worker_comm.work_mutex, NULL)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: mutex_init error %d - %s\n", go->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-  if ((n = pthread_cond_init(&worker_comm.start_cond, NULL)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: mutex_init error %d - %s\n", go->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-  if ((n = pthread_cond_init(&worker_comm.complete_cond, NULL)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: mutex_init error %d - %s\n", go->argv[0], errno, strerror(errno));
-    exit(1);
-  }
-  if ((n = pthread_cond_init(&worker_comm.worker_cond, NULL)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: mutex_init error %d - %s\n", go->argv[0], errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_init(&worker_comm.work_mutex, NULL)) != 0)   LOG_FATAL_MSG("mutex init", n);
+  if ((n = pthread_cond_init(&worker_comm.start_cond, NULL)) != 0)    LOG_FATAL_MSG("cond init", n);
+  if ((n = pthread_cond_init(&worker_comm.complete_cond, NULL)) != 0) LOG_FATAL_MSG("cond init", n);
+  if ((n = pthread_cond_init(&worker_comm.worker_cond, NULL)) != 0)   LOG_FATAL_MSG("cond init", n);
 
   worker_comm.sock_fd = -1;
   worker_comm.head    = NULL;
@@ -670,19 +688,11 @@ master_process(ESL_GETOPTS *go)
   /* read query hmm/sequence */
   while ((query = read_Queue(queue)) != NULL) {
 
-    if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%s: mutex lock error %d - %s\n", go->argv[0], errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
     /* wait until we have atleast one worker */
     while (worker_comm.head == NULL) {
-      if ((n = pthread_cond_wait(&worker_comm.worker_cond, &worker_comm.work_mutex)) != 0) {
-        errno = n;
-        fprintf(stderr, "%s: mutex cond wait error %d - %s\n", go->argv[0], errno, strerror(errno));
-        exit(1);
-      }
+      if ((n = pthread_cond_wait(&worker_comm.worker_cond, &worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
     }
 
     /* add to all workers the new query to process */
@@ -691,10 +701,7 @@ master_process(ESL_GETOPTS *go)
     while (worker != NULL) {
       ++worker_comm.started;
 
-      if ((worker->cmd = malloc(query->cmd->length)) == NULL) {
-        fprintf(stderr, "hmmgpmd: malloc error %d - %s\n", errno, strerror(errno));
-        exit(1);
-      }
+      if ((worker->cmd = malloc(query->cmd->length)) == NULL) LOG_FATAL_MSG("malloc", errno);
       memcpy(worker->cmd, query->cmd, query->cmd->length);
 
       worker->started    = 1;
@@ -709,13 +716,11 @@ master_process(ESL_GETOPTS *go)
     inx = 0;
     i = worker_comm.started;
     cnt = cache[query->dbx]->seq_count;
-    printf ("DBX: %d - %d %d\n", query->dbx, i, cnt);
     worker = worker_comm.head;
     while (worker != NULL) {
       if (worker->cmd != NULL) {
         worker->cmd->sq_inx = inx;
         worker->cmd->sq_cnt = cnt / i;
-        printf ("WORKER %d: %d - %d\n", worker_comm.started - i, worker->cmd->sq_inx, worker->cmd->sq_cnt);
 
         inx += worker->cmd->sq_cnt;
         cnt -= worker->cmd->sq_cnt;
@@ -729,48 +734,19 @@ master_process(ESL_GETOPTS *go)
     worker_comm.errors    = 0;
 
     /* notify all the worker threads of the new query */
-    if ((n = pthread_cond_broadcast(&worker_comm.start_cond)) != 0) {
-      errno = n;
-      fprintf(stderr, "%s: mutex cond broadcast error %d - %s\n", go->argv[0], errno, strerror(errno));
-      exit(1);
-    }
-
-    if ((n = pthread_mutex_unlock (&worker_comm.work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%s: mutex unlock error %d - %s\n", go->argv[0], errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_cond_broadcast(&worker_comm.start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+    if ((n = pthread_mutex_unlock (&worker_comm.work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
     esl_stopwatch_Start(w);
 
-    if (query->hmm == NULL) {
-      fprintf(ofp, "Query (%d):  %s  [L=%d]\n", query->sock, query->seq->name, (int)query->seq->n);
-    } else {
-      fprintf(ofp, "Query (%d):  %s  [M=%d]\n", query->sock, query->hmm->name, query->hmm->M);
-    }
-
     /* Wait for all the workers to complete */
-    if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%s: mutex lock error %d - %s\n", go->argv[0], errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
-    printf("WAITING: %d\n", worker_comm.completed); fflush(stdout);
     while (worker_comm.completed > 0) {
-      if ((n = pthread_cond_wait (&worker_comm.complete_cond, &worker_comm.work_mutex)) != 0) {
-        errno = n;
-        fprintf(stderr, "%s: cond wait error %d - %s\n", go->argv[0], errno, strerror(errno));
-        exit(1);
-      }
-      printf("WAITING: %d\n", worker_comm.completed); fflush(stdout);
+      if ((n = pthread_cond_wait (&worker_comm.complete_cond, &worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
     }
 
-    if ((n = pthread_mutex_unlock (&worker_comm.work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%s: mutex unlock error %d - %s\n", go->argv[0], errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_unlock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
     esl_stopwatch_Stop(w);
 
@@ -803,8 +779,7 @@ master_process(ESL_GETOPTS *go)
   return;
 
  ERROR:
-  fprintf(stderr, "%s: malloc error %d - %s\n", go->argv[0], errno, strerror(errno));
-  exit(1);
+  LOG_FATAL_MSG("malloc", errno);
 }
 
 int
@@ -816,6 +791,9 @@ main(int argc, char **argv)
 
   /* if we write to a broken socket, ignore the signal and handle the error. */
   signal(SIGPIPE, SIG_IGN);
+
+  /* check if we need to write out our pid */
+  if (esl_opt_IsOn(go, "--pid")) write_pid(go);
 
   if (esl_opt_IsUsed(go, "--master")) master_process(go);
   if (esl_opt_IsUsed(go, "--worker")) worker_process(go);
@@ -834,27 +812,15 @@ read_Queue(SEARCH_QUEUE *queue)
   int         n;
   QUEUE_DATA *data;
 
-  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   while (queue->head == NULL) {
-    if ((n = pthread_cond_wait (&queue->queue_cond, &queue->queue_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: cond wait error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_cond_wait (&queue->queue_cond, &queue->queue_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
   }
 
   data = queue->head;
 
-  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
   return data;
 }
@@ -865,21 +831,13 @@ pop_Queue(SEARCH_QUEUE *queue)
   int         n;
   QUEUE_DATA *data;
 
-  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   data = queue->head;
   queue->head = data->next;
   if (queue->head == NULL) queue->tail = NULL;
 
-  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
   free_QueueData(data);
 }
@@ -890,11 +848,7 @@ push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue)
   int n;
 
   /* add the search request to the queue */
-  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   if (queue->head == NULL) {
     queue->head = data;
@@ -905,18 +859,9 @@ push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue)
     queue->tail = data;
   }
 
-  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
-
   /* if anyone is waiting, wake them up */
-  if ((n = pthread_cond_broadcast (&queue->queue_cond)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_cond_broadcast (&queue->queue_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 }
 
 static void
@@ -951,30 +896,18 @@ read_QueryCmd(int fd)
   QUEUE_DATA        *query  = NULL;
 
   n = sizeof(hdr);
-  if ((size = readn(fd, &hdr, n)) == -1) {
-    fprintf(stderr, "hmmgpmd: read error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((size = readn(fd, &hdr, n)) == -1)  LOG_FATAL_MSG("read", errno);
 
-  if ((cmd = malloc(hdr.length)) == NULL) {
-    fprintf(stderr, "hmmgpmd: malloc error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((cmd = malloc(hdr.length)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   *cmd = hdr;
   p = (char *)cmd;
   p += sizeof(hdr);
 
   n = hdr.length - sizeof(hdr);
-  if ((size = readn(fd, p, n)) == -1) {
-    fprintf(stderr, "hmmgpmd: read error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((size = readn(fd, p, n)) == -1)               LOG_FATAL_MSG("read", errno);
 
-  if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) {
-    fprintf(stderr, "hmmgpmd: malloc error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   query->dbx       = cmd->db_inx;
   query->sq_inx    = cmd->sq_inx;
@@ -988,11 +921,7 @@ read_QueryCmd(int fd)
 
   /* process search specific options */
   query->opts = esl_getopts_Create(searchOpts);
-  if (query->opts == NULL)  {
-    client_error(fd, eslFAIL, "hmmgpmd: internal failure creating options object");
-    return 0;
-  }
-
+  if (query->opts == NULL)  LOG_FATAL_MSG("esl_getopts_Create", EINVAL);
   if (cmd->opts_length > 1) process_searchline(fd, p, query->opts);
 
   query->hmm = NULL;
@@ -1007,8 +936,8 @@ read_QueryCmd(int fd)
     dsq  = (ESL_DSQ *) (desc + strlen(desc) + 1);
     query->seq = esl_sq_CreateDigitalFrom(query->abc, name, dsq, n, desc, NULL, NULL);
   } else {
-    P7_HMM *hmm = p7_hmm_CreateShell();
     P7_HMM  thmm;
+    P7_HMM *hmm = p7_hmm_CreateShell();
 
     /* allocate memory for the hmm and initialize */
     p += cmd->opts_length;
@@ -1266,11 +1195,7 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   stats.sys         = w->sys;
 
   /* lock the workers until we have merged the results */
-  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "hmmpgmd: mutex lock error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   /* count the number of hits */
   n = 0;
@@ -1281,22 +1206,23 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   }
 
   /* allocate spaces to hold all the hits */
-  hit      = malloc(sizeof(char *) * n);
-  hit_data = malloc(sizeof(char *) * n);
+  if ((hit = malloc(sizeof(char *) * n)) == NULL)      LOG_FATAL_MSG("malloc", errno);
+  if ((hit_data = malloc(sizeof(char *) * n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   /* gather up the results and merge them */
   inx = 0;
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
+      stats.nmodels      = worker->stats.nmodels;
+      stats.nseqs        = worker->stats.nseqs;
+      stats.nres         = worker->stats.nres;
+      stats.nnodes       = worker->stats.nnodes;
+
       stats.nhits       += worker->stats.nhits;
       stats.nreported   += worker->stats.nreported;
       stats.nincluded   += worker->stats.nincluded;
 
-      stats.nmodels     += worker->stats.nmodels;
-      stats.nseqs       += worker->stats.nseqs;
-      stats.nres        += worker->stats.nres;
-      stats.nnodes      += worker->stats.nnodes;
       stats.n_past_msv  += worker->stats.n_past_msv;
       stats.n_past_bias += worker->stats.n_past_bias;
       stats.n_past_vit  += worker->stats.n_past_vit;
@@ -1332,37 +1258,24 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     worker = worker->next;
   }
 
-  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "hmmpgmd: mutex unlock error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
   /* send back a successful status message */
   status.status  = eslOK;
   status.err_len = 0;
   n = sizeof(status);
   total += n;
-  if (writen(fd, &status, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-    exit(1);
-  }
+  if (writen(fd, &status, n) != n)                         LOG_FATAL_MSG("write", errno);
 
   n = sizeof(stats);
   total += n;
-  if (writen(fd, &stats, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-    exit(1);
-  }
+  if (writen(fd, &stats, n) != n)                          LOG_FATAL_MSG("write", errno);
 
   /* loop through the hit list sending to dest */
   for (i = 0; i < stats.nhits; ++i) {
     n = sizeof(P7_HIT);
     total += n;
-    if (writen(fd, hit[i], n) != n) {
-      fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-      exit(1);
-    }
+    if (writen(fd, hit[i], n) != n)                        LOG_FATAL_MSG("write", errno);
 
     if (hit_data[i] != NULL) {
       /* the hit string pointers contain the length of the strings */
@@ -1372,10 +1285,7 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
       if (hit[i]->desc != NULL) n += (socklen_t)(hit[i]->desc - (char *)NULL);
 
       total += n;
-      if (writen(fd, hit_data[i], n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, hit_data[i], n) != n)                 LOG_FATAL_MSG("write", errno);
     }
 
     /* send the domains */
@@ -1384,24 +1294,15 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
       n = (socklen_t)sizeof(P7_DOMAIN);
       total += n;
-      if (writen(fd, dcl, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, dcl, n) != n)                         LOG_FATAL_MSG("write", errno);
 
       n = (socklen_t)sizeof(P7_ALIDISPLAY);
       total += n;
-      if (writen(fd, dcl->ad, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, dcl->ad, n) != n)                     LOG_FATAL_MSG("write", errno);
 
       n = (socklen_t)dcl->ad->memsize;
       total += n;
-      if (writen(fd, dcl->ad->mem, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, dcl->ad->mem, n) != n)                LOG_FATAL_MSG("write", errno);
     }
   }
 
@@ -1437,11 +1338,7 @@ clear_results(WORKERSIDE_ARGS *comm)
   WORKER_DATA *worker;
 
   /* lock the workers until we have freed the results */
-  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "hmmpgmd: mutex lock error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   /* free all the results */
   worker = comm->head;
@@ -1508,11 +1405,7 @@ clear_results(WORKERSIDE_ARGS *comm)
     }
   }
 
-  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "hmmpgmd: mutex unlock error %d - %s\n", errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 }
 
 static void
@@ -1534,10 +1427,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   status.err_len = 0;
   n = sizeof(status);
   total += n;
-  if (writen(fd, &status, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-    exit(1);
-  }
+  if (writen(fd, &status, n) != n) LOG_FATAL_MSG("write", errno);
 
   /* copy the search stats */
   stats.elapsed     = w->elapsed;
@@ -1564,10 +1454,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
   n = sizeof(stats);
   total += n;
-  if (writen(fd, &stats, n) != n) {
-    fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-    exit(1);
-  }
+  if (writen(fd, &stats, n) != n) LOG_FATAL_MSG("write", errno);
   printf("SENT STATS %d\n", (int)info->th->N); fflush(stdout);
 
   /* loop through the hit list sending to dest */
@@ -1583,11 +1470,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
     if (hit->acc  != NULL) n += strlen(hit->acc)  + 1;
     if (hit->desc != NULL) n += strlen(hit->desc) + 1;
 
-    if ((h = malloc(n)) == NULL) {
-      fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", n);
-      exit(1);
-    }
-
+    if ((h = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
     memcpy(h, hit, sizeof(P7_HIT));
 
     /* copy the strings to the memory space after the P7_HIT structure.
@@ -1617,34 +1500,22 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
     }
 
     total += n;
-    if (writen(fd, h, n) != n) {
-      fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-      exit(1);
-    }
+    if (writen(fd, h, n) != n) LOG_FATAL_MSG("write", errno);
 
     /* send the domains for this hit */
     dcl = hit->dcl;
     for (j = 0; j < hit->ndom; ++j) {
       n = sizeof(P7_DOMAIN);
       total += n;
-      if (writen(fd, dcl, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, dcl, n) != n) LOG_FATAL_MSG("write", errno);
 
       n = sizeof(P7_ALIDISPLAY);
       total += n;
-      if (writen(fd, dcl->ad, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, dcl->ad, n) != n) LOG_FATAL_MSG("write", errno);
 
       n = dcl->ad->memsize;
       total += n;
-      if (writen(fd, dcl->ad->mem, n) != n) {
-        fprintf(stderr, "hmmpgmd: write (size %d) error %d - %s\n", n, errno, strerror(errno));
-        exit(1);
-      }
+      if (writen(fd, dcl->ad->mem, n) != n) LOG_FATAL_MSG("write", errno);
 
       ++dcl;
     }
@@ -1668,25 +1539,16 @@ setup_masterside_comm(ESL_GETOPTS *opts)
   struct sockaddr_in   addr;
 
   /* Create a reliable, stream socket using TCP */
-  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    fprintf(stderr, "%s: socket error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
-  }
+  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) LOG_FATAL_MSG("socket", errno);
 
   /* Construct the server address structure */
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port   = htons(esl_opt_GetInteger(opts, "--wport"));
-  if ((inet_pton(AF_INET, esl_opt_GetString(opts, "--worker"), &addr.sin_addr)) < 0) {
-    fprintf(stderr, "%s: inet_pton error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
-  }
+  if ((inet_pton(AF_INET, esl_opt_GetString(opts, "--worker"), &addr.sin_addr)) < 0) LOG_FATAL_MSG("inet pton", errno);
 
   /* Establish the connection to the echo server */
-  if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "%s: connect error %d - %s\n", opts->argv[0], errno, strerror(errno));
-    exit(1);
-  }
+  if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) LOG_FATAL_MSG("connect", errno);
 
   return fd;
 }
@@ -1722,17 +1584,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   jmp_buf            jmp_env;
 
   buf_size = MAX_BUFFER;
-  buffer = malloc(buf_size);
-  if (buffer == NULL) {
-    fprintf(stderr, "%s: malloc error\n", data->pgm);
-    exit(1);
-  }
-
-  opt_str = malloc(MAX_BUFFER);
-  if (opt_str == NULL) {
-    fprintf(stderr, "%s: malloc error\n", data->pgm);
-    exit(1);
-  }
+  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
+  if ((opt_str = malloc(MAX_BUFFER)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   ptr = buffer;
   remaining = buf_size;
@@ -2013,12 +1866,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->retry     = 0;
   parms->retry_cnt = 0;
 
-  if (parms->seq != NULL) {
-    printf("Waiting to queue sequence %s on %d\n", parms->seq->name, parms->sock);
-  } else {
-    printf("Waiting to queue hmm %s on %d\n", parms->hmm->name, parms->sock);
-  }
-
   push_Queue(parms, queue);
 
   if (parms->seq != NULL) {
@@ -2070,28 +1917,18 @@ client_comm_thread(void *arg)
 
     /* Wait for a client to connect */
     n = sizeof(addr);
-    if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) {
-      fprintf(stderr, "%s: accept error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
+    if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
 
     printf("Handling client %s (%d)\n", inet_ntoa(addr.sin_addr), fd);
 
-    targs = malloc(sizeof(CLIENTSIDE_ARGS));
-    if (targs == NULL) {
-      fprintf(stderr, "%s: malloc error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
+    if ((targs = malloc(sizeof(CLIENTSIDE_ARGS))) == NULL) LOG_FATAL_MSG("malloc", errno);
     targs->pgm        = data->pgm;
     targs->queue      = queue;
     targs->sock_fd    = fd;
     targs->cache      = data->cache;
     targs->cache_size = data->cache_size;
 
-    if (pthread_create(&thread_id, NULL, clientside_thread, (void *)targs) != 0) {
-      fprintf(stderr, "%s: pthread_create error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_create(&thread_id, NULL, clientside_thread, targs)) != 0) LOG_FATAL_MSG("thread create", n);
   }
   
   pthread_exit(NULL);
@@ -2176,31 +2013,19 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
   for ( ; ; ) {
 
     /* wait for the next search object */
-    if ((n = pthread_mutex_lock (&data->work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_lock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
     /* wait for the master's signal to start the calculations */
     while (worker->cmd == NULL) {
-      if ((n = pthread_cond_wait(&data->start_cond, &data->work_mutex)) != 0) {
-        errno = n;
-        fprintf(stderr, "%08X: mutex cond wait error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-        exit(1);
-      }
+      if ((n = pthread_cond_wait(&data->start_cond, &data->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
     }
 
-    if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
     n = worker->cmd->length;
     printf ("Sending data %d:\n", n);
     if (writen(worker->sock_fd, worker->cmd, n) != n) {
-      fprintf(stderr, "%08X: write (size %d) error %d - %s\n", (unsigned int)pthread_self(), n, errno, strerror(errno));
+      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       return 0;
     }
 
@@ -2210,7 +2035,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     n = sizeof(worker->status);
     total += n;
     if ((size = readn(worker->sock_fd, &worker->status, n)) == -1) {
-      fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       return 0;
     }
 
@@ -2219,7 +2044,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       total += n; 
       worker->err_buf = malloc(n);
       if ((size = readn(worker->sock_fd, worker->err_buf, n)) == -1) {
-        fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         return 0;
       }
       break;
@@ -2228,7 +2053,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     n = sizeof(worker->stats);
     total += n;
     if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
-      fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       return 0;
     }
 
@@ -2239,14 +2064,11 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     /* loop through the hit list sending to dest */
     for (i = 0; i < stats->nhits; ++i) {
       n = sizeof(P7_HIT);
-      if ((hit = malloc(n)) == NULL) {
-        fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-        return 0;
-      }
+      if ((hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
       worker->hit[i] = hit;
       total += n;
       if ((size = readn(worker->sock_fd, hit, n)) == -1) {
-        fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         return 0;
       }
 
@@ -2262,21 +2084,15 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         worker->hit_data[i] = NULL;
       } else {
         total += n; 
-        if ((worker->hit_data[i] = malloc(n)) == NULL) {
-          fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-          return 0;
-        }
+        if ((worker->hit_data[i] = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
         if ((size = readn(worker->sock_fd, worker->hit_data[i], n)) == -1) {
-          fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
           return 0;
         }
       }
 
       n = sizeof(P7_DOMAIN) * hit->ndom;
-      if ((hit->dcl = malloc(n)) == NULL) {
-        fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-        return 0;
-      }
+      if ((hit->dcl = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
       /* read the domains for this hit */
       dcl = hit->dcl;
@@ -2287,18 +2103,15 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         n = (socklen_t)sizeof(P7_DOMAIN);
         total += n;
         if ((size = readn(worker->sock_fd, dcl, n)) == -1) {
-          fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
           return 0;
         }
 
         n = (socklen_t)sizeof(P7_ALIDISPLAY);
         total += n;
-        if ((dcl->ad = malloc(n)) == NULL) {
-          fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)n);
-          return 0;
-        }
+        if ((dcl->ad = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
         if ((size = readn(worker->sock_fd, dcl->ad, n)) == -1) {
-          fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
           return 0;
         }
 
@@ -2309,12 +2122,9 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
         n = (socklen_t)dcl->ad->memsize;
         total += n;
-        if ((dcl->ad->mem = malloc(n)) == NULL) {
-          fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", n);
-          return 0;
-        }
+        if ((dcl->ad->mem = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
         if ((size = readn(worker->sock_fd, dcl->ad->mem, n)) == -1) {
-          fprintf(stderr, "%08X: read error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
+          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
           return 0;
         }
 
@@ -2337,11 +2147,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       }
     }
 
-    if ((n = pthread_mutex_lock (&data->work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_lock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
     /* set the state of the worker to completed */
     worker->cmd       = NULL;
@@ -2350,17 +2156,9 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     --data->completed;
 
     /* notify all the worker threads of the new query */
-    if ((n = pthread_cond_broadcast(&data->complete_cond)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: mutex cond broadcast error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_cond_broadcast(&data->complete_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
 
-    if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
     printf ("WORKER COMPLETE: received %d bytes\n", total), fflush(stdout);
   }
@@ -2381,15 +2179,13 @@ workerside_thread(void *arg)
   /* Guarantees that thread resources are deallocated upon return */
   pthread_detach(pthread_self()); 
 
+  printf("Handling worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
+
   worker->next = NULL;
   worker->prev = NULL;
 
   /* add the worker to the new fd list */
-  if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   if (parent->head == NULL) {
     parent->head = worker;
@@ -2402,26 +2198,14 @@ workerside_thread(void *arg)
 
   /* notify the master process that there is atleast one worker now */
   if (parent->head == parent->tail) {
-    if ((n = pthread_cond_broadcast (&parent->worker_cond)) != 0) {
-      errno = n;
-      fprintf(stderr, "%08X: mutex cond broadcast error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
-    }
+    if ((n = pthread_cond_broadcast (&parent->worker_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
   }
 
-  if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
   workerside_loop(parent, worker);
 
-  if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex lock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   fd = worker->sock_fd;
 
@@ -2430,13 +2214,9 @@ workerside_thread(void *arg)
   --parent->completed;
   ++parent->errors;
 
-  if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) {
-    errno = n;
-    fprintf(stderr, "%08X: mutex unlock error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
-  printf("Closing socket %d\n", fd);
+  printf("Closing worker %s (%d)\n", worker->ip_addr, fd);
 
   close(fd);
 
@@ -2459,18 +2239,9 @@ worker_comm_thread(void *arg)
 
     /* Wait for a worker to connect */
     n = sizeof(addr);
-    if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) {
-      fprintf(stderr, "%s: accept error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
+    if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
 
-    printf("Handling worker %s (%d)\n", inet_ntoa(addr.sin_addr), fd);
-
-    worker = malloc(sizeof(WORKER_DATA));
-    if (worker == NULL) {
-      fprintf(stderr, "%s: malloc error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
+    if ((worker = malloc(sizeof(WORKER_DATA))) == NULL) LOG_FATAL_MSG("thread create", errno);
     worker->parent     = data;
     worker->sock_fd    = fd;
     worker->next       = NULL;
@@ -2483,10 +2254,10 @@ worker_comm_thread(void *arg)
     worker->completed  = 0;
     worker->cmd        = NULL;
 
-    if (pthread_create(&thread_id, NULL, workerside_thread, (void *)worker) != 0) {
-      fprintf(stderr, "%s: pthread_create error %d - %s\n", data->pgm, errno, strerror(errno));
-      exit(1);
-    }
+    strncpy(worker->ip_addr, inet_ntoa(addr.sin_addr), INET_ADDRSTRLEN);
+    worker->ip_addr[INET_ADDRSTRLEN-1] = 0;
+
+    if ((n = pthread_create(&thread_id, NULL, workerside_thread, worker)) != 0) LOG_FATAL_MSG("thread create", n);
   }
   
   pthread_exit(NULL);
@@ -2504,29 +2275,20 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
   struct sockaddr_in   addr;
 
   /* Create socket for incoming connections */
-  if ((sock_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-    fprintf(stderr, "%s: socket error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if ((sock_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) LOG_FATAL_MSG("socket", errno);
       
   /* incase the server went down in an ungraceful way, allow the port to be
    * reused avoiding the timeout.
    */
   reuse = 1;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
-    fprintf(stderr, "%s: setsockopt error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* the sockets are never closed, so if the server exits, force the kernel to
    * close the socket and clear it so the server can be restarted immediately.
    */
   linger.l_onoff = 1;
   linger.l_linger = 0;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) {
-    fprintf(stderr, "%s: setsockopt error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* Construct local address structure */
   memset(&addr, 0, sizeof(addr));
@@ -2535,24 +2297,14 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
   addr.sin_port = htons(esl_opt_GetInteger(opts, "--wport"));
 
   /* Bind to the local address */
-  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "%s: bind error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) LOG_FATAL_MSG("bind", errno);
 
   /* Mark the socket so it will listen for incoming connections */
-  if (listen(sock_fd, esl_opt_GetInteger(opts, "--wcncts")) < 0) {
-    fprintf(stderr, "%s: listen error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (listen(sock_fd, esl_opt_GetInteger(opts, "--wcncts")) < 0) LOG_FATAL_MSG("listen", errno);
 
   args->sock_fd = sock_fd;
 
-  if ((n = pthread_create(&thread_id, NULL, worker_comm_thread, (void *)args)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: pthread_create error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_create(&thread_id, NULL, worker_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("thread create", n);
 }
 
 /*****************************************************************
