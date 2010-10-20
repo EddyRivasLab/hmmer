@@ -276,7 +276,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i basev;                   /* offset for scores                                         */
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
-  __m128i tempv2;                   /* work vector                                               */
 
   int cmp;
   int status;

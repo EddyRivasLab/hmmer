@@ -608,7 +608,7 @@ workaround_bug_h74(P7_TOPHITS *th)
 }
 
 
-/* Function:  p7_tophits_ComputeEvalues()
+/* Function:  p7_tophits_ComputeNhmmerEvalues()
  * Synopsis:  Compute e-values based on pvalues and window sizes.
  * Incept:    TJW, Thu Mar 25 15:00:52 EDT 2010 [Janelia]
  *
@@ -621,13 +621,13 @@ workaround_bug_h74(P7_TOPHITS *th)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N)
+p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N)
 {
-  int i, hit_len;    /* counters over hits */
+  int i;    /* counters over hits */
 
   for (i = 0; i < th->N ; i++)
   {
-      th->unsrt[i].pvalue *= (float)N / (float)(th->unsrt[i].window_length);
+      th->unsrt[i].pvalue *= N / (float)(th->unsrt[i].window_length);
       th->unsrt[i].sortkey = -th->unsrt[i].pvalue;
   }
   return eslOK;

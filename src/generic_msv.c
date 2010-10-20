@@ -18,6 +18,8 @@
 #include "esl_alphabet.h"
 #include "esl_gumbel.h"
 
+#include <string.h>
+#include <stdlib.h>
 
 #include "hmmer.h"
 
@@ -165,7 +167,7 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
   float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
   float        tej   = logf((nu - 1.0f) / nu);
   float        tec   = logf(1.0f / nu);
-  int          i,k;
+  int          i,j,k;
   int 	  	   status;
 
   float 	   tloop_total = tloop * gm->max_length;
@@ -209,6 +211,9 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
   for (k = 0; k <= gm->M; k++)
 	MMX(0,k) = -eslINFINITY;                                 /* need seq to get here */
 
+
+  //printf("p = %.2f, sc_thresh = %.2f\n",P, sc_thresh);
+
   for (i = 1; i <= L; i++)
   {
 	  float const *rsc = gm->rsc[dsq[i]];
@@ -220,6 +225,10 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 	  {
 		  MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
 		  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
+
+//		  if (MMX(i,k) > XMX(i-1,p7G_B) + tbmk)
+//			  printf ("(%3d,%3d) : %5.2f (%5.2f)\n", i, k, MMX(i,k), MMX(i,k) - (XMX(i-1,p7G_B) + tbmk));
+
 	  }
 
       XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) /*+ tloop*/,     XMX(i, p7G_E) + tej);
@@ -230,6 +239,41 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 
 	  if (XMX(i,p7G_C) > sc_thresh)
 	  {
+
+		  //print out the dp matrix
+		  /*
+		  for (j = 1; j <= i; j++) {
+			  printf("%d :  (%5.2f)", j,   XMX(j,p7G_C));
+			  for (k = 1; k <= gm->M; k++){
+				  printf ("%5.2f  ", MMX(j,k));
+			  }
+			  printf ("\n");
+		  }
+*/
+
+/*
+		  //backtrack to figure out the sequence that got this score:
+		  int which_k = -1;
+		  int tmp_i = i;
+		  for (k = 1; k <= gm->M; k++)
+		  {
+			  if ( MMX(i,k) + tec > sc_thresh)
+				  which_k = k;
+		  }
+		  printf("i: %d, k: %d\n", i, which_k);
+		  float sc = MMX(tmp_i,which_k);
+		  while (which_k>0 && tmp_i>0) {
+			  float const *rsc = gm->rsc[dsq[tmp_i]];
+			  putchar(gm->abc->sym[dsq[tmp_i]]);
+			  printf ("  %.3f\n", sc);
+			  sc -= MSC(which_k);
+			  which_k--;
+			  tmp_i--;
+		  }
+
+*/
+
+
 		  //ensure hit list is large enough
 		  if (*hit_cnt == hit_arr_size ) {
 			  hit_arr_size *= 10;
@@ -294,6 +338,456 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 }
 /*------------------ end, p7_GMSV_longtarget() ------------------------*/
 
+
+void
+bwt_getOccCounts (BWT_METADATA *meta, int* occCnts, ESL_DSQ *BWT, int *counts, int pos) {
+	int i;
+	int cnt_mask = meta->freq_cnt - 1; //used to compute the mod function
+	int up =  (pos & cnt_mask)>>(meta->cnt_shift - 1); // if 1, pos is closer to the next-higher count, else the lower one
+
+	int index = up + (pos >> (meta->cnt_shift)); // finds nearest count vector
+	memcpy(counts, occCnts + (meta->alph_size * index), sizeof(int) * meta->alph_size);
+
+
+	int landmark = (index<<(meta->cnt_shift)) - 1; // what pos do the current counts correspond to
+	if (landmark >= meta->N) // the final count vector might cover fewer than the standard number of positions
+		landmark = meta->N-1;
+
+
+	int c;
+	int xx;
+	if (up==0) {
+		for (i=landmark+1; i<=pos; i++) { //index<<meta->cnt_shift is the position for which the current counts apply
+			counts[0xF & (BWT[(i>>1)]>>((1^(i&1))<<2))]++;     //Unpacks char:
+														//(1^(i&1))<<2: 4 if i is even, 0 if i is odd. - that's the amount to right-shift the entry
+													    //... then clear left bits with 0xF
+		}
+	} else {
+		for (i=landmark; i>pos; i--) {//index<<meta->cnt_shift is the position for which the current counts apply
+			counts[0xF & (BWT[(i>>1)]>>((1^(i&1))<<2))]--;     //Unpacks char:  possibly shift with (~(i&1)): 1 if i is even, 0 if i is odd. ... then clear left bits
+		}
+	}
+
+}
+
+
+extern inline void
+bwt_updateInterval (BWT_INTERVAL *interval, int *counts_lower, int *counts_upper, int *C, ESL_DSQ i) {
+	interval->lower = C[i] + counts_lower[i];
+	interval->upper = C[i] + counts_upper[i] - 1;
+}
+
+float
+p7_BWT_Recurse(ESL_DSQ *seq, int depth, BWT_METADATA *meta, BWT_FMINDEX *fmindex, int M, int first, int last,
+		      BWT_DP_PAIR *diags, BWT_INTERVAL *interval_f, BWT_INTERVAL *interval_r, const ESL_ALPHABET *abc, int max_char,
+		      float sc_thresh, float sc_thresh50, float **optimal_extensions,
+		      float **scores,  int **starts, int **ends, int *hit_cnt)
+{
+
+#define DO_BWT
+	int max_depth =10;
+	int ssv_req = 22;
+
+	int max_k = 0;
+	int i,j;
+
+	BWT_INTERVAL interval_f_new;
+	BWT_INTERVAL interval_r_new;
+
+#ifdef DO_BWT
+	int counts_done = 0;
+
+	interval_f_new.lower = interval_r_new.lower = -1;
+
+	//fill in the count arrays for each of the interval boundaries
+	int cnts_fwd_lower[meta->alph_size];
+	int cnts_fwd_upper[meta->alph_size];
+	int cnts_rev_lower[meta->alph_size];
+	int cnts_rev_upper[meta->alph_size];
+#endif //DO_BWT
+
+	/*iterate over ways of extending the suffix, possibly recursing*/
+	//for (i=1; i<=meta->alph_size; i++) {//skip '$'
+	for (i=1; i<=4; i++) {//acgt
+	  int dppos = last;
+	  ESL_DSQ c = i - (i <= abc->K ? 1 : 0);  // shift to the easel alphabet
+
+
+	  float max_sc = 0.0;
+
+      for (j=first; j<=last; j++) {
+		  int k = diags[j].pos + 1;
+		  float next_score = scores[k][c];
+//		  if (next_score<0)
+//			  next_score *=3;
+		  float sc = next_score + diags[j].score ;
+
+		  if (sc > max_sc) {
+			  max_sc = sc;
+			  max_k = k;
+		  }
+
+
+		  if ( sc  >= sc_thresh50) { // that's a p50 hit.
+			  //printf("p50 hit !!! (%d @ %d)\n", depth, k);
+			  //add all instances to hit list
+		  } else
+		  if ( 0 == 1
+				 || (depth == ssv_req && sc < sc_thresh50)
+				 || ( depth > ssv_req - 10 &&  sc + optimal_extensions[k][ssv_req-depth] < sc_thresh50 )
+				 //|| ( sc < (float)depth/4.0 )
+				 ) {
+			  //do nothing, 'cause it either didn't or can't hit threshold
+		  } else
+		  if ( sc>0 && k < M ) { // if we hit the final position, and still no score, don't bother to extend it.
+			  dppos++;
+			  diags[dppos].pos = k;
+			  diags[dppos].score = sc;
+	      }
+	  }
+
+
+	  seq[depth-1] = abc->sym[c];
+	  seq[depth] = '\0';
+
+/*
+//	  const char* full = "GGCCAGGCACAGTGGCTCAACCCTGTAATCCCAGTACTT";
+	  const char* full = "AAAACCAGGCACAGTGGCTCAACCCTGTAATCCCAGTACTT";
+	  char *part = (char*) malloc(depth+1);
+	  strncpy(part, full, depth);
+	  part[depth]='\0';
+
+	  //really should compare the depth-length prefixes, then print 'em out
+	  if (strcmp(seq,part) == 0) {
+		  printf ("%s : %.3f\n", seq, max_sc);
+	  }
+*/
+	  if (dppos > last ){  // at least one useful extension && depth < limit ) {
+
+		  if ( max_sc  >= sc_thresh50) {
+			//  printf ("hit thresh50: depth=%d, max_sc=%.2f, num_diags=%d\n", depth, max_sc, dppos-last);
+		  } else
+		  if (depth==max_depth) {
+			//  printf ("hit maxdepth: depth=%d, max_sc=%.2f, num_diags=%d\n", depth, max_sc, dppos-last);
+		  } else {
+
+#ifdef DO_BWT
+			  if (0==counts_done) {
+//				  printf ("*computing counts for   %s\n", seq);
+				  if (interval_f->lower > 0) {
+					  bwt_getOccCounts(meta, fmindex->occCnts_f, fmindex->BWTf, cnts_fwd_lower, interval_f->lower-1);
+					  bwt_getOccCounts(meta, fmindex->occCnts_f, fmindex->BWTf, cnts_fwd_upper, interval_f->upper);
+				  }
+				  if (interval_r->lower > 0) {
+					  bwt_getOccCounts(meta, fmindex->occCnts_r, fmindex->BWTr, cnts_rev_lower, interval_r->lower-1);
+					  bwt_getOccCounts(meta, fmindex->occCnts_r, fmindex->BWTr, cnts_rev_upper, interval_r->upper);
+				  }
+				  counts_done = 1;
+			  }
+//			  printf (" computing interval for %s\n", seq);
+			  if (interval_f->lower > 0 && interval_f->lower <= interval_f->upper)
+				  bwt_updateInterval(&interval_f_new, cnts_fwd_lower, cnts_fwd_upper, fmindex->Cf, i);
+			  if (interval_r->lower > 0 && interval_r->lower <= interval_r->upper)
+				  bwt_updateInterval(&interval_r_new, cnts_rev_lower, cnts_rev_upper, fmindex->Cr, i);
+
+			  if ( (interval_f_new.lower < 0 || interval_f_new.lower > interval_f_new.upper)  &&
+				   (interval_r_new.lower < 0 || interval_r_new.lower > interval_r_new.upper) )  //that suffix doesn't exist
+				  continue;
+
+#endif //DO_BWT
+
+
+
+			  p7_BWT_Recurse (seq, depth+1, meta, fmindex, M, last+1, dppos, diags, &interval_f_new, &interval_r_new,
+					  abc, max_char, sc_thresh, sc_thresh50, optimal_extensions, scores,  starts, ends, hit_cnt);
+		  }
+	  } else {
+		  //printf ("internal stop: %d\n", depth);
+	  }
+
+/*
+			  if (sc > max_sc)
+				  max_sc = sc;
+		  }
+*/
+
+   }
+/*
+	if (depth > max_depth-6 && depth < max_depth) {
+		printf ("depth=%d: %d\n", depth, to_return);
+	}
+
+	*/
+   return eslOK;
+}
+
+
+int
+p7_GMSV_BWT(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+{
+
+  int 	  	   status;
+  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+  float        tec   = logf(1.0f / nu);
+  int          i,j,k;
+  ESL_DSQ      *seq;
+  ESL_ALLOC(seq, 50*sizeof(ESL_DSQ));
+
+
+  float 	   tloop_total = tloop * gm->max_length;
+  float nullsc;
+  p7_bg_SetLength(bg, gm->max_length);
+  p7_ReconfigLength(gm, gm->max_length);
+  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+
+  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+  float invP50 = esl_gumbel_invsurv(0.5, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+  float sc_thresh50 =   nullsc  + (invP50 * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+//printf ("scthresh = %.2f, 50thresh = %.2f\n", sc_thresh, sc_thresh50);
+
+  BWT_DP_PAIR diags[10000]; // should always be more than enough
+
+  //read in the FM-index.  Obviously needs to happen in the wrapper app eventually
+  BWT_METADATA *meta;
+  ESL_ALLOC (meta, sizeof(BWT_METADATA));
+  FILE *fp;
+  const char *fname = "chr22.bwt";
+  //const char *fname = "xxx";
+  BWT_FMINDEX fm;
+#ifdef DO_BWT
+  if((fp = fopen(fname, "rb")) == NULL) {
+    ESL_FAIL(eslFAIL, "Cannot open file `%s': ", fname);
+  }
+  //get the BWT meta data
+  if(fread(meta, sizeof(BWT_METADATA), 1, fp) != 1) {
+	  ESL_FAIL(eslFAIL, "Error reading BWT size.%s\n", " ");
+  }
+
+  int num_freq_cnts = 1+ceil((float)meta->N/meta->freq_cnt);
+  int num_SA_samples = floor((float)meta->N/meta->freq_SA);
+
+  // allocate and read the data
+  ESL_ALLOC (fm.T, ((meta->N+1)/2) * sizeof(ESL_DSQ));
+  ESL_ALLOC (fm.BWTf, ((meta->N+1)/2) * sizeof(ESL_DSQ));
+  ESL_ALLOC (fm.BWTr, ((meta->N+1)/2) * sizeof(ESL_DSQ));
+  ESL_ALLOC (fm.SAf, num_SA_samples * sizeof(int));
+  ESL_ALLOC (fm.SAr, num_SA_samples * sizeof(int));
+  ESL_ALLOC (fm.Cf, 1+meta->alph_size * sizeof(int));
+  ESL_ALLOC (fm.Cr, 1+meta->alph_size * sizeof(int));
+  ESL_ALLOC (fm.occCnts_f,  num_freq_cnts *  meta->alph_size * sizeof(int)); // every freq_cnt positions, store an array of ints
+  ESL_ALLOC (fm.occCnts_r,  num_freq_cnts *  meta->alph_size * sizeof(int)); // every freq_cnt positions, store an array of ints
+#endif //DO_BWT
+
+  //shortcut variables
+  ESL_DSQ *T    = fm.T;
+  ESL_DSQ *BWTf = fm.BWTf;
+  ESL_DSQ *BWTr = fm.BWTr;
+  int *SAf      = fm.SAf;
+  int *SAr      = fm.SAr;
+  int *Cf       = fm.Cf;
+  int *Cr       = fm.Cr;
+  int *occCnts_f  = fm.occCnts_f;
+  int *occCnts_r  = fm.occCnts_r;
+
+#ifdef DO_BWT
+  if((T == NULL) || (BWTf==NULL) || (BWTr==NULL) || (SAf==NULL) || (SAr==NULL) ||
+		  (Cf==NULL) || (Cr==NULL) || (occCnts_f==NULL) || (occCnts_r==NULL) ) {
+    ESL_FAIL(eslFAIL, "%s: Cannot allocate memory.\n", "bwt_nhmmer");
+  }
+
+  // read T, the target text
+  if(fread(T, sizeof(ESL_DSQ), (size_t)((meta->N+1)/2), fp) != (size_t)((meta->N+1)/2))
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+
+  // read forward FM index structures
+  if(fread(BWTf, sizeof(ESL_DSQ), (size_t)((meta->N+1)/2), fp) != (size_t)((meta->N+1)/2))
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+  if(fread(SAf, sizeof(int), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+  if(fread(occCnts_f, meta->alph_size * sizeof(int), (size_t)num_freq_cnts, fp) != (size_t)num_freq_cnts)
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+
+  // read reverse-complement FM index structures
+  if(fread(BWTr, sizeof(ESL_DSQ), (size_t)((meta->N+1)/2), fp) != (size_t)((meta->N+1)/2))
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+  if(fread(SAr, sizeof(int), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+  if(fread(occCnts_r, meta->alph_size * sizeof(int), (size_t)num_freq_cnts, fp) != (size_t)num_freq_cnts)
+	  ESL_FAIL(eslFAIL, "%s: Error reading BWT.\n", "bwt_nhmmer");
+
+
+  /*compute the first position of each letter in the alphabet in a sorted list
+   * (with an extra value to simplify lookup of the last position for the last letter).
+   * Negative values indicate that there are zero of that character in T, can be
+   * used to establish the end of the prior range*/
+
+  Cf[0] = Cr[0] = 0;
+  for (i=0; i<meta->alph_size; i++) {
+	  int prevC = abs(Cf[i]);
+	  int cnt = bwt_OccCnt( occCnts_f, num_freq_cnts-1, i);
+	  if (cnt==0) {// none of this character
+		  Cf[i+1] = prevC;
+		  Cf[i] *= -1; // use negative to indicate that there's no character of this type, the number gives the end point of the previous
+	  } else {
+		  Cf[i+1] = prevC + cnt;
+	  }
+
+	  prevC = abs(Cr[i]);
+	  cnt = bwt_OccCnt( occCnts_r, num_freq_cnts-1, i);
+	  if (cnt==0) {// none of these, so store
+		  Cr[i+1] = prevC;
+		  Cr[i] *= -1; // use negative to indicate that there's no character of this type, the number gives the end point of the previous
+	  } else {
+		  Cr[i+1] = prevC + cnt;
+	  }
+  }
+  Cf[meta->alph_size - 1] *= -1;
+  Cr[meta->alph_size - 1] *= -1;
+#endif //DO_BWT
+
+  int max_char = gm->abc->K;
+  /*
+  for (i=max_char+1; i<meta->alph_size; i++) {
+	  if (Cf[i] > 0)
+		  max_char = i;
+  }
+  */
+  //print out FM-index bits for testing:
+/*
+  printf("Text (pressed)\n");
+  for (i=0; i<(meta->N+1)/2; i++)
+	  printf ("%d: %d\n", i, T[i]);
+  printf("BWTf (pressed)\n");
+  for (i=0; i<(meta->N+1)/2; i++)
+	  printf ("%d: %d\n", i, BWTf[i]);
+  printf("SAf\n");
+  for (i=0; i<num_SA_samples; i++)
+	  printf ("%d: %d\n", i, SAf[i]);
+  printf("Counts_f\n");
+  for (i=0; i<num_freq_cnts; i++) {
+	  printf ("%d: ", i);
+	  for (j=0; j<meta->alph_size; j++)
+		  printf ("%d ", bwt_OccCnt(occCnts_f, i, j));
+	  printf ("\n");
+  }
+  printf ("\n");
+  printf("BWTr (pressed)\n");
+  for (i=0; i<(meta->N+1)/2; i++)
+	  printf ("%d: %d\n", i, BWTr[i]);
+  printf("SAr\n");
+  for (i=0; i<num_SA_samples; i++)
+	  printf ("%d: %d\n", i, SAr[i]);
+
+  printf("Counts_r\n");
+  for (i=0; i<num_freq_cnts; i++) {
+	  printf ("%d: ", i);
+	  for (j=0; j<meta->alph_size; j++)
+		  printf ("%d ", bwt_OccCnt(occCnts_r, i, j));
+	  printf ("\n");
+  }
+  printf ("\n");
+*/
+
+
+
+  /*gather values from gm->rsc into a succinct 2D array*/
+  float **scores;
+  ESL_ALLOC(scores, (gm->M + 1) * sizeof(float*));
+  for (k = 1; k <= gm->M; k++) {
+	  ESL_ALLOC(scores[k], gm->abc->Kp * sizeof(float));
+	  for (i=0; i<gm->abc->Kp; i++) {
+		  scores[k][i] = gm->rsc[i][(k) * p7P_NR     + p7P_MSC];
+	  }
+  }
+
+
+  float **optimal_extensions;
+  ESL_ALLOC(optimal_extensions, (gm->M + 1) * sizeof(float*));
+  for (i=1; i<=gm->M; i++) {
+	  ESL_ALLOC(optimal_extensions[i], 10 * sizeof(float));
+	  float sc = 0;
+	  //printf ("%3d: ", i);
+	  for (j=0; j<10 && i+j<=gm->M; j++) {
+		  float maxval = 0;
+		  for (k=0; k<4; k++) {
+			  if ( scores[i+j][k] > maxval)  maxval = scores[i+j][k];
+		  }
+		  sc += maxval;
+		  optimal_extensions[i][j] = sc;
+		  //printf ("%5.2f ", sc);
+	  }
+	  for ( ; j<10; j++) //fill in empty values
+		  optimal_extensions[i][j] = optimal_extensions[i][j-1];
+
+	  //printf ("\n");
+  }
+
+/*
+  //print out rsc values
+  for (k = 1; k <= gm->M; k++) {
+	  float max_val = 0;
+	  for (i=0; i<gm->abc->K; i++) {
+		  if (scores[k][i] > max_val)
+			  max_val = scores[k][i];
+	  }
+	  printf ("%d: %.2f ", k, max_val);
+	  for (i=0; i<gm->abc->K; i++)
+		  if (scores[k][i] < max_val)
+			  printf ("%.2f ", scores[k][i]);
+	  printf ("\n");
+  }
+
+  exit(0);
+*/
+
+
+  BWT_INTERVAL interval_f, interval_r;
+  float sc;
+  for (i=1; i<=max_char; i++) {//skip '$'
+	  int cnt=0;
+
+#ifdef DO_BWT
+	  interval_f.lower = Cf[i];
+	  interval_f.upper  = abs(Cf[i+1])-1;
+
+	  interval_r.lower = Cr[i];
+	  interval_r.upper  = abs(Cr[i+1])-1;
+
+	  if (interval_f.lower<0 && interval_r.lower<0) //none of that character found
+		  continue;
+#endif DO_BWT
+
+	  ESL_DSQ c = i - (i <= gm->abc->K ? 1 : 0);  // shift to the easel alphabet
+	  seq[0] = gm->abc->sym[c];
+	  seq[1] = '\0';
+
+	  for (k = 1; k < gm->M; k++) // was "k<=gm->M", but there's no need to bother keeping an entry starting at the last position
+	  {
+		  sc = scores[k][c];
+          if (sc>0) { // we'll extend any positive-scoring diagonal
+        	  diags[cnt].pos = k;
+        	  diags[cnt].score = sc;
+              cnt++;
+		  }
+      }
+
+      p7_BWT_Recurse (seq, 2, meta, &fm, gm->M, 0, cnt-1, diags, &interval_f, &interval_r,
+					  gm->abc, max_char, sc_thresh, sc_thresh50, optimal_extensions, scores,  starts, ends, hit_cnt);
+
+  }
+
+  return eslOK;
+
+ERROR:
+  return eslFAIL;
+//  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+
+}
 
 
 

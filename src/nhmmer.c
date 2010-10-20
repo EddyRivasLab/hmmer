@@ -27,7 +27,7 @@
 #include "hmmer.h"
 
 
-/* set the max residue count to 1 meg when reading a block */
+/* set the max residue count to 1 meg when reading a block (smaller if in dummy mode) */
 #ifdef P7_IMPL_DUMMY_INCLUDED
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
 #else
@@ -477,7 +477,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
       //need to re-compute e-values before merging (when list will be sorted)
-      int resCnt = 0;
+      double resCnt = 0.0;
       if (esl_opt_IsUsed(go, "-Z"))
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
       else
@@ -625,8 +625,9 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
       prev_hit_cnt = info->th->N;
       p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
-      p7_pipeline_Reuse(info->pli); // prepare for next search
 
+
+      p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
       P7_DOMAIN *dcl;

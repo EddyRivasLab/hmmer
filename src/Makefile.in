@@ -13,12 +13,13 @@ SIMDFLAGS= @SIMD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
 DEFS     = @DEFS@
-LIBS     = @GROUPHMMERLIBS@ -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+LIBS     = @GROUPHMMERLIBS@ -leasel -lbwt @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 
 AR       = @AR@ rcv 
 RANLIB   = @RANLIB@
 
 ESLDIR    = ../@HMMER_ESLDIR@
+BWTDIR    = ../@HMMER_BWTDIR@
 IMPLDIR   = impl_@IMPL_CHOICE@
 
 # Configuration for optional pthreads multiprocessor support
@@ -26,13 +27,14 @@ IMPLDIR   = impl_@IMPL_CHOICE@
 MPILIBS   = @MPILIBS@
 
 SHELL     = /bin/sh
-MYLIBDIRS = -L${ESLDIR} -L./${IMPLDIR} -L.
+MYLIBDIRS = -L${ESLDIR} -L${BWTDIR} -L./${IMPLDIR} -L.
 MYINCDIRS = -I${ESLDIR} \
+        -I${BWTDIR} \
 	    -I${top_srcdir}/easel \
 	    -I. \
 	    -I${srcdir}
 
-LIBDEP = ./libhmmer.a @HMMERIMPLLIB@ ${ESLDIR}/libeasel.a
+LIBDEP = ./libhmmer.a @HMMERIMPLLIB@ ${ESLDIR}/libeasel.a ${BWTDIR}/libbwt.a
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -46,7 +48,8 @@ PROGS = hmmalign\
 	hmmstat\
 	jackhmmer\
 	phmmer\
-	nhmmer
+	nhmmer\
+	bwtbuild
 
 HDRS =  hmmer.h\
 	p7_config.h
@@ -143,10 +146,13 @@ check:
 
 dev: libraries programs utests itests misc
 
-libraries: easel_lib impl_lib hmmer_lib
+libraries: easel_lib impl_lib hmmer_lib bwt_lib
 
 easel_lib:
 	cd ${ESLDIR}; ${MAKE} libeasel.a
+
+bwt_lib:
+	cd ${BWTDIR}; ${MAKE} libbwt.a
 
 impl_lib:
 	cd ${IMPLDIR}; ${MAKE} impl_lib

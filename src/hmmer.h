@@ -438,6 +438,7 @@ typedef struct p7_gmx_s {
   float  *dp_mem;
 } P7_GMX;
 
+
 #define MMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_M])
 #define IMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_I])
 #define DMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_D])
@@ -842,8 +843,49 @@ typedef struct p7_builder_s {
 
 
 
+
 /*****************************************************************
- * 15. Routines in HMMER's exposed API.
+ * 15. BWT: building and searching with BWT / FM-index
+ *****************************************************************/
+#define bwt_OccCnt(cnts, i, c)  ( cnts[meta->alph_size*(i) + (c)])
+
+typedef struct bwt_dp_pair_s {
+  int   pos;
+  float  score;
+} BWT_DP_PAIR;
+
+
+typedef struct bwt_interval_s {
+  int   lower;
+  int   upper;
+} BWT_INTERVAL;
+
+
+typedef struct bwt_metadata_s {
+  int alph_type;
+  int alph_size;
+  int N; //length of text
+  int freq_SA; //frequency with which SA is sampled
+  int freq_cnt; //frequency with which counts are captured
+  int SA_shift;
+  int cnt_shift;
+} BWT_METADATA;
+
+typedef struct bwt_fmindex_s {
+  ESL_DSQ *T;
+  ESL_DSQ *BWTf;
+  ESL_DSQ *BWTr;
+  int     *SAf;
+  int     *SAr;
+  int     *Cf;
+  int     *Cr;
+  int     *occCnts_f;
+  int     *occCnts_r;
+} BWT_FMINDEX;
+
+
+/*****************************************************************
+ * 16. Routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -882,6 +924,8 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
 extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L,       P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt);
+extern int p7_GMSV_BWT       (const ESL_DSQ *dsq, int L,       P7_PROFILE *gm,             float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt);
+
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1142,7 +1186,7 @@ extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
-extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, int N);
+extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N);
 extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th);
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
