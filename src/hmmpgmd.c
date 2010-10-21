@@ -42,6 +42,7 @@ typedef struct queue_data_s {
   HMMD_SEARCH_CMD    *cmd;         /* workers search command         */
 
   int                 sock;        /* socket descriptor of client    */
+  char                ip_addr[INET_ADDRSTRLEN];
 
   int                 retry;
   int                 retry_cnt;
@@ -62,15 +63,15 @@ typedef struct {
 } SEARCH_QUEUE;
 
 typedef struct {
-  char           *pgm;
   int             sock_fd;
+  char            ip_addr[INET_ADDRSTRLEN];
+
   SEARCH_QUEUE   *queue;
   ESL_SQCACHE   **cache;
   int             cache_size;
 } CLIENTSIDE_ARGS;
 
 typedef struct {
-  char            *pgm;
   int              sock_fd;
 
   pthread_mutex_t  work_mutex;
@@ -291,8 +292,14 @@ print_client_error(int fd, int status, char *format, va_list ap)
 
   /* send back an unsuccessful status message */
   n = sizeof(s);
-  if (writen(fd, &s, n) != n)                    LOG_FATAL_MSG("write", errno);
-  if (writen(fd, ebuf, s.err_len) != s.err_len)  LOG_FATAL_MSG("write", errno);
+  if (writen(fd, &s, n) != n) {
+    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
+    return;
+  }
+  if (writen(fd, ebuf, s.err_len) != s.err_len)  {
+    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
+    return;
+  }
 }
 
 static void
@@ -531,9 +538,9 @@ worker_process(ESL_GETOPTS *go)
     esl_stopwatch_Start(w);
 
     if (query->hmm == NULL) {
-      fprintf(ofp, "Query (%d):       %s  [L=%ld]\n", query->sock, query->seq->name, (long) query->seq->n);
+      fprintf(ofp, "Query (%s):       %s  [L=%ld]\n", query->ip_addr, query->seq->name, (long) query->seq->n);
     } else {
-      fprintf(ofp, "Query (%d):       %s  [M=%d]\n", query->sock, query->hmm->name, query->hmm->M);
+      fprintf(ofp, "Query (%s):       %s  [M=%d]\n", query->ip_addr, query->hmm->name, query->hmm->M);
     }
     fprintf(ofp, "Database %s [%d - %d]\n", cache[query->dbx]->filename, query->sq_inx, query->sq_inx + query->sq_cnt - 1);
 
@@ -666,7 +673,6 @@ master_process(ESL_GETOPTS *go)
   queue->tail = NULL;
 
   /* start the communications with the web clients */
-  client_comm.pgm   = go->argv[0];
   client_comm.queue = queue;
   client_comm.cache = cache;
   client_comm.cache_size = esl_opt_ArgNumber(go);
@@ -682,11 +688,12 @@ master_process(ESL_GETOPTS *go)
   worker_comm.head    = NULL;
   worker_comm.tail    = NULL;
 
-  worker_comm.pgm     = go->argv[0];
   setup_workerside_comm(go, &worker_comm);
 
   /* read query hmm/sequence */
   while ((query = read_Queue(queue)) != NULL) {
+
+    printf("Processing query from %s\n", query->ip_addr);
 
     if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
@@ -862,6 +869,47 @@ push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue)
   /* if anyone is waiting, wake them up */
   if ((n = pthread_cond_broadcast (&queue->queue_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
   if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+}
+
+static void
+remove_Queue(int fd, SEARCH_QUEUE *queue)
+{
+  int n;
+  QUEUE_DATA *data   = NULL;
+  QUEUE_DATA *next   = NULL;
+  QUEUE_DATA *list   = NULL;
+
+  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  /* skip over the first queued object since it is being searched */
+  data = queue->head;
+  if (data != NULL) data = data->next;
+
+  /* remove all search request from the queue for this socket */
+  while (data != NULL) {
+    next = data->next;
+    if (data->sock == fd) {
+      data->prev->next = data->next;
+      if (data->next == NULL) {
+        queue->tail = data->prev;
+      } else {
+        data->next->prev = data->prev;
+      }
+      data->next = list;
+      list = data;
+    }
+    data = next;
+  }
+
+  /* unlock the queue */
+  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+  /* free all the removed queries */
+  while (list != NULL) {
+    data = list;
+    list = list->next;
+    free_QueueData(data);
+  }
 }
 
 static void
@@ -1265,17 +1313,26 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   status.err_len = 0;
   n = sizeof(status);
   total += n;
-  if (writen(fd, &status, n) != n)                         LOG_FATAL_MSG("write", errno);
+  if (writen(fd, &status, n) != n) {
+    syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
 
   n = sizeof(stats);
   total += n;
-  if (writen(fd, &stats, n) != n)                          LOG_FATAL_MSG("write", errno);
+  if (writen(fd, &stats, n) != n) {
+    syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
 
   /* loop through the hit list sending to dest */
   for (i = 0; i < stats.nhits; ++i) {
     n = sizeof(P7_HIT);
     total += n;
-    if (writen(fd, hit[i], n) != n)                        LOG_FATAL_MSG("write", errno);
+    if (writen(fd, hit[i], n) != n) {
+      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+      goto CLEAR;
+    }
 
     if (hit_data[i] != NULL) {
       /* the hit string pointers contain the length of the strings */
@@ -1285,7 +1342,10 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
       if (hit[i]->desc != NULL) n += (socklen_t)(hit[i]->desc - (char *)NULL);
 
       total += n;
-      if (writen(fd, hit_data[i], n) != n)                 LOG_FATAL_MSG("write", errno);
+      if (writen(fd, hit_data[i], n) != n) {
+        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+        goto CLEAR;
+      }
     }
 
     /* send the domains */
@@ -1294,21 +1354,31 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
       n = (socklen_t)sizeof(P7_DOMAIN);
       total += n;
-      if (writen(fd, dcl, n) != n)                         LOG_FATAL_MSG("write", errno);
+      if (writen(fd, dcl, n) != n) {
+        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+        goto CLEAR;
+      }
 
       n = (socklen_t)sizeof(P7_ALIDISPLAY);
       total += n;
-      if (writen(fd, dcl->ad, n) != n)                     LOG_FATAL_MSG("write", errno);
+      if (writen(fd, dcl->ad, n) != n) {
+        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+        goto CLEAR;
+      }
 
       n = (socklen_t)dcl->ad->memsize;
       total += n;
-      if (writen(fd, dcl->ad->mem, n) != n)                LOG_FATAL_MSG("write", errno);
+      if (writen(fd, dcl->ad->mem, n) != n) {
+        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+        goto CLEAR;
+      }
     }
   }
 
-  printf("Bytes %d sent on socket %d\n", total, fd);
+  printf("Results for %s (%d) sent %d bytes\n", query->ip_addr, fd, total);
 
   /* free all the data */
+ CLEAR:
   for (i = 0; i < stats.nhits; ++i) {
     for (j = 0; j < hit[i]->ndom; ++j) {
       P7_DOMAIN *dcl = &hit[i]->dcl[j];
@@ -1596,8 +1666,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     /* Receive message from client */
     if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
-      fprintf(stderr, "%08X: recv error %d - %s\n", (unsigned int)pthread_self(), errno, strerror(errno));
-      exit(1);
+      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+      return 1;
     }
 
     if (n == 0) return 1;
@@ -1609,12 +1679,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     /* if the buffer is full, make it larger */
     if (!eod && remaining == 0) {
-      buffer = realloc(buffer, buf_size * 2);
-      if (buffer == NULL) {
-        fprintf(stderr, "%s: realloc error\n", data->pgm);
-        exit(1);
-      }
-
+      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
       ptr = buffer + buf_size;
       remaining = buf_size;
       buf_size *= 2;
@@ -1623,12 +1688,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   /* zero terminate the buffer */
   if (remaining == 0) {
-    buffer = realloc(buffer, buf_size + 1);
-    if (buffer == NULL) {
-      fprintf(stderr, "%s: realloc error\n", data->pgm);
-      exit(1);
-    }
-
+    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
     ptr = buffer + buf_size;
   }
   *ptr = 0;
@@ -1733,11 +1793,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     return 0;
   }
 
-  parms = malloc(sizeof(QUEUE_DATA));
-  if (parms == NULL) {
-    fprintf(stderr, "%s: malloc error\n", data->pgm);
-    exit(1);
-  }
+  if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   /* build the search structure that will be sent to all the workers */
   n = sizeof(HMMD_SEARCH_CMD);
@@ -1761,11 +1817,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (hmm->flags & p7H_MAP) n = n + sizeof(int) * (hmm->M + 1);
   }
 
-  cmd = malloc(n);
-  if (cmd == NULL) {
-    fprintf(stderr, "%s: malloc error\n", data->pgm);
-    exit(1);
-  }
+  if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   cmd->length       = n;
   cmd->command      = HMMD_SEARCH;
@@ -1859,6 +1911,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->dbx  = dbx;
   parms->cmd  = cmd;
 
+  strcpy(parms->ip_addr, data->ip_addr);
   parms->sock = data->sock_fd;
   parms->next = NULL;
   parms->prev = NULL;
@@ -1869,9 +1922,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   push_Queue(parms, queue);
 
   if (parms->seq != NULL) {
-    printf("Queued sequence %s on %d\n", parms->seq->name, parms->sock);
+    printf("Queued sequence %s from %s (%d)\n", parms->seq->name, parms->ip_addr, parms->sock);
   } else {
-    printf("Queued hmm %s on %d\n", parms->hmm->name, parms->sock);
+    printf("Queued hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
   }
 
   free(buffer);
@@ -1892,7 +1945,9 @@ clientside_thread(void *arg)
     eof = clientside_loop(data);
   }
 
-  printf("Closing socket %d\n", data->sock_fd);
+  remove_Queue(data->sock_fd, data->queue);
+
+  printf("Closing %s (%d)\n", data->ip_addr, data->sock_fd);
 
   close(data->sock_fd);
   free(data);
@@ -1919,14 +1974,14 @@ client_comm_thread(void *arg)
     n = sizeof(addr);
     if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
 
-    printf("Handling client %s (%d)\n", inet_ntoa(addr.sin_addr), fd);
-
     if ((targs = malloc(sizeof(CLIENTSIDE_ARGS))) == NULL) LOG_FATAL_MSG("malloc", errno);
-    targs->pgm        = data->pgm;
     targs->queue      = queue;
     targs->sock_fd    = fd;
     targs->cache      = data->cache;
     targs->cache_size = data->cache_size;
+
+    strncpy(targs->ip_addr, inet_ntoa(addr.sin_addr), INET_ADDRSTRLEN);
+    targs->ip_addr[INET_ADDRSTRLEN-1] = 0;
 
     if ((n = pthread_create(&thread_id, NULL, clientside_thread, targs)) != 0) LOG_FATAL_MSG("thread create", n);
   }
@@ -1946,29 +2001,20 @@ setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
   struct sockaddr_in   addr;
 
   /* Create socket for incoming connections */
-  if ((sock_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-    fprintf(stderr, "%s: socket error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if ((sock_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) LOG_FATAL_MSG("socket", errno);
       
   /* incase the server went down in an ungraceful way, allow the port to be
    * reused avoiding the timeout.
    */
   reuse = 1;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
-    fprintf(stderr, "%s: setsockopt error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* the sockets are never closed, so if the server exits, force the kernel to
    * close the socket and clear it so the server can be restarted immediately.
    */
   linger.l_onoff = 1;
   linger.l_linger = 0;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) {
-    fprintf(stderr, "%s: setsockopt error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* Construct local address structure */
   memset(&addr, 0, sizeof(addr));
@@ -1977,27 +2023,16 @@ setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
   addr.sin_port = htons(esl_opt_GetInteger(opts, "--cport"));
 
   /* Bind to the local address */
-  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "%s: bind error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) LOG_FATAL_MSG("bind", errno);
 
   /* Mark the socket so it will listen for incoming connections */
-  if (listen(sock_fd, esl_opt_GetInteger(opts, "--ccncts")) < 0) {
-    fprintf(stderr, "%s: listen error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
-
+  if (listen(sock_fd, esl_opt_GetInteger(opts, "--ccncts")) < 0) LOG_FATAL_MSG("listen", errno);
   args->sock_fd = sock_fd;
 
-  if ((n = pthread_create(&thread_id, NULL, client_comm_thread, (void *)args)) != 0) {
-    errno = n;
-    fprintf(stderr, "%s: pthread_create error %d - %s\n", args->pgm, errno, strerror(errno));
-    exit(1);
-  }
+  if ((n = pthread_create(&thread_id, NULL, client_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("socket", n);
 }
 
-static int
+static void
 workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 {
   int          n;
@@ -2008,7 +2043,11 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
   P7_HIT      *hit     = NULL;
   P7_DOMAIN   *dcl     = NULL;
 
+  ESL_STOPWATCH   *w;
+
   HMMD_SEARCH_STATS  *stats;
+
+  w = esl_stopwatch_Create();
 
   for ( ; ; ) {
 
@@ -2022,11 +2061,12 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
     if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
+    esl_stopwatch_Start(w);
+
     n = worker->cmd->length;
-    printf ("Sending data %d:\n", n);
     if (writen(worker->sock_fd, worker->cmd, n) != n) {
       syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-      return 0;
+      break;
     }
 
     total = 0;
@@ -2036,116 +2076,119 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     total += n;
     if ((size = readn(worker->sock_fd, &worker->status, n)) == -1) {
       syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-      return 0;
+      break;
     }
 
     if (worker->status.status != eslOK) {
       n = worker->status.err_len;
       total += n; 
-      worker->err_buf = malloc(n);
+      if ((worker->err_buf = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+      worker->err_buf[0] = 0;
       if ((size = readn(worker->sock_fd, worker->err_buf, n)) == -1) {
         syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-        return 0;
+        break;
       }
-      break;
-    }
+    } else {
 
-    n = sizeof(worker->stats);
-    total += n;
-    if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
-      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-      return 0;
-    }
-
-    stats = &worker->stats;
-    worker->hit      = malloc(sizeof(char *) * stats->nhits);
-    worker->hit_data = malloc(sizeof(char *) * stats->nhits);
-
-    /* loop through the hit list sending to dest */
-    for (i = 0; i < stats->nhits; ++i) {
-      n = sizeof(P7_HIT);
-      if ((hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      worker->hit[i] = hit;
+      n = sizeof(worker->stats);
       total += n;
-      if ((size = readn(worker->sock_fd, hit, n)) == -1) {
+      if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
         syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-        return 0;
+        break;
       }
 
-      /* the hit string pointers contain the length of the string including
-       * the null terminator at the end.
-       */
-      n = 0;
-      if (hit->name != NULL) n += (socklen_t)(hit->name - (char *)NULL);
-      if (hit->acc  != NULL) n += (socklen_t)(hit->acc  - (char *)NULL);
-      if (hit->desc != NULL) n += (socklen_t)(hit->desc - (char *)NULL);
+      stats = &worker->stats;
+      if ((worker->hit      = malloc(sizeof(char *) * stats->nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+      if ((worker->hit_data = malloc(sizeof(char *) * stats->nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-      if (n == 0) {
-        worker->hit_data[i] = NULL;
-      } else {
-        total += n; 
-        if ((worker->hit_data[i] = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-        if ((size = readn(worker->sock_fd, worker->hit_data[i], n)) == -1) {
-          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-          return 0;
-        }
-      }
-
-      n = sizeof(P7_DOMAIN) * hit->ndom;
-      if ((hit->dcl = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-      /* read the domains for this hit */
-      dcl = hit->dcl;
-      for (j = 0; j < hit->ndom; ++j) {
-        char *base;
-        P7_ALIDISPLAY *ad = NULL;
-
-        n = (socklen_t)sizeof(P7_DOMAIN);
+      /* loop through the hit list sending to dest */
+      for (i = 0; i < stats->nhits; ++i) {
+        n = sizeof(P7_HIT);
+        if ((hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+        worker->hit[i] = hit;
         total += n;
-        if ((size = readn(worker->sock_fd, dcl, n)) == -1) {
+        if ((size = readn(worker->sock_fd, hit, n)) == -1) {
           syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-          return 0;
+          break;
         }
 
-        n = (socklen_t)sizeof(P7_ALIDISPLAY);
-        total += n;
-        if ((dcl->ad = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-        if ((size = readn(worker->sock_fd, dcl->ad, n)) == -1) {
-          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-          return 0;
-        }
-
-        /* save off the original mem pointer so all the pointers can be adjusted
-         * to the new block of memory.
+        /* the hit string pointers contain the length of the string including
+         * the null terminator at the end.
          */
-        base = dcl->ad->mem;
+        n = 0;
+        if (hit->name != NULL) n += (socklen_t)(hit->name - (char *)NULL);
+        if (hit->acc  != NULL) n += (socklen_t)(hit->acc  - (char *)NULL);
+        if (hit->desc != NULL) n += (socklen_t)(hit->desc - (char *)NULL);
 
-        n = (socklen_t)dcl->ad->memsize;
-        total += n;
-        if ((dcl->ad->mem = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-        if ((size = readn(worker->sock_fd, dcl->ad->mem, n)) == -1) {
-          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-          return 0;
+        if (n == 0) {
+          worker->hit_data[i] = NULL;
+        } else {
+          total += n; 
+          if ((worker->hit_data[i] = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+          if ((size = readn(worker->sock_fd, worker->hit_data[i], n)) == -1) {
+            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+            break;
+          }
         }
 
-        /* readjust all the pointers to the new memory block */
-        ad = dcl->ad;
-        if (ad->rfline  != NULL) ad->rfline  = ad->rfline  - base + ad->mem;
-        if (ad->csline  != NULL) ad->csline  = ad->csline  - base + ad->mem;
-        if (ad->model   != NULL) ad->model   = ad->model   - base + ad->mem;
-        if (ad->mline   != NULL) ad->mline   = ad->mline   - base + ad->mem;
-        if (ad->aseq    != NULL) ad->aseq    = ad->aseq    - base + ad->mem;
-        if (ad->ppline  != NULL) ad->ppline  = ad->ppline  - base + ad->mem;
-        if (ad->hmmname != NULL) ad->hmmname = ad->hmmname - base + ad->mem;
-        if (ad->hmmacc  != NULL) ad->hmmacc  = ad->hmmacc  - base + ad->mem;
-        if (ad->hmmdesc != NULL) ad->hmmdesc = ad->hmmdesc - base + ad->mem;
-        if (ad->sqname  != NULL) ad->sqname  = ad->sqname  - base + ad->mem;
-        if (ad->sqacc   != NULL) ad->sqacc   = ad->sqacc   - base + ad->mem;
-        if (ad->sqdesc  != NULL) ad->sqdesc  = ad->sqdesc  - base + ad->mem;
+        n = sizeof(P7_DOMAIN) * hit->ndom;
+        if ((hit->dcl = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-        ++dcl;
+        /* read the domains for this hit */
+        dcl = hit->dcl;
+        for (j = 0; j < hit->ndom; ++j) {
+          char *base;
+          P7_ALIDISPLAY *ad = NULL;
+
+          n = (socklen_t)sizeof(P7_DOMAIN);
+          total += n;
+          if ((size = readn(worker->sock_fd, dcl, n)) == -1) {
+            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+            break;
+          }
+
+          n = (socklen_t)sizeof(P7_ALIDISPLAY);
+          total += n;
+          if ((dcl->ad = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+          if ((size = readn(worker->sock_fd, dcl->ad, n)) == -1) {
+            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+            break;
+          }
+
+          /* save off the original mem pointer so all the pointers can be adjusted
+           * to the new block of memory.
+           */
+          base = dcl->ad->mem;
+
+          n = (socklen_t)dcl->ad->memsize;
+          total += n;
+          if ((dcl->ad->mem = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+          if ((size = readn(worker->sock_fd, dcl->ad->mem, n)) == -1) {
+            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+            break;
+          }
+
+          /* readjust all the pointers to the new memory block */
+          ad = dcl->ad;
+          if (ad->rfline  != NULL) ad->rfline  = ad->rfline  - base + ad->mem;
+          if (ad->csline  != NULL) ad->csline  = ad->csline  - base + ad->mem;
+          if (ad->model   != NULL) ad->model   = ad->model   - base + ad->mem;
+          if (ad->mline   != NULL) ad->mline   = ad->mline   - base + ad->mem;
+          if (ad->aseq    != NULL) ad->aseq    = ad->aseq    - base + ad->mem;
+          if (ad->ppline  != NULL) ad->ppline  = ad->ppline  - base + ad->mem;
+          if (ad->hmmname != NULL) ad->hmmname = ad->hmmname - base + ad->mem;
+          if (ad->hmmacc  != NULL) ad->hmmacc  = ad->hmmacc  - base + ad->mem;
+          if (ad->hmmdesc != NULL) ad->hmmdesc = ad->hmmdesc - base + ad->mem;
+          if (ad->sqname  != NULL) ad->sqname  = ad->sqname  - base + ad->mem;
+          if (ad->sqacc   != NULL) ad->sqacc   = ad->sqacc   - base + ad->mem;
+          if (ad->sqdesc  != NULL) ad->sqdesc  = ad->sqdesc  - base + ad->mem;
+
+          ++dcl;
+        }
       }
     }
+
+    esl_stopwatch_Stop(w);
 
     if ((n = pthread_mutex_lock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
@@ -2160,10 +2203,12 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
     if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
-    printf ("WORKER COMPLETE: received %d bytes\n", total), fflush(stdout);
+    printf ("WORKER %s COMPLETED: %.2f sec received %d bytes\n", worker->ip_addr, w->elapsed, total), fflush(stdout);
   }
 
-  return 1;
+  esl_stopwatch_Destroy(w);
+
+  return;
 }
 
 static void *
