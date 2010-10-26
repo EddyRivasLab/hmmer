@@ -367,6 +367,7 @@ int main(int argc, char *argv[])
         pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
 
         n = sizeof(sstatus);
+        //printf("STATUS size %d\n", n);
         total += n;
         if ((size = readn(sock, &sstatus, n)) == -1) {
           fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
@@ -389,6 +390,7 @@ int main(int argc, char *argv[])
         }
 
         n = sizeof(stats);
+        //printf("STATS size %d\n", n);
         total += n;
         if ((size = readn(sock, &stats, n)) == -1) {
           fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
@@ -425,6 +427,7 @@ int main(int argc, char *argv[])
           }
 
           n = sizeof(P7_HIT);
+          //printf("P7_HIT size %d\n", n);
           total += n;
           if ((size = readn(sock, hit, n)) == -1) {
             fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
@@ -467,14 +470,14 @@ int main(int argc, char *argv[])
             fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)sizeof(P7_DOMAIN) * hit->ndom);
             exit(1);
           }
-
+#if 0
           /* zero out the reported and included fields of the hit because when the
            * score and E-value thresholds are applied to the hit list, the reported
            * and included fields are resummed.
            */
           hit->nreported = 0;
           hit->nincluded = 0;
-
+#endif
           /* send the domains for this hit */
           dcl = hit->dcl;
           for (j = 0; j < hit->ndom; ++j) {
@@ -482,6 +485,7 @@ int main(int argc, char *argv[])
             P7_ALIDISPLAY *ad = NULL;
 
             n = (socklen_t)sizeof(P7_DOMAIN);
+            //printf("P7_DOMAIN size %d\n", n);
             total += n;
             if ((size = readn(sock, dcl, n)) == -1) {
               fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
@@ -495,6 +499,7 @@ int main(int argc, char *argv[])
             dcl->ad = ad;
 
             n = (socklen_t)sizeof(P7_ALIDISPLAY);
+            //printf("P7_ALIDISPLAY size %d\n", n);
             total += n;
             if ((size = readn(sock, ad, n)) == -1) {
               fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
@@ -537,12 +542,13 @@ int main(int argc, char *argv[])
         }
 
         /* adjust the reported and included hits */
-        //th->nreported = stats.nreported;
-        //th->nincluded = stats.nincluded;
+        th->nreported = stats.nreported;
+        th->nincluded = stats.nincluded;
+        th->is_sorted = TRUE;
+
+        for (i = 0; i < th->N; i++) th->hit[i] = th->unsrt + i;
 
         /* Print the results.  */
-        p7_tophits_Sort(th);
-        p7_tophits_Threshold(th, pli);
         p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
         p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
 

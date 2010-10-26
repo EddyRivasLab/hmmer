@@ -48,8 +48,8 @@ typedef struct queue_data_s {
   int                 retry_cnt;
 
   int                 dbx;         /* database index to search       */
-  int                 sq_cnt;
-  int                 sq_inx;
+  int                 sq_inx;      /* sequence index to start search */
+  int                 sq_cnt;      /* number of sequences to search  */
 
   struct queue_data_s *next;
   struct queue_data_s *prev;
@@ -122,13 +122,13 @@ typedef struct {
   ESL_GETOPTS      *opts;        /* search specific options          */
   P7_BUILDER       *bld;         /* HMM construction configuration   */
 
-  double            elapsed;
+  double            elapsed;     /* elapsed search time              */
 
   /* Structure created and populated by the individual threads.
    * The main thread is responsible for freeing up the memory.
    */
-  P7_PIPELINE      *pli;         /* work pipeline                           */
-  P7_TOPHITS       *th;          /* top hit results                         */
+  P7_PIPELINE      *pli;         /* work pipeline                    */
+  P7_TOPHITS       *th;          /* top hit results                  */
 } WORKER_INFO;
 
 static void free_QueueData(QUEUE_DATA *data);
@@ -163,6 +163,10 @@ static ESL_OPTIONS cmdlineOpts[] = {
   { "--ccncts",     eslARG_INT,     "16", NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
   { "--wcncts",     eslARG_INT,     "32", NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
   { "--pid",        eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "write process id to file [default: /var/run/hmmpgmd.pid]",    12 },
+  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,            "run as a daemon using config file: /etc/hmmpgmd.conf",        12 },
+
+  { "--protdb",     eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "protein database to cache for searches",                      12 },
+  { "--hmmdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "hmm database to cache for searches",                          12 },
 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>0", NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
 
@@ -173,8 +177,6 @@ static ESL_OPTIONS searchOpts[] = {
   /* Control of output */
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
-  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
-  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,          "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,          "gap extend probability",                                       3 },
@@ -348,12 +350,44 @@ static void
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
 {
   int n;
+  int status;
   ESL_GETOPTS *go = NULL;
 
+  FILE *fp;
+  const char *conf_file = "/etc/hmmpgmd.conf";
+
+  if (go->argc == 1) {
+  }
+
   if ((go = esl_getopts_Create(cmdlineOpts)) == NULL)    p7_Die("Internal failure creating options object");
-  if (esl_opt_ProcessEnvironment(go)         != eslOK) { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK) { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+
+  /* if there are no command line arguements, lets try and read /etc/hmmpgmd.conf
+   * for any configuration data.
+   */
+  if (argc == 1) {
+    if ((fp = fopen("/etc/hmmpgmd.conf", "r")) == NULL) {
+      puts("Options --master or --worker must be specified.");
+      esl_getopts_Destroy(go);
+      return eslOK;
+    }
+    status = esl_opt_ProcessConfigfile(go, conf_file, fp);
+    fclose(fp);
+
+    if (status != eslOK) {
+      printf("Failed to parse configuration file %s: %s\n",  conf_file, go->errbuf); 
+      goto ERROR; 
+    }
+  } else {
+    if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) { 
+      printf("Failed to parse command line: %s\n",  go->errbuf); 
+      goto ERROR; 
+    }
+  }
+
+  if (esl_opt_VerifyConfig(go) != eslOK) { 
+    printf("Failed to parse command line: %s\n", go->errbuf); 
+    goto ERROR; 
+  }
  
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) {
@@ -382,16 +416,31 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   exit(0);  
 }
 
-static void
+static int
 process_searchline(int fd, char *cmdstr, ESL_GETOPTS *go)
 {
   int status;
 
-  if ((status = esl_opt_ProcessSpoof(go, cmdstr)) != eslOK) client_error(fd, status, "Failed to parse options string: %s", go->errbuf);
-  if ((status = esl_opt_VerifyConfig(go))         != eslOK) client_error(fd, status, "Failed to parse options string: %s", go->errbuf);
+  if ((status = esl_opt_ProcessSpoof(go, cmdstr)) != eslOK) return status;
+  if ((status = esl_opt_VerifyConfig(go))         != eslOK) return status;
 
-  /* the options string can handle an optional database */
-  if (esl_opt_ArgNumber(go) > 1)                 client_error(fd, eslFAIL, "Incorrect number of command line arguments.");
+  return eslOK;
+}
+
+static void
+print_timings(int i, double elapsed, P7_PIPELINE *pli)
+{
+  char buf1[16];
+  int h, m, s, hs;
+
+  h  = (int) (elapsed / 3600.);
+  m  = (int) (elapsed / 60.) - h * 60;
+  s  = (int) (elapsed) - h * 3600 - m * 60;
+  hs = (int) (elapsed * 100.) - h * 360000 - m * 6000 - s * 100;
+  sprintf(buf1, "%02d:%02d.%02d", m,s,hs);
+
+  fprintf (stdout, "%2d %9" PRId64 " %9" PRId64 " %7" PRId64 " %7" PRId64 " %6" PRId64 " %5" PRId64 " %s\n",
+           i, pli->nseqs, pli->nres, pli->n_past_msv, pli->n_past_bias, pli->n_past_vit, pli->n_past_fwd, buf1);
 }
 
 /* sort routines */
@@ -491,7 +540,6 @@ worker_process(ESL_GETOPTS *go)
   FILE            *ofp        = stdout;            /* results output file (-o)                        */
   ESL_ALPHABET    *abc;                            /* digital alphabet                                */
   ESL_STOPWATCH   *w;                              /* timer used for profiling statistics             */
-  int              textw      = 0;
   int              status     = eslOK;
   int              i;
   int              fd;
@@ -533,8 +581,6 @@ worker_process(ESL_GETOPTS *go)
   /* read query hmm/sequence */
   while ((query = read_QueryCmd(fd)) != NULL) {
 
-    textw = (esl_opt_GetBoolean(query->opts, "--notextw")) ? 0 : esl_opt_GetInteger(query->opts, "--textw");
-
     esl_stopwatch_Start(w);
 
     if (query->hmm == NULL) {
@@ -570,20 +616,7 @@ worker_process(ESL_GETOPTS *go)
 #if 1
     fprintf (ofp, "   Sequences  Residues                              Elapsed\n");
     for (i = 0; i < ncpus; ++i) {
-      char buf1[16];
-      int h, m, s, hs;
-      P7_PIPELINE *pli = info[i].pli;
-      double elapsed;
-
-      elapsed = info[i].elapsed;
-      h  = (int) (elapsed / 3600.);
-      m  = (int) (elapsed / 60.) - h * 60;
-      s  = (int) (elapsed) - h * 3600 - m * 60;
-      hs = (int) (elapsed * 100.) - h * 360000 - m * 6000 - s * 100;
-      sprintf(buf1, "%02d:%02d.%02d", m,s,hs);
-
-      fprintf (ofp, "%2d %9" PRId64 " %9" PRId64 " %7" PRId64 " %7" PRId64 " %6" PRId64 " %5" PRId64 " %s\n",
-               i, pli->nseqs, pli->nres, pli->n_past_msv, pli->n_past_bias, pli->n_past_vit, pli->n_past_fwd, buf1);
+      print_timings(i, info[i].elapsed, info[i].pli);
     }
 #endif
     /* merge the results of the search results */
@@ -594,7 +627,7 @@ worker_process(ESL_GETOPTS *go)
       p7_tophits_Destroy(info[i].th);
     }
 
-    p7_pli_Statistics(stdout, info[0].pli, w);
+    print_timings(99, w->elapsed, info[0].pli);
     send_results(fd, w, info);
 
     /* free the last of the pipeline data */
@@ -794,7 +827,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS  *go = NULL;      /* command line processing */
 
-  process_commandline(argc, argv, &go);    
+  process_commandline(argc, argv, &go);
 
   /* if we write to a broken socket, ignore the signal and handle the error. */
   signal(SIGPIPE, SIG_IGN);
@@ -1203,6 +1236,31 @@ pipeline_thread(void *arg)
   return;
 }
 
+typedef struct {
+  P7_HIT         *hit;
+  char           *data;
+} HIT_LIST;
+
+static int
+hit_sorter(const void *p1, const void *p2)
+{
+  int cmp;
+
+  const P7_HIT *h1 = ((HIT_LIST *) p1)->hit;
+  const P7_HIT *h2 = ((HIT_LIST *) p2)->hit;
+
+  cmp  = (h1->sortkey < h2->sortkey);
+  cmp -= (h1->sortkey > h2->sortkey);
+  if (cmp == 0) {
+    if ((cmp = strcmp(h1->name, h2->name)) == 0) {
+      cmp  = (h1->dcl[0].iali < h2->dcl[0].iali);
+      cmp -= (h1->dcl[0].iali > h2->dcl[0].iali);
+    }
+  }
+
+  return cmp;
+}
+
 static void
 forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 {
@@ -1213,14 +1271,15 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
   int total = 0;
 
-  P7_HIT    **hit;
-  char      **hit_data;
+  HIT_LIST           *list;
+  HIT_LIST           *ptr;
 
   WORKER_DATA        *worker;
 
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
 
+ 
   fd = query->sock;
 
   stats.nhits       = 0;
@@ -1254,8 +1313,8 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   }
 
   /* allocate spaces to hold all the hits */
-  if ((hit = malloc(sizeof(char *) * n)) == NULL)      LOG_FATAL_MSG("malloc", errno);
-  if ((hit_data = malloc(sizeof(char *) * n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+  if ((list = malloc(sizeof(HIT_LIST) * n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+  ptr = list;
 
   /* gather up the results and merge them */
   inx = 0;
@@ -1263,8 +1322,8 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   while (worker != NULL) {
     if (worker->completed) {
       stats.nmodels      = worker->stats.nmodels;
-      stats.nseqs        = worker->stats.nseqs;
-      stats.nres         = worker->stats.nres;
+      stats.nseqs       += worker->stats.nseqs;
+      stats.nres        += worker->stats.nres;
       stats.nnodes       = worker->stats.nnodes;
 
       stats.nhits       += worker->stats.nhits;
@@ -1276,28 +1335,25 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
       stats.n_past_vit  += worker->stats.n_past_vit;
       stats.n_past_fwd  += worker->stats.n_past_fwd;
 
-      stats.domZ = worker->stats.domZ;
-      if (worker->stats.Z_setby == p7_ZSETBY_NTARGETS) {
-        stats.Z += (query->hmm != NULL) ? worker->stats.nmodels : worker->stats.nseqs;
-      } else {
-        stats.Z = worker->stats.Z;
-      }
+      stats.Z_setby      = worker->stats.Z_setby;
+      stats.domZ_setby   = worker->stats.domZ_setby;
+      stats.domZ         = worker->stats.domZ;
+      stats.Z            = worker->stats.Z;
 
       if (worker->stats.nhits > 0) {
-        n = worker->stats.nhits;
-        memcpy(hit + inx, worker->hit, sizeof(char *) * n);
-        memcpy(hit_data + inx, worker->hit_data, sizeof(char *) * n);
-
-        memset(worker->hit, 0, sizeof(char *) * n);
-        memset(worker->hit_data, 0, sizeof(char *) * n);
+        for (i = 0; i < worker->stats.nhits; ++i) {
+          ptr->hit  = worker->hit[i];
+          ptr->data = worker->hit_data[i];
+          ++ptr;
+        }
+        memset(worker->hit, 0, sizeof(char *) * worker->stats.nhits);
+        memset(worker->hit_data, 0, sizeof(char *) * worker->stats.nhits);
 
         free(worker->hit);
         free(worker->hit_data);
 
         worker->hit      = NULL;
         worker->hit_data = NULL;
-
-        inx += worker->stats.nhits;
       }
 
       worker->completed = 0;
@@ -1307,6 +1363,52 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   }
 
   if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+
+  if (stats.Z_setby == p7_ZSETBY_NTARGETS) {
+    stats.Z = (query->hmm != NULL) ? stats.nmodels : stats.nseqs;
+  }
+
+  /* sort the hits and apply score and E-value thresholds */
+  if (stats.nhits > 0) {
+    P7_PIPELINE     *pli;
+    P7_TOPHITS       th;
+
+    th.unsrt     = NULL;
+    th.N         = stats.nhits;
+    th.nreported = 0;
+    th.nincluded = 0;
+    th.is_sorted = 0;
+      
+    pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
+    pli->nmodels     = stats.nmodels;
+    pli->nseqs       = stats.nseqs;
+    pli->nres        = stats.nres;
+    pli->nnodes      = stats.nnodes;
+    pli->n_past_msv  = stats.n_past_msv;
+    pli->n_past_bias = stats.n_past_bias;
+    pli->n_past_vit  = stats.n_past_vit;
+    pli->n_past_fwd  = stats.n_past_fwd;
+
+    pli->Z           = stats.Z;
+    pli->domZ        = stats.domZ;
+    pli->Z_setby     = stats.Z_setby;
+    pli->domZ_setby  = stats.domZ_setby;
+
+    if ((th.hit = malloc(sizeof(P7_HIT *) * stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+    qsort(list, stats.nhits, sizeof(HIT_LIST), hit_sorter);
+
+    for (i = 0; i < th.N; ++i) th.hit[i] = list[i].hit;
+    p7_tophits_Threshold(&th, pli);
+
+    stats.nreported = th.nreported;
+    stats.nincluded = th.nreported;
+    stats.domZ      = pli->domZ;
+    stats.Z         = pli->Z;
+
+    memset(th.hit, 0, sizeof(P7_HIT *) * th.N);
+    free(th.hit);
+  }
 
   /* send back a successful status message */
   status.status  = eslOK;
@@ -1327,30 +1429,32 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
   /* loop through the hit list sending to dest */
   for (i = 0; i < stats.nhits; ++i) {
+    P7_HIT *hit = list[i].hit;
+
     n = sizeof(P7_HIT);
     total += n;
-    if (writen(fd, hit[i], n) != n) {
+    if (writen(fd, hit, n) != n) {
       syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
       goto CLEAR;
     }
 
-    if (hit_data[i] != NULL) {
+    if (list[i].data != NULL) {
       /* the hit string pointers contain the length of the strings */
       n = 0;
-      if (hit[i]->name != NULL) n += (socklen_t)(hit[i]->name - (char *)NULL);
-      if (hit[i]->acc  != NULL) n += (socklen_t)(hit[i]->acc  - (char *)NULL);
-      if (hit[i]->desc != NULL) n += (socklen_t)(hit[i]->desc - (char *)NULL);
+      if (hit->name != NULL) n += (socklen_t)(hit->name - (char *)NULL);
+      if (hit->acc  != NULL) n += (socklen_t)(hit->acc  - (char *)NULL);
+      if (hit->desc != NULL) n += (socklen_t)(hit->desc - (char *)NULL);
 
       total += n;
-      if (writen(fd, hit_data[i], n) != n) {
+      if (writen(fd, list[i].data, n) != n) {
         syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
         goto CLEAR;
       }
     }
 
     /* send the domains */
-    for (j = 0; j < hit[i]->ndom; ++j) {
-      P7_DOMAIN      *dcl = &hit[i]->dcl[j];
+    for (j = 0; j < hit->ndom; ++j) {
+      P7_DOMAIN      *dcl = &hit->dcl[j];
 
       n = (socklen_t)sizeof(P7_DOMAIN);
       total += n;
@@ -1380,22 +1484,20 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   /* free all the data */
  CLEAR:
   for (i = 0; i < stats.nhits; ++i) {
-    for (j = 0; j < hit[i]->ndom; ++j) {
-      P7_DOMAIN *dcl = &hit[i]->dcl[j];
+    P7_HIT *hit = list[i].hit;
+    for (j = 0; j < hit->ndom; ++j) {
+      P7_DOMAIN *dcl = &hit->dcl[j];
       free (dcl->ad);
       free (dcl->ad->mem);
     }
-    free(hit[i]->dcl);
-    free(hit[i]);
+    free(hit->dcl);
+    free(hit);
     
-    if (hit_data[i] != NULL) free(hit_data[i]);
+    if (list[i].data != NULL) free(list[i].data);
   }
 
-  memset(hit, 0, sizeof(char *) * stats.nhits);
-  memset(hit_data, 0, sizeof(char *) * stats.nhits);
-
-  free(hit);
-  free(hit_data);
+  memset(list, 0, sizeof(HIT_LIST) * stats.nhits);
+  free(list);
 }
 
 static void
@@ -1734,7 +1836,18 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   if (!setjmp(jmp_env)) {
     dbx = 0;
     
-    if (opt_str[0] != 0) process_searchline(data->sock_fd, opt_str, opts);
+    if (opt_str[0] != 0) {
+      status = process_searchline(data->sock_fd, opt_str, opts);
+      if (status != eslOK) {
+        client_error_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+      }
+
+      /* the options string can handle an optional database */
+      if (esl_opt_ArgNumber(opts) > 1) {
+        client_error_longjmp(data->sock_fd, status, &jmp_env, "Incorrect number of command line arguments.");
+      }
+    }
+
 
     /* figure out which cached database to use */
     if (esl_opt_ArgNumber(opts) == 1) {
