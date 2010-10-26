@@ -1251,12 +1251,6 @@ hit_sorter(const void *p1, const void *p2)
 
   cmp  = (h1->sortkey < h2->sortkey);
   cmp -= (h1->sortkey > h2->sortkey);
-  if (cmp == 0) {
-    if ((cmp = strcmp(h1->name, h2->name)) == 0) {
-      cmp  = (h1->dcl[0].iali < h2->dcl[0].iali);
-      cmp -= (h1->dcl[0].iali > h2->dcl[0].iali);
-    }
-  }
 
   return cmp;
 }

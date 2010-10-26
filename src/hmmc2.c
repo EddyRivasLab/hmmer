@@ -544,9 +544,8 @@ int main(int argc, char *argv[])
         /* adjust the reported and included hits */
         th->nreported = stats.nreported;
         th->nincluded = stats.nincluded;
-        th->is_sorted = TRUE;
-
-        for (i = 0; i < th->N; i++) th->hit[i] = th->unsrt + i;
+        th->is_sorted = FALSE;
+        p7_tophits_Sort(th);
 
         /* Print the results.  */
         p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
