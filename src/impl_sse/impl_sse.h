@@ -122,7 +122,7 @@ typedef struct p7_oprofile_s {
   /* Information about current configuration, size, allocation                       */
   int    L;			/* current configured target seq length              */
   int    M;			/* model length                                      */
-  int    max_length;		/* bound on the length of sequence emitted by single pass though model      */
+  int    max_length;		/* upper bound on emitted sequence length            */
   int    allocM;		/* maximum model length currently allocated for      */
   int    allocQ4;		/* p7_NQF(allocM): alloc size for tf, rf             */
   int    allocQ8;		/* p7_NQW(allocM): alloc size for tw, rw             */

@@ -49,6 +49,7 @@ static uint32_t  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
 #endif
 static uint32_t  v3a_magic = 0xe8ededb6; /* 3/a binary: "hmm6" + 0x80808080 */
 static uint32_t  v3b_magic = 0xe8ededb7; /* 3/b binary: "hmm7" + 0x80808080 */
+static uint32_t  v3c_magic = 0xe8ededb8; /* 3/c binary: "hmm8" + 0x80808080 */
 
 
 static int read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm);
@@ -286,6 +287,7 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
   if (! fread((char *) &(magic.n), sizeof(uint32_t), 1, hfp->f)) { status = eslEFORMAT; goto ERROR; }
   if      (magic.n == v3a_magic) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3b_magic) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_bin30hmm; }
+  else if (magic.n == v3c_magic) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_bin30hmm; }
   else if (hfp->is_pressed) { status = eslEFORMAT; goto ERROR; }
 
   /* 7. Checks for ASCII file format */
@@ -299,7 +301,8 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
       if ((status = esl_fileparser_NextLinePeeked(hfp->efp, magic.c, 4)) != eslOK)  goto ERROR;
       if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  goto ERROR;
 
-      if      (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
+      if      (strcmp("HMMER3/c", tok) == 0) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_asc30hmm; }
+      else if (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
     }
@@ -415,9 +418,10 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
 {
   int k, x;
   
-  if (format == -1) format = p7_HMMFILE_3b;
+  if (format == -1) format = p7_HMMFILE_3c;
 
-  if      (format == p7_HMMFILE_3b)  fprintf(fp, "HMMER3/b [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE);
+  if      (format == p7_HMMFILE_3c)  fprintf(fp, "HMMER3/c [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE);
+  else if (format == p7_HMMFILE_3b)  fprintf(fp, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
   else if (format == p7_HMMFILE_3a)  fprintf(fp, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
   
@@ -425,7 +429,7 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->acc)  fprintf(fp, "ACC   %s\n", hmm->acc);
   if (hmm->desc) fprintf(fp, "DESC  %s\n", hmm->desc);
   fprintf(fp, "LENG  %d\n", hmm->M);
-  if (hmm->max_length > 0) fprintf(fp, "MAX_LENG  %d\n", hmm->max_length);
+  if (hmm->max_length > 0) fprintf(fp, "MAXL  %d\n", hmm->max_length);
   fprintf(fp, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type));
   fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)  ? "yes" : "no");
   fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)  ? "yes" : "no");
@@ -520,7 +524,7 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
 {
   int k;
 
-  if (format == -1) format = p7_HMMFILE_3b;
+  if (format == -1) format = p7_HMMFILE_3c;
 
   /* Legacy: p7H_{ACC, DESC} flags used to be used to indicate
    * whether optional acc, desc were present. Now we just use
@@ -540,10 +544,11 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
    * issue too - and remove the flags.
    */
   if (hmm->desc == NULL) hmm->flags &= ~p7H_DESC;  else hmm->flags |= p7H_DESC;
-  if (hmm->acc == NULL)  hmm->flags &= ~p7H_ACC;   else hmm->flags |= p7H_ACC;
+  if (hmm->acc  == NULL) hmm->flags &= ~p7H_ACC;   else hmm->flags |= p7H_ACC;
 
   /* ye olde magic number */
-  if      (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  if      (format == p7_HMMFILE_3c) { if (fwrite((char *) &(v3c_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  else if (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
   else if (format == p7_HMMFILE_3a) { if (fwrite((char *) &(v3a_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
 
@@ -571,8 +576,11 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
   if ((hmm->flags & p7H_CS)   && (fwrite((char *) hmm->cs,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
   if ((hmm->flags & p7H_CA)   && (fwrite((char *) hmm->ca,  sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
   if (write_bin_string(fp, hmm->comlog) != eslOK)                                                     return eslFAIL;
-  if (fwrite((char *) &(hmm->nseq),     sizeof(int),    1,   fp) != 1)                                return eslFAIL;
-  if (fwrite((char *) &(hmm->eff_nseq), sizeof(float),  1,   fp) != 1)                                return eslFAIL;
+  if (fwrite((char *) &(hmm->nseq),       sizeof(int),    1,   fp) != 1)                              return eslFAIL;
+  if (fwrite((char *) &(hmm->eff_nseq),   sizeof(float),  1,   fp) != 1)                              return eslFAIL;
+  if (format == p7_HMMFILE_3c) {
+    if (fwrite((char *) &(hmm->max_length), sizeof(int),  1,   fp) != 1)                              return eslFAIL;
+  }
   if (write_bin_string(fp, hmm->ctime) != eslOK)                                                      return eslFAIL;
   if ((hmm->flags & p7H_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1))   return eslFAIL;
   if (fwrite((char *) &(hmm->checksum), sizeof(uint32_t),1,  fp) != 1)                                return eslFAIL;
@@ -806,7 +814,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_NextLine(hfp->efp))                   != eslOK)  goto ERROR;  /* EOF here is normal; could also be a thrown EMEM */
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "unexpected absence of tokens on data line");
 
-      if      (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
+      if      (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
       else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
       else                                                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
     }
@@ -839,9 +848,9 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((hmm->M = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
-      else if (strcmp(tag, "MAX_LENG") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAX_LENG line");
-	if ((hmm->max_length = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXLENG line", tok1);
+      else if (hfp->format >= p7_HMMFILE_3c && strcmp(tag, "MAXL") == 0) {
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAXL line");
+	if ((hmm->max_length = atoi(tok1))                                   == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXL line", tok1);
       }
 
       else if (strcmp(tag, "ALPH") == 0) {
@@ -910,7 +919,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       }
 
       else if (strcmp(tag, "STATS") == 0) {
-	if (hfp->format == p7_HMMFILE_3b)
+	if (hfp->format >= p7_HMMFILE_3b)
 	  {
 	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
 	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* MSV | VITERBI | FORWARD */
@@ -1092,7 +1101,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       }
       if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOF;       goto ERROR; }
 
-      if      (hfp->format == p7_HMMFILE_3b) { if (magic != v3b_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
+      if      (hfp->format == p7_HMMFILE_3c) { if (magic != v3c_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
+      else if (hfp->format == p7_HMMFILE_3b) { if (magic != v3b_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
       else if (hfp->format == p7_HMMFILE_3a) { if (magic != v3a_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
       else                                                              ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no such HMM file format code");      
     }
@@ -1138,14 +1148,17 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if ((hmm->flags & p7H_CS)   && ! fread((char *) hmm->cs, sizeof(char), hmm->M+2, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs");
   if ((hmm->flags & p7H_CA)   && ! fread((char *) hmm->ca, sizeof(char), hmm->M+2, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ca");
   if (read_bin_string(hfp->f, &(hmm->comlog)) != eslOK)                                       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read comlog");
-  if (! fread((char *) &(hmm->nseq),     sizeof(int),   1, hfp->f))                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nseq");
-  if (! fread((char *) &(hmm->eff_nseq), sizeof(float), 1, hfp->f))                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read eff_nseq");
+  if (! fread((char *) &(hmm->nseq),       sizeof(int),   1, hfp->f))                         ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nseq");
+  if (! fread((char *) &(hmm->eff_nseq),   sizeof(float), 1, hfp->f))                         ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read eff_nseq");
+  if (hfp->format >= p7_HMMFILE_3c) {
+    if (! fread((char *) &(hmm->max_length), sizeof(int),   1, hfp->f))                         ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read max_length");
+  }
   if (read_bin_string(hfp->f, &(hmm->ctime))  != eslOK)                                       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ctime");
   if ((hmm->flags & p7H_MAP)  && ! fread((char *) hmm->map, sizeof(int), hmm->M+1, hfp->f))   ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read map");
   if (! fread((char *) &(hmm->checksum), sizeof(uint32_t),1,hfp->f))                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read checksum");
 
   /* E-value parameters and Pfam cutoffs */
-  if (hfp->format == p7_HMMFILE_3b) {
+  if (hfp->format >= p7_HMMFILE_3b) {
     if (! fread((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read statistical params");
   } else if (hfp->format == p7_HMMFILE_3a) {
     /* a backward compatibility mode. 3/a files stored 3 floats: LAMBDA, MU, TAU. Read 3 #'s and carefully copy/rearrange them into new 6 format */
@@ -1242,11 +1255,6 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
 	if ((hmm->M = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
-
-      else if (strcmp(tag, "MAX_LENG") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAX_LENG line");
-	if ((hmm->max_length = atoi(tok1))                                            == 0)  	 ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXLENG line", tok1);
-      }
 
       else if (strcmp(tag, "ALPH") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
@@ -1715,7 +1723,7 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK)  esl_fatal(msg);
   
   /* It should have determined the right file format */
-  if (format == -1) { if (hfp->format != p7_HMMFILE_3b) esl_fatal(msg); }
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3c) esl_fatal(msg); }
   else              { if (hfp->format != format)        esl_fatal(msg); } 
 
   /* It should be identical to what we started with */
@@ -1734,7 +1742,7 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK)  esl_fatal(msg);
   if (p7_hmm_Compare(hmm, new, 0.0001)     != eslOK)  esl_fatal(msg);
 
-  if (format == -1) { if (hfp->format != p7_HMMFILE_3b) esl_fatal(msg); }
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3c) esl_fatal(msg); }
   else              { if (hfp->format != format)        esl_fatal(msg); } 
 
   p7_hmm_Destroy(new);

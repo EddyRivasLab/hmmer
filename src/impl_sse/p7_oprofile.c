@@ -131,12 +131,13 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   memset(om->cs,       '\0', sizeof(char) * (allocM+2));
   memset(om->consensus,'\0', sizeof(char) * (allocM+2));
 
-  om->abc       = abc;
-  om->L         = 0;
-  om->M         = 0;
-  om->allocM    = allocM;
-  om->mode      = p7_NO_MODE;
-  om->nj        = 0.0f;
+  om->abc        = abc;
+  om->L          = 0;
+  om->M          = 0;
+  om->max_length = -1;
+  om->allocM     = allocM;
+  om->mode       = p7_NO_MODE;
+  om->nj         = 0.0f;
   return om;
 
  ERROR:

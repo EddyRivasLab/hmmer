@@ -103,6 +103,7 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   gm->L                = 0;
   gm->allocM           = allocM;
   gm->M                = 0;
+  gm->max_length       = -1;
   gm->nj               = 0.0f;
 
   gm->roff             = -1;

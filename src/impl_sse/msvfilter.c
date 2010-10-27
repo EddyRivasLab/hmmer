@@ -259,7 +259,7 @@ int
 p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, __m128i sc_threshv, int **starts, int** ends, int *hit_cnt)
 {
 
-  register __m128i mpv;        /* previous row values                                       */
+  register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
@@ -269,14 +269,12 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
-  __m128i *rsc;			   		   /* will point at om->rbv[x] for residue x[i]                 */
-
+  __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
   __m128i tecv;                    /* vector for E->C  cost                                     */
-  __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs              */
+  __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
   __m128i basev;                   /* offset for scores                                         */
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
-  __m128i tempv2;                   /* work vector                                               */
 
   int cmp;
   int status;

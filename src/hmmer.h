@@ -174,7 +174,7 @@ typedef struct p7_hmm_s {
   char    *comlog;               /* command line(s) that built model      (optional: NULL) */ /* String, \0-terminated   */
   int      nseq;	         /* number of training sequences          (optional: -1)   */
   float    eff_nseq;             /* effective number of seqs (<= nseq)    (optional: -1)   */
-  int	   max_length;            /* the length that contains all but 1e-7 of the prob mass, based on the model */
+  int	   max_length;           /* upper bound length, all but 1e-7 prob (optional: -1)   */
   char    *ctime;	         /* creation date                         (optional: NULL) */
   int     *map;	                 /* map of alignment cols onto model 1..M (p7H_MAP)        */ /* Array; map[0]=0 */
   uint32_t checksum;             /* checksum of training sequences        (p7H_CHKSUM)     */
@@ -248,7 +248,7 @@ typedef struct p7_profile_s {
   int     L;		/* current configured target seq length                    */
   int     allocM;	/* max # of nodes allocated in this structure              */
   int     M;		/* number of nodes in the model                            */
-  int     max_length;		/* bound on the length of sequence emitted by single pass though model      */
+  int     max_length;	/* calculated upper bound on emitted seq length            */
   float   nj;		/* expected # of uses of J; precalculated from loop config */
 
   /* Info, most of which is a copy from parent HMM:                                       */
@@ -368,10 +368,14 @@ typedef struct p7_trace_s {
  * 5. P7_HMMFILE:  an HMM save file or database, open for reading.
  *****************************************************************/
 
+/* These tags need to be in temporal order, so we can do tests
+ * like "if (format >= p7_HMMFILE_3b) ..."
+ */
 enum p7_hmmfile_formats_e {
   p7_HMMFILE_20 = 0,
   p7_HMMFILE_3a = 1,
   p7_HMMFILE_3b = 2,
+  p7_HMMFILE_3c = 3,
 };
 
 typedef struct p7_hmmfile_s {

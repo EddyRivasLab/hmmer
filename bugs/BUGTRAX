@@ -6,7 +6,7 @@ STATUS          CLOSED
 XREF            J6/120 
 REPORTED_BY     Marcelo Carlos Sousa <Marcelo.Sousa@Colorado.EDU>
 OPENED_DATE     SRE, Tue Aug 24 13:45:56 2010
-CLOSED_DATE     
+CLOSED_DATE     SRE, Tue Aug 24 16:56:21 2010 
 DESCRIPTION     
   --incE option doesn't work below 1e-30 or so, as in:
   jackhmmer --noali --incE 1.0e-40 ../nlpb_coli.fasta ../uniprot_trembl.fasta

@@ -343,11 +343,9 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
   if ((status =  make_post_msa        (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
 
-  if (bld->w_len > 0)
-	  hmm->max_length = bld->w_len;
-  else if (bld->w_beta == 0.0)
-	  hmm->max_length = hmm->M *4;
-  else if ((status =  p7_Builder_MaxLength      (hmm, bld->w_beta))               != eslOK) goto ERROR;
+  if (bld->w_len > 0)           hmm->max_length = bld->w_len;
+  else if (bld->w_beta == 0.0)  hmm->max_length = hmm->M *4;
+  else if ((status =  p7_Builder_MaxLength(hmm, bld->w_beta)) != eslOK) goto ERROR;
 
   hmm->checksum = checksum;
   hmm->flags   |= p7H_CHKSUM;
@@ -527,7 +525,7 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
  *
  * Args:      hmm         - p7_HMM (required for the transition probabilities)
  *
- * Returns:   <eslOK> on success. The max length is returned in hmm->max_length.
+ * Returns:   <eslOK> on success. The max length is set in hmm->max_length.
 
  */
 int

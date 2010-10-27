@@ -84,23 +84,24 @@ p7_hmm_CreateShell(void)
   int     status;
 
   ESL_ALLOC(hmm, sizeof(P7_HMM));
-  hmm->M        = 0;
-  hmm->t        = NULL;
-  hmm->mat      = NULL;
-  hmm->ins      = NULL;
+  hmm->M          = 0;
+  hmm->t          = NULL;
+  hmm->mat        = NULL;
+  hmm->ins        = NULL;
 
-  hmm->name     = NULL;
-  hmm->acc      = NULL;
-  hmm->desc     = NULL;
-  hmm->rf       = NULL;
-  hmm->cs       = NULL;
-  hmm->ca       = NULL;
-  hmm->comlog   = NULL; 
-  hmm->nseq     = -1;
-  hmm->eff_nseq = -1.0;
-  hmm->ctime    = NULL;
-  hmm->map      = NULL;
-  hmm->checksum = 0;
+  hmm->name       = NULL;
+  hmm->acc        = NULL;
+  hmm->desc       = NULL;
+  hmm->rf         = NULL;
+  hmm->cs         = NULL;
+  hmm->ca         = NULL;
+  hmm->comlog     = NULL; 
+  hmm->nseq       = -1;
+  hmm->eff_nseq   = -1.0;
+  hmm->max_length = -1;
+  hmm->ctime      = NULL;
+  hmm->map        = NULL;
+  hmm->checksum   = 0;
 
   for (z = 0; z < p7_NCUTOFFS; z++) hmm->cutoff[z]  = p7_CUTOFF_UNSET;
   for (z = 0; z < p7_NEVPARAM; z++) hmm->evparam[z] = p7_EVPARAM_UNSET;
@@ -569,37 +570,46 @@ p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv)
  * Date:     SRE, Wed Oct 29 11:53:19 1997 [TWA 721 over the Atlantic]
  * 
  * Purpose:  Set the <ctime> field in a new HMM to the current time.
- *
- *           This function is not reentrant and not threadsafe, because
- *           it calls the nonreentrant ANSI C ctime() function.
  * 
  * Returns:  <eslOK> on success.
  * 
- * Throws:   <eslEMEM> on allocation failure. <eslESYS> if the <time()>
- *           system call fails to obtain the calendar time.
+ * Throws:   <eslEMEM> on allocation failure. 
+ *           <eslESYS> if system calls fail to obtain (or format) the time.
+ *           
+ * Notes:    This function calls <ctime_r()>, supposedly a part of the
+ *           ISO/IEC 9945-1:1996 (POSIX.1) standard, but not ANSI
+ *           C99. <ctime_r()> is a reportedly a three-argument call on
+ *           Solaris 10 systems, so beware portability problems
+ *           there. We might want to use strftime() instead; that's what 
+ *           POSIX 2008 recommends; but we'd still need localtime_r() or
+ *           its equivalent, and that has its own portability issues.
+ *           
+ *           Note to porters: it really doesn't matter what this
+ *           timestamp is. HMMER doesn't look at it, it's for human
+ *           notetaking. If you have to, set it to an empty string.
+ *
+ * TODO:     Oi. Time is complicated. Easel should give us an
+ *           easy and portable call to generate time stamps like this;
+ *           an esl_time module, perhaps?
  */
 int
 p7_hmm_SetCtime(P7_HMM *hmm)
 {
-  int      status;
   char    *s = NULL;
   time_t   date;
+  int      status;
 
-  if ((date = time(NULL)) == -1) { status = eslESYS; goto ERROR; }
-
-  /* use a thread safe version of ctime to avoid possible memory
-   * corruption when called my a multi-threaded program.
-   */
   ESL_ALLOC(s, 32);
-  ctime_r(&date, s);
-  esl_strchop(s, -1);
+  if ((date = time(NULL)) == -1)               { status = eslESYS; goto ERROR; }
+  if (ctime_r(&date, s) == NULL)               { status = eslESYS; goto ERROR; }
+  if ((status = esl_strchop(s, -1)) != eslOK)  {                   goto ERROR; }
   
   if (hmm->ctime != NULL) free(hmm->ctime);
   hmm->ctime = s;
   return eslOK;
 
  ERROR:
-  if (s != NULL) free(s);
+  if (s) free(s);
   return status;
 }
 
@@ -1329,6 +1339,7 @@ main(int argc, char **argv)
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
   exit(0); /* success */
 }
 

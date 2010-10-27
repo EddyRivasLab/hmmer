@@ -268,7 +268,6 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
   int *matuse   = NULL;	  /* matuse[k=1..M] == TRUE|FALSE: does node k map to an alignment column */
   int *matmap   = NULL;	  /* matmap[k=1..M]: if matuse[k] TRUE, what column 1..alen does node k map to */
   int  idx;		  /* counter over sequences */
-  int  nins;		  /* counter for inserted residues observed */
   int  z;		  /* index into trace positions */
   int  alen;		  /* length of alignment */
   int  k;		  /* counter over nodes 1..M */

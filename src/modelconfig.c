@@ -67,11 +67,11 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   if (hmm->M > gm->allocM)             ESL_XEXCEPTION(eslEINVAL, "profile too small to hold HMM");
 
   /* Copy some pointer references and other info across from HMM  */
-  gm->M      = hmm->M;
-  gm->max_length = hmm->max_length;
-  gm->mode   = mode;
-  gm->roff   = -1;
-  gm->eoff   = -1;
+  gm->M                = hmm->M;
+  gm->max_length       = hmm->max_length;
+  gm->mode             = mode;
+  gm->roff             = -1;
+  gm->eoff             = -1;
   gm->offs[p7_MOFFSET] = -1;
   gm->offs[p7_FOFFSET] = -1;
   gm->offs[p7_POFFSET] = -1;

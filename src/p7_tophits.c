@@ -623,7 +623,7 @@ workaround_bug_h74(P7_TOPHITS *th)
 int
 p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N)
 {
-  int i, hit_len;    /* counters over hits */
+  int i;    /* counters over hits */
 
   for (i = 0; i < th->N ; i++)
   {

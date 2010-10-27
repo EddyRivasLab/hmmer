@@ -411,17 +411,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (qhstatus == eslOK) {
-
-      if (window_length > 0)
-          hmm->max_length = window_length;
-      else if (window_beta > 0)
-          p7_Builder_MaxLength(hmm, window_beta);
-      else if (hmm->max_length == 0 ) {
-          p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
-      }
-
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
+
+      if      (window_length > 0)     hmm->max_length = window_length;
+      else if (window_beta   > 0)     p7_Builder_MaxLength(hmm, window_beta);
+      else if (hmm->max_length == 0 ) p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
 
       nquery++;
       esl_stopwatch_Start(w);
