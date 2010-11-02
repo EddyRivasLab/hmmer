@@ -142,7 +142,7 @@ static char banner[] = "collect histograms of probabilistic S/W for E-value calc
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go    = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go    = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   ESL_ALPHABET   *abc   = esl_alphabet_Create(eslAMINO);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *qfile = esl_opt_GetArg(go, 2);

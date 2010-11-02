@@ -49,6 +49,12 @@ The
 file contains precomputed data structures
 for the rest of each profile.
 
+.PP
+.I <hmmfile>
+may not be '-' (dash); running
+.B hmmpress
+on a standard input stream rather than a file
+is not allowed.
 
 
 .SH OPTIONS

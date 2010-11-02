@@ -102,7 +102,7 @@ static ESL_OPTIONS options[] = {
   { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "Not used",      99 },
 /* will eventually bring these back, but store in group 99 for now, so they don't print to help*/
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   99 },
-  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>>: no autodetection", 99 },
+  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection", 99 },
 
 
 #ifdef HMMER_THREADS 
@@ -128,7 +128,7 @@ struct cfg_s {
 
 //static char usage[]  = "[options] <query hmmfile|alignfile> <target seqfile>";
 //static char banner[] = "search a DNA model or alignment against a DNA database";
-static char usage[]  = "[options] <query hmmfile> <target seqfile>";
+static char usage[]  = "[options] <hmmfile> <seqdb>";
 static char banner[] = "search a DNA model against a DNA database";
 
 
@@ -182,7 +182,14 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 
   if (esl_opt_ArgNumber(go)                  != 2)     { puts("Incorrect number of command line arguments.");      goto ERROR; }
   if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <hmmfile> argument on command line"); goto ERROR; }
-  if ((*ret_seqfile = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <seqfile> argument on command line"); goto ERROR; }
+  if ((*ret_seqfile = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <seqdb> argument on command line");   goto ERROR; }
+
+  /* Validate any attempted use of stdin streams */
+  if (strcmp(*ret_hmmfile, "-") == 0 && strcmp(*ret_seqfile, "-") == 0) {
+    puts("Either <hmmfile> or <seqdb> may be '-' (to read from stdin), but not both.");
+    goto ERROR;
+  }
+
   *ret_go = go;
   return;
   

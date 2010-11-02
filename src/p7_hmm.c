@@ -578,9 +578,15 @@ p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv)
  *           
  * Notes:    This function calls <ctime_r()>, supposedly a part of the
  *           ISO/IEC 9945-1:1996 (POSIX.1) standard, but not ANSI
- *           C99. <ctime_r()> is a reportedly a three-argument call on
- *           Solaris 10 systems, so beware portability problems
- *           there. We might want to use strftime() instead; that's what 
+ *           C99, so we have potential portability problems here.
+ *
+ *           A known one: <ctime_r()> is by default a three-argument
+ *           call on Solaris 10 systems. Our autoconf script sets
+ *           -D_POSIX_PTHREAD_SEMANTICS on Solaris systems to fix this
+ *           issue, requesting Solaris to use a compliant version of 
+ *           ctime_r().
+ *
+ *           We might want to use strftime() instead; that's what 
  *           POSIX 2008 recommends; but we'd still need localtime_r() or
  *           its equivalent, and that has its own portability issues.
  *           
@@ -1330,7 +1336,7 @@ static char banner[] = "unit test driver for the p7_hmm.c: core model routines";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
 

@@ -23,6 +23,22 @@ use that sequence to search the target database of sequences in
 and output ranked lists of the sequences with the most significant
 matches to the query.
 
+.PP 
+Either the query
+.I <seqfile> 
+or the target
+.I <seqdb> 
+may be '-' (a dash character), in which case
+the query sequences or target database input will be read from a <stdin> pipe instead of from a
+file. Only one input source can come through <stdin>, not both.
+An exception is that if the
+.I <seqfile> 
+contains more than one query sequence, then
+.I <seqdb> 
+cannot come from <stdin>, because we can't rewind the
+streaming target database to search it with another query.
+
+
 .PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The

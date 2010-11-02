@@ -1178,7 +1178,7 @@ static char banner[] = "example of using acceleration pipeline in search mode (s
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char         *hmmfile = esl_opt_GetArg(go, 1);
   char         *seqfile = esl_opt_GetArg(go, 2);
   int           format  = eslSQFILE_FASTA;
@@ -1317,7 +1317,7 @@ static char banner[] = "example of using acceleration pipeline in scan mode (HMM
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go      = esl_getopts_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char         *hmmfile = esl_opt_GetArg(go, 1);
   char         *seqfile = esl_opt_GetArg(go, 2);
   int           format  = eslSQFILE_FASTA;

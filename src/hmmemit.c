@@ -28,18 +28,18 @@ static ESL_OPTIONS options[] = {
   { "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "show brief help on version and usage",                   1 },
   { "-o",          eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "send sequence output to file <f>, not stdout",           1 },
   { "-N",          eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,  "-c,-C", "number of seqs to sample",                               1 },
-/* what to emit */
+/* options controlling what to emit */
   { "-a",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit alignment",                                         2 },
   { "-c",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit simple majority-rule consensus sequence",           2 },
   { "-C",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit fancier consensus sequence (req's --minl, --minu)", 2 },
   { "-p",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "sample sequences from profile, not core model",          2 },
-/* options for profile emission, with -p  */
+/* options controlling emission from profiles with -p  */
   { "-L",          eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",               3 },
-  { "--local",     eslARG_NONE,"default",NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in local mode",                       3 }, 
+  { "--local",     eslARG_NONE,"default",NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in multihit local mode",              3 }, 
   { "--unilocal",  eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in unilocal mode",                    3 }, 
-  { "--glocal",    eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in glocal mode",                      3 }, 
-  { "--uniglocal", eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in glocal mode",                      3 }, 
-/* options for fancy consensus emission, with -C */
+  { "--glocal",    eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in multihit glocal mode",             3 }, 
+  { "--uniglocal", eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in unihit glocal mode",               3 }, 
+/* options controlling fancy consensus emission with -C */
   { "--minl",      eslARG_REAL,  "0.0",  NULL, "0<=x<=1", NULL,      "-C",    NULL, "show consensus as 'any' (X/N) unless >= this fraction", 4 },
   { "--minu",      eslARG_REAL,  "0.0",  NULL, "0<=x<=1", NULL,      "-C",    NULL, "show consensus as upper case if >= this fraction",      4 },
 /* other options */
@@ -139,10 +139,14 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   esl_usage (stdout, argv0, usage);
   puts("\nCommon options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
-  puts("\nOptions controlling emission from profiles (incompatible with -c, -a):");
+  puts("\nOptions controlling what to emit:");
   esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
-  puts("\nOther options::");
+  puts("\nOptions controlling emission from profiles with -p:");
   esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
+  puts("\nOptions controlling fancy consensus emission with -C:");
+  esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
+  puts("\nOther options::");
+  esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
   exit(0);
 }
 

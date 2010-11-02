@@ -102,7 +102,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "[options] <query hmmfile> <target seqfile>";
+static char usage[]  = "[options] <hmmfile> <seqdb>";
 static char banner[] = "search profile(s) against a sequence database";
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
@@ -174,7 +174,14 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 
   if (esl_opt_ArgNumber(go)                  != 2)     { puts("Incorrect number of command line arguments.");      goto ERROR; }
   if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <hmmfile> argument on command line"); goto ERROR; }
-  if ((*ret_seqfile = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <seqfile> argument on command line"); goto ERROR; }
+  if ((*ret_seqfile = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <seqdb> argument on command line");   goto ERROR; }
+
+  /* Validate any attempted use of stdin streams */
+  if (strcmp(*ret_hmmfile, "-") == 0 && strcmp(*ret_seqfile, "-") == 0) {
+    puts("Either <hmmfile> or <seqdb> may be '-' (to read from stdin), but not both.");
+    goto ERROR;
+  }
+
   *ret_go = go;
   return;
   

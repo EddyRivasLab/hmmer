@@ -31,12 +31,14 @@ Quickly retrieves one or more profile HMMs from an
 (a large Pfam database, for example). 
 
 .PP
-The 
+For maximum speed, the 
 .I <hmmfile>
-must be indexed first, using
+should be indexed first, using
 .B hmmfetch --index.
 The index is a binary file named
 .I <hmmfile>.ssi.
+However, this is optional, and retrieval will still
+work from unindexed files, albeit much more slowly.
 
 .PP
 The default mode is to retrieve a single profile by name or
@@ -60,20 +62,68 @@ line of the
 .I <keyfile> 
 is used as a 
 .I <key>,
-and any remaining data on the line is ignored; this allows
+and any remaining data on the line is ignored. This allows
 a variety of whitespace delimited datafiles to be used
 as 
 .I <keyfile>s.
-The
-.I <keyfile> 
-argument can be a '-' (dash) character, in which case
-the 
-.I keyfile 
-is read from standard input; this allows unix ninjas to
-construct sophisticated invocations using pipes.
 
 .PP
-By default, the HMM is printed to standard output in HMMER3 format.
+When using
+.I -f 
+and a
+.I <keyfile>,
+if 
+.B hmmfile 
+has been indexed, the keys are retrieved in the order
+they occur in the 
+.I keyfile,
+but if 
+.B hmmfile 
+isn't indexed, keys are retrieved in the order they occur
+in the 
+.B hmmfile. 
+This is a side effect of an implementation that allows
+multiple keys to be retrieved even if the
+.B <hmmfile> 
+is a nonrewindable stream, like a standard input pipe.
+
+.PP 
+In normal use
+(without
+.I --index
+or 
+.I -f
+options),
+.I <hmmfile> 
+may be 
+'-' (dash), which
+means reading input from
+.I stdin
+rather than a file.  
+With the
+.I --index
+option, 
+.I <hmmfile>
+may not be '-'; it does not make sense
+to index a standard input stream.
+With the 
+.I -f 
+option,  
+either 
+.I <hmmfile> 
+or 
+.I <keyfile> 
+(but not both) may be '-'.
+It is often particularly useful to read
+.I <keyfile>
+from standard input, because this allows
+use to use arbitrary command line invocations to
+create a list of HMM names or accessions, then fetch them all
+to a new file, just with one command.
+
+.PP
+By default, fetched HMMs are printed to standard output in HMMER3 format.
+
 
 .SH OPTIONS
 

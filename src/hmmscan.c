@@ -116,7 +116,7 @@ struct cfg_s {
   int              my_rank;           /* who am I, in 0..nproc-1                         */
 };
 
-static char usage[]  = "[-options] <hmm database> <query seqfile>";
+static char usage[]  = "[-options] <hmmdb> <seqfile>";
 static char banner[] = "search sequence(s) against a profile database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
@@ -178,8 +178,15 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
     }
 
   if (esl_opt_ArgNumber(go)                 != 2)      { puts("Incorrect number of command line arguments.");      goto ERROR; }
-  if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <hmmfile> argument on command line"); goto ERROR; }
+  if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <hmmdb> argument on command line");   goto ERROR; }
   if ((*ret_seqfile = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <seqfile> argument on command line"); goto ERROR; }
+
+  /* Validate any attempted use of stdin streams */
+  if (strcmp(*ret_hmmfile, "-") == 0) {
+    puts("hmmscan cannot read <hmm database> from stdin stream, because it must have hmmpress'ed auxfiles");
+    goto ERROR;
+  }
+
   *ret_go = go;
   return;
   
@@ -301,7 +308,7 @@ main(int argc, char **argv)
 
 /* serial_master()
  * The serial version of hmmsearch.
- * For each query HMM in <hmmfile> search the database for hits.
+ * For each query HMM in <hmmdb> search the database for hits.
  * 
  * A master can only return if it's successful. All errors are handled immediately and fatally with p7_Fail().
  */
@@ -349,14 +356,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                       cfg->hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n",  cfg->hmmfile);
+  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format in hmm file %s or its binary auxfiles\n",     cfg->hmmfile);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
-  if (! hfp->is_pressed)           p7_Fail("Failed to open binary dbs for HMM file %s: use hmmpress first\n", cfg->hmmfile);
+  if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",     cfg->hmmfile);
   
   hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
-  if      (hstatus == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             cfg->hmmfile);
-  else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);
-  else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
+  if      (hstatus == eslEFORMAT)   p7_Fail("bad file format in binary auxfiles for %s:\n%s", cfg->hmmfile, hfp->errbuf);
+  else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",       cfg->hmmfile);
+  else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",       cfg->hmmfile); 
 
   p7_oprofile_Destroy(om);
   p7_hmmfile_Close(hfp);

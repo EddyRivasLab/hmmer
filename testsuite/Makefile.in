@@ -28,7 +28,9 @@ ALIS     = \
 	RRM_1\
 	SMC_N\
 	XYPPX\
-	ecori
+	ecori\
+	3box\
+	PSE\
 
 all:  
 	cd ${ESLDIR};  ${MAKE} easel_lib

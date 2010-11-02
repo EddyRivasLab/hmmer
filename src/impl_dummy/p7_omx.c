@@ -89,7 +89,8 @@ p7_omx_Reuse(P7_OMX *ox)
 void
 p7_omx_Destroy(P7_OMX *ox)
 {
-  return p7_gmx_Destroy(ox);
+  p7_gmx_Destroy(ox);
+  return;
 }
 
 /*------------------- end, P7_OMX structure ---------------------*/

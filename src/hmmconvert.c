@@ -21,7 +21,7 @@ static ESL_OPTIONS options[] = {
   { "-a",        eslARG_NONE,"default",NULL, NULL, "-a,-b,-2",      NULL,    NULL, "ascii:  output models in HMMER3 ASCII format",                     0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "binary: output models in HMMER3 binary format",                    0 },
   { "-2",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "HMMER2: output backward compatible HMMER2 ASCII format (ls mode)", 0 },
-  { "--outfmt",  eslARG_STRING, "3/b", NULL, NULL,      NULL,       NULL,    "-2", "choose output legacy 3.x file formats by name, such as '3/a'",     0 },
+  { "--outfmt",  eslARG_STRING, NULL,  NULL, NULL,      NULL,       NULL,    "-2", "choose output legacy 3.x file formats by name, such as '3/a'",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -31,14 +31,14 @@ static char banner[] = "convert profile file to a HMMER format";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   ESL_ALPHABET  *abc     = NULL;
   char          *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE    *hfp     = NULL;
   P7_HMM        *hmm     = NULL;
   FILE          *ofp     = stdout;
   char          *outfmt  = esl_opt_GetString(go, "--outfmt");
-  int            fmtcode = -1;
+  int            fmtcode = -1;	/* -1 = write the current default format */
   int            status;
 
   if (outfmt != NULL) {

@@ -6,17 +6,45 @@ hmmbuild - construct profile HMM(s) from multiple sequence alignment(s)
 .SH SYNOPSIS
 .B hmmbuild
 .I [options]
-.I hmmfile
-.I msafile
+.I <hmmfile_out>
+.I <msafile>
 
 
 .SH DESCRIPTION
 
-Build a profile HMM for 
-each multiple sequence alignment in 
-.I msafile,
+For each multiple sequence alignment in 
+.I <msafile>
+build a profile HMM 
 and save it to a new file
-.I hmmfile.
+.I <hmmfile_out>.
+
+
+.PP
+.I <msafile> 
+may be '-' (dash), which means
+reading this input from
+.I stdin
+rather than a file. 
+To use '-', you must also specify the
+alignment file format with
+.BI --informat " <s>",
+as in
+.B --informat stockholm
+(because of a current limitation in our implementation,
+MSA file formats cannot be autodetected in a nonrewindable
+input stream.)
+
+.PP
+.I <hmmfile_out>
+may not be '-' 
+.I (stdout),
+because sending the HMM file to 
+.I stdout
+would conflict with the other text
+output of the program.
+
+
+
 
 
 

@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -146,7 +147,7 @@ static ESL_OPTIONS options[] = {
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "[-options] <query seqfile> <target seqdb>";
+static char usage[]  = "[-options] <seqfile> <seqdb>";
 static char banner[] = "iteratively search a protein sequence against a protein database";
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
@@ -239,9 +240,15 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
       exit(0);
     }
 
-  if (esl_opt_ArgNumber(go)                 != 2)    { puts("Incorrect number of command line arguments.");    goto ERROR; }
-  if ((*ret_qfile  = esl_opt_GetArg(go, 1)) == NULL) { puts("Failed to get <qfile> argument on command line"); goto ERROR; }
-  if ((*ret_dbfile = esl_opt_GetArg(go, 2)) == NULL) { puts("Failed to get <seqdb> argument on command line"); goto ERROR; }
+  if (esl_opt_ArgNumber(go)                 != 2)    { puts("Incorrect number of command line arguments.");      goto ERROR; }
+  if ((*ret_qfile  = esl_opt_GetArg(go, 1)) == NULL) { puts("Failed to get <seqfile> argument on command line"); goto ERROR; }
+  if ((*ret_dbfile = esl_opt_GetArg(go, 2)) == NULL) { puts("Failed to get <seqdb> argument on command line");   goto ERROR; }
+
+  /* Validate any attempted use of stdin streams */
+  if (strcmp(*ret_dbfile, "-") == 0) {
+    puts("jackhmmer cannot read <seqdb> from stdin stream");
+    goto ERROR;
+  }
 
   *ret_go = go;
   return;

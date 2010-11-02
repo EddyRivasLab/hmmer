@@ -15,7 +15,7 @@ hmmemit - sample sequences from a profile HMM
 The 
 .B hmmemit
 program 
-samples (emits) sequences from the profile HMM in
+samples (emits) sequences from the profile HMM(s) in
 .I hmmfile,
 and writes them to output.
 Sampling sequences may be useful for a variety of purposes, including
@@ -48,6 +48,14 @@ The
 .I hmmfile 
 may contain a library of HMMs, in which case
 each HMM will be used in turn.
+
+.PP
+.I <hmmfile> 
+may be '-' (dash), which
+means reading this input from
+.I stdin
+rather than a file.  
+
 
 .SH COMMON OPTIONS
 
@@ -137,7 +145,7 @@ local mode, and the target sequence length is configured for L=400.
 
 .SH OPTIONS CONTROLLING EMISSION FROM PROFILES
 
-All these options require that you have set the
+These options require that you have set the
 .B -p
 option.
 
@@ -163,7 +171,7 @@ Configure the profile for multihit glocal alignment.
 Configure the profile for unihit glocal alignment.
 
 
-.SH OPTIONS FOR FANCY CONSENSUS EMISSION
+.SH OPTIONS CONTROLLING FANCY CONSENSUS EMISSION
 
 These options require that you have set the
 .B -C option.

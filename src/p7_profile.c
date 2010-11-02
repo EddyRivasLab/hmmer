@@ -613,7 +613,7 @@ static char banner[] = "test driver for p7_profile.c";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
 
   utest_Compare();
 

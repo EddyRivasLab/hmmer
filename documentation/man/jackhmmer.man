@@ -33,6 +33,20 @@ is done (identical to an
 .B hmmsearch
 with the profile).
 
+
+.PP 
+The query
+.I <seqfile> 
+may be '-' (a dash character), in which case
+the query sequences are read from a <stdin> pipe instead of from a
+file.
+The
+.I <seqdb> 
+cannot be read from a <stdin> stream, because
+.B jackhmmer
+needs to do multiple passes over the database.
+
+
 .PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The

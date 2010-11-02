@@ -29,7 +29,7 @@ static void open_db_files(ESL_GETOPTS *go, char *basename, FILE **ret_mfp,  FILE
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   ESL_ALPHABET  *abc     = NULL;
   char          *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE    *hfp     = NULL;
@@ -45,6 +45,8 @@ main(int argc, char **argv)
   int            nmodel  = 0;
   uint64_t       totM    = 0;
   int            status;
+
+  if (strcmp(hmmfile, "-") == 0) p7_Fail("Can't use - for <hmmfile> argument: can't index standard input\n");
 
   status = p7_hmmfile_OpenNoDB(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);

@@ -534,7 +534,7 @@ static char banner[] = "example for the build module";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go        = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS  *go        = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char         *msafile   = esl_opt_GetArg(go, 1);
   int           fmt       = eslMSAFILE_UNKNOWN;
   int           alphatype = eslUNKNOWN;

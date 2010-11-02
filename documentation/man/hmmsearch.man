@@ -22,13 +22,23 @@ use that query profile to search the target database of profiles in
 .I <seqdb>,
 and output ranked lists of the sequences with the most significant
 matches to the profile.
-
-.PP
-The 
-.I <hmmfile>
-may contain more than one profile. To build profiles from multiple
-alignments, see
+To build profiles from multiple alignments, see
 .B hmmbuild.
+
+.PP 
+Either the query
+.I <hmmfile> 
+or the target
+.I <seqdb> 
+may be '-' (a dash character), in which case
+the query profile or target database input will be read from a <stdin> pipe instead of from a
+file. Only one input source can come through <stdin>, not both.
+An exception is that if the
+.I <hmmfile> 
+contains more than one profile query, then
+.I <seqdb> 
+cannot come from <stdin>, because we can't rewind the
+streaming target database to search it with another profile. 
 
 .PP
 The output format is designed to be human-readable, but is often so

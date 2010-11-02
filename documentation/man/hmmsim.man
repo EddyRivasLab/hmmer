@@ -6,7 +6,7 @@ hmmsim - collect score distributions on random sequences
 .SH SYNOPSIS
 .B hmmsim
 .I [options]
-.I hmmfile
+.I <hmmfile>
 
 
 .SH DESCRIPTION
@@ -15,7 +15,7 @@ hmmsim - collect score distributions on random sequences
 The 
 .B hmmsim 
 program generates random sequences, scores them with the model(s) in 
-.I hmmfile,
+.I <hmmfile>,
 and outputs various sorts of histograms, plots, and fitted
 distributions for the resulting scores.
 

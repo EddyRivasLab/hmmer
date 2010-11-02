@@ -68,6 +68,8 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS  *go      = NULL;	/* application configuration       */
   char         *hmmfile = NULL;	/* HMM file name                   */
+  char         *keyfile = NULL;	/* keyfile name                    */
+  char         *keyname = NULL;	/* key name                        */
   P7_HMMFILE   *hfp     = NULL;	/* open HMM file                   */
   FILE         *ofp     = NULL;	/* output stream for HMMs          */
   int           status;		/* easel/hmmer return code         */
@@ -81,8 +83,40 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-h") )                   cmdline_help   (argv[0], go);
   if (esl_opt_ArgNumber(go) < 1)                       cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
   
+  /* Check arguments. Consider three modes separately.
+   */
+  if (esl_opt_GetBoolean(go, "--index")) 
+    {
+      if (esl_opt_ArgNumber(go) != 1) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+
+      hmmfile = esl_opt_GetArg(go, 1);
+      keyfile = NULL;
+      keyname = NULL;
+
+      if (strcmp(hmmfile, "-") == 0) cmdline_failure(argv[0], "Can't use - with --index, can't index <stdin>.\n");
+    }
+
+  else if (esl_opt_GetBoolean(go, "-f"))
+    {
+      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+
+      hmmfile = esl_opt_GetArg(go, 1);
+      keyfile = esl_opt_GetArg(go, 2);
+      keyname = NULL;
+
+      if (strcmp(hmmfile, "-") == 0 && strcmp(keyfile, "-") == 0) 
+	cmdline_failure(argv[0], "Either <hmmfile> or <keyfile> can be - but not both.\n");
+    }
+  else
+    {
+      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+
+      hmmfile = esl_opt_GetArg(go, 1);
+      keyfile = NULL;
+      keyname = esl_opt_GetArg(go, 2);
+    }
+    
   /* Open the HMM file.  */
-  hmmfile = esl_opt_GetArg(go, 1);
   status  = p7_hmmfile_Open(hmmfile, NULL, &hfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
   else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
@@ -91,8 +125,8 @@ main(int argc, char **argv)
  /* Open the output file, if any  */
   if (esl_opt_GetBoolean(go, "-O")) 
     {
-      if ((ofp = fopen(esl_opt_GetArg(go, 2), "w")) == NULL)
-	esl_fatal("Failed to open output file %s\n", esl_opt_GetArg(go, 2));
+      if (! keyname)                            p7_Fail("No key name? Can't use -O\n"); 
+      if ((ofp = fopen(keyname, "w")) == NULL)	p7_Fail("Failed to open output file %s\n", keyname);
     }
   else if (esl_opt_GetString(go, "-o") != NULL)
     {
@@ -103,21 +137,12 @@ main(int argc, char **argv)
 
   
   /* Hand off to the appropriate routine */
-  if (esl_opt_GetBoolean(go, "--index")) 
-    {
-      if (esl_opt_ArgNumber(go) != 1) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
-      create_ssi_index(go, hfp);
-    }
-  else if (esl_opt_GetBoolean(go, "-f"))
-    {
-      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
-      multifetch(go, ofp, esl_opt_GetArg(go, 2), hfp);
-    }
+  if     (esl_opt_GetBoolean(go, "--index"))  create_ssi_index(go, hfp);
+  else if (esl_opt_GetBoolean(go, "-f"))      multifetch(go, ofp, keyfile, hfp);
   else 
     {
-      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
-      onefetch(go, ofp, esl_opt_GetArg(go, 2), hfp);
-      if (ofp != stdout) printf("\n\nRetrieved HMM %s.\n",  esl_opt_GetArg(go, 2));
+      onefetch(go, ofp, keyname, hfp);
+      if (ofp != stdout) printf("\n\nRetrieved HMM %s.\n",  keyname);
     }
 
   if (esl_opt_GetBoolean(go, "-O") || esl_opt_GetString(go, "-o") != NULL) fclose(ofp);

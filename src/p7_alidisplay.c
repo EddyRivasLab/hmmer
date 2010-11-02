@@ -491,7 +491,7 @@ static char banner[] = "benchmark driver for P7_ALIDISPLAY";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = esl_getopts_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();

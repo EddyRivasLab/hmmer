@@ -23,6 +23,13 @@ By default, the input profile can be in any HMMER format, including
 old/obsolete formats from HMMER2, ASCII or binary; the output profile
 is a current HMMER3 ASCII format.
 
+.PP
+.I <hmmfile> 
+may be '-' (dash), which
+means reading this input from
+.I stdin
+rather than a file.  
+
 
 .SH OPTIONS
 

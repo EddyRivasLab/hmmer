@@ -160,7 +160,7 @@ struct cfg_s {
 };
 
 
-static char usage[]  = "[-options] <hmmfile output> <alignment file input>";
+static char usage[]  = "[-options] <hmmfile_out> <msafile>";
 static char banner[] = "profile HMM construction from multiple sequence alignments";
 
 static int  init_master_cfg(const ESL_GETOPTS *go, struct cfg_s *cfg, char *errmsg);
@@ -216,9 +216,15 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       exit(0);
     }
 
-  if (esl_opt_ArgNumber(go)                  != 2)    { puts("Incorrect number of command line arguments.");      goto ERROR; }
-  if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL) { puts("Failed to get <hmmfile> argument on command line"); goto ERROR; }
-  if ((*ret_alifile = esl_opt_GetArg(go, 2)) == NULL) { puts("Failed to get <alifile> argument on command line"); goto ERROR; }
+  if (esl_opt_ArgNumber(go)                  != 2)    { puts("Incorrect number of command line arguments.");          goto ERROR; }
+  if ((*ret_hmmfile = esl_opt_GetArg(go, 1)) == NULL) { puts("Failed to get <hmmfile_out> argument on command line"); goto ERROR; }
+  if ((*ret_alifile = esl_opt_GetArg(go, 2)) == NULL) { puts("Failed to get <msafile> argument on command line");     goto ERROR; }
+
+  if (strcmp(*ret_hmmfile, "-") == 0) 
+    { puts("Can't write <hmmfile_out> to stdout: don't use '-'");         goto ERROR; }
+  if (strcmp(*ret_alifile, "-") == 0 && ! esl_opt_IsOn(go, "--informat"))
+    { puts("Must specify --informat to read <alifile> from stdin ('-')"); goto ERROR; }
+
   *ret_go = go;
   return;
   

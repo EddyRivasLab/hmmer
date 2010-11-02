@@ -18,6 +18,13 @@ utility prints out a tabular file of summary statistics for each
 profile in
 .I <hmmfile>.
 
+
+.PP 
+.I <hmmfile> 
+may be '-' (a dash character), in which case profiles
+are read from a <stdin> pipe instead of from a file.
+
+.PP
 The columns are:
 
 .TP

@@ -96,7 +96,7 @@ int
 main(int argc, char **argv)
 {
   struct p7_bruteparam_s prm;
-  ESL_GETOPTS    *go       = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_ALPHABET   *abc      = esl_alphabet_Create(eslDNA);
   ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   P7_BG          *bg       = p7_bg_Create(abc);

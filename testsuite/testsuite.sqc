@@ -289,6 +289,8 @@
 1 exercise  msa-integrity         !testsuite/i13-msa-integrity.pl!      @@ !! %OUTFILES%
 1 exercise  hmmemit-consensus     !testsuite/i14-hmmemit-consensus.pl!  @@ !! %OUTFILES%
 1 exercise  hmmconvert            !testsuite/i15-hmmconvert.pl!         @@ !! %OUTFILES%
+1 exercise  stdin_pipes           !testsuite/i17-stdin.pl!              @@ !! %OUTFILES%
+
 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%

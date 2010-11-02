@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -23,16 +24,16 @@ static int map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_s
 
 static ESL_OPTIONS options[] = {
   /* name             type        default      env  range   toggles   reqs  incomp               help                                          docgroup*/
-  { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help on version and usage",                        1 },
-  { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                    1 },
+  { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help on version and usage",                              1 },
+  { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                          1 },
 
-  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> (same ali that HMM came from)", 2 },
-  { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",   2 },
+  { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> (same ali that HMM came from)",       2 },
+  { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,    NULL,   NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",         2 },
   { "--amino",     eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
   { "--dna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both DNA: no autodetection",      2 },
   { "--rna",       eslARG_NONE,     FALSE,     NULL, NULL, ALPHOPTS,  NULL,  NULL, "assert <seqfile>, <hmmfile> both RNA: no autodetection",      2 },
-  { "--informat",  eslARG_STRING,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "assert input <seqfile> is in format <s>: no autodetection",   2 },
-  { "--outformat", eslARG_STRING, "Stockholm", NULL, NULL,   NULL,    NULL,  NULL, "output alignment in format <s>",                              2 },
+  { "--informat",  eslARG_STRING,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "assert <seqfile> is in format <s>: no autodetection",            2 },
+  { "--outformat", eslARG_STRING, "Stockholm", NULL, NULL,   NULL,    NULL,  NULL, "output alignment in format <s>",                                    2 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -61,7 +62,7 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
   puts("\nLess common options:");
   esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
-  puts("\nSequence input formats include: FASTA, EMBL, Genbank, Uniprot");
+  puts("\nSequence input formats include:   FASTA, EMBL, Genbank, Uniprot");
   puts("Alignment output formats include: Stockholm, Pfam, A2M, PSIBLAST\n");
   exit(0);
 }
@@ -111,6 +112,9 @@ main(int argc, char **argv)
 
   hmmfile = esl_opt_GetArg(go, 1);
   seqfile = esl_opt_GetArg(go, 2);
+
+  if (strcmp(hmmfile, "-") == 0 && strcmp(seqfile, "-") == 0) 
+    cmdline_failure(argv[0], "Either <hmmfile> or <seqfile> may be '-' (to read from stdin), but not both.\n");
 
   msaopts |= p7_ALL_CONSENSUS_COLS; /* default as of 3.1 */
   if (esl_opt_GetBoolean(go, "--trim"))    msaopts |= p7_TRIM;

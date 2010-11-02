@@ -2,8 +2,8 @@
 
 # Bug #h82: hmmbuild corrupts resave alignment on all-insert seq
 #
-# Usage:   ./i16-build-allins <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i16-build-allins ..         ..       tmpfoo
+# Usage:   ./i16-build-allins.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i16-build-allins.pl ..         ..       tmpfoo
 #
 # SRE, Sun Jun 13 12:09:54 2010 [UA231 IAD->SAN]
 # SVN $Id$
