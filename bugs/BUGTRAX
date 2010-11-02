@@ -2,11 +2,11 @@ ID              h84
 TITLE           hmmbuild: "composition fails pvector validation"
 AFFECTS         3.0
 FIXED_IN        -
-STATUS          OPEN
+STATUS          CLOSED
 XREF            J7/7
 REPORTED_BY     Andy Yates <ayates@ebi.ac.uk>
 OPENED_DATE     SRE, Tue Nov  2 12:57:18 2010
-CLOSED_DATE     -
+CLOSED_DATE     SRE, Tue Nov  2 14:58:38 2010
 DESCRIPTION     
    hmmbuild gives "composition fails pvector validation" error on
    example alignments provided by Yates. 
