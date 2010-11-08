@@ -146,7 +146,7 @@ p7_domaindef_Create(ESL_RANDOMNESS *r)
  * Throws:    <eslEMEM> on allocation failure. In this case, the
  *            data in <ddef> are unaffected.
  */
-static int
+int
 p7_domaindef_GrowTo(P7_DOMAINDEF *ddef, int L)
 {
   void *p;
