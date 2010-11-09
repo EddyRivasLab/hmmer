@@ -1142,6 +1142,7 @@ extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  P7_ALIDISPLAY *ali);
 extern int         p7_tophits_Sort(P7_TOPHITS *h);
 extern int         p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2);
+extern int         p7_tophits_GetMaxPositionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
