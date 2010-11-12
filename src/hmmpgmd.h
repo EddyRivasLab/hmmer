@@ -48,23 +48,42 @@ typedef struct {
 #define HMMD_SEQUENCE   101
 #define HMMD_HMM        102
 
-#define HMMD_SEARCH     10001
+/* commands between master and worker */
+#define HMMD_CMD_SEARCH     10001
+#define HMMD_CMD_SCAN       10002
+#define HMMD_CMD_INIT       10003
 
+#define MAX_INIT_DESC 32
+
+/* HMMD_CMD_SEARCH or HMMD_CMD_SCAN */
 typedef struct {
-  uint32_t   length;            /* message length                           */
-  uint32_t   command;           /* message type                             */
-  uint32_t   db_inx;            /* database index to search                 */
-  uint32_t   sq_inx;            /* index to begin search                    */
-  uint32_t   sq_cnt;            /* number of sequences to search            */
-  uint32_t   query_type;        /* sequence / hmm                           */
-  uint32_t   query_length;      /* length of the query data                 */
-  uint32_t   opts_length;       /* length of the options string             */
+  uint32_t   length;               /* message length                           */
+  uint32_t   command;              /* message type                             */
+  uint32_t   db_inx;               /* database index to search                 */
+  uint32_t   db_type;              /* database type to search                  */
+  uint32_t   inx;                  /* index to begin search                    */
+  uint32_t   cnt;                  /* number of sequences to search            */
+  uint32_t   query_type;           /* sequence / hmm                           */
+  uint32_t   query_length;         /* length of the query data                 */
+  uint32_t   opts_length;          /* length of the options string             */
 } HMMD_SEARCH_CMD;
 
-#endif /*P7_HMMPGMD_INCLUDED*/
+/* HMMD_CMD_INIT */
+typedef struct {
+  uint32_t   length;               /* message length                           */
+  uint32_t   command;              /* message type                             */
+  char       sid[MAX_INIT_DESC];   /* unique id for sequence database          */
+  char       hid[MAX_INIT_DESC];   /* unique id for hmm database               */
+  uint32_t   db_cnt;               /* total number of sequence databases       */
+  uint32_t   seq_cnt;              /* sequences in database                    */
+  uint32_t   hmm_cnt;              /* total number hmm databases               */
+  uint32_t   model_cnt;            /* models in hmm database                   */
+} HMMD_INIT_CMD;
 
 size_t writen(int fd, const void *vptr, size_t n);
 size_t readn(int fd, void *vptr, size_t n);
+
+#endif /*P7_HMMPGMD_INCLUDED*/
 
 /************************************************************
  * @LICENSE@

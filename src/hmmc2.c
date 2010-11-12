@@ -77,6 +77,8 @@ static ESL_OPTIONS searchOpts[] = {
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
+  { "--seqdb",      eslARG_INT,    NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
+  { "--hmmdb",      eslARG_INT,    NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -307,7 +309,7 @@ int main(int argc, char *argv[])
       }
 
       /* the options string can handle an optional database */
-      if (esl_opt_ArgNumber(go) > 1) { 
+      if (esl_opt_ArgNumber(go) != 0) { 
         printf("Incorrect number of command line arguments.");
         continue;
       }
