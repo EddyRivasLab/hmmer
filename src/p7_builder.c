@@ -190,15 +190,18 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double open, double extend)
+p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *env)
 {
   ESL_FILEPARSER  *efp      = NULL;
   double          *fa       = NULL;
   double          *fb       = NULL;
+  double           open;
+  double           extend;
   double           slambda;
   int              a,b;
   int              status;
 
+  const char *mxfile = esl_opt_GetString(go, "--mxfile");
 
   bld->errbuf[0] = '\0';
 
@@ -208,7 +211,7 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
 
   /* Get the scoring matrix */
   if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if (mxfile == NULL) 
+  if (mxfile == NULL)
     {
       if ((status = esl_scorematrix_SetBLOSUM62(bld->S)) != eslOK) goto ERROR;
     } 
@@ -226,24 +229,38 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   /* Set probabilities in bld */
   for (a = 0; a < bld->abc->K; a++)
     for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
+      bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+  /* Set background probabilities in bld */
+
+  if (! esl_opt_GetBoolean(go, "--inconsistent"))
+	  for (a = 0; a < bld->abc->K; a++)
+		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
 
   /* Set popen/pextend probabilities in bld */
-   if (bld->s2p_strategy == p7_S2P_CONVERT)
+   if (esl_opt_GetBoolean(go, "--convert"))
    {
-  	 bld->popen   = exp(slambda * -open);
-  	 bld->pextend = exp(slambda * -extend);
+	   open   = esl_opt_GetReal(go, "--sopen");
+	   extend = esl_opt_GetReal(go, "--sextend");
 
+	   bld->popen   = exp(slambda * -open);
+	   bld->pextend = exp(slambda * -extend);
    }
-   else if (bld->s2p_strategy == p7_S2P_COLLAPSE)
+//   else if (esl_opt_GetBoolean(go, "--collapse"))
+//   {
+//       open   = esl_opt_GetReal(go, "--sopen");
+//       extend = esl_opt_GetReal(go, "--sextend");
+//
+//  	 bld->popen   = (exp(slambda * -open) + exp(slambda * -extend)) / 3;
+//   	 bld->pextend = exp(slambda * -extend);
+//   }
+   else
    {
-  	 bld->popen   = (exp(slambda * -open) + exp(slambda * -extend)) / 3;
-   	 bld->pextend = exp(slambda * -extend);
-   }
-   else /* bld->s2p_strategy = p7_S2P_NONE */
-   {
-  	 bld->popen   = open;
-  	 bld->pextend = extend;
+		open   = esl_opt_GetReal(go, "--popen");
+ 		extend = esl_opt_GetReal(go, "--pextend");
+
+ 		bld->popen   = open;
+ 		bld->pextend = extend;
    }
 
    /* Check range */

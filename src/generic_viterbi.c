@@ -88,7 +88,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
       float sc;
 
       MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
-      XMX(i,p7G_E) = -eslINFINITY;
+      XMX(i,p7G_E) = -eslINFINITY;                         /* THIS INITIALIZATION DOES NOT SEEM CORRECT!!! */
     
       for (k = 1; k < gm->M; k++) 
 	{
@@ -131,7 +131,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 
       /* E state update; transition from M_M scores 0 by def'n */
       sc  =          ESL_MAX(XMX(i,p7G_E), MMX(i,M));
-      XMX(i,p7G_E) = ESL_MAX(sc,           DMX(i,M));
+      XMX(i,p7G_E) = ESL_MAX(sc,           DMX(i,M));              /* We are checking D->E*/
    
       /* Now the special states. E must already be done, and B must follow N,J.
        * remember, N, C and J emissions are zero score by definition.
