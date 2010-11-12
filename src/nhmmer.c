@@ -704,6 +704,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   if (status != eslOK) esl_fatal("Work queue reader failed");
   ((ESL_SQ_BLOCK *)newBlock)->complete = TRUE;
 
+
   /* Main loop: */
   while (sstatus == eslOK ) {
       block = (ESL_SQ_BLOCK *) newBlock;
@@ -714,7 +715,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       for (i=1; i<block->count; i++)
           esl_sq_Reuse(block->list + i);
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
       info->pli->nseqs += block->count - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
 
@@ -768,7 +769,7 @@ pipeline_thread(void *arg)
   /* In order to avoid the performance penalty dealing with sub-normal
    * values in the floating point calculations, set the processor flag
    * so sub-normals are "flushed" immediately to zero.
-   * On OS X, need to reset this flag for each thread
+   * On OS X, need to reset this flag for each thread.
    * (see TW notes 05/08/10 for details)
    */
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);

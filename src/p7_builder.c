@@ -343,9 +343,11 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
   if ((status =  make_post_msa        (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
 
-  if (bld->w_len > 0)           hmm->max_length = bld->w_len;
-  else if (bld->w_beta == 0.0)  hmm->max_length = hmm->M *4;
-  else if ((status =  p7_Builder_MaxLength(hmm, bld->w_beta)) != eslOK) goto ERROR;
+  if ( bld->abc->type == eslDNA ||  bld->abc->type == eslRNA ) {
+	  if (bld->w_len > 0)           hmm->max_length = bld->w_len;
+	  else if (bld->w_beta == 0.0)  hmm->max_length = hmm->M *4;
+	  else if ( (status =  p7_Builder_MaxLength(hmm, bld->w_beta)) != eslOK) goto ERROR;
+  }
 
   hmm->checksum = checksum;
   hmm->flags   |= p7H_CHKSUM;
@@ -532,6 +534,7 @@ int
 p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
 {
 
+	int       status = eslOK;	/* return status from an ESL call */
 	int model_len = hmm->M; //model length
 
 	if (model_len==1) {
@@ -539,7 +542,21 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
 		return eslOK;
 	}
 
-    double I[model_len+1][2], M[model_len+1][2], D[model_len+1][2]; //2 columns for each way of ending a subpath
+
+	//    double I[model_len+1][2], M[model_len+1][2], D[model_len+1][2]; //2 columns for each way of ending a subpath
+	double **I;
+	double **M;
+	double **D;
+	ESL_ALLOC(I, (model_len+1) * sizeof(double*));
+	ESL_ALLOC(M, (model_len+1) * sizeof(double*));
+	ESL_ALLOC(D, (model_len+1) * sizeof(double*));
+	for (int i=0; i<model_len+1; i++) {
+		ESL_ALLOC(I[i], 2 * sizeof(double));
+		ESL_ALLOC(M[i], 2 * sizeof(double));
+		ESL_ALLOC(D[i], 2 * sizeof(double));
+	}
+
+
     int col_ptr, prev_col_ptr; //which true column in above 2d-arrays is active
     int col; //which conceptual column in above 2d-arrays is active (up to table_len)
 	double p_sum; // sum of probabilities for lengths <=L;  X from above
@@ -602,9 +619,21 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
 		col_ptr = 1-col_ptr; // alternating between 0 and 1
 	}
 
+	for (int i=0; i<model_len+1; i++) {
+		free(I[i]);
+		free(M[i]);
+		free(D[i]);
+	}
+	free(I);
+	free(M);
+	free(D);
+
 	if (hmm->max_length >= length_bound) return eslERANGE;
 
-	return eslOK;
+
+	ERROR:
+
+	return status;
 
 }
 

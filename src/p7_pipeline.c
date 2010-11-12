@@ -325,7 +325,11 @@ p7_pli_TargetReportable(P7_PIPELINE *pli, float score, double Pval)
 int
 p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, double Pval)
 {
-  if      (  pli->dom_by_E   && Pval * pli->domZ <= pli->domE) return TRUE;
+  if      (  pli->dom_by_E )
+	  {
+	   if ( !pli->long_targets  &&  Pval * pli->domZ <= pli->domE) return TRUE;
+	   if (  pli->long_targets  &&  Pval  <= pli->domE) return TRUE;
+	  }
   else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
   else return FALSE;
 }
@@ -859,8 +863,14 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
   p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, bg, pli->F1, &window_starts, &window_ends, &hit_cnt);
 
-  if (hit_cnt == 0 ) return eslOK;
+  if (hit_cnt == 0 ) {
+	  free(window_starts);
+	  free(window_ends);
+	  return eslOK;
+  }
   pli->n_past_msv += hit_cnt;
+
+
   ESL_SQ *tmpseq = esl_sq_CreateDigital(sq->abc);
   ESL_DSQ* subseq;
   for (i=0; i<hit_cnt; i++){
@@ -1025,6 +1035,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
 
   }
+
+  esl_sq_Destroy(tmpseq);
+  free(window_starts);
+  free(window_ends);
 
   return eslOK;
 
