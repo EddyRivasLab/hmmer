@@ -119,7 +119,7 @@ typedef struct {
   HMMER_SEQ       **sq_list;     /* list of sequences to process     */
   int               sq_cnt;      /* number of sequences              */
 
-  P7_OPROFILE      *om_list;     /* list of profiles to process      */
+  P7_OPROFILE     **om_list;     /* list of profiles to process      */
   int               om_cnt;      /* number of profiles               */
 
   pthread_mutex_t   inx_mutex;   /* protect data                     */
@@ -538,16 +538,16 @@ worker_process(ESL_GETOPTS *go)
 
     esl_stopwatch_Start(w);
 
-    if (query->srch_type = HMMD_CMD_SEARCH) {
+    if (query->srch_type == HMMD_CMD_SEARCH) {
       threadObj = esl_threads_Create(&search_thread);
     } else {
       threadObj = esl_threads_Create(&scan_thread);
     }
 
     if (query->query_type == HMMD_SEQUENCE) {
-      fprintf(ofp, "Query (%s):       %s  [L=%ld]\n", query->ip_addr, query->seq->name, (long) query->seq->n);
+      fprintf(ofp, "Query (%s): %s  [L=%ld]\n", query->ip_addr, query->seq->name, (long) query->seq->n);
     } else {
-      fprintf(ofp, "Query (%s):       %s  [M=%d]\n", query->ip_addr, query->hmm->name, query->hmm->M);
+      fprintf(ofp, "Query (%s): %s  [M=%d]\n", query->ip_addr, query->hmm->name, query->hmm->M);
     }
 
     fprintf(ofp, "%s database %d [%d - %d]\n", 
@@ -576,7 +576,7 @@ worker_process(ESL_GETOPTS *go)
       } else {
         info[i].sq_list   = NULL;
         info[i].sq_cnt    = 0;
-        info[i].om_list   = hmm_db->list + query->inx;
+        info[i].om_list   = &hmm_db->list[query->inx];
         info[i].om_cnt    = query->cnt;
       }
 
@@ -972,6 +972,8 @@ read_QueryCmd(int fd)
 
   if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
+  printf("CMD: %d %d\n", cmd->command, cmd->query_type);
+
   query->srch_type  = cmd->command;
   query->query_type = cmd->query_type;
   query->dbx        = cmd->db_inx;
@@ -1248,7 +1250,7 @@ scan_thread(void *arg)
   count = 1;
   while (count > 0) {
     int           inx;
-    P7_OPROFILE  *om;
+    P7_OPROFILE **om;
 
     /* grab the next block of sequences */
     if (pthread_mutex_lock(&info->inx_mutex) != 0) p7_Fail("mutex lock failed");
@@ -1264,12 +1266,12 @@ scan_thread(void *arg)
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++om) {
-      p7_pli_NewModel(pli, om, bg);
-      p7_oprofile_ReconfigLength(om, info->seq->n);
+      p7_pli_NewModel(pli, *om, bg);
+      p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
-      p7_Pipeline(pli, om, bg, info->seq, th);
+      p7_Pipeline(pli, *om, bg, info->seq, th);
 	      
-      p7_oprofile_Destroy(om);
+      //p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(pli);
     }
   }
@@ -1329,7 +1331,8 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
 
- 
+  enum p7_pipemodes_e mode;
+
   fd = query->sock;
 
   stats.nhits       = 0;
@@ -1414,9 +1417,17 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
   if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
-  if (comm->seq_db != NULL) {
-    stats.nseqs = comm->seq_db->db[query->dbx].K;
+  if (query->srch_type == HMMD_CMD_SEARCH) {
+    mode = p7_SEARCH_SEQS;
+    stats.nmodels = 1;
+    stats.nseqs   = comm->seq_db->db[query->dbx].K;
+  } else {
+    mode = p7_SCAN_MODELS;
+    stats.nseqs   = 1;
+    stats.nmodels = comm->hmm_db->count;
   }
+  stats.nres    = 0;
+  stats.nnodes  = 0;
     
   if (stats.Z_setby == p7_ZSETBY_NTARGETS) {
     stats.Z = (query->srch_type == HMMD_CMD_SEARCH) ? stats.nseqs : stats.nmodels;
@@ -1433,7 +1444,7 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     th.nincluded = 0;
     th.is_sorted = 0;
       
-    pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
+    pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
     pli->nmodels     = stats.nmodels;
     pli->nseqs       = stats.nseqs;
     pli->nres        = stats.nres;
@@ -2116,7 +2127,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   push_Queue(parms, queue);
 
   if (parms->seq != NULL) {
-    printf("Queued sequence %s from %s (%d)\n", parms->seq->name, parms->ip_addr, parms->sock);
+    printf("Queued %s of sequence %s from %s (%d)\n", (cmd->command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
   } else {
     printf("Queued hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
   }

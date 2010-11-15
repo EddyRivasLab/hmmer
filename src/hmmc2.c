@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
           exit(1);
         }
 
-        pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+        pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS);
 
         n = sizeof(sstatus);
         //printf("STATUS size %d\n", n);

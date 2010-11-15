@@ -24,11 +24,11 @@
 int
 cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
 {
-  int            i;
-  int            status;
+  int              i;
+  int              status;
 
-  int            count;
-  int            inx = 0;
+  int              count;
+  int              inx = 0;
 
   P7_OPROFILE     *om       = NULL;        /* target profile            */
   P7_OPROFILE    **list     = NULL;        /* list of profiles          */
@@ -36,8 +36,9 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
   P7_HMMFILE      *hfp      = NULL;        /* open HMM database file    */
 
   void            *tmp;
+  HMM_CACHE       *cache    = NULL;
 
-  HMM_CACHE       *cache    = NULL;;
+  uint64_t         total_mem = 0;
 
   /* Open the target profile database */
   if ((status = p7_hmmfile_Open(hmmfile, NULL, &hfp)) != eslOK) return status;
@@ -47,8 +48,22 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
 
   ESL_ALLOC(cache, sizeof(HMM_CACHE));
 
+  total_mem = sizeof(HMM_CACHE) + sizeof(char *) * count;
+
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK) {
+    int nqb = p7O_NQB(om->M); /* # of uchar vectors needed for query */
+    int nqw = p7O_NQW(om->M); /* # of sword vectors needed for query */
+    int nqf = p7O_NQF(om->M); /* # of float vectors needed for query */
+    int nqs = nqb + 17;
+
+    if ((inx % 1000) == 0) { printf ("."); fflush(stdout); }
     p7_oprofile_ReadRest(hfp, om);
+
+    total_mem += sizeof(P7_OPROFILE);
+    total_mem += (sizeof(__m128i) * (nqb + nqs + nqw + nqf) * abc->Kp + 60);
+    total_mem += (sizeof(__m128i) * (nqw + nqf) * p7O_NTRANS + 30);
+    total_mem += (sizeof(__m128i *) * abc->Kp * 4);
+    total_mem += ((om->M + 2) * 3);
 
     if (inx >= count) {
       ESL_RALLOC(list, tmp, sizeof(char *) * count * 2);
@@ -58,6 +73,9 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
     list[inx++] = om;
     om = NULL;
   }
+  if (status != eslEOF) { printf("Unexpected error %d at %d\n", status, inx); goto ERROR; }
+
+  printf("\nfinal:: %d  memory %" PRId64 "\n", inx, total_mem);
 
   cache->abc    = abc;
   cache->count  = inx;
@@ -65,7 +83,7 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
 
   *ret_cache = cache;
 
-  return status;
+  return eslOK;
 
  ERROR:
   if (abc   != NULL) esl_alphabet_Destroy(abc);
@@ -74,7 +92,7 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
     for (i = 0; i < inx; ++i) p7_oprofile_Destroy(list[i]);
     free(list);
   }
-  return eslEMEM;
+  return status;
 }
 
 void
