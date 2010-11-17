@@ -163,23 +163,23 @@ int main(int argc, char *argv[])
   char             buffer[MAX_READ_LEN];
 
   int              status  = eslOK;
+  char            *data    = NULL;
   char            *ptr     = NULL;
 
   ESL_GETOPTS     *go      = NULL;
   ESL_STOPWATCH   *w       = NULL;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
-  P7_HIT          *hit     = NULL;
   P7_DOMAIN       *dcl     = NULL;
 
-  HMMD_SEARCH_STATS   stats;
-  HMMD_SEARCH_STATUS  sstatus;
+  HMMD_SEARCH_STATS   *stats;
+  HMMD_SEARCH_STATUS   sstatus;
 
-  int                 sock;
-  char                serv_ip[64];
-  unsigned short      serv_port;
+  int                  sock;
+  char                 serv_ip[64];
+  unsigned short       serv_port;
 
-  struct sockaddr_in      serv_addr;
+  struct sockaddr_in   serv_addr;
 
   /* set up defaults */
   strcpy(serv_ip, "127.0.0.1");
@@ -369,7 +369,6 @@ int main(int argc, char *argv[])
         pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS);
 
         n = sizeof(sstatus);
-        //printf("STATUS size %d\n", n);
         total += n;
         if ((size = readn(sock, &sstatus, n)) == -1) {
           fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
@@ -378,7 +377,7 @@ int main(int argc, char *argv[])
 
         if (sstatus.status != eslOK) {
           char *ebuf;
-          n = sstatus.err_len;
+          n = sstatus.msg_size;
           total += n; 
           ebuf = malloc(n);
           if ((size = readn(sock, ebuf, n)) == -1) {
@@ -391,163 +390,101 @@ int main(int argc, char *argv[])
           goto COMPLETE;
         }
 
-        n = sizeof(stats);
-        //printf("STATS size %d\n", n);
-        total += n;
-        if ((size = readn(sock, &stats, n)) == -1) {
+        n = sstatus.msg_size;
+        if ((data = malloc(n)) == NULL) {
+          fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+          exit(1);
+        }
+        if ((size = readn(sock, data, n)) == -1) {
           fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
           exit(1);
         }
 
+        stats = (HMMD_SEARCH_STATS *)data;
+
         /* copy the search stats */
-        w->elapsed       = stats.elapsed;
-        w->user          = stats.user;
-        w->sys           = stats.sys;
+        w->elapsed       = stats->elapsed;
+        w->user          = stats->user;
+        w->sys           = stats->sys;
 
-        pli->nmodels     = stats.nmodels;
-        pli->nseqs       = stats.nseqs;
-        pli->nres        = stats.nres;
-        pli->nnodes      = stats.nnodes;
-        pli->n_past_msv  = stats.n_past_msv;
-        pli->n_past_bias = stats.n_past_bias;
-        pli->n_past_vit  = stats.n_past_vit;
-        pli->n_past_fwd  = stats.n_past_fwd;
+        pli->nmodels     = stats->nmodels;
+        pli->nseqs       = stats->nseqs;
+        pli->n_past_msv  = stats->n_past_msv;
+        pli->n_past_bias = stats->n_past_bias;
+        pli->n_past_vit  = stats->n_past_vit;
+        pli->n_past_fwd  = stats->n_past_fwd;
 
-        pli->Z           = stats.Z;
-        pli->domZ        = stats.domZ;
-        pli->Z_setby     = stats.Z_setby;
-        pli->domZ_setby  = stats.domZ_setby;
+        pli->Z           = stats->Z;
+        pli->domZ        = stats->domZ;
+        pli->Z_setby     = stats->Z_setby;
+        pli->domZ_setby  = stats->domZ_setby;
 
         th = p7_tophits_Create(); 
 
-        /* loop through the hit list sending to dest */
-        for (i = 0; i < stats.nhits; ++i) {
-          hit = NULL;
-          if ((status = p7_tophits_CreateNextHit(th, &hit)) != eslOK) {
-            fprintf(stderr, "%s: p7_tophits_CreateNextHit error %d\n", argv[0], status);
-            exit(1);
-          }
+        free(th->unsrt);
+        free(th->hit);
 
-          n = sizeof(P7_HIT);
-          //printf("P7_HIT size %d\n", n);
-          total += n;
-          if ((size = readn(sock, hit, n)) == -1) {
-            fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-            exit(1);
-          }
+        th->N         = stats->nhits;
+        th->unsrt     = (P7_HIT *)(data + sizeof(HMMD_SEARCH_STATS));
+        th->nreported = stats->nreported;
+        th->nincluded = stats->nincluded;
+        th->is_sorted = TRUE;
+
+        if ((th->hit = malloc(sizeof(void *) * stats->nhits)) == NULL) {
+          fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+          exit(1);
+        }
+        for (i = 0; i < stats->nhits; i++) th->hit[i] = th->unsrt + i;
+        
+        /* loop through the hit list adjusting the pointers */
+        for (i = 0; i < stats->nhits; ++i) {
+          char   *ptr;
+          char   *base;
+          P7_HIT *hit = th->unsrt + i;
+
+          hit->dcl = (P7_DOMAIN *)(data + ((char *)hit->dcl - (char *)NULL));
 
           /* the hit string pointers contain the length of the string including
            * the null terminator at the end.
            */
           if (hit->name != NULL) {
-            n = (socklen_t)(hit->name - (char *)NULL);
-            total += n;
-            hit->name = malloc(n);
-            if ((size = readn(sock, hit->name, n)) == -1) {
-              fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-              exit(1);
-            }
-          }
-          if (hit->acc != NULL) {
-            n = (socklen_t)(hit->acc - (char *)NULL);
-            total += n;
-            hit->acc = malloc(n);
-            if ((size = readn(sock, hit->acc, n)) == -1) {
-              fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-              exit(1);
-            }
-          }
-          if (hit->desc != NULL) {
-            n = (socklen_t)(hit->desc - (char *)NULL);
-            total += n;
-            hit->desc = malloc(n);
-            if ((size = readn(sock, hit->desc, n)) == -1) {
-              fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-              exit(1);
-            }
+            char *name = malloc(16);
+            sprintf(name, "%d", (int)(hit->name - (char *)NULL));
+            hit->name = name;
           }
 
-          hit->dcl = malloc(sizeof(P7_DOMAIN) * hit->ndom);
-          if ((hit->dcl = malloc(sizeof(P7_DOMAIN) * hit->ndom)) == NULL) {
-            fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)sizeof(P7_DOMAIN) * hit->ndom);
-            exit(1);
-          }
-#if 0
-          /* zero out the reported and included fields of the hit because when the
-           * score and E-value thresholds are applied to the hit list, the reported
-           * and included fields are resummed.
-           */
-          hit->nreported = 0;
-          hit->nincluded = 0;
-#endif
           /* send the domains for this hit */
-          dcl = hit->dcl;
+          dcl  = hit->dcl;
+          base = (char *)dcl;
+          ptr  = (char *)(dcl + hit->ndom);
           for (j = 0; j < hit->ndom; ++j) {
-            char *base;
-            P7_ALIDISPLAY *ad = NULL;
+            P7_ALIDISPLAY *ad = (P7_ALIDISPLAY *)ptr;
 
-            n = (socklen_t)sizeof(P7_DOMAIN);
-            //printf("P7_DOMAIN size %d\n", n);
-            total += n;
-            if ((size = readn(sock, dcl, n)) == -1) {
-              fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-              exit(1);
-            }
-
-            if ((ad = malloc(sizeof(P7_ALIDISPLAY))) == NULL) {
-              fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", (int)sizeof(P7_ALIDISPLAY));
-              exit(1);
-            }
-            dcl->ad = ad;
-
-            n = (socklen_t)sizeof(P7_ALIDISPLAY);
-            //printf("P7_ALIDISPLAY size %d\n", n);
-            total += n;
-            if ((size = readn(sock, ad, n)) == -1) {
-              fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-              exit(1);
-            }
-
-            /* save off the original mem pointer so all the pointers can be adjusted
-             * to the new block of memory.
-             */
-            base = ad->mem;
-
-            if ((ad->mem = malloc(ad->memsize)) == NULL) {
-              fprintf(stderr, "hmmpgmd: malloc error (size %d)\n", ad->memsize);
-              exit(1);
-            }
-
-            n = (socklen_t)ad->memsize;
-            total += n;
-            if ((size = readn(sock, ad->mem, n)) == -1) {
-              fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
-              exit(1);
-            }
-
+            dcl->ad  = ad;
+            ad->mem  = ptr + sizeof(P7_ALIDISPLAY);
+                        
             /* readjust all the pointers to the new memory block */
-            if (ad->rfline  != NULL) ad->rfline  = ad->rfline  - base + ad->mem;
-            if (ad->csline  != NULL) ad->csline  = ad->csline  - base + ad->mem;
-            if (ad->model   != NULL) ad->model   = ad->model   - base + ad->mem;
-            if (ad->mline   != NULL) ad->mline   = ad->mline   - base + ad->mem;
-            if (ad->aseq    != NULL) ad->aseq    = ad->aseq    - base + ad->mem;
-            if (ad->ppline  != NULL) ad->ppline  = ad->ppline  - base + ad->mem;
-            if (ad->hmmname != NULL) ad->hmmname = ad->hmmname - base + ad->mem;
-            if (ad->hmmacc  != NULL) ad->hmmacc  = ad->hmmacc  - base + ad->mem;
-            if (ad->hmmdesc != NULL) ad->hmmdesc = ad->hmmdesc - base + ad->mem;
-            if (ad->sqname  != NULL) ad->sqname  = ad->sqname  - base + ad->mem;
-            if (ad->sqacc   != NULL) ad->sqacc   = ad->sqacc   - base + ad->mem;
-            if (ad->sqdesc  != NULL) ad->sqdesc  = ad->sqdesc  - base + ad->mem;
+            if (ad->rfline  != NULL) ad->rfline  = base + (ad->rfline  - (char *)NULL);
+            if (ad->csline  != NULL) ad->csline  = base + (ad->csline  - (char *)NULL);
+            if (ad->model   != NULL) ad->model   = base + (ad->model   - (char *)NULL);
+            if (ad->mline   != NULL) ad->mline   = base + (ad->mline   - (char *)NULL);
+            if (ad->aseq    != NULL) ad->aseq    = base + (ad->aseq    - (char *)NULL);
+            if (ad->ppline  != NULL) ad->ppline  = base + (ad->ppline  - (char *)NULL);
+            if (ad->hmmname != NULL) ad->hmmname = base + (ad->hmmname - (char *)NULL);
+            if (ad->hmmacc  != NULL) ad->hmmacc  = base + (ad->hmmacc  - (char *)NULL);
+            if (ad->hmmdesc != NULL) ad->hmmdesc = base + (ad->hmmdesc - (char *)NULL);
+            if (ad->sqname  != NULL) ad->sqname  = base + (ad->sqname  - (char *)NULL);
+            if (ad->sqacc   != NULL) ad->sqacc   = base + (ad->sqacc   - (char *)NULL);
+            if (ad->sqdesc  != NULL) ad->sqdesc  = base + (ad->sqdesc  - (char *)NULL);
 
+            ptr += sizeof(P7_ALIDISPLAY) + ad->memsize;
             ++dcl;
           }
         }
 
         /* adjust the reported and included hits */
-        th->nreported = stats.nreported;
-        th->nincluded = stats.nincluded;
-        th->is_sorted = FALSE;
-        p7_tophits_Sort(th);
+        //th->is_sorted = FALSE;
+        //p7_tophits_Sort(th);
 
         /* Print the results.  */
         p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
@@ -555,20 +492,14 @@ int main(int argc, char *argv[])
 
         p7_pli_Statistics(stdout, pli, w);  
         p7_pipeline_Destroy(pli);
-        p7_tophits_Destroy(th);
+
+        free(th->hit);
+        free(data);
+        free(th);
 
         fprintf(stdout, "//\n");  fflush(stdout);
 
         fprintf(stdout, "Total bytes received %d\n", total);
-#if 0
-        if (hmm == NULL) {
-          if (tblfp)    p7_tophits_TabularTargets(tblfp,    sq->name, sq->acc, info->th, info->pli, TRUE);
-          if (domtblfp) p7_tophits_TabularDomains(domtblfp, sq->name, sq->acc, info->th, info->pli, TRUE);
-        } else {
-          if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, info->th, info->pli, TRUE);
-          if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, info->th, info->pli, TRUE);
-        }
-#endif
       } else {
         printf("Error parsing input query\n");
       }

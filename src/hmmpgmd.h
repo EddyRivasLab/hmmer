@@ -17,8 +17,10 @@
 
 typedef struct {
   uint32_t   status;            /* error status                             */
-  uint32_t   err_len;           /* if status not zero, the stream will next */
-                                /* contain the error message.               */
+  uint64_t   msg_size;          /* size of the next packat.  if status not  */
+                                /* zero, the length is for the error string */
+                                /* otherwise it is the length of the data   */
+                                /* to follow.                               */
 } HMMD_SEARCH_STATUS;
 
 typedef struct {
@@ -33,8 +35,6 @@ typedef struct {
 
   uint64_t   nmodels;         	/* # of HMMs searched                       */
   uint64_t   nseqs;           	/* # of sequences searched                  */
-  uint64_t   nres;            	/* # of residues searched                   */
-  uint64_t   nnodes;          	/* # of model nodes searched                */
   uint64_t   n_past_msv;      	/* # comparisons that pass MSVFilter()      */
   uint64_t   n_past_bias;     	/* # comparisons that pass bias filter      */
   uint64_t   n_past_vit;      	/* # comparisons that pass ViterbiFilter()  */

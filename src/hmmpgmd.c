@@ -33,7 +33,8 @@
 #include "hmmpgmd.h"
 #include "cachedb.h"
 
-#define MAX_BUFFER 4096
+#define MAX_WORKERS  64
+#define MAX_BUFFER   4096
 
 typedef struct queue_data_s {
   uint32_t            srch_type;   /* type of search to preform      */
@@ -100,8 +101,8 @@ typedef struct worker_s {
   HMMD_SEARCH_STATS     stats;
   HMMD_SEARCH_STATUS    status;
   char                 *err_buf;
-  P7_HIT              **hit;
-  void                **hit_data;
+  P7_HIT               *hit;
+  void                 *hit_data;
   int                   total;
 
   WORKERSIDE_ARGS      *parent;
@@ -300,7 +301,7 @@ print_client_error(int fd, int status, char *format, va_list ap)
   HMMD_SEARCH_STATUS s;
 
   s.status  = status;
-  s.err_len = vsnprintf(ebuf, sizeof(ebuf), format, ap);
+  s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap);
   vsyslog(LOG_ERR, format, ap);
 
   /* send back an unsuccessful status message */
@@ -309,7 +310,7 @@ print_client_error(int fd, int status, char *format, va_list ap)
     syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
     return;
   }
-  if (writen(fd, ebuf, s.err_len) != s.err_len)  {
+  if (writen(fd, ebuf, s.msg_size) != s.msg_size)  {
     syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
     return;
   }
@@ -1270,8 +1271,6 @@ scan_thread(void *arg)
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
       p7_Pipeline(pli, *om, bg, info->seq, th);
-	      
-      //p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(pli);
     }
   }
@@ -1295,6 +1294,8 @@ scan_thread(void *arg)
 }
 
 typedef struct {
+  uint32_t        count;
+  uint32_t        data_size;
   P7_HIT         *hit;
   char           *data;
 } HIT_LIST;
@@ -1304,8 +1305,8 @@ hit_sorter(const void *p1, const void *p2)
 {
   int cmp;
 
-  const P7_HIT *h1 = ((HIT_LIST *) p1)->hit;
-  const P7_HIT *h2 = ((HIT_LIST *) p2)->hit;
+  const P7_HIT *h1 = p1;
+  const P7_HIT *h2 = p2;
 
   cmp  = (h1->sortkey < h2->sortkey);
   cmp -= (h1->sortkey > h2->sortkey);
@@ -1318,13 +1319,17 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 {
   int fd;
   int i, j;
-  int inx;
+  int cnt;
   int n;
 
-  int total = 0;
+  uint32_t           adj;
+  uint32_t           offset;
 
-  HIT_LIST           *list;
-  HIT_LIST           *ptr;
+  P7_TOPHITS         th;
+  P7_PIPELINE        *pli   = NULL;
+  P7_DOMAIN         **dcl   = NULL;
+  P7_HIT             *hits  = NULL;
+  HIT_LIST           *list  = NULL;
 
   WORKER_DATA        *worker;
 
@@ -1335,14 +1340,15 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
   fd = query->sock;
 
+  status.status     = eslOK;
+  status.msg_size   = 0;
+
   stats.nhits       = 0;
   stats.nreported   = 0;
   stats.nincluded   = 0;
 
   stats.nmodels     = 0;
   stats.nseqs       = 0;
-  stats.nres        = 0;
-  stats.nnodes      = 0;
   stats.n_past_msv  = 0;
   stats.n_past_bias = 0;
   stats.n_past_vit  = 0;
@@ -1354,62 +1360,43 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   stats.user        = w->user;
   stats.sys         = w->sys;
 
+  /* allocate spaces to hold all the hits */
+  if ((list = malloc(sizeof(HIT_LIST) * MAX_WORKERS)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
   /* lock the workers until we have merged the results */
   if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
 
   /* count the number of hits */
-  n = 0;
-  worker = comm->head;
-  while (worker != NULL) {
-      if (worker->completed) n += worker->stats.nhits;
-      worker = worker->next;
-  }
-
-  /* allocate spaces to hold all the hits */
-  if ((list = malloc(sizeof(HIT_LIST) * n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-  ptr = list;
-
-  /* gather up the results and merge them */
-  inx = 0;
+  cnt = 0;
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
-      stats.nmodels      = worker->stats.nmodels;
-      stats.nseqs       += worker->stats.nseqs;
-      stats.nres        += worker->stats.nres;
-      stats.nnodes       = worker->stats.nnodes;
+      stats.nhits        += worker->stats.nhits;
+      stats.nreported    += worker->stats.nreported;
+      stats.nincluded    += worker->stats.nincluded;
 
-      stats.nhits       += worker->stats.nhits;
-      stats.nreported   += worker->stats.nreported;
-      stats.nincluded   += worker->stats.nincluded;
+      stats.n_past_msv   += worker->stats.n_past_msv;
+      stats.n_past_bias  += worker->stats.n_past_bias;
+      stats.n_past_vit   += worker->stats.n_past_vit;
+      stats.n_past_fwd   += worker->stats.n_past_fwd;
 
-      stats.n_past_msv  += worker->stats.n_past_msv;
-      stats.n_past_bias += worker->stats.n_past_bias;
-      stats.n_past_vit  += worker->stats.n_past_vit;
-      stats.n_past_fwd  += worker->stats.n_past_fwd;
+      stats.Z_setby       = worker->stats.Z_setby;
+      stats.domZ_setby    = worker->stats.domZ_setby;
+      stats.domZ          = worker->stats.domZ;
+      stats.Z             = worker->stats.Z;
 
-      stats.Z_setby      = worker->stats.Z_setby;
-      stats.domZ_setby   = worker->stats.domZ_setby;
-      stats.domZ         = worker->stats.domZ;
-      stats.Z            = worker->stats.Z;
+      status.msg_size    += worker->status.msg_size;
 
-      if (worker->stats.nhits > 0) {
-        for (i = 0; i < worker->stats.nhits; ++i) {
-          ptr->hit  = worker->hit[i];
-          ptr->data = worker->hit_data[i];
-          ++ptr;
-        }
-        memset(worker->hit, 0, sizeof(char *) * worker->stats.nhits);
-        memset(worker->hit_data, 0, sizeof(char *) * worker->stats.nhits);
+      list[cnt].count     = worker->stats.nhits;
+      list[cnt].data_size = worker->status.msg_size - sizeof(stats) - sizeof(P7_HIT) * list[cnt].count;
+      list[cnt].hit       = worker->hit;
+      list[cnt].data      = worker->hit_data;
 
-        free(worker->hit);
-        free(worker->hit_data);
+      worker->hit         = NULL;
+      worker->hit_data    = NULL;
 
-        worker->hit      = NULL;
-        worker->hit_data = NULL;
-      }
-
-      worker->completed = 0;
+      worker->completed   = 0;
+      ++cnt;
     }
 
     worker = worker->next;
@@ -1426,8 +1413,6 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     stats.nseqs   = 1;
     stats.nmodels = comm->hmm_db->count;
   }
-  stats.nres    = 0;
-  stats.nnodes  = 0;
     
   if (stats.Z_setby == p7_ZSETBY_NTARGETS) {
     stats.Z = (query->srch_type == HMMD_CMD_SEARCH) ? stats.nseqs : stats.nmodels;
@@ -1435,8 +1420,30 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
   /* sort the hits and apply score and E-value thresholds */
   if (stats.nhits > 0) {
-    P7_PIPELINE     *pli;
-    P7_TOPHITS       th;
+    P7_HIT *h1;
+
+    /* at this point the domain pointers are the offset of the domain structure
+     * in the block of memory pointed to by "list[n]->data".  now we will change
+     * that offset to be the true pointers back to the dcl data.
+     */
+    for (i = 0; i < cnt; ++i) {
+      h1 = list[i].hit;
+      for (j = 0; j < list[i].count; ++j) {
+        int off = ((char *)h1->dcl - (char *)NULL) - sizeof(stats) - (sizeof(P7_HIT) * list[i].count);
+        h1->dcl = (P7_DOMAIN *)(list[i].data + off);
+        ++h1;
+      }
+    }
+
+    /* combine all the hits into a single list */
+    offset = 0;
+    if ((hits = malloc(sizeof(P7_HIT) * stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+    for (i = 0; i < cnt; ++i) {
+      memcpy(hits + offset, list[i].hit, sizeof(P7_HIT) * list[i].count);
+      offset += list[i].count;
+    }
+
+    qsort(hits, stats.nhits, sizeof(P7_HIT), hit_sorter);
 
     th.unsrt     = NULL;
     th.N         = stats.nhits;
@@ -1447,8 +1454,6 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
     pli->nmodels     = stats.nmodels;
     pli->nseqs       = stats.nseqs;
-    pli->nres        = stats.nres;
-    pli->nnodes      = stats.nnodes;
     pli->n_past_msv  = stats.n_past_msv;
     pli->n_past_bias = stats.n_past_bias;
     pli->n_past_vit  = stats.n_past_vit;
@@ -1459,118 +1464,92 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     pli->Z_setby     = stats.Z_setby;
     pli->domZ_setby  = stats.domZ_setby;
 
-    if ((th.hit = malloc(sizeof(P7_HIT *) * stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+    if ((dcl = malloc(sizeof(void *) * stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+    th.hit = (P7_HIT **)dcl;
 
-    qsort(list, stats.nhits, sizeof(HIT_LIST), hit_sorter);
-
-    for (i = 0; i < th.N; ++i) th.hit[i] = list[i].hit;
+    for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
     p7_tophits_Threshold(&th, pli);
 
     stats.nreported = th.nreported;
-    stats.nincluded = th.nreported;
+    stats.nincluded = th.nincluded;
     stats.domZ      = pli->domZ;
     stats.Z         = pli->Z;
 
-    memset(th.hit, 0, sizeof(P7_HIT *) * th.N);
-    free(th.hit);
+    /* at this point the domain pointers need to be converted back to offsets
+     * within the binary data stream.
+     */
+    adj = sizeof(stats) + sizeof(P7_HIT) * stats.nhits;
+    h1 = hits;
+    for (i = 0; i < stats.nhits; ++i) {
+      char *ptr;
+
+      dcl[i] = h1->dcl;
+      h1->dcl = (P7_DOMAIN *)(((char *)NULL) + adj);
+
+      /* figure out the size of the domain and alignment info */
+      adj += sizeof(P7_DOMAIN) * h1->ndom;
+      ptr = (char *)(dcl[i] + h1->ndom);
+      for (j = 0; j < h1->ndom; ++j) {
+        n = sizeof(P7_ALIDISPLAY) + ((P7_ALIDISPLAY *)ptr)->memsize;
+        adj += n;
+        ptr += n;
+      }
+      ++h1;
+    }
   }
 
   /* send back a successful status message */
-  status.status  = eslOK;
-  status.err_len = 0;
   n = sizeof(status);
-  total += n;
   if (writen(fd, &status, n) != n) {
     syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
   n = sizeof(stats);
-  total += n;
   if (writen(fd, &stats, n) != n) {
     syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
-  /* loop through the hit list sending to dest */
-  for (i = 0; i < stats.nhits; ++i) {
-    P7_HIT *hit = list[i].hit;
-
-    n = sizeof(P7_HIT);
-    total += n;
-    if (writen(fd, hit, n) != n) {
+  if (stats.nhits > 0) {
+    /* send all the hit data */
+    n = sizeof(P7_HIT) * stats.nhits;
+    if (writen(fd, hits, n) != n) {
       syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
       goto CLEAR;
     }
 
-    if (list[i].data != NULL) {
-      /* the hit string pointers contain the length of the strings */
-      n = 0;
-      if (hit->name != NULL) n += (socklen_t)(hit->name - (char *)NULL);
-      if (hit->acc  != NULL) n += (socklen_t)(hit->acc  - (char *)NULL);
-      if (hit->desc != NULL) n += (socklen_t)(hit->desc - (char *)NULL);
-
-      total += n;
-      if (writen(fd, list[i].data, n) != n) {
-        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-        goto CLEAR;
+    for (i = 0; i < stats.nhits; ++i) {
+      if (i + 1 < stats.nhits) {
+        n = (char *)hits[i+1].dcl - (char *)hits[i].dcl;
+      } else {
+        n = ((char *)NULL) + status.msg_size - (char *)hits[i].dcl;
       }
-    }
-
-    /* send the domains */
-    for (j = 0; j < hit->ndom; ++j) {
-      P7_DOMAIN      *dcl = &hit->dcl[j];
-
-      n = (socklen_t)sizeof(P7_DOMAIN);
-      total += n;
-      if (writen(fd, dcl, n) != n) {
-        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-        goto CLEAR;
-      }
-
-      n = (socklen_t)sizeof(P7_ALIDISPLAY);
-      total += n;
-      if (writen(fd, dcl->ad, n) != n) {
-        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-        goto CLEAR;
-      }
-
-      n = (socklen_t)dcl->ad->memsize;
-      total += n;
-      if (writen(fd, dcl->ad->mem, n) != n) {
+      if (writen(fd, dcl[i], n) != n) {
         syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
         goto CLEAR;
       }
     }
   }
 
-  printf("Results for %s (%d) sent %d bytes\n", query->ip_addr, fd, total);
-  printf("Hits:%"PRId64 "  reported:%"PRId64 "  included:%"PRId64 "\n", stats.nhits, stats.nreported, stats.nincluded);
+  printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, status.msg_size);
+  printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", stats.nhits, stats.nreported, stats.nincluded);
 
-  /* free all the data */
  CLEAR:
-  for (i = 0; i < stats.nhits; ++i) {
-    P7_HIT *hit = list[i].hit;
-    for (j = 0; j < hit->ndom; ++j) {
-      P7_DOMAIN *dcl = &hit->dcl[j];
-      free (dcl->ad);
-      free (dcl->ad->mem);
-    }
-    free(hit->dcl);
-    free(hit);
-    
+  /* free all the data */
+  for (i = 0; i < cnt; ++i) {
+    if (list[i].hit  != NULL) free(list[i].hit);
     if (list[i].data != NULL) free(list[i].data);
   }
 
-  memset(list, 0, sizeof(HIT_LIST) * stats.nhits);
-  free(list);
+  if (list != NULL) free(list);
+  if (hits != NULL) free(hits);
+  if (dcl  != NULL) free(dcl);
 }
 
 static void
 clear_results(WORKERSIDE_ARGS *comm)
 {
-  int i, j;
-  int inx;
   int n;
 
   WORKER_DATA *worker;
@@ -1582,37 +1561,18 @@ clear_results(WORKERSIDE_ARGS *comm)
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
-      if (worker->stats.nhits > 0) {
-        /* free all the data */
-        for (i = 0; i < worker->stats.nhits; ++i) {
-          for (j = 0; j < worker->hit[i]->ndom; ++j) {
-            P7_DOMAIN *dcl = &worker->hit[i]->dcl[j];
-            free (dcl->ad);
-            free (dcl->ad->mem);
-          }
-          free(worker->hit[i]->dcl);
-          free(worker->hit[i]);
-          
-          if (worker->hit_data[i] != NULL) free(worker->hit_data[i]);
-        }
 
-        memset(worker->hit, 0, sizeof(char *) * n);
-        memset(worker->hit_data, 0, sizeof(char *) * n);
+      if (worker->hit      != NULL)  free(worker->hit);
+      if (worker->hit_data != NULL)  free(worker->hit_data);
 
-        free(worker->hit);
-        free(worker->hit_data);
+      worker->hit      = NULL;
+      worker->hit_data = NULL;
 
-        worker->hit      = NULL;
-        worker->hit_data = NULL;
-
-        if (worker->err_buf != NULL) {
-          free(worker->err_buf);
-          worker->err_buf = NULL;
-        }
-
-        inx += worker->stats.nhits;
+      if (worker->err_buf != NULL) {
+        free(worker->err_buf);
+        worker->err_buf = NULL;
       }
-
+      
       worker->completed = 0;
     }
 
@@ -1652,7 +1612,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   int i, j;
   int n;
 
-  int total = 0;
+  uint64_t   offset;
 
   P7_HIT    *hit;
   P7_DOMAIN *dcl;
@@ -1660,12 +1620,8 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
 
-  /* send back a successful status message */
-  status.status  = eslOK;
-  status.err_len = 0;
-  n = sizeof(status);
-  total += n;
-  if (writen(fd, &status, n) != n) LOG_FATAL_MSG("write", errno);
+  status.status     = eslOK;
+  status.msg_size   = sizeof(stats);
 
   /* copy the search stats */
   stats.elapsed     = w->elapsed;
@@ -1674,8 +1630,6 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
   stats.nmodels     = info->pli->nmodels;
   stats.nseqs       = info->pli->nseqs;
-  stats.nres        = info->pli->nres;
-  stats.nnodes      = info->pli->nnodes;
   stats.n_past_msv  = info->pli->n_past_msv;
   stats.n_past_bias = info->pli->n_past_bias;
   stats.n_past_vit  = info->pli->n_past_vit;
@@ -1690,82 +1644,96 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   stats.nreported   = info->th->nreported;
   stats.nincluded   = info->th->nincluded;
 
-  n = sizeof(stats);
-  total += n;
-  if (writen(fd, &stats, n) != n) LOG_FATAL_MSG("write", errno);
-  printf("SENT STATS %d\n", (int)info->th->N); fflush(stdout);
+  n = sizeof(P7_HIT) * stats.nhits;
 
-  /* loop through the hit list sending to dest */
-  printf("SENDING %d hits ", (int)info->th->N); fflush(stdout);
-  hit = info->th->unsrt;
-  for (i = 0; i < info->th->N; ++i) {
-    int     l;
-    char   *h;
-    char   *p;
+  status.msg_size += n;
+  offset = status.msg_size;
+  if ((hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-    n = sizeof(P7_HIT);
-    if (hit->name != NULL) n += strlen(hit->name) + 1;
-    if (hit->acc  != NULL) n += strlen(hit->acc)  + 1;
-    if (hit->desc != NULL) n += strlen(hit->desc) + 1;
+  /* get the data in the right format before we send it */
+  for (i = 0; i < stats.nhits; ++i) {
+    P7_HIT *h1 = &hit[i];
+    P7_HIT *h2 = &info->th->unsrt[i];
 
-    if ((h = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-    memcpy(h, hit, sizeof(P7_HIT));
+    memcpy(h1, h2, sizeof(P7_HIT));
 
-    /* copy the strings to the memory space after the P7_HIT structure.
-     * then replace the pointers with the lenght of the strings.  this
-     * will allow the client to get the hit data with two receives.  the
-     * first receive will be the hit structure.  then the space for the
-     * strings can be calculated and one more receive for the string data.
-     */
-    p = h + sizeof(P7_HIT);
-    if (hit->name != NULL) {
-      strcpy(p, hit->name);
-      l = strlen(hit->name) + 1;
-      ((P7_HIT *)h)->name = ((char *) NULL) + l;
-      p += l;
-    }
-    if (hit->acc  != NULL) {
-      strcpy(p, hit->acc);
-      l = strlen(hit->acc) + 1;
-      ((P7_HIT *)h)->acc = ((char *) NULL) + l;
-      p += l;
-    }
-    if (hit->desc != NULL) {
-      strcpy(p, hit->desc);
-      l = strlen(hit->desc) + 1;
-      ((P7_HIT *)h)->desc = ((char *) NULL) + l;
-      p += l;
-    }
+    /* the name will be an integer value of the sequence index */
+    h1->name = (char *) strtol(h2->name, NULL, 10);
+    h1->acc  = NULL;
+    h1->desc = NULL;
 
-    total += n;
-    if (writen(fd, h, n) != n) LOG_FATAL_MSG("write", errno);
+    /* offset of the domain in the data stream */
+    h1->dcl  = (P7_DOMAIN *)offset;
 
-    /* send the domains for this hit */
-    dcl = hit->dcl;
-    for (j = 0; j < hit->ndom; ++j) {
-      n = sizeof(P7_DOMAIN);
-      total += n;
-      if (writen(fd, dcl, n) != n) LOG_FATAL_MSG("write", errno);
-
-      n = sizeof(P7_ALIDISPLAY);
-      total += n;
-      if (writen(fd, dcl->ad, n) != n) LOG_FATAL_MSG("write", errno);
-
-      n = dcl->ad->memsize;
-      total += n;
-      if (writen(fd, dcl->ad->mem, n) != n) LOG_FATAL_MSG("write", errno);
+    /* figure out how big the domains are and their offset */
+    dcl = h2->dcl;
+    for (j = 0; j < h1->ndom; ++j) {
+      n = sizeof(P7_DOMAIN) + sizeof(P7_ALIDISPLAY) + dcl->ad->memsize;
+      status.msg_size += n;
+      offset += n;
 
       ++dcl;
     }
-
-    free(h);
-
-    ++hit;
-    if (((i + 1) % 10) == 0) { printf("."); fflush(stdout); }
   }
-  printf("\n"); fflush(stdout);
 
-  printf("Bytes %d sent on socket %d\n", total, fd);
+  /* send back a successful status message */
+  n = sizeof(status);
+  if (writen(fd, &status, n) != n) LOG_FATAL_MSG("write", errno);
+
+  /* send back that search stats */
+  n = sizeof(stats);
+  if (writen(fd, &stats, n) != n) LOG_FATAL_MSG("write", errno);
+
+  /* send all the hit data */
+  n = sizeof(P7_HIT) * stats.nhits;
+  if (writen(fd, hit, n) != n) LOG_FATAL_MSG("write", errno);
+
+  /* loop through the hit list sending the domains */
+  for (i = 0; i < stats.nhits; ++i) {
+    char *base;
+    P7_HIT *h2 = &info->th->unsrt[i];
+
+    dcl = h2->dcl;
+
+    n = sizeof(P7_DOMAIN) * h2->ndom;
+    if (writen(fd, dcl, n) != n) LOG_FATAL_MSG("write", errno);
+    base = (char *)NULL + n;
+
+    for (j = 0; j < h2->ndom; ++j) {
+      P7_ALIDISPLAY *ad = NULL;
+
+      /* save off the original mem pointer so all the pointers can be adjusted
+       * to the new block of memory.
+       */
+      base += sizeof(P7_ALIDISPLAY);
+
+      /* readjust all the pointers to the new memory block */
+      ad = dcl->ad;
+      if (ad->rfline  != NULL) ad->rfline  = base + (ad->rfline  - ad->mem);
+      if (ad->csline  != NULL) ad->csline  = base + (ad->csline  - ad->mem);
+      if (ad->model   != NULL) ad->model   = base + (ad->model   - ad->mem);
+      if (ad->mline   != NULL) ad->mline   = base + (ad->mline   - ad->mem);
+      if (ad->aseq    != NULL) ad->aseq    = base + (ad->aseq    - ad->mem);
+      if (ad->ppline  != NULL) ad->ppline  = base + (ad->ppline  - ad->mem);
+      if (ad->hmmname != NULL) ad->hmmname = base + (ad->hmmname - ad->mem);
+      if (ad->hmmacc  != NULL) ad->hmmacc  = base + (ad->hmmacc  - ad->mem);
+      if (ad->hmmdesc != NULL) ad->hmmdesc = base + (ad->hmmdesc - ad->mem);
+      if (ad->sqname  != NULL) ad->sqname  = base + (ad->sqname  - ad->mem);
+      if (ad->sqacc   != NULL) ad->sqacc   = base + (ad->sqacc   - ad->mem);
+      if (ad->sqdesc  != NULL) ad->sqdesc  = base + (ad->sqdesc  - ad->mem);
+
+      n = sizeof(P7_ALIDISPLAY);
+      if (writen(fd, dcl->ad, n) != n) LOG_FATAL_MSG("write", errno);
+
+      n = dcl->ad->memsize;
+      if (writen(fd, dcl->ad->mem, n) != n) LOG_FATAL_MSG("write", errno);
+
+      base += ad->memsize;
+      ++dcl;
+    }
+  }
+
+  printf("Bytes: %" PRId64 "  hits: %" PRId64 "  sent on socket %d\n", status.msg_size, stats.nhits, fd);
   fflush(stdout);
 }
 
@@ -2241,12 +2209,8 @@ static void
 workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 {
   int          n;
-  int          i, j;
   int          size;
   int          total;
-
-  P7_HIT      *hit     = NULL;
-  P7_DOMAIN   *dcl     = NULL;
 
   ESL_STOPWATCH   *w;
 
@@ -2285,7 +2249,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     }
 
     if (worker->status.status != eslOK) {
-      n = worker->status.err_len;
+      n = worker->status.msg_size;
       total += n; 
       if ((worker->err_buf = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
       worker->err_buf[0] = 0;
@@ -2303,93 +2267,21 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       }
 
       stats = &worker->stats;
-      if ((worker->hit      = malloc(sizeof(char *) * stats->nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      if ((worker->hit_data = malloc(sizeof(char *) * stats->nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-      /* loop through the hit list sending to dest */
-      for (i = 0; i < stats->nhits; ++i) {
-        n = sizeof(P7_HIT);
-        if ((hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-        worker->hit[i] = hit;
-        total += n;
-        if ((size = readn(worker->sock_fd, hit, n)) == -1) {
-          syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-          break;
-        }
+      /* read in the hits */
+      n = sizeof(P7_HIT) * stats->nhits;
+      if ((worker->hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+      if ((size = readn(worker->sock_fd, worker->hit, n)) == -1) {
+        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        break;
+      }
 
-        /* the hit string pointers contain the length of the string including
-         * the null terminator at the end.
-         */
-        n = 0;
-        if (hit->name != NULL) n += (socklen_t)(hit->name - (char *)NULL);
-        if (hit->acc  != NULL) n += (socklen_t)(hit->acc  - (char *)NULL);
-        if (hit->desc != NULL) n += (socklen_t)(hit->desc - (char *)NULL);
-
-        if (n == 0) {
-          worker->hit_data[i] = NULL;
-        } else {
-          total += n; 
-          if ((worker->hit_data[i] = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-          if ((size = readn(worker->sock_fd, worker->hit_data[i], n)) == -1) {
-            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-            break;
-          }
-        }
-
-        n = sizeof(P7_DOMAIN) * hit->ndom;
-        if ((hit->dcl = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-        /* read the domains for this hit */
-        dcl = hit->dcl;
-        for (j = 0; j < hit->ndom; ++j) {
-          char *base;
-          P7_ALIDISPLAY *ad = NULL;
-
-          n = (socklen_t)sizeof(P7_DOMAIN);
-          total += n;
-          if ((size = readn(worker->sock_fd, dcl, n)) == -1) {
-            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-            break;
-          }
-
-          n = (socklen_t)sizeof(P7_ALIDISPLAY);
-          total += n;
-          if ((dcl->ad = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-          if ((size = readn(worker->sock_fd, dcl->ad, n)) == -1) {
-            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-            break;
-          }
-
-          /* save off the original mem pointer so all the pointers can be adjusted
-           * to the new block of memory.
-           */
-          base = dcl->ad->mem;
-
-          n = (socklen_t)dcl->ad->memsize;
-          total += n;
-          if ((dcl->ad->mem = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-          if ((size = readn(worker->sock_fd, dcl->ad->mem, n)) == -1) {
-            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-            break;
-          }
-
-          /* readjust all the pointers to the new memory block */
-          ad = dcl->ad;
-          if (ad->rfline  != NULL) ad->rfline  = ad->rfline  - base + ad->mem;
-          if (ad->csline  != NULL) ad->csline  = ad->csline  - base + ad->mem;
-          if (ad->model   != NULL) ad->model   = ad->model   - base + ad->mem;
-          if (ad->mline   != NULL) ad->mline   = ad->mline   - base + ad->mem;
-          if (ad->aseq    != NULL) ad->aseq    = ad->aseq    - base + ad->mem;
-          if (ad->ppline  != NULL) ad->ppline  = ad->ppline  - base + ad->mem;
-          if (ad->hmmname != NULL) ad->hmmname = ad->hmmname - base + ad->mem;
-          if (ad->hmmacc  != NULL) ad->hmmacc  = ad->hmmacc  - base + ad->mem;
-          if (ad->hmmdesc != NULL) ad->hmmdesc = ad->hmmdesc - base + ad->mem;
-          if (ad->sqname  != NULL) ad->sqname  = ad->sqname  - base + ad->mem;
-          if (ad->sqacc   != NULL) ad->sqacc   = ad->sqacc   - base + ad->mem;
-          if (ad->sqdesc  != NULL) ad->sqdesc  = ad->sqdesc  - base + ad->mem;
-
-          ++dcl;
-        }
+      /* read in the domain and alignment info */
+      n = worker->status.msg_size - sizeof(worker->stats) - n;
+      if ((worker->hit_data = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+      if ((size = readn(worker->sock_fd, worker->hit_data, n)) == -1) {
+        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        break;
       }
     }
 
