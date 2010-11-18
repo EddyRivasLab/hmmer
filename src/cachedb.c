@@ -39,6 +39,7 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
   HMM_CACHE       *cache    = NULL;
 
   uint64_t         total_mem = 0;
+  char             buffer[16];
 
   /* Open the target profile database */
   if ((status = p7_hmmfile_Open(hmmfile, NULL, &hfp)) != eslOK) return status;
@@ -49,6 +50,8 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
   ESL_ALLOC(cache, sizeof(HMM_CACHE));
 
   total_mem = sizeof(HMM_CACHE) + sizeof(char *) * count;
+
+  strcpy(buffer, "000000001");
 
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK) {
     int nqb = p7O_NQB(om->M); /* # of uchar vectors needed for query */
@@ -69,6 +72,20 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
       ESL_RALLOC(list, tmp, sizeof(char *) * count * 2);
       count *= 2;
     }
+
+    /* increment the buffer string */
+    ++buffer[8];
+    for (i = 8; i > 0; --i) {
+      if (buffer[i] > '9') {
+        buffer[i] = '0';
+        buffer[i-1]++;
+      }
+    }
+    if (om->name == NULL || strlen(om->name) < sizeof(buffer)) {
+      char *tmp;
+      ESL_RALLOC(om->name, tmp, sizeof(buffer));
+    }
+    strcpy(om->name, buffer);
 
     list[inx++] = om;
     om = NULL;

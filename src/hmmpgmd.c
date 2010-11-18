@@ -546,13 +546,12 @@ worker_process(ESL_GETOPTS *go)
     }
 
     if (query->query_type == HMMD_SEQUENCE) {
-      fprintf(ofp, "Query (%s): %s  [L=%ld]\n", query->ip_addr, query->seq->name, (long) query->seq->n);
+      fprintf(ofp, "Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
     } else {
-      fprintf(ofp, "Query (%s): %s  [M=%d]\n", query->ip_addr, query->hmm->name, query->hmm->M);
+      fprintf(ofp, "Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
     }
-
-    fprintf(ofp, "%s database %d [%d - %d]\n", 
-            (query->srch_type == HMMD_CMD_SEARCH) ? "Sequence" : "HMM", 
+    fprintf(ofp, " vs %s DB %d [%d - %d]\n", 
+            (query->srch_type == HMMD_CMD_SEARCH) ? "SEQ" : "HMM", 
             query->dbx, query->inx, query->inx + query->cnt - 1);
 
     /* Create processing pipeline and hit list */
