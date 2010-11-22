@@ -57,28 +57,45 @@ typedef struct {
 
 /* HMMD_CMD_SEARCH or HMMD_CMD_SCAN */
 typedef struct {
-  uint32_t   length;               /* message length                           */
-  uint32_t   command;              /* message type                             */
-  uint32_t   db_inx;               /* database index to search                 */
-  uint32_t   db_type;              /* database type to search                  */
-  uint32_t   inx;                  /* index to begin search                    */
-  uint32_t   cnt;                  /* number of sequences to search            */
-  uint32_t   query_type;           /* sequence / hmm                           */
-  uint32_t   query_length;         /* length of the query data                 */
-  uint32_t   opts_length;          /* length of the options string             */
+  uint32_t    db_inx;               /* database index to search                 */
+  uint32_t    db_type;              /* database type to search                  */
+  uint32_t    inx;                  /* index to begin search                    */
+  uint32_t    cnt;                  /* number of sequences to search            */
+  uint32_t    query_type;           /* sequence / hmm                           */
+  uint32_t    query_length;         /* length of the query data                 */
+  uint32_t    opts_length;          /* length of the options string             */
+  char        data[1];              /* search data                              */
 } HMMD_SEARCH_CMD;
 
 /* HMMD_CMD_INIT */
 typedef struct {
-  uint32_t   length;               /* message length                           */
-  uint32_t   command;              /* message type                             */
-  char       sid[MAX_INIT_DESC];   /* unique id for sequence database          */
-  char       hid[MAX_INIT_DESC];   /* unique id for hmm database               */
-  uint32_t   db_cnt;               /* total number of sequence databases       */
-  uint32_t   seq_cnt;              /* sequences in database                    */
-  uint32_t   hmm_cnt;              /* total number hmm databases               */
-  uint32_t   model_cnt;            /* models in hmm database                   */
+  uint32_t    status;               /* 0 - success                              */
+  char        sid[MAX_INIT_DESC];   /* unique id for sequence database          */
+  char        hid[MAX_INIT_DESC];   /* unique id for hmm database               */
+  uint32_t    seqdb_off;            /* offset to seq database name, 0 if none   */
+  uint32_t    hmmdb_off;            /* offset to hmm database name, 0 if none   */
+  uint32_t    db_cnt;               /* total number of sequence databases       */
+  uint32_t    seq_cnt;              /* sequences in database                    */
+  uint32_t    hmm_cnt;              /* total number hmm databases               */
+  uint32_t    model_cnt;            /* models in hmm database                   */
+  char        data[1];              /* string data                              */
 } HMMD_INIT_CMD;
+
+/* HMMD_HEADER */
+typedef struct {
+  uint32_t   length;                /* message length                           */
+  uint32_t   command;               /* message type                             */
+} HMMD_HEADER;
+
+typedef struct {
+  HMMD_HEADER hdr;                  /* length and type of message               */
+  union {
+    HMMD_INIT_CMD   init;
+    HMMD_SEARCH_CMD srch;
+  };
+} HMMD_COMMAND;
+
+#define MSG_SIZE(x) (sizeof(HMMD_HEADER) + ((HMMD_HEADER *)(x))->length)
 
 size_t writen(int fd, const void *vptr, size_t n);
 size_t readn(int fd, void *vptr, size_t n);

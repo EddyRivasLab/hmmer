@@ -43,7 +43,7 @@ typedef struct queue_data_s {
   ESL_SQ             *seq;         /* query sequence                 */
   ESL_ALPHABET       *abc;         /* digital alphabet               */
   ESL_GETOPTS        *opts;        /* search specific options        */
-  HMMD_SEARCH_CMD    *cmd;         /* workers search command         */
+  HMMD_COMMAND       *cmd;         /* workers search command         */
 
   int                 sock;        /* socket descriptor of client    */
   char                ip_addr[INET_ADDRSTRLEN];
@@ -113,7 +113,7 @@ typedef struct worker_s {
   int                   started;
   int                   completed;
   int                   terminated;
-  HMMD_SEARCH_CMD      *cmd;
+  HMMD_COMMAND         *cmd;
 } WORKER_DATA;
 
 typedef struct {
@@ -145,9 +145,10 @@ static void pop_Queue(SEARCH_QUEUE *queue);
 static void push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue);
 static QUEUE_DATA *read_Queue(SEARCH_QUEUE *queue);
 
-static QUEUE_DATA *read_QueryCmd(int fd);
+static QUEUE_DATA *process_QueryCmd(int fd, HMMD_HEADER *hdr);
+static void process_InitCmd(int fd, HMMD_HEADER *hdr, SEQ_CACHE **seq_db, HMM_CACHE **hmm_db);
 
-static int  setup_masterside_comm(ESL_GETOPTS *opts, SEQ_CACHE *seq_db, HMM_CACHE *hmm_db);
+static int  setup_masterside_comm(ESL_GETOPTS *opts);
 static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
 
@@ -174,8 +175,8 @@ static ESL_OPTIONS cmdlineOpts[] = {
   { "--pid",        eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "write process id to file [default: /var/run/hmmpgmd.pid]",    12 },
   { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,            "run as a daemon using config file: /etc/hmmpgmd.conf",        12 },
 
-  { "--seqdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "protein database to cache for searches",                      12 },
-  { "--hmmdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "hmm database to cache for searches",                          12 },
+  { "--seqdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
+  { "--hmmdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>0", NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
 
@@ -417,7 +418,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   n = esl_opt_ArgNumber(go);
   if (n != 0) { puts("Incorrect number of command line arguments."); goto ERROR; }
 
-  if (!esl_opt_IsUsed(go, "--seqdb") && !esl_opt_IsUsed(go, "--hmmdb")) {
+  if (esl_opt_IsUsed(go, "--master") && !(esl_opt_IsUsed(go, "--seqdb") || esl_opt_IsUsed(go, "--hmmdb"))) {
     puts("At least one --seqdb or --hmmdb must be specified."); 
     goto ERROR;
   }
@@ -486,16 +487,16 @@ sort_seq_inx(const void *p1, const void *p2)
 void
 worker_process(ESL_GETOPTS *go)
 {
-  FILE            *ofp        = stdout;            /* results output file (-o)                        */
-  ESL_ALPHABET    *abc;                            /* digital alphabet                                */
-  ESL_STOPWATCH   *w;                              /* timer used for profiling statistics             */
   int              status     = eslOK;
   int              i;
   int              fd;
+  int              size;
 
   int              ncpus      = 0;
   WORKER_INFO     *info       = NULL;
 
+  ESL_ALPHABET    *abc;
+  ESL_STOPWATCH   *w;
   ESL_THREADS     *threadObj  = NULL;
   pthread_mutex_t  inx_mutex;
   int              current_index;
@@ -503,6 +504,8 @@ worker_process(ESL_GETOPTS *go)
   SEQ_CACHE       *seq_db     = NULL;
   HMM_CACHE       *hmm_db     = NULL;
   QUEUE_DATA      *query      = NULL;
+
+  HMMD_HEADER      hdr;
 
   /* Set processor specific flags */
   impl_Init();
@@ -513,18 +516,8 @@ worker_process(ESL_GETOPTS *go)
   w = esl_stopwatch_Create();
   abc = esl_alphabet_Create(eslAMINO);
 
-  if (esl_opt_IsUsed(go, "--seqdb")) {
-    char *name = esl_opt_GetString(go, "--seqdb");
-    if ((status = cache_SeqDb(name, &seq_db)) != eslOK) p7_Fail("Failed to cache %s (%d)", name, status);
-  }
-
-  if (esl_opt_IsUsed(go, "--hmmdb")) {
-    char *name = esl_opt_GetString(go, "--hmmdb");
-    if ((status = cache_HmmDb(name, &hmm_db)) != eslOK) p7_Fail("Failed to cache %s (%d)", name, status);
-  }
-
   /* start the communications with the web clients */
-  fd = setup_masterside_comm(go, seq_db, hmm_db);
+  fd = setup_masterside_comm(go);
 
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
@@ -534,8 +527,28 @@ worker_process(ESL_GETOPTS *go)
 
   ESL_ALLOC(info, sizeof(*info) * ncpus);
 
-  /* read query hmm/sequence */
-  while ((query = read_QueryCmd(fd)) != NULL) {
+  /* process the init command first */
+  if ((size = readn(fd, &hdr, sizeof(hdr))) == -1)  LOG_FATAL_MSG("read", errno);
+  if (hdr.command != HMMD_CMD_INIT) {
+    syslog(LOG_ERR,"[%s:%d] - expecting HMMD_CMD_INIT command %d (%d)\n", __FILE__, __LINE__, hdr.command, hdr.length);
+    exit(0);
+  }
+  process_InitCmd(fd, &hdr, &seq_db, &hmm_db);
+
+  /* read and process commands */
+  size = 0;
+  while ((size = readn(fd, &hdr, sizeof(hdr))) != -1) {
+
+    if (hdr.command == HMMD_CMD_INIT) {
+      process_InitCmd(fd, &hdr, &seq_db, &hmm_db);
+      continue;
+
+    } else if (hdr.command != HMMD_CMD_SEARCH && hdr.command != HMMD_CMD_SCAN) {
+      syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, hdr.command, hdr.length);
+      exit(0);
+    }
+
+    query = process_QueryCmd(fd, &hdr);
 
     esl_stopwatch_Start(w);
 
@@ -546,11 +559,11 @@ worker_process(ESL_GETOPTS *go)
     }
 
     if (query->query_type == HMMD_SEQUENCE) {
-      fprintf(ofp, "Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
+      fprintf("Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
     } else {
-      fprintf(ofp, "Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
+      fprintf("Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
     }
-    fprintf(ofp, " vs %s DB %d [%d - %d]\n", 
+    fprintf(" vs %s DB %d [%d - %d]\n", 
             (query->srch_type == HMMD_CMD_SEARCH) ? "SEQ" : "HMM", 
             query->dbx, query->inx, query->inx + query->cnt - 1);
 
@@ -589,7 +602,7 @@ worker_process(ESL_GETOPTS *go)
 
     esl_stopwatch_Stop(w);
 #if 1
-    fprintf (ofp, "   Sequences  Residues                              Elapsed\n");
+    fprintf (stdout, "   Sequences  Residues                              Elapsed\n");
     for (i = 0; i < ncpus; ++i) {
       print_timings(i, info[i].elapsed, info[i].pli);
     }
@@ -614,6 +627,8 @@ worker_process(ESL_GETOPTS *go)
     esl_threads_Destroy(threadObj);
   } /* end outer loop over query HMMs */
 
+  if (size == -1)  LOG_FATAL_MSG("read", errno);
+
   pthread_mutex_destroy(&inx_mutex);
 
   if (hmm_db != NULL) cache_HmmDestroy(hmm_db);
@@ -622,8 +637,6 @@ worker_process(ESL_GETOPTS *go)
   free(info);
 
   esl_stopwatch_Destroy(w);
-
-  if (ofp != stdout) fclose(ofp);
 
   esl_getopts_Destroy(go);
   esl_alphabet_Destroy(abc);
@@ -637,7 +650,6 @@ worker_process(ESL_GETOPTS *go)
 void
 master_process(ESL_GETOPTS *go)
 {
-  FILE               *ofp        = stdout;    /* results output file (-o)                        */
   ESL_ALPHABET       *abc        = NULL;      /* digital alphabet                                */
   ESL_STOPWATCH      *w          = NULL;      /* timer used for profiling statistics             */
   int                 status     = eslOK;
@@ -717,13 +729,14 @@ master_process(ESL_GETOPTS *go)
     }
 
     /* add to all workers the new query to process */
+    n = MSG_SIZE(query->cmd);
     worker_comm.started = 0;
     worker = worker_comm.head;
     while (worker != NULL) {
       ++worker_comm.started;
 
-      if ((worker->cmd = malloc(query->cmd->length)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      memcpy(worker->cmd, query->cmd, query->cmd->length);
+      if ((worker->cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+      memcpy(worker->cmd, query->cmd, n);
 
       worker->started    = 1;
       worker->completed  = 0;
@@ -744,11 +757,11 @@ master_process(ESL_GETOPTS *go)
     worker = worker_comm.head;
     while (worker != NULL) {
       if (worker->cmd != NULL) {
-        worker->cmd->inx = inx;
-        worker->cmd->cnt = cnt / i;
+        worker->cmd->srch.inx = inx;
+        worker->cmd->srch.cnt = cnt / i;
 
-        inx += worker->cmd->cnt;
-        cnt -= worker->cmd->cnt;
+        inx += worker->cmd->srch.cnt;
+        cnt -= worker->cmd->srch.cnt;
         --i;
 
         worker = worker->next;
@@ -790,8 +803,6 @@ master_process(ESL_GETOPTS *go)
 
   if (hmm_db != NULL) cache_HmmDestroy(hmm_db);
   if (seq_db != NULL) cache_SeqDestroy(seq_db);
-
-  if (ofp != stdout) fclose(ofp);
 
   esl_getopts_Destroy(go);
 
@@ -942,49 +953,43 @@ free_QueueData(QUEUE_DATA *data)
 }
 
 static QUEUE_DATA *
-read_QueryCmd(int fd)
+process_QueryCmd(int fd, HMMD_HEADER *hdr)
 {
   int                i;
   int                n;
-  int                size;
 
   char              *p;
   char              *name;
   char              *desc;
   ESL_DSQ           *dsq;
 
-  HMMD_SEARCH_CMD    hdr;
-  HMMD_SEARCH_CMD   *cmd    = NULL;
-  
+  HMMD_COMMAND      *cmd    = NULL;
   QUEUE_DATA        *query  = NULL;
 
-  n = sizeof(hdr);
-  if ((size = readn(fd, &hdr, n)) == -1)  LOG_FATAL_MSG("read", errno);
+  n = MSG_SIZE(hdr);
+  if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-  if ((cmd = malloc(hdr.length)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-  *cmd = hdr;
-  p = (char *)cmd;
-  p += sizeof(hdr);
-
-  n = hdr.length - sizeof(hdr);
-  if ((size = readn(fd, p, n)) == -1)               LOG_FATAL_MSG("read", errno);
+  cmd->hdr.command = hdr->command;
+  cmd->hdr.length  = hdr->length;
+  if (readn(fd, &cmd->srch, hdr->length) == -1) LOG_FATAL_MSG("read", errno);
 
   if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-  printf("CMD: %d %d\n", cmd->command, cmd->query_type);
+  printf("CMD: %d %d\n", cmd->hdr.command, cmd->srch.query_type);
 
-  query->srch_type  = cmd->command;
-  query->query_type = cmd->query_type;
-  query->dbx        = cmd->db_inx;
-  query->inx        = cmd->inx;
-  query->cnt        = cmd->cnt;
+  query->srch_type  = cmd->hdr.command;
+  query->query_type = cmd->srch.query_type;
+  query->dbx        = cmd->srch.db_inx;
+  query->inx        = cmd->srch.inx;
+  query->cnt        = cmd->srch.cnt;
   query->sock       = fd;
   query->retry      = 0;
   query->retry_cnt  = 0;
   query->cmd        = NULL;
   query->next       = NULL;
   query->prev       = NULL;
+
+  p = cmd->srch.data;
 
   /* process search specific options */
   query->opts = esl_getopts_Create(searchOpts);
@@ -996,9 +1001,9 @@ read_QueryCmd(int fd)
   query->abc = esl_alphabet_Create(eslAMINO);
 
   /* check if we are processing a sequence or hmm */
-  if (cmd->query_type == HMMD_SEQUENCE) {
-    n    = cmd->query_length - 2;
-    name = p + cmd->opts_length;
+  if (cmd->srch.query_type == HMMD_SEQUENCE) {
+    n    = cmd->srch.query_length - 2;
+    name = p + cmd->srch.opts_length;
     desc = name + strlen(name) + 1;
     dsq  = (ESL_DSQ *) (desc + strlen(desc) + 1);
     query->seq = esl_sq_CreateDigitalFrom(query->abc, name, dsq, n, desc, NULL, NULL);
@@ -1007,11 +1012,11 @@ read_QueryCmd(int fd)
     P7_HMM *hmm = p7_hmm_CreateShell();
 
     /* allocate memory for the hmm and initialize */
-    p += cmd->opts_length;
+    p += cmd->srch.opts_length;
     memcpy(&thmm, p, sizeof(P7_HMM));
 
     hmm->flags = thmm.flags;
-    p7_hmm_CreateBody(hmm, cmd->query_length, query->abc);
+    p7_hmm_CreateBody(hmm, cmd->srch.query_length, query->abc);
     p += sizeof(P7_HMM);
 
     /* initialize fields */
@@ -1081,6 +1086,80 @@ read_QueryCmd(int fd)
 
   return query;
 }
+
+
+static void
+process_InitCmd(int fd, HMMD_HEADER *hdr, SEQ_CACHE **seq_db, HMM_CACHE **hmm_db)
+{
+  int            n;
+  int            status;
+
+  char          *p;
+
+  HMMD_COMMAND  *cmd    = NULL;
+
+  n = MSG_SIZE(hdr);
+  if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+  cmd->hdr.command = hdr->command;
+  cmd->hdr.length  = hdr->length;
+
+  if (readn(fd, &cmd->init, hdr->length) == -1) LOG_FATAL_MSG("read", errno);
+
+  if (*hmm_db != NULL) cache_HmmDestroy(*hmm_db);
+  if (*seq_db != NULL) cache_SeqDestroy(*seq_db);
+
+  *hmm_db = NULL;
+  *seq_db = NULL;
+
+  /* load the sequence database */
+  if (cmd->init.db_cnt != 0) {
+    SEQ_CACHE *sdb = NULL;
+
+    p  = cmd->init.data + cmd->init.seqdb_off;
+    if ((status = cache_SeqDb(p, &sdb)) != eslOK) {
+      syslog(LOG_ERR,"[%s:%d] - cache_SeqDb %s error %d\n", __FILE__, __LINE__, p, status);
+      LOG_FATAL_MSG("cache seqdb error", status);
+    }
+
+    /* validate the sequence database */
+    cmd->init.sid[MAX_INIT_DESC-1] = 0;
+    if (strcmp (cmd->init.sid, sdb->id) != 0 || cmd->init.db_cnt != sdb->db_cnt || cmd->init.seq_cnt != sdb->count) {
+      syslog(LOG_ERR,"[%s:%d] - seq db %s: integrity error %s - %s\n", __FILE__, __LINE__, p, cmd->init.sid, sdb->id);
+      LOG_FATAL_MSG("database integrity error", 0);
+    }
+
+    *seq_db = sdb;
+  }
+
+  /* load the hmm database */
+  if (cmd->init.hmm_cnt != 0) {
+    HMM_CACHE *hdb = NULL;
+
+    p  = cmd->init.data + cmd->init.hmmdb_off;
+    if ((status = cache_HmmDb(p, &hdb)) != eslOK) {
+      syslog(LOG_ERR,"[%s:%d] - cache_HmmDb %s error %d\n", __FILE__, __LINE__, p, status);
+      LOG_FATAL_MSG("cache hmmdb error", status);
+    }
+
+    /* validate the hmm database */
+    cmd->init.hid[MAX_INIT_DESC-1] = 0;
+    /* TODO: come up with a new pressed format with an id to compare - strcmp (cmd->init.hid, hdb->id) != 0 */
+    if (cmd->init.hmm_cnt != 1 || cmd->init.model_cnt != hdb->count) {
+      syslog(LOG_ERR,"[%s:%d] - hmm db %s: integrity error\n", __FILE__, __LINE__, p);
+      LOG_FATAL_MSG("database integrity error", 0);
+    }
+
+    *hmm_db = hdb;
+  }
+
+  /* write back to the master that we are on line */
+  cmd->init.status = eslOK;
+  if (writen(fd, cmd, n) != n) {
+    LOG_FATAL_MSG("write error", errno);
+  }
+}
+
 
 static void 
 search_thread(void *arg)
@@ -1738,13 +1817,10 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
 
 static int 
-setup_masterside_comm(ESL_GETOPTS *opts, SEQ_CACHE *seq_db, HMM_CACHE *hmm_db)
+setup_masterside_comm(ESL_GETOPTS *opts)
 {
-  int                  n;
   int                  fd;
   struct sockaddr_in   addr;
-
-  HMMD_INIT_CMD        cmd;
 
   /* create a reliable, stream socket using TCP */
   if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) LOG_FATAL_MSG("socket", errno);
@@ -1757,26 +1833,6 @@ setup_masterside_comm(ESL_GETOPTS *opts, SEQ_CACHE *seq_db, HMM_CACHE *hmm_db)
 
   /* establish the connection to the master server */
   if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) LOG_FATAL_MSG("connect", errno);
-
-  /* read the database information */
-  n = sizeof(cmd);
-  if (readn(fd, &cmd, n) == -1) {
-      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, inet_ntoa(addr.sin_addr), errno, strerror(errno));
-      LOG_FATAL_MSG("reading init command", errno);
-  }
-
-  if (cmd.command != HMMD_CMD_INIT || cmd.length != sizeof(cmd)) {
-      syslog(LOG_ERR,"[%s:%d] - malformed init cmd from %s %d %d\n", __FILE__, __LINE__, inet_ntoa(addr.sin_addr), cmd.command, cmd.length);
-      LOG_FATAL_MSG("malformed message", 0);
-  }
-
-  if (seq_db != NULL) {
-    cmd.sid[MAX_INIT_DESC-1] = 0;
-    if (strcmp (cmd.sid, seq_db->id) != 0 || cmd.db_cnt != seq_db->db_cnt || cmd.seq_cnt != seq_db->count) {
-      syslog(LOG_ERR,"[%s:%d] - database integrity error %s - %s\n", __FILE__, __LINE__, cmd.sid, seq_db->id);
-      LOG_FATAL_MSG("database integrity error", 0);
-    }
-  }
 
   return fd;    
 }
@@ -1802,7 +1858,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   ESL_SQ            *seq     = NULL;     /* query sequence                 */
   ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
-  HMMD_SEARCH_CMD   *cmd     = NULL;     /* search cmd to send to workers  */
+  HMMD_COMMAND      *cmd     = NULL;     /* search cmd to send to workers  */
 
   SEARCH_QUEUE      *queue   = data->queue;
   SEQ_CACHE         *seq_db  = data->seq_db;
@@ -1965,7 +2021,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   /* build the search structure that will be sent to all the workers */
-  n = sizeof(HMMD_SEARCH_CMD);
+  n = sizeof(HMMD_COMMAND);
   n = n + strlen(opt_str) + 1;
 
   if (seq != NULL) {
@@ -1988,20 +2044,19 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-  cmd->length       = n;
-  cmd->command      = (esl_opt_IsUsed(opts, "--seqdb")) ? HMMD_CMD_SEARCH : HMMD_CMD_SCAN;
-  cmd->db_inx       = dbx - 1;   /* the program indexes databases 0 .. n-1 */
-  cmd->opts_length  = strlen(opt_str) + 1;
+  cmd->hdr.length       = n - sizeof(HMMD_HEADER);
+  cmd->hdr.command      = (esl_opt_IsUsed(opts, "--seqdb")) ? HMMD_CMD_SEARCH : HMMD_CMD_SCAN;
+  cmd->srch.db_inx      = dbx - 1;   /* the program indexes databases 0 .. n-1 */
+  cmd->srch.opts_length = strlen(opt_str) + 1;
 
-  ptr = (char *) cmd;
-  ptr += sizeof(HMMD_SEARCH_CMD);
+  ptr = cmd->srch.data;
 
-  memcpy(ptr, opt_str, cmd->opts_length);
-  ptr += cmd->opts_length;
+  memcpy(ptr, opt_str, cmd->srch.opts_length);
+  ptr += cmd->srch.opts_length;
   
   if (seq != NULL) {
-    cmd->query_type   = HMMD_SEQUENCE;
-    cmd->query_length = seq->n + 2;
+    cmd->srch.query_type   = HMMD_SEQUENCE;
+    cmd->srch.query_length = seq->n + 2;
 
     n = strlen(seq->name) + 1;
     memcpy(ptr, seq->name, n);
@@ -2015,8 +2070,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     memcpy(ptr, seq->dsq, n);
     ptr += n;
   } else {
-    cmd->query_type   = HMMD_HMM;
-    cmd->query_length = hmm->M;
+    cmd->srch.query_type   = HMMD_HMM;
+    cmd->srch.query_length = hmm->M;
 
     n = sizeof(P7_HMM);
     memcpy(ptr, hmm, n);
@@ -2088,16 +2143,16 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->retry      = 0;
   parms->retry_cnt  = 0;
 
-  parms->srch_type  = cmd->command;
+  parms->srch_type  = cmd->hdr.command;
   parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
 
-  push_Queue(parms, queue);
-
   if (parms->seq != NULL) {
-    printf("Queued %s of sequence %s from %s (%d)\n", (cmd->command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
+    printf("Queuing %se %s from %s (%d)\n", (cmd->hdr.command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
   } else {
-    printf("Queued hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
+    printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
   }
+
+  push_Queue(parms, queue);
 
   free(buffer);
   return 0;
@@ -2229,9 +2284,11 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
     if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
+    printf ("Writing %d bytes to %s [MSG = %d/%d]\n", (int)MSG_SIZE(worker->cmd), worker->ip_addr, worker->cmd->hdr.command, worker->cmd->hdr.length);
+
     esl_stopwatch_Start(w);
 
-    n = worker->cmd->length;
+    n = MSG_SIZE(worker->cmd);
     if (writen(worker->sock_fd, worker->cmd, n) != n) {
       syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
@@ -2313,7 +2370,10 @@ workerside_thread(void *arg)
   int               n;
   int               fd;
 
-  HMMD_INIT_CMD     cmd;
+  char             *p;
+
+  HMMD_HEADER       hdr;
+  HMMD_COMMAND     *cmd     = NULL;
 
   WORKER_DATA      *worker  = (WORKER_DATA *)arg;
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
@@ -2323,25 +2383,75 @@ workerside_thread(void *arg)
 
   printf("Handling worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
 
-  memset(&cmd, 0, sizeof(cmd));
+  n = sizeof(HMMD_COMMAND);
+  if (parent->seq_db != NULL) n += strlen(parent->seq_db->name) + 1;
+  if (parent->hmm_db != NULL) n += strlen(parent->hmm_db->name) + 1;
 
-  n = sizeof(cmd);
+  if ((cmd = malloc(n)) == NULL) {
+    syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    goto EXIT;
+  }
 
-  cmd.length  = n;
-  cmd.command = HMMD_CMD_INIT;
-  cmd.db_cnt  = parent->seq_db->db_cnt;
-  cmd.seq_cnt = parent->seq_db->count;
+  memset(cmd, 0, n);
 
-  strncpy(cmd.sid, parent->seq_db->id, sizeof(cmd.sid));
-  cmd.sid[n-1]  = 0;
+  cmd->hdr.length  = n - sizeof(HMMD_HEADER);
+  cmd->hdr.command = HMMD_CMD_INIT;
 
-  if (writen(worker->sock_fd, &cmd, n) != n) {
-    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
-    printf("Closing worker %s (%d)\n", worker->ip_addr, fd);
+  p = cmd->init.data;
 
-    close(fd);
+  if (parent->seq_db != NULL) {
+    cmd->init.db_cnt      = parent->seq_db->db_cnt;
+    cmd->init.seq_cnt     = parent->seq_db->count;
+    cmd->init.seqdb_off   = p - cmd->init.data;
 
-    pthread_exit(NULL);
+    strncpy(cmd->init.sid, parent->seq_db->id, sizeof(cmd->init.sid));
+    cmd->init.sid[sizeof(cmd->init.sid)-1] = 0;
+
+    strcpy(p, parent->seq_db->name);
+    p += strlen(parent->seq_db->name) + 1;
+  }
+
+  if (parent->hmm_db != NULL) {
+    cmd->init.hmm_cnt     = 1;
+    cmd->init.model_cnt   = parent->hmm_db->count;
+    cmd->init.hmmdb_off   = p - cmd->init.data;
+
+    //strncpy(cmd->init.hid, parent->hmm_db->id, sizeof(cmd->init.hid));
+    //cmd->init.hid[sizeof(cmd->init.hid)-1] = 0;
+
+    strcpy(p, parent->hmm_db->name);
+    p += strlen(parent->hmm_db->name) + 1;
+  }
+
+  if (writen(worker->sock_fd, cmd, n) != n) {
+    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+    goto EXIT;
+  }
+
+  /* process the init command first */
+  if (readn(worker->sock_fd, &hdr, sizeof(hdr)) == -1) {
+    syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+    goto EXIT;
+  }
+
+  n = MSG_SIZE(&hdr);
+  if (realloc(cmd, n) == NULL) {
+    syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    goto EXIT;
+  }
+  if (readn(worker->sock_fd, &cmd->init, hdr.length) == -1) {
+    syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+    goto EXIT;
+  }
+
+  /* validate the database of the worker before adding him to the list */
+  if (hdr.command != HMMD_CMD_INIT) {
+    syslog(LOG_ERR,"[%s:%d] - expecting HMMD_CMD_INIT %d\n", __FILE__, __LINE__, hdr.command);
+    goto EXIT;
+  }
+  if (cmd->init.status != eslOK) {
+    syslog(LOG_ERR,"[%s:%d] - workers init status failed %d\n", __FILE__, __LINE__, cmd->init.status);
+    goto EXIT;
   }
 
   worker->next = NULL;
@@ -2359,7 +2469,9 @@ workerside_thread(void *arg)
     parent->tail = worker;
   }
 
-  /* notify the master process that there is atleast one worker now */
+  printf("Worker %s (%d) is online %s\n", worker->ip_addr, worker->sock_fd,(parent->head == parent->tail) ? "BROADCASTING" : "");
+
+  /* notify the master process that there is at least one worker now */
   if (parent->head == parent->tail) {
     if ((n = pthread_cond_broadcast (&parent->worker_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
   }
@@ -2379,8 +2491,10 @@ workerside_thread(void *arg)
 
   if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
+ EXIT:
   printf("Closing worker %s (%d)\n", worker->ip_addr, fd);
 
+  if (cmd != NULL) free(cmd);
   close(fd);
 
   pthread_exit(NULL);

@@ -48,6 +48,9 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
   ESL_ALLOC(list, sizeof(char *) * count);
 
   ESL_ALLOC(cache, sizeof(HMM_CACHE));
+  memset(cache, 0, sizeof(HMM_CACHE));
+
+  if (esl_strdup(hmmfile, -1, &cache->name) != eslOK) goto ERROR;
 
   total_mem = sizeof(HMM_CACHE) + sizeof(char *) * count;
 
@@ -104,7 +107,11 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
 
  ERROR:
   if (abc   != NULL) esl_alphabet_Destroy(abc);
-  if (cache != NULL) free(cache);
+  if (cache != NULL) {
+    if (cache->name != NULL) free(cache->name);
+    if (cache->id   != NULL) free(cache->id);
+    free(cache);
+  }
   if (list  != NULL) {
     for (i = 0; i < inx; ++i) p7_oprofile_Destroy(list[i]);
     free(list);
@@ -120,9 +127,15 @@ cache_HmmDestroy(HMM_CACHE *cache)
 
   list = cache->list;
 
+  if (cache->name != NULL) free(cache->name);
+
   esl_alphabet_Destroy(cache->abc);
   for (i = 0; i < cache->count; ++i) p7_oprofile_Destroy(list[i]);
   free(list);
+
+  if (cache->name != NULL) free(cache->name);
+  if (cache->id   != NULL) free(cache->id);
+  free(cache);
 
   return;
 }
@@ -204,6 +217,8 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
   total_mem = sizeof(SEQ_CACHE);
   ESL_ALLOC(cache, sizeof(SEQ_CACHE));
   memset(cache, 0, sizeof(SEQ_CACHE));
+
+  if (esl_strdup(seqfile, -1, &cache->name) != eslOK)   goto ERROR;
 
   total_mem += (sizeof(HMMER_SEQ) * seq_cnt);
   ESL_ALLOC(cache->list, sizeof(HMMER_SEQ) * seq_cnt);
@@ -360,6 +375,7 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
   if (cache != NULL) {
     if (cache->header_mem  != NULL) free(cache->header_mem);
     if (cache->residue_mem != NULL) free(cache->residue_mem);
+    if (cache->name        != NULL) free(cache->name);
     if (cache->id          != NULL) free(cache->id);
     free(cache);
   }
@@ -379,6 +395,7 @@ cache_SeqDestroy(SEQ_CACHE *cache)
   }
   if (cache->header_mem   != NULL) free(cache->header_mem);
   if (cache->residue_mem  != NULL) free(cache->residue_mem);
+  if (cache->name         != NULL) free(cache->name);
   if (cache->id           != NULL) free(cache->id);
   free(cache);
 }

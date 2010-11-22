@@ -16,6 +16,7 @@ typedef struct {
 } SEQ_DB;
 
 typedef struct {
+  char               *name;        /* name of the seq database              */
   char               *id;          /* unique identifier string              */
   uint32_t            db_cnt;      /* number of sub databases               */
   SEQ_DB             *db;          /* list of databases [0 .. db_cnt-1]     */
@@ -32,6 +33,7 @@ typedef struct {
 } SEQ_CACHE;
 
 typedef struct {
+  char               *name;        /* name of the hmm database              */
   char               *id;          /* unique identifier string              */
   ESL_ALPHABET       *abc;         /* alphabet for database                 */
 
