@@ -36,6 +36,8 @@
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
 
+#define CONF_FILE "/etc/hmmpgmd.conf"
+
 typedef struct queue_data_s {
   uint32_t            srch_type;   /* type of search to preform      */
   uint32_t            query_type;  /* type of the query              */
@@ -367,10 +369,6 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   ESL_GETOPTS *go = NULL;
 
   FILE *fp;
-  const char *conf_file = "/etc/hmmpgmd.conf";
-
-  if (go->argc == 1) {
-  }
 
   if ((go = esl_getopts_Create(cmdlineOpts)) == NULL)    p7_Die("Internal failure creating options object");
 
@@ -378,16 +376,15 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
    * for any configuration data.
    */
   if (argc == 1) {
-    if ((fp = fopen("/etc/hmmpgmd.conf", "r")) == NULL) {
+    if ((fp = fopen(CONF_FILE, "r")) == NULL) {
       puts("Options --master or --worker must be specified.");
-      esl_getopts_Destroy(go);
-      return eslOK;
+      goto ERROR; 
     }
-    status = esl_opt_ProcessConfigfile(go, conf_file, fp);
+    status = esl_opt_ProcessConfigfile(go, CONF_FILE, fp);
     fclose(fp);
 
     if (status != eslOK) {
-      printf("Failed to parse configuration file %s: %s\n",  conf_file, go->errbuf); 
+      printf("Failed to parse configuration file %s: %s\n",  CONF_FILE, go->errbuf); 
       goto ERROR; 
     }
   } else {
@@ -431,6 +428,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   puts("\nwhere most common options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
   printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+  esl_getopts_Destroy(go);
   exit(0);  
 }
 
@@ -559,11 +557,11 @@ worker_process(ESL_GETOPTS *go)
     }
 
     if (query->query_type == HMMD_SEQUENCE) {
-      fprintf("Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
+      fprintf(stdout, "Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
     } else {
-      fprintf("Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
+      fprintf(stdout, "Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
     }
-    fprintf(" vs %s DB %d [%d - %d]\n", 
+    fprintf(stdout, " vs %s DB %d [%d - %d]\n", 
             (query->srch_type == HMMD_CMD_SEARCH) ? "SEQ" : "HMM", 
             query->dbx, query->inx, query->inx + query->cnt - 1);
 
