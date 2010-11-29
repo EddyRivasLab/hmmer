@@ -163,6 +163,7 @@ static void send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info);
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define STAGEOPTS   "--F1,--F2,--F3"
 
 static ESL_OPTIONS cmdlineOpts[] = {
   /* name           type         default  env   range  toggles  reqs   incomp           help                                                     docgroup */
@@ -187,47 +188,47 @@ static ESL_OPTIONS cmdlineOpts[] = {
 
 static ESL_OPTIONS searchOpts[] = {
   /* Control of output */
-  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
-  { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
+  { "--acc",        eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, NULL,        "prefer accessions over names in output",                       2 },
+  { "--noali",      eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't output alignments, so output is smaller",                2 },
   /* Control of scoring system */
-  { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,          "gap open probability",                                         3 },
-  { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,          "gap extend probability",                                       3 },
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,          "substitution score matrix [default: BLOSUM62]",                3 },
+  { "--popen",      eslARG_REAL,     "0.02", NULL, "0<=x<0.5",NULL,  NULL, NULL,        "gap open probability",                                         3 },
+  { "--pextend",    eslARG_REAL,      "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL,        "gap extend probability",                                       3 },
+  { "--mxfile",   eslARG_STRING, "BLOSUM62", NULL, NULL,      NULL,  NULL, NULL,        "substitution score matrix [default: BLOSUM62]",                3 },
   /* Control of reporting thresholds */
-  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  REPOPTS,         "report sequences <= this E-value threshold in output",         4 },
-  { "-T",           eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  REPOPTS,         "report sequences >= this score threshold in output",           4 },
-  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",           4 },
-  { "--domT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "report domains >= this score cutoff in output",                4 },
+  { "-E",           eslARG_REAL,     "10.0", NULL, "x>0",     NULL,  NULL, REPOPTS,     "report sequences <= this E-value threshold in output",         4 },
+  { "-T",           eslARG_REAL,      FALSE, NULL, NULL,      NULL,  NULL, REPOPTS,     "report sequences >= this score threshold in output",           4 },
+  { "--domE",       eslARG_REAL,     "10.0", NULL, "x>0",     NULL,  NULL, DOMREPOPTS,  "report domains <= this E-value threshold in output",           4 },
+  { "--domT",       eslARG_REAL,      FALSE, NULL, NULL,      NULL,  NULL, DOMREPOPTS,  "report domains >= this score cutoff in output",                4 },
   /* Control of inclusion (significance) thresholds */
-  { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCOPTS,         "consider sequences <= this E-value threshold as significant",  5 },
-  { "--incT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
-  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
-  { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
+  { "--incE",       eslARG_REAL,     "0.01", NULL, "x>0",     NULL,  NULL, INCOPTS,     "consider sequences <= this E-value threshold as significant",  5 },
+  { "--incT",       eslARG_REAL,      FALSE, NULL, NULL,      NULL,  NULL, INCOPTS,     "consider sequences >= this score threshold as significant",    5 },
+  { "--incdomE",    eslARG_REAL,     "0.01", NULL, "x>0",     NULL,  NULL, INCDOMOPTS,  "consider domains <= this E-value threshold as significant",    5 },
+  { "--incdomT",    eslARG_REAL,      FALSE, NULL, NULL,      NULL,  NULL, INCDOMOPTS,  "consider domains >= this score threshold as significant",      5 },
   /* Model-specific thresholding for both reporting and inclusion */
-  { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",   6 },
-  { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",       6 },
-  { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",     6 },
+  { "--cut_ga",     eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, THRESHOPTS,  "use profile's GA gathering cutoffs to set all thresholding",   6 },
+  { "--cut_nc",     eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, THRESHOPTS,  "use profile's NC noise cutoffs to set all thresholding",       6 },
+  { "--cut_tc",     eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, THRESHOPTS,  "use profile's TC trusted cutoffs to set all thresholding",     6 },
   /* Control of acceleration pipeline */
-  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      7 },
-  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,    NULL,  NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
-  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
-  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
-  { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
+  { "--max",        eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, STAGEOPTS,   "Turn all heuristic filters off (less speed, more power)",      7 },
+  { "--F1",         eslARG_REAL,     "0.02", NULL, NULL,      NULL,  NULL, "--max",     "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
+  { "--F2",         eslARG_REAL,     "1e-3", NULL, NULL,      NULL,  NULL, "--max",     "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
+  { "--F3",         eslARG_REAL,     "1e-5", NULL, NULL,      NULL,  NULL, "--max",     "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
+  { "--nobias",     eslARG_NONE,       NULL, NULL, NULL,      NULL,  NULL, "--max",     "turn off composition bias filter",                             7 },
   /* Control of E-value calibration */
-  { "--EmL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,          "length of sequences for MSV Gumbel mu fit",                   11 },   
-  { "--EmN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,          "number of sequences for MSV Gumbel mu fit",                   11 },   
-  { "--EvL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,          "length of sequences for Viterbi Gumbel mu fit",               11 },   
-  { "--EvN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,          "number of sequences for Viterbi Gumbel mu fit",               11 },   
-  { "--EfL",        eslARG_INT,    "100", NULL,"n>0",      NULL,  NULL,  NULL,          "length of sequences for Forward exp tail tau fit",            11 },   
-  { "--EfN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,          "number of sequences for Forward exp tail tau fit",            11 },   
-  { "--Eft",        eslARG_REAL,  "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,          "tail mass for Forward exponential tail tau fit",              11 },   
+  { "--EmL",        eslARG_INT,       "200", NULL,"n>0",      NULL,  NULL, NULL,        "length of sequences for MSV Gumbel mu fit",                   11 },   
+  { "--EmN",        eslARG_INT,       "200", NULL,"n>0",      NULL,  NULL, NULL,        "number of sequences for MSV Gumbel mu fit",                   11 },   
+  { "--EvL",        eslARG_INT,       "200", NULL,"n>0",      NULL,  NULL, NULL,        "length of sequences for Viterbi Gumbel mu fit",               11 },   
+  { "--EvN",        eslARG_INT,       "200", NULL,"n>0",      NULL,  NULL, NULL,        "number of sequences for Viterbi Gumbel mu fit",               11 },   
+  { "--EfL",        eslARG_INT,       "100", NULL,"n>0",      NULL,  NULL, NULL,        "length of sequences for Forward exp tail tau fit",            11 },   
+  { "--EfN",        eslARG_INT,       "200", NULL,"n>0",      NULL,  NULL, NULL,        "number of sequences for Forward exp tail tau fit",            11 },   
+  { "--Eft",        eslARG_REAL,     "0.04", NULL,"0<x<1",    NULL,  NULL, NULL,        "tail mass for Forward exponential tail tau fit",              11 },   
   /* Other options */
-  { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
-  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
-  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
-  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--seqdb",      eslARG_INT,    NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
-  { "--hmmdb",      eslARG_INT,    NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
+  { "--seed",       eslARG_INT,        "42", NULL, "n>=0",    NULL,  NULL, NULL,        "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
+  { "--nonull2",    eslARG_NONE,       NULL, NULL, NULL,      NULL,  NULL, NULL,        "turn off biased composition score corrections",               12 },
+  { "-Z",           eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of comparisons done, for E-value calculation",          12 },
+  { "--domZ",       eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of significant seqs, for domain E-value calculation",   12 },
+  { "--seqdb",      eslARG_INT,        NULL, NULL, "n>0",     NULL,  NULL, "--hmmdb",   "protein database to search",                                  12 },
+  { "--hmmdb",      eslARG_INT,        NULL, NULL, "n>0",     NULL,  NULL, "--seqdb",   "hmm database to search",                                      12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -250,9 +251,14 @@ void syslog(int priority, const char *format, ...)
 {
   va_list ap;
 
+  printf("\n*** ERROR ***\n");
+
   va_start(ap, format);
   vprintf(format, ap);
   va_end(ap);
+
+  printf("\n");
+  fflush(stdout);
 
   return;
 }
@@ -305,7 +311,7 @@ print_client_error(int fd, int status, char *format, va_list ap)
 
   s.status  = status;
   s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap);
-  vsyslog(LOG_ERR, format, ap);
+  syslog(LOG_ERR, ebuf);
 
   /* send back an unsuccessful status message */
   n = sizeof(s);
@@ -1197,6 +1203,10 @@ search_thread(void *arg)
 
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
+    char  *matrix  = esl_opt_GetString(info->opts, "--mxfile");
+    float  popen   = esl_opt_GetReal(info->opts,   "--popen");
+    float  pextend = esl_opt_GetReal(info->opts,   "--pextend");
+
     bld = p7_builder_Create(NULL, info->abc);
     if ((seed = esl_opt_GetInteger(info->opts, "--seed")) > 0) {
       esl_randomness_Init(bld->r, seed);
@@ -1209,11 +1219,7 @@ search_thread(void *arg)
     bld->EfL = esl_opt_GetInteger(info->opts, "--EfL");
     bld->EfN = esl_opt_GetInteger(info->opts, "--EfN");
     bld->Eft = esl_opt_GetReal   (info->opts, "--Eft");
-    status = p7_builder_SetScoreSystem(bld, 
-                                       esl_opt_GetString(info->opts, "--mxfile"), 
-                                       NULL, 
-                                       esl_opt_GetReal(info->opts, "--popen"), 
-                                       esl_opt_GetReal(info->opts, "--pextend"));
+    status = p7_builder_LoadScoreSystem(bld, matrix, popen, pextend);
     if (status != eslOK) {
       //client_error(info->sock, status, "hmmgpmd: failed to set single query sequence score system: %s", bld->errbuf);
       fprintf(stderr, "hmmgpmd: failed to set single query sequence score system: %s", bld->errbuf);
@@ -1854,12 +1860,15 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   P7_HMM            *hmm     = NULL;     /* query HMM                      */
   ESL_SQ            *seq     = NULL;     /* query sequence                 */
+  ESL_SCOREMATRIX   *sco     = NULL;     /* scoring matrix                 */
+  P7_HMMFILE        *hfp     = NULL;
   ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
   HMMD_COMMAND      *cmd     = NULL;     /* search cmd to send to workers  */
 
   SEARCH_QUEUE      *queue   = data->queue;
   SEQ_CACHE         *seq_db  = data->seq_db;
+  HMM_CACHE         *hmm_db  = data->hmm_db;
   QUEUE_DATA        *parms;
 
   jmp_buf            jmp_env;
@@ -1874,6 +1883,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   eod = 0;
   while (!eod) {
+    int   l;
+    char *s;
 
     /* Receive message from client */
     if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
@@ -1886,7 +1897,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     ptr += n;
     amount += n;
     remaining -= n;
-    eod = (amount > 1 && *(ptr - 2) == '/' && *(ptr - 2) == '/' );
+
+    /* scan backwards till we hit the start of the line */
+    l = amount;
+    s = ptr - 1;
+    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
+    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
+    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
 
     /* if the buffer is full, make it larger */
     if (!eod && remaining == 0) {
@@ -1961,12 +1978,16 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (esl_opt_IsUsed(opts, "--seqdb")) {
       dbx = esl_opt_GetInteger(opts, "--seqdb");
-      if (dbx < 1 || dbx > seq_db->db_cnt) {
+      if (seq_db == NULL) {
+        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "There are no sequence databases to search.");
+      } else if (dbx < 1 || dbx > seq_db->db_cnt) {
         client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Database out of range (1 - %d).", seq_db->db_cnt);
       }
     } else if (esl_opt_IsUsed(opts, "--hmmdb")) {
       dbx = esl_opt_GetInteger(opts, "--hmmdb");
-      if (dbx != 1) {
+      if (hmm_db == NULL) {
+        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "There are no hmm databases to search.");
+      } else if (dbx != 1) {
         client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Database out of range (1 - 1).");
       }
     } else {
@@ -1975,6 +1996,28 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
 
     abc = esl_alphabet_Create(eslAMINO);
+
+    /* validate the score matrix if used */
+    if (*ptr == '>' && esl_opt_IsUsed(opts, "--mxfile")) {
+      double  slambda;
+      char   *matrix    = esl_opt_GetString(opts, "--mxfile");
+
+      if ((sco = esl_scorematrix_Create(abc)) == NULL) {
+        client_error_longjmp(data->sock_fd, eslEMEM, &jmp_env, "could not allocate scoring matrix.");
+      }
+      if ((status = esl_scorematrix_Load(matrix, sco)) != eslOK) {
+        client_error_longjmp(data->sock_fd, status, &jmp_env, "Failed to load precompiled matrix %s", matrix);
+      }
+      if (!esl_scorematrix_IsSymmetric(sco)) {
+        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Matrix %s isn't symmetric", matrix);
+      }
+      if ((status = esl_sco_Probify(sco, NULL, NULL, NULL, &slambda)) != eslOK) {
+        client_error_longjmp(data->sock_fd, status, &jmp_env, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+      }
+
+      esl_scorematrix_Destroy(sco);
+      sco = NULL;
+    }
 
     seq = NULL;
     hmm = NULL;
@@ -1985,8 +2028,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
 
     } else if (strncmp(ptr, "HMM", 3) == 0) {
-      P7_HMMFILE   *hfp     = NULL;
-
       if (esl_opt_IsUsed(opts, "--hmmdb")) {
         client_error_longjmp(data->sock_fd, status, &jmp_env, "A HMM cannot be used to search a hmm database");
       }
@@ -2010,6 +2051,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (abc  != NULL) esl_alphabet_Destroy(abc);
     if (hmm  != NULL) p7_hmm_Destroy(hmm);
     if (seq  != NULL) esl_sq_Destroy(seq);
+    if (sco  != NULL) esl_scorematrix_Destroy(sco);
 
     free(buffer);
 

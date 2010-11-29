@@ -325,8 +325,9 @@ int main(int argc, char *argv[])
       ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
       ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
 
+      status = eslOK;
       abc = esl_alphabet_Create(eslAMINO);
-
+#if 0
       /* try to parse the input buffer as a sequence */
       sq = esl_sq_CreateDigital(abc);
       status = esl_sqio_Parse(ptr, strlen(ptr), sq, eslSQFILE_DAEMON);
@@ -334,7 +335,8 @@ int main(int argc, char *argv[])
         esl_sq_Destroy(sq);
         sq = NULL;
       }
-
+#endif
+#if 0
       /* now try to parse the buffer as an hmm */
       if (status != eslOK) {
         status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
@@ -343,9 +345,10 @@ int main(int argc, char *argv[])
           p7_hmmfile_Close(hfp);
         }
       }
-
+#endif
       if (status == eslOK) {
         total = 0;
+#if 0
         if (hmm == NULL) {
           output_header(stdout, go, argv[0], banner_seq);
           fprintf(stdout, "Query:       %s  [L=%ld]\n", sq->name, (long) sq->n);
@@ -357,7 +360,7 @@ int main(int argc, char *argv[])
           if (hmm->acc)  fprintf(stdout, "Accession:   %s\n", hmm->acc);
           if (hmm->desc) fprintf(stdout, "Description: %s\n", hmm->desc);
         }
-
+#endif
         /* Send the string to the server */ 
         n = strlen(seq);
         printf ("Sending data %d:\n", n);
