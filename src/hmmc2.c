@@ -160,6 +160,8 @@ int main(int argc, char *argv[])
   char            *opts;
   int              seqlen;
 
+  int              ali;
+
   char             buffer[MAX_READ_LEN];
 
   int              status  = eslOK;
@@ -184,6 +186,7 @@ int main(int argc, char *argv[])
   /* set up defaults */
   strcpy(serv_ip, "127.0.0.1");
   serv_port = SERVER_PORT;
+  ali = 0;
 
   i = 1;
   while (i < argc) {
@@ -198,6 +201,9 @@ int main(int argc, char *argv[])
     case 'i':
       strcpy(serv_ip, argv[i+1]);
       ++i;
+      break;
+    case 'a':
+      ali = 1;
       break;
     default:
       usage(argv[0]);
@@ -491,7 +497,9 @@ int main(int argc, char *argv[])
 
         /* Print the results.  */
         p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
-        p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        if (ali) { 
+          p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        }
 
         p7_pli_Statistics(stdout, pli, w);  
         p7_pipeline_Destroy(pli);

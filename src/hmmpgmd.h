@@ -100,6 +100,52 @@ typedef struct {
 size_t writen(int fd, const void *vptr, size_t n);
 size_t readn(int fd, void *vptr, size_t n);
 
+typedef struct queue_data_s {
+  uint32_t       srch_type;   /* type of search to preform      */
+  uint32_t       query_type;  /* type of the query              */
+  P7_HMM        *hmm;         /* query HMM                      */
+  ESL_SQ        *seq;         /* query sequence                 */
+  ESL_ALPHABET  *abc;         /* digital alphabet               */
+  ESL_GETOPTS   *opts;        /* search specific options        */
+  HMMD_COMMAND  *cmd;         /* workers search command         */
+
+  int            sock;        /* socket descriptor of client    */
+  char           ip_addr[64];
+
+  int            retry;
+  int            retry_cnt;
+
+  int            dbx;         /* database index to search       */
+  int            inx;         /* sequence index to start search */
+  int            cnt;         /* number of sequences to search  */
+
+  struct queue_data_s *next;
+  struct queue_data_s *prev;
+} QUEUE_DATA;
+
+typedef struct {
+  pthread_mutex_t  queue_mutex;
+  pthread_cond_t   queue_cond;
+  QUEUE_DATA      *head;
+  QUEUE_DATA      *tail;
+} SEARCH_QUEUE;
+
+extern void free_QueueData(QUEUE_DATA *data);
+extern void pop_Queue(SEARCH_QUEUE *queue);
+extern void push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue);
+extern void remove_Queue(int fd, SEARCH_QUEUE *queue);
+extern QUEUE_DATA *read_Queue(SEARCH_QUEUE *queue);
+
+extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
+
+extern void worker_process(ESL_GETOPTS *go);
+extern void master_process(ESL_GETOPTS *go);
+
+#define LOG_FATAL_MSG(str, err) {                                               \
+    syslog(LOG_CRIT,"[%s:%d] - %s error %d - %s\n", __FILE__, __LINE__, str, err, strerror(err)); \
+    exit(0); \
+  }
+
 #endif /*P7_HMMPGMD_INCLUDED*/
 
 /************************************************************
