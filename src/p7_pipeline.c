@@ -794,6 +794,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   return eslOK;
 }
 
+
 int
 myget_shortest_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P) {
 	  int 	  	   status;
@@ -811,11 +812,11 @@ myget_shortest_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, fl
 	  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
 	  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
 
-	  //sc_thresh = 9;
+//	  sc_thresh = 5;
 
 	  int test = 0;
 
-	  //printf("p = %.2f, sc_thresh = %.2f\n",P, sc_thresh);
+	  printf("p = %.2f, sc_thresh = %.2f\n",P, sc_thresh);
 
 	  /*gather values from gm->rsc into a succinct 2D array*/
 	  if (test == 2) {
@@ -871,7 +872,6 @@ myget_shortest_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, fl
 				  i=j+1; // j will catch up in a moment
 				  run_sc = 0;
 			  } else {
-				  //printf ("(%3d,%3d) : %5.2f\n", j, j+k-1, run_sc );
 				  if (run_sc >= sc_thresh) {
 					  //now scan between i and j, checking if the score of any suffix of that subalignment is still above threshold
 					  float tmp_run_sc = run_sc;
@@ -914,6 +914,25 @@ myget_shortest_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, fl
 	ERROR:
 	  return eslFAIL;
 
+}
+
+float
+myget_scthresh(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P) {
+	  int 	  	   status;
+	  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+	  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+	  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+	  float        tec   = logf(1.0f / nu);
+	  int          i,j,k, x;
+
+	  float 	   tloop_total = tloop * gm->max_length;
+	  float nullsc;
+	  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+	  p7_bg_SetLength(bg, gm->max_length);
+	  p7_ReconfigLength(gm, gm->max_length);
+	  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+	  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+	  return sc_thresh;
 }
 
 float
@@ -977,7 +996,7 @@ myget_minratio_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, fl
 			  }
 		  }
 
-//		  printf ("%.2f v %.2f\n", max_run_sc, sc_thresh);
+
 		  // Now I have the maximum scoring run on the diagonal.
 		  // For each possible starting position that gives sc above sc_thresh,
 		  //  run along the diagonal, and capture the lowest ratio of prefix sc/length;
@@ -990,12 +1009,372 @@ myget_minratio_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, fl
 				  for (j = i; j<=max_run_j; j++) {
 					  sc = scores[j][j+k-1];
 					  run_sc += sc;
+					  if (run_sc<0) {
+						  j = max_run_j;
+						  continue;
+					  }
 					  if (run_sc/depth < min_ratio) min_ratio = run_sc/depth;
 					  depth++;
 					  if (run_sc > sc_thresh) {
 						  if (min_ratio > best_ratio) best_ratio = min_ratio;
 						  j = max_run_j + 1; // done with that prefix - I hit the threshold.
 					  }
+				  }
+
+				  //backwards diagonal
+				  min_ratio = 100.0;
+				  run_sc = 0;
+				  depth = 1;
+				  for (j = max_run_j; j>=i; j--) {
+					  sc = scores[j][j+k-1];
+					  run_sc += sc;
+					  if (run_sc<0) {
+						  j = max_run_j;
+						  continue;
+					  }
+					  if (run_sc/depth < min_ratio) min_ratio = run_sc/depth;
+					  depth++;
+					  if (run_sc > sc_thresh) {
+						  if (min_ratio > best_ratio) best_ratio = min_ratio;
+						  j = i-1; // done with that prefix - I hit the threshold.
+					  }
+				  }
+
+
+				 // printf("\n");
+			  }
+		  }
+
+	  }
+
+
+	  for (i=1; i<=L; i++)
+				free(scores[i]);
+	  free(scores);
+
+	  return best_ratio;
+
+	ERROR:
+	  return eslFAIL;
+
+}
+
+
+float
+myget_maxdrop_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P) {
+	  int 	  	   status;
+	  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+	  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+	  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+	  float        tec   = logf(1.0f / nu);
+	  int          i,j,k;
+
+	  float 	   tloop_total = tloop * gm->max_length;
+	  float nullsc;
+	  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+	  p7_bg_SetLength(bg, gm->max_length);
+	  p7_ReconfigLength(gm, gm->max_length);
+	  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+	  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+
+	  /*gather values from gm->rsc into a succinct 2D array*/
+	  float **scores;
+	  ESL_ALLOC(scores, (L+1) * sizeof(float*));
+	  for (i=1; i<=L; i++) {
+		  ESL_ALLOC(scores[i], (gm->M + 1) * sizeof(float));
+		  for (k = 1; k <= gm->M; k++) {
+			  scores[i][k] = gm->rsc[dsq[i]][(k) * p7P_NR     + p7P_MSC];
+		  }
+	  }
+
+	  //For each position in the model, start the query there, and scan along for high-scoring runs.
+	  //Keep two pointers (head, tail): keep both together until a positive score is seen, then
+	  //extend head while score remains positive. Bring tail up to head if score goes negative. If score
+	  //exceeds sc_thresh, note the length (keeping the shortest),
+	  float sc;
+	  float run_sc;
+	  float max_run_sc;
+	  int  max_run_i;
+	  int  max_run_j;
+	  float minmax_drop = -100.0;
+
+	  for (k = 1-gm->L+1; k <= gm->M; k++) { // make sure I scan through the whole 2d table
+		  i = ESL_MAX(1, 1-(k-1));
+		  run_sc = 0;
+		  max_run_sc = 0;
+		  for (j = i; j<=L && j+k-1<=gm->M; j++)
+		  {
+			  sc = scores[j][j+k-1];
+			  run_sc += sc;
+			  if (run_sc > max_run_sc) {
+				  max_run_sc = run_sc;
+				  max_run_i = i;
+				  max_run_j = j;
+			  }
+			  if (run_sc <= 0 ){
+				  i=j+1; // j will catch up in a moment
+				  run_sc = 0;
+			  }
+		  }
+
+		  // Now I have the maximum scoring run on the diagonal.
+		  // For each possible starting position that gives sc above sc_thresh,
+		  //  run along the diagonal, and capture the largest-scale drop in score.
+		  // keep the smallest-magnitude such value among all diagonals, and return it
+
+		  if (max_run_sc > sc_thresh) {
+			  for (i = max_run_i; i<max_run_j; i++) {
+				  run_sc = 0;
+				  float drop_run_sc = 0.0;
+				  float max_drop_loc = 0.0;
+				  for (j = i; j<=max_run_j; j++) {
+					  sc = scores[j][j+k-1];
+					  run_sc += sc;
+					  drop_run_sc += sc;
+
+					  if (drop_run_sc < max_drop_loc)
+						  max_drop_loc = drop_run_sc; //maximum drop observed in the current i/j run, whether it meets threshold or not
+
+					  if (run_sc > sc_thresh) {
+						  if (max_drop_loc > minmax_drop)
+							  minmax_drop = max_drop_loc;  //smallest-magnitude maximum drop observed in the current i/j run, if that run meets threshold
+					  }
+					  if (drop_run_sc>0)
+						  drop_run_sc = 0;
+				  }
+			  }
+
+
+
+		  }
+
+	  }
+
+
+	  for (i=1; i<=L; i++)
+				free(scores[i]);
+	  free(scores);
+
+	  return minmax_drop;
+
+	ERROR:
+	  return eslFAIL;
+
+}
+
+int
+myget_maxnonpos_len_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P) {
+	  int 	  	   status;
+	  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+	  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+	  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+	  float        tec   = logf(1.0f / nu);
+	  int          i,j,k;
+
+	  float 	   tloop_total = tloop * gm->max_length;
+	  float nullsc;
+	  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+	  p7_bg_SetLength(bg, gm->max_length);
+	  p7_ReconfigLength(gm, gm->max_length);
+	  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+	  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+
+	  /*gather values from gm->rsc into a succinct 2D array*/
+	  float **scores;
+	  ESL_ALLOC(scores, (L+1) * sizeof(float*));
+	  for (i=1; i<=L; i++) {
+		  ESL_ALLOC(scores[i], (gm->M + 1) * sizeof(float));
+		  for (k = 1; k <= gm->M; k++) {
+			  scores[i][k] = gm->rsc[dsq[i]][(k) * p7P_NR     + p7P_MSC];
+		  }
+	  }
+
+	  //For each position in the model, start the query there, and scan along for high-scoring runs.
+	  //Keep two pointers (head, tail): keep both together until a positive score is seen, then
+	  //extend head while score remains positive. Bring tail up to head if score goes negative. If score
+	  //exceeds sc_thresh, note the length (keeping the shortest),
+	  float sc;
+	  float run_sc;
+	  float max_run_sc;
+	  int  max_run_i;
+	  int  max_run_j;
+	  int shortest_neg_run = 100;
+
+
+	  for (k = 1-gm->L+1; k <= gm->M; k++) { // make sure I scan through the whole 2d table
+		  i = ESL_MAX(1, 1-(k-1));
+		  run_sc = 0;
+		  max_run_sc = 0;
+		  for (j = i; j<=L && j+k-1<=gm->M; j++)
+		  {
+			  sc = scores[j][j+k-1];
+			  run_sc += sc;
+			  if (run_sc > max_run_sc) {
+				  max_run_sc = run_sc;
+				  max_run_i = i;
+				  max_run_j = j;
+			  }
+			  if (run_sc <= 0 ){
+				  i=j+1; // j will catch up in a moment
+				  run_sc = 0;
+			  }
+		  }
+
+		  // Now I have the maximum scoring run on the diagonal.
+		  // For each possible starting position that gives sc above sc_thresh,
+		  //  run along the diagonal, and capture the longest non-positive run.
+		  // Keep the smallest-magnitude such value among all diagonals, and return it
+		  int neg_start;
+		  int neg_end;
+		  float neg_run_sc;
+		  if (max_run_sc > sc_thresh) {
+			  for (i = max_run_i; i<max_run_j; i++) {
+				  run_sc = 0;
+				  neg_run_sc = 0;
+				  int max_neg_len = 0;
+				  int max_neg_start=-1;
+				  int max_neg_end=-1;
+				  float max_neg_run_sc;
+				  for (j = i; j<=max_run_j; j++) {
+					  sc = scores[j][j+k-1];
+					  run_sc += sc;
+
+					  if (neg_run_sc < 0 || sc < 0 )
+						  neg_run_sc += sc;
+
+					  if (neg_run_sc < 0) {
+						  if (j == max_run_i)
+							  neg_start = j;
+						  neg_end = j;
+
+						  if (neg_end-neg_start+1 > max_neg_len) {
+							  max_neg_len = neg_end-neg_start+1;
+							  max_neg_run_sc = neg_run_sc;
+							  max_neg_start = neg_start;
+							  max_neg_end = neg_end;
+						  }
+					  } else {
+						  neg_start = j+1;
+						  neg_run_sc = 0;
+					  }
+
+					  if (run_sc > sc_thresh) {
+						  if (max_neg_len < shortest_neg_run)
+							  shortest_neg_run = max_neg_len;
+					  }
+
+
+				  }
+			  }
+
+
+
+		  }
+
+	  }
+
+
+	  for (i=1; i<=L; i++)
+				free(scores[i]);
+	  free(scores);
+
+	  return shortest_neg_run;
+
+	ERROR:
+	  return eslFAIL;
+
+}
+
+int
+myget_maxpos_len_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P) {
+	  int 	  	   status;
+	  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+	  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+	  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+	  float        tec   = logf(1.0f / nu);
+	  int          i,j,k;
+
+	  float 	   tloop_total = tloop * gm->max_length;
+	  float nullsc;
+	  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+	  p7_bg_SetLength(bg, gm->max_length);
+	  p7_ReconfigLength(gm, gm->max_length);
+	  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+	  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+
+	  /*gather values from gm->rsc into a succinct 2D array*/
+	  float **scores;
+	  ESL_ALLOC(scores, (L+1) * sizeof(float*));
+	  for (i=1; i<=L; i++) {
+		  ESL_ALLOC(scores[i], (gm->M + 1) * sizeof(float));
+		  for (k = 1; k <= gm->M; k++) {
+			  scores[i][k] = gm->rsc[dsq[i]][(k) * p7P_NR     + p7P_MSC];
+		  }
+	  }
+
+	  //For each position in the model, start the query there, and scan along for high-scoring runs.
+	  //Keep two pointers (head, tail): keep both together until a positive score is seen, then
+	  //extend head while score remains positive. Bring tail up to head if score goes negative. If score
+	  //exceeds sc_thresh, note the length (keeping the shortest),
+	  float sc;
+	  float run_sc;
+	  float max_run_sc;
+	  int  max_run_i;
+	  int  max_run_j;
+	  int max_pos_run_length = 0;
+
+	  for (k = 1-gm->L+1; k <= gm->M; k++) { // make sure I scan through the whole 2d table
+		  i = ESL_MAX(1, 1-(k-1));
+		  run_sc = 0;
+		  max_run_sc = 0;
+		  for (j = i; j<=L && j+k-1<=gm->M; j++)
+		  {
+			  sc = scores[j][j+k-1];  //[target_pos][model_pos]
+			  run_sc += sc;
+			  if (run_sc > max_run_sc) {
+				  max_run_sc = run_sc;
+				  max_run_i = i;
+				  max_run_j = j;
+			  }
+			  if (run_sc <= 0 ){
+				  i=j+1; // j will catch up in a moment
+				  run_sc = 0;
+			  }
+		  }
+
+		  // Now I have the maximum scoring run on the diagonal.
+		  // For each possible starting position that gives sc above sc_thresh,
+		  //  run along the diagonal, and capture the longest run of positive scores.
+		  // Keep the smallest-magnitude such value among all diagonals, and return it
+		  int curr_pos_run_length = 0;
+
+		  if (max_run_sc > sc_thresh) {
+
+			  for (i = max_run_i; i<max_run_j; i++) {
+				  run_sc = 0;
+				  curr_pos_run_length = 0;
+				  int max_pos_run_length_loc = 0;
+				  for (j = i; j<=max_run_j; j++) {
+					  sc = scores[j][j+k-1];
+					  run_sc += sc;
+
+					  if (sc>0)
+						  curr_pos_run_length++;
+					  else
+						  curr_pos_run_length = 0;
+
+					  if (curr_pos_run_length > max_pos_run_length_loc)
+												  max_pos_run_length_loc = curr_pos_run_length;
+
+					  if (run_sc > sc_thresh) {
+						  if (max_pos_run_length_loc > max_pos_run_length)
+							  max_pos_run_length = max_pos_run_length_loc;
+					  }
+
+
 				  }
 			  }
 		  }
@@ -1007,13 +1386,12 @@ myget_minratio_ssv_hit(char* name, const ESL_DSQ *dsq, int L, P7_PROFILE *gm, fl
 				free(scores[i]);
 	  free(scores);
 
-	  return 1/best_ratio;
+	  return max_pos_run_length;
 
 	ERROR:
 	  return eslFAIL;
 
 }
-
 
 /* Function:  p7_Pipeline_LongTarget()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, modified to use the scanning MSV/SSV filters.
@@ -1056,7 +1434,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   float            nullsc;             /* null model score                        */
   float            seq_score;          /* the corrected per-seq bit score */
   double           P;               /* P-value of a hit */
-  int              d, i, j;
+  int              d, i;
   int              status;
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
@@ -1075,9 +1453,24 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   int* window_ends;
   int hit_cnt;
 
-  //p7_GMSV_BWT(sq->dsq, sq->n, om, 2.0, bg, pli->F1, &window_starts, &window_ends, &hit_cnt);
-  //exit(1);
 
+  float        tloop = logf((float) om->max_length / (float) (om->max_length+3));
+  float        tmove = logf(     3.0f / (float) (om->max_length+3));
+  float        tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
+  float        tec   = logf(1.0f / 2);
+  float 	   tloop_total = tloop * om->max_length;
+
+  float invP = esl_gumbel_invsurv(0.5, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  p7_bg_SetLength(bg, om->max_length);
+  p7_ReconfigLength(om, om->max_length);
+  p7_bg_NullOne  (bg, sq->dsq, om->max_length, &nullsc);
+  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+//printf ("M_v_sc,%s,%d,%.2f\n",om->name, om->M, sc_thresh);
+//exit(0);
+
+  p7_GMSV_BWT(sq->dsq, sq->n, om, 2.0, bg, pli->F1, &window_starts, &window_ends, &hit_cnt);
+  exit(0);
 
   p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, bg, pli->F1, &window_starts, &window_ends, &hit_cnt);
 
@@ -1120,22 +1513,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       pli->pos_past_bias += window_len;
 
       p7_oprofile_ReconfigRestLength(om, window_len);
-/*
-      int shortest_1;// = myget_shortest_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, 0.02);
-      int shortest_2;// = myget_shortest_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, 0.04);
-      int shortest_3;// = myget_shortest_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, 0.1);
-      int shortest_4;// = myget_shortest_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, 0.2);
-      int shortest_5 = myget_shortest_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, 0.5);
-  //  float ratio =  myget_minratio_ssv_hit(sq->name, sq->dsq, sq->n, om, 2.0, bg, 0.02);
-
-
-      if (shortest_5 < 25) // don't want to see the alignments
-    	  continue;
-*/
-
-    //printf ("** %-20.20s : pass MSV, (%.2f)=%d; (%.2f)=%d; (%.2f)=%d; (%.2f)=%d; (%.2f)=%d\n", sq->name, .02, shortest_1, .04, shortest_2, .1, shortest_3, .2, shortest_4, .5, shortest_5);
-    //printf ("** %-20.20s : pass MSV, ratio: %.2f\n", sq->name, ratio);
-
 
       /* In scan mode, if it passes the MSV filter, read the rest of the profile */
       if (pli->hfp)
@@ -1157,22 +1534,30 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       pli->pos_past_vit += window_len;
 
 
-      //printf ("** %20.20s : pass Vit, (%.2f)=%d; (%.2f)=%d; (%.2f)=%d; (%.2f)=%d; (%.2f)=%d\n", sq->name, .02, shortest_1, .04, shortest_2, .1, shortest_3, .2, shortest_4, .5, shortest_5);
-      //printf ("** %20.20s : pass Vit, ratio: %.2f\n", sq->name, ratio);
-
-
       /* Parse it with Forward and obtain its real Forward score. */
       p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
       seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
       P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
       if (P > pli->F3) continue;
 
+      float pct = 0.5;
+      int shortest = myget_shortest_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, pct);
+      float minmax_drop = myget_maxdrop_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, pct);
+      int minmax_neglen = myget_maxnonpos_len_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, pct);
+      int max_poslen = myget_maxpos_len_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, pct);
+      float minratio = myget_minratio_ssv_hit(sq->name, subseq, window_len, om, 2.0, bg, pct);
+
+      float scthresh = myget_scthresh(sq->name, subseq, window_len, om, 2.0, bg, pct);
+
+      printf("shortest   : %-20s %d %d\n", sq->name, om->M, shortest);
+      printf("drop       : %-20s %d %5.2f\n",sq->name, om->M, minmax_drop);
+      printf("maxneglen  : %-20s %d %d\n",sq->name, om->M, minmax_neglen);
+      printf("maxposlen  : %-20s %d %d\n",sq->name, om->M, max_poslen);
+      printf("minratio   : %-20s %d %5.2f (%6.2f)\n",sq->name, om->M, minratio, scthresh);
+      printf("minratiopct: %-20s %d %6.3f\n",sq->name, om->M, minratio/scthresh);
+
       pli->n_past_fwd++;
       pli->pos_past_fwd += window_len;
-
-      //printf ("** %20.20s : pass Fwd, (%.2f)=%d; (%.2f)=%d; (%.2f)=%d; (%.2f)=%d; (%.2f)=%d\n", sq->name, .02, shortest_1, .04, shortest_2, .1, shortest_3, .2, shortest_4, .5, shortest_5);
-      //printf ("** %20.20s : pass Fwd, ratio: %.2f\n", sq->name, ratio);
-
 
       /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow
        * In this case "domains" will end up being translated as independent "hits" */
@@ -1205,15 +1590,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       for (d = 0; d < pli->ddef->ndom; d++)
         {
 
-  ESL_DSQ* subseq2;
-  subseq2 = subseq + pli->ddef->dcl[d].ienv - 1;
-  p7_oprofile_ReconfigMSVLength(om, pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1);
-
-  int shortest_5 = myget_shortest_ssv_hit(sq->name, subseq2, pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1, om, 2.0, bg, 0.5);
-
-  //if (shortest_5<19)
-//	  continue;
-
     	  p7_tophits_CreateNextHit(hitlist, &hit);
 
           /*  These appear to be unnecessary, as we don't report per-hit stats
@@ -1242,29 +1618,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
           //adjust the score of a hit to account for the full length model - the characters ouside the envelope but in the window
           int env_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
-          int ali_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
+          int ali_len = hit->dcl[0].jali - hit->dcl[0].iali + 1;
           hit->dcl[0].bitscore = hit->dcl[0].envsc ;
-
-
-  printf ("** %20.20s : pass Fwd, (%.2f)=%d\n", sq->name, .5, shortest_5);
-  printf("%d -> %d\n", hit->dcl[0].ienv , hit->dcl[0].jenv );
-
-  printf("full window\n");
-  for (j=0; j<window_len; j++)
-	  putchar ( om->abc->sym[ subseq[j] ] );
-  putchar('\n');
-  putchar('\n');
-
-  for (j=0; j< hit->dcl[0].jenv - hit->dcl[0].ienv + 1; j++) {
-	  putchar( om->abc->sym[ subseq2[j] ] );
-  }
-  putchar('\n');
-
-  p7_MSVFilter(subseq2, env_len, om, pli->oxf, &usc);
-  seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  printf ("MSV: score:%.2f , P:%.5f\n", seq_score, P);
-
 
 
           //For these modifications, see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010

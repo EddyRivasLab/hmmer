@@ -850,8 +850,14 @@ typedef struct p7_builder_s {
 #define bwt_OccCnt(cnts, i, c)  ( cnts[meta->alph_size*(i) + (c)])
 
 typedef struct bwt_dp_pair_s {
-  int   pos;
+  int    pos;  // position of the diagonal in the model.   these can be int8_t, I'd think
   float  score;
+  float  max_score;
+  int    max_score_len; // how long was the diagonal when the maximum observed score was seen?
+  int    consec_pos;
+  int    max_consec_pos;
+//  float  score8;
+//  float  max_score8;
 } BWT_DP_PAIR;
 
 
@@ -866,21 +872,20 @@ typedef struct bwt_metadata_s {
   int alph_size;
   int N; //length of text
   int freq_SA; //frequency with which SA is sampled
-  int freq_cnt; //frequency with which counts are captured
+  int freq_cnt_sb; //frequency with which full cumulative counts are captured
+  int freq_cnt_b; //frequency with which intermittent counts are captured
   int SA_shift;
-  int cnt_shift;
+  int cnt_shift_sb;
+  int cnt_shift_b;
 } BWT_METADATA;
 
 typedef struct bwt_fmindex_s {
   ESL_DSQ *T;
-  ESL_DSQ *BWTf;
-  ESL_DSQ *BWTr;
-  int     *SAf;
-  int     *SAr;
-  int     *Cf;
-  int     *Cr;
-  int     *occCnts_f;
-  int     *occCnts_r;
+  ESL_DSQ *BWT;
+  int     *SA;
+  int     *C;
+  unsigned short   *occCnts_b;
+  int     *occCnts_sb;
 } BWT_FMINDEX;
 
 
