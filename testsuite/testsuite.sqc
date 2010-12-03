@@ -290,6 +290,7 @@
 1 exercise  hmmemit-consensus     !testsuite/i14-hmmemit-consensus.pl!  @@ !! %OUTFILES%
 1 exercise  hmmconvert            !testsuite/i15-hmmconvert.pl!         @@ !! %OUTFILES%
 1 exercise  stdin_pipes           !testsuite/i17-stdin.pl!              @@ !! %OUTFILES%
+1 exercise  nhmmer_generic        !testsuite/i18-nhmmer-generic.pl!     @@ !! %OUTFILES%
 
 
 1 exercise  brute-itest           @src/itest_brute@  
