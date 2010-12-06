@@ -54,7 +54,7 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
 
   total_mem = sizeof(HMM_CACHE) + sizeof(char *) * count;
 
-  strcpy(buffer, "000000001");
+  strcpy(buffer, "000000000");
 
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK) {
     int nqb = p7O_NQB(om->M); /* # of uchar vectors needed for query */
