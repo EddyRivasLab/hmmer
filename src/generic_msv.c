@@ -21,7 +21,41 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <xmmintrin.h>		/* SSE  */
+#include <emmintrin.h>		/* SSE2 */
+
 #include "hmmer.h"
+
+
+__m128i *masks_v;
+__m128i *reverse_masks_v;
+
+__m128i leftmask_v;
+__m128i rightmask_v;
+__m128i zeros_v;
+__m128i ones_v;
+__m128i negmask_v;
+__m128i counts_v;
+__m128i *leftc_v;
+__m128i *rightc_v;
+
+
+
+//doing left and right halves in parallel eeks out a little better performance
+//byte values for matching chars are 0xff, or -1, so counts_v ends up collecting a sum
+//that is the negative of the number of matched characters, with a minimum of -128
+#define BWT_COUNTS() do {\
+		tmp_v    = _mm_and_si128(BWT_v, leftmask_v);\
+		tmp2_v    = _mm_and_si128(BWT_v, rightmask_v);\
+		\
+		tmp_v    = _mm_cmpeq_epi8(tmp_v, leftc_tmp_v);\
+		tmp2_v   = _mm_cmpeq_epi8(tmp2_v, rightc_tmp_v);\
+		\
+		counts_v = _mm_subs_epi8(counts_v, tmp_v);\
+		counts_v = _mm_subs_epi8(counts_v, tmp2_v);\
+	} while (0)
+
+
 
 /*****************************************************************
  * 1. MSV implementation.
@@ -312,44 +346,141 @@ bwt_getOccCount (BWT_METADATA *meta, int* occCnts_sb, unsigned short *occCnts_b,
 		cnt += bwt_OccCnt(occCnts_b, b_pos + up_b, c ) ; // add the block count as long as the block doesn't represent the same position as the superblock
 	}
 
+
 	int left_c =  c << 4;
 	int landmark = (b_pos+up_b)<<(meta->cnt_shift_b) ;
 
 	if (up_b == 1) { // need to count backwards, subtracting
-		for (i=landmark-1; i>pos; i-=2) { //start subtracting at landmark
-			if ((BWT[i>>1] & 0xf0) == left_c)  cnt--;  //the i>>1 cuts the index in half, to account for the compressed BWT string
-			if ((BWT[i>>1] & 0x0f) == c)  cnt--;
+		//printf("\ncnt= %d\n", cnt);
+		for (i=(landmark-1)/2; i>((pos-1)/2); i--) {
+			if ((BWT[i] & 0xf0) == left_c)  cnt--;  // BWT[i] contains two chars, compressed into one bit
+			if ((BWT[i] & 0x0f) == c)  cnt--;
+			//printf ("%d : %d, %d\n", i, BWT[i], cnt);
 		}
-		if (i==pos)
-			if ((BWT[i>>1] & 0x0f) == c)  cnt--;//final singleton
-
+		if (pos & 0x1) { // pos is odd, so there's a final singleton
+			if ((BWT[i] & 0x0f) == c)  cnt--;
+			//printf ("%d : %d, %d\n", i, BWT[i], cnt);
+		}
 	} else { // need to count forwards, adding
-		for (i=landmark; i<pos-1; i+=2) {   // really, start adding at landmark+1, but indexing into the compressed BWT string requires (pos-1)>>1, so just keep i indexed with a -1 offset
-			if ((BWT[i>>1] & 0xf0) == left_c)  cnt++;
-			if ((BWT[i>>1] & 0x0f) == c)  cnt++;
+		for (i=landmark/2; i<(pos/2);  i++) {
+			if ((BWT[i] & 0xf0) == left_c)  cnt++;
+			if ((BWT[i] & 0x0f) == c)  cnt++;
+			//printf ("%d : %d, %d\n", i, BWT[i], cnt);
 		}
-		if (i==pos-1)
-			if ((BWT[i>>1] & 0xf0) == left_c)  cnt++; //final singleton
+		if ( pos & 0x1 ) {// pos is odd, so there's a final singleton
+			if ((BWT[i] & 0xf0) == left_c)  cnt++;
+			//printf ("%d : %d, %d\n", i, BWT[i], cnt);
+		}
 	}
 
-	/* If I want to do this in SIMD:
-	 *
-	 * Something like:
-	 *  - create a 16-parallel mask for both upper and lower halves of byte
-	 *  - read in a 16-byte chunk of the array into simd register
-	 *  - mask the register with lower mask
-	 *  - do >0 test, which sets all bytes to 11111111 or 00000000
-	 *  - subtract 11111110 (with a floor of 0)
-	 *  - add up the number of 1s in the array (either by a logarithmic # of sums, or using the SSE4.2 instruction POPCNT)
-	 *                     -what about HADDPS ?
-	 *
-	 *  repeat with the upper mask
-	 *
-	 *
-	 *  note, I could delay the addition by simply keeping another simd register with the counts initialized to zero,
-	 *  and incremented by the above value.
-	 *
-	 */
+	return cnt;
+
+}
+
+
+void *
+print_m128_signed (__m128i in, char* name) {
+	printf ("----\n%s\n", name);
+
+	int 	  	   status;
+	int8_t *bytearray;
+	ESL_ALLOC(bytearray, 16 * sizeof(int8_t));
+	_mm_store_si128( (__m128i*)bytearray, in);
+
+
+	for (int i=0; i<16; i++)
+		printf("%3d|", bytearray[i]);
+	printf("\n");
+
+	free(bytearray);
+
+
+	ERROR:
+	  return eslFAIL;
+
+}
+
+void *
+print_m128_unsigned (__m128i in, char* name) {
+	printf ("----\n%s\n", name);
+
+	int 	  	   status;
+	uint8_t *bytearray;
+	ESL_ALLOC(bytearray, 16 * sizeof(uint8_t));
+	_mm_store_si128( (__m128i*)bytearray, in);
+
+	for (int i=0; i<16; i++)
+		printf("%3d|", bytearray[i]);
+	printf("\n");
+
+	free(bytearray);
+
+
+	ERROR:
+	  return eslFAIL;
+
+}
+
+
+int
+bwt_getOccCount_SSE (BWT_METADATA *meta, int* occCnts_sb, unsigned short *occCnts_b, ESL_DSQ *BWT, int pos, int c) {
+	int i;
+	int cnt_mod_mask_b = meta->freq_cnt_b - 1; //used to compute the mod function
+	int sb_pos = pos >> meta->cnt_shift_sb; //floor(pos/sb_size) : the sb count element preceding pos
+	int b_pos = pos >> meta->cnt_shift_b; //floor(pos/sb_size)   : the b count element preceding pos
+	int b_rel_pos = pos & cnt_mod_mask_b; // pos % b_size      : how close is pos to the boundary corresponding to b_pos
+	int up_b = b_rel_pos>>(meta->cnt_shift_b - 1); //1 if pos is closer to the boundary of b_pos+1, 0 otherwise
+	int landmark = (b_pos+up_b)<<(meta->cnt_shift_b) ;
+
+	// get the cnt stored at the nearest checkpoint
+	int cnt;
+	if ( !( up_b==0 && b_pos ==  sb_pos * (1<<(meta->cnt_shift_sb - meta->cnt_shift_b)) ) )
+		cnt =  bwt_OccCnt(occCnts_sb, sb_pos, c ) + bwt_OccCnt(occCnts_b, b_pos + up_b, c ) ;
+	else
+		cnt = bwt_OccCnt(occCnts_sb, sb_pos, c )   ;
+
+
+	register __m128i tmp_v;
+	register __m128i tmp2_v;
+	register __m128i BWT_v;
+	__m128i leftc_tmp_v = *(leftc_v + c);
+	__m128i rightc_tmp_v = *(rightc_v + c);
+	counts_v  = negmask_v; // set to -128, offset to allow fast addition of counts
+
+	if (up_b == 1) { // need to count backwards, subtracting
+		for (i=((landmark-1)/2)-15; i>((pos-1)/2);  i-=16) {
+			BWT_v    = _mm_load_si128((__m128i*)(BWT+i));
+			BWT_COUNTS();
+		}
+		int remaining_cnt = 32 - (pos - i*2);
+		if (remaining_cnt > 0) {
+			BWT_v    = _mm_load_si128((__m128i*)(BWT+i));
+			BWT_v    = _mm_and_si128(BWT_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+			BWT_COUNTS();
+		}
+	} else { // need to count forwards, adding
+		for (i=landmark/2; i+15<(pos/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
+			BWT_v    = _mm_load_si128((__m128i*)(BWT+i));
+			BWT_COUNTS();
+		}
+		int remaining_cnt = pos - i*2;
+		if (remaining_cnt > 0) {
+			if ( (i<<1) < pos ) {
+				BWT_v    = _mm_load_si128((__m128i*)(BWT+i));
+				BWT_v    = _mm_and_si128(BWT_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+				BWT_COUNTS();
+			}
+		}
+	}
+
+
+	counts_v = _mm_xor_si128(counts_v, negmask_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
+	counts_v = _mm_sad_epu8 (counts_v, zeros_v);
+	tmp_v = _mm_shuffle_epi32(counts_v, _MM_SHUFFLE(1, 1, 1, 2));
+	counts_v = _mm_add_epi16(counts_v, tmp_v);
+
+	//subtract if up_b, else add
+	cnt +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v, 0) );  // the value in counts_v is a negative.
 
 	return cnt;
 
@@ -433,8 +564,6 @@ p7_BWT_Recurse(ESL_DSQ *seq, int depth, BWT_METADATA *meta, BWT_FMINDEX *fmindex
 				  diags[dppos].max_score_len = diags[j].max_score_len;
 			  }
 
-			  //printf ("%-3d  %2d : %2d : %.2f (%.2f)  (%d, %d)\n", dppos, depth, k, sc, next_score , k, c);
-
 			  diags[dppos].consec_pos =  next_score > 0 ? diags[j].consec_pos + 1 : 0;
 			  diags[dppos].max_consec_pos = ESL_MAX( diags[dppos].consec_pos, diags[j].max_consec_pos);
 
@@ -460,24 +589,27 @@ p7_BWT_Recurse(ESL_DSQ *seq, int depth, BWT_METADATA *meta, BWT_FMINDEX *fmindex
 			  int count;
 			  if (interval->lower > 0 && interval->lower <= interval->upper) {
 				  count = bwt_getOccCount (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->lower-1, i);
+				  //count = bwt_getOccCount_SSE (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->lower-1, i);
 				  interval_new.lower = fmindex->C[i] + count;
 
 				  count = bwt_getOccCount (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->upper, i);
+				  //count = bwt_getOccCount_SSE (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->upper, i);
 				  interval_new.upper = fmindex->C[i] + count - 1;
 			  }
+
+//			  printf ("%-18s : %d, %d\n", seq, interval_new.lower, interval_new.upper);
 
 			  if ( interval_new.lower < 0 || interval_new.lower > interval_new.upper  )  //that suffix doesn't exist
 				  continue;
 
 #endif //DO_BWT
 
+
 			  p7_BWT_Recurse (seq, depth+1, meta, fmindex, M, last+1, dppos, diags, &interval_new, abc,
 					  max_char, sc_thresh, sc_thresh50, optimal_extensions, scores,  starts, ends, hit_cnt
 					  , node_cnts, diag_cnts
 					  );
 
-//			  if (res >0)
-//				  has_terminal = 1;
 		  }
 	  } else {
 		  //printf ("internal stop: %d\n", depth);
@@ -701,6 +833,45 @@ p7_GMSV_BWT(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, doub
 //  printf("thresh50 = %.2f\n", sc_thresh50);
 
 
+  //initialize the masks that will be used in Occ() counting
+  ESL_ALLOC(masks_v, 31*sizeof(__m128));
+  ESL_ALLOC(reverse_masks_v, 31*sizeof(__m128));
+  //all 1s
+  uint8_t *bytearray;
+  ESL_ALLOC(bytearray, 16 * sizeof(uint8_t));
+  //uint8_t bytearray[16];
+  for (i=0; i<16; i++)
+	  bytearray[i] = 0xff;
+
+  __m128i allones_v  = _mm_set1_epi8((int8_t) 0xff);
+  //incrementally chew off the 1s in nybbles of 4 from the right side, and stick each result into an element of a __m128 array
+  for (i=31; i>0; i--) { // don't need the 0th entry
+	  bytearray[i/2] &= i&0x1 ? 0xf0 : 0x00; //if it's odd, chew off the last 4 bits, else clear the whole byte
+	  masks_v[i]          = _mm_load_si128((__m128i*)bytearray);
+	  reverse_masks_v[32-i]  = _mm_andnot_si128(masks_v[i], allones_v );
+//	  printf ("mask %d, revmask %d\n", i, 32-i);
+//	  print_m128(masks_v[i], "masks");
+//	  print_m128(reverse_masks_v[32-i], "reverse_masks");
+  }
+  free(bytearray);
+
+
+  leftmask_v  = _mm_set1_epi8((int8_t) 0xf0);
+  rightmask_v = _mm_set1_epi8((int8_t) 0x0f);
+  ones_v      = _mm_set1_epi8((int8_t) 0x01);
+  //negmask_v   = _mm_set1_epi8((int8_t) 127);
+  negmask_v   = _mm_set1_epi8((int8_t) -128);
+  zeros_v     = _mm_setzero_si128();
+
+
+
+
+  ESL_ALLOC (leftc_v, max_char * sizeof(__m128i));
+  ESL_ALLOC (rightc_v, max_char * sizeof(__m128i));
+  for (i=1; i<=max_char; i++) {
+	  leftc_v[i]     = _mm_set1_epi8((int8_t) i<<4);
+	  rightc_v[i]    = _mm_set1_epi8((int8_t) i);
+  }
 
   BWT_INTERVAL interval;
 

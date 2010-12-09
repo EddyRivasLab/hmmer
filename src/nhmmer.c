@@ -713,7 +713,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       for (i=1; i<block->count; i++)
           esl_sq_Reuse(block->list + i);
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
       info->pli->nseqs += block->count - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
 

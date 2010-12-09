@@ -36,7 +36,7 @@ main(int argc, const char *argv[]) {
   meta->alph_size = 16;
   meta->freq_SA = 32;
   meta->freq_cnt_sb = pow(2,16); //65536 - that's the max size of an unsigned short
-  meta->freq_cnt_b = 128;
+  meta->freq_cnt_b = pow(2,10); // for SSE, can't be more than 256 * 16 = 4096, or lose guarantee of collecting counts correctly
 
   meta->SA_shift = log2(meta->freq_SA);
   meta->cnt_shift_sb = log2(meta->freq_cnt_sb);
