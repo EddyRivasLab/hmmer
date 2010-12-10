@@ -31,8 +31,6 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-#define EXTRA_SB 17
-
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
  *****************************************************************/

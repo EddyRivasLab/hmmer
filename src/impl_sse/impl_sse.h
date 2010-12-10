@@ -24,6 +24,8 @@
 #define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 words   */
 #define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /*  4 floats  */
 
+#define EXTRA_SB 17
+
 
 /*****************************************************************
  * 1. P7_OPROFILE: an optimized score profile

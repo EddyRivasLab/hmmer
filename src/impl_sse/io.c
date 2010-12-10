@@ -84,10 +84,11 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-  int Q4  = p7O_NQF(om->M);
-  int Q8  = p7O_NQW(om->M);
-  int Q16 = p7O_NQB(om->M);
-  int n   = strlen(om->name);
+  int Q4   = p7O_NQF(om->M);
+  int Q8   = p7O_NQW(om->M);
+  int Q16  = p7O_NQB(om->M);
+  int Q16x = p7O_NQB(om->M) + EXTRA_SB;
+  int n    = strlen(om->name);
   int x;
 
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
@@ -104,7 +105,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->bias_b),    sizeof(uint8_t),  1,           ffp) != 1)           return eslFAIL;  
 
   for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->sbv[x],    sizeof(__m128i),  Q16,         ffp) != Q16)         return eslFAIL;
+    if (fwrite( (char *) om->sbv[x],    sizeof(__m128i),  Q16x,        ffp) != Q16x)        return eslFAIL;
   
   for (x = 0; x < om->abc->Kp; x++)
     if (fwrite( (char *) om->rbv[x],    sizeof(__m128i),  Q16,         ffp) != Q16)         return eslFAIL;
@@ -228,7 +229,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
   off_t         roff;
-  int           M, Q16;
+  int           M, Q16, Q16x;
   int           x,n;
   int           alphatype;
   int           status;
@@ -247,7 +248,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16 = p7O_NQB(M);
+  Q16  = p7O_NQB(M);
+  Q16x = p7O_NQB(M) + EXTRA_SB;
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
@@ -274,7 +276,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (! fread((char *) &(om->base_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read base");
   if (! fread((char *) &(om->bias_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read bias");
   for (x = 0; x < abc->Kp; x++)
-    if (! fread((char *) om->sbv[x],     sizeof(__m128i), Q16,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
+    if (! fread((char *) om->sbv[x],     sizeof(__m128i), Q16x,        hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
   for (x = 0; x < abc->Kp; x++)
     if (! fread((char *) om->rbv[x],     sizeof(__m128i), Q16,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
