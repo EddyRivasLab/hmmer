@@ -177,10 +177,13 @@ main(int argc, char **argv)
   /* check if we need to write out our pid */
   if (esl_opt_IsOn(go, "--pid")) write_pid(go);
 
-  if (esl_opt_IsUsed(go, "--master")) master_process(go);
-  if (esl_opt_IsUsed(go, "--worker")) worker_process(go);
-
-  puts("Options --master or --worker must be specified.");
+  if (esl_opt_IsUsed(go, "--master")) {
+    master_process(go);
+  } else if (esl_opt_IsUsed(go, "--worker")) {
+    worker_process(go);
+  } else {
+    puts("Options --master or --worker must be specified.");
+  }
 
   esl_getopts_Destroy(go);
 

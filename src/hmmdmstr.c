@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <syslog.h>
+#include <assert.h>
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
@@ -42,9 +43,7 @@ typedef struct {
   int             sock_fd;
   char            ip_addr[64];
 
-  SEARCH_QUEUE   *queue;
-  SEQ_CACHE      *seq_db;
-  HMM_CACHE      *hmm_db;
+  COMMAND_QUEUE  *queue;
 } CLIENTSIDE_ARGS;
 
 typedef struct {
@@ -52,24 +51,37 @@ typedef struct {
 
   pthread_mutex_t  work_mutex;
   pthread_cond_t   start_cond;
-  pthread_cond_t   worker_cond;
   pthread_cond_t   complete_cond;
 
+  int              db_version;
   SEQ_CACHE       *seq_db;
   HMM_CACHE       *hmm_db;
 
-  int              started;
+  int              ready;
+  int              failed;
   struct worker_s *head;
   struct worker_s *tail;
 
+  int              pend_cnt;
+  struct worker_s *pending;
+
+  int              idle_cnt;
+  struct worker_s *idling;
+
   int              completed;
-  int              errors;
 } WORKERSIDE_ARGS;
 
 typedef struct worker_s {
   int                   sock_fd;
   char                  ip_addr[64];
   
+  int                   completed;
+  int                   terminated;
+  HMMD_COMMAND         *cmd;
+
+  uint32_t              srch_inx;
+  uint32_t              srch_cnt;
+
   HMMD_SEARCH_STATS     stats;
   HMMD_SEARCH_STATUS    status;
   char                 *err_buf;
@@ -81,11 +93,6 @@ typedef struct worker_s {
 
   struct worker_s      *next;
   struct worker_s      *prev;
-
-  int                   started;
-  int                   completed;
-  int                   terminated;
-  HMMD_COMMAND         *cmd;
 } WORKER_DATA;
 
 typedef struct {
@@ -115,11 +122,12 @@ typedef struct {
 static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
 
+static void destroy_worker(WORKER_DATA *worker);
 static void clear_results(WORKERSIDE_ARGS *comm);
 static void forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm);
 
 static void
-print_client_error(int fd, int status, char *format, va_list ap)
+print_client_msg(int fd, int status, char *format, va_list ap)
 {
   int   n;
   char  ebuf[512];
@@ -143,57 +151,508 @@ print_client_error(int fd, int status, char *format, va_list ap)
 }
 
 static void
-client_error(int fd, int status, char *format, ...)
+client_msg(int fd, int status, char *format, ...)
 {
   va_list ap;
 
   va_start(ap, format);
-  print_client_error(fd, status, format, ap);
+  print_client_msg(fd, status, format, ap);
   va_end(ap);
 }
 
 static void
-client_error_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
+client_msg_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
 {
   va_list ap;
 
   va_start(ap, format);
-  print_client_error(fd, status, format, ap);
+  print_client_msg(fd, status, format, ap);
   va_end(ap);
 
   longjmp(*env, 1);
 }
 
+static int
+validate_workers(WORKERSIDE_ARGS *args)
+{
+  int ready    = 0;
+  int failed   = 0;
+  int pending  = 0;
+  int idling   = 0;
+
+  WORKER_DATA *worker = NULL;
+  WORKER_DATA *tail   = NULL;
+
+  /* count the idling workers */
+  worker = args->idling;
+  while (worker != NULL) {
+    ++idling;
+    if (worker->terminated) ++failed;
+    worker = worker->next;
+  }
+  assert(idling == args->idle_cnt);
+
+  /* count the pending workers */
+  worker = args->pending;
+  while (worker != NULL) {
+    ++pending;
+    if (worker->terminated) ++failed;
+    worker = worker->next;
+  }
+  assert(pending == args->pend_cnt);
+
+  if (args->head == NULL && args->tail == NULL) {
+    assert(failed == args->failed);
+    assert(ready == 0);
+    return 1;
+  }
+
+  assert(args->head != NULL && args->tail != NULL);
+  assert(args->head->prev == NULL);
+  assert(args->tail->next == NULL);
+
+  /* count the ready workers */
+  worker = args->head;
+  while (worker != NULL) {
+    ++ready;
+    assert(worker->prev == tail);
+    assert(ready <= args->ready);
+    tail = worker;
+    if (worker->terminated) ++failed;
+    worker = worker->next;
+  }
+  assert(ready  == args->ready);
+  assert(failed == args->failed);
+  assert(tail   == args->tail);
+
+  return 1;
+}
+
+static void
+update_workers(WORKERSIDE_ARGS *args)
+{
+  WORKER_DATA *worker = NULL;
+
+  assert(validate_workers(args));
+
+  /* if there are any workers waiting to join, add them */
+  while (args->pending != NULL) {
+    worker = args->pending;
+    args->pending = worker->next;
+
+    worker->next = NULL;
+    if (args->head == NULL) {
+      args->head = worker;
+      worker->prev = NULL;
+    } else {
+      args->tail->next = worker;
+      worker->prev = args->tail;
+    }
+    args->tail = worker;
+
+    args->pend_cnt--;
+    args->ready++;
+  }
+
+  /* remove any workers who have failed */
+  worker = args->head;
+  while (args->failed > 0 && worker != NULL) {
+    WORKER_DATA *next =  worker->next;
+    if (worker->terminated) {
+      --args->failed;
+      --args->ready;
+      if (args->head == worker && args->tail == worker) {
+        args->head = NULL;
+        args->tail = NULL;
+      } else if (args->head == worker) {
+        args->head = worker->next;
+        worker->next->prev = NULL;
+      } else if (args->tail == worker) {
+        args->tail = worker->prev;
+        worker->prev->next = NULL;
+      } else {
+        worker->next->prev = worker->prev;
+        worker->prev->next = worker->next;
+      }
+      destroy_worker(worker);
+    }
+    worker = next;
+  }
+
+  assert(validate_workers(args));
+}
+
+static void
+process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+{
+  int n;
+  int cnt;
+  int inx;
+  int rem;
+
+  ESL_STOPWATCH      *w          = NULL;      /* timer used for profiling statistics             */
+
+  WORKER_DATA *worker = NULL;
+
+  w = esl_stopwatch_Create();
+
+  /* process any changes to the available workers */
+  if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  esl_stopwatch_Start(w);
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  /* if there are no workers, report an error */
+  if (args->ready > 0) {
+    /* figure out the size of the database we are searching */
+    inx = 0;
+    rem = args->ready;
+    if (query->cmd_type == HMMD_CMD_SEARCH) {
+      cnt = args->seq_db->db[query->dbx].count;
+
+      /* REMOVE ME */
+      {
+        int   len = strlen(query->seq->name);
+        char *ptr = query->cmd->srch.data;
+        ptr += query->cmd->srch.opts_length;
+        if (len > 10) {
+          *(ptr + len - 1) = '0' + (args->ready % 10);
+          *(ptr + len - 2) = '0' + (args->ready / 10);
+        }
+      }
+    } else {
+      cnt = args->hmm_db->count;
+    }
+
+    /* update the workers search information */
+    worker = args->head;
+    while (worker != NULL) {
+      worker->cmd        = query->cmd;
+      worker->completed  = 0;
+      worker->total      = 0;
+
+      /* assign each worker a portion of the database */
+      worker->srch_inx = inx;
+      worker->srch_cnt = cnt / rem;
+
+      inx += worker->srch_cnt;
+      cnt -= worker->srch_cnt;
+      --rem;
+
+      worker            = worker->next;
+    }
+
+    args->completed = 0;
+
+    /* notify all the worker threads of the new query */
+    if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+    if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+    /* Wait for all the workers to complete */
+    if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+    while (args->completed < args->ready) {
+      if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
+    }
+  }
+
+  if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+
+  /* TODO: check for errors */
+  if (args->ready == 0) {
+    client_msg(query->sock, eslFAIL, "No compute nodes available\n");
+  } else if (args->failed > 0) {
+    client_msg(query->sock, eslFAIL, "Errors running search\n");
+    clear_results(args);
+  } else {
+    forward_results(query, w, args);  
+  }
+
+  esl_stopwatch_Destroy(w);
+}
+
+static void
+process_reset(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+{
+  int n;
+  int cnt;
+
+  WORKER_DATA *worker = NULL;
+
+  /* process any changes to the available workers */
+  if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  cnt = 0;
+
+  /* look for the active workers to reset */
+  worker = args->head;
+  while (worker != NULL) {
+    if (strcmp(worker->ip_addr, query->cmd->reset.ip_addr) == 0) {
+      worker->cmd        = query->cmd;
+      worker->completed  = 0;
+      worker->total      = 0;
+
+      ++cnt;
+    }
+
+    worker = worker->next;
+  }
+
+  /* look for the idle workers to reset */
+  worker = args->idling;
+  while (worker != NULL) {
+    if (strcmp(worker->ip_addr, query->cmd->reset.ip_addr) == 0) {
+      worker->cmd        = query->cmd;
+      worker->completed  = 0;
+      worker->total      = 0;
+
+      ++cnt;
+    }
+
+    worker = worker->next;
+  }
+
+  /* check if there are any worker matching the ip address */
+  if (cnt > 0) {
+    args->completed = 0;
+
+    /* notify all the worker threads of the new query */
+    if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+    if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+    /* Wait for all the workers to complete */
+    if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+    while (args->completed < cnt) {
+      if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
+    }
+  }
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+
+  if (cnt == 0) {
+    client_msg(query->sock, eslFAIL, "No compute nodes found matching ip %s\n", query->cmd->reset.ip_addr);
+  } else {
+    HMMD_SEARCH_STATUS status;
+
+    status.status     = eslOK;
+    status.msg_size   = 0;
+
+    /* send back a successful status message */
+    n = sizeof(status);
+    if (writen(query->sock, &status, n) != n) {
+      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    }
+  }
+}
+
+static void
+process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+{
+  int n;
+  int cnt;
+  int status;
+
+  void        *tmp;
+  SEQ_CACHE   *seq_db  = NULL;
+  HMM_CACHE   *hmm_db  = NULL;
+
+  HMMD_COMMAND cmd;
+
+  WORKER_DATA *worker  = NULL;
+
+  client_msg(query->sock, eslOK, "Loading databases...\n");
+
+  if (query->cmd->init.seqdb_off) {
+    char *name = (char *)&query->cmd;
+    name += query->cmd->init.seqdb_off;
+    if ((status = cache_SeqDb(name, &seq_db)) != eslOK) {
+      client_msg(query->sock, status, "Failed to load sequence database %s\n", name);
+      return;
+    }
+  }
+
+  if (query->cmd->init.hmmdb_off) {
+    char *name = (char *)&query->cmd;
+    name += query->cmd->init.hmmdb_off;
+    if ((status = cache_HmmDb(name, &hmm_db)) != eslOK) {
+      client_msg(query->sock, status, "Failed to load hmm database %s\n", name);
+      if (seq_db != NULL) cache_SeqDestroy(seq_db);
+      return;
+    }
+  }
+
+  /* process any changes to the available workers */
+  if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  /* swap in the new cached databases */
+  tmp = args->seq_db;
+  args->seq_db = seq_db;
+  seq_db = tmp;
+
+  tmp = args->seq_db;
+  args->seq_db = seq_db;
+  seq_db = tmp;
+
+  args->db_version++;
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  /* reset all the idle and active workers */
+  cnt = 0;
+
+  /* build a reset command */
+  cmd.hdr.length  = 0;
+  cmd.hdr.command = HMMD_CMD_RESET;
+
+  /* look for the active workers to reset */
+  worker = args->head;
+  while (worker != NULL) {
+    worker->cmd        = &cmd;
+    worker->completed  = 0;
+    worker->total      = 0;
+
+    worker = worker->next;
+    ++cnt;
+  }
+
+  /* look for the idle workers to reset */
+  worker = args->idling;
+  while (worker != NULL) {
+    worker->cmd        = &cmd;
+    worker->completed  = 0;
+    worker->total      = 0;
+
+    worker = worker->next;
+    ++cnt;
+  }
+
+  /* check if there are any worker matching the ip address */
+  if (cnt > 0) {
+    args->completed = 0;
+
+    /* notify all the worker threads of the new query */
+    if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+    if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+    /* Wait for all the workers to complete */
+    if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+    while (args->completed < cnt) {
+      if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
+    }
+  }
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+
+  /* free up the old copies */
+  if (seq_db != NULL) cache_SeqDestroy(seq_db);
+  if (hmm_db != NULL) cache_HmmDestroy(hmm_db);
+
+  client_msg(query->sock, eslOK, "Load complete\n");
+}
+
+static void
+process_shutdown(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+{
+  int n;
+  int cnt;
+
+  HMMD_COMMAND cmd;
+
+  WORKER_DATA *worker  = NULL;
+
+  /* process any changes to the available workers */
+  if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  /* reset all the idle and active workers */
+  cnt = 0;
+
+  /* build a reset command */
+  cmd.hdr.length  = 0;
+  cmd.hdr.command = HMMD_CMD_SHUTDOWN;
+
+  /* look for the active workers to shutdown */
+  worker = args->head;
+  while (worker != NULL) {
+    worker->cmd        = &cmd;
+    worker->completed  = 0;
+    worker->total      = 0;
+
+    worker = worker->next;
+    ++cnt;
+  }
+
+  /* look for the idle workers to shutdown */
+  worker = args->idling;
+  while (worker != NULL) {
+    worker->cmd        = &cmd;
+    worker->completed  = 0;
+    worker->total      = 0;
+
+    worker = worker->next;
+    ++cnt;
+  }
+
+  /* check if there are any workers to shutdown */
+  if (cnt > 0) {
+    args->completed = 0;
+
+    /* notify all the worker threads of the new query */
+    if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+    if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+    /* Wait for all the workers to complete */
+    if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+    while (args->completed < cnt) {
+      if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
+    }
+  }
+
+  /* build a list of the currently available workers */
+  update_workers(args);
+
+  if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+}
+
 void
 master_process(ESL_GETOPTS *go)
 {
-  ESL_ALPHABET       *abc        = NULL;      /* digital alphabet                                */
-  ESL_STOPWATCH      *w          = NULL;      /* timer used for profiling statistics             */
+  int                 n;
   int                 status     = eslOK;
-  int                 i, n;
-
-  int                 inx;
-  int                 cnt;
+  int                 shutdown;
 
   WORKER_INFO        *info       = NULL;
 
   SEQ_CACHE          *seq_db     = NULL;
   HMM_CACHE          *hmm_db     = NULL;
-  SEARCH_QUEUE       *queue      = NULL;
+  COMMAND_QUEUE      *queue      = NULL;
   QUEUE_DATA         *query      = NULL;
 
   CLIENTSIDE_ARGS     client_comm;
   WORKERSIDE_ARGS     worker_comm;
-  WORKER_DATA        *worker;
 
   /* Set processor specific flags */
   impl_Init();
 
   /* Initializations */
   p7_FLogsumInit();     /* we're going to use table-driven Logsum() approximations at times */
-
-  w = esl_stopwatch_Create();
-  abc = esl_alphabet_Create(eslAMINO);
 
   if (esl_opt_IsUsed(go, "--seqdb")) {
     char *name = esl_opt_GetString(go, "--seqdb");
@@ -206,7 +665,7 @@ master_process(ESL_GETOPTS *go)
   }
 
   /* initialize the search queue */
-  ESL_ALLOC(queue, sizeof(SEARCH_QUEUE));
+  ESL_ALLOC(queue, sizeof(COMMAND_QUEUE));
   if ((n = pthread_mutex_init(&queue->queue_mutex, NULL)) != 0)  LOG_FATAL_MSG("mutex init", n);
   if ((n = pthread_cond_init(&queue->queue_cond, NULL)) != 0)    LOG_FATAL_MSG("cond init", n);
 
@@ -215,113 +674,67 @@ master_process(ESL_GETOPTS *go)
 
   /* start the communications with the web clients */
   client_comm.queue = queue;
-  client_comm.seq_db = seq_db;
-  client_comm.hmm_db = hmm_db;
   setup_clientside_comm(go, &client_comm);
 
   /* initialize the worker structure */
   if ((n = pthread_mutex_init(&worker_comm.work_mutex, NULL)) != 0)   LOG_FATAL_MSG("mutex init", n);
   if ((n = pthread_cond_init(&worker_comm.start_cond, NULL)) != 0)    LOG_FATAL_MSG("cond init", n);
   if ((n = pthread_cond_init(&worker_comm.complete_cond, NULL)) != 0) LOG_FATAL_MSG("cond init", n);
-  if ((n = pthread_cond_init(&worker_comm.worker_cond, NULL)) != 0)   LOG_FATAL_MSG("cond init", n);
 
-  worker_comm.sock_fd = -1;
-  worker_comm.head    = NULL;
-  worker_comm.tail    = NULL;
-  worker_comm.seq_db  = seq_db;
-  worker_comm.hmm_db  = hmm_db;
+  worker_comm.sock_fd    = -1;
+  worker_comm.head       = NULL;
+  worker_comm.tail       = NULL;
+  worker_comm.pending    = NULL;
+  worker_comm.idling     = NULL;
+  worker_comm.seq_db     = seq_db;
+  worker_comm.hmm_db     = hmm_db;
+  worker_comm.db_version = 1;
+
+  worker_comm.ready      = 0;
+  worker_comm.failed     = 0;
+  worker_comm.pend_cnt   = 0;
+  worker_comm.idle_cnt   = 0;
 
   setup_workerside_comm(go, &worker_comm);
 
   /* read query hmm/sequence */
-  while ((query = read_Queue(queue)) != NULL) {
+  shutdown = 0;
+  while (!shutdown && (query = pop_Queue(queue)) != NULL) {
 
-    printf("Processing query from %s\n", query->ip_addr);
-
-    if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
-    /* wait until we have atleast one worker */
-    while (worker_comm.head == NULL) {
-      if ((n = pthread_cond_wait(&worker_comm.worker_cond, &worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
+    printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
+    switch(query->cmd_type) {
+    case HMMD_CMD_SEARCH:
+    case HMMD_CMD_SCAN:
+      process_search(&worker_comm, query);
+      break;
+    case HMMD_CMD_INIT:
+      process_load(&worker_comm, query);
+      break;
+    case HMMD_CMD_SHUTDOWN:
+      process_shutdown(&worker_comm, query);
+      syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
+      shutdown = 1;
+      break;
+    case HMMD_CMD_RESET:
+      process_reset(&worker_comm, query);
+      break;
+    default:
+      syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
+      break;
     }
 
-    /* add to all workers the new query to process */
-    n = MSG_SIZE(query->cmd);
-    worker_comm.started = 0;
-    worker = worker_comm.head;
-    while (worker != NULL) {
-      ++worker_comm.started;
-
-      if ((worker->cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      memcpy(worker->cmd, query->cmd, n);
-
-      worker->started    = 1;
-      worker->completed  = 0;
-      worker->terminated = 0;
-      worker->total      = 0;
-
-      worker            = worker->next;
-    }
-
-    /* assign each worker a portion of the database */
-    inx = 0;
-    i = worker_comm.started;
-    if (query->srch_type == HMMD_CMD_SEARCH) {
-      cnt = seq_db->db[query->dbx].count;
-    } else {
-      cnt = hmm_db->count;
-    }
-    worker = worker_comm.head;
-    while (worker != NULL) {
-      if (worker->cmd != NULL) {
-        worker->cmd->srch.inx = inx;
-        worker->cmd->srch.cnt = cnt / i;
-
-        inx += worker->cmd->srch.cnt;
-        cnt -= worker->cmd->srch.cnt;
-        --i;
-
-        worker = worker->next;
-      }
-    }
-
-    worker_comm.completed = worker_comm.started;
-    worker_comm.errors    = 0;
-
-    /* notify all the worker threads of the new query */
-    if ((n = pthread_cond_broadcast(&worker_comm.start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
-    if ((n = pthread_mutex_unlock (&worker_comm.work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
-
-    esl_stopwatch_Start(w);
-
-    /* Wait for all the workers to complete */
-    if ((n = pthread_mutex_lock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
-    while (worker_comm.completed > 0) {
-      if ((n = pthread_cond_wait (&worker_comm.complete_cond, &worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
-    }
-
-    if ((n = pthread_mutex_unlock (&worker_comm.work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
-
-    esl_stopwatch_Stop(w);
-
-    if (worker_comm.errors == 0) {
-      /* send the merged results to the web client */
-      forward_results(query, w, &worker_comm);
-      pop_Queue(queue);
-    } else {
-      /* TODO: after how many retries should we just kill the query???? */
-      clear_results(&worker_comm);
-      ++query->retry_cnt;
-    }
+    free_QueueData(query);
   }
-
-  esl_stopwatch_Destroy(w);
 
   if (hmm_db != NULL) cache_HmmDestroy(hmm_db);
   if (seq_db != NULL) cache_SeqDestroy(seq_db);
 
-  esl_getopts_Destroy(go);
+  pthread_mutex_destroy(&queue->queue_mutex);
+  pthread_cond_destroy(&queue->queue_cond);
+
+  pthread_mutex_destroy(&worker_comm.work_mutex);
+  pthread_cond_destroy(&worker_comm.start_cond);
+  pthread_cond_destroy(&worker_comm.complete_cond);
 
   free(info);
   free(queue);
@@ -394,11 +807,6 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   stats.n_past_fwd  = 0;
   stats.Z           = 0;
 
-  /* copy the search stats */
-  stats.elapsed     = w->elapsed;
-  stats.user        = w->user;
-  stats.sys         = w->sys;
-
   /* allocate spaces to hold all the hits */
   if ((list = malloc(sizeof(HIT_LIST) * MAX_WORKERS)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
@@ -424,7 +832,7 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
       stats.domZ          = worker->stats.domZ;
       stats.Z             = worker->stats.Z;
 
-      status.msg_size    += worker->status.msg_size;
+      status.msg_size    += worker->status.msg_size - sizeof(stats);
 
       list[cnt].count     = worker->stats.nhits;
       list[cnt].data_size = worker->status.msg_size - sizeof(stats) - sizeof(P7_HIT) * list[cnt].count;
@@ -443,7 +851,7 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
   if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
-  if (query->srch_type == HMMD_CMD_SEARCH) {
+  if (query->cmd_type == HMMD_CMD_SEARCH) {
     mode = p7_SEARCH_SEQS;
     stats.nmodels = 1;
     stats.nseqs   = comm->seq_db->db[query->dbx].K;
@@ -454,7 +862,7 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   }
     
   if (stats.Z_setby == p7_ZSETBY_NTARGETS) {
-    stats.Z = (query->srch_type == HMMD_CMD_SEARCH) ? stats.nseqs : stats.nmodels;
+    stats.Z = (query->cmd_type == HMMD_CMD_SEARCH) ? stats.nseqs : stats.nmodels;
   }
 
   /* sort the hits and apply score and E-value thresholds */
@@ -509,6 +917,8 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
     p7_tophits_Threshold(&th, pli);
 
+    /* after the top hits thresholds are checked, the number of sequences
+     * and domains to be reported can change. */
     stats.nreported = th.nreported;
     stats.nincluded = th.nincluded;
     stats.domZ      = pli->domZ;
@@ -536,6 +946,16 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
       ++h1;
     }
   }
+
+  esl_stopwatch_Stop(w);
+
+  /* copy the search stats */
+  stats.elapsed     = w->elapsed;
+  stats.user        = w->user;
+  stats.sys         = w->sys;
+
+  /* add the size of the status structure to the message size */
+  status.msg_size += sizeof(stats);
 
   /* send back a successful status message */
   n = sizeof(status);
@@ -587,64 +1007,199 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 }
 
 static void
-clear_results(WORKERSIDE_ARGS *comm)
+destroy_worker(WORKER_DATA *worker)
+{
+  if (worker == NULL) {
+    if (worker->hit      != NULL) free(worker->hit);
+    if (worker->hit_data != NULL) free(worker->hit_data);
+    if (worker->err_buf  != NULL) free(worker->err_buf);
+
+    memset(worker, 0, sizeof(WORKER_DATA));
+    free(worker);
+  }
+}
+
+static void
+clear_results(WORKERSIDE_ARGS *args)
 {
   int n;
 
   WORKER_DATA *worker;
 
   /* lock the workers until we have freed the results */
-  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+  if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  assert(validate_workers(args));
 
   /* free all the results */
-  worker = comm->head;
+  worker = args->head;
   while (worker != NULL) {
-    if (worker->completed) {
+    if (worker->hit      != NULL) free(worker->hit);
+    if (worker->hit_data != NULL) free(worker->hit_data);
+    if (worker->err_buf  != NULL) free(worker->err_buf);
 
-      if (worker->hit      != NULL)  free(worker->hit);
-      if (worker->hit_data != NULL)  free(worker->hit_data);
-
-      worker->hit      = NULL;
-      worker->hit_data = NULL;
-
-      if (worker->err_buf != NULL) {
-        free(worker->err_buf);
-        worker->err_buf = NULL;
-      }
+    worker->hit      = NULL;
+    worker->hit_data = NULL;
+    worker->err_buf  = NULL;
       
-      worker->completed = 0;
-    }
-
-    /* check if the worker node has terminated */
-    if (worker->terminated) {
-      WORKER_DATA *temp = worker;
-
-      worker = worker->next;
-
-      if (temp->prev == NULL) {
-        comm->head = temp->next;
-      } else {
-        temp->prev->next = temp->next;
-      }
-      if (temp->next == NULL) {
-        comm->tail = temp->prev;
-      } else {
-        temp->next->prev = temp->prev;
-      }
-
-      temp->prev   = NULL;
-      temp->next   = NULL;
-      temp->parent = NULL;
-
-      free(temp);
-    } else {
-      worker = worker->next;
-    }
+    worker->completed = 0;
+    worker = worker->next;
   }
 
-  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+  if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 }
 
+static void
+process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
+{
+  int   n;
+  char *s;
+
+  QUEUE_DATA    *parms  = NULL;     /* cmd to queue           */
+  HMMD_COMMAND  *cmd    = NULL;     /* parsed cmd to process  */
+
+  int            fd     = data->sock_fd;
+  COMMAND_QUEUE *queue  = data->queue;
+
+  /* skip leading white spaces */
+  ++ptr;
+  while (*ptr == ' ' || *ptr == '\t') ++ptr;
+
+  /* skip to the end of the line */
+  s = ptr;
+  while (*s && (*s != '\n' && *s != '\r')) ++s;
+  *s = 0;
+
+  /* process the different commands */
+  s = strsep(&ptr, " \t");
+  if (strcmp(s, "shutdown") == 0) {
+    if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    cmd->hdr.length  = 0;
+    cmd->hdr.command = HMMD_CMD_SHUTDOWN;
+  } else if (strcmp(s, "load") == 0) {
+    char **db;
+    char  *hmmdb = NULL;
+    char  *seqdb = NULL;
+
+    /* skip leading white spaces */
+    while (*ptr == ' ' || *ptr == '\t') ++ptr;
+    if (!*ptr) {
+      client_msg(fd, eslEINVAL, "Load command missing --seqdb or --hmmdb option\n");
+      return;
+    }
+
+    while (*ptr) {
+      s = strsep(&ptr, " \t");
+
+      db = NULL;
+      if (strcmp (s, "--seqdb") == 0) {
+        db = &seqdb;
+      } else if (strcmp (s, "--hmmdb") == 0) {
+        db = &hmmdb;
+      }
+    
+      if (db == NULL) {
+        client_msg(fd, eslEINVAL, "Unknown option %s for load command\n", s);
+        return;
+      } else if (*db != NULL) {
+        client_msg(fd, eslEINVAL, "Option %s for load command specified twice\n", s);
+        return;
+      }
+
+      /* skip leading white spaces */
+      while (*ptr == ' ' || *ptr == '\t') ++ptr;
+      if (!*ptr) {
+        client_msg(fd, eslEINVAL, "Missing file name following options %s\n", s);
+        return;
+      }
+      *db = strsep(&ptr, " \t");
+
+      /* skip leading white spaces */
+      while (*ptr == ' ' || *ptr == '\t') ++ptr;
+    }
+
+    n = sizeof(HMMD_COMMAND);
+    if (seqdb != NULL) n += strlen(seqdb) + 1;
+    if (hmmdb != NULL) n += strlen(hmmdb) + 1;
+
+    if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+    memset(cmd, 0, n);
+
+    cmd->hdr.length  = n - sizeof(HMMD_HEADER);
+    cmd->hdr.command = HMMD_CMD_INIT;
+
+    s = cmd->init.data;
+
+    if (seqdb != NULL) {
+      cmd->init.seqdb_off = s - cmd->init.data;
+      strcpy(s, seqdb);
+      s += strlen(seqdb) + 1;
+    }
+
+    if (hmmdb != NULL) {
+      cmd->init.hmmdb_off = s - cmd->init.data;
+      strcpy(s, hmmdb);
+      s += strlen(hmmdb) + 1;
+    }
+
+  } else if (strcmp(s, "reset") == 0) {
+    char *ip_addr = NULL;
+
+    /* skip leading white spaces */
+    while (*ptr == ' ' || *ptr == '\t') ++ptr;
+    if (!*ptr) {
+      client_msg(fd, eslEINVAL, "Load command missing ip addres\n");
+      return;
+    }
+
+    while (ptr && *ptr) {
+      if (ip_addr != NULL) {
+        client_msg(fd, eslEINVAL, "Multiple ip addresses on command line %s\n", s);
+        return;
+      }
+
+      ip_addr = strsep(&ptr, " \t");
+
+      /* skip leading white spaces */
+      while (ptr && (*ptr == ' ' || *ptr == '\t')) ++ptr;
+    }
+
+    n = sizeof(HMMD_COMMAND) + strlen(ip_addr) + 1;
+    if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+    memset(cmd, 0, n);
+
+    cmd->hdr.length  = n - sizeof(HMMD_HEADER);
+    cmd->hdr.command = HMMD_CMD_RESET;
+    strcpy(cmd->reset.ip_addr, ip_addr);
+
+  } else {
+    client_msg(fd, eslEINVAL, "Unknown command %s\n", s);
+    return;
+  }
+
+  if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+  parms->hmm  = NULL;
+  parms->seq  = NULL;
+  parms->abc  = NULL;
+  parms->opts = NULL;
+  parms->dbx  = -1;
+  parms->cmd  = cmd;
+
+  strcpy(parms->ip_addr, data->ip_addr);
+  parms->sock = fd;
+  parms->next = NULL;
+  parms->prev = NULL;
+
+  parms->cmd_type   = cmd->hdr.command;
+  parms->query_type = 0;
+
+  printf("Queuing command %d from %s (%d)\n", cmd->hdr.command, parms->ip_addr, parms->sock);
+  push_Queue(parms, queue);
+
+}
 
 static int
 clientside_loop(CLIENTSIDE_ARGS *data)
@@ -670,9 +1225,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
   HMMD_COMMAND      *cmd     = NULL;     /* search cmd to send to workers  */
 
-  SEARCH_QUEUE      *queue   = data->queue;
-  SEQ_CACHE         *seq_db  = data->seq_db;
-  HMM_CACHE         *hmm_db  = data->hmm_db;
+  COMMAND_QUEUE     *queue   = data->queue;
   QUEUE_DATA        *parms;
 
   jmp_buf            jmp_env;
@@ -730,11 +1283,11 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   while (*ptr && isspace(*ptr)) ++ptr;
 
   opt_str[0] = 0;
-  if (*ptr != '@') {
-    client_error(data->sock_fd, eslEFORMAT, "Missing options string");
+  if (*ptr == '!') {
+    process_ServerCmd(ptr, data);
     free(buffer);
     return 0;
-  } else {
+  } else if (*ptr == '@') {
     char *s = ++ptr;
 
     /* skip to the end of the line */
@@ -751,10 +1304,14 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     /* skip remaining white spaces */
     while (*ptr && isspace(*ptr)) ++ptr;
+  } else {
+    client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
+    free(buffer);
+    return 0;
   }
 
   if (strncmp(ptr, "//", 2) == 0) {
-    client_error(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
+    client_msg(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
     free(buffer);
     return 0;
   }
@@ -764,30 +1321,20 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     
     status = process_searchopts(data->sock_fd, opt_str, &opts);
     if (status != eslOK) {
-      client_error_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
     }
 
     /* the options string can handle an optional database */
     if (esl_opt_ArgNumber(opts) > 0) {
-      client_error_longjmp(data->sock_fd, status, &jmp_env, "Incorrect number of command line arguments.");
+      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Incorrect number of command line arguments.");
     }
 
     if (esl_opt_IsUsed(opts, "--seqdb")) {
       dbx = esl_opt_GetInteger(opts, "--seqdb");
-      if (seq_db == NULL) {
-        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "There are no sequence databases to search.");
-      } else if (dbx < 1 || dbx > seq_db->db_cnt) {
-        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Database out of range (1 - %d).", seq_db->db_cnt);
-      }
     } else if (esl_opt_IsUsed(opts, "--hmmdb")) {
       dbx = esl_opt_GetInteger(opts, "--hmmdb");
-      if (hmm_db == NULL) {
-        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "There are no hmm databases to search.");
-      } else if (dbx != 1) {
-        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Database out of range (1 - 1).");
-      }
     } else {
-      client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --seqdb or --hmmdb.");
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --seqdb or --hmmdb.");
     }
 
 
@@ -799,16 +1346,16 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       char   *matrix    = esl_opt_GetString(opts, "--mxfile");
 
       if ((sco = esl_scorematrix_Create(abc)) == NULL) {
-        client_error_longjmp(data->sock_fd, eslEMEM, &jmp_env, "could not allocate scoring matrix.");
+        client_msg_longjmp(data->sock_fd, eslEMEM, &jmp_env, "could not allocate scoring matrix.");
       }
       if ((status = esl_scorematrix_Load(matrix, sco)) != eslOK) {
-        client_error_longjmp(data->sock_fd, status, &jmp_env, "Failed to load precompiled matrix %s", matrix);
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to load precompiled matrix %s", matrix);
       }
       if (!esl_scorematrix_IsSymmetric(sco)) {
-        client_error_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Matrix %s isn't symmetric", matrix);
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Matrix %s isn't symmetric", matrix);
       }
       if ((status = esl_sco_Probify(sco, NULL, NULL, NULL, &slambda)) != eslOK) {
-        client_error_longjmp(data->sock_fd, status, &jmp_env, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
       }
 
       esl_scorematrix_Destroy(sco);
@@ -821,25 +1368,25 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       /* try to parse the input buffer as a FASTA sequence */
       seq = esl_sq_CreateDigital(abc);
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
-      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
 
     } else if (strncmp(ptr, "HMM", 3) == 0) {
       if (esl_opt_IsUsed(opts, "--hmmdb")) {
-        client_error_longjmp(data->sock_fd, status, &jmp_env, "A HMM cannot be used to search a hmm database");
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "A HMM cannot be used to search a hmm database");
       }
 
       /* try to parse the buffer as an hmm */
       status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
-      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error opening query hmm: %s", hfp->errbuf);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error opening query hmm: %s", hfp->errbuf);
 
       status = p7_hmmfile_Read(hfp, &abc,  &hmm);
-      if (status != eslOK) client_error_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
 
       p7_hmmfile_Close(hfp);
 
     } else {
       /* no idea what we are trying to parse */
-      client_error_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
+      client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
     }
   } else {
     /* an error occured some where, so try to clean up */
@@ -976,14 +1523,11 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->next = NULL;
   parms->prev = NULL;
 
-  parms->retry      = 0;
-  parms->retry_cnt  = 0;
-
-  parms->srch_type  = cmd->hdr.command;
+  parms->cmd_type   = cmd->hdr.command;
   parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
 
   if (parms->seq != NULL) {
-    printf("Queuing %se %s from %s (%d)\n", (cmd->hdr.command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
+    printf("Queuing %s %s from %s (%d)\n", (cmd->hdr.command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
   } else {
     printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
   }
@@ -1030,7 +1574,7 @@ client_comm_thread(void *arg)
 
   CLIENTSIDE_ARGS     *targs = NULL;
   CLIENTSIDE_ARGS     *data  = (CLIENTSIDE_ARGS *)arg;
-  SEARCH_QUEUE        *queue = data->queue;
+  COMMAND_QUEUE       *queue = data->queue;
 
   for ( ;; ) {
 
@@ -1041,8 +1585,6 @@ client_comm_thread(void *arg)
     if ((targs = malloc(sizeof(CLIENTSIDE_ARGS))) == NULL) LOG_FATAL_MSG("malloc", errno);
     targs->queue      = queue;
     targs->sock_fd    = fd;
-    targs->seq_db     = data->seq_db;
-    targs->hmm_db     = data->hmm_db;
 
     addrlen = sizeof(targs->ip_addr);
     strncpy(targs->ip_addr, inet_ntoa(addr.sin_addr), addrlen);
@@ -1100,12 +1642,15 @@ setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
 static void
 workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 {
-  int          n;
-  int          size;
-  int          total;
+  int    n;
+  int    size;
+  int    total;
+
+  char  *ptr;
 
   ESL_STOPWATCH   *w;
 
+  HMMD_COMMAND        cmd;
   HMMD_SEARCH_STATS  *stats;
 
   w = esl_stopwatch_Create();
@@ -1122,16 +1667,68 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
     if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
-    printf ("Writing %d bytes to %s [MSG = %d/%d]\n", (int)MSG_SIZE(worker->cmd), worker->ip_addr, worker->cmd->hdr.command, worker->cmd->hdr.length);
+    /* terminate the connection */
+    if (worker->cmd->hdr.command == HMMD_CMD_RESET) {
+      break;
+    } else if (worker->cmd->hdr.command == HMMD_CMD_SHUTDOWN) {
+      fd_set rset;
+      struct timeval tv;
+      
+      n = MSG_SIZE(worker->cmd);
+      if (writen(worker->sock_fd, worker->cmd, n) != n) {
+        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        break;
+      }
+
+      FD_ZERO(&rset);
+      FD_SET(worker->sock_fd, &rset);
+
+      tv.tv_sec = 2;
+      tv.tv_usec = 0;
+
+      if ((n = select(worker->sock_fd + 1, &rset, NULL, NULL, &tv)) < 0) {
+        syslog(LOG_ERR,"[%s:%d] - select %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+      } else {
+        if (n == 0) {
+          syslog(LOG_ERR,"[%s:%d] - shutdown %s is not responding\n", __FILE__, __LINE__, worker->ip_addr);
+        } else {
+          n = sizeof(HMMD_HEADER);
+          if ((size = readn(worker->sock_fd, &cmd, n)) == -1) {
+            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+          }
+          if (cmd.hdr.command == HMMD_CMD_SHUTDOWN) {
+            syslog(LOG_ERR,"[%s:%d] - shutting down %s\n", __FILE__, __LINE__, worker->ip_addr);
+          } else {
+            syslog(LOG_ERR,"[%s:%d] - error shutting down %s - received %d\n", __FILE__, __LINE__, worker->ip_addr, cmd.hdr.command);
+          }
+        }
+      }
+      break;
+    }
+
+    //printf ("Writing %d bytes to %s [MSG = %d/%d]\n", (int)MSG_SIZE(worker->cmd), worker->ip_addr, worker->cmd->hdr.command, worker->cmd->hdr.length);
 
     esl_stopwatch_Start(w);
 
-    n = MSG_SIZE(worker->cmd);
-    if (writen(worker->sock_fd, worker->cmd, n) != n) {
+    /* write the the search message in two parts */
+    n = sizeof(HMMD_HEADER) + sizeof(HMMD_SEARCH_CMD);
+    memcpy(&cmd, worker->cmd, n);
+    cmd.srch.inx = worker->srch_inx;
+    cmd.srch.cnt = worker->srch_cnt;
+    if (writen(worker->sock_fd, &cmd, n) != n) {
       syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
     }
 
+    /* write the remaining data, ie sequence, options etc. */
+    ptr = (char *)worker->cmd;
+    ptr += n;
+    n = MSG_SIZE(worker->cmd) - n;
+    if (writen(worker->sock_fd, ptr, n) != n) {
+      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+      break;
+    }
+    
     total = 0;
     worker->total = 0;
 
@@ -1187,11 +1784,10 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     worker->cmd       = NULL;
     worker->completed = 1;
     worker->total     = total;
-    --data->completed;
+    ++data->completed;
 
-    /* notify all the worker threads of the new query */
+    /* notify the master that a worker has completed */
     if ((n = pthread_cond_broadcast(&data->complete_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
-
     if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
     printf ("WORKER %s COMPLETED: %.2f sec received %d bytes\n", worker->ip_addr, w->elapsed, total), fflush(stdout);
@@ -1207,6 +1803,10 @@ workerside_thread(void *arg)
 {
   int               n;
   int               fd;
+  int               status = eslOK;
+
+  int               version;
+  int               updated;
 
   char             *p;
 
@@ -1221,100 +1821,115 @@ workerside_thread(void *arg)
 
   printf("Handling worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
 
-  n = sizeof(HMMD_COMMAND);
-  if (parent->seq_db != NULL) n += strlen(parent->seq_db->name) + 1;
-  if (parent->hmm_db != NULL) n += strlen(parent->hmm_db->name) + 1;
+  updated = 0;
+  while (!updated) {
+    /* get the database version to load */
+    if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+    version = parent->db_version;
+    if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
-  if ((cmd = malloc(n)) == NULL) {
-    syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-    goto EXIT;
+    n = sizeof(HMMD_COMMAND);
+    if (parent->seq_db != NULL) n += strlen(parent->seq_db->name) + 1;
+    if (parent->hmm_db != NULL) n += strlen(parent->hmm_db->name) + 1;
+
+    if ((cmd = malloc(n)) == NULL) {
+      syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      goto EXIT;
+    }
+
+    memset(cmd, 0, n);
+
+    cmd->hdr.length  = n - sizeof(HMMD_HEADER);
+    cmd->hdr.command = HMMD_CMD_INIT;
+
+    p = cmd->init.data;
+
+    if (parent->seq_db != NULL) {
+      cmd->init.db_cnt      = parent->seq_db->db_cnt;
+      cmd->init.seq_cnt     = parent->seq_db->count;
+      cmd->init.seqdb_off   = p - cmd->init.data;
+
+      strncpy(cmd->init.sid, parent->seq_db->id, sizeof(cmd->init.sid));
+      cmd->init.sid[sizeof(cmd->init.sid)-1] = 0;
+
+      strcpy(p, parent->seq_db->name);
+      p += strlen(parent->seq_db->name) + 1;
+    }
+
+    if (parent->hmm_db != NULL) {
+      cmd->init.hmm_cnt     = 1;
+      cmd->init.model_cnt   = parent->hmm_db->count;
+      cmd->init.hmmdb_off   = p - cmd->init.data;
+
+      //strncpy(cmd->init.hid, parent->hmm_db->id, sizeof(cmd->init.hid));
+      //cmd->init.hid[sizeof(cmd->init.hid)-1] = 0;
+
+      strcpy(p, parent->hmm_db->name);
+      p += strlen(parent->hmm_db->name) + 1;
+    }
+
+    if (writen(worker->sock_fd, cmd, n) != n) {
+      syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+      status = eslFAIL;
+    }
+
+    /* process the init command first */
+    if (readn(worker->sock_fd, &hdr, sizeof(hdr)) == -1) {
+      syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+      status = eslFAIL;
+    }
+
+    n = MSG_SIZE(&hdr);
+    if (realloc(cmd, n) == NULL) {
+      syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      status = eslFAIL;
+    }
+    if (readn(worker->sock_fd, &cmd->init, hdr.length) == -1) {
+      syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+      status = eslFAIL;
+    }
+
+    /* validate the database of the worker before adding him to the list */
+    if (hdr.command != HMMD_CMD_INIT) {
+      syslog(LOG_ERR,"[%s:%d] - expecting HMMD_CMD_INIT %d\n", __FILE__, __LINE__, hdr.command);
+      status = eslFAIL;
+    }
+    if (cmd->hdr.status != eslOK) {
+      syslog(LOG_ERR,"[%s:%d] - workers init status failed %d\n", __FILE__, __LINE__, cmd->hdr.status);
+      status = eslFAIL;
+    }
+
+    worker->next = NULL;
+    worker->prev = NULL;
+
+    /* add the worker to the pending list */
+    if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+    assert(validate_workers(parent));
+    
+    /* make sure the master has not loaded a new database while we were waiting
+     * for the worker to load and verify the database we started out this.  If
+     * the version has changed, force the worker to reload and verify.
+     */
+    if (version == parent->db_version) {
+      if (status == eslOK) {
+        worker->next    = parent->pending;
+        parent->pending = worker;
+        ++parent->pend_cnt;
+      } else {
+        worker->next   = parent->idling;
+        parent->idling = worker;
+        ++parent->idle_cnt;
+      }
+      updated = 1;
+    }
+   
+    assert(validate_workers(parent));
+
+    if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
   }
 
-  memset(cmd, 0, n);
-
-  cmd->hdr.length  = n - sizeof(HMMD_HEADER);
-  cmd->hdr.command = HMMD_CMD_INIT;
-
-  p = cmd->init.data;
-
-  if (parent->seq_db != NULL) {
-    cmd->init.db_cnt      = parent->seq_db->db_cnt;
-    cmd->init.seq_cnt     = parent->seq_db->count;
-    cmd->init.seqdb_off   = p - cmd->init.data;
-
-    strncpy(cmd->init.sid, parent->seq_db->id, sizeof(cmd->init.sid));
-    cmd->init.sid[sizeof(cmd->init.sid)-1] = 0;
-
-    strcpy(p, parent->seq_db->name);
-    p += strlen(parent->seq_db->name) + 1;
-  }
-
-  if (parent->hmm_db != NULL) {
-    cmd->init.hmm_cnt     = 1;
-    cmd->init.model_cnt   = parent->hmm_db->count;
-    cmd->init.hmmdb_off   = p - cmd->init.data;
-
-    //strncpy(cmd->init.hid, parent->hmm_db->id, sizeof(cmd->init.hid));
-    //cmd->init.hid[sizeof(cmd->init.hid)-1] = 0;
-
-    strcpy(p, parent->hmm_db->name);
-    p += strlen(parent->hmm_db->name) + 1;
-  }
-
-  if (writen(worker->sock_fd, cmd, n) != n) {
-    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
-    goto EXIT;
-  }
-
-  /* process the init command first */
-  if (readn(worker->sock_fd, &hdr, sizeof(hdr)) == -1) {
-    syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
-    goto EXIT;
-  }
-
-  n = MSG_SIZE(&hdr);
-  if (realloc(cmd, n) == NULL) {
-    syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-    goto EXIT;
-  }
-  if (readn(worker->sock_fd, &cmd->init, hdr.length) == -1) {
-    syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
-    goto EXIT;
-  }
-
-  /* validate the database of the worker before adding him to the list */
-  if (hdr.command != HMMD_CMD_INIT) {
-    syslog(LOG_ERR,"[%s:%d] - expecting HMMD_CMD_INIT %d\n", __FILE__, __LINE__, hdr.command);
-    goto EXIT;
-  }
-  if (cmd->init.status != eslOK) {
-    syslog(LOG_ERR,"[%s:%d] - workers init status failed %d\n", __FILE__, __LINE__, cmd->init.status);
-    goto EXIT;
-  }
-
-  worker->next = NULL;
-  worker->prev = NULL;
-
-  /* add the worker to the new fd list */
-  if ((n = pthread_mutex_lock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
-  if (parent->head == NULL) {
-    parent->head = worker;
-    parent->tail = worker;
-  } else {
-    parent->tail->next = worker;
-    worker->prev = parent->tail;
-    parent->tail = worker;
-  }
-
-  printf("Worker %s (%d) is online %s\n", worker->ip_addr, worker->sock_fd,(parent->head == parent->tail) ? "BROADCASTING" : "");
-
-  /* notify the master process that there is at least one worker now */
-  if (parent->head == parent->tail) {
-    if ((n = pthread_cond_broadcast (&parent->worker_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
-  }
-
-  if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+  printf("Pending worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
 
   workerside_loop(parent, worker);
 
@@ -1322,11 +1937,17 @@ workerside_thread(void *arg)
 
   fd = worker->sock_fd;
 
-  worker->sock_fd    = -1;
-  worker->terminated = 1;
-  --parent->completed;
-  ++parent->errors;
+  ++parent->failed;
+  ++parent->completed;
 
+  worker->terminated = 1;
+  worker->total      = 0;
+  worker->sock_fd    = -1;
+
+  assert(validate_workers(parent));
+
+  /* notify the master that a worker has completed */
+  if ((n = pthread_cond_broadcast(&parent->complete_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
   if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
  EXIT:
@@ -1358,17 +1979,10 @@ worker_comm_thread(void *arg)
     if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
 
     if ((worker = malloc(sizeof(WORKER_DATA))) == NULL) LOG_FATAL_MSG("thread create", errno);
+    memset(worker, 0, sizeof(WORKER_DATA));
+
     worker->parent     = data;
     worker->sock_fd    = fd;
-    worker->next       = NULL;
-    worker->prev       = NULL;
-
-    worker->err_buf    = NULL;
-    worker->hit        = NULL;
-    worker->hit_data   = NULL;
-    worker->total      = 0;
-    worker->completed  = 0;
-    worker->cmd        = NULL;
 
     addrlen = sizeof(worker->ip_addr);
     strncpy(worker->ip_addr, inet_ntoa(addr.sin_addr), addrlen);

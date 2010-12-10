@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <syslog.h>
+#include <assert.h>
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
@@ -188,8 +189,41 @@ process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts)
   return eslOK;
 }
 
+static int
+validate_Queue(COMMAND_QUEUE *queue)
+{
+  int cnt = 0;
+
+  QUEUE_DATA *data  = NULL;
+  QUEUE_DATA *tail  = NULL;
+
+  if (queue->head == NULL && queue->tail == NULL) {
+    assert(queue->count == 0);
+    return 1;
+  }
+
+  assert(queue->head != NULL && queue->tail != NULL);
+  assert(queue->head->prev == NULL);
+  assert(queue->tail->next == NULL);
+
+  /* count the queue entries */
+  data = queue->head;
+  while (data != NULL) {
+    ++cnt;
+    assert(data->prev == tail);
+    assert(cnt <= queue->count);
+    tail = data;
+    data = data->next;
+  }
+  assert(cnt  == queue->count);
+  assert(tail == queue->tail);
+
+  return 1;
+}
+
+
 QUEUE_DATA *
-read_Queue(SEARCH_QUEUE *queue)
+pop_Queue(COMMAND_QUEUE *queue)
 {
   int         n;
   QUEUE_DATA *data;
@@ -200,7 +234,19 @@ read_Queue(SEARCH_QUEUE *queue)
     if ((n = pthread_cond_wait (&queue->queue_cond, &queue->queue_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
   }
 
+  assert(validate_Queue(queue));
+
   data = queue->head;
+  queue->head = data->next;
+  if (queue->head == NULL) {
+    queue->tail = NULL;
+  } else {
+    queue->head->prev = NULL;
+  }
+
+  --queue->count;
+
+  assert(validate_Queue(queue));
 
   if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
@@ -208,29 +254,14 @@ read_Queue(SEARCH_QUEUE *queue)
 }
 
 void
-pop_Queue(SEARCH_QUEUE *queue)
-{
-  int         n;
-  QUEUE_DATA *data;
-
-  if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
-  data = queue->head;
-  queue->head = data->next;
-  if (queue->head == NULL) queue->tail = NULL;
-
-  if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
-
-  free_QueueData(data);
-}
-
-void
-push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue)
+push_Queue(QUEUE_DATA *data, COMMAND_QUEUE *queue)
 {
   int n;
 
   /* add the search request to the queue */
   if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  assert(validate_Queue(queue));
 
   if (queue->head == NULL) {
     queue->head = data;
@@ -241,13 +272,17 @@ push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue)
     queue->tail = data;
   }
 
+  ++queue->count;
+
+  assert(validate_Queue(queue));
+
   /* if anyone is waiting, wake them up */
   if ((n = pthread_cond_broadcast (&queue->queue_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
   if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 }
 
 void
-remove_Queue(int fd, SEARCH_QUEUE *queue)
+remove_Queue(int fd, COMMAND_QUEUE *queue)
 {
   int n;
   QUEUE_DATA *data   = NULL;
@@ -255,6 +290,8 @@ remove_Queue(int fd, SEARCH_QUEUE *queue)
   QUEUE_DATA *list   = NULL;
 
   if ((n = pthread_mutex_lock (&queue->queue_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  assert(validate_Queue(queue));
 
   /* skip over the first queued object since it is being searched */
   data = queue->head;
@@ -264,17 +301,27 @@ remove_Queue(int fd, SEARCH_QUEUE *queue)
   while (data != NULL) {
     next = data->next;
     if (data->sock == fd) {
-      data->prev->next = data->next;
-      if (data->next == NULL) {
+      if (queue->head == data && queue->tail == data) {
+        queue->head = NULL;
+        queue->tail = NULL;
+      } else if (queue->head == data) {
+        queue->head = data->next;
+        data->next->prev = NULL;
+      } else if (queue->tail == data) {
         queue->tail = data->prev;
+        data->prev->next = NULL;
       } else {
         data->next->prev = data->prev;
+        data->prev->next = data->next;
       }
       data->next = list;
       list = data;
+      --queue->count;
     }
     data = next;
   }
+
+  assert(validate_Queue(queue));
 
   /* unlock the queue */
   if ((n = pthread_mutex_unlock (&queue->queue_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);

@@ -52,6 +52,8 @@ typedef struct {
 #define HMMD_CMD_SEARCH     10001
 #define HMMD_CMD_SCAN       10002
 #define HMMD_CMD_INIT       10003
+#define HMMD_CMD_SHUTDOWN   10004
+#define HMMD_CMD_RESET      10005
 
 #define MAX_INIT_DESC 32
 
@@ -69,7 +71,6 @@ typedef struct {
 
 /* HMMD_CMD_INIT */
 typedef struct {
-  uint32_t    status;               /* 0 - success                              */
   char        sid[MAX_INIT_DESC];   /* unique id for sequence database          */
   char        hid[MAX_INIT_DESC];   /* unique id for hmm database               */
   uint32_t    seqdb_off;            /* offset to seq database name, 0 if none   */
@@ -81,10 +82,16 @@ typedef struct {
   char        data[1];              /* string data                              */
 } HMMD_INIT_CMD;
 
+/* HMMD_CMD_RESET */
+typedef struct {
+  char        ip_addr[1];           /* ip address                               */
+} HMMD_INIT_RESET;
+
 /* HMMD_HEADER */
 typedef struct {
   uint32_t   length;                /* message length                           */
   uint32_t   command;               /* message type                             */
+  uint32_t    status;               /* 0 - success                              */
 } HMMD_HEADER;
 
 typedef struct {
@@ -92,6 +99,7 @@ typedef struct {
   union {
     HMMD_INIT_CMD   init;
     HMMD_SEARCH_CMD srch;
+    HMMD_INIT_RESET reset;
   };
 } HMMD_COMMAND;
 
@@ -101,7 +109,7 @@ size_t writen(int fd, const void *vptr, size_t n);
 size_t readn(int fd, void *vptr, size_t n);
 
 typedef struct queue_data_s {
-  uint32_t       srch_type;   /* type of search to preform      */
+  uint32_t       cmd_type;    /* type of command to preform     */
   uint32_t       query_type;  /* type of the query              */
   P7_HMM        *hmm;         /* query HMM                      */
   ESL_SQ        *seq;         /* query sequence                 */
@@ -111,9 +119,6 @@ typedef struct queue_data_s {
 
   int            sock;        /* socket descriptor of client    */
   char           ip_addr[64];
-
-  int            retry;
-  int            retry_cnt;
 
   int            dbx;         /* database index to search       */
   int            inx;         /* sequence index to start search */
@@ -126,15 +131,15 @@ typedef struct queue_data_s {
 typedef struct {
   pthread_mutex_t  queue_mutex;
   pthread_cond_t   queue_cond;
+  int              count;
   QUEUE_DATA      *head;
   QUEUE_DATA      *tail;
-} SEARCH_QUEUE;
+} COMMAND_QUEUE;
 
 extern void free_QueueData(QUEUE_DATA *data);
-extern void pop_Queue(SEARCH_QUEUE *queue);
-extern void push_Queue(QUEUE_DATA *data, SEARCH_QUEUE *queue);
-extern void remove_Queue(int fd, SEARCH_QUEUE *queue);
-extern QUEUE_DATA *read_Queue(SEARCH_QUEUE *queue);
+extern void push_Queue(QUEUE_DATA *data, COMMAND_QUEUE *queue);
+extern void remove_Queue(int fd, COMMAND_QUEUE *queue);
+extern QUEUE_DATA *pop_Queue(COMMAND_QUEUE *queue);
 
 extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 
