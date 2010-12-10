@@ -62,7 +62,6 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
     int nqf = p7O_NQF(om->M); /* # of float vectors needed for query */
     int nqs = nqb + 17;
 
-    if ((inx % 1000) == 0) { printf ("."); fflush(stdout); }
     p7_oprofile_ReadRest(hfp, om);
 
     total_mem += sizeof(P7_OPROFILE);
@@ -339,7 +338,6 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
 
   /* fill in the different databases and fix the index */
   for (i = 0 ; i < seq_cnt; ++i) {
-    if ((i % 1000) == 0) { printf ("."); fflush(stdout); }
     inx = 0;
     db_key = cache->list[i].db_key;
     while (db_key) {
@@ -355,7 +353,6 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
     cache->list[i].idx = (cache->list[i].name - cache->header_mem) / 10 + 1;
   }
 
-  printf("\n");
   for (i = 0; i < cache->db_cnt; ++i) {
     printf("final (%d):: %d %d\n", i, cache->db[i].count, db_inx[i]);
   }
@@ -541,8 +538,6 @@ main(int argc, char **argv)
 
     while ((status = esl_sqio_Read(sqfp, sq)) == eslOK) {
       int sum = 0;
-
-      if ((++cnt % 10000) == 0) { printf("."); fflush(stdout); }
 
       inx = 0;
       for (i = 1; i <= sq->n; ++i) {
