@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
   int              seqlen;
 
   int              ali;
+  int              scores;
 
   char             buffer[MAX_READ_LEN];
 
@@ -186,6 +187,7 @@ int main(int argc, char *argv[])
   /* set up defaults */
   strcpy(serv_ip, "127.0.0.1");
   serv_port = SERVER_PORT;
+  scores = 0;
   ali = 0;
 
   i = 1;
@@ -202,8 +204,11 @@ int main(int argc, char *argv[])
       strcpy(serv_ip, argv[i+1]);
       ++i;
       break;
-    case 'a':
+    case 'A':
       ali = 1;
+      break;
+    case 'S':
+      scores = 1;
       break;
     default:
       usage(argv[0]);
@@ -213,24 +218,24 @@ int main(int argc, char *argv[])
 
   seqlen = MAX_READ_LEN;
   if ((seq = malloc(seqlen)) == NULL) {
-    fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+    fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
   if ((opts = malloc(MAX_READ_LEN)) == NULL) {
-    fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+    fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
   /* set up a signal handler for broken pipes */
   if (signal(SIGINT, sig_int) == SIG_ERR) {
-    fprintf(stderr, "%s: signal error %d - %s\n", argv[0], errno, strerror(errno));
+    fprintf(stderr, "[%s:%d] signal error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
   /* Create a reliable, stream socket using TCP */
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    fprintf(stderr, "%s: socket error %d - %s\n", argv[0], errno, strerror(errno));
+    fprintf(stderr, "[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
@@ -240,13 +245,13 @@ int main(int argc, char *argv[])
   serv_addr.sin_addr.s_addr = inet_addr(serv_ip);
   serv_addr.sin_port        = htons(serv_port);
   if ((inet_pton(AF_INET, serv_ip, &serv_addr.sin_addr)) < 0) {
-    fprintf(stderr, "%s: inet_pton error %d - %s\n", argv[0], errno, strerror(errno));
+    fprintf(stderr, "[%s:%d] inet_pton error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
   /* Establish the connection to the echo server */
   if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-    fprintf(stderr, "%s: connect error %d - %s\n", argv[0], errno, strerror(errno));
+    fprintf(stderr, "[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
@@ -267,7 +272,7 @@ int main(int argc, char *argv[])
         int n = strlen(buffer);
         if (n >= rem) {
           if ((seq = realloc(seq, seqlen * 2)) == NULL) {
-            fprintf(stderr, "%s: realloc error %d - %s\n", argv[0], errno, strerror(errno));
+            fprintf(stderr, "[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
             exit(1);
           }
           rem += seqlen;
@@ -285,6 +290,40 @@ int main(int argc, char *argv[])
     /* skip all leading white spaces */
     ptr = seq;
     while (*ptr && isspace(*ptr)) ++ptr;
+
+    /* process server commands */
+    if (*ptr == '!') {
+
+      /* Send the string to the server */ 
+      n = strlen(seq);
+      printf ("Sending data %d:\n", n);
+      if (writen(sock, seq, n) != n) {
+        fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+        exit(1);
+      }
+
+      n = sizeof(sstatus);
+      total += n;
+      if ((size = readn(sock, &sstatus, n)) == -1) {
+        fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+        exit(1);
+      }
+
+      if (sstatus.status != eslOK) {
+        char *ebuf;
+        n = sstatus.msg_size;
+        total += n; 
+        ebuf = malloc(n);
+        if ((size = readn(sock, ebuf, n)) == -1) {
+          fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+          exit(1);
+        }
+        fprintf(stderr, "ERROR (%d): %s\n", sstatus.status, ebuf);
+        free(ebuf);
+      }
+
+      continue;
+    }
 
     /* process search specific options */
     if (*ptr == '@') {
@@ -370,8 +409,9 @@ int main(int argc, char *argv[])
         /* Send the string to the server */ 
         n = strlen(seq);
         printf ("Sending data %d:\n", n);
+        printf ("DATA: --%s--\n", seq);
         if (writen(sock, seq, n) != n) {
-          fprintf(stderr, "%s: write (size %d) error %d - %s\n", argv[0], n, errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
           exit(1);
         }
 
@@ -380,7 +420,7 @@ int main(int argc, char *argv[])
         n = sizeof(sstatus);
         total += n;
         if ((size = readn(sock, &sstatus, n)) == -1) {
-          fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           exit(1);
         }
 
@@ -390,7 +430,7 @@ int main(int argc, char *argv[])
           total += n; 
           ebuf = malloc(n);
           if ((size = readn(sock, ebuf, n)) == -1) {
-            fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
+            fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
             exit(1);
           }
           fprintf(stderr, "ERROR (%d): %s\n", sstatus.status, ebuf);
@@ -401,11 +441,11 @@ int main(int argc, char *argv[])
 
         n = sstatus.msg_size;
         if ((data = malloc(n)) == NULL) {
-          fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           exit(1);
         }
         if ((size = readn(sock, data, n)) == -1) {
-          fprintf(stderr, "%s: read error %d - %s\n", argv[0], errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           exit(1);
         }
 
@@ -440,7 +480,7 @@ int main(int argc, char *argv[])
         th->is_sorted = TRUE;
 
         if ((th->hit = malloc(sizeof(void *) * stats->nhits)) == NULL) {
-          fprintf(stderr, "%s: malloc error %d - %s\n", argv[0], errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           exit(1);
         }
         for (i = 0; i < stats->nhits; i++) th->hit[i] = th->unsrt + i;
@@ -496,7 +536,9 @@ int main(int argc, char *argv[])
         //p7_tophits_Sort(th);
 
         /* Print the results.  */
-        p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        if (scores) {
+          p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        }
         if (ali) { 
           p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
         }
@@ -510,7 +552,7 @@ int main(int argc, char *argv[])
 
         fprintf(stdout, "//\n");  fflush(stdout);
 
-        fprintf(stdout, "Total bytes received %d\n", total);
+        fprintf(stdout, "Total bytes received %" PRId64 "\n", sstatus.msg_size);
       } else {
         printf("Error parsing input query\n");
       }
