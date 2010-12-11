@@ -268,7 +268,7 @@ ${EXAMPLES}: ${LIBDEP}
 
 distclean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} ${HMMDPROGS} TAGS gmon.out
-	-rf -f libhmmer.a libhmmd.a
+	-rm -f libhmmer.a libhmmd.a
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
 	-rm -f ${STATS}
@@ -280,7 +280,7 @@ distclean:
 
 clean:
 	-rm -f *.o *~ Makefile.bak core ${PROGS} ${HMMDPROGS} TAGS gmon.out
-	-rf -f libhmmer.a libhmmd.a
+	-rm -f libhmmer.a libhmmd.a
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
 	-rm -f ${STATS}
@@ -291,7 +291,7 @@ clean:
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	-rf -f libhmmer.a libhmmd.a
+	-rm -f libhmmer.a libhmmd.a
 	cd ${IMPLDIR}; ${MAKE} binclean
 
 TAGS:
