@@ -143,7 +143,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
 static void 
 usage(char *pgm)
 {
-  fprintf(stderr, "Usage: %s [-i addr] [-p port]\n", pgm);
+  fprintf(stderr, "Usage: %s [-i addr] [-p port] [-A] [-S]\n", pgm);
+  fprintf(stderr, "    -S      : print sequence scores\n");
+  fprintf(stderr, "    -A      : print sequence alignments\n");
   fprintf(stderr, "    -i addr : ip address running daemon (default: 127.0.0.1)\n");
   fprintf(stderr, "    -p port : port daemon listens on (default: 41139)\n");
   exit(1);
@@ -192,20 +194,28 @@ int main(int argc, char *argv[])
 
   i = 1;
   while (i < argc) {
-    if (i + 1 >= argc) usage(argv[0]);
     if (argv[i][0] != '-') usage(argv[0]);
     if (argv[i][1] == 0 || argv[i][2] != 0) usage(argv[0]);
     switch (argv[i][1]) {
     case 'p':
+      if (i + 1 >= argc) {
+        printf("Missing port number\n");
+        usage(argv[0]);
+      }
       serv_port = atoi(argv[i+1]);
       ++i;
       break;
     case 'i':
+      if (i + 1 >= argc) {
+        printf("Missing ip address\n");
+        usage(argv[0]);
+      }
       strcpy(serv_ip, argv[i+1]);
       ++i;
       break;
     case 'A':
       ali = 1;
+      scores = 1;
       break;
     case 'S':
       scores = 1;
@@ -409,7 +419,6 @@ int main(int argc, char *argv[])
         /* Send the string to the server */ 
         n = strlen(seq);
         printf ("Sending data %d:\n", n);
-        printf ("DATA: --%s--\n", seq);
         if (writen(sock, seq, n) != n) {
           fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
           exit(1);
