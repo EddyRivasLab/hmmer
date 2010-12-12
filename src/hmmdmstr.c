@@ -40,6 +40,23 @@
 #define CONF_FILE "/etc/hmmpgmd.conf"
 
 typedef struct {
+  uint32_t        count;
+  uint32_t        data_size;
+  P7_HIT         *hit;
+  char           *data;
+} HIT_LIST;
+
+typedef struct {
+  HMMD_SEARCH_STATS   stats;
+  HMMD_SEARCH_STATUS  status;
+  HIT_LIST           *hits;
+  int                 nhits;
+  int                 db_inx;
+  int                 db_cnt;
+  int                 errors;
+} SEARCH_RESULTS;
+
+typedef struct {
   int             sock_fd;
   char            ip_addr[64];
 
@@ -123,8 +140,11 @@ static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
 
 static void destroy_worker(WORKER_DATA *worker);
-static void clear_results(WORKERSIDE_ARGS *comm);
-static void forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm);
+
+static void init_results(SEARCH_RESULTS *results);
+static void clear_results(WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
+static void gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
+static void forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results);
 
 static void
 print_client_msg(int fd, int status, char *format, va_list ap)
@@ -289,85 +309,102 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   int cnt;
   int inx;
   int rem;
+  int tries;
 
   ESL_STOPWATCH      *w          = NULL;      /* timer used for profiling statistics             */
 
-  WORKER_DATA *worker = NULL;
+  SEARCH_RESULTS      results;
+  WORKER_DATA        *worker     = NULL;
 
   w = esl_stopwatch_Create();
-
-  /* process any changes to the available workers */
-  if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
   esl_stopwatch_Start(w);
 
-  /* build a list of the currently available workers */
-  update_workers(args);
-
-  /* if there are no workers, report an error */
-  if (args->ready > 0) {
-    /* figure out the size of the database we are searching */
-    inx = 0;
-    rem = args->ready;
-    if (query->cmd_type == HMMD_CMD_SEARCH) {
-      cnt = args->seq_db->db[query->dbx].count;
-
-      /* REMOVE ME */
-      {
-        int   len = strlen(query->seq->name);
-        char *ptr = query->cmd->srch.data;
-        ptr += query->cmd->srch.opts_length;
-        if (len > 10) {
-          *(ptr + len - 1) = '0' + (args->ready % 10);
-          *(ptr + len - 2) = '0' + (args->ready / 10);
-        }
-      }
-    } else {
-      cnt = args->hmm_db->count;
-    }
-
-    /* update the workers search information */
-    worker = args->head;
-    while (worker != NULL) {
-      worker->cmd        = query->cmd;
-      worker->completed  = 0;
-      worker->total      = 0;
-
-      /* assign each worker a portion of the database */
-      worker->srch_inx = inx;
-      worker->srch_cnt = cnt / rem;
-
-      inx += worker->srch_cnt;
-      cnt -= worker->srch_cnt;
-      --rem;
-
-      worker            = worker->next;
-    }
-
-    args->completed = 0;
-
-    /* notify all the worker threads of the new query */
-    if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
-    if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
-
-    /* Wait for all the workers to complete */
-    if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
-    while (args->completed < args->ready) {
-      if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
-    }
+  /* figure out the size of the database we are searching */
+  inx = 0;
+  if (query->cmd_type == HMMD_CMD_SEARCH) {
+    cnt = args->seq_db->db[query->dbx].count;
+  } else {
+    cnt = args->hmm_db->count;
   }
 
-  if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+  init_results(&results);
+  tries = 0;
+
+  do {
+    /* process any changes to the available workers */
+    if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+    /* build a list of the currently available workers */
+    update_workers(args);
+
+    /* if there are no workers, report an error */
+    if (args->ready > 0) {
+      rem = args->ready;
+
+      /* update the workers search information */
+      worker = args->head;
+      while (worker != NULL) {
+        worker->cmd        = query->cmd;
+        worker->completed  = 0;
+        worker->total      = 0;
+
+        /* assign each worker a portion of the database */
+        worker->srch_inx = inx;
+        worker->srch_cnt = cnt / rem;
+
+        inx += worker->srch_cnt;
+        cnt -= worker->srch_cnt;
+        --rem;
+
+        worker            = worker->next;
+      }
+
+      args->completed = 0;
+
+      /* notify all the worker threads of the new query */
+      if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
+    }
+    
+    if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+    if (args->ready > 0) {
+      /* Wait for all the workers to complete */
+      if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+      while (args->completed < args->ready) {
+        if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
+      }
+
+      if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+    }
+
+    /* gather up the results from all the workers */
+    gather_results(query, args, &results);
+
+    /* we can recover from one worker crashing.  get the block that worker ran on
+     * and redistribute its load to all the remaining workers.
+     */
+    inx = results.db_inx;
+    cnt = results.db_cnt;
+    ++tries;
+
+  } while (args->ready > 0 && results.errors == 1 && tries < 2);
+
+  esl_stopwatch_Stop(w);
+
+  /* copy the search stats */
+  results.stats.elapsed = w->elapsed;
+  results.stats.user    = w->user;
+  results.stats.sys     = w->sys;
 
   /* TODO: check for errors */
   if (args->ready == 0) {
     client_msg(query->sock, eslFAIL, "No compute nodes available\n");
   } else if (args->failed > 0) {
     client_msg(query->sock, eslFAIL, "Errors running search\n");
-    clear_results(args);
+    clear_results(args, &results);
   } else {
-    forward_results(query, w, args);  
+    forward_results(query, &results);  
   }
 
   esl_stopwatch_Destroy(w);
@@ -745,13 +782,6 @@ master_process(ESL_GETOPTS *go)
   LOG_FATAL_MSG("malloc", errno);
 }
 
-typedef struct {
-  uint32_t        count;
-  uint32_t        data_size;
-  P7_HIT         *hit;
-  char           *data;
-} HIT_LIST;
-
 static int
 hit_sorter(const void *p1, const void *p2)
 {
@@ -767,11 +797,107 @@ hit_sorter(const void *p1, const void *p2)
 }
 
 static void
-forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
+init_results(SEARCH_RESULTS *results)
+{
+  results->status.status     = eslOK;
+  results->status.msg_size   = 0;
+
+  results->stats.nhits       = 0;
+  results->stats.nreported   = 0;
+  results->stats.nincluded   = 0;
+
+  results->stats.nmodels     = 0;
+  results->stats.nseqs       = 0;
+  results->stats.n_past_msv  = 0;
+  results->stats.n_past_bias = 0;
+  results->stats.n_past_vit  = 0;
+  results->stats.n_past_fwd  = 0;
+  results->stats.Z           = 0;
+
+  results->hits              = NULL;
+  results->nhits             = 0;
+  results->db_inx            = 0;
+  results->db_cnt            = 0;
+  results->errors            = 0;
+}
+
+static void
+gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results)
+{
+  int cnt;
+  int n;
+
+  WORKER_DATA        *worker;
+
+  /* allocate spaces to hold all the hits */
+  cnt = results->nhits + MAX_WORKERS;
+  if ((results->hits = realloc(results->hits, sizeof(HIT_LIST) * cnt)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+  /* lock the workers until we have merged the results */
+  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
+
+  /* count the number of hits */
+  cnt = results->nhits;
+  worker = comm->head;
+  while (worker != NULL) {
+    if (worker->completed) {
+      results->stats.nhits        += worker->stats.nhits;
+      results->stats.nreported    += worker->stats.nreported;
+      results->stats.nincluded    += worker->stats.nincluded;
+
+      results->stats.n_past_msv   += worker->stats.n_past_msv;
+      results->stats.n_past_bias  += worker->stats.n_past_bias;
+      results->stats.n_past_vit   += worker->stats.n_past_vit;
+      results->stats.n_past_fwd   += worker->stats.n_past_fwd;
+
+      results->stats.Z_setby       = worker->stats.Z_setby;
+      results->stats.domZ_setby    = worker->stats.domZ_setby;
+      results->stats.domZ          = worker->stats.domZ;
+      results->stats.Z             = worker->stats.Z;
+
+      results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
+
+      results->hits[cnt].count     = worker->stats.nhits;
+      results->hits[cnt].data_size = worker->status.msg_size - sizeof(HMMD_SEARCH_STATS) - sizeof(P7_HIT) * worker->stats.nhits;
+      results->hits[cnt].hit       = worker->hit;
+      results->hits[cnt].data      = worker->hit_data;
+
+      worker->hit         = NULL;
+      worker->hit_data    = NULL;
+
+      worker->completed   = 0;
+      ++cnt;
+    } else {
+      results->errors++;
+      results->db_inx            = worker->srch_inx;
+      results->db_cnt            = worker->srch_cnt;
+    }
+
+    worker = worker->next;
+  }
+
+  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+
+  if (query->cmd_type == HMMD_CMD_SEARCH) {
+    results->stats.nmodels = 1;
+    results->stats.nseqs   = comm->seq_db->db[query->dbx].K;
+  } else {
+    results->stats.nseqs   = 1;
+    results->stats.nmodels = comm->hmm_db->count;
+  }
+    
+  if (results->stats.Z_setby == p7_ZSETBY_NTARGETS) {
+    results->stats.Z = (query->cmd_type == HMMD_CMD_SEARCH) ? results->stats.nseqs : results->stats.nmodels;
+  }
+
+  results->nhits = cnt;
+}
+
+static void
+forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 {
   int fd;
   int i, j;
-  int cnt;
   int n;
 
   uint32_t           adj;
@@ -783,100 +909,29 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
   P7_HIT             *hits  = NULL;
   HIT_LIST           *list  = NULL;
 
-  WORKER_DATA        *worker;
-
-  HMMD_SEARCH_STATS   stats;
-  HMMD_SEARCH_STATUS  status;
-
   enum p7_pipemodes_e mode;
 
   fd = query->sock;
-
-  status.status     = eslOK;
-  status.msg_size   = 0;
-
-  stats.nhits       = 0;
-  stats.nreported   = 0;
-  stats.nincluded   = 0;
-
-  stats.nmodels     = 0;
-  stats.nseqs       = 0;
-  stats.n_past_msv  = 0;
-  stats.n_past_bias = 0;
-  stats.n_past_vit  = 0;
-  stats.n_past_fwd  = 0;
-  stats.Z           = 0;
-
-  /* allocate spaces to hold all the hits */
-  if ((list = malloc(sizeof(HIT_LIST) * MAX_WORKERS)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-  /* lock the workers until we have merged the results */
-  if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
-  /* count the number of hits */
-  cnt = 0;
-  worker = comm->head;
-  while (worker != NULL) {
-    if (worker->completed) {
-      stats.nhits        += worker->stats.nhits;
-      stats.nreported    += worker->stats.nreported;
-      stats.nincluded    += worker->stats.nincluded;
-
-      stats.n_past_msv   += worker->stats.n_past_msv;
-      stats.n_past_bias  += worker->stats.n_past_bias;
-      stats.n_past_vit   += worker->stats.n_past_vit;
-      stats.n_past_fwd   += worker->stats.n_past_fwd;
-
-      stats.Z_setby       = worker->stats.Z_setby;
-      stats.domZ_setby    = worker->stats.domZ_setby;
-      stats.domZ          = worker->stats.domZ;
-      stats.Z             = worker->stats.Z;
-
-      status.msg_size    += worker->status.msg_size - sizeof(stats);
-
-      list[cnt].count     = worker->stats.nhits;
-      list[cnt].data_size = worker->status.msg_size - sizeof(stats) - sizeof(P7_HIT) * list[cnt].count;
-      list[cnt].hit       = worker->hit;
-      list[cnt].data      = worker->hit_data;
-
-      worker->hit         = NULL;
-      worker->hit_data    = NULL;
-
-      worker->completed   = 0;
-      ++cnt;
-    }
-
-    worker = worker->next;
-  }
-
-  if ((n = pthread_mutex_unlock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
+  list  = results->hits;
 
   if (query->cmd_type == HMMD_CMD_SEARCH) {
     mode = p7_SEARCH_SEQS;
-    stats.nmodels = 1;
-    stats.nseqs   = comm->seq_db->db[query->dbx].K;
   } else {
     mode = p7_SCAN_MODELS;
-    stats.nseqs   = 1;
-    stats.nmodels = comm->hmm_db->count;
   }
     
-  if (stats.Z_setby == p7_ZSETBY_NTARGETS) {
-    stats.Z = (query->cmd_type == HMMD_CMD_SEARCH) ? stats.nseqs : stats.nmodels;
-  }
-
   /* sort the hits and apply score and E-value thresholds */
-  if (stats.nhits > 0) {
+  if (results->nhits > 0) {
     P7_HIT *h1;
 
     /* at this point the domain pointers are the offset of the domain structure
      * in the block of memory pointed to by "list[n]->data".  now we will change
      * that offset to be the true pointers back to the dcl data.
      */
-    for (i = 0; i < cnt; ++i) {
+    for (i = 0; i < results->nhits; ++i) {
       h1 = list[i].hit;
       for (j = 0; j < list[i].count; ++j) {
-        int off = ((char *)h1->dcl - (char *)NULL) - sizeof(stats) - (sizeof(P7_HIT) * list[i].count);
+        int off = ((char *)h1->dcl - (char *)NULL) - sizeof(HMMD_SEARCH_STATS) - (sizeof(P7_HIT) * list[i].count);
         h1->dcl = (P7_DOMAIN *)(list[i].data + off);
         ++h1;
       }
@@ -884,34 +939,34 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
     /* combine all the hits into a single list */
     offset = 0;
-    if ((hits = malloc(sizeof(P7_HIT) * stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
-    for (i = 0; i < cnt; ++i) {
+    if ((hits = malloc(sizeof(P7_HIT) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+    for (i = 0; i < results->nhits; ++i) {
       memcpy(hits + offset, list[i].hit, sizeof(P7_HIT) * list[i].count);
       offset += list[i].count;
     }
 
-    qsort(hits, stats.nhits, sizeof(P7_HIT), hit_sorter);
+    qsort(hits, results->stats.nhits, sizeof(P7_HIT), hit_sorter);
 
     th.unsrt     = NULL;
-    th.N         = stats.nhits;
+    th.N         = results->stats.nhits;
     th.nreported = 0;
     th.nincluded = 0;
     th.is_sorted = 0;
       
     pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
-    pli->nmodels     = stats.nmodels;
-    pli->nseqs       = stats.nseqs;
-    pli->n_past_msv  = stats.n_past_msv;
-    pli->n_past_bias = stats.n_past_bias;
-    pli->n_past_vit  = stats.n_past_vit;
-    pli->n_past_fwd  = stats.n_past_fwd;
+    pli->nmodels     = results->stats.nmodels;
+    pli->nseqs       = results->stats.nseqs;
+    pli->n_past_msv  = results->stats.n_past_msv;
+    pli->n_past_bias = results->stats.n_past_bias;
+    pli->n_past_vit  = results->stats.n_past_vit;
+    pli->n_past_fwd  = results->stats.n_past_fwd;
 
-    pli->Z           = stats.Z;
-    pli->domZ        = stats.domZ;
-    pli->Z_setby     = stats.Z_setby;
-    pli->domZ_setby  = stats.domZ_setby;
+    pli->Z           = results->stats.Z;
+    pli->domZ        = results->stats.domZ;
+    pli->Z_setby     = results->stats.Z_setby;
+    pli->domZ_setby  = results->stats.domZ_setby;
 
-    if ((dcl = malloc(sizeof(void *) * stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+    if ((dcl = malloc(sizeof(void *) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
     th.hit = (P7_HIT **)dcl;
 
     for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
@@ -919,17 +974,17 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
 
     /* after the top hits thresholds are checked, the number of sequences
      * and domains to be reported can change. */
-    stats.nreported = th.nreported;
-    stats.nincluded = th.nincluded;
-    stats.domZ      = pli->domZ;
-    stats.Z         = pli->Z;
+    results->stats.nreported = th.nreported;
+    results->stats.nincluded = th.nincluded;
+    results->stats.domZ      = pli->domZ;
+    results->stats.Z         = pli->Z;
 
     /* at this point the domain pointers need to be converted back to offsets
      * within the binary data stream.
      */
-    adj = sizeof(stats) + sizeof(P7_HIT) * stats.nhits;
+    adj = sizeof(HMMD_SEARCH_STATS) + sizeof(P7_HIT) * results->stats.nhits;
     h1 = hits;
-    for (i = 0; i < stats.nhits; ++i) {
+    for (i = 0; i < results->stats.nhits; ++i) {
       char *ptr;
 
       dcl[i] = h1->dcl;
@@ -947,42 +1002,35 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     }
   }
 
-  esl_stopwatch_Stop(w);
-
-  /* copy the search stats */
-  stats.elapsed     = w->elapsed;
-  stats.user        = w->user;
-  stats.sys         = w->sys;
-
   /* add the size of the status structure to the message size */
-  status.msg_size += sizeof(stats);
+  results->status.msg_size += sizeof(HMMD_SEARCH_STATS);
 
   /* send back a successful status message */
-  n = sizeof(status);
-  if (writen(fd, &status, n) != n) {
+  n = sizeof(HMMD_SEARCH_STATUS);
+  if (writen(fd, &results->status, n) != n) {
     syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
-  n = sizeof(stats);
-  if (writen(fd, &stats, n) != n) {
+  n = sizeof(HMMD_SEARCH_STATS);
+  if (writen(fd, &results->stats, n) != n) {
     syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
-  if (stats.nhits > 0) {
+  if (results->stats.nhits > 0) {
     /* send all the hit data */
-    n = sizeof(P7_HIT) * stats.nhits;
+    n = sizeof(P7_HIT) * results->stats.nhits;
     if (writen(fd, hits, n) != n) {
       syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
       goto CLEAR;
     }
 
-    for (i = 0; i < stats.nhits; ++i) {
-      if (i + 1 < stats.nhits) {
+    for (i = 0; i < results->stats.nhits; ++i) {
+      if (i + 1 < results->stats.nhits) {
         n = (char *)hits[i+1].dcl - (char *)hits[i].dcl;
       } else {
-        n = ((char *)NULL) + status.msg_size - (char *)hits[i].dcl;
+        n = ((char *)NULL) + results->status.msg_size - (char *)hits[i].dcl;
       }
       if (writen(fd, dcl[i], n) != n) {
         syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
@@ -991,19 +1039,23 @@ forward_results(QUEUE_DATA *query, ESL_STOPWATCH *w, WORKERSIDE_ARGS *comm)
     }
   }
 
-  printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, status.msg_size);
-  printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", stats.nhits, stats.nreported, stats.nincluded);
+  printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
+  printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", results->stats.nhits, results->stats.nreported, results->stats.nincluded);
 
  CLEAR:
   /* free all the data */
-  for (i = 0; i < cnt; ++i) {
+  for (i = 0; i < results->nhits; ++i) {
     if (list[i].hit  != NULL) free(list[i].hit);
     if (list[i].data != NULL) free(list[i].data);
+    list[i].hit  = NULL;
+    list[i].data = NULL;
   }
 
   if (list != NULL) free(list);
   if (hits != NULL) free(hits);
   if (dcl  != NULL) free(dcl);
+
+  init_results(results);
 }
 
 static void
@@ -1020,8 +1072,9 @@ destroy_worker(WORKER_DATA *worker)
 }
 
 static void
-clear_results(WORKERSIDE_ARGS *args)
+clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
 {
+  int i;
   int n;
 
   WORKER_DATA *worker;
@@ -1047,6 +1100,16 @@ clear_results(WORKERSIDE_ARGS *args)
   }
 
   if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
+
+  for (i = 0; i < results->nhits; ++i) {
+    if (results->hits[i].hit  != NULL) free(results->hits[i].hit);
+    if (results->hits[i].data != NULL) free(results->hits[i].data);
+    results->hits[i].hit  = NULL;
+    results->hits[i].data = NULL;
+  }
+
+  if (results->hits != NULL) free(results->hits);
+  init_results(results);
 }
 
 static void
