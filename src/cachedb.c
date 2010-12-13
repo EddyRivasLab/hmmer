@@ -126,8 +126,6 @@ cache_HmmDestroy(HMM_CACHE *cache)
 
   list = cache->list;
 
-  if (cache->name != NULL) free(cache->name);
-
   esl_alphabet_Destroy(cache->abc);
   for (i = 0; i < cache->count; ++i) p7_oprofile_Destroy(list[i]);
   free(list);
