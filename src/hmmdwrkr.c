@@ -47,6 +47,8 @@ typedef struct {
   int               om_cnt;      /* number of profiles               */
 
   pthread_mutex_t   inx_mutex;   /* protect data                     */
+  int              *blk_size;    /* sequences per block              */
+  int              *limit;       /* point to decrease block size     */
   int              *inx;         /* next index to process            */
 
   P7_HMM           *hmm;         /* query HMM                        */
@@ -196,7 +198,10 @@ static void
 process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
 { 
   int              i;
+  int              cnt;
+  int              limit;
   int              status;
+  int              blk_size;
 
   WORKER_INFO     *info       = NULL;
 
@@ -248,6 +253,9 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
     info[i].inx_mutex = inx_mutex;
     info[i].inx       = &current_index;
 
+    info[i].blk_size  = &blk_size;
+    info[i].limit     = &limit;
+
     if (query->cmd_type == HMMD_CMD_SEARCH) {
       HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
       info[i].sq_list   = &list[query->inx];
@@ -266,7 +274,24 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
     esl_threads_AddThread(threadObj, &info[i]);
   }
 
+  /* try block size of 5000.  we will need enough sequences for four
+   * blocks per thread or better.
+   */
+  blk_size = 5000;
+  cnt = query->cnt / env->ncpus / blk_size;
+  limit = query->cnt * 2 / 3;
+  if (cnt < 4) {
+    /* try block size of 1000  */
+    blk_size /= 5;
+    cnt = query->cnt / env->ncpus / blk_size;
+    if (cnt < 4) {
+      /* still not enough.  just divide it up into one block per thread */
+      blk_size = query->cnt / env->ncpus + 1;
+      limit = query->cnt * 2;
+    }
+  }
   current_index = 0;
+
   esl_threads_WaitForStart(threadObj);
   esl_threads_WaitForFinish(threadObj);
 
@@ -588,18 +613,29 @@ search_thread(void *arg)
   count = 1;
   while (count > 0) {
     int          inx;
+    int          blksz;
     HMMER_SEQ  **sq;
 
     /* grab the next block of sequences */
     if (pthread_mutex_lock(&info->inx_mutex) != 0) p7_Fail("mutex lock failed");
     inx = *info->inx;
-    *info->inx += BLOCK_SIZE;
+    blksz = *info->blk_size;
+    if (inx > *info->limit) {
+      blksz /= 5;
+      if (blksz < 1000) {
+        *info->limit = info->sq_cnt * 2;
+      } else {
+        *info->limit = inx + (info->sq_cnt - inx) * 2 / 3; 
+      }
+    }
+    *info->blk_size = blksz;
+    *info->inx += blksz;
     if (pthread_mutex_unlock(&info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
 
     sq = info->sq_list + inx;
 
     count = info->sq_cnt - inx;
-    if (count > BLOCK_SIZE) count = BLOCK_SIZE;
+    if (count > blksz) count = blksz;
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++sq) {
@@ -677,19 +713,29 @@ scan_thread(void *arg)
   count = 1;
   while (count > 0) {
     int           inx;
+    int          blksz;
     P7_OPROFILE **om;
 
     /* grab the next block of sequences */
     if (pthread_mutex_lock(&info->inx_mutex) != 0) p7_Fail("mutex lock failed");
     inx = *info->inx;
-    *info->inx += BLOCK_SIZE;
+    blksz = *info->blk_size;
+    if (inx > *info->limit) {
+      blksz /= 5;
+      if (blksz < 1000) {
+        *info->limit = info->om_cnt * 2;
+      } else {
+        *info->limit = inx + (info->om_cnt - inx) * 2 / 3; 
+      }
+    }
+    *info->blk_size = blksz;
+    *info->inx += blksz;
     if (pthread_mutex_unlock(&info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
 
     om = info->om_list + inx;
 
     count = info->om_cnt - inx;
-    if (count > BLOCK_SIZE) count = BLOCK_SIZE;
-    //printf("THREAD %08x: %d %d\n", workeridx, inx, count);
+    if (count > blksz) count = blksz;
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++om) {
