@@ -374,6 +374,12 @@ p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, double Pval)
  * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
  *            to receive this model as either a query or a target.
  *
+ *            If the "experimental" bias filter HMM is in use, this
+ *            call resets it to use the new model's composition. This
+ *            overwrites the bias filter HMM's expected length! You
+ *            need to call <p7_bg_SetLength()> after a <NewModel()> call.
+ *            (Failure to do this is bug #h85, 14 Dec 10.)
+ *
  *            The pipeline may alter the null model <bg> in a model-specific
  *            way (if we're using a composition bias filter HMM in the
  *            pipeline).
@@ -1375,9 +1381,9 @@ main(int argc, char **argv)
     {
       bg = p7_bg_Create(abc);
       if (esl_sq_Digitize(abc, sq) != eslOK) p7_Die("alphabet mismatch");
-      p7_bg_SetLength(bg, sq->n);
     }
       p7_pli_NewModel(pli, om, bg);
+      p7_bg_SetLength(bg, sq->n); /* SetLength() call MUST follow NewModel() call, because NewModel() resets the filter HMM, including its default expected length; see bug #h85 */
       p7_oprofile_ReconfigLength(om, sq->n);
 
       p7_Pipeline(pli, om, bg, sq, hitlist);

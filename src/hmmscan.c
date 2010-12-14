@@ -448,7 +448,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
 	  p7_pli_NewSeq(info[i].pli, qsq);
-	  p7_bg_SetLength(info[i].bg, qsq->n);
 	  info[i].qsq = qsq;
 
 #ifdef HMMER_THREADS
@@ -819,7 +818,6 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
       p7_pli_NewSeq(pli, qsq);
-      p7_bg_SetLength(bg, qsq->n);
 
       /* Main loop: */
       while ((hstatus = next_block(hfp, list, &block)) == eslOK)
@@ -1044,7 +1042,6 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
       p7_pli_NewSeq(pli, qsq);
-      p7_bg_SetLength(bg, qsq->n);
 
       /* receive a sequence block from the master */
       MPI_Recv(&block, 3, MPI_LONG_LONG_INT, 0, HMMER_BLOCK_TAG, MPI_COMM_WORLD, &mpistatus);
@@ -1061,6 +1058,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      length = om->eoff - block.offset + 1;
 
 	      p7_pli_NewModel(pli, om, bg);
+	      p7_bg_SetLength(bg, qsq->n);
 	      p7_oprofile_ReconfigLength(om, qsq->n);
 	      
 	      p7_Pipeline(pli, om, bg, qsq, th);
@@ -1147,6 +1145,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
     {
       p7_pli_NewModel(info->pli, om, info->bg);
+      p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
       p7_Pipeline(info->pli, om, info->bg, info->qsq, info->th);
@@ -1248,6 +1247,7 @@ pipeline_thread(void *arg)
 	  P7_OPROFILE *om = block->list[i];
 
 	  p7_pli_NewModel(info->pli, om, info->bg);
+	  p7_bg_SetLength(info->bg, info->qsq->n);
 	  p7_oprofile_ReconfigLength(om, info->qsq->n);
 
 	  p7_Pipeline(info->pli, om, info->bg, info->qsq, info->th);
