@@ -616,13 +616,28 @@ p7_hmm_SetCtime(P7_HMM *hmm)
  *
  * Throws:    <eslEMEM> on allocation failure, in which case 
  *            values in <hmm->compo[]> are unchanged.
+ *            
+ * Note:      In principle, you should be able to normalize
+ *            hmm->compo[] by dividing thru by the sum of
+ *            mocc[] and iocc[] vectors, and that's what the
+ *            3.0 release version did. This allowed p7_hmm_Validate()
+ *            to check compo[] for summation to 1.0, as a smoke
+ *            check for bugs here. The problem with that 
+ *            is numerical roundoff error accumulation, when
+ *            hmm->M is large [bug #h84]. To fix #h84, we
+ *            simply renormalize compo[], rather than the fancier
+ *            previous version. This avoids error accumulation,
+ *            but it also guarantees that compo[] will trivially
+ *            pass the hmm_Validation() step; it's not really
+ *            validating the SetComposition() calculation at all.                                 
+ *            (For description of #h84, error analysis, and the fix,
+ *            xref J7/7; SRE, Tue Nov  2 14:32:29 2010)
  */
 int
 p7_hmm_SetComposition(P7_HMM *hmm)
 {
   float *mocc = NULL;
   float *iocc = NULL;
-  float  norm = 0.0;
   int    k;
   int    status;
 
@@ -637,10 +652,8 @@ p7_hmm_SetComposition(P7_HMM *hmm)
       esl_vec_FAddScaled(hmm->compo, hmm->mat[k], mocc[k], hmm->abc->K);
       esl_vec_FAddScaled(hmm->compo, hmm->ins[k], iocc[k], hmm->abc->K);
     }
-  norm  = esl_vec_FSum(mocc, hmm->M+1);
-  norm += esl_vec_FSum(iocc, hmm->M+1);
 
-  esl_vec_FScale(hmm->compo, hmm->abc->K, 1.0 / norm);
+  esl_vec_FNorm(hmm->compo, hmm->abc->K);
   hmm->flags  |= p7H_COMPO;
 
   free(mocc);

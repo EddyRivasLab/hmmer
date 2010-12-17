@@ -1,3 +1,40 @@
+ID              h84
+TITLE           hmmbuild: "composition fails pvector validation"
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J7/7
+REPORTED_BY     Andy Yates <ayates@ebi.ac.uk>
+OPENED_DATE     SRE, Tue Nov  2 12:57:18 2010
+CLOSED_DATE     SRE, Tue Nov  2 14:58:38 2010
+DESCRIPTION     
+   hmmbuild gives "composition fails pvector validation" error on
+   example alignments provided by Yates. 
+
+   All these alignments are large in length (M > 10K or so), outside
+   the range of our tests (max M=2.2K, Arena_RNA_pol).
+
+   Caused by a roundoff error accumulation in
+   p7_hmm.c::p7_hmm_SetComposition(), which leads to a failure in
+   p7_hmm_Validate() when hmm->compo[] vector sum is compared to 1.0
+   with a tolerance of 1e-4. Back of the envelope analysis suggests to
+   expect a sigma of about sqrt(2 * K * M * 1.2e-15), or about 0.00002
+   for M ~ 10K (and probably more, if we accounted for all sources of
+   accumulating variance). Five sigmas is well within reach of
+   something that can cause trouble (looks like Yates was building
+   ~100K models). 
+
+   The reason error was accumulating was because I was being fancy and
+   summing my normalizing constant by a different calculation and
+   different order of evaluation than the numerators; this had the
+   advantage that any errors in the calculation would be more likely
+   to get caught, when compo[] failed to sum to 1.0.
+
+   The fix is to not be so fancy in the renormalization of compo[] in
+   p7_hmm_SetComposition(); just renormalize it. The disadvantage is
+   that validating compo[]'s sum to 1.0 is now redundant and
+   pointless, doesn't catch any possible errors.
+//
 ID              h83
 TITLE           commandline E-value threshold options only work down to ~1e-30
 AFFECTS         3.0
