@@ -107,10 +107,6 @@ typedef struct {
  *
  */
 
-/* --nonconsistent
- * --stats: print model statistics (length, h, lambda, mu/tau)
- */
-
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show brief help on version and usage",                         1 },
@@ -118,6 +114,7 @@ static ESL_OPTIONS options[] = {
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL,              "direct output to file <f>, not stdout",                        2 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",         "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",       "set max width of ASCII text output lines",                     2 },
+// --verbose --prints query running and number to standard error
   /* Control of headers */
 //  { "--options",    eslARG_NONE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "print all running options including defaults",                 3 }, /* NOT IMPLEMENTED */
   { "--stats",      eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  SALGORITHMS,       "print model statistics (h, lambda, mu/tau)",                   3 }, /* Should it work with Erank? */
@@ -128,16 +125,16 @@ static ESL_OPTIONS options[] = {
   { "--fwd",        eslARG_NONE,   FALSE, NULL, NULL,ALGORITHMS,  NULL,   NULL,             "score seqs with the Forward algorithm",                        4 },
   /* Control of scoring mode */
   { "--unihit",     eslARG_NONE,"default",NULL, NULL,     MODES,  NULL,   NULL,             "unihit local alignment",                                       5 },
-  { "--multihit",   eslARG_NONE,   FALSE, NULL, NULL,     MODES,  NULL,   SALGORITHMS,      "multihit local alignment",                                     5 },
+  { "--multihit",   eslARG_NONE,   FALSE, NULL, NULL,     MODES,  NULL,   SALGORITHMS,      "multihit local alignment",                                     5 }, /* check gap open/extension when using this mode */
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL,"0<=x<0.5", NULL,  NULL,  SGAPS,             "gap open probability",                                         6 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL,"0<=x<1",   NULL,  NULL,  SGAPS,             "gap extend probability",                                       6 },
-  { "--sopen",      eslARG_REAL,  "11.0", NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap open score",                                               6 },
-  { "--sextend",    eslARG_REAL,   "1.0", NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap extend score",                                             6 },
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,   NULL,             "substitution score matrix [BLOSUM62]",                         6 },
-  { "--convert",    eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  PGAPS,             "convert gap open/extension scores into probabilities",         6 },
-  { "--inconsistent",eslARG_NONE,  FALSE,NULL, NULL,      NULL,  NULL,  SALGORITHMS,        "use background frequencies from SwissProt",                    6 },
-//  { "--collapse",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  PGAPS,             "collapse gap open/extension scores into probability model",    5 }, /* NOT IMPLEMENTED */
+  { "--sopen",      eslARG_REAL,  "7.0",  NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap open score",                                               6 }, /* default in ssearch (unihit)*/
+  { "--sextend",    eslARG_REAL,   "1.0", NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap extend score",                                             6 }, /* default in ssearch (unihit)*/
+  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,   NULL,             "substitution score matrix [BLOSUM62]",                         6 }, /* default in ssearch (unihit) */
+  { "--convert",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  PGAPS,             "convert gap open/extension scores into probabilities",         6 }, /* See J2 page 129. Should print the result of the conversion */
+  { "--inconsistent",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,       "use background frequencies from SwissProt",                    6 },
+  { "--collapse",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  PGAPS,             "collapse gap open/extension scores into probability model",    6 },
   /* Control of reporting thresholds */
   { "-T",           eslARG_REAL,  "-500", NULL,  NULL,   REPOPTS,  NULL,  NULL,             "report sequences >= this score threshold in output",           7 },
   { "-E",           eslARG_REAL,  FALSE, NULL, "x>0",    REPOPTS,  NULL,  NULL,             "report sequences <= this E-value threshold in output",         7 },
@@ -285,7 +282,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
   if (esl_opt_IsUsed(go, "--convert"))   fprintf(ofp, "# converting gap open/extension scores into probabilities      \n");
   if (esl_opt_IsUsed(go, "--inconsistent"))   fprintf(ofp, "# Using inconsistent background frequencies from SwissProt      \n");
-//  if (esl_opt_IsUsed(go, "--collapse"))  fprintf(ofp, "# collapse gap open/extension scores into probability model \n");
+  if (esl_opt_IsUsed(go, "--collapse"))  fprintf(ofp, "# collapse gap open/extension scores into probability model \n");
   /* Control of reporting thresholds */
   if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
   if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"));
@@ -437,6 +434,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  bld->bg = p7_bg_Create(abc);
 
 	  /* Set score system in builder
+	   * It only sets emissions and
+	   * transitions int the core model
 	   * Set bg to matrix marginals
 	   * unless --inconsistent is on.
 	   */
