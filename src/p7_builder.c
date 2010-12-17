@@ -223,45 +223,58 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *en
     }
   if (! esl_scorematrix_IsSymmetric(bld->S)) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
-  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
-    ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+  if (esl_opt_GetBoolean(go, "--collapse"))
+  {
+	  open   = esl_opt_GetReal(go, "--sopen");
+	  extend = esl_opt_GetReal(go, "--sextend");
+
+	  /* Compute score system lambda */
+	  if ((status = esl_sco_gap_Probify(bld->S, open, extend, &(bld->Q), &(bld->popen), &(bld->pextend), &fa, &fb, &slambda)) != eslOK)
+		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Castellano/Eddy method (based on Yu/Altschul method) failed to backcalculate probabilistic basis of Smith-Waterman score system");
+
+	  /* Set popen/pextend probabilities in bld WRONG!!! FIX IT!!! */
+//	  bld->popen   = (exp(slambda * -open) + exp(slambda * -extend)) / 3;
+//	  bld->pextend = exp(slambda * -extend);
+  }
+
+  else
+  {
+	  /* Compute score matrix lambda */
+	  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK)
+		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+	  /* Set popen/pextend probabilities in bld */
+	  if (esl_opt_GetBoolean(go, "--convert"))
+	  {
+		  open   = esl_opt_GetReal(go, "--sopen");
+		  extend = esl_opt_GetReal(go, "--sextend");
+
+		  bld->popen   = exp(slambda * -open);    /* this is the backcalculated lambda from the score matrix */
+		  bld->pextend = exp(slambda * -extend);
+	  }
+
+	  else /* specify popen and pextend directly */
+	  {
+		  open   = esl_opt_GetReal(go, "--popen");
+		  extend = esl_opt_GetReal(go, "--pextend");
+
+		  /* Set popen/pextend probabilities in bld */
+		  bld->popen   = open;
+		  bld->pextend = extend;
+	  }
+  }
 
   /* Set probabilities in bld */
   for (a = 0; a < bld->abc->K; a++)
-    for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+	  for (b = 0; b < bld->abc->K; b++)
+		  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
 
   /* Set background probabilities in bld */
 
   if (! esl_opt_GetBoolean(go, "--inconsistent"))
 	  for (a = 0; a < bld->abc->K; a++)
 		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
-
-  /* Set popen/pextend probabilities in bld */
-   if (esl_opt_GetBoolean(go, "--convert"))
-   {
-	   open   = esl_opt_GetReal(go, "--sopen");
-	   extend = esl_opt_GetReal(go, "--sextend");
-
-	   bld->popen   = exp(slambda * -open);
-	   bld->pextend = exp(slambda * -extend);
-   }
-//   else if (esl_opt_GetBoolean(go, "--collapse"))
-//   {
-//       open   = esl_opt_GetReal(go, "--sopen");
-//       extend = esl_opt_GetReal(go, "--sextend");
-//
-//  	 bld->popen   = (exp(slambda * -open) + exp(slambda * -extend)) / 3;
-//   	 bld->pextend = exp(slambda * -extend);
-//   }
-   else
-   {
-		open   = esl_opt_GetReal(go, "--popen");
- 		extend = esl_opt_GetReal(go, "--pextend");
-
- 		bld->popen   = open;
- 		bld->pextend = extend;
-   }
 
    /* Check range */
    if ( !(bld->popen >= 0 && bld->popen < 0.5) )
