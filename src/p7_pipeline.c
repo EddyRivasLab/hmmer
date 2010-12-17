@@ -302,7 +302,7 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  *            for the processing pipeline.
  */
 int
-p7_pli_TargetReportable(P7_PIPELINE *pli, float score, float Pval)
+p7_pli_TargetReportable(P7_PIPELINE *pli, float score, double Pval)
 {
   if      (  pli->by_E )
     {
@@ -323,7 +323,7 @@ p7_pli_TargetReportable(P7_PIPELINE *pli, float score, float Pval)
  *            for the processing pipeline.
  */
 int
-p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, float Pval)
+p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, double Pval)
 {
   if      (  pli->dom_by_E   && Pval * pli->domZ <= pli->domE) return TRUE;
   else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
@@ -335,7 +335,7 @@ p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, float Pval)
  * Incept:    SRE, Fri Jan 16 11:18:08 2009 [Janelia]
  */
 int
-p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, float Pval)
+p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, double Pval)
 {
   if      (  pli->inc_by_E )
     {
@@ -353,7 +353,7 @@ p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, float Pval)
  * Incept:    SRE, Fri Jan 16 11:20:38 2009 [Janelia]
  */
 int
-p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, float Pval)
+p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, double Pval)
 {
   if      (  pli->incdom_by_E   && Pval * pli->domZ <= pli->incdomE) return TRUE;
   else if (! pli->incdom_by_E   && dom_score        >= pli->incdomT) return TRUE;

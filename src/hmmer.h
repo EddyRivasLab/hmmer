@@ -1077,10 +1077,10 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     float Pval);
-extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, float Pval);
-extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     float Pval);
-extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, float Pval);
+extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double Pval);
+extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double Pval);
+extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     double Pval);
+extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double Pval);
 extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
