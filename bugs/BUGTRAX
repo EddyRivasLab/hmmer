@@ -1,3 +1,31 @@
+ID              h85
+TITLE           hmmscan and hmmsearch give different results for same model
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J7/36; 1210-bug-h85
+REPORTED_BY    	Sarah Hunter <hunter@ebi.ac.uk>, 10 Dec 2010
+OPENED_DATE     SRE, Tue Dec 14 10:43:56 2010
+CLOSED_DATE     SRE, Tue Dec 14 10:43:57 2010
+DESCRIPTION     
+  Pfam SLT model, Uniparc http://www.uniprot.org/uniparc/UPI00001BD3BA
+  hmmsearch sees 31.9 bit, 4.9e-12 hit; hmmscan sees nothing.
+  hmmscan is filtering it out in the bias filter step.
+
+  Problem is that hmmscan is calling p7_bg_SetLength() before
+  p7_bg_SetFilter(), so the bias filter hmm never gets its length
+  configured properly. p7_bg_SetFilter() is called in
+  p7_pli_NewModel(), after we read each new profile.
+   
+  The result is that the filter HMM's expected length is always 400 in
+  hmmscan, rather than the actual query sequence length. The more 
+  the actual length differs from 400, the more this will cause
+  differences in sequences passing the bias filter. 
+
+  Changed so SetLength() is called in the inner sequence-reading loop,
+  after the p7_pli_NewModel() calls, just as hmmsearch calls it after 
+  a p7_pli_NewSeq() call.
+//
 ID              h84
 TITLE           hmmbuild: "composition fails pvector validation"
 AFFECTS         3.0

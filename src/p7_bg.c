@@ -40,7 +40,7 @@
  *            here; neither is the filter null model <bg->fhmm>.  To
  *            use the filter null model, caller will want to
  *            initialize these fields by calling
- *            <p7_bg_SetFilterByHMM()>.
+ *            <p7_bg_SetFilter()>.
  *
  * Throws:    <NULL> on allocation failure.
  *
@@ -217,6 +217,15 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *            <compo> is the average model residue composition, from
  *            either the HMM or the copy in a profile or optimized
  *            profile. <M> is the length of the model in nodes.
+ *            
+ *            The expected length of the filter HMM's generated
+ *            sequence is set to a default (about 400). You need a
+ *            subsequent call to <p7_bg_SetLength()> to set it to the
+ *            target sequence length. In hmmscan, this requires a 
+ *            call after every new model is read and <p7_pli_NewModel()> 
+ *            is called, because <NewModel()> is calling <p7_bg_SetFilter()>
+ *            to copy the new model's composition <compo>. [Failure to
+ *            do this properly was bug #h85, 14 Dec 2010.]
  *
  * Returns:   <eslOK> on success.
  *
