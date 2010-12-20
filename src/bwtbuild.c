@@ -19,24 +19,41 @@
 int
 main(int argc, const char *argv[]) {
   FILE *fp;
-  const char *fname;
+  const char *fname_in;
+  const char *fname_out;
   ESL_DSQ *T, *BWT; //*Trev,
-  int *SA;
-  unsigned short *occCnts_b; // this is really a 2D array, but will be indexed as occ_cnts[alph_size*index + char]  (instead of occ_cnts[index][char])
-  int *occCnts_sb; // same indexing as above
-  int *cnts;
-  unsigned short *cnts_loc;
+  int *SA;  //should be uint32_t, but that requires changes to divsufsort, which I'll make later
+  uint16_t *occCnts_b; // this is really a 2D array, but will be indexed as occ_cnts[alph_size*index + char]  (instead of occ_cnts[index][char])
+  uint32_t *occCnts_sb; // same indexing as above
+  uint32_t *cnts;
+  uint16_t *cnts_loc;
   long i,j;
   int            status   = eslOK;
   ESL_ALPHABET    *abc      = esl_alphabet_Create(eslDNA);              /* digital alphabet                                */
   BWT_METADATA *meta;
   ESL_ALLOC (meta, sizeof(BWT_METADATA));
 
-  meta->alph_type = eslDNA;
-  meta->alph_size = 16;
-  meta->freq_SA = 32;
+  meta->alph_type   = eslDNA;
+  meta->alph_size   = 16;
+  meta->freq_SA     = 32;
   meta->freq_cnt_sb = pow(2,16); //65536 - that's the max size of an unsigned short
-  meta->freq_cnt_b = pow(2,10); // for SSE, can't be more than 256 * 16 = 4096, or lose guarantee of collecting counts correctly
+  meta->freq_cnt_b  = 128; // for SSE, can't be more than 256 * 16 = 4096, or lose guarantee of collecting counts correctly
+
+
+  if (argc >= 3) {
+	  fname_in = argv[1];
+	  fname_out = argv[2];
+	  if (argc >=4) {
+		  meta->freq_cnt_b = atoi(argv[3]);
+		  if (! meta->freq_cnt_b ==   round(meta->freq_cnt_b) ) {
+			  printf ("bin_length must be a power of 2, at least 128, and at most 4096\n");
+			  exit(1);
+		  }
+	  }
+  } else {
+	  printf ("need 2 or 3 args:  filein fileout [bin_length]\n");
+	  exit(1);
+  }
 
   meta->SA_shift = log2(meta->freq_SA);
   meta->cnt_shift_sb = log2(meta->freq_cnt_sb);
@@ -44,8 +61,8 @@ main(int argc, const char *argv[]) {
 
 
   /* Open a file for reading. */
-  if((fp = fopen(fname = argv[1], "rb")) == NULL) {
-    ESL_FAIL(eslFAIL, "%s: Cannot open file `%s': ", argv[0], fname);
+  if((fp = fopen(fname_in, "rb")) == NULL) {
+    ESL_FAIL(eslFAIL, "%s: Cannot open file `%s': ", argv[0], fname_in);
   }
 
   /* Get the file size. */
@@ -53,26 +70,26 @@ main(int argc, const char *argv[]) {
 	  meta->N = ftell(fp);
     rewind(fp);
     if(meta->N < 0)
-      ESL_FAIL(eslFAIL, "%s: Cannot ftell `%s': ", argv[0], fname);
+      ESL_FAIL(eslFAIL, "%s: Cannot ftell `%s': ", argv[0], fname_in);
   } else {
-	ESL_FAIL(eslFAIL, "%s: Cannot fseek `%s': ", argv[0], fname);
+	ESL_FAIL(eslFAIL, "%s: Cannot fseek `%s': ", argv[0], fname_in);
   }
 
   int num_freq_cnts_sb = 1+ceil((float)meta->N/meta->freq_cnt_sb);
-  int num_freq_cnts_b = 1+ceil((float)meta->N/meta->freq_cnt_b);
-  int num_SA_samples = floor((float)meta->N/meta->freq_SA);
-  int cnt_mask_b = meta->freq_cnt_b - 1; //used to compute the mod function
-  int cnt_mask_sb = meta->freq_cnt_sb - 1; //used to compute the mod function
+  int num_freq_cnts_b  = 1+ceil((float)meta->N/meta->freq_cnt_b);
+  int num_SA_samples   = floor((float)meta->N/meta->freq_SA);
+  int cnt_mask_b       = meta->freq_cnt_b - 1; //used to compute the mod function
+  int cnt_mask_sb      = meta->freq_cnt_sb - 1; //used to compute the mod function
 
 
   /* Allocate n bytes for BWT and 4n bytes for SA*/
   ESL_ALLOC (T, meta->N * sizeof(ESL_DSQ));
   ESL_ALLOC (BWT, meta->N * sizeof(ESL_DSQ));
   ESL_ALLOC (SA, meta->N * sizeof(int));
-  ESL_ALLOC (cnts, meta->alph_size * sizeof(int));
-  ESL_ALLOC (cnts_loc, meta->alph_size * sizeof(int));
-  ESL_ALLOC (occCnts_b,  num_freq_cnts_b *  meta->alph_size * sizeof(unsigned short)); // every freq_cnt_b positions, store an array of 8-byte ints
-  ESL_ALLOC (occCnts_sb,  num_freq_cnts_sb *  meta->alph_size * sizeof(int)); // every freq_cnt_sb positions, store an array of ints
+  ESL_ALLOC (cnts, meta->alph_size * sizeof(uint32_t));
+  ESL_ALLOC (cnts_loc, meta->alph_size * sizeof(uint16_t));
+  ESL_ALLOC (occCnts_b,  num_freq_cnts_b *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
+  ESL_ALLOC (occCnts_sb,  num_freq_cnts_sb *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
   if((T == NULL)  || (SA==NULL) || (BWT==NULL) || (cnts==NULL) || (occCnts_b==NULL) || (cnts_loc==NULL) ||  (occCnts_sb==NULL)  ) {
     ESL_FAIL(eslFAIL, "%s: Cannot allocate memory.\n", argv[0]);
   }
@@ -92,24 +109,28 @@ main(int argc, const char *argv[]) {
 
 
   /* Open a file for writing. */
-  if((fp = fopen(fname = argv[2], "wb")) == NULL)
-    ESL_FAIL(eslFAIL, "%s: Cannot open file `%s': ", argv[0], fname);
+  if((fp = fopen(fname_out, "wb")) == NULL)
+    ESL_FAIL(eslFAIL, "%s: Cannot open file `%s': ", argv[0], fname_out);
   /* Write the FM-index meta data */
   if(fwrite(meta, sizeof(BWT_METADATA), 1, fp) != 1)
 	  ESL_FAIL(eslFAIL, "%s: Error writing BWT.\n", argv[0]);
 
-  /* Reverse the sequence, for suitable BWT traversal.
+  /* Reverse the sequence in place, for suitable BWT traversal.
    * While I'm at it, convert to resemble the easel alphabet
    *  (a) this collapses upper/lower case for appropriate sorting.
    *  (b) the K+1th character of the easel alphabet is '-', which is a waste for me. I'd like to replace it with '$',
    *      but need '$' to be the lowest letter, so shift the first K chars up one, and make 0 = '$'
-   *  Also make the revcomp (of the reverse :o  )
    */
-  for(i=0; i < meta->N-1; ++i) {
-	  T[i] =  abc->inmap[T[i]];
-	  T[i] += T[i] < abc->K ? 1 : 0;
-  }
+
   T[meta->N-1] = 0; // by default, this is LF;  convert it to 0, essentially '$'
+  ESL_DSQ tmpc;
+  for(i=0; i < (meta->N-1)/2; ++i) {
+	  tmpc = T[meta->N-2-i];
+	  T[meta->N-2-i] = abc->inmap[T[i]];
+	  T[i] = abc->inmap[tmpc];
+  }
+  for(i=0; i < (meta->N-1); ++i)
+	  T[i] += T[i] < abc->K ? 1 : 0;
 
   /* Construct the Suffix Array */
   int result = divsufsort(T, SA, meta->N);
@@ -126,13 +147,13 @@ main(int argc, const char *argv[]) {
 
 		  if ( (j & cnt_mask_sb) == 0 ) {  // j%freq_cnt_sb
 			  for (i=0; i<meta->alph_size; i++) {
-				  bwt_OccCnt(occCnts_sb, (j>>meta->cnt_shift_sb), i ) = cnts[i];
-				  bwt_OccCnt(occCnts_b, (j>>meta->cnt_shift_b), i ) = cnts_loc[i];
+				  bwt_OccCnt((j>>meta->cnt_shift_sb), i, sb ) = cnts[i];
+				  bwt_OccCnt((j>>meta->cnt_shift_b), i, b ) = cnts_loc[i];
 				  cnts_loc[i] = 0;
 			  }
 		  } else {
 			  for (i=0; i<meta->alph_size; i++)
-				  bwt_OccCnt(occCnts_b, (j>>meta->cnt_shift_b), i ) = cnts_loc[i];
+				  bwt_OccCnt((j>>meta->cnt_shift_b), i, b ) = cnts_loc[i];
 
 		  }
 
@@ -141,8 +162,8 @@ main(int argc, const char *argv[]) {
 	  cnts_loc[BWT[j]]++;
   }
   for (i=0; i<meta->alph_size; i++) {
-	  bwt_OccCnt(occCnts_sb, num_freq_cnts_sb-1, i ) = cnts[i];
-	  bwt_OccCnt(occCnts_b, num_freq_cnts_b-1, i ) = cnts_loc[i];
+	  bwt_OccCnt(num_freq_cnts_sb-1, i, sb ) = cnts[i];
+	  bwt_OccCnt(num_freq_cnts_b-1, i, b ) = cnts_loc[i];
   }
 /*
   printf ("Text\n");
@@ -218,9 +239,9 @@ main(int argc, const char *argv[]) {
 	  ESL_FAIL(eslFAIL, "%s: Error writing BWT.\n", argv[0]);
   if(fwrite(SA, sizeof(int), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
 	  ESL_FAIL(eslFAIL, "%s: Error writing BWT.\n", argv[0]);
-  if(fwrite(occCnts_b, sizeof(unsigned short)*meta->alph_size, (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
+  if(fwrite(occCnts_b, sizeof(uint16_t)*meta->alph_size, (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
 	  ESL_FAIL(eslFAIL, "%s: Error writing BWT.\n", argv[0]);
-  if(fwrite(occCnts_sb, sizeof(int)*meta->alph_size, (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
+  if(fwrite(occCnts_sb, sizeof(uint32_t)*meta->alph_size, (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
 	  ESL_FAIL(eslFAIL, "%s: Error writing BWT.\n", argv[0]);
 
 

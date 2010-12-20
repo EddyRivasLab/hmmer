@@ -1,6 +1,6 @@
-/* nhmmer: search profile HMM(s) against a nucleotide sequence database.
+/* ssv-hits: given a profile HMM and a nucleotide sequence, find the shortest diagonal that meets SSV filter threshold
  * 
- * TJW, Mon Apr  5 09:35:36 EDT 2010 [Janelia]
+ * TJW, Mon Oct  5 06:53:36 EDT 2010 [Janelia]
  */
 #include "p7_config.h"
 
@@ -13,6 +13,7 @@
 #include "esl_dmatrix.h"
 #include "esl_getopts.h"
 #include "esl_scorematrix.h"
+#include "esl_gumbel.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
@@ -27,7 +28,7 @@
 #include "hmmer.h"
 
 
-/* set the max residue count to 1 meg when reading a block (smaller if in dummy mode) */
+/* set the max residue count to 1 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
 #else
@@ -129,7 +130,7 @@ struct cfg_s {
 //static char usage[]  = "[options] <query hmmfile|alignfile> <target seqfile>";
 //static char banner[] = "search a DNA model or alignment against a DNA database";
 static char usage[]  = "[options] <query hmmfile> <target seqfile>";
-static char banner[] = "search a DNA model against a DNA database";
+static char banner[] = "given a profile HMM and a nucleotide sequence, find the shortest diagonal that meets SSV filter threshold";
 
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
@@ -272,7 +273,7 @@ main(int argc, char **argv)
   p7_FLogsumInit();        /* we're going to use table-driven Logsum() approximations at times */
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
-      status = serial_master(go, &cfg);
+  status = serial_master(go, &cfg);
 
   esl_getopts_Destroy(go);
 
@@ -368,8 +369,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                                   esl_threads_CPUCount(&ncpus);
+//  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
+//  else                                   esl_threads_CPUCount(&ncpus);
 
 
   if (ncpus > 0) {
@@ -602,6 +603,115 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 //TODO: MPI code needs to be added here
 
+
+int
+get_shortest_ssv_hit(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, float nu, P7_BG *bg, double P) {
+	  int 	  	   status;
+	  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
+	  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
+	  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
+	  float        tec   = logf(1.0f / nu);
+	  int          i,j,k, x;
+
+	  float 	   tloop_total = tloop * gm->max_length;
+	  float nullsc;
+	  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+	  p7_bg_SetLength(bg, gm->max_length);
+	  p7_ReconfigLength(gm, gm->max_length);
+	  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+	  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
+
+	  int test = 1;
+	  /*gather values from gm->rsc into a succinct 2D array*/
+	  if (test == 1) {
+		  printf ("         ");
+		  for (k = 1; k <= gm->M; k++) {
+			  printf (" %3d   ", k);
+		  }
+		  printf("\n");
+	  }
+	  float **scores;
+	  ESL_ALLOC(scores, (L+1) * sizeof(float*));
+	  for (i=1; i<=L; i++) {
+		  ESL_ALLOC(scores[i], (gm->M + 1) * sizeof(float));
+		  if (test == 1)  printf ("%3d (%c): ", i, gm->abc->sym[dsq[i]]);
+		  for (k = 1; k <= gm->M; k++) {
+			  scores[i][k] = gm->rsc[dsq[i]][(k) * p7P_NR     + p7P_MSC];
+			  if (test == 1) printf ("%5.2f  ", scores[i][k]);
+		  }
+		  if (test == 1) printf ("\n");
+	  }
+
+	  //For each position in the model, start the query there, and scan along for high-scoring runs.
+	  //Keep two pointers (head, tail): keep both together until a positive score is seen, then
+	  //extend head while score remains positive. Bring tail up to head if score goes negative. If score
+	  //exceeds sc_thresh, note the length (keeping the shortest),
+	  float sc;
+	  float run_sc;
+	  float max_run_sc;
+	  int  max_run_i;
+	  int  max_run_j;
+	  int  max_run_k;
+	  int shortest_len = 100000;
+	  int shortest_len_i ;
+	  int shortest_len_j ;
+	  int shortest_len_k ;
+	  for (k = 1; k <= gm->M; k++) {
+		  i = 1;
+		  run_sc = 0;
+		  for (j = 1; j<=L && j+k-1<=gm->M; j++)
+		  {
+
+			  sc = scores[j][j+k-1];
+			  run_sc += sc;
+			  if (run_sc > max_run_sc) {
+				  max_run_sc = run_sc;
+				  max_run_i = i;
+				  max_run_j = j;
+				  max_run_k = k;
+			  }
+			  if (run_sc <= 0 ){
+				  i=j+1; // j will catch up in a moment
+				  run_sc = 0;
+			  } else {
+				  if (run_sc >= sc_thresh) {
+					  //now scan between i and j, checking if the score of any suffix of that subalignment is still above threshold
+					  float tmp_run_sc = run_sc;
+
+					  for (x=i; x<j; x++) {
+
+						  sc = scores[x][x+k-1];
+						  tmp_run_sc -= sc;
+						  if (tmp_run_sc >= sc_thresh) {
+							  i = x+1;
+							  run_sc = tmp_run_sc;
+						  }
+					  }
+					  if (j-i+1 < shortest_len) {
+						  shortest_len = j-i+1;
+						  shortest_len_i = i;
+						  shortest_len_j = j;
+						  shortest_len_k = k;
+					  }
+				  }
+			  }
+		  }
+	  }
+
+	  printf ("Max: %.2f (%.2f) (i=%d, j=%d, k=%d)\n", max_run_sc, sc_thresh, max_run_i, max_run_j, max_run_k);
+	  if (shortest_len < 100000) {
+		  printf ("Shortest: %d\n", shortest_len);
+		  printf ("i=%d, j=%d, k=%d\n", shortest_len_i, shortest_len_j, shortest_len_k );
+	  }
+	  exit(0);
+
+	ERROR:
+	  return eslFAIL;
+
+}
+
+
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
@@ -624,10 +734,15 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_pli_NewSeq(info->pli, dbsq);
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
       prev_hit_cnt = info->th->N;
-      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
+
+      //p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
+      //Here - compare dbsq to om (in dummy mode, thats a gm object)
+      get_shortest_ssv_hit(dbsq->dsq, dbsq->n, info->om, 2.0, info->bg, info->pli->F1);
+
 
 
       p7_pipeline_Reuse(info->pli); // prepare for next search
+
 
 
       P7_DOMAIN *dcl;
@@ -713,7 +828,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       for (i=1; i<block->count; i++)
           esl_sq_Reuse(block->list + i);
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT);
 
       info->pli->nseqs += block->count - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
 
@@ -763,9 +878,6 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
-
-
-
 #ifdef HAVE_FLUSH_ZERO_MODE
   /* In order to avoid the performance penalty dealing with sub-normal
    * values in the floating point calculations, set the processor flag

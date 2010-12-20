@@ -847,24 +847,34 @@ typedef struct p7_builder_s {
 /*****************************************************************
  * 15. BWT: building and searching with BWT / FM-index
  *****************************************************************/
-#define bwt_OccCnt(cnts, i, c)  ( cnts[meta->alph_size*(i) + (c)])
+#define bwt_OccCnt( i, c, type)  ( occCnts_##type[meta->alph_size*(i) + (c)])
+//#define bwt_OccCnt( i, c, type)  ( occCnts_##type[num_freq_cnts_##type*(c) + (i) ])
 
 typedef struct bwt_dp_pair_s {
-  int    pos;  // position of the diagonal in the model.   these can be int8_t, I'd think
-  float  score;
-  float  max_score;
-  int    max_score_len; // how long was the diagonal when the maximum observed score was seen?
-  int    consec_pos;
-  int    max_consec_pos;
-//  float  score8;
-//  float  max_score8;
-} BWT_DP_PAIR;
+  uint16_t    pos;  // position of the diagonal in the model.
+  float       score;
+  float       max_score;
+  uint8_t     max_score_len; // how long was the diagonal when the maximum observed score was seen?
+  uint8_t     consec_pos;
+  uint8_t     max_consec_pos;
 
+} BWT_DP_PAIR;
 
 typedef struct bwt_interval_s {
   int   lower;
   int   upper;
 } BWT_INTERVAL;
+
+
+typedef struct bwt_diag_s {
+  uint16_t    k;  // position of the model at which the diagonal begins
+  float       score;
+  union {
+  	  BWT_INTERVAL interval;
+  	  uint32_t    p;
+  };
+} BWT_DIAG;
+
 
 
 typedef struct bwt_metadata_s {
@@ -880,12 +890,12 @@ typedef struct bwt_metadata_s {
 } BWT_METADATA;
 
 typedef struct bwt_fmindex_s {
-  ESL_DSQ *T;
-  ESL_DSQ *BWT;
-  int     *SA;
-  int     *C;
-  unsigned short   *occCnts_b;
-  int     *occCnts_sb;
+  ESL_DSQ   *T;
+  ESL_DSQ   *BWT;
+  int  *SA;
+  int  *C; //the first position of each letter in the alphabet in a sorted list
+  uint16_t  *occCnts_b;
+  uint32_t  *occCnts_sb;
 } BWT_FMINDEX;
 
 
