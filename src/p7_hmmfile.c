@@ -1,7 +1,7 @@
 /* Input/output of HMMs.
  * 
  * Contents:
- *     1. The P7_HMMFILE object for reading HMMs.
+ *     1. The P7_HMMFILE object for reading HMMs
  *     2. Writing HMMER3 HMM files.
  *     3. API for reading HMM files in various formats.
  *     4. Private, specific profile HMM file format parsers.
@@ -65,11 +65,18 @@ static float h2ascii2prob(char *s, float null);
  * 1. The P7_HMMFILE object for reading HMMs.
  *****************************************************************/
 
-static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only);
+/* Historical note:
+ * p7_hmmfile_Open() is deprecated;
+ * p7_hmmfile_OpenE() is the newer replacement, which includes
+ * better error reporting through a <errbuf>.
+ */
+
+static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf);
 
 
-/* Function:  p7_hmmfile_Open()
- * Incept:    SRE, Wed Jan  3 18:38:10 2007 [Casa de Gatos]
+/* Function:  p7_hmmfile_OpenE()
+ * Synopsis:  Open an HMM file <filename>. 
+ * Incept:    SRE, Tue Dec 21 10:44:38 2010 [Zaragoza]
  *
  * Purpose:   Open an HMM file <filename>, and prepare to read the first
  *            HMM from it.
@@ -98,6 +105,8 @@ static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_a
  *            env      - list of paths to look for <hmmfile> in, in 
  *                       addition to current working dir; or <NULL>
  *            ret_hfp  - RETURN: opened <P7_HMMFILE>.
+ *            errbuf   - error message buffer: <NULL>, or a ptr
+ *                       to <eslERRBUFSIZE> chars of allocated space.
  *
  * Returns:   <eslOK> on success, and the open <ESL_HMMFILE> is returned
  *            in <*ret_hfp>.
@@ -108,21 +117,59 @@ static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_a
  *            
  *            <eslEFORMAT> if <filename> is not in a recognized HMMER
  *            HMM file format.
+ *            
+ *            On either type of error, if a non-NULL <errbuf> was provided,
+ *            a useful user error message is left in it.
  *
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
+p7_hmmfile_OpenE(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
-  return open_engine(filename, env, ret_hfp, FALSE);
+  return open_engine(filename, env, ret_hfp, FALSE, errbuf);
 }
 
 
-/* Function:  p7_hmmfile_OpenNoDB()
+/* Function:  p7_hmmfile_Open()
+ * Synopsis:  Open an HMM file. (Deprecated version with less error handling)
+ * Incept:    SRE, Wed Jan  3 18:38:10 2007 [Casa de Gatos]
+ *
+ * Purpose:   Same as <p7_hmmfile_OpenE()>, above, but without the <errbuf>.
+ *            This older version is now deprecated. Use <p7_hmmfile_OpenE()>.
+ *            
+ *            When we have squashed out all usage of legacy <p7_hmmfile_Open()>,
+ *            <OpenE()> will become <Open()>.
+ */
+int
+p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
+{
+  return open_engine(filename, env, ret_hfp, FALSE, NULL);
+}
+
+/* Function:  p7_hmmfile_OpenENoDB()
  * Synopsis:  Open only an HMM flatfile, even if pressed db exists.
+ * Incept:    SRE, Tue Dec 21 10:52:35 2010 [Zaragoza]
+ *
+ * Purpose:   Same as <p7_hmmfile_OpenE()> except that if a pressed
+ *            database exists for <filename>, it is ignored. Only
+ *            <filename> itself is opened.
+ *            
+ *            hmmpress needs this call. Otherwise, it opens a press'ed
+ *            database that it may be about to overwrite.
+ */
+int
+p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
+{
+  return open_engine(filename, env, ret_hfp, TRUE, errbuf);
+}
+
+
+
+/* Function:  p7_hmmfile_OpenNoDB()
+ * Synopsis:  Open only an HMM flatfile, even if pressed db exists. (Deprecated)
  * Incept:    SRE, Thu Nov 12 09:26:04 2009 [Janelia]
  *
- * Purpose:   Same as <p7_hmmfile_Open()> except that if a pressed
+ * Purpose:   Same as <p7_hmmfile_OpenENoDB()>, 
  *            database exists for <filename>, it is ignored. Only
  *            <filename> itself is opened.
  *            
@@ -132,22 +179,31 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 int
 p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
 {
-  return open_engine(filename, env, ret_hfp, TRUE);
+  return open_engine(filename, env, ret_hfp, TRUE, NULL);
 }
 
 
 /* open_engine()
  *
- * Implements both p7_hmmfile_Open() and p7_hmmfile_OpenNoDB(). 
+ * Implements all of the file opening functions:
+ * <p7_hmmfile_Open()>, <p7_hmmfile_OpenE()>, <p7_hmmfile_OpenNoDB()>, 
+ * and <p7_OpenENoDB()>.
  * See their comments above.
+ * 
+ * Only returns three types of errors: 
+ *    eslENOTFOUND - file (the HMM file) or program (gzip, for .gz files) not found
+ *    eslEFORMAT   - bad HMM file format (or format of associated file)           
+ *    eslEMEM      - allocation failure somewhere
+ * <errbuf>, if non-NULL, will contain a useful error message.             
+ *              
  */
 static int 
-open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
+open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf)
 {
-  P7_HMMFILE *hfp     = NULL;
-  char       *envfile = NULL;	/* full path to filename after using environment  */
-  char       *dbfile  = NULL;	/* constructed name of an index or binary db file */
-  char       *cmd     = NULL;	/* constructed gzip -dc pipe command              */
+  P7_HMMFILE *hfp      = NULL;
+  char       *envfile  = NULL;	/* full path to filename after using environment  */
+  char       *dbfile   = NULL;	/* constructed name of an index or binary db file */
+  char       *cmd      = NULL;	/* constructed gzip -dc pipe command              */
   int         status;
   int         n       = strlen(filename);
   union { char c[4]; uint32_t n; } magic;
@@ -181,15 +237,15 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
     {				
       hfp->f        = stdin;
       hfp->do_stdin = TRUE;
-      if ((status = esl_strdup("[STDIN]", -1, &(hfp->fname))) != eslOK) goto ERROR;
+      if ((status = esl_strdup("[STDIN]", -1, &(hfp->fname))) != eslOK)   ESL_XFAIL(status, errbuf, "esl_strdup failed; shouldn't happen");
     }
 #ifdef HAVE_POPEN
   else if (n > 3 && strcmp(filename+n-3, ".gz") == 0) /* a <*.gz> filename means read via gunzip pipe */
     {			
-      if (! esl_FileExists(filename))	                                  { status = eslENOTFOUND; goto ERROR; }
-      if ((status = esl_sprintf(&cmd, "gzip -dc %s", filename)) != eslOK) goto ERROR;
-      if ((hfp->f = popen(cmd, "r")) == NULL)                             { status = eslENOTFOUND; goto ERROR; }
-      if ((status = esl_strdup(filename, n, &(hfp->fname))) != eslOK)     goto ERROR;
+      if (! esl_FileExists(filename))	                                  ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
+      if ((status = esl_sprintf(&cmd, "gzip -dc %s", filename)) != eslOK) ESL_XFAIL(status,       errbuf, "when setting up .gz pipe: esl_sprintf() failed");
+      if ((hfp->f = popen(cmd, "r")) == NULL)                             ESL_XFAIL(eslENOTFOUND, errbuf, "gzip -dc %s failed; gzip not installed or not in PATH?", filename);
+      if ((status = esl_strdup(filename, n, &(hfp->fname))) != eslOK)     ESL_XFAIL(status,       errbuf, "esl_strdup() failed, shouldn't happen");
       hfp->do_gzip  = TRUE;
       free(cmd); cmd = NULL;
     }
@@ -207,17 +263,17 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
     {
       if ((hfp->f = fopen(filename, "r")) != NULL) 
 	{
-	  if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) goto ERROR;
+	  if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) ESL_XFAIL(status, errbuf, "esl_strdup() failed, shouldn't happen");
 	}
       else if (esl_FileEnvOpen(filename, env, &(hfp->f), &envfile) == eslOK)
 	{
 	  n = strlen(envfile);
-	  if ((status = esl_strdup(envfile, n, &(hfp->fname)))     != eslOK) goto ERROR;
+	  if ((status = esl_strdup(envfile, n, &(hfp->fname)))     != eslOK) ESL_XFAIL(status, errbuf, "esl_strdup() failed, shouldn't happen");
 	  free(envfile); envfile = NULL;
 	}
       else
-	{
-	  if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) goto ERROR;
+	{ /* temporarily copy filename over to hfp->fname, even though we haven't opened anything: we'll next try to open <filename>.h3m  */
+	  if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) ESL_XFAIL(status, errbuf, "esl_strdup() failed, shouldn't happen");
 	}
     }
   /* <hfp->f> may *still* be NULL, if <filename> is a press'ed database and ASCII file is deleted */
@@ -235,19 +291,21 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
   if (! do_ascii_only && ! hfp->do_stdin && ! hfp->do_gzip)
     {
       FILE *tmpfp;
-      esl_sprintf(&dbfile, "%s.h3m", hfp->fname);
+      /* if we opened an ASCII file in the HMMERDB directory, hfp->fname contains fully qualified name of file including the path */
+      if ((status = esl_sprintf(&dbfile, "%s.h3m", hfp->fname) != eslOK)) ESL_XFAIL(status, errbuf, "esl_sprintf() failed; shouldn't happen");
       
       if ((tmpfp = fopen(dbfile, "rb")) != NULL) 
 	{
-	  if (hfp->f != NULL) fclose(hfp->f);
+	  if (hfp->f != NULL) fclose(hfp->f); /* preferentially read the .h3m file, not the original */
 	  hfp->f = tmpfp;
 	  hfp->is_pressed = TRUE;
+	  free(hfp->fname);
+	  if ((status = esl_strdup(dbfile, -1, &(hfp->fname)))    != eslOK) ESL_XFAIL(status, errbuf, "esl_strdup() failed, shouldn't happen");
 	}
       else if (hfp->f == NULL && esl_FileEnvOpen(dbfile, env, &(hfp->f), &envfile) == eslOK)
 	{ /* found a binary-only press'ed db in one of the env directories. */
 	  free(hfp->fname);
-	  envfile[strlen(envfile)-4] = '\0';	/* "strip" the .h3m suffix */
-	  if ((status = esl_strdup(envfile, n, &(hfp->fname)))    != eslOK) goto ERROR;
+	  if ((status = esl_strdup(envfile, -1, &(hfp->fname)))    != eslOK) ESL_XFAIL(status, errbuf, "esl_strdup() failed; shouldn't happen");
 	  hfp->is_pressed = TRUE;
 	}
       free(dbfile); dbfile = NULL;
@@ -255,7 +313,11 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
 
   /* 4. <hfp->f> must now point to a valid model input stream: if not, we fail. 
    */
-  if (hfp->f == NULL) { status = eslENOTFOUND; goto ERROR; }
+  if (hfp->f == NULL)  
+    {
+      if (env) ESL_XFAIL(eslENOTFOUND, errbuf, "HMM file %s not found (nor an .h3m binary of it); also looked in %s", filename, env);
+      else     ESL_XFAIL(eslENOTFOUND, errbuf, "HMM file %s not found (nor an .h3m binary of it)",                    filename);
+    }
 
 
   /* 5. If we found and opened a binary model file .h3m, open the rest of 
@@ -263,52 +325,61 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only)
    */
   if (hfp->is_pressed) 
     {
-      esl_sprintf(&dbfile, "%s.h3f", hfp->fname);
-      if ((hfp->ffp = fopen(dbfile, "rb")) == NULL) { hfp->is_pressed = FALSE; } /* not an error; we'll just read unpressed. */
-      free(dbfile); dbfile = NULL;
+      /* here we rely on the fact that the suffixes are .h3{mfpi}, to construct other names from .h3m file name !! */
+      n = strlen(hfp->fname); 	/* so, n = '\0', n-1 = 'm'  */
+      esl_strdup(hfp->fname, n, &dbfile);
 
-      esl_sprintf(&dbfile, "%s.h3p", hfp->fname);
-      if ((hfp->pfp = fopen(dbfile, "rb")) == NULL) { hfp->is_pressed = FALSE; } /* not an error; we'll just read unpressed. */
-      free(dbfile); dbfile = NULL;      
+      dbfile[n-1] = 'f';	/* the MSV filter part of the optimized profiles */
+      if ((hfp->ffp = fopen(dbfile, "rb")) == NULL) ESL_XFAIL(eslENOTFOUND, errbuf, "Opened %s, a pressed HMM file; but no .h3f file found", hfp->fname);
 
-      esl_sprintf(&dbfile, "%s.h3i", hfp->fname);
-      if (esl_ssi_Open(dbfile, &(hfp->ssi)) != eslOK) { hfp->is_pressed = FALSE; } /* not an error; we'll just read unpressed. */
+      dbfile[n-1] = 'p';	/* the remainder of the optimized profiles */
+      if ((hfp->pfp = fopen(dbfile, "rb")) == NULL) ESL_XFAIL(eslENOTFOUND, errbuf, "Opened %s, a pressed HMM file; but no .h3p file found", hfp->fname);
+
+      dbfile[n-1] = 'i';	/* the SSI index for the .h3m file */
+      status = esl_ssi_Open(dbfile, &(hfp->ssi));
+      if      (status == eslENOTFOUND) ESL_XFAIL(eslENOTFOUND, errbuf, "Opened %s, a pressed HMM file; but no .h3i file found", hfp->fname);
+      else if (status == eslEFORMAT)   ESL_XFAIL(eslEFORMAT,   errbuf, "Opened %s, a pressed HMM file; but format of its .h3i file unrecognized", hfp->fname);
+      else if (status == eslERANGE)    ESL_XFAIL(eslEFORMAT,   errbuf, "Opened %s, a pressed HMM file; but its .h3i file is 64-bit and your system is 32-bit", hfp->fname);
+      else if (status != eslOK)        ESL_XFAIL(eslEFORMAT,   errbuf, "Opened %s, a pressed HMM file; but failed to open its .h3i file", hfp->fname);
+
       free(dbfile); dbfile = NULL;      
     }
   else
     {
-      esl_sprintf(&dbfile, "%s.ssi", hfp->fname);
-      esl_ssi_Open(dbfile, &(hfp->ssi));
+      if ((status = esl_sprintf(&dbfile, "%s.ssi", hfp->fname)) != eslOK) ESL_XFAIL(status, errbuf, "esl_sprintf() failed");
+
+      status = esl_ssi_Open(dbfile, &(hfp->ssi)); /* not finding an SSI file is ok. we open it if we find it. */
+      if      (status == eslEFORMAT)   ESL_XFAIL(status, errbuf, "a %s.ssi file exists (an SSI index), but its SSI format is not recognized",     hfp->fname);
+      else if (status == eslERANGE)    ESL_XFAIL(status, errbuf, "a %s.ssi file exists (an SSI index), but is 64-bit, and your system is 32-bit", hfp->fname);
+      else if (status != eslOK && status != eslENOTFOUND) ESL_XFAIL(status, errbuf, "esl_ssi_Open() failed");
       free(dbfile); dbfile = NULL;
     }
 
 
   /* 6. Check for binary file format. A pressed db is automatically binary: verify. */
-  if (! fread((char *) &(magic.n), sizeof(uint32_t), 1, hfp->f)) { status = eslEFORMAT; goto ERROR; }
+  if (! fread((char *) &(magic.n), sizeof(uint32_t), 1, hfp->f))  ESL_XFAIL(eslEFORMAT, errbuf, "File exists, but appears to be empty?");
   if      (magic.n == v3a_magic) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3b_magic) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3c_magic) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_bin30hmm; }
-  else if (hfp->is_pressed) { status = eslEFORMAT; goto ERROR; }
+  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent is HMMER3/c\nAll previous H2/H3 formats also supported", hfp->fname);
 
   /* 7. Checks for ASCII file format */
   if (hfp->parser == NULL)
     {
       /* Does the magic appear to be binary, yet we didn't recognize it? */
-      if (magic.n & 0x80000000) { status = eslEFORMAT; goto ERROR; }
+      if (magic.n & 0x80000000) ESL_XFAIL(eslEFORMAT, errbuf, "Format tag appears binary, but unrecognized\nCurrent is HMMER 3/c\nAll previous H2/H3 formats also supported");
 
-      if ((hfp->efp = esl_fileparser_Create(hfp->f))                     == NULL)   { status = eslEMEM; goto ERROR; }
-      if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  goto ERROR;
-      if ((status = esl_fileparser_NextLinePeeked(hfp->efp, magic.c, 4)) != eslOK)  goto ERROR;
-      if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  goto ERROR;
+      if ((hfp->efp = esl_fileparser_Create(hfp->f))                     == NULL)   ESL_XFAIL(eslEMEM, errbuf, "internal error in esl_fileparser_Create()");
+      if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_SetCommentChar()");
+      if ((status = esl_fileparser_NextLinePeeked(hfp->efp, magic.c, 4)) != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_NextLinePeeked()");
+      if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_GetToken()");
 
       if      (strcmp("HMMER3/c", tok) == 0) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
+      else ESL_XFAIL(eslEFORMAT, errbuf, "File's tag appears to be '%s'.\nCurrent is 'HMMER3/c'\nAll previous H2/H3 formats also supported", tok);
     }
-
-  /* 8. Still no parser assigned? That's an unrecognized format. */
-  if (hfp->parser == NULL) { status = eslEFORMAT; goto ERROR; }
 
   *ret_hfp = hfp;
   return eslOK;
@@ -1638,13 +1709,14 @@ main(int argc, char **argv)
   int            nmodel  = 0;
   uint64_t       totM    = 0;
   int            status;
+  char           errbuf[eslERRBUFSIZE];
 
   esl_stopwatch_Start(w);
 
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
@@ -1719,8 +1791,8 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   fclose(fp);
   
   /* Read it back */
-  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK)  esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
   
   /* It should have determined the right file format */
   if (format == -1) { if (hfp->format != p7_HMMFILE_3c) esl_fatal(msg); }
@@ -1731,19 +1803,19 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   p7_hmm_Destroy(new);
 
   /* Trying to read one more HMM should give us a normal EOF */
-  if (p7_hmmfile_Read(hfp, &newabc, &new) != eslEOF) esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslEOF) esl_fatal(msg);
   p7_hmmfile_Close(hfp);
 
   /* Do it all again, but with binary format */
-  if ((fp = fopen(tmpfile, "w"))               == NULL)  esl_fatal(msg);
-  if (p7_hmmfile_WriteBinary(fp, format, hmm)  != eslOK) esl_fatal(msg);
+  if ((fp = fopen(tmpfile, "w"))                  == NULL)   esl_fatal(msg);
+  if (p7_hmmfile_WriteBinary(fp, format, hmm)     != eslOK)  esl_fatal(msg);
   fclose(fp);
-  if (p7_hmmfile_Open(tmpfile, NULL, &hfp) != eslOK)  esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)  != eslOK)  esl_fatal(msg);
-  if (p7_hmm_Compare(hmm, new, 0.0001)     != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
+  if (p7_hmm_Compare(hmm, new, 0.0001)            != eslOK)  esl_fatal(msg);
 
-  if (format == -1) { if (hfp->format != p7_HMMFILE_3c) esl_fatal(msg); }
-  else              { if (hfp->format != format)        esl_fatal(msg); } 
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3c)      esl_fatal(msg); }
+  else              { if (hfp->format != format)             esl_fatal(msg); } 
 
   p7_hmm_Destroy(new);
   p7_hmmfile_Close(hfp);
@@ -1854,6 +1926,20 @@ main(int argc, char **argv)
 /*****************************************************************
  * 9. Example.
  *****************************************************************/
+/* On using the example to test error messages from p7_hmmfile_OpenE():
+ *    Message
+ *  --------------
+ *  .gz file missing/not readable     \rm test.hmm.gz; touch test.hmm.gz; src/p7_hmmfile_example test.hmm.gz
+ *  gzip -dc doesn't exist            \cp testsuite/20aa.hmm test.hmm; gzip test.hmm; sudo mv /usr/bin/gzip /usr/bin/gzip.old; src/p7_hmmfile_example test.hmm.gz
+ *  hmm file not found                \rm test.hmm; src/p7_hmmfile_example test.hmm
+ *  bad SSI file format               \cp testsuite/20aa.hmm test.hmm; \rm test.hmm.ssi; touch test.hmm.ssi; src/p7_hmmfile_example test.hmm
+ *  64-bit SSI on 32-bit sys
+ *  empty file                        \rm test.hmm; touch test.hmm
+ *  unrecognized format (binary)      cat testsuite/20aa.hmm > test.hmm; src/hmmpress test.hmm; \rm test.hmm; [edit test.hmm.h3m, delete first byte]
+ *  unrecognized format (ascii)       cat testsuite/20aa.hmm | sed -e 's/^HMMER3\/b/HMMER3\/x/' > test.hmm
+ *  
+ */
+
 #ifdef p7HMMFILE_EXAMPLE
 /* gcc -g -Wall -Dp7HMMFILE_EXAMPLE -I. -I../easel -L. -L../easel -o p7_hmmfile_example p7_hmmfile.c -lhmmer -leasel -lm
  */
@@ -1871,26 +1957,27 @@ main(int argc, char **argv)
   P7_HMMFILE   *hfp     = NULL;
   P7_HMM       *hmm     = NULL;
   ESL_ALPHABET *abc     = NULL;
+  char          errbuf[eslERRBUFSIZE];
   int           status;
   
   /* An example of reading a single HMM from a file, and checking that it is the only one. */
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open HMM file %s for reading.\n",                   hmmfile);
-  else if (status == eslEFORMAT)   esl_fatal("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        esl_fatal("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   esl_fatal("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) esl_fatal("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       esl_fatal("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        esl_fatal("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   status = p7_hmmfile_Read(hfp, &abc, NULL);
-  if (status != eslEOF)            esl_fatal("HMM file %s does not contain just one HMM\n", hfp->fname);
+  if (status != eslEOF)            p7_Fail("HMM file %s does not contain just one HMM\n", hfp->fname);
 
   p7_hmmfile_Close(hfp);
 
-  write_asc30hmm(stdout, hmm);
+  p7_hmmfile_WriteASCII(stdout, -1, hmm);
 
   esl_alphabet_Destroy(abc);
   p7_hmm_Destroy(hmm);

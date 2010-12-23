@@ -30,7 +30,6 @@ static char banner[] = "display summary statistics for a profile file";
 int
 main(int argc, char **argv)
 {
-  int status;
   ESL_GETOPTS     *go	   = NULL;      /* command line processing                   */
   ESL_ALPHABET    *abc     = NULL;
   char            *hmmfile = NULL;
@@ -40,6 +39,8 @@ main(int argc, char **argv)
   int              nhmm;	
   double           x;
   float            KL;
+  int              status;
+  char             errbuf[eslERRBUFSIZE];
 
   /* Process the command line options.
    */
@@ -81,11 +82,10 @@ main(int argc, char **argv)
 
   /* Initializations: open the HMM file
    */
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
-
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   /* Main body: read HMMs one at a time, print one line of stats
    */

@@ -466,8 +466,8 @@ main(int argc, char **argv)
 
   r  = esl_randomness_CreateFast(0);
   tr = p7_trace_Create();
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("failed to open %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("failed to open %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("failed to read HMM");
   sq = esl_sq_CreateDigital(abc);
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
@@ -548,9 +548,19 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   char            errbuf[eslERRBUFSIZE];
   int             i;
+  int             status;
 
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
+
+  status = p7_hmmfile_Read(hfp, &abc, &hmm);
+  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+
   p7_hmmfile_Close(hfp);
 
   bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, L);
@@ -561,7 +571,7 @@ main(int argc, char **argv)
     {
       p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
       esl_sq_FormatName(sq, "%s-sample%d", hmm->name, i);
-      esl_sqio_Write(stdout, sq, eslSQFILE_FASTA);
+      esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
 
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal(errbuf);
 

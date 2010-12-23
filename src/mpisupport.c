@@ -1544,7 +1544,7 @@ main(int argc, char **argv)
 
 
       /* Read HMMs from a file. */
-      if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+      if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
       esl_stopwatch_Start(w);
       while (p7_hmmfile_Read(hfp, &abc, &hmm)     == eslOK) 

@@ -192,7 +192,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
  *            convention used by <p7_hmmfile_Read()>.
  *            
  *            The <.h3f> file was opened automatically, if it existed,
- *            when the HMM file was opened with <p7_hmmfile_Open()>.
+ *            when the HMM file was opened with <p7_hmmfile_OpenE()>.
  *            
  *            When no more HMMs remain in the file, return <eslEOF>.
  *
@@ -304,7 +304,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
  *            model and return a pointer to it in <*ret_om>. 
  *            
  *            The <.h3f> file was opened automatically, if it existed,
- *            when the HMM file was opened with <p7_hmmfile_Open()>.
+ *            when the HMM file was opened with <p7_hmmfile_OpenE()>.
  *            
  *            When no more HMMs remain in the file, return <eslEOF>.
  *
@@ -811,9 +811,9 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
   esl_newssi_Close(nssi);
 
   /* 2. read the optimized profile back in */
-  if ( p7_hmmfile_Open(tmpfile, NULL, &hfp)  != eslOK) esl_fatal(msg);
-  if ( p7_oprofile_ReadMSV(hfp, &abc, &om2)  != eslOK) esl_fatal(msg);
-  if ( p7_oprofile_ReadRest(hfp, om2)        != eslOK) esl_fatal(msg);
+  if ( p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL)  != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_ReadMSV(hfp, &abc, &om2)         != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_ReadRest(hfp, om2)               != eslOK) esl_fatal(msg);
 
   /* 3. it should be identical to the original  */
   if ( p7_oprofile_Compare(om, om2, tolerance, errbuf) != eslOK) esl_fatal("%s\n%s", msg, errbuf);
@@ -943,16 +943,17 @@ main(int argc, char **argv)
   int            nmodel  = 0;
   uint64_t       totM    = 0;
   int            status;
+  char           errbuf[eslERRBUFSIZE];
 
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open HMM file %s for reading.\n",                   hmmfile);
-  else if (status == eslEFORMAT)   esl_fatal("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        esl_fatal("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   esl_sprintf(&fname, "%s.h3f", hmmfile);  
   esl_sprintf(&pname, "%s.h3f", hmmfile);  
-  if ((ffp = fopen(fname, "wb")) == NULL) esl_fatal("failed to open %s\n", fname);
-  if ((pfp = fopen(pname, "wb")) == NULL) esl_fatal("failed to open %s\n", pname);
+  if ((ffp = fopen(fname, "wb")) == NULL) p7_Fail("failed to open %s\n", fname);
+  if ((pfp = fopen(pname, "wb")) == NULL) p7_Fail("failed to open %s\n", pname);
   free(fname);
   free(pname);
 
@@ -978,9 +979,9 @@ main(int argc, char **argv)
       p7_oprofile_Destroy(om);
       p7_hmm_Destroy(hmm);
     }
-  if      (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s",             hmmfile);
-  else if (status == eslEINCOMPAT) esl_fatal("HMM file %s contains different alphabets",   hmmfile);
-  else if (status != eslEOF)       esl_fatal("Unexpected error in reading HMMs from %s",   hmmfile);
+  if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile);
 
   fclose(ffp);
   fclose(pfp);

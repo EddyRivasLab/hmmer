@@ -341,6 +341,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
+  char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
 
@@ -354,12 +355,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                       cfg->hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format in hmm file %s or its binary auxfiles\n",     cfg->hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
-  if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",     cfg->hmmfile);
-  
+  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
+  if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
+
   hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   p7_Fail("bad file format in binary auxfiles for %s:\n%s", cfg->hmmfile, hfp->errbuf);
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",       cfg->hmmfile);
@@ -424,7 +425,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);	                          
 
       /* Open the target profile database */
-      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
+      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
   
 #ifdef HMMER_THREADS
@@ -432,7 +433,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (ncpus > 0)
 	{
 	  status = p7_hmmfile_CreateLock(hfp);
-	  if (status != eslOK) p7_Fail("Unexpected error %d createing lock\n", status);
+	  if (status != eslOK) p7_Fail("Unexpected error %d creating lock\n", status);
 	}
 #endif
 
@@ -692,7 +693,7 @@ int next_block(P7_HMMFILE *hfp, BLOCK_LIST *list, MSV_BLOCK *block)
 }
 
 /* mpi_master()
- * The MPI version of hmmbuild.
+ * The MPI version of hmmscan
  * Follows standard pattern for a master/worker load-balanced MPI program (J1/78-79).
  * 
  * A master can only return if it's successful. 
@@ -738,6 +739,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              i;
   int              size;
   MPI_Status       mpistatus;
+  char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
 
@@ -751,11 +753,11 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
-  if      (status == eslENOTFOUND) mpi_failure("Failed to open hmm file %s for reading.\n",                       cfg->hmmfile);
-  else if (status == eslEFORMAT)   mpi_failure("Unrecognized format, trying to open hmm file %s for reading.\n",  cfg->hmmfile);
-  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
-  if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n", cfg->hmmfile);
+  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
+  if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n",         hfp->fname);
   
   hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);
@@ -805,7 +807,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (nquery > 1) list->current = 0;
 
       /* Open the target profile database */
-      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
+      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
@@ -991,16 +993,17 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              mpi_size = 0;                 /* size of the allocated buffer */
 
   MPI_Status       mpistatus;
+  char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
-  if      (status == eslENOTFOUND) mpi_failure("Failed to open hmm file %s for reading.\n",                       cfg->hmmfile);
-  else if (status == eslEFORMAT)   mpi_failure("Unrecognized format, trying to open hmm file %s for reading.\n",  cfg->hmmfile);
-  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
-  if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n", cfg->hmmfile);
-  
+  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
+  if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n",         hfp->fname);
+
   hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);
   else if (hstatus == eslEINCOMPAT) mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);
@@ -1033,7 +1036,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
 
       /* Open the target profile database */
-      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp);
+      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       /* Create processing pipeline and hit list */

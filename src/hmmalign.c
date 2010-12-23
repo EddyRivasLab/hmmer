@@ -101,6 +101,7 @@ main(int argc, char **argv)
   float         fwdsc;		/* Forward score                   */
   float         oasc;		/* optimal accuracy score          */
   int           status;		/* easel/hmmer return code         */
+  char          errbuf[eslERRBUFSIZE];
 
   /* Parse the command line
    */
@@ -146,19 +147,19 @@ main(int argc, char **argv)
 
   /* Read one HMM, and make sure there's only one.
    */
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) cmdline_failure(argv[0], "Failed to open HMM file %s for reading.\n",                   hmmfile);
-  else if (status == eslEFORMAT)   cmdline_failure(argv[0], "File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        cmdline_failure(argv[0], "Unexpected error %d in opening HMM file %s.\n", status,       hmmfile);  
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   cmdline_failure(argv[0], "bad file format in HMM file %s:\n       %s\n",     hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) cmdline_failure(argv[0], "HMM in %s is not in the expected %s alphabet\n",   hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       cmdline_failure(argv[0], "Empty HMM file %s? No HMM data found.\n",          hfp->fname);
-  else if (status != eslOK)        cmdline_failure(argv[0], "Unexpected error in reading HMMs from %s\n",       hfp->fname);
+  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   status = p7_hmmfile_Read(hfp, &abc, NULL);
-  if      (status != eslEOF)       cmdline_failure(argv[0], "HMM file %s does not contain just one HMM\n", hfp->fname);
+  if      (status != eslEOF)       p7_Fail("HMM file %s does not contain just one HMM\n",    hfp->fname);
   p7_hmmfile_Close(hfp);
 
 

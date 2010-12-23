@@ -331,7 +331,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
-
+  char   errbuf[eslERRBUFSIZE];
   double window_beta = -1.0 ;
   int window_length  = -1;
   if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
@@ -356,17 +356,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Open the target sequence database */
   status = esl_sqfile_Open(cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
-  else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
-  else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        esl_fatal("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
+  else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
 
 
   /* Open the query profile HMM file */
-  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
-  else if (status == eslEFORMAT)   esl_fatal("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
-  else if (status != eslOK)        esl_fatal("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);
+  status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }

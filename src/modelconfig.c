@@ -434,7 +434,6 @@ static int profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *
 int
 main(int argc, char **argv)
 {
-  int              status;
   ESL_ALPHABET    *abc     = NULL;     /* sequence alphabet                       */
   ESL_GETOPTS     *go      = NULL;     /* command line processing                 */
   ESL_RANDOMNESS  *r       = NULL;     /* source of randomness                    */
@@ -465,6 +464,8 @@ main(int argc, char **argv)
   ESL_DMATRIX     *kmx     = NULL;
   ESL_DMATRIX     *iref    = NULL; /* reference matrix: expected i distribution under ideality */
   int              Lbins;
+  int              status;
+  char             errbuf[eslERRBUFSIZE];
   
   /*****************************************************************
    * Parse the command line
@@ -501,10 +502,10 @@ main(int argc, char **argv)
     {	/* Read the HMM (and get alphabet from it) */
       P7_HMMFILE      *hfp     = NULL;
 
-      status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-      if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",                   hmmfile);
-      else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-      else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n",       status, hmmfile);  
+      status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+      if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+      else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+      else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
     
       if ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslOK) {
 	if      (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
