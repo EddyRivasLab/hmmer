@@ -361,13 +361,13 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
   if      (magic.n == v3a_magic) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3b_magic) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3c_magic) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_bin30hmm; }
-  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent is HMMER3/c\nAll previous H2/H3 formats also supported", hfp->fname);
+  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent H3 format is HMMER3/c. Previous H2/H3 formats also supported.", hfp->fname);
 
   /* 7. Checks for ASCII file format */
   if (hfp->parser == NULL)
     {
       /* Does the magic appear to be binary, yet we didn't recognize it? */
-      if (magic.n & 0x80000000) ESL_XFAIL(eslEFORMAT, errbuf, "Format tag appears binary, but unrecognized\nCurrent is HMMER 3/c\nAll previous H2/H3 formats also supported");
+      if (magic.n & 0x80000000) ESL_XFAIL(eslEFORMAT, errbuf, "Format tag appears binary, but unrecognized\nCurrent H3 format is HMMER3/c. Previous H2/H3 formats also supported.");
 
       if ((hfp->efp = esl_fileparser_Create(hfp->f))                     == NULL)   ESL_XFAIL(eslEMEM, errbuf, "internal error in esl_fileparser_Create()");
       if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_SetCommentChar()");
@@ -378,7 +378,7 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
       else if (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
-      else ESL_XFAIL(eslEFORMAT, errbuf, "File's tag appears to be '%s'.\nCurrent is 'HMMER3/c'\nAll previous H2/H3 formats also supported", tok);
+      else ESL_XFAIL(eslEFORMAT, errbuf, "Format tag is '%s': unrecognized.\nCurrent H3 format is 'HMMER3/c'. Previous H2/H3 formats also supported.", tok);
     }
 
   *ret_hfp = hfp;
