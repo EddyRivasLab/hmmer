@@ -506,7 +506,8 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
-  P7_GMX         *fwd     = NULL;
+  P7_OPROFILE    *om      = NULL;
+  P7_OMX         *fwd     = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   P7_TRACE       *tr      = NULL;
@@ -519,8 +520,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
   
   /* Read in one sequence */
@@ -537,11 +538,14 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
+  om = p7_oprofile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_oprofile_Convert(gm, om);
+  p7_oprofile_ReconfigLength(om, sq->n);
 
   /* Allocate DP matrix for Forward, and run a Forward calculation in it */
-  fwd = p7_gmx_Create(gm->M, sq->n);
-  p7_GForward (sq->dsq, sq->n, gm, fwd, &sc);
+  fwd = p7_omx_Create(gm->M, sq->n, sq->n);
+  p7_Forward (sq->dsq, sq->n, om, fwd, &sc);
 
   /* Allocate a trace container, and an spensemble */
   tr = p7_trace_Create();
@@ -552,7 +556,7 @@ main(int argc, char **argv)
 
   /* Collect N traces, add their domain coords to the ensemble, and cluster */
   for (t = 0; t < N; t++) {
-    p7_StochasticTrace(r, sq->dsq, sq->n, gm, fwd, tr);
+    p7_StochasticTrace(r, sq->dsq, sq->n, om, fwd, tr);
     p7_trace_Index(tr);
 
     for (d = 0; d < tr->ndom; d++)
@@ -572,8 +576,9 @@ main(int argc, char **argv)
   p7_spensemble_Destroy(sp);
   p7_trace_Destroy(tr);
   esl_sq_Destroy(sq);
-  p7_gmx_Destroy(fwd);
+  p7_omx_Destroy(fwd);
   p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
   esl_stopwatch_Destroy(w);

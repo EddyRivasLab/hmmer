@@ -400,6 +400,16 @@ typedef struct p7_hmmfile_s {
   char          errbuf[eslERRBUFSIZE];
 } P7_HMMFILE;
 
+/* note on <fname>, above:
+ * this is the actual name of the HMM file being read.
+ * 
+ * The way p7_hmmfile_Open() works, it will preferentially look for
+ * hmmpress'ed binary files. If you open "foo", it will first try to
+ * open "foo.h3m" and <fname> will be "foo.h3m". "foo" does not even
+ * have to exist. If a parsing error occurs, you want <fname> to
+ * be "foo.h3m", so error messages report blame correctly.
+ * In the special case of reading from stdin, <fname> is "[STDIN]".
+ */
 
 
 /*****************************************************************
@@ -1058,8 +1068,10 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 
 
 /* p7_hmmfile.c */
-extern int  p7_hmmfile_Open    (char *filename, char *env, P7_HMMFILE **ret_hfp);
-extern int  p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp);
+extern int  p7_hmmfile_OpenE    (char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_Open     (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_OpenNoDB (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
 extern int  p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 #ifdef HMMER_THREADS

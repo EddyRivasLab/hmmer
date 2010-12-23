@@ -834,8 +834,11 @@ main(int argc, char **argv)
   ESL_ALPHABET   *abc     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
-  P7_GMX         *fwd     = NULL;
-  P7_GMX         *bck     = NULL;
+  P7_OPROFILE    *om      = NULL;
+  P7_OMX         *oxf     = NULL; /* parsing matrix, passed to PosteriorHeuristics */
+  P7_OMX         *oxb     = NULL;
+  P7_OMX         *fwd     = NULL; /* full LxL matrix workspace passed to PosteriorHeuristics */
+  P7_OMX         *bck     = NULL;
   P7_DOMAINDEF   *ddef    = NULL;
   char           *ofile   = NULL;
   FILE           *ofp     = NULL;
@@ -844,8 +847,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Read in one sequence */
@@ -859,32 +862,32 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
 
   /* Configure a profile from the HMM */
+  p7_FLogsumInit();
+
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
+  om = p7_oprofile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_oprofile_Convert(gm, om);
+  p7_oprofile_ReconfigLength(om, sq->n);
 
   /* allocate the domain definition object */
   ddef = p7_domaindef_Create(r);
 
   /* allocate DP matrices for forward and backward */
-  fwd = p7_gmx_Create(gm->M, sq->n);
-  bck = p7_gmx_Create(gm->M, sq->n);
+  fwd = p7_omx_Create(gm->M, sq->n, sq->n);
+  bck = p7_omx_Create(gm->M, sq->n, sq->n);
+
+  oxf = p7_omx_Create(om->M, 0, sq->n);
+  oxb = p7_omx_Create(om->M, 0, sq->n);
 
   /* define domain structure */
-  p7_FLogsumInit();
 
-  if (esl_opt_GetBoolean(go, "-V"))
-    {
-      p7_GViterbi (sq->dsq, sq->n, gm, fwd, &overall_sc); 
-      p7_domaindef_ByViterbi(gm, sq, fwd, bck, ddef);
-    }
-  else
-    {
-      p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
-      p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
-      p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
-    }
+
+  p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
+  p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
+  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef);
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
 
@@ -908,9 +911,12 @@ main(int argc, char **argv)
     }
 
   p7_domaindef_Destroy(ddef);
-  p7_gmx_Destroy(fwd);
-  p7_gmx_Destroy(bck);
+  p7_omx_Destroy(oxf);
+  p7_omx_Destroy(oxb);
+  p7_omx_Destroy(fwd);
+  p7_omx_Destroy(bck);
   p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
   esl_sq_Destroy(sq);
@@ -979,8 +985,8 @@ main(int argc, char **argv)
   int             tot_true, tot_found;
 
   /* Read in one HMM */
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Configure a profile from the HMM */

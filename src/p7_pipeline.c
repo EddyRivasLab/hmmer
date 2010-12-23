@@ -327,7 +327,7 @@ p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, double Pval)
 {
   if      (  pli->dom_by_E   && Pval * pli->domZ <= pli->domE) return TRUE;
   else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
-  else return FALSE;
+  return FALSE;
 }
 
 /* Function:  p7_pli_TargetIncludable()
@@ -1204,8 +1204,8 @@ main(int argc, char **argv)
   p7_FLogsumInit();
 
   /* Read in one HMM */
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Open a sequence file */
@@ -1349,7 +1349,7 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
 
   /* Open the HMM db */
-  if (p7_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
   /* Create a pipeline for the query sequence in scan mode */
   pli      = p7_pipeline_Create(go, 100, sq->n, FALSE, p7_SCAN_MODELS);

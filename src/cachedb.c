@@ -42,7 +42,7 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
   char             buffer[16];
 
   /* Open the target profile database */
-  if ((status = p7_hmmfile_Open(hmmfile, NULL, &hfp)) != eslOK) return status;
+  if ((status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL)) != eslOK) return status;
 
   count = 4096;
   ESL_ALLOC(list, sizeof(char *) * count);

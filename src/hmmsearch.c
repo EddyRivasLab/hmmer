@@ -328,6 +328,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
+  char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
 
@@ -347,10 +348,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
 
   /* Open the query profile HMM file */
-  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
+  status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
@@ -758,6 +759,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              i;
   int              size;
   MPI_Status       mpistatus;
+  char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
 
@@ -777,10 +779,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
 
   /* Open the query profile HMM file */
-  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) mpi_failure("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
-  else if (status == eslEFORMAT)   mpi_failure("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
-  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
+  status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o") && (ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL)
@@ -1040,6 +1042,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              mpi_size = 0;                 /* size of the allocated buffer                    */
 
   MPI_Status       mpistatus;
+  char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
 
@@ -1051,10 +1054,10 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
 
   /* Open the query profile HMM file */
-  status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) mpi_failure("Failed to open hmm file %s for reading.\n",                      cfg->hmmfile);
-  else if (status == eslEFORMAT)   mpi_failure("Unrecognized format, trying to open hmm file %s for reading.\n", cfg->hmmfile);
-  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening hmm file %s.\n", status,          cfg->hmmfile);  
+  status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
 
   /* <abc> is not known 'til first HMM is read. */
   hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);

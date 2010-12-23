@@ -133,13 +133,18 @@ ITESTS = \
 
 EXAMPLES = \
 	build_example\
+	emit_example\
 	generic_fwdback_example\
 	generic_msv_example\
 	generic_optacc_example\
 	generic_stotrace_example\
 	generic_viterbi_example\
-	generic_vtrace_example
-
+	generic_vtrace_example\
+	logsum_example\
+	p7_domaindef_example\
+	p7_hmmfile_example\
+	p7_pipeline_example\
+	p7_spensemble_example
 
 all: libraries programs
 

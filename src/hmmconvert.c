@@ -40,6 +40,7 @@ main(int argc, char **argv)
   char          *outfmt  = esl_opt_GetString(go, "--outfmt");
   int            fmtcode = -1;
   int            status;
+  char           errbuf[eslERRBUFSIZE];
 
   if (outfmt != NULL) {
     if      (strcmp(outfmt, "3/a") == 0) fmtcode = p7_HMMFILE_3a;
@@ -47,10 +48,10 @@ main(int argc, char **argv)
     else    p7_Fail("No such 3.x output format code %s.\n", outfmt);
   }
 
-  status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open HMM file %s for reading.\n",     hmmfile);
-  else if (status == eslEFORMAT)   p7_Fail("File %s does not appear to be in a recognized HMM format.\n", hmmfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n", status, hmmfile);  
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
