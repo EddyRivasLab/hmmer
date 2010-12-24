@@ -155,6 +155,9 @@ clean:
 	-rm -f libhmmerimpl.a
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
 	-rm -f *.gcno
+	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
+	done
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 

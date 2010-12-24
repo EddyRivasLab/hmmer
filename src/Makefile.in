@@ -269,7 +269,12 @@ clean:
 	-rm -f ${BENCHMARKS}
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
+	-rm -f cscope.out
+	for prog in ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do\
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
+	done
 	cd ${IMPLDIR}; ${MAKE} clean
+
 
 binclean:
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
