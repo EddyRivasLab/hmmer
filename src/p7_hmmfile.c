@@ -50,7 +50,7 @@ static uint32_t  v20swap  = 0xb5edede8; /* V2.0 binary, byteswapped         */
 static uint32_t  v3a_magic = 0xe8ededb6; /* 3/a binary: "hmm6" + 0x80808080 */
 static uint32_t  v3b_magic = 0xe8ededb7; /* 3/b binary: "hmm7" + 0x80808080 */
 static uint32_t  v3c_magic = 0xe8ededb8; /* 3/c binary: "hmm8" + 0x80808080 */
-
+static uint32_t  v3d_magic = 0xe8ededb9; /* 3/d binary: "hmm9" + 0x80808080 */
 
 static int read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm);
 static int read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm);
@@ -180,6 +180,83 @@ int
 p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
 {
   return open_engine(filename, env, ret_hfp, TRUE, NULL);
+}
+
+
+/* Function:  p7_hmmfile_OpenBuffer()
+ * Incept:    MSF, Thu Aug 19 2010 [Janelia]
+ *
+ * Purpose:   Perparse a buffer containing an ascii HMM for parsing.
+ *            
+ *            As another special case, if <filename> ends in a <.gz>
+ *            suffix, the file is assumed to be compressed by GNU
+ *            <gzip>, and it is opened for reading from a pipe with
+ *            <gunzip -dc>. This feature is only available on
+ *            POSIX-compliant systems that have a <popen()> call, and
+ *            <HAVE_POPEN> is defined by the configure script at
+ *            compile time. 
+ *            
+ * Args:      filename - HMM file to open; or "-" for <stdin>
+ *            env      - list of paths to look for <hmmfile> in, in 
+ *                       addition to current working dir; or <NULL>
+ *            ret_hfp  - RETURN: opened <P7_HMMFILE>.
+ *
+ * Returns:   <eslOK> on success, and the open <ESL_HMMFILE> is returned
+ *            in <*ret_hfp>.
+ *            
+ *            <eslENOTFOUND> if <filename> can't be opened for
+ *            reading, even after the list of directories in <env> (if
+ *            any) is checked.
+ *            
+ *            <eslEFORMAT> if <filename> is not in a recognized HMMER
+ *            HMM file format.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
+{
+  P7_HMMFILE *hfp     = NULL;
+  int         status;
+  char       *tok;
+  int         toklen;
+
+  ESL_ALLOC(hfp, sizeof(P7_HMMFILE));
+  hfp->f            = NULL;
+  hfp->fname        = NULL;
+  hfp->do_gzip      = FALSE;
+  hfp->do_stdin     = FALSE;
+  hfp->newly_opened = TRUE;	/* well, it will be, real soon now */
+  hfp->is_pressed   = FALSE;
+#ifdef HMMER_THREADS
+  hfp->syncRead     = FALSE;
+#endif
+  hfp->parser       = NULL;
+  hfp->efp          = NULL;
+  hfp->ffp          = NULL;
+  hfp->pfp          = NULL;
+  hfp->ssi          = NULL;
+  hfp->errbuf[0]    = '\0';
+
+  if ((hfp->efp = esl_fileparser_CreateMapped(buffer, size))         == NULL)   { status = eslEMEM; goto ERROR; }
+  if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  goto ERROR;
+  if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  goto ERROR;
+
+  if      (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
+  else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
+  else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
+
+  if (hfp->parser == NULL) { status = eslEFORMAT; goto ERROR; }
+
+  *ret_hfp = hfp;
+  return eslOK;
+
+ ERROR:
+  if (hfp     != NULL) p7_hmmfile_Close(hfp);
+  *ret_hfp = NULL;
+  if      (status == eslEMEM)       return status;
+  else if (status == eslENOTFOUND)  return status;
+  else                              return eslEFORMAT;
 }
 
 
@@ -361,24 +438,26 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
   if      (magic.n == v3a_magic) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3b_magic) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3c_magic) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_bin30hmm; }
-  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent H3 format is HMMER3/c. Previous H2/H3 formats also supported.", hfp->fname);
+  else if (magic.n == v3d_magic) { hfp->format = p7_HMMFILE_3d; hfp->parser = read_bin30hmm; }
+  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent H3 format is HMMER3/d. Previous H2/H3 formats also supported.", hfp->fname);
 
   /* 7. Checks for ASCII file format */
   if (hfp->parser == NULL)
     {
       /* Does the magic appear to be binary, yet we didn't recognize it? */
-      if (magic.n & 0x80000000) ESL_XFAIL(eslEFORMAT, errbuf, "Format tag appears binary, but unrecognized\nCurrent H3 format is HMMER3/c. Previous H2/H3 formats also supported.");
+      if (magic.n & 0x80000000) ESL_XFAIL(eslEFORMAT, errbuf, "Format tag appears binary, but unrecognized\nCurrent H3 format is HMMER3/d. Previous H2/H3 formats also supported.");
 
       if ((hfp->efp = esl_fileparser_Create(hfp->f))                     == NULL)   ESL_XFAIL(eslEMEM, errbuf, "internal error in esl_fileparser_Create()");
       if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_SetCommentChar()");
       if ((status = esl_fileparser_NextLinePeeked(hfp->efp, magic.c, 4)) != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_NextLinePeeked()");
       if ((status = esl_fileparser_GetToken(hfp->efp, &tok, &toklen))    != eslOK)  ESL_XFAIL(status,  errbuf, "internal error in esl_fileparser_GetToken()");
 
-      if      (strcmp("HMMER3/c", tok) == 0) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_asc30hmm; }
+      if      (strcmp("HMMER3/d", tok) == 0) { hfp->format = p7_HMMFILE_3d; hfp->parser = read_asc30hmm; }
+      else if (strcmp("HMMER3/c", tok) == 0) { hfp->format = p7_HMMFILE_3c; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
       else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
-      else ESL_XFAIL(eslEFORMAT, errbuf, "Format tag is '%s': unrecognized.\nCurrent H3 format is 'HMMER3/c'. Previous H2/H3 formats also supported.", tok);
+      else ESL_XFAIL(eslEFORMAT, errbuf, "Format tag is '%s': unrecognized.\nCurrent H3 format is 'HMMER3/d'. Previous H2/H3 formats also supported.", tok);
     }
 
   *ret_hfp = hfp;
@@ -489,9 +568,10 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
 {
   int k, x;
   
-  if (format == -1) format = p7_HMMFILE_3c;
+  if (format == -1) format = p7_HMMFILE_3d;
 
-  if      (format == p7_HMMFILE_3c)  fprintf(fp, "HMMER3/c [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE);
+  if      (format == p7_HMMFILE_3d)  fprintf(fp, "HMMER3/d [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE);
+  else if (format == p7_HMMFILE_3c)  fprintf(fp, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
   else if (format == p7_HMMFILE_3b)  fprintf(fp, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
   else if (format == p7_HMMFILE_3a)  fprintf(fp, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
@@ -595,7 +675,7 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
 {
   int k;
 
-  if (format == -1) format = p7_HMMFILE_3c;
+  if (format == -1) format = p7_HMMFILE_3d;
 
   /* Legacy: p7H_{ACC, DESC} flags used to be used to indicate
    * whether optional acc, desc were present. Now we just use
@@ -618,7 +698,8 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->acc  == NULL) hmm->flags &= ~p7H_ACC;   else hmm->flags |= p7H_ACC;
 
   /* ye olde magic number */
-  if      (format == p7_HMMFILE_3c) { if (fwrite((char *) &(v3c_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  if      (format == p7_HMMFILE_3d) { if (fwrite((char *) &(v3d_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  else if (format == p7_HMMFILE_3c) { if (fwrite((char *) &(v3c_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
   else if (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
   else if (format == p7_HMMFILE_3a) { if (fwrite((char *) &(v3a_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
@@ -649,7 +730,7 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
   if (write_bin_string(fp, hmm->comlog) != eslOK)                                                     return eslFAIL;
   if (fwrite((char *) &(hmm->nseq),       sizeof(int),    1,   fp) != 1)                              return eslFAIL;
   if (fwrite((char *) &(hmm->eff_nseq),   sizeof(float),  1,   fp) != 1)                              return eslFAIL;
-  if (format == p7_HMMFILE_3c) {
+  if (format >= p7_HMMFILE_3c) {
     if (fwrite((char *) &(hmm->max_length), sizeof(int),  1,   fp) != 1)                              return eslFAIL;
   }
   if (write_bin_string(fp, hmm->ctime) != eslOK)                                                      return eslFAIL;
@@ -885,7 +966,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_NextLine(hfp->efp))                   != eslOK)  goto ERROR;  /* EOF here is normal; could also be a thrown EMEM */
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "unexpected absence of tokens on data line");
 
-      if      (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
+      if      (hfp->format == p7_HMMFILE_3d) { if (strcmp(tag, "HMMER3/d") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/d tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
       else if (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
       else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
       else                                                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
@@ -1172,7 +1254,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       }
       if (! fread((char *) &magic, sizeof(uint32_t), 1, hfp->f))    { status = eslEOF;       goto ERROR; }
 
-      if      (hfp->format == p7_HMMFILE_3c) { if (magic != v3c_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
+      if      (hfp->format == p7_HMMFILE_3d) { if (magic != v3d_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
+      else if (hfp->format == p7_HMMFILE_3c) { if (magic != v3c_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
       else if (hfp->format == p7_HMMFILE_3b) { if (magic != v3b_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
       else if (hfp->format == p7_HMMFILE_3a) { if (magic != v3a_magic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic number at start of HMM");  }
       else                                                              ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no such HMM file format code");      
@@ -1795,7 +1878,7 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
   
   /* It should have determined the right file format */
-  if (format == -1) { if (hfp->format != p7_HMMFILE_3c) esl_fatal(msg); }
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3d) esl_fatal(msg); }
   else              { if (hfp->format != format)        esl_fatal(msg); } 
 
   /* It should be identical to what we started with */
@@ -1814,7 +1897,7 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
   if (p7_hmm_Compare(hmm, new, 0.0001)            != eslOK)  esl_fatal(msg);
 
-  if (format == -1) { if (hfp->format != p7_HMMFILE_3c)      esl_fatal(msg); }
+  if (format == -1) { if (hfp->format != p7_HMMFILE_3d)      esl_fatal(msg); }
   else              { if (hfp->format != format)             esl_fatal(msg); } 
 
   p7_hmm_Destroy(new);
@@ -1825,7 +1908,7 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
 }
 
 
-/* Test current 3/b file formats */
+/* Test current (3/d) file formats */
 static int
 utest_io_current(char *tmpfile, P7_HMM *hmm)
 {

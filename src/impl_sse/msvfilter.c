@@ -95,10 +95,15 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   __m128i tempv;                   /* work vector                                               */
 
   int cmp;
+  int status = eslOK;
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   ox->M   = om->M;
+
+  /* Try highly optimized ssv filter first */
+  status = p7_SSVFilter(dsq, L, om, ret_sc);
+  if (status != eslENORESULT) return status;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */

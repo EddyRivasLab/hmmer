@@ -248,6 +248,85 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
 }
 
 
+/* Function:  p7_builder_LoadScoreSystem()
+ * Synopsis:  Load score system for single sequence queries.
+ * Incept:    MSF, Mon Nov 29, 2010 [Janelia]
+ *
+ * Purpose:   Initialize the builder <bld> to be able to parameterize
+ *            single sequence queries.
+ *            
+ *            Load a standard substitution score matrix from memory
+ *            <mx>.
+ *            
+ *            Set the gap-open and gap-extend probabilities to
+ *            <popen>, <pextend>, respectively.
+ *
+ *
+ * Args:      bld      - <P7_BUILDER> to initialize
+ *            matrix   - score matrix file to use
+ *            popen    - gap open probability
+ *            pextend  - gap extend probability
+ *
+ * Returns:   <eslOK> on success.
+ *            
+ *            <eslENOTFOUND> if <mxfile> can't be found or opened, even
+ *            in any of the directories specified by the <env> variable.   
+ *            
+ *            <eslEINVAL> if the score matrix can't be converted into
+ *            conditional probabilities by the Yu and Altschul method,
+ *            either because it isn't a symmetric matrix or because
+ *            the Yu/Altschul numerical method fails to converge. 
+ * 
+ *            On either error, <bld->errbuf> contains a useful error message
+ *            for the user.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, double pextend)
+{
+  double          *fa       = NULL;
+  double          *fb       = NULL;
+  double           slambda;
+  int              a,b;
+  int              status;
+
+
+  bld->errbuf[0] = '\0';
+
+  /* If a score system is already set, delete it. */
+  if (bld->S != NULL) esl_scorematrix_Destroy(bld->S);
+  if (bld->Q != NULL) esl_dmatrix_Destroy(bld->Q);
+
+  /* Get the scoring matrix */
+  if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+
+  if ((status = esl_scorematrix_Load(matrix, bld->S)) != eslOK) 
+    ESL_XFAIL(status, bld->errbuf, "Failed to load precompiled matrix %s", matrix);
+
+  if (! esl_scorematrix_IsSymmetric(bld->S)) 
+    ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
+  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
+    ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+  for (a = 0; a < bld->abc->K; a++)
+    for (b = 0; b < bld->abc->K; b++)
+      bld->Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
+
+  bld->popen   = popen;
+  bld->pextend = pextend;
+
+  free(fa);
+  free(fb);
+  return eslOK;
+
+ ERROR:
+  if (fa != NULL) free(fa);
+  if (fb != NULL) free(fb);
+  return status;
+}
+
+
 /* Function:  p7_builder_Destroy()
  * Synopsis:  Free a <P7_BUILDER>
  * Incept:    SRE, Thu Dec 11 13:15:45 2008 [Janelia]

@@ -14,6 +14,7 @@ CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
 DEFS     = @DEFS@
 LIBS     = @GROUPHMMERLIBS@ -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+HMMDLIBS = -lhmmd
 
 AR       = @AR@ rcv 
 RANLIB   = @RANLIB@
@@ -34,6 +35,8 @@ MYINCDIRS = -I${ESLDIR} \
 
 LIBDEP = ./libhmmer.a @HMMERIMPLLIB@ ${ESLDIR}/libeasel.a
 
+HMMDLIBDEP = ./libhmmd.a
+
 PROGS = hmmalign\
 	hmmbuild\
 	hmmconvert\
@@ -47,6 +50,9 @@ PROGS = hmmalign\
 	jackhmmer\
 	phmmer\
 	nhmmer
+
+HMMDPROGS = hmmc2\
+	hmmpgmd
 
 HDRS =  hmmer.h\
 	p7_config.h
@@ -88,6 +94,10 @@ OBJS =  build.o\
 	p7_trace.o
 #	island.o\
 
+HMMDOBJS = hmmdmstr.o\
+	hmmdwrkr.o\
+	hmmdutils.o\
+	cachedb.o
 
 STATS = \
 	evalues_stats
@@ -148,7 +158,7 @@ check:
 
 dev: libraries programs utests itests misc
 
-libraries: easel_lib impl_lib hmmer_lib
+libraries: easel_lib impl_lib hmmer_lib hmmd_lib
 
 easel_lib:
 	cd ${ESLDIR}; ${MAKE} libeasel.a
@@ -158,7 +168,9 @@ impl_lib:
 
 hmmer_lib: libhmmer.a
 
-programs: libraries ${PROGS}
+hmmd_lib: libhmmd.a
+
+programs: libraries ${PROGS} ${HMMDPROGS}
 
 utests: libraries impl_utests ${UTESTS}
 
@@ -169,6 +181,7 @@ misc: libraries ${STATS} impl_benchmarks ${BENCHMARKS} impl_examples ${EXAMPLES}
 # the following rules are called from the upper level makefile and
 # any library dependancies are assume to be resolved.
 hmmer_progs:       ${PROGS}
+hmmd_progs:        ${HMMDPROGS}
 hmmer_stats:       ${STATS}
 hmmer_utests:      impl_utests     ${UTESTS}
 hmmer_itests:                      ${ITESTS}
@@ -179,6 +192,11 @@ libhmmer.a: ${OBJS}
 	${AR} libhmmer.a $?
 	${RANLIB} libhmmer.a
 	chmod 644 libhmmer.a
+
+libhmmd.a: ${HMMDOBJS} 
+	${AR} libhmmd.a $?
+	${RANLIB} libhmmd.a
+	chmod 644 libhmmd.a
 
 impl_utests:
 	cd ${IMPLDIR}; ${MAKE} impl_utests
@@ -193,6 +211,9 @@ ${OBJS}: ${HDRS}
 
 ${PROGS}: @EXEC_DEPENDENCY@  ${LIBDEP}
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
+
+${HMMDPROGS}: @EXEC_DEPENDENCY@  ${HMMDLIBDEP} ${LIBDEP}
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${HMMDLIBS} ${LIBS}
 
 .c.o:
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
@@ -251,7 +272,8 @@ ${EXAMPLES}: ${LIBDEP}
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 distclean:
-	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core ${PROGS} ${HMMDPROGS} TAGS gmon.out
+	-rm -f libhmmer.a libhmmd.a
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
 	-rm -f ${STATS}
@@ -262,7 +284,8 @@ distclean:
 	cd  ${IMPLDIR}; ${MAKE} distclean
 
 clean:
-	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core ${PROGS} ${HMMDPROGS} TAGS gmon.out
+	-rm -f libhmmer.a libhmmd.a
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
 	-rm -f ${STATS}
@@ -277,7 +300,8 @@ clean:
 
 
 binclean:
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out libhmmer.a
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	-rm -f libhmmer.a libhmmd.a
 	cd ${IMPLDIR}; ${MAKE} binclean
 
 TAGS:

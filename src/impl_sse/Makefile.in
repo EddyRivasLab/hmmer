@@ -33,6 +33,7 @@ LIBDEP = ../libhmmer.a ./libhmmerimpl.a ${ESLDIR}/libeasel.a
 OBJS =  decoding.o\
 	fwdback.o\
 	io.o\
+	ssvfilter.o\
 	msvfilter.o\
 	null2.o\
 	optacc.o\

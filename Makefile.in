@@ -96,7 +96,8 @@ PROGS = \
 	hmmstat\
 	jackhmmer\
 	phmmer\
-	nhmmer
+	nhmmer\
+	hmmpgmd
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
@@ -117,7 +118,7 @@ dev: libraries programs utests itests misc
 
 
 # rules to build the libraries
-libraries: easel_lib impl_lib hmmer_lib
+libraries: easel_lib impl_lib hmmer_lib hmmd_lib
 
 easel_lib:
 	cd ${ESLDIR};  ${MAKE} libeasel.a
@@ -128,14 +129,20 @@ impl_lib:
 hmmer_lib:
 	cd ${SRCDIR};  ${MAKE} libhmmer.a
 
+hmmd_lib:
+	cd ${SRCDIR};  ${MAKE} libhmmd.a
+
 # rules to build the programs
-programs: easel_progs hmmer_progs profmark_progs
+programs: easel_progs hmmer_progs hmmd_progs profmark_progs
 
 easel_progs: libraries
 	cd ${ESLDIR};   ${MAKE} easel_progs
 
 hmmer_progs: libraries
 	cd ${SRCDIR};   ${MAKE} hmmer_progs	
+
+hmmd_progs: libraries
+	cd ${SRCDIR};   ${MAKE} hmmd_progs	
 
 profmark_progs: libraries
 	cd ${PMARKDIR}; ${MAKE} profmark_progs

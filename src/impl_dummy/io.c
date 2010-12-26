@@ -40,11 +40,17 @@
 #include "hmmer.h"
 #include "impl_dummy.h"
 
-static uint32_t  v3b_fmagic = 0xb3e2e6f3; /* 3/b binary MSV file:     "3bfs" = 0x 33 62 66 73  + 0x80808080 */
-static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file: "3bps" = 0x 33 62 70 73  + 0x80808080 */
+static uint32_t  v3d_fmagic = 0xb3e4e6e4; /* 3/d binary MSV file, dummy:     "3dfd" = 0x 33 64 66 64  + 0x80808080 */
+static uint32_t  v3d_pmagic = 0xb3e4f0e4; /* 3/d binary profile file, dummy: "3dpd" = 0x 33 64 70 64  + 0x80808080 */
 
-static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
-static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
+static uint32_t  v3c_fmagic = 0xb3e3e6e4; /* 3/c binary MSV file, dummy:     "3cfd" = 0x 33 63 66 64  + 0x80808080 */
+static uint32_t  v3c_pmagic = 0xb3e3f0e4; /* 3/c binary profile file, dummy: "3cpd" = 0x 33 63 70 64  + 0x80808080 */
+
+static uint32_t  v3b_fmagic = 0xb3e2e6e4; /* 3/b binary MSV file, dummy:     "3bfd" = 0x 33 62 66 64  + 0x80808080 */
+static uint32_t  v3b_pmagic = 0xb3e2f0e4; /* 3/b binary profile file, dummy: "3bpd" = 0x 33 62 70 64  + 0x80808080 */
+
+static uint32_t  v3a_fmagic = 0xe8b3e6e4; /* 3/a binary MSV file, dummy:     "h3fd" = 0x 68 33 66 64  + 0x80808080 */
+static uint32_t  v3a_pmagic = 0xe8b3f0e4; /* 3/a binary profile file, dummy: "h3pd" = 0x 68 33 70 64  + 0x80808080 */
 
 /*****************************************************************
  *# 1. Writing optimized profiles to two files.
@@ -74,13 +80,13 @@ int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
-  if (fwrite((char *) &(v3b_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3d_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) return eslFAIL;
 
   /* <pfp> gets the rest of the oprofile */
-  if (fwrite((char *) &(v3b_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3d_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   
@@ -163,8 +169,10 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   roff = ftello(hfp->ffp);
 
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
-  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
-  if (magic != v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
+  if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
+  if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
+  if (magic != v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),    1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),    1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alpha type");
@@ -271,8 +279,10 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   roff = ftello(hfp->ffp);
 
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
-  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
-  if (magic != v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
+  if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
+  if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
+  if (magic != v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alpha type");
@@ -394,8 +404,10 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 #endif
 
   if (! fread( (char *) &magic,          sizeof(uint32_t), 1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read magic");
-  if (magic == v3a_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database (3/a format); please hmmpress your HMM file again");
-  if (magic != v3b_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
+  if (magic == v3a_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
+  if (magic == v3b_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
+  if (magic == v3c_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
+  if (magic != v3d_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
 
   if (! fread( (char *) &M,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  

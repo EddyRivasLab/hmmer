@@ -31,8 +31,6 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
-
-
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
  *****************************************************************/
@@ -53,16 +51,19 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   int          nqb = p7O_NQB(allocM); /* # of uchar vectors needed for query */
   int          nqw = p7O_NQW(allocM); /* # of sword vectors needed for query */
   int          nqf = p7O_NQF(allocM); /* # of float vectors needed for query */
+  int          nqs = nqb + EXTRA_SB;
   int          x;
 
   /* level 0 */
   ESL_ALLOC(om, sizeof(P7_OPROFILE));
   om->rbv_mem = NULL;
+  om->sbv_mem = NULL;
   om->rwv_mem = NULL;
   om->twv_mem = NULL;
   om->rfv_mem = NULL;
   om->tfv_mem = NULL;
   om->rbv     = NULL;
+  om->sbv     = NULL;
   om->rwv     = NULL;
   om->twv     = NULL;
   om->rfv     = NULL;
@@ -71,17 +72,20 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* level 1 */
   ESL_ALLOC(om->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp          +15); /* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp          +15); 
   ESL_ALLOC(om->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp          +15);                     
   ESL_ALLOC(om->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS       +15);   
   ESL_ALLOC(om->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp          +15);                     
   ESL_ALLOC(om->tfv_mem, sizeof(__m128)  * nqf  * p7O_NTRANS       +15);    
 
   ESL_ALLOC(om->rbv, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om->sbv, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om->rwv, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om->rfv, sizeof(__m128  *) * abc->Kp); 
 
   /* align vector memory on 16-byte boundaries */
   om->rbv[0] = (__m128i *) (((unsigned long int) om->rbv_mem + 15) & (~0xf));
+  om->sbv[0] = (__m128i *) (((unsigned long int) om->sbv_mem + 15) & (~0xf));
   om->rwv[0] = (__m128i *) (((unsigned long int) om->rwv_mem + 15) & (~0xf));
   om->twv    = (__m128i *) (((unsigned long int) om->twv_mem + 15) & (~0xf));
   om->rfv[0] = (__m128  *) (((unsigned long int) om->rfv_mem + 15) & (~0xf));
@@ -90,6 +94,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
     om->rbv[x] = om->rbv[0] + (x * nqb);
+    om->sbv[x] = om->sbv[0] + (x * nqs);
     om->rwv[x] = om->rwv[0] + (x * nqw);
     om->rfv[x] = om->rfv[0] + (x * nqf);
   }
@@ -170,11 +175,13 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
   if (om->clone == 0)
     {
       if (om->rbv_mem   != NULL) free(om->rbv_mem);
+      if (om->sbv_mem   != NULL) free(om->sbv_mem);
       if (om->rwv_mem   != NULL) free(om->rwv_mem);
       if (om->twv_mem   != NULL) free(om->twv_mem);
       if (om->rfv_mem   != NULL) free(om->rfv_mem);
       if (om->tfv_mem   != NULL) free(om->tfv_mem);
       if (om->rbv       != NULL) free(om->rbv);
+      if (om->sbv       != NULL) free(om->sbv);
       if (om->rwv       != NULL) free(om->rwv);
       if (om->rfv       != NULL) free(om->rfv);
       if (om->name      != NULL) free(om->name);
@@ -205,6 +212,7 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   int           nqb  = p7O_NQB(om1->allocM); /* # of uchar vectors needed for query */
   int           nqw  = p7O_NQW(om1->allocM); /* # of sword vectors needed for query */
   int           nqf  = p7O_NQF(om1->allocM); /* # of float vectors needed for query */
+  int           nqs  = nqb + EXTRA_SB;
 
   size_t        size = sizeof(char) * (om1->allocM+2);
 
@@ -215,11 +223,13 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   /* level 0 */
   ESL_ALLOC(om2, sizeof(P7_OPROFILE));
   om2->rbv_mem = NULL;
+  om2->sbv_mem = NULL;
   om2->rwv_mem = NULL;
   om2->twv_mem = NULL;
   om2->rfv_mem = NULL;
   om2->tfv_mem = NULL;
   om2->rbv     = NULL;
+  om2->sbv     = NULL;
   om2->rwv     = NULL;
   om2->twv     = NULL;
   om2->rfv     = NULL;
@@ -227,17 +237,20 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
 
   /* level 1 */
   ESL_ALLOC(om2->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
+  ESL_ALLOC(om2->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp    +15);
   ESL_ALLOC(om2->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp    +15);                     
   ESL_ALLOC(om2->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS +15);   
   ESL_ALLOC(om2->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp    +15);                     
   ESL_ALLOC(om2->tfv_mem, sizeof(__m128)  * nqf  * p7O_NTRANS +15);    
 
   ESL_ALLOC(om2->rbv, sizeof(__m128i *) * abc->Kp); 
+  ESL_ALLOC(om2->sbv, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om2->rwv, sizeof(__m128i *) * abc->Kp); 
   ESL_ALLOC(om2->rfv, sizeof(__m128  *) * abc->Kp); 
 
   /* align vector memory on 16-byte boundaries */
   om2->rbv[0] = (__m128i *) (((unsigned long int) om2->rbv_mem + 15) & (~0xf));
+  om2->sbv[0] = (__m128i *) (((unsigned long int) om2->sbv_mem + 15) & (~0xf));
   om2->rwv[0] = (__m128i *) (((unsigned long int) om2->rwv_mem + 15) & (~0xf));
   om2->twv    = (__m128i *) (((unsigned long int) om2->twv_mem + 15) & (~0xf));
   om2->rfv[0] = (__m128  *) (((unsigned long int) om2->rfv_mem + 15) & (~0xf));
@@ -245,12 +258,14 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
 
   /* copy the vector data */
   memcpy(om2->rbv[0], om1->rbv[0], sizeof(__m128i) * nqb  * abc->Kp);
+  memcpy(om2->sbv[0], om1->sbv[0], sizeof(__m128i) * nqs  * abc->Kp);
   memcpy(om2->rwv[0], om1->rwv[0], sizeof(__m128i) * nqw  * abc->Kp);
   memcpy(om2->rfv[0], om1->rfv[0], sizeof(__m128i) * nqf  * abc->Kp);
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
     om2->rbv[x] = om2->rbv[0] + (x * nqb);
+    om2->sbv[x] = om2->sbv[0] + (x * nqs);
     om2->rwv[x] = om2->rwv[0] + (x * nqw);
     om2->rfv[x] = om2->rfv[0] + (x * nqf);
   }
@@ -405,6 +420,62 @@ wordify(P7_OPROFILE *om, float sc)
   else return (int16_t) sc;
 }
 
+
+/* sf_conversion():
+ * Author: Bjarne Knudsen
+ * 
+ * Generates the SSVFilter() parts of the profile <om> scores
+ * from the completed MSV score.  This includes calculating 
+ * special versions of the match scores for using the the
+ * ssv filter.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+static int
+sf_conversion(P7_OPROFILE *om)
+{
+  int     M   = om->M;		/* length of the query                                          */
+  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int     x;			/* counter over residues                                        */
+  int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
+  __m128i tmp;
+  __m128i tmp2;
+
+  /* We now want to fill out om->sbv with om->rbv - bias for use in the
+   * SSV filter. The only challenge is that the om->rbv values are
+   * unsigned and generally use the whole scale while the om->sbv
+   * values are signed. To solve that problem we perform the following
+   * calculation:
+   *
+   *   ((127 + bias) - rbv) ^ 127
+   *
+   * where the subtraction is unsigned saturated and the addition is
+   * unsigned (it will not overflow, since bias is a small positive
+   * number). The f(x) = x ^ 127 combined with a change from unsigned
+   * to signed numbers have the same effect as f(x) = -x + 127. So if
+   * we regard the above as signed instead of unsigned it is equal to:
+   *
+   *   -((127 + bias) - rbv) + 127 = rbv - bias
+   *
+   * which is what we want. The reason for this slightly complex idea
+   * is that we wish the transformation to be fast, especially for
+   * hmmscan where many models are loaded.
+   */
+
+  tmp = _mm_set1_epi8((int8_t) (om->bias_b + 127));
+  tmp2  = _mm_set1_epi8(127);
+
+  for (x = 0; x < om->abc->Kp; x++)
+    {
+      for (q = 0;  q < nq;            q++) om->sbv[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rbv[x][q]), tmp2);
+      for (q = nq; q < nq + EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
+    }
+
+  return eslOK;
+}
+
 /* mf_conversion(): 
  * 
  * This builds the MSVFilter() parts of the profile <om>, scores
@@ -449,6 +520,8 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->tbm_b = unbiased_byteify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
   om->tec_b = unbiased_byteify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
   om->tjb_b = unbiased_byteify(om, logf(3.0f / (float) (gm->L+3))); /* this adopts the L setting of the parent profile */
+
+  sf_conversion(om);
 
   return eslOK;
 }
@@ -655,6 +728,13 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int status, z;
 
+  /* Set these first so they are available in the following calls */
+  om->mode       = gm->mode;
+  om->L          = gm->L;
+  om->M          = gm->M;
+  om->nj         = gm->nj;
+  om->max_length = gm->max_length;
+
   if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
   if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");  
 
@@ -675,11 +755,6 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) om->compo[z]   = gm->compo[z];
 
-  om->mode = gm->mode;
-  om->L    = gm->L;
-  om->M    = gm->M;
-  om->max_length = gm->max_length;
-  om->nj   = gm->nj;
   return eslOK;
 
  ERROR:

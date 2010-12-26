@@ -376,6 +376,7 @@ enum p7_hmmfile_formats_e {
   p7_HMMFILE_3a = 1,
   p7_HMMFILE_3b = 2,
   p7_HMMFILE_3c = 3,
+  p7_HMMFILE_3d = 4,
 };
 
 typedef struct p7_hmmfile_s {
@@ -1006,6 +1007,7 @@ extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
 /* p7_builder.c */
 extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc);
 extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
+extern int         p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, double pextend);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
 extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
@@ -1076,6 +1078,7 @@ extern int  p7_hmmfile_OpenE    (char *filename, char *env, P7_HMMFILE **ret_hfp
 extern int  p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
 extern int  p7_hmmfile_Open     (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
 extern int  p7_hmmfile_OpenNoDB (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 #ifdef HMMER_THREADS
 extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
