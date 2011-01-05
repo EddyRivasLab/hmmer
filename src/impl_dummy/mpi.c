@@ -353,10 +353,14 @@ main(int argc, char **argv)
 
 
 #else /*!HAVE_MPI*/
-/* Provide a null test driver if MPI isn't enabled, so
- * automated tests are always happy.
+/* If we don't have MPI compiled in, provide some nothingness to:
+ *   a. prevent Mac OS/X ranlib from bitching about .o file that "has no symbols" 
+ *   b. prevent compiler from bitching about "empty compilation unit"
+ *   c. automatically pass the automated tests.
  */
-#ifdef p7MPI_TESTDRIVE
+void p7_mpi_DoAbsolutelyNothing(void) { return; }
+
+#if defined p7MPI_TESTDRIVE || p7MPI_BENCHMARK || p7MPI_EXAMPLE
 int main(void) { return 0; }
 #endif
 #endif /*HAVE_MPI*/

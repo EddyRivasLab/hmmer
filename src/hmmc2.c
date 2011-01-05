@@ -82,8 +82,8 @@ static ESL_OPTIONS searchOpts[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char banner_seq[] = "search a protein sequence against a sequence database";
-static char banner_hmm[] = "search profile(s) against a sequence database";
+//static char banner_seq[] = "search a protein sequence against a sequence database";
+//static char banner_hmm[] = "search profile(s) against a sequence database";
 
 static void
 sig_int(int signo)
@@ -92,6 +92,7 @@ sig_int(int signo)
   exit(1);
 }
 
+#if 0
 static int
 output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
 {
@@ -139,6 +140,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
   fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
   return eslOK;
 }
+#endif /*0; SRE removed to silence compiler warning, looks like MSF wasn't using it*/
 
 static void 
 usage(char *pgm)
@@ -376,7 +378,7 @@ int main(int argc, char *argv[])
 
     if (*ptr && strncmp(ptr, "//", 2) != 0) {
       P7_HMM          *hmm     = NULL;        /* query HMM                       */
-      P7_HMMFILE      *hfp     = NULL;        /* open input HMM file             */
+      //     P7_HMMFILE      *hfp     = NULL;        /* open input HMM file             */
       ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
       ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
 

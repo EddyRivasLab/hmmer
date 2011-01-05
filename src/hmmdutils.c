@@ -133,10 +133,8 @@ readn(int fd, void *vptr, size_t n)
       } else {
         return -1;
       }
-    } else if (bytes < 0) {
-      break;
     }
-
+    
     remaining -= bytes;
     ptr += bytes;
   }

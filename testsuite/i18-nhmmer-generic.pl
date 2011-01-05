@@ -7,6 +7,7 @@
 # Example: ./i18-nhmmer-generic.pl ..         ..       tmpfoo
 #
 # TJW, Fri Nov 12 11:07:31 EST 2010 [Janelia]
+# SVN $URL$
 # SVN $Id$
 
 BEGIN {
@@ -35,12 +36,12 @@ $alignment   = "3box.sto";
 
 # Verify that we have all the executables and datafiles we need for the test.
 foreach $h3prog  (@h3progs)  { if (! -x "$builddir/src/$h3prog")              { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
-foreach $eslprog (@eslrogs) { if (! -x "$builddir/easel/miniapps/$eslprog") { die "FAIL: didn't find $eslprog executable in $builddir/easel/miniapps\n";  } }
+foreach $eslprog (@eslprogs) { if (! -x "$builddir/easel/miniapps/$eslprog")  { die "FAIL: didn't find $eslprog executable in $builddir/easel/miniapps\n";  } }
 
 if (! -r "$srcdir/testsuite/$alignment")  { die "FAIL: can't read msa $alignment in $srcdir/testsuite\n"; }
 
 # Create the test hmm
-$cmd = "$builddir/src/hmmbuild $tmppfx.hmm 3box.sto";
+$cmd = "$builddir/src/hmmbuild $tmppfx.hmm $srcdir/testsuite/$alignment";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: hmmbuild failed unexpectedly\n"; }
 if ($output !~ /1     3box                    22    22    20    75    22.00  1.356/) {
@@ -111,7 +112,7 @@ exit 0;
 
 
 sub do_cmd {
-	$cmd = shift;
+    $cmd = shift;
     print "$cmd\n" if $verbose;
     return `$cmd`;	
 }

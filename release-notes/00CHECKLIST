@@ -182,10 +182,10 @@ On login-eddy (our compile host):
   rm -rf build-gcc
   mkdir build-gcc
   cd build-gcc
-  ../configure    2>&1  > build.out
-  make            2>&1 >> build.out
-  make dev        2>&1 >> build.out
-  make check      2>&1 >> build.out
+  ../configure     > build.out  2>&1
+  make            >> build.out  2>&1
+  make dev        >> build.out  2>&1
+  make check      >> build.out  2>&1
 
   ssh login-eddy
   cd ~/releases/hmmer-release
@@ -193,10 +193,10 @@ On login-eddy (our compile host):
   mkdir build-icc-mpi
   cd build-icc-mpi
   setup_icc_intel64
-  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi   2>&1 > build.out
-  make            2>&1 >> build.out
-  make dev        2>&1 >> build.out
-  make check      2>&1 >> build.out
+  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi   > build.out  2>&1
+  make            >> build.out  2>&1
+  make dev        >> build.out  2>&1
+  make check      >> build.out  2>&1
 
   ssh login-eddy
   cd ~/releases/hmmer-${HMMER_OLDVERSION}
@@ -204,10 +204,10 @@ On login-eddy (our compile host):
   rm -rf build-gcc
   mkdir build-gcc
   cd build-gcc
-  ../configure  2>&1  > build.out
-  make          2>&1 >> build.out
-  make dev      2>&1 >> build.out
-  make check    2>&1 >> build.out
+  ../configure   > build.out   2>&1
+  make          >> build.out   2>&1
+  make dev      >> build.out   2>&1
+  make check    >> build.out   2>&1
 
   ssh login-eddy
   cd ~/releases/hmmer-${HMMER_OLDVERSION}
@@ -215,10 +215,10 @@ On login-eddy (our compile host):
   mkdir build-icc-mpi
   cd build-icc-mpi
   setup_icc_intel64
-  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi 2>&1 > build.out
-  make          2>&1 >> build.out
-  make dev      2>&1 >> build.out
-  make check    2>&1 >> build.out
+  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi > build.out 2>&1
+  make          >> build.out  2>&1
+  make dev      >> build.out  2>&1
+  make check    >> build.out  2>&1
 
 This sets up:
 
@@ -345,20 +345,20 @@ On login-eddy (our compile host):
   cd ~/releases/hmmer-${HMMER_VERSION}
   mkdir build-gcc
   cd build-gcc
-  ../configure    2>&1  > build.out
-  make            2>&1 >> build.out
-  make dev        2>&1 >> build.out
-  make check      2>&1 >> build.out
+  ../configure     > build.out   2>&1
+  make            >> build.out	 2>&1
+  make dev        >> build.out	 2>&1
+  make check      >> build.out	 2>&1
 
   ssh login-eddy
   cd ~/releases/hmmer-${HMMER_VERSION}
   mkdir build-icc-mpi
   cd build-icc-mpi
   setup_icc_intel64
-  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi   2>&1 > build.out
-  make            2>&1 >> build.out
-  make dev        2>&1 >> build.out
-  make check      2>&1 >> build.out
+  ../configure CC=icc LDFLAGS=-static-intel --enable-mpi   > build.out  2>&1
+  make            >> build.out  2>&1
+  make dev        >> build.out  2>&1
+  make check      >> build.out  2>&1
 
 
 ================================================================
@@ -396,12 +396,12 @@ ia32 build:
   setup_icc_ia32
   mkdir build-${HMMER_DISTRO}
   cd build-${HMMER_DISTRO}
-  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  2>&1 > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make                             2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make dev                         2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make check                       2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make install                     2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  (cd easel/miniapps; make install 2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out)
+  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out 2>&1
+  make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make install                     >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  (cd easel/miniapps; make install >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1)
 
   cd ..
   rm -rf build-${HMMER_DISTRO}
@@ -419,12 +419,12 @@ intel64 build:
   setup_icc_intel64
   mkdir build-${HMMER_DISTRO}
   cd build-${HMMER_DISTRO}
-  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  2>&1 > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make                             2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make dev                         2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make check                       2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make install                     2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  (cd easel/miniapps; make install 2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out)
+  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out 2>&1
+  make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make install                     >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  (cd easel/miniapps; make install >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1)
 
   cd ..
   rm -rf build-${HMMER_DISTRO}
@@ -442,12 +442,12 @@ macosx-intel build:
 
   mkdir build-${HMMER_DISTRO}
   cd build-${HMMER_DISTRO}
-  ../configure --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  2>&1 > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make                             2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make dev                         2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make check                       2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  make install                     2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out
-  (cd easel/miniapps; make install 2>&1 >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out)
+  ../configure --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out  2>&1
+  make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make install                     >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  (cd easel/miniapps; make install >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1)
 
   cd ..
   rm -rf build-${HMMER_DISTRO}

@@ -647,6 +647,7 @@ echo "
 HMMER configuration:
 
      compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS}
+     host:                 $host
      linker:               ${LDFLAGS}
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
@@ -654,7 +655,7 @@ HMMER configuration:
 
 if test "$impl_choice" = "dummy"; then
   AC_MSG_WARN([The "dummy" implementation is a portable ANSI C reference implementation.])
-  AC_MSG_WARN([It is slow, and is not intended for production use.])
+  AC_MSG_WARN([It is slow, and is NOT intended for production use.])
 fi
 
 

@@ -7,6 +7,7 @@
 # Example: ./i17-stdin.pl ..         ..       tmpfoo
 #
 # SRE, Wed Oct 27 13:05:10 2010 [Janelia]
+# SVN $URL$
 # SVN $Id$
 
 BEGIN {
