@@ -611,11 +611,12 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   pli->n_past_bias++;
 
   /* In scan mode, if it passes the MSV filter, read the rest of the profile */
-  if (pli->hfp) {
-    p7_oprofile_ReadRest(pli->hfp, om);
-    p7_oprofile_ReconfigRestLength(om, sq->n);
-    if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
-  }
+  if (pli->mode == p7_SCAN_MODELS)
+    {
+      if (pli->hfp) p7_oprofile_ReadRest(pli->hfp, om);
+      p7_oprofile_ReconfigRestLength(om, sq->n);
+      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
+    }
 
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   if (P > pli->F2)

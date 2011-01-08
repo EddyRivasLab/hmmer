@@ -1,19 +1,10 @@
-/* The all-encompassing include file for HMMER.
- * All-encompassing because there's a lot of crossdependency.
- * There's some opportunity for modularity, but not a lot.
- *
- *    1. P7_HMM:         a core model.
- *    2. Copyright and license information.
- *   
- * SRE, Wed Jan  3 13:46:42 2007 [Janelia]
- * SVN $Id: hmmer.h 3350 2010-08-19 17:36:13Z farrarm $
+/*
+ * SVN $URL$
+ * SVN $Id$
  */
 #ifndef P7_HMMPGMD_INCLUDED
 #define P7_HMMPGMD_INCLUDED
 
-/*****************************************************************
- * 1.
- *****************************************************************/
 
 typedef struct {
   uint32_t   status;            /* error status                             */

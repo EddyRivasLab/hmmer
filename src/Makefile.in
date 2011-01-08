@@ -272,14 +272,7 @@ ${EXAMPLES}: ${LIBDEP}
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 distclean:
-	-rm -f *.o *~ Makefile.bak core ${PROGS} ${HMMDPROGS} TAGS gmon.out
-	-rm -f libhmmer.a libhmmd.a
-	-rm -f ${UTESTS}
-	-rm -f ${ITESTS}
-	-rm -f ${STATS}
-	-rm -f ${BENCHMARKS}
-	-rm -f ${EXAMPLES}
-	-rm -f *.gcno
+	${MAKE} clean
 	-rm -f Makefile p7_config.h
 	cd  ${IMPLDIR}; ${MAKE} distclean
 

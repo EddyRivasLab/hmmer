@@ -1,7 +1,26 @@
-/* hmmpgmd: hmmer deamon searchs against a sequence database.
+/* HMMER search daemon
+ * 
+ * How to run a test:
+ *   Need a test sequence database: mine is ~eddys/data/hmmpgmd/hmmpgmd.fa
+ *   Need a test profile database:  mine is ~eddys/data/hmmpgmd/hmmpgmd.hmm
+ *   
+ *   src/hmmpgmd --master --seqdb ~/data/hmmpgmd/hmmpgmd.fa --hmmdb ~/data/hmmpgmd/hmmpgmd.hmm &
+ *   src/hmmpgmd --worker 127.0.0.1 --cpu 1 &
+ *   src/hmmc2 -S
+ *     @--seqdb 1
+ *     >foo
+ *     ACDEFGH...
+ *     //
+ *     !shutdown
+ *     //
+ *     
+ * For debugging, start two of the three processes on cmdline, and the
+ * one to be debugged under gdb.
+ *    in worker: break process_SearchCmd
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id: hmmsearch.c 3324 2010-07-07 19:30:12Z wheelert $
+ * SVN $URL$
+ * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -60,7 +79,7 @@ signal(int signo, sig_func *fn)
   sigemptyset(&act.sa_mask);
   act.sa_flags = 0;
   if (signo == SIGALRM) {
-#ifdef SA_INTERRUMP
+#ifdef SA_INTERRUPT
     act.sa_flags |= SA_INTERRUPT;  /* SunOS 4.x */
 #endif
   } else {
@@ -78,13 +97,12 @@ signal(int signo, sig_func *fn)
 static void
 write_pid(ESL_GETOPTS *go)
 {
-  FILE   *fp;
-
+  FILE   *fp      = NULL;
   char   *file    = NULL;
   char   *def_pid = "/var/run/hmmpgmd.pid";
 
   file = esl_opt_GetString(go, "--pid");
-  if (file == NULL) file = def_pid;
+  if (!file) file = def_pid;
 
   if ((fp = fopen(file, "w")) == NULL) {
   }
@@ -104,7 +122,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
 
   if ((go = esl_getopts_Create(cmdlineOpts)) == NULL)    p7_Die("Internal failure creating options object");
 
-  /* if there are no command line arguements, lets try and read /etc/hmmpgmd.conf
+  /* if there are no command line arguments, let's try to read /etc/hmmpgmd.conf
    * for any configuration data.
    */
   if (argc == 1) {
@@ -177,13 +195,10 @@ main(int argc, char **argv)
   /* check if we need to write out our pid */
   if (esl_opt_IsOn(go, "--pid")) write_pid(go);
 
-  if (esl_opt_IsUsed(go, "--master")) {
-    master_process(go);
-  } else if (esl_opt_IsUsed(go, "--worker")) {
-    worker_process(go);
-  } else {
-    puts("Options --master or --worker must be specified.");
-  }
+  if      (esl_opt_IsUsed(go, "--master"))  master_process(go);
+  else if (esl_opt_IsUsed(go, "--worker"))  worker_process(go);
+  else
+    { puts("Options --master or --worker must be specified.");  }
 
   esl_getopts_Destroy(go);
 

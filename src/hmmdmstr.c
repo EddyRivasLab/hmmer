@@ -1,7 +1,8 @@
-/* hmmpgmd: hmmer deamon searchs against a sequence database.
+/* hmmpgmd: hmmer daemon searchs against a sequence database.
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id: hmmsearch.c 3324 2010-07-07 19:30:12Z wheelert $
+ * SVN $URL$
+ * SVN $Id$
  */
 #include "p7_config.h"
 

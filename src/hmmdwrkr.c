@@ -1,7 +1,8 @@
-/* hmmpgmd: hmmer deamon searchs against a sequence database.
+/* worker side of the hmmer daemon
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id: hmmsearch.c 3324 2010-07-07 19:30:12Z wheelert $
+ * SVN $URL$
+ * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -106,10 +107,9 @@ print_timings(int i, double elapsed, P7_PIPELINE *pli)
 static int
 read_Command(HMMD_COMMAND **ret_cmd, WORKER_ENV *env)
 {
-  int  n;
-
-  HMMD_HEADER      hdr;
-  HMMD_COMMAND    *cmd = NULL;
+  HMMD_HEADER   hdr;
+  HMMD_COMMAND *cmd = NULL;
+  int           n;
 
   /* read the command header */  
   if (readn(env->fd, &hdr, sizeof(hdr)) == -1) {
@@ -137,28 +137,23 @@ read_Command(HMMD_COMMAND **ret_cmd, WORKER_ENV *env)
 void
 worker_process(ESL_GETOPTS *go)
 {
-  int   status;
-  int   shutdown;
-
-  HMMD_COMMAND    *cmd = NULL;
-  WORKER_ENV       env;
+  HMMD_COMMAND *cmd      = NULL;  /* see hmmpgmd.h */
+  WORKER_ENV    env;
+  int           shutdown = 0;
+  int           status;
     
-  /* Set processor specific flags */
-  impl_Init();
-
   /* Initializations */
+  impl_Init();
   p7_FLogsumInit();      /* we're going to use table-driven Logsum() approximations at times */
 
   if (esl_opt_IsOn(go, "--cpu")) env.ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                                       esl_threads_CPUCount(&env.ncpus);
+  else     esl_threads_CPUCount(&env.ncpus);
 
   env.fd     = -1;
   env.hmm_db = NULL;
   env.seq_db = NULL;
 
-  shutdown = 0;
   while (!shutdown) {
-
     /* start the communications with the web clients */
     env.fd = -1;
     env.fd = setup_masterside_comm(go);
@@ -225,11 +220,8 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
 
   esl_stopwatch_Start(w);
 
-  if (query->cmd_type == HMMD_CMD_SEARCH) {
-    threadObj = esl_threads_Create(&search_thread);
-  } else {
-    threadObj = esl_threads_Create(&scan_thread);
-  }
+  if (query->cmd_type == HMMD_CMD_SEARCH) threadObj = esl_threads_Create(&search_thread);
+  else                                    threadObj = esl_threads_Create(&scan_thread);
 
   if (query->query_type == HMMD_SEQUENCE) {
     fprintf(stdout, "Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
