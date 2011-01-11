@@ -19,6 +19,7 @@
 #     make DESTDIR=~/rpm/tmp/buildroot install
 # By default, DESTDIR is null.
 #
+# SVN $URL$
 # SVN $Id$
 
 
@@ -222,6 +223,8 @@ distclean:
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
+	-rm -f release-notes/LICENSE.sh
+	-rm -f src/impl
 	if test -d src;           then (cd src;       ${MAKE} distclean); fi
 	if test -d easel;         then (cd easel;     ${MAKE} distclean); fi
 	if test -d profmark;      then (cd profmark;  ${MAKE} distclean); fi
@@ -261,18 +264,21 @@ distclean:
 
 
 TAGS:
-	etags ${SRCDIR}/*.c ${SRCDIR}/*.h ${SRCDIR}/p7_config.h.in Makefile.in 
-	etags -a profmark/*.c profmark/Makefile.in 
-	etags -a documentation/userguide/*.tex documentation/userguide/Makefile.in
-	etags -a documentation/man/*.man 
-	etags -a testsuite/*.sqc testsuite/Makefile.in
-#	etags -a documentation/devguide/*.tex 
-	etags -a ${SRCDIR}/impl_sse/*.c   ${SRCDIR}/impl_sse/*.h   ${SRCDIR}/impl_sse/Makefile.in 
-	etags -a ${SRCDIR}/impl_vmx/*.c   ${SRCDIR}/impl_vmx/*.h   ${SRCDIR}/impl_vmx/Makefile.in 
-	etags -a ${SRCDIR}/impl_dummy/*.c ${SRCDIR}/impl_dummy/*.h ${SRCDIR}/impl_dummy/Makefile.in 
-	(cd easel; etags -a -o ../TAGS *.c *.h *.tex documentation/*.tex miniapps/*.c miniapps/*.man testsuite/*.sqc Makefile.in)
+	find . -name \*.c     | xargs etags    -
+	find . -name \*.h     | xargs etags -a -
+	find . -name \*.pl    | xargs etags -a -
+	find . -name \*.sh    | xargs etags -a -
+	find . -name \*.tex   | xargs etags -a -
+	find . -name \*.man   | xargs etags -a -
+	find . -name \*.in    | xargs etags -a -
+	find . -name \*.sqc   | xargs etags -a -
+	find . -name 00README | xargs etags -a -
+	etags -a COPYRIGHT INSTALL LICENSE README configure.ac
 
+# magic SVN for setting keyword ID replacements
+#  	find . -name \*.[ch]  | xargs grep -l 'SVN \$Id\$'  | xargs svn propset svn:keywords "Id"
+#	find . -name \*.[ch]  | xargs grep -l 'SVN \$URL\$' | xargs svn propset svn:keywords "URL"
 
-###########
+################################################################
 # @LICENSE@
-###########
+################################################################
