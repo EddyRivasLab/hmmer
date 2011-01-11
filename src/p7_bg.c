@@ -32,7 +32,7 @@
  *            
  *            For protein models, default iid background frequencies
  *            are set (by <p7_AminoFrequencies()>) to average
- *            SwissProt residue composition. For DNA, RNA and other
+ *            Swiss-Prot residue composition. For DNA, RNA and other
  *            alphabets, default frequencies are set to a uniform
  *            distribution.
  *            

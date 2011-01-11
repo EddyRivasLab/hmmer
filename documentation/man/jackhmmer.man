@@ -681,8 +681,8 @@ Declare that the input
 .I query_seqfile
 is in format 
 .I <s>.
-Accepted sequence file formats include FASTA, EMBL, Genbank, DDBJ,
-Uniprot, Stockholm, and SELEX. Default is to autodetect the format of
+Accepted sequence file formats include FASTA, EMBL, GenBank, DDBJ,
+UniProt, Stockholm, and SELEX. Default is to autodetect the format of
 the file.
 
 .TP 
@@ -691,8 +691,8 @@ Declare that the input
 .I target_seqdb
 is in format 
 .I <s>.
-Accepted sequence file formats include FASTA, EMBL, Genbank, DDBJ,
-Uniprot, Stockholm, and SELEX. Default is to autodetect the format of
+Accepted sequence file formats include FASTA, EMBL, GenBank, DDBJ,
+UniProt, Stockholm, and SELEX. Default is to autodetect the format of
 the file.
 
 .TP

@@ -14,7 +14,7 @@ BEGIN {
     $srcdir   = shift;
     $tmppfx   = shift;
 }
-use lib "$srcdir/testsuite";
+use lib "$srcdir/testsuite";  # The BEGIN is necessary to make this work: sets $srcdir at compile-time
 use h3;
 
 

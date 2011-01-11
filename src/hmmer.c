@@ -155,7 +155,7 @@ p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
  *            alphabet uses. Caller must provide <f> allocated for at
  *            least 20 floats.
  *            
- *            These were updated 4 Sept 2007, from SwissProt 50.8,
+ *            These were updated 4 Sept 2007, from Swiss-Prot 50.8,
  *            (Oct 2006), counting over 85956127 (86.0M) residues.
  *
  * Returns:   <eslOK> on success.

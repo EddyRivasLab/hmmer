@@ -65,7 +65,7 @@ are:
   \prog{globins4.sto}, in HMMER3 ASCII text format.
 %
 \item[\emprog{globins4.out}] An example \prog{hmmsearch} output file that results
-  from searching the \prog{globins4.hmm} against Uniprot 15.7.
+  from searching the \prog{globins4.hmm} against UniProt 15.7.
 %
 \item[\emprog{fn3.sto}] An example alignment of 106 fibronectin type III
   domains. This is the Pfam 22.0 \prog{fn3} seed alignment. It provides an
@@ -243,14 +243,14 @@ local alignment.
 \subsubsection{Step 2: search the sequence database with hmmsearch}
 
 Presumably you have a sequence database to search. Here I'll use the
-Uniprot 15.7 Swissprot FASTA format flatfile (not provided in the
+UniProt 15.7 Swiss-Prot FASTA format flatfile (not provided in the
 tutorial, because of its large size), \prog{uniprot\_sprot.fasta}.  If
 you don't have a sequence database handy, run your example search
 against \prog{tutorial/globins45.fa} instead, which is a FASTA format
 file containing 45 globin sequences.
 
 \prog{hmmsearch} accepts any FASTA file as input. It also accepts
-EMBL/Uniprot text format. It will automatically determine what format
+EMBL/UniProt text format. It will automatically determine what format
 your file is in; you don't have to say. An example of searching a
 sequene database with our \prog{globins4.hmm} model would look like:
 
@@ -258,7 +258,7 @@ sequene database with our \prog{globins4.hmm} model would look like:
 
 Depending on the database you search, the output file
 \prog{globins4.out} should look more or less like the example of a
-Uniprot search output provided in \prog{tutorial/globins4.out}.
+UniProt search output provided in \prog{tutorial/globins4.out}.
 
 The first section is the \emph{header} that tells you what program you
 ran, on what, and with what options:
@@ -495,12 +495,12 @@ independent/best single domain E-value depends on). There's one
 sequence reported as a putative homolog in the sequence top hits list
 (that's the size of the search space that the conditional E-value
 depends on). A better example is to see what happens when we search
-Uniprot (15.7 contains 497293 sequences) with the \prog{fn3} model:
+UniProt (15.7 contains 497293 sequences) with the \prog{fn3} model:
 %        ^^^^          ^^^^^^   VERIFY WHEN UPDATING
 
 \user{hmmsearch fn3.hmm uniprot\_sprot.fasta}
 
-(If you don't have Uniprot and can't run a command like this, don't
+(If you don't have UniProt and can't run a command like this, don't
 worry about it - I'll show the relevant bits here.) Now the domain
 report for \prog{7LESS\_DROME} looks like:
 
@@ -531,7 +531,7 @@ be expected to happen 497293 times as often: 1.2e-16 $\times$ 497293
 %                     ^^^^^^                 ^^^^^^^          ^^^^^^
 $=$ 5.97e-11 (it's showing 5.8e-11 because of roundoff issues; the
 %   ^^^^^^^
-1.2e-16 in fact isn't exactly 1.2e-16 inside HMMER). In this Uniprot
+1.2e-16 in fact isn't exactly 1.2e-16 inside HMMER). In this UniProt
 %^^^^^^                       ^^^^^^^   
 search, 711 sequences were reported in the top hits list (with
 %       ^^^ 
@@ -548,7 +548,7 @@ times we'd see a hit of 47.2 bits or better is now 1.2e-16 $\times$
 %^^     ^^^^^^^
 coming from.
 
-Notice that a couple of domains disappeared in the Uniprot search,
+Notice that a couple of domains disappeared in the UniProt search,
 because now, in this larger search space size, they're not
 significant. Domain 1 (the one with the score of -1.3 bits) got a
 conditional E-value of 0.17 $\times$ 711 = 121, and domain 6 (with a
@@ -576,7 +576,7 @@ E-value to decide the statistical significance of additional
 weak-scoring domains.
 \end{itemize}
 
-In the Uniprot output, for example, I'd be pretty sure of four of the
+In the UniProt output, for example, I'd be pretty sure of four of the
 domains (1, 4, 5, and maybe 6), each of which has a strong enough
 independent E-value to declare \prog{7LESS\_DROME} to be an
 fnIII-domain-containing protein. Domains 2 and 7 wouldn't be
@@ -627,7 +627,7 @@ The last column is the average posterior probability of the aligned
 target sequence residues; effectively, the expected accuracy per
 residue of the alignment.
 
-For comparison, current Uniprot consensus annotation of Sevenless
+For comparison, current UniProt consensus annotation of Sevenless
 shows seven domains:
 
 \begin{sreoutput}
@@ -642,9 +642,9 @@ FT   DOMAIN     1898   1988       Fibronectin type-III 7.
 
 These domains are a pretty tough case to call, actually. HMMER fails
 to see anything significant overlapping two of these domains (311-431
-and 1680-1794) in the Uniprot search, though it sees a smidgen of them
+and 1680-1794) in the UniProt search, though it sees a smidgen of them
 when \prog{7LESS\_DROME} alone is the target. HMMER3 sees two new
-domains (1205-1235 and 1993-2098) that Uniprot currently doesn't
+domains (1205-1235 and 1993-2098) that UniProt currently doesn't
 annotate, but these are pretty plausible domains (given that the
 extracellular domain of Sevenless is pretty much just a big array of
 $\sim$100aa fibronectin repeats.
@@ -1191,7 +1191,7 @@ correspond exactly to the residues of your query, so the coordinate
 system of every profile is always the same as the numbering of
 residues in your query sequence, 1..L for a sequence of length L.
 
-Assuming you have Uniprot or something like it handy, here's an
+Assuming you have UniProt or something like it handy, here's an
 example command line for a jackhmmer search:
 
 \user{jackhmmer tutorial/HBB\_HUMAN uniprot\_sprot.fa}\\

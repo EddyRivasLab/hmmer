@@ -124,8 +124,8 @@ fly. For example:
 \user{cat mytargets.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch globins4.hmm -}
 
 This takes a list of sequence names/accessions in
-\prog{mytargets.list}, fetches them one by one from Uniprot (note that
-we index the Uniprot file first, for fast retrieval; and note that
+\prog{mytargets.list}, fetches them one by one from UniProt (note that
+we index the UniProt file first, for fast retrieval; and note that
 \prog{esl-sfetch} is reading its \prog{<namefile>} list of
 names/accessions through a pipe using the '-' argument), and pipes
 them to an \prog{hmmsearch}. It should be obvious from this that we
@@ -140,7 +140,7 @@ Ditto for piping subsets of profiles. Supposing you have a copy of Pfam in Pfam-
 
 This takes a list of query profile names/accessions in
 \prog{myqueries.list}, fetches them one by one from Pfam, and does an
-hmmsearch with each of them against Uniprot. As above, the \prog{cat
+hmmsearch with each of them against UniProt. As above, the \prog{cat
   myqueries.list} part can be replaced by any suitable incantation
 that generates a list of profile names/accessions.
 

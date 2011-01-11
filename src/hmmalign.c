@@ -62,7 +62,7 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
   puts("\nLess common options:");
   esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
-  puts("\nSequence input formats include:   FASTA, EMBL, Genbank, Uniprot");
+  puts("\nSequence input formats include:   FASTA, EMBL, GenBank, UniProt");
   puts("Alignment output formats include: Stockholm, Pfam, A2M, PSIBLAST\n");
   exit(0);
 }
