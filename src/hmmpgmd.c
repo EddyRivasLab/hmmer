@@ -42,28 +42,23 @@
 #define CONF_FILE "/etc/hmmpgmd.conf"
 
 static ESL_OPTIONS cmdlineOpts[] = {
-  /* name           type         default  env   range  toggles  reqs   incomp           help                                                     docgroup */
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
-  /* Other options */
-  { "--master",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  "--worker",      "run program as the master server",                            12 },
-  { "--worker",     eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  "--master",      "run program as a worker with server at <s>",                  12 },
-  { "--cport",      eslARG_INT,  "41139", NULL, "n>1024",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
-  { "--wport",      eslARG_INT,  "41023", NULL, "n>1024",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
-  { "--ccncts",     eslARG_INT,     "16", NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
-  { "--wcncts",     eslARG_INT,     "32", NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
-  { "--pid",        eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "write process id to file [default: /var/run/hmmpgmd.pid]",    12 },
-  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,            "run as a daemon using config file: /etc/hmmpgmd.conf",        12 },
-
-  { "--seqdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
-  { "--hmmdb",      eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
-
-  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>0", NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
-
+  /* name           type         default      env   range  toggles  reqs   incomp           help                                                     docgroup */
+  { "-h",           eslARG_NONE,   FALSE,     NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "--master",     eslARG_NONE,    NULL,     NULL, NULL,    NULL,  NULL,  "--worker",      "run program as the master server",                            12 },
+  { "--worker",     eslARG_STRING,  NULL,     NULL, NULL,    NULL,  NULL,  "--master",      "run program as a worker with server at <s>",                  12 },
+  { "--cport",      eslARG_INT,     "41139",  NULL, "n>1024",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
+  { "--wport",      eslARG_INT,     "41023",  NULL, "n>1024",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
+  { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
+  { "--wcncts",     eslARG_INT,     "32",     NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
+  { "--pid",        eslARG_OUTFILE, NULL,     NULL, NULL,    NULL,  NULL,  NULL,            "file to write process id to",                                 12 },
+  { "--daemon",     eslARG_NONE,    NULL,     NULL, NULL,    NULL,  NULL,  NULL,            "run as a daemon using config file: /etc/hmmpgmd.conf",        12 },
+  { "--seqdb",      eslARG_INFILE,  NULL,     NULL, NULL,    NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
+  { "--hmmdb",      eslARG_INFILE,  NULL,     NULL, NULL,    NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
+  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU","n>0", NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 static char usage[]  = "[options]";
-
 static char banner[] = "search a query against a database";
 
 
@@ -94,19 +89,16 @@ signal(int signo, sig_func *fn)
   return oact.sa_handler;
 }
 
+/* write_pid()
+ * Log the process id to a file.
+ */
 static void
 write_pid(ESL_GETOPTS *go)
 {
-  FILE   *fp      = NULL;
-  char   *file    = NULL;
-  char   *def_pid = "/var/run/hmmpgmd.pid";
+  char   *pid_file = esl_opt_GetString(go, "--pid");
+  FILE   *fp       = fopen(pid_file, "w");
 
-  file = esl_opt_GetString(go, "--pid");
-  if (!file) file = def_pid;
-
-  if ((fp = fopen(file, "w")) == NULL) {
-  }
-
+  if (!fp) p7_Fail("Unable to open PID file %s for writing.", pid_file);
   fprintf(fp,"%ld\n", (long)getpid());
   fclose(fp);
 }

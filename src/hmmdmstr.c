@@ -1,4 +1,4 @@
-/* hmmpgmd: hmmer daemon searchs against a sequence database.
+/* master side of the hmmpgmd daemon
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
  * SVN $URL$
@@ -18,6 +18,7 @@
 #include <arpa/inet.h>
 #include <syslog.h>
 #include <assert.h>
+#include <time.h>
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
@@ -740,6 +741,8 @@ master_process(ESL_GETOPTS *go)
   while (!shutdown && (query = pop_Queue(queue)) != NULL) {
 
     printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
+    fflush(stdout);
+
     switch(query->cmd_type) {
     case HMMD_CMD_SEARCH:
     case HMMD_CMD_SCAN:
@@ -1042,6 +1045,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
   printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
   printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", results->stats.nhits, results->stats.nreported, results->stats.nincluded);
+  fflush(stdout);
 
  CLEAR:
   /* free all the data */
@@ -1077,7 +1081,6 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
 {
   int i;
   int n;
-
   WORKER_DATA *worker;
 
   /* lock the workers until we have freed the results */
@@ -1116,14 +1119,14 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
 static void
 process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 {
-  int   n;
-  char *s;
-
   QUEUE_DATA    *parms  = NULL;     /* cmd to queue           */
   HMMD_COMMAND  *cmd    = NULL;     /* parsed cmd to process  */
-
   int            fd     = data->sock_fd;
   COMMAND_QUEUE *queue  = data->queue;
+  int            n;
+  char          *s;
+  time_t         date;
+  char           timestamp[32];
 
   /* skip leading white spaces */
   ++ptr;
@@ -1260,9 +1263,13 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   parms->cmd_type   = cmd->hdr.command;
   parms->query_type = 0;
 
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
   printf("Queuing command %d from %s (%d)\n", cmd->hdr.command, parms->ip_addr, parms->sock);
-  push_Queue(parms, queue);
+  fflush(stdout);
 
+  push_Queue(parms, queue);
 }
 
 static int
@@ -1291,8 +1298,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   COMMAND_QUEUE     *queue   = data->queue;
   QUEUE_DATA        *parms;
-
   jmp_buf            jmp_env;
+  time_t             date;
+  char               timestamp[32];
 
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
@@ -1591,11 +1599,17 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->cmd_type   = cmd->hdr.command;
   parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
 
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
+
   if (parms->seq != NULL) {
     printf("Queuing %s %s from %s (%d)\n", (cmd->hdr.command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
   } else {
     printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
   }
+  printf("%s", opt_str);	/* note opt_str already has trailing \n */
+  fflush(stdout);
 
   push_Queue(parms, queue);
 
@@ -1620,6 +1634,7 @@ clientside_thread(void *arg)
   remove_Queue(data->sock_fd, data->queue);
 
   printf("Closing %s (%d)\n", data->ip_addr, data->sock_fd);
+  fflush(stdout);
 
   close(data->sock_fd);
   free(data);
@@ -1855,7 +1870,8 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     if ((n = pthread_cond_broadcast(&data->complete_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
     if ((n = pthread_mutex_unlock (&data->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
-    printf ("WORKER %s COMPLETED: %.2f sec received %d bytes\n", worker->ip_addr, w->elapsed, total), fflush(stdout);
+    printf ("WORKER %s COMPLETED: %.2f sec received %d bytes\n", worker->ip_addr, w->elapsed, total);
+    fflush(stdout);
   }
 
   esl_stopwatch_Destroy(w);
@@ -1885,6 +1901,7 @@ workerside_thread(void *arg)
   pthread_detach(pthread_self()); 
 
   printf("Handling worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
+  fflush(stdout);
 
   updated = 0;
   while (!updated) {
@@ -1995,6 +2012,7 @@ workerside_thread(void *arg)
   }
 
   printf("Pending worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
+  fflush(stdout);
 
   workerside_loop(parent, worker);
 
@@ -2017,6 +2035,7 @@ workerside_thread(void *arg)
 
  EXIT:
   printf("Closing worker %s (%d)\n", worker->ip_addr, fd);
+  fflush(stdout);
 
   if (cmd != NULL) free(cmd);
   close(fd);

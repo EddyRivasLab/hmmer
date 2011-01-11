@@ -31,9 +31,9 @@ foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { di
 
 # start the hmmpgmd master and 1 worker with 1 core
 system("$builddir/src/hmmpgmd --master --hmmdb $tmppfx.hmm > /dev/null 2>&1 &");
-sleep 1;
+sleep 2;
 system("$builddir/src/hmmpgmd --worker 127.0.0.1 --cpu 1   > /dev/null 2>&1 &");
-sleep 1;
+sleep 2;
 
 # Run the test script
 @output = `cat $tmppfx.in | $builddir/src/hmmc2 -S 2>&1`;

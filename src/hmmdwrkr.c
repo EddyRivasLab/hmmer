@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <syslog.h>
+#include <time.h>
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
@@ -197,27 +198,29 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   int              limit;
   int              status;
   int              blk_size;
-
   WORKER_INFO     *info       = NULL;
-
   ESL_ALPHABET    *abc;
   ESL_STOPWATCH   *w;
   ESL_THREADS     *threadObj  = NULL;
   pthread_mutex_t  inx_mutex;
   int              current_index;
-
   QUEUE_DATA      *query      = NULL;
+  time_t           date;
+  char             timestamp[32];
 
   w = esl_stopwatch_Create();
   abc = esl_alphabet_Create(eslAMINO);
 
   if (pthread_mutex_init(&inx_mutex, NULL) != 0) p7_Fail("mutex init failed");
-
   ESL_ALLOC(info, sizeof(*info) * env->ncpus);
+
+  /* Log the current time (at search start) */
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note that ctime_r() leaves \n on end of timestamp  */
 
   /* initialize thread data */
   query = process_QueryCmd(cmd, env);
-
   esl_stopwatch_Start(w);
 
   if (query->cmd_type == HMMD_CMD_SEARCH) threadObj = esl_threads_Create(&search_thread);
