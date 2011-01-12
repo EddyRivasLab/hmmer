@@ -602,6 +602,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
+
+  /* Terminate outputs - any last words?
+   */
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "phmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "phmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
+  if (ofp)      fprintf(ofp, "[ok]\n");
+
+  /* Cleanup - prepare for successful exit
+   */
   for (i = 0; i < infocnt; ++i)
     {
       p7_bg_Destroy(info[i].bg);
@@ -1083,6 +1092,14 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
     }
 
+  /* Terminate outputs - any last words?
+   */
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "phmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "phmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
+  if (ofp)      fprintf(ofp, "[ok]\n");
+
+  /* Cleanup - prepare for successful exit
+   */
   free(list);
   if (mpi_buf != NULL) free(mpi_buf);
 

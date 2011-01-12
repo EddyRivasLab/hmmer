@@ -518,28 +518,25 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
 
-  switch(hstatus)
-    {
-    case eslEOD:
-      p7_Fail("read failed, HMM file %s may be truncated?", cfg->hmmfile);
-      break;
-    case eslEFORMAT:
-      p7_Fail("bad file format in HMM file %s", cfg->hmmfile);
-      break;
-    case eslEINCOMPAT:
-      p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
-      break;
-    case eslEOF:
-      /* do nothing */
-      break;
-    default:
-      p7_Fail("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
-    }
+  switch(hstatus) {
+  case eslEOD:       p7_Fail("read failed, HMM file %s may be truncated?", cfg->hmmfile);      break;
+  case eslEFORMAT:   p7_Fail("bad file format in HMM file %s",             cfg->hmmfile);      break;
+  case eslEINCOMPAT: p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);      break;
+  case eslEOF:       /* do nothing. EOF is what we want. */                                    break;
+  default:           p7_Fail("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
+  }
 
+
+  /* Terminate outputs... any last words?
+   */
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmsearch", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmsearch", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (ofp)      fprintf(ofp, "[ok]\n");
+
+  /* Cleanup - prepare for exit
+   */
   for (i = 0; i < infocnt; ++i)
-    {
-      p7_bg_Destroy(info[i].bg);
-    }
+    p7_bg_Destroy(info[i].bg);
 
 #ifdef HMMER_THREADS
   if (ncpus > 0)
@@ -555,7 +552,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 
   free(info);
-
   p7_hmmfile_Close(hfp);
   esl_sqfile_Close(dbfp);
   esl_alphabet_Destroy(abc);
@@ -969,22 +965,13 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
 
-  switch(hstatus)
-    {
-    case eslEOD:
-      mpi_failure("read failed, HMM file %s may be truncated?", cfg->hmmfile);
-      break;
-    case eslEFORMAT:
-      mpi_failure("bad file format in HMM file %s", cfg->hmmfile);
-      break;
-    case eslEINCOMPAT:
-      mpi_failure("HMM file %s contains different alphabets", cfg->hmmfile);
-      break;
-    case eslEOF:
-      break;
-    default:
-      mpi_failure("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
-    }
+  switch(hstatus) {
+  case eslEOD:       mpi_failure("read failed, HMM file %s may be truncated?", cfg->hmmfile);      break;
+  case eslEFORMAT:   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);      break;
+  case eslEINCOMPAT: mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);      break;
+  case eslEOF:       /* EOF is good, that's what we expect here */                                 break;
+  default:           mpi_failure("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
+  }
 
   /* monitor all the workers to make sure they have ended */
   for (i = 1; i < cfg->nproc; ++i)
@@ -1008,6 +995,14 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
     }
 
+  /* Terminate outputs... any last words?
+   */
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmsearch", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmsearch", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (ofp)      fprintf(ofp, "[ok]\n");
+
+  /* Cleanup - prepare for exit
+   */
   free(list);
   if (mpi_buf != NULL) free(mpi_buf);
 

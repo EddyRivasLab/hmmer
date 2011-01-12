@@ -553,25 +553,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   } /* end outer loop over query HMMs */
 
   switch(qhstatus) {
-    case eslEOD:
-      p7_Fail("read failed, HMM file %s may be truncated?", cfg->hmmfile);
-      break;
-    case eslEFORMAT:
-      p7_Fail("bad file format in HMM file %s", cfg->hmmfile);
-      break;
-    case eslEINCOMPAT:
-      p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
-      break;
-    case eslEOF:
-      /* do nothing */
-      break;
-    default:
-      p7_Fail("Unexpected error (%d) in reading HMMs from %s", qhstatus, cfg->hmmfile);
+    case eslEOD:        p7_Fail("read failed, HMM file %s may be truncated?", cfg->hmmfile);      break;
+    case eslEFORMAT:    p7_Fail("bad file format in HMM file %s",             cfg->hmmfile);      break;
+    case eslEINCOMPAT:  p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);      break;
+    case eslEOF:        /* do nothing; EOF is what we expect here */                              break;
+    default:            p7_Fail("Unexpected error (%d) in reading HMMs from %s", qhstatus, cfg->hmmfile);
   }
 
-  for (i = 0; i < infocnt; ++i) {
-      p7_bg_Destroy(info[i].bg);
-  }
+ /* Terminate outputs - any last words?
+   */
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "nhmmer", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (ofp)      fprintf(ofp, "[ok]\n");
+
+  /* Cleanup - prepare for successful exit
+   */
+  for (i = 0; i < infocnt; ++i) 
+    p7_bg_Destroy(info[i].bg);
 
 #ifdef HMMER_THREADS
   if (ncpus > 0) {

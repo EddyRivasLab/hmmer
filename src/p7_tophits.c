@@ -1442,6 +1442,73 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
       }
   return eslOK;
 }
+
+/* Function:  p7_tophits_TabularTail()
+ * Synopsis:  Print a trailer on a tabular output file.
+ * Incept:    SRE, Tue Jan 11 16:13:30 2011 [Janelia]
+ *
+ * Purpose:   Print some metadata as a trailer on a tabular output file:
+ *            date/time, the program, HMMER3 version info, the pipeline mode (SCAN or SEARCH), 
+ *            the query and target filenames, a spoof commandline
+ *            recording the entire program configuration, and
+ *            a "fini!" that's useful for detecting successful
+ *            output completion.
+ *
+ * Args:      ofp       - open tabular output file (either --tblout or --domtblout)
+ *            progname  - "hmmscan", for example
+ *            pipemode  - p7_SEARCH_SEQS | p7_SCAN_MODELS
+ *            qfile     - name of query file, or '-' for stdin, or '[none]' if NULL
+ *            tfile     - name of target file, or '-' for stdin, or '[none]' if NULL
+ *            go        - program configuration; used to generate spoofed command line
+ *
+ * Returns:   <eslOK>.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            <eslESYS> if time() or ctime_r() system calls fail.
+ *                        
+ * Xref:      J7/54
+ */
+int
+p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode, const char *qfile, const char *tfile, const ESL_GETOPTS *go)
+{
+   time_t date           = time(NULL);
+   char  *spoof_cmd      = NULL;
+   char  *cwd            = NULL;
+   char   timestamp[32];
+   char   modestamp[16];
+   int    status;
+
+
+  if ((status = esl_opt_SpoofCmdline(go, &spoof_cmd)) != eslOK) goto ERROR;
+  if (date == -1)                                               ESL_XEXCEPTION(eslESYS, "time() failed");
+  if ((ctime_r(&date, timestamp)) == NULL)                      ESL_XEXCEPTION(eslESYS, "ctime_r() failed");
+  switch (pipemode) {
+  case p7_SEARCH_SEQS: strcpy(modestamp, "SEARCH"); break;
+  case p7_SCAN_MODELS: strcpy(modestamp, "SCAN");   break;
+  default:             ESL_EXCEPTION(eslEINCONCEIVABLE, "wait, what? no such pipemode");
+  }
+  esl_getcwd(&cwd);
+
+  fprintf(ofp, "#\n");
+  fprintf(ofp, "# Program:         %s\n",      (progname == NULL) ? "[none]" : progname);
+  fprintf(ofp, "# Version:         %s (%s)\n", HMMER_VERSION, HMMER_DATE);
+  fprintf(ofp, "# Pipeline mode:   %s\n",      modestamp);
+  fprintf(ofp, "# Query file:      %s\n",      (qfile    == NULL) ? "[none]" : qfile);
+  fprintf(ofp, "# Target file:     %s\n",      (tfile    == NULL) ? "[none]" : tfile);
+  fprintf(ofp, "# Option settings: %s\n",      spoof_cmd);
+  fprintf(ofp, "# Current dir:     %s\n",      (cwd      == NULL) ? "[unknown]" : cwd);
+  fprintf(ofp, "# Date:            %s",        timestamp); /* timestamp ends in \n */
+  fprintf(ofp, "# [ok]\n");
+
+  free(spoof_cmd);
+  if (cwd) free(cwd);
+  return eslOK;
+
+ ERROR:
+  if (spoof_cmd) free(spoof_cmd);
+  if (cwd)       free(cwd);
+  return status;
+}
 /*------------------- end, tabular output -----------------------*/
 
 
