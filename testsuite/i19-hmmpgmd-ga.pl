@@ -8,13 +8,17 @@
 # SVN $URL$
 # SVN $Id$
 
-BEGIN {
-    $builddir = shift;
-    $srcdir   = shift;
-    $tmppfx   = shift;
-}
+use IO::Socket;
+
+$builddir = shift;
+$srcdir   = shift;
+$tmppfx   = shift;
 
 $verbose = 0;
+$host    = "127.0.0.1";
+$wport   = 51373;		# nondefault worker and client ports...
+$cport   = 51374;               # ...don't want a test to interfere w/ running hmmpgmd daemon on same machine
+
 
 # This test creates its own small HMM database in $tmppfx.hmm
 # create_test_hmmdb() writes three specific models to a file.
@@ -24,19 +28,28 @@ $verbose = 0;
 @h3progs = ("hmmpgmd", "hmmc2", "hmmpress");
 foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
 
+# Verify that the wport and cport are CLOSED - we don't want to
+# clobber existing hmmpgmd's (or other client-server programs on those
+# ports).
+if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $wport, Proto     => 'tcp')) { die "FAIL: worker port $wport already in use"; }
+if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 'tcp')) { die "FAIL: client port $cport already in use"; }
+
 # create the files needed for the test
 &create_test_hmmdb("$tmppfx.hmm");
 &create_test_script("$tmppfx.in");
 `$builddir/src/hmmpress -f $tmppfx.hmm`;  if ($?) { die "FAIL: hmmpress"; }
 
 # start the hmmpgmd master and 1 worker with 1 core
-system("$builddir/src/hmmpgmd --master --hmmdb $tmppfx.hmm > /dev/null 2>&1 &");
-sleep 2;
-system("$builddir/src/hmmpgmd --worker 127.0.0.1 --cpu 1   > /dev/null 2>&1 &");
+system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm > /dev/null 2>&1 &"); 
+if ($?) { die "FAIL: hmmpgmd master failed to start";  }
+sleep 2;  
+system("$builddir/src/hmmpgmd --worker 127.0.0.1 --wport $wport --cpu 1   > /dev/null 2>&1 &"); 
+if ($?) { die "FAIL: hmmpgmd worker failed to start";  }
 sleep 2;
 
 # Run the test script
-@output = `cat $tmppfx.in | $builddir/src/hmmc2 -S 2>&1`;
+@output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+# Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
 
 $in_data = 0;
 $nhits   = 0;

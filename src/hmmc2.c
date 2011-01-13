@@ -25,7 +25,7 @@
 #include "hmmer.h"
 #include "hmmpgmd.h"
 
-#define SERVER_PORT      41139
+#define SERVER_PORT      51371
 #define MAX_READ_LEN     4096
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -149,7 +149,7 @@ usage(char *pgm)
   fprintf(stderr, "    -S      : print sequence scores\n");
   fprintf(stderr, "    -A      : print sequence alignments\n");
   fprintf(stderr, "    -i addr : ip address running daemon (default: 127.0.0.1)\n");
-  fprintf(stderr, "    -p port : port daemon listens on (default: 41139)\n");
+  fprintf(stderr, "    -p port : port daemon listens to clients on (default: 51371)\n");
   exit(1);
 }
 
