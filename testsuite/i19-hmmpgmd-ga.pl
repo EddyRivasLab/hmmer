@@ -16,9 +16,8 @@ $tmppfx   = shift;
 
 $verbose = 0;
 $host    = "127.0.0.1";
-$wport   = 51373;		# nondefault worker and client ports...
-$cport   = 51374;               # ...don't want a test to interfere w/ running hmmpgmd daemon on same machine
-
+$cport   = 51373;               # ...don't want a test to interfere w/ running hmmpgmd daemon on same machine
+$wport   = 51374;		# nondefault worker and client ports...
 
 # This test creates its own small HMM database in $tmppfx.hmm
 # create_test_hmmdb() writes three specific models to a file.

@@ -42,19 +42,19 @@
 #define CONF_FILE "/etc/hmmpgmd.conf"
 
 static ESL_OPTIONS cmdlineOpts[] = {
-  /* name           type         default      env   range  toggles  reqs   incomp           help                                                     docgroup */
-  { "-h",           eslARG_NONE,   FALSE,     NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
-  { "--master",     eslARG_NONE,    NULL,     NULL, NULL,    NULL,  NULL,  "--worker",      "run program as the master server",                            12 },
-  { "--worker",     eslARG_STRING,  NULL,     NULL, NULL,    NULL,  NULL,  "--master",      "run program as a worker with server at <s>",                  12 },
+  /* name           type         default      env   range           toggles  reqs   incomp           help                                                     docgroup */
+  { "-h",           eslARG_NONE,   FALSE,     NULL, NULL,           NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "--master",     eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "run program as the master server",                            12 },
+  { "--worker",     eslARG_STRING,  NULL,     NULL, NULL,           NULL,  NULL,  "--master",      "run program as a worker with server at <s>",                  12 },
   { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
   { "--wport",      eslARG_INT,     "51372",  NULL, "49151<n<65536",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
-  { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
-  { "--wcncts",     eslARG_INT,     "32",     NULL, "n>0",   NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
-  { "--pid",        eslARG_OUTFILE, NULL,     NULL, NULL,    NULL,  NULL,  NULL,            "file to write process id to",                                 12 },
-  { "--daemon",     eslARG_NONE,    NULL,     NULL, NULL,    NULL,  NULL,  NULL,            "run as a daemon using config file: /etc/hmmpgmd.conf",        12 },
-  { "--seqdb",      eslARG_INFILE,  NULL,     NULL, NULL,    NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
-  { "--hmmdb",      eslARG_INFILE,  NULL,     NULL, NULL,    NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
-  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU","n>0", NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
+  { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
+  { "--wcncts",     eslARG_INT,     "32",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
+  { "--pid",        eslARG_OUTFILE, NULL,     NULL, NULL,           NULL,  NULL,  NULL,            "file to write process id to",                                 12 },
+  { "--daemon",     eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL,  NULL,            "run as a daemon using config file: /etc/hmmpgmd.conf",        12 },
+  { "--seqdb",      eslARG_INFILE,  NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
+  { "--hmmdb",      eslARG_INFILE,  NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
+  { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU","n>0",        NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
