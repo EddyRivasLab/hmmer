@@ -285,9 +285,10 @@ p7_hmm_Clone(const P7_HMM *hmm)
     ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
     esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
   }
-  new->nseq     = hmm->nseq;
-  new->eff_nseq = hmm->eff_nseq;
-  new->checksum = hmm->checksum;
+  new->nseq       = hmm->nseq;
+  new->eff_nseq   = hmm->eff_nseq;
+  new->max_length = hmm->max_length;
+  new->checksum   = hmm->checksum;
 
   for (z = 0; z < p7_NEVPARAM; z++) new->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) new->cutoff[z]  = hmm->cutoff[z];
