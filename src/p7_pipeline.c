@@ -944,10 +944,14 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
 
       /*now that almost everything has been filtered away, set up seq object for domaindef function*/
-      esl_sq_GrowTo(tmpseq, window_len);
+      if ((status = esl_sq_SetName     (tmpseq, sq->name))   != eslOK) goto ERROR;
+      if ((status = esl_sq_SetSource   (tmpseq, sq->source)) != eslOK) goto ERROR;
+      if ((status = esl_sq_SetAccession(tmpseq, sq->acc))    != eslOK) goto ERROR;
+      if ((status = esl_sq_SetDesc     (tmpseq, sq->desc))   != eslOK) goto ERROR;
+      if ((status = esl_sq_GrowTo      (tmpseq, window_len)) != eslOK) goto ERROR;
+      tmpseq->n = window_len;
       memcpy((void*)(tmpseq->dsq), subseq, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
       tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
-      tmpseq->n = window_len;
 
 
       /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow
