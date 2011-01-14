@@ -1,0 +1,9 @@
+. /usr/local/intel/ictce/current/cc/bin/iccvars.sh intel64
+. /usr/local/intel/ictce/current/impi/bin64/mpivars.sh
+export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
+
+../configure CC=icc LDFLAGS=-static-intel --enable-mpi
+make                                  
+make dev                              
+make check                            
+

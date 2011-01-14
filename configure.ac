@@ -655,8 +655,10 @@ HMMER configuration:
 "
 
 if test "$impl_choice" = "dummy"; then
-  AC_MSG_WARN([The "dummy" implementation is a portable ANSI C reference implementation.])
-  AC_MSG_WARN([It is slow, and is NOT intended for production use.])
+  AC_MSG_WARN([Your system is apparently not supported by HMMER3.])
+  AC_MSG_WARN([We will compile the "dummy" implementation, a portable ANSI C reference implementation.])
+  AC_MSG_WARN([It is slow, about 100x slower than real H3, and is NOT intended for production use!])
+  AC_MSG_WARN([It only intended to show the basics of how HMMER3 works, portably.])
 fi
 
 

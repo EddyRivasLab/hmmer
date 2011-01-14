@@ -1,0 +1,7 @@
+../configure CC=gcc --enable-debugging
+make                                  
+make dev                              
+make check                            
+
+
+
