@@ -17,6 +17,8 @@
     { name => "intel-macosx-gcc",         host => "."           },
     );
 
+$autoconf = "/opt/local/bin/autoconf";
+
 if ($#ARGV+1 != 1) { die "FAIL: incorrect number of command line arguments"; }
 $srcdir = shift;
 if (! -d $srcdir) { die "FAIL: source working directory $srcdir not found"; }
@@ -25,8 +27,8 @@ if (! -d $srcdir) { die "FAIL: source working directory $srcdir not found"; }
 #
 chdir $srcdir ||    die "FAIL: couldn't cd to $srcdir"; 
 system("svn update > autobuilds.log 2>&1");             if ($?) { die "FAIL: svn update"; }
-system("autoconf   > autobuilds.log 2>&1 ");            if ($?) { die "FAIL: H3 autoconf"; }
-system("(cd easel; autoconf) > autobuilds.log 2>&1");   if ($?) { die "FAIL: esl autoconf"; }
+system("$autoconf  > autobuilds.log 2>&1 ");            if ($?) { die "FAIL: H3 $autoconf"; }
+system("(cd easel; $autoconf) > autobuilds.log 2>&1");  if ($?) { die "FAIL: esl $autoconf"; }
 
 # Then we try to build on everything
 #

@@ -1543,39 +1543,14 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     memcpy(ptr, *hmm->ins, n);
     ptr += n;
 
-    if (hmm->name != NULL) {
-      n = strlen(hmm->name) + 1;
-      memcpy(ptr, hmm->name, n);
-      ptr += n;
-    }
-
-    if (hmm->acc != NULL) {
-      n = strlen(hmm->acc)  + 1;
-      memcpy(ptr, hmm->name, n);
-      ptr += n;
-    }
-
-    if (hmm->desc != NULL) {
-      n = strlen(hmm->desc) + 1;
-      memcpy(ptr, hmm->desc, n);
-      ptr += n;
-    }
+    if (hmm->name) { n = strlen(hmm->name) + 1;  memcpy(ptr, hmm->name, n);  ptr += n; }
+    if (hmm->acc)  { n = strlen(hmm->acc)  + 1;  memcpy(ptr, hmm->acc, n);   ptr += n; }
+    if (hmm->desc) { n = strlen(hmm->desc) + 1;  memcpy(ptr, hmm->desc, n);  ptr += n; }
 
     n = hmm->M + 2;
-    if (hmm->flags & p7H_RF) {
-      memcpy(ptr, hmm->rf, n);
-      ptr += n;
-    }
-
-    if (hmm->flags & p7H_CS) {
-      memcpy(ptr, hmm->cs, n);
-      ptr += n;
-    }
-
-    if (hmm->flags & p7H_CA) {
-      memcpy(ptr, hmm->ca, n);
-      ptr += n;
-    }
+    if (hmm->flags & p7H_RF)  { memcpy(ptr, hmm->rf, n); ptr += n; }
+    if (hmm->flags & p7H_CS)  { memcpy(ptr, hmm->cs, n); ptr += n; }
+    if (hmm->flags & p7H_CA)  { memcpy(ptr, hmm->ca, n); ptr += n; }
 
     if (hmm->flags & p7H_MAP) {
       n = sizeof(int) * (hmm->M + 1);

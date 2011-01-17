@@ -1,6 +1,7 @@
-/* hmmpgmd: hmmer deamon searchs against a sequence database.
+/* Sequence and profile caches, used by the hmmpgmd daemon.
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
+ * SVN $URL$
  * SVN $Id$
  */
 #include "p7_config.h"
