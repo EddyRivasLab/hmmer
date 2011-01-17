@@ -11,7 +11,7 @@
  *    7. Copyright and license information.
  *    
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id: stotrace.c 2818 2009-06-03 12:31:02Z eddys $
+ * SVN $Id$
  */   
 #include "p7_config.h"
 

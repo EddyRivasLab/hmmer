@@ -6,7 +6,7 @@
  *   3. Copyright and license information
  * 
  * Bjarne Knudsen, CLC Bio
- * SVN $Id: msvfilter.c 3333 2010-07-23 19:13:21Z wheelert $
+ * SVN $Id$
  */
 
 /*****************************************************************

@@ -277,9 +277,8 @@ TAGS:
 	find . -name 00README | xargs etags -a -
 	etags -a COPYRIGHT INSTALL LICENSE README configure.ac
 
-# magic SVN for setting keyword ID replacements
-#  	find . -name \*.[ch]  | xargs grep -l 'SVN \$Id\$'  | xargs svn propset svn:keywords "Id"
-#	find . -name \*.[ch]  | xargs grep -l 'SVN \$URL\$' | xargs svn propset svn:keywords "URL"
+# magic SVN for setting keyword ID replacements looks like:
+#  	find . -name \*.[ch]  | xargs svn propset svn:keywords "Id URL"
 
 ################################################################
 # @LICENSE@

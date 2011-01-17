@@ -1,7 +1,7 @@
 /* hmmd: hmmc2 deamon client.
  * 
  * MSF, Tue Aug 10, 2010 [Janelia]
- * SVN $Id: hmmsearch.c 3324 2010-07-07 19:30:12Z wheelert $
+ * SVN $Id$
  */
 
 #include <stdio.h>

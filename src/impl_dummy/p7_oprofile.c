@@ -12,7 +12,7 @@
  *   8. Copyright and license information.
  *   
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id: p7_oprofile.c 2852 2009-07-08 18:40:34Z farrarm $
+ * SVN $Id$
  */
 #include "p7_config.h"
 

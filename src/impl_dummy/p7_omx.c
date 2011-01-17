@@ -6,7 +6,7 @@
  *   3. Copyright and license information
  * 
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id: p7_omx.c 2790 2009-04-23 12:43:39Z eddys $
+ * SVN $Id$
  */
 #include "p7_config.h"
 

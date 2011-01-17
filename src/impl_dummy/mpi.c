@@ -8,7 +8,7 @@
  *    5. Copyright and license information.
  *    
  * SRE, Thu Jun 14 09:59:20 2007 [Janelia] [Tom Waits, Orphans]
- * SVN $Id: mpisupport.c 2963 2009-10-20 15:52:20Z farrarm $
+ * SVN $Id$
  */
 #include "p7_config.h"		
 

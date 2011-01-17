@@ -1,7 +1,7 @@
 /* hmmd: hmmer deamon to run hmmer programs.
  * 
  * MSF, Fri Aug 06, 2010 [Janelia]
- * SVN $Id: hmmsearch.c 3324 2010-07-07 19:30:12Z wheelert $
+ * SVN $Id$
  */
 
 #include <stdio.h>

@@ -27,7 +27,7 @@
  *      in ReadRest().
  *    
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id: io.c 2864 2009-07-22 13:46:50Z farrarm $
+ * SVN $Id$
  */
 #include "p7_config.h"
 

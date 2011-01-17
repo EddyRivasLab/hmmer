@@ -15,7 +15,7 @@
  *   6. Copyright and license information
  * 
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id: msvfilter.c 2902 2009-09-16 13:13:53Z farrarm $
+ * SVN $Id$
  */
 #include "p7_config.h"
 
