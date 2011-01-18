@@ -749,7 +749,12 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
         {
           th->hit[h]->flags |= p7_IS_REPORTED;
           if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->pvalue))
-        th->hit[h]->flags |= p7_IS_INCLUDED;
+              th->hit[h]->flags |= p7_IS_INCLUDED;
+
+          if (pli->long_targets) { // no domains in dna search, so:
+        	  th->hit[h]->dcl[0].is_reported = th->hit[h]->flags & p7_IS_REPORTED;
+        	  th->hit[h]->dcl[0].is_included = th->hit[h]->flags & p7_IS_INCLUDED;
+          }
         }
     }
   }
@@ -773,7 +778,7 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
    * (sequence|domain) must be reported to be included, and
    * domain can only be (reported|included) if whole sequence is too.
    */
-  if (! pli->use_bit_cutoffs) 
+  if (! pli->use_bit_cutoffs && !pli->long_targets)
   {
       for (h = 0; h < th->N; h++)
     {
