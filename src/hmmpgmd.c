@@ -1,23 +1,5 @@
 /* HMMER search daemon
  * 
- * How to run a test:
- *   Need a test sequence database: mine is ~eddys/data/hmmpgmd/hmmpgmd.fa
- *   Need a test profile database:  mine is ~eddys/data/hmmpgmd/hmmpgmd.hmm
- *   
- *   src/hmmpgmd --master --seqdb ~/data/hmmpgmd/hmmpgmd.fa --hmmdb ~/data/hmmpgmd/hmmpgmd.hmm &
- *   src/hmmpgmd --worker 127.0.0.1 --cpu 1 &
- *   src/hmmc2 -S
- *     @--seqdb 1
- *     >foo
- *     ACDEFGH...
- *     //
- *     !shutdown
- *     //
- *     
- * For debugging, start two of the three processes on cmdline, and the
- * one to be debugged under gdb.
- *    in worker: break process_SearchCmd
- * 
  * MSF, Thu Aug 12, 2010 [Janelia]
  * SVN $URL$
  * SVN $Id$
@@ -196,6 +178,45 @@ main(int argc, char **argv)
 
   return eslOK;
 }
+
+
+/*****************************************************************
+ * Notes on testing and debugging
+ *****************************************************************/
+
+
+/* How to run a test:
+ *   Need a test sequence database: mine is ~eddys/data/hmmpgmd/hmmpgmd.fa
+ *   Need a test profile database:  mine is ~eddys/data/hmmpgmd/hmmpgmd.hmm
+ *   
+ *   src/hmmpgmd --master --seqdb ~/data/hmmpgmd/hmmpgmd.fa --hmmdb ~/data/hmmpgmd/hmmpgmd.hmm &
+ *   src/hmmpgmd --worker 127.0.0.1 --cpu 1 &
+ *   src/hmmc2 -S
+ *     @--seqdb 1
+ *     >foo
+ *     ACDEFGH...
+ *     //
+ *     !shutdown
+ *     //
+ *     
+ * For debugging, start two of the three processes on cmdline, and the
+ * one to be debugged under gdb.
+ *    in worker: break process_SearchCmd
+ *    
+ *    
+ * Valgrind debugging
+ * generate a small test seq database:
+ *     esl-shuffle -G --amino -N 10 -L 400 > foo.fa
+ *     fasta2daemon foo.fa                 > foo.d
+ *     
+ * in three separate terminal windows    
+ *     valgrind --dsymutil=yes --leak-check=yes --show-reachable=yes src/hmmpgmd --master --seqdb foo.d 
+ *     valgrind                --leak-check=yes --show-reachable=yes src/hmmpgmd --worker 127.0.0.1 --cpu 1 
+ *     valgrind                --leak-check=yes --show-reachable=yes src/hmmc2 -S
+ *     
+ * copy/paste tutorial/M1.hmm as an example hmmsearch    
+ */
+
 
 
 /*****************************************************************

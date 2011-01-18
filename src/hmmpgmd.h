@@ -8,7 +8,7 @@
 
 typedef struct {
   uint32_t   status;            /* error status                             */
-  uint64_t   msg_size;          /* size of the next packat.  if status not  */
+  uint64_t   msg_size;          /* size of the next packet.  if status not  */
                                 /* zero, the length is for the error string */
                                 /* otherwise it is the length of the data   */
                                 /* to follow.                               */

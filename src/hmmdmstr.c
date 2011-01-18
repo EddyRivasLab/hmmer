@@ -1,8 +1,8 @@
 /* master side of the hmmpgmd daemon
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $URL$
  * SVN $Id$
+ * SVN $URL$
  */
 #include "p7_config.h"
 
@@ -1936,12 +1936,18 @@ workerside_thread(void *arg)
       status = eslFAIL;
     }
 
+    /* cmd is a HMMD_COMMAND.
+     *    consists of HMMD_HEADER:  length, command, status
+     *    and a union of HMMD_INIT_CMD, HMMD_SEARCH_COMMAND, HMMD_INIT_RESET.
+     *    we know which is valid, from hdr.command
+     *    the total malloc size for an HMMD_COMMAND is calculated from the header, using MSG_SIZE(cmd)
+     */
     n = MSG_SIZE(&hdr);
-    if (realloc(cmd, n) == NULL) {
+    if ((cmd = realloc(cmd, n)) == NULL) {
       syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       status = eslFAIL;
     }
-    if (readn(worker->sock_fd, &cmd->init, hdr.length) == -1) {
+    if (readn(worker->sock_fd, &(cmd->init), hdr.length) == -1) {
       syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
       status = eslFAIL;
     }

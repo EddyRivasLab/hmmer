@@ -139,8 +139,8 @@ void
 worker_process(ESL_GETOPTS *go)
 {
   HMMD_COMMAND *cmd      = NULL;  /* see hmmpgmd.h */
-  WORKER_ENV    env;
   int           shutdown = 0;
+  WORKER_ENV    env;
   int           status;
     
   /* Initializations */
@@ -148,46 +148,32 @@ worker_process(ESL_GETOPTS *go)
   p7_FLogsumInit();      /* we're going to use table-driven Logsum() approximations at times */
 
   if (esl_opt_IsOn(go, "--cpu")) env.ncpus = esl_opt_GetInteger(go, "--cpu");
-  else     esl_threads_CPUCount(&env.ncpus);
+  else esl_threads_CPUCount(&env.ncpus);
 
-  env.fd     = -1;
   env.hmm_db = NULL;
   env.seq_db = NULL;
+  env.fd     = setup_masterside_comm(go);
 
-  while (!shutdown) {
-    /* start the communications with the web clients */
-    env.fd = -1;
-    env.fd = setup_masterside_comm(go);
-
-    while (!shutdown) {
+  while (!shutdown) 
+    {
       if ((status = read_Command(&cmd, &env)) != eslOK) break;
 
       switch (cmd->hdr.command) {
-      case HMMD_CMD_INIT:
-        process_InitCmd(cmd, &env);
-        break;
-      case HMMD_CMD_SCAN:
-      case HMMD_CMD_SEARCH:
-        process_SearchCmd(cmd, &env);
-        break;
-      case HMMD_CMD_SHUTDOWN:
-        /* write back to the master that we are shutting down */
-        process_Shutdown(cmd, &env);
-        shutdown = 1;
-        break;
-      default:
-        syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
+      case HMMD_CMD_INIT:      process_InitCmd  (cmd, &env);                break;
+      case HMMD_CMD_SCAN:      process_SearchCmd(cmd, &env);                break;
+      case HMMD_CMD_SEARCH:    process_SearchCmd(cmd, &env);                break;
+      case HMMD_CMD_SHUTDOWN:  process_Shutdown (cmd, &env);  shutdown = 1; break;
+      default: syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
       }
 
       free(cmd);
       cmd = NULL;
     }
-  }
 
-  if (env.hmm_db != NULL) cache_HmmDestroy(env.hmm_db);
-  if (env.seq_db != NULL) cache_SeqDestroy(env.seq_db);
-
+  if (env.hmm_db) cache_HmmDestroy(env.hmm_db);
+  if (env.seq_db) cache_SeqDestroy(env.seq_db);
   if (env.fd != -1) close(env.fd);
+  return;
 }
 
 static void 
@@ -774,6 +760,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
 
+  memset(&status, 0, sizeof(HMMD_SEARCH_STATUS)); /* silence valgrind errors - zero out entire structure including its padding */
   status.status     = eslOK;
   status.msg_size   = sizeof(stats);
 
@@ -895,7 +882,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 static int 
 setup_masterside_comm(ESL_GETOPTS *opts)
 {
-  int    fd;
+  int    fd = -1;
   int    cnt;
   int    sec;
   int    connected;
