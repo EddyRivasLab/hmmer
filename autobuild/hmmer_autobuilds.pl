@@ -15,6 +15,7 @@
     { name => "intel-linux-gcc",          host => "login-eddy"  },
     { name => "intel-macosx-gcc-debug",   host => "."           },
     { name => "intel-macosx-gcc",         host => "."           },
+    { name => "ppc-aix-xlc",              host => "cf-ppc2"     },
     );
 
 $autoconf = "/opt/local/bin/autoconf";

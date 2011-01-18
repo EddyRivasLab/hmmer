@@ -111,12 +111,12 @@ close ENVFILE;
 
 
 open(OUT,">build.out") || die "FAIL: couldn't write to build.out";
-print OUT "AUTOMATED BUILD: $build\n\n";
+print OUT "AUTOMATED BUILD: $script\n\n";
 close OUT;
 
 foreach $cmd (@cmdlist)
 {
-    system(". build.env; $cmd >> build.out 2>&1");
+    system(". ./build.env; $cmd >> build.out 2>&1");
     if ($?) { &logstatus(1, "FAIL: $cmd"); }
 }
 
