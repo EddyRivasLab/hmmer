@@ -426,8 +426,6 @@ int main(int argc, char *argv[])
           exit(1);
         }
 
-        pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS);
-
         n = sizeof(sstatus);
         total += n;
         if ((size = readn(sock, &sstatus, n)) == -1) {
@@ -446,7 +444,6 @@ int main(int argc, char *argv[])
           }
           fprintf(stderr, "ERROR (%d): %s\n", sstatus.status, ebuf);
           free(ebuf);
-
           goto COMPLETE;
         }
 
@@ -460,6 +457,7 @@ int main(int argc, char *argv[])
           exit(1);
         }
 
+        pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS);
         stats = (HMMD_SEARCH_STATS *)data;
 
         /* copy the search stats */
@@ -547,16 +545,11 @@ int main(int argc, char *argv[])
         //p7_tophits_Sort(th);
 
         /* Print the results.  */
-        if (scores) {
-          p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
-        }
-        if (ali) { 
-          p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
-        }
-
+        if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        if (ali)    p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
         p7_pli_Statistics(stdout, pli, w);  
-        p7_pipeline_Destroy(pli);
 
+        p7_pipeline_Destroy(pli); 
         free(th->hit);
         free(data);
         free(th);
@@ -569,9 +562,9 @@ int main(int argc, char *argv[])
       }
 
     COMPLETE:
-      if (abc != NULL) esl_alphabet_Destroy(abc);
-      if (hmm != NULL) p7_hmm_Destroy(hmm);
-      if (sq  != NULL) esl_sq_Destroy(sq);
+      if (abc) esl_alphabet_Destroy(abc);
+      if (hmm) p7_hmm_Destroy(hmm);
+      if (sq)  esl_sq_Destroy(sq);
     }
   }
 

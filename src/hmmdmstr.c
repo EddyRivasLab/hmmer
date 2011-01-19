@@ -157,8 +157,10 @@ print_client_msg(int fd, int status, char *format, va_list ap)
 
   HMMD_SEARCH_STATUS s;
 
-  s.status  = status;
-  s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap);
+  memset(&s, 0, sizeof(HMMD_SEARCH_STATUS));
+
+  s.status   = status;
+  s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap) +1; /* +1 because we send the \0 */
   syslog(LOG_ERR, ebuf);
 
   /* send back an unsuccessful status message */
@@ -308,16 +310,16 @@ update_workers(WORKERSIDE_ARGS *args)
 static void
 process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 {
+  ESL_STOPWATCH  *w          = NULL;      /* timer used for profiling statistics             */
+  WORKER_DATA    *worker     = NULL;
+  SEARCH_RESULTS  results;
   int n;
   int cnt;
   int inx;
   int rem;
   int tries;
 
-  ESL_STOPWATCH      *w          = NULL;      /* timer used for profiling statistics             */
-
-  SEARCH_RESULTS      results;
-  WORKER_DATA        *worker     = NULL;
+  memset(&results, 0, sizeof(SEARCH_RESULTS)); /* avoid valgrind bitching about uninit bytes; remove, if we ever serialize structs properly */
 
   w = esl_stopwatch_Create();
   esl_stopwatch_Start(w);
@@ -735,7 +737,7 @@ master_process(ESL_GETOPTS *go)
    * the PPop() will wait until a client pushes a command to the queue
    */
   shutdown = 0;
-  while (!shutdown && (esl_stack_PPop(cmdstack, &( (void *) query)) == eslOK)) {
+  while (!shutdown &&  esl_stack_PPop(cmdstack, (void **) &query) == eslOK) {
     printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
     fflush(stdout);
 
@@ -901,14 +903,11 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
   enum p7_pipemodes_e mode;
 
-  fd = query->sock;
+  fd    = query->sock;
   list  = results->hits;
 
-  if (query->cmd_type == HMMD_CMD_SEARCH) {
-    mode = p7_SEARCH_SEQS;
-  } else {
-    mode = p7_SCAN_MODELS;
-  }
+  if (query->cmd_type == HMMD_CMD_SEARCH) mode = p7_SEARCH_SEQS;
+  else                                    mode = p7_SCAN_MODELS;
     
   /* sort the hits and apply score and E-value thresholds */
   if (results->nhits > 0) {
@@ -930,6 +929,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     /* combine all the hits into a single list */
     offset = 0;
     if ((hits = malloc(sizeof(P7_HIT) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
+    memset(hits, 0, sizeof(P7_HIT) * results->stats.nhits); /* avoiding valgrind bitching; remove if structs serialized properly */
     for (i = 0; i < results->nhits; ++i) {
       memcpy(hits + offset, list[i].hit, sizeof(P7_HIT) * list[i].count);
       offset += list[i].count;
@@ -1042,9 +1042,10 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     list[i].data = NULL;
   }
 
-  if (list != NULL) free(list);
-  if (hits != NULL) free(hits);
-  if (dcl  != NULL) free(dcl);
+  if (pli)  p7_pipeline_Destroy(pli);
+  if (list) free(list);
+  if (hits) free(hits);
+  if (dcl)  free(dcl);
 
   init_results(results);
 }
@@ -1128,6 +1129,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   if (strcmp(s, "shutdown") == 0) 
     {
       if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
+      memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
       cmd->hdr.length  = 0;
       cmd->hdr.command = HMMD_CMD_SHUTDOWN;
     } 
@@ -1170,8 +1172,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
       if (hmmdb) n += strlen(hmmdb) + 1;
 
       if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-      memset(cmd, 0, n);
+      memset(cmd, 0, n);	/* avoiding valgrind bitching about uninit bytes; remove if we serialize structs correctly */
       cmd->hdr.length  = n - sizeof(HMMD_HEADER);
       cmd->hdr.command = HMMD_CMD_INIT;
 
@@ -1209,9 +1210,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 
       n = sizeof(HMMD_COMMAND) + strlen(ip_addr) + 1;
       if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-      memset(cmd, 0, n);
-
+      memset(cmd, 0, n);	/* remove if we ever serialize structs correctly */
       cmd->hdr.length  = n - sizeof(HMMD_HEADER);
       cmd->hdr.command = HMMD_CMD_RESET;
       strcpy(cmd->reset.ip_addr, ip_addr);
@@ -1224,6 +1223,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
     }
 
   if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(parms, 0, sizeof(QUEUE_DATA)); /* avoid valgrind bitches about uninit bytes; remove if structs are serialized properly */
 
   parms->hmm  = NULL;
   parms->seq  = NULL;
@@ -1332,6 +1332,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   if (*ptr == '!') {
     process_ServerCmd(ptr, data);
     free(buffer);
+    free(opt_str);
     return 0;
   } else if (*ptr == '@') {
     char *s = ++ptr;
@@ -1353,12 +1354,14 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   } else {
     client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
     free(buffer);
+    free(opt_str);
     return 0;
   }
 
   if (strncmp(ptr, "//", 2) == 0) {
     client_msg(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
     free(buffer);
+    free(opt_str);
     return 0;
   }
 
@@ -1443,8 +1446,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (seq  != NULL) esl_sq_Destroy(seq);
     if (sco  != NULL) esl_scorematrix_Destroy(sco);
 
+    free(opt_str);
     free(buffer);
-
     return 0;
   }
 
@@ -1473,7 +1476,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   }
 
   if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
+  memset(cmd, 0, n);		/* silence valgrind bitching about uninit bytes; remove if we ever serialize structs properly */
   cmd->hdr.length       = n - sizeof(HMMD_HEADER);
   cmd->hdr.command      = (esl_opt_IsUsed(opts, "--seqdb")) ? HMMD_CMD_SEARCH : HMMD_CMD_SCAN;
   cmd->srch.db_inx      = dbx - 1;   /* the program indexes databases 0 .. n-1 */
@@ -1560,6 +1563,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   esl_stack_PPush(cmdstack, parms);
 
   free(buffer);
+  free(opt_str);
   return 0;
 }
 
@@ -1689,17 +1693,15 @@ setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
 static void
 workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 {
+  ESL_STOPWATCH      *w     = NULL;
+  HMMD_SEARCH_STATS  *stats = NULL;
+  HMMD_COMMAND        cmd;
   int    n;
   int    size;
   int    total;
-
   char  *ptr;
 
-  ESL_STOPWATCH   *w;
-
-  HMMD_COMMAND        cmd;
-  HMMD_SEARCH_STATS  *stats;
-
+  memset(&cmd, 0, sizeof(HMMD_COMMAND)); /* silence valgrind. if we ever serialize structs properly, remove */
   w = esl_stopwatch_Create();
 
   for ( ; ; ) {
@@ -1757,7 +1759,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 
     esl_stopwatch_Start(w);
 
-    /* write the the search message in two parts */
+    /* write search message in two parts */
     n = sizeof(HMMD_HEADER) + sizeof(HMMD_SEARCH_CMD);
     memcpy(&cmd, worker->cmd, n);
     cmd.srch.inx = worker->srch_inx;
@@ -1767,7 +1769,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       break;
     }
 
-    /* write the remaining data, ie sequence, options etc. */
+    /* write remaining data, i.e. sequence, options etc. */
     ptr = (char *)worker->cmd;
     ptr += n;
     n = MSG_SIZE(worker->cmd) - n;
@@ -1849,20 +1851,18 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 static void *
 workerside_thread(void *arg)
 {
-  int               n;
-  int               fd;
-  int               status = eslOK;
-
-  int               version;
-  int               updated;
-
-  char             *p;
-
-  HMMD_HEADER       hdr;
   HMMD_COMMAND     *cmd     = NULL;
-
   WORKER_DATA      *worker  = (WORKER_DATA *)arg;
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
+  HMMD_HEADER       hdr;
+  int               n;
+  int               fd;
+  int               version;
+  int               updated;
+  int               status = eslOK;
+  char             *p;
+
+  memset(&hdr, 0, sizeof(HMMD_HEADER)); /* silence valgrind; remove if/when we serialize structs properly */
 
   /* Guarantees that thread resources are deallocated upon return */
   pthread_detach(pthread_self()); 
@@ -1885,7 +1885,6 @@ workerside_thread(void *arg)
       syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       goto EXIT;
     }
-
     memset(cmd, 0, n);
 
     cmd->hdr.length  = n - sizeof(HMMD_HEADER);

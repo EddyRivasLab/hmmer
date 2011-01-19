@@ -252,6 +252,9 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
   offset = ftell(ascii->fp);
   if ((status = esl_sqfile_Position(sqfp, offset)) != eslOK) goto ERROR;
 
+  abc = esl_alphabet_Create(eslAMINO);
+  sq  = esl_sq_CreateDigital(abc);
+
   cache->db_cnt      = db_cnt;
   cache->db          = db;
   cache->abc         = abc;
@@ -262,9 +265,6 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
   hdr_ptr = cache->header_mem;
   res_ptr = cache->residue_mem;
   for (i = 0; i < db_cnt; ++i) db_inx[i] = 0;
-
-  abc = esl_alphabet_Create(eslAMINO);
-  sq  = esl_sq_CreateDigital(abc);
 
   strcpy(buffer, "000000001");
   
@@ -386,13 +386,19 @@ cache_SeqDestroy(SEQ_CACHE *cache)
 {
   int i;
 
-  for (i = 0; i < cache->db_cnt; ++i) {
-    if (cache->db[i].list != NULL) free(cache->db[i].list);
-  }
-  if (cache->header_mem   != NULL) free(cache->header_mem);
-  if (cache->residue_mem  != NULL) free(cache->residue_mem);
-  if (cache->name         != NULL) free(cache->name);
-  if (cache->id           != NULL) free(cache->id);
+  if (cache->name)        free(cache->name);
+  if (cache->id)          free(cache->id);
+  if (cache->db) 
+    {
+      for (i = 0; i < cache->db_cnt; ++i) {
+	if (cache->db[i].list != NULL) free(cache->db[i].list);
+      }
+      free(cache->db);
+    }
+  if (cache->abc)         esl_alphabet_Destroy(cache->abc);
+  if (cache->list)        free(cache->list);
+  if (cache->residue_mem) free(cache->residue_mem);
+  if (cache->header_mem)  free(cache->header_mem);
   free(cache);
 }
 

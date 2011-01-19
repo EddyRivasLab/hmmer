@@ -121,7 +121,7 @@ read_Command(HMMD_COMMAND **ret_cmd, WORKER_ENV *env)
   /* read the command data */
   n = MSG_SIZE(&hdr);
   if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
+  memset(cmd, 0, n);		/* avoid uninitialized bytes. remove this, if we ever serialize/deserialize structures properly */
   cmd->hdr.command = hdr.command;
   cmd->hdr.length  = hdr.length;
   if (hdr.length > 0) {
@@ -330,6 +330,7 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   QUEUE_DATA        *query  = NULL;
 
   if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(query, 0, sizeof(QUEUE_DATA));	 /* avoid uninitialized bytes. remove this, if we ever serialize/deserialize structures properly */
 
   printf("CMD: %d %d\n", cmd->hdr.command, cmd->srch.query_type);
 
@@ -574,6 +575,7 @@ search_thread(void *arg)
       return;
     }
     p7_SingleBuilder(bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+    p7_builder_Destroy(bld);
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
     om = p7_oprofile_Create(info->hmm->M, info->abc);
@@ -872,6 +874,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
     }
   }
 
+  free(hit);
   printf("Bytes: %" PRId64 "  hits: %" PRId64 "  sent on socket %d\n", status.msg_size, stats.nhits, fd);
   fflush(stdout);
 }
