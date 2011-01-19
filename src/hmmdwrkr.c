@@ -340,8 +340,6 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   query->cnt        = cmd->srch.cnt;
   query->sock       = env->fd;
   query->cmd        = NULL;
-  query->next       = NULL;
-  query->prev       = NULL;
 
   p = cmd->srch.data;
 

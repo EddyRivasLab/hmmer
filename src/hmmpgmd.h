@@ -115,22 +115,9 @@ typedef struct queue_data_s {
   int            inx;         /* sequence index to start search */
   int            cnt;         /* number of sequences to search  */
 
-  struct queue_data_s *next;
-  struct queue_data_s *prev;
 } QUEUE_DATA;
 
-typedef struct {
-  pthread_mutex_t  queue_mutex;
-  pthread_cond_t   queue_cond;
-  int              count;
-  QUEUE_DATA      *head;
-  QUEUE_DATA      *tail;
-} COMMAND_QUEUE;
-
 extern void free_QueueData(QUEUE_DATA *data);
-extern void push_Queue(QUEUE_DATA *data, COMMAND_QUEUE *queue);
-extern void remove_Queue(int fd, COMMAND_QUEUE *queue);
-extern QUEUE_DATA *pop_Queue(COMMAND_QUEUE *queue);
 
 extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 

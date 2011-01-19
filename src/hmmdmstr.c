@@ -29,6 +29,7 @@
 #include "esl_getopts.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
+#include "esl_stack.h"
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
@@ -62,7 +63,7 @@ typedef struct {
   int             sock_fd;
   char            ip_addr[64];
 
-  COMMAND_QUEUE  *queue;
+  ESL_STACK      *cmdstack;	/* stack of commands that clients want done */
 } CLIENTSIDE_ARGS;
 
 typedef struct {
@@ -681,16 +682,13 @@ master_process(ESL_GETOPTS *go)
 
   SEQ_CACHE          *seq_db     = NULL;
   HMM_CACHE          *hmm_db     = NULL;
-  COMMAND_QUEUE      *queue      = NULL;
+  ESL_STACK          *cmdstack   = NULL; /* stack of commands that clients want done */
   QUEUE_DATA         *query      = NULL;
 
   CLIENTSIDE_ARGS     client_comm;
   WORKERSIDE_ARGS     worker_comm;
 
-  /* Set processor specific flags */
   impl_Init();
-
-  /* Initializations */
   p7_FLogsumInit();     /* we're going to use table-driven Logsum() approximations at times */
 
   if (esl_opt_IsUsed(go, "--seqdb")) {
@@ -703,16 +701,13 @@ master_process(ESL_GETOPTS *go)
     if ((status = cache_HmmDb(name, &hmm_db)) != eslOK) p7_Fail("Failed to cache %s (%d)", name, status);
   }
 
-  /* initialize the search queue */
-  ESL_ALLOC(queue, sizeof(COMMAND_QUEUE));
-  if ((n = pthread_mutex_init(&queue->queue_mutex, NULL)) != 0)  LOG_FATAL_MSG("mutex init", n);
-  if ((n = pthread_cond_init(&queue->queue_cond, NULL)) != 0)    LOG_FATAL_MSG("cond init", n);
-
-  queue->head = NULL;
-  queue->tail = NULL;
+  /* initialize the search stack, set it up for interthread communication  */
+  cmdstack = esl_stack_PCreate();
+  esl_stack_UseMutex(cmdstack);
+  esl_stack_UseCond(cmdstack);
 
   /* start the communications with the web clients */
-  client_comm.queue = queue;
+  client_comm.cmdstack = cmdstack;
   setup_clientside_comm(go, &client_comm);
 
   /* initialize the worker structure */
@@ -736,28 +731,23 @@ master_process(ESL_GETOPTS *go)
 
   setup_workerside_comm(go, &worker_comm);
 
-  /* read query hmm/sequence */
+  /* read query hmm/sequence 
+   * the PPop() will wait until a client pushes a command to the queue
+   */
   shutdown = 0;
-  while (!shutdown && (query = pop_Queue(queue)) != NULL) {
-
+  while (!shutdown && (esl_stack_PPop(cmdstack, &( (void *) query)) == eslOK)) {
     printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
     fflush(stdout);
 
     switch(query->cmd_type) {
-    case HMMD_CMD_SEARCH:
-    case HMMD_CMD_SCAN:
-      process_search(&worker_comm, query);
-      break;
-    case HMMD_CMD_INIT:
-      process_load(&worker_comm, query);
-      break;
-    case HMMD_CMD_SHUTDOWN:
+    case HMMD_CMD_SEARCH:      process_search(&worker_comm, query); break;
+    case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
+    case HMMD_CMD_INIT:        process_load  (&worker_comm, query); break;
+    case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
+    case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
       syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
       shutdown = 1;
-      break;
-    case HMMD_CMD_RESET:
-      process_reset(&worker_comm, query);
       break;
     default:
       syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
@@ -767,23 +757,19 @@ master_process(ESL_GETOPTS *go)
     free_QueueData(query);
   }
 
-  if (hmm_db != NULL) cache_HmmDestroy(hmm_db);
-  if (seq_db != NULL) cache_SeqDestroy(seq_db);
+  esl_stack_ReleaseCond(cmdstack);
 
-  pthread_mutex_destroy(&queue->queue_mutex);
-  pthread_cond_destroy(&queue->queue_cond);
+  if (hmm_db) cache_HmmDestroy(hmm_db);
+  if (seq_db) cache_SeqDestroy(seq_db);
+
+  esl_stack_Destroy(cmdstack);
 
   pthread_mutex_destroy(&worker_comm.work_mutex);
   pthread_cond_destroy(&worker_comm.start_cond);
   pthread_cond_destroy(&worker_comm.complete_cond);
 
   free(info);
-  free(queue);
-
   return;
-
- ERROR:
-  LOG_FATAL_MSG("malloc", errno);
 }
 
 static int
@@ -1119,10 +1105,10 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
 static void
 process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 {
-  QUEUE_DATA    *parms  = NULL;     /* cmd to queue           */
-  HMMD_COMMAND  *cmd    = NULL;     /* parsed cmd to process  */
-  int            fd     = data->sock_fd;
-  COMMAND_QUEUE *queue  = data->queue;
+  QUEUE_DATA    *parms    = NULL;     /* cmd to queue           */
+  HMMD_COMMAND  *cmd      = NULL;     /* parsed cmd to process  */
+  int            fd       = data->sock_fd;
+  ESL_STACK     *cmdstack = data->cmdstack;
   int            n;
   char          *s;
   time_t         date;
@@ -1139,112 +1125,103 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 
   /* process the different commands */
   s = strsep(&ptr, " \t");
-  if (strcmp(s, "shutdown") == 0) {
-    if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
-    cmd->hdr.length  = 0;
-    cmd->hdr.command = HMMD_CMD_SHUTDOWN;
-  } else if (strcmp(s, "load") == 0) {
-    char **db;
-    char  *hmmdb = NULL;
-    char  *seqdb = NULL;
+  if (strcmp(s, "shutdown") == 0) 
+    {
+      if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
+      cmd->hdr.length  = 0;
+      cmd->hdr.command = HMMD_CMD_SHUTDOWN;
+    } 
+  else if (strcmp(s, "load") == 0) 
+    {
+      char **db;
+      char  *hmmdb = NULL;
+      char  *seqdb = NULL;
 
-    /* skip leading white spaces */
-    while (*ptr == ' ' || *ptr == '\t') ++ptr;
-    if (!*ptr) {
-      client_msg(fd, eslEINVAL, "Load command missing --seqdb or --hmmdb option\n");
-      return;
-    }
+      /* skip leading white spaces */
+      while (*ptr == ' ' || *ptr == '\t') ++ptr;
+      if (!*ptr) 
+	{
+	  client_msg(fd, eslEINVAL, "Load command missing --seqdb or --hmmdb option\n");
+	  return;
+	}
 
-    while (*ptr) {
-      s = strsep(&ptr, " \t");
+      while (*ptr) 
+	{
+	  s = strsep(&ptr, " \t");
 
-      db = NULL;
-      if (strcmp (s, "--seqdb") == 0) {
-        db = &seqdb;
-      } else if (strcmp (s, "--hmmdb") == 0) {
-        db = &hmmdb;
-      }
+	  db = NULL;
+	  if      (strcmp (s, "--seqdb") == 0) db = &seqdb;
+	  else if (strcmp (s, "--hmmdb") == 0) db = &hmmdb;
     
-      if (db == NULL) {
-        client_msg(fd, eslEINVAL, "Unknown option %s for load command\n", s);
-        return;
-      } else if (*db != NULL) {
-        client_msg(fd, eslEINVAL, "Option %s for load command specified twice\n", s);
-        return;
+	  if       (db == NULL) { client_msg(fd, eslEINVAL, "Unknown option %s for load command\n", s);         return; }
+	  else if (*db != NULL) { client_msg(fd, eslEINVAL, "Option %s for load command specified twice\n", s); return; }
+
+	  /* skip leading white spaces */
+	  while (*ptr == ' ' || *ptr == '\t') ++ptr;
+	  if (!*ptr) { client_msg(fd, eslEINVAL, "Missing file name following options %s\n", s); return; }
+	  *db = strsep(&ptr, " \t");
+
+	  /* skip leading white spaces */
+	  while (*ptr == ' ' || *ptr == '\t') ++ptr;
+	}
+
+      n = sizeof(HMMD_COMMAND);
+      if (seqdb) n += strlen(seqdb) + 1;
+      if (hmmdb) n += strlen(hmmdb) + 1;
+
+      if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+      memset(cmd, 0, n);
+      cmd->hdr.length  = n - sizeof(HMMD_HEADER);
+      cmd->hdr.command = HMMD_CMD_INIT;
+
+      s = cmd->init.data;
+
+      if (seqdb != NULL) {
+	cmd->init.seqdb_off = s - cmd->init.data;
+	strcpy(s, seqdb);
+	s += strlen(seqdb) + 1;
       }
+
+      if (hmmdb != NULL) {
+	cmd->init.hmmdb_off = s - cmd->init.data;
+	strcpy(s, hmmdb);
+	s += strlen(hmmdb) + 1;
+      }
+      
+    } 
+  else if (strcmp(s, "reset") == 0) 
+    {
+      char *ip_addr = NULL;
 
       /* skip leading white spaces */
       while (*ptr == ' ' || *ptr == '\t') ++ptr;
-      if (!*ptr) {
-        client_msg(fd, eslEINVAL, "Missing file name following options %s\n", s);
-        return;
+      if (!*ptr) { client_msg(fd, eslEINVAL, "Load command missing ip addres\n"); return; }
+
+      while (ptr && *ptr) {
+	if (ip_addr != NULL) { client_msg(fd, eslEINVAL, "Multiple ip addresses on command line %s\n", s); return; }
+
+	ip_addr = strsep(&ptr, " \t");
+
+	/* skip leading white spaces */
+	while (ptr && (*ptr == ' ' || *ptr == '\t')) ++ptr;
       }
-      *db = strsep(&ptr, " \t");
 
-      /* skip leading white spaces */
-      while (*ptr == ' ' || *ptr == '\t') ++ptr;
-    }
+      n = sizeof(HMMD_COMMAND) + strlen(ip_addr) + 1;
+      if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
-    n = sizeof(HMMD_COMMAND);
-    if (seqdb != NULL) n += strlen(seqdb) + 1;
-    if (hmmdb != NULL) n += strlen(hmmdb) + 1;
+      memset(cmd, 0, n);
 
-    if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+      cmd->hdr.length  = n - sizeof(HMMD_HEADER);
+      cmd->hdr.command = HMMD_CMD_RESET;
+      strcpy(cmd->reset.ip_addr, ip_addr);
 
-    memset(cmd, 0, n);
-
-    cmd->hdr.length  = n - sizeof(HMMD_HEADER);
-    cmd->hdr.command = HMMD_CMD_INIT;
-
-    s = cmd->init.data;
-
-    if (seqdb != NULL) {
-      cmd->init.seqdb_off = s - cmd->init.data;
-      strcpy(s, seqdb);
-      s += strlen(seqdb) + 1;
-    }
-
-    if (hmmdb != NULL) {
-      cmd->init.hmmdb_off = s - cmd->init.data;
-      strcpy(s, hmmdb);
-      s += strlen(hmmdb) + 1;
-    }
-
-  } else if (strcmp(s, "reset") == 0) {
-    char *ip_addr = NULL;
-
-    /* skip leading white spaces */
-    while (*ptr == ' ' || *ptr == '\t') ++ptr;
-    if (!*ptr) {
-      client_msg(fd, eslEINVAL, "Load command missing ip addres\n");
+    } 
+  else 
+    {
+      client_msg(fd, eslEINVAL, "Unknown command %s\n", s);
       return;
     }
-
-    while (ptr && *ptr) {
-      if (ip_addr != NULL) {
-        client_msg(fd, eslEINVAL, "Multiple ip addresses on command line %s\n", s);
-        return;
-      }
-
-      ip_addr = strsep(&ptr, " \t");
-
-      /* skip leading white spaces */
-      while (ptr && (*ptr == ' ' || *ptr == '\t')) ++ptr;
-    }
-
-    n = sizeof(HMMD_COMMAND) + strlen(ip_addr) + 1;
-    if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-
-    memset(cmd, 0, n);
-
-    cmd->hdr.length  = n - sizeof(HMMD_HEADER);
-    cmd->hdr.command = HMMD_CMD_RESET;
-    strcpy(cmd->reset.ip_addr, ip_addr);
-
-  } else {
-    client_msg(fd, eslEINVAL, "Unknown command %s\n", s);
-    return;
-  }
 
   if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
@@ -1256,10 +1233,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   parms->cmd  = cmd;
 
   strcpy(parms->ip_addr, data->ip_addr);
-  parms->sock = fd;
-  parms->next = NULL;
-  parms->prev = NULL;
-
+  parms->sock       = fd;
   parms->cmd_type   = cmd->hdr.command;
   parms->query_type = 0;
 
@@ -1269,7 +1243,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   printf("Queuing command %d from %s (%d)\n", cmd->hdr.command, parms->ip_addr, parms->sock);
   fflush(stdout);
 
-  push_Queue(parms, queue);
+  esl_stack_PPush(cmdstack, parms);
 }
 
 static int
@@ -1296,7 +1270,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
   HMMD_COMMAND      *cmd     = NULL;     /* search cmd to send to workers  */
 
-  COMMAND_QUEUE     *queue   = data->queue;
+  ESL_STACK         *cmdstack = data->cmdstack;
   QUEUE_DATA        *parms;
   jmp_buf            jmp_env;
   time_t             date;
@@ -1567,10 +1541,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->cmd  = cmd;
 
   strcpy(parms->ip_addr, data->ip_addr);
-  parms->sock = data->sock_fd;
-  parms->next = NULL;
-  parms->prev = NULL;
-
+  parms->sock       = data->sock_fd;
   parms->cmd_type   = cmd->hdr.command;
   parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
 
@@ -1586,10 +1557,31 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   printf("%s", opt_str);	/* note opt_str already has trailing \n */
   fflush(stdout);
 
-  push_Queue(parms, queue);
+  esl_stack_PPush(cmdstack, parms);
 
   free(buffer);
   return 0;
+}
+
+/* discard_function()
+ * function handed to esl_stack_DiscardSelected() to remove
+ * all commands in the stack that are associated with a
+ * particular client socket, because we're closing that
+ * client down. Prototype to this is dictate by the generalized
+ * interface to esl_stack_DiscardSelected().
+ */
+static int
+discard_function(void *elemp, void *args)
+{
+  QUEUE_DATA  *elem = (QUEUE_DATA *) elemp;
+  int          fd   = * (int *) args;
+
+  if (elem->sock == fd) 
+    {
+      free_QueueData(elem);
+      return TRUE;
+    }
+  return FALSE;
 }
 
 static void *
@@ -1606,7 +1598,8 @@ clientside_thread(void *arg)
     eof = clientside_loop(data);
   }
 
-  remove_Queue(data->sock_fd, data->queue);
+  /* remove any commands in stack associated with this client's socket */
+  esl_stack_DiscardSelected(data->cmdstack, discard_function, &(data->sock_fd));
 
   printf("Closing %s (%d)\n", data->ip_addr, data->sock_fd);
   fflush(stdout);
@@ -1627,9 +1620,8 @@ client_comm_thread(void *arg)
 
   struct sockaddr_in   addr;
 
-  CLIENTSIDE_ARGS     *targs = NULL;
-  CLIENTSIDE_ARGS     *data  = (CLIENTSIDE_ARGS *)arg;
-  COMMAND_QUEUE       *queue = data->queue;
+  CLIENTSIDE_ARGS     *targs    = NULL;
+  CLIENTSIDE_ARGS     *data     = (CLIENTSIDE_ARGS *)arg;
 
   for ( ;; ) {
 
@@ -1638,7 +1630,7 @@ client_comm_thread(void *arg)
     if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
 
     if ((targs = malloc(sizeof(CLIENTSIDE_ARGS))) == NULL) LOG_FATAL_MSG("malloc", errno);
-    targs->queue      = queue;
+    targs->cmdstack   = data->cmdstack;
     targs->sock_fd    = fd;
 
     addrlen = sizeof(targs->ip_addr);
