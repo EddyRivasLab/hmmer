@@ -58,7 +58,7 @@ p7_GMiyazawa(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float *ret_
 	float      **dp   = gx->dp;
 	int          M    = sm->n;
 	int          i;                    /* index over rows (target)   */
-	int 				 k;						         /* index over columns (query) */
+	int 				 k;	           /* index over columns (query) */
 	double     **MSC  = sm->Q->mx;
 	double    lopen   = sm->lopen;
 	double  lextend   = sm->lextend;
@@ -89,10 +89,10 @@ p7_GMiyazawa(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float *ret_
 			MMX(i,k) = sc + (float)MSC[dsq[i]][sm->dsq[k]];
 
 			/* insert (in the target) */
-			IMX(i,k) = p7_FLogsum(MMX(i-1,k) - lopen, IMX(i-1,k) - lextend);
+			IMX(i,k) = p7_FLogsum(MMX(i-1,k) + lopen, IMX(i-1,k) + lextend);
 
 			/* delete (in the target) */
-			DMX(i,k) = p7_FLogsum(MMX(i,k-1) - lopen, DMX(i,k-1) - lextend);
+			DMX(i,k) = p7_FLogsum(MMX(i,k-1) + lopen, DMX(i,k-1) + lextend);
 
 			Z = p7_FLogsum(Z, MMX(i,k));                                                          /* we sum the score of each local alignment terminating in each match cell */
 

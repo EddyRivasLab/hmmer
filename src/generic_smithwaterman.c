@@ -89,10 +89,10 @@ p7_GSmithWaterman(const ESL_DSQ *dsq, int L, P7_SCORESYS *sm, P7_GMX *gx, float 
 			if (MMX(i,k) > osc) osc = MMX(i,k);
 
 			/* insert (in the target) */
-			IMX(i,k) = ESL_MAX((MMX(i-1,k) - sopen), (IMX(i-1,k) - sextend));
+			IMX(i,k) = ESL_MAX((MMX(i-1,k) + sopen), (IMX(i-1,k) + sextend));
 
 			/* delete (in the target) */
-			DMX(i,k) = ESL_MAX((MMX(i,k-1) - sopen), (DMX(i,k-1) - sextend));
+			DMX(i,k) = ESL_MAX((MMX(i,k-1) + sopen), (DMX(i,k-1) + sextend));
 
 		} /* end loop over query sequence */
 

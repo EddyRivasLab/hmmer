@@ -785,7 +785,7 @@ typedef struct p7_pipeline_s {
 enum p7_archchoice_e { p7_ARCH_FAST = 0, p7_ARCH_HAND   = 1 };
 enum p7_wgtchoice_e  { p7_WGT_NONE  = 0, p7_WGT_GIVEN   = 1, p7_WGT_GSC    = 2, p7_WGT_PB       = 3, p7_WGT_BLOSUM = 4 };
 enum p7_effnchoice_e { p7_EFFN_NONE = 0, p7_EFFN_SET    = 1, p7_EFFN_CLUST = 2, p7_EFFN_ENTROPY = 3 };
-enum p7_s2pchoice_e  { p7_S2P_NONE  = 0, p7_S2P_CONVERT = 1, p7_S2P_COLLAPSE = 2 }; /* gap open/extension scores to probabilities */
+//enum p7_s2pchoice_e  { p7_S2P_NONE  = 0, p7_S2P_CONVERT = 1, p7_S2P_COLLAPSE = 2 }; /* gap open/extension scores to probabilities */
 
 typedef struct p7_builder_s {
   /* Model architecture                                                                            */
@@ -826,9 +826,9 @@ typedef struct p7_builder_s {
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		         /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	             /* Q->mx[a][b] = P(b|a) residue probabilities             */
+  P7_BG               *bg;               /* marginals from Q or SwissProt frequencies              */
   double               popen;         	 /* gap open probability                                   */
   double               pextend;          /* gap extend probability                                 */
-  enum p7_s2pchoice_e  s2p_strategy;   /* choice of method for gap open/extension scores to probabilities */
   const ESL_ALPHABET  *abc;		         /* COPY of alphabet                                       */
   char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
 } P7_BUILDER;
@@ -1008,7 +1008,7 @@ extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
 
 /* p7_builder.c */
 extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc);
-extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
+extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *env);
 extern int         p7_builder_SetSWScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend); /* may want to do this within p7_builder_SetSWScoreSystem */
 extern int         p7_builder_SetMiyScoreSystem(P7_SCORESYS *sm, const char *mxfile, const char *env, double sopen, double sextend);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);

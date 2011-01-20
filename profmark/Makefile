@@ -10,7 +10,7 @@ srcdir     = .
 VPATH      =  ..
 
 CC       = gcc -std=gnu99
-CFLAGS   = -O3 -fomit-frame-pointer -malign-double -fstrict-aliasing
+CFLAGS   = -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro
 CPPFLAGS = 
 LDFLAGS  = 
 SIMDFLAGS= -msse2

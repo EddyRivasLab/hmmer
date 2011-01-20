@@ -129,8 +129,8 @@ static ESL_OPTIONS options[] = {
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL,"0<=x<0.5", NULL,  NULL,  SGAPS,             "gap open probability",                                         6 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL,"0<=x<1",   NULL,  NULL,  SGAPS,             "gap extend probability",                                       6 },
-  { "--sopen",      eslARG_REAL,  "7.0",  NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap open score",                                               6 }, /* default in ssearch (unihit)*/
-  { "--sextend",    eslARG_REAL,   "1.0", NULL, "0<=x<100",NULL,  NULL,  PGAPS,             "gap extend score",                                             6 }, /* default in ssearch (unihit)*/
+  { "--sopen",      eslARG_REAL,  "-7.0",  NULL, "-100<=x<=0",NULL,  NULL,  PGAPS,           "gap open score",                                               6 }, /* default in ssearch (unihit)*/
+  { "--sextend",    eslARG_REAL,   "-1.0", NULL, "-100<=x<=0",NULL,  NULL,  PGAPS,           "gap extend score",                                             6 }, /* default in ssearch (unihit)*/
   { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,   NULL,             "substitution score matrix [BLOSUM62]",                         6 }, /* default in ssearch (unihit) */
   { "--convert",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  PGAPS,             "convert gap open/extension scores into probabilities",         6 }, /* See J2 page 129. Should print the result of the conversion */
   { "--inconsistent",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,       "use background frequencies from SwissProt",                    6 },

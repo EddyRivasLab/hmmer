@@ -1,14 +1,14 @@
 # Makefile for HMMER src directory
 #
 # SRE, Mon Jan  1 19:05:39 2007 [Casa de Gatos]
-# SVN $Id: Makefile.in 3209 2010-03-05 20:27:21Z castellanos $
+# SVN $Id: Makefile.in 3266 2010-05-06 14:50:24Z castellanos $
 
 top_srcdir = ..
 srcdir     = .
 VPATH      =  ..
 
 CC       = gcc -std=gnu99
-CFLAGS   = -O3 -fomit-frame-pointer -malign-double -fstrict-aliasing 
+CFLAGS   = -g -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro 
 SIMDFLAGS= -msse2
 CPPFLAGS = 
 LDFLAGS  = 
@@ -74,6 +74,7 @@ OBJS =  build.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
+	rankorder.o\
 	seqmodel.o\
 	tracealign.o\
 	p7_alidisplay.o\
@@ -108,6 +109,7 @@ BENCHMARKS = \
 UTESTS =\
 	build_utest\
 	generic_fwdback_utest\
+	generic_miyazawa_utest\
 	generic_msv_utest\
 	generic_stotrace_utest\
 	generic_viterbi_utest\

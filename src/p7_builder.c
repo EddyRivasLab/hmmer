@@ -233,9 +233,21 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *en
 	  if ((status = esl_sco_gap_Probify(bld->S, open, extend, &(bld->Q), &(bld->popen), &(bld->pextend), &fa, &fb, &slambda)) != eslOK)
 		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Castellano/Eddy method (based on Yu/Altschul method) failed to backcalculate probabilistic basis of Smith-Waterman score system");
 
-	  /* Set popen/pextend probabilities in bld WRONG!!! FIX IT!!! */
-//	  bld->popen   = (exp(slambda * -open) + exp(slambda * -extend)) / 3;
-//	  bld->pextend = exp(slambda * -extend);
+	  printf("Uncorrected lambda %f\n", slambda);
+
+	  /* Set popen/pextend probabilities in bld */
+	  bld->popen   = exp(slambda * open) / (1 - exp(slambda * extend) + 2 * exp(slambda * open)); /* IS THIS CORRECT??? IS THIS THE LAMBDA I WANT TO USE??? */
+	  bld->pextend = exp(slambda * extend);
+
+	  /* Set probabilities in bld */
+	   for (a = 0; a < bld->abc->K; a++)
+	 	  for (b = 0; b < bld->abc->K; b++)
+	 		  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+	   /* Set background probabilities in bld */
+	   if (! esl_opt_GetBoolean(go, "--inconsistent"))
+	 	  for (b = 0; b < bld->abc->K; b++)
+	 		  bld->bg->f[b] = (float)fb[b];           /* bld->bg->f[b] is now  P(b) */
   }
 
   else
@@ -250,8 +262,8 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *en
 		  open   = esl_opt_GetReal(go, "--sopen");
 		  extend = esl_opt_GetReal(go, "--sextend");
 
-		  bld->popen   = exp(slambda * -open);    /* this is the backcalculated lambda from the score matrix */
-		  bld->pextend = exp(slambda * -extend);
+		  bld->popen   = exp(slambda * open);    /* this is the backcalculated lambda from the score matrix */
+		  bld->pextend = exp(slambda * extend);
 	  }
 
 	  else /* specify popen and pextend directly */
@@ -263,18 +275,18 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *en
 		  bld->popen   = open;
 		  bld->pextend = extend;
 	  }
+
+	  /* Set probabilities in bld */
+	   for (a = 0; a < bld->abc->K; a++)
+	 	  for (b = 0; b < bld->abc->K; b++)
+	 		  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+	   /* Set background probabilities in bld */
+
+	   if (! esl_opt_GetBoolean(go, "--inconsistent"))
+	 	  for (a = 0; a < bld->abc->K; a++)
+	 		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
   }
-
-  /* Set probabilities in bld */
-  for (a = 0; a < bld->abc->K; a++)
-	  for (b = 0; b < bld->abc->K; b++)
-		  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
-
-  /* Set background probabilities in bld */
-
-  if (! esl_opt_GetBoolean(go, "--inconsistent"))
-	  for (a = 0; a < bld->abc->K; a++)
-		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
 
    /* Check range */
    if ( !(bld->popen >= 0 && bld->popen < 0.5) )

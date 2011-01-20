@@ -19,7 +19,7 @@
 #     make DESTDIR=~/rpm/tmp/buildroot install
 # By default, DESTDIR is null.
 #
-# SVN $Id: Makefile.in 3159 2010-02-10 16:10:21Z eddys $
+# SVN $Id: Makefile.in 3233 2010-03-19 20:36:23Z castellanos $
 
 
 # VPATH and shell configuration
@@ -44,7 +44,7 @@ manext      = .1
 # Compiler configuration
 #
 CC        = gcc -std=gnu99
-CFLAGS    = -O3 -fomit-frame-pointer -malign-double -fstrict-aliasing
+CFLAGS    = -g -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro
 LDFLAGS   = -static 
 SIMDFLAGS = -msse2
 CPPFLAGS  = 

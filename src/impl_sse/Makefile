@@ -8,7 +8,7 @@ srcdir     = .
 VPATH      =  ../../src
 
 CC             = gcc -std=gnu99
-CFLAGS         = -O3 -fomit-frame-pointer -malign-double -fstrict-aliasing 
+CFLAGS         = -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro 
 SIMDFLAGS      = -msse2
 CPPFLAGS       = 
 LDFLAGS        = 

@@ -448,7 +448,7 @@ Copyright (C) 2009 Free Software Foundation, Inc.
 This config.status script is free software; the Free Software Foundation
 gives unlimited permission to copy, distribute and modify it."
 
-ac_pwd='/Volumes/castellanos/research/homology/castellanos_3.0rc1'
+ac_pwd='/Users/sergi/research/homology/castellanos_3.0rc1'
 srcdir='.'
 test -n "$AWK" || AWK=awk
 # The default lists apply if the user does not specify any file.
@@ -646,16 +646,16 @@ S["EXEEXT"]=""
 S["ac_ct_CC"]="gcc"
 S["CPPFLAGS"]=""
 S["LDFLAGS"]=""
-S["CFLAGS"]="-O3 -fomit-frame-pointer -malign-double -fstrict-aliasing"
+S["CFLAGS"]="-O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro"
 S["CC"]="gcc -std=gnu99"
-S["host_os"]="darwin9.8.0"
+S["host_os"]="darwin10.4.0"
 S["host_vendor"]="apple"
 S["host_cpu"]="i386"
-S["host"]="i386-apple-darwin9.8.0"
-S["build_os"]="darwin9.8.0"
+S["host"]="i386-apple-darwin10.4.0"
+S["build_os"]="darwin10.4.0"
 S["build_vendor"]="apple"
 S["build_cpu"]="i386"
-S["build"]="i386-apple-darwin9.8.0"
+S["build"]="i386-apple-darwin10.4.0"
 S["EASEL_URL"]="http://bioeasel.org/"
 S["EASEL_VERSION"]="h3.0rc1"
 S["EASEL_LICENSE"]="Freely distributed under the Janelia Farm Software License."
