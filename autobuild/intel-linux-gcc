@@ -1,7 +1,6 @@
 ../configure 
 make                                  
 make dev                              
-make check                            
-
+make SQCLEVEL=3 check 
 
 

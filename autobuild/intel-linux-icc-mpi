@@ -5,5 +5,5 @@ export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
 ../configure CC=icc LDFLAGS=-static-intel --enable-mpi
 make                                  
 make dev                              
-make check                            
-
+make SQCLEVEL=3 check 
+#    SQCLEVEL=3 activates valgrind tests
