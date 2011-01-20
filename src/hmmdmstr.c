@@ -1427,7 +1427,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
       /* try to parse the buffer as an hmm */
       status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
-      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error opening query hmm: %s", hfp->errbuf);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to open query hmm buffer");
 
       status = p7_hmmfile_Read(hfp, &abc,  &hmm);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
