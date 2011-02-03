@@ -48,7 +48,7 @@ typedef struct {
   P7_OPROFILE     **om_list;     /* list of profiles to process      */
   int               om_cnt;      /* number of profiles               */
 
-  pthread_mutex_t   inx_mutex;   /* protect data                     */
+  pthread_mutex_t  *inx_mutex;   /* protect data                     */
   int              *blk_size;    /* sequences per block              */
   int              *limit;       /* point to decrease block size     */
   int              *inx;         /* next index to process            */
@@ -231,11 +231,10 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
     info[i].th    = NULL;
     info[i].pli   = NULL;
 
-    info[i].inx_mutex = inx_mutex;
-    info[i].inx       = &current_index;
-
-    info[i].blk_size  = &blk_size;
-    info[i].limit     = &limit;
+    info[i].inx_mutex = &inx_mutex;
+    info[i].inx       = &current_index;/* this is confusing trickery - to share a single variable across all threads */
+    info[i].blk_size  = &blk_size;     /* ditto */
+    info[i].limit     = &limit;	       /* ditto. TODO: come back and clean this up. */
 
     if (query->cmd_type == HMMD_CMD_SEARCH) {
       HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
@@ -598,7 +597,7 @@ search_thread(void *arg)
     HMMER_SEQ  **sq;
 
     /* grab the next block of sequences */
-    if (pthread_mutex_lock(&info->inx_mutex) != 0) p7_Fail("mutex lock failed");
+    if (pthread_mutex_lock(info->inx_mutex) != 0) p7_Fail("mutex lock failed");
     inx = *info->inx;
     blksz = *info->blk_size;
     if (inx > *info->limit) {
@@ -611,7 +610,7 @@ search_thread(void *arg)
     }
     *info->blk_size = blksz;
     *info->inx += blksz;
-    if (pthread_mutex_unlock(&info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
+    if (pthread_mutex_unlock(info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
 
     sq = info->sq_list + inx;
 
@@ -698,8 +697,8 @@ scan_thread(void *arg)
     P7_OPROFILE **om;
 
     /* grab the next block of sequences */
-    if (pthread_mutex_lock(&info->inx_mutex) != 0) p7_Fail("mutex lock failed");
-    inx = *info->inx;
+    if (pthread_mutex_lock(info->inx_mutex) != 0) p7_Fail("mutex lock failed");
+    inx   = *info->inx;
     blksz = *info->blk_size;
     if (inx > *info->limit) {
       blksz /= 5;
@@ -711,10 +710,9 @@ scan_thread(void *arg)
     }
     *info->blk_size = blksz;
     *info->inx += blksz;
-    if (pthread_mutex_unlock(&info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
+    if (pthread_mutex_unlock(info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
 
-    om = info->om_list + inx;
-
+    om    = info->om_list + inx;
     count = info->om_cnt - inx;
     if (count > blksz) count = blksz;
 

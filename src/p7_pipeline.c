@@ -80,7 +80,6 @@
  *            | --nonull2    |  turn OFF biased comp score correction      |   FALSE   |
  *            | --seed       |  RNG seed (0=use arbitrary seed)            |      42   |
  *            | --acc        |  prefer accessions over names in output     |   FALSE   |
-
  *
  * Returns:   ptr to new <P7_PIPELINE> object on success. Caller frees this
  *            with <p7_pipeline_Destroy()>.
