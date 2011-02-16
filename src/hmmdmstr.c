@@ -115,30 +115,6 @@ typedef struct worker_s {
   struct worker_s      *prev;
 } WORKER_DATA;
 
-typedef struct {
-  HMMER_SEQ       **sq_list;     /* list of sequences to process     */
-  int               sq_cnt;      /* number of sequences              */
-
-  P7_OPROFILE     **om_list;     /* list of profiles to process      */
-  int               om_cnt;      /* number of profiles               */
-
-  pthread_mutex_t   inx_mutex;   /* protect data                     */
-  int              *inx;         /* next index to process            */
-
-  P7_HMM           *hmm;         /* query HMM                        */
-  ESL_SQ           *seq;         /* query sequence                   */
-  ESL_ALPHABET     *abc;         /* digital alphabet                 */
-  ESL_GETOPTS      *opts;        /* search specific options          */
-
-  double            elapsed;     /* elapsed search time              */
-
-  /* Structure created and populated by the individual threads.
-   * The main thread is responsible for freeing up the memory.
-   */
-  P7_PIPELINE      *pli;         /* work pipeline                    */
-  P7_TOPHITS       *th;          /* top hit results                  */
-} WORKER_INFO;
-
 static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
 
@@ -680,8 +656,6 @@ master_process(ESL_GETOPTS *go)
   int                 status     = eslOK;
   int                 shutdown;
 
-  WORKER_INFO        *info       = NULL;
-
   SEQ_CACHE          *seq_db     = NULL;
   HMM_CACHE          *hmm_db     = NULL;
   ESL_STACK          *cmdstack   = NULL; /* stack of commands that clients want done */
@@ -770,7 +744,6 @@ master_process(ESL_GETOPTS *go)
   pthread_cond_destroy(&worker_comm.start_cond);
   pthread_cond_destroy(&worker_comm.complete_cond);
 
-  free(info);
   return;
 }
 
