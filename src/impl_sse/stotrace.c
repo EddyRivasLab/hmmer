@@ -259,7 +259,6 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   union { __m128 v; float p[4]; } u;
   int    q,r;
 
-  ESL_DASSERT1(norm > 0.999 && norm < 1.001);
   while (1) {
     for (q = 0; q < Q; q++)
       {
