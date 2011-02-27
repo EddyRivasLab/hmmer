@@ -259,17 +259,14 @@ select_j(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
 static inline int
 select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int *ret_k)
 {
-  int    Q     = p7O_NQF(ox->M);
-  float  sum   = 0.0;
-  float  roll  = esl_random(rng);
-  float  norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E]; /* all M, D already scaled exactly the same */
-  vector float xEv;
-  vector float zerov;
+  int          Q     = p7O_NQF(ox->M);
+  double       sum   = 0.0;
+  double       roll  = esl_random(rng);
+  double       norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E];   /* all M, D already scaled exactly the same */
+  vector float xEv   = esl_vmx_set_float(norm);
+  vector float zerov = (vector float) vec_splat_u32(0);
   union { vector float v; float p[4]; } u;
   int    q,r;
-
-  xEv = esl_vmx_set_float(norm);
-  zerov = (vector float) vec_splat_u32(0);
 
   while (1) {
     for (q = 0; q < Q; q++)
@@ -286,8 +283,7 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
 	}
       }
-    if (sum < 0.99) 
-      ESL_EXCEPTION(-1, "Probabilities weren't normalized - failed to trace back from an E");
+    ESL_ASSERT1(sum > 0.99);
   }
   /*UNREACHED*/
   ESL_EXCEPTION(-1, "unreached code was reached. universe collapses.");

@@ -246,18 +246,20 @@ select_j(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
  * instead we use the fact that E(i) is itself the necessary normalization
  * factor, and implement FChoose's algorithm here for an on-the-fly 
  * calculation.
+ * Note that that means double-precision calculation, to be sure 0.0 <= roll < 1.0
  */
 static inline int
 select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int *ret_k)
 {
   int    Q     = p7O_NQF(ox->M);
-  float  sum   = 0.0;
-  float  roll  = esl_random(rng);
-  float  norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E]; /* all M, D already scaled exactly the same */
-  __m128 xEv   = _mm_set1_ps(norm);
+  double sum   = 0.0;
+  double roll  = esl_random(rng);
+  double norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E];
+  __m128 xEv   = _mm_set1_ps(norm); /* all M, D already scaled exactly the same */
   union { __m128 v; float p[4]; } u;
   int    q,r;
 
+  ESL_DASSERT1(norm > 0.999 && norm < 1.001);
   while (1) {
     for (q = 0; q < Q; q++)
       {
@@ -273,8 +275,7 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
 	}
       }
-    if (sum < 0.99) 
-      ESL_EXCEPTION(-1, "Probabilities weren't normalized - failed to trace back from an E");
+    ESL_DASSERT1(sum > 0.99);
   }
   /*UNREACHED*/
   ESL_EXCEPTION(-1, "unreached code was reached. universe collapses.");

@@ -329,46 +329,46 @@
 ################################################################
 
 #           xxxxxxxxxxxxxxxxxxxx
-3 valgrind hmmer                 @src/hmmer_utest@
-3 valgrind build                 @src/build_utest@
-3 valgrind generic_fwdback       @src/generic_fwdback_utest@
-3 valgrind generic_msv           @src/generic_msv_utest@
-3 valgrind generic_stotrace      @src/generic_stotrace_utest@
-3 valgrind generic_viterbi       @src/generic_viterbi_utest@
-3 valgrind logsum                @src/logsum_utest@
-3 valgrind modelconfig           @src/modelconfig_utest@
-3 valgrind p7_gmx                @src/p7_gmx_utest@
-3 valgrind p7_hmm                @src/p7_hmm_utest@
-3 valgrind p7_hmmfile            @src/p7_hmmfile_utest@
-3 valgrind p7_profile            @src/p7_profile_utest@
-3 valgrind p7_tophits            @src/p7_tophits_utest@
-3 valgrind p7_trace              @src/p7_trace_utest@
+3 valgrind  hmmer                 @src/hmmer_utest@
+3 valgrind  build                 @src/build_utest@
+3 valgrind  generic_fwdback       @src/generic_fwdback_utest@
+3 valgrind  generic_msv           @src/generic_msv_utest@
+3 valgrind  generic_stotrace      @src/generic_stotrace_utest@
+3 valgrind  generic_viterbi       @src/generic_viterbi_utest@
+3 valgrind  logsum                @src/logsum_utest@
+3 valgrind  modelconfig           @src/modelconfig_utest@
+3 valgrind  p7_gmx                @src/p7_gmx_utest@
+3 valgrind  p7_hmm                @src/p7_hmm_utest@
+3 valgrind  p7_hmmfile            @src/p7_hmmfile_utest@
+3 valgrind  p7_profile            @src/p7_profile_utest@
+3 valgrind  p7_tophits            @src/p7_tophits_utest@
+3 valgrind  p7_trace              @src/p7_trace_utest@
 
-3 valgrind decoding              @src/impl/decoding_utest@
-3 valgrind fwdback               @src/impl/fwdback_utest@
-3 valgrind io                    @src/impl/io_utest@
-3 valgrind msvfilter             @src/impl/msvfilter_utest@
-3 valgrind null2                 @src/impl/null2_utest@
-3 valgrind optacc                @src/impl/optacc_utest@
-3 valgrind stotrace              @src/impl/stotrace_utest@
-3 valgrind vitfilter             @src/impl/vitfilter_utest@
+3 valgrind  decoding              @src/impl/decoding_utest@
+3 valgrind  fwdback               @src/impl/fwdback_utest@
+3 valgrind  io                    @src/impl/io_utest@
+3 valgrind  msvfilter             @src/impl/msvfilter_utest@
+3 valgrind  null2                 @src/impl/null2_utest@
+3 valgrind  optacc                @src/impl/optacc_utest@
+3 valgrind  stotrace              @src/impl/stotrace_utest@
+3 valgrind  vitfilter             @src/impl/vitfilter_utest@
 
-1 prep     minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
+1 prep      minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
 
-3 valgrind hmmbuild              @src/hmmbuild@   %GLOBIN.HMM% !tutorial/globins4.sto!
-3 valgrind hmmconvert            @src/hmmconvert@ -b %GLOBIN.HMM%
-3 valgrind hmmalign              @src/hmmalign@   %GLOBIN.HMM% !tutorial/globins45.fa!
-3 valgrind hmmemit               @src/hmmemit@    -N10 %GLOBIN.HMM% 
-3 valgrind hmmpress              @src/hmmpress@   -f %MINIFAM.HMM%
-3 valgrind hmmfetch              @src/hmmfetch@   %MINIFAM.HMM% Caudal_act
-3 valgrind hmmscan               @src/hmmscan@    %MINIFAM.HMM% !tutorial/HBB_HUMAN!
-3 valgrind hmmsearch             @src/hmmsearch@  %GLOBIN.HMM% !tutorial/globins45.fa!
-3 valgrind hmmsim                @src/hmmsim@     %GLOBIN.HMM% 
-3 valgrind hmmstat               @src/hmmstat@    %MINIFAM.HMM% 
-3 valgrind jackhmmer             @src/jackhmmer@  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
-3 valgrind phmmer                @src/phmmer@     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+3 valgrind  hmmbuild              @src/hmmbuild@   %GLOBIN.HMM% !tutorial/globins4.sto!
+3 valgrind  hmmconvert            @src/hmmconvert@ -b %GLOBIN.HMM%
+3 valgrind  hmmalign              @src/hmmalign@   %GLOBIN.HMM% !tutorial/globins45.fa!
+3 valgrind  hmmemit               @src/hmmemit@    -N10 %GLOBIN.HMM% 
+3 valgrind  hmmpress              @src/hmmpress@   -f %MINIFAM.HMM%
+3 valgrind  hmmfetch              @src/hmmfetch@   %MINIFAM.HMM% Caudal_act
+3 valgrind  hmmscan               @src/hmmscan@    %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+3 valgrind  hmmsearch             @src/hmmsearch@  %GLOBIN.HMM% !tutorial/globins45.fa!
+3 valgrind  hmmsim                @src/hmmsim@     %GLOBIN.HMM% 
+3 valgrind  hmmstat               @src/hmmstat@    %MINIFAM.HMM% 
+3 valgrind  jackhmmer             @src/jackhmmer@  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+3 valgrind  phmmer                @src/phmmer@     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
 
 # some derivatives of tmpfiles created by hmmpress, not sqc itself: clean up
-#1 prep      minifam              rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 
+#1 prep     minifam               rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 
 
 
