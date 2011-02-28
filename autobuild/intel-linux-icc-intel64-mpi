@@ -1,3 +1,7 @@
+# Cannot use valgrind memcheck on code compiled with icc 11.x;
+# a known issue with icc's use of SSE-optimized str*() functions.
+# xref J7/84
+#
 . /usr/local/intel/ictce/current/cc/bin/iccvars.sh intel64
 . /usr/local/intel/ictce/current/impi/bin64/mpivars.sh
 export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
@@ -5,5 +9,4 @@ export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
 ../configure CC=icc LDFLAGS=-static-intel --enable-mpi
 make                                  
 make dev                              
-make SQCLEVEL=3 check 
-#    SQCLEVEL=3 activates valgrind tests
+make check 

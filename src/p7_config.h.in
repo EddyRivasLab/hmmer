@@ -18,7 +18,6 @@
 #ifndef P7_CONFIGH_INCLUDED
 #define P7_CONFIGH_INCLUDED
 
-
 /*****************************************************************
  * 1. Compile-time constants that control HMMER's computational 
  *    behavior (memory and processor use), and output formatting.

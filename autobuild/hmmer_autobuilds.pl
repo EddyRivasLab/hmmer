@@ -5,17 +5,18 @@
 # Usage:     hmmer_autobuilds.pl  <srcdir>
 # Example:   hmmer_autobuilds.pl  ~/nightlies/hmmer/trunk > /tmp/hmmer_autobuilds.log
 #
-# SVN $URL$
 # SVN $Id$
+# SVN $URL$
 # SRE, Fri Jan 14 16:02:36 2011 [Janelia]
 
 
 @buildconfigs = (
-    { name => "intel-linux-icc-mpi",      host => "login-eddy"  },
-    { name => "intel-linux-gcc",          host => "login-eddy"  },
-    { name => "intel-macosx-gcc-debug",   host => "."           },
-    { name => "intel-macosx-gcc",         host => "."           },
-    { name => "ppc-aix-xlc",              host => "cf-ppc2"     },
+    { name => "intel-linux-icc-intel64-mpi", host => "login-eddy"  },
+    { name => "intel-linux-icc-ia32-mpi",    host => "login-eddy"  },
+    { name => "intel-linux-gcc",             host => "login-eddy"  },
+    { name => "intel-macosx-gcc-debug",      host => "."           },
+    { name => "intel-macosx-gcc",            host => "."           },
+    { name => "ppc-aix-xlc",                 host => "cf-ppc2"     },
     );
 
 $autoconf = "/opt/local/bin/autoconf";

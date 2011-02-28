@@ -488,7 +488,7 @@ utest_fragments(void)
  *****************************************************************/
 
 #ifdef p7BUILD_TESTDRIVE
-/* gcc -g -Wall -Dp7BUILD_TESTDRIVE -I. -I../easel -L. -L../easel -o build_test build.c -lhmmer -leasel -lm
+/* gcc -g -Wall -Dp7BUILD_TESTDRIVE -I. -I../easel -L. -L../easel -o build_utest build.c -lhmmer -leasel -lm
  */
 #include "easel.h"
 
