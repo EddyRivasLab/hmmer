@@ -379,7 +379,7 @@
  * times, so it handles the whole of phase two. Note also that the
  * macro may let rsc overflow since it does not reset rsc after a
  * shift operation. This is handled by extending the match score array
- * in the P7_OPROFILE by MAX_BANDS - 1 = 17 as defined by the EXTRA_SB
+ * in the P7_OPROFILE by MAX_BANDS - 1 = 17 as defined by the p7O_EXTRA_SB
  * constant in that file.
  *
  * The only macro remaining is the CALC macro which just contains the

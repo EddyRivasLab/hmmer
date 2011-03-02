@@ -271,6 +271,31 @@ p7_profile_Reuse(P7_PROFILE *gm)
 }
 
 
+/* Function:  p7_profile_Sizeof()
+ * Synopsis:  Return the allocated size of a P7_PROFILE.
+ * Incept:    SRE, Wed Mar  2 10:34:23 2011 [Janelia]
+ *
+ * Purpose:   Return the allocated size of a <P7_PROFILE>, in bytes.
+ */
+size_t
+p7_profile_Sizeof(P7_PROFILE *gm)
+{
+  size_t n = 0;
+
+  /* these mirror malloc()'s in p7_profile_Create(); maintain one:one correspondence for maintainability */
+  n += sizeof(P7_PROFILE);
+  n += sizeof(float)   * gm->allocM * p7P_NTRANS;             /* gm->tsc       */
+  n += sizeof(float *) * gm->abc->Kp;	                      /* gm->rsc       */
+  n += sizeof(char)    * (gm->allocM+2);	              /* gm->rf        */
+  n += sizeof(char)    * (gm->allocM+2);	              /* gm->cs        */
+  n += sizeof(char)    * (gm->allocM+2);	              /* gm->consensus */
+
+  n += sizeof(float) * gm->abc->Kp * (gm->allocM+1) * p7P_NR; /* gm->rsc[0]    */
+
+  return n;
+}
+
+
 /* Function:  p7_profile_Destroy()
  * Synopsis:  Frees a profile.
  * Incept:    SRE, Thu Jan 11 15:54:17 2007 [Janelia]

@@ -102,8 +102,8 @@ if ($verbose) { print "$tag...\n"; }
 `cat $arg1 | $prog - $arg2 > $tmppfx.out2`;   if ($?) { die "FAIL: $tag - $tag2\n"; }
 `cat $arg2 | $prog $arg1 - > $tmppfx.out3`;   if ($?) { die "FAIL: $tag $tag1 -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`; if ($?) { die "FAIL: $tag results differ if $tag2 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`; if ($?) { die "FAIL: $tag results differ if $tag2 comes through stdin\n"; }
 
 $output = `cat $arg1 $arg2 | $prog - - 2>&1`;            
 if (!$?) { die "FAIL: $tag should fail on double - -\n"; }
@@ -122,8 +122,7 @@ if ($verbose) { print "$tag...\n"; }
 
 `$prog $tmppfx.hmm.out1 $arg1                              | grep -v "^#" > $tmppfx.out1`;   if ($?) { die "FAIL: $tag <hmmfile> $tag1 \n"; }
 `cat $arg1 | $prog --informat stockholm $tmppfx.hmm.out2 - | grep -v "^#" > $tmppfx.out2`;   if ($?) { die "FAIL: $tag <hmmfile> -\n"; }
-
-`diff -b -B $tmppfx.out1     $tmppfx.out2     2>&1 > /dev/null`; if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1     $tmppfx.out2     2>&1 > /dev/null`; if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 
 $output = `$prog - $arg1`;
 if (!$?) { die "FAIL: $tag should reject - for <hmmfile_out>\n"; }
@@ -139,7 +138,7 @@ if ($verbose) { print "$tag...\n"; }
 `$prog $arg1         > $tmppfx.out1`;   if ($?) { die "FAIL: $tag $tag1\n"; }
 `cat $arg1 | $prog - > $tmppfx.out2`;   if ($?) { die "FAIL: $tag -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; 
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; 
 if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 
 ################################################################
@@ -154,7 +153,7 @@ if ($verbose) { print "$tag...\n"; }
 `$prog --seed 42 $arg1         > $tmppfx.out1`;   if ($?) { die "FAIL: $tag $tag1\n"; }
 `cat $arg1 | $prog --seed 42 - > $tmppfx.out2`;   if ($?) { die "FAIL: $tag -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; 
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; 
 if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 
 
@@ -175,13 +174,13 @@ if ($verbose) { print "$tag...\n"; }
 
 `$prog $arg1 Caudal_act         > $tmppfx.out1`;          if ($?) { die "FAIL: $tag $tag1\n"; }
 `cat $arg1 | $prog - Caudal_act > $tmppfx.out2`;          if ($?) { die "FAIL: $tag -\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 
 `$prog -f $arg1 $arg2           > $tmppfx.out1`;          if ($?) { die "FAIL: $tag -f $tag1 $tag2\n"; }
 `cat $arg1 | $prog -f - $arg2   > $tmppfx.out2`;          if ($?) { die "FAIL: $tag -f - $tag2\n"; }
 `cat $arg2 | $prog -f $arg1 -   > $tmppfx.out3`;          if ($?) { die "FAIL: $tag -f $tag1 -\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag -f results differ if $tag1 comes through stdin\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag -f results differ if $tag2 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag -f results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag -f results differ if $tag2 comes through stdin\n"; }
 
 $output = `cat $arg1 $arg2 | $prog -f - - 2>&1`;
 if (! $?) { die "FAIL: $tag should have failed on double - -\n"; }
@@ -216,7 +215,7 @@ if ($verbose) { print "$tag...\n"; }
 `$prog $arg1 $arg2         | grep -v "^#" > $tmppfx.out1`;   if ($?) { die "FAIL: $tag $tag1 $tag2\n"; }
 `cat $arg2 | $prog $arg1 - | grep -v "^#" > $tmppfx.out2`;   if ($?) { die "FAIL: $tag $tag1 -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; 
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`; 
 if ($?) { die "FAIL: $tag results differ if $arg2 comes from stdin\n"; }
 
 $output = `cat $arg1 | $prog - $arg2 2>&1`;
@@ -241,8 +240,8 @@ if ($verbose) { print "$tag...\n"; }
 `cat $arg1 | $prog - $arg2  | grep -v "^#" > $tmppfx.out2`;  if ($?) { die "FAIL: $tag - $tag2\n"; }
 `cat $arg2 | $prog $arg1 -  | grep -v "^#" > $tmppfx.out3`;  if ($?) { die "FAIL: $tag $tag1 -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
 
 $output = `cat $arg1 $arg2 | $prog - - 2>&1`;    if (! $?) { die "FAIL: $prog should have failed on double - -\n"; }
 if ($output !~ /^Either <hmmfile> or <seqdb>/) { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
@@ -261,7 +260,7 @@ if ($verbose) { print "$tag...\n"; }
 `$prog $arg1         > $tmppfx.out1`;                     if ($?) { die "FAIL: $tag $tag1\n"; }
 `cat $arg1 | $prog - > $tmppfx.out2`;                     if ($?) { die "FAIL: $tag -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 
 
 ################################################################
@@ -277,7 +276,7 @@ if ($verbose) { print "$tag...\n"; }
 `$prog $arg1 $arg2          | grep -v "^#" > $tmppfx.out1`;  if ($?) { die "FAIL: $tag $tag1 $tag2\n"; }
 `cat $arg1 | $prog - $arg2  | grep -v "^#" > $tmppfx.out2`;  if ($?) { die "FAIL: $tag - $tag2\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
 
 $output = `cat $arg2 | $prog $arg1 - 2>&1`;           if (! $?) { die "FAIL: $prog should fail if <seqdb> is -\n"; }
 if ($output !~ /^jackhmmer cannot read <seqdb> from/) { die "FAIL: $prog didn't give expected error message\n"; }
@@ -298,8 +297,8 @@ if ($verbose) { print "$tag...\n"; }
 `cat $arg1 | $prog - $arg2  | grep -v "^#" > $tmppfx.out2`;  if ($?) { die "FAIL: $tag - $tag2\n"; }
 `cat $arg2 | $prog $arg1 -  | grep -v "^#" > $tmppfx.out3`;  if ($?) { die "FAIL: $tag $tag1 -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
 
 $output = `cat $arg1 $arg2 | $prog - - 2>&1`;    if (! $?) { die "FAIL: $prog should have failed on double - -\n"; }
 if ($output !~ /^Either <hmmfile> or <seqdb>/) { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
@@ -320,16 +319,13 @@ if ($verbose) { print "$tag...\n"; }
 `cat $arg1 | $prog - $arg2  | grep -v "^#" > $tmppfx.out2`;  if ($?) { die "FAIL: $tag - $tag2\n"; }
 `cat $arg2 | $prog $arg1 -  | grep -v "^#" > $tmppfx.out3`;  if ($?) { die "FAIL: $tag $tag1 -\n"; }
 
-`diff -b -B $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
-`diff -b -B $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
+`diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
 
 $output = `cat $arg1 $arg2 | $prog - - 2>&1`;    if (! $?) { die "FAIL: $prog should have failed on double - -\n"; }
 if ($output !~ /^Either <seqfile> or <seqdb>/)   { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
 
 $output = `cat $arg2 | $prog $arg1b - 2>&1`;     if (! $?) { die "FAIL: $prog should fail on multiquery $tag1, stdin $tag2.\n"; }
-
-
-
 
 
 unlink <$tmppfx.out*>;

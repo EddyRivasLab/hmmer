@@ -67,6 +67,21 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
   p7_profile_Destroy(om);
 }
 
+/* Function:  p7_oprofile_Sizeof()
+ * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
+ * Incept:    SRE, Wed Mar  2 10:39:54 2011 [Janelia]
+ *
+ * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
+ *            in bytes.
+ */
+size_t 
+p7_oprofile_Sizeof(P7_OPROFILE *om) 
+{ 
+  return p7_profile_Sizeof(om); 
+}
+
+/* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
+/* TODO: its documentation header is a cut/paste of _Create; FIXME */
 /* Function:  p7_oprofile_Copy()
  * Synopsis:  Allocate an optimized profile structure.
  * Incept:    MSF Tue Nov 3, 2009 [Janelia]

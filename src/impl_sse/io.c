@@ -90,7 +90,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   int Q4   = p7O_NQF(om->M);
   int Q8   = p7O_NQW(om->M);
   int Q16  = p7O_NQB(om->M);
-  int Q16x = p7O_NQB(om->M) + EXTRA_SB;
+  int Q16x = p7O_NQB(om->M) + p7O_EXTRA_SB;
   int n    = strlen(om->name);
   int x;
 
@@ -254,7 +254,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
   Q16  = p7O_NQB(M);
-  Q16x = p7O_NQB(M) + EXTRA_SB;
+  Q16x = p7O_NQB(M) + p7O_EXTRA_SB;
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */

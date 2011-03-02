@@ -65,7 +65,7 @@ sub msa_integrity_check
     `$builddir/easel/miniapps/esl-reformat -u fasta $fafile     2>&1 > $tmppfx.fa2`;
     if ($? != 0) { die "FAIL: second esl-reformat failed\n"; }
 
-    `diff -b -B $tmppfx.fa1 $tmppfx.fa2 2>&1 > /dev/null`;
+    `diff -b $tmppfx.fa1 $tmppfx.fa2 2>&1 > /dev/null`;
     if ($? != 0) { die "FAIL: alignment corrupted\n"; }
 }
 

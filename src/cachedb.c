@@ -58,18 +58,8 @@ cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
   strcpy(buffer, "000000000");
 
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK) {
-    int nqb = p7O_NQB(om->M); /* # of uchar vectors needed for query */
-    int nqw = p7O_NQW(om->M); /* # of sword vectors needed for query */
-    int nqf = p7O_NQF(om->M); /* # of float vectors needed for query */
-    int nqs = nqb + 17;
-
     p7_oprofile_ReadRest(hfp, om);
-
-    total_mem += sizeof(P7_OPROFILE);
-    total_mem += (sizeof(__m128i) * (nqb + nqs + nqw + nqf) * abc->Kp + 60);
-    total_mem += (sizeof(__m128i) * (nqw + nqf) * p7O_NTRANS + 30);
-    total_mem += (sizeof(__m128i *) * abc->Kp * 4);
-    total_mem += ((om->M + 2) * 3);
+    total_mem += p7_oprofile_Sizeof(om);
 
     if (inx >= count) {
       ESL_RALLOC(list, tmp, sizeof(char *) * count * 2);

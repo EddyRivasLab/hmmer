@@ -24,7 +24,7 @@
 #define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 words   */
 #define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /*  4 floats  */
 
-#define EXTRA_SB 17
+#define p7O_EXTRA_SB 17		/* see ssvfilter.c for explanation */
 
 
 /*****************************************************************
@@ -269,6 +269,7 @@ extern int          p7_omx_DumpFBRow(P7_OMX *ox, int logify, int rowi, int width
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
 extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
+extern size_t       p7_oprofile_Sizeof(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Copy(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Clone(const P7_OPROFILE *om);
 

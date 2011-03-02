@@ -51,7 +51,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   int          nqb = p7O_NQB(allocM); /* # of uchar vectors needed for query */
   int          nqw = p7O_NQW(allocM); /* # of sword vectors needed for query */
   int          nqf = p7O_NQF(allocM); /* # of float vectors needed for query */
-  int          nqs = nqb + EXTRA_SB;
+  int          nqs = nqb + p7O_EXTRA_SB;
   int          x;
 
   /* level 0 */
@@ -195,6 +195,51 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
   free(om);
 }
 
+/* Function:  p7_oprofile_Sizeof()
+ * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
+ * Incept:    SRE, Wed Mar  2 10:09:21 2011 [Janelia]
+ *
+ * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
+ *            in bytes.
+ */
+size_t
+p7_oprofile_Sizeof(P7_OPROFILE *om)
+{
+  size_t n   = 0;
+  int    nqb = om->allocQ16;	/* # of uchar vectors needed for query */
+  int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
+  int    nqf = om->allocQ4;     /* # of float vectors needed for query */
+  int    nqs = nqb + p7O_EXTRA_SB;
+
+  /* Stuff below exactly mirrors the malloc()'s in
+   * p7_oprofile_Create(); so even though we could
+   * write this more compactly, leave it like this
+   * w/ one:one correspondence to _Create(), for
+   * maintainability and clarity.
+   */
+  n  += sizeof(P7_OPROFILE);
+  n  += sizeof(__m128i) * nqb  * om->abc->Kp +15; /* om->rbv_mem   */
+  n  += sizeof(__m128i) * nqs  * om->abc->Kp +15; /* om->sbv_mem   */
+  n  += sizeof(__m128i) * nqw  * om->abc->Kp +15; /* om->rwv_mem   */
+  n  += sizeof(__m128i) * nqw  * p7O_NTRANS  +15; /* om->twv_mem   */
+  n  += sizeof(__m128)  * nqf  * om->abc->Kp +15; /* om->rfv_mem   */
+  n  += sizeof(__m128)  * nqf  * p7O_NTRANS  +15; /* om->tfv_mem   */
+  
+  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rbv       */
+  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->sbv       */
+  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rwv       */
+  n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
+  
+  n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
+  n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
+  n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
+
+  return n;
+}
+
+
+/* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
+/* TODO: its documentation header is a cut/paste of _Create; FIXME */
 /* Function:  p7_oprofile_Copy()
  * Synopsis:  Allocate an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
@@ -212,7 +257,7 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   int           nqb  = p7O_NQB(om1->allocM); /* # of uchar vectors needed for query */
   int           nqw  = p7O_NQW(om1->allocM); /* # of sword vectors needed for query */
   int           nqf  = p7O_NQF(om1->allocM); /* # of float vectors needed for query */
-  int           nqs  = nqb + EXTRA_SB;
+  int           nqs  = nqb + p7O_EXTRA_SB;
 
   size_t        size = sizeof(char) * (om1->allocM+2);
 
@@ -470,7 +515,7 @@ sf_conversion(P7_OPROFILE *om)
   for (x = 0; x < om->abc->Kp; x++)
     {
       for (q = 0;  q < nq;            q++) om->sbv[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rbv[x][q]), tmp2);
-      for (q = nq; q < nq + EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
+      for (q = nq; q < nq + p7O_EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
     }
 
   return eslOK;
