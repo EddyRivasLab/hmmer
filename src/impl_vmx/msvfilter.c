@@ -264,7 +264,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   vector unsigned char *rsc;			        /* will point at om->rbv[x] for residue x[i]                 */
 
   vector unsigned char zerov;	   /* vector of zeros                                           */
-  vector unsigned char xEv_prev;            	 /* E state: keeps the max seen up to the current position i, for window overlap test.  Note that this will always just be xJv + tecv    */
   vector unsigned char tecv;                    /* vector for E->C  cost                                     */
   vector unsigned char tjbmv;                    /* vector for [JN]->B->M move cost                                  */
   vector unsigned char basev;                   /* offset for scores                                         */
@@ -462,8 +461,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	   *  high. This will require mu of something in the neighborhood of -6.4 bits
 	   *  (see TJW notes Mon Jun  7 10:19:34 EDT 2010 for details)
 	   */
-	  int hit_pthresh;
-	  int e_unchanged;
 	  int      status;
 
 	  //used to track neighboring MSV peaks
@@ -499,15 +496,14 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  xBv = vec_subs(basev, tjbmv);
 
 
-
 	#if p7_DEBUGGING
-	  if (ox->debugging)
-		{
-		  uint8_t xB;
-		  xB = _mm_extract_epi16(xBv, 0);
-		  xJ = _mm_extract_epi16(xJv, 0);
-		  p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
-		}
+      if (ox->debugging)
+	    {
+	  unsigned char xB;
+	  vec_ste(xBv, 0, &xB);
+	  vec_ste(xJv, 0, &xJ);
+	  p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+	    }
 	#endif
 
 
