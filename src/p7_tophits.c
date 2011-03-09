@@ -1310,10 +1310,10 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   if (show_header)
   {
       if (pli->long_targets) {
-            fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %9s %6s %5s %s\n",
-              tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to",  "  E-value", " score", " bias", "description of target");
-            fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %9s %6s %5s %s\n",
-              tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------", "---------", "------", "-----", "---------------------");
+    	    fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %*s %*s %9s %6s %5s %s\n",
+    	       tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", "  E-value", " score", " bias", "description of target");
+    	    fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %*s %*s %9s %6s %5s %s\n",
+    	       tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "---------", "------", "-----", "---------------------");
       } else {
           fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
           fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
@@ -1327,7 +1327,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
     if (th->hit[h]->flags & p7_IS_REPORTED)    {
         d    = th->hit[h]->best_domain;
         if (pli->long_targets) {
-            fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %9.2g %6.1f %5.1f %s\n",
+            fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %9.2g %6.1f %5.1f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -1336,6 +1336,8 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 th->hit[h]->dcl[d].ad->hmmto,
                 posw, th->hit[h]->dcl[d].iali,
                 posw, th->hit[h]->dcl[d].jali,
+                posw, th->hit[h]->dcl[d].ienv,
+                posw, th->hit[h]->dcl[d].jenv,
                 th->hit[h]->pvalue,
                 th->hit[h]->score,
                 th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
