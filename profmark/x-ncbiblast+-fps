@@ -1,15 +1,15 @@
 #! /usr/bin/perl -w
 
-# Do a piece of a profmark benchmark, for NCBI BLASTP searches by FPS
+# Do a piece of a profmark benchmark, for NCBI BLASTP+ searches by FPS
 # (family-pairwise-search; best E-value of all individual queries).
 #
 # This script is normally called by pmark_master.pl; its command line
 # syntax is tied to pmark_master.pl.
 #
-# Usage:     x-ncbiblast-fps <top_builddir>          <top_srcdir>       <resultdir> <tblfile> <msafile> <fafile> <outfile>
-# Example: ./x-ncbiblast-fps /usr/local/blast-2.2.22 ~/src/hmmer/trunk  testdir     test.tbl  pmark.msa test.fa  test.out
+# Usage:     x-ncbiblast+-fps <top_builddir>                <top_srcdir>       <resultdir> <tblfile> <msafile> <fafile> <outfile>
+# Example: ./x-ncbiblast+-fps /usr/local/ncbi-blast-2.2.21+ ~/src/hmmer/trunk  testdir     test.tbl  pmark.msa test.fa  test.out
 #        
-# SRE, Tue Apr 20 08:29:03 2010 [Janelia]
+# SRE, Tue Mar  8 09:12:11 2011
 # SVN $Id$
 
 BEGIN {
@@ -24,8 +24,8 @@ BEGIN {
 use lib "${top_srcdir}/easel/demotic";
 use demotic_blast;
 
-$blastp      = "${top_builddir}/bin/blastall";
-$blastopts   = "-p blastp -a 1 -v 9999 -b 0";
+$blastp      = "${top_builddir}/bin/blastp";
+$blastopts   = "-num_threads 1 -num_descriptions 9999 -num_alignments 0";
 
 if (! -d $top_builddir)                                 { die "didn't find BLAST build directory $top_builddir"; }
 if (! -d $top_srcdir)                                   { die "didn't find H3 source directory $top_srcdir"; }
@@ -59,8 +59,8 @@ while (<TABLE>)
 	$output = `esl-sfetch -o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname`;
 	if ($?) { print "FAILED: esl-sfetch -o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname\n"; next MSA; }
 
-	if (! open(BLASTP, "$blastp -d $fafile -i $wrkdir/$msaname.query.fa $blastopts |")) {
-	    print  "FAILED: $blastp -d $fafile -i $wrkdir/$msaname.query.fa $blastopts |\n"; next MSA;
+	if (! open(BLASTP, "$blastp -db $fafile -query $wrkdir/$msaname.query.fa $blastopts |")) {
+	    print  "FAILED: $blastp -db $fafile -query $wrkdir/$msaname.query.fa $blastopts |\n"; next MSA;
 	}
 	
 	if (! demotic_blast::parse(\*BLASTP)) {
