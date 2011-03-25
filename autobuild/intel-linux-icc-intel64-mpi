@@ -7,6 +7,6 @@
 export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
 
 ../configure CC=icc LDFLAGS=-static-intel --enable-mpi
-make                                  
-make dev                              
-make check 
+make V=1
+make V=1 dev                              
+make V=1 check 

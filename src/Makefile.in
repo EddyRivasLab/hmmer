@@ -1,41 +1,43 @@
-# Makefile for HMMER src directory
-#
-# SRE, Mon Jan  1 19:05:39 2007 [Casa de Gatos]
-# SVN $Id$
-
+# VPATH and shell configuration
 top_srcdir = @top_srcdir@
 srcdir     = @srcdir@
-VPATH      = @srcdir@ @top_srcdir@
+VPATH      = @srcdir@ 
+SHELL      = /bin/sh
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@
-SIMDFLAGS= @SIMD_CFLAGS@
-CPPFLAGS = @CPPFLAGS@
-LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
-LIBS     = @GROUPHMMERLIBS@ -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
-HMMDLIBS = -lhmmd
-
-AR       = @AR@ rcv 
-RANLIB   = @RANLIB@
-
-ESLDIR    = ../@HMMER_ESLDIR@
-IMPLDIR   = impl_@IMPL_CHOICE@
-
-# Configuration for optional pthreads multiprocessor support
+# Installation targets
 #
+prefix      = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+bindir      = @bindir@
+libdir      = @libdir@
+includedir  = @includedir@
+mandir      = @mandir@
+docdir      = @docdir@
+pdfdir      = @pdfdir@
+mandir      = @mandir@
+man1dir     = ${mandir}/man1
+man1ext     = .1
+
+CC        = @CC@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@
+SIMDFLAGS = @SIMD_CFLAGS@
+CPPFLAGS  = @CPPFLAGS@
+LDFLAGS   = @LDFLAGS@
+DEFS      = @DEFS@
+LIBS      = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 MPILIBS   = @MPILIBS@
 
-SHELL     = /bin/sh
-MYLIBDIRS = -L${ESLDIR} -L./${IMPLDIR} -L.
-MYINCDIRS = -I${ESLDIR} \
+AR        = @AR@ 
+RANLIB    = @RANLIB@
+INSTALL   = @INSTALL@
+
+IMPLDIR   = impl_@IMPL_CHOICE@
+MYLIBDIRS = -L../easel -L./${IMPLDIR} -L.
+MYINCDIRS = -I../easel \
 	    -I${top_srcdir}/easel \
 	    -I. \
 	    -I${srcdir}
-
-LIBDEP = ./libhmmer.a @HMMERIMPLLIB@ ${ESLDIR}/libeasel.a
-
-HMMDLIBDEP = ./libhmmd.a
 
 PROGS = hmmalign\
 	hmmbuild\
@@ -49,16 +51,14 @@ PROGS = hmmalign\
 	hmmstat\
 	jackhmmer\
 	phmmer\
-	nhmmer
-
-HMMDPROGS = \
+	nhmmer\
 	hmmpgmd\
         hmmc2
 
-HDRS =  hmmer.h\
-	p7_config.h
+HDRS =  hmmer.h
 
 OBJS =  build.o\
+	cachedb.o\
 	emit.o\
 	errors.o\
 	evalues.o\
@@ -73,6 +73,9 @@ OBJS =  build.o\
 	generic_vtrace.o\
 	h2_io.o\
 	heatmap.o\
+	hmmdmstr.o\
+	hmmdwrkr.o\
+	hmmdutils.o\
 	hmmer.o\
 	logsum.o\
 	modelconfig.o\
@@ -94,11 +97,6 @@ OBJS =  build.o\
 	p7_tophits.o\
 	p7_trace.o
 #	island.o\
-
-HMMDOBJS = hmmdmstr.o\
-	hmmdwrkr.o\
-	hmmdutils.o\
-	cachedb.o
 
 STATS = \
 	evalues_stats
@@ -147,84 +145,61 @@ EXAMPLES = \
 	p7_pipeline_example\
 	p7_spensemble_example
 
-all: libraries programs
+# beautification magic stolen from git
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
 
-# check: Run test suites.
-check:
-			${MAKE} all
-			${MAKE} hmmer_utests
-			${MAKE} hmmer_itests
-			${MAKE} testsuite
-	cd ${TESTDIR};  ${MAKE} run_sqc
+.PHONY: all dev tests check impl_lib impl_dev impl_tests install uninstall distclean clean TAGS
 
-dev: libraries programs utests itests misc
+all:   ${PROGS}
 
-libraries: easel_lib impl_lib hmmer_lib hmmd_lib
+dev:   ${PROGS} ${UTESTS} ${ITESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} impl_dev
 
-easel_lib:
-	cd ${ESLDIR}; ${MAKE} libeasel.a
+tests: ${UTESTS} ${ITESTS} impl_tests
+
+check: ${PROGS} ${UTESTS} ${ITESTS} 
+	${QUIET_SUBDIR0}${TESTDIR} ${QUIET_SUBDIR1} run_sqc
+
+libhmmer.a: impl_lib src_lib.stamp
 
 impl_lib:
-	cd ${IMPLDIR}; ${MAKE} impl_lib
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} impl_lib
 
-hmmer_lib: libhmmer.a
+src_lib.stamp: ${OBJS} 
+	${QUIET_AR}${AR} -r libhmmer.a $?
+	@${RANLIB} libhmmer.a
+	@echo "src_lib objects compiled:\c" > $@
+	@date >> $@
 
-hmmd_lib: libhmmd.a
+../easel/libeasel.a:
+	${QUIET_SUBDIR0}../easel ${QUIET_SUBDIR1} libeasel.a
 
-programs: libraries ${PROGS} ${HMMDPROGS}
+impl_dev:
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} dev
 
-utests: libraries impl_utests ${UTESTS}
+impl_tests:
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} tests
 
-itests: libraries             ${ITESTS}
+${OBJS}: ${HDRS} p7_config.h
 
-misc: libraries ${STATS} impl_benchmarks ${BENCHMARKS} impl_examples ${EXAMPLES}
-
-# the following rules are called from the upper level makefile and
-# any library dependancies are assume to be resolved.
-hmmer_progs:       ${PROGS}
-hmmd_progs:        ${HMMDPROGS}
-hmmer_stats:       ${STATS}
-hmmer_utests:      impl_utests     ${UTESTS}
-hmmer_itests:                      ${ITESTS}
-hmmer_benchmarks:  impl_benchmarks ${BENCHMARKS}
-hmmer_examples:    impl_examples   ${EXAMPLES}
-
-libhmmer.a: ${OBJS} 
-	${AR} libhmmer.a $?
-	${RANLIB} libhmmer.a
-	chmod 644 libhmmer.a
-
-libhmmd.a: ${HMMDOBJS} 
-	${AR} libhmmd.a $?
-	${RANLIB} libhmmd.a
-	chmod 644 libhmmd.a
-
-impl_utests:
-	cd ${IMPLDIR}; ${MAKE} impl_utests
-
-impl_benchmarks:
-	cd ${IMPLDIR}; ${MAKE} impl_benchmarks
-
-impl_examples:
-	cd ${IMPLDIR}; ${MAKE} impl_examples
-
-${OBJS}: ${HDRS}
-
-${PROGS}: @EXEC_DEPENDENCY@  ${LIBDEP}
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
-
-${HMMDPROGS}: @EXEC_DEPENDENCY@  ${HMMDLIBDEP} ${LIBDEP}
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${HMMDLIBS} ${LIBS}
+${PROGS}: @EXEC_DEPENDENCY@ libhmmer.a ../easel/libeasel.a
+	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 .c.o:
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
+	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-.a:	libraries
+${ITESTS}: @EXEC_DEPENDENCY@ libhmmer.a ../easel/libeasel.a
+	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
-${ITESTS}: @EXEC_DEPENDENCY@  ${LIBDEP}
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
-
-${UTESTS}: ${LIBDEP}
+${UTESTS}: libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -233,10 +208,10 @@ ${UTESTS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${BENCHMARKS}: ${LIBDEP}
+${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -245,10 +220,10 @@ ${BENCHMARKS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${STATS}: ${LIBDEP}
+${STATS}: libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_STATS ;\
@@ -257,10 +232,10 @@ ${STATS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${EXAMPLES}: ${LIBDEP}
+${EXAMPLES}: libhmmer.a ../easel/libeasel.a
 	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -269,16 +244,38 @@ ${EXAMPLES}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-distclean:
-	${MAKE} clean
+install:
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} install
+	for file in ${PROGS}; do \
+	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
+	done
+	${INSTALL} -m 0755 libhmmer.a ${DESTDIR}${libdir}/
+	for file in ${HDRS}; do \
+	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
+	done
+	${INSTALL} -m 0644 p7_config.h ${DESTDIR}${includedir}/ ;\
+
+uninstall:
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} uninstall
+	for file in ${PROGS}; do \
+	   rm -f ${DESTDIR}${bindir}/$$file ;\
+	done
+	-rm -f ${DESTDIR}${libdir}/libhmmer.a
+	for file in ${HDRS}; do \
+	   rm -f ${DESTDIR}${includedir}/$$file ;\
+	done
+	-rm -f ${DESTDIR}${includedir}/p7_config.h
+
+distclean: clean
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} distclean
 	-rm -f Makefile p7_config.h
-	cd  ${IMPLDIR}; ${MAKE} distclean
 
 clean:
-	-rm -f *.o *~ Makefile.bak core ${PROGS} ${HMMDPROGS} TAGS gmon.out
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} clean
+	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out
 	-rm -f libhmmer.a libhmmd.a
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
@@ -287,16 +284,10 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f cscope.out
-	for prog in ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do\
-	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
+	-rm -f src_lib.stamp
+	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
-	cd ${IMPLDIR}; ${MAKE} clean
-
-
-binclean:
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	-rm -f libhmmer.a libhmmd.a
-	cd ${IMPLDIR}; ${MAKE} binclean
 
 TAGS:
 	etags  *.c *.h Makefile.in
@@ -304,6 +295,6 @@ TAGS:
 	etags -a impl_vmx/*.c   impl_vmx/*.h   impl_vmx/Makefile.in
 	etags -a impl_dummy/*.c impl_dummy/*.h impl_dummy/Makefile.in
 
-###########
+################################################################
 # @LICENSE@
-###########
+################################################################

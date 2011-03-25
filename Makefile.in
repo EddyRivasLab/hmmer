@@ -1,36 +1,31 @@
-# Top level Makefile for HMMER
+# Top level Makefile for HMMER3
 # 
-# On most Unices, you can build the package without modifying anything 
-#   by just typing "./configure; make".
+# On most systems, to build H3 you should only need:
+#     % ./configure; make
 #
-# Post-configuration, you may still want to modify the following make variables:
-#   BINDIR  - where the executables will be installed by a 'make install'
-#   MANDIR  - where the man pages will be installed by a 'make install'
-#   CC      - which compiler to use
-#   CFLAGS  - compiler flags to use
+# Optionally, you can run a test suite:
+#     % make check
 #
-# We generally follow GNU coding standards. ${prefix} might be
-# /usr/local.  ${exec_prefix} gives you some flexibility for
-# installing architecture dependent files (e.g. the programs): an
-# example ${exec_prefix} might be /nfs/share/irix64/
+# And optionally, you can install everything more permanently:
+#     % make install
 #
-# You can also provide DESTDIR from the commandline, for installation
-# in a buildroot; for example:
-#     make DESTDIR=~/rpm/tmp/buildroot install
-# By default, DESTDIR is null.
+# For more information, see the Installation chapter of the HMMER
+# User's Guide.
 #
-# SVN $URL$
-# SVN $Id$
 
 
 # VPATH and shell configuration
+#
 top_srcdir     = @top_srcdir@
 srcdir         = @srcdir@
 VPATH          = @srcdir@
-
 SHELL          = /bin/sh
-SUFFIXES       = 
-SUFFIXES       = .c .o
+
+# Package information
+#
+PACKAGE         = @PACKAGE_NAME@
+PACKAGE_VERSION = @PACKAGE_VERSION@
+PACKAGE_TARNAME = @PACKAGE_TARNAME@
 
 # Installation targets
 #
@@ -38,9 +33,14 @@ prefix      = @prefix@
 exec_prefix = @exec_prefix@
 datarootdir = @datarootdir@
 bindir      = @bindir@
+libdir      = @libdir@
+includedir  = @includedir@
+mandir      = @mandir@
+docdir      = @docdir@
+pdfdir      = @pdfdir@
 mandir      = @mandir@
 man1dir     = ${mandir}/man1
-manext      = .1
+man1ext     = .1
 
 # Compiler configuration
 #
@@ -52,40 +52,26 @@ CPPFLAGS  = @CPPFLAGS@
 
 # Other tools
 #
-INSTMAN   = cp
-AR        = @AR@ rcv
-LN        = ln
+AR        = @AR@ 
 RANLIB    = @RANLIB@
-COMPRESS  = gzip
+INSTALL   = @INSTALL@
 
-#######################################################################
-## You should not need to modify below this line.
-## Much of it is concerned with maintenance of the development version
-## and building the release (indeed, several commands will only work at
-## Janelia)
-#######
-PACKAGE     = @PACKAGE_NAME@
-BASENAME    = @PACKAGE_TARNAME@
-RELEASE     = @PACKAGE_VERSION@
-RELEASEDATE = "@HMMER_DATE@"
-COPYRIGHT   = "@HMMER_COPYRIGHT@"
-LICENSELINE = "@HMMER_LICENSE@"
-LICENSETAG  = gnu
-REPOSITORY  = https://svn.janelia.org/eddylab/eddys/src/
-
-ESLDIR      = @HMMER_ESLDIR@
-SRCDIR      = src
-TESTDIR     = testsuite
-PMARKDIR    = profmark
-IMPLDIR     = ${SRCDIR}/impl_@IMPL_CHOICE@
-
-# The program lists below for HMMER are not necessarily
-# a complete manifest. They are the list of stable programs that the
-# package will install. Eventually there will be a man page for each one of them
-# in the appropriate places (documentation/man for HMMER)
+# beautification magic stolen from git 
 #
-PROGS = \
-	hmmalign\
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
+
+# Programs installed by HMMER (stable, documented)
+#
+PROGS = hmmalign\
 	hmmbuild\
 	hmmconvert\
 	hmmemit\
@@ -100,170 +86,80 @@ PROGS = \
 	nhmmer\
 	hmmpgmd
 
-.PHONY: all check dev TAGS
+.PHONY: all dev check pdf install uninstall clean distclean TAGS
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
 #
-all: libraries programs
-
-# check: Run test suites.
-check:
-			${MAKE} all
-			${MAKE} utests
-			${MAKE} itests
-			${MAKE} testsuite
-	cd ${ESLDIR};   ${MAKE} run_sqc
-	cd ${TESTDIR};  ${MAKE} run_sqc
+all: 
+	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} all
 
 # dev: compile all executables, including drivers.
-dev: libraries programs utests itests misc
+#
+dev: 
+	${QUIET_SUBDIR0}easel    ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}src      ${QUIET_SUBDIR1} dev
 
+# check: Run test suites.
+#
+check:
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} check
+	${QUIET_SUBDIR0}testsuite  ${QUIET_SUBDIR1} check
 
-# rules to build the libraries
-libraries: easel_lib impl_lib hmmer_lib hmmd_lib
-
-easel_lib:
-	cd ${ESLDIR};  ${MAKE} libeasel.a
-
-impl_lib:
-	cd ${IMPLDIR}; ${MAKE} libhmmerimpl.a
-
-hmmer_lib:
-	cd ${SRCDIR};  ${MAKE} libhmmer.a
-
-hmmd_lib:
-	cd ${SRCDIR};  ${MAKE} libhmmd.a
-
-# rules to build the programs
-programs: easel_progs hmmer_progs hmmd_progs profmark_progs
-
-easel_progs: libraries
-	cd ${ESLDIR};   ${MAKE} easel_progs
-
-hmmer_progs: libraries
-	cd ${SRCDIR};   ${MAKE} hmmer_progs	
-
-hmmd_progs: libraries
-	cd ${SRCDIR};   ${MAKE} hmmd_progs	
-
-profmark_progs: libraries
-	cd ${PMARKDIR}; ${MAKE} profmark_progs
-
-# rules to build the unit tests
-utests: easel_utests hmmer_utests
-
-itests:              hmmer_itests
-
-easel_utests: libraries
-	cd ${ESLDIR};   ${MAKE} easel_utests
-
-hmmer_utests: libraries
-	cd ${SRCDIR};   ${MAKE} hmmer_utests
-
-hmmer_itests: libraries
-	cd ${SRCDIR};   ${MAKE} hmmer_itests
-
-# rules to build the miscellaneous programs
-misc: hmmer_stats hmmer_benchmarks hmmer_benchmarks hmmer_examples testsuite
-
-hmmer_stats: libraries
-	cd ${SRCDIR};   ${MAKE} hmmer_stats
-
-hmmer_benchmarks: libraries
-	cd ${SRCDIR};   ${MAKE} hmmer_benchmarks
-
-hmmer_examples: libraries
-	cd ${SRCDIR};   ${MAKE} hmmer_examples
-
-testsuite: libraries
-	cd ${TESTDIR};  ${MAKE} testsuite_progs
-
+# pdf: compile the User Guide.
+#
+pdf:
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} pdf
 
 # install: installs the binaries in ${bindir}/
 #          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 #          Creates these directories if they don't exist.
 #          Prefix those paths with ${DESTDIR} (rarely used, usually null;
 #          may be set on a make command line when building contrib RPMs).
-install: libraries programs
-	cd ${PMARKDIR}; ${MAKE} profmark_progs
-	-mkdir -p ${DESTDIR}${bindir}
-	for file in $(PROGS); do\
-	   cp ${SRCDIR}/$$file ${DESTDIR}${bindir}/;\
-	done
-#	-mkdir -p ${DESTDIR}/${MANDIR}/man${MANSUFFIX}
-#	-for file in hmmer $(PROGS); do\
-#	   $(INSTMAN) documentation/man/$$file.man ${DESTDIR}$(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
-#	done
+install: 
+	${INSTALL} -d ${DESTDIR}${bindir}
+	${INSTALL} -d ${DESTDIR}${libdir}
+	${INSTALL} -d ${DESTDIR}${includedir}
+	${INSTALL} -d ${DESTDIR}${man1dir}
+	${INSTALL} -d ${DESTDIR}${pdfdir}
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} install
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} install
 
 # uninstall: Reverses the steps of "make install".
 #
 uninstall: 
-	for file in $(PROGS); do\
-	   rm ${DESTDIR}${bindir}/$$file;\
-	done
-#	for file in hmmer $(PROGS); do\
-#	   rm $(MANDIR)/man$(MANSUFFIX)/$$file.$(MANSUFFIX);\
-#	done
-
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} uninstall
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} uninstall
 
 # "make clean" removes almost everything except configuration files.
 #
 clean:
-	if test -d src;       then (cd src;       ${MAKE} clean); fi
-	if test -d easel;     then (cd easel;     ${MAKE} clean); fi
-	if test -d profmark;  then (cd profmark;  ${MAKE} clean); fi
-	if test -d testsuite; then (cd testsuite; ${MAKE} clean); fi
-	if test -d documentation/userguide; then (cd documentation/userguide; ${MAKE} clean); fi
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} clean
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
 # "make distclean" leaves a pristine source distribution.
 #
 distclean:
-#	-rm -rf binaries
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} distclean
 	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
 	-rm -f release-notes/LICENSE.sh
 	-rm -f src/impl
-	if test -d src;           then (cd src;       ${MAKE} distclean); fi
-	if test -d easel;         then (cd easel;     ${MAKE} distclean); fi
-	if test -d profmark;      then (cd profmark;  ${MAKE} distclean); fi
-	if test -d testsuite;     then (cd testsuite; ${MAKE} distclean); fi
-	if test -d documentation/userguide; then (cd documentation/userguide; ${MAKE} distclean); fi
 	-rm Makefile
-
-# "make binclean" is special: it cleans up and leaves only a binary
-#       distribution behind, including configured Makefiles.
-#
-#	(cd src;       make binclean)
-# binclean:
-# 	if test -d src;       then (cd src;       make binclean); fi
-# 	if test -d easel;     then (cd easel;     make binclean); fi
-# 	if test -d profmark;  then (cd profmark;  make binclean); fi
-# 	if test -d testsuite; then (cd testsuite; make binclean); fi
-# 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-# 	-rm config.log config.status
-#	-rm -rf autom4te.cache
-
-# doc:  build the Userguide and on-line manual
-#
-#doc:
-#	(cd documentation/userguide; make)
-
-
-# make optcheck:
-#    Check that all program options are documented in man pages,
-#    and tested in sqc scripts, by running ssdk's checkoptions.pl 
-#    script on each program. 
-#    
-# optcheck:
-# 	@echo Checking options for consistency and documentation...
-# 	@for prog in $(PROGS); do\
-# 	   ssdk/checkoptions.pl src/$$prog documentation/man/$$prog.man testsuite/exercises.sqc testsuite/exercises-threaded.sqc testsuite/exercises-pvm.sqc;\
-# 	done
-
 
 TAGS:
 	find . -name \*.c     | xargs etags    -
@@ -276,9 +172,6 @@ TAGS:
 	find . -name \*.sqc   | xargs etags -a -
 	find . -name 00README | xargs etags -a -
 	etags -a COPYRIGHT INSTALL LICENSE README configure.ac
-
-# magic SVN for setting keyword ID replacements looks like:
-#  	find . -name \*.[ch]  | xargs svn propset svn:keywords "Id URL"
 
 ################################################################
 # @LICENSE@

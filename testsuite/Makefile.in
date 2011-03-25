@@ -1,26 +1,10 @@
-################################################################
-# Makefile for the HMMER testsuite
-# Makefile is generated from Makefile.in by autoconf
-# DO NOT EDIT Makefile: only edit Makefile.in
-#
-# SRE, Sat Feb 16 10:18:40 2008 [janelia]
-# SVN $Id$
-#
-
-# VPATH and shell configuration
 top_srcdir     = @top_srcdir@
 srcdir         = @srcdir@
-VPATH          = @srcdir@ @top_srcdir@
+VPATH          = @srcdir@ 
 
-SRCDIR   = ../src
-ESLDIR   = ../@HMMER_ESLDIR@
-IMPLDIR  = ${SRCDIR}/impl_@IMPL_CHOICE@
 SQCLEVEL = 2
 
-PROGS    = 
-
-ALIS     = \
-	20aa\
+ALIS = 	20aa\
 	Caudal_act\
 	LuxC\
 	M1\
@@ -32,31 +16,24 @@ ALIS     = \
 	3box\
 	PSE\
 
-all:  
-	cd ${ESLDIR};  ${MAKE} easel_lib
-	cd ${ESLDIR};  ${MAKE} easel_progs
-	cd ${IMPLDIR}; ${MAKE} impl_lib
-	cd ${SRCDIR};  ${MAKE} hmmer_lib
-	cd ${SRCDIR};  ${MAKE} hmmer_progs
-	cd ${SRCDIR};  ${MAKE} hmmer_utests
-	cd ${IMPLDIR}; ${MAKE} impl_utests
-	${MAKE} testsuite_progs
+# beautification magic stolen from git 
+#
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR  $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
+
+.PHONY: all check hmms clean distclean
+
+all:   check
 
 check: 
-	cd ${ESLDIR};  ${MAKE} easel_lib
-	cd ${ESLDIR};  ${MAKE} easel_progs
-	cd ${ESLDIR};  ${MAKE} easel_utests
-	cd ${IMPLDIR}; ${MAKE} impl_lib
-	cd ${SRCDIR};  ${MAKE} hmmer_lib
-	cd ${SRCDIR};  ${MAKE} hmmer_progs
-	cd ${SRCDIR};  ${MAKE} hmmer_utests
-	cd ${IMPLDIR}; ${MAKE} impl_utests
-	${MAKE} testsuite_progs
-	${MAKE} run_sqc
-
-testsuite_progs: ${PROGS}
-
-run_sqc:
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
@@ -64,7 +41,7 @@ run_sqc:
 
 hmms:
 	for ali in ${ALIS}; do\
-	   ${top_srcdir}/src/hmmbuild $$ali.hmm $$ali.sto;\
+	   ../src/hmmbuild $$ali.hmm $$ali.sto;\
 	done
 
 clean:
@@ -74,3 +51,7 @@ clean:
 distclean:
 	make clean
 	-rm -f Makefile
+
+################################################################
+# @LICENSE@
+################################################################

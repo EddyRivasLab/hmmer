@@ -67,7 +67,6 @@ fi
 #     HMMER_LICENSETAG  which license to bundle from Licenses/ subdirectory.
 #     HMMER_VERSION     copy of version code, e.g. "3.0"
 #     HMMER_URL         URL home for HMMER.
-#     HMMER_ESLDIR      top-level path to easel/ (e.g. "easel")
 # And we have to define the relevant package variables for Easel as well.
 #
 # We avoid using AC_INIT's PACKAGE_ variables anywhere, because we want to be able
@@ -79,7 +78,6 @@ HMMER_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
-HMMER_ESLDIR="easel"
 
 EASEL_DATE="March 2010"
 EASEL_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
@@ -93,7 +91,6 @@ AC_SUBST(HMMER_COPYRIGHT)
 AC_SUBST(HMMER_LICENSE)
 AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
-AC_SUBST(HMMER_ESLDIR)
 
 AC_SUBST(EASEL_DATE)
 AC_SUBST(EASEL_COPYRIGHT)
@@ -330,6 +327,7 @@ fi
 # Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
 #
 AC_PROG_CC
+AC_PROG_INSTALL
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
    ACX_MPI([AC_DEFINE(HAVE_MPI)
@@ -626,17 +624,19 @@ AC_SYS_LARGEFILE
 if test -d release-notes; then
   AC_CONFIG_FILES(release-notes/LICENSE.sh)
 fi
-if test -d documentation/userguide; then  
-  AC_CONFIG_FILES([documentation/userguide/Makefile])
-fi
-AC_CONFIG_FILES([src/Makefile testsuite/Makefile profmark/Makefile])
-
+AC_CONFIG_FILES([documentation/Makefile])
+AC_CONFIG_FILES([documentation/man/Makefile])
+AC_CONFIG_FILES([documentation/userguide/Makefile])
+AC_CONFIG_FILES([src/Makefile])
+AC_CONFIG_FILES([testsuite/Makefile])
+AC_CONFIG_FILES([profmark/Makefile])
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
-AC_CONFIG_HEADERS(src/p7_config.h)
+AC_CONFIG_HEADERS([src/p7_config.h])
 
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_FILES([easel/miniapps/Makefile])
 AC_CONFIG_FILES([easel/testsuite/Makefile])
+AC_CONFIG_FILES([easel/documentation/Makefile])
 AC_CONFIG_FILES([easel/Makefile])
 
 # the following incantation establishes a symlink of

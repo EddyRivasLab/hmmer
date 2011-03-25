@@ -1,13 +1,6 @@
-# Makefile for HMMER profmark benchmark generation tools
-# The Makefile is generated from Makefile.in by autoconf
-# DO NOT EDIT Makefile; only edit Makefile.in
-#
-# SRE, Mon Mar 31 09:12:28 2008 [Janelia]
-# SVN $Id$
-
 top_srcdir = @top_srcdir@
 srcdir     = @srcdir@
-VPATH      = @srcdir@ @top_srcdir@
+VPATH      = @srcdir@ 
 
 CC       = @CC@
 CFLAGS   = @CFLAGS@
@@ -19,35 +12,48 @@ LIBS     = @LIBS@ @LIBGSL@ -lm
 MPILIBS  = @MPILIBS@
 IMPLDIR  = impl_@IMPL_CHOICE@
 
-SRCDIR   = ../src
-ESLDIR   = ../@HMMER_ESLDIR@
-
-ESLINC   = -I${ESLDIR} -I${top_srcdir}/easel
-SRCINC   = -I${SRCDIR} -I${top_srcdir}/src
+ESLINC   = -I../easel -I${top_srcdir}/easel
+SRCINC   = -I../src   -I${top_srcdir}/src
 
 PROGS    = create-profmark\
 	   rocplot
 
-all: ${PROGS} 
-	cd ${ESLDIR};            ${MAKE} easel_lib
-	cd ${SRCDIR}/${IMPLDIR}; ${MAKE} impl_lib
-	cd ${SRCDIR};            ${MAKE} hmmer_lib
-	cd ${SRCDIR};            ${MAKE} hmmer_progs
-	${MAKE} profmark_progs
+# beautification magic stolen from git 
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
 
-profmark_progs: ${PROGS} 
+.PHONY: all distclean clean
+
+all:    ${PROGS}
+
+../easel/libeasel.a:
+	${QUIET_SUBDIR0}../easel ${QUIET_SUBDIR1} libeasel.a
+
+../src/libhmmer.a:
+	${QUIET_SUBDIR0}../src   ${QUIET_SUBDIR1} libhmmer.a
+
+${PROGS}: @EXEC_DEPENDENCY@  ../easel/libeasel.a ../src/libhmmer.a
+	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../easel -L../src -o $@ $@.o -lhmmer -leasel ${LIBS}
 
 .c.o: 
-	${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -o $@ -c $<		
+	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -o $@ -c $<		
 
-${PROGS}: @EXEC_DEPENDENCY@  ${SRCDIR}/libhmmer.a ${ESLDIR}/libeasel.a
-	${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L${ESLDIR} -L${SRCDIR} -o $@ $@.o -lhmmer -leasel ${LIBS}
-
-distclean:
-	make clean
+distclean: clean
 	-rm -f Makefile
 
 clean:
 	-rm -f *.o *~  ${PROGS} TAGS
 	-rm -f *.gcno
+
+################################################################
+# @LICENSE@
+################################################################
 

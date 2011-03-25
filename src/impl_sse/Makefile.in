@@ -1,34 +1,34 @@
-# HMMER SSE optimized implementation
-#
-# SRE, Wed Jul 30 10:49:13 2008 [Janelia]
-# SVN $Id$
-
 top_srcdir = @top_srcdir@
 srcdir     = @srcdir@
-VPATH      = @srcdir@ @top_srcdir@/src
+VPATH      = @srcdir@ 
+SHELL      = /bin/sh
 
-CC             = @CC@
-CFLAGS         = @CFLAGS@ @PTHREAD_CFLAGS@
-SIMDFLAGS      = @SIMD_CFLAGS@
-CPPFLAGS       = @CPPFLAGS@
-LDFLAGS        = @LDFLAGS@
-DEFS           = @DEFS@
-LIBS           = @GROUPHMMERLIBS@ -leasel @LIBS@ -lm
-AR             = @AR@ rcv
-RANLIB         = @RANLIB@
+prefix      = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+bindir      = @bindir@
+libdir      = @libdir@
+includedir  = @includedir@
 
-ESLDIR         = ../../@HMMER_ESLDIR@
+CC          = @CC@
+CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@
+SIMDFLAGS   = @SIMD_CFLAGS@
+CPPFLAGS    = @CPPFLAGS@
+LDFLAGS     = @LDFLAGS@
+DEFS        = @DEFS@
+LIBS        = -lhmmer -leasel @LIBS@ -lm
 
-SHELL          = /bin/sh
-MYLIBDIRS      = -L${ESLDIR} -L.. -L.
-MYINCDIRS      = -I${ESLDIR} \
+AR          = @AR@ 
+RANLIB      = @RANLIB@
+INSTALL     = @INSTALL@
+
+MYLIBDIRS      = -L../../easel -L.. 
+MYINCDIRS      = -I../../easel \
 		 -I${top_srcdir}/easel \
 		 -I. \
 		 -I.. \
 		 -I${srcdir} \
 		 -I${top_srcdir}/src
-
-LIBDEP = ../libhmmer.a ./libhmmerimpl.a ${ESLDIR}/libeasel.a
 
 OBJS =  decoding.o\
 	fwdback.o\
@@ -73,43 +73,43 @@ EXAMPLES =\
 	stotrace_example\
 	vitfilter_example
 
-all: impl_lib
+# beautification magic stolen from git 
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
 
-check:
-			${MAKE} libraries
-			${MAKE} impl_utests
+.PHONY: all dev check tests impl_lib install uninstall distclean clean TAGS
 
-dev: libraries utests misc
 
-libraries: easel_lib impl_lib hmmer_lib
+all:   impl_lib.stamp
+dev:   ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
+check: ${UTESTS}
+tests: ${UTESTS}
 
-easel_lib:
-	cd ${ESLDIR}; ${MAKE} libeasel.a
+impl_lib: impl_lib.stamp
 
-hmmer_lib:
-	cd ..; ${MAKE} hmmer_lib
+impl_lib.stamp: ${OBJS}
+	${QUIET_AR}${AR} -r ../libhmmer.a $? > /dev/null 2>&1
+	@${RANLIB} ../libhmmer.a
+	@echo "impl_lib objects compiled:\c" > $@
+	@date >> $@
 
-impl_lib: libhmmerimpl.a
-
-utests: libraries ${UTESTS}
-
-misc: libraries ${BENCHMARKS} ${EXAMPLES}
-
-impl_utests:      ${UTESTS}
-impl_benchmarks:  ${BENCHMARKS}
-impl_examples:    ${EXAMPLES}
-
-libhmmerimpl.a: ${OBJS}
-	$(AR) libhmmerimpl.a $?
-	$(RANLIB) libhmmerimpl.a
-	chmod 644 libhmmerimpl.a	
+../libhmmer.a: 
+	${QUIET_SUBDIR0}.. ${QUIET_SUBDIR1} libhmmer.a
 
 ${OBJS}:   ${HDRS} ../hmmer.h
 
 .c.o:  
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
+	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-${UTESTS}: ${LIBDEP}
+${UTESTS}: ../libhmmer.a 
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -118,10 +118,10 @@ ${UTESTS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${BENCHMARKS}: ${LIBDEP}
+${BENCHMARKS}: ../libhmmer.a
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -130,10 +130,10 @@ ${BENCHMARKS}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${EXAMPLES}: ${LIBDEP}
+${EXAMPLES}: ../libhmmer.a 
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -142,30 +142,38 @@ ${EXAMPLES}: ${LIBDEP}
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo ${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS};\
+	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-distclean:
-	${MAKE} clean
+
+install:
+	for file in ${HDRS}; do \
+	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
+	done
+
+uninstall:
+	for file in ${HDRS}; do \
+	   rm -f ${DESTDIR}${includedir}/$$file ;\
+	done
+
+distclean: clean
 	-rm -f Makefile 
 
 clean:
+	-rm -f impl_lib.stamp
 	-rm -f ${UTESTS}
 	-rm -f ${BENCHMARKS}
 	-rm -f ${EXAMPLES}
-	-rm -f libhmmerimpl.a
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
 	-rm -f *.gcno
 	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 	done
 
-binclean:
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out 
-
 tags:
 	etags  *.c *.h Makefile.in
 
-###########
+################################################################
 # @LICENSE@
-###########
+################################################################
+

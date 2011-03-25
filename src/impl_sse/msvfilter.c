@@ -175,12 +175,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xEv = _mm_max_epu8(xEv, tempv);
       xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
 
-//      if (L==2375) {
- //   	  int tmp = (uint8_t) _mm_extract_epi16(xJv, 0);
- //   	  printf ("%d:  \t%d\n", i, tmp );
- //     }
-
-
       /* immediately detect overflow */
       if (cmp != 0x0000)
 	{ 

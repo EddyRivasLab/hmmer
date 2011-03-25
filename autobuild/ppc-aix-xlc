@@ -3,6 +3,6 @@ export OBJECT_MODE=64
 # We shouldn't need to provide CFLAGS; configure should figure this all out for us!
 #
 ../configure CC=/usr/vac/bin/xlc_r  CFLAGS="-qaltivec -q64 -qarch=pwr6"
-gmake
-gmake dev
-gmake check
+gmake V=1
+gmake V=1 dev
+gmake V=1 check

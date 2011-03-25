@@ -294,6 +294,11 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" release-notes/LICENSE.tag
    find .     -type f -exec easel/devkit/sedition-pp LICENSE release-notes/LICENSE.tag {} \;
 
+   cd documentation/man
+   for manpage in *.man; do\
+     ../../easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" HMMER_LICENSE "${HMMER_LICENSE}" HMMER_URL "${HMMER_URL}" $manpage;\
+   done
+   cd ../..
 
 * compile documentation
    cd documentation/userguide

@@ -1,7 +1,7 @@
 ../configure CC=gcc --enable-debugging
-make                                  
-make dev                              
-make SQCLEVEL=3 check                            
+make V=1 
+make V=1 dev                              
+make V=1 SQCLEVEL=3 check                            
 
 
 
