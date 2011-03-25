@@ -1,4 +1,13 @@
 #! /usr/bin/perl
+
+# We assume that a HMMER3 build tree is in $top_builddir, with binaries in src/ subdir of it
+# $top_srcdir is unused: pass "." or $top_builddir
+#
+# Example:
+#   mkdir foo-test
+#   ./x-hmmsearch ~/src/hmmer/trunk/build-icc-mpi . foo-test test.list 1 Pfam-A.seed uniprot/trembl-shuf-1M test.out
+#
+
 use Benchmark qw(:hireswallclock) ;
 
 $top_builddir = shift;
