@@ -322,9 +322,14 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 	if (ad->model[z] != '.') nk++; /* k advances except on insert states */
 	if (ad->aseq[z]  != '-') ni++; /* i advances except on delete states */
       }
-      i2 = i1+ni-1;
-      k2 = k1+nk-1;
 
+      if (ad->sqfrom < ad->sqto) {
+         i2 = i1+ni-1;
+         k2 = k1+nk-1;
+      } else { // revcomp hit for DNA
+          i2 = i1-ni+1;
+          k2 = k1-nk+1;
+      }
       if (ad->csline != NULL) { strncpy(buf, ad->csline+pos, aliwidth); fprintf(fp, "  %*s %s CS\n", namewidth+coordwidth+1, "", buf); }
       if (ad->rfline != NULL) { strncpy(buf, ad->rfline+pos, aliwidth); fprintf(fp, "  %*s %s RF\n", namewidth+coordwidth+1, "", buf); }
 
@@ -336,8 +341,13 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 
       if (ad->ppline != NULL) { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
 
-      i1 += ni;
-      k1 += nk;
+      if (ad->sqfrom < ad->sqto) {
+         i1 += ni;
+         k1 += nk;
+      }  else { // revcomp hit for DNA
+          i1 -= ni;
+          k1 -= nk;
+      }
     }
   fflush(fp);
   free(buf);
