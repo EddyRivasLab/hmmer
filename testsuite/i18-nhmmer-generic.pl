@@ -16,7 +16,7 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 0;
+$verbose = 1;
 
 # The test makes use of the following file:
 #
@@ -43,8 +43,8 @@ if (! -r "$srcdir/testsuite/$alignment")  { die "FAIL: can't read msa $alignment
 # Create the test hmm
 $cmd = "$builddir/src/hmmbuild $tmppfx.hmm $srcdir/testsuite/$alignment";
 $output = do_cmd($cmd);
-if ($? != 0) { die "FAIL: hmmbuild failed unexpectedly\n"; }
-if ($output !~ /1     3box                    22    22    20    75    22.00  1.356/) {
+if ($? != 0) { die "FAIL: hmmbuild failed unexpectedly\n"; } 
+if ($output !~ /1     3box                    22    22    20    75    22.00  1.415/) {
 	die "FAIL: hmmbuild failed to build correctly\n";
 }
 $output = do_cmd( "grep MAXL $tmppfx.hmm" );
@@ -70,16 +70,17 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[
 Target sequences:                  1  \(8999958 residues\)
-Windows passing MSV filter:              2486  \(0.04202\); expected \(0.02\)
-Windows passing bias filter:             1242  \(0.02094\); expected \(0.02\)
-Windows passing Vit filter:                66  \(0.00113\); expected \(0.001\)
-Windows passing Fwd filter:                 2  \(3.489e-05\); expected \(1e-05\)
+Windows passing MSV filter:              2454  \(0.04145\); expected \(0.02\)
+Windows passing bias filter:             1093  \(0.01849\); expected \(0.02\)
+Windows passing Vit filter:                56  \(0.0009567\); expected \(0.001\)
+Windows passing Fwd filter:                 2  \(3.4e-05\); expected \(1e-05\)
 Total hits:                                 2  \(4.222e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
-$expect = q[0.022   17.6   1.4  random   3299961 3299978 
-       0.05   16.5   0.9  random   1979941 1979960 ]; 
+$expect = 
+     q[0.077   15.9   0.2  random   3299961 3299978 
+      0.093   15.7   0.6  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
@@ -88,16 +89,18 @@ $cmd = "$builddir/src/nhmmer --single $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[Target sequences:                  1  \(4499979 residues\)
-Windows passing MSV filter:              1252  \(0.04223\); expected \(0.02\)
-Windows passing bias filter:              633  \(0.02127\); expected \(0.02\)
-Windows passing Vit filter:                36  \(0.001205\); expected \(0.001\)
-Windows passing Fwd filter:                 2  \(6.978e-05\); expected \(1e-05\)
+Windows passing MSV filter:              1235  \(0.04166\); expected \(0.02\)
+Windows passing bias filter:              557  \(0.01877\); expected \(0.02\)
+Windows passing Vit filter:                31  \(0.001038\); expected \(0.001\)
+Windows passing Fwd filter:                 2  \(6.8e-05\); expected \(1e-05\)
 Total hits:                                 2  \(8.444e-06\)];
+
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\n";
 }
-$expect = q[0.011   17.6   1.4  random   3299961 3299978 
-      0.025   16.5   0.9  random   1979941 1979960]; 
+$expect = 
+    q[0.038   15.9   0.2  random   3299961 3299978 
+      0.046   15.7   0.6  random   1979941 1979960 ]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }
