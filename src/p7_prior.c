@@ -163,7 +163,7 @@ p7_prior_CreateAmino(void)
 /* Function:  p7_prior_CreateNucleicNew()
  * Incept:    TJW, Thu Nov 12 21:15:11 EST 2009 [Couch at home]
  *
- * Purpose:   Creates the default mixture Dirichlet prior for nucleotiden
+ * Purpose:   Creates the default mixture Dirichlet prior for nucleotide
  *            sequences.
  *
  *            The transition priors (match, insert, delete) are all
@@ -189,10 +189,6 @@ p7_prior_CreateNucleic(void)
   P7_PRIOR *pri = NULL;
   int q;
 
-
-  /* Match emission priors are trained on rmark database [Nawrocki 08]
-   */
-
   /* Plus-1 Laplace prior
   int num_comp = 1;
   static double defmq[2] =  { 1.0  };
@@ -200,58 +196,20 @@ p7_prior_CreateNucleic(void)
          { 1.0, 1.0, 1.0, 1.0} //
   };
 */
-/*
-  int num_comp = 2;
-  static double defmq[2] =  { 0.42,  0.58   };
-  static double defm[2][4] = {
-         { 0.94,   0.90,   0.89,   1.13}, //
-         { 0.096,  0.078,  0.093,   0.089} //
-  };
-*/
-/*
-   //weird - but this performs marginally better than the best 2- 5- or 8-component mixtures tested
-  // (on rmark - MER: 2 better than 5/8-comp  , 3 better than 2-comp )
-   int num_comp = 4;
-   static double defmq[4] = { 0.16, 0.29, 0.12, 0.43  };
-   static double defm[4][4] = {
-         { 0.36,   0.10,   5.3,   0.13}, // G
-         { 0.05,  0.18,  0.03,   0.19}, // CT
-         { 7.1,  0.13,  0.35,   0.17}, // A
-         { 0.96,  0.92,  0.91,   1.19} // uniform
-	};
- */
 
-   /*On rmark, this model does only slightly better than the 2-component model
-     It's chosen as the default on grounds of reasonableness, given that it shows
-     a non-uniform transition:transversion ratio. It's based on the results
-     of training against a portion of rmark, but the overspecified numbers
-     resulting from that training have been rounded/simplified.
+  /* Match emission priors are trained on Rmark3 database
+   * Xref: ~wheelert/notebook/2011/0325_nhmmer_new_parameters
    */
-   int num_comp = 5;
-   static double defmq[5] = { 0.16, 0.13, 0.17, 0.15, 0.39 };
-   static double defm[5][4] = {
-         { 6.0,   0.2,  0.5,   0.2}, // A
-         { 0.2,  8.0,  0.2,   0.5}, // C
-         { 0.5,  0.2,  8.0,   0.2}, // G
-         { 0.2,  0.5,  0.2,   4.0}, // T
-         { 1.3,  1.2,  1.2,   1.4}   // uniform
+   int num_comp = 4;
+   static double defmq[4] = { 0.24, 0.26, 0.08, 0.42  };
+   static double defm[4][4] = {
+         { 0.16,  0.45,  0.12,   0.39},
+         { 0.09,  0.03,  0.09,   0.04},
+         { 1.29,  0.40,  6.58,   0.51},
+         { 1.74,  1.49,  1.57,   1.95}
 	};
 
 
-/* gives no improved performance in my hands over the 5-component model
-  int num_comp = 8;
-  static double defmq[8] = { 0.13, 0.08, 0.08, 0.13, 0.08, 0.08, 0.17, 0.25 } ;
-  static double defm[8][4] = {
-       { 4.0,   0.3,   0.5,   0.4}, // A
-       { 0.3,   22.0,  0.3,   0.8}, // C
-       { 1.0,   0.4,   28.0,  0.4}, // G
-       { 0.5,   0.8,   0.3,   6.0}, // T
-       { 1.8,   0.8,   6.0,   1.0}, // AG
-       { 0.6,   6.0,   0.6,   2.4}, // CT
-       { 0.03,  0.01,  0.02,  0.02}, // anything, but highly conserved
-       { 2.0,   2.0,   2.0,   2.0}  // anything, not much conservation
-       };
- */
 
   ESL_ALLOC(pri, sizeof(P7_PRIOR));
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
