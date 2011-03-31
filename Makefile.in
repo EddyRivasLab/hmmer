@@ -99,8 +99,15 @@ all:
 # dev: compile all executables, including drivers.
 #
 dev: 
-	${QUIET_SUBDIR0}easel    ${QUIET_SUBDIR1} dev
-	${QUIET_SUBDIR0}src      ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}profmark   ${QUIET_SUBDIR1} dev
+
+# tests: compile all test drivers for 'make check'
+#
+tests:
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
 
 # check: Run test suites.
 #
@@ -110,7 +117,7 @@ check:
 	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} check
 	${QUIET_SUBDIR0}testsuite  ${QUIET_SUBDIR1} check
 
-# pdf: compile the User Guide.
+# pdf: compile the User Guides.
 #
 pdf:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} pdf

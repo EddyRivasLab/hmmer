@@ -629,11 +629,14 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
   char        *mfile       = NULL;
   char        *ffile       = NULL;
   char        *pfile       = NULL;
+  char        *ssifile     = NULL;
   FILE        *fp          = NULL;
   FILE        *mfp         = NULL;
   FILE        *ffp         = NULL;
   FILE        *pfp         = NULL;
+  ESL_NEWSSI  *nssi        = NULL;
   P7_HMMFILE  *hfp         = NULL;
+  uint16_t     fh          = 0;
   float        tolerance   = 0.001;
   char         errbuf[eslERRBUFSIZE];
 
@@ -644,19 +647,34 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
   if ( esl_sprintf(&mfile,   "%s.h3m", tmpfile) != eslOK) esl_fatal(msg);
   if ( esl_sprintf(&ffile,   "%s.h3f", tmpfile) != eslOK) esl_fatal(msg);
   if ( esl_sprintf(&pfile,   "%s.h3p", tmpfile) != eslOK) esl_fatal(msg);
+  if ( esl_sprintf(&ssifile, "%s.h3i", tmpfile) != eslOK) esl_fatal(msg);
 
+  if ( esl_newssi_Open(ssifile, TRUE, &nssi)    != eslOK) esl_fatal(msg);
   if (( mfp = fopen(mfile, "wb"))               == NULL)  esl_fatal(msg);
   if (( ffp = fopen(ffile, "wb"))               == NULL)  esl_fatal(msg);
   if (( pfp = fopen(pfile, "wb"))               == NULL)  esl_fatal(msg);
+
+  /* the disk offsets are all 0 by construction, if there's only one
+   * HMM in the file - but don't want to forget them, if we change the
+   * unit test in the future to be multi HMM
+   */
+  if ((om->offs[p7_MOFFSET] = ftello(mfp))      == -1)    esl_fatal(msg);
+  if ((om->offs[p7_FOFFSET] = ftello(ffp))      == -1)    esl_fatal(msg);
+  if ((om->offs[p7_POFFSET] = ftello(pfp))      == -1)    esl_fatal(msg);
 
   if ( p7_hmmfile_WriteASCII(fp,   -1, hmm)     != eslOK) esl_fatal(msg);
   if ( p7_hmmfile_WriteBinary(mfp, -1, hmm)     != eslOK) esl_fatal(msg);
   if ( p7_oprofile_Write(ffp, pfp, om)          != eslOK) esl_fatal(msg);
 
+  if ( esl_newssi_AddFile(nssi, tmpfile, 0, &fh)                           != eslOK) esl_fatal(msg);
+  if ( esl_newssi_AddKey (nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK) esl_fatal(msg);
+  if ( esl_newssi_Write(nssi)                                              != eslOK) esl_fatal(msg);
+
   fclose(fp);
   fclose(mfp);
   fclose(ffp); 
   fclose(pfp);
+  esl_newssi_Close(nssi);
 
   /* 2. read the optimized profile back in */
   if ( p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL)  != eslOK) esl_fatal(msg);
@@ -669,11 +687,13 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
   p7_oprofile_Destroy(om2);
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
+  remove(ssifile);
   remove(ffile);
   remove(pfile);
   remove(mfile);
   remove(tmpfile);
 
+  free(ssifile);
   free(mfile);
   free(ffile);
   free(pfile);

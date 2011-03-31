@@ -11,10 +11,7 @@ ifndef V
 endif
 
 
-.PHONY: all install uninstall clean distclean
-
-all:
-	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} 
+.PHONY: pdf install uninstall clean distclean
 
 pdf:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf

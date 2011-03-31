@@ -18,6 +18,10 @@ SRCINC   = -I../src   -I${top_srcdir}/src
 PROGS    = create-profmark\
 	   rocplot
 
+PROGOBJS  =\
+	create-profmark.o\
+	rocplot.o
+
 # beautification magic stolen from git 
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
 QUIET_SUBDIR1 = 
@@ -30,18 +34,15 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all distclean clean
+.PHONY: all dev distclean clean
 
 all:    ${PROGS}
+dev:    ${PROGS}
 
-../easel/libeasel.a:
-	${QUIET_SUBDIR0}../easel ${QUIET_SUBDIR1} libeasel.a
-
-../src/libhmmer.a:
-	${QUIET_SUBDIR0}../src   ${QUIET_SUBDIR1} libhmmer.a
-
-${PROGS}: @EXEC_DEPENDENCY@  ../easel/libeasel.a ../src/libhmmer.a
+${PROGS}: @EXEC_DEPENDENCY@  ../easel/libeasel.a ../src/libhmmer.a 
 	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../easel -L../src -o $@ $@.o -lhmmer -leasel ${LIBS}
+
+${PROGOBJS}: ../src/hmmer.h ../src/p7_config.h
 
 .c.o: 
 	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -o $@ -c $<		

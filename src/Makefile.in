@@ -39,6 +39,7 @@ MYINCDIRS = -I../easel \
 	    -I. \
 	    -I${srcdir}
 
+
 PROGS = hmmalign\
 	hmmbuild\
 	hmmconvert\
@@ -54,6 +55,23 @@ PROGS = hmmalign\
 	nhmmer\
 	hmmpgmd\
         hmmc2
+
+PROGOBJSS =\
+	hmmalign.o\
+	hmmbuild.o\
+	hmmconvert.o\
+	hmmemit.o\
+	hmmfetch.o\
+	hmmpress.o\
+	hmmscan.o\
+	hmmsearch.o\
+	hmmsim.o\
+	hmmstat.o\
+	jackhmmer.o\
+	phmmer.o\
+	nhmmer.o\
+	hmmpgmd.o\
+        hmmc2.o
 
 HDRS =  hmmer.h
 
@@ -157,49 +175,43 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev tests check impl_lib impl_dev impl_tests install uninstall distclean clean TAGS
+.PHONY: all dev tests check install uninstall distclean clean TAGS
 
-all:   ${PROGS}
+all:   ${PROGS} .FORCE
 
-dev:   ${PROGS} ${UTESTS} ${ITESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} impl_dev
+dev:   ${PROGS} ${UTESTS} ${ITESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} .FORCE
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} dev
 
-tests: ${UTESTS} ${ITESTS} impl_tests
+tests: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} tests
 
-check: ${PROGS} ${UTESTS} ${ITESTS} 
-	${QUIET_SUBDIR0}${TESTDIR} ${QUIET_SUBDIR1} run_sqc
+check: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} check
 
-libhmmer.a: impl_lib src_lib.stamp
+libhmmer.a: libhmmer-src.stamp .FORCE
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} libhmmer-impl.stamp
 
-impl_lib:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} impl_lib
-
-src_lib.stamp: ${OBJS} 
-	${QUIET_AR}${AR} -r libhmmer.a $?
+libhmmer-src.stamp: ${OBJS}
+	${QUIET_AR}${AR} -r libhmmer.a $? > /dev/null 2>&1 
 	@${RANLIB} libhmmer.a
 	@echo "src_lib objects compiled:\c" > $@
 	@date >> $@
 
-../easel/libeasel.a:
-	${QUIET_SUBDIR0}../easel ${QUIET_SUBDIR1} libeasel.a
+.FORCE:
 
-impl_dev:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} dev
+${OBJS}:     ${HDRS} p7_config.h  
+${PROGOBJS}: ${HDRS} p7_config.h
 
-impl_tests:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} tests
-
-${OBJS}: ${HDRS} p7_config.h
-
-${PROGS}: @EXEC_DEPENDENCY@ libhmmer.a ../easel/libeasel.a
+${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../easel/libeasel.a  
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 .c.o:
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-${ITESTS}: @EXEC_DEPENDENCY@ libhmmer.a ../easel/libeasel.a
+${ITESTS}: @EXEC_DEPENDENCY@ libhmmer.a ${HDRS} p7_config.h
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
-${UTESTS}: libhmmer.a ../easel/libeasel.a
+${UTESTS}: libhmmer.a  ${HDRS} p7_config.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -211,7 +223,7 @@ ${UTESTS}: libhmmer.a ../easel/libeasel.a
 	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
+${BENCHMARKS}: libhmmer.a  ${HDRS} p7_config.h
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -223,7 +235,7 @@ ${BENCHMARKS}: libhmmer.a ../easel/libeasel.a
 	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${STATS}: libhmmer.a ../easel/libeasel.a
+${STATS}: libhmmer.a ${HDRS} p7_config.h
 	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_STATS ;\
@@ -235,7 +247,7 @@ ${STATS}: libhmmer.a ../easel/libeasel.a
 	echo '    ' GEN $@;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${EXAMPLES}: libhmmer.a ../easel/libeasel.a
+${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
 	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -276,7 +288,7 @@ distclean: clean
 clean:
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} clean
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out
-	-rm -f libhmmer.a libhmmd.a
+	-rm -f libhmmer.a libhmmer-src.stamp
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
 	-rm -f ${STATS}
@@ -284,16 +296,9 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f cscope.out
-	-rm -f src_lib.stamp
 	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
-
-TAGS:
-	etags  *.c *.h Makefile.in
-	etags -a impl_sse/*.c   impl_sse/*.h   impl_sse/Makefile.in
-	etags -a impl_vmx/*.c   impl_vmx/*.h   impl_vmx/Makefile.in
-	etags -a impl_dummy/*.c impl_dummy/*.h impl_dummy/Makefile.in
 
 ################################################################
 # @LICENSE@

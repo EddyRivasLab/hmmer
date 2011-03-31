@@ -85,31 +85,28 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev check tests impl_lib install uninstall distclean clean TAGS
+.PHONY: all dev check tests install uninstall distclean clean 
 
 
-all:   impl_lib.stamp
+all:   libhmmer-impl.stamp
 dev:   ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
 check: ${UTESTS}
 tests: ${UTESTS}
 
-impl_lib: impl_lib.stamp
-
-impl_lib.stamp: ${OBJS}
+libhmmer-impl.stamp: ${OBJS}
 	${QUIET_AR}${AR} -r ../libhmmer.a $? > /dev/null 2>&1
 	@${RANLIB} ../libhmmer.a
 	@echo "impl_lib objects compiled:\c" > $@
 	@date >> $@
 
-../libhmmer.a: 
-	${QUIET_SUBDIR0}.. ${QUIET_SUBDIR1} libhmmer.a
+.FORCE:
 
-${OBJS}:   ${HDRS} ../hmmer.h
+${OBJS}:   ${HDRS} ../hmmer.h 
 
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-${UTESTS}: ../libhmmer.a 
+${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -118,10 +115,13 @@ ${UTESTS}: ../libhmmer.a
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${BENCHMARKS}: ../libhmmer.a
+${BENCHMARKS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -130,10 +130,13 @@ ${BENCHMARKS}: ../libhmmer.a
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${EXAMPLES}: ../libhmmer.a 
+${EXAMPLES}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -142,7 +145,10 @@ ${EXAMPLES}: ../libhmmer.a
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 
@@ -160,7 +166,7 @@ distclean: clean
 	-rm -f Makefile 
 
 clean:
-	-rm -f impl_lib.stamp
+	-rm -f libhmmer-impl.stamp
 	-rm -f ${UTESTS}
 	-rm -f ${BENCHMARKS}
 	-rm -f ${EXAMPLES}
@@ -169,9 +175,6 @@ clean:
 	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 	done
-
-tags:
-	etags  *.c *.h Makefile.in
 
 ################################################################
 # @LICENSE@

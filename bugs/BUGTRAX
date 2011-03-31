@@ -1,3 +1,19 @@
+ID              h86
+TITLE           man pages have stray @KEYWORDS@ and aren't installed by "make install"
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            J7/114
+REPORTED_BY     Joel Hedlund <joel@nsc.liu.se> (National Supercomputer Centre, Linkoping University, Sweden) 21 Mar 2011
+OPENED_DATE     21 Mar 2011
+CLOSED_DATE     SRE, Fri Mar 25 16:10:11 2011
+DESCRIPTION     
+  Man pages were distributed without keyword subsitution (@HMMER_COPYRIGHT@, etc), 
+  and "make install" doesn't install them.
+
+  Added instructions to 00CHECKLIST so we don't forget next time. Overhauled
+  our Makefiles, and among other things, "make install" now installs man pages.
+//
 ID              h85
 TITLE           hmmscan and hmmsearch give different results for same model
 AFFECTS         3.0

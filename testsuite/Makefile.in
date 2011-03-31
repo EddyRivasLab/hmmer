@@ -29,9 +29,7 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all check hmms clean distclean
-
-all:   check
+.PHONY: check hmms clean distclean
 
 check: 
 	@echo 
@@ -48,8 +46,7 @@ clean:
 	-rm -f *.gcno *.gcda *.gcov
 	-rm -f *.o *~ 
 
-distclean:
-	make clean
+distclean: clean
 	-rm -f Makefile
 
 ################################################################

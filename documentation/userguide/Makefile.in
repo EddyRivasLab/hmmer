@@ -54,9 +54,7 @@ TEXFILES =\
 	tabular.tex\
 	tutorial.tex
 
-.PHONY: all pdf manpages install uninstall clean distclean TAGS
-
-all:    Userguide.pdf
+.PHONY: pdf install uninstall clean distclean TAGS
 
 pdf:    Userguide.pdf
 
