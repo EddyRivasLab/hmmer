@@ -1,8 +1,4 @@
 /* worker side of the hmmer daemon
- * 
- * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $URL$
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -747,16 +743,12 @@ scan_thread(void *arg)
 static void
 send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 {
-  int i, j;
-  int n;
-
-  uint64_t   offset;
-
-  P7_HIT    *hit;
-  P7_DOMAIN *dcl;
-
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
+  P7_HIT             *hit;
+  P7_DOMAIN          *dcl;
+  int                 i, j, n;
+  uint32_t            offset;
 
   memset(&status, 0, sizeof(HMMD_SEARCH_STATUS)); /* silence valgrind errors - zero out entire structure including its padding */
   status.status     = eslOK;
@@ -802,6 +794,10 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
     h1->desc = NULL;
 
     /* offset of the domain in the data stream */
+    /* SRE: This looks like a hack of MSF's. Revisit it.
+     *      Surely we shouldn't be communicating an offset
+     *      by casting and storing in an unused pointer?
+     */
     h1->dcl  = (P7_DOMAIN *)offset;
 
     /* figure out how big the domains are and their offset */

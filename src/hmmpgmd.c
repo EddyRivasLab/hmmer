@@ -1,8 +1,4 @@
 /* HMMER search daemon
- * 
- * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $URL$
- * SVN $Id$
  */
 #include "p7_config.h"
 
