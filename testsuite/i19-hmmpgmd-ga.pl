@@ -10,6 +10,8 @@
 
 use IO::Socket;
 
+$SIG{INT} = \&catch_sigint;
+
 $builddir = shift;
 $srcdir   = shift;
 $tmppfx   = shift;
@@ -38,9 +40,11 @@ if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 't
 &create_test_script("$tmppfx.in");
 `$builddir/src/hmmpress -f $tmppfx.hmm`;  if ($?) { die "FAIL: hmmpress"; }
 
+$daemon_active = 0;
 # start the hmmpgmd master and 1 worker with 1 core
 system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm > /dev/null 2>&1 &"); 
 if ($?) { die "FAIL: hmmpgmd master failed to start";  }
+$daemon_active = 1;
 sleep 2;  
 system("$builddir/src/hmmpgmd --worker 127.0.0.1 --wport $wport --cpu 1   > /dev/null 2>&1 &"); 
 if ($?) { die "FAIL: hmmpgmd worker failed to start";  }
@@ -49,6 +53,8 @@ sleep 2;
 # Run the test script
 @output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
 # Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
+$daemon_active = 0;
+
 
 $in_data = 0;
 $nhits   = 0;
@@ -82,6 +88,33 @@ unlink "$tmppfx.in";
 print "ok\n";
 exit 0;
 
+# TJW: Thu Mar 31 14:30:56 EDT 2011
+# Written to tear down the worker/master in the case of a sigint,
+# so a zombie won't be left behind
+sub catch_sigint  
+{
+	if ($daemon_active) {
+		&create_kill_script("$tmppfx.in");
+		`cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+	}
+    unlink <$tmppfx.hmm*>;
+    unlink "$tmppfx.in";
+    die "sigint signal captured; killed daemons\n";
+}
+
+sub create_kill_script
+{
+    my ($scriptfile) = @_;
+    open(SCRIPTFILE, ">$scriptfile") || die "FAIL: couldn't create the test script"; 
+    print SCRIPTFILE <<"EOF";
+\@--hmmdb 1 --cut_ga
+//
+!shutdown
+//
+EOF
+    close SCRIPTFILE;
+    1;
+}
 
 sub create_test_script
 {
