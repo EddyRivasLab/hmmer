@@ -102,7 +102,7 @@ libhmmer-impl.stamp: ${OBJS}
 ${OBJS}:   ${HDRS} ../hmmer.h 
 
 .c.o:  
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
+	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -c $<
 
 ${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\

@@ -42,8 +42,13 @@ static char banner[] = "search a query against a database";
 
 typedef void sig_func(int);
 
+/* MSF called this <signal()>. That conflicts with system's <signal()>. 
+ * Unclear what he was doing. This appears to duplicated functionality
+ * of the system's <signal()>. Revisit later. For now, silence compiler
+ * warning by renaming the function.
+ */
 sig_func *
-signal(int signo, sig_func *fn)
+our_signal(int signo, sig_func *fn)
 {
   struct sigaction act;
   struct sigaction oact;
@@ -160,7 +165,7 @@ main(int argc, char **argv)
   process_commandline(argc, argv, &go);
 
   /* if we write to a broken socket, ignore the signal and handle the error. */
-  signal(SIGPIPE, SIG_IGN);
+  our_signal(SIGPIPE, SIG_IGN);
 
   /* check if we need to write out our pid */
   if (esl_opt_IsOn(go, "--pid")) write_pid(go);
