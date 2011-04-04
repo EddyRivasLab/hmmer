@@ -81,6 +81,9 @@
  *            | --seed       |  RNG seed (0=use arbitrary seed)            |      42   |
  *            | --acc        |  prefer accessions over names in output     |   FALSE   |
  *
+ *            As a special case, if <go> is <NULL>, defaults are set as above.
+ *            This shortcut is used in simplifying test programs and the like.
+ *            
  * Returns:   ptr to new <P7_PIPELINE> object on success. Caller frees this
  *            with <p7_pipeline_Destroy()>.
  *
@@ -90,7 +93,7 @@ P7_PIPELINE *
 p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode)
 {
   P7_PIPELINE *pli  = NULL;
-  int          seed = esl_opt_GetInteger(go, "--seed");
+  int          seed = (go ? esl_opt_GetInteger(go, "--seed") : 42);
   int          status;
 
   ESL_ALLOC(pli, sizeof(P7_PIPELINE));
@@ -114,18 +117,18 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 
   /* Configure reporting thresholds */
   pli->by_E            = TRUE;
-  pli->E               = esl_opt_GetReal(go, "-E");
+  pli->E               = (go ? esl_opt_GetReal(go, "-E") : 10.0);
   pli->T               = 0.0;
   pli->dom_by_E        = TRUE;
-  pli->domE            = esl_opt_GetReal(go, "--domE");
+  pli->domE            = (go ? esl_opt_GetReal(go, "--domE") : 10.0);
   pli->domT            = 0.0;
   pli->use_bit_cutoffs = FALSE;
-  if (esl_opt_IsOn(go, "-T")) 
+  if (go && esl_opt_IsOn(go, "-T")) 
     {
-      pli->T    = esl_opt_GetReal(go, "-T"); 
+      pli->T    = esl_opt_GetReal(go, "-T");  
       pli->by_E = FALSE;
-    } 
-  if (esl_opt_IsOn(go, "--domT")) 
+    }
+  if (go && esl_opt_IsOn(go, "--domT")) 
     {
       pli->domT     = esl_opt_GetReal(go, "--domT"); 
       pli->dom_by_E = FALSE;
@@ -134,17 +137,17 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 
   /* Configure inclusion thresholds */
   pli->inc_by_E           = TRUE;
-  pli->incE               = esl_opt_GetReal(go, "--incE");
+  pli->incE               = (go ? esl_opt_GetReal(go, "--incE") : 0.01);
   pli->incT               = 0.0;
   pli->incdom_by_E        = TRUE;
-  pli->incdomE            = esl_opt_GetReal(go, "--incdomE");
+  pli->incdomE            = (go ? esl_opt_GetReal(go, "--incdomE") : 0.01);
   pli->incdomT            = 0.0;
-  if (esl_opt_IsOn(go, "--incT")) 
+  if (go && esl_opt_IsOn(go, "--incT")) 
     {
       pli->incT     = esl_opt_GetReal(go, "--incT"); 
       pli->inc_by_E = FALSE;
     } 
-  if (esl_opt_IsOn(go, "--incdomT")) 
+  if (go && esl_opt_IsOn(go, "--incdomT")) 
     {
       pli->incdomT     = esl_opt_GetReal(go, "--incdomT"); 
       pli->incdom_by_E = FALSE;
@@ -152,7 +155,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 
 
   /* Configure for one of the model-specific thresholding options */
-  if (esl_opt_GetBoolean(go, "--cut_ga"))
+  if (go && esl_opt_GetBoolean(go, "--cut_ga"))
     {
       pli->T        = pli->domT        = 0.0;
       pli->by_E     = pli->dom_by_E    = FALSE;
@@ -160,7 +163,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
       pli->inc_by_E = pli->incdom_by_E = FALSE;
       pli->use_bit_cutoffs = p7H_GA;
     }
-  if (esl_opt_GetBoolean(go, "--cut_nc"))
+  if (go && esl_opt_GetBoolean(go, "--cut_nc"))
     {
       pli->T        = pli->domT        = 0.0;
       pli->by_E     = pli->dom_by_E    = FALSE;
@@ -168,7 +171,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
       pli->inc_by_E = pli->incdom_by_E = FALSE;
       pli->use_bit_cutoffs = p7H_NC;
     }
-  if (esl_opt_GetBoolean(go, "--cut_tc"))
+  if (go && esl_opt_GetBoolean(go, "--cut_tc"))
     {
       pli->T        = pli->domT        = 0.0;
       pli->by_E     = pli->dom_by_E    = FALSE;
@@ -181,12 +184,12 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   /* Configure search space sizes for E value calculations  */
   pli->Z       = pli->domZ       = 0.0;
   pli->Z_setby = pli->domZ_setby = p7_ZSETBY_NTARGETS;
-  if (esl_opt_IsOn(go, "-Z")) 
+  if (go && esl_opt_IsOn(go, "-Z")) 
     {
       pli->Z_setby = p7_ZSETBY_OPTION;
       pli->Z       = esl_opt_GetReal(go, "-Z");
     }
-  if (esl_opt_IsOn(go, "--domZ")) 
+  if (go && esl_opt_IsOn(go, "--domZ")) 
     {
       pli->domZ_setby = p7_ZSETBY_OPTION;
       pli->domZ       = esl_opt_GetReal(go, "--domZ");
@@ -197,10 +200,10 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->do_max        = FALSE;
   pli->do_biasfilter = TRUE;
   pli->do_null2      = TRUE;
-  pli->F1     = ESL_MIN(1.0, esl_opt_GetReal(go, "--F1"));
-  pli->F2     = ESL_MIN(1.0, esl_opt_GetReal(go, "--F2"));
-  pli->F3     = ESL_MIN(1.0, esl_opt_GetReal(go, "--F3"));
-  if (esl_opt_GetBoolean(go, "--max")) 
+  pli->F1     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F1")) : 0.02);
+  pli->F2     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F2")) : 1e-3);
+  pli->F3     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F3")) : 1e-5);
+  if (go && esl_opt_GetBoolean(go, "--max")) 
     {
       pli->do_max        = TRUE;
       pli->do_biasfilter = FALSE;
@@ -208,26 +211,26 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
       pli->F2 = pli->F3 = 1.0;
       pli->F1 = (pli->long_targets ? 0.3 : 1.0); // need to set some threshold for F1 even on long targets. Should this be tighter?
     }
-  if (esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
-  if (esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
+  if (go && esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
+  if (go && esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
 
   /* Accounting as we collect results */
-  pli->nmodels     = 0;
-  pli->nseqs       = 0;
-  pli->nres        = 0;
-  pli->nnodes      = 0;
-  pli->n_past_msv  = 0;
-  pli->n_past_bias = 0;
-  pli->n_past_vit  = 0;
-  pli->n_past_fwd  = 0;
-  pli->pos_past_msv  = 0;
-  pli->pos_past_bias = 0;
-  pli->pos_past_vit  = 0;
-  pli->pos_past_fwd  = 0;
+  pli->nmodels         = 0;
+  pli->nseqs           = 0;
+  pli->nres            = 0;
+  pli->nnodes          = 0;
+  pli->n_past_msv      = 0;
+  pli->n_past_bias     = 0;
+  pli->n_past_vit      = 0;
+  pli->n_past_fwd      = 0;
+  pli->pos_past_msv    = 0;
+  pli->pos_past_bias   = 0;
+  pli->pos_past_vit    = 0;
+  pli->pos_past_fwd    = 0;
   pli->mode            = mode;
-  pli->show_accessions = (esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
-  pli->show_alignments = (esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
+  pli->show_accessions = (go && esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
+  pli->show_alignments = (go && esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
   pli->hfp             = NULL;
   pli->errbuf[0]       = '\0';
 

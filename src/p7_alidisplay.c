@@ -1,10 +1,15 @@
-/* P7_ALIDISPLAY: formatting and printing alignments
+/* Formatting, transmitting, and printing single alignments to a
+ * profile.
  * 
  * Contents:
- *   1. The P7_ALIDISPLAY object
- * 
- * SRE, Sun Dec 30 09:12:47 2007
- * SVN $Id$
+ *   1. The P7_ALIDISPLAY object.
+ *   2. The P7_ALIDISPLAY API.
+ *   3. Debugging/dev code.
+ *   4. Benchmark driver.
+ *   5. Unit tests.
+ *   6. Test driver.
+ *   7. Example.
+ *   8. Copyright and license.
  */
 #include "p7_config.h"
 
@@ -17,9 +22,12 @@
 #include "hmmer.h"
 
 
+/*****************************************************************
+ * 1. The P7_ALIDISPLAY object
+ *****************************************************************/
+
 /* Function:  p7_alidisplay_Create()
  * Synopsis:  Create an alignment display, from trace and oprofile.
- * Incept:    SRE, Sun Dec 30 09:13:31 2007 [Janelia]
  *
  * Purpose:   Creates and returns an alignment display for domain number
  *            <which> in traceback <tr>, where the traceback
@@ -192,18 +200,191 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   return NULL;
 }
 
+
+/* Function:  p7_alidisplay_Sizeof()
+ * Synopsis:  Returns the total size of a P7_ALIDISPLAY, in bytes.
+ *
+ * Purpose:   Return the total size of <P7_ALIDISPLAY> <ad>, in bytes.
+ *
+ *            Note that <ad->memsize = p7_alidisplay_Sizeof(ad) - sizeof(P7_ALIDISPLAY)>,
+ *            for a serialized object, because <ad->memsize> only refers to the sum
+ *            of the variable-length allocated fields.
+ *
+ * Args:      ad - P7_ALIDISPLAY to get the size of
+ *
+ * Returns:   size of <ad> in bytes
+ */
+size_t
+p7_alidisplay_Sizeof(P7_ALIDISPLAY *ad)
+{
+  size_t n = sizeof(P7_ALIDISPLAY);
+
+  if (ad->rfline) n += ad->N+1; /* +1 for \0 */
+  if (ad->csline) n += ad->N+1; 
+  if (ad->ppline) n += ad->N+1; 
+  n += 3 * (ad->N+1);	          /* model, mline, aseq */
+  n += 1 + strlen(ad->hmmname);	  
+  n += 1 + strlen(ad->hmmacc);	  /* optional acc, desc fields: when not present, just "" ("\0") */
+  n += 1 + strlen(ad->hmmdesc);
+  n += 1 + strlen(ad->sqname);
+  n += 1 + strlen(ad->sqacc);  
+  n += 1 + strlen(ad->sqdesc); 
+ 
+  return n;
+}
+
+/* Function:  p7_alidisplay_Serialize()
+ * Synopsis:  Serialize a P7_ALIDISPLAY, using internal memory.
+ *
+ * Purpose:   Serialize the <P7_ALIDISPLAY> <ad>, internally converting
+ *            all its variable-length allocations to a single
+ *            contiguous memory allocation. Serialization aids
+ *            interprocess communication.
+ *            
+ *            If <ad> is already serialized, do nothing.
+ *
+ * Args:      ad  - alidisplay to serialize
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure, and <ad> is restored to
+ *            its original (deserialized) state.
+ */
+int
+p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
+{
+  int pos;
+  int n;
+  int status;
+
+  if (ad->mem) return eslOK;	/* already serialized, so no-op */
+  ad->memsize = p7_alidisplay_Sizeof(ad) - sizeof(P7_ALIDISPLAY);
+  ESL_ALLOC(ad->mem, ad->memsize);
+
+  /* allow no exceptions past this point, because API guarantees restore of original state upon error */
+
+  pos = 0;
+  if (ad->rfline) { memcpy(ad->mem+pos, ad->rfline, ad->N+1); free(ad->rfline); ad->rfline = ad->mem+pos;  pos += ad->N+1; }
+  if (ad->csline) { memcpy(ad->mem+pos, ad->csline, ad->N+1); free(ad->csline); ad->csline = ad->mem+pos;  pos += ad->N+1; }
+  memcpy(ad->mem+pos, ad->model,  ad->N+1); free(ad->model); ad->model = ad->mem+pos; pos += ad->N+1; 
+  memcpy(ad->mem+pos, ad->mline,  ad->N+1); free(ad->mline); ad->mline = ad->mem+pos; pos += ad->N+1; 
+  memcpy(ad->mem+pos, ad->aseq,   ad->N+1); free(ad->aseq);  ad->aseq  = ad->mem+pos; pos += ad->N+1; 
+  if (ad->ppline) { memcpy(ad->mem+pos, ad->ppline, ad->N+1); free(ad->ppline); ad->ppline = ad->mem+pos;  pos += ad->N+1; }
+  n = 1 + strlen(ad->hmmname);  memcpy(ad->hmmname, ad->mem + pos, n); free(ad->hmmname); ad->hmmname = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->hmmacc);   memcpy(ad->hmmacc,  ad->mem + pos, n); free(ad->hmmacc);  ad->hmmacc  = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->hmmdesc);  memcpy(ad->hmmdesc, ad->mem + pos, n); free(ad->hmmdesc); ad->hmmdesc = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqname);   memcpy(ad->sqname,  ad->mem + pos, n); free(ad->sqname);  ad->sqname  = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqacc);    memcpy(ad->sqacc,   ad->mem + pos, n); free(ad->sqacc);   ad->sqacc   = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqdesc);   memcpy(ad->sqdesc,  ad->mem + pos, n); free(ad->sqdesc);  ad->sqdesc  = ad->mem+pos; pos += n;
+  
+  return eslOK;
+
+ ERROR:
+  if (ad->mem) free(ad->mem); ad->mem = NULL;
+  return status;
+}
+
+/* Function:  p7_alidisplay_Deserialize()
+ * Synopsis:  Deserialize a P7_ALIDISPLAY, using internal memory.
+ *
+ * Purpose:   Deserialize the <P7_ALIDISPLAY> <ad>, converting its internal
+ *            allocations from a single contiguous memory chunk to individual
+ *            variable-length allocations. Deserialization facilitates 
+ *            reallocation/editing of individual elements of the display.
+ *            
+ *            If <ad> is already deserialized, do nothing.
+ *
+ * Args:      ad - alidisplay to serialize
+ *
+ * Returns:   <eslOK> on success
+ *
+ * Throws:    <eslEMEM> on allocation failure, and <ad> is restored to
+ *            its original (serialized) state.
+ */
+int
+p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
+{
+  int pos;
+  int n;
+  int status;
+
+  if (ad->mem == NULL) return eslOK; /* already deserialized, so no-op */
+
+  pos = 0;
+  if (ad->rfline) { ESL_ALLOC(ad->rfline, sizeof(char) * ad->N+1); memcpy(ad->rfline, ad->mem+pos, ad->N+1); pos += ad->N+1; }
+  if (ad->csline) { ESL_ALLOC(ad->csline, sizeof(char) * ad->N+1); memcpy(ad->csline, ad->mem+pos, ad->N+1); pos += ad->N+1; }
+  ESL_ALLOC(ad->model, sizeof(char) * ad->N+1); memcpy(ad->model, ad->mem+pos, ad->N+1); pos += ad->N+1; 
+  ESL_ALLOC(ad->mline, sizeof(char) * ad->N+1); memcpy(ad->mline, ad->mem+pos, ad->N+1); pos += ad->N+1; 
+  ESL_ALLOC(ad->aseq,  sizeof(char) * ad->N+1); memcpy(ad->aseq,  ad->mem+pos, ad->N+1); pos += ad->N+1; 
+  if (ad->ppline) { ESL_ALLOC(ad->ppline, sizeof(char) * ad->N+1); memcpy(ad->ppline, ad->mem+pos, ad->N+1); pos += ad->N+1; }
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->hmmname,  sizeof(char) * n); memcpy(ad->hmmname,  ad->mem+pos, n); pos += n;
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->hmmacc,   sizeof(char) * n); memcpy(ad->hmmacc,   ad->mem+pos, n); pos += n;
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->hmmdesc,  sizeof(char) * n); memcpy(ad->hmmdesc,  ad->mem+pos, n); pos += n;
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqname,   sizeof(char) * n); memcpy(ad->sqname,   ad->mem+pos, n); pos += n;
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqacc,    sizeof(char) * n); memcpy(ad->sqacc,    ad->mem+pos, n); pos += n;
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqdesc,   sizeof(char) * n); memcpy(ad->sqdesc,   ad->mem+pos, n); pos += n;
+
+  free(ad->mem);
+  ad->memsize = 0;
+  return eslOK;
+  
+ ERROR:
+  /* restore serialized state, if an alloc fails. tedious, if not nontrivial. */
+  /* the pointers are non-NULL whether we just allocated them or if they're pointing into mem, so we have to check against mem+pos */
+  pos = 0;
+  if (ad->rfline) { if (ad->rfline != ad->mem+pos) { free(ad->rfline); ad->rfline = ad->mem+pos; }  pos += ad->N+1; }
+  if (ad->csline) { if (ad->csline != ad->mem+pos) { free(ad->csline); ad->csline = ad->mem+pos; }  pos += ad->N+1; }
+  if (ad->model != ad->mem+pos) { free(ad->model); ad->model = ad->mem+pos; }  pos += ad->N+1; 
+  if (ad->mline != ad->mem+pos) { free(ad->mline); ad->mline = ad->mem+pos; }  pos += ad->N+1; 
+  if (ad->aseq  != ad->mem+pos) { free(ad->aseq);  ad->aseq  = ad->mem+pos; }  pos += ad->N+1; 
+  if (ad->ppline) { if (ad->ppline != ad->mem+pos) { free(ad->ppline); ad->ppline = ad->mem+pos; }  pos += ad->N+1; }
+
+  n = 1 + strlen(ad->hmmname);  if (ad->hmmname != ad->mem+pos) { free(ad->hmmname); ad->hmmname = ad->mem+pos; }  pos += n;
+  n = 1 + strlen(ad->hmmacc);   if (ad->hmmacc  != ad->mem+pos) { free(ad->hmmacc);  ad->hmmacc  = ad->mem+pos; }  pos += n;
+  n = 1 + strlen(ad->hmmname);  if (ad->hmmdesc != ad->mem+pos) { free(ad->hmmdesc); ad->hmmdesc = ad->mem+pos; }  pos += n;
+  n = 1 + strlen(ad->sqname);   if (ad->sqname  != ad->mem+pos) { free(ad->sqname);  ad->sqname = ad->mem+pos;  }  pos += n;
+  n = 1 + strlen(ad->sqacc);    if (ad->sqacc   != ad->mem+pos) { free(ad->sqacc);   ad->sqacc  = ad->mem+pos;  }  pos += n;
+  n = 1 + strlen(ad->sqname);   if (ad->sqdesc  != ad->mem+pos) { free(ad->sqdesc);  ad->sqdesc = ad->mem+pos;  }  pos += n;
+  return status;
+}
+
+
+
 /* Function:  p7_alidisplay_Destroy()
  * Synopsis:  Frees a <P7_ALIDISPLAY>
- * Incept:    SRE, Thu Jan  3 10:00:36 2008 [Janelia]
  */
 void
 p7_alidisplay_Destroy(P7_ALIDISPLAY *ad)
 {
   if (ad == NULL) return;
-  if (ad->mem != NULL) free(ad->mem);
+  if (ad->mem)
+    {	/* serialized form */
+      free(ad->mem);
+    }
+  else
+    {	/* deserialized form */
+      if (ad->rfline)  free(ad->rfline);
+      if (ad->csline)  free(ad->csline);
+      if (ad->model)   free(ad->model);
+      if (ad->mline)   free(ad->mline);
+      if (ad->aseq)    free(ad->aseq);
+      if (ad->ppline)  free(ad->ppline);
+      if (ad->hmmname) free(ad->hmmname);
+      if (ad->hmmacc)  free(ad->hmmacc);
+      if (ad->hmmdesc) free(ad->hmmdesc);
+      if (ad->sqname)  free(ad->sqname);
+      if (ad->sqacc)   free(ad->sqacc);
+      if (ad->sqdesc)  free(ad->sqdesc);
+    }
   free(ad);
 }
+/*---------------- end, alidisplay object -----------------------*/
 
+
+
+/*****************************************************************
+ * 2. The P7_ALIDISPLAY API
+ *****************************************************************/
 
 static int
 integer_textwidth(long n)
@@ -215,7 +396,6 @@ integer_textwidth(long n)
 
 /* Function:  p7_alidisplay_EncodePostProb()
  * Synopsis:  Convert a posterior probability to a char code.
- * Incept:    SRE, Thu Oct 23 08:20:20 2008 [Janelia]
  *
  * Purpose:   Convert the posterior probability <p> to
  *            a character code suitable for Stockholm format
@@ -240,7 +420,6 @@ p7_alidisplay_EncodePostProb(float p)
 
 /* Function:  p7_alidisplay_DecodePostProb()
  * Synopsis:  Convert a char code post prob to an approx float.
- * Incept:    SRE, Wed Dec 10 08:59:16 2008 [Janelia]
  *
  * Purpose:   Convert posterior probability code <pc>, which
  *            is [0-9*], to an approximate floating point probability.
@@ -266,7 +445,6 @@ p7_alidisplay_DecodePostProb(char pc)
 
 /* Function:  p7_alidisplay_Print()
  * Synopsis:  Human readable output of <P7_ALIDISPLAY>
- * Incept:    SRE, Thu Jan  3 10:02:05 2008 [Janelia]
  *
  * Purpose:   Prints alignment <ad> to stream <fp>.
  *            
@@ -359,7 +537,6 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 
 /* Function:  p7_alidisplay_Backconvert()
  * Synopsis:  Convert an alidisplay to a faux trace and subsequence.
- * Incept:    SRE, Wed Dec 10 09:49:28 2008 [Janelia]
  *
  * Purpose:   Convert alignment display object <ad> to a faux subsequence
  *            and faux subsequence trace, returning them in <ret_sq> and
@@ -384,7 +561,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
  *            data corruption. On any exception, <*ret_sq> and <*ret_tr> are
  *            <NULL>.
  *
- * Xref:      J4/29.
+ * Xref:      SRE:J4/29.
  */
 int
 p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr)
@@ -393,7 +570,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   P7_TRACE *tr   = NULL;	/* RETURN: faux trace                */
   int       subL = 0;		/* subsequence length in the <ad>    */
   int       a, i, k;        	/* coords for <ad>, <sq->dsq>, model */
-  char      st;			/* state type: MDI                   */
+  char      cur_st, nxt_st;	/* state type: MDI                   */
   int       status;
   
   /* Make a first pass over <ad> just to calculate subseq length */
@@ -416,15 +593,24 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   i = 1; 
   for (a = 0; a < ad->N; a++)
     {
-      if (esl_abc_CIsResidue(abc, ad->model[a])) { st = (esl_abc_CIsResidue(abc, ad->aseq[a]) ? p7T_M : p7T_D); } else st = p7T_I;
+      if (esl_abc_CIsResidue(abc, ad->model[a]))   { cur_st = (esl_abc_CIsResidue(abc, ad->aseq[a])   ? p7T_M : p7T_D); } else cur_st = p7T_I;
+      if (esl_abc_CIsResidue(abc, ad->model[a+1])) { nxt_st = (esl_abc_CIsResidue(abc, ad->aseq[a+1]) ? p7T_M : p7T_D); } else nxt_st = p7T_I; /* ad->N pos is \0, nxt_st becomes p7T_I on last step, that's fine. */
 
-      if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, st, k, i) : p7_trace_AppendWithPP(tr, st, k, i, p7_alidisplay_DecodePostProb(ad->ppline[a])))) != eslOK) goto ERROR;
+      if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, cur_st, k, i) : p7_trace_AppendWithPP(tr, cur_st, k, i, p7_alidisplay_DecodePostProb(ad->ppline[a])))) != eslOK) goto ERROR;
 
-      switch (st) {
-      case p7T_M: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); k++; i++; break;
-      case p7T_I: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]);      i++; break;
-      case p7T_D:                                                        k++;      break;
+      switch (cur_st) {
+      case p7T_M: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
+      case p7T_I: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
+      case p7T_D:                                                             break;
       }
+
+      switch (nxt_st) {
+      case p7T_M:  k++; break;
+      case p7T_I:       break;
+      case p7T_D:  k++; break;
+      case p7T_E:       break;
+      }
+
     }
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_E, 0, 0) : p7_trace_AppendWithPP(tr, p7T_E, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_C, 0, 0) : p7_trace_AppendWithPP(tr, p7T_C, 0, 0, 0.0))) != eslOK) goto ERROR;
@@ -432,9 +618,9 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   sq->dsq[i] = eslDSQ_SENTINEL;
 
   /* some sanity checks */
-  if (tr->N != ad->N + 6)      ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size (%s/%s)",         ad->sqname, ad->hmmname);
-  if (k     != ad->hmmto + 1)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace didn't end at expected place on model (%s/%s)", ad->sqname, ad->hmmname);
-  if (i     != subL + 1)       ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
+  if (tr->N != ad->N + 6)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size (%s/%s)",         ad->sqname, ad->hmmname);
+  if (k     != ad->hmmto)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace didn't end at expected place on model (%s/%s)", ad->sqname, ad->hmmname);
+  if (i     != subL+1)     ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
 
   /* Set up <sq> annotation as a subseq of a source sequence */
   if ((status = esl_sq_FormatName(sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
@@ -462,10 +648,64 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   *ret_tr = NULL;
   return status;
 }
+/*------------------- end, alidisplay API -----------------------*/
 
 
 /*****************************************************************
- * 2. Benchmark driver.
+ * 3. Debugging/dev code
+ *****************************************************************/
+
+/* Function:  p7_alidisplay_Dump()
+ * Synopsis:  Print contents of P7_ALIDISPLAY for inspection.
+ *
+ * Purpose:   Print contents of the <P7_ALIDISPLAY> <ad> to
+ *            stream <fp> for inspection. Includes all elements
+ *            of the structure, whether the object is allocated
+ *            in serialized or deserialized form, and the total
+ *            size of the object in bytes.
+ *
+ * Returns:   <eslOK>
+ */
+int
+p7_alidisplay_Dump(FILE *fp, P7_ALIDISPLAY *ad)
+{
+  fprintf(fp, "P7_ALIDISPLAY dump\n");
+  fprintf(fp, "------------------\n");
+
+  fprintf(fp, "rfline  = %s\n", ad->rfline ? ad->rfline : "[none]");
+  fprintf(fp, "csline  = %s\n", ad->csline ? ad->csline : "[none]");
+  fprintf(fp, "model   = %s\n", ad->model);
+  fprintf(fp, "mline   = %s\n", ad->mline);
+  fprintf(fp, "aseq    = %s\n", ad->aseq);
+  fprintf(fp, "N       = %d\n", ad->N);
+  fprintf(fp, "\n");
+
+  fprintf(fp, "hmmname = %s\n", ad->hmmname);
+  fprintf(fp, "hmmacc  = %s\n", ad->hmmacc[0]  == '\0' ? "[none]" : ad->hmmacc);
+  fprintf(fp, "hmmdesc = %s\n", ad->hmmdesc[0] == '\0' ? "[none]" : ad->hmmdesc);
+  fprintf(fp, "hmmfrom = %d\n", ad->hmmfrom);
+  fprintf(fp, "hmmto   = %d\n", ad->hmmto);
+  fprintf(fp, "M       = %d\n", ad->M);
+  fprintf(fp, "\n");
+
+  fprintf(fp, "sqname  = %s\n",  ad->sqname);
+  fprintf(fp, "sqacc   = %s\n",  ad->sqacc[0]  == '\0' ? "[none]" : ad->sqacc);
+  fprintf(fp, "sqdesc  = %s\n",  ad->sqdesc[0] == '\0' ? "[none]" : ad->sqdesc);
+  fprintf(fp, "sqfrom  = %ld\n", ad->sqfrom);
+  fprintf(fp, "sqto    = %ld\n", ad->sqto);
+  fprintf(fp, "L       = %ld\n", ad->L);
+  fprintf(fp, "\n");
+
+  fprintf(fp, "size    = %d bytes\n",  (int) p7_alidisplay_Sizeof(ad));
+  fprintf(fp, "%s\n", ad->mem ? "serialized" : "not serialized");
+  return eslOK;
+}
+/*-------------- end, debugging/dev code ------------------------*/
+
+
+
+/*****************************************************************
+ * 4. Benchmark driver.
  *****************************************************************/
 #ifdef p7ALIDISPLAY_BENCHMARK
 /*
@@ -567,7 +807,350 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7ALIDISPLAY_BENCHMARK*/
+/*--------------------- end, benchmark driver -------------------*/
 
+/****************************************************************
+ * 5. Unit tests.
+ ****************************************************************/
+#ifdef p7ALIDISPLAY_TESTDRIVE
+
+/* create_faux_alidisplay()
+ * 
+ * Create a fake P7_ALIDISPLAY of length <N> for testing purposes,
+ * randomizing it to try to exercise many possible combos of
+ * optional annotation, etc. Return it in <ret_ad>; caller frees.
+ */
+static int
+create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
+{
+  P7_ALIDISPLAY *ad            = NULL;
+  char          *guidestring   = NULL;	/* string [0..N-1] composed of MDI */
+  int            nM            = 0;
+  int            nD            = 0;
+  int            nI            = 0;
+  enum p7t_statetype_e last_st;
+  int            pos;
+  int            status;
+
+  ESL_ALLOC(guidestring, sizeof(char) * (N+1));
+
+  guidestring[0] = 'M'; nM++; last_st = p7T_M; /* local alignments must start with M */
+  for (pos = 1; pos < N-1; pos++)
+    {
+      switch (last_st) 
+	{
+	case p7T_M:
+	  switch (esl_rnd_Roll(rng, 3)) 
+	    {
+	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
+	    case 2: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
+	    }
+	  break;
+
+	case p7T_I: 
+	  switch (esl_rnd_Roll(rng, 2))
+	    {
+	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+	    case 1: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
+	    }
+	  break;
+
+	case p7T_D: 
+	  switch (esl_rnd_Roll(rng, 2)) 
+	    {
+	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
+	    }
+	  break;
+	  
+	default:
+	  break;
+	}
+    }
+  /* local alignments can end on M or D. (optimal local alignments can only end on M) */
+  switch (last_st) {
+  case p7T_I:
+    guidestring[N-1] = 'M';  nM++;  break;
+  default:   
+    switch (esl_rnd_Roll(rng, 2)) {
+    case 0: guidestring[N-1] = 'M'; nM++; break;
+    case 1: guidestring[N-1] = 'D'; nD++; break;
+    }
+    break;
+  }
+  guidestring[N] = '\0';
+
+  printf("guidestring: %s\n", guidestring);
+
+  ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
+  ad->rfline  = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ppline = NULL;
+  ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
+  ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->mem     = NULL;
+  ad->memsize = 0;
+
+  /* Optional lines are added w/ 50% chance */
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->rfline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->csline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->ppline, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->model, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->mline, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->aseq,  sizeof(char) * (N+1));
+  ad->N = N;
+
+  esl_strdup("my_hmm", -1, &(ad->hmmname));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("PF000007",          -1, &(ad->hmmacc));  else esl_strdup("", -1, &(ad->hmmacc));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(hmm description)", -1, &(ad->hmmdesc)); else esl_strdup("", -1, &(ad->hmmdesc));
+
+  esl_strdup("my_seq", -1, &(ad->sqname));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
+
+  /* model, seq coords must look valid. */
+  ad->hmmfrom = 100;
+  ad->hmmto   = ad->hmmfrom + nM + nD - 1;
+  ad->M       = ad->hmmto + esl_rnd_Roll(rng, 2);
+
+  ad->sqfrom  = 1000;
+  ad->sqto    = ad->sqfrom + nM + nI - 1;
+  ad->L       = ad->sqto + esl_rnd_Roll(rng, 2);
+
+  /* rfline is free-char "reference annotation" on consensus; H3 puts '.' for inserts. */
+  if (ad->rfline) {
+    for (pos = 0; pos < N; pos++)
+      ad->rfline[pos] = (guidestring[pos] == 'I' ? '.' : 'x');
+    ad->rfline[pos] = '\0';
+  }
+
+  /* csline is optional. It has free-char "consensus structure annotation" on consensus positions. H3 puts '.' on inserts. */
+  if (ad->csline) {
+    for (pos = 0; pos < N; pos++)
+      ad->csline[pos] = (guidestring[pos] == 'I' ? '.' : 'X');
+    ad->csline[pos] = '\0';
+  }
+  
+  /* the mandatory three-line alignment display:
+   *
+   *   guidestring:    MMMDI
+   *   model:          XXXX.
+   *   mline:          A+   
+   *   aseq:           AAA-a
+   */
+  for (pos = 0; pos < N; pos++)
+    {
+      switch (guidestring[pos]) {
+      case 'M':
+	ad->model[pos] = 'X';
+	switch (esl_rnd_Roll(rng, 3)) {
+	case 0: ad->mline[pos] = 'A';
+	case 1: ad->mline[pos] = '+';
+	case 2: ad->mline[pos] = ' ';
+	}
+	ad->aseq[pos]  = 'A';
+	break;
+
+      case 'D':
+	ad->model[pos] = 'X';
+	ad->mline[pos] = ' ';
+	ad->aseq[pos]  = '-';
+	break;
+
+      case 'I':
+	ad->model[pos] = '.';
+	ad->mline[pos] = ' ';
+	ad->aseq[pos]  = 'a';
+	break;
+      }
+    }
+  ad->model[pos] = '\0';
+  ad->mline[pos] = '\0';
+  ad->mline[pos] = '\0';
+
+  /* ppline is optional */
+  if (ad->ppline) {
+    for (pos = 0; pos < N; pos++)
+      ad->ppline[pos] = (guidestring[pos] == 'D' ? '.' : p7_alidisplay_EncodePostProb(esl_random(rng)));
+    ad->ppline[pos] = '\0';
+  }
+
+  if ((status = p7_alidisplay_Serialize(ad)) != eslOK) goto ERROR;
+
+  *ret_ad = ad; 
+  return eslOK;
+
+ ERROR:
+  p7_alidisplay_Destroy(ad);
+  *ret_ad = NULL;
+  return status;
+}
+
+
+static void
+utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int ntrials, int N)
+{
+  char          msg[] = "utest_Backconvert failed";
+  P7_ALIDISPLAY *ad   = NULL;
+  ESL_SQ        *sq   = NULL;
+  P7_TRACE      *tr   = NULL;
+  int            trial;
+
+  for (trial = 0; trial < ntrials; trial++)
+    {
+      if ( create_faux_alidisplay(rng, N, &ad)                   != eslOK) esl_fatal(msg);
+      if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)          != eslOK) esl_fatal(msg);
+      if (be_verbose && p7_trace_Dump(stdout, tr, NULL, sq->dsq) != eslOK) esl_fatal(msg);
+      if ( p7_trace_Validate(tr, abc, sq->dsq, NULL)             != eslOK) esl_fatal(msg);
+
+      p7_alidisplay_Destroy(ad);
+      esl_sq_Destroy(sq);
+    }
+  return;
+}
+#endif /*p7ALIDISPLAY_TESTDRIVE*/
+/*------------------- end, unit tests ---------------------------*/
+
+/*****************************************************************
+ * 6. Test driver.
+ *****************************************************************/
+#ifdef p7ALIDISPLAY_TESTDRIVE
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {"-N",  eslARG_INT,      "10", NULL, NULL, NULL, NULL, NULL, "number of random-sampled alidisplays to test",   0},
+  {"-L",  eslARG_INT,      "20", NULL, NULL, NULL, NULL, NULL, "length of random-sampled alidisplays to test",   0},
+  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
+  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose commentary/output",                 0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for p7_alidisplay.c";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go         = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc        = esl_alphabet_Create(eslAMINO);
+  int             N          = esl_opt_GetInteger(go, "-N");
+  int             L          = esl_opt_GetInteger(go, "-L");
+  int             be_verbose = esl_opt_GetBoolean(go, "-v");
+
+  utest_Backconvert(be_verbose, rng, abc, N, L);
+  return 0;
+}
+#endif /*p7ALIDISPLAY_TESTDRIVE*/
+/*------------------- end, test driver --------------------------*/
+
+
+/*****************************************************************
+ * 7. Example.
+ *****************************************************************/
+/* 
+   gcc -o p7_alidisplay_example -std=gnu99 -g -Wall -I. -L. -I../easel -L../easel -Dp7ALIDISPLAY_EXAMPLE p7_alidisplay.c -lhmmer -leasel -lm 
+*/
+#ifdef p7ALIDISPLAY_EXAMPLE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type         default   env  range   toggles   reqs   incomp                             help                                                  docgroup*/
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show brief help on version and usage",                         0 },
+ {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example driver for P7_ALIDISPLAY";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+  P7_TRACE       *tr1     = NULL;
+  P7_TRACE       *tr2     = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_SQ         *sq2     = NULL;
+  P7_ALIDISPLAY  *ad      = NULL;
+  P7_PIPELINE    *pli     = NULL;
+  P7_TOPHITS     *hitlist = NULL;
+
+  p7_FLogsumInit();
+
+  /* Read a single HMM from a file */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  /* Read a single sequence from a file */
+  if (esl_sqfile_Open(seqfile, eslSQFILE_UNKNOWN, NULL, &sqfp) != eslOK) p7_Fail("Failed to open sequence file %s", seqfile);
+  sq = esl_sq_CreateDigital(abc);
+  if (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
+
+  /* Configure a profile from the HMM */
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, 0);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, 0, p7_UNILOCAL); 
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
+
+  /* Create a pipeline and a top hits list */
+  pli     = p7_pipeline_Create(NULL/*=default*/, hmm->M, 400, FALSE, p7_SEARCH_SEQS);
+  hitlist = p7_tophits_Create();
+
+  /* Run the pipeline */
+  p7_pli_NewSeq(pli, sq);
+  p7_bg_SetLength(bg, sq->n);
+  p7_oprofile_ReconfigLength(om, sq->n);
+  p7_Pipeline(pli, om, bg, sq, hitlist);
+
+  if (hitlist->N == 0) { p7_Fail("target sequence doesn't hit"); }
+
+  if (p7_alidisplay_Backconvert(hitlist->hit[0]->dcl[0].ad, abc, &sq2, &tr2) != eslOK) p7_Fail("backconvert failed");
+  
+  p7_trace_Dump(stdout, tr2, gm, sq2->dsq);
+
+  p7_tophits_Destroy(hitlist);
+  p7_alidisplay_Destroy(ad);
+  esl_sq_Destroy(sq);
+  esl_sq_Destroy(sq2);
+  p7_trace_Destroy(tr2);
+  p7_trace_Destroy(tr1);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7ALIDISPLAY_EXAMPLE*/
 
 
 /*****************************************************************

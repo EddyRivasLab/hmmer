@@ -177,6 +177,20 @@ if test "$ok" = "yes"; then
 fi
 
 
+# --enable-gprof     - compile for gcc code profiling
+#
+# Replaces CC with "gcc" and CFLAGS with "-O -g -pg"
+# Running programs generates a profile data file "gmon.out".
+#
+AC_ARG_ENABLE(gprof,[AS_HELP_STRING([--enable-gprof],[compile for gcc code profiing])], ok=$enableval, ok=no)
+if test "$ok" = "yes"; then
+  AC_MSG_NOTICE([Compiling with gprof instrumentation.])
+  CC="gcc"
+  CFLAGS="-O -g -pg"
+  sre_cflags_env_set=yes
+fi
+
+
 # --enable-sse    Enable the SSE implementation.
 # --enable-vmx    Enable the Altivec/VMX implementation.
 # --enable-dummy  Enable the portable implementation.

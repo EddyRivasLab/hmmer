@@ -34,6 +34,7 @@
 1 exercise generic_viterbi    @src/generic_viterbi_utest@
 1 exercise logsum             @src/logsum_utest@
 1 exercise modelconfig        @src/modelconfig_utest@
+1 exercise p7_alidisplay      @src/p7_alidisplay_utest@
 1 exercise p7_gmx             @src/p7_gmx_utest@
 1 exercise p7_hmm             @src/p7_hmm_utest@
 1 exercise p7_hmmfile         @src/p7_hmmfile_utest@
@@ -60,7 +61,6 @@
 #   island.c
 #   modelstats.c
 #   mpisupport.c     (MPI testing needs to be handled specially)
-#   p7_alidisplay.c
 #   p7_bg.c
 #   p7_domaindef.c
 #   p7_prior.c
@@ -337,6 +337,7 @@
 3 valgrind  generic_viterbi       @src/generic_viterbi_utest@
 3 valgrind  logsum                @src/logsum_utest@
 3 valgrind  modelconfig           @src/modelconfig_utest@
+3 valgrind  p7_alidisplay         @src/p7_alidisplay_utest@
 3 valgrind  p7_gmx                @src/p7_gmx_utest@
 3 valgrind  p7_hmm                @src/p7_hmm_utest@
 3 valgrind  p7_hmmfile            @src/p7_hmmfile_utest@

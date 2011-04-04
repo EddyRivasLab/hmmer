@@ -22,9 +22,6 @@
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
  * structure for an optimized profile.
- * 
- * SRE, Wed Jan  3 13:46:42 2007 [Janelia] [Philip Glass, The Fog of War]
- * SVN $Id$
  */
 #ifndef P7_HMMERH_INCLUDED
 #define P7_HMMERH_INCLUDED
@@ -104,7 +101,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
  *      for backwards compatibility; so we may as well keep using them.
  */
 #define p7H_HASBITS (1<<0)    /* obsolete (was: model has log-odds scores)       !*/
-#define p7H_DESC    (1<<1)    /* description exists (legacy; xref J5/114)        !*/
+#define p7H_DESC    (1<<1)    /* description exists (legacy; xref SRE:J5/114)    !*/
 #define p7H_RF      (1<<2)    /* #RF annotation available                        !*/
 #define p7H_CS      (1<<3)    /* #CS annotation available                        !*/
 #define p7H_XRAY    (1<<4)    /* obsolete (was: structural data available)       !*/
@@ -112,7 +109,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7H_HASDNA  (1<<6)    /* obsolete (was: protein HMM->DNA seq params set) !*/
 #define p7H_STATS   (1<<7)    /* model has E-value statistics calibrated         !*/
 #define p7H_MAP     (1<<8)    /* alignment map is available                      !*/
-#define p7H_ACC     (1<<9)    /* accession is available (legacy; xref J5/114)    !*/
+#define p7H_ACC     (1<<9)    /* accession is available (legacy; xref SRE:J5/114)!*/
 #define p7H_GA      (1<<10)   /* gathering thresholds available                  !*/
 #define p7H_TC      (1<<11)   /* trusted cutoffs available                       !*/
 #define p7H_NC      (1<<12)   /* noise cutoffs available                         !*/
@@ -987,11 +984,15 @@ extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           in
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern size_t         p7_alidisplay_Sizeof(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
+extern int            p7_alidisplay_Dump(FILE *fp, P7_ALIDISPLAY *ad);
 
 /* p7_bg.c */
 extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
