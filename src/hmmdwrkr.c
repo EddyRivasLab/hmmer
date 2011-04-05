@@ -748,7 +748,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   P7_HIT             *hit;
   P7_DOMAIN          *dcl;
   int                 i, j, n;
-  uint32_t            offset;
+  esl_pos_t           offset;
 
   memset(&status, 0, sizeof(HMMD_SEARCH_STATUS)); /* silence valgrind errors - zero out entire structure including its padding */
   status.status     = eslOK;
@@ -793,12 +793,8 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
     h1->acc  = NULL;
     h1->desc = NULL;
 
-    /* offset of the domain in the data stream */
-    /* SRE: This looks like a hack of MSF's. Revisit it.
-     *      Surely we shouldn't be communicating an offset
-     *      by casting and storing in an unused pointer?
-     */
-    h1->dcl  = (P7_DOMAIN *)offset;
+    /* store offset of the domain info in the hit packet */
+    h1->offset = offset;
 
     /* figure out how big the domains are and their offset */
     dcl = h2->dcl;

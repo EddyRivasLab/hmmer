@@ -222,7 +222,10 @@ ${UTESTS}: libhmmer.a  ${HDRS} p7_config.h
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+        fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${BENCHMARKS}: libhmmer.a  ${HDRS} p7_config.h
@@ -234,7 +237,10 @@ ${BENCHMARKS}: libhmmer.a  ${HDRS} p7_config.h
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+        fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${STATS}: libhmmer.a ${HDRS} p7_config.h
@@ -246,7 +252,10 @@ ${STATS}: libhmmer.a ${HDRS} p7_config.h
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+        fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
@@ -258,7 +267,10 @@ ${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
         else \
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
-	echo '    ' GEN $@;\
+	if test ${V} ;\
+	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+        fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 install:

@@ -270,12 +270,12 @@ p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
   memcpy(ad->mem+pos, ad->mline,  ad->N+1); free(ad->mline); ad->mline = ad->mem+pos; pos += ad->N+1; 
   memcpy(ad->mem+pos, ad->aseq,   ad->N+1); free(ad->aseq);  ad->aseq  = ad->mem+pos; pos += ad->N+1; 
   if (ad->ppline) { memcpy(ad->mem+pos, ad->ppline, ad->N+1); free(ad->ppline); ad->ppline = ad->mem+pos;  pos += ad->N+1; }
-  n = 1 + strlen(ad->hmmname);  memcpy(ad->hmmname, ad->mem + pos, n); free(ad->hmmname); ad->hmmname = ad->mem+pos; pos += n;
-  n = 1 + strlen(ad->hmmacc);   memcpy(ad->hmmacc,  ad->mem + pos, n); free(ad->hmmacc);  ad->hmmacc  = ad->mem+pos; pos += n;
-  n = 1 + strlen(ad->hmmdesc);  memcpy(ad->hmmdesc, ad->mem + pos, n); free(ad->hmmdesc); ad->hmmdesc = ad->mem+pos; pos += n;
-  n = 1 + strlen(ad->sqname);   memcpy(ad->sqname,  ad->mem + pos, n); free(ad->sqname);  ad->sqname  = ad->mem+pos; pos += n;
-  n = 1 + strlen(ad->sqacc);    memcpy(ad->sqacc,   ad->mem + pos, n); free(ad->sqacc);   ad->sqacc   = ad->mem+pos; pos += n;
-  n = 1 + strlen(ad->sqdesc);   memcpy(ad->sqdesc,  ad->mem + pos, n); free(ad->sqdesc);  ad->sqdesc  = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->hmmname);  memcpy(ad->mem + pos, ad->hmmname, n); free(ad->hmmname); ad->hmmname = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->hmmacc);   memcpy(ad->mem + pos, ad->hmmacc,  n); free(ad->hmmacc);  ad->hmmacc  = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->hmmdesc);  memcpy(ad->mem + pos, ad->hmmdesc, n); free(ad->hmmdesc); ad->hmmdesc = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqname);   memcpy(ad->mem + pos, ad->sqname,  n); free(ad->sqname);  ad->sqname  = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqacc);    memcpy(ad->mem + pos, ad->sqacc,   n); free(ad->sqacc);   ad->sqacc   = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqdesc);   memcpy(ad->mem + pos, ad->sqdesc,  n); free(ad->sqdesc);  ad->sqdesc  = ad->mem+pos; pos += n;
   
   return eslOK;
 
@@ -546,7 +546,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
  *            <ad> are digitized using digital alphabet <abc>.
  *            
  *            The subsequence and trace are suitable for passing as
- *            array elements to <p7_MultipleAlignment>. This is the
+ *            array elements to <p7_tracealign_Seqs>. This is the
  *            main purpose of backconversion. Results of a profile
  *            search are stored in a hit list as a processed
  *            <P7_ALIDISPLAY>, not as a <P7_TRACE> and <ESL_SQ>, to
@@ -881,8 +881,6 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   }
   guidestring[N] = '\0';
 
-  printf("guidestring: %s\n", guidestring);
-
   ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
   ad->rfline  = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ppline = NULL;
   ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
@@ -976,11 +974,13 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
 
   if ((status = p7_alidisplay_Serialize(ad)) != eslOK) goto ERROR;
 
+  free(guidestring);
   *ret_ad = ad; 
   return eslOK;
 
  ERROR:
-  p7_alidisplay_Destroy(ad);
+  if (guidestring) free(guidestring);
+  if (ad)          p7_alidisplay_Destroy(ad);
   *ret_ad = NULL;
   return status;
 }
@@ -1005,6 +1005,7 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
 
       p7_alidisplay_Destroy(ad);
       esl_sq_Destroy(sq);
+      p7_trace_Destroy(tr);
     }
   return;
 }
@@ -1048,6 +1049,10 @@ main(int argc, char **argv)
   int             be_verbose = esl_opt_GetBoolean(go, "-v");
 
   utest_Backconvert(be_verbose, rng, abc, N, L);
+
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
   return 0;
 }
 #endif /*p7ALIDISPLAY_TESTDRIVE*/

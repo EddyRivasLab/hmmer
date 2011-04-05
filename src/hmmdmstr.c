@@ -861,19 +861,16 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 static void
 forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 {
-  int fd;
-  int i, j;
-  int n;
-
   uint32_t           adj;
-  uint32_t           offset;
-
+  esl_pos_t          offset;
   P7_TOPHITS         th;
   P7_PIPELINE        *pli   = NULL;
   P7_DOMAIN         **dcl   = NULL;
   P7_HIT             *hits  = NULL;
   HIT_LIST           *list  = NULL;
-
+  int fd;
+  int i, j;
+  int n;
   enum p7_pipemodes_e mode;
 
   fd    = query->sock;
@@ -886,14 +883,14 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   if (results->nhits > 0) {
     P7_HIT *h1;
 
-    /* at this point the domain pointers are the offset of the domain structure
+    /* at this point h1->offset's are the offset of the domain structure
      * in the block of memory pointed to by "list[n]->data".  now we will change
      * that offset to be the true pointers back to the dcl data.
      */
     for (i = 0; i < results->nhits; ++i) {
       h1 = list[i].hit;
       for (j = 0; j < list[i].count; ++j) {
-        int off = ((char *)h1->dcl - (char *)NULL) - sizeof(HMMD_SEARCH_STATS) - (sizeof(P7_HIT) * list[i].count);
+        esl_pos_t off = h1->offset - sizeof(HMMD_SEARCH_STATS) - (sizeof(P7_HIT) * list[i].count);
         h1->dcl = (P7_DOMAIN *)(list[i].data + off);
         ++h1;
       }

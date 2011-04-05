@@ -685,6 +685,7 @@ typedef struct p7_hit_s {
   int64_t  subseq_start; /*used to track which subsequence of a full_length target this hit came from, for purposes of removing duplicates */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
+  esl_pos_t  offset;	/* used in socket communications, in serialized communication: offset of P7_DOMAIN msg for this P7_HIT */
 } P7_HIT;
 
 

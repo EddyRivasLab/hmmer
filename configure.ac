@@ -619,6 +619,8 @@ AC_CHECK_FUNCS(getpid)
 AC_CHECK_FUNCS(sysctl)
 AC_CHECK_FUNCS(sysconf)
 AC_CHECK_FUNCS(getcwd)
+AC_CHECK_FUNCS(stat)
+AC_CHECK_FUNCS(fstat)
 
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))

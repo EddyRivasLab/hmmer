@@ -156,6 +156,7 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->nincluded    = 0;
   hit->best_domain  = -1;
   hit->dcl          = NULL;
+  hit->offset       = 0;
 
   *ret_hit = hit;
   return eslOK;
@@ -1182,7 +1183,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
  *            "includable" in the top hits list <th>, and return it in
  *            <*ret_msa>.
  *            
- *            Use of <optflags> is identical to <optflags> in <p7_MultipleAlignment()>.
+ *            Use of <optflags> is identical to <optflags> in <p7_tracealign_Seqs()>.
  *            Possible flags include <p7_DIGITIZE>, <p7_ALL_CONSENSUS_COLS>,
  *            and <p7_TRIM>; they may be OR'ed together. Otherwise, pass
  *            <p7_DEFAULT> to set no flags.
