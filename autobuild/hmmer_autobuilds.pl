@@ -9,8 +9,9 @@
     { name => "intel-linux-icc-intel64-mpi", host => "login-eddy"  },
     { name => "intel-linux-icc-ia32-mpi",    host => "login-eddy"  },
     { name => "intel-linux-gcc",             host => "login-eddy"  },
-    { name => "intel-macosx-gcc-debug",      host => "."           },
     { name => "intel-macosx-gcc",            host => "."           },
+    { name => "intel-macosx-gcc-debug",      host => "."           },
+    { name => "intel-macosx-gcc-dummy",      host => "."           },
     { name => "ppc-aix-xlc",                 host => "cf-ppc2"     },
     { name => "ppc-macosx",                  host => "10.41.4.30"  },
     );
