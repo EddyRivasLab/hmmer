@@ -1,7 +1,4 @@
 Automated build system for HMMER3
-SRE, Fri Jan 14 13:23:39 2011
-SVN $URL$
-SVN $Id$
 
 The automated build system consists of three levels of files.  A build
 can be done at any of the three levels. Each level increases the

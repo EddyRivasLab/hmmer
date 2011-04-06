@@ -22,6 +22,12 @@
 #      commands for setting environment variables for subsequent
 #      commands. These lines are placed in a special script,
 #      build.env.
+#    - A line starting with "MAKE=", such as "MAKE=/usr/bin/gmake",
+#      sets the make that autobuild.pl itself (only) will use. This is
+#      a bit of a hack. autobuild.pl calls "make distclean", but that
+#      "make" may need to be set to something special, such as gmake,
+#      on certain platforms. The build script itself will call
+#      whatever platform-specific stuff it needs to.
 #    - All other lines are assumed to be shell commands (such as ../configure)
 #      executed relative to the build directory. For each command
 #      "<command>", a Perl system call is issued, while using the zero or
@@ -43,10 +49,6 @@
 # followed by a short reason, to both stdout and the build.status file.
 # 
 #
-# SVN $URL$
-# SVN $Id$
-# SRE, Fri Jan 14 13:37:47 2011 [Janelia]
-#
 if ($#ARGV+1 != 2) { die "FAIL: incorrect number of command line arguments"; }
 
 $srcdir   = shift;
@@ -54,6 +56,7 @@ $script   = shift;
 $builddir = "ab-$script";
 
 if (! -r "$srcdir/autobuild/$script")    { die "FAIL: didn't find command script $srcdir/autobuild/$script"; }
+$MAKE = "make";
 
 # read the build script in before changing working directory
 # Lines starting w/ "#" are comments: ignore them, and blank lines too.
@@ -73,6 +76,7 @@ open(SCRIPT,"$srcdir/autobuild/$script") || die "FAIL: couldn't open build scrip
 while (<SCRIPT>)
 {  chop; 
    if    (/^\s*$/   || /^\s*\#/)       { next; }
+   elsif (/^MAKE=(\S+)/)               { $MAKE = $1; }
    elsif (/^\s*\. / || /^\s*export /)  { push @envlist, $_; }
    else                                { push @cmdlist, $_; } 
 }
@@ -90,7 +94,7 @@ if (-d $builddir)
 {
     chdir $builddir || die "FAIL: couldn't cd to existing $builddir"; 
     if (-e "Makefile") {
-	system("make distclean > /dev/null 2>&1");
+	system("$MAKE distclean > /dev/null 2>&1");
 	if ($?) { die "FAIL: make distclean"; }
     }
 }
