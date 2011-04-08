@@ -985,7 +985,8 @@ extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           in
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
-extern size_t         p7_alidisplay_Sizeof(P7_ALIDISPLAY *ad);
+extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
+extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
@@ -993,7 +994,8 @@ extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
-extern int            p7_alidisplay_Dump(FILE *fp, P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
 
 /* p7_bg.c */
 extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);

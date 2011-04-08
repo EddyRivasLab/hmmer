@@ -201,6 +201,91 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
 }
 
 
+/* Function:  p7_alidisplay_Clone()
+ * Synopsis:  Make a duplicate of an ALIDISPLAY.
+ *
+ * Purpose:   Create a duplicate of alignment display <ad>.
+ *            Return a pointer to the duplicate. Caller
+ *            is responsible for freeing the new object.
+ *
+ * Returns:   pointer to new <P7_ALIDISPLAY>
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_ALIDISPLAY *
+p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
+{
+  P7_ALIDISPLAY *ad2 = NULL;
+  int status;
+
+  ESL_ALLOC(ad2, sizeof(P7_ALIDISPLAY));
+  ad2->rfline  = ad2->csline = ad2->model   = ad2->mline  = ad2->aseq = ad2->ppline = NULL;
+  ad2->hmmname = ad2->hmmacc = ad2->hmmdesc = NULL;
+  ad2->sqname  = ad2->sqacc  = ad2->sqdesc  = NULL;
+  ad2->mem     = NULL;
+  ad2->memsize = 0;
+
+  if (ad->memsize) 		/* serialized */
+    {
+      ESL_ALLOC(ad2->mem, sizeof(char) * ad->memsize);
+      ad2->memsize = ad->memsize;
+      memcpy(ad2->mem, ad->mem, ad->memsize);
+
+      ad2->rfline = (ad->rfline ? ad2->mem + (ad->rfline - ad->mem) : NULL );
+      ad2->csline = (ad->csline ? ad2->mem + (ad->csline - ad->mem) : NULL );
+      ad2->model  = ad2->mem + (ad->model  - ad->mem);
+      ad2->mline  = ad2->mem + (ad->mline  - ad->mem);
+      ad2->aseq   = ad2->mem + (ad->aseq   - ad->mem);
+      ad2->ppline = (ad->ppline ? ad2->mem + (ad->ppline - ad->mem) : NULL );
+      ad2->N      = ad->N;
+
+      ad2->hmmname = ad2->mem + (ad->hmmname - ad->mem);
+      ad2->hmmacc  = ad2->mem + (ad->hmmacc  - ad->mem);
+      ad2->hmmdesc = ad2->mem + (ad->hmmdesc - ad->mem);
+      ad2->hmmfrom = ad->hmmfrom;
+      ad2->hmmto   = ad->hmmto;
+      ad2->M       = ad->M;
+
+      ad2->sqname  = ad2->mem + (ad->sqname - ad->mem);
+      ad2->sqacc   = ad2->mem + (ad->sqacc  - ad->mem);
+      ad2->sqdesc  = ad2->mem + (ad->sqdesc - ad->mem);
+      ad2->sqfrom  = ad->sqfrom;
+      ad2->sqto    = ad->sqto;
+      ad2->L       = ad->L;
+    }
+  else				/* deserialized */
+    {
+      if ( esl_strdup(ad->rfline, -1, &(ad2->rfline)) != eslOK) goto ERROR;
+      if ( esl_strdup(ad->csline, -1, &(ad2->csline)) != eslOK) goto ERROR;
+      if ( esl_strdup(ad->model,  -1, &(ad2->model))  != eslOK) goto ERROR;
+      if ( esl_strdup(ad->mline,  -1, &(ad2->mline))  != eslOK) goto ERROR;
+      if ( esl_strdup(ad->aseq,   -1, &(ad2->aseq))   != eslOK) goto ERROR;
+      if ( esl_strdup(ad->ppline, -1, &(ad2->ppline)) != eslOK) goto ERROR;
+      ad2->N = ad->N;
+
+      if ( esl_strdup(ad->hmmname, -1, &(ad2->hmmname)) != eslOK) goto ERROR;
+      if ( esl_strdup(ad->hmmacc,  -1, &(ad2->hmmacc))  != eslOK) goto ERROR;
+      if ( esl_strdup(ad->hmmdesc, -1, &(ad2->hmmdesc)) != eslOK) goto ERROR;
+      ad2->hmmfrom = ad->hmmfrom;
+      ad2->hmmto   = ad->hmmto;
+      ad2->M       = ad->M;
+
+      if ( esl_strdup(ad->sqname,  -1, &(ad2->sqname)) != eslOK) goto ERROR;
+      if ( esl_strdup(ad->sqacc,   -1, &(ad2->sqacc))  != eslOK) goto ERROR;
+      if ( esl_strdup(ad->sqdesc,  -1, &(ad2->sqdesc)) != eslOK) goto ERROR;
+      ad2->sqfrom  = ad->sqfrom;
+      ad2->sqto    = ad->sqto;
+      ad2->L       = ad->L;      
+    }
+
+  return ad2;
+
+ ERROR:
+  if (ad2) p7_alidisplay_Destroy(ad2);
+  return NULL;
+}
+
+
 /* Function:  p7_alidisplay_Sizeof()
  * Synopsis:  Returns the total size of a P7_ALIDISPLAY, in bytes.
  *
@@ -215,7 +300,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
  * Returns:   size of <ad> in bytes
  */
 size_t
-p7_alidisplay_Sizeof(P7_ALIDISPLAY *ad)
+p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
 {
   size_t n = sizeof(P7_ALIDISPLAY);
 
@@ -325,6 +410,7 @@ p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
   n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqdesc,   sizeof(char) * n); memcpy(ad->sqdesc,   ad->mem+pos, n); pos += n;
 
   free(ad->mem);
+  ad->mem     = NULL;
   ad->memsize = 0;
   return eslOK;
   
@@ -347,7 +433,6 @@ p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
   n = 1 + strlen(ad->sqname);   if (ad->sqdesc  != ad->mem+pos) { free(ad->sqdesc);  ad->sqdesc = ad->mem+pos;  }  pos += n;
   return status;
 }
-
 
 
 /* Function:  p7_alidisplay_Destroy()
@@ -667,7 +752,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
  * Returns:   <eslOK>
  */
 int
-p7_alidisplay_Dump(FILE *fp, P7_ALIDISPLAY *ad)
+p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad)
 {
   fprintf(fp, "P7_ALIDISPLAY dump\n");
   fprintf(fp, "------------------\n");
@@ -700,6 +785,53 @@ p7_alidisplay_Dump(FILE *fp, P7_ALIDISPLAY *ad)
   fprintf(fp, "%s\n", ad->mem ? "serialized" : "not serialized");
   return eslOK;
 }
+
+/* Function:  p7_alidisplay_Compare()
+ * Synopsis:  Compare two <P7_ALIDISPLAY> objects for equality
+ *
+ * Purpose:   Compare alignment displays <ad1> and <ad2> for 
+ *            equality. Return <eslOK> if they have identical 
+ *            contents; <eslFAIL> if not.
+ *            
+ *            Only contents matter, not serialization status;
+ *            a serialized and deserialized version of the same
+ *            alidisplay will compare identical.
+ */
+int
+p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2)
+{
+  if (ad1->mem && ad2->mem)	/* both objects serialized */
+    {
+      if (ad1->memsize != ad2->memsize)                  return eslFAIL;
+      if (memcmp(ad1->mem, ad2->mem, ad1->memsize) != 0) return eslFAIL;
+    }
+  
+  if (esl_strcmp(ad1->rfline,  ad2->rfline)  != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->csline,  ad2->csline)  != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->model,   ad2->model)   != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->mline,   ad2->mline)   != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->aseq,    ad2->aseq)    != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->ppline,  ad2->ppline)  != eslOK) return eslFAIL;
+  if (ad1->N != ad2->N)                                return eslFAIL;
+
+  if (esl_strcmp(ad1->hmmname, ad2->hmmname) != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->hmmacc,  ad2->hmmacc)  != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->hmmdesc, ad2->hmmdesc) != eslOK) return eslFAIL;
+  if (ad1->hmmfrom != ad2->hmmfrom)                    return eslFAIL;
+  if (ad1->hmmto   != ad2->hmmto)                      return eslFAIL;
+  if (ad1->M       != ad2->M)                          return eslFAIL;
+
+  if (esl_strcmp(ad1->sqname,  ad2->sqname)  != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->sqacc,   ad2->sqacc)   != eslOK) return eslFAIL;
+  if (esl_strcmp(ad1->sqdesc,  ad2->sqdesc)  != eslOK) return eslFAIL;
+  if (ad1->sqfrom != ad2->sqfrom)                      return eslFAIL;
+  if (ad1->sqto   != ad2->sqto)                        return eslFAIL;
+  if (ad1->M      != ad2->M)                           return eslFAIL;
+  
+  return eslOK;
+}
+
+
 /*-------------- end, debugging/dev code ------------------------*/
 
 
@@ -963,7 +1095,7 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
     }
   ad->model[pos] = '\0';
   ad->mline[pos] = '\0';
-  ad->mline[pos] = '\0';
+  ad->aseq[pos]  = '\0';
 
   /* ppline is optional */
   if (ad->ppline) {
@@ -971,8 +1103,6 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
       ad->ppline[pos] = (guidestring[pos] == 'D' ? '.' : p7_alidisplay_EncodePostProb(esl_random(rng)));
     ad->ppline[pos] = '\0';
   }
-
-  if ((status = p7_alidisplay_Serialize(ad)) != eslOK) goto ERROR;
 
   free(guidestring);
   *ret_ad = ad; 
@@ -985,6 +1115,31 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   return status;
 }
 
+static void
+utest_Serialize(ESL_RANDOMNESS *rng, int ntrials, int N)
+{
+  char          msg[] = "utest_Serialize failed";
+  P7_ALIDISPLAY *ad   = NULL;
+  P7_ALIDISPLAY *ad2  = NULL;
+  int trial;
+
+  for (trial = 0; trial < ntrials; trial++)
+    {
+      if ( create_faux_alidisplay(rng, N, &ad)   != eslOK) esl_fatal(msg);
+      if ( (ad2 = p7_alidisplay_Clone(ad))       == NULL)  esl_fatal(msg);
+      if ( p7_alidisplay_Compare(ad, ad2)        != eslOK) esl_fatal(msg);
+
+      if ( p7_alidisplay_Serialize(ad)           != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Compare(ad, ad2)        != eslOK) esl_fatal(msg);
+
+      if ( p7_alidisplay_Deserialize(ad)         != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Compare(ad, ad2)        != eslOK) esl_fatal(msg);
+
+      p7_alidisplay_Destroy(ad);
+      p7_alidisplay_Destroy(ad2);
+    }
+  return;
+}
 
 static void
 utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int ntrials, int N)
@@ -998,6 +1153,7 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
   for (trial = 0; trial < ntrials; trial++)
     {
       if ( create_faux_alidisplay(rng, N, &ad)                   != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Serialize(ad)                           != eslOK) esl_fatal(msg);
       if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)          != eslOK) esl_fatal(msg);
       if (be_verbose && p7_trace_Dump(stdout, tr, NULL, sq->dsq) != eslOK) esl_fatal(msg);
@@ -1048,6 +1204,7 @@ main(int argc, char **argv)
   int             L          = esl_opt_GetInteger(go, "-L");
   int             be_verbose = esl_opt_GetBoolean(go, "-v");
 
+  utest_Serialize  (            rng,      N, L);
   utest_Backconvert(be_verbose, rng, abc, N, L);
 
   esl_alphabet_Destroy(abc);
