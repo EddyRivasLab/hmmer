@@ -1,8 +1,11 @@
 /* jackhmmer: iterative search of a protein sequence against a protein database
- * 
- * SRE, Thu Dec 11 15:20:27 2008 [Janelia] [maestro Bear McCreary, conducting]
- * SVN $Id$
  */
+
+/* Wish list:
+ *   1. Should work on .gz files; "rewind" by close/reopen of the cmd pipe.
+ *      (See esl_buffer.) [Zasha Weinberg, 2 Apr 2011]
+ */
+
 #include "p7_config.h"
 
 #include <stdio.h>

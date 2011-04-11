@@ -205,7 +205,6 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   int              a,b;
   int              status;
 
-
   bld->errbuf[0] = '\0';
 
   /* If a score system is already set, delete it. */
@@ -216,17 +215,17 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
   if (mxfile == NULL) 
     {
-      if ((status = esl_scorematrix_SetBLOSUM62(bld->S)) != eslOK) goto ERROR;
+      if ((status = esl_scorematrix_Set("BLOSUM62", bld->S)) != eslOK) goto ERROR;
     } 
   else 
     {
       if ((status = esl_fileparser_Open(mxfile, env, &efp)) != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to find or open matrix file %s", mxfile);
-      if ((status = esl_sco_Read(efp, bld->abc, &(bld->S))) != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to read matrix from %s:\n%s", mxfile, efp->errbuf);
+      if ((status = esl_scorematrix_Read(efp, bld->abc, &(bld->S))) != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to read matrix from %s:\n%s", mxfile, efp->errbuf);
       esl_fileparser_Close(efp); efp = NULL;
     }
   if (! esl_scorematrix_IsSymmetric(bld->S)) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
-  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
+  if ((status = esl_scorematrix_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
 
   for (a = 0; a < bld->abc->K; a++)
@@ -301,12 +300,12 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
   /* Get the scoring matrix */
   if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
 
-  if ((status = esl_scorematrix_Load(matrix, bld->S)) != eslOK) 
-    ESL_XFAIL(status, bld->errbuf, "Failed to load precompiled matrix %s", matrix);
+  if ((status = esl_scorematrix_Set(matrix, bld->S)) != eslOK) 
+    ESL_XFAIL(status, bld->errbuf, "Failed to load built-in matrix %s", matrix);
 
   if (! esl_scorematrix_IsSymmetric(bld->S)) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
-  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
+  if ((status = esl_scorematrix_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
 
   for (a = 0; a < bld->abc->K; a++)

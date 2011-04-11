@@ -1367,13 +1367,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       if ((sco = esl_scorematrix_Create(abc)) == NULL) {
         client_msg_longjmp(data->sock_fd, eslEMEM, &jmp_env, "could not allocate scoring matrix.");
       }
-      if ((status = esl_scorematrix_Load(matrix, sco)) != eslOK) {
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to load precompiled matrix %s", matrix);
+      if ((status = esl_scorematrix_Set(matrix, sco)) != eslOK) {
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to set built-in matrix %s", matrix);
       }
       if (!esl_scorematrix_IsSymmetric(sco)) {
         client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Matrix %s isn't symmetric", matrix);
       }
-      if ((status = esl_sco_Probify(sco, NULL, NULL, NULL, &slambda)) != eslOK) {
+      if ((status = esl_scorematrix_Probify(sco, NULL, NULL, NULL, &slambda)) != eslOK) {
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
       }
 

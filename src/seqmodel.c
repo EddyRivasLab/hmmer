@@ -170,16 +170,16 @@ main(int argc, char **argv)
    * matrix rows as HMM match emission vectors. This means dividing
    * the joint probs through by f_a.
    */
-  if (mxfile == NULL)  esl_scorematrix_SetBLOSUM62(S);
+  if (mxfile == NULL)  esl_scorematrix_Set("BLOSUM62", S);
   else {
     ESL_FILEPARSER *efp = NULL;
 
     if ( esl_fileparser_Open(mxfile, NULL,  &efp) != eslOK) esl_fatal("failed to open score file %s",  mxfile);
-    if ( esl_sco_Read(efp, abc, &S)               != eslOK) esl_fatal("failed to read matrix from %s", mxfile);
+    if ( esl_scorematrix_Read(efp, abc, &S)               != eslOK) esl_fatal("failed to read matrix from %s", mxfile);
     esl_fileparser_Close(efp);
   }
   if (! esl_scorematrix_IsSymmetric(S)) esl_fatal("Score matrix isn't symmetric");
-  esl_sco_Probify(S, &Q, &fa, &fb, &slambda);
+  esl_scorematrix_Probify(S, &Q, &fa, &fb, &slambda);
   for (a = 0; a < abc->K; a++)
     for (b = 0; b < abc->K; b++)
       Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
