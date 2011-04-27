@@ -139,6 +139,7 @@ UTESTS =\
 	logsum_utest\
 	modelconfig_utest\
 	p7_alidisplay_utest\
+	p7_bg_utest\
 	p7_gmx_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
@@ -160,6 +161,8 @@ EXAMPLES = \
 	generic_vtrace_example\
 	logsum_example\
 	p7_alidisplay_example\
+	p7_bg_example\
+	p7_bg_example2\
 	p7_domaindef_example\
 	p7_hmmfile_example\
 	p7_pipeline_example\
@@ -259,9 +262,8 @@ ${STATS}: libhmmer.a ${HDRS} p7_config.h
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
-	@BASENAME=`echo $@ | sed -e 's/_example//' | sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_EXAMPLE ;\
+	@BASENAME=`echo $@ | sed -e 's/_example[0-9]*//' | sed -e 's/^p7_//'` ;\
+	DFLAG=p7`echo $@ | sed -e 's/^p7_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
            DFILE=${srcdir}/p7_$${BASENAME}.c ;\
         else \

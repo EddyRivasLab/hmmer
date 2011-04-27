@@ -144,13 +144,13 @@ readn(int fd, void *vptr, size_t n)
 
 #define LOG_TO_STDOUT
 #ifdef LOG_TO_STDOUT
-void openlog(const char *ident, int option, int facility)
+void p7_openlog(const char *ident, int option, int facility)
 {
   /* do nothing */
   return;
 }
 
-void syslog(int priority, const char *format, ...)
+void p7_syslog(int priority, const char *format, ...)
 {
   va_list ap;
 
@@ -165,7 +165,7 @@ void syslog(int priority, const char *format, ...)
 
   return;
 }
-void closelog(void)
+void p7_closelog(void)
 {
   /* do nothing */
   return;

@@ -125,7 +125,7 @@ extern void worker_process(ESL_GETOPTS *go);
 extern void master_process(ESL_GETOPTS *go);
 
 #define LOG_FATAL_MSG(str, err) {                                               \
-    syslog(LOG_CRIT,"[%s:%d] - %s error %d - %s\n", __FILE__, __LINE__, str, err, strerror(err)); \
+    p7_syslog(LOG_CRIT,"[%s:%d] - %s error %d - %s\n", __FILE__, __LINE__, str, err, strerror(err)); \
     exit(0); \
   }
 

@@ -3,12 +3,12 @@ srcdir     = @srcdir@
 VPATH      = @srcdir@ 
 
 CC       = @CC@
-CFLAGS   = @CFLAGS@
+CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@
+SIMDFLAGS= @SIMD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
-SIMDFLAGS= @SIMD_CFLAGS@
 DEFS     = @DEFS@
-LIBS     = @LIBS@ @LIBGSL@ -lm
+LIBS     = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 MPILIBS  = @MPILIBS@
 IMPLDIR  = impl_@IMPL_CHOICE@
 
@@ -40,7 +40,7 @@ all:    ${PROGS}
 dev:    ${PROGS}
 
 ${PROGS}: @EXEC_DEPENDENCY@  ../easel/libeasel.a ../src/libhmmer.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../easel -L../src -o $@ $@.o -lhmmer -leasel ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../easel -L../src -o $@ $@.o ${LIBS}
 
 ${PROGOBJS}: ../src/hmmer.h ../src/p7_config.h
 

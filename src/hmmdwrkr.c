@@ -159,7 +159,7 @@ worker_process(ESL_GETOPTS *go)
       case HMMD_CMD_SCAN:      process_SearchCmd(cmd, &env);                break;
       case HMMD_CMD_SEARCH:    process_SearchCmd(cmd, &env);                break;
       case HMMD_CMD_SHUTDOWN:  process_Shutdown (cmd, &env);  shutdown = 1; break;
-      default: syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
+      default: p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
       }
 
       free(cmd);
@@ -464,14 +464,14 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 
     p  = cmd->init.data + cmd->init.seqdb_off;
     if ((status = cache_SeqDb(p, &sdb)) != eslOK) {
-      syslog(LOG_ERR,"[%s:%d] - cache_SeqDb %s error %d\n", __FILE__, __LINE__, p, status);
+      p7_syslog(LOG_ERR,"[%s:%d] - cache_SeqDb %s error %d\n", __FILE__, __LINE__, p, status);
       LOG_FATAL_MSG("cache seqdb error", status);
     }
 
     /* validate the sequence database */
     cmd->init.sid[MAX_INIT_DESC-1] = 0;
     if (strcmp (cmd->init.sid, sdb->id) != 0 || cmd->init.db_cnt != sdb->db_cnt || cmd->init.seq_cnt != sdb->count) {
-      syslog(LOG_ERR,"[%s:%d] - seq db %s: integrity error %s - %s\n", __FILE__, __LINE__, p, cmd->init.sid, sdb->id);
+      p7_syslog(LOG_ERR,"[%s:%d] - seq db %s: integrity error %s - %s\n", __FILE__, __LINE__, p, cmd->init.sid, sdb->id);
       LOG_FATAL_MSG("database integrity error", 0);
     }
 
@@ -484,7 +484,7 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 
     p  = cmd->init.data + cmd->init.hmmdb_off;
     if ((status = cache_HmmDb(p, &hdb)) != eslOK) {
-      syslog(LOG_ERR,"[%s:%d] - cache_HmmDb %s error %d\n", __FILE__, __LINE__, p, status);
+      p7_syslog(LOG_ERR,"[%s:%d] - cache_HmmDb %s error %d\n", __FILE__, __LINE__, p, status);
       LOG_FATAL_MSG("cache hmmdb error", status);
     }
 
@@ -492,7 +492,7 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
     cmd->init.hid[MAX_INIT_DESC-1] = 0;
     /* TODO: come up with a new pressed format with an id to compare - strcmp (cmd->init.hid, hdb->id) != 0 */
     if (cmd->init.hmm_cnt != 1 || cmd->init.model_cnt != hdb->count) {
-      syslog(LOG_ERR,"[%s:%d] - hmm db %s: integrity error\n", __FILE__, __LINE__, p);
+      p7_syslog(LOG_ERR,"[%s:%d] - hmm db %s: integrity error\n", __FILE__, __LINE__, p);
       LOG_FATAL_MSG("database integrity error", 0);
     }
 

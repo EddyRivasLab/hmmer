@@ -137,16 +137,16 @@ print_client_msg(int fd, int status, char *format, va_list ap)
 
   s.status   = status;
   s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap) +1; /* +1 because we send the \0 */
-  syslog(LOG_ERR, ebuf);
+  p7_syslog(LOG_ERR, ebuf);
 
   /* send back an unsuccessful status message */
   n = sizeof(s);
   if (writen(fd, &s, n) != n) {
-    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
+    p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
     return;
   }
   if (writen(fd, ebuf, s.msg_size) != s.msg_size)  {
-    syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
+    p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
     return;
   }
 }
@@ -467,7 +467,7 @@ process_reset(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
     /* send back a successful status message */
     n = sizeof(status);
     if (writen(query->sock, &status, n) != n) {
-      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     }
   }
 }
@@ -722,11 +722,11 @@ master_process(ESL_GETOPTS *go)
     case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
-      syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
+      p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
       shutdown = 1;
       break;
     default:
-      syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
+      p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
       break;
     }
 
@@ -968,13 +968,13 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   /* send back a successful status message */
   n = sizeof(HMMD_SEARCH_STATUS);
   if (writen(fd, &results->status, n) != n) {
-    syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
   n = sizeof(HMMD_SEARCH_STATS);
   if (writen(fd, &results->stats, n) != n) {
-    syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
@@ -982,7 +982,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     /* send all the hit data */
     n = sizeof(P7_HIT) * results->stats.nhits;
     if (writen(fd, hits, n) != n) {
-      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
       goto CLEAR;
     }
 
@@ -993,7 +993,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
         n = ((char *)NULL) + results->status.msg_size - (char *)hits[i].dcl;
       }
       if (writen(fd, dcl[i], n) != n) {
-        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
         goto CLEAR;
       }
     }
@@ -1261,7 +1261,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     /* Receive message from client */
     if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
-      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
       return 1;
     }
 
@@ -1695,7 +1695,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       
       n = MSG_SIZE(worker->cmd);
       if (writen(worker->sock_fd, worker->cmd, n) != n) {
-        syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
 
@@ -1706,19 +1706,19 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       tv.tv_usec = 0;
 
       if ((n = select(worker->sock_fd + 1, &rset, NULL, NULL, &tv)) < 0) {
-        syslog(LOG_ERR,"[%s:%d] - select %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - select %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       } else {
         if (n == 0) {
-          syslog(LOG_ERR,"[%s:%d] - shutdown %s is not responding\n", __FILE__, __LINE__, worker->ip_addr);
+          p7_syslog(LOG_ERR,"[%s:%d] - shutdown %s is not responding\n", __FILE__, __LINE__, worker->ip_addr);
         } else {
           n = sizeof(HMMD_HEADER);
           if ((size = readn(worker->sock_fd, &cmd, n)) == -1) {
-            syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+            p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
           }
           if (cmd.hdr.command == HMMD_CMD_SHUTDOWN) {
-            syslog(LOG_ERR,"[%s:%d] - shutting down %s\n", __FILE__, __LINE__, worker->ip_addr);
+            p7_syslog(LOG_ERR,"[%s:%d] - shutting down %s\n", __FILE__, __LINE__, worker->ip_addr);
           } else {
-            syslog(LOG_ERR,"[%s:%d] - error shutting down %s - received %d\n", __FILE__, __LINE__, worker->ip_addr, cmd.hdr.command);
+            p7_syslog(LOG_ERR,"[%s:%d] - error shutting down %s - received %d\n", __FILE__, __LINE__, worker->ip_addr, cmd.hdr.command);
           }
         }
       }
@@ -1735,7 +1735,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     cmd.srch.inx = worker->srch_inx;
     cmd.srch.cnt = worker->srch_cnt;
     if (writen(worker->sock_fd, &cmd, n) != n) {
-      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
     }
 
@@ -1744,7 +1744,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     ptr += n;
     n = MSG_SIZE(worker->cmd) - n;
     if (writen(worker->sock_fd, ptr, n) != n) {
-      syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
     }
     
@@ -1754,7 +1754,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     n = sizeof(worker->status);
     total += n;
     if ((size = readn(worker->sock_fd, &worker->status, n)) == -1) {
-      syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
     }
 
@@ -1764,7 +1764,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       if ((worker->err_buf = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
       worker->err_buf[0] = 0;
       if ((size = readn(worker->sock_fd, worker->err_buf, n)) == -1) {
-        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
     } else {
@@ -1772,7 +1772,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       n = sizeof(worker->stats);
       total += n;
       if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
-        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
 
@@ -1782,7 +1782,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       n = sizeof(P7_HIT) * stats->nhits;
       if ((worker->hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
       if ((size = readn(worker->sock_fd, worker->hit, n)) == -1) {
-        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
 
@@ -1790,7 +1790,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       n = worker->status.msg_size - sizeof(worker->stats) - n;
       if ((worker->hit_data = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
       if ((size = readn(worker->sock_fd, worker->hit_data, n)) == -1) {
-        syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
+        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
     }
@@ -1852,7 +1852,7 @@ workerside_thread(void *arg)
     if (parent->hmm_db != NULL) n += strlen(parent->hmm_db->name) + 1;
 
     if ((cmd = malloc(n)) == NULL) {
-      syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       goto EXIT;
     }
     memset(cmd, 0, n);
@@ -1887,13 +1887,13 @@ workerside_thread(void *arg)
     }
 
     if (writen(worker->sock_fd, cmd, n) != n) {
-      syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
       status = eslFAIL;
     }
 
     /* process the init command first */
     if (readn(worker->sock_fd, &hdr, sizeof(hdr)) == -1) {
-      syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
       status = eslFAIL;
     }
 
@@ -1905,21 +1905,21 @@ workerside_thread(void *arg)
      */
     n = MSG_SIZE(&hdr);
     if ((cmd = realloc(cmd, n)) == NULL) {
-      syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       status = eslFAIL;
     }
     if (readn(worker->sock_fd, &(cmd->init), hdr.length) == -1) {
-      syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
+      p7_syslog(LOG_ERR,"[%s:%d] - reading (%d) error %d - %s\n", __FILE__, __LINE__, worker->sock_fd, errno, strerror(errno));
       status = eslFAIL;
     }
 
     /* validate the database of the worker before adding him to the list */
     if (hdr.command != HMMD_CMD_INIT) {
-      syslog(LOG_ERR,"[%s:%d] - expecting HMMD_CMD_INIT %d\n", __FILE__, __LINE__, hdr.command);
+      p7_syslog(LOG_ERR,"[%s:%d] - expecting HMMD_CMD_INIT %d\n", __FILE__, __LINE__, hdr.command);
       status = eslFAIL;
     }
     if (cmd->hdr.status != eslOK) {
-      syslog(LOG_ERR,"[%s:%d] - workers init status failed %d\n", __FILE__, __LINE__, cmd->hdr.status);
+      p7_syslog(LOG_ERR,"[%s:%d] - workers init status failed %d\n", __FILE__, __LINE__, cmd->hdr.status);
       status = eslFAIL;
     }
 

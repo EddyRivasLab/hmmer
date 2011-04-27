@@ -165,6 +165,137 @@ p7_bg_SetLength(P7_BG *bg, int L)
 
 
 
+/*****************************************************************
+ * x. Reading/writing residue backgrounds from files
+ *****************************************************************/
+
+/* Function:  p7_bg_Read()
+ * Synopsis:  Read background frequencies from a file.
+ *
+ * Purpose:   Read new background frequencies from file <bgfile>,
+ *            overwriting the frequencies previously in the 
+ *            <P7_BG> object <bg>.
+ *            
+ *            Note that <bg> is already created by the caller, not
+ *            created here. Also note that <p7_bg_Read()> only reads
+ *            residue background frequencies used for the "null
+ *            model", whereas a <P7_BG> object contains additional
+ *            information for the bias filter and for the biased
+ *            composition correction.
+ *            
+ * Args:      bgfile  - file to read.
+ *            bg      - existing <P7_BG> object provided by the caller.
+ *            errbuf  - OPTIONAL: space for an error message, upon parse errors; or NULL.
+ *
+ * Returns:   <eslOK> on success, and background frequencies in <bg>
+ *            are overwritten.
+ * 
+ *            <eslENOTFOUND> if <bgfile> can't be opened for reading.
+ *            <eslEFORMAT> if parsing of <bgfile> fails for some
+ *            reason.  In both cases, <errbuf> contains a
+ *            user-directed error message upon return, including (if
+ *            relevant) the file name <bgfile> and the line number on
+ *            which an error was detected. <bg> is unmodified.
+ *
+ * Throws:    <eslEMEM> on allocation failure; <bg> is unmodified,
+ *            and <errbuf> is empty.
+ */
+int
+p7_bg_Read(char *bgfile, P7_BG *bg, char *errbuf)
+{
+  ESL_FILEPARSER *efp   = NULL;
+  float          *fq    = NULL;
+  int             n     = 0;
+  char           *tok;
+  int             toklen;
+  int             alphatype;
+  ESL_DSQ         x;
+  int             status;
+
+  if (errbuf) errbuf[0] = '\0';
+
+  status =  esl_fileparser_Open(bgfile, NULL, &efp);
+  if      (status == eslENOTFOUND) ESL_XFAIL(eslENOTFOUND, errbuf, "couldn't open bg file  %s for reading", bgfile);
+  else if (status != eslOK)        goto ERROR;
+
+  esl_fileparser_SetCommentChar(efp, '#');
+
+  /* First token is alphabet type: amino | DNA | RNA */
+  status = esl_fileparser_GetToken(efp, &tok, &toklen);
+  if      (status == eslEOF) ESL_XFAIL(eslEFORMAT, errbuf, "premature end of file [line %d of bgfile %s]", efp->linenumber, bgfile);
+  else if (status != eslOK)  goto ERROR;
+
+  alphatype = esl_abc_EncodeType(tok);
+  if      (alphatype == eslUNKNOWN)    ESL_XFAIL(eslEFORMAT, errbuf, "expected alphabet type but saw \"%s\" [line %d of bgfile %s]", tok, efp->linenumber, bgfile);
+  else if (alphatype != bg->abc->type) ESL_XFAIL(eslEFORMAT, errbuf, "bg file's alphabet is %s; expected %s [line %d, %s]", tok, esl_abc_DecodeType(bg->abc->type), efp->linenumber, bgfile);
+  
+  ESL_ALLOC(fq, sizeof(float) * bg->abc->K);
+  esl_vec_FSet(fq, bg->abc->K, -1.0);
+
+  while ((status = esl_fileparser_NextLine(efp)) == eslOK)
+    {
+      status = esl_fileparser_GetTokenOnLine(efp, &tok, &toklen);
+      if      (status == eslEOL) ESL_XFAIL(eslEFORMAT, errbuf, "premature end of file [line %d of bgfile %s", efp->linenumber, bgfile);
+      else if (status != eslOK)  goto ERROR;
+
+      if      (toklen != 1 ||   ! esl_abc_CIsCanonical(bg->abc, *tok))
+	ESL_XFAIL(eslEFORMAT, errbuf, "expected to parse a residue letter; saw %s [line %d of bgfile %s]", tok, efp->linenumber, bgfile);
+
+      x = esl_abc_DigitizeSymbol(bg->abc, *tok);
+      if (fq[x] != -1.0)         ESL_XFAIL(eslEFORMAT, errbuf, "already parsed probability of %c [line %d of bgfile %s]", bg->abc->sym[x], efp->linenumber, bgfile);
+      n++;
+
+      status = esl_fileparser_GetTokenOnLine(efp, &tok, &toklen);
+      if      (status == eslEOL) ESL_XFAIL(eslEFORMAT, errbuf, "premature end of file, expected a probability [line %d of bgfile %s]", efp->linenumber, bgfile);
+      else if (status != eslOK)  goto ERROR;
+      if (! esl_str_IsReal(tok)) ESL_XFAIL(eslEFORMAT, errbuf, "expected a probability, saw %s [line %d of bgfile %s]", tok, efp->linenumber, bgfile);
+
+      fq[x] = atof(tok);
+
+      status = esl_fileparser_GetTokenOnLine(efp, &tok, &toklen);
+      if      (status == eslOK)  ESL_XFAIL(eslEFORMAT, errbuf, "extra unexpected data found [line %d of bgfile %s]", efp->linenumber, bgfile);
+      else if (status != eslEOL) goto ERROR;
+    }
+  if (status != eslEOF) goto ERROR;
+
+  if ( n != bg->abc->K) 
+    ESL_XFAIL(eslEFORMAT, errbuf, "expected %d residue frequencies, but found %d in bgfile %s", bg->abc->K, n, bgfile);
+  if ( esl_FCompare(esl_vec_FSum(fq, bg->abc->K), 1.0, 0.001) != eslOK) 
+    ESL_XFAIL(eslEFORMAT, errbuf, "residue frequencies do not sum to 1.0 in bgfile %s", bgfile);
+  
+  /* all checking complete. no more error cases. overwrite bg with the new frequencies */
+  esl_vec_FNorm(fq, bg->abc->K);
+  esl_vec_FCopy(fq, bg->abc->K, bg->f);
+  return eslOK;
+
+ ERROR:
+  if (efp) esl_fileparser_Close(efp);
+  return status;
+}
+
+
+/* Function:  p7_bg_Write()
+ * Synopsis:  Write a <P7_BG> object to a stream in its save file format.
+ *
+ * Purpose:   Write the residue frequencies of <P7_BG> object <bg> to
+ *            stream <fp> in save file format. Only the residue
+ *            frequencies are written (there are other parts of a
+ *            <P7_BG> object, having to do with the bias filter and
+ *            biased composition score correction.)
+ *            
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_bg_Write(FILE *fp, P7_BG *bg)
+{
+  int x;
+  fprintf(fp, "%s\n", esl_abc_DecodeType(bg->abc->type));
+  for (x = 0; x < bg->abc->K; x++)
+    fprintf(fp, "%c  %.5f\n", bg->abc->sym[x], bg->f[x]);
+  return eslOK;
+}
+/*---------------- end, i/o of P7_BG object ---------------------*/
+
 
 /*****************************************************************
  * 2. Standard iid null model ("null1")
@@ -379,9 +510,90 @@ main(int argc, char **argv)
 #endif /*p7BG_BENCHMARK*/
 
 
+/*****************************************************************
+ * x. Unit tests
+ *****************************************************************/
+#ifdef p7BG_TESTDRIVE
+#include "esl_dirichlet.h"
+#include "esl_random.h"
+
+static void
+utest_ReadWrite(ESL_RANDOMNESS *rng)
+{
+  char          msg[]       = "bg Read/Write unit test failed";
+  char          tmpfile[32] = "esltmpXXXXXX";
+  FILE         *fp          = NULL;
+  ESL_ALPHABET *abc         = NULL;   /* random alphabet choice eslRNA..eslDICE */
+  float        *fq          = NULL;
+  P7_BG        *bg          = NULL; 
+
+  if ((abc = esl_alphabet_Create(esl_rnd_Roll(rng, 5) + 1)) == NULL)  esl_fatal(msg);
+  if (( bg = p7_bg_Create(abc))                             == NULL)  esl_fatal(msg);
+  if (( fq = malloc(sizeof(float) * abc->K))                == NULL)  esl_fatal(msg);                 
+  if (esl_dirichlet_FSampleUniform(rng, abc->K, fq)         != eslOK) esl_fatal(msg);
+  esl_vec_FCopy(fq, abc->K, bg->f);
+
+  if (esl_tmpfile_named(tmpfile, &fp) != eslOK) esl_fatal(msg);
+  if ( p7_bg_Write(fp, bg)            != eslOK) esl_fatal(msg);
+  fclose(fp);
+
+  esl_vec_FSet(bg->f, bg->abc->K, 0.0);
+  if ( p7_bg_Read(tmpfile, bg, NULL)                 != eslOK) esl_fatal(msg);
+  if ( esl_vec_FCompare(fq, bg->f, bg->abc->K, 0.01) != eslOK) esl_fatal(msg);
+
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  free(fq);
+  remove(tmpfile);
+}
+#endif /*p7BG_TESTDRIVE*/
+
 
 /*****************************************************************
- * x. Example
+ * x. Test driver
+ *****************************************************************/
+
+#ifdef p7BG_TESTDRIVE
+#include "esl_config.h"
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
+  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose commentary/output",                 0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for p7_bg";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go          = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  int             be_verbose  = esl_opt_GetBoolean(go, "-v");
+
+  if (be_verbose) printf("p7_bg unit test: rng seed %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_ReadWrite(rng);
+
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /* p7BG_TESTDRIVE */
+
+
+/*****************************************************************
+ * x. Examples
  *****************************************************************/
 #ifdef p7BG_EXAMPLE
 /*
@@ -435,12 +647,13 @@ main(int argc, char **argv)
 
   sq = esl_sq_CreateDigital(abc);
   bg = p7_bg_Create(abc);
-  p7_bg_SetFilterByHMM(bg, hmm);
+
+  p7_bg_SetFilter(bg, hmm->M, hmm->compo);
 
   H = esl_vec_FEntropy(bg->f, bg->abc->K);
   printf("bg iid H = %.4f\n", H);
 
-  H = esl_vec_FEntropy(bg->mcomp, bg->abc->K);
+  H = esl_vec_FEntropy(hmm->compo, bg->abc->K);
   printf("modelcomp H = %.4f\n", H);
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
@@ -454,10 +667,10 @@ main(int argc, char **argv)
 
       esl_sq_Reuse(sq);
     }
-  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s line %" PRId64 "):\n%s\n",
-					    sqfp->filename, sqfp->linenumber, sqfp->errbuf);     
+  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",
+					   sqfp->filename, sqfp->get_error(sqfp));     
   else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-					    status, sqfp->filename);
+					   status, sqfp->filename);
 
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
@@ -468,6 +681,32 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7BG_EXAMPLE*/
+
+#ifdef p7BG_EXAMPLE2
+#include <stdio.h>
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "hmmer.h"
+
+int 
+main(int argc, char **argv)
+{
+  char         *bgfile     = argv[1];
+  char         *alphabet   = argv[2];
+  ESL_ALPHABET *abc        = esl_alphabet_Create(esl_abc_EncodeType(alphabet));
+  P7_BG        *bg         = p7_bg_Create(abc);
+  char          errbuf[eslERRBUFSIZE];
+  int           status;
+
+  status = p7_bg_Read(bgfile, bg, errbuf);
+  if      (status == eslENOTFOUND) esl_fatal("open failed: %s", errbuf);
+  else if (status == eslEFORMAT)   esl_fatal("parse failed: %s", errbuf);
+  else if (status != eslOK)        esl_fatal("failed to read bg file %s (error %d)\n", bgfile, status);
+  
+  p7_bg_Write(stdout, bg);
+  return 0;
+}
+#endif /*p7BG_EXAMPLE2*/
 
 /*****************************************************************
  * @LICENSE@
