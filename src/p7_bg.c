@@ -4,9 +4,6 @@
  *     1. P7_BG object: allocation, initialization, destruction.
  *     2. Standard iid null model ("null1")
  *     3. Filter null model. 
- * 
- * SRE, Fri Jan 12 13:31:26 2007 [Janelia] [Ravel, Bolero]
- * SVN $Id$
  */
 
 #include "p7_config.h"		/* must be included first */
@@ -24,7 +21,6 @@
  *****************************************************************/
 
 /* Function:  p7_bg_Create()
- * Incept:    SRE, Fri Jan 12 13:32:51 2007 [Janelia]
  *
  * Purpose:   Allocate a <P7_BG> object for digital alphabet <abc>,
  *            initializes it to appropriate default values, and
@@ -79,7 +75,6 @@ p7_bg_Create(const ESL_ALPHABET *abc)
 
 /* Function:  p7_bg_CreateUniform()
  * Synopsis:  Creates background model with uniform freqs.
- * Incept:    SRE, Sat Jun 30 10:25:27 2007 [Janelia]
  *
  * Purpose:   Creates a background model for alphabet <abc>
  *            with uniform residue frequencies.
@@ -111,7 +106,6 @@ p7_bg_CreateUniform(const ESL_ALPHABET *abc)
 
 /* Function:  p7_bg_Dump()
  * Synopsis:  Outputs <P7_BG> object as text, for diagnostics.
- * Incept:    SRE, Fri May 25 08:07:11 2007 [Janelia]
  *
  * Purpose:   Given a null model <bg>, dump it as text to stream <fp>.
  */
@@ -125,13 +119,12 @@ p7_bg_Dump(FILE *ofp, const P7_BG *bg)
 
 
 /* Function:  p7_bg_Destroy()
- * Incept:    SRE, Fri Jan 12 14:04:30 2007 [Janelia]
  *
  * Purpose:   Frees a <P7_BG> object.
  *
  * Returns:   (void)
  *
- * Xref:      STL11/125.
+ * Xref:      SRE:STL11/125.
  */
 void
 p7_bg_Destroy(P7_BG *bg)
@@ -147,7 +140,6 @@ p7_bg_Destroy(P7_BG *bg)
 
 /* Function:  p7_bg_SetLength()
  * Synopsis:  Set the null model length distribution.
- * Incept:    SRE, Thu Aug 28 08:44:22 2008 [Janelia]
  *
  * Purpose:   Sets the geometric null model length 
  *            distribution in <bg> to a mean of <L> residues.
@@ -266,9 +258,13 @@ p7_bg_Read(char *bgfile, P7_BG *bg, char *errbuf)
   /* all checking complete. no more error cases. overwrite bg with the new frequencies */
   esl_vec_FNorm(fq, bg->abc->K);
   esl_vec_FCopy(fq, bg->abc->K, bg->f);
+
+  free(fq);
+  esl_fileparser_Close(efp);
   return eslOK;
 
  ERROR:
+  if (fq)  free(fq);
   if (efp) esl_fileparser_Close(efp);
   return status;
 }
@@ -302,7 +298,6 @@ p7_bg_Write(FILE *fp, P7_BG *bg)
  *****************************************************************/
 
 /* Function:  p7_bg_NullOne()
- * Incept:    SRE, Mon Apr 23 08:13:26 2007 [Janelia]
  *
  * Purpose:   Calculate the null1 lod score, for sequence <dsq>
  *            of length <L> "aligned" to the base null model <bg>. 
@@ -329,7 +324,6 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 
 /* Function:  p7_bg_SetFilter()
  * Synopsis:  Configure filter HMM with new model composition.
- * Incept:    SRE, Fri Dec  5 09:08:15 2008 [Janelia]
  *
  * Purpose:   The "filter HMM" is an experimental filter in the
  *            acceleration pipeline for avoiding biased composition
@@ -362,8 +356,8 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *
  * Throws:    (no abnormal error conditions)
  *
- * Xref:      J4/25: generalized to use composition vector, not
- *                   specifically an HMM. 
+ * Xref:      SRE:J4/25: generalized to use composition vector, not
+ *                       specifically an HMM. 
  *                   
  * Note:      This looks like a two-state HMM, but if you start thinking
  *            about its length distribution ("oh my god, L0 assumes a
@@ -413,7 +407,6 @@ p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)
 
 /* Function:  p7_bg_FilterScore()
  * Synopsis:  Calculates the filter null model score.
- * Incept:    SRE, Thu Aug 28 08:52:53 2008 [Janelia]
  *
  * Purpose:   Calculates the filter null model <bg> score for sequence
  *            <dsq> of length <L>, and return it in 
