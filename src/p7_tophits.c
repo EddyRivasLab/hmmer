@@ -1311,10 +1311,10 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   if (show_header)
   {
       if (pli->long_targets) {
-    	    fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %*s %*s %9s %6s %5s %s\n",
-    	       tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", "  E-value", " score", " bias", "description of target");
-    	    fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %*s %*s %9s %6s %5s %s\n",
-    	       tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "---------", "------", "-----", "---------------------");
+    	    fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %*s %*s %9s %6s %5s %5s %s\n",
+    	       tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", "  E-value", " score", " bias", "strand", "description of target");
+    	    fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %*s %*s %9s %6s %5s %5s %s\n",
+    	       tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "---------", "------", "-----", "------", "---------------------");
       } else {
           fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----");
           fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
@@ -1328,7 +1328,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
     if (th->hit[h]->flags & p7_IS_REPORTED)    {
         d    = th->hit[h]->best_domain;
         if (pli->long_targets) {
-            fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %9.2g %6.1f %5.1f %s\n",
+            fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %9.2g %6.1f %5.1f %6s %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -1342,7 +1342,8 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 th->hit[h]->pvalue,
                 th->hit[h]->score,
                 th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-                th->hit[h]->desc ?  th->hit[h]->desc : "-");
+                (th->hit[h]->dcl[d].iali < th->hit[h]->dcl[d].jali ? "   +  "  :  "   -  "),
+                th->hit[h]->desc ?  th->hit[h]->desc : "");
         } else {
 
             fprintf(ofp, "%-*s %-*s %-*s %-*s %9.2g %6.1f %5.1f %9.2g %6.1f %5.1f %5.1f %3d %3d %3d %3d %3d %3d %3d %s\n",
@@ -1450,6 +1451,174 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
       }
   return eslOK;
 }
+
+
+/* Function:  p7_tophits_TabularTargets_Xfam()
+ * Synopsis:  Output parsable table(s) of hits, in format desired by Xfam.
+ * Incept:    TJW, Thu Apr 28 16:56:25 EDT 2011 [Flying back from Convey]
+ *
+ * Purpose:   Output a parseable table of reportable hits in sorted
+ *            tophits list <th> in an easily parsed ASCII tabular
+ *            form to stream <ofp>, using final pipeline accounting
+ *            stored in <pli>.
+ *
+ *            For long-target nucleotide queries, this will print the
+ *            same hits as p7_tophits_TabularTargets(), but with the
+ *            smaller number of (reordered) fields required by Dfam
+ *            scripts.
+ *
+ *            For protein queries, this will print two tables:
+ *            (a) per-sequence hits as presented by
+ *                p7_tophits_TabularTargets(), but formatted for
+ *                Pfam scripts;
+ *            (b) per-domain hits, similar to those presented by
+ *                p7_tophits_TabularDomains(), but sorted by
+ *                score/e-value, and formated for Pfam scripts.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli)
+{
+  int h,d;
+  int status;
+  int posw;
+  int ndom = 0;
+  P7_TOPHITS *domHitlist;
+  P7_HIT     *domhit     = NULL;
+
+  int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  if (pli->long_targets)    posw = ESL_MAX(7, p7_tophits_GetMaxPositionLength(th));
+
+  //header
+  if (pli->long_targets) {
+
+		fprintf(ofp, "# Hit scores\n# ----------\n#\n");
+		fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %*s %*s %*s %*s %6s   %s\n",
+				tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", "strand", "description of target");
+				fprintf(ofp, "# %*s %6s %9s %5s %s %s %*s %*s %*s %*s %5s    %s\n",
+				   tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "------", "---------------------");
+
+		  for (h = 0; h < th->N; h++) {
+		    if (th->hit[h]->flags & p7_IS_REPORTED)    {
+
+		        	d    = th->hit[h]->best_domain;
+		            fprintf(ofp, "%-*s  %6.1f %9.2g %5.1f %7d %7d %*d %*d %*d %*d %s   %s\n",
+		                tnamew, th->hit[h]->name,
+		                th->hit[h]->score,
+		                th->hit[h]->pvalue,
+		                th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+		                th->hit[h]->dcl[d].ad->hmmfrom,
+		                th->hit[h]->dcl[d].ad->hmmto,
+		                posw, th->hit[h]->dcl[d].iali,
+		                posw, th->hit[h]->dcl[d].jali,
+		                posw, th->hit[h]->dcl[d].ienv,
+		                posw, th->hit[h]->dcl[d].jenv,
+		                (th->hit[h]->dcl[d].iali < th->hit[h]->dcl[d].jali ? "   +  "  :  "   -  "),
+		                th->hit[h]->desc ?  th->hit[h]->desc : "");
+		    }
+		  }
+
+  } else {
+	  fprintf(ofp, "# Sequence scores\n# ---------------\n#\n");
+	  fprintf(ofp, "# %-*s %6s %9s %3s %5s %5s    %s\n",
+		  tnamew-1, "name",  " bits", "  E-value", "n",  "exp", " bias", "description");
+	  fprintf(ofp, "# %*s %6s %9s %3s %5s %5s    %s\n",
+		  tnamew-1, "-------------------",  "------", "---------","---", "-----",  "-----", "---------------------");
+
+
+	  for (h = 0; h < th->N; h++) {
+		  if (th->hit[h]->flags & p7_IS_REPORTED)    {
+
+            fprintf(ofp, "%-*s  %6.1f %9.2g %3d %5.1f %5.1f    %s\n",
+                tnamew, th->hit[h]->name,
+                th->hit[h]->score,
+                th->hit[h]->pvalue * pli->Z,
+                th->hit[h]->ndom,
+                th->hit[h]->nexpected,
+                th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+                (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc)
+                );
+
+            for (d = 0; d < th->hit[h]->ndom; d++)
+  			  if (th->hit[h]->dcl[d].is_reported)
+  		    	ndom ++;
+
+		  }
+	  }
+	  fprintf(ofp, "\n");
+
+	  //Need to sort the domains.  One way to do this is to re-use the hit sorting machinery,
+	  // so we create one "hit" for each domain, then hand it off to the sorter
+	  domHitlist  = p7_tophits_Create();
+	  for (h = 0; h < th->N; h++)
+	  {
+  	    if (th->hit[h]->flags & p7_IS_REPORTED)
+  	    {
+  	    	int ndomReported = 0;
+            for (d = 0; d < th->hit[h]->ndom; d++)
+            {
+  			  if (th->hit[h]->dcl[d].is_reported)
+  			  {
+  	  	    	p7_tophits_CreateNextHit(domHitlist, &domhit);
+  	  	        ndomReported++;
+  	  	        ESL_ALLOC(domhit->dcl, sizeof(P7_DOMAIN) );
+
+  	  	        domhit->ndom       = ndomReported;  // re-using this variable to track the ordinal value of the domain in the original hit list that generated this pseudo-hit
+  	  	        domhit->name       = th->hit[h]->name;
+  	  	        domhit->desc       = th->hit[h]->desc;
+  	  	        domhit->dcl[0]     = th->hit[h]->dcl[d];
+  	  	        domhit->sortkey    = pli->inc_by_E ? 0-th->hit[h]->dcl[d].pvalue : th->hit[h]->dcl[d].bitscore;
+  			  }
+            }
+  	    }
+	  }
+	  p7_tophits_Sort(domHitlist);
+
+	  //Now with this list of sorted "hits" (really domains),
+      fprintf(ofp, "# Domain scores\n# -------------\n#\n");
+      fprintf(ofp, "# %-*s %6s %9s %5s %5s %6s %6s %6s %6s %6s %6s     %s\n",
+          tnamew-1, " name",  "bits", "E-value", "hit", "bias",      "env-st",  "env-en",  "ali-st",  "ali-en",  "hmm-st",  "hmm-en",   "description");
+      fprintf(ofp, "# %*s %6s %9s %5s %5s %6s %6s %6s %6s %6s %6s      %s\n",
+         tnamew-1, "-------------------",  "------", "---------", "-----", "-----", "------", "------", "------", "------", "------", "------", "---------------------");
+
+	  for (h = 0; h < domHitlist->N; h++){
+		  domhit = domHitlist->hit[h];
+
+		  fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6d %6d %6ld %6ld %6d %6d     %s\n",
+			  tnamew, domHitlist->hit[h]->name,
+			  domhit->dcl[0].bitscore,
+			  domhit->dcl[0].pvalue * pli->Z, //i-Evalue
+			  domhit->ndom,
+			  domhit->dcl[0].dombias * eslCONST_LOG2R, // NATS to BITS at last moment
+			  domhit->dcl[0].ienv,
+			  domhit->dcl[0].jenv,
+			  domhit->dcl[0].ad->sqfrom,
+			  domhit->dcl[0].ad->sqto,
+			  domhit->dcl[0].ad->hmmfrom,
+			  domhit->dcl[0].ad->hmmto,
+			  (domhit->desc ?  domhit->desc : "-")
+			  );
+	  }
+	  free (domHitlist->unsrt);
+	  free (domHitlist->hit);
+	  free (domHitlist);
+
+  }
+
+
+  return eslOK;
+
+  ERROR:
+  if (domHitlist) {
+	  free (domHitlist->unsrt);
+	  free (domHitlist->hit);
+	  free (domHitlist);
+  }
+  return eslFAIL;
+}
+
+
 
 /* Function:  p7_tophits_TabularTail()
  * Synopsis:  Print a trailer on a tabular output file.

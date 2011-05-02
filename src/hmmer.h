@@ -1205,6 +1205,7 @@ extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 				ESL_MSA **ret_msa);
 extern int p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
 extern int p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
+extern int p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode, 
 				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
 
