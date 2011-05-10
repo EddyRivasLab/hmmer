@@ -1138,7 +1138,7 @@ set_msa_name(struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
     {
       if  (cfg->hmmName != NULL)
 	{
-	  if ((status = esl_msa_SetName(msa, cfg->hmmName)) != eslOK) return status;
+	  if ((status = esl_msa_SetName(msa, cfg->hmmName, -1)) != eslOK) return status;
 	}
       else if (msa->name != NULL) 
 	{
@@ -1147,7 +1147,7 @@ set_msa_name(struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
       else if (! cfg->afp->do_stdin)
 	{
 	  if ((status = esl_FileTail(cfg->afp->fname, TRUE, &name)) != eslOK) return status; /* TRUE=nosuffix */	  
-	  if ((status = esl_msa_SetName(msa, name))                 != eslOK) return status;
+	  if ((status = esl_msa_SetName(msa, name, -1))             != eslOK) return status;
 	  free(name);
 	}
       else ESL_FAIL(eslEINVAL, errbuf, "Failed to set model name: msa has no name, no msa filename, and no -n");

@@ -118,9 +118,9 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ES
 
   for (idx = 0; idx < nseq; idx++)
     {
-      esl_msa_SetSeqName(msa, idx, sq[idx]->name);
-      if (sq[idx]->acc[0]  != '\0') esl_msa_SetSeqAccession  (msa, idx, sq[idx]->acc);
-      if (sq[idx]->desc[0] != '\0') esl_msa_SetSeqDescription(msa, idx, sq[idx]->desc);
+      esl_msa_SetSeqName(msa, idx, sq[idx]->name, -1);
+      if (sq[idx]->acc[0]  != '\0') esl_msa_SetSeqAccession  (msa, idx, sq[idx]->acc,  -1);
+      if (sq[idx]->desc[0] != '\0') esl_msa_SetSeqDescription(msa, idx, sq[idx]->desc, -1);
       msa->wgt[idx] = 1.0;
       if (msa->sqlen != NULL) msa->sqlen[idx] = sq[idx]->n;
     }
@@ -184,15 +184,15 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
 
 
   /* Transfer information from old MSA to new */
-  esl_msa_SetName     (msa, premsa->name);
-  esl_msa_SetDesc     (msa, premsa->desc);
-  esl_msa_SetAccession(msa, premsa->acc);
+  esl_msa_SetName     (msa, premsa->name, -1);
+  esl_msa_SetDesc     (msa, premsa->desc, -1);
+  esl_msa_SetAccession(msa, premsa->acc,  -1);
 
   for (idx = 0; idx < premsa->nseq; idx++)
     {
-      esl_msa_SetSeqName       (msa, idx, premsa->sqname[idx]);
-      if (msa->sqacc)  esl_msa_SetSeqAccession  (msa, idx, premsa->sqacc[idx]);
-      if (msa->sqdesc) esl_msa_SetSeqDescription(msa, idx, premsa->sqdesc[idx]);
+      esl_msa_SetSeqName       (msa, idx, premsa->sqname[idx], -1);
+      if (msa->sqacc)  esl_msa_SetSeqAccession  (msa, idx, premsa->sqacc[idx], -1);
+      if (msa->sqdesc) esl_msa_SetSeqDescription(msa, idx, premsa->sqdesc[idx], -1);
       msa->wgt[idx] = premsa->wgt[idx];
     }
 
