@@ -22,8 +22,9 @@ AR          = @AR@
 RANLIB      = @RANLIB@
 INSTALL     = @INSTALL@
 
-MYLIBDIRS   = -L../../easel -L.. 
-MYINCDIRS   = -I../../easel \
+ESLDIR      = @HMMER_ESLDIR@
+MYLIBDIRS   = -L../../${ESLDIR} -L.. 
+MYINCDIRS   = -I../../${ESLDIR} \
 	      -I${top_srcdir}/easel \
 	      -I. \
 	      -I.. \
