@@ -78,6 +78,7 @@ HMMER_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
+HMMER_ESLDIR="easel"
 
 EASEL_DATE="March 2010"
 EASEL_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."

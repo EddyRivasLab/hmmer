@@ -21,6 +21,9 @@ srcdir         = @srcdir@
 VPATH          = @srcdir@
 SHELL          = /bin/sh
 
+# location of easel
+ESLDIR         = @HMMER_ESLDIR@
+
 # Package information
 #
 PACKAGE         = @PACKAGE_NAME@
@@ -92,29 +95,29 @@ PROGS = hmmalign\
 #      (Excludes test programs.)
 #
 all: 
-	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} all
 
 # dev: compile all executables, including drivers.
 #
 dev: 
-	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} dev
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} dev
 	${QUIET_SUBDIR0}profmark   ${QUIET_SUBDIR1} dev
 
 # tests: compile all test drivers for 'make check'
 #
 tests:
-	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tests
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
 
 # check: Run test suites.
 #
 check:
-	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tests
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
-	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} check
+	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} check
 	${QUIET_SUBDIR0}testsuite  ${QUIET_SUBDIR1} check
 
 # pdf: compile the User Guides.
@@ -149,7 +152,7 @@ clean:
 	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} clean
-	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} clean
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 
 # "make distclean" leaves a pristine source distribution.
@@ -159,7 +162,7 @@ distclean:
 	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} distclean
-	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} distclean
 	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
