@@ -33,8 +33,10 @@ RANLIB    = @RANLIB@
 INSTALL   = @INSTALL@
 
 IMPLDIR   = impl_@IMPL_CHOICE@
-MYLIBDIRS = -L../easel -L./${IMPLDIR} -L.
-MYINCDIRS = -I../easel \
+ESLDIR    = @HMMER_ESLDIR@
+
+MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L.
+MYINCDIRS = -I../${ESLDIR} \
 	    -I${top_srcdir}/easel \
 	    -I. \
 	    -I${srcdir}
@@ -207,7 +209,7 @@ libhmmer-src.stamp: ${OBJS}
 ${OBJS}:     ${HDRS} p7_config.h  
 ${PROGOBJS}: ${HDRS} p7_config.h
 
-${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../easel/libeasel.a  
+${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a  
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 .c.o:

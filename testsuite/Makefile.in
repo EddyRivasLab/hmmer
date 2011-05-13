@@ -4,6 +4,8 @@ VPATH          = @srcdir@
 
 SQCLEVEL = 2
 
+ESLDIR = @HMMER_ESLDIR@
+
 ALIS = 	20aa\
 	Caudal_act\
 	LuxC\
@@ -35,7 +37,7 @@ check:
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${srcdir}/../easel/devkit/sqc ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
+	@${srcdir}/../${ESLDIR}/devkit/sqc ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
 
 hmms:
 	for ali in ${ALIS}; do\
