@@ -278,7 +278,7 @@ parse_tblfile(char *tblfile, ESL_KEYHASH *kh)
   while (esl_fileparser_NextLine(efp) == eslOK)
     {
       if (esl_fileparser_GetTokenOnLine(efp, &tok, &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, tblfile);
-      if (esl_key_Store(kh, tok, NULL)                      != eslOK) esl_fatal("failed to add %s to seq index", tok);
+      if (esl_keyhash_Store(kh, tok, toklen, NULL)          != eslOK) esl_fatal("failed to add %s to seq index", tok);
     }      
   esl_fileparser_Close(efp);
   return eslOK;
@@ -368,18 +368,17 @@ parse_results(char *resfile, int **pni, ESL_KEYHASH *qkh, ESL_KEYHASH *poskh, ES
       if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* bit score ignored */
       if (esl_fileparser_GetTokenOnLine(efp, &target, &tlen)   != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* target name; will be converted to an index */
       if (esl_fileparser_GetTokenOnLine(efp, &query,  &qlen)   != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* query name; will be converted to an index */
-      
-      if (esl_key_Lookup(qkh, query,  &(rp[nr].qidx)) != eslOK) esl_fatal("failed to find query model %s in hash", query);  /* query index */
+      if (esl_keyhash_Lookup(qkh, query, qlen, &(rp[nr].qidx)) != eslOK) esl_fatal("failed to find query model %s in hash", query);  /* query index */
       rp[nr].class = classify_pair_by_names(query, target);
 
       if (rp[nr].class == -1)		/* negatives: look up in negkh, and offset the index by npos */
 	{
-	  if (esl_key_Lookup(negkh, target, &(rp[nr].tidx)) != eslOK) esl_fatal("failed to find target seq  %s in hash", target);	/* target index */
+	  if (esl_keyhash_Lookup(negkh, target, tlen, &(rp[nr].tidx)) != eslOK) esl_fatal("failed to find target seq  %s in hash", target);	/* target index */
 	  rp[nr].tidx  += esl_keyhash_GetNumber(poskh);
 	}
       else			/* positives/ignores: look up in poskh */
 	{
-	  if (esl_key_Lookup(poskh, target, &(rp[nr].tidx)) != eslOK) esl_fatal("failed to find target seq  %s in hash", target);	/* target index */
+	  if (esl_keyhash_Lookup(poskh, target, tlen, &(rp[nr].tidx)) != eslOK) esl_fatal("failed to find target seq  %s in hash", target);	/* target index */
 	}
       nr++;
     }

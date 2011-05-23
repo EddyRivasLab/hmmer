@@ -251,7 +251,7 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
       if (esl_fileparser_GetTokenOnLine(efp, &key, &keylen) != eslOK)
 	p7_Fail("Failed to read HMM name on line %d of file %s\n", efp->linenumber, keyfile);
       
-      status = esl_key_Store(keys, key, &keyidx);
+      status = esl_keyhash_Store(keys, key, -1, &keyidx);
       if (status == eslEDUP) p7_Fail("HMM key %s occurs more than once in file %s\n", key, keyfile);
 	
       if (hfp->ssi != NULL) { onefetch(go, ofp, key, hfp);  nhmm++; }
@@ -266,8 +266,8 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
 	  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hfp->fname);
 	  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hfp->fname);
 
-	  if (esl_key_Lookup(keys, hmm->name, &keyidx) == eslOK || 
-	      ((hmm->acc) && esl_key_Lookup(keys, hmm->acc, &keyidx) == eslOK))
+	  if (esl_keyhash_Lookup(keys, hmm->name, -1, &keyidx) == eslOK || 
+	      ((hmm->acc) && esl_keyhash_Lookup(keys, hmm->acc, -1, &keyidx) == eslOK))
 	    {
 	      p7_hmmfile_WriteASCII(ofp, -1, hmm);
 	      nhmm++;

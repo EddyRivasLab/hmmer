@@ -12,11 +12,6 @@
  * Again, Sept 2005: xref STL10/24-26.      (Inherent target length dependency)
  * Again, Jan 2007:  xref STL11/125,136-137 (HMMER3)
  * Again, Jul 2007:  xref J1/103            (floating point ops)
- *
- * SRE, Mon May  2 10:55:16 2005 [St. Louis]
- * SRE, Fri Jan 12 08:06:33 2007 [Janelia] [Kate Bush, Aerial]
- * SRE, Tue Jul 10 13:19:46 2007 [Janelia] [HHGTTG]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -37,7 +32,6 @@
  
 /* Function:  p7_ProfileConfig()
  * Synopsis:  Configure a search profile.
- * Incept:    SRE, Sun Sep 25 12:21:25 2005 [St. Louis]
  *
  * Purpose:   Given a model <hmm> with core probabilities, the null1
  *            model <bg>, a desired search <mode> (one of <p7_LOCAL>,
@@ -215,7 +209,6 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
 
 /* Function:  p7_ReconfigLength()
  * Synopsis:  Set the target sequence length of a model.
- * Incept:    SRE, Sun Sep 25 12:38:55 2005 [St. Louis]
  *
  * Purpose:   Given a model already configured for scoring, in some
  *            particular algorithm mode; reset the expected length
@@ -253,7 +246,6 @@ p7_ReconfigLength(P7_PROFILE *gm, int L)
 
 /* Function:  p7_ReconfigMultihit()
  * Synopsis:  Quickly reconfig model into multihit mode for target length <L>.
- * Incept:    SRE, Sat Feb 23 09:16:01 2008 [Janelia]
  *
  * Purpose:   Given a profile <gm> that's already been configured once,
  *            quickly reconfigure it into a multihit mode for target 
@@ -282,7 +274,6 @@ p7_ReconfigMultihit(P7_PROFILE *gm, int L)
 
 /* Function:  p7_ReconfigUnihit()
  * Synopsis:  Quickly reconfig model into unihit mode for target length <L>.
- * Incept:    SRE, Sat Feb 23 09:19:42 2008 [Janelia]
  *
  * Purpose:   Given a profile <gm> that's already been configured once,
  *            quickly reconfigure it into a unihit mode for target 
@@ -622,7 +613,6 @@ main(int argc, char **argv)
 }
 
 /* ideal_local_endpoints()
- * Incept:    SRE, Fri Jan 26 13:01:34 2007 [Janelia]
  *
  * Purpose:  Implementation of the "two-step" fragment sampling
  *           algorithm, sampling a uniform local fragment w.r.t.
@@ -722,7 +712,6 @@ ideal_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr, 
 }
 
 /* profile_local_endpoints()
- * Incept:    SRE, Fri Jan 26 13:16:09 2007 [Janelia]
  *
  * Purpose:   Wrapper around <p7_ProfileEmit()>, sampling a local
  *            alignment fragment from the profile's probabilistic model

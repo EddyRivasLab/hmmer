@@ -876,16 +876,16 @@ p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew)
    */
   for (h = 0; h < th->N; h++)
   {
-      esl_key_Lookup(kh, th->hit[h]->name, &oldrank);
+    esl_keyhash_Lookup(kh, th->hit[h]->name, -1, &oldrank);
       
-      if (th->hit[h]->flags & p7_IS_INCLUDED) 
-    {
-      if (oldrank == -1) { th->hit[h]->flags |= p7_IS_NEW; nnew++; }
-    }
-      else 
-    {
-      if (oldrank >=  0) th->hit[h]->flags |= p7_IS_DROPPED;
-    }
+    if (th->hit[h]->flags & p7_IS_INCLUDED) 
+      {
+	if (oldrank == -1) { th->hit[h]->flags |= p7_IS_NEW; nnew++; }
+      }
+    else 
+      {
+	if (oldrank >=  0) th->hit[h]->flags |= p7_IS_DROPPED;
+      }
   }
 
   /* Replace the old rank list with the new one */
@@ -895,7 +895,7 @@ p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew)
       if (th->hit[h]->flags & p7_IS_INCLUDED)
     {
       /* What happens when the same sequence name appears twice? It gets stored with higher rank */
-      status = esl_key_Store(kh, th->hit[h]->name, NULL);
+      status = esl_keyhash_Store(kh, th->hit[h]->name, -1, NULL);
       if (status != eslOK && status != eslEDUP) goto ERROR;
     }
   }
