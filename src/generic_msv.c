@@ -554,7 +554,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   P7_TRACE       *tr      = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           sc, nullsc, seqscore, P;
+  float           sc, nullsc, seqscore, lnP;
   int             status;
 
   /* Read in one HMM */
@@ -590,12 +590,12 @@ main(int argc, char **argv)
       /* Calculate bit score and P-value using standard null1 model*/
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
       seqscore = (sc - nullsc) / eslCONST_LOG2;
-      P        =  esl_gumbel_surv(seqscore,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
+      lnP      =  esl_gumbel_logsurv(seqscore,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
 
       /* output suitable for direct use in profmark benchmark postprocessors:
        * <Pvalue> <bitscore> <target name> <query name>
        */
-      printf("%g\t%.2f\t%s\t%s\n", P, seqscore, sq->name, hmm->name);
+      printf("%g\t%.2f\t%s\t%s\n", exp(lnP), seqscore, sq->name, hmm->name);
 
       esl_sq_Reuse(sq);
     }

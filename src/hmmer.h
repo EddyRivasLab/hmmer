@@ -588,7 +588,7 @@ typedef struct p7_dom_s {
   float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 score contribution; NATS */
   float          oasc;		/* optimal accuracy score (units: expected # residues correctly aligned)      */
   float          bitscore;	/* overall score in BITS, null corrected, if this were the only domain in seq */
-  double         pvalue;	/* P-value of the bitscore                                                    */
+  double         lnP;	        /* log(P-value) of the bitscore                                               */
   int            is_reported;	/* TRUE if domain meets reporting thresholds                                  */
   int            is_included;	/* TRUE if domain meets inclusion thresholds                                  */
   P7_ALIDISPLAY *ad; 
@@ -677,16 +677,16 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
-  int    window_length; /* for later use in e-value computation, when splitting long sequences */
+  int    window_length;         /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
   float  score;			/* bit score of the sequence (all domains, w/ correction) */
   float  pre_score;		/* bit score of sequence before null2 correction          */
   float  sum_score;		/* bit score reconstructed from sum of domain envelopes   */
 
-  double pvalue;		/* P-value of the score               */
-  double pre_pvalue;		/* P-value of the pre_score           */
-  double sum_pvalue;		/* P-value of the sum_score           */
+  double lnP;		        /* log(P-value) of the score               */
+  double pre_lnP;		/* log(P-value) of the pre_score           */
+  double sum_lnP;		/* log(P-value) of the sum_score           */
 
   float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
   int    nregions;	/* number of regions evaluated */
@@ -1125,10 +1125,10 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double Pval);
-extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double Pval);
-extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     double Pval);
-extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double Pval);
+extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
+extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
+extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     double lnP);
+extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double lnP);
 extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
@@ -1180,8 +1180,8 @@ extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
 extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  char *name, char *acc, char *desc, 
 				  double sortkey, 
-				  float score,    double pvalue, 
-				  float mothersc, double motherp,
+				  float score,    double lnP, 
+				  float mothersc, double mother_lnP,
 				  int sqfrom, int sqto, int sqlen,
 				  int hmmfrom, int hmmto, int hmmlen, 
 				  int domidx, int ndom,

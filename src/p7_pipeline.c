@@ -297,19 +297,18 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
 
 /* Function:  p7_pli_TargetReportable
  * Synopsis:  Returns TRUE if target score meets reporting threshold.
- * Incept:    SRE, Tue Dec  9 08:57:26 2008 [Janelia]
  *
  * Purpose:   Returns <TRUE> if the bit score <score> and/or 
- *            P-value <Pval> meeds per-target reporting thresholds 
+ *            log P-value <lnP> meet per-target reporting thresholds 
  *            for the processing pipeline.
  */
 int
-p7_pli_TargetReportable(P7_PIPELINE *pli, float score, double Pval)
+p7_pli_TargetReportable(P7_PIPELINE *pli, float score, double lnP)
 {
   if      (  pli->by_E )
     {
-      if ( !pli->long_targets  && Pval * pli->Z <= pli->E) return TRUE;
-      if (  pli->long_targets  && Pval <= pli->E) return TRUE; // database size is already built into the Pval if pli->targetlength == p7_TARGET_LONG
+      if ( !pli->long_targets  && exp(lnP) * pli->Z <= pli->E) return TRUE;
+      if (  pli->long_targets  && exp(lnP) <= pli->E)          return TRUE; // database size is already built into the Pval if pli->targetlength == p7_TARGET_LONG
     }
   else if (! pli->by_E   && score         >= pli->T) return TRUE;
 
@@ -318,35 +317,33 @@ p7_pli_TargetReportable(P7_PIPELINE *pli, float score, double Pval)
 
 /* Function:  p7_pli_DomainReportable
  * Synopsis:  Returns TRUE if domain score meets reporting threshold. 
- * Incept:    SRE, Tue Dec  9 09:01:01 2008 [Janelia]
  *
  * Purpose:   Returns <TRUE> if the bit score <score> and/or 
- *            P-value <Pval> meets per-domain reporting thresholds 
+ *            log P-value <lnP> meet per-domain reporting thresholds 
  *            for the processing pipeline.
  */
 int
-p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, double Pval)
+p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, double lnP)
 {
   if      (  pli->dom_by_E )
-	  {
-	   if ( !pli->long_targets  &&  Pval * pli->domZ <= pli->domE) return TRUE;
-	   if (  pli->long_targets  &&  Pval  <= pli->domE) return TRUE;
-	  }
+    {
+      if ( !pli->long_targets  &&  exp(lnP) * pli->domZ <= pli->domE) return TRUE;
+      if (  pli->long_targets  &&  exp(lnP) <= pli->domE) return TRUE;
+    }
   else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
   return FALSE;
 }
 
 /* Function:  p7_pli_TargetIncludable()
  * Synopsis:  Returns TRUE if target score meets inclusion threshold.
- * Incept:    SRE, Fri Jan 16 11:18:08 2009 [Janelia]
  */
 int
-p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, double Pval)
+p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, double lnP)
 {
   if      (  pli->inc_by_E )
     {
-      if ( !pli->long_targets && Pval * pli->Z <= pli->incE) return TRUE;
-      if (  pli->long_targets && Pval <= pli->incE) return TRUE;
+      if ( !pli->long_targets && exp(lnP) * pli->Z <= pli->incE) return TRUE;
+      if (  pli->long_targets && exp(lnP) <= pli->incE) return TRUE;
     }
 
   else if (! pli->inc_by_E   && score         >= pli->incT) return TRUE;
@@ -356,12 +353,11 @@ p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, double Pval)
 
 /* Function:  p7_pli_DomainIncludable()
  * Synopsis:  Returns TRUE if domain score meets inclusion threshold.
- * Incept:    SRE, Fri Jan 16 11:20:38 2009 [Janelia]
  */
 int
-p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, double Pval)
+p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, double lnP)
 {
-  if      (  pli->incdom_by_E   && Pval * pli->domZ <= pli->incdomE) return TRUE;
+  if      (  pli->incdom_by_E   && exp(lnP) * pli->domZ <= pli->incdomE) return TRUE;
   else if (! pli->incdom_by_E   && dom_score        >= pli->incdomT) return TRUE;
   else return FALSE;
 }
@@ -581,7 +577,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   float            seq_score;          /* the corrected per-seq bit score */
   float            sum_score;           /* the corrected reconstruction score for the seq */
   float            pre_score, pre2_score; /* uncorrected bit scores for seq */
-  double           P;               /* P-value of a hit */
+  double           P;                /* P-value of a hit */
+  double           lnP;              /* log P-value of a hit */
   int              Ld;               /* # of residues in envelopes */
   int              d;
   int              status;
@@ -669,26 +666,26 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   if (pli->do_null2) 
     {
       for (d = 0; d < pli->ddef->ndom; d++) 
-    {
-      if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0)
-        {
-          sum_score += pli->ddef->dcl[d].envsc;         /* NATS */
-          Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
-          seqbias   += pli->ddef->dcl[d].domcorrection; /* NATS */
-        }
-    }
+	{
+	  if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0)
+	    {
+	      sum_score += pli->ddef->dcl[d].envsc;         /* NATS */
+	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
+	      seqbias   += pli->ddef->dcl[d].domcorrection; /* NATS */
+	    }
+	}
       seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);  /* NATS */
     }
   else 
     {
       for (d = 0; d < pli->ddef->ndom; d++) 
-    {
-      if (pli->ddef->dcl[d].envsc > 0.0)
-        {
-          sum_score += pli->ddef->dcl[d].envsc;      /* NATS */
-          Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
-        }
-    }
+	{
+	  if (pli->ddef->dcl[d].envsc > 0.0)
+	    {
+	      sum_score += pli->ddef->dcl[d].envsc;      /* NATS */
+	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
+	    }
+	}
       seqbias = 0.0;
     }    
   sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS */
@@ -707,8 +704,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
    * only be a lower bound for now, so this list may be longer
    * than eventually reported.
    */
-  P =  esl_exp_surv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
-  if (p7_pli_TargetReportable(pli, seq_score, P))
+  lnP =  esl_exp_logsurv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+  if (p7_pli_TargetReportable(pli, seq_score, lnP))
     {
       p7_tophits_CreateNextHit(hitlist, &hit);
       if (pli->mode == p7_SEARCH_SEQS) {
@@ -728,14 +725,14 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       hit->nenvelopes = pli->ddef->nenvelopes;
 
       hit->pre_score  = pre_score; /* BITS */
-      hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      hit->pre_lnP    = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       hit->score      = seq_score; /* BITS */
-      hit->pvalue     = P;
-      hit->sortkey    = pli->inc_by_E ? -log(P) : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
+      hit->lnP        = lnP;
+      hit->sortkey    = pli->inc_by_E ? -lnP : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
 
       hit->sum_score  = sum_score; /* BITS */
-      hit->sum_pvalue = esl_exp_surv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      hit->sum_lnP    = esl_exp_logsurv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       /* Transfer all domain coordinates (unthresholded for
        * now) with their alignment displays to the hit list,
@@ -749,15 +746,15 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       pli->ddef->dcl   = NULL;
       hit->best_domain = 0;
       for (d = 0; d < hit->ndom; d++)
-    {
-      Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
-      hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
-      hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
-      hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
-      hit->dcl[d].pvalue   = esl_exp_surv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+	{
+	  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
+	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
+	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
+	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
+	  hit->dcl[d].lnP      = esl_exp_logsurv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
-      if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
-    }
+	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
+	}
 
       /* If we're using model-specific bit score thresholds (GA | TC |
        * NC) and we're in an hmmscan pipeline (mode = p7_SCAN_MODELS),
@@ -784,24 +781,24 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
        * [xref J5/92]
        */
       if (pli->use_bit_cutoffs)
-    {
-      if (p7_pli_TargetReportable(pli, hit->score, hit->pvalue))
-        {
-          hit->flags |= p7_IS_REPORTED;
-          if (p7_pli_TargetIncludable(pli, hit->score, hit->pvalue))
-        hit->flags |= p7_IS_INCLUDED;
-        }
+	{
+	  if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
+	    {
+	      hit->flags |= p7_IS_REPORTED;
+	      if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
+		hit->flags |= p7_IS_INCLUDED;
+	    }
 
-      for (d = 0; d < hit->ndom; d++)
-        {
-          if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].pvalue))
-        {
-          hit->dcl[d].is_reported = TRUE;
-          if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].pvalue))
-            hit->dcl[d].is_included = TRUE;
-        }
-        }
-    }
+	  for (d = 0; d < hit->ndom; d++)
+	    {
+	      if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+		{
+		  hit->dcl[d].is_reported = TRUE;
+		  if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+		    hit->dcl[d].is_included = TRUE;
+		}
+	    }
+	}
     }
 
   return eslOK;
@@ -1021,13 +1018,13 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
 
           hit->pre_score  = hit->dcl[0].bitscore  / eslCONST_LOG2;
-          hit->pre_pvalue = esl_exp_surv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+          hit->pre_lnP    = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
           float nullsc2 =  (float) hit->window_length * log((float)hit->window_length/(hit->window_length+1)) + log(1./(hit->window_length+1));
 
           hit->dcl[0].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[0].domcorrection) : 0.0);
           hit->dcl[0].bitscore = (hit->dcl[0].bitscore - (nullsc2 + hit->dcl[0].dombias)) / eslCONST_LOG2;
-          hit->dcl[0].pvalue   = esl_exp_surv (hit->dcl[0].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+          hit->dcl[0].lnP      = esl_exp_logsurv (hit->dcl[0].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
           if (pli->mode == p7_SEARCH_SEQS)
             {
@@ -1039,9 +1036,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
             }
 
           hit->sum_score  = hit->score  = hit->dcl[0].bitscore;
-          hit->sum_pvalue = hit->pvalue     = hit->dcl[0].pvalue;
-
-
+          hit->sum_lnP    = hit->lnP    = hit->dcl[0].lnP;
         }
 
         pli->ddef->ndom = 0; // reset for next use
@@ -1268,17 +1263,17 @@ main(int argc, char **argv)
       d    = hitlist->hit[h]->best_domain;
 
       printf("%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %s\n",
-         hitlist->hit[h]->pvalue * (double) pli->Z,
-         hitlist->hit[h]->score,
-         hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
-         hitlist->hit[h]->dcl[d].bitscore,
-         eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of bits */
-         hitlist->hit[h]->dcl[d].pvalue * (double) pli->Z,
-         hitlist->hit[h]->nexpected,
-         hitlist->hit[h]->nreported,
-         namew,
-         hitlist->hit[h]->name,
-         hitlist->hit[h]->desc);
+	     exp(hitlist->hit[h]->lnP) * (double) pli->Z,
+	     hitlist->hit[h]->score,
+	     hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+	     hitlist->hit[h]->dcl[d].bitscore,
+	     eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of bits */
+	     exp(hitlist->hit[h]->dcl[d].lnP) * (double) pli->Z,
+	     hitlist->hit[h]->nexpected,
+	     hitlist->hit[h]->nreported,
+	     namew,
+	     hitlist->hit[h]->name,
+	     hitlist->hit[h]->desc);
     }
 
   /* Done. */
@@ -1409,17 +1404,17 @@ main(int argc, char **argv)
       d    = hitlist->hit[h]->best_domain;
 
       printf("%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %s\n",
-         hitlist->hit[h]->pvalue * (double) pli->Z,
-         hitlist->hit[h]->score,
-         hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
-         hitlist->hit[h]->dcl[d].bitscore,
-         eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of BITS */
-         hitlist->hit[h]->dcl[d].pvalue * (double) pli->Z,
-         hitlist->hit[h]->nexpected,
-         hitlist->hit[h]->nreported,
-         namew,
-         hitlist->hit[h]->name,
-         hitlist->hit[h]->desc);
+	     exp(hitlist->hit[h]->lnP) * (double) pli->Z,
+	     hitlist->hit[h]->score,
+	     hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+	     hitlist->hit[h]->dcl[d].bitscore,
+	     eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of BITS */
+	     exp(hitlist->hit[h]->dcl[d].lnP) * (double) pli->Z,
+	     hitlist->hit[h]->nexpected,
+	     hitlist->hit[h]->nreported,
+	     namew,
+	     hitlist->hit[h]->name,
+	     hitlist->hit[h]->desc);
     }
 
   /* Done. */
