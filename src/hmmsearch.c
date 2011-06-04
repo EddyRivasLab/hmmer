@@ -809,7 +809,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--pfamtblout") && (pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)
     mpi_failure("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblfp"));
 
-  ESL_ALLOC(list, sizeof(SEQ_BLOCK));
+  ESL_ALLOC(list, sizeof(BLOCK_LIST));
   list->complete = 0;
   list->size     = 0;
   list->current  = 0;
