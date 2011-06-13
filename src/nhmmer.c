@@ -88,7 +88,7 @@ static ESL_OPTIONS options[] = {
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
 /* Other options */
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
-  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size in *Mb* to <x> for E-value calculations",   12 },
+  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size (Megabases) to <x> for E-value calculations",   12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--w_beta",     eslARG_REAL,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "tail mass at which window length is determined",               12 },
   { "--w_length",   eslARG_INT, NULL,  NULL, NULL,   NULL,  NULL,  NULL,            "window length ",                                              12 },
@@ -690,10 +690,11 @@ static int
 thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
 
-  //int      wstatus, wstatus_next;
-  int  status  = eslOK;
-  int  sstatus = eslOK;
-  int  eofCount = 0;
+  int          status  = eslOK;
+  int          sstatus = eslOK;
+  int          eofCount = 0;
+  int          use_tmpsq = FALSE;
+  ESL_SQ       *tmpsq   =  esl_sq_CreateDigital(info->om->abc);
   ESL_SQ_BLOCK *block;
   void         *newBlock;
   int i;
@@ -710,16 +711,32 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   while (sstatus == eslOK ) {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      //reset block as an empty vessel, possibly keeping the first sq intact for reading in the next window
-      if (block->count > 0 && block->complete)
-          esl_sq_Reuse(block->list);
-      for (i=1; i<block->count; i++)
+      //reset block as an empty vessel
+      for (i=0; i<block->count; i++)
           esl_sq_Reuse(block->list + i);
+
+      if (use_tmpsq) {
+          esl_sq_Copy(tmpsq , block->list);
+          block->complete = FALSE;  //this lets ReadBlock know that it needs to append to a small bit of previously-read seqeunce
+          block->list->C = info->om->max_length; // overload the ->C value, which ReadBlock uses to determine how much
+                                                 // overlap should be retained in the ReadWindow step
+      }
+
 
       sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
-      info->pli->nseqs += block->count - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
+      if (block->complete || block->count == 0) {
+          use_tmpsq = FALSE;
+      } else {
+          /* the final sequence on the block was a probably-incomplete window of the active sequence,
+           * so capture a copy of that window to use as a template on which the next ReadWindow() call
+           * (internal to ReadBlock) will be based
+           */
+          esl_sq_Copy(block->list + (block->count - 1) , tmpsq);
+          use_tmpsq = TRUE;
+      }
 
+      info->pli->nseqs += block->count - (use_tmpsq ? 1 : 0);// if there's an incomplete sequence read into the block wait to count it until it's complete.
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
@@ -749,6 +766,8 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       esl_threads_WaitForFinish(obj);
       esl_workqueue_Complete(queue);  
     }
+
+  esl_sq_Destroy(tmpsq);
 
   return sstatus;
 }

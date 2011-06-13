@@ -917,7 +917,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       if (pli->hfp)
         {
     	  p7_oprofile_ReadRest(pli->hfp, om);
-          p7_oprofile_ReconfigRestLength(om, window_len);
+          //p7_oprofile_ReconfigRestLength(om, window_len);
           if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
         }
 
@@ -1012,7 +1012,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
           //For these modifications, see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
           hit->dcl[0].bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
           hit->dcl[0].bitscore += 2 * log(2. / (hit->window_length+2)) ;
-          //handle extremely rare case that the env_len is actually larger than om->max_length
+          //the ESL_MAX test handles the extremely rare case that the env_len is actually larger than om->max_length
           hit->dcl[0].bitscore +=  (ESL_MAX(hit->window_length, env_len) - ali_len) * log((float)hit->window_length / (float) (hit->window_length+2));
 
 
