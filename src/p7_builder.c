@@ -5,9 +5,6 @@
  *    2. Standardized model construction API.
  *    3. Internal functions.
  *    4. Copyright and license information
- *    
- * SRE, Thu Dec 11 08:44:58 2008 [Janelia] [Requiem for a Dream]
- * SVN $Id$
  */   
 #include "p7_config.h"
 
@@ -32,7 +29,6 @@
 
 /* Function:  p7_builder_Create()
  * Synopsis:  Create a default HMM construction configuration.
- * Incept:    SRE, Thu Dec 11 13:14:21 2008 [Janelia]
  *
  * Purpose:   Create a construction configuration for building
  *            HMMs in alphabet <abc>, and return a pointer to it.
@@ -153,14 +149,96 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
 }
 
 
+/* Function:  p7_builder_LoadScoreSystem()
+ * Synopsis:  Load a standard score system for single sequence queries.
+ *
+ * Purpose:   Initialize the builder <bld> to be able to parameterize
+ *            single sequence queries, using the standard (built-in) score
+ *            matrix named <mx>.
+ *            
+ *            Available score matrices <mx> include PAM30, 70, 120, and 240;
+ *            and BLOSUM45, 50, 62, 80, and 90. See <esl_scorematrix.c>.
+ *
+ *            Set the gap-open and gap-extend probabilities to
+ *            <popen>, <pextend>, respectively.
+ *            
+ *            Use background residue frequencies in the null model
+ *            <bg> to convert substitution matrix scores to
+ *            conditional probability parameters.
+ *
+ * Args:      bld      - <P7_BUILDER> to initialize
+ *            matrix   - score matrix file to use
+ *            popen    - gap open probability
+ *            pextend  - gap extend probability
+ *            bg       - null model, containing background frequencies           
+ *
+ * Returns:   <eslOK> on success.
+ *            
+ *            <eslENOTFOUND> if <mxfile> can't be found or opened, even
+ *            in any of the directories specified by the <env> variable.   
+ *            
+ *            <eslEINVAL> if the score matrix can't be converted into
+ *            conditional probabilities; for example, if it has no valid
+ *            solution for <lambda>.
+ * 
+ *            On either error, <bld->errbuf> contains a useful error message
+ *            for the user.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, double pextend, P7_BG *bg)
+{
+  double  *f = NULL;
+  double   slambda;
+  int      a,b;
+  int      status;
+
+  bld->errbuf[0] = '\0';
+
+  /* If a score system is already set, delete it. */
+  if (bld->S != NULL) esl_scorematrix_Destroy(bld->S);
+  if (bld->Q != NULL) esl_dmatrix_Destroy(bld->Q);
+
+  /* Get the scoring matrix */
+  if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  status =  esl_scorematrix_Set(matrix, bld->S);
+  if      (status == eslENOTFOUND) ESL_XFAIL(status, bld->errbuf, "no matrix named %s is available as a built-in", matrix);
+  else if (status != eslOK)        ESL_XFAIL(status, bld->errbuf, "failed to set score matrix %s as a built-in",   matrix);
+
+  /* A wasteful conversion of the HMMER single-precision background probs to Easel double-prec */
+  ESL_ALLOC(f, sizeof(double) * bg->abc->K);
+  esl_vec_F2D(bg->f, bg->abc->K, f);
+
+  /* Backcalculate joint probability matrix Q, given scores S and background freqs bg->f.  */
+  /* Failures shouldn't happen here: these are standard matrices.  */
+  status = esl_scorematrix_ProbifyGivenBG(bld->S, f, f, &slambda, &(bld->Q));
+  if      (status == eslEINVAL)  ESL_XFAIL(eslEINVAL, bld->errbuf, "built-in score matrix %s has no valid solution for lambda", matrix);
+  else if (status == eslENOHALT) ESL_XFAIL(eslEINVAL, bld->errbuf, "failed to solve score matrix %s for lambda", matrix);
+  else if (status != eslOK)      ESL_XFAIL(eslEINVAL, bld->errbuf, "unexpected error in solving score matrix %s for probability parameters", matrix);
+
+  /* Convert joint probabilities P(ab) to conditionals P(b|a) */
+  for (a = 0; a < bld->abc->K; a++)
+    for (b = 0; b < bld->abc->K; b++)
+      bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
+
+  bld->popen   = popen;
+  bld->pextend = pextend;
+  free(f);
+  return eslOK;
+
+ ERROR:
+  if (f) free(f);
+  return status;
+}
 
 
 /* Function:  p7_builder_SetScoreSystem()
  * Synopsis:  Initialize score system for single sequence queries.
- * Incept:    SRE, Fri Dec 12 10:04:36 2008 [Janelia]
  *
  * Purpose:   Initialize the builder <bld> to be able to parameterize
- *            single sequence queries.
+ *            single sequence queries, using a substitution matrix
+ *            from a file.
  *            
  *            Read a standard substitution score matrix from file
  *            <mxfile>. If <mxfile> is <NULL>, default to BLOSUM62
@@ -172,13 +250,17 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
  *            
  *            Set the gap-open and gap-extend probabilities to
  *            <popen>, <pextend>, respectively.
- *
+ *            
+ *            Use background residue frequencies in the null model
+ *            <bg> to convert substitution matrix scores to
+ *            conditional probability parameters.
  *
  * Args:      bld      - <P7_BUILDER> to initialize
  *            mxfile   - score matrix file to use, or NULL for BLOSUM62 default
  *            env      - env variable containing directory list where <mxfile> may reside
  *            popen    - gap open probability
  *            pextend  - gap extend probability
+ *            bg       - null model, containing background frequencies
  *
  * Returns:   <eslOK> on success.
  *            
@@ -186,9 +268,8 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
  *            in any of the directories specified by the <env> variable.   
  *            
  *            <eslEINVAL> if the score matrix can't be converted into
- *            conditional probabilities by the Yu and Altschul method,
- *            either because it isn't a symmetric matrix or because
- *            the Yu/Altschul numerical method fails to converge. 
+ *            conditional probabilities; for example, if it has no valid
+ *            solution for <lambda>.
  * 
  *            On either error, <bld->errbuf> contains a useful error message
  *            for the user.
@@ -196,11 +277,10 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend)
+p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend, P7_BG *bg)
 {
-  ESL_FILEPARSER  *efp      = NULL;
-  double          *fa       = NULL;
-  double          *fb       = NULL;
+  ESL_FILEPARSER  *efp = NULL;
+  double          *f   = NULL;
   double           slambda;
   int              a,b;
   int              status;
@@ -219,116 +299,43 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
     } 
   else 
     {
-      if ((status = esl_fileparser_Open(mxfile, env, &efp)) != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to find or open matrix file %s", mxfile);
-      if ((status = esl_scorematrix_Read(efp, bld->abc, &(bld->S))) != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to read matrix from %s:\n%s", mxfile, efp->errbuf);
-      esl_fileparser_Close(efp); efp = NULL;
+      if ((status = esl_fileparser_Open(mxfile, env, &efp))         != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to find or open matrix file %s", mxfile);
+      if ((status = esl_scorematrix_Read(efp, bld->abc, &(bld->S))) != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to read matrix from %s:\n%s",    mxfile, efp->errbuf);
+      esl_fileparser_Close(efp); 
+      efp = NULL;
     }
-  if (! esl_scorematrix_IsSymmetric(bld->S)) 
-    ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
-  if ((status = esl_scorematrix_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
-    ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
 
+  /* A wasteful conversion of the HMMER single-precision background probs to Easel double-prec */
+  ESL_ALLOC(f, sizeof(double) * bg->abc->K);
+  esl_vec_F2D(bg->f, bg->abc->K, f);
+
+  /* Backcalculate joint probability matrix Q, given scores S and background freqs bg->f.  */
+  status = esl_scorematrix_ProbifyGivenBG(bld->S, f, f, &slambda, &(bld->Q));
+  if      (status == eslEINVAL)  ESL_XFAIL(eslEINVAL, bld->errbuf, "input score matrix %s has no valid solution for lambda", mxfile);
+  else if (status == eslENOHALT) ESL_XFAIL(eslEINVAL, bld->errbuf, "failed to solve input score matrix %s for lambda: are you sure it's valid?", mxfile);
+  else if (status != eslOK)      ESL_XFAIL(eslEINVAL, bld->errbuf, "unexpected error in solving input score matrix %s for probability parameters", mxfile);
+
+  /* Convert joint probs P(ab) to conditionals P(b | a) */
   for (a = 0; a < bld->abc->K; a++)
     for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
+      bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
 
   bld->popen   = popen;
   bld->pextend = pextend;
-
-  free(fa);
-  free(fb);
+  free(f);
   return eslOK;
 
  ERROR:
-  if (efp != NULL) esl_fileparser_Close(efp);
-  if (fa  != NULL) free(fa);
-  if (fb  != NULL) free(fb);
+  if (efp) esl_fileparser_Close(efp);
+  if (f)   free(f);
   return status;
 }
 
 
-/* Function:  p7_builder_LoadScoreSystem()
- * Synopsis:  Load score system for single sequence queries.
- * Incept:    MSF, Mon Nov 29, 2010 [Janelia]
- *
- * Purpose:   Initialize the builder <bld> to be able to parameterize
- *            single sequence queries.
- *            
- *            Load a standard substitution score matrix from memory
- *            <mx>.
- *            
- *            Set the gap-open and gap-extend probabilities to
- *            <popen>, <pextend>, respectively.
- *
- *
- * Args:      bld      - <P7_BUILDER> to initialize
- *            matrix   - score matrix file to use
- *            popen    - gap open probability
- *            pextend  - gap extend probability
- *
- * Returns:   <eslOK> on success.
- *            
- *            <eslENOTFOUND> if <mxfile> can't be found or opened, even
- *            in any of the directories specified by the <env> variable.   
- *            
- *            <eslEINVAL> if the score matrix can't be converted into
- *            conditional probabilities by the Yu and Altschul method,
- *            either because it isn't a symmetric matrix or because
- *            the Yu/Altschul numerical method fails to converge. 
- * 
- *            On either error, <bld->errbuf> contains a useful error message
- *            for the user.
- *
- * Throws:    <eslEMEM> on allocation failure.
- */
-int
-p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, double pextend)
-{
-  double          *fa       = NULL;
-  double          *fb       = NULL;
-  double           slambda;
-  int              a,b;
-  int              status;
-
-
-  bld->errbuf[0] = '\0';
-
-  /* If a score system is already set, delete it. */
-  if (bld->S != NULL) esl_scorematrix_Destroy(bld->S);
-  if (bld->Q != NULL) esl_dmatrix_Destroy(bld->Q);
-
-  /* Get the scoring matrix */
-  if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-
-  if ((status = esl_scorematrix_Set(matrix, bld->S)) != eslOK) 
-    ESL_XFAIL(status, bld->errbuf, "Failed to load built-in matrix %s", matrix);
-
-  if (! esl_scorematrix_IsSymmetric(bld->S)) 
-    ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
-  if ((status = esl_scorematrix_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK) 
-    ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
-
-  for (a = 0; a < bld->abc->K; a++)
-    for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
-
-  bld->popen   = popen;
-  bld->pextend = pextend;
-
-  free(fa);
-  free(fb);
-  return eslOK;
-
- ERROR:
-  if (fa != NULL) free(fa);
-  if (fb != NULL) free(fb);
-  return status;
-}
 
 
 /* Function:  p7_builder_Destroy()
  * Synopsis:  Free a <P7_BUILDER>
- * Incept:    SRE, Thu Dec 11 13:15:45 2008 [Janelia]
  *
  * Purpose:   Frees a <P7_BUILDER> object.
  */
@@ -365,7 +372,6 @@ static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, cons
 
 /* Function:  p7_Builder()
  * Synopsis:  Build a new HMM from an MSA.
- * Incept:    SRE, Thu Dec 11 13:24:38 2008 [Janelia]
  *
  * Purpose:   Take the multiple sequence alignment <msa> and a build configuration <bld>,
  *            and build a new HMM. 
@@ -445,7 +451,6 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 
 /* Function:  p7_SingleBuilder()
  * Synopsis:  Build a new HMM from a single sequence.
- * Incept:    SRE, Fri Dec 12 10:52:45 2008 [Janelia]
  *
  * Purpose:   Take the sequence <sq> and a build configuration <bld>, and
  *            build a new HMM.
@@ -508,7 +513,6 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
 
 /* Function:  p7_Builder_MaxLength()
  * Synopsis:  Compute the maximum likely length of an emitted sequence
- * Incept:    TJW, Mon Jan 18 12:48:57 EST 2010 [Janelia]
  *
  * Computes a fairly tight upper bound on domain length, by computing the
  * probability of the model emitting sequences of all lengths up to some
@@ -812,7 +816,6 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 
 
 /* set_effective_seqnumber()
- * Incept:    SRE, Fri May 11 08:14:57 2007 [Janelia]
  *
  * <hmm> comes in with weighted observed counts. It goes out with
  * those observed counts rescaled to sum to the "effective sequence
@@ -971,4 +974,7 @@ make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRAC
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

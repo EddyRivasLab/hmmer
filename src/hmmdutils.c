@@ -48,12 +48,13 @@
 
 static ESL_OPTIONS searchOpts[] = {
   /* Control of output */
-  { "--acc",        eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, NULL,        "prefer accessions over names in output",                       2 },
-  { "--noali",      eslARG_NONE,      FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't output alignments, so output is smaller",                2 },
+  { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "prefer accessions over names in output",                       2 },
+  { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't output alignments, so output is smaller",                2 },
   /* Control of scoring system */
-  { "--popen",      eslARG_REAL,     "0.02", NULL, "0<=x<0.5",NULL,  NULL, NULL,        "gap open probability",                                         3 },
-  { "--pextend",    eslARG_REAL,      "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL,        "gap extend probability",                                       3 },
-  { "--mxfile",   eslARG_STRING, "BLOSUM62", NULL, NULL,      NULL,  NULL, NULL,        "substitution score matrix [default: BLOSUM62]",                3 },
+  { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL, NULL,        "gap open probability",                                         3 },
+  { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL,        "gap extend probability",                                       3 },
+  { "--mx",         eslARG_STRING, "BLOSUM62", NULL, NULL,      NULL,  NULL,  "--mxfile", "substitution score matrix choice (of some built-in matrices)", 3 },
+  { "--mxfile",     eslARG_INFILE,       NULL, NULL, NULL,      NULL,  NULL,  "--mx",     "read substitution score matrix from file <f>",                 3 },
   /* Control of reporting thresholds */
   { "-E",           eslARG_REAL,     "10.0", NULL, "x>0",     NULL,  NULL, REPOPTS,     "report sequences <= this E-value threshold in output",         4 },
   { "-T",           eslARG_REAL,      FALSE, NULL, NULL,      NULL,  NULL, REPOPTS,     "report sequences >= this score threshold in output",           4 },

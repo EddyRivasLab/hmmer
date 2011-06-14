@@ -1,7 +1,4 @@
 /* phmmer: search a protein sequence against a protein database
- * 
- * SRE, Sun Dec  7 11:19:05 2008 [Janelia] [Requiem for a Dream]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -62,57 +59,58 @@ typedef struct {
 #endif
 
 static ESL_OPTIONS options[] = {
-  /* name           type         default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show brief help on version and usage",                         1 },
+  /* name           type              default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
+  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show brief help on version and usage",                         1 },
 /* Control of output */
-  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL,              "direct output to file <f>, not stdout",                        2 },
-  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL,              "save multiple alignment of hits to file <s>",                  2 },
-  { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL,              "save parseable table of per-sequence hits to file <s>",        2 },
-  { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL,              "save parseable table of per-domain hits to file <s>",          2 },
-  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "prefer accessions over names in output",                       2 },
-  { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "don't output alignments, so output is smaller",                2 },
-  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL, "--textw",          "unlimit ASCII text output line width",                         2 },
-  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL, "--notextw",        "set max width of ASCII text output lines",                     2 },
+  { "-o",           eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "direct output to file <f>, not stdout",                        2 },
+  { "-A",           eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "save multiple alignment of hits to file <s>",                  2 },
+  { "--tblout",     eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "save parseable table of per-sequence hits to file <s>",        2 },
+  { "--domtblout",  eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "save parseable table of per-domain hits to file <s>",          2 },
+  { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "prefer accessions over names in output",                       2 },
+  { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "don't output alignments, so output is smaller",                2 },
+  { "--notextw",    eslARG_NONE,         NULL, NULL, NULL,      NULL,  NULL, "--textw",          "unlimit ASCII text output line width",                         2 },
+  { "--textw",      eslARG_INT,         "120", NULL, "n>=120",  NULL,  NULL, "--notextw",        "set max width of ASCII text output lines",                     2 },
 /* Control of scoring system */
-  { "--popen",      eslARG_REAL,  "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
-  { "--pextend",    eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "substitution score matrix [default: BLOSUM62]",                3 },
+  { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
+  { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },
+  { "--mx",         eslARG_STRING, "BLOSUM62", NULL, NULL,      NULL,  NULL,  "--mxfile",        "substitution score matrix choice (of some built-in matrices)", 3 },
+  { "--mxfile",     eslARG_INFILE,       NULL, NULL, NULL,      NULL,  NULL,  "--mx",            "read substitution score matrix from file <f>",                 3 },
 /* Control of reporting thresholds */
-  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  REPOPTS,           "report sequences <= this E-value threshold in output",         4 },
-  { "-T",           eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  REPOPTS,           "report sequences >= this score threshold in output",           4 },
-  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  DOMREPOPTS,        "report domains <= this E-value threshold in output",           4 },
-  { "--domT",       eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  DOMREPOPTS,        "report domains >= this score cutoff in output",                4 },
+  { "-E",           eslARG_REAL,       "10.0", NULL, "x>0",     NULL,  NULL,  REPOPTS,           "report sequences <= this E-value threshold in output",         4 },
+  { "-T",           eslARG_REAL,        FALSE, NULL,  NULL,     NULL,  NULL,  REPOPTS,           "report sequences >= this score threshold in output",           4 },
+  { "--domE",       eslARG_REAL,       "10.0", NULL, "x>0",     NULL,  NULL,  DOMREPOPTS,        "report domains <= this E-value threshold in output",           4 },
+  { "--domT",       eslARG_REAL,        FALSE, NULL,  NULL,     NULL,  NULL,  DOMREPOPTS,        "report domains >= this score cutoff in output",                4 },
 /* Control of inclusion thresholds */
-  { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  NULL,  INCOPTS,           "consider sequences <= this E-value threshold as significant",  5 },
-  { "--incT",       eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  INCOPTS,           "consider sequences >= this score threshold as significant",    5 },
-  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",     NULL,  NULL,  INCDOMOPTS,        "consider domains <= this E-value threshold as significant",    5 },
-  { "--incdomT",    eslARG_REAL,   FALSE, NULL,  NULL,     NULL,  NULL,  INCDOMOPTS,        "consider domains >= this score threshold as significant",      5 },
+  { "--incE",       eslARG_REAL,       "0.01", NULL, "x>0",     NULL,  NULL,  INCOPTS,           "consider sequences <= this E-value threshold as significant",  5 },
+  { "--incT",       eslARG_REAL,        FALSE, NULL,  NULL,     NULL,  NULL,  INCOPTS,           "consider sequences >= this score threshold as significant",    5 },
+  { "--incdomE",    eslARG_REAL,       "0.01", NULL, "x>0",     NULL,  NULL,  INCDOMOPTS,        "consider domains <= this E-value threshold as significant",    5 },
+  { "--incdomT",    eslARG_REAL,        FALSE, NULL,  NULL,     NULL,  NULL,  INCDOMOPTS,        "consider domains >= this score threshold as significant",      5 },
 /* Model-specific thresholding for both reporting and inclusion (unused in phmmer)*/
-  { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  THRESHOPTS,        "use profile's GA gathering cutoffs to set all thresholding",  99 },
-  { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  THRESHOPTS,        "use profile's NC noise cutoffs to set all thresholding",      99 },
-  { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  THRESHOPTS,        "use profile's TC trusted cutoffs to set all thresholding",    99 },
+  { "--cut_ga",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  THRESHOPTS,        "use profile's GA gathering cutoffs to set all thresholding",  99 },
+  { "--cut_nc",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  THRESHOPTS,        "use profile's NC noise cutoffs to set all thresholding",      99 },
+  { "--cut_tc",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  THRESHOPTS,        "use profile's TC trusted cutoffs to set all thresholding",    99 },
 /* Control of filter pipeline */
-  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3",   "Turn all heuristic filters off (less speed, more power)",      7 },
-  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, "--max",            "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
-  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,      NULL,  NULL, "--max",            "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
-  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,      NULL,  NULL, "--max",            "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
-  { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL, "--max",            "turn off composition bias filter",                             7 },
+  { "--max",        eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, "--F1,--F2,--F3",   "Turn all heuristic filters off (less speed, more power)",      7 },
+  { "--F1",         eslARG_REAL,       "0.02", NULL, NULL,      NULL,  NULL, "--max",            "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
+  { "--F2",         eslARG_REAL,       "1e-3", NULL, NULL,      NULL,  NULL, "--max",            "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
+  { "--F3",         eslARG_REAL,       "1e-5", NULL, NULL,      NULL,  NULL, "--max",            "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
+  { "--nobias",     eslARG_NONE,        NULL,  NULL, NULL,      NULL,  NULL, "--max",            "turn off composition bias filter",                             7 },
 /* Control of E-value calibration */
-  { "--EmL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for MSV Gumbel mu fit",                   11 },   
-  { "--EmN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for MSV Gumbel mu fit",                   11 },   
-  { "--EvL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Viterbi Gumbel mu fit",               11 },   
-  { "--EvN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Viterbi Gumbel mu fit",               11 },   
-  { "--EfL",        eslARG_INT,    "100", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Forward exp tail tau fit",            11 },   
-  { "--EfN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Forward exp tail tau fit",            11 },   
-  { "--Eft",        eslARG_REAL,  "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,              "tail mass for Forward exponential tail tau fit",              11 },   
+  { "--EmL",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for MSV Gumbel mu fit",                   11 },   
+  { "--EmN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for MSV Gumbel mu fit",                   11 },   
+  { "--EvL",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Viterbi Gumbel mu fit",               11 },   
+  { "--EvN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Viterbi Gumbel mu fit",               11 },   
+  { "--EfL",        eslARG_INT,         "100", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Forward exp tail tau fit",            11 },   
+  { "--EfN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Forward exp tail tau fit",            11 },   
+  { "--Eft",        eslARG_REAL,       "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,              "tail mass for Forward exponential tail tau fit",              11 },   
 /* other options */
-  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,      NULL,  NULL,  NULL,              "turn off biased composition score corrections",               12 },
-  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,              "set # of comparisons done, for E-value calculation",          12 },
-  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,              "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",    NULL,  NULL,  NULL,              "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
-  { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
-  { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
-  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },
+  { "--nonull2",    eslARG_NONE,        NULL,  NULL, NULL,      NULL,  NULL,  NULL,              "turn off biased composition score corrections",               12 },
+  { "-Z",           eslARG_REAL,       FALSE, NULL, "x>0",     NULL,  NULL,  NULL,              "set # of comparisons done, for E-value calculation",          12 },
+  { "--domZ",       eslARG_REAL,       FALSE, NULL, "x>0",     NULL,  NULL,  NULL,              "set # of significant seqs, for domain E-value calculation",   12 },
+  { "--seed",       eslARG_INT,         "42",  NULL, "n>=0",    NULL,  NULL,  NULL,              "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
+  { "--qformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
+  { "--tformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
+  { "--daemon",     eslARG_NONE,        NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },
 
 #ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,           "number of parallel CPU workers to use for multithreads",      12 },
@@ -163,7 +161,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
 {
   ESL_GETOPTS *go = NULL;
 
-  if ((go = esl_getopts_Create(options))     == NULL)     esl_fatal("Internal failure creating options object");
+  if ((go = esl_getopts_Create(options))     == NULL)     p7_Fail("Internal failure creating options object");
   if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
   if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
@@ -239,7 +237,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"));  
   if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal  (go, "--popen"));
   if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal  (go, "--pextend"));
-  if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
+  if (esl_opt_IsUsed(go, "--mx"))        fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString(go, "--mx"));
+  if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString(go, "--mxfile"));
   if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"));
   if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
   if (esl_opt_IsUsed(go, "--domE"))      fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal(go, "--domE"));
@@ -359,6 +358,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                      */
   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                                */
+  P7_BG           *bg       = NULL;		  /* null model (copies made of this into threads)    */
   P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                   */
   ESL_STOPWATCH   *w        = NULL;               /* for timing                                       */
   int              nquery   = 0;
@@ -368,9 +368,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              qstatus  = eslOK;
   int              sstatus  = eslOK;
   int              i;
-
   int              ncpus    = 0;
-
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
 #ifdef HMMER_THREADS
@@ -382,8 +380,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Initializations */
   abc     = esl_alphabet_Create(eslAMINO);
   w       = esl_stopwatch_Create();
-  if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
-  else                                     textw = esl_opt_GetInteger(go, "--textw");
+  textw   = (esl_opt_GetBoolean(go, "--notextw") ? 0 : esl_opt_GetInteger(go, "--textw"));
+  bg      = p7_bg_Create(abc);
 
   /* If caller declared input formats, decode them */
   if (esl_opt_IsOn(go, "--qformat")) {
@@ -396,15 +394,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /* validate options if running as a daemon */
-  if (esl_opt_IsOn(go, "--daemon")) {
-
-    /* running as a daemon, the input format must be type daemon */
-    if (qformat != eslSQFILE_UNKNOWN && qformat != eslSQFILE_DAEMON) 
-      esl_fatal("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
-    qformat = eslSQFILE_DAEMON;
-
-    if (strcmp(cfg->qfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
-  }
+  if (esl_opt_IsOn(go, "--daemon")) 
+    {
+      /* running as a daemon, the input format must be type daemon */
+      if (qformat != eslSQFILE_UNKNOWN && qformat != eslSQFILE_DAEMON) 
+	p7_Fail("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
+      qformat = eslSQFILE_DAEMON;
+      
+      if (strcmp(cfg->qfile, "-") != 0) p7_Fail("Query sequence file must be '-', in daemon mode\n");
+    }
 
   /* Initialize a default builder configuration,
    * then set only the options we need for single sequence search
@@ -422,28 +420,31 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   bld->EfL = esl_opt_GetInteger(go, "--EfL");
   bld->EfN = esl_opt_GetInteger(go, "--EfN");
   bld->Eft = esl_opt_GetReal   (go, "--Eft");
-  status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
-  if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
+
+  /* Default is stored in the --mx option, so it's always IsOn(). Check --mxfile first; then go to the --mx option and the default. */
+  if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg);
+  else                              status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg); 
+  if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
   /* Open results output files */
-  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); } 
-  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"),          "w")) == NULL)  esl_fatal("Failed to open alignment output file %s for writing\n",       esl_opt_GetString(go, "-A")); } 
-  if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
-  if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
+  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  p7_Fail("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); } 
+  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"),          "w")) == NULL)  p7_Fail("Failed to open alignment output file %s for writing\n",       esl_opt_GetString(go, "-A")); } 
+  if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  p7_Fail("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
+  if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  p7_Fail("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp")); }
     
   /* Open the target sequence database for sequential access. */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
-  else if (status == eslEFORMAT)   esl_fatal("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
-  else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        esl_fatal("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
+  else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
 
   /* Open the query sequence file  */
   status = esl_sqfile_OpenDigital(abc, cfg->qfile, qformat, NULL, &qfp);
-  if      (status == eslENOTFOUND) esl_fatal("Failed to open sequence file %s for reading\n",      cfg->qfile);
-  else if (status == eslEFORMAT)   esl_fatal("Sequence file %s is empty or misformatted\n",        cfg->qfile);
-  else if (status == eslEINVAL)    esl_fatal("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        esl_fatal ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
+  if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",      cfg->qfile);
+  else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",        cfg->qfile);
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
+  else if (status != eslOK)        p7_Fail ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
   qsq  = esl_sq_CreateDigital(abc);
 
 #ifdef HMMER_THREADS
@@ -469,7 +470,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].pli   = NULL;
       info[i].th    = NULL;
       info[i].om    = NULL;
-      info[i].bg    = p7_bg_Create(abc);
+      info[i].bg    = p7_bg_Clone(bg);
 #ifdef HMMER_THREADS
       info[i].queue = queue;
 #endif
@@ -481,13 +482,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
       if (block == NULL) 
 	{
-	  esl_fatal("Failed to allocate sequence block");
+	  p7_Fail("Failed to allocate sequence block");
 	}
 
       status = esl_workqueue_Init(queue, block);
       if (status != eslOK) 
 	{
-	  esl_fatal("Failed to add block to work queue");
+	  p7_Fail("Failed to add block to work queue");
 	}
     }
 #endif
@@ -505,7 +506,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1)
 	{
-	  if (! esl_sqfile_IsRewindable(dbfp)) esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
+	  if (! esl_sqfile_IsRewindable(dbfp)) p7_Fail("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
 	  esl_sqfile_Position(dbfp, 0);
 	}
 
@@ -515,7 +516,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* Build the model */
-      p7_SingleBuilder(bld, qsq, info->bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+      p7_SingleBuilder(bld, qsq, info[0].bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
       for (i = 0; i < infocnt; ++i)
 	{
@@ -539,14 +540,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       switch(sstatus)
 	{
 	case eslEFORMAT: 
-	  esl_fatal("Parse failed (sequence file %s):\n%s\n",
+	  p7_Fail("Parse failed (sequence file %s):\n%s\n",
 		    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
 	  break;
 	case eslEOF:
 	  /* do nothing */
 	  break;
 	default:
-	  esl_fatal("Unexpected error %d reading sequence file %s",
+	  p7_Fail("Unexpected error %d reading sequence file %s",
 		    sstatus, dbfp->filename);
 	}
 
@@ -597,9 +598,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Destroy(om);
       esl_sq_Reuse(qsq);
     } /* end outer loop over query sequences */
-  if      (qstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
+  if      (qstatus == eslEFORMAT) p7_Fail("Parse failed (sequence file %s):\n%s\n",
 					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
-  else if (qstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
+  else if (qstatus != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s",
 					    qstatus, qfp->filename);
 
 
@@ -630,11 +631,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 
   free(info);
-
   esl_sqfile_Close(dbfp);
   esl_sqfile_Close(qfp);
   esl_stopwatch_Destroy(w);
   esl_sq_Destroy(qsq);
+  p7_bg_Destroy(bg);
   p7_builder_Destroy(bld);
   esl_alphabet_Destroy(abc);
 
@@ -863,6 +864,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
+  bg = p7_bg_Create(abc);
+
   /* Initialize a default builder configuration,
    * then set only the options we need for single sequence search
    */
@@ -879,7 +882,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   bld->EfL = esl_opt_GetInteger(go, "--EfL");
   bld->EfN = esl_opt_GetInteger(go, "--EfN");
   bld->Eft = esl_opt_GetReal   (go, "--Eft");
-  status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
+
+  if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg);
+  else                              status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg); 
   if (status != eslOK) mpi_failure("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
   /* Open results output files */
@@ -917,8 +922,6 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Show header output */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
-
-  bg = p7_bg_Create(abc);
 
   /* Outer loop over sequence queries */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
@@ -1148,8 +1151,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   MPI_Status       mpistatus;
 
   /* Initializations */
-  abc     = esl_alphabet_Create(eslAMINO);
-  w       = esl_stopwatch_Create();
+  abc  = esl_alphabet_Create(eslAMINO);
+  w    = esl_stopwatch_Create();
+  bg   = p7_bg_Create(abc);
 
   /* If caller declared input formats, decode them */
   if (esl_opt_IsOn(go, "--qformat")) {
@@ -1177,7 +1181,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   bld->EfL = esl_opt_GetInteger(go, "--EfL");
   bld->EfN = esl_opt_GetInteger(go, "--EfN");
   bld->Eft = esl_opt_GetReal   (go, "--Eft");
-  status = p7_builder_SetScoreSystem(bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"));
+
+  if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg);
+  else                              status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg); 
   if (status != eslOK) mpi_failure("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
   /* Open the target sequence database for sequential access. */
@@ -1196,7 +1202,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
   qsq  = esl_sq_CreateDigital(abc);
 
-  bg = p7_bg_Create(abc);
+
 
   /* Outer loop over sequence queries */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
@@ -1334,7 +1340,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   esl_threads_WaitForStart(obj);
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
-  if (status != eslOK) esl_fatal("Work queue reader failed");
+  if (status != eslOK) p7_Fail("Work queue reader failed");
       
   /* Main loop: */
   while (sstatus == eslOK)
@@ -1350,12 +1356,12 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
       if (sstatus == eslOK)
 	{
 	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
-	  if (status != eslOK) esl_fatal("Work queue reader failed");
+	  if (status != eslOK) p7_Fail("Work queue reader failed");
 	}
     }
 
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);
-  if (status != eslOK) esl_fatal("Work queue reader failed");
+  if (status != eslOK) p7_Fail("Work queue reader failed");
 
   if (sstatus == eslEOF)
     {
@@ -1395,7 +1401,7 @@ pipeline_thread(void *arg)
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
 
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
-  if (status != eslOK) esl_fatal("Work queue worker failed");
+  if (status != eslOK) p7_Fail("Work queue worker failed");
 
   /* loop until all blocks have been processed */
   block = (ESL_SQ_BLOCK *) newBlock;
@@ -1417,13 +1423,13 @@ pipeline_thread(void *arg)
 	}
 
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
-      if (status != eslOK) esl_fatal("Work queue worker failed");
+      if (status != eslOK) p7_Fail("Work queue worker failed");
 
       block = (ESL_SQ_BLOCK *) newBlock;
     }
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
-  if (status != eslOK) esl_fatal("Work queue worker failed");
+  if (status != eslOK) p7_Fail("Work queue worker failed");
 
   esl_threads_Finished(obj, workeridx);
   return;
@@ -1433,4 +1439,7 @@ pipeline_thread(void *arg)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

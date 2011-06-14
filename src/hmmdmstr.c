@@ -1358,31 +1358,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
 
     abc = esl_alphabet_Create(eslAMINO);
-
-    /* validate the score matrix if used */
-    if (*ptr == '>' && esl_opt_IsUsed(opts, "--mxfile")) {
-      double  slambda;
-      char   *matrix    = esl_opt_GetString(opts, "--mxfile");
-
-      if ((sco = esl_scorematrix_Create(abc)) == NULL) {
-        client_msg_longjmp(data->sock_fd, eslEMEM, &jmp_env, "could not allocate scoring matrix.");
-      }
-      if ((status = esl_scorematrix_Set(matrix, sco)) != eslOK) {
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to set built-in matrix %s", matrix);
-      }
-      if (!esl_scorematrix_IsSymmetric(sco)) {
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Matrix %s isn't symmetric", matrix);
-      }
-      if ((status = esl_scorematrix_Probify(sco, NULL, NULL, NULL, &slambda)) != eslOK) {
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
-      }
-
-      esl_scorematrix_Destroy(sco);
-      sco = NULL;
-    }
-
     seq = NULL;
     hmm = NULL;
+
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
       seq = esl_sq_CreateDigital(abc);

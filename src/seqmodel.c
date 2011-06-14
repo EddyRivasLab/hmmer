@@ -170,8 +170,9 @@ main(int argc, char **argv)
    * matrix rows as HMM match emission vectors. This means dividing
    * the joint probs through by f_a.
    */
-  if (mxfile == NULL)  esl_scorematrix_Set("BLOSUM62", S);
-  else {
+  if (mxfile == NULL) {
+    if (esl_scorematrix_Set("BLOSUM62", S) != eslOK) esl_fatal("failed to set BLOSUM62 scores");
+  } else {
     ESL_FILEPARSER *efp = NULL;
 
     if ( esl_fileparser_Open(mxfile, NULL,  &efp) != eslOK) esl_fatal("failed to open score file %s",  mxfile);

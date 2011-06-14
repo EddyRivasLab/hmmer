@@ -1,3 +1,55 @@
+ID              h88
+TITLE           Many classic score matrices are invalid for phmmer/jackhmmer
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J7/126; SRE:J7/130-131; SRE:J7/132; SRE:J8/23
+REPORTED_BY     Eanna O'Keefe (Eanna O Keefe <eannaokeefe@yahoo.co.uk>), 24 Mar 2011
+OPENED_DATE     4 Apr 2011
+CLOSED_DATE     SRE, Tue Jun 14 11:09:15 2011
+DESCRIPTION     
+  O'Keefe was trying to provide a custom matrix called Disorder40 to
+  phmmer.  phmmer failed to backcalculate a probabilistic basis for
+  this matrix using the Yu/Altschul procedure. The Disorder40 matrix,
+  published in CJ Brown et al MBE 27:609 (2010) was apparently
+  calculated incorrectly (see email correspondence with Celeste Brown
+  and her student Audra Johnson). The miscalculation does not account
+  for the bug; it only exacerbates it, by reducing the information
+  content of the matrix. 
+
+  Problem instead turns out to be the Yu/Altschul procedure
+  [YuAltschul05]. Yu/Altschul procedure fails frequently, even on many
+  classic score matrices including PAM240, for example. This is odd,
+  because these are log-odds matrices with a known basis. Turns out to
+  be an effect of roundoff of the integer scores. On higher-precision
+  versions of the same matrices, the Yu/Altschul procedure succeeds.
+  So, arbitrary valid score matrices in fact do NOT necessarily have a
+  solution for a probabilistic basis -- where by "valid" I mean the
+  usual criteria for the matrix having a solution for lambda: negative
+  expectation and at least one positive score. In correspondence with
+  Steve Altschul, Altschul says they meant "valid" in the sense of
+  being derived as a log-odds matrix from a probabilistic basis -- but
+  that's unpersuasive, because if we calculated the matrix from a
+  probabilistic basis, we have the probabilistic basis already, and we
+  don't need the Yu/Altschul procedure.
+
+  So we can't use Yu/Altschul reliably. 
+  
+  The fix is to switch to esl_scorematrix_ProbifyGivenBG() instead of
+  esl_scorematrix_Probify().
+//
+ID              h87
+TITLE           Fragments should be defined by fraction of average rlen, not by alen
+AFFECTS         3.0
+FIXED_IN        
+STATUS          
+XREF            
+REPORTED_BY     
+OPENED_DATE     
+CLOSED_DATE     
+DESCRIPTION     
+
+//
 ID              h86
 TITLE           man pages have stray @KEYWORDS@ and aren't installed by "make install"
 AFFECTS         3.0

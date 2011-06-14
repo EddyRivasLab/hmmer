@@ -8,6 +8,8 @@
 
 #include "p7_config.h"		/* must be included first */
 
+#include <string.h>
+
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_hmm.h"
@@ -21,6 +23,7 @@
  *****************************************************************/
 
 /* Function:  p7_bg_Create()
+ * Synopsis:  Create a <P7_BG> null model object.
  *
  * Purpose:   Allocate a <P7_BG> object for digital alphabet <abc>,
  *            initializes it to appropriate default values, and
@@ -100,6 +103,40 @@ p7_bg_CreateUniform(const ESL_ALPHABET *abc)
 
  ERROR:
   p7_bg_Destroy(bg);
+  return NULL;
+}
+
+
+/* Function:  p7_bg_Clone()
+ * Synopsis:  Create a duplicate of an existing <P7_BG> object.
+ *
+ * Purpose:   Creates a duplicate of the existing <P7_BG> object <bg>.
+ *
+ * Returns:   ptr to the duplicate <P7_BG> object.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_BG *
+p7_bg_Clone(const P7_BG *bg)
+{
+  P7_BG *dup = NULL;
+  int    status;
+
+  ESL_ALLOC(dup, sizeof(P7_BG));
+  dup->f    = NULL;
+  dup->fhmm = NULL;
+  dup->abc  = bg->abc;		/* by reference only */
+
+  ESL_ALLOC(dup->f, sizeof(float) * bg->abc->K);
+  memcpy(dup->f, bg->f, sizeof(float) * bg->abc->K);
+  if ((dup->fhmm = esl_hmm_Clone(bg->fhmm)) == NULL) goto ERROR;
+  
+  dup->p1    = bg->p1;
+  dup->omega = bg->omega;
+  return dup;
+
+ ERROR:
+  p7_bg_Destroy(dup);
   return NULL;
 }
 

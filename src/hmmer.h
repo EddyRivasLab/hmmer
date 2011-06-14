@@ -1023,6 +1023,7 @@ extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_A
 /* p7_bg.c */
 extern P7_BG *p7_bg_Create(const ESL_ALPHABET *abc);
 extern P7_BG *p7_bg_CreateUniform(const ESL_ALPHABET *abc);
+extern P7_BG *p7_bg_Clone(const P7_BG *bg);
 extern int    p7_bg_Dump(FILE *ofp, const P7_BG *bg);
 extern void   p7_bg_Destroy(P7_BG *bg);
 extern int    p7_bg_SetLength(P7_BG *bg, int L);
@@ -1036,8 +1037,8 @@ extern int    p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc);
 
 /* p7_builder.c */
 extern P7_BUILDER *p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc);
-extern int         p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend);
-extern int         p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, double pextend);
+extern int         p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix,                  double popen, double pextend, P7_BG *bg);
+extern int         p7_builder_SetScoreSystem (P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend, P7_BG *bg);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
 extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);

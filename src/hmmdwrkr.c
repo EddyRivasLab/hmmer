@@ -518,10 +518,8 @@ search_thread(void *arg)
   int               workeridx;
   WORKER_INFO      *info;
   ESL_THREADS      *obj;
-
   ESL_SQ            dbsq;
-  ESL_STOPWATCH    *w;
-
+  ESL_STOPWATCH    *w        = NULL;         /* timing stopwatch               */
   P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
   P7_BG            *bg       = NULL;         /* null model                     */
   P7_PIPELINE      *pli      = NULL;         /* work pipeline                  */
@@ -533,23 +531,16 @@ search_thread(void *arg)
   esl_threads_Started(obj, &workeridx);
 
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
-
-  w = esl_stopwatch_Create();
+  w    = esl_stopwatch_Create();
+  bg   = p7_bg_Create(info->abc);
   esl_stopwatch_Start(w);
 
   /* set up the dummy description and accession fields */
   dbsq.desc = "";
   dbsq.acc  = "";
 
-  /* Convert to an optimized model */
-  bg = p7_bg_Create(info->abc);
-
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
-    char  *matrix  = esl_opt_GetString(info->opts, "--mxfile");
-    float  popen   = esl_opt_GetReal(info->opts,   "--popen");
-    float  pextend = esl_opt_GetReal(info->opts,   "--pextend");
-
     bld = p7_builder_Create(NULL, info->abc);
     if ((seed = esl_opt_GetInteger(info->opts, "--seed")) > 0) {
       esl_randomness_Init(bld->r, seed);
@@ -562,10 +553,12 @@ search_thread(void *arg)
     bld->EfL = esl_opt_GetInteger(info->opts, "--EfL");
     bld->EfN = esl_opt_GetInteger(info->opts, "--EfN");
     bld->Eft = esl_opt_GetReal   (info->opts, "--Eft");
-    status = p7_builder_LoadScoreSystem(bld, matrix, popen, pextend);
+
+    if (esl_opt_IsOn(info->opts, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(info->opts, "--mxfile"), NULL, esl_opt_GetReal(info->opts, "--popen"), esl_opt_GetReal(info->opts, "--pextend"), bg);
+    else                                      status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(info->opts, "--mx"),           esl_opt_GetReal(info->opts, "--popen"), esl_opt_GetReal(info->opts, "--pextend"), bg); 
     if (status != eslOK) {
       //client_error(info->sock, status, "hmmgpmd: failed to set single query sequence score system: %s", bld->errbuf);
-      fprintf(stderr, "hmmgpmd: failed to set single query sequence score system: %s", bld->errbuf);
+      fprintf(stderr, "hmmpgmd: failed to set single query sequence score system: %s", bld->errbuf);
       pthread_exit(NULL);
       return;
     }

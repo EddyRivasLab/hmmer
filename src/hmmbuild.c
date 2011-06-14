@@ -1,7 +1,4 @@
-/* main() for profile HMM construction from a multiple sequence alignment
- * 
- * SRE, Wed Jan  3 11:03:47 2007 [Janelia] [The Chemical Brothers]
- * SVN $Id$
+/* Profile HMM construction from a multiple sequence alignment
  */
 #include "p7_config.h"
 

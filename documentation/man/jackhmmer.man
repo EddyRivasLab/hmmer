@@ -188,6 +188,23 @@ The default is 0.4.
 must be >= 0 and < 1.0.
 
 .TP
+.BI --mx " <s>"
+Obtain residue alignment probabilities from the built-in
+substitution matrix named
+.I <s>. 
+Several standard matrices are built-in, and do not need to be
+read from files. 
+The matrix name
+.I <s> can be
+PAM30, PAM70, PAM120, PAM240, BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80,
+or BLOSUM90.
+Only one of the
+.B --mx 
+and
+.B --mxfile
+options may be used.
+
+.TP
 .BI --mxfile " <mxfile>"
 Obtain residue alignment probabilities from the substitution matrix
 in file
