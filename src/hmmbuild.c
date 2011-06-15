@@ -61,14 +61,6 @@ typedef struct _pending_s {
 #define EFFOPTS "--eent,--eclust,--eset,--enone"               /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"      /* Exclusive options for relative weighting                    */
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
-#define CPUOPTS     "--mpi,-n"
-#define MPIOPTS     "--cpu,-n"
-#else
-#define CPUOPTS     "-n"
-#define MPIOPTS     "-n"
-#endif
-
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                  1 },
@@ -113,10 +105,10 @@ static ESL_OPTIONS options[] = {
   { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail tau fit",       6 },   
 /* Other options */
 #ifdef HMMER_THREADS 
-  { "--cpu",     eslARG_INT,    NULL,"HMMER_NCPU","n>=0",NULL,     NULL, CPUOPTS, "number of parallel CPU workers for multithreads",       8 },
+  { "--cpu",     eslARG_INT,    NULL,"HMMER_NCPU","n>=0",NULL,     NULL,  NULL,  "number of parallel CPU workers for multithreads",       8 },
 #endif
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, MPIOPTS, "run as an MPI parallel program",                        8 },
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,  NULL,  "run as an MPI parallel program",                        8 },
 #endif
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,   "--mpi",    NULL, "arrest after start: for debugging MPI under gdb",       8 },  
   { "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
@@ -185,9 +177,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
   ESL_GETOPTS *go = NULL;
 
   if ((go = esl_getopts_Create(options))     == NULL)    p7_Die("problem with options structure");
-  if (esl_opt_ProcessEnvironment(go)         != eslOK) { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK) { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessEnvironment(go)         != eslOK) { printf("Failed to process environment:\n%s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) { printf("Failed to parse command line:\n%s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK) { printf("Failed to parse command line:\n%s\n",  go->errbuf); goto ERROR; }
 
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
@@ -222,6 +214,19 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
   if (strcmp(*ret_alifile, "-") == 0 && ! esl_opt_IsOn(go, "--informat"))
     { puts("Must specify --informat to read <alifile> from stdin ('-')"); goto ERROR; }
 
+#ifdef HAVE_MPI
+  if (esl_opt_IsOn(go, "--mpi") && esl_opt_IsOn(go, "--cpu")) 
+    {
+      int mpisetby = esl_opt_GetSetter(go, "--mpi");
+      int cpusetby = esl_opt_GetSetter(go, "--cpu");
+
+      if (mpisetby == cpusetby) {
+	puts("Options --cpu and --mpi are incompatible. The MPI implementation is not multithreaded.");
+	goto ERROR;
+      }
+    }
+#endif
+
   *ret_go = go;
   return;
   
@@ -229,7 +234,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
   esl_usage(stdout, argv[0], usage);
   puts("\nwhere basic options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
-  printf("\nTo see more help on other available options, do %s -h\n\n", argv[0]);
+  printf("\nTo see more help on other available options, do:\n  %s -h\n\n", argv[0]);
   exit(1);  
 }
 

@@ -1,3 +1,40 @@
+ID              h89
+TITLE           HMMER_NCPU env var sets --cpu, creates incompatibility with -n, --mpi
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J7/104;SRE:J8/25
+REPORTED_BY     Joel Hedlund <joel@nsc.liu.se> 9 Mar 2011; Torsten Seemann <torsten.seemann@monash.edu> 31 Mar 2011
+OPENED_DATE     15 Mar 2011
+CLOSED_DATE     SRE, Wed Jun 15 15:40:54 2011
+DESCRIPTION     
+  In hmmbuild, --cpu is set to be incompatible with --mpi and -n, on the theory
+  that mixing them must reflect a user misunderstanding that we want to warn on:
+  --cpu <n> --mpi is misguided because the MPI implementation is not 
+  multithreaded, so --cpu is a no-op; -n <name> --cpu <n> is misguided because
+  -n <name> only works if the alignment has a single alignment in it, so
+  it's pointless to deliberately multithread.
+
+  However, the HMMER_NCPU environment variable is connected to --cpu,
+  and esl_getopts treats HMMER_NCPU just as if --cpu were set on the
+  command line. This means that if HMMER_NCPU is set in the environment,
+  --mpi jobs won't run, and -n can't be used. 
+
+  Moreover, both situations cause confusing error messages,
+  complaining about --cpu being set, but the user may not realize that
+  HMMER_NCPU is even set in their environment (might be a system-wide
+  config issue), and worse, probably doesn't realize that it has
+  anything to do with --cpu anyway.
+
+  --cpu/--mpi compatibility is now explicitly detected in
+  process_commandline(), rather than being left to getopts. Error is
+  only generated if --cpu and --mpi are set on the same command line,
+  or in the same config file. 
+
+  --cpu/-n incompatibility is now left to the existing handling of
+  errors for -n, which issues an error if/when a second model is
+  constructed and is about to be named.
+//
 ID              h88
 TITLE           Many classic score matrices are invalid for phmmer/jackhmmer
 AFFECTS         3.0
