@@ -467,10 +467,20 @@ We only want to count terminal gaps as deletions if the aligned
 sequence is known to be full-length, not if it is a fragment (for
 instance, because only part of it was sequenced). HMMER uses a simple
 rule to infer fragments: if the sequence length L is less than 
-a fraction
+or equal to a fraction
 .I <x> 
-times the mean sequence length of all the sequences in the alignment,
+times the alignment length in columns,
 then the sequence is handled as a fragment. The default is 0.5.
+Setting
+.BI --fragthresh 0
+will define no (nonempty) sequence as a fragment; you might want to do
+this if you know you've got a carefully curated alignment of full-length
+sequences.
+Setting
+.BI --fragthresh 1
+will define all sequences as fragments; you might want to do this if
+you know your alignment is entirely composed of fragments, such as
+translated short reads in metagenomic shotgun data.
 
 
 

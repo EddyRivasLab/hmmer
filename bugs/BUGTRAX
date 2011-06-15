@@ -39,16 +39,31 @@ DESCRIPTION
   esl_scorematrix_Probify().
 //
 ID              h87
-TITLE           Fragments should be defined by fraction of average rlen, not by alen
+TITLE           Fragment definition (--fragthresh) incorrectly documented.
 AFFECTS         3.0
-FIXED_IN        
-STATUS          
-XREF            
-REPORTED_BY     
-OPENED_DATE     
-CLOSED_DATE     
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J8/1; SRE:J8/24
+REPORTED_BY     Travis Wheeler
+OPENED_DATE     16 May 2011
+CLOSED_DATE     15 June 2011
 DESCRIPTION     
+  Documentation of --fragthresh and esl_msa_MarkFragments() suggested
+  that the rule was < x * average_rlen, but the rule was changed to
+  x < x * alen by the #h55 bugfix. 
 
+  Did some work comparing the average_rlen rule vs. the alen rule.
+  average_rlen is computationally expensive, taking 3x longer to build
+  models. average_rlen breaks the i7-hmmbuild-fragments.pl test,
+  exercising bug #h55 on an all-fragment alignment of the sort that
+  arises on metagenomic short read data. No difference in Pfam.seed
+  model lengths observed, and no difference observed in profmark
+  benchmark based on Pfam seeds.
+
+  Decided to leave the rule as alen, as the #h55 fix put it. Made the
+  slight change to <= x*alen (from < x*alen). This makes it so
+  --fragthresh 0 never defines a fragment, and --fragthresh 1 always
+  defines a fragment. Updated --fragthresh documentation.
 //
 ID              h86
 TITLE           man pages have stray @KEYWORDS@ and aren't installed by "make install"

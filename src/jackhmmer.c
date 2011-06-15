@@ -106,7 +106,7 @@ static ESL_OPTIONS options[] = {
   { "--fast",       eslARG_NONE,        FALSE, NULL, NULL,   CONOPTS,    NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              8 },
   { "--hand",       eslARG_NONE,    "default", NULL, NULL,   CONOPTS,    NULL,  NULL,            "manual construction (requires reference annotation)",          8 },
   { "--symfrac",    eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,"--fast",  NULL,            "sets sym fraction controlling --fast construction",            8 },
-  { "--fragthresh", eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L < x<L>, tag sequence as a fragment",                      8 },
+  { "--fragthresh", eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L <= x*alen, tag sequence as a fragment",                   8 },
 /* Alternative relative sequence weighting strategies */
   { "--wpb",        eslARG_NONE,    "default", NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff position-based weights",                              9 },
   { "--wgsc",       eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
@@ -306,7 +306,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--fast"))      fprintf(ofp, "# model architecture construction: fast/heuristic\n");
   if (esl_opt_IsUsed(go, "--hand"))      fprintf(ofp, "# model architecture construction: hand-specified by RF annotation\n");
   if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(ofp, "# sym frac for model structure:    %.3f\n", esl_opt_GetReal(go, "--symfrac"));
-  if (esl_opt_IsUsed(go, "--fragthresh"))fprintf(ofp, "# define fragments if < xL    :    %.3f\n", esl_opt_GetReal(go, "--fragthresh"));
+  if (esl_opt_IsUsed(go, "--fragthresh"))fprintf(ofp, "# define fragments if <= x*alen:   %.3f\n", esl_opt_GetReal(go, "--fragthresh"));
   if (esl_opt_IsUsed(go, "--wpb"))       fprintf(ofp, "# relative weighting scheme:       Henikoff PB\n");
   if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(ofp, "# relative weighting scheme:       G/S/C\n");
   if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(ofp, "# relative weighting scheme:       BLOSUM filter\n");
