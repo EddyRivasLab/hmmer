@@ -153,9 +153,7 @@ main(int argc, char **argv)
   ESL_DMATRIX     *Q    = NULL;
   P7_BG           *bg   = p7_bg_Create(abc);		
   P7_HMM          *hmm  = NULL;
-
   double          *fa   = NULL;
-  double          *fb   = NULL;
   double          popen   = esl_opt_GetReal  (go, "-q");
   double          pextend = esl_opt_GetReal  (go, "-r");
   char            *mxfile = esl_opt_GetString(go, "-m");
@@ -179,12 +177,21 @@ main(int argc, char **argv)
     if ( esl_scorematrix_Read(efp, abc, &S)               != eslOK) esl_fatal("failed to read matrix from %s", mxfile);
     esl_fileparser_Close(efp);
   }
-  if (! esl_scorematrix_IsSymmetric(S)) esl_fatal("Score matrix isn't symmetric");
-  esl_scorematrix_Probify(S, &Q, &fa, &fb, &slambda);
+
+  /* A wasteful conversion of the HMMER single-precision background probs to Easel double-prec */
+  ESL_ALLOC(fa, sizeof(double) * bg->abc->K);
+  esl_vec_F2D(bg->f, bg->abc->K, fa);
+
+  /* Backcalculate joint probabilities Q, given score matrix S and background frequencies fa */
+  status = esl_scorematrix_ProbifyGivenBG(S, fa, fa, &slambda, &Q); 
+  if      (status == eslEINVAL)  esl_fatal("built-in score matrix %s has no valid solution for lambda", matrix);
+  else if (status == eslENOHALT) esl_fatal("failed to solve score matrix %s for lambda", matrix);
+  else if (status != eslOK)      esl_fatal("unexpected error in solving score matrix %s for probability parameters", matrix);
+
+  /* Convert joint probs to conditionals P(b|a) */
   for (a = 0; a < abc->K; a++)
     for (b = 0; b < abc->K; b++)
       Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
-
 
   /* Open the query sequence file in FASTA format 
    */

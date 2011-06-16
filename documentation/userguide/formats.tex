@@ -10,53 +10,56 @@ save file. An abridged version is shown here, where (\ldots) mark
 deletions made for clarity and space:
 
 \begin{tinysreoutput}
-HMMER3/b [3.0b2 | June 2009]
+HMMER3/e [3.0 | March 2010]
 NAME  fn3
-ACC   PF00041.12
+ACC   PF00041.13
 DESC  Fibronectin type III domain
 LENG  86
 ALPH  amino
 RF    no
+CONS  yes
 CS    yes
 MAP   yes
-DATE  Mon Jun 15 09:39:41 2009
+DATE  Thu Jun 16 11:48:22 2011
 NSEQ  106
 EFFN  11.415833
-CKSUM 72638555
+CKSUM 3564431818
 GA    8.00 7.20
 TC    8.00 7.20
 NC    7.90 7.90
 STATS LOCAL MSV       -9.4043  0.71847
 STATS LOCAL VITERBI   -9.7737  0.71847
 STATS LOCAL FORWARD   -3.8341  0.71847
-HMM          A        C        D        E        F        G        H        I     (...)    Y   
+HMM          A        C        D        E        F        G        H        I    (...)    Y   
             m->m     m->i     m->d     i->m     i->i     d->m     d->d
-  COMPO   2.70271  4.89246  3.02314  2.64362  3.59817  2.82566  3.74147  3.08574  (...) 3.22607
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+  COMPO   2.70330  4.91262  3.03272  2.64079  3.60307  2.84344  3.74204  3.07942 (...) 3.21526
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00338  6.08833  6.81068  0.61958  0.77255  0.00000        *
-      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801  (...) 3.93889      1 - -
-          2.68629  4.42236  2.77530  2.73088  3.46365  2.40512  3.72505  3.29365  (...) 3.61514
+      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801 (...) 3.93889      1 p - -
+          2.68629  4.42236  2.77530  2.73088  3.46365  2.40512  3.72505  3.29365 (...) 3.61514
           0.09796  2.38361  6.81068  0.10064  2.34607  0.48576  0.95510
-      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731  (...) 4.25623      3 - -
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731 (...) 4.25623      3 s - -
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
 (...)
-     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898  (...) 3.43366    120 - B
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898 (...) 3.43366    120 e - B
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
-     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840  (...) 4.99111    121 - E
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354  (...) 3.61503
+     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840 (...) 4.99111    121 s - E
+          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00227  6.08723        *  0.61958  0.77255  0.00000        *
 //
 \end{tinysreoutput}
 
-An HMM file consists of one or more HMMs.  Each HMM starts with the
-identifier \prog{HMMER3/b} and ends with \prog{//} on a line by
-itself.  The identifier allows backward compatibility as the HMMER
-software evolves: it tells the parser this file is from HMMER3's save
-file format version b. (The 3/a format was used in alpha test versions
-of HMMER3.)  The closing \prog{//} allows multiple HMMs to be
-concatenated.
+An HMM file consists of one or more HMMs.  Each HMM starts with a
+format version identifier (here, \prog{HMMER3/e}) and ends with
+\prog{//} on a line by itself.  The format version identifier allows
+backward compatibility as the HMMER software evolves: it tells the
+parser this file is from HMMER3's save file format version
+e.\footnote{HMMER 3.0 used 3/b format. HMMER 3.1 uses 3/e format.
+  Some alpha test versions of 3.0 used 3/a format. Internal
+  development versions of 3.1 used 3/c and 3/d formats.}  The closing
+\prog{//} allows multiple HMMs to be concatenated.
 
 The format is divided into two regions. The first region contains
 textual information and miscalleneous parameters in a roughly
@@ -134,6 +137,18 @@ alignment file's \verb+#=GC RF+ line. It is propagated to alignment
 outputs, and also may optionally be used to define consensus match
 columns in profile HMM construction. \textbf{Optional}; assumed to be
 no if not present.
+
+\item [\emprog{CONS <s>}] Consensus residue annotation flag;
+  \prog{<s>} is either \prog{no} or \prog{yes} (case insensitive).  If
+  \prog{yes}, the consensus residue field for each match state in the
+  main model (see below) is valid. If \prog{no}, these characters are
+  ignored. Consensus residue annotation is determined when models are
+  built. For models of single sequences, the consensus is the same as
+  the query sequence. For models of multiple alignments, the consensus
+  is the maximum likelihood residue at each position. Upper case
+  indicates that the model's emission probability for the consensus
+  residue is $\geq$ an arbitrary threshold (0.5 for protein models,
+  0.9 for DNA/RNA models).
 
 \item [\emprog{CS <s>}] Consensus structure annotation flag;
 \prog{<s>} is either \prog{no} or \prog{yes} (case insensitive). If
@@ -263,6 +278,11 @@ The next field is the \prog{MAP} annotation for this node.  If
 \prog{MAP} was \prog{yes} in the header, then this is an integer,
 representing the alignment column index for this match state
 (1..alen); otherwise, this field is `-'.
+
+The next field is the \prog{CONS} consensus residue for this node.  If
+\prog{CONS} was \prog{yes} in the header, then this is a single
+character, representing the consensus residue annotation for this
+match state; otherwise, this field is `-'.
 
 The next field is the \prog{RF} annotation for this node.  If
 \prog{RF} was \prog{yes} in the header, then this is a single

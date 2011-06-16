@@ -9,9 +9,6 @@
  *    6. Unit tests.
  *    7. Test driver.
  *    8. Copyright and license information.
- *    
- * SRE, Thu Jun 14 09:59:20 2007 [Janelia] [Tom Waits, Orphans]
- * SVN $Id$
  */
 #include "p7_config.h"		
 
@@ -46,7 +43,6 @@ static int p7_dcl_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *n
 
 /* Function:  p7_hmm_MPISend()
  * Synopsis:  Send an HMM as an MPI work unit.
- * Incept:    SRE, Sat Jun  2 08:07:03 2007 [Janelia]
  *
  * Purpose:   Sends an HMM <hmm> as a work unit to MPI process
  *            <dest> (where <dest> ranges from 0..<nproc-1>), tagged
@@ -119,7 +115,6 @@ p7_hmm_MPISend(P7_HMM *hmm, int dest, int tag, MPI_Comm comm, char **buf, int *n
 
 /* Function:  p7_hmm_MPIPackSize()
  * Synopsis:  Calculates size needed to pack an HMM.
- * Incept:    SRE, Thu Jun  7 10:29:00 2007 [Janelia]
  *
  * Purpose:   Calculate an upper bound on the number of bytes
  *            that <p7_hmm_MPIPack()> will need to pack an HMM
@@ -149,6 +144,7 @@ p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n)
   if ((status = esl_mpi_PackOptSize(hmm->desc, -1, MPI_CHAR, comm, &sz)) != eslOK) goto ERROR;  n += sz; 
 
   if (hmm->flags & p7H_RF)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
+  if (hmm->flags & p7H_CONS) { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
   if (hmm->flags & p7H_CS)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
   if (hmm->flags & p7H_CA)   { if (MPI_Pack_size(M+2, MPI_CHAR,  comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");        n+= sz; }
   if ((status = esl_mpi_PackOptSize(hmm->comlog,      -1,  MPI_CHAR,  comm, &sz)) != eslOK) goto ERROR;                               n+= sz;
@@ -168,7 +164,6 @@ p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n)
 
 /* Function:  p7_hmm_MPIPack()
  * Synopsis:  Packs an HMM into MPI buffer.
- * Incept:    SRE, Thu Jun  7 10:45:37 2007 [Janelia]
  *
  * Purpose:   Packs HMM <hmm> into an MPI packed message buffer <buf>
  *            of length <n> bytes, starting at byte position <*position>,
@@ -209,6 +204,7 @@ p7_hmm_MPIPack(P7_HMM *hmm, char *buf, int n, int *pos, MPI_Comm comm)
   if ((status = esl_mpi_PackOpt(            hmm->acc,         -1,      MPI_CHAR,  buf, n, pos, comm)) != eslOK) return status; 
   if ((status = esl_mpi_PackOpt(            hmm->desc,        -1,      MPI_CHAR,  buf, n, pos, comm)) != eslOK) return status; 
   if (hmm->flags & p7H_RF)   { if (MPI_Pack(hmm->rf,         M+2,      MPI_CHAR,  buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
+  if (hmm->flags & p7H_CONS) { if (MPI_Pack(hmm->consensus,  M+2,      MPI_CHAR,  buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
   if (hmm->flags & p7H_CS)   { if (MPI_Pack(hmm->cs,         M+2,      MPI_CHAR,  buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
   if (hmm->flags & p7H_CA)   { if (MPI_Pack(hmm->ca,         M+2,      MPI_CHAR,  buf, n, pos, comm)  != 0)     ESL_EXCEPTION(eslESYS, "pack failed"); }
   if ((status = esl_mpi_PackOpt(            hmm->comlog,      -1,      MPI_CHAR,  buf, n, pos, comm)) != eslOK) return status;
@@ -228,7 +224,6 @@ p7_hmm_MPIPack(P7_HMM *hmm, char *buf, int n, int *pos, MPI_Comm comm)
 
 /* Function:  p7_hmm_MPIUnpack()
  * Synopsis:  Unpacks an HMM from an MPI buffer.
- * Incept:    SRE, Thu Jun  7 11:04:46 2007 [Janelia]
  *
  * Purpose:   Unpack a newly allocated HMM from MPI packed buffer
  *            <buf>, starting from position <*pos>, where the total length
@@ -297,9 +292,10 @@ p7_hmm_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, 
   if ((status = esl_mpi_UnpackOpt(             buf, n, pos,   (void**)&(hmm->name),        NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
   if ((status = esl_mpi_UnpackOpt(             buf, n, pos,    (void**)&(hmm->acc),        NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
   if ((status = esl_mpi_UnpackOpt(             buf, n, pos,   (void**)&(hmm->desc),        NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-  if (hmm->flags & p7H_RF)    { if (MPI_Unpack(buf, n, pos,                hmm->rf,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
-  if (hmm->flags & p7H_CS)    { if (MPI_Unpack(buf, n, pos,                hmm->cs,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
-  if (hmm->flags & p7H_CA)    { if (MPI_Unpack(buf, n, pos,                hmm->ca,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_RF)    { if (MPI_Unpack(buf, n, pos,         hmm->rf,                M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_CONS)  { if (MPI_Unpack(buf, n, pos,         hmm->consensus,         M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_CS)    { if (MPI_Unpack(buf, n, pos,         hmm->cs,                M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
+  if (hmm->flags & p7H_CA)    { if (MPI_Unpack(buf, n, pos,         hmm->ca,                M+2, MPI_CHAR,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); }
   if ((status = esl_mpi_UnpackOpt(             buf, n, pos, (void**)&(hmm->comlog),        NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
   if (MPI_Unpack(                              buf, n, pos,           &(hmm->nseq),           1, MPI_INT,   comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack(                              buf, n, pos,       &(hmm->eff_nseq),           1, MPI_FLOAT, comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
@@ -323,7 +319,6 @@ p7_hmm_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, 
 
 /* Function:  p7_hmm_MPIRecv()
  * Synopsis:  Receives an HMM as a work unit from an MPI sender.
- * Incept:    SRE, Sat Jun  2 10:54:40 2007 [Janelia]
  *
  * Purpose:   Receive a work unit that consists of a single HMM
  *            sent by MPI <source> (<0..nproc-1>, or
@@ -421,7 +416,6 @@ p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_
 
 /* Function:  p7_profile_MPISend()
  * Synopsis:  Send a profile as an MPI message.
- * Incept:    SRE, Fri Apr 20 13:55:47 2007 [Janelia]
  *
  * Purpose:   Sends profile <gm> to MPI process <dest> (where
  *            <dest> ranges from 0..<nproc-1>), with MPI tag <tag> 
@@ -555,7 +549,6 @@ p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf,
 
 /* Function:  p7_profile_MPIRecv()
  * Synopsis:  Receive a profile as an MPI message.
- * Incept:    SRE, Fri Apr 20 14:19:07 2007 [Janelia]
  *
  * Purpose:   Receive a profile from <source> (where <source> is usually
  *            process 0, the master) with tag <tag> from communicator <comm>,
@@ -656,7 +649,6 @@ p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, 
 
 /* Function:  p7_pipeline_MPISend()
  * Synopsis:  Send pipeline data as an MPI message.
- * Incept:    MSF, Wed Sep 09 09:09:47 2009 [Janelia]
  *
  * Purpose:   Sends pipeline statistics <pli> to MPI process <dest>
  *            (where <dest> ranges from 0..<nproc-1>), with MPI tag
@@ -751,7 +743,6 @@ p7_pipeline_MPISend(P7_PIPELINE *pli, int dest, int tag, MPI_Comm comm, char **b
 
 /* Function:  p7_pipeline_MPIRecv()
  * Synopsis:  Receive pipeline data as an MPI message.
- * Incept:    MSF, Wed Sep 09 09:09:47 2009 [Janelia]
  *
  * Purpose:   Receive a pipeline from <source> (where <source> is usually
  *            process 0, the master) with tag <tag> from communicator <comm>,
@@ -829,7 +820,6 @@ p7_pipeline_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc,
 
 /* Function:  p7_tophits_MPISend()
  * Synopsis:  Send the TOPHITS as an MPI work unit.
- * Incept:    MSF, Mon Sep  21 22:22:00 2009 [Janelia]
  *
  * Purpose:   Sends the TOPHITS <th> as a work unit to MPI process
  *            <dest> (where <dest> ranges from 0..<nproc-1>), tagged
@@ -913,7 +903,6 @@ p7_tophits_MPISend(P7_TOPHITS *th, int dest, int tag, MPI_Comm comm, char **buf,
 
 /* Function:  p7_tophits_MPIRecv()
  * Synopsis:  Receives an TOPHITS as a work unit from an MPI sender.
- * Incept:    MSF, Mon Sep  21 22:22:00 2009 [Janelia]
  *
  * Purpose:   Sends the TOPHITS <th> as a work unit to MPI process
  *            <dest> (where <dest> ranges from 0..<nproc-1>), tagged
@@ -1082,7 +1071,6 @@ p7_hit_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_H
 
 /* Function:  p7_hit_MPIPackSize()
  * Synopsis:  Calculates size needed to pack a HIT.
- * Incept:    MSF, Mon Sep  21 22:22:00 2009 [Janelia]
  *
  * Purpose:   Calculate an upper bound on the number of bytes
  *            that <p7_hit_MPIPack()> will need to pack an P7_HIT
@@ -1124,7 +1112,6 @@ p7_hit_MPIPackSize(P7_HIT *hit, MPI_Comm comm, int *ret_n)
 
 /* Function:  p7_hit_MPIPack()
  * Synopsis:  Packs the HIT into MPI buffer.
- * Incept:    MSF, Mon Sep  21 22:22:00 2009 [Janelia]
  *
  * Purpose:   Packs HIT <hit> into an MPI packed message buffer <buf>
  *            of length <n> bytes, starting at byte position <*position>,
@@ -1184,7 +1171,6 @@ p7_hit_MPIPack(P7_HIT *hit, char *buf, int n, int *pos, MPI_Comm comm)
 
 /* Function:  p7_hit_MPIUnpack()
  * Synopsis:  Unpacks an HIT from an MPI buffer.
- * Incept:    MSF, Mon Sep  21 22:22:00 2009 [Janelia]
  *
  * Purpose:   Unpack a newly allocated HIT from MPI packed buffer
  *            <buf>, starting from position <*pos>, where the total length
@@ -1758,6 +1744,9 @@ int main(void) { return 0; }
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 
 

@@ -10,8 +10,6 @@
  *   7. Test driver. 
  *   8. Copyright and license.
  * 
- * SRE, Mon Jan  1 16:20:29 2007 [Casa de Gatos] [Verdi, La Traviata]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -36,7 +34,7 @@
  *****************************************************************/
 
 /* Function:  p7_hmm_Create()
- * Incept:    SRE, Fri Mar 31 14:07:43 2006 [St. Louis]
+ * Synopsis:  Allocate a new <P7_HMM>.
  *
  * Purpose:   Allocate a <P7_HMM> of <M> nodes, for symbol
  *            alphabet <abc>, and return a pointer to it.
@@ -62,7 +60,7 @@ p7_hmm_Create(int M, const ESL_ALPHABET *abc)
 
 
 /* Function:  p7_hmm_CreateShell()
- * Incept:    SRE, Fri Mar 31 14:09:45 2006 [St. Louis]
+ * Synopsis:  Allocate the ``shell'' of a <P7_HMM>.
  *
  * Purpose:   Allocate the shell of a <P7_HMM>: everything that
  *            doesn't depend on knowing the number of nodes M. 
@@ -93,6 +91,7 @@ p7_hmm_CreateShell(void)
   hmm->acc        = NULL;
   hmm->desc       = NULL;
   hmm->rf         = NULL;
+  hmm->consensus  = NULL;
   hmm->cs         = NULL;
   hmm->ca         = NULL;
   hmm->comlog     = NULL; 
@@ -117,7 +116,7 @@ p7_hmm_CreateShell(void)
 }  
 
 /* Function:  p7_hmm_CreateBody()
- * Incept:    SRE, Fri Mar 31 14:24:44 2006 [St. Louis]
+ * Synopsis:  Allocate the ``body'' of a <P7_HMM>.
  *
  * Purpose:   Given an allocated shell <hmm>, and a now-known number
  *            of nodes <M> and alphabet <abc>, allocate
@@ -163,10 +162,11 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
   hmm->t[0][p7H_DM] = 1.0; 
 
   /* Optional allocation, status flag dependent */
-  if (hmm->flags & p7H_RF)  ESL_ALLOC(hmm->rf,  (M+2) * sizeof(char));
-  if (hmm->flags & p7H_CS)  ESL_ALLOC(hmm->cs,  (M+2) * sizeof(char));
-  if (hmm->flags & p7H_CA)  ESL_ALLOC(hmm->ca,  (M+2) * sizeof(char));
-  if (hmm->flags & p7H_MAP) ESL_ALLOC(hmm->map, (M+1) * sizeof(int));
+  if (hmm->flags & p7H_RF)    ESL_ALLOC(hmm->rf,         (M+2) * sizeof(char));
+  if (hmm->flags & p7H_CONS)  ESL_ALLOC(hmm->consensus,  (M+2) * sizeof(char));
+  if (hmm->flags & p7H_CS)    ESL_ALLOC(hmm->cs,         (M+2) * sizeof(char));
+  if (hmm->flags & p7H_CA)    ESL_ALLOC(hmm->ca,         (M+2) * sizeof(char));
+  if (hmm->flags & p7H_MAP)   ESL_ALLOC(hmm->map,        (M+1) * sizeof(int));
   
   return eslOK;
 
@@ -176,7 +176,7 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
 
 
 /* Function:  p7_hmm_Destroy()
- * Incept:    SRE, Fri Mar 31 15:13:25 2006 [St. Louis]
+ * Synopsis:  Free a <P7_HMM>.
  *
  * Purpose:   Frees both the shell and body of an <hmm>.
  *            Works even if the <hmm> is damaged (incompletely allocated)
@@ -192,35 +192,27 @@ p7_hmm_Destroy(P7_HMM *hmm)
 {
   if (hmm == NULL) return;
 
-  if (hmm->mat     != NULL) {
-    if (hmm->mat[0] != NULL) free(hmm->mat[0]);
-    free(hmm->mat);
-  }
-  if (hmm->ins     != NULL) {
-    if (hmm->ins[0] != NULL) free(hmm->ins[0]);
-    free(hmm->ins);
-  }
-  if (hmm->t != NULL) {
-    if (hmm->t[0] != NULL) free(hmm->t[0]);
-    free(hmm->t);
-  }
+  if (hmm->mat) {  if (hmm->mat[0]) free(hmm->mat[0]); free(hmm->mat); }
+  if (hmm->ins) {  if (hmm->ins[0]) free(hmm->ins[0]); free(hmm->ins); }
+  if (hmm->t)   {  if (hmm->t[0])   free(hmm->t[0]);   free(hmm->t);   }
 
-  if (hmm->name    != NULL) free(hmm->name);
-  if (hmm->acc     != NULL) free(hmm->acc);
-  if (hmm->desc    != NULL) free(hmm->desc);
-  if (hmm->rf      != NULL) free(hmm->rf);
-  if (hmm->cs      != NULL) free(hmm->cs);
-  if (hmm->ca      != NULL) free(hmm->ca);
-  if (hmm->comlog  != NULL) free(hmm->comlog);
-  if (hmm->ctime   != NULL) free(hmm->ctime);
-  if (hmm->map     != NULL) free(hmm->map);
+  if (hmm->name)      free(hmm->name);
+  if (hmm->acc)       free(hmm->acc);
+  if (hmm->desc)      free(hmm->desc);
+  if (hmm->rf)        free(hmm->rf);
+  if (hmm->consensus) free(hmm->consensus);
+  if (hmm->cs)        free(hmm->cs);
+  if (hmm->ca)        free(hmm->ca);
+  if (hmm->comlog)    free(hmm->comlog);
+  if (hmm->ctime)     free(hmm->ctime);
+  if (hmm->map)       free(hmm->map);
 
   free(hmm);
   return;
 }
 
 /* Function:  p7_hmm_CopyParameters()
- * Incept:    SRE, Fri May  4 14:10:17 2007 [Janelia]
+ * Synopsis:  Copy parameters from one HMM to another.
  *
  * Purpose:   Copy parameters of <src> to <dest>. The HMM <dest> must
  *            be allocated by the caller for the same 
@@ -250,7 +242,7 @@ p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest)
 }
 
 /* Function:  p7_hmm_Clone()
- * Incept:    SRE, Fri Jan 26 15:34:42 2007 [Janelia]
+ * Synopsis:  Make an exact duplicate of an HMM.
  *
  * Purpose:   Duplicates an hmm.
  * 
@@ -276,11 +268,12 @@ p7_hmm_Clone(const P7_HMM *hmm)
   if ((status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
 
-  if ((hmm->flags & p7H_RF)  && (status = esl_strdup(hmm->rf,     -1, &(new->rf)))     != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CS)  && (status = esl_strdup(hmm->cs,     -1, &(new->cs)))     != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CA)  && (status = esl_strdup(hmm->ca,     -1, &(new->ca)))     != eslOK) goto ERROR;
-  if ((hmm->comlog != NULL)  && (status = esl_strdup(hmm->comlog, -1, &(new->comlog))) != eslOK) goto ERROR;
-  if ((hmm->ctime  != NULL)  && (status = esl_strdup(hmm->ctime,  -1, &(new->ctime)))  != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_RF)   && (status = esl_strdup(hmm->rf,        -1, &(new->rf)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CONS) && (status = esl_strdup(hmm->consensus, -1, &(new->consensus))) != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CS)   && (status = esl_strdup(hmm->cs,        -1, &(new->cs)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CA)   && (status = esl_strdup(hmm->ca,        -1, &(new->ca)))        != eslOK) goto ERROR;
+  if ((hmm->comlog != NULL)   && (status = esl_strdup(hmm->comlog,    -1, &(new->comlog)))    != eslOK) goto ERROR;
+  if ((hmm->ctime  != NULL)   && (status = esl_strdup(hmm->ctime,     -1, &(new->ctime)))     != eslOK) goto ERROR;
   if (hmm->flags & p7H_MAP) {
     ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
     esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
@@ -304,31 +297,9 @@ p7_hmm_Clone(const P7_HMM *hmm)
   return NULL;
 }
 
-/* Function:  p7_hmm_Scale()
- * Incept:    SRE, Fri May  4 14:19:33 2007 [Janelia]
- *
- * Purpose:   Given a counts-based model <hmm>, scale core
- *            by a multiplicative factor of <scale>. Used in
- *            absolute sequence weighting.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_hmm_Scale(P7_HMM *hmm, double scale)
-{
-  int k;
-
-  for (k = 0; k <= hmm->M; k++) {
-    esl_vec_FScale(hmm->t[k],   p7H_NTRANSITIONS, scale);  
-    esl_vec_FScale(hmm->mat[k], hmm->abc->K,      scale);  
-    esl_vec_FScale(hmm->ins[k], hmm->abc->K,      scale);  
-  }
-  return eslOK;
-}
-
 
 /* Function:  p7_hmm_Zero()
- * Incept:    SRE, Mon Jan  1 16:32:59 2007 [Casa de Gatos]
+ * Synopsis:  Set all parameters to zero (including model composition).
  *
  * Purpose:   Zeroes all counts/probabilities fields in core model,
  *            including emissions, transitions, and model
@@ -354,7 +325,6 @@ p7_hmm_Zero(P7_HMM *hmm)
 
 /* Function:  p7_hmm_EncodeStatetype()
  * Synopsis:  Convert a state type string to internal code.
- * Incept:    SRE, Sat Oct 25 10:48:43 2008 [Janelia]
  *
  * Purpose:   Converts state type string <typestring> case insensitively to
  *            an internal code, and returns the code. For example,
@@ -380,7 +350,7 @@ p7_hmm_EncodeStatetype(char *typestring)
 }
 
 /* Function:  p7_hmm_DecodeStatetype()
- * Incept:    SRE, Mon Jan  1 18:47:34 2007 [Casa de Gatos]
+ * Synopsis:  Convert an internal state type code to a string.
  *
  * Purpose:   Returns the state type in text, as a string of length 1 
  *            (2 if you count <NUL>). For example, <p7_DecodeStatetype(p7T_S)>
@@ -418,7 +388,7 @@ p7_hmm_DecodeStatetype(char st)
  *****************************************************************/ 
 
 /* Function: p7_hmm_SetName()
- * Incept:   SRE, Mon Jan  1 16:53:23 2007 [Casa de Gatos]
+ * Synopsis: Set or change the name of an HMM.
  * 
  * Purpose:  Set or change the name of a Plan7 HMM to <name>.
  *           Any trailing whitespace (including newline) is chopped off.     
@@ -451,7 +421,7 @@ p7_hmm_SetName(P7_HMM *hmm, char *name)
 }
 
 /* Function: p7_hmm_SetAccession()
- * Incept:   SRE, Mon Jan  1 16:53:53 2007 [Casa de Gatos]
+ * Synopsis: Set or change the accession of an HMM.
  * 
  * Purpose:  Set or change the accession number of a Plan7 HMM to <acc>,
  *           and raise the <P7_ACC> flag. Trailing whitespace (including newline) 
@@ -490,7 +460,7 @@ p7_hmm_SetAccession(P7_HMM *hmm, char *acc)
 }
 
 /* Function: p7_hmm_SetDescription()
- * Incept:   SRE, Mon Jan  1 16:59:28 2007 [Casa de Gatos]
+ * Synopsis: Set or change the description line of an HMM.
  * 
  * Purpose:  Set or change the description line of a Plan7 HMM. 
  *           Trailing whitespace (including newline) is chopped.
@@ -523,7 +493,7 @@ p7_hmm_SetDescription(P7_HMM *hmm, char *desc)
 }
 
 /* Function: p7_hmm_AppendComlog()
- * Incept:   SRE, Mon Jan  1 18:23:42 2007 [Casa de Gatos]
+ * Synopsis: Concatenate and append command line to the command line log.
  * 
  * Purpose:  Concatenate command line options and append as a new line in the
  *           command line log. Command line log is multiline, with each line
@@ -568,7 +538,7 @@ p7_hmm_AppendComlog(P7_HMM *hmm, int argc, char **argv)
 }
 
 /* Function: p7_hmm_SetCtime()
- * Date:     SRE, Wed Oct 29 11:53:19 1997 [TWA 721 over the Atlantic]
+ * Synopsis: Timestamp an HMM.
  * 
  * Purpose:  Set the <ctime> field in a new HMM to the current time.
  * 
@@ -624,7 +594,6 @@ p7_hmm_SetCtime(P7_HMM *hmm)
 
 /* Function:  p7_hmm_SetComposition()
  * Synopsis:  Calculate and set model composition, <hmm->compo[]>
- * Incept:    SRE, Tue Sep 16 13:54:29 2008 [Janelia]
  *
  * Purpose:   Calculates the mean residue composition emitted by
  *            model <hmm>, and set <hmm->compo[]> to it.
@@ -684,6 +653,81 @@ p7_hmm_SetComposition(P7_HMM *hmm)
 }
   
 
+/* Function:  p7_hmm_SetConsensus()
+ * Synopsis:  Set the consensus residue line of the HMM.
+ *
+ * Purpose:   Sets the consensus annotation line of the model <hmm>.
+ *            
+ *            Behavior differs, depending on whether this is a
+ *            single-sequence model (i.e. phmmer) or a standard
+ *            model of a multiple sequence alignment. If <sq> is
+ *            non-<NULL> this is a single-sequence model and <sq> is
+ *            the digital sequence it was built from. If <sq> is <NULL>
+ *            this is a standard multiple-sequence model.
+ *            
+ *            In a standard model, the most likely (highest emission
+ *            probability) residue is the consensus at each position.
+ *            In a single-sequence model, the consensus is the
+ *            sequence itself.
+ *            
+ *            In both cases, if the emission probability is $\geq$
+ *            certain threshold, the residue is upper cased. The
+ *            threshold is arbitrarily set to 0.9 for nucleic acid
+ *            alphabets (<eslDNA>, <eslRNA>) and 0.5 for amino acid
+ *            alphabets (<eslAMINO>) and all other alphabets.
+ *            
+ *            The special handling of single-sequence models avoids
+ *            a counterintuitive case where the most likely residue is
+ *            not the original residue. For example, under the
+ *            BLOSUM62 matrix, given an observed M, the most likely
+ *            aligned residue is an L, not an M. (Because L is so much
+ *            more likely a priori than M.)
+ *
+ * Args:      hmm    - model with valid probability parameters mat[1..M][x]
+ *            sq     - NULL if a standard model;
+ *                     or the query sequence for a single-sequence model.
+ *           
+ * Returns:   <eslOK> on success. The <p7H_CONS> flag on the <hmm> is raised
+ *            if it wasn't already. The <hmm->consensus> line is set.
+ *
+ * Throws:    <eslEMEM> on allocation error. The <p7H_CONS> is dropped, even
+ *            if it was up to begin with, and the <hmm->consensus> is <NULL>,
+ *            even if we had one to begin with.
+ *
+ * Xref:      SRE:J8/26.
+ */
+int
+p7_hmm_SetConsensus(P7_HMM *hmm, ESL_SQ *sq)
+{
+  int   k, x;
+  float mthresh;
+  int   status;
+  
+  /* allocation, if needed */
+  if (! hmm->consensus) ESL_ALLOC(hmm->consensus, sizeof(char) * (hmm->M+2));
+
+  /* set our arbitrary threshold for upper/lower casing */
+  if      (hmm->abc->type == eslAMINO) mthresh = 0.5;
+  else if (hmm->abc->type == eslDNA)   mthresh = 0.9;
+  else if (hmm->abc->type == eslRNA)   mthresh = 0.9;
+  else                                 mthresh = 0.5;
+
+  hmm->consensus[0] = ' ';
+  for (k = 1; k <= hmm->M; k++) 
+    {
+      x = (sq ?  sq->dsq[k] : esl_vec_FArgMax(hmm->mat[k], hmm->abc->K));
+      hmm->consensus[k] = ((hmm->mat[k][x] >= mthresh) ? toupper(hmm->abc->sym[x]) : tolower(hmm->abc->sym[x]));
+    }
+  hmm->consensus[hmm->M+1] = '\0';
+  hmm->flags  |= p7H_CONS;	
+  return eslOK;
+
+ ERROR:
+  if (hmm->consensus) free(hmm->consensus);
+  hmm->consensus = NULL;
+  hmm->flags    &= (~p7H_CONS);	
+  return status;
+}
 /*---------------- end, internal-setting routines ---------------*/
 
 
@@ -693,13 +737,14 @@ p7_hmm_SetComposition(P7_HMM *hmm)
  * 3. Renormalization and rescaling counts in core HMMs.
  *****************************************************************/ 
 
-/* Function:  p7_hmm_Rescale()
- * Incept:    Steve Johnson, 3 May 2004
- *            eweights code incorp: SRE, Thu May 20 10:34:03 2004 [St. Louis]
+/* Function:  p7_hmm_Scale()
+ * Synopsis:  In a model containing counts, rescale counts by a factor.
  *
- * Purpose:   Scale a counts-based core HMM by some factor, for
- *            adjusting counts to a new effective sequence number.
- *            Only affects the core probability model (<t>, <ins>, and <mat>).
+ * Purpose:   Given a counts-based model <hmm>, scale core
+ *            by a multiplicative factor of <scale>, where <scale> is
+ *            often <eff_nseq/nseq> for absolute sequence weighting.
+ *            Only affects core probability model emissions and 
+ *            transitions (<t>, <ins>, and <mat>).
  *
  * Args:      hmm        - counts based HMM.
  *            scale      - scaling factor (e.g. eff_nseq/nseq); 1.0=no scaling.
@@ -707,20 +752,20 @@ p7_hmm_SetComposition(P7_HMM *hmm)
  * Returns:   <eslOK> on success.
  */
 int
-p7_hmm_Rescale(P7_HMM *hmm, float scale)
+p7_hmm_Scale(P7_HMM *hmm, double scale)
 {
   int k;
 
   for (k = 0; k <= hmm->M; k++) {
-    esl_vec_FScale(hmm->mat[k], hmm->abc->K, scale);
-    esl_vec_FScale(hmm->ins[k], hmm->abc->K, scale);
-    esl_vec_FScale(hmm->t[k],   7,           scale);
+    esl_vec_FScale(hmm->t[k],   p7H_NTRANSITIONS, scale);  
+    esl_vec_FScale(hmm->mat[k], hmm->abc->K,      scale);  
+    esl_vec_FScale(hmm->ins[k], hmm->abc->K,      scale);  
   }
   return eslOK;
 }
 
 /* Function: p7_hmm_Renormalize()
- * Incept:   SRE, Mon Jan  1 18:39:42 2007 [Casa de Gatos]
+ * Synopsis: Renormalize all parameter vectors (emissions/transitions).
  * 
  * Purpose:  Take a core HMM in counts form, and renormalize
  *           all probability vectors in the core probability model. Enforces
@@ -771,7 +816,7 @@ p7_hmm_Renormalize(P7_HMM *hmm)
  *****************************************************************/
 
 /* Function:  p7_hmm_Dump()
- * Incept:    SRE, Mon Jan  1 18:44:15 2007 [Casa de Gatos]
+ * Synopsis:  Dump HMM data structure to a stream.
  *
  * Purpose:   Debugging: dump the probabilities (or counts) from a core HMM.
  * 
@@ -806,7 +851,7 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
 }
 
 /* Function:  p7_hmm_Sample()
- * Incept:    SRE, Sat Jan  6 13:43:03 2007 [Casa de Gatos]
+ * Synopsis:  Sample an HMM at random.
  *
  * Purpose:   Creates a random HMM of length <M> nodes,
  *            for alphabet <abc>, obtaining randomness from
@@ -856,6 +901,7 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
   
   *ret_hmm = hmm;
   return eslOK;
@@ -868,7 +914,7 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
 }
 
 /* Function:  p7_hmm_SampleUngapped()
- * Incept:    SRE, Thu Jan 25 09:38:30 2007 [Janelia]
+ * Synopsis:  Sample a random HMM with no nonzero indel transitions.
  *
  * Purpose:   Same as <p7_hmm_Sample()>, except all 
  *            M $\rightarrow$ M transitions are 1.0:
@@ -906,7 +952,7 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM 
 }
 
 /* Function:  esl_hmm_SampleEnumerable()
- * Incept:    SRE, Wed Apr 18 09:38:09 2007 [Janelia]
+ * Synopsis:  Sample an random HMM with no nonzero insertion transitions.
  *
  * Purpose:   Sample a random HMM with random emission and 
  *            transition probabilities with the exception that
@@ -969,6 +1015,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
 
   /* SRE DEBUGGING */
   p7_hmm_Validate(hmm, NULL, 0.0001);
@@ -983,7 +1030,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
 }
 
 /* Function:  p7_hmm_SampleUniform()
- * Incept:    SRE, Thu Feb 22 10:04:19 2007 [Janelia]
+ * Synopsis:  Sample a model that uses fixed (given) transition probs.
  *
  * Purpose:   Sample a model that uses uniform transition probabilities,
  *            determined by <tmi>, <tii>, <tmd>, and <tdd>,
@@ -1040,6 +1087,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
 
   *ret_hmm = hmm;
   return eslOK;
@@ -1053,7 +1101,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
 
 
 /* Function:  p7_hmm_Compare()
- * Incept:    SRE, Sat Jan  6 14:14:58 2007 [Casa de Gatos]
+ * Synopsis:  Compare two HMMs for equality.
  *
  * Purpose:   Compare two HMMs <h1> and <h2> to each other;
  *            return <eslOK> if they're identical, and <eslFAIL>
@@ -1088,9 +1136,10 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
   if (esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
 
-  if ((h1->flags & p7H_RF)   && esl_strcmp(h1->rf,   h2->rf)                != 0) return eslFAIL;
-  if ((h1->flags & p7H_CS)   && esl_strcmp(h1->cs,   h2->cs)                != 0) return eslFAIL;
-  if ((h1->flags & p7H_CA)   && esl_strcmp(h1->ca,   h2->ca)                != 0) return eslFAIL;
+  if ((h1->flags & p7H_RF)   && esl_strcmp(h1->rf,        h2->rf)           != 0) return eslFAIL;
+  if ((h1->flags & p7H_CONS) && esl_strcmp(h1->consensus, h2->consensus)    != 0) return eslFAIL;
+  if ((h1->flags & p7H_CS)   && esl_strcmp(h1->cs,        h2->cs)           != 0) return eslFAIL;
+  if ((h1->flags & p7H_CA)   && esl_strcmp(h1->ca,        h2->ca)           != 0) return eslFAIL;
   if ((h1->flags & p7H_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
 
   if (h1->flags & p7H_GA) {
@@ -1115,7 +1164,7 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
 }
 
 /* Function:  p7_hmm_Validate()
- * Incept:    SRE, Sat Jan  6 14:43:00 2007 [Casa de Gatos]
+ * Synopsis:  Validate a <P7_HMM> data structuure.
  *
  * Purpose:   Validates the internals of the HMM structure <hmm>.
  * 
@@ -1158,20 +1207,20 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
   if ( (hmm->eff_nseq != -1.0f)  && hmm->eff_nseq <= 0.0f) ESL_XFAIL(eslFAIL, errbuf, "invalid eff_nseq");
   if (!(hmm->flags & p7H_CHKSUM) && hmm->checksum != 0 )   ESL_XFAIL(eslFAIL, errbuf, "p7H_CHKSUM flag down, but nonzero checksum present"); 
 
-  if (hmm->flags & p7H_RF) {
-    if (hmm->rf == NULL || strlen(hmm->rf) != hmm->M+1)    ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag up, but rf string is invalid");
-  } else 
-    if (hmm->rf != NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag down, but rf string is present");
-  if (hmm->flags & p7H_CS) {
-    if (hmm->cs == NULL || strlen(hmm->cs) != hmm->M+1)    ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag up, but cs string is invalid");
-  } else 
-    if (hmm->cs != NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag down, but cs string is present");
-  if (hmm->flags & p7H_CA) {
-    if (hmm->ca == NULL || strlen(hmm->ca) != hmm->M+1)    ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag up, but ca string is invalid");
-  } else 
-    if (hmm->ca != NULL)                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag down, but ca string is present");
-  if (  (hmm->flags & p7H_MAP) && hmm->map == NULL)        ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag up, but map string is null");
-  if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)        ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
+  if (hmm->flags & p7H_RF)   { if (hmm->rf == NULL        || strlen(hmm->rf)        != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag up, but rf string is invalid");            }
+  else if (hmm->rf)          {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag down, but rf string is present");          }
+
+  if (hmm->flags & p7H_CONS) { if (hmm->consensus == NULL || strlen(hmm->consensus) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CONS flag up, but consensus string is invalid");   } 
+  else if (hmm->consensus)   {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CONS flag down, but consensus string is present"); }
+
+  if (hmm->flags & p7H_CS)   { if (hmm->cs == NULL        || strlen(hmm->cs)        != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag up, but cs string is invalid");   }
+  else if (hmm->cs)          {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CS flag down, but cs string is present"); }
+
+  if (hmm->flags & p7H_CA)   { if (hmm->ca == NULL        || strlen(hmm->ca)        != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag up, but ca string is invalid");   }
+  else if (hmm->ca)          {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CA flag down, but ca string is present"); }
+
+  if (  (hmm->flags & p7H_MAP) && hmm->map == NULL)  ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag up, but map string is null");
+  if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)  ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
 
   if (hmm->flags & p7H_STATS) {
     if (hmm->evparam[p7_MLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
@@ -1196,7 +1245,7 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
  *****************************************************************/
 
 /* Function:  p7_hmm_CalculateOccupancy()
- * Incept:    SRE, Mon Jan 22 08:10:05 2007 [Janelia]
+ * Synopsis:  Calculate match occupancy and insert expected use count vectors.
  *
  * Purpose:   Calculate a vector <mocc[1..M]> containing probability
  *            that each match state is used in a sampled path through
@@ -1369,5 +1418,8 @@ main(int argc, char **argv)
 
 /************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  ************************************************************/
 

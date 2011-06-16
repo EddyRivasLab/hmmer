@@ -116,7 +116,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7H_CA      (1<<13)   /* surface accessibilities available               !*/
 #define p7H_COMPO   (1<<14)   /* model-specific residue composition available     */
 #define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
-
+#define p7H_CONS    (1<<16)   /* consensus residue line available                 */
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
@@ -166,8 +166,10 @@ typedef struct p7_hmm_s {
   char    *acc;	                 /* accession number of model (Pfam)      (optional: NULL) */ /* String, \0-terminated   */
   char    *desc;                 /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
   char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
+  char    *consensus;		 /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
   char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
   char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
+
   char    *comlog;               /* command line(s) that built model      (optional: NULL) */ /* String, \0-terminated   */
   int      nseq;	         /* number of training sequences          (optional: -1)   */
   float    eff_nseq;             /* effective number of seqs (<= nseq)    (optional: -1)   */
@@ -392,6 +394,7 @@ enum p7_hmmfile_formats_e {
   p7_HMMFILE_3b = 2,
   p7_HMMFILE_3c = 3,
   p7_HMMFILE_3d = 4,
+  p7_HMMFILE_3e = 5,
 };
 
 typedef struct p7_hmmfile_s {
@@ -1076,7 +1079,6 @@ extern int     p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc);
 extern void    p7_hmm_Destroy(P7_HMM *hmm);
 extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
 extern P7_HMM *p7_hmm_Clone(const P7_HMM *hmm);
-extern int     p7_hmm_Scale(P7_HMM *hmm, double scale);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
 extern char    p7_hmm_EncodeStatetype(char *typestring);
 extern char   *p7_hmm_DecodeStatetype(char st);
@@ -1087,8 +1089,9 @@ extern int     p7_hmm_SetDescription(P7_HMM *hmm, char *desc);
 extern int     p7_hmm_AppendComlog  (P7_HMM *hmm, int argc, char **argv);
 extern int     p7_hmm_SetCtime      (P7_HMM *hmm);
 extern int     p7_hmm_SetComposition(P7_HMM *hmm);
+extern int     p7_hmm_SetConsensus  (P7_HMM *hmm, ESL_SQ *sq);
 /*      3. Renormalization and rescaling counts in core HMMs. */
-extern int     p7_hmm_Rescale(P7_HMM *hmm, float scale);
+extern int     p7_hmm_Scale      (P7_HMM *hmm, double scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 /*      4. Debugging and development code. */
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
@@ -1128,6 +1131,7 @@ extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
+
 extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double lnP);
 extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);

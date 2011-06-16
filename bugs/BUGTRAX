@@ -1,3 +1,29 @@
+ID              h90
+TITLE           phmmer's displayed consensus differs from query sequence
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J8/26
+REPORTED_BY     Rob Finn
+OPENED_DATE     SRE, Thu Jun 16 11:20:29 2011
+CLOSED_DATE     SRE, Thu Jun 16 11:20:29 2011
+DESCRIPTION     
+  In displayed alignments, the model consensus line was constructed by
+  choosing maximum likelihood residues at each position. With single
+  sequence queries, this can produce a counterintuitive effect, because
+  the most likely residue is not necessarily the original residue. For
+  example, under BLOSUM62 scoring, the most likely residue to align to
+  an M is an L, not another M.
+
+  Consensus of a model is now set in the model itself, at model
+  construction time. (Previously, consensus was set in the profile, at
+  model->profile configuration time.) This allows single-sequence
+  models to set consensus specially.
+
+  Implemented p7_hmm_SetConsensus(), which handles single sequences
+  and standard multiple-alignment models as different cases. Added
+  <consensus> field to the <P7_HMM> structure.
+//
 ID              h89
 TITLE           HMMER_NCPU env var sets --cpu, creates incompatibility with -n, --mpi
 AFFECTS         3.0

@@ -53,12 +53,12 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   float *occ = NULL;
   float *tp, *rp;
   float  sc[p7_MAXCODE];
-  float  mthresh;
   float  Z;
  
   /* Contract checks */
   if (gm->abc->type != hmm->abc->type) ESL_XEXCEPTION(eslEINVAL, "HMM and profile alphabet don't match");
   if (hmm->M > gm->allocM)             ESL_XEXCEPTION(eslEINVAL, "profile too small to hold HMM");
+  if (! (hmm->flags & p7H_CONS))       ESL_XEXCEPTION(eslEINVAL, "HMM must have a consensus to transfer to the profile");
 
   /* Copy some pointer references and other info across from HMM  */
   gm->M                = hmm->M;
@@ -75,25 +75,12 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) goto ERROR;
-  if (hmm->flags & p7H_RF) strcpy(gm->rf, hmm->rf);
-  if (hmm->flags & p7H_CS) strcpy(gm->cs, hmm->cs);
+  if (hmm->flags & p7H_RF)   strcpy(gm->rf,        hmm->rf);
+  if (hmm->flags & p7H_CONS) strcpy(gm->consensus, hmm->consensus); /* must be present, actually, so the flag test is just for symmetry w/ other optional HMM fields */
+  if (hmm->flags & p7H_CS)   strcpy(gm->cs,        hmm->cs);
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) gm->compo[z]   = hmm->compo[z];
-
-  /* Determine the "consensus" residue for each match position.
-   * This is only used for alignment displays, not in any calculations.
-   */
-  if      (hmm->abc->type == eslAMINO) mthresh = 0.5;
-  else if (hmm->abc->type == eslDNA)   mthresh = 0.9;
-  else if (hmm->abc->type == eslRNA)   mthresh = 0.9;
-  else                                 mthresh = 0.5;
-  gm->consensus[0] = ' ';
-  for (k = 1; k <= hmm->M; k++) {
-    x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
-    gm->consensus[k] = ((hmm->mat[k][x] > mthresh) ? toupper(hmm->abc->sym[x]) : tolower(hmm->abc->sym[x]));
-  }
-  gm->consensus[hmm->M+1] = '\0';
 
   /* Entry scores. */
   if (p7_profile_IsLocal(gm))

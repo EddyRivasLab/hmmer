@@ -343,6 +343,7 @@ create_brute_hmm(ESL_ALPHABET *abc, struct p7_bruteparam_s *prm)
   hmm->nseq     = 0;
   hmm->eff_nseq = 0;
   p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
   hmm->checksum = 0;
 
   return hmm;

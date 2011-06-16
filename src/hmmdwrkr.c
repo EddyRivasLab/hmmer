@@ -380,51 +380,24 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
 
     /* fill in the hmm pointers */
     n = sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
-    memcpy(*hmm->t, p, n);
-    p += n;
+    memcpy(*hmm->t, p, n);     p += n;
 
     n = sizeof(float) * (hmm->M + 1) * query->abc->K;
-    memcpy(*hmm->mat, p, n);
-    p += n;
-    memcpy(*hmm->ins, p, n);
-    p += n;
+    memcpy(*hmm->mat, p, n);   p += n;
+    memcpy(*hmm->ins, p, n);   p += n;
 
-    if (thmm.name != NULL) {
-      hmm->name = strdup(p);
-      p += strlen(hmm->name) + 1;
-    }
-
-    if (thmm.acc != NULL) {
-      hmm->acc = strdup(p);
-      p += strlen(hmm->name) + 1;
-    }
-
-    if (thmm.desc != NULL) {
-      hmm->desc = strdup(p);
-      p += strlen(hmm->name) + 1;
-    }
+    if (thmm.name) { hmm->name = strdup(p); p += strlen(hmm->name) + 1; }
+    if (thmm.acc)  { hmm->acc  = strdup(p); p += strlen(hmm->name) + 1; }
+    if (thmm.desc) { hmm->desc = strdup(p); p += strlen(hmm->name) + 1; }
 
     n = hmm->M + 2;
-    if (hmm->flags & p7H_RF) {
-      memcpy(hmm->rf, p, n);
-      p += n;
-    }
+    if (hmm->flags & p7H_RF)   { memcpy(hmm->rf,        p, n); p += n; }
+    if (hmm->flags & p7H_CONS) { memcpy(hmm->consensus, p, n); p += n; }
+    if (hmm->flags & p7H_CS)   { memcpy(hmm->cs,        p, n); p += n; }
+    if (hmm->flags & p7H_CA)   { memcpy(hmm->ca,        p, n); p += n; }
 
-    if (hmm->flags & p7H_CS) {
-      memcpy(hmm->cs, p, n);
-      p += n;
-    }
-
-    if (hmm->flags & p7H_CA) {
-      memcpy(hmm->ca, p, n);
-      p += n;
-    }
-
-    if (hmm->flags & p7H_MAP) {
-      n = sizeof(int) * (hmm->M + 1);
-      memcpy(hmm->map, p, n);
-      p += n;
-    }
+    n = sizeof(int) * (hmm->M + 1);
+    if (hmm->flags & p7H_MAP) {  memcpy(hmm->map,       p, n); p += n; }
 
     query->hmm = hmm;
   }

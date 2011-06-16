@@ -74,6 +74,7 @@ p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm)
   fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)  ? "yes" : "no");
   fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)  ? "yes" : "no");
   fprintf(fp, "MAP   %s\n", (hmm->flags & p7H_MAP) ? "yes" : "no");
+  /* H3 consensus line has no counterpart in H2 */
 
   if (hmm->comlog != NULL)  h2_multiline(fp, "COM   ",     hmm->comlog);
   if (hmm->nseq   != -1)    fprintf     (fp, "NSEQ  %d\n", hmm->nseq);
