@@ -2,8 +2,14 @@
  * 
  * Contents:
  *     1. P7_BG object: allocation, initialization, destruction.
- *     2. Standard iid null model ("null1")
- *     3. Filter null model. 
+ *     2. Reading/writing residue backgrounds from files.
+ *     3. Standard iid null model ("null1").
+ *     4. Filter null model. 
+ *     5. Benchmark driver.
+ *     6. Unit tests.
+ *     7. Test driver.
+ *     8. Examples.
+ *     9. Copyright and license.
  */
 
 #include "p7_config.h"		/* must be included first */
@@ -195,7 +201,7 @@ p7_bg_SetLength(P7_BG *bg, int L)
 
 
 /*****************************************************************
- * x. Reading/writing residue backgrounds from files
+ * 2. Reading/writing residue backgrounds from files
  *****************************************************************/
 
 /* Function:  p7_bg_Read()
@@ -331,7 +337,7 @@ p7_bg_Write(FILE *fp, P7_BG *bg)
 
 
 /*****************************************************************
- * 2. Standard iid null model ("null1")
+ * 3. Standard iid null model ("null1")
  *****************************************************************/
 
 /* Function:  p7_bg_NullOne()
@@ -356,7 +362,7 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 
 
 /*****************************************************************
- * 3. Filter null model
+ * 4. Filter null model
  *****************************************************************/
 
 /* Function:  p7_bg_SetFilter()
@@ -476,7 +482,7 @@ p7_bg_FilterScore(P7_BG *bg, ESL_DSQ *dsq, int L, float *ret_sc)
 
 
 /*****************************************************************
- * x. Benchmark
+ * 5. Benchmark driver
  *****************************************************************/
 #ifdef p7BG_BENCHMARK
 /*
@@ -541,7 +547,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * x. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef p7BG_TESTDRIVE
 #include "esl_dirichlet.h"
@@ -560,7 +566,9 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
   if ((abc = esl_alphabet_Create(esl_rnd_Roll(rng, 5) + 1)) == NULL)  esl_fatal(msg);
   if (( bg = p7_bg_Create(abc))                             == NULL)  esl_fatal(msg);
   if (( fq = malloc(sizeof(float) * abc->K))                == NULL)  esl_fatal(msg);                 
-  if (esl_dirichlet_FSampleUniform(rng, abc->K, fq)         != eslOK) esl_fatal(msg);
+  do {
+    if (esl_dirichlet_FSampleUniform(rng, abc->K, fq)      != eslOK) esl_fatal(msg);
+  } while (esl_vec_FMin(fq, abc->K) < 0.001); /* small p's will get rounded off and fail FCompare() */
   esl_vec_FCopy(fq, abc->K, bg->f);
 
   if (esl_tmpfile_named(tmpfile, &fp) != eslOK) esl_fatal(msg);
@@ -580,7 +588,7 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
 
 
 /*****************************************************************
- * x. Test driver
+ * 7. Test driver
  *****************************************************************/
 
 #ifdef p7BG_TESTDRIVE
@@ -623,7 +631,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * x. Examples
+ * 8. Examples
  *****************************************************************/
 #ifdef p7BG_EXAMPLE
 /*
@@ -740,6 +748,9 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 
 
