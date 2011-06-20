@@ -839,7 +839,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  * Xref:      J4/25.
  */
 int
-p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist)
+p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   float            usc, vfsc, fwdsc;   /* filter scores                           */
@@ -953,7 +953,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
 
 
-      /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow
+      /* Now a Backwards parser pass, and hand it to domain definition workflow
        * In this case "domains" will end up being translated as independent "hits" */
       p7_omx_GrowTo(pli->oxb, om->M, 0, window_len);
       p7_BackwardParser(tmpseq->dsq, window_len, om, pli->oxf, pli->oxb, NULL);
@@ -963,84 +963,83 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
       if (pli->ddef->nregions   == 0)  continue; /* score passed threshold but there's no discrete domains here       */
       if (pli->ddef->nenvelopes == 0)  continue; /* rarer: region was found, stochastic clustered, no envelopes found */
 
-
-
-      /* Put these hits ("domains") into the hit list. Some of them may not
-       * pass eventual E-value thresholds, so this list may be longer
-       * than eventually reported.
-
-       * Modified original pipeline to create a single hit
-       * for each domain, so the remainder of the typical-case hit-merging
-       * process can remain mostly intact
+      /* Put these hits ("domains") into the hit list.
+       *
+       * Modified original pipeline to create a single hit for each
+       * domain, so the remainder of the typical-case hit-merging
+       * process can remain mostly intact.
+       *
+       * Some of them may not pass eventual E-value thresholds. In
+       * protein context, these would be reported as supplementary
+       * data (domains contributing to a full-sequence score, but
+       * in nhmmer context, they'll just get thrown away later, so
+       * drop them now, if possible.
        */
+
+      int loc_window_length = ESL_MIN(om->max_length, window_len); //see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
+	  float nullsc2 =  (float)loc_window_length * log((float)loc_window_length/(loc_window_length+1)) + log(1./(loc_window_length+1));
 
 
       for (d = 0; d < pli->ddef->ndom; d++)
         {
 
-    	  p7_tophits_CreateNextHit(hitlist, &hit);
-
-          /*  These appear to be unnecessary, as we don't report per-hit stats
-          hit->nexpected  = 0;
-          hit->nregions   = 0;
-          hit->nclustered = 0;
-          hit->noverlaps  = 0;
-          hit->nenvelopes = 0;
-           */
-          hit->ndom       = 1;
-          hit->best_domain = 0;
-
-          hit->window_length = ESL_MIN(om->max_length, window_len); //see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
-          hit->subseq_start = sq->start;
-
-          ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
-          hit->dcl[0] = pli->ddef->dcl[d];
-
-
-          hit->dcl[0].ienv += window_starts[i] - 1; // represents the real position within the sequence handed to the pipeline
-          hit->dcl[0].jenv += window_starts[i] - 1;
-          hit->dcl[0].iali += window_starts[i] - 1;
-          hit->dcl[0].jali += window_starts[i] - 1;
-          hit->dcl[0].ad->sqfrom += window_starts[i] - 1;
-          hit->dcl[0].ad->sqto += window_starts[i] - 1;
-
-
-          //adjust the score of a hit to account for the full length model - the characters ouside the envelope but in the window
-          int env_len = hit->dcl[0].jenv - hit->dcl[0].ienv + 1;
-          int ali_len = hit->dcl[0].jali - hit->dcl[0].iali + 1;
-          hit->dcl[0].bitscore = hit->dcl[0].envsc ;
+          //adjust the score of a hit to account for the full length model - the characters outside the envelope but in the window
+          int env_len = pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1;
+          int ali_len = pli->ddef->dcl[d].jali - pli->ddef->dcl[d].iali + 1;
+          float bitscore = pli->ddef->dcl[d].envsc ;
           //For these modifications, see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
-          hit->dcl[0].bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
-          hit->dcl[0].bitscore += 2 * log(2. / (hit->window_length+2)) ;
+          bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
+          bitscore += 2 * log(2. / (loc_window_length+2)) ;
           //the ESL_MAX test handles the extremely rare case that the env_len is actually larger than om->max_length
-          hit->dcl[0].bitscore +=  (ESL_MAX(hit->window_length, env_len) - ali_len) * log((float)hit->window_length / (float) (hit->window_length+2));
+          bitscore +=  (ESL_MAX(loc_window_length, env_len) - ali_len) * log((float)loc_window_length / (float) (loc_window_length+2));
 
+          //compute scores used to decide if we should keep this "domain" as a hit.
+		  float dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + pli->ddef->dcl[d].domcorrection) : 0.0);
+          float dom_score  = (bitscore - (nullsc2 + dom_bias))  / eslCONST_LOG2;
+          double dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
+         //note: this test is conservative: it uses just the nres from the current pipeline, while the final filters
+         //will add up nres from all threads, over all windows, which will increase stringency
+         if ( p7_pli_TargetReportable(pli, dom_score, dom_lnP + log((float)pli->nres / loc_window_length) ) ) {
 
-          hit->pre_score  = hit->dcl[0].bitscore  / eslCONST_LOG2;
-          hit->pre_lnP    = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+			  p7_tophits_CreateNextHit(hitlist, &hit);
 
-          float nullsc2 =  (float) hit->window_length * log((float)hit->window_length/(hit->window_length+1)) + log(1./(hit->window_length+1));
+			  hit->ndom        = 1;
+			  hit->best_domain = 0;
 
-          hit->dcl[0].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[0].domcorrection) : 0.0);
-          hit->dcl[0].bitscore = (hit->dcl[0].bitscore - (nullsc2 + hit->dcl[0].dombias)) / eslCONST_LOG2;
-          hit->dcl[0].lnP      = esl_exp_logsurv (hit->dcl[0].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+			  hit->window_length = loc_window_length;
+			  hit->seqidx = seqidx;
+			  hit->subseq_start = sq->start;
 
-          if (pli->mode == p7_SEARCH_SEQS)
-            {
-                if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-                if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-            } else {
-                if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
-                if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
-            }
+			  ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
+			  hit->dcl[0] = pli->ddef->dcl[d];
 
-          hit->sum_score  = hit->score  = hit->dcl[0].bitscore;
-          hit->sum_lnP    = hit->lnP    = hit->dcl[0].lnP;
+			  hit->dcl[0].ienv += window_starts[i] - 1; // represents the real position within the sequence handed to the pipeline
+			  hit->dcl[0].jenv += window_starts[i] - 1;
+			  hit->dcl[0].iali += window_starts[i] - 1;
+			  hit->dcl[0].jali += window_starts[i] - 1;
+			  hit->dcl[0].ad->sqfrom += window_starts[i] - 1;
+			  hit->dcl[0].ad->sqto += window_starts[i] - 1;
+
+			  hit->pre_score = bitscore  / eslCONST_LOG2;
+	          hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+
+			  hit->dcl[0].dombias  = dom_bias;
+			  hit->sum_score  = hit->score  = hit->dcl[0].bitscore = dom_score;
+			  hit->sum_lnP    = hit->lnP    = hit->dcl[0].lnP  = dom_lnP;
+
+			  if (pli->mode == p7_SEARCH_SEQS)
+				{
+					if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+					if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+				} else {
+					if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
+					if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+				}
+          }
         }
 
         pli->ddef->ndom = 0; // reset for next use
-
 
   }
 
@@ -1256,7 +1255,7 @@ main(int argc, char **argv)
   /* Print the results. 
    * This example is a stripped version of hmmsearch's tabular output.
    */
-  p7_tophits_Sort(hitlist);
+  p7_tophits_SortBySortkey(hitlist);
   namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
   for (h = 0; h < hitlist->N; h++)
     {
@@ -1397,7 +1396,7 @@ main(int argc, char **argv)
   /* Print the results. 
    * This example is a stripped version of hmmsearch's tabular output.
    */
-  p7_tophits_Sort(hitlist);
+  p7_tophits_SortBySortkey(hitlist);
   namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(hitlist));
   for (h = 0; h < hitlist->N; h++)
     {

@@ -703,6 +703,7 @@ typedef struct p7_hit_s {
   int      nincluded;	/* # of domains satisfying inclusion thresholding */
   int      best_domain;	/* index of best-scoring domain in dcl */
 
+  int64_t  seqidx;          /*unique identifier to track the database sequence from which this hit came*/
   int64_t  subseq_start; /*used to track which subsequence of a full_length target this hit came from, for purposes of removing duplicates */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
@@ -721,7 +722,8 @@ typedef struct p7_tophits_s {
   uint64_t N;		/* number of hits in list now               */
   uint64_t nreported;	/* number of hits that are reportable       */
   uint64_t nincluded;	/* number of hits that are includable       */
-  int      is_sorted;	/* TRUE when h->hit valid for all N hits    */
+  int      is_sorted_by_sortkey; /* TRUE when hits sorted by sortkey and th->hit valid for all N hits */
+  int      is_sorted_by_seqidx; /* TRUE when hits sorted by seq_idx, position, and th->hit valid for all N hits */
 } P7_TOPHITS;
 
 
@@ -1138,7 +1140,7 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th, int64_t seqidx);
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
@@ -1191,7 +1193,9 @@ extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  int hmmfrom, int hmmto, int hmmlen, 
 				  int domidx, int ndom,
 				  P7_ALIDISPLAY *ali);
-extern int         p7_tophits_Sort(P7_TOPHITS *h);
+extern int         p7_tophits_SortBySortkey(P7_TOPHITS *h);
+extern int         p7_tophits_SortBySeqidx(P7_TOPHITS *h);
+
 extern int         p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2);
 extern int         p7_tophits_GetMaxPositionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);

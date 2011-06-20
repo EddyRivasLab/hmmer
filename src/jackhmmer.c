@@ -660,7 +660,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    }
 
 	  /* Print the results. */
-	  p7_tophits_Sort(info->th);
+	  p7_tophits_SortBySortkey(info->th);
 	  p7_tophits_Threshold(info->th, info->pli);
 	  p7_tophits_CompareRanking(info->th, kh, &nnew_targets);
 	  p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
@@ -1214,7 +1214,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    }
 
 	  /* Print the results. */
-	  p7_tophits_Sort(th);
+	  p7_tophits_SortBySortkey(th);
 	  p7_tophits_Threshold(th, pli);
 	  p7_tophits_CompareRanking(th, kh, &nnew_targets);
 	  p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");

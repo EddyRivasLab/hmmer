@@ -911,7 +911,8 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     th.N         = results->stats.nhits;
     th.nreported = 0;
     th.nincluded = 0;
-    th.is_sorted = 0;
+    th.is_sorted_by_sortkey = 0;
+    th.is_sorted_by_seqidx  = 0;
       
     pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
     pli->nmodels     = results->stats.nmodels;

@@ -488,7 +488,8 @@ int main(int argc, char *argv[])
         th->unsrt     = (P7_HIT *)(data + sizeof(HMMD_SEARCH_STATS));
         th->nreported = stats->nreported;
         th->nincluded = stats->nincluded;
-        th->is_sorted = TRUE;
+        th->is_sorted_by_seqidx  = FALSE;
+        th->is_sorted_by_sortkey = TRUE;
 
         if ((th->hit = malloc(sizeof(void *) * stats->nhits)) == NULL) {
           fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));

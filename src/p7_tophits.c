@@ -52,7 +52,8 @@ p7_tophits_Create(void)
   h->N         = 0;
   h->nreported = 0;
   h->nincluded = 0;
-  h->is_sorted = TRUE;           /* but only because there's 0 hits */
+  h->is_sorted_by_sortkey = TRUE; /* but only because there's 0 hits */
+  h->is_sorted_by_seqidx = TRUE; /* but only because there's 0 hits */
   h->hit[0]    = h->unsrt;    /* if you're going to call it "sorted" when it contains just one hit, you need this */
   return h;
 
@@ -91,7 +92,7 @@ p7_tophits_Grow(P7_TOPHITS *h)
   /* If we grow a sorted list, we have to translate the pointers
    * in h->hit, because h->unsrt might have just moved in memory. 
    */
-  if (h->is_sorted) 
+  if (h->is_sorted_by_seqidx || h->is_sorted_by_sortkey)
     {
       for (i = 0; i < h->N; i++)
     h->hit[i] = h->unsrt + (h->hit[i] - ori);
@@ -129,7 +130,10 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   
   hit = &(h->unsrt[h->N]);
   h->N++;
-  if (h->N >= 2) h->is_sorted = FALSE;
+  if (h->N >= 2) {
+	  h->is_sorted_by_seqidx = FALSE;
+	  h->is_sorted_by_sortkey = FALSE;
+  }
 
   hit->name         = NULL;
   hit->acc          = NULL;
@@ -249,13 +253,16 @@ p7_tophits_Add(P7_TOPHITS *h,
   h->unsrt[h->N].dcl        = NULL;
   h->N++;
 
-  if (h->N >= 2) h->is_sorted = FALSE;
+  if (h->N >= 2) {
+	  h->is_sorted_by_seqidx = FALSE;
+	  h->is_sorted_by_sortkey = FALSE;
+  }
   return eslOK;
 }
 
 /* hit_sorter(): qsort's pawn, below */
 static int
-hit_sorter(const void *vh1, const void *vh2)
+hit_sorter_by_sortkey(const void *vh1, const void *vh2)
 {
   P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
   P7_HIT *h2 = *((P7_HIT **) vh2);
@@ -265,11 +272,39 @@ hit_sorter(const void *vh1, const void *vh2)
   else {
       int c = strcmp(h1->name, h2->name);
       if (c != 0)                       return c;
-      else                               return  (h1->dcl[0].iali < h2->dcl[0].iali ? 1 : -1 );
+
+      // if on different strand, the positive strand goes first, else use position
+      int dir1 = h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1;
+      int dir2 = h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1;
+      if (dir1 != dir2)
+    	  return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
+      else
+          return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+
   }
 }
 
-/* Function:  p7_tophits_Sort()
+static int
+hit_sorter_by_seqidx(const void *vh1, const void *vh2)
+{
+  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
+  P7_HIT *h2 = *((P7_HIT **) vh2);
+
+  if      (h1->seqidx > h2->seqidx) return  1; /* first key, seq_idx (unique id for sequences), low to high */
+  else if (h1->seqidx < h2->seqidx) return -1;
+  // if on different strand, the positive strand goes first, else use position
+  int dir1 = h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1;
+  int dir2 = h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1;
+  if (dir1 != dir2)
+	  return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
+  else
+      return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+
+
+}
+
+
+/* Function:  p7_tophits_SortBySortkey()
  * Synopsis:  Sorts a hit list.
  * Incept:    SRE, Fri Dec 28 07:51:56 2007 [Janelia]
  *
@@ -280,16 +315,44 @@ hit_sorter(const void *vh1, const void *vh2)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_Sort(P7_TOPHITS *h)
+p7_tophits_SortBySortkey(P7_TOPHITS *h)
 {
   int i;
 
-  if (h->is_sorted)  return eslOK;
+  if (h->is_sorted_by_sortkey)  return eslOK;
   for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
-  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter);
-  h->is_sorted = TRUE;
+  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_sortkey);
+  h->is_sorted_by_seqidx  = FALSE;
+  h->is_sorted_by_sortkey = TRUE;
   return eslOK;
 }
+
+
+/* Function:  p7_tophits_SortBySeqidx()
+ * Synopsis:  Sorts a hit list by sequence index and position in that
+ *            sequence at which the hit's first domain begins
+ * Incept:    TJW, Tue Jun 14 14:09:34 EDT 2011 [Janelia]
+ *
+ * Purpose:   Sorts a top hit list. After this call,
+ *            <h->hit[i]> points to the i'th ranked
+ *            <P7_HIT> for all <h->N> hits.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_SortBySeqidx(P7_TOPHITS *h)
+{
+  int i;
+
+  if (h->is_sorted_by_seqidx)  return eslOK;
+  for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
+  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_seqidx);
+  h->is_sorted_by_sortkey = FALSE;
+  h->is_sorted_by_seqidx  = TRUE;
+  return eslOK;
+}
+
+
 
 /* Function:  p7_tophits_Merge()
  * Synopsis:  Merge two top hits lists.
@@ -318,8 +381,8 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   int      status;
 
   /* Make sure the two lists are sorted */
-  if ((status = p7_tophits_Sort(h1)) != eslOK) goto ERROR;
-  if ((status = p7_tophits_Sort(h2)) != eslOK) goto ERROR;
+  if ((status = p7_tophits_SortBySortkey(h1)) != eslOK) goto ERROR;
+  if ((status = p7_tophits_SortBySortkey(h2)) != eslOK) goto ERROR;
 
   /* Attempt our allocations, so we fail early if we fail. 
    * Reallocating h1->unsrt screws up h1->hit, so fix it.
@@ -335,7 +398,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 
   /* Merge the sorted hit lists */
   for (i=0,j=0,k=0; i < h1->N && j < h2->N ; k++)
-    new_hit[k] = (hit_sorter(&h1->hit[i], &h2->hit[j]) > 0) ? new2 + (h2->hit[j++] - h2->unsrt) : h1->hit[i++];
+    new_hit[k] = (hit_sorter_by_sortkey(&h1->hit[i], &h2->hit[j]) > 0) ? new2 + (h2->hit[j++] - h2->unsrt) : h1->hit[i++];
   while (i < h1->N) new_hit[k++] = h1->hit[i++];
   while (j < h2->N) new_hit[k++] = new2 + (h2->hit[j++] - h2->unsrt);
 
@@ -508,7 +571,8 @@ p7_tophits_Reuse(P7_TOPHITS *h)
     }
   }
   h->N         = 0;
-  h->is_sorted = TRUE;
+  h->is_sorted_by_seqidx = TRUE;
+  h->is_sorted_by_sortkey = TRUE;
   h->hit[0]    = h->unsrt;
   return eslOK;
 }
@@ -670,6 +734,8 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
       dir_i = s_i < e_i ? 1 : -1;
       len_i = 1 + dir_i * (e_i - s_i) ;
 
+ //     printf ("hit: %ld,%d-%d,%d (%.5g) \n", (long)th->hit[i]->seqidx, s_i,e_i, dir_i, exp(p_i) );
+
       for (j = i+1; j < th->N; j++) {
           sub_j = th->hit[j]->subseq_start;
           p_j = th->hit[j]->lnP;
@@ -678,11 +744,12 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
           dir_j = s_j < e_j ? 1 : -1;
           len_j = 1 + dir_j * (e_j - s_j) ;
 
+//printf ("compare: %ld,%d-%d,%d <-> %ld,%d-%d,%d\n", (long)th->hit[i]->seqidx, s_i,e_i, dir_i, (long)th->hit[j]->seqidx, s_j,e_j, dir_j );
 
-          if ( 0==esl_strcmp(th->hit[i]->acc, th->hit[j]->acc)  && //same sequence
-                  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
-                  dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
-                  (
+          if ( th->hit[i]->seqidx ==  th->hit[j]->seqidx  && //same source sequence
+               sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
+               dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
+                 (
                       ( s_i >= s_j-2 && s_i <= s_j+2) ||  // at least one side is essentially flush (
                       ( e_i >= e_j-2 && e_i <= e_j+2)
                   )
@@ -1492,7 +1559,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
 		fprintf(ofp, "# Hit scores\n# ----------\n#\n");
 		fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %*s %*s %*s %*s %6s   %s\n",
 				tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", "strand", "description of target");
-				fprintf(ofp, "# %*s %6s %9s %5s %s %s %*s %*s %*s %*s %5s    %s\n",
+		fprintf(ofp, "# %*s %6s %9s %5s %s %s %*s %*s %*s %*s %5s   %s\n",
 				   tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "------", "---------------------");
 
 		  for (h = 0; h < th->N; h++) {
@@ -1568,7 +1635,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
 		}
   	    }
 	  }
-	  p7_tophits_Sort(domHitlist);
+	  p7_tophits_SortBySortkey(domHitlist);
 
 	  //Now with this list of sorted "hits" (really domains),
       fprintf(ofp, "# Domain scores\n# -------------\n#\n");
@@ -1753,7 +1820,7 @@ main(int argc, char **argv)
                i, i, N,
                i, i, N,
                i, N, NULL);
-      p7_tophits_Sort(h[j]);
+      p7_tophits_SortBySortkey(h[j]);
     }
   /* then merge them into one big list in h[0] */
   for (j = 1; j < M; j++)
@@ -1837,7 +1904,7 @@ main(int argc, char **argv)
   p7_tophits_Add(h1, "last",  NULL, NULL, -1.0, (float) key, key, (float) key, key, i, i, N, i, i, N, 1, 1, NULL);
   p7_tophits_Add(h1, "first", NULL, NULL, 20.0, (float) key, key, (float) key, key, i, i, N, i, i, N, 1, 1, NULL);
 
-  p7_tophits_Sort(h1);
+  p7_tophits_SortBySortkey(h1);
   if (strcmp(h1->hit[0]->name,   "first") != 0) esl_fatal("sort failed (top is %s = %f)", h1->hit[0]->name,   h1->hit[0]->sortkey);
   if (strcmp(h1->hit[N+1]->name, "last")  != 0) esl_fatal("sort failed (last is %s = %f)", h1->hit[N+1]->name, h1->hit[N+1]->sortkey);
 

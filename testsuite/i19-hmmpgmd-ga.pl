@@ -81,24 +81,31 @@ foreach $line (@output)
 $expected_line = "    1.3e-43  134.8   1.6      4e-28   82.1   0.1    3.3  3  3";
 
 if ($nhits == 3) { die "FAIL: ga thresholds not applied?"; }
-if ($nhits != 1 && $resultline[0] ne $expected_line) { die "FAIL: didn't get expected result line\nresult: $resultline[0]\nexpect: $expected_line"; }
+if ($nhits != 1 && $resultline[0] ne $expected_line) { $daemon_active=1; tear_down(); die "FAIL: didn't get expected result line\nresult: $resultline[0]\nexpect: $expected_line"; }
 
 unlink <$tmppfx.hmm*>;
 unlink "$tmppfx.in";
 print "ok\n";
 exit 0;
 
+
+sub tear_down 
+{
+    if ($daemon_active) {
+        &create_kill_script("$tmppfx.in");
+        `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+    }
+    unlink <$tmppfx.hmm*>;
+    unlink "$tmppfx.in";
+	
+}
+
 # TJW: Thu Mar 31 14:30:56 EDT 2011
 # Written to tear down the worker/master in the case of a sigint,
 # so a zombie won't be left behind
 sub catch_sigint  
 {
-	if ($daemon_active) {
-		&create_kill_script("$tmppfx.in");
-		`cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
-	}
-    unlink <$tmppfx.hmm*>;
-    unlink "$tmppfx.in";
+    tear_down();
     die "sigint signal captured; killed daemons\n";
 }
 

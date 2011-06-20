@@ -504,9 +504,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* Print the results.  */
-      p7_tophits_Sort(info->th);
+      p7_tophits_SortBySeqidx(info->th);
       p7_tophits_RemoveDuplicates(info->th);
 
+      p7_tophits_SortBySortkey(info->th);
       p7_tophits_Threshold(info->th, info->pli);
 
       //tally up total number of hits and target coverage
@@ -626,9 +627,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_pli_NewSeq(info->pli, dbsq);
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
       prev_hit_cnt = info->th->N;
-      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
+      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, info->pli->nseqs);
       p7_pipeline_Reuse(info->pli); // prepare for next search
-
 
 
       P7_DOMAIN *dcl;
@@ -650,7 +650,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq_revcmp, info->th);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -678,7 +678,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       }
     }
 
-  esl_sq_Destroy(dbsq);
+  if (dbsq) esl_sq_Destroy(dbsq);
 
   return wstatus;
 
@@ -721,7 +721,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
                                                  // overlap should be retained in the ReadWindow step
       }
 
-
       sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
       if (block->complete || block->count == 0) {
@@ -735,6 +734,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
           use_tmpsq = TRUE;
       }
 
+      block->first_seqidx = info->pli->nseqs;
       info->pli->nseqs += block->count - (use_tmpsq ? 1 : 0);// if there's an incomplete sequence read into the block wait to count it until it's complete.
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
@@ -766,7 +766,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       esl_workqueue_Complete(queue);  
     }
 
-  esl_sq_Destroy(tmpsq);
+  if (tmpsq) esl_sq_Destroy(tmpsq);
 
   return sstatus;
 }
@@ -815,7 +815,7 @@ pipeline_thread(void *arg)
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
       prev_hit_cnt = info->th->N;
-      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
+      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, block->first_seqidx + i);
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -838,7 +838,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {
