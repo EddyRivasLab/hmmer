@@ -666,6 +666,8 @@ typedef struct p7_domaindef_s {
 #define p7_IS_REPORTED      (1<<1)
 #define p7_IS_NEW           (1<<2)
 #define p7_IS_DROPPED       (1<<3)
+#define p7_IS_DUPLICATE     (1<<4)
+
 
 /* Structure: P7_HIT
  * 
