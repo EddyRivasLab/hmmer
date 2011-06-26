@@ -670,10 +670,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
 				  //merge windows
 				  merged = 1;
-				  if ( (*ends)[new_hit_cnt] < (*ends)[i])
+				  if ( (*ends)[i] > (*ends)[new_hit_cnt] )
 					  (*ends)[new_hit_cnt] = (*ends)[i];
-				  if ( (*starts)[new_hit_cnt] > (*starts)[i])
-  					  (*starts)[new_hit_cnt] = (*starts)[i];
 			  } else {
 				  //new window
 				  new_hit_cnt++;

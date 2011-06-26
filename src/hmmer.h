@@ -789,6 +789,9 @@ typedef struct p7_pipeline_s {
   double  F1;		        /* MSV filter threshold                     */
   double  F2;		        /* Viterbi filter threshold                 */
   double  F3;		        /* uncorrected Forward filter threshold     */
+  int     B1;               /* window length for biased-composition modifier - MSV*/
+  int     B2;               /* window length for biased-composition modifier - Viterbi*/
+  int     B3;               /* window length for biased-composition modifier - Forward*/
   int     do_biasfilter;	/* TRUE to use biased comp HMM filter       */
   int     do_null2;		/* TRUE to use null2 score corrections      */
 

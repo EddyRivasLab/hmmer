@@ -203,6 +203,14 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->F1     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F1")) : 0.02);
   pli->F2     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F2")) : 1e-3);
   pli->F3     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F3")) : 1e-5);
+  if (long_targets) {
+	  pli->B1     = (go ? esl_opt_GetInteger(go, "--B1") : 100);
+	  pli->B2     = (go ? esl_opt_GetInteger(go, "--B2") : 240);
+	  pli->B3     = (go ? esl_opt_GetInteger(go, "--B3") : 1000);
+  } else {
+	  pli->B1 = pli->B2 = pli->B3 = -1;
+  }
+
   if (go && esl_opt_GetBoolean(go, "--max")) 
     {
       pli->do_max        = TRUE;
@@ -808,7 +816,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
 /* Function:  p7_Pipeline_LongTarget()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, modified to use the scanning MSV/SSV filters.
- * Incept:    TJW, Fri Feb 26 10:17:53 2018 [Janelia]
+ * Incept:    TJW, Fri Feb 26 10:17:53 2010 [Janelia]
  *
  * Purpose:   Run H3's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
@@ -866,6 +874,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   int* window_starts;
   int* window_ends;
   int hit_cnt;
+  float bias_filtersc;
 
   p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, bg, pli->F1, &window_starts, &window_ends, &hit_cnt);
 
@@ -874,7 +883,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 	  free(window_ends);
 	  return eslOK;
   }
-  pli->n_past_msv += hit_cnt;
 
 
   ESL_SQ *tmpseq = esl_sq_CreateDigital(sq->abc);
@@ -882,61 +890,67 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   for (i=0; i<hit_cnt; i++){
 
       int window_len = window_ends[i] - window_starts[i] + 1;
-      pli->pos_past_msv += window_len;
+      int F1_L = ESL_MIN( window_len,  pli->B1);
+      int F2_L = ESL_MIN( window_len,  pli->B2);
+      int F3_L = ESL_MIN( window_len,  pli->B3);
+
 
       subseq = sq->dsq + window_starts[i] - 1;
       p7_bg_SetLength(bg, window_len);
       p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
 
-      if (pli->do_biasfilter)
-        {
-          // Have to run msv again, to get the full score for the window.
-          // (using the standard "per-sequence" msv filter this time).
-          p7_oprofile_ReconfigMSVLength(om, window_len);
-          p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
-          p7_bg_FilterScore(bg, subseq, window_len, &filtersc);
+
+      // To ensure that msv filter stats make sense in the context of no_bias, have
+      // to run msv again, this time on just a short window. (this is also necessary
+      //if bias filtering is used.
+      p7_oprofile_ReconfigMSVLength(om, window_len);
+      p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
+      P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      if (P > pli->F1 ) continue;
+
+	  pli->n_past_msv++;
+      pli->pos_past_msv += window_len;
+
+      if (pli->do_biasfilter) {
+          p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
+          bias_filtersc -= nullsc;
+          filtersc =  nullsc + (bias_filtersc * (float)F1_L/window_len);
 
           seq_score = (usc - filtersc) / eslCONST_LOG2;
           P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-
           if (P > pli->F1) continue;
-
-        }
-      else
-        {
-          filtersc = nullsc;
-          P = 1; // to ensure that ViterbiFilter gets run
-        }
+      } else {
+    	  bias_filtersc = 0;
+      }
       pli->n_past_bias++;
       pli->pos_past_bias += window_len;
 
       p7_oprofile_ReconfigRestLength(om, window_len);
 
-
       /* In scan mode, if it passes the MSV filter, read the rest of the profile */
       if (pli->hfp)
         {
     	  p7_oprofile_ReadRest(pli->hfp, om);
-          //p7_oprofile_ReconfigRestLength(om, window_len);
           if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
         }
 
       /* Second level filter: ViterbiFilter(), multihit with <om> */
-      if (P > pli->F2 )
-        {
-          p7_ViterbiFilter(subseq, window_len, om, pli->oxf, &vfsc);
-          seq_score = (vfsc-filtersc) / eslCONST_LOG2;
-          P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-          if (P > pli->F2) continue;
-        }
+      filtersc =  nullsc + (bias_filtersc * (float)F2_L/window_len);
+	  p7_ViterbiFilter(subseq, window_len, om, pli->oxf, &vfsc);
+      seq_score = (vfsc - filtersc) / eslCONST_LOG2;
+      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+      if (P > pli->F2 ) continue;
+
       pli->n_past_vit++;
       pli->pos_past_vit += window_len;
 
       /* Parse it with Forward and obtain its real Forward score. */
       p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
-      seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
+      filtersc =  nullsc + (bias_filtersc * (float)F3_L/window_len);
+      seq_score = (fwdsc - filtersc) / eslCONST_LOG2;
       P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-      if (P > pli->F3) continue;
+      if (P > pli->F3 ) continue;
+
 
       pli->n_past_fwd++;
       pli->pos_past_fwd += window_len;

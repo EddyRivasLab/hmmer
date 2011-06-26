@@ -266,10 +266,9 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
 				  //merge windows
 				  merged = 1;
-				  if ( (*ends)[new_hit_cnt] < (*ends)[i])
+				  if ( (*ends)[i] > (*ends)[new_hit_cnt] )
 					  (*ends)[new_hit_cnt] = (*ends)[i];
-				  if ( (*starts)[new_hit_cnt] > (*starts)[i])
-  					  (*starts)[new_hit_cnt] = (*starts)[i];
+
 			  } else {
 				  //new window
 				  new_hit_cnt++;
