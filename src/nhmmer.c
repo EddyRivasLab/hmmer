@@ -85,9 +85,9 @@ static ESL_OPTIONS options[] = {
   { "--F2",         eslARG_REAL,       "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
   { "--F3",         eslARG_REAL,       "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
-  { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--nobias",       "window length for biased-composition modifier (MSV)",          7 },
-  { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--nobias",       "window length for biased-composition modifier (Vit)",          7 },
-  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--nobias",       "window length for biased-composition modifier (Fwd)",          7 },
+  { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          7 },
+  { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
+  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
 
 /* Other options */
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 12 },
