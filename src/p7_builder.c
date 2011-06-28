@@ -487,7 +487,6 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
   if ((status = p7_hmm_SetConsensus(hmm, sq))                                                                   != eslOK) goto ERROR; 
   if ((status = calibrate(bld, hmm, bg, opt_gm, opt_om))                                                        != eslOK) goto ERROR;
 
-
   /* build a faux trace: relative to core model (B->M_1..M_L->E) */
   if (opt_tr != NULL) 
     {
@@ -499,6 +498,11 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
       tr->M = sq->n;
       tr->L = sq->n;
     }
+
+  if ((status = p7_hmm_SetComposition(hmm))                     != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to determine model composition");
+  for (k=0; k < bld->abc->K; x++)
+       (*opt_om)->compo[k] = hmm->compo[k];
+
 
   if (opt_hmm   != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
   if (opt_tr    != NULL) *opt_tr  = tr;
