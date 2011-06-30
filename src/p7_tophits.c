@@ -715,7 +715,7 @@ p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N)
 int
 p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
 {
-  int i,j;    /* counters over hits */
+  int i;    /* counter over hits */
 
   if (th->N<2)
       return eslOK;
