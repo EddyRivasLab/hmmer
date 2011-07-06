@@ -71,12 +71,12 @@ Internal pipeline statistics summary:
 -------------------------------------
 Query model(s):                    1  (96 nodes)
 Target sequences:                  1  (3738212 residues)
-Windows passing MSV filter:               508  (0.05303); expected (0.02)
-Windows passing bias filter:              252  (0.02635); expected (0.02)
-Windows passing Vit filter:                13  (0.001401); expected (0.001)
+Windows passing MSV filter:               265  (0.02766); expected (0.02)
+Windows passing bias filter:              265  (0.02766); expected (0.02)
+Windows passing Vit filter:                 6  (0.0006953); expected (0.001)
 Windows passing Fwd filter:                 3  (0.0003927); expected (1e-05)
 Total hits:                                 3  (5.992e-05)
-# CPU time: 0.13u 0.01s 00:00:00.14 Elapsed: 00:00:00.09
-# Mc/sec: 3987.43
+# CPU time: 0.11u 0.00s 00:00:00.11 Elapsed: 00:00:00.07
+# Mc/sec: 5126.69
 //
 [ok]
