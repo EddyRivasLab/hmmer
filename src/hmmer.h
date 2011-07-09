@@ -557,8 +557,9 @@ typedef struct p7_alidisplay_s {
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
-  char *ppline;			/* posterior prob annotation; or NULL   */
-  int   N;			/* length of strings                    */
+  char *ppline;			        /* posterior prob annotation; or NULL   */
+  char *appline;			    /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
+  int   N;			            /* length of strings                    */
 
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM; or [0]='\0'        */
@@ -1017,7 +1018,7 @@ extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, in
 extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           int M, int optflags, ESL_MSA **ret_postmsa);
 
 /* p7_alidisplay.c */
-extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, P7_DOMAINDEF *app_ddef);
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
@@ -1025,6 +1026,7 @@ extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
+extern char           p7_alidisplay_EncodeAliPostProb(float p);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
 extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
@@ -1064,8 +1066,8 @@ extern int           p7_domaindef_DumpPosteriors(FILE *ofp, P7_DOMAINDEF *ddef);
 extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
 extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
-extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb,
-					      P7_OMX *fwd, P7_OMX *bck, P7_DOMAINDEF *ddef);
+extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck,
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app);
 
 
 /* p7_gmx.c */

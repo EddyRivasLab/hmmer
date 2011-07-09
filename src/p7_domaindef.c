@@ -47,7 +47,7 @@
 
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2, 
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
 				   int i, int j, int null2_is_done);
 
 
@@ -378,7 +378,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
-				   P7_DOMAINDEF *ddef)
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app)
 {
   int i, j;
   int triggered;
@@ -400,7 +400,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
   i     = -1;
   triggered = FALSE;
   for (j = 1; j <= sq->n; j++)
-    {
+  {
       if (! triggered) 
 	{			/* xref J2/101 for what the logic below is: */
 	  if       (ddef->mocc[j] - (ddef->btot[j] - ddef->btot[j-1]) <  ddef->rt2) i = j;
@@ -435,10 +435,10 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
 	      last_j2 = 0;
 	      for (d = 0; d < nc; d++) {
-		p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
-		if (i2 <= last_j2) ddef->noverlaps++;
+              p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
+              if (i2 <= last_j2) ddef->noverlaps++;
 
-		/* Note that k..m coords on model are available, but
+              /* Note that k..m coords on model are available, but
                  * we're currently ignoring them.  This leads to a
                  * rare clustering bug that we eventually need to fix
                  * properly [xref J3/32]: two different regions in one
@@ -454,10 +454,10 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
                  * by hiding all but one envelope with an identical
                  * alignment, in the rare event that this
                  * happens. [xref J5/130].
-		 */
-		ddef->nenvelopes++;
-		if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE) == eslOK) 
-		  last_j2 = j2;
+              */
+              ddef->nenvelopes++;
+              if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE) == eslOK)
+                   last_j2 = j2;
 	      }
 	      p7_spensemble_Reuse(ddef->sp);
 	      p7_trace_Reuse(ddef->tr);
@@ -466,12 +466,12 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 	    {
 	      /* The region looks simple, single domain; convert the region to an envelope. */
 	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, om, sq, fwd, bck, i, j, FALSE);
+	      rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE);
 	    }
 	  i     = -1;
 	  triggered = FALSE;
 	}
-    }
+  }
 
   /* Restore model to uni/multihit mode, and to its original length model */
   if (p7_IsMulti(save_mode)) p7_oprofile_ReconfigMultihit(om, saveL); 
@@ -710,7 +710,7 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ *sq, 
+rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq,
 			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done)
 {
   P7_DOMAIN     *dom           = NULL;
@@ -724,6 +724,13 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
 
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
+
+  if (ddef_app != NULL) {
+	  //grab mocc values for computing confidence of alignment-inclusion boundaries
+	  if ((status = p7_domaindef_GrowTo(ddef_app, Ld))      != eslOK) return status;  /* ddef_app btot,etot,mocc now ready*/
+	  if ((status = p7_DomainDecoding(om, ox1, ox2, ddef_app)) != eslOK && status != eslERANGE) return status;  /* ddef_app->{btot,etot,mocc} now made.                    */
+  }
+
 
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
@@ -769,13 +776,14 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_SQ 
   dom->lnP           = 0.0;	/* gets set later by caller, using bitscore */
   dom->is_reported   = FALSE;	/* gets set later by caller */
   dom->is_included   = FALSE;	/* gets set later by caller */
-  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
+  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
   dom->iali          = dom->ad->sqfrom;
   dom->jali          = dom->ad->sqto;
 
   ddef->ndom++;
 
   p7_trace_Reuse(ddef->tr);
+  if (ddef_app != NULL) p7_domaindef_Reuse(ddef_app);
   return eslOK;
 
  ERROR:

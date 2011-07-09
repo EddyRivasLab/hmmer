@@ -54,7 +54,7 @@
  *            in the data.
  */
 P7_ALIDISPLAY *
-p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq)
+p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, P7_DOMAINDEF *ddef_app)
 {
   P7_ALIDISPLAY *ad       = NULL;
   char          *Alphabet = om->abc->sym;
@@ -98,6 +98,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   if (om->rf[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
   if (om->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
   if (tr->pp     != NULL) n += z2-z1+2;  /* optional posterior prob line         */
+  if (ddef_app       != NULL) n += z2-z1+2;  /* optional posterior prob alignment line         */
   hmm_namelen = strlen(om->name);                           n += hmm_namelen + 1;
   hmm_acclen  = (om->acc  != NULL ? strlen(om->acc)  : 0);  n += hmm_acclen  + 1;
   hmm_desclen = (om->desc != NULL ? strlen(om->desc) : 0);  n += hmm_desclen + 1;
@@ -117,6 +118,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mline   = ad->mem + pos;  pos += z2-z1+2;
   ad->aseq    = ad->mem + pos;  pos += z2-z1+2;
   if (tr->pp != NULL)  { ad->ppline = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline = NULL; }
+  if (ddef_app != NULL)    { ad->appline = ad->mem + pos;  pos += z2-z1+2;} else { ad->appline = NULL; }
   ad->hmmname = ad->mem + pos;  pos += hmm_namelen +1;
   ad->hmmacc  = ad->mem + pos;  pos += hmm_acclen +1;
   ad->hmmdesc = ad->mem + pos;  pos += hmm_desclen +1;
@@ -155,6 +157,11 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   if (ad->ppline != NULL) {
     for (z = z1; z <= z2; z++) ad->ppline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodePostProb(tr->pp[z]));
     ad->ppline[z-z1] = '\0';
+  }
+
+  if (ddef_app != NULL) {
+     for (s = z = z1; z <= z2; z++)  ad->appline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodeAliPostProb(ddef_app->mocc[s++]));
+     ad->appline[z-z1] = '\0';
   }
 
   /* mandatory three alignment display lines: model, mline, aseq */
@@ -479,6 +486,42 @@ integer_textwidth(long n)
   return w;
 }
 
+/* Function:  p7_alidisplay_EncodeAliPostProb()
+ * Synopsis:  Convert the posterior probability of a position aligning
+ *            toa core model state into a char code.
+ *
+ * Purpose:   Convert the posterior probability <p> to
+ *            a character code used to visually assess the 
+ *            confidence that a position should be included 
+ *            at the boundary of an alignment.
+ *
+ *            Because it is important to distinguish values at 
+ *            the high end, the numbers x=0-9 are used for p's 
+ *            in the 90's, with each score >0.9x  (e.g.
+ *            9 : >=0.99,  8: >=0.98, etc.)  Others:
+ *             '*' == 1.0
+ *             '#' >= 0.85, <0.9,
+ *             '+' >= 0.80, <0.85,
+ *             '-' < 0.8.
+ *
+ * Returns:   the encoded character.
+ */
+char
+p7_alidisplay_EncodeAliPostProb(float p)
+{
+  if ( p == 1.0 ) {
+	  return '*';
+  } else if ( p >= 0.9 ) {
+	  return (char)(p * 100 - 90) + '0'; // gets the 2nd digit for values >=0.9
+  } else if ( p >= 0.85 ){
+	  return '#';
+  } else if ( p >= 0.80 ){
+	  return '+';
+  } else {
+	  return '-';
+  }
+}
+
 /* Function:  p7_alidisplay_EncodePostProb()
  * Synopsis:  Convert a posterior probability to a char code.
  *
@@ -501,7 +544,6 @@ p7_alidisplay_EncodePostProb(float p)
 {
   return (p + 0.05 >= 1.0) ? '*' :  (char) ((p + 0.05) * 10.0) + '0';
 }
-
 
 /* Function:  p7_alidisplay_DecodePostProb()
  * Synopsis:  Convert a char code post prob to an approx float.
@@ -601,7 +643,8 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
       if (ni > 0) { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*ld %s %-*ld\n", namewidth, show_seqname, coordwidth, i1,  buf, coordwidth, i2);  }
       else        { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, show_seqname, coordwidth, "-", buf, coordwidth, "-"); }
 
-      if (ad->ppline != NULL) { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
+      if (ad->ppline != NULL)  { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
+      if (ad->appline != NULL) { strncpy(buf, ad->appline+pos, aliwidth); fprintf(fp, "  %*s %s APP\n", namewidth+coordwidth+1, "", buf); }
 
       k1 += nk;
       if (ad->sqfrom < ad->sqto) {
