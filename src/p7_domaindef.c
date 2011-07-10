@@ -895,7 +895,7 @@ main(int argc, char **argv)
 
   p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
   p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
-  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef);
+  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL);
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
 
@@ -1037,7 +1037,7 @@ main(int argc, char **argv)
 	  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
 	  if (! do_baseline) {
 	    p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
-	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef);
+	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef, NULL);
 	  }
 	}
 

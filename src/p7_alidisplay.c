@@ -959,7 +959,7 @@ main(int argc, char **argv)
 	    for (z = 0; z < tr->N; z++)
 	      if (tr->i[z] > 0) tr->pp[z] = esl_random(r);
 
-	  ad = p7_alidisplay_Create(tr, 0, om, sq);
+	  ad = p7_alidisplay_Create(tr, 0, om, sq, NULL);
 	  p7_alidisplay_Print(stdout, ad, 40, 80, FALSE);
 	  p7_alidisplay_Destroy(ad);
 	}
