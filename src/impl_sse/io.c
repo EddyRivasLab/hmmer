@@ -349,7 +349,7 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
   off_t         roff;
-  int           M, Q16;
+  int           M, Q16, Q16x;
   int           n;
   int           alphatype;
   int           status;
@@ -369,7 +369,8 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16 = p7O_NQB(M);
+  Q16  = p7O_NQB(M);
+  Q16x = p7O_NQB(M) + p7O_EXTRA_SB;
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
@@ -388,13 +389,14 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   /* calculate the remaining length of the msv model */
   om->name = NULL;
   if (!fread((char *) &n, sizeof(int), 1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
-  roff += (sizeof(int) * 3);                          /* magic, model size, and alphabet type    */
-  roff += sizeof(int) + n + 1;                        /* length, name string and terminator '\0' */
-  roff += (sizeof(float) + sizeof(uint8_t) * 5);      /* transition  costs, bias, scale and base */
-  roff += (sizeof(__m128i) * abc->Kp * Q16);          /* msv scores                              */
-  roff += (sizeof(float) * p7_NEVPARAM);              /* stat params                             */
-  roff += (sizeof(off_t) * p7_NOFFSETS);              /* hmmpfam offsets                         */
-  roff += (sizeof(float) * p7_MAXABET);               /* model composition                       */
+  roff += (sizeof(int) * 5);                      /* magic, model size, alphabet type, max length, name length */
+  roff += (sizeof(char) * (n + 1));               /* name string and terminator '\0'                           */
+  roff += (sizeof(float) + sizeof(uint8_t) * 5);  /* transition  costs, bias, scale and base                   */
+  roff += (sizeof(__m128i) * abc->Kp * Q16x);     /* ssv scores                                                */
+  roff += (sizeof(__m128i) * abc->Kp * Q16);      /* msv scores                                                */
+  roff += (sizeof(float) * p7_NEVPARAM);          /* stat params                                               */
+  roff += (sizeof(off_t) * p7_NOFFSETS);          /* hmmscan offsets                                           */
+  roff += (sizeof(float) * p7_MAXABET);           /* model composition                                         */
 
   /* keep track of the ending offset of the MSV model */
   p7_oprofile_Position(hfp, roff);
