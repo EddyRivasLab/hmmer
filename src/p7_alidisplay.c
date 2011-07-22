@@ -159,10 +159,12 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
     ad->ppline[z-z1] = '\0';
   }
 
+
   if (ddef_app != NULL) {
-     for (s = z = z1; z <= z2; z++)  ad->appline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodeAliPostProb(ddef_app->mocc[s++]));
+     for (z = z1, s = z-2  ; z <= z2; z++)  ad->appline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodeAliPostProb(ddef_app->mocc[s++]));
      ad->appline[z-z1] = '\0';
   }
+
 
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
@@ -496,30 +498,28 @@ integer_textwidth(long n)
  *            at the boundary of an alignment.
  *
  *            Because it is important to distinguish values at 
- *            the high end, the numbers x=0-9 are used for p's 
- *            in the 90's, with each score >0.9x  (e.g.
- *            9 : >=0.99,  8: >=0.98, etc.)  Others:
- *             '*' == 1.0
- *             '#' >= 0.85, <0.9,
- *             '+' >= 0.80, <0.85,
- *             '-' < 0.8.
+ *            the high end, this breaks the range of interest up 
+ *            into 10 bins from 70% up to 90%
+ *             * : >97%
+ *             9 : >94%
+ *             8 : >91%
+ *             7 : >88%
+ *             6 : >85%
+ *             5 : >82%
+ *             4 : >79%
+ *             3 : >76%
+ *             2 : >73%
+ *             1 : >70%
+ *             0 : <70%
+ *             i.e. int((p-0.67) * (100/3))
  *
  * Returns:   the encoded character.
  */
 char
 p7_alidisplay_EncodeAliPostProb(float p)
 {
-  if ( p == 1.0 ) {
-	  return '*';
-  } else if ( p >= 0.9 ) {
-	  return (char)(p * 100 - 90) + '0'; // gets the 2nd digit for values >=0.9
-  } else if ( p >= 0.85 ){
-	  return '#';
-  } else if ( p >= 0.80 ){
-	  return '+';
-  } else {
-	  return '-';
-  }
+  return (p >= 0.97) ? '*' : (p<0.7? '0' : (char) ((p-.67) * (100.0/3)) + '0');
+ 
 }
 
 /* Function:  p7_alidisplay_EncodePostProb()
@@ -1361,3 +1361,4 @@ main(int argc, char **argv)
 /*****************************************************************
  * @LICENSE@
  *****************************************************************/
+
