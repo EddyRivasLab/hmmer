@@ -128,7 +128,7 @@ main(int argc, char **argv)
   }
 
   /* Determine output alignment file format */
-  outfmt = esl_msa_EncodeFormat(esl_opt_GetString(go, "--outformat"));
+  outfmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
   if (outfmt == eslMSAFILE_UNKNOWN)    cmdline_failure(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
 
   /* Open output stream */

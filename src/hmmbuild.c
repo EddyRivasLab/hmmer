@@ -335,7 +335,7 @@ main(int argc, char **argv)
   cfg.hmmName    = esl_opt_GetString(go, "-n"); /* NULL by default */
 
   if (esl_opt_IsOn(go, "--informat")) {
-    cfg.fmt = esl_msa_EncodeFormat(esl_opt_GetString(go, "--informat"));
+    cfg.fmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--informat"));
     if (cfg.fmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
   }
 
