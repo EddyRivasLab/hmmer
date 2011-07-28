@@ -25,7 +25,7 @@ SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
 DEFS      = @DEFS@
-LIBS      = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+LIBS      = -lhmmer -leasel -ldivsufsort @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 MPILIBS   = @MPILIBS@
 
 AR        = @AR@ 
@@ -34,9 +34,11 @@ INSTALL   = @INSTALL@
 
 IMPLDIR   = impl_@IMPL_CHOICE@
 ESLDIR    = @HMMER_ESLDIR@
+SADIR     = @HMMER_SADIR@
 
-MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L.
+MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L../${SADIR} -L.
 MYINCDIRS = -I../${ESLDIR} \
+        -I../${SADIR} \
 	    -I${top_srcdir}/easel \
 	    -I. \
 	    -I${srcdir}
@@ -56,7 +58,9 @@ PROGS = hmmalign\
 	phmmer\
 	nhmmer\
 	hmmpgmd\
-        hmmc2
+    hmmc2\
+    makenhmmerdb
+
 
 PROGOBJSS =\
 	hmmalign.o\
@@ -73,7 +77,8 @@ PROGOBJSS =\
 	phmmer.o\
 	nhmmer.o\
 	hmmpgmd.o\
-        hmmc2.o
+    hmmc2.o\
+    makenhmmerdb.o
 
 HDRS =  hmmer.h
 
@@ -115,7 +120,8 @@ OBJS =  build.o\
 	p7_profile.o\
 	p7_spensemble.o\
 	p7_tophits.o\
-	p7_trace.o
+	p7_trace.o\
+	fm.o
 #	island.o\
 
 STATS = \
