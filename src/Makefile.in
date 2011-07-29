@@ -59,7 +59,8 @@ PROGS = hmmalign\
 	nhmmer\
 	hmmpgmd\
     hmmc2\
-    makenhmmerdb
+    makenhmmerdb\
+    exactmatch
 
 
 PROGOBJSS =\
@@ -78,9 +79,11 @@ PROGOBJSS =\
 	nhmmer.o\
 	hmmpgmd.o\
     hmmc2.o\
-    makenhmmerdb.o
+    makenhmmerdb.o\
+    exactmatch.o
 
-HDRS =  hmmer.h
+HDRS =  hmmer.h\
+        fm.h 
 
 OBJS =  build.o\
 	cachedb.o\

@@ -28,27 +28,27 @@ createAlphabet (int alph_type, char **alph, char **inv_alph, int *alph_size, int
 	int status;
 
 	if ( alph_type ==  fm_DNA) {
-		*alph_size = 5;
+		*alph_size = 4;
 		if (alph_bits) *alph_bits = 2;
 	} else if ( alph_type ==  fm_DNA_full) {
-		*alph_size = 16;
+		*alph_size = 15;
 		if (alph_bits) *alph_bits = 4;
 	} else if ( alph_type ==  fm_AMINO) {
-		*alph_size = 27;
+		*alph_size = 26;
 		if (alph_bits) *alph_bits = 5;
 	} else {
-		FM_FAIL("Unknown alphabet type\n%s", "");
+		esl_fatal("Unknown alphabet type\n%s", "");
 	}
 
-	FM_ALLOC(*alph, (*alph_size)*sizeof(char));
-	FM_ALLOC(*inv_alph, 256*sizeof(char));
+	ESL_ALLOC(*alph, (*alph_size)*sizeof(char));
+	ESL_ALLOC(*inv_alph, 256*sizeof(char));
 
 	if ( alph_type ==  fm_DNA)
-		memcpy((*alph), " ACGT", *alph_size);
+		memcpy((*alph), "ACGT", *alph_size);
 	if ( alph_type ==  fm_DNA_full)
-		memcpy((*alph), " ACGTRYMKSWHBVDN", *alph_size);
+		memcpy((*alph), "ACGTRYMKSWHBVDN", *alph_size);
 	else if ( alph_type ==  fm_AMINO)
-		memcpy((*alph), " ACDEFGHIKLMNPQRSTVWYBJZOUX", *alph_size);
+		memcpy((*alph), "ACDEFGHIKLMNPQRSTVWYBJZOUX", *alph_size);
 
 
 	(*alph)[0] = 0; //'$', the lexicographically smallest character
