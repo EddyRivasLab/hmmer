@@ -164,7 +164,6 @@ main(int argc, char *argv[]) {
 			inv_alph[i]++;
 
 
-
 	/* Allocate n bytes for BWT and 4n bytes for SA*/
 	ESL_ALLOC (T, meta->N * sizeof(uint8_t));
 	ESL_ALLOC (BWT, meta->N * sizeof(uint8_t));
@@ -203,7 +202,7 @@ main(int argc, char *argv[]) {
 	  const uint8_t tmpc2 = inv_alph[T[i]];
 
 	  if (tmpc1 == 255 || tmpc2 == 255)
-		  fprintf (stderr, "requested alphabet doesn't match input test: T[%ld] = (%d), T[%ld] = (%d)\n",
+		  esl_fatal("requested alphabet doesn't match input test: T[%ld] = (%d), T[%ld] = (%d)\n",
 				  meta->N-2-i, T[meta->N-2-i], i, T[i]);
 
 	  T[i] = tmpc1;

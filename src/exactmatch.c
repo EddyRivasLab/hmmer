@@ -80,6 +80,7 @@ initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 		chars_v[i] = _mm_set1_epi8(c);
 	}
 
+	printf ("D\n");
 
 	/* this is a collection of masks used to clear off the left- or right- part
 	 *  of a register when we shouldn't be counting the whole thing
@@ -116,12 +117,14 @@ initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 			}
 			  arr.bytes[i/meta->charBits] = byte_mask; //if it's odd, chew off the last 4 bits, else clear the whole byte
 			  masks_v[i]             = *(__m128i*)(&(arr.m128));
-			  reverse_masks_v[chars_per_vector]  = _mm_andnot_si128(masks_v[i], allones_v );
+			  reverse_masks_v[i]  = _mm_andnot_si128(masks_v[i], allones_v );
 		}
 	}
-
+	printf ("E\n");
 	maskSA       =  meta->freq_SA - 1;
 	shiftSA      =  meta->SA_shift;
+
+	printf ("F\n");
 
 	return eslOK;
 
@@ -129,7 +132,7 @@ ERROR:
 	if (masks_v)         free (masks_v);
 	if (reverse_masks_v) free (reverse_masks_v);
 
-	esl_fatal("Error allocating memory in %s\n", "initMasks");
+	esl_fatal("Error allocating memory in initGlobals\n");
 	//return fmFAIL;
 }
 
@@ -255,7 +258,7 @@ bwt_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 	}
 
 	counts_v = _mm_xor_si128(counts_v, allones_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
-    FM_EXTRACT_8BIT_COUNTS(counts_v,counts_v,counts_v);
+    FM_GATHER_8BIT_COUNTS(counts_v,counts_v,counts_v);
 
 	cnt  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v, 0) );
 	occCallCnt++;
@@ -593,11 +596,20 @@ main(int argc,  char *argv[]) {
 	fname_fm = argv[optind];
 	fname_queries = argv[optind+1];
 
+	printf("A\n");
+
+
 	readFM ( fname_fm, &meta, &fm );
 
-
+	printf("B\n");
 	initGlobals(&meta, &fm);
+
+	printf("C\n");
+		exit(1);
+
 	createAlphabet(meta.alph_type, &alph, &inv_alph, &(meta.alph_size), NULL); // don't override charBits
+
+
 
 
 	fp = fopen(fname_queries,"r");

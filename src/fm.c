@@ -51,14 +51,11 @@ createAlphabet (int alph_type, char **alph, char **inv_alph, int *alph_size, int
 		memcpy((*alph), "ACDEFGHIKLMNPQRSTVWYBJZOUX", *alph_size);
 
 
-	(*alph)[0] = 0; //'$', the lexicographically smallest character
-
 	for (i=0; i<256; i++)
 		(*inv_alph)[i] = -1;
 
 	for (i=0; i<*alph_size; i++)
 		(*inv_alph)[tolower((*alph)[i])] = (*inv_alph)[toupper((*alph)[i])] = i;
-
 	return;
 
 ERROR:
