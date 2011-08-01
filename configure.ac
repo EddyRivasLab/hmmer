@@ -652,12 +652,14 @@ AC_CONFIG_FILES([testsuite/Makefile])
 AC_CONFIG_FILES([profmark/Makefile])
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
 AC_CONFIG_HEADERS([src/p7_config.h])
-
 AC_CONFIG_HEADERS([easel/esl_config.h])
+AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
 AC_CONFIG_FILES([easel/miniapps/Makefile])
 AC_CONFIG_FILES([easel/testsuite/Makefile])
 AC_CONFIG_FILES([easel/documentation/Makefile])
 AC_CONFIG_FILES([easel/Makefile])
+AC_CONFIG_FILES([libdivsufsort/Makefile])
+
 
 # the following incantation establishes a symlink of
 # src/impl_{whatever} to src/impl in the *build* directory.
