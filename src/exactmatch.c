@@ -23,12 +23,13 @@ int interesting = -1;
 __m128i *masks_v;
 __m128i *reverse_masks_v;
 __m128i *chars_v;
+__m128i allones_v;
 __m128i zeros_v;
 __m128i neg128_v;
 __m128i m0f;  //00 00 11 11
 __m128i m01;  //01 01 01 01
 __m128i m11;  //00 00 00 11
-__m128i allones_v;
+
 
 int num_freq_cnts_b ;
 int num_freq_cnts_sb;
@@ -66,7 +67,6 @@ initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 		m01 = _mm_set1_epi8((int8_t) 0x55);	 //01 01 01 01
 		m11 = _mm_set1_epi8((int8_t) 0x03);  //00 00 00 11
 	}
-
     //set up an array of vectors, one for each character in the alphabet
 	chars_v         = NULL;
 	ESL_ALLOC(chars_v, meta->alph_size * sizeof(__m128));
@@ -181,12 +181,12 @@ bwt_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 	const int up_b           = b_rel_pos>>(meta->cnt_shift_b - 1); //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
 	const int landmark       = ((b_pos+up_b)<<(meta->cnt_shift_b)) - 1 ;
 	// get the cnt stored at the nearest checkpoint
-	if ( up_b  &&  (b_pos+1) ==  (sb_pos+1) * (1<<(meta->cnt_shift_sb - meta->cnt_shift_b)) )
-		cnt = FM_OCC_CNT(sb, sb_pos+1, c )  ;// b_pos+1 is referencing the same position as sb+1. I don't store those b-vectors, so just go straight to the sb vector
-	else {
-		cnt =  FM_OCC_CNT(sb, sb_pos, c );
-		cnt += FM_OCC_CNT(b, b_pos + up_b, c ) ;
-	}
+	cnt =  FM_OCC_CNT(sb, sb_pos, c );
+
+	if (up_b)
+		cnt += FM_OCC_CNT(b, b_pos + 1, c ) ;
+	else if ( b_pos !=  sb_pos * (1<<(meta->cnt_shift_sb - meta->cnt_shift_b)) )
+		cnt += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
 
 
 	if ( landmark < meta->N ) {
@@ -209,33 +209,31 @@ bwt_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 			if (!up_b) { // count forward, adding
 				for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
 					BWT_v    = *(__m128i*)(BWT+i);
-					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+                    FM_MATCH_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+                    FM_COUNT_SSE_4PACKED(tmp_v, tmp2_v, counts_v);
 				}
 
 				int remaining_cnt = pos + 1 -  i*4 ;
 				if (remaining_cnt > 0) {
 					BWT_v    = *(__m128i*)(BWT+i);
-					BWT_v    = _mm_and_si128(BWT_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+                    FM_MATCH_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+                    tmp_v    = _mm_and_si128(tmp_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+                    FM_COUNT_SSE_4PACKED(tmp_v, tmp2_v, counts_v);
 				}
 
 			} else { // count backwards, subtracting
 				for (i=(landmark/4)-15 ; i>(pos/4);  i-=16) {
 					BWT_v = *(__m128i*)(BWT+i);
-					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+                    FM_MATCH_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+                    FM_COUNT_SSE_4PACKED(tmp_v, tmp2_v, counts_v);
 				}
 
 				int remaining_cnt = 64 - (pos + 1 - i*4);
 				if (remaining_cnt > 0) {
 					BWT_v = *(__m128i*)(BWT+i);
-//					fprintf(stderr, "bwt     : "); print_m128(BWT_v);
-					BWT_v    = _mm_and_si128(BWT_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-
-//					fprintf(stderr, "mask    : "); print_m128(*(reverse_masks_v + remaining_cnt));
-//					fprintf(stderr, "bwt     : "); print_m128(BWT_v);
-
-					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-//					fprintf(stderr, "cnt     : "); print_m128(counts_v);
+                    FM_MATCH_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+                    tmp_v    = _mm_and_si128(tmp_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+                    FM_COUNT_SSE_4PACKED(tmp_v, tmp2_v, counts_v);
 				}
 			}
 
@@ -280,6 +278,7 @@ bwt_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 		cnt--;
 	}
 
+
 	occCallCnt++;
 	return cnt ;
 
@@ -315,6 +314,8 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char * restrict query, char * restri
 		//TODO: these will often overlap - might get acceleration by merging to a single redundancy-avoiding call
 		count1 = bwt_getOccCount (meta, fm, interval->lower-1, c);
 		count2 = bwt_getOccCount (meta, fm, interval->upper, c);
+
+		//printf("%d %d %d -> %d,%d\n", c, interval->lower-1, interval->upper, count1, count2);
 
 		interval->lower = Cvals[c] + count1;
 		interval->upper = Cvals[c] + count2 - 1;
@@ -360,7 +361,6 @@ getChar( FM_METADATA *meta, int j, const uint8_t * restrict B ) {
 /* Function:  getFMHits()
  * Synopsis:  For a given interval, identify the position in original text for each element
  *            of interval
- * Incept:    TJW, Mon Jan  3 11:35:24 EST 2011 [Janelia]
  * Purpose:   Implement Algorithm 3.7 (p17) of Firth paper (A Comparison of BWT Approaches
  *            to String Pattern Matching). Most of the meat is in the method of counting
  *            characters - bwt_getOccCount, which depends on compilation choices.
@@ -477,25 +477,7 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 	  }
 	}
 	C[meta->alph_size] *= -1;
-
-
-/*
-	for (i=0; i<num_freq_cnts_b; i++) {
-		  printf("b: %3d : ", i);
-		  int c;
-		  for (int c=0; c<meta->alph_size; c++) {
-			  //FM_OCC_CNT_INCHAR( i, c)
-			  printf(" %4d ",   FM_OCC_CNT_INCHAR(i,c) );
-		  }
-		  printf("\n");
-
-	}
-
-	for (int c=0; c<=meta->alph_size; c++) {
-		printf ("C[%d] = %d\n" , c, C[c]);
-	}
-	exit(1);
-*/
+	C[0] = 1;
 
 
 	return eslOK;
@@ -620,8 +602,6 @@ main(int argc,  char *argv[]) {
 	createAlphabet(meta.alph_type, &alph, &inv_alph, &(meta.alph_size), NULL); // don't override charBits
 
 
-
-
 	fp = fopen(fname_queries,"r");
 	if (fp == NULL)
 		esl_fatal("Unable to open file %s\n", fname_queries);
@@ -653,6 +633,8 @@ main(int argc,  char *argv[]) {
 			hit_cnt++;
 			hit_indiv_cnt += hit_num;
 
+			//printf ("%s : %d\n", line, interval.upper-interval.lower+1);
+
 
 			//PRINTOUT ( "HIT:  %s  (%d, %d)\n", line, interval.lower, interval.upper);
 			//int i;
@@ -661,6 +643,7 @@ main(int argc,  char *argv[]) {
 				//PRINTOUT ( "\t%d\n", pos_fwd);
 			//}
 		} else {
+//			printf ("no hit\n\n");
 			//PRINTOUT ( "MISS: %s\n", line);
 			miss_cnt++;
 		}

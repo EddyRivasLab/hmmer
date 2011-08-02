@@ -90,9 +90,13 @@ typedef union {
 
 
 
-
-/*Macro for performing SSE operations to count occurrences of a character in a
+/* Macro for SSE operations to turn 2-bit character values into 2-bit binary
+ * (00 or 01) match/mismatch values representing occurrences of a character in a
  * 4-char-per-byte packed BWT.
+ *
+ * Typically followed by a call to FM_COUNT_SSE_4PACKED, possibly with a
+ * mask in between to handle the case where we don't want to add over all
+ * positions in the vector
  *
  * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
  * at the end
@@ -104,6 +108,24 @@ typedef union {
  *
  * subs()                : invert, so match is 01, mismatch is 00
  *
+ */
+#define FM_MATCH_SSE_4PACKED(in_v, c_v, a_v, b_v, out_v) do {\
+		a_v = _mm_xor_si128(in_v, c_v);\
+		\
+		b_v = _mm_and_si128(a_v, m01);\
+		a_v  = _mm_srli_epi16(a_v, 1);\
+		a_v  = _mm_and_si128(a_v, m01);\
+		a_v  = _mm_or_si128(a_v, b_v);\
+		\
+		out_v  = _mm_subs_epi8(m01,a_v);\
+	} while (0)
+
+
+/*Macro for SSE operations to count bits produced by FM_MATCH_SSE_4PACKED
+ *
+ * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
+ * at the end
+ *
  * then add up the 2-bit values:
  * srli(4)+add()         : left 4 bits shifted right, added to right 4 bits
  *
@@ -112,25 +134,16 @@ typedef union {
  *
  * final 2 add()s        : tack current counts on to already-tabulated counts.
  */
-#define FM_COUNTS_SSE_4PACKED(in_v, c_v, tmp_v, tmp2_v, cnts_v) do {\
-		tmp_v = _mm_xor_si128(in_v, c_v);\
+#define FM_COUNT_SSE_4PACKED(a_v, b_v, cnts_v) do {\
+        b_v = _mm_srli_epi16(a_v, 4);\
+        a_v  = _mm_add_epi16(a_v, b_v);\
         \
-        tmp2_v = _mm_and_si128(tmp_v, m01);\
-        tmp_v  = _mm_srli_epi16 (tmp_v, 1);\
-        tmp_v  = _mm_and_si128(tmp_v, m01);\
-        tmp_v  = _mm_or_si128(tmp_v, tmp2_v);\
+        b_v = _mm_srli_epi16(a_v, 2);\
+        a_v  = _mm_and_si128(a_v,m11);\
+        b_v = _mm_and_si128(b_v,m11);\
         \
-        tmp_v  = _mm_subs_epi8(m01,tmp_v);\
-        \
-        tmp2_v = _mm_srli_epi16(tmp_v, 4);\
-        tmp_v  = _mm_add_epi16(tmp_v, tmp2_v);\
-        \
-        tmp2_v = _mm_srli_epi16(tmp_v, 2);\
-        tmp_v  = _mm_and_si128(tmp_v,m11);\
-        tmp2_v = _mm_and_si128(tmp2_v,m11);\
-        \
-        cnts_v = _mm_add_epi16(cnts_v, tmp_v);\
-        cnts_v = _mm_add_epi16(cnts_v, tmp2_v);\
+        cnts_v = _mm_add_epi16(cnts_v, a_v);\
+        cnts_v = _mm_add_epi16(cnts_v, b_v);\
 	} while (0)
 
 

@@ -1,7 +1,8 @@
 #include "divsufsort.h"
 #include "fm.h"
 
-#define PRINTBWT 1
+#define PRINTBWT 0
+#define PRINTOCC 0
 
 //static const char *optString = "a:b:f:deupsrnl:h?";
 static const char *optString = "a:b:s:del:h?";
@@ -72,6 +73,8 @@ main(int argc, char *argv[]) {
 	int num_freq_cnts_sb ;
 	int num_freq_cnts_b ;
 	int num_SA_samples ;
+
+	int chars_per_byte;
 
 	ESL_ALLOC (meta, sizeof(FM_METADATA));
 	meta->alph_type   = fm_DNA;
@@ -264,19 +267,43 @@ main(int argc, char *argv[]) {
 	  }
 	}
 
-
-
-#ifdef PRINTBWT
-	for(j=0; j < meta->N; ++j)
-	  printf ("%d", BWT[j]);
-#endif
-
-
 	//wrap up the counting;
 	for (c=0; c<meta->alph_size; c++) {
 	  FM_OCC_CNT(b, num_freq_cnts_b-1, c ) = cnts_b[c];
 	  FM_OCC_CNT(sb, num_freq_cnts_sb-1, c ) = cnts_sb[c];
 	}
+
+
+#ifdef PRINTOCC
+	printf ("SB\n---\n");
+	for(j=0; j < num_freq_cnts_sb; ++j) {
+		int sum = 0;
+		printf("%ld  ", j);
+		for (c=0; c<meta->alph_size; c++) {
+			printf("%8d  ", FM_OCC_CNT(sb, j, c ));
+			sum+=FM_OCC_CNT(sb, j, c );
+		}
+		printf("%8d\n", sum);
+	}
+
+	printf ("\nB\n---\n");
+	for(j=0; j < num_freq_cnts_b; ++j) {
+		int sum = 0;
+		printf("%ld  ", j);
+		for (c=0; c<meta->alph_size; c++) {
+			printf("%8d  ", FM_OCC_CNT(b, j, c ));
+			sum+=FM_OCC_CNT(b, j, c );
+		}
+		printf("%8d\n", sum);
+	}
+
+
+#endif
+
+#ifdef PRINTBWT
+	for(j=0; j < meta->N; ++j)
+	  printf ("%d", BWT[j]);
+#endif
 
 	/* Convert BWT and T to packed versions if appropriate. */
 	if (meta->alph_type == fm_DNA) {
@@ -309,7 +336,7 @@ main(int argc, char *argv[]) {
 		  }
 	}
 
-	int chars_per_byte = 8/meta->charBits;
+	chars_per_byte = 8/meta->charBits;
 	meta->L = (size_t)((chars_per_byte-1+meta->N)/chars_per_byte);
 
 
