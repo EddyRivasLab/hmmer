@@ -112,8 +112,8 @@ typedef union {
  *
  * final 2 add()s        : tack current counts on to already-tabulated counts.
  */
-#define FM_COUNTS_SSE_4PACKED(in_v, c_v, tmp_v, tmp2_v, counts_v) do {\
-		tmp_v = _mm_xor_si128(tmp_v, c_v);\
+#define FM_COUNTS_SSE_4PACKED(in_v, c_v, tmp_v, tmp2_v, cnts_v) do {\
+		tmp_v = _mm_xor_si128(in_v, c_v);\
         \
         tmp2_v = _mm_and_si128(tmp_v, m01);\
         tmp_v  = _mm_srli_epi16 (tmp_v, 1);\
@@ -129,8 +129,8 @@ typedef union {
         tmp_v  = _mm_and_si128(tmp_v,m11);\
         tmp2_v = _mm_and_si128(tmp2_v,m11);\
         \
-        counts_v = _mm_add_epi16(counts_v, tmp_v);\
-        counts_v = _mm_add_epi16(counts_v, tmp2_v);\
+        cnts_v = _mm_add_epi16(cnts_v, tmp_v);\
+        cnts_v = _mm_add_epi16(cnts_v, tmp2_v);\
 	} while (0)
 
 

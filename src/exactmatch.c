@@ -24,6 +24,7 @@ __m128i *masks_v;
 __m128i *reverse_masks_v;
 __m128i *chars_v;
 __m128i zeros_v;
+__m128i neg128_v;
 __m128i m0f;  //00 00 11 11
 __m128i m01;  //01 01 01 01
 __m128i m11;  //00 00 00 11
@@ -32,7 +33,7 @@ __m128i allones_v;
 int num_freq_cnts_b ;
 int num_freq_cnts_sb;
 
-int *Cvals;
+int32_t *Cvals;
 int maskSA;
 int shiftSA;
 
@@ -45,22 +46,23 @@ int shiftSA;
 int
 initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	int status;
-	int i;
+	int i,j;
 	int chars_per_vector;
 
 	allones_v = _mm_set1_epi8(0xff);
+	neg128_v  = _mm_set1_epi8((int8_t) -128);
 
 	occCallCnt = 0;
 	//capture abs() for C array (so I don't have to do it for every query sequence)
 	Cvals = NULL;
-	ESL_ALLOC(Cvals, meta->alph_size * sizeof(int) );
-	for(i=0; i<meta->alph_size; i++)
+	ESL_ALLOC(Cvals, (meta->alph_size+1) * sizeof(int32_t) );
+	for(i=0; i<=meta->alph_size; i++)
 		Cvals[i] = abs(fm->C[i]);
 
 	zeros_v = _mm_set1_epi8((int8_t) 0x00);      //00 00 00 00
 	m0f     = _mm_set1_epi8((int8_t) 0x0f);      //00 00 11 11
 
-	if (meta->alph_type = fm_DNA) {
+	if (meta->alph_type == fm_DNA) {
 		m01 = _mm_set1_epi8((int8_t) 0x55);	 //01 01 01 01
 		m11 = _mm_set1_epi8((int8_t) 0x03);  //00 00 00 11
 	}
@@ -72,15 +74,13 @@ initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 		int8_t c = i;
 		if (meta->alph_type == fm_DNA) {
 			// need 4 copies per byte
-			c &= i<<2;
-			c &= i<<4;
-			c &= i<<6;
+			c |= i<<2;
+			c |= i<<4;
+			c |= i<<6;
 		} //else, just leave it on the right-most bits
 
 		chars_v[i] = _mm_set1_epi8(c);
 	}
-
-	printf ("D\n");
 
 	/* this is a collection of masks used to clear off the left- or right- part
 	 *  of a register when we shouldn't be counting the whole thing
@@ -95,10 +95,12 @@ initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	{
 		byte_m128 arr;
 		arr.m128 = allones_v;
+
 		for (i=chars_per_vector-1; i>0; i--) { // don't need the 0th entry
 			int byte_mask=0xff; //11 11 11 11
+			int byte_i = (i-1)/(8/meta->charBits);
 			if (meta->alph_type == fm_DNA) {
-				switch (i&0x11) {
+				switch (i&0x03) {
 				  case 1:
 					byte_mask ^= 0x3f; //11 00 00 00
 					break;
@@ -115,16 +117,18 @@ initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 				if (i&0x1)
 					byte_mask ^= 0x0f; //11 11 00 00
 			}
-			  arr.bytes[i/meta->charBits] = byte_mask; //if it's odd, chew off the last 4 bits, else clear the whole byte
-			  masks_v[i]             = *(__m128i*)(&(arr.m128));
-			  reverse_masks_v[i]  = _mm_andnot_si128(masks_v[i], allones_v );
+ 		    arr.bytes[byte_i] = byte_mask; //chew off the appropriate number of bits
+			for (j=byte_i+1; j<16; j++) {
+				arr.bytes[j] = 0x0;
+			}
+ 		    masks_v[i]                           = *(__m128i*)(&(arr.m128));
+ 		    reverse_masks_v[chars_per_vector-i]  = _mm_andnot_si128(masks_v[i], allones_v );
+// 		    fprintf(stderr, "rev[%3d] : ",chars_per_vector-i);
+// 		    print_m128(reverse_masks_v[chars_per_vector-i]);
 		}
 	}
-	printf ("E\n");
 	maskSA       =  meta->freq_SA - 1;
 	shiftSA      =  meta->SA_shift;
-
-	printf ("F\n");
 
 	return eslOK;
 
@@ -133,7 +137,7 @@ ERROR:
 	if (reverse_masks_v) free (reverse_masks_v);
 
 	esl_fatal("Error allocating memory in initGlobals\n");
-	//return fmFAIL;
+	return eslFAIL;
 }
 
 
@@ -141,7 +145,7 @@ ERROR:
 /* Function:  bwt_getOccCount()
  * Synopsis:  Compute number of occurrences of c in BWT[1..pos]
  *
- * Purpose:   Scan through the BWT to compute number of occurrence of c in BWT[1..pos],
+ * Purpose:   Scan through the BWT to compute number of occurrence of c in BWT[0..pos],
  *            using SSE to scan 16 bytes-at-a-time.
  *
  *            First, use checkpointed occurrence counts in the arrays occCnts_sb and occCnts_b.
@@ -156,9 +160,9 @@ ERROR:
  *            a reasonable expectation, as spacings of 256 or more seem to give the best speed,
  *            and certainly better space-utilization.
  */
-#ifndef FMDEBUG
-inline
-#endif
+//#ifndef FMDEBUG
+//inline
+//#endif
 int
 bwt_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 
@@ -184,83 +188,98 @@ bwt_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 		cnt += FM_OCC_CNT(b, b_pos + up_b, c ) ;
 	}
 
-	const uint8_t * BWT = fm->BWT;
+
+	if ( landmark < meta->N ) {
+
+		const uint8_t * BWT = fm->BWT;
 
 
-	register __m128i c_v = *(chars_v + c);
-	register __m128i BWT_v;
-	register __m128i tmp_v;
-	register __m128i tmp2_v;
-	register __m128i counts_v = allones_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
-	                                       // so effectively, can guarantee holding 128*16 = 2048.
-	                                       // Since I count from left or right, whichever is closer, this means
-	                                       // we can support an occ_b interval of up to 4096 with guarantee of
-	                                       // correctness.
+		register __m128i c_v = *(chars_v + c);
+		register __m128i BWT_v;
+		register __m128i tmp_v;
+		register __m128i tmp2_v;
+		register __m128i counts_v = neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
+											   // so effectively, can guarantee holding 128*16 = 2048.
+											   // Since I count from left or right, whichever is closer, this means
+											   // we can support an occ_b interval of up to 4096 with guarantee of
+											   // correctness.
+		if (meta->alph_type == fm_DNA) {
 
-	if (meta->alph_type == fm_DNA) {
 
+			if (!up_b) { // count forward, adding
+				for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
+					BWT_v    = *(__m128i*)(BWT+i);
+					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
 
-		if (!up_b) { // count forward, adding
-			for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
-				BWT_v    = *(__m128i*)(BWT+i);
-				FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				int remaining_cnt = pos + 1 -  i*4 ;
+				if (remaining_cnt > 0) {
+					BWT_v    = *(__m128i*)(BWT+i);
+					BWT_v    = _mm_and_si128(BWT_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
+
+			} else { // count backwards, subtracting
+				for (i=(landmark/4)-15 ; i>(pos/4);  i-=16) {
+					BWT_v = *(__m128i*)(BWT+i);
+					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
+
+				int remaining_cnt = 64 - (pos + 1 - i*4);
+				if (remaining_cnt > 0) {
+					BWT_v = *(__m128i*)(BWT+i);
+//					fprintf(stderr, "bwt     : "); print_m128(BWT_v);
+					BWT_v    = _mm_and_si128(BWT_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+
+//					fprintf(stderr, "mask    : "); print_m128(*(reverse_masks_v + remaining_cnt));
+//					fprintf(stderr, "bwt     : "); print_m128(BWT_v);
+
+					FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+//					fprintf(stderr, "cnt     : "); print_m128(counts_v);
+				}
 			}
-			int remaining_cnt = pos + 1 -  i*4 ;
-			if (remaining_cnt > 0) {
-				BWT_v    = *(__m128i*)(BWT+i);
-				BWT_v    = _mm_and_si128(BWT_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-				FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-			}
 
-		} else { // count backwards, subtracting
-			for (i=(landmark/4)-15 ; i>(pos/4);  i-=16) {
-			 	BWT_v = *(__m128i*)(BWT+i);
-			 	FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-			}
+		} else if ( meta->alph_type == fm_DNA_full) {
 
-			int remaining_cnt = 64 - (pos + 1 - i*4);
-			if (remaining_cnt > 0) {
-				BWT_v = *(__m128i*)(BWT+i);
-				BWT_v    = _mm_and_si128(BWT_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-				FM_COUNTS_SSE_4PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+			if (!up_b) { // count forward, adding
+				for (i=1+floor(landmark/2.0) ; i+15<( (pos+1)/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
+					BWT_v    = *(__m128i*)(BWT+i);
+					FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
+				int remaining_cnt = pos + 1 -  i*2 ;
+				if (remaining_cnt > 0) {
+					BWT_v    = *(__m128i*)(BWT+i);
+					BWT_v    = _mm_and_si128(BWT_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+					FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
+
+			} else { // count backwards, subtracting
+				for (i=(landmark/2)-15 ; i>(pos/2);  i-=16) {
+					BWT_v = *(__m128i*)(BWT+i);
+					FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
+
+				int remaining_cnt = 32 - (pos + 1 - i*2);
+				if (remaining_cnt > 0) {
+					BWT_v = *(__m128i*)(BWT+i);
+					BWT_v    = _mm_and_si128(BWT_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+					FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+				}
 			}
+		} else {
+			esl_fatal("Invalid alphabet type\n");
 		}
 
-	} else if ( meta->alph_type == fm_DNA_full) {
+		counts_v = _mm_xor_si128(counts_v, neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
+		FM_GATHER_8BIT_COUNTS(counts_v,counts_v,counts_v);
 
-		if (!up_b) { // count forward, adding
-			for (i=1+floor(landmark/2.0) ; i+15<( (pos+1)/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
-				BWT_v    = *(__m128i*)(BWT+i);
-				FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-			}
-			int remaining_cnt = pos + 1 -  i*2 ;
-			if (remaining_cnt > 0) {
-				BWT_v    = *(__m128i*)(BWT+i);
-				BWT_v    = _mm_and_si128(BWT_v, *(masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-				FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-			}
-
-		} else { // count backwards, subtracting
-			for (i=(landmark/2)-15 ; i>(pos/2);  i-=16) {
-			 	BWT_v = *(__m128i*)(BWT+i);
-				FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-			}
-
-			int remaining_cnt = 32 - (pos + 1 - i*2);
-			if (remaining_cnt > 0) {
-				BWT_v = *(__m128i*)(BWT+i);
-				BWT_v    = _mm_and_si128(BWT_v, *(reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-				FM_COUNTS_SSE_2PACKED(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
-			}
-		}
-	} else {
-		esl_fatal("Invalid alphabet type\n");
+		cnt  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v, 0) );
 	}
 
-	counts_v = _mm_xor_si128(counts_v, allones_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
-    FM_GATHER_8BIT_COUNTS(counts_v,counts_v,counts_v);
+	if (c==0 && pos >= meta->term_loc) { // I overcounted 'A' by one, because '$' was replaced with an 'A'
+		cnt--;
+	}
 
-	cnt  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v, 0) );
 	occCallCnt++;
 	return cnt ;
 
@@ -280,13 +299,11 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char * restrict query, char * restri
 		FM_INTERVAL *interval) {
 
 	int count1, count2;
-	int C_base;
 	int i=0;
-	int32_t * restrict C = fm->C;
 
-	uint8_t c = inv_alph[query[0]];
-	interval->lower = abs(C[c]);
-	interval->upper  = abs(C[c+1])-1;
+	uint8_t c = inv_alph[(int)query[0]];
+	interval->lower = Cvals[c] + (c==0?1:0);
+	interval->upper  = Cvals[c+1]-1;
 
 	while (interval->lower>0 && interval->lower <= interval->upper) {
 		c = query[++i];
@@ -294,14 +311,13 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char * restrict query, char * restri
 			break;
 
 		c = inv_alph[c];
-		C_base = Cvals[c];
 
 		//TODO: these will often overlap - might get acceleration by merging to a single redundancy-avoiding call
 		count1 = bwt_getOccCount (meta, fm, interval->lower-1, c);
 		count2 = bwt_getOccCount (meta, fm, interval->upper, c);
 
-		interval->lower = C_base + count1;
-		interval->upper = C_base + count2 - 1;
+		interval->lower = Cvals[c] + count1;
+		interval->upper = Cvals[c] + count2 - 1;
 	}
 
 	return eslOK;
@@ -356,8 +372,8 @@ int
 getFMHits( FM_METADATA *meta, FM_DATA *fm, FM_INTERVAL *interval, FM_HIT *hits_ptr) {
 
 	const uint8_t * restrict B = fm->BWT;
-	const uint32_t * restrict occCnts_sb = fm->occCnts_sb;
-	const uint16_t * restrict occCnts_b  = fm->occCnts_b;
+	//const uint32_t * restrict occCnts_sb = fm->occCnts_sb;
+	//const uint16_t * restrict occCnts_b  = fm->occCnts_b;
 	int i, j, len = 0;
 
 	for (i = interval->lower;  i<= interval->upper; i++) {
@@ -463,7 +479,6 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 	C[meta->alph_size] *= -1;
 
 
-
 /*
 	for (i=0; i<num_freq_cnts_b; i++) {
 		  printf("b: %3d : ", i);
@@ -493,7 +508,7 @@ ERROR:
 	if (fm->occCnts_b)   free (fm->occCnts_b);
 	if (fm->occCnts_sb)  free (fm->occCnts_sb);
 	esl_fatal("Error allocating memory in %s\n", "readFM");
-
+    return eslFAIL;
 }
 
 
@@ -596,16 +611,11 @@ main(int argc,  char *argv[]) {
 	fname_fm = argv[optind];
 	fname_queries = argv[optind+1];
 
-	printf("A\n");
-
 
 	readFM ( fname_fm, &meta, &fm );
 
-	printf("B\n");
 	initGlobals(&meta, &fm);
 
-	printf("C\n");
-		exit(1);
 
 	createAlphabet(meta.alph_type, &alph, &inv_alph, &(meta.alph_size), NULL); // don't override charBits
 
@@ -637,19 +647,19 @@ main(int argc,  char *argv[]) {
 				hits_size = hit_num;
 			}
 
-			if (!count_only)
-				getFMHits(&meta, &fm, &interval, hits);
+			//if (!count_only)
+			//	getFMHits(&meta, &fm, &interval, hits);
 
 			hit_cnt++;
 			hit_indiv_cnt += hit_num;
 
 
 			//PRINTOUT ( "HIT:  %s  (%d, %d)\n", line, interval.lower, interval.upper);
-			int i;
-			for (i = 0; i< hit_num; i++) {
-				int pos_fwd = meta.N - hits[i].start - qlen - 1; // flip the sequence reversal
+			//int i;
+			//for (i = 0; i< hit_num; i++) {
+			//	int pos_fwd = meta.N - hits[i].start - qlen - 1; // flip the sequence reversal
 				//PRINTOUT ( "\t%d\n", pos_fwd);
-			}
+			//}
 		} else {
 			//PRINTOUT ( "MISS: %s\n", line);
 			miss_cnt++;

@@ -1,6 +1,7 @@
 #include "divsufsort.h"
 #include "fm.h"
 
+#define PRINTBWT 1
 
 //static const char *optString = "a:b:f:deupsrnl:h?";
 static const char *optString = "a:b:s:del:h?";
@@ -62,7 +63,7 @@ main(int argc, char *argv[]) {
 
 
 
-	long i,j, c, k;
+	long i,j, c;
 	int status;
 	int result;
 	int opt = 0;
@@ -230,7 +231,6 @@ main(int argc, char *argv[]) {
 	cnts_sb[BWT[0]]++;
 	cnts_b[BWT[0]]++;
 
-
 	//Scan through SA to build the BWT and FM index structures
 	for(j=1; j < meta->N; ++j) {
 	  if (SA[j]==0) { //'$'
@@ -250,8 +250,9 @@ main(int argc, char *argv[]) {
 	  const long joffset = j+1;
 	  if ( !(  joffset % meta->freq_cnt_b) ) {  // (j+1)%freq_cnt_b==0  , i.e. every freq_cnt_bth position, noting that it's a zero-based count
 
-		  for (c=0; c<meta->alph_size; c++)
+		  for (c=0; c<meta->alph_size; c++) {
 			  FM_OCC_CNT(b, (joffset>>meta->cnt_shift_b), c ) = cnts_b[c];
+		  }
 
 		  if ( !(joffset % meta->freq_cnt_sb) ) {  // j%freq_cnt_sb==0
 			  for (c=0; c<meta->alph_size; c++) {
@@ -262,6 +263,14 @@ main(int argc, char *argv[]) {
 
 	  }
 	}
+
+
+
+#ifdef PRINTBWT
+	for(j=0; j < meta->N; ++j)
+	  printf ("%d", BWT[j]);
+#endif
+
 
 	//wrap up the counting;
 	for (c=0; c<meta->alph_size; c++) {
