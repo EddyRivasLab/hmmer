@@ -26,8 +26,6 @@
  *      that MSV and Rest parts match, saving a malloc for var-lengthed name
  *      in ReadRest().
  *    
- * SRE, Fri Oct 17 10:10:31 2008 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -46,6 +44,9 @@
 
 #include "hmmer.h"
 #include "impl_sse.h"
+
+static uint32_t  v3e_fmagic = 0xb3e5e6f3; /* 3/e binary MSV file, SSE:     "3efs" = 0x 33 65 66 73  + 0x80808080 */
+static uint32_t  v3e_pmagic = 0xb3e5f0f3; /* 3/e binary profile file, SSE: "3eps" = 0x 33 65 70 73  + 0x80808080 */
 
 static uint32_t  v3d_fmagic = 0xb3e4e6f3; /* 3/d binary MSV file, SSE:     "3dfs" = 0x 33 64 66 73  + 0x80808080 */
 static uint32_t  v3d_pmagic = 0xb3e4f0f3; /* 3/d binary profile file, SSE: "3dps" = 0x 33 64 70 73  + 0x80808080 */
@@ -66,7 +67,6 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 
 /* Function:  p7_oprofile_Write()
  * Synopsis:  Write an optimized profile in two files.
- * Incept:    SRE, Wed Jan 21 10:35:28 2009 [Janelia]
  *
  * Purpose:   Write the MSV filter part of <om> to open binary stream
  *            <ffp>, and the rest of the model to <pfp>. These two
@@ -95,7 +95,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   int x;
 
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
-  if (fwrite((char *) &(v3d_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           return eslFAIL;
   if (fwrite((char *) &n,               sizeof(int),      1,           ffp) != 1)           return eslFAIL;
@@ -117,9 +117,10 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) om->evparam,      sizeof(float),    p7_NEVPARAM, ffp) != p7_NEVPARAM) return eslFAIL;
   if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) return eslFAIL;
   if (fwrite((char *) om->compo,        sizeof(float),    p7_MAXABET,  ffp) != p7_MAXABET)  return eslFAIL;
+  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL; /* sentinel */
 
   /* <pfp> gets the rest of the oprofile */
-  if (fwrite((char *) &(v3d_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &n,               sizeof(int),      1,           pfp) != 1)           return eslFAIL;
@@ -169,6 +170,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->nj),        sizeof(float),    1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->mode),      sizeof(int),      1,           pfp) != 1)           return eslFAIL;
   if (fwrite((char *) &(om->L)   ,      sizeof(int),      1,           pfp) != 1)           return eslFAIL;
+  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL; /* sentinel */
   return eslOK;
 }
 /*---------------- end, writing oprofile ------------------------*/
@@ -182,7 +184,6 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 
 /* Function:  p7_oprofile_ReadMSV()
  * Synopsis:  Read MSV filter part of an optimized profile.
- * Incept:    SRE, Wed Jan 21 10:39:20 2009 [Janelia]
  *
  * Purpose:   Read the MSV filter part of a profile from the
  *            <.h3f> file associated with an open HMM file <hfp>.
@@ -249,7 +250,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
   if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
   if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
-  if (magic != v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+  if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
+  if (magic != v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -289,6 +291,10 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
   if (! fread((char *) om->compo,        sizeof(float),   p7_MAXABET,  hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
 
+  /* record ends with magic sentinel, for detecting binary file corruption */
+  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3f file corrupted?");
+  if (magic != v3e_fmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3f file corrupted?");
+
   /* keep track of the ending offset of the MSV model */
   om->eoff = ftello(hfp->ffp) - 1;;
 
@@ -306,7 +312,6 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 
 /* Function:  p7_oprofile_ReadInfoMSV()
  * Synopsis:  Read MSV filter info, but not the scores.
- * Incept:    MSF, Thu Oct 15, 2009 [Janelia]
  *
  * Purpose:   Read just enough of the MSV filter header from the
  *            <.h3f> file associated with an open HMM file <hfp>
@@ -365,7 +370,8 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
   if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
   if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
-  if (magic != v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+  if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
+  if (magic != v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -397,6 +403,7 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   roff += (sizeof(float) * p7_NEVPARAM);          /* stat params                                               */
   roff += (sizeof(off_t) * p7_NOFFSETS);          /* hmmscan offsets                                           */
   roff += (sizeof(float) * p7_MAXABET);           /* model composition                                         */
+  roff += sizeof(uint32_t);			  /* sentinel magic                                            */
 
   /* keep track of the ending offset of the MSV model */
   p7_oprofile_Position(hfp, roff);
@@ -416,7 +423,6 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 
 /* Function:  p7_oprofile_ReadBlockMSV()
  * Synopsis:  Read the next block of optimized profiles from a hmm file.
- * Incept:    
  *
  * Purpose:   Reads a block of optimized profiles from open hmm file <hfp> into 
  *            <hmmBlock>.
@@ -452,7 +458,6 @@ p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *h
 
 /* Function:  p7_oprofile_ReadRest()
  * Synopsis:  Read the rest of an optimized profile.
- * Incept:    SRE, Wed Jan 21 11:04:56 2009 [Janelia]
  *
  * Purpose:   Read the rest of an optimized profile <om> from
  *            the <.h3p> file associated with an open HMM
@@ -510,7 +515,8 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (magic == v3a_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
   if (magic == v3b_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
   if (magic == v3c_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
-  if (magic != v3d_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
+  if (magic == v3d_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
+  if (magic != v3e_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
 
   if (! fread( (char *) &M,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -561,6 +567,10 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) &(om->mode),      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mode");
   if (! fread((char *) &(om->L)   ,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read L");
 
+  /* record ends with magic sentinel, for detecting binary file corruption */
+  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->pfp))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3p file corrupted?");
+  if (magic != v3e_pmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3p file corrupted?");
+
 #ifdef HMMER_THREADS
   if (hfp->syncRead)
     {
@@ -591,7 +601,6 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
  *****************************************************************/
 /* Function:  p7_oprofile_CreateBlock()
  * Synopsis:  Create a new block of empty <P7_OM_BLOCK>.
- * Incept:    
  *
  * Purpose:   Creates a block of empty <P7_OM_BLOCK> profile objects.
  *            
@@ -636,7 +645,6 @@ p7_oprofile_CreateBlock(int count)
 
 /* Function:  p7_oprofile_DestroyBlock()
  * Synopsis:  Frees an <P7_OM_BLOCK>.
- * Incept:    
  *
  * Purpose:   Free a Create()'d block of profiles.
  */
@@ -662,7 +670,6 @@ p7_oprofile_DestroyBlock(P7_OM_BLOCK *block)
 
 /* Function:  p7_oprofile_Position()
  * Synopsis:  Reposition an open hmm file to an offset.
- * Incept:    MSF, Thu Oct 15, 2009 [Janelia]
  *
  * Purpose:   Reposition an open <hfp> to offset <offset>.
  *            <offset> would usually be the first byte of a
@@ -1010,4 +1017,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

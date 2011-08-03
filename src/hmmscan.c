@@ -375,14 +375,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
 
   hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
-  if      (hstatus == eslEFORMAT)   p7_Fail("bad file format in binary auxfiles for %s:\n%s", cfg->hmmfile, hfp->errbuf);
-  else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",       cfg->hmmfile);
-  else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",       cfg->hmmfile); 
+  if      (hstatus == eslEFORMAT)   p7_Fail("bad format, binary auxfiles, %s:\n%s",     cfg->hmmfile, hfp->errbuf);
+  else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
+  else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
 
   p7_oprofile_Destroy(om);
   p7_hmmfile_Close(hfp);
@@ -781,12 +781,12 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
-  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
+  else if (status == eslEFORMAT)   mpi_failure("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
-  if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n",         hfp->fname);
+  if (! hfp->is_pressed)           mpi_failure("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
   
   hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
-  if      (hstatus == eslEFORMAT)   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);
+  if      (hstatus == eslEFORMAT)   mpi_failure("bad format, binary auxfiles, %s",            cfg->hmmfile);
   else if (hstatus == eslEINCOMPAT) mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslOK)        mpi_failure("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
 

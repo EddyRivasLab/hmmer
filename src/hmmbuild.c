@@ -15,6 +15,7 @@
 #include "esl_getopts.h"
 #include "esl_mpi.h"
 #include "esl_msa.h"
+#include "esl_msafile.h"
 #include "esl_msaweight.h"
 #include "esl_msacluster.h"
 #include "esl_stopwatch.h"

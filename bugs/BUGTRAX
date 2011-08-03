@@ -1,3 +1,23 @@
+ID              h91
+TITLE           hmmscan floating point exception, is actually database corruption
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J8/65
+REPORTED_BY     Haruna Cofer <haruna@sgi.com>
+OPENED_DATE     SRE, 22 Jul 2011
+CLOSED_DATE     SRE, Wed Aug  3 09:58:56 2011
+DESCRIPTION     
+  hmmscan failed to cleanly detect corrupted .h3* hmmpress files,
+  ingested a corrupted model, and failed in Forward with a floating
+  point exception that was not at all helpful in identifying the
+  actual problem.
+
+  Fix is to include magic sentinel bytes at the end of each binary
+  record in .h3f and .h3p files, not just at the beginning. File
+  readers check this sentinel, and fail with an EFORMAT error if it's
+  not present.
+//
 ID              h90
 TITLE           phmmer's displayed consensus differs from query sequence
 AFFECTS         3.0
