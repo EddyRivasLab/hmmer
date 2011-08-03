@@ -82,8 +82,7 @@ PROGOBJSS =\
     makenhmmerdb.o\
     exactmatch.o
 
-HDRS =  hmmer.h\
-        fm.h 
+HDRS =  hmmer.h 
 
 OBJS =  build.o\
 	cachedb.o\
@@ -124,7 +123,7 @@ OBJS =  build.o\
 	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o\
-	fm.o
+	fm_alphabet.o
 #	island.o\
 
 STATS = \

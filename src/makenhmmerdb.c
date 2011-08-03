@@ -1,10 +1,12 @@
 #include "divsufsort.h"
-#include "fm.h"
+#include "hmmer.h"
 
-#define PRINTBWT 0
-#define PRINTOCC 0
+#include <getopt.h>
 
-//static const char *optString = "a:b:f:deupsrnl:h?";
+
+//#define PRINTBWT 1
+//#define PRINTOCC 1
+
 static const char *optString = "a:b:s:del:h?";
 static const struct option longOpts[] = {
   { "alph",       required_argument, NULL, 'a' },
@@ -63,7 +65,6 @@ main(int argc, char *argv[]) {
 	char *alph           = NULL;
 
 
-
 	long i,j, c;
 	int status;
 	int result;
@@ -75,6 +76,9 @@ main(int argc, char *argv[]) {
 	int num_SA_samples ;
 
 	int chars_per_byte;
+	char *fname_in;
+	char *fname_out;
+
 
 	ESL_ALLOC (meta, sizeof(FM_METADATA));
 	meta->alph_type   = fm_DNA;
@@ -87,11 +91,11 @@ main(int argc, char *argv[]) {
 	while( opt != -1 ) {
 	  switch( opt ) {
 		  case 'a':
-			  if (strcmp(optarg, "dna")==0)
+			  if ( esl_strcmp(optarg, "dna")==0)
 				  meta->alph_type = fm_DNA;
-			  else if (strcmp(optarg, "dna_full")==0)
+			  else if (esl_strcmp(optarg, "dna_full")==0)
 				  meta->alph_type = fm_DNA_full;
-			  else if (strcmp(optarg, "amino")==0)
+			  else if (esl_strcmp(optarg, "amino")==0)
 				  meta->alph_type = fm_AMINO;
 			  else
 				  esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
@@ -130,8 +134,8 @@ main(int argc, char *argv[]) {
 	}
 
 
-	const char *fname_in = argv[optind];
-	const char *fname_out = argv[optind+1];
+	fname_in = argv[optind];
+	fname_out = argv[optind+1];
 
 
 	/* Open a file for reading. */
@@ -143,11 +147,11 @@ main(int argc, char *argv[]) {
 	//TODO: this is where the loop should start, just use a sequence block
 	if(fseek(fp, 0, SEEK_END) == 0) {
 	  meta->N = ftell(fp);
-	rewind(fp);
-	if(meta->N < 0)
-	  esl_fatal("%s: Cannot ftell `%s': ", argv[0], fname_in);
+	  rewind(fp);
+	  if(meta->N < 0)
+	    esl_fatal("%s: Cannot ftell `%s': ", argv[0], fname_in);
 	} else {
-	esl_fatal( "%s: Cannot fseek `%s': ", argv[0], fname_in);
+	  esl_fatal( "%s: Cannot fseek `%s': ", argv[0], fname_in);
 	}
 
 	meta->SA_shift = log2(meta->freq_SA);
@@ -161,7 +165,10 @@ main(int argc, char *argv[]) {
 
 
 	//getInverseAlphabet
-	createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), &(meta->charBits));
+	fm_createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), &(meta->charBits));
+
+
+
     //shift inv_alph up one, to make space for '$' at 0
 	for (i=0; i<256; i++)
 		if ( inv_alph[i] >= 0)
@@ -371,7 +378,6 @@ main(int argc, char *argv[]) {
 	free(alph);
 
 
-
 	return (eslOK);
 
 
@@ -388,7 +394,6 @@ ERROR:
 	if (meta)       free(meta);
 	if (inv_alph)   free(inv_alph);
 	if (alph)       free(alph);
-
 
 	fprintf (stderr, "failure during memory allocation\n");
 

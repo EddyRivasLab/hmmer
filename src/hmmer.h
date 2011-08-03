@@ -13,11 +13,12 @@
  *    9. P7_ALIDISPLAY:  an alignment formatted for printing
  *   10. P7_DOMAINDEF:   reusably managing workflow in annotating domains
  *   11. P7_TOPHITS:     ranking lists of top-scoring hits
- *   12. Inclusion of the architecture-specific optimized implementation.
- *   13. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
- *   14. P7_BUILDER:     configuration options for new HMM construction.
- *   15. Declaration of functions in HMMER's exposed API.
- *   16. Copyright and license information.
+ *   12. FM:             FM-index
+ *   13. Inclusion of the architecture-specific optimized implementation.
+ *   14. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
+ *   15. P7_BUILDER:     configuration options for new HMM construction.
+ *   16. Declaration of functions in HMMER's exposed API.
+ *   17. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -51,6 +52,7 @@
 #include "esl_sq.h"		/* ESL_SQ                */
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
+
 
 
 /* Search modes. */
@@ -732,7 +734,68 @@ typedef struct p7_tophits_s {
 
 
 /*****************************************************************
- * 12. The optimized implementation.
+ * 12. FM:  FM-index implementation (architecture-specific code found in impl_**)
+ *****************************************************************/
+// fm.c
+
+#define FM_MAX_LINE 256
+
+
+/* Structure the 2D occ array into a single array.  "type" is either b or sb.
+ * Note that one extra count value is required by RLE, one 4-byte int for
+ * each superblock count vector, and one 2-byte short for each block count
+ * vector. This is small overhead, even for a small alphabet like dna.
+ */
+#define FM_OCC_CNT( type, i, c)  ( occCnts_##type[(meta->alph_size)*(i) + (c)])
+
+
+enum fm_alphabettypes_e {
+  fm_DNA        = 0,  //acgt,  2 bit
+  fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit
+  fm_AMINO      = 2,  // 5 bit
+};
+
+typedef struct fm_interval_s {
+  int   lower;
+  int   upper;
+} FM_INTERVAL;
+
+typedef struct fm_hit_s {
+  int   start;
+//  int   length;
+} FM_HIT;
+
+
+typedef struct fm_metadata_s {
+  //TODO: these don't need to be ints - uint8_t ?
+  int alph_type;
+  int alph_size;
+  int charBits;
+  int N; //length of text
+  int L; //bytes used to store BWT/T
+  int freq_SA; //frequency with which SA is sampled
+  int freq_cnt_sb; //frequency with which full cumulative counts are captured
+  int freq_cnt_b; //frequency with which intermittent counts are captured
+  int SA_shift;
+  int cnt_shift_sb;
+  int cnt_shift_b;
+  int term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
+} FM_METADATA;
+
+typedef struct fm_data_s {
+  uint8_t  *T;  //text corresponding to the BWT
+  uint8_t  *BWT;
+  //byte_m128  *BWT; //BWT, each element of this array is either an array of 16 bytes or a single m128 element
+  uint32_t  *SA; // sampled suffix array
+  int32_t   *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
+  uint32_t  *occCnts_sb;
+  uint16_t  *occCnts_b;
+} FM_DATA;
+
+
+
+/*****************************************************************
+ * 13. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
 #include "impl_sse/impl_sse.h"
@@ -744,7 +807,7 @@ typedef struct p7_tophits_s {
 
 
 /*****************************************************************
- * 13. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
+ * 14. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
@@ -827,7 +890,7 @@ typedef struct p7_pipeline_s {
 
 
 /*****************************************************************
- * 14. P7_BUILDER: pipeline for new HMM construction
+ * 15. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
 #define p7_DEFAULT_WINDOW_BETA  1e-7
@@ -885,7 +948,7 @@ typedef struct p7_builder_s {
 
 
 /*****************************************************************
- * 15. Routines in HMMER's exposed API.
+ * 16. Routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -1261,6 +1324,8 @@ extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 
 
+/* fm_alphabet.c */
+extern int fm_createAlphabet (int alph_type, char **alph, char **inv_alph, int *alph_size, int *alph_bits);
 
 
 

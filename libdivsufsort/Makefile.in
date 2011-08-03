@@ -1,4 +1,4 @@
-# Makefile for bwt
+# Makefile for fm-index
 
 # VPATH and shell configuration
 top_srcdir = @top_srcdir@
@@ -12,14 +12,19 @@ TARGET				= libdivsufsort.a
 MAKEFILE			= Makefile
 
 # options
-CC					= gcc 
-CFLAGS  	 		= -g -O3 -fomit-frame-pointer -fstrict-aliasing 
-CPPFLAGS			= -Wall 
-LDFLAGS				= 
-LDLIBS				= 
-#TARGET_ARCH		=
-AR       = /usr/bin/ar rc
-RANLIB   = ranlib
+CC        = @CC@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@
+CPPFLAGS  = @CPPFLAGS@
+MPILIBS   = @MPILIBS@
+AR        = @AR@ rc
+RANLIB    = @RANLIB@
+INSTALL   = @INSTALL@
+
+#CC					= gcc 
+#CFLAGS  	 		= -g -O3 -fomit-frame-pointer -fstrict-aliasing 
+#CPPFLAGS			= -Wall 
+#AR       = /usr/bin/ar rc
+#RANLIB   = ranlib
 
 
 # beautification magic stolen from git (added within hmmer source)

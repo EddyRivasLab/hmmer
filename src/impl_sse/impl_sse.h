@@ -337,6 +337,13 @@ extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
+/*fm.c */
+extern int fm_initGlobals ( FM_METADATA *meta, FM_DATA *fm  );
+extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
+extern int fm_print_m128 (__m128i in);
+extern int fm_print_m128_rev (__m128i in);
+
+
 /*****************************************************************
  * 4. Implementation specific initialization
  *****************************************************************/
@@ -351,7 +358,117 @@ impl_Init(void)
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 #endif
 }
-  
+
+
+
+/*****************************************************************
+ * 5. FM-index
+ *****************************************************************/
+
+//used to convert from a byte array to an __m128i
+typedef union {
+        uint8_t bytes[16];
+        __m128i m128;
+        } byte_m128;
+
+/* Gather the sum of all counts in a 16x8-bit element into a single 16-bit
+ *  element of the register (the 0th element)
+ *
+ *  the _mm_sad_epu8  accumulates 8-bit counts into 16-bit counts:
+ *			left 8 counts (64-bits) accumulate in counts_v[0],
+ *			right 8 counts in counts_v[4]  (the other 6 16-bit ints are 0)
+ *	the _mm_shuffle_epi32  flips the 4th int into the 0th slot
+ */
+#define FM_GATHER_8BIT_COUNTS( in_v, mid_v, out_v  ) do {\
+		mid_v = _mm_sad_epu8 (in_v, fm_zeros_v);\
+		tmp_v = _mm_shuffle_epi32(mid_v, _MM_SHUFFLE(1, 1, 1, 2));\
+		out_v = _mm_add_epi16(mid_v, tmp_v);\
+	} while (0)
+
+
+/* Macro for SSE operations to turn 2-bit character values into 2-bit binary
+ * (00 or 01) match/mismatch values representing occurrences of a character in a
+ * 4-char-per-byte packed BWT.
+ *
+ * Typically followed by a call to FM_COUNT_SSE_4PACKED, possibly with a
+ * mask in between to handle the case where we don't want to add over all
+ * positions in the vector
+ *
+ * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
+ * at the end
+ *
+ * xor(in_v, c_v)        : each 2-bit value will be 00 if a match, and non-0 if a mismatch
+ * and(in_v, 01010101)   : look at the right bit of each 2-bit value,
+ * srli(1)+and()         : look at the left bit of each 2-bit value,
+ * or()                  : if either left bit or right bit is non-0, 01, else 00 (match is 00)
+ *
+ * subs()                : invert, so match is 01, mismatch is 00
+ *
+ */
+#define FM_MATCH_2BIT(in_v, c_v, a_v, b_v, out_v) do {\
+		a_v = _mm_xor_si128(in_v, c_v);\
+		\
+		b_v = _mm_and_si128(a_v, fm_m01);\
+		a_v  = _mm_srli_epi16(a_v, 1);\
+		a_v  = _mm_and_si128(a_v, fm_m01);\
+		a_v  = _mm_or_si128(a_v, b_v);\
+		\
+		out_v  = _mm_subs_epi8(fm_m01,a_v);\
+	} while (0)
+
+
+/*Macro for SSE operations to count bits produced by FM_MATCH_SSE_4PACKED
+ *
+ * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
+ * at the end
+ *
+ * then add up the 2-bit values:
+ * srli(4)+add()         : left 4 bits shifted right, added to right 4 bits
+ *
+ * srli(2)+and(00000011) : left 2 bits (value 0..2) shifted right, masked, so no other bits active
+ * and(00000011)         : right 2 bits (value 0..2) masked so no other bits active
+ *
+ * final 2 add()s        : tack current counts on to already-tabulated counts.
+ */
+#define FM_COUNT_2BIT(a_v, b_v, cnts_v) do {\
+        b_v = _mm_srli_epi16(a_v, 4);\
+        a_v  = _mm_add_epi16(a_v, b_v);\
+        \
+        b_v = _mm_srli_epi16(a_v, 2);\
+        a_v  = _mm_and_si128(a_v,fm_m11);\
+        b_v = _mm_and_si128(b_v,fm_m11);\
+        \
+        cnts_v = _mm_add_epi16(cnts_v, a_v);\
+        cnts_v = _mm_add_epi16(cnts_v, b_v);\
+	} while (0)
+
+
+
+/* Macro for performing SSE operations to count occurrences of a character in
+ * a 2-char-per-byte packed BWT.
+ *
+ * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless
+ * values at the end.
+ *
+ * and()         : capture the right 4-bit value
+ * srli(4)+and() : capture the left 4-bit value   (need the mask because 16-bit shift leave garbage in left-4-bit chunks)
+ *
+ * cmpeq()x2     : test if both left and right == c.  If so, value = 11111111 (-1)
+ *
+ * subs()x2      : subtracting -1 == adding 1
+ */
+#define FM_COUNTS_4BIT(in_v, c_v, tmp_v, tmp2_v, counts_v) do {\
+		tmp_v    = _mm_srli_epi16(BWT_v, 4);\
+        tmp2_v   = _mm_and_si128(BWT_v, c_v);\
+		tmp_v    = _mm_and_si128(tmp_v, c_v);\
+		\
+		tmp_v    = _mm_cmpeq_epi8(tmp_v, c_v);\
+		tmp2_v   = _mm_cmpeq_epi8(tmp2_v, c_v);\
+		\
+		counts_v = _mm_subs_epi8(counts_v, tmp_v);\
+		counts_v = _mm_subs_epi8(counts_v, tmp2_v);\
+	} while (0)
+
 
 #endif /* P7_IMPL_SSE_INCLUDED */
 
