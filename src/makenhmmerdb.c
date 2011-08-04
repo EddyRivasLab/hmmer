@@ -226,7 +226,7 @@ main(int argc, char *argv[]) {
 	/* Construct the Suffix Array */
 	result = divsufsort(T, SA, meta->N);
 	if ( result < 0 )
-	esl_fatal("%s: Error building BWT.\n", argv[0]);
+	  esl_fatal("%s: Error building BWT.\n", argv[0]);
 
 
 	/* Construct the BWT, SA landmarks, and FM-index */
@@ -349,7 +349,7 @@ main(int argc, char *argv[]) {
 
 	/* Open a file for writing. */
 	if((fp = fopen(fname_out, "wb")) == NULL)
-	esl_fatal( "%s: Cannot open file `%s': ", argv[0], fname_out);
+	  esl_fatal( "%s: Cannot open file `%s': ", argv[0], fname_out);
 	/* Write the FM-index meta data */
 	if(fwrite(meta, sizeof(FM_METADATA), 1, fp) != 1)
 	  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);

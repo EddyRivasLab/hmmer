@@ -329,6 +329,137 @@ extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 /* vitscore.c */
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
+/*fm.c */
+extern int fm_initGlobals ( FM_METADATA *meta, FM_DATA *fm  );
+extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
+
+
+
+
+
+/*****************************************************************
+ * 5. FM-index
+ *****************************************************************/
+
+//used to convert from a byte array to an __m128i
+typedef union {
+        uint8_t bytes[16];
+        vector unsigned char m128;
+        } byte_m128;
+
+/* Gather the sum of all counts in a 16x8-bit element into a single 16-bit
+ *  element of the register (the 0th element)
+ *
+ *        see http://www.dtic.mil/cgi-bin/GetTRDoc?Location=U2&doc=GetTRDoc.pdf&AD=ADA428666
+ *	the _mm_shuffle_epi32  flips the 4th int into the 0th slot
+ */
+#define FM_GATHER_8BIT_COUNTS( in_v, mid_v, out_v  ) do {\
+		mid_v = vec_sum2s(vec_sum4s(vec_sub(vec_max(in_v,fm_zeros_v), vec_min(in_v,fm_zeros_v)));
+        out_v = vec_splat(mid_v, 3);
+	} while (0)
+
+
+/* Macro for SSE operations to turn 2-bit character values into 2-bit binary
+ * (00 or 01) match/mismatch values representing occurrences of a character in a
+ * 4-char-per-byte packed BWT.
+ *
+ * Typically followed by a call to FM_COUNT_SSE_4PACKED, possibly with a
+ * mask in between to handle the case where we don't want to add over all
+ * positions in the vector
+ *
+ * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
+ * at the end
+ *
+ * xor(in_v, c_v)        : each 2-bit value will be 00 if a match, and non-0 if a mismatch
+ * and(in_v, 01010101)   : look at the right bit of each 2-bit value,
+ * srli(1)+and()         : look at the left bit of each 2-bit value,
+ * or()                  : if either left bit or right bit is non-0, 01, else 00 (match is 00)
+ *
+ * subs()                : invert, so match is 01, mismatch is 00
+ *
+ */
+#define FM_MATCH_2BIT(in_v, c_v, a_v, b_v, out_v) do {\
+		a_v = vec_xor(in_v, c_v);\
+		\
+		b_v  = vec_and(a_v, fm_m01);\
+		a_v  = vec_sl(a_v, 1);\
+		a_v  = vec_and(a_v, fm_m01);\
+		a_v  = vec_or(a_v, b_v);\
+		\
+		out_v  = vec_subs(fm_m01,a_v);\
+	} while (0)
+
+
+/*Macro for SSE operations to count bits produced by FM_MATCH_SSE_4PACKED
+ *
+ * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
+ * at the end
+ *
+ * then add up the 2-bit values:
+ * srli(4)+add()         : left 4 bits shifted right, added to right 4 bits
+ *
+ * srli(2)+and(00000011) : left 2 bits (value 0..2) shifted right, masked, so no other bits active
+ * and(00000011)         : right 2 bits (value 0..2) masked so no other bits active
+ *
+ * final 2 add()s        : tack current counts on to already-tabulated counts.
+ */
+#define FM_COUNT_2BIT(a_v, b_v, cnts_v) do {\
+        b_v  = vec_sl(a_v, 4);\
+        a_v  = vec_adds(a_v, b_v);\
+        \
+        b_v  = vec_sl(a_v, 2);\
+        a_v  = vec_and(a_v,fm_m11);\
+        b_v  = vec_and(b_v,fm_m11);\
+        \
+        cnts_v = vec_adds(cnts_v, a_v);\
+        cnts_v = vec_adds(cnts_v, b_v);\
+	} while (0)
+
+
+
+/* Macro for SSE operations that turns a vector of 4-bit character values into
+ * 2 vectors representing matches. Each byte in the input vector consists of
+ * a left half (4 bits) and a right half (4 bits). The 16 left-halves produce
+ * one vector, which contains all-1s for bytes in which the left half matches
+ * the c_v character (and 0s if it doesn't), while the 16 right-halves produce
+ * the other vector, again with each byte either all-1s or all-0s.
+ *
+ * The expectation is that FM_COUNT_4BIT will be called after this, to
+ * turn these binary values into sums over a series of vectors. The macros
+ * are split up to allow one end or other to be trimmed in the case that
+ * counting is not expected to include the full vector.
+ *
+ * srli(4)+and() : capture the left 4-bit value   (need the mask because 16-bit shift leaves garbage in left-4-bit chunks)
+ * and()         : capture the right 4-bit value
+ *
+ * cmpeq()x2     : test if both left and right == c.  For each, if ==c , value = 11111111 (-1)
+ */
+#define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
+		out1_v    = vec_sl(in_v, 4);\
+        out2_v    = vec_and(in_v, fm_m0f);\
+		out1_v    = vec_and(out1_v, fm_m0f);\
+		\
+		out1_v    = vec_cmpeq(out1_v, c_v);\
+		out2_v    = vec_cmpeq(out2_v, c_v);\
+	} while (0)
+
+
+
+/* Macro for SSE operations to add occurrence counts to the tally vector counts_v,
+ * in the 4-bits-per-character case
+ *
+ * The expectation is that in[12]_v will contain bytes that are either
+ *   00000000  =  0
+ *  or
+ *   11111111  = -1
+ * so subtracting the value of the byte is the same as adding 0 or 1.
+ */
+#define FM_COUNT_4BIT(in1_v, in2_v, counts_v) do {\
+		counts_v = vec_subs(counts_v, in1_v);\
+		counts_v = vec_subs(counts_v, in2_v);\
+	} while (0)
+
+
 
 /*****************************************************************
  * 4. Implementation specific initialization

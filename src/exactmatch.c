@@ -2,6 +2,7 @@
 #include <sys/times.h>
 
 #include <getopt.h>
+#include <string.h>
 
 static const char *optString = "o:ch?";
 static const struct option longOpts[] = {
@@ -58,6 +59,10 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
 	interval->lower = Cvals[c] + (c==0?1:0);
 	interval->upper  = Cvals[c+1]-1;
 
+
+//	if (strcmp(query,"TTGTGTTCTTGG")==0)
+//		printf("h\n");
+
 	while (interval->lower>0 && interval->lower <= interval->upper) {
 		c = query[++i];
 		if (c == '\0')  // end of query - the current range defines the hits
@@ -65,11 +70,13 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
 
 		c = inv_alph[c];
 
+
 		//TODO: these will often overlap - might get acceleration by merging to a single redundancy-avoiding call
 		count1 = fm_getOccCount (meta, fm, interval->lower-1, c);
 		count2 = fm_getOccCount (meta, fm, interval->upper, c);
 
-		//printf("%d %d %d -> %d,%d\n", c, interval->lower-1, interval->upper, count1, count2);
+//		if (strcmp(query,"TTGTGTTCTTGG")==0)
+// 		   printf("%d %d %d -> %d,%d\n", c, interval->lower-1, interval->upper, count1, count2);
 
 		interval->lower = Cvals[c] + count1;
 		interval->upper = Cvals[c] + count2 - 1;

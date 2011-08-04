@@ -18,6 +18,44 @@ __m128i fm_m01;  //01 01 01 01
 __m128i fm_m11;  //00 00 00 11
 
 
+
+
+int fm_getbits_m128 (__m128i in, char *buf, int reverse) {
+	byte_m128 new;
+	new.m128 = in;
+	int i,j;
+
+	for (i=0; i<16;i++) {
+
+		for (j=0; j<8; j++) {
+			if (reverse)
+				buf[9*i+j] = (new.bytes[i]>>j)&0x1 ? '1' : '0';
+			else
+				buf[9*i+(7-j)] = (new.bytes[i]>>j)&0x1 ? '1' : '0';
+		}
+		buf[9*i + 8] = ' ';
+	}
+	buf[143] = '\0';
+
+	return eslOK;
+}
+
+int fm_print_m128 (__m128i in) {
+	char str[144];
+	fm_getbits_m128(in, str, 0);
+	fprintf (stderr, "%s\n", str);
+	return eslOK;
+}
+
+
+int fm_print_m128_rev (__m128i in) {
+	char str[144];
+	fm_getbits_m128(in, str, 1);
+	fprintf (stderr, "%s\n", str);
+	return eslOK;
+}
+
+
 /* Function:  fm_initGlobals()
  * Purpose:   Initialize vector masks used in SSE FMindex implementation
  */
@@ -25,7 +63,7 @@ int
 fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	int status;
 	int i,j;
-	int chars_per_vector;
+	int trim_chunk_count;
 
 	fm_allones_v = _mm_set1_epi8(0xff);
 	fm_neg128_v  = _mm_set1_epi8((int8_t) -128);
@@ -56,56 +94,79 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	 * Incrementally chew off the 1s in chunks of 2 (for DNA) or 4 (for DNA_full)
 	 * from the right side, and stick each result into an element of a __m128 array
 	 */
-	chars_per_vector = 128/meta->charBits;
+	if (meta->alph_type == fm_DNA)
+		trim_chunk_count = 64; //2-bit steps
+	else //(meta->alph_type == fm_DNA_full)
+		trim_chunk_count = 16; //8-bit steps
+
+	//chars_per_vector = 128/meta->charBits;
 	fm_masks_v         = NULL;
 	fm_reverse_masks_v = NULL;
-	ESL_ALLOC(fm_masks_v, chars_per_vector*sizeof(__m128));
-	ESL_ALLOC(fm_reverse_masks_v, chars_per_vector*sizeof(__m128));
+	ESL_ALLOC(fm_masks_v, (1+trim_chunk_count) *sizeof(__m128));
+	ESL_ALLOC(fm_reverse_masks_v, (1+trim_chunk_count)*sizeof(__m128));
 	{
 		byte_m128 arr;
 		arr.m128 = fm_allones_v;
 
-		for (i=chars_per_vector-1; i>0; i--) { // don't need the 0th entry
+		for (i=trim_chunk_count-1; i>0; i--) {
 			int byte_mask=0xff; //11 11 11 11
-			int byte_i = (i-1)/(8/meta->charBits);
+			int byte_i = (i-1)/(trim_chunk_count/16);
 			if (meta->alph_type == fm_DNA) {
 				switch (i&0x03) {
 				  case 1:
-					byte_mask ^= 0x3f; //11 00 00 00
+					byte_mask = 0xc0; //11 00 00 00
 					break;
 				  case 2:
-					byte_mask ^= 0x0f; //11 11 00 00
+					byte_mask = 0xf0; //11 11 00 00
 					break;
 				  case 3:
-					byte_mask ^= 0x03; //11 11 11 00
+					byte_mask = 0xfc; //11 11 11 00
 					break;
 				  default:
 			        break;
 				}
-			} else if (meta->alph_type == fm_DNA_full) {
-				if (i&0x1)
-					byte_mask ^= 0x0f; //11 11 00 00
 			}
+
  		    arr.bytes[byte_i] = byte_mask; //chew off the appropriate number of bits
 			for (j=byte_i+1; j<16; j++) {
 				arr.bytes[j] = 0x0;
 			}
  		    fm_masks_v[i]                           = *(__m128i*)(&(arr.m128));
- 		    fm_reverse_masks_v[chars_per_vector-i]  = _mm_andnot_si128(fm_masks_v[i], fm_allones_v );
+ 		    fm_reverse_masks_v[trim_chunk_count-i]  = _mm_andnot_si128(fm_masks_v[i], fm_allones_v );
+
 		}
 	}
 
-	return eslOK;
+	if (meta->alph_type == fm_DNA_full) {
+		fm_masks_v[16]          = fm_allones_v;
+		fm_reverse_masks_v[16]  = fm_allones_v;
+
+	}
+
+	/*
+	fprintf( stderr, "mask\n========\n");
+	for (i=0; i<trim_chunk_count + 1; i++) {
+	    fprintf( stderr, "%2d:", i);
+	    fm_print_m128(fm_masks_v[i]);
+	}
+	fprintf( stderr, "\n\n reverse mask\n========\n");
+	for (i=0; i<trim_chunk_count + 1; i++) {
+	    fprintf( stderr, "%2d:", i);
+	    fm_print_m128(fm_reverse_masks_v[i]);
+    }
+
+*/
+    return eslOK;
 
 ERROR:
 	if (fm_masks_v)         free (fm_masks_v);
 	if (fm_reverse_masks_v) free (fm_reverse_masks_v);
 
-	esl_fatal("Error allocating memory in initGlobals_archSpecific\n");
+	esl_fatal("Error allocating memory in initGlobals\n");
 	return eslFAIL;
 }
 
-/* Function:  bwt_getOccCount()
+/* Function:  fm_getOccCount()
  * Synopsis:  Compute number of occurrences of c in BWT[1..pos]
  *
  * Purpose:   Scan through the BWT to compute number of occurrence of c in BWT[0..pos],
@@ -123,9 +184,6 @@ ERROR:
  *            a reasonable expectation, as spacings of 256 or more seem to give the best speed,
  *            and certainly better space-utilization.
  */
-//#ifndef FMDEBUG
-//inline
-//#endif
 int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 
 	int i;
@@ -167,7 +225,6 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 											   // correctness.
 		if (meta->alph_type == fm_DNA) {
 
-
 			if (!up_b) { // count forward, adding
 				for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
 					BWT_v    = *(__m128i*)(BWT+i);
@@ -204,26 +261,32 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 			if (!up_b) { // count forward, adding
 				for (i=1+floor(landmark/2.0) ; i+15<( (pos+1)/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
 					BWT_v    = *(__m128i*)(BWT+i);
-					FM_COUNTS_4BIT(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+					FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
+					FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
 				}
 				int remaining_cnt = pos + 1 -  i*2 ;
 				if (remaining_cnt > 0) {
 					BWT_v    = *(__m128i*)(BWT+i);
-					BWT_v    = _mm_and_si128(BWT_v, *(fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-					FM_COUNTS_4BIT(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+					FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
+					tmp_v     = _mm_and_si128(tmp_v, *(fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
+					tmp2_v    = _mm_and_si128(tmp2_v, *(fm_masks_v + remaining_cnt/2));
+					FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
 				}
 
 			} else { // count backwards, subtracting
 				for (i=(landmark/2)-15 ; i>(pos/2);  i-=16) {
 					BWT_v = *(__m128i*)(BWT+i);
-					FM_COUNTS_4BIT(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+					FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
+					FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
 				}
 
 				int remaining_cnt = 32 - (pos + 1 - i*2);
 				if (remaining_cnt > 0) {
 					BWT_v = *(__m128i*)(BWT+i);
-					BWT_v    = _mm_and_si128(BWT_v, *(fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-					FM_COUNTS_4BIT(BWT_v, c_v, tmp_v, tmp2_v, counts_v);
+					FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
+					tmp_v     = _mm_and_si128(tmp_v, *(fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
+					tmp2_v    = _mm_and_si128(tmp2_v, *(fm_reverse_masks_v + (remaining_cnt+1)/2));
+					FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
 				}
 			}
 		} else {
@@ -246,42 +309,6 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 
 }
 
-
-
-int fm_getbits_m128 (__m128i in, char *buf, int reverse) {
-	byte_m128 new;
-	new.m128 = in;
-	int i,j;
-
-	for (i=0; i<16;i++) {
-
-		for (j=0; j<8; j++) {
-			if (reverse)
-				buf[9*i+j] = (new.bytes[i]>>j)&0x1 ? '1' : '0';
-			else
-				buf[9*i+(7-j)] = (new.bytes[i]>>j)&0x1 ? '1' : '0';
-		}
-		buf[9*i + 8] = ' ';
-	}
-	buf[143] = '\0';
-
-	return eslOK;
-}
-
-int fm_print_m128 (__m128i in) {
-	char str[144];
-	fm_getbits_m128(in, str, 0);
-	fprintf (stderr, "%s\n", str);
-	return eslOK;
-}
-
-
-int fm_print_m128_rev (__m128i in) {
-	char str[144];
-	fm_getbits_m128(in, str, 1);
-	fprintf (stderr, "%s\n", str);
-	return eslOK;
-}
 
 
 
