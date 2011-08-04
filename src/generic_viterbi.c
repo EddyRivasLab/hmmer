@@ -21,9 +21,6 @@
  *    4. Test driver.
  *    5. Example.
  *    6. Copyright and license information.
- * 
- * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
- * SVN $Id$
  */
  
 #include "p7_config.h"
@@ -274,6 +271,8 @@ main(int argc, char **argv)
 #ifdef p7GENERIC_VITERBI_TESTDRIVE
 #include <string.h>
 #include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_msafile.h"
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
@@ -558,4 +557,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id: generic_viterbi.c 3569 2011-06-16 16:16:13Z eddys $
  *****************************************************************/

@@ -12,9 +12,6 @@
  *   9. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
- * 
- * SRE, Tue Jan  2 2007 [Casa de Gatos] 
- * SVN $Id$
  */
 
 #include "p7_config.h"
@@ -1583,6 +1580,8 @@ utest_faux(ESL_MSA *msa, int *matassign, int M)
 
 #include "easel.h"
 #include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_msafile.h"
 #include "esl_random.h"
 
 #include "hmmer.h"
@@ -1637,5 +1636,8 @@ main(int argc, char **argv)
 
 /************************************************************
  * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id: p7_trace.c 3474 2011-01-17 13:25:32Z eddys $
  ************************************************************/
 

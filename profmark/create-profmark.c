@@ -12,8 +12,6 @@
  *   <basename>.pos  - table summarizing positive test set
  *   <basename>.neg  - table summarizing negative test set                
  * 
- * SRE, Thu Mar 27 11:05:38 2008 [Janelia]
- * SVN $Id$
  */
 
 #include <stdlib.h>
@@ -26,6 +24,7 @@
 #include "esl_getopts.h"
 #include "esl_msa.h"
 #include "esl_msacluster.h"
+#include "esl_msafile.h"
 #include "esl_random.h"
 #include "esl_randomseq.h"
 #include "esl_sq.h"
@@ -149,7 +148,7 @@ main(int argc, char **argv)
   char          outfile[256];	/* name of an output file          */
   int           alifmt;		/* format code for alifile         */
   int           dbfmt;		/* format code for dbfile          */
-  ESL_MSAFILE  *afp     = NULL;	/* open alignment file             */
+  ESLX_MSAFILE  *afp    = NULL;	/* open alignment file             */
   ESL_MSA      *origmsa = NULL;	/* one multiple sequence alignment */
   ESL_MSA      *msa     = NULL;	/* MSA after frags are removed     */
   ESL_MSA      *trainmsa= NULL;	/* training set, aligned           */
@@ -196,25 +195,13 @@ main(int argc, char **argv)
   if (snprintf(outfile, 256, "%s.tbl", basename) >= 256)  esl_fatal("Failed to construct benchmark table file name");
   if ((cfg.tblfp     = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open benchmark table file %s\n", outfile);
 
-  /* Open the MSA file; determine alphabet */
-  status = esl_msafile_Open(alifile, alifmt, NULL, &afp);
-  if      (status == eslENOTFOUND) esl_fatal("Alignment file %s doesn't exist or is not readable\n", alifile);
-  else if (status == eslEFORMAT)   esl_fatal("Couldn't determine format of alignment %s\n", alifile);
-  else if (status != eslOK)        esl_fatal("Alignment file open failed with error %d\n", status);
-
+  /* Open the MSA file, digital mode; determine alphabet */
   if      (esl_opt_GetBoolean(go, "--amino"))   cfg.abc = esl_alphabet_Create(eslAMINO);
   else if (esl_opt_GetBoolean(go, "--dna"))     cfg.abc = esl_alphabet_Create(eslDNA);
   else if (esl_opt_GetBoolean(go, "--rna"))     cfg.abc = esl_alphabet_Create(eslRNA);
-  else {
-    int type;
-    status = esl_msafile_GuessAlphabet(afp, &type);
-    if (status == eslEAMBIGUOUS)    esl_fatal("Failed to guess the bio alphabet used in %s.\nUse --dna, --rna, or --amino option to specify it.", alifile);
-    else if (status == eslEFORMAT)  esl_fatal("Alignment file parse failed: %s\n", afp->errbuf);
-    else if (status == eslENODATA)  esl_fatal("Alignment file %s is empty\n", alifile);
-    else if (status != eslOK)       esl_fatal("Failed to read alignment file %s\n", alifile);
-    cfg.abc = esl_alphabet_Create(type);
-  }
-  esl_msafile_SetDigital(afp, cfg.abc);
+
+  status = eslx_msafile_Open(&(cfg.abc), alifile, NULL, alifmt, NULL, &afp);
+  if (status != eslOK) eslx_msafile_OpenFailure(afp, status);
 
   if (cfg.abc->type == eslAMINO) esl_composition_SW34(cfg.fq);
   else                           esl_vec_DSet(cfg.fq, cfg.abc->K, 1.0 / (double) cfg.abc->K);
@@ -224,8 +211,9 @@ main(int argc, char **argv)
 
   /* Read and process MSAs one at a time  */
   nali = 0;
-  while ((status = esl_msa_Read(afp, &origmsa)) == eslOK)
+  while ((status = eslx_msafile_Read(afp, &origmsa)) != eslEOF)
     {
+      if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
       esl_msa_ConvertDegen2X(origmsa); 
 
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
@@ -238,7 +226,7 @@ main(int argc, char **argv)
 	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
 	  esl_msa_MinimGaps(trainmsa, NULL, NULL, FALSE);
-	  esl_msa_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
+	  eslx_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
 	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
 	  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
@@ -249,13 +237,9 @@ main(int argc, char **argv)
       esl_msa_Destroy(origmsa);
       esl_msa_Destroy(msa);
     }
-  if      (status == eslEFORMAT)  esl_fatal("Alignment file parse error, line %d of file %s:\n%s\nOffending line is:\n%s\n", 
-					    afp->linenumber, afp->fname, afp->errbuf, afp->buf);	
-  else if (status != eslEOF)      esl_fatal("Alignment file read failed with error code %d\n", status);
-  else if (nali   == 0)           esl_fatal("No alignments found in file %s\n", alifile);
-
-  if (nali > 0)
-    synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
+  if  (nali == 0) esl_fatal("No alignments found in file %s\n", alifile);
+  
+  synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
 
   fclose(cfg.out_msafp);
   fclose(cfg.out_seqfp);
@@ -264,7 +248,7 @@ main(int argc, char **argv)
   fclose(cfg.tblfp);
   esl_randomness_Destroy(cfg.r);
   esl_alphabet_Destroy(cfg.abc);
-  esl_msafile_Close(afp);
+  eslx_msafile_Close(afp);
   esl_getopts_Destroy(go);
   return 0;
 }
@@ -666,5 +650,11 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
   return eslOK;
 }
   
+/*****************************************************************
+ * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id: create-profmark.c 3267 2010-05-14 17:27:36Z eddys $
+ *****************************************************************/
 
   

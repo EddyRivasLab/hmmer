@@ -1,7 +1,4 @@
 /* hmmemit: sample sequence(s) from a profile HMM.
- * 
- * SRE, Tue Jan  9 13:22:53 2007 [Janelia] [Verdi, Requiem]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -13,6 +10,8 @@
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"
 #include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_msafile.h"
 #include "esl_random.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
@@ -208,7 +207,7 @@ emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
     }
 
   p7_tracealign_Seqs(sq, tr, N, hmm->M, optflags, &msa);
-  esl_msa_Write(ofp, msa, outfmt);
+  eslx_msafile_Write(ofp, msa, outfmt);
   
   for (i = 0; i < N; i++) p7_trace_Destroy(tr[i]);  free(tr);
   for (i = 0; i < N; i++) esl_sq_Destroy(sq[i]);    free(sq);
@@ -268,3 +267,10 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   p7_profile_Destroy(gm);
   return;
 }
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id: hmmemit.c 3474 2011-01-17 13:25:32Z eddys $
+ *****************************************************************/

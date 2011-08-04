@@ -1,7 +1,4 @@
 /* hmmsearch: search profile HMM(s) against a sequence database.
- * 
- * SRE, Thu Dec 20 07:07:25 2007 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -12,6 +9,8 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_msafile.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
@@ -503,8 +502,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
-	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
+	    if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
 	    fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
 	  } 
@@ -957,8 +956,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
-	    if (textw > 0) esl_msa_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	    else           esl_msa_Write(afp, msa, eslMSAFILE_PFAM);
+	    if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
 	    fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
 	  } 
@@ -1328,5 +1327,8 @@ pipeline_thread(void *arg)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id: hmmsearch.c 3572 2011-06-20 18:06:12Z wheelert $
  *****************************************************************/
 

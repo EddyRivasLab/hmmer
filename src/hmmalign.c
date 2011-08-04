@@ -1,7 +1,5 @@
 /* hmmalign:  align sequences to a profile HMM
  * 
- * SRE, Wed Oct 22 10:33:15 2008 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -12,6 +10,8 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_msafile.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_vectorops.h"
@@ -284,7 +284,7 @@ main(int argc, char **argv)
 
   p7_tracealign_Seqs(sq, tr, totseq, om->M, msaopts, &msa);
 
-  esl_msa_Write(ofp, msa, outfmt);
+  eslx_msafile_Write(ofp, msa, outfmt);
 
   for (idx = 0; idx <= totseq; idx++) esl_sq_Destroy(sq[idx]);    /* including sq[nseq] because we overallocated */
   for (idx = 0; idx <  totseq; idx++) p7_trace_Destroy(tr[idx]); 
@@ -312,25 +312,21 @@ main(int argc, char **argv)
 static int
 map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE ***ret_tr, int *ret_ntot)
 {
-  ESL_SQ      **sq        = NULL;
-  P7_TRACE    **tr        = NULL;
-  ESL_MSAFILE  *afp       = NULL;
-  ESL_MSA      *msa       = NULL;
-  int          *matassign = NULL;
-  uint32_t      chksum    = 0;
-  int           i,k;
-  int           status;
+  ESL_SQ       **sq        = NULL;
+  P7_TRACE     **tr        = NULL;
+  ESLX_MSAFILE  *afp       = NULL;
+  ESL_MSA       *msa       = NULL;
+  ESL_ALPHABET  *abc       = (ESL_ALPHABET *) hmm->abc; /* removing const'ness to make compiler happy. Safe. */
+  int           *matassign = NULL;
+  uint32_t       chksum    = 0;
+  int            i,k;
+  int            status;
 
-  status = esl_msafile_OpenDigital(hmm->abc, msafile, eslMSAFILE_UNKNOWN, NULL, &afp);
-  if      (status == eslENOTFOUND) esl_fatal("Alignment file %s isn't readable", msafile);
-  else if (status == eslEFORMAT)   esl_fatal("Couldn't determine format of %s",  msafile);
-  else if (status != eslOK)        esl_fatal("Alignment file open failed (error code %d)", status);
+  status = eslx_msafile_Open(&abc, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp);
+  if (status != eslOK) eslx_msafile_OpenFailure(afp, status);
 
-  status = esl_msa_Read(afp, &msa);
-  if      (status == eslEFORMAT) esl_fatal("Alignment file parse error:\n%s\n",    afp->errbuf);
-  else if (status == eslEINVAL)  esl_fatal("Alignment file alphabet error:\n%s\n", afp->errbuf);
-  else if (status == eslEOF)     esl_fatal("Alignment file %s empty?",             afp->fname);
-  else if (status != eslOK)      esl_fatal("Alignment file read failed with error code %d\n", status);
+  status = eslx_msafile_Read(afp, &msa);
+  if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
 
   if (! (hmm->flags & p7H_CHKSUM)  )  esl_fatal("HMM has no checksum. --mapali unreliable without it.");
   if (! (hmm->flags & p7H_MAP)  )     esl_fatal("HMM has no map. --mapali can't work without it.");
@@ -360,7 +356,7 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   *ret_tr   = tr;
   *ret_sq   = sq;
 
-  esl_msafile_Close(afp);
+  eslx_msafile_Close(afp);
   esl_msa_Destroy(msa);
   free(matassign);
   return eslOK;
@@ -369,7 +365,7 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   *ret_ntot = 0;
   *ret_tr   = NULL;
   *ret_sq   = NULL;
-  if (afp       != NULL) esl_msafile_Close(afp);
+  if (afp       != NULL) eslx_msafile_Close(afp);
   if (msa       != NULL) esl_msa_Destroy(msa);
   if (matassign != NULL) free(matassign);
   return status;
@@ -378,4 +374,7 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id: hmmalign.c 3619 2011-07-28 11:14:18Z eddys $
  *****************************************************************/
