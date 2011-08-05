@@ -341,22 +341,24 @@ extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
  * 5. FM-index
  *****************************************************************/
 
-//used to convert from a byte array to an __m128i
+//used to convert from a byte array to a vec
 typedef union {
         uint8_t bytes[16];
-        vector unsigned char m128;
-        } byte_m128;
+        int ints[4];
+        vector signed char s;
+        vector unsigned char c;
+        vector unsigned int l;
+        } byte_vec;
 
-/* Gather the sum of all counts in a 16x8-bit element into a single 16-bit
- *  element of the register (the 0th element)
- *
- *        see http://www.dtic.mil/cgi-bin/GetTRDoc?Location=U2&doc=GetTRDoc.pdf&AD=ADA428666
- *	the _mm_shuffle_epi32  flips the 4th int into the 0th slot
+/* Gather the sum of all counts in a 16x8-bit element into a single 32-bit
+ *  element of the register (the last (3rd) element)
  */
-#define FM_GATHER_8BIT_COUNTS( in_v, mid_v, out_v  ) do {\
-		mid_v = vec_sum2s(vec_sum4s(vec_sub(vec_max(in_v,fm_zeros_v), vec_min(in_v,fm_zeros_v)));
-        out_v = vec_splat(mid_v, 3);
+#define FM_GATHER_8BIT_COUNTS( in_v, out_v  ) do {\
+             out_v  = vec_sums(vec_sum4s(in_v, fm_zeros_v), fm_zeros_v);\
 	} while (0)
+
+
+
 
 
 /* Macro for SSE operations to turn 2-bit character values into 2-bit binary
@@ -379,10 +381,10 @@ typedef union {
  *
  */
 #define FM_MATCH_2BIT(in_v, c_v, a_v, b_v, out_v) do {\
-		a_v = vec_xor(in_v, c_v);\
-		\
+	        a_v = vec_xor(in_v, c_v);\
+                \
 		b_v  = vec_and(a_v, fm_m01);\
-		a_v  = vec_sl(a_v, 1);\
+		a_v  = vec_sr(a_v,  fm_one);\
 		a_v  = vec_and(a_v, fm_m01);\
 		a_v  = vec_or(a_v, b_v);\
 		\
@@ -404,10 +406,10 @@ typedef union {
  * final 2 add()s        : tack current counts on to already-tabulated counts.
  */
 #define FM_COUNT_2BIT(a_v, b_v, cnts_v) do {\
-        b_v  = vec_sl(a_v, 4);\
+        b_v  = vec_sr(a_v, fm_four);\
         a_v  = vec_adds(a_v, b_v);\
         \
-        b_v  = vec_sl(a_v, 2);\
+        b_v  = vec_sr(a_v, fm_two);\
         a_v  = vec_and(a_v,fm_m11);\
         b_v  = vec_and(b_v,fm_m11);\
         \
@@ -435,12 +437,12 @@ typedef union {
  * cmpeq()x2     : test if both left and right == c.  For each, if ==c , value = 11111111 (-1)
  */
 #define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
-		out1_v    = vec_sl(in_v, 4);\
-        out2_v    = vec_and(in_v, fm_m0f);\
+		out1_v    = vec_sr(in_v, fm_four);\
+                out2_v    = vec_and(in_v, fm_m0f);\
 		out1_v    = vec_and(out1_v, fm_m0f);\
 		\
-		out1_v    = vec_cmpeq(out1_v, c_v);\
-		out2_v    = vec_cmpeq(out2_v, c_v);\
+		out1_v    = (vector unsigned char)vec_cmpeq(out1_v, c_v);\
+		out2_v    = (vector unsigned char)vec_cmpeq(out2_v, c_v);\
 	} while (0)
 
 

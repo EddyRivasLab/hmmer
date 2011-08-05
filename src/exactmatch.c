@@ -408,7 +408,7 @@ main(int argc,  char *argv[]) {
 			hit_cnt++;
 			hit_indiv_cnt += hit_num;
 
-			//printf ("%s : %d\n", line, interval.upper-interval.lower+1);
+//			printf ("%s : %d\n", line, interval.upper-interval.lower+1);
 
 
 			//PRINTOUT ( "HIT:  %s  (%d, %d)\n", line, interval.lower, interval.upper);
