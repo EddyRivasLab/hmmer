@@ -274,7 +274,7 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
 	}
       }
-    ESL_DASSERT1(sum > 0.99);
+    ESL_DASSERT1((sum > 0.99));
   }
   /*UNREACHED*/
   ESL_EXCEPTION(-1, "unreached code was reached. universe collapses.");
