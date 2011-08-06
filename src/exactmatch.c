@@ -1,17 +1,22 @@
 #include "hmmer.h"
 #include <sys/times.h>
 
-#include <getopt.h>
+#include "easel.h"
 #include <string.h>
 
-static const char *optString = "o:ch?";
-static const struct option longOpts[] = {
-  { "out",        required_argument, NULL, 'o' },
-  { "count_only", no_argument,       NULL, 'c' },
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
+  { "-h",           eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "show brief help on version and usage",                      1 },
 
-  { "help",       no_argument,       NULL, 'h' },
-  { NULL,         no_argument,       NULL,   0 }
+  { "--out",       eslARG_STRING,     "none", NULL, NULL,    NULL,  NULL,  NULL,          "save list of hits to file <s>  ('-' writes to stdout)",     2 },
+  { "--count_only", eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "compute just counts, not locations",                        2 },
+
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
+
+
+static char usage[]  = "[options] <fmfile> <qfile>";
+static char banner[] = "Find all instances of each <qfile> sequence in the database represented by <fmfile>";
 
 int occCallCnt;
 
@@ -21,6 +26,87 @@ int num_freq_cnts_sb;
 int32_t *Cvals;
 int maskSA;
 int shiftSA;
+
+
+static void
+process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_fmfile, char **ret_qfile)
+{
+  ESL_GETOPTS *go = NULL;
+
+  if ((go = esl_getopts_Create(options))     == NULL)     p7_Die("Internal failure creating options object");
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+
+  /* help format: */
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
+      p7_banner(stdout, argv[0], banner);
+      esl_usage(stdout, argv[0], usage);
+      puts("\nBasic options:");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
+
+      puts("\nSpecial options:");
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); /* 2= group; 2 = indentation; 120=textwidth*/
+
+      exit(0);
+  }
+
+  if (esl_opt_ArgNumber(go)                  != 2)     { puts("Incorrect number of command line arguments.");      goto ERROR; }
+  if ((*ret_fmfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <fmfile> argument on command line"); goto ERROR; }
+  if ((*ret_qfile  = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <qfile> argument on command line");   goto ERROR; }
+
+  /* Validate any attempted use of stdin streams */
+  if (esl_strcmp(*ret_fmfile, "-") == 0 && esl_strcmp(*ret_qfile, "-") == 0) {
+    puts("Either <fmfile> or <qfile> may be '-' (to read from stdin), but not both.");
+    goto ERROR;
+  }
+
+  *ret_go = go;
+  return;
+
+ ERROR:  /* all errors handled here are user errors, so be polite.  */
+  esl_usage(stdout, argv[0], usage);
+  puts("\nwhere basic options are:");
+  esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
+  printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+  exit(1);
+}
+
+static int
+output_header(FILE *ofp, const ESL_GETOPTS *go, char *fmfile, char *qfile, FM_METADATA *meta)
+{
+  p7_banner(ofp, go->argv[0], banner);
+
+  fprintf(ofp, "# input binary-formatted HMMER database:   %s\n", fmfile);
+  fprintf(ofp, "# input file of query sequences:           %s\n", qfile);
+
+  if (esl_opt_IsUsed(go, "--out")) {
+  fprintf(ofp, "# output file containing list of hits:     ");
+	  char *outfile = esl_opt_GetString(go, "--out");
+	  if (esl_strcmp(outfile, "-"))
+		  fprintf(ofp, "stdout\n");
+	  else
+		  fprintf(ofp, "%s\n", outfile);
+  }
+
+  if (esl_opt_IsUsed(go, "--count_only"))
+	  fprintf(ofp, "# output only counts, not hit locations\n");
+
+  char *alph;
+  if (meta->alph_type == fm_DNA)
+	  alph = "dna";
+  else if (meta->alph_type == fm_DNA_full)
+	  alph = "dna_full";
+  else if (meta->alph_type == fm_AMINO)
+  	  alph = "amino";
+  fprintf(ofp, "# alphabet     :                           %s\n", alph);
+
+  fprintf(ofp, "# bin_length   :                           %d\n", meta->freq_cnt_b);
+  fprintf(ofp, "# suffix array sample rate:                %d\n", meta->freq_SA);
+  fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  return eslOK;
+}
+
 
 
 //see: http://c-faq.com/stdio/commaprint.html
@@ -59,10 +145,6 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
 	interval->lower = Cvals[c] + (c==0?1:0);
 	interval->upper  = Cvals[c+1]-1;
 
-
-//	if (strcmp(query,"TTGTGTTCTTGG")==0)
-//		printf("h\n");
-
 	while (interval->lower>0 && interval->lower <= interval->upper) {
 		c = query[++i];
 		if (c == '\0')  // end of query - the current range defines the hits
@@ -70,12 +152,10 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
 
 		c = inv_alph[c];
 
-
 		//TODO: these will often overlap - might get acceleration by merging to a single redundancy-avoiding call
 		count1 = fm_getOccCount (meta, fm, interval->lower-1, c);
 		count2 = fm_getOccCount (meta, fm, interval->upper, c);
 
-//		if (strcmp(query,"TTGTGTTCTTGG")==0)
 // 		   printf("%d %d %d -> %d,%d\n", c, interval->lower-1, interval->upper, count1, count2);
 
 		interval->lower = Cvals[c] + count1;
@@ -262,28 +342,6 @@ ERROR:
 }
 
 
-/* Function:  display_usage()
- * Synopsis:  Print usage instructions
- * Incept:    TJW, Mon Jan 31 13:54:01 MST 2010
- */
-void
-display_usage () {
-
-	fprintf (stderr,
-			"Usage: fmsearch [optional args] file_fmindex file_queryseqs\n\n"
-			"--out filename  (-o) \n"
-			"   File to which fmsearch writes misses and the positions of\n"
-			"   hits. Default is to not write them out (useful for timing\n"
-			"   experiments).  If filename is 'stdout', then output\n"
-			"   will go to stdout, instead of a file.\n"
-			"\n"
-			"--count_only  (-c)\n"
-			"   Only compute the count of hits for a query, not the location\n"
-			"   of each hit."
-			"\n"
-			);
-	exit(0);
-}
 
 
 /* Function:  main()
@@ -303,12 +361,12 @@ main(int argc,  char *argv[]) {
 	//start timer
 	t1 = times(&ts1);
 
-	const char *fname_fm      = NULL;
-	const char *fname_queries = NULL;
-	char *inv_alph            = NULL;
-	char *alph                = NULL;
-	FM_HIT *hits              = NULL;
-	char *line                = NULL;
+	char *fname_fm      = NULL;
+	char *fname_queries = NULL;
+	char *inv_alph      = NULL;
+	char *alph          = NULL;
+	FM_HIT *hits        = NULL;
+	char *line          = NULL;
 	int status        = eslOK;
 	int hit_cnt       = 0;
 	int hit_indiv_cnt = 0;
@@ -323,47 +381,32 @@ main(int argc,  char *argv[]) {
 	FM_INTERVAL interval;
 	FILE* fp = NULL;
 	FILE* out = NULL;
+    char *outname = NULL;
 
-	int opt = 0;
-	int longIndex = 0;
+	ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
+	process_commandline(argc, argv, &go, &fname_fm, &fname_queries);
 
-	opt = getopt_long( argc, argv, optString, longOpts, &longIndex );
-	while( opt != -1 ) {
-	  switch( opt ) {
-		  case 'o':
-			  if (esl_strcmp (optarg, "stdout") == 0)
-				  out = stdout;
-			  else
-				  out = fopen(optarg,"w");
-			  break;
-		  case 'c':
-			  count_only = 1;
-			  break;
-		  case 'h':   /* fall-through is intentional */
-		  case '?':
-			  display_usage();
-			  break;
-		  default:
-			  fprintf(stderr, "Unknown flag: '%s'\n", longOpts[longIndex].name );
-			  exit(1);
-			  break;
-	  }
-	  opt = getopt_long( argc, argv, optString, longOpts, &longIndex );
+
+
+	if (esl_opt_IsOn(go, "--out")) {
+		outname = esl_opt_GetString(go, "--out");
+		if ( esl_strcmp ("-", outname) == 0 ) {
+			out = stdout;
+			outname = "stdout";
+		} else {
+			out = fopen(optarg,"w");
+		}
 	}
 
-
-	if (argc - optind != 2) {
-	  fprintf (stderr, "Must specify file_fmindex and file_queryseqs; "
-			  "for more details, run with -h flag\n");
-	  exit(1);
-	}
+	if (esl_opt_IsOn(go, "--count_only"))
+		count_only = 1;
 
 	occCallCnt = 0;
-	fname_fm = argv[optind];
-	fname_queries = argv[optind+1];
 
 
 	readFM ( fname_fm, &meta, &fm );
+
+	output_header(stdout, go, fname_fm, fname_queries, &meta);
 
 
 	/* initialize a few global variables, then call initGlobals

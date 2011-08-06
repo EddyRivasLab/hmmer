@@ -1,45 +1,81 @@
 #include "divsufsort.h"
 #include "hmmer.h"
-
-#include <getopt.h>
+#include "easel.h"
 
 
 //#define PRINTBWT 1
 //#define PRINTOCC 1
 
-static const char *optString = "a:b:s:del:h?";
-static const struct option longOpts[] = {
-  { "alph",       required_argument, NULL, 'a' },
-  { "bin_length", required_argument, NULL, 'b' },
-  { "sa_freq",    required_argument, NULL, 's' },
-  { "help",       no_argument,       NULL, 'h' },
-  { NULL,         no_argument,       NULL,   0 }
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
+  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                      1 },
+
+  { "--alph",       eslARG_STRING,     "dna", NULL, NULL,    NULL,  NULL,  NULL,             "alphabet [dna,dna_full,amino]",                             2 },
+  { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,             "bin length (power of 2;  32<=b<=4096)",                     2 },
+  { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,             "suffix array sample rate (power of 2)",                     2 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-void
-display_usage () {
+static char usage[]  = "[options] <seqfile> <fmfile>";
+static char banner[] = "build a HMMER binary-formatted database from an input sequence file";
 
-	fprintf (stderr,
-			"Usage: fmbuild [optional args] infile outfile \n\n"
-			"--alph (dna|dna_full|amino|alpha)\n"
-			"   Select alphabet for FMindex:\n"
-			"   * dna:      ACGT (default)\n"
-			"   * dna_full: ACGTRYMKSWHBVDN\n"
-			"   * amino:    ACDEFGHIKLMNPQRSTVWYBJZOUX\n"
-			"\n"
-			"--bin_length len   (-b) \n"
-			"   Length of bins for occurence counting; shorter bins\n"
-			"   typically lead to shorter run times. Must be power\n"
-			"   of 2, between 128 and 4096 (default 512)\n"
-			"\n"
-			"--sa_freq len  (-s)\n"
-			"   Number of characters between sampled suffix array values\n"
-			"   Must be power of 2, typically 8 to 32 (default 32)\n"
-			"\n"
-			"--help\n"
-			"   Produce this message\n"
-			"\n");
-	exit(0);
+
+static void
+process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_seqfile, char **ret_fmfile)
+{
+  ESL_GETOPTS *go = NULL;
+
+  if ((go = esl_getopts_Create(options))     == NULL)     p7_Die("Internal failure creating options object");
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+
+  /* help format: */
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
+      p7_banner(stdout, argv[0], banner);
+      esl_usage(stdout, argv[0], usage);
+      puts("\nBasic options:");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
+
+      puts("\nSpecial options:");
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); /* 2= group; 2 = indentation; 120=textwidth*/
+
+      exit(0);
+  }
+
+  if (esl_opt_ArgNumber(go)                  != 2)     { puts("Incorrect number of command line arguments.");      goto ERROR; }
+  if ((*ret_seqfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <seqfile> argument on command line"); goto ERROR; }
+  if ((*ret_fmfile  = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <fmfile> argument on command line");   goto ERROR; }
+
+  /* Validate any attempted use of stdin streams */
+  if (esl_strcmp(*ret_seqfile, "-") == 0 && esl_strcmp(*ret_fmfile, "-") == 0) {
+    puts("Either <seqfile> or <fmfile> may be '-' (to read from stdin), but not both.");
+    goto ERROR;
+  }
+
+  *ret_go = go;
+  return;
+
+ ERROR:  /* all errors handled here are user errors, so be polite.  */
+  esl_usage(stdout, argv[0], usage);
+  puts("\nwhere basic options are:");
+  esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
+  printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+  exit(1);
+}
+
+static int
+output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
+{
+  p7_banner(ofp, go->argv[0], banner);
+
+  fprintf(ofp, "# input sequence file:                     %s\n", seqfile);
+  fprintf(ofp, "# output binary-formatted HMMER database:  %s\n", fmfile);
+  fprintf(ofp, "# alphabet     :                           %s\n", esl_opt_GetString(go, "--alph"));
+  fprintf(ofp, "# bin_length   :                           %d\n", esl_opt_GetInteger(go, "--bin_length"));
+  fprintf(ofp, "# suffix array sample rate:                %d\n", esl_opt_GetInteger(go, "--sa_freq"));
+  fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  return eslOK;
 }
 
 /* Function:  main()
@@ -66,7 +102,7 @@ main(int argc, char *argv[]) {
 
 
 	long i,j, c;
-	int status;
+	int status = eslOK;
 	int result;
 	int opt = 0;
 	int longIndex = 0;
@@ -75,67 +111,39 @@ main(int argc, char *argv[]) {
 	int num_freq_cnts_b ;
 	int num_SA_samples ;
 
-	int chars_per_byte;
-	char *fname_in;
-	char *fname_out;
 
+	int chars_per_byte;
+	char *fname_in = NULL;
+	char *fname_out= NULL;
+	ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
 
 	ESL_ALLOC (meta, sizeof(FM_METADATA));
 	meta->alph_type   = fm_DNA;
 	meta->freq_SA     = 8;
-	meta->freq_cnt_b  = 512;
+	meta->freq_cnt_b  = 256;
 	meta->freq_cnt_sb = pow(2,16); //65536 - that's the # values in a short
 
+	process_commandline(argc, argv, &go, &fname_in, &fname_out);
 
-	opt = getopt_long( argc, argv, optString, longOpts, &longIndex );
-	while( opt != -1 ) {
-	  switch( opt ) {
-		  case 'a':
-			  if ( esl_strcmp(optarg, "dna")==0)
-				  meta->alph_type = fm_DNA;
-			  else if (esl_strcmp(optarg, "dna_full")==0)
-				  meta->alph_type = fm_DNA_full;
-			  else if (esl_strcmp(optarg, "amino")==0)
-				  meta->alph_type = fm_AMINO;
-			  else
-				  esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
-			  break;
-		  case 'b':
-			  meta->freq_cnt_b = atoi(optarg);
-			  if ( meta->freq_cnt_b < 32 || meta->freq_cnt_b >4096 ||  (meta->freq_cnt_b & (meta->freq_cnt_b - 1)) /* test power of 2*/ ) {
-				  fprintf (stderr, "bin_length must be a power of 2, at least 128, and at most 4096\n");
-				  exit(1);
-			  }
-			  break;
-		  case 's':
-			  meta->freq_SA = atoi(optarg);
-			  if ( (meta->freq_SA & (meta->freq_SA - 1)) /* test power of 2*/ ) {
-				  fprintf (stderr, "SA_freq must be a power of 2\n");
-				  exit(1);
-			  }
-			  break;
-		  case 'h':   /* fall-through is intentional */
-		  case '?':
-			  display_usage();
-			  break;
-		  default:
-			  fprintf(stderr, "Unknown flag: '%s'\n", longOpts[longIndex].name );
-			  exit(1);
-			  break;
-	  }
+	if (esl_opt_IsOn(go, "--alph")) { alph    = esl_opt_GetString(go, "--alph") ; }
+	if ( esl_strcmp(alph, "dna")==0)
+	  meta->alph_type = fm_DNA;
+	else if (esl_strcmp(alph, "dna_full")==0)
+	  meta->alph_type = fm_DNA_full;
+	else if (esl_strcmp(alph, "amino")==0)
+	  meta->alph_type = fm_AMINO;
+	else
+	  esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
 
-	  opt = getopt_long( argc, argv, optString, longOpts, &longIndex );
-	}
+    alph = NULL;
 
+	if (esl_opt_IsOn(go, "--bin_length")) meta->freq_cnt_b = esl_opt_GetInteger(go, "--bin_length");
+	if ( meta->freq_cnt_b < 32 || meta->freq_cnt_b >4096 ||  (meta->freq_cnt_b & (meta->freq_cnt_b - 1))  ) // test power of 2
+	  esl_fatal("bin_length must be a power of 2, at least 128, and at most 4096\n");
 
-	if (argc - optind != 2) {
-	  fprintf (stderr, "must specify infile and outfile; for more details, run with -h flag\n");
-	  exit(1);
-	}
-
-
-	fname_in = argv[optind];
-	fname_out = argv[optind+1];
+	if (esl_opt_IsOn(go, "--sa_freq")) meta->freq_SA = esl_opt_GetInteger(go, "--sa_freq");
+	if ( (meta->freq_SA & (meta->freq_SA - 1))  )  // test power of 2
+		esl_fatal ("SA_freq must be a power of 2\n");
 
 
 	/* Open a file for reading. */
@@ -153,6 +161,9 @@ main(int argc, char *argv[]) {
 	} else {
 	  esl_fatal( "%s: Cannot fseek `%s': ", argv[0], fname_in);
 	}
+
+
+	output_header(stdout, go, fname_in, fname_out);
 
 	meta->SA_shift = log2(meta->freq_SA);
 	meta->cnt_shift_b = log2(meta->freq_cnt_b);
@@ -376,6 +387,8 @@ main(int argc, char *argv[]) {
 	free(meta);
 	free(inv_alph);
 	free(alph);
+
+    esl_getopts_Destroy(go);
 
 
 	return (eslOK);
