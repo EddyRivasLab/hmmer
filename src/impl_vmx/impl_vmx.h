@@ -355,7 +355,7 @@ typedef union {
  *  element of the register (the last (3rd) element)
  */
 #define FM_GATHER_8BIT_COUNTS( in_v, out_v  ) do {\
-             out_v  = vec_sums(vec_sum4s(in_v, (vector signed int)fm_zeros_v), (vector signed int)fm_zeros_v);\  
+             out_v  = vec_sums(vec_sum4s(in_v, (vector signed int)fm_zeros_v), (vector signed int)fm_zeros_v);\
 	} while (0)
 
 

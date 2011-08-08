@@ -172,8 +172,9 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
     return eslOK;
 
 ERROR:
-	if (fm_masks_v)         free (fm_masks_v);
-	if (fm_reverse_masks_v) free (fm_reverse_masks_v);
+if (fm_chars_mem)         free(fm_chars_mem);
+if (fm_masks_mem)         free(fm_masks_mem);
+if (fm_reverse_masks_mem) free(fm_reverse_masks_mem);
 
 	esl_fatal("Error allocating memory in initGlobals\n");
 	return eslFAIL;
@@ -186,9 +187,9 @@ ERROR:
  */
 int
 fm_destroyGlobals( ) {
-	if (fm_chars_mem) free(fm_chars_mem);
-	if (fm_masks_mem) free(fm_masks_mem);
-	if (fm_reverse_masks_v) free(fm_reverse_masks_v);
+	if (fm_chars_mem)         free(fm_chars_mem);
+	if (fm_masks_mem)         free(fm_masks_mem);
+	if (fm_reverse_masks_mem) free(fm_reverse_masks_mem);
 
     return eslOK;
 }
