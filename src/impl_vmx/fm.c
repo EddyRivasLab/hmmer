@@ -81,7 +81,9 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	}
     //set up an array of vectors, one for each character in the alphabet
 	fm_chars_v         = NULL;
-	ESL_ALLOC(fm_chars_v, meta->alph_size * sizeof(vector unsigned char));
+	ESL_ALLOC (fm_chars_mem, meta->alph_size * sizeof(vector unsigned char)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
+	    fm_chars_v = 	(vector unsigned char *) (((unsigned long int)fm_chars_mem + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+
 	for (i=0; i<meta->alph_size; i++) {
 		int8_t c = i;
 		if (meta->alph_type == fm_DNA) {
@@ -107,8 +109,13 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	//chars_per_vector = 128/meta->charBits;
 	fm_masks_v         = NULL;
 	fm_reverse_masks_v = NULL;
-	ESL_ALLOC(fm_masks_v, (1+trim_chunk_count) * sizeof(vector unsigned char));
-	ESL_ALLOC(fm_reverse_masks_v, (1+trim_chunk_count) * sizeof(vector unsigned char));
+	ESL_ALLOC (fm_masks_mem, (1+trim_chunk_count) *sizeof(vector unsigned char)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
+	    fm_masks_v = 	(vector unsigned char *) (((unsigned long int)fm_masks_mem + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+
+	ESL_ALLOC (fm_reverse_masks_mem, (1+trim_chunk_count) *sizeof(vector unsigned char)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
+	    fm_reverse_masks_v = 	(vector unsigned char *) (((unsigned long int)fm_reverse_masks_mem + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+
+
 	{
 		byte_vec arr;
 		arr.u8 = fm_allones_v;
@@ -169,6 +176,19 @@ ERROR:
 
 	esl_fatal("Error allocating memory in initGlobals\n");
 	return eslFAIL;
+}
+
+
+/* Function:  fm_initGlobals()
+ * Purpose:   Initialize vector masks used in SSE FMindex implementation
+ */
+int
+fm_destroyGlobals( ) {
+	if (fm_chars_mem) free(fm_chars_mem);
+	if (fm_masks_mem) free(fm_masks_mem);
+	if (fm_reverse_masks_v) free(fm_reverse_masks_v);
+
+    return eslOK;
 }
 
 /* Function:  fm_getOccCount()

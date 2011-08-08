@@ -784,8 +784,8 @@ typedef struct fm_metadata_s {
 
 typedef struct fm_data_s {
   uint8_t  *T;  //text corresponding to the BWT
+  uint8_t  *BWT_mem;
   uint8_t  *BWT;
-  //byte_m128  *BWT; //BWT, each element of this array is either an array of 16 bytes or a single m128 element
   uint32_t  *SA; // sampled suffix array
   int32_t   *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
   uint32_t  *occCnts_sb;

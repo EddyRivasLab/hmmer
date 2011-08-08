@@ -178,7 +178,7 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
 inline
 #endif
 uint8_t
-getChar( FM_METADATA *meta, int j, const uint8_t * restrict B ) {
+getChar( FM_METADATA *meta, int j, const uint8_t *B ) {
 	uint8_t c = -1;
 
 	if (meta->alph_type == fm_DNA) {
@@ -275,9 +275,9 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 
 	// allocate and read the data
 	bwtSize = meta->L  * sizeof(uint8_t);
-
 	ESL_ALLOC (fm->T, bwtSize );
-	ESL_ALLOC (fm->BWT, (1 + bwtSize/16) * 16  ); // 16 stuff for ensuring 16-byte aligned end of the array, which matters for SIMD stuff
+	ESL_ALLOC (fm->BWT_mem, bwtSize + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
+        fm->BWT = 	(uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
 	ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
 	ESL_ALLOC (fm->C, 1+meta->alph_size * sizeof(uint32_t));
 	ESL_ALLOC (fm->occCnts_b,  num_freq_cnts_b *  (meta->alph_size ) * sizeof(uint16_t)); // every freq_cnt positions, store an array of ints
@@ -332,7 +332,7 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 
 ERROR:
     if (fm->T)           free (fm->T);
-    if (fm->BWT)         free (fm->BWT);
+    if (fm->BWT_mem)     free (fm->BWT_mem);
 	if (fm->SA)          free (fm->SA);
 	if (fm->C)           free (fm->C);
 	if (fm->occCnts_b)   free (fm->occCnts_b);
@@ -471,6 +471,7 @@ main(int argc,  char *argv[]) {
 
     free (hits);
     fclose(fp);
+    fm_destroyGlobals();
 
     // compute and print the elapsed time in millisec
     t2 = times(&ts2);

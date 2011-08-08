@@ -4,17 +4,23 @@
 
 
 /* Function:  fm_initGlobals()
- * Purpose:   Initialize vector masks used in SSE FMindex implementation
+ * do nothing.  This is a placeholder in the dummy implementation for
+ * a function that does something in _sse and _vmx code
  */
 int
 fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
-    /*do nothing.  This is a placeholder in the dummy implementation for
-     * a function that does something in _sse and _vmx code
-     */
-
 	return eslOK;
-
 }
+
+/* Function:  fm_destroyGlobals()
+ * do nothing.  This is a placeholder in the dummy implementation for
+ * a function that does something in _sse and _vmx code
+ */
+int
+fm_destroyGlobals( ) {
+    return eslOK;
+}
+
 
 /* Function:  bwt_getOccCount()
  * Synopsis:  Compute number of occurrences of c in BWT[1..pos]
