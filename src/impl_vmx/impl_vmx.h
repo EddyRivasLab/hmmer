@@ -345,19 +345,17 @@ extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
 typedef union {
         uint8_t bytes[16];
         int ints[4];
-        vector signed char s;
-        vector unsigned char c;
-        vector unsigned int l;
+        vector signed char   i8;
+        vector unsigned char u8;
+        vector signed int    i32;
         } byte_vec;
 
 /* Gather the sum of all counts in a 16x8-bit element into a single 32-bit
  *  element of the register (the last (3rd) element)
  */
 #define FM_GATHER_8BIT_COUNTS( in_v, out_v  ) do {\
-             out_v  = vec_sums(vec_sum4s(in_v, fm_zeros_v), fm_zeros_v);\
+             out_v  = vec_sums(vec_sum4s(in_v, (vector signed int)fm_zeros_v), (vector signed int)fm_zeros_v);\  
 	} while (0)
-
-
 
 
 
@@ -407,14 +405,14 @@ typedef union {
  */
 #define FM_COUNT_2BIT(a_v, b_v, cnts_v) do {\
         b_v  = vec_sr(a_v, fm_four);\
-        a_v  = vec_adds(a_v, b_v);\
+        a_v  = (vector unsigned char)vec_adds( (vector signed char)a_v, (vector signed char)b_v);\
         \
         b_v  = vec_sr(a_v, fm_two);\
         a_v  = vec_and(a_v,fm_m11);\
         b_v  = vec_and(b_v,fm_m11);\
         \
-        cnts_v = vec_adds(cnts_v, a_v);\
-        cnts_v = vec_adds(cnts_v, b_v);\
+        cnts_v = vec_adds(cnts_v, (vector signed char)a_v);\
+        cnts_v = vec_adds(cnts_v, (vector signed char)b_v);\
 	} while (0)
 
 

@@ -24,7 +24,7 @@ vector unsigned char  fm_four; //value of 4 in each byte, used for shifting
 
 int fm_getbits_vec (vector unsigned char in, char *buf, int reverse) {
 	byte_vec new;
-	new.c = in;
+	new.u8 = in;
 	int i,j;
 
 	for (i=0; i<16;i++) {
@@ -69,8 +69,8 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 
 	fm_allones_v = esl_vmx_set_u8((unsigned char) 0xff);
 	fm_neg128_v  = esl_vmx_set_u8((int8_t) -128);
-	fm_zeros_v   = esl_vmx_set_u8((int8_t) 0x00);      //00 00 00 00
-	fm_m0f       = esl_vmx_set_u8((int8_t) 0x0f);      //00 00 11 11
+	fm_zeros_v   = esl_vmx_set_u8((int8_t) 0x00);      //all zeros
+        fm_m0f       = esl_vmx_set_u8((int8_t) 0x0f);      //00 00 11 11
 	fm_one       = esl_vmx_set_u8((int8_t) 1);         //
 	fm_two       = esl_vmx_set_u8((int8_t) 2);         //
 	fm_four      = esl_vmx_set_u8((int8_t) 4);         //
@@ -111,7 +111,7 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 	ESL_ALLOC(fm_reverse_masks_v, (1+trim_chunk_count) * sizeof(vector unsigned char));
 	{
 		byte_vec arr;
-		arr.c = fm_allones_v;
+		arr.u8 = fm_allones_v;
 
 		for (i=trim_chunk_count-1; i>0; i--) {
 			int byte_mask=0xff; //11 11 11 11
@@ -136,7 +136,7 @@ fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
 			for (j=byte_i+1; j<16; j++) {
 				arr.bytes[j] = 0x0;
 			}
- 		    fm_masks_v[i]                           = *(vector unsigned char*)(&(arr.c));
+ 		    fm_masks_v[i]                           = *(vector unsigned char*)(&(arr.u8));
  		    fm_reverse_masks_v[trim_chunk_count-i]  = vec_andc( fm_allones_v , fm_masks_v[i]);   //_mm_andnot_si128(fm_masks_v[i], fm_allones_v );
 
 		}
@@ -224,7 +224,7 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 		vector unsigned char tmp_v;
 		vector unsigned char tmp2_v;
 		byte_vec counts;
-                counts.c = fm_neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
+                counts.u8 = fm_neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
                                         // so effectively, can guarantee holding 128*16 = 2048.
                                         // Since I count from left or right, whichever is closer, this means
                                         // we can support an occ_b interval of up to 4096 with guarantee of
@@ -235,7 +235,7 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 				for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
                                      BWT_v    = *(vector unsigned char*)(BWT+i);
                                      FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.c);
+                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.i8);
 				}
 
 				int remaining_cnt = pos + 1 -  i*4 ;
@@ -243,14 +243,14 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
                                      BWT_v    = *(vector unsigned char*)(BWT+i);
                                      FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
                                      tmp_v    = vec_and(tmp_v, *(fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.c);
+                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.i8);
 				}
 
 			} else { // count backwards, subtracting
 				for (i=(landmark/4)-15 ; i>(pos/4);  i-=16) {
                                      BWT_v = *(vector unsigned char*)(BWT+i);
                                      FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.c);
+                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.i8);
 				}
 
 				int remaining_cnt = 64 - (pos + 1 - i*4);
@@ -258,7 +258,7 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
                                      BWT_v = *(vector unsigned char*)(BWT+i);
                                      FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
                                      tmp_v    = vec_and(tmp_v, *(fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.c);
+                                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts.i8);
 				}
 			}
 
@@ -269,7 +269,7 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 				for (i=1+floor(landmark/2.0) ; i+15<( (pos+1)/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
                                      BWT_v    = *(vector unsigned char*)(BWT+i);
                                      FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.s);
+                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.i8);
 				}
 				int remaining_cnt = pos + 1 -  i*2 ;
 				if (remaining_cnt > 0) {
@@ -277,14 +277,14 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
                                      FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
                                      tmp_v     = vec_and(tmp_v, *(fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
                                      tmp2_v    = vec_and(tmp2_v, *(fm_masks_v + remaining_cnt/2));
-                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.s);
+                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.i8);
 				}
 
 			} else { // count backwards, subtracting
 				for (i=(landmark/2)-15 ; i>(pos/2);  i-=16) {
                                      BWT_v = *(vector unsigned char*)(BWT+i);
                                      FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.s);
+                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.i8);
 				}
 
 				int remaining_cnt = 32 - (pos + 1 - i*2);
@@ -293,16 +293,15 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
                                      FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
                                      tmp_v     = vec_and(tmp_v, *(fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
                                      tmp2_v    = vec_and(tmp2_v, *(fm_reverse_masks_v + (remaining_cnt+1)/2));
-                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.s);
+                                     FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts.i8);
 				}
 			}
 		} else {
 			esl_fatal("Invalid alphabet type\n");
 		}
 
-		counts.c = vec_xor(counts.c, fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
-		FM_GATHER_8BIT_COUNTS(counts.c,counts.l);
-                cnt  +=   ( up_b == 1 ?  -1 : 1) * ( counts.ints[3] );   
+		FM_GATHER_8BIT_COUNTS(counts.i8,counts.i32);
+                cnt  +=   ( up_b == 1 ?  -1 : 1) * ( counts.ints[3] + 128*16 );   
 
 	}
 
