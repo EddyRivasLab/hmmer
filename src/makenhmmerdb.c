@@ -2,7 +2,6 @@
 #include "hmmer.h"
 #include "easel.h"
 
-
 //#define PRINTBWT 1
 //#define PRINTOCC 1
 
@@ -100,6 +99,8 @@ main(int argc, char *argv[]) {
 	char *inv_alph       = NULL;
 	char *alph           = NULL;
 
+        clock_t t1, t2;
+        struct tms ts1, ts2;
 
 	long i,j, c;
 	int status = eslOK;
@@ -115,6 +116,7 @@ main(int argc, char *argv[]) {
 	int chars_per_byte;
 	char *fname_in = NULL;
 	char *fname_out= NULL;
+
 	ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
 
 	ESL_ALLOC (meta, sizeof(FM_METADATA));
@@ -145,6 +147,9 @@ main(int argc, char *argv[]) {
 	if ( (meta->freq_SA & (meta->freq_SA - 1))  )  // test power of 2
 		esl_fatal ("SA_freq must be a power of 2\n");
 
+
+        //start timer
+        t1 = times(&ts1);
 
 	/* Open a file for reading. */
 	if((fp = fopen(fname_in, "rb")) == NULL) {
@@ -389,6 +394,15 @@ main(int argc, char *argv[]) {
 	free(alph);
 
     esl_getopts_Destroy(go);
+
+    // compute and print the elapsed time in millisec
+    t2 = times(&ts2);
+    {
+      double clk_ticks = sysconf(_SC_CLK_TCK);
+      double elapsedTime = (t2-t1)/clk_ticks;
+
+      fprintf (stderr, "run time:  %.2f seconds\n", elapsedTime);
+    }
 
 
 	return (eslOK);

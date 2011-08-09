@@ -275,7 +275,7 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 
 	// allocate and read the data
 	bwtSize = meta->L  * sizeof(uint8_t);
-	ESL_ALLOC (fm->T, bwtSize );
+        ESL_ALLOC (fm->T, bwtSize );
 	ESL_ALLOC (fm->BWT_mem, bwtSize + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
         fm->BWT = 	(uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
 	ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
