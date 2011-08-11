@@ -15,45 +15,58 @@
  * background residue frequencies, and the log to the base e.
  * 
  * The Forward algorithm needs to calculate sums of probabilities.
- * Given two log probabilities s1 and s2, where s1 = \log
- * \frac{p_1}{f_1}, and s2 = \log \frac{p_2}{f_2}, we need to
- * calculate s3 = \log \frac{p_1 + p_2}{f_3}.
+ * Given two log probabilities A and B, where s1 = \log
+ * \frac{a}{f}, and s2 = \log \frac{b}{g}, we need to
+ * calculate C = \log \frac{a + b}{h}.
  * 
- * The Forward algorithm guarantees that f_1 = f_2 = f_3, because it
- * is always concerned with summing terms that describe different
- * parses of the same target sequence prefix, and the product of the
- * background frequencies for the same sequence prefix is a constant.
+ * The Forward algorithm guarantees that the null model denominator
+ * terms f = g = h, because it is always concerned with summing terms
+ * that describe different parses of the same target sequence prefix,
+ * and the product of the background frequencies for the same sequence
+ * prefix is a constant.
  * 
- * The naive solution is s3 = log(e^{s1} + e^{s2}). This requires
+ * The naive solution is C = log(e^{A} + e^{B}), but this requires
  * expensive calls to log() and exp().
  * 
- * A better solution is s3 = s1 + log(1 + e^{s2-s1}). s1 should be the
- * greater, so s2-s1 is negative. For sufficiently small s2 << s1,
- * e^{s2-s1} becomes less than the machine's FLT_EPSILON, and s3 ~=
- * s1. (This is at about s2-s1 < -15.9, for the typical FLT_EPSILON of
- * 1.2e-7.)
+ * A better solution is C = A + log(1 + e^{-(A-B)}), for A >= B.  For
+ * sufficiently small B << A, e^-{A-B} becomes less than the
+ * machine's FLT_EPSILON, and C ~= A. (This is at about (A-B) >
+ * -15.9, for the typical FLT_EPSILON of 1.2e-7.)
  * 
- * With some loss of accuracy, we can precalculate log(1 + e^{s2-s1})
- * for a discretized range of differences (s2-s1), and compute s3 = s1
- * + table_lookup(s2-s1). This is what HMMER's p7_FLogsum() function
- * does.
- * 
- * SRE, Wed Jul 11 11:00:57 2007 [Janelia]
- * SVN $Id$
+ * With some loss of accuracy [1], we can precalculate log(1 +
+ * e^{-(A-B)}) for a discretized range of differences (A-B), and
+ * compute C = A + table_lookup(A-B). This is what HMMER's
+ * p7_FLogsum() function does.
+ *
+ * This only applies to the generic (serial) implementation.
+ * See footnote [2] for discussion of why we remain unable to 
+ * implement an efficient log-space SIMD vector implementation of
+ * Forward.
  */
 #include "p7_config.h"
 #include <math.h>
 #include "hmmer.h"
 
-static float flogsum_lookup[p7_LOGSUM_TBL];
+
+/* p7_LOGSUM_SCALE defines the precision of the calculation; the
+ * default of 1000.0 means rounding differences to the nearest 0.001
+ * nat. p7_LOGSUM_TBL defines the size of the lookup table; the
+ * default of 16000 means entries are calculated for differences of 0
+ * to 16.000 nats (when p7_LOGSUM_SCALE is 1000.0).  e^{-p7_LOGSUM_TBL /
+ * p7_LOGSUM_SCALE} should be on the order of the machine FLT_EPSILON,
+ * typically 1.2e-7.
+ */
+#define p7_LOGSUM_SCALE 1000.f
+#define p7_LOGSUM_TBL   16000
+
+static float flogsum_lookup[p7_LOGSUM_TBL]; /* p7_LOGSUM_TBL=16000: (A-B) = 0..16 nats, steps of 0.001 */
 
 /*****************************************************************
- *= 1. floating point log sum
+ *# 1. floating point log sum
  *****************************************************************/
 
 /* Function:  p7_FLogsumInit()
  * Synopsis:  Initialize the p7_Logsum() function.
- * Incept:    SRE, Thu Apr 10 08:46:23 2008 [Janelia]
  *
  * Purpose:   Initialize the lookup table for <p7_FLogsum()>. 
  *            This function must be called once before any
@@ -73,13 +86,12 @@ p7_FLogsumInit(void)
 
   int i;
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
-    flogsum_lookup[i] = log(1. + exp((double) -i / p7_INTSCALE));
+    flogsum_lookup[i] = log(1. + exp((double) -i / p7_LOGSUM_SCALE));
   return eslOK;
 }
 
 /* Function:  p7_FLogsum()
  * Synopsis:  Approximate $\log(e^a + e^b)$.
- * Incept:    SRE, Fri Jul 13 15:30:39 2007 [Janelia]
  *
  * Purpose:   Returns a fast table-driven approximation to
  *            $\log(e^a + e^b)$.
@@ -98,12 +110,11 @@ p7_FLogsum(float a, float b)
 #if 0
   return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  /* SRE: While debugging SSE impl. Remember to remove! */
 #endif
-  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_INTSCALE)];
+  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_LOGSUM_SCALE)];
 } 
 
 /* Function:  p7_FLogsumError()
  * Synopsis:  Compute absolute error in probability from Logsum.
- * Incept:    SRE, Sun Aug  3 10:22:18 2008 [Janelia]
  *
  * Purpose:   Compute the absolute error in probability space
  *            resulting from <p7_FLogsum()>'s table lookup 
@@ -132,23 +143,20 @@ p7_FLogsumError(float a, float b)
  * 2. Benchmark driver.
  *****************************************************************/
 #ifdef p7LOGSUM_BENCHMARK
-/* gcc -o benchmark -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_BENCHMARK logsum.c -leasel -lm
- * ./benchmark
+/* gcc -o logsum_benchmark -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_BENCHMARK logsum.c -leasel -lm
+ * ./logsum_benchmark
  */
-/* All times in units of nanoseconds/iteration: cpu time * 10.
- * All times derived from 1e8 iterations (-N 100000000) unless stated.
- * All runs on my workstation, a 3.2GHz Xeon.
- * Times in brackets are difference from baseline.  
- * To get baselines, comment out the appropriate Logsum() call and recompile.
- * 
- * Floating point:   gcc -g -O2
- *                   ---------      
- *   baseline:        274.5
- *   p7_FLogsum()     293.2  [18.7]
- *  
- * Integer version:             
- *   baseline:        269.9                                       
- *   p7_ILogsum()     271.8   [1.9]
+
+/* A table-driven FLogsum() is about 20x faster than a direct
+ * C = A + log(1+e^{-(A-B)}) implementation, "naive2()":
+ *             time/call   clocks/call
+ *  naive1:     110 nsec      250          SRE:J8/71 10 Aug 2011
+ *  naive2:      87 nsec      200          MacOS/X desktop, default build (gcc -O3), 2.26 GHz Xeon
+ *  FLogsum():    4 nsec        9 
+ *
+ * Times in units of nanoseconds/iteration: cpu time * 10
+ * based on default 1e8 iterations (-N 100000000).
+ * Clocks based on 2.26GHz = 2.26 clocks/nsec
  */
 #include "p7_config.h"
 
@@ -164,7 +172,8 @@ p7_FLogsumError(float a, float b)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",    0 },
-  { "-i",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "run the integer version",                 0 },
+  { "-n",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "naive time: A + log(1+exp(-(A-B)))",      0 },
+  { "-r",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "really naive time: log(exp(A)+exp(B))",   0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",           0 },
   { "-v",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual results",     0 },
   { "-N",        eslARG_INT,"100000000",NULL,"n>0", NULL,  NULL, NULL, "number of trials",                        0 },
@@ -194,45 +203,41 @@ main(int argc, char **argv)
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   int             N       = esl_opt_GetInteger(go, "-N");
   int             i;
+  float           x, z;
+  float          *A, *B, *C;
 
-  if (esl_opt_GetBoolean(go, "-i"))
+  p7_FLogsumInit();
+
+  /* Create the problem: sample N values A,B on interval -1000,1000: about the range of H3 scores */
+  A = malloc(sizeof(float) * N);
+  B = malloc(sizeof(float) * N);
+  C = malloc(sizeof(float) * N);
+  for (i = 0; i < N; i++)
     {
-      int  x, z;
+      A[i] = esl_random(r) * 2000. - 1000.;
+      B[i] = esl_random(r) * 2000. - 1000.;
+    }
+  
+  /* Run */
+  esl_stopwatch_Start(w);
 
-      p7_ILogsumInit();
-      esl_stopwatch_Start(w);
-      for (z = 0, i = 0; i < N; i++)
-	{
-	  x = z - esl_random(r) * 7000;
-
-	  if (esl_opt_GetBoolean(go, "-v"))  
-	    printf("%d %d %d \n", z, x, p7_ILogsum(x, z));
-
-	  z = p7_ILogsum(x,z);  
-	  z -= 119;
-	}
-      esl_stopwatch_Stop(w);
+  if (esl_opt_GetBoolean(go, "-n"))
+    {
+      for (i = 0; i < N; i++)
+	C[i] = naive2(A[i], B[i]);
+    }
+  else if (esl_opt_GetBoolean(go, "-r"))
+    {
+      for (i = 0; i < N; i++)
+	C[i] = naive1(A[i], B[i]);
     }
   else
     {
-      float  x, z;
-
-      p7_FLogsumInit();
-      esl_stopwatch_Start(w);
-      for (z = 0., i = 0; i < N; i++)
-	{
-	  x = z - esl_random(r) * 7.;
-
-	  if (esl_opt_GetBoolean(go, "-v"))  
-	    printf("%g %g %g %g %g\n", z, x, p7_FLogsum(x, z), naive1(x,z), fabs(p7_FLogsum(x, z) - naive1(x,z)));
-
-	  z  = p7_FLogsum(x, z);       
-	  /* z = naive2(x,y); */
-	  z -= 0.1187;		/* empirically balancing z near 0 */
-	}
-      esl_stopwatch_Stop(w);
-  
+      for (i = 0; i < N; i++)
+	C[i] = p7_FLogsum(A[i], B[i]);       
     }
+
+  esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
 
   esl_stopwatch_Destroy(w);
@@ -383,8 +388,37 @@ main(int argc, char **argv)
 #endif /*p7LOGSUM_EXAMPLE*/
 /*--------------------- end, example ----------------------------*/
 
+
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id: logsum.c 3474 2011-01-17 13:25:32Z eddys $
  *****************************************************************/
 
+/* Footnotes.
+ * 
+ * [1] The maximum relative error is on the order of 1/SCALE, or 0.001.
+ *     [xref SRE:J8/71].
+ *     
+ * [2] SIMD vectorization of a log-space Forward remains vexing.
+ *     Sparse-rescaled probability-space Forward vector
+ *     implemementation only works for local; glocal or global may
+ *     underflow long delete paths. Would be desirable to use a
+ *     log-space implementation if we could make it fast. Problem is
+ *     implementing the p7_FLogsum() lookup table in SIMD; lookup
+ *     tables of this size in current SSE, Altivec appear to be
+ *     infeasible. I considered the possibility of using a functional
+ *     fit to f(x) = log(1+e^{-x}) for x >=0, for example with a
+ *     Chebyshev polynomial, because a numerical f(x) would vectorize.
+ *     Decided that this computation would necessarily be expensive on
+ *     the order of log(x) or exp(x), so replacing log(1+exp(-x)) with
+ *     f(x) doesn't look like compelling -- might as well compute
+ *     log(1+exp(-x)) directly! The table-driven approach is about 20x
+ *     faster (about 9 clocks, compared to about 200 for the direct
+ *     log,exp calculation), and even if we could get an f(x)
+ *     calculation to be as efficient as log(x) -- say 100 clocks --
+ *     the 4x SIMD vectorization does not compensate for the 10x hit
+ *     in speed. [xref SRE:J8/71]
+ */
 

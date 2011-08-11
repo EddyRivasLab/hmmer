@@ -38,7 +38,7 @@ SADIR     = @HMMER_SADIR@
 
 MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L../${SADIR} -L.
 MYINCDIRS = -I../${ESLDIR} \
-        -I../${SADIR} \
+	    -I../${SADIR} \
 	    -I${top_srcdir}/easel \
 	    -I. \
 	    -I${srcdir}
@@ -58,12 +58,12 @@ PROGS = hmmalign\
 	phmmer\
 	nhmmer\
 	hmmpgmd\
-    hmmc2\
-    makenhmmerdb\
-    exactmatch
+	hmmc2\
+	makenhmmerdb\
+	exactmatch
 
 
-PROGOBJSS =\
+PROGOBJS =\
 	hmmalign.o\
 	hmmbuild.o\
 	hmmconvert.o\
@@ -78,9 +78,9 @@ PROGOBJSS =\
 	phmmer.o\
 	nhmmer.o\
 	hmmpgmd.o\
-    hmmc2.o\
-    makenhmmerdb.o\
-    exactmatch.o
+	hmmc2.o\
+	makenhmmerdb.o\
+	exactmatch.o
 
 HDRS =  hmmer.h 
 
@@ -131,6 +131,7 @@ STATS = \
 
 BENCHMARKS = \
 	evalues_benchmark\
+	logsum_benchmark\
 	generic_decoding_benchmark\
 	generic_fwdback_benchmark\
 	generic_msv_benchmark\
@@ -328,4 +329,7 @@ clean:
 
 ################################################################
 # @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
 ################################################################

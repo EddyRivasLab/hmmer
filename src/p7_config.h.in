@@ -78,19 +78,6 @@
  */
 #define p7_MAX_SC_TXTLEN   11	      
 
-/* In Forward algorithm implementations, we use a table lookup in
- * p7_FLogsum() to calculate summed probabilities in log
- * space. p7_INTSCALE defines the precision of the calculation; the
- * default of 1000.0 means rounding differences to the nearest 0.001
- * nat. p7_LOGSUM_TBL defines the size of the lookup table; the
- * default of 16000 means entries are calculated for differences of 0
- * to 16.000 nats (when p7_INTSCALE is 1000.0).  e^{-p7_LOGSUM_TBL /
- * p7_INTSCALE} should be on the order of the machine FLT_EPSILON,
- * typically 1.2e-7.
- */
-#define p7_INTSCALE     1000.0f
-#define p7_LOGSUM_TBL   16000
-
 /* Other stuff.
  */
 #define p7_MAXDCHLET  20      /* maximum # Dirichlet components in mixture prior */

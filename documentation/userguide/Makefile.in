@@ -115,9 +115,9 @@ distclean: clean
 	-rm -f Userguide.pdf
 	-rm -f Makefile
 
-TAGS:
-	etags *.tex Makefile.in
-
 ################################################################
 # @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
 ################################################################
