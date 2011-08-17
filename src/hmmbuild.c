@@ -595,7 +595,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   else                                          cfg->abc = NULL;
 
   status = eslx_msafile_Open(&(cfg->abc), cfg->alifile, NULL, cfg->fmt, NULL, &(cfg->afp));
-  if (status != eslOK) mpi_init_open_failure(afp, status);
+  if (status != eslOK) mpi_init_open_failure(cfg->afp, status);
 
   cfg->hmmfp = fopen(cfg->hmmfile, "w");
   if (cfg->hmmfp == NULL) mpi_init_other_failure("Failed to open HMM file %s for writing", cfg->hmmfile); 
@@ -610,7 +610,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (cfg->postmsafile) 
     {
       cfg->postmsafp = fopen(cfg->postmsafile, "w");
-      if (cfp->postmsafp == NULL) mpi_init_other_failure("Failed to MSA resave file %s for writing", cfg->postmsafile);
+      if (cfg->postmsafp == NULL) mpi_init_other_failure("Failed to MSA resave file %s for writing", cfg->postmsafile);
     }
   else cfg->postmsafp = NULL;
 
