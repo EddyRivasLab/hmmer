@@ -7,15 +7,12 @@
  *   4. Example 2: scan mode (in an HMM db)
  *   5. Copyright and license information
  * 
- * SRE, Fri Dec  5 10:09:39 2008 [Janelia] [BSG3, Bear McCreary]
- * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h> //memcpy
-
+#include <string.h> 
 
 #include "easel.h"
 #include "esl_exponential.h"
@@ -33,7 +30,6 @@
 
 /* Function:  p7_pipeline_Create()
  * Synopsis:  Create a new accelerated comparison pipeline.
- * Incept:    SRE, Fri Dec  5 10:11:31 2008 [Janelia]
  *
  * Purpose:   Given an application configuration structure <go>
  *            containing certain standardized options (described
@@ -252,7 +248,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 
 /* Function:  p7_pipeline_Reuse()
  * Synopsis:  Reuse a pipeline for next target.
- * Incept:    SRE, Fri Dec  5 10:31:36 2008 [Janelia]
  *
  * Purpose:   Reuse <pli> for next target sequence (search mode)
  *            or model (scan mode). 
@@ -276,7 +271,6 @@ p7_pipeline_Reuse(P7_PIPELINE *pli)
 
 /* Function:  p7_pipeline_Destroy()
  * Synopsis:  Free a <P7_PIPELINE> object.
- * Incept:    SRE, Fri Dec  5 10:30:23 2008 [Janelia]
  *
  * Purpose:   Free a <P7_PIPELINE> object.
  */
@@ -375,7 +369,6 @@ p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, double lnP)
 
 /* Function:  p7_pli_NewModel()
  * Synopsis:  Prepare pipeline for a new model (target or query)
- * Incept:    SRE, Fri Dec  5 10:35:37 2008 [Janelia]
  *
  * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
  *            to receive this model as either a query or a target.
@@ -417,7 +410,6 @@ p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 
 /* Function:  p7_pli_NewModelThresholds()
  * Synopsis:  Set reporting and inclusion bit score thresholds on a new model.
- * Incept:    SRE, Sat Oct 17 12:07:43 2009 [Janelia]
  *
  * Purpose:   Set the bit score thresholds on a new model, if we're 
  *            using Pfam GA, TC, or NC cutoffs for reporting or
@@ -472,7 +464,6 @@ p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 
 /* Function:  p7_pli_NewSeq()
  * Synopsis:  Prepare pipeline for a new sequence (target or query)
- * Incept:    SRE, Fri Dec  5 10:57:15 2008 [Janelia]
  *
  * Purpose:   Caller has a new sequence <sq>. Prepare the pipeline <pli>
  *            to receive this model as either a query or a target.
@@ -490,7 +481,6 @@ p7_pli_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
 
 /* Function:  p7_pipeline_Merge()
  * Synopsis:  Merge the pipeline statistics
- * Incept:    
  *
  * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
  *            to receive this model as either a query or a target.
@@ -548,7 +538,6 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
 
 /* Function:  p7_Pipeline()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
- * Incept:    SRE, Thu Dec  4 17:17:01 2008 [Janelia]
  *
  * Purpose:   Run H3's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
@@ -816,7 +805,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
 /* Function:  p7_Pipeline_LongTarget()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, modified to use the scanning MSV/SSV filters.
- * Incept:    TJW, Fri Feb 26 10:17:53 2010 [Janelia]
  *
  * Purpose:   Run H3's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
@@ -1073,7 +1061,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
 /* Function:  p7_pli_Statistics()
  * Synopsis:  Final statistics output from a processing pipeline.
- * Incept:    SRE, Tue Dec  9 10:19:45 2008 [Janelia]
  *
  * Purpose:   Print a standardized report of the internal statistics of
  *            a finished processing pipeline <pli> to stream <ofp>.
@@ -1449,4 +1436,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

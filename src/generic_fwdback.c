@@ -7,9 +7,6 @@
  *   4. Test driver.
  *   5. Example.
  *   6. Copyright and license information.
- *   
- * SRE, Tue Jan 30 10:49:43 2007 [at Einstein's in St. Louis]
- * SVN $Id$  
  */
 
 #include "p7_config.h"
@@ -25,7 +22,6 @@
 
 /* Function:  p7_GForward()
  * Synopsis:  The Forward algorithm.
- * Incept:    SRE, Mon Apr 16 13:57:35 2007 [Janelia]
  *
  * Purpose:   The Forward dynamic programming algorithm. 
  *
@@ -143,7 +139,6 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 
 /* Function:  p7_GBackward()
  * Synopsis:  The Backward algorithm.
- * Incept:    SRE, Fri Dec 28 14:31:58 2007 [Janelia]
  *
  * Purpose:   The Backward dynamic programming algorithm.
  * 
@@ -259,7 +254,6 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
 
 /* Function:  p7_GHybrid()
  * Synopsis:  The "hybrid" algorithm.
- * Incept:    SRE, Sat May 19 10:01:46 2007 [Janelia]
  *
  * Purpose:   The profile HMM version of the Hwa "hybrid" alignment
  *            algorithm \citep{YuHwa02}. The "hybrid" score is the
@@ -710,9 +704,15 @@ main(int argc, char **argv)
 
 #include "hmmer.h"
 
+#define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
+
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--fs",      eslARG_NONE,"default",NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
+  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
+  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
+  { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -735,6 +735,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fsc, bsc;
+  float           nullsc;
   int             status;
 
   /* Read in one HMM */
@@ -749,27 +750,58 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
-  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
-  esl_sqfile_Close(sqfp);
  
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
-  p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
+
+  /* Now reconfig the models however we were asked to */
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_GLOCAL);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNIGLOCAL);
   
   /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, sq->n);
   bck = p7_gmx_Create(gm->M, sq->n);
 
-  /* Run Forward, Backward */
-  p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
-  p7_GBackward(sq->dsq, sq->n, gm, bck, &bsc);
+  printf("%-15s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
+  printf("%15s   %10s %10s   %10s %10s\n",      "#--------------", "----------",  "----------",  "----------",  "----------");
 
-  printf("fwd = %.4f nats\n", fsc);
-  printf("bck = %.4f nats\n", bsc);
+  while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
+    {
+      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+      else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+
+      /* Resize the DP matrices if necessary */
+      p7_gmx_GrowTo(fwd, gm->M, sq->n);
+      p7_gmx_GrowTo(bck, gm->M, sq->n);
+
+      /* Set the profile and null model's target length models */
+      p7_bg_SetLength(bg,   sq->n);
+      p7_ReconfigLength(gm, sq->n);
+
+      /* Run Forward, Backward */
+      p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
+      p7_GBackward(sq->dsq, sq->n, gm, bck, &bsc);
+
+      /* Those scores are partial log-odds likelihoods in nats.
+       * Subtract off the rest of the null model, convert to bits.
+       */
+      p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
+
+      printf("%-15s   %10.4f %10.4f   %10.4f %10.4f\n", 
+	     sq->name, 
+	     fsc, bsc, 
+	     (fsc - nullsc) / eslCONST_LOG2, (bsc - nullsc) / eslCONST_LOG2);
+
+      p7_gmx_Reuse(fwd);
+      p7_gmx_Reuse(bck);
+      esl_sq_Reuse(sq);
+    }
 
   /* Cleanup */
+  esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
   p7_gmx_Destroy(fwd);
   p7_gmx_Destroy(bck);
@@ -785,4 +817,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$  
  *****************************************************************/

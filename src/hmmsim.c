@@ -2,9 +2,6 @@
  * 
  * Main testbed for exploring the statistical behavior of HMMER3
  * scores on random sequences.
- * 
- * SRE, Fri Apr 20 14:56:26 2007 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -956,3 +953,9 @@ elide_length_model(P7_PROFILE *gm, P7_BG *bg)
 }
 
 
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id$
+ *****************************************************************/
