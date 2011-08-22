@@ -8,9 +8,6 @@
  *
  * See also: 
  *   modelconfig.c : routines that configure a profile given an HMM
- *    
- * SRE, Thu Jan 11 15:16:47 2007 [Janelia] [Sufjan Stevens, Illinois]
- * SVN $Id$
  */
 
 #include "p7_config.h"
@@ -32,7 +29,6 @@
 
 /* Function:  p7_profile_Create()
  * Synopsis:  Allocates a profile.
- * Incept:    SRE, Thu Jan 11 15:53:28 2007 [Janelia]
  *
  * Purpose:   Allocates for a profile of up to <M> nodes, for digital
  *            alphabet <abc>.
@@ -134,7 +130,6 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
 
 /* Function:  p7_profile_Copy()
  * Synopsis:  Copy a profile.
- * Incept:    SRE, Sun Feb 17 10:27:37 2008 [Janelia]
  *
  * Purpose:   Copies profile <src> to profile <dst>, where <dst>
  *            has already been allocated to be of sufficient size.
@@ -188,7 +183,6 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
 
 /* Function:  p7_profile_Clone()
  * Synopsis:  Duplicates a profile.
- * Incept:    SRE, Mon Jun 25 08:29:23 2007 [Janelia]
  *
  * Purpose:   Duplicate profile <gm>; return a pointer
  *            to the newly allocated copy.
@@ -212,7 +206,6 @@ p7_profile_Clone(const P7_PROFILE *gm)
 
 /* Function:  p7_profile_SetNullEmissions()
  * Synopsis:  Set all emission scores to zero (experimental).
- * Incept:    SRE, Mon Jun 25 08:12:06 2007 [Janelia]
  *
  * Purpose:   Set all emission scores in profile <gm> to zero.
  *            This makes the profile a null model, with all the same
@@ -237,7 +230,6 @@ p7_profile_SetNullEmissions(P7_PROFILE *gm)
 
 /* Function:  p7_profile_Reuse()
  * Synopsis:  Prepare profile to be re-used for a new HMM.
- * Incept:    SRE, Wed Jan  2 17:32:36 2008 [Janelia]
  *
  * Purpose:   Prepare profile <gm>'s memory to be re-used
  *            for a new HMM.
@@ -273,7 +265,6 @@ p7_profile_Reuse(P7_PROFILE *gm)
 
 /* Function:  p7_profile_Sizeof()
  * Synopsis:  Return the allocated size of a P7_PROFILE.
- * Incept:    SRE, Wed Mar  2 10:34:23 2011 [Janelia]
  *
  * Purpose:   Return the allocated size of a <P7_PROFILE>, in bytes.
  */
@@ -298,7 +289,6 @@ p7_profile_Sizeof(P7_PROFILE *gm)
 
 /* Function:  p7_profile_Destroy()
  * Synopsis:  Frees a profile.
- * Incept:    SRE, Thu Jan 11 15:54:17 2007 [Janelia]
  *
  * Purpose:   Frees a profile <gm>.
  *
@@ -331,7 +321,6 @@ p7_profile_Destroy(P7_PROFILE *gm)
 
 /* Function:  p7_profile_IsLocal()
  * Synopsis:  Return TRUE if profile is in a local alignment mode.
- * Incept:    SRE, Thu Jul 12 11:57:49 2007 [Janelia]
  *
  * Purpose:   Return <TRUE> if profile is in a local alignment mode.
  */
@@ -344,7 +333,6 @@ p7_profile_IsLocal(const P7_PROFILE *gm)
 
 /* Function:  p7_profile_IsMultihit()
  * Synopsis:  Return TRUE if profile is in a multihit alignment mode.
- * Incept:    SRE, Thu Jul 12 11:58:58 2007 [Janelia]
  *
  * Purpose:   Return <TRUE> if profile is in a multihit alignment mode.
  */
@@ -359,7 +347,6 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 
 
 /* Function:  p7_profile_GetT()
- * Incept:    SRE, Wed Apr 12 14:20:18 2006 [St. Louis]
  *
  * Purpose:   Convenience function that looks up a transition score in
  *            profile <gm> for a transition from state type <st1> in
@@ -496,7 +483,6 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
  *****************************************************************/
 
 /* Function:  p7_profile_Validate()
- * Incept:    SRE, Tue Jan 23 13:58:04 2007 [Janelia]
  *
  * Purpose:   Validates the internals of the generic profile structure
  *            <gm>.
@@ -547,7 +533,6 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
 
 /* Function:  p7_profile_Compare()
  * Synopsis:  Compare two profiles for equality.
- * Incept:    SRE, Thu Jun 21 17:57:56 2007 [Janelia]
  *
  * Purpose:   Compare two profiles <gm1> and <gm2> to each other.
  *            Return <eslOK> if they're identical, and <eslFAIL> if
@@ -649,4 +634,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

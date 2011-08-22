@@ -6,9 +6,6 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. Copyright and license information
- * 
- * SRE, Tue Jan 30 11:14:11 2007 [Einstein's, in St. Louis]
- * SVN $Id$
  */
 
 #include "p7_config.h"
@@ -19,7 +16,6 @@
  *****************************************************************/
 
 /* Function:  p7_gmx_Create()
- * Incept:    SRE, Tue Jan 30 11:20:33 2007 [Einstein's, in St. Louis]
  *
  * Purpose:   Allocate a reusable, resizeable <P7_GMX> for models up to
  *            size <allocM> and sequences up to length <allocL>.
@@ -80,7 +76,6 @@ p7_gmx_Create(int allocM, int allocL)
 
 /* Function:  p7_gmx_GrowTo()
  * Synopsis:  Assure that DP matrix is big enough.
- * Incept:    SRE, Tue Jan 30 11:31:23 2007 [Olin Library, St. Louis]
  *
  * Purpose:   Assures that a DP matrix <gx> is allocated
  *            for a model of size up to <M> and a sequence of
@@ -154,7 +149,6 @@ p7_gmx_GrowTo(P7_GMX *gx, int M, int L)
 
 /* Function:  p7_gmx_Reuse()
  * Synopsis:  Recycle a generic DP matrix.
- * Incept:    SRE, Fri Nov 13 08:48:52 2009 [Janelia]
  *
  * Purpose:   Recycles <gx> for reuse.
  *
@@ -172,7 +166,6 @@ p7_gmx_Reuse(P7_GMX *gx)
 
 /* Function:  p7_gmx_Destroy()
  * Synopsis:  Frees a DP matrix.
- * Incept:    SRE, Tue Jan 30 11:17:36 2007 [Einstein's, in St. Louis]
  *
  * Purpose:   Frees a <P7_GMX>.
  *
@@ -196,7 +189,6 @@ p7_gmx_Destroy(P7_GMX *gx)
 
 /* Function:  p7_gmx_Compare()
  * Synopsis:  Compare two DP matrices for equality within given tolerance.
- * Incept:    SRE, Sat May 16 09:56:41 2009 [Janelia]
  *
  * Purpose:   Compare all the values in DP matrices <gx1> and <gx2> using
  *            <esl_FCompare()> and relative epsilon <tolerance>. If any
@@ -220,7 +212,7 @@ p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
 		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
       }
       for (x = 0; x < p7G_NXCELLS; x++)
-    	  if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
+	if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
   }
   return eslOK;	
 }
@@ -229,7 +221,6 @@ p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
 
 /* Function:  p7_gmx_Dump()
  * Synopsis:  Dump a DP matrix to a stream, for diagnostics.
- * Incept:    SRE, Fri Jul 13 09:56:04 2007 [Janelia]
  *
  * Purpose:   Dump matrix <gx> to stream <fp> for diagnostics.
  */
@@ -242,7 +233,6 @@ p7_gmx_Dump(FILE *ofp, P7_GMX *gx)
 
 /* Function:  p7_gmx_DumpWindow()
  * Synopsis:  Dump a window of a DP matrix to a stream for diagnostics.
- * Incept:    SRE, Mon Apr 14 08:45:28 2008 [Janelia]
  *
  * Purpose:   Dump a window of matrix <gx> to stream <fp> for diagnostics,
  *            from row <istart> to <iend>, from column <kstart> to <kend>.
@@ -455,4 +445,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

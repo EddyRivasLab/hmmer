@@ -473,6 +473,14 @@ typedef struct p7_gmx_s {
   float  *dp_mem;
 } P7_GMX;
 
+/* Macros below implement indexing idioms for generic DP routines.
+ * They require the following setup, for profile <gm> and matrix <gx>:
+ *   float const *tsc = gm->tsc;
+ *   float      **dp  = gx->dp;
+ *   float       *xmx = gx->xmx;
+ * and for each row i (target residue x_i in digital seq <dsq>):
+ *   float const *rsc = gm->rsc[dsq[i]];
+ */
 #define MMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_M])
 #define IMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_I])
 #define DMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_D])
