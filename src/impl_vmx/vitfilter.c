@@ -430,7 +430,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
       p7_GViterbi     (dsq, L, gm, gx, &sc2);
 
 #if 0
-      p7_gmx_Dump(stdout, gx);              // dumps a generic DP matrix
+      p7_gmx_Dump(stdout, gx, p7_DEFAULT);  // dumps a generic DP matrix
 #endif
       
       sc2 /= om->scale_w;
@@ -604,9 +604,9 @@ main(int argc, char **argv)
   gx = p7_gmx_Create(gm->M, sq->n);
 
   /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);      dumps the optimized profile
-     p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
-     p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
+     p7_oprofile_Dump(stdout, om);        dumps the optimized profile
+     p7_omx_SetDumpMode(ox, TRUE);        makes the fast DP algorithms dump their matrices
+     p7_gmx_Dump(stdout, gx, p7_DEFAULT); dumps a generic DP matrix
   */
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)

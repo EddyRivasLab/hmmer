@@ -883,8 +883,8 @@ utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   p7_profile_SameAsMF(om, gm);
 #if 0
-  p7_oprofile_Dump(stdout, om);              //dumps the optimized profile
-  p7_omx_SetDumpMode(stdout, ox, TRUE);      //makes the fast DP algorithms dump their matrices
+  p7_oprofile_Dump(stdout, om);              /* dumps the optimized profile */
+  p7_omx_SetDumpMode(stdout, ox, TRUE);      /* makes the fast DP algorithms dump their matrices */
 #endif
 
   while (N--)
@@ -893,7 +893,7 @@ utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
       p7_MSVFilter(dsq, L, om, ox, &sc1);
       p7_GViterbi (dsq, L, gm, gx, &sc2);
 #if 0
-      p7_gmx_Dump(stdout, gx);           //dumps a generic DP matrix
+      p7_gmx_Dump(stdout, gx, p7_DEFAULT);   /* dumps a generic DP matrix */
 #endif
 
       sc2 = sc2 / om->scale_b - 3.0f;
@@ -1065,9 +1065,9 @@ main(int argc, char **argv)
   gx = p7_gmx_Create(gm->M, sq->n);
 
   /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);      dumps the optimized profile
+     p7_oprofile_Dump(stdout, om);              dumps the optimized profile
      p7_omx_SetDumpMode(stdout, ox, TRUE);      makes the fast DP algorithms dump their matrices
-     p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
+     p7_gmx_Dump(stdout, gx, p7_DEFAULT);       dumps a generic DP matrix
      p7_oprofile_SameMSV(om, gm);
   */
   //p7_oprofile_Dump(stdout, om);

@@ -105,9 +105,6 @@ main(int argc, char *argv[]) {
 	long i,j, c;
 	int status = eslOK;
 	int result;
-	int opt = 0;
-	int longIndex = 0;
-
 	int num_freq_cnts_sb ;
 	int num_freq_cnts_b ;
 	int num_SA_samples ;

@@ -555,8 +555,8 @@ main(int argc, char **argv)
   p7_OptimalAccuracy(om, ox2, ox1, &accscore);	    /* <gx1> is now the OA matrix */
   p7_OATrace(om, ox2, ox1, tr);
   
-  if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, ox2);
-  if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, ox1);
+  if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, ox2, p7_DEFAULT);
+  if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, ox1, p7_DEFAULT);
 
   p7_trace_Dump(stdout, tr, gm, sq->dsq);
 

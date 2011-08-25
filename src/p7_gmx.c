@@ -223,11 +223,15 @@ p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
  * Synopsis:  Dump a DP matrix to a stream, for diagnostics.
  *
  * Purpose:   Dump matrix <gx> to stream <fp> for diagnostics.
+ *
+ *            <flags> control some optional output behaviors, as follows:
+ *              | <p7_HIDE_SPECIALS> | don't show scores for <ENJBC> states  |
+ *              | <p7_SHOW_LOG>      | <gx> is in probs; show as log probs   |
  */
 int
-p7_gmx_Dump(FILE *ofp, P7_GMX *gx)
+p7_gmx_Dump(FILE *ofp, P7_GMX *gx, int flags)
 {
-  return p7_gmx_DumpWindow(ofp, gx, 0, gx->L, 0, gx->M, TRUE);
+  return p7_gmx_DumpWindow(ofp, gx, 0, gx->L, 0, gx->M, flags);
 }
 
 
@@ -237,45 +241,69 @@ p7_gmx_Dump(FILE *ofp, P7_GMX *gx)
  * Purpose:   Dump a window of matrix <gx> to stream <fp> for diagnostics,
  *            from row <istart> to <iend>, from column <kstart> to <kend>.
  *            
- *            If <show_specials> is <TRUE>, scores for the special
- *            <ENJBC> states are also displayed.
- *
- *            Asking for <0..L,0..M> with <show_specials=TRUE> is the
+ *            Asking for <0..L,0..M> with <flags=p7_SHOW_SPECIALS> is the
  *            same as <p7_gmx_Dump()>.
- *
+ *            
+ *            <flags> control some optional output behaviors, as follows:
+ *              | <p7_HIDE_SPECIALS> | don't show scores for <ENJBC> states  |
+ *              | <p7_SHOW_LOG>      | <gx> is in probs; show as log probs   |
+ *  
  * Returns:   <eslOK> on success.
  */
 int
-p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials)
+p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int flags)
 {
-  int i, k, x;
-  int width     = 9;
-  int precision = 4;
+  int   width     = 9;
+  int   precision = 4;
+  int   i, k, x;
+  float val;
 
   /* Header */
   fprintf(ofp, "     ");
   for (k = kstart; k <= kend;  k++) fprintf(ofp, "%*d ", width, k);
-  if (show_specials)                fprintf(ofp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
+  if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
   fprintf(ofp, "      ");
-  for (k = kstart; k <= kend; k++) fprintf(ofp, "%*.*s ", width, width, "----------");
-  if (show_specials)               fprintf(ofp, "%*.*s ", width, width, "----------");
+  for (k = kstart; k <= kend; k++)  fprintf(ofp, "%*.*s ", width, width, "----------");
+  if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*.*s ", width, width, "----------");
   fprintf(ofp, "\n");
   
   /* DP matrix data */
   for (i = istart; i <= iend; i++)
   {
       fprintf(ofp, "%3d M ", i);
-      for (k = kstart; k <= kend;        k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_M]);
-      if (show_specials) 
-    	  for (x = 0;    x <  p7G_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, gx->xmx[  i * p7G_NXCELLS + x]);
+      for (k = kstart; k <= kend;        k++)  
+	{
+	  val = gx->dp[i][k * p7G_NSCELLS + p7G_M];
+	  if (flags & p7_SHOW_LOG) val = log(val);
+	  fprintf(ofp, "%*.*f ", width, precision, val);
+	}
+      if (! (flags & p7_HIDE_SPECIALS))
+	{
+    	  for (x = 0;  x <  p7G_NXCELLS; x++) 
+	    {
+	      val = gx->xmx[  i * p7G_NXCELLS + x];
+	      if (flags & p7_SHOW_LOG) val = log(val);
+	      fprintf(ofp, "%*.*f ", width, precision, val);
+	    }
+	}
       fprintf(ofp, "\n");
 
       fprintf(ofp, "%3d I ", i);
-      for (k = kstart; k <= kend;        k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_I]);
+      for (k = kstart; k <= kend;        k++) 
+	{
+	  val = gx->dp[i][k * p7G_NSCELLS + p7G_I];
+	  if (flags & p7_SHOW_LOG) val = log(val);
+	  fprintf(ofp, "%*.*f ", width, precision, val);
+	}
       fprintf(ofp, "\n");
 
       fprintf(ofp, "%3d D ", i);
-      for (k = kstart; k <= kend;        k++) fprintf(ofp, "%*.*f ", width, precision, gx->dp[i][k * p7G_NSCELLS + p7G_D]);
+      for (k = kstart; k <= kend;        k++) 
+	{
+	  val =  gx->dp[i][k * p7G_NSCELLS + p7G_D];
+	  if (flags & p7_SHOW_LOG) val = log(val);
+	  fprintf(ofp, "%*.*f ", width, precision, val);
+	}
       fprintf(ofp, "\n\n");
   }
   return eslOK;

@@ -584,8 +584,8 @@ main(int argc, char **argv)
   p7_GOptimalAccuracy(gm, gx2, gx1, &accscore);	     /* <gx1> is now the OA matrix */
   p7_GOATrace(gm, gx2, gx1, tr);
 
-  if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, gx2);
-  if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, gx1);
+  if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, gx2, p7_DEFAULT);
+  if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, gx1, p7_DEFAULT);
 
   p7_trace_Dump(stdout, tr, gm, sq->dsq);
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);

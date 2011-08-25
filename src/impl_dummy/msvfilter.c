@@ -447,7 +447,7 @@ main(int argc, char **argv)
   gx = p7_gmx_Create(gm->M, sq->n);
 
   /* Useful to place and compile in for debugging: 
-     p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
+     p7_gmx_Dump(stdout, gx, p7_DEFAULT);   dumps a generic DP matrix
   */
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)

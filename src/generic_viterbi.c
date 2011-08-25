@@ -314,7 +314,7 @@ utest_basic(ESL_GETOPTS *go)
 
   p7_GViterbi   (dsq, L, gm, gx, &vsc);
   if (esl_opt_GetBoolean(go, "-v")) printf("Viterbi score: %.4f\n", vsc);
-  if (esl_opt_GetBoolean(go, "-v")) p7_gmx_Dump(stdout, gx);
+  if (esl_opt_GetBoolean(go, "-v")) p7_gmx_Dump(stdout, gx, p7_DEFAULT);
 
   p7_GTrace     (dsq, L, gm, gx, tr);
   p7_trace_Score(tr, dsq, gm, &vsc2);
@@ -324,7 +324,7 @@ utest_basic(ESL_GETOPTS *go)
 
   p7_GForward   (dsq, L, gm, gx, &fsc);
   if (esl_opt_GetBoolean(go, "-v")) printf("Forward score: %.4f\n", fsc);
-  if (esl_opt_GetBoolean(go, "-v")) p7_gmx_Dump(stdout, gx);
+  if (esl_opt_GetBoolean(go, "-v")) p7_gmx_Dump(stdout, gx, p7_DEFAULT);
 
   p7_trace_Destroy(tr);
   p7_gmx_Destroy(gx);

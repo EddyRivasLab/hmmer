@@ -525,9 +525,9 @@ main(int argc, char **argv)
   gx = p7_gmx_Create(gm->M, sq->n);
 
   /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);      dumps the optimized profile
-     p7_omx_SetDumpMode(ox, TRUE);      makes the fast DP algorithms dump their matrices
-     p7_gmx_Dump(stdout, gx);           dumps a generic DP matrix
+     p7_oprofile_Dump(stdout, om);         dumps the optimized profile
+     p7_omx_SetDumpMode(ox, TRUE);         makes the fast DP algorithms dump their matrices
+     p7_gmx_Dump(stdout, gx, p7_DEFAULT);  dumps a generic DP matrix
   */
 
   p7_ViterbiScore(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (VMX):  %.2f nats\n", sc);

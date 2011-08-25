@@ -146,13 +146,13 @@ main(int argc, char **argv)
 	    if (p7_GViterbi(dsq, L, gm, gx, &(vsc[L]))  != eslOK) esl_fatal("viterbi failed");
 
 	    if (esl_opt_GetBoolean(go, "--vv")) 
-	      p7_gmx_Dump(stdout, gx);
+	      p7_gmx_Dump(stdout, gx, p7_DEFAULT);
 	    p7_gmx_Reuse(gx);
 
 	    p7_gmx_GrowTo(gx, 3, L);
 	    if (p7_GForward(dsq, L, gm, gx, &(fsc[L]))  != eslOK) esl_fatal("forward failed");
 	    if (esl_opt_GetBoolean(go, "--vv")) 
-	      p7_gmx_Dump(stdout, gx);
+	      p7_gmx_Dump(stdout, gx, p7_DEFAULT);
 	    p7_gmx_Reuse(gx);
 
 	    vprecision = 1e-4;    /* default impl uses fp, should be accurate within machine precision      */

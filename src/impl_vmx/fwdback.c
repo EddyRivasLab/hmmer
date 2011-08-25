@@ -770,8 +770,8 @@ static ESL_OPTIONS options[] = {
   { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-B", "only benchmark Forward",                           0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, "n>0", NULL,  NULL, "-F", "only benchmark Backward",                          0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-B", "only benchmark Forward",                           0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-F", "only benchmark Backward",                          0 },
   { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "benchmark parsing version, not full version",      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -1134,7 +1134,7 @@ main(int argc, char **argv)
       p7_GForward     (sq->dsq, sq->n, gm, gx,  &gfraw);
       p7_GBackward    (sq->dsq, sq->n, gm, gx,  &gbraw);
 
-      /* p7_gmx_Dump(stdout, gx);  */
+      /* p7_gmx_Dump(stdout, gx, p7_DEFAULT);  */
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       gfsc = (gfraw-nullsc) / eslCONST_LOG2;

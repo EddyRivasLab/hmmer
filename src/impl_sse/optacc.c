@@ -635,9 +635,9 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 
 #if 0
       p7_omx_FDeconvert(ox1, gx1); 
-      p7_gmx_Dump(stdout, gx1); 
+      p7_gmx_Dump(stdout, gx1, p7_DEFAULT); 
       p7_omx_FDeconvert(ox2, gx1); 
-      p7_gmx_Dump(stdout, gx1); 
+      p7_gmx_Dump(stdout, gx1, p7_DEFAULT); 
 #endif
       if (p7_OATrace(om, ox2, ox1, tr)                    != eslOK) esl_fatal(msg);
       
@@ -645,16 +645,16 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       if (p7_GBackward(sq->dsq, sq->n, gm, gx2, &bsc_g)   != eslOK) esl_fatal(msg);
 
 #if 0
-      p7_gmx_Dump(stdout, gx1); /* fwd */
-      p7_gmx_Dump(stdout, gx2); /* bck */
+      p7_gmx_Dump(stdout, gx1, p7_DEFAULT); /* fwd */
+      p7_gmx_Dump(stdout, gx2, p7_DEFAULT); /* bck */
 #endif
 
       if (p7_GDecoding(gm, gx1, gx2, gx2)                 != eslOK) esl_fatal(msg);
       if (p7_GOptimalAccuracy(gm, gx2, gx1, &accscore_g)  != eslOK) esl_fatal(msg);
       
 #if 0
-      p7_gmx_Dump(stdout, gx1); /* oa */
-      p7_gmx_Dump(stdout, gx2); /* pp */
+      p7_gmx_Dump(stdout, gx1, p7_DEFAULT); /* oa */
+      p7_gmx_Dump(stdout, gx2, p7_DEFAULT); /* pp */
 #endif
       if (p7_GOATrace(gm, gx2, gx1, trg)                  != eslOK) esl_fatal(msg);
 
@@ -913,8 +913,8 @@ main(int argc, char **argv)
   p7_OptimalAccuracy(om, ox2, ox1, &accscore);	    /* <gx1> is now the OA matrix */
   p7_OATrace(om, ox2, ox1, tr);
   
-  if (esl_opt_GetBoolean(go, "-d")) { p7_omx_FDeconvert(ox2, gx);  p7_gmx_Dump(stdout, gx); }
-  if (esl_opt_GetBoolean(go, "-m")) { p7_omx_FDeconvert(ox1, gx);  p7_gmx_Dump(stdout, gx); }
+  if (esl_opt_GetBoolean(go, "-d")) { p7_omx_FDeconvert(ox2, gx);  p7_gmx_Dump(stdout, gx, p7_DEFAULT); }
+  if (esl_opt_GetBoolean(go, "-m")) { p7_omx_FDeconvert(ox1, gx);  p7_gmx_Dump(stdout, gx, p7_DEFAULT); }
 
   p7_trace_Dump(stdout, tr, gm, sq->dsq);
 

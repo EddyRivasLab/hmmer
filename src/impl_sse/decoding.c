@@ -344,8 +344,8 @@ utest_decoding(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
       if (p7_GBackward(dsq, L, gm, gxb, &bsc2)           != eslOK) esl_fatal(msg);
       if (p7_GDecoding(gm, gxf, gxb, gxp2)               != eslOK) esl_fatal(msg);
 
-      // p7_gmx_Dump(stdout, gxp1);
-      // p7_gmx_Dump(stdout, gxp2);
+      // p7_gmx_Dump(stdout, gxp1, p7_DEFAULT);
+      // p7_gmx_Dump(stdout, gxp2, p7_DEFAULT);
 
       if (p7_gmx_Compare(gxp1, gxp2, tolerance)          != eslOK) esl_fatal(msg);
     }

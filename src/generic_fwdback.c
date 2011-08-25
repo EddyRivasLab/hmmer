@@ -765,8 +765,8 @@ main(int argc, char **argv)
   fwd = p7_gmx_Create(gm->M, sq->n);
   bck = p7_gmx_Create(gm->M, sq->n);
 
-  printf("%-15s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
-  printf("%15s   %10s %10s   %10s %10s\n",      "#--------------", "----------",  "----------",  "----------",  "----------");
+  printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
+  printf("%30s   %10s %10s   %10s %10s\n",      "#--------------", "----------",  "----------",  "----------",  "----------");
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
@@ -785,12 +785,14 @@ main(int argc, char **argv)
       p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
       p7_GBackward(sq->dsq, sq->n, gm, bck, &bsc);
 
+      //p7_gmx_Dump(stdout, fwd, p7_DEFAULT);
+
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.
        */
       p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-      printf("%-15s   %10.4f %10.4f   %10.4f %10.4f\n", 
+      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f\n", 
 	     sq->name, 
 	     fsc, bsc, 
 	     (fsc - nullsc) / eslCONST_LOG2, (bsc - nullsc) / eslCONST_LOG2);

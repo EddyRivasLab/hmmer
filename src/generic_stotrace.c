@@ -491,7 +491,7 @@ main(int argc, char **argv)
 
   p7_GViterbi(sq->dsq, sq->n, gm, fwd,  &vsc);
   p7_GForward(sq->dsq, sq->n, gm, fwd, &fsc);
-  if (esl_opt_GetBoolean(go, "-m") == TRUE)  p7_gmx_Dump(stdout, fwd);
+  if (esl_opt_GetBoolean(go, "-m") == TRUE)  p7_gmx_Dump(stdout, fwd, p7_DEFAULT);
 
   for (i = 0; i < N; i++)
     {

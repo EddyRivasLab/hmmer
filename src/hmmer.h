@@ -490,6 +490,10 @@ typedef struct p7_gmx_s {
 #define MSC(k)   (rsc[(k) * p7P_NR     + p7P_MSC])
 #define ISC(k)   (rsc[(k) * p7P_NR     + p7P_ISC])
 
+/* Flags that control P7_GMX debugging dumps */
+#define p7_HIDE_SPECIALS (1<<0)
+#define p7_SHOW_LOG      (1<<1)
+
 
 /*****************************************************************
  * 7. P7_PRIOR: mixture Dirichlet prior for profile HMMs
@@ -1147,7 +1151,7 @@ extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
 extern int     p7_gmx_Reuse(P7_GMX *gx);
 extern void    p7_gmx_Destroy(P7_GMX *gx);
 extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
-extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx);
+extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
 
 
