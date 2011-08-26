@@ -259,6 +259,8 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 	int prevC;
 	int cnt;
 	int bwtSize;
+	int compressed_bytes;
+	int chars_per_byte;
 
 	if((fp = fopen(fname, "rb")) == NULL)
 		esl_fatal("Cannot open file `%s': ", fname);
@@ -268,13 +270,16 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 		esl_fatal("Error reading BWT size.%s\n", " ");
 
 
-	num_freq_cnts_sb = 1+ceil((float)meta->N/meta->freq_cnt_sb);
-	num_freq_cnts_b  = 1+ceil((float)meta->N/meta->freq_cnt_b);
-	num_SA_samples   = 1+floor((float)meta->N/meta->freq_SA);
+	num_freq_cnts_sb = 1+ceil((float)fm->N/meta->freq_cnt_sb);
+	num_freq_cnts_b  = 1+ceil((float)fm->N/meta->freq_cnt_b);
+	num_SA_samples   = 1+floor((float)fm->N/meta->freq_SA);
 
+
+	chars_per_byte = 8/meta->charBits;
+	compressed_bytes = 	((chars_per_byte-1+fm->N)/chars_per_byte);
 
 	// allocate and read the data
-	bwtSize = meta->L  * sizeof(uint8_t);
+	bwtSize = compressed_bytes  * sizeof(uint8_t);
         ESL_ALLOC (fm->T, bwtSize );
 	ESL_ALLOC (fm->BWT_mem, bwtSize + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
         fm->BWT = 	(uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries

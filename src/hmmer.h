@@ -783,18 +783,27 @@ typedef struct fm_metadata_s {
   int alph_type;
   int alph_size;
   int charBits;
-  int N; //length of text
-  int L; //bytes used to store BWT/T
   int freq_SA; //frequency with which SA is sampled
   int freq_cnt_sb; //frequency with which full cumulative counts are captured
   int freq_cnt_b; //frequency with which intermittent counts are captured
   int SA_shift;
   int cnt_shift_sb;
   int cnt_shift_b;
-  int term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
+
+  int       seq_count;
+  int       block_count;
+  int      *block_offsets; //block_offsets[i] stores the number of sequences held in blocks 0..i-1
+  uint16_t *name_lengths;
+  char     **names;
+  uint32_t *ids;
+  uint32_t *starts;
+  uint32_t *lengths;
 } FM_METADATA;
 
 typedef struct fm_data_s {
+  uint32_t N; //length of text
+//  uint32_t L; // bytes used to store text
+  uint32_t term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
   uint8_t  *T;  //text corresponding to the BWT
   uint8_t  *BWT_mem;
   uint8_t  *BWT;
