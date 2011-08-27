@@ -66,7 +66,7 @@ fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 		cnt += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
 
 
-	if ( landmark < meta->N ) {
+	if ( landmark < fm->N ) {
 
 		const uint8_t * BWT = fm->BWT;
 
@@ -128,7 +128,7 @@ fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 		}
 	}
 
-	if (c==0 && pos >= meta->term_loc) { // I overcounted 'A' by one, because '$' was replaced with an 'A'
+	if (c==0 && pos >= fm->term_loc) { // I overcounted 'A' by one, because '$' was replaced with an 'A'
 		cnt--;
 	}
 
