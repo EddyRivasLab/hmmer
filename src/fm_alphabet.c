@@ -12,7 +12,7 @@
  * Returns:   <eslOK> on success.
  */
 int
-fm_createAlphabet (int alph_type, char **alph, char **inv_alph, int *alph_size, int *alph_bits) {
+fm_createAlphabet (int alph_type, char **alph, char **inv_alph, uint8_t *alph_size, uint8_t *alph_bits) {
 
 	int i = 0;
 	int status;

@@ -92,24 +92,24 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
 
 
 int
-ensure_meta_alloc (FM_METADATA *meta, int numseqs, int *allocedseqs) {
+allocate_seqdata (FM_METADATA *meta, int namelength, int numseqs, int *allocedseqs) {
     int status = eslOK;
-	int to_alloc = *allocedseqs;
 	if (numseqs == *allocedseqs) {
-		to_alloc *= 2;
+		*allocedseqs *= 2; // we've bumped up against allocation limit, double allocation.
 	}
 
 	if (numseqs == 0 || numseqs == *allocedseqs) { // either first allocation, or increase in size
-		ESL_REALLOC (meta->name_lengths, to_alloc * sizeof(uint16_t*));
-		ESL_REALLOC (meta->names,        to_alloc * sizeof(char*));
-		ESL_REALLOC (meta->starts,       to_alloc * sizeof(uint32_t*));
-		ESL_REALLOC (meta->lengths,      to_alloc * sizeof(uint32_t*));
-		ESL_REALLOC (meta->ids,          to_alloc * sizeof(uint32_t*));
-		if (meta->names == NULL || meta->starts == NULL || meta->lengths == NULL || meta->ids == NULL)
+		ESL_REALLOC (meta->seq_data, *allocedseqs * sizeof(FM_SEQDATA));
+		if (meta->seq_data == NULL )
 			esl_fatal("unable to allocate memory to store FM meta data\n");
 	}
 
-	*allocedseqs = to_alloc;
+	//allocate space for the name of the sequence source for the block
+	meta->seq_data[numseqs].name_length = namelength;
+	ESL_ALLOC (meta->seq_data[numseqs].name, (1+namelength) * sizeof(char));
+	if (meta->seq_data[numseqs].name == NULL )
+		esl_fatal("unable to allocate memory to store FM meta data\n");
+
 
 	return eslOK;
 
@@ -127,6 +127,9 @@ ERROR:
  */
 int
 main(int argc, char *argv[]) {
+
+	char tmp_filename[16] = "fmtmpXXXXXX";
+	FILE *fptmp          = NULL;
 	FILE *fp             = NULL;
 	uint8_t *T           = NULL;
 	uint8_t *BWT         = NULL;
@@ -166,8 +169,9 @@ main(int argc, char *argv[]) {
 	int sq_cnt = 0;
 	int use_tmpsq = 0;
 	int reported_N = 0;
-	int block_length;
+	uint32_t block_length;
 	int max_block_size;
+	long joffset;
 
 	int numblocks = 0;
 	int allocedblocks = 10;
@@ -177,6 +181,7 @@ main(int argc, char *argv[]) {
 	int compressed_bytes;
     int term_loc;
     uint64_t offset = 0;
+    uint32_t meta_size = 0;
 
 	ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
 
@@ -189,13 +194,7 @@ main(int argc, char *argv[]) {
 	meta->freq_cnt_b  = 256;
 	meta->freq_cnt_sb = pow(2,16); //65536 - that's the # values in a short
 
-	ESL_ALLOC (meta->block_offsets,  allocedblocks * sizeof(uint16_t*));
-
-	status = ensure_meta_alloc(meta, 0, &allocedseqs);
-	if (status != eslOK) {
-        esl_exception(eslEMEM, __FILE__, __LINE__, "failure allocting memory");
-        goto ERROR;
-	}
+	ESL_ALLOC (meta->block_sizes,  allocedblocks * sizeof(uint64_t*));
 
 	process_commandline(argc, argv, &go, &fname_in, &fname_out);
 
@@ -231,7 +230,6 @@ main(int argc, char *argv[]) {
     t1 = times(&ts1);
 
 
-
 	output_header(stdout, go, fname_in, fname_out);
 
 	meta->SA_shift = log2(meta->freq_SA);
@@ -241,28 +239,13 @@ main(int argc, char *argv[]) {
 
 	//getInverseAlphabet
 	fm_createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), &(meta->charBits));
+	chars_per_byte = 8/meta->charBits;
 
     //shift inv_alph up one, to make space for '$' at 0
 	for (i=0; i<256; i++)
 		if ( inv_alph[i] >= 0)
 			inv_alph[i]++;
 
-
-
-	output_header(stdout, go, fname_in, fname_out);
-
-	meta->SA_shift = log2(meta->freq_SA);
-	meta->cnt_shift_b = log2(meta->freq_cnt_b);
-	meta->cnt_shift_sb = log2(meta->freq_cnt_sb);
-
-
-	//getInverseAlphabet
-	fm_createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), &(meta->charBits));
-
-    //shift inv_alph up one, to make space for '$' at 0
-	for (i=0; i<256; i++)
-		if ( inv_alph[i] >= 0)
-			inv_alph[i]++;
 
     if (esl_opt_GetString(go, "--informat") != NULL) {
       infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
@@ -298,14 +281,9 @@ main(int argc, char *argv[]) {
 	}
 
 
-	// Open a file for writing.
-	if((fp = fopen(fname_out, "wb")) == NULL)
-	  esl_fatal( "%s: Cannot open file `%s': ", argv[0], fname_out);
+	// Open a temporary file, to which FM-index data will be written
+	if (esl_tmpfile(tmp_filename, &fptmp) != eslOK) esl_fatal("unable to open fm-index tmpfile");
 
-//	skip 64 bits, which will be used to store the offset of the metadata,
-//	once I know where that will be
-    if(fseek(fp, sizeof(uint64_t), 0) != 0)
-    	esl_fatal("error writing FM-index meta data");
 
     numblocks = 0;
 	numseqs = 0;
@@ -360,21 +338,14 @@ main(int argc, char *argv[]) {
         block_length = 0;
         for (i=0; i<block->count; i++) {
 
-        	ensure_meta_alloc(meta, numseqs, &allocedseqs);
-        	if (status != eslOK) {
-                esl_exception(eslEMEM, __FILE__, __LINE__, "failure allocting memory");
-                goto ERROR;
-        	}
-			meta->name_lengths[numseqs] = strlen(block->list[i].name) ;
-			ESL_REALLOC (meta->names[numseqs], meta->name_lengths[numseqs] * sizeof(char));
-        	if (meta->names[numseqs] == NULL)
-        		esl_fatal("unable to allocate memory to store FM meta data(3)\n");
+        	//start a new block, with space for the name
+        	allocate_seqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
 
         	//meta data
-        	esl_memstrcpy(block->list[i].name, meta->name_lengths[numseqs], meta->names[numseqs]);
-        	meta->ids[numseqs]   = block->first_seqidx + i;
-        	meta->starts[numseqs] = block->list[i].start;
-
+        	meta->seq_data[numseqs].id   = block->first_seqidx + i ;
+        	meta->seq_data[numseqs].start = block->list[i].start + j;
+        	if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
+        	  else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
 
         	for (j=1; j<=block->list[i].n; j++) {
         		c = abc->sym[block->list[i].dsq[j]];
@@ -390,20 +361,13 @@ main(int argc, char *argv[]) {
         				numseqs++;
 
         				//start a new block
-        				ensure_meta_alloc(meta, numseqs, &allocedseqs);
-        				if (status != eslOK) {
-        			        esl_exception(eslEMEM, __FILE__, __LINE__, "failure allocting memory");
-        			        goto ERROR;
-        				}
-        				meta->name_lengths[numseqs] = strlen(block->list[i].name) ;
-        				ESL_REALLOC (meta->names[numseqs], meta->name_lengths[numseqs] * sizeof(char));
-        	        	if ( meta->names[numseqs] == NULL)
-        	        		esl_fatal("unable to allocate memory to store FM meta data(3)\n");
+        	        	allocate_seqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
 
         	        	//meta data
-        	        	esl_memstrcpy(block->list[i].name, meta->name_lengths[numseqs], meta->names[numseqs]);
-        	        	meta->ids[numseqs]   = block->first_seqidx + i ;
-        	        	meta->starts[numseqs] = block->list[i].start + j;
+        	        	meta->seq_data[numseqs].id   = block->first_seqidx + i ;
+        	        	meta->seq_data[numseqs].start = block->list[i].start + j;
+        	        	if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
+        	        	  else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
         			}
         		} else if (inv_alph[c] == -1) {
     	    		esl_fatal("requested alphabet doesn't match input text\n");
@@ -412,7 +376,7 @@ main(int argc, char *argv[]) {
     	    	T[block_length] = inv_alph[c];
 
     	    	block_length++;
-    	    	meta->lengths[numseqs]++;
+    	    	meta->seq_data[numseqs].length++;
 
         	}
         	numseqs++;
@@ -431,8 +395,6 @@ main(int argc, char *argv[]) {
         //###########################################
     	//     build Suffix Array, then FM-index
     	//###########################################
-
-    	chars_per_byte = 8/meta->charBits;
     	compressed_bytes = 	((chars_per_byte-1+block_length)/chars_per_byte);
 
     	// Construct the Suffix Array
@@ -471,7 +433,7 @@ main(int argc, char *argv[]) {
     	  cnts_sb[BWT[j]]++;
     	  cnts_b[BWT[j]]++;
 
-    	  const long joffset = j+1;
+    	  joffset = j+1;
     	  if ( !(  joffset % meta->freq_cnt_b) ) {  // (j+1)%freq_cnt_b==0  , i.e. every freq_cnt_bth position, noting that it's a zero-based count
 
     		  for (c=0; c<meta->alph_size; c++) {
@@ -486,6 +448,8 @@ main(int argc, char *argv[]) {
     		  }
     	  }
     	}
+
+
 
     	//wrap up the counting;
     	for (c=0; c<meta->alph_size; c++) {
@@ -528,6 +492,106 @@ main(int argc, char *argv[]) {
 
 
     	// Write the FM-index meta data
+    	if(fwrite(&block_length, sizeof(uint32_t), 1, fptmp) !=  1)
+    		esl_fatal( "%s: Error writing block_length in FM index.\n", argv[0]);
+    	if(fwrite(&term_loc, sizeof(uint32_t), 1, fptmp) !=  1)
+    		esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
+
+    	if(fwrite(T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+    	  esl_fatal( "%s: Error writing T in FM index.\n", argv[0]);
+    	if(fwrite(BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+    	  esl_fatal( "%s: Error writing BWT in FM index.\n", argv[0]);
+    	if(fwrite(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fptmp) != (size_t)num_SA_samples)
+    	  esl_fatal( "%s: Error writing SA in FM index.\n", argv[0]);
+    	if(fwrite(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
+    	  esl_fatal( "%s: Error writing occCnts_b in FM index.\n", argv[0]);
+    	if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
+    	  esl_fatal( "%s: Error writing occCnts_sb in FM index.\n", argv[0]);
+
+
+    	if (numblocks == allocedblocks) {
+    		allocedblocks *= 2;
+    		ESL_REALLOC(meta->block_sizes, allocedblocks * sizeof(uint64_t));
+    	}
+
+    	offset +=  2*sizeof(uint32_t)
+    	         + 2*sizeof(uint8_t)*compressed_bytes
+    	         + sizeof(uint32_t)*num_SA_samples
+    	         + sizeof(uint16_t)*(meta->alph_size)*num_freq_cnts_b
+    	         + sizeof(uint32_t)*(meta->alph_size)*num_freq_cnts_sb ;
+
+    	meta->block_sizes[numblocks] = offset;
+
+    	numblocks++;
+
+    }
+
+
+
+    /* Finished writing the FM-index data to a temporary file. Now write
+     * metadata to fname_out, than append FM-index data from temp file
+     */
+	if((fp = fopen(fname_out, "wb")) == NULL)
+	  esl_fatal( "%s: Cannot open file `%s': ", argv[0], fname_out);
+
+
+    //write out meta data
+	if(		fwrite(&meta_size,            sizeof(uint32_t), 1, fp) != 1 ||
+			fwrite(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->alph_size),    sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->charBits),     sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->freq_SA),      sizeof(uint32_t), 1, fp) != 1 ||
+			fwrite(&(meta->freq_cnt_sb),  sizeof(uint32_t), 1, fp) != 1 ||
+			fwrite(&(meta->freq_cnt_b),   sizeof(uint32_t), 1, fp) != 1 ||
+			fwrite(&(meta->SA_shift),     sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->cnt_shift_sb), sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->cnt_shift_b),  sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->block_count),  sizeof(uint16_t), 1, fp) != 1 ||
+			fwrite(&(meta->seq_count),    sizeof(uint32_t), 1, fp) != 1 ||
+			fwrite(meta->block_sizes,   sizeof(uint64_t), numblocks, fp) != numblocks
+	)
+	  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
+
+	for (i=0; i<numseqs; i++) {
+		if(		fwrite(&(meta->seq_data[i].id),          sizeof(uint32_t),  1, fp) != 1 ||
+				fwrite(&(meta->seq_data[i].start),       sizeof(uint32_t),  1, fp) != 1 ||
+				fwrite(&(meta->seq_data[i].length),      sizeof(uint32_t),  1, fp) != 1 ||
+				fwrite(&(meta->seq_data[i].name_length), sizeof(uint16_t),  1, fp) != 1 ||
+				fwrite(meta->seq_data[i].name,           sizeof(char),    meta->seq_data[i].name_length+1  , fp) !=  meta->seq_data[i].name_length+1
+		)
+		  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
+	}
+
+
+	/* now append the FM-index data in fptmp to the desired output file, fp */
+	rewind(fptmp);
+    for (i=0; i<numblocks; i++) {
+
+    	//first, read
+    	if(fread(&block_length, sizeof(uint32_t), 1, fptmp) !=  1)
+    		esl_fatal( "%s: Error reading block_length in FM index.\n", argv[0]);
+    	if(fread(&term_loc, sizeof(uint32_t), 1, fptmp) !=  1)
+    		esl_fatal( "%s: Error reading terminal location in FM index.\n", argv[0]);
+
+    	compressed_bytes = 	((chars_per_byte-1+block_length)/chars_per_byte);
+    	num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
+    	num_freq_cnts_sb = 1+ceil((float)block_length/meta->freq_cnt_sb);
+    	num_SA_samples   = 1+floor((float)block_length/meta->freq_SA);
+
+    	if(fread(T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+    	  esl_fatal( "%s: Error reading T in FM index.\n", argv[0]);
+    	if(fread(BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+    	  esl_fatal( "%s: Error reading BWT in FM index.\n", argv[0]);
+    	if(fread(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fptmp) != (size_t)num_SA_samples)
+    	  esl_fatal( "%s: Error reading SA in FM index.\n", argv[0]);
+    	if(fread(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
+    	  esl_fatal( "%s: Error reading occCnts_b in FM index.\n", argv[0]);
+    	if(fread(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
+    	  esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", argv[0]);
+
+
+
+    	//then, write
     	if(fwrite(&block_length, sizeof(uint32_t), 1, fp) !=  1)
     		esl_fatal( "%s: Error writing block_length in FM index.\n", argv[0]);
     	if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
@@ -545,47 +609,28 @@ main(int argc, char *argv[]) {
     	  esl_fatal( "%s: Error writing occCnts_sb in FM index.\n", argv[0]);
 
 
-    	if (numblocks == allocedblocks) {
-    		allocedblocks *= 2;
-    		ESL_REALLOC(meta->block_offsets, allocedblocks);
-    	}
-    	meta->block_offsets[numblocks] = offset;
-
-    	offset +=  2*sizeof(uint32_t)
-    	         + 2*sizeof(uint8_t)*compressed_bytes
-    	         + sizeof(uint32_t)*num_SA_samples
-    	         + sizeof(uint16_t)*(meta->alph_size)*num_freq_cnts_b
-    	         + sizeof(uint32_t)*(meta->alph_size)*num_freq_cnts_sb ;
-
-    	numblocks++;
-
     }
-
-
-	if(fwrite(meta, sizeof(FM_METADATA), 1, fp) != 1)
-	  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
-
-	//go back to beginning of file, and store the location at which the meta data was written
-	fseek(fp, 0, 0);
-	if(fwrite(&offset, sizeof(uint64_t), 1, fp) != 1)
-	  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
-
-
-
 
 
 
 	fclose(fp);
+	fclose(fptmp);
 	free(T);
 	free(BWT);
 	free(SA);
+	free(SAsamp);
 	free(occCnts_b);
 	free(cnts_b);
 	free(occCnts_sb);
 	free(cnts_sb);
-	free(meta);
 	free(inv_alph);
 	free(alph);
+
+	for (i=0; i<numseqs; i++)
+		free(meta->seq_data[numseqs].name);
+	free(meta->seq_data);
+	free(meta);
+
 
     esl_getopts_Destroy(go);
 
@@ -608,13 +653,20 @@ ERROR:
 	if (T)          free(T);
 	if (BWT)        free(BWT);
 	if (SA)         free(SA);
+	if (SAsamp)     free(SAsamp);
 	if (occCnts_b)  free(occCnts_b);
 	if (cnts_b)     free(cnts_b);
 	if (occCnts_sb) free(occCnts_sb);
 	if (cnts_sb)    free(cnts_sb);
-	if (meta)       free(meta);
 	if (inv_alph)   free(inv_alph);
 	if (alph)       free(alph);
+
+    if (meta) {
+    	for (i=0; i<numseqs; i++)
+    		free(meta->seq_data[numseqs].name);
+    	free(meta->seq_data);
+    	free(meta);
+    }
 
 	fprintf (stderr, "failure during memory allocation\n");
 

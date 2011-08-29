@@ -778,27 +778,32 @@ typedef struct fm_hit_s {
 } FM_HIT;
 
 
-typedef struct fm_metadata_s {
-  //TODO: these don't need to be ints - uint8_t ?
-  int alph_type;
-  int alph_size;
-  int charBits;
-  int freq_SA; //frequency with which SA is sampled
-  int freq_cnt_sb; //frequency with which full cumulative counts are captured
-  int freq_cnt_b; //frequency with which intermittent counts are captured
-  int SA_shift;
-  int cnt_shift_sb;
-  int cnt_shift_b;
+typedef struct fm_blockdata_s {
+  uint32_t id;
+  uint32_t start;
+  uint32_t length;
+  uint16_t name_length;
+  char     *name;
+} FM_SEQDATA;
 
-  int       seq_count;
-  int       block_count;
-  int      *block_offsets; //block_offsets[i] stores the number of sequences held in blocks 0..i-1
-  uint16_t *name_lengths;
-  char     **names;
-  uint32_t *ids;
-  uint32_t *starts;
-  uint32_t *lengths;
+
+typedef struct fm_metadata_s {
+  uint8_t alph_type;
+  uint8_t alph_size;
+  uint8_t charBits;
+  uint32_t freq_SA; //frequency with which SA is sampled
+  uint32_t freq_cnt_sb; //frequency with which full cumulative counts are captured
+  uint32_t freq_cnt_b; //frequency with which intermittent counts are captured
+  uint8_t SA_shift;
+  uint8_t cnt_shift_sb;
+  uint8_t cnt_shift_b;
+  uint16_t block_count;
+  uint32_t seq_count;
+  uint64_t     *block_sizes; //block_offsets[i] stores the number of sequences held in blocks 0..i-1
+  FM_SEQDATA   *seq_data;
 } FM_METADATA;
+
+
 
 typedef struct fm_data_s {
   uint32_t N; //length of text
@@ -807,10 +812,10 @@ typedef struct fm_data_s {
   uint8_t  *T;  //text corresponding to the BWT
   uint8_t  *BWT_mem;
   uint8_t  *BWT;
-  uint32_t  *SA; // sampled suffix array
-  int32_t   *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
-  uint32_t  *occCnts_sb;
-  uint16_t  *occCnts_b;
+  uint32_t *SA; // sampled suffix array
+  int32_t  *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
+  uint32_t *occCnts_sb;
+  uint16_t *occCnts_b;
 } FM_DATA;
 
 
@@ -1346,7 +1351,7 @@ extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 
 /* fm_alphabet.c */
-extern int fm_createAlphabet (int alph_type, char **alph, char **inv_alph, int *alph_size, int *alph_bits);
+extern int fm_createAlphabet (int alph_type, char **alph, char **inv_alph, uint8_t *alph_size, uint8_t *alph_bits);
 
 
 
