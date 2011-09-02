@@ -236,10 +236,22 @@ getFMHits( FM_DATA *fm, FM_INTERVAL *interval, int block_id, int hit_offset, FM_
 
 }
 
+/* Function:  freeFM()
+ * Synopsis:  release the memory required to store an individual FM-index
+ */
+void
+freeFM ( FM_DATA *fm)
+{
+    if (fm->T)           free (fm->T);
+    if (fm->BWT_mem)     free (fm->BWT_mem);
+	if (fm->SA)          free (fm->SA);
+	if (fm->C)           free (fm->C);
+	if (fm->occCnts_b)   free (fm->occCnts_b);
+	if (fm->occCnts_sb)  free (fm->occCnts_sb);
+}
 
 /* Function:  readFM()
  * Synopsis:  Read the FM index off disk
- * Incept:    TJW, Wed Dec 22 19:05:04 MST 2010 [Tucson]
  * Purpose:   Read the FM-index as written by fmbuild.
  *            First read the metadata header, then allocate space for the full index,
  *            then read it in.
@@ -330,12 +342,7 @@ readFM( FILE *fp, FM_DATA *fm )
 	return eslOK;
 
 ERROR:
-    if (fm->T)           free (fm->T);
-    if (fm->BWT_mem)     free (fm->BWT_mem);
-	if (fm->SA)          free (fm->SA);
-	if (fm->C)           free (fm->C);
-	if (fm->occCnts_b)   free (fm->occCnts_b);
-	if (fm->occCnts_sb)  free (fm->occCnts_sb);
+    freeFM(fm);
 	esl_fatal("Error allocating memory in %s\n", "readFM");
     return eslFAIL;
 }
@@ -433,16 +440,32 @@ computeSequenceOffset (FM_DATA *fms, int block, int pos) {
 	if (meta->seq_data[hi].offset <= pos) return hi;
 
     while (1) {
-   	   mid = (lo + hi + 1) / 2;  /* +1 makes mid round up, mid=0 impossible */
-	   if      (meta->seq_data[mid].offset < pos) lo = mid; /* we're too far left  */
-	   else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* we're too far right */
-	   else break;		              /* ta-da! */
+   	   mid = (lo + hi + 1) / 2;  /* round up */
+	   if      (meta->seq_data[mid].offset < pos) lo = mid; /* too far left  */
+	   else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* too far right */
+	   else break;		             /* perfecto */
     }
 	return mid-1;
 
 }
 
+void
+reverse (char* str, int N)
+{
+  int end   = N-1;
+  int start = 0;
 
+  while( start<end )
+  {
+    str[start] ^= str[end];
+    str[end]   ^= str[start];
+    str[start] ^= str[end];
+
+    ++start;
+    --end;
+  }
+
+}
 
 /* hit_sorter(): qsort's pawn, below */
 static int
@@ -536,7 +559,7 @@ main(int argc,  char *argv[]) {
 	for (i=0; i<meta->block_count; i++) {
 		readFM( fp_fm, fms+i );
 	}
-
+    fclose(fp_fm);
 
 	output_header(stdout, go, fname_fm, fname_queries);
 
@@ -567,6 +590,8 @@ main(int argc,  char *argv[]) {
 		while (line[qlen] != '\0' && line[qlen] != '\n')  qlen++;
 		if (line[qlen] == '\n')  line[qlen] = '\0';
 
+		reverse(line, qlen);
+
 		hit_num = 0;
 
 		for (i=0; i<meta->block_count; i++) {
@@ -589,36 +614,40 @@ main(int argc,  char *argv[]) {
 			}
 		}
 
+
 		if (hit_num > 0) {
 			hit_cnt++;
 
-			//printf ("HIT:  %s (%d)\n", line, hit_num);
-			//for each hit, identify the sequence id and position within that sequence
-			for (i = 0; i< hit_num; i++) {
-				int block = hits[i].block;
-				int seq_offset = computeSequenceOffset( fms, block, hits[i].start);
-				int pos =  ( hits[i].start - meta->seq_data[ seq_offset ].offset) + meta->seq_data[ seq_offset ].start - 1;
-				//reuse hit variables.  Now "block" has the index into the matching sequence (in meta), and "start" has the pos within that sequence
-				hits[i].block = seq_offset;
-				hits[i].start = pos;
-//				printf ( "\t%10s (%d)\n",meta.seq_data[ seq_offset ].name, pos);
-			}
-
-			//now sort according the the sequence_id corresponding to that seq_offset
-			qsort(hits, hit_num, sizeof(FM_HIT), hit_sorter);
-
-			//printf ( "\t%10s (%d)\n",meta->seq_data[ hits[0].block ].name, hits[0].start);
-		    hit_indiv_cnt++;
-			for (i = 1; i< hit_num; i++) {
-				if (meta->seq_data[ hits[i].block ].id != meta->seq_data[ hits[i-1].block ].id ||
-						hits[i].start != hits[i-1].start )
-				{
-					//printf ( "\t%10s (%d)\n",meta->seq_data[ hits[i].block ].name, hits[i].start);
-					hit_indiv_cnt++;
+			if (count_only) {
+				hit_indiv_cnt += hit_num;
+			} else {
+				//printf ("HIT:  %s (%d)\n", line, hit_num);
+				//printf ("HIT:  %s  (%d, %d)\n", line, interval.lower, interval.upper );
+				//for each hit, identify the sequence id and position within that sequence
+				for (i = 0; i< hit_num; i++) {
+					int block = hits[i].block;
+					int seq_offset = computeSequenceOffset( fms, block, hits[i].start);
+					int pos =  ( hits[i].start - meta->seq_data[ seq_offset ].offset) + meta->seq_data[ seq_offset ].start - 1;
+					//reuse hit variables.  Now "block" has the index into the matching sequence (in meta), and "start" has the pos within that sequence
+					hits[i].block = seq_offset;
+					hits[i].start = pos;
+					//printf ( "\t%d\n", pos);
 				}
-			}
-		    //printf ("\n");
 
+				//now sort according the the sequence_id corresponding to that seq_offset
+				qsort(hits, hit_num, sizeof(FM_HIT), hit_sorter);
+
+				hit_indiv_cnt++;
+				for (i = 1; i< hit_num; i++) {
+					if (meta->seq_data[ hits[i].block ].id != meta->seq_data[ hits[i-1].block ].id ||
+							hits[i].start != hits[i-1].start )
+					{
+						//printf ( "\t%10s (%d)\n",meta->seq_data[ hits[i].block ].name, hits[i].start);
+						hit_indiv_cnt++;
+					}
+				}
+				//printf ("\n");
+			}
 		} else {
 			miss_cnt++;
 		}
@@ -626,8 +655,17 @@ main(int argc,  char *argv[]) {
 
 	}
 
+	for (i=0; i<meta->block_count; i++)
+		freeFM( fms+i );
 
+	for (i=0; i<meta->seq_count; i++)
+		free (meta->seq_data[i].name);
+
+	free (meta->seq_data);
+	free (meta);
     free (hits);
+    free (line);
+
     fclose(fp);
     fm_destroyGlobals();
 

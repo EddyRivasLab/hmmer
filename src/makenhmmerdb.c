@@ -20,7 +20,7 @@ static ESL_OPTIONS options[] = {
   { "--alph",       eslARG_STRING,     "dna", NULL, NULL,    NULL,  NULL,  NULL,        "alphabet [dna,dna_full,amino]",                             2 },
   { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     2 },
   { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,        "suffix array sample rate (power of 2)",                     2 },
-  { "--block_size", eslARG_INT,        "15",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      2 },
+  { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      2 },
 
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -165,11 +165,13 @@ main(int argc, char *argv[]) {
 
 	char *fname_in = NULL;
 	char *fname_out= NULL;
-	int block_size = 15000000;
+	int block_size = 50000000;
 	int sq_cnt = 0;
 	int use_tmpsq = 0;
 	int reported_N = 0;
 	uint32_t block_length;
+	uint64_t total_char_count = 0;
+
 	int max_block_size;
 	long joffset;
 
@@ -380,6 +382,7 @@ main(int argc, char *argv[]) {
     	    	T[block_length] = inv_alph[c];
 
     	    	block_length++;
+    	    	if (j>block->list[i].C) total_char_count++; // add to total count, only if it's not redundant with earlier read
     	    	meta->seq_data[numseqs].length++;
 
         	}
@@ -387,6 +390,7 @@ main(int argc, char *argv[]) {
         }
     	T[block_length] = 0; // last character 0 is effectively '$' for suffix array
     	block_length++;
+
 
     	num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
     	num_freq_cnts_sb = 1+ceil((float)block_length/meta->freq_cnt_sb);
@@ -610,6 +614,9 @@ main(int argc, char *argv[]) {
     }
 
 
+    fprintf (stderr, "Number of characters in index:  %ld\n", (long)total_char_count);
+    fprintf (stderr, "Number of FM-index blocks:      %ld\n", (long)meta->block_count);
+
 
 	fclose(fp);
 	fclose(fptmp);
@@ -631,6 +638,8 @@ main(int argc, char *argv[]) {
 
 
     esl_getopts_Destroy(go);
+
+
 
     // compute and print the elapsed time in millisec
     t2 = times(&ts2);
