@@ -8,7 +8,7 @@
  * a function that does something in _sse and _vmx code
  */
 int
-fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
+fm_initGlobals( FM_METADATA *meta  ) {
 	return eslOK;
 }
 

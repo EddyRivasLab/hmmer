@@ -338,7 +338,7 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 /*fm.c */
-extern int fm_initGlobals ( FM_METADATA *meta, FM_DATA *fm  );
+extern int fm_initGlobals ( FM_METADATA *meta );
 extern int fm_destroyGlobals();
 extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
 

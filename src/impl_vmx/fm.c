@@ -66,7 +66,7 @@ int fm_print_vec_rev (vector unsigned char in) {
  * Purpose:   Initialize vector masks used in VMX FMindex implementation
  */
 int
-fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
+fm_initGlobals( FM_METADATA *meta ) {
 	int status;
 	int i,j;
 	int trim_chunk_count;

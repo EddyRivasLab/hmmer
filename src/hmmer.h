@@ -774,14 +774,16 @@ typedef struct fm_interval_s {
 
 typedef struct fm_hit_s {
   int   start;
+  int   block;
 //  int   length;
 } FM_HIT;
 
 
-typedef struct fm_blockdata_s {
+typedef struct fm_seqdata_s {
   uint32_t id;
   uint32_t start;
   uint32_t length;
+  uint32_t offset;
   uint16_t name_length;
   char     *name;
 } FM_SEQDATA;
@@ -799,7 +801,6 @@ typedef struct fm_metadata_s {
   uint8_t cnt_shift_b;
   uint16_t block_count;
   uint32_t seq_count;
-  uint64_t     *block_sizes; //block_offsets[i] stores the number of sequences held in blocks 0..i-1
   FM_SEQDATA   *seq_data;
 } FM_METADATA;
 
@@ -807,8 +808,8 @@ typedef struct fm_metadata_s {
 
 typedef struct fm_data_s {
   uint32_t N; //length of text
-//  uint32_t L; // bytes used to store text
   uint32_t term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
+  uint32_t seq_offset;
   uint8_t  *T;  //text corresponding to the BWT
   uint8_t  *BWT_mem;
   uint8_t  *BWT;

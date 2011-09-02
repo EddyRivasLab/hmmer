@@ -23,10 +23,10 @@ int occCallCnt;
 int num_freq_cnts_b ;
 int num_freq_cnts_sb;
 
-int32_t *Cvals;
+
 int maskSA;
 int shiftSA;
-
+FM_METADATA *meta;
 
 static void
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_fmfile, char **ret_qfile)
@@ -73,7 +73,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_fmfi
 }
 
 static int
-output_header(FILE *ofp, const ESL_GETOPTS *go, char *fmfile, char *qfile, FM_METADATA *meta)
+output_header(FILE *ofp, const ESL_GETOPTS *go, char *fmfile, char *qfile)
 {
   p7_banner(ofp, go->argv[0], banner);
 
@@ -136,14 +136,16 @@ commaprint(unsigned long n) {
  *            characters - bwt_getOccCount, which depends on compilation choices.
  */
 int
-getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
+getFMRange( FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
 
 	int count1, count2;
 	int i=0;
 
+
+
 	uint8_t c = inv_alph[(int)query[0]];
-	interval->lower = Cvals[c] + (c==0?1:0);
-	interval->upper  = Cvals[c+1]-1;
+	interval->lower  = abs(fm->C[c]);// + (c==0?1:0);
+	interval->upper  = abs(fm->C[c+1])-1;
 
 	while (interval->lower>0 && interval->lower <= interval->upper) {
 		c = query[++i];
@@ -156,10 +158,10 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
 		count1 = fm_getOccCount (meta, fm, interval->lower-1, c);
 		count2 = fm_getOccCount (meta, fm, interval->upper, c);
 
-// 		   printf("%d %d %d -> %d,%d\n", c, interval->lower-1, interval->upper, count1, count2);
+ 		   //printf("%d %d %d -> %d,%d\n", c, interval->lower-1, interval->upper, count1, count2);
 
-		interval->lower = Cvals[c] + count1;
-		interval->upper = Cvals[c] + count2 - 1;
+		interval->lower = abs(fm->C[c]) + count1;
+		interval->upper = abs(fm->C[c]) + count2 - 1;
 
 		occCallCnt+=2;
 	}
@@ -174,24 +176,23 @@ getFMRange( FM_METADATA *meta, FM_DATA *fm, char *query, char *inv_alph, FM_INTE
  * Purpose:   The returned char is used by getFMHits(), to seed a call to
  *            bwt_getOccCount().
  */
-#ifndef FMDEBUG
-inline
-#endif
+//#ifndef FMDEBUG
+//inline
+//#endif
 uint8_t
-getChar( FM_METADATA *meta, int j, const uint8_t *B ) {
+getChar( int j, const uint8_t *B ) {
 	uint8_t c = -1;
 
 	if (meta->alph_type == fm_DNA) {
         /*
          *  B[j>>2] is the byte of B in which j is found (j/4)
          *
-         *  without branching, do:
-         *  if (j%0 == 0) use the rightmost two bits
-         *  else shift  4-(j%1) bits to the right, and use the remaining rightmost 2 bits
-         *
-         *  the bizarre  ((0x4 - (j&0x3))&0x3)<<1 gets the amount of shift described above
+         *  Let j' be the final two bits of j (j&0x2)
+         *  The char bits are the two starting at position 2*j'.
+         *  Without branching, grab them by shifting B[j>>2] right 6-2*j' bits,
+         *  then masking to keep the final two bits
          */
-		c = (B[j>>2] >> ( ((0x4 - (j&0x3))&0x3)<<1 ) ) & 0x3;
+		c = (B[j>>2] >> ( 0x6 - ((j&0x3)<<1) ) & 0x3);
 	} else if (meta->alph_type == fm_DNA_full) {
 		c = (B[j>>1] >> (((j&0x1)^0x1)<<2) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
 	} else {
@@ -208,13 +209,12 @@ getChar( FM_METADATA *meta, int j, const uint8_t *B ) {
  *            to String Pattern Matching). Most of the meat is in the method of counting
  *            characters - bwt_getOccCount, which depends on compilation choices.
  */
-#ifndef FMDEBUG
-inline
-#endif
+//#ifndef FMDEBUG
+//inline
+//#endif
 int
-getFMHits( FM_METADATA *meta, FM_DATA *fm, FM_INTERVAL *interval, FM_HIT *hits_ptr) {
+getFMHits( FM_DATA *fm, FM_INTERVAL *interval, int block_id, int hit_offset, FM_HIT *hits_ptr) {
 
-	const uint8_t *B = fm->BWT;
 	int i, j, len = 0;
 
 	for (i = interval->lower;  i<= interval->upper; i++) {
@@ -222,13 +222,14 @@ getFMHits( FM_METADATA *meta, FM_DATA *fm, FM_INTERVAL *interval, FM_HIT *hits_p
 		len = 0;
 
 		while ( j & maskSA ) { //go until we hit a position in the full SA that was sampled during FM index construction
-			uint8_t c = getChar( meta, j, B);
+			uint8_t c = getChar( j, fm->BWT);
 			j = fm_getOccCount (meta, fm, j-1, c);
-			j += Cvals[c] ;
+			j += abs(fm->C[c]);
 			len++;
 		}
 		const int tmp = j >> shiftSA;
-		hits_ptr[i - interval->lower].start = fm->SA[ tmp ] + len;
+		hits_ptr[hit_offset + i - interval->lower].block = block_id;
+		hits_ptr[hit_offset + i - interval->lower].start = fm->SA[ tmp ] + len;
 	}
 
 	return eslOK;
@@ -244,66 +245,67 @@ getFMHits( FM_METADATA *meta, FM_DATA *fm, FM_INTERVAL *interval, FM_HIT *hits_p
  *            then read it in.
  */
 int
-readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
+readFM( FILE *fp, FM_DATA *fm )
 {
 	//shortcut variables
 	int *C               = NULL;
 
-
-	uint16_t *occCnts_b  = NULL;
-	uint32_t *occCnts_sb = NULL;
-	FILE *fp             = NULL;
 	int status;
 	int i;
+
+	uint16_t *occCnts_b  = NULL;  //convenience variables, used to simplify macro calls
+	uint32_t *occCnts_sb = NULL;
+
+	int compressed_bytes;
+	int num_freq_cnts_b;
+	int num_freq_cnts_sb;
 	int num_SA_samples;
 	int prevC;
 	int cnt;
-	int bwtSize;
-	int compressed_bytes;
-	int chars_per_byte;
-
-	if((fp = fopen(fname, "rb")) == NULL)
-		esl_fatal("Cannot open file `%s': ", fname);
-
-	//get the FM meta data
-	if(fread(meta, sizeof(FM_METADATA), 1, fp) != 1)
-		esl_fatal("Error reading BWT size.%s\n", " ");
+	int chars_per_byte = 8/meta->charBits;
 
 
-	num_freq_cnts_sb = 1+ceil((float)fm->N/meta->freq_cnt_sb);
+	//first, read
+	if(fread(&(fm->N), sizeof(uint32_t), 1, fp) !=  1)
+		esl_fatal( "%s: Error reading block_length in FM index.\n", __FILE__);
+	if(fread(&(fm->term_loc), sizeof(uint32_t), 1, fp) !=  1)
+		esl_fatal( "%s: Error reading terminal location in FM index.\n", __FILE__);
+	if(fread(&(fm->seq_offset), sizeof(uint16_t), 1, fp) !=  1)
+		esl_fatal( "%s: Error reading seq_offset in FM index.\n", __FILE__);
+
+
+	compressed_bytes = 	((chars_per_byte-1+fm->N)/chars_per_byte);
 	num_freq_cnts_b  = 1+ceil((float)fm->N/meta->freq_cnt_b);
+	num_freq_cnts_sb = 1+ceil((float)fm->N/meta->freq_cnt_sb);
 	num_SA_samples   = 1+floor((float)fm->N/meta->freq_SA);
 
-
-	chars_per_byte = 8/meta->charBits;
-	compressed_bytes = 	((chars_per_byte-1+fm->N)/chars_per_byte);
-
-	// allocate and read the data
-	bwtSize = compressed_bytes  * sizeof(uint8_t);
-        ESL_ALLOC (fm->T, bwtSize );
-	ESL_ALLOC (fm->BWT_mem, bwtSize + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
+	// allocate space, then read the data
+    ESL_ALLOC (fm->T, compressed_bytes );
+	ESL_ALLOC (fm->BWT_mem, compressed_bytes + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
         fm->BWT = 	(uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
 	ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
 	ESL_ALLOC (fm->C, 1+meta->alph_size * sizeof(uint32_t));
 	ESL_ALLOC (fm->occCnts_b,  num_freq_cnts_b *  (meta->alph_size ) * sizeof(uint16_t)); // every freq_cnt positions, store an array of ints
 	ESL_ALLOC (fm->occCnts_sb,  num_freq_cnts_sb *  (meta->alph_size ) * sizeof(uint32_t)); // every freq_cnt positions, store an array of ints
 
+
+	if(fread(fm->T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+	  esl_fatal( "%s: Error reading T in FM index.\n", __FILE__);
+	if(fread(fm->BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+	  esl_fatal( "%s: Error reading BWT in FM index.\n", __FILE__);
+	if(fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+	  esl_fatal( "%s: Error reading SA in FM index.\n", __FILE__);
+	if(fread(fm->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
+	  esl_fatal( "%s: Error reading occCnts_b in FM index.\n", __FILE__);
+	if(fread(fm->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
+	  esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", __FILE__);
+
+
 	//shortcut variables
 	C          = fm->C;
 	occCnts_b  = fm->occCnts_b;
 	occCnts_sb = fm->occCnts_sb;
 
-	// read FM index structures
-	if( fread(fm->T, 1, (size_t)bwtSize, fp) != (size_t)bwtSize)
-		esl_fatal("%s: Error reading FM T.\n", "fmsearch");
-	if( fread(fm->BWT, 1, (size_t)bwtSize, fp) != (size_t)bwtSize)
-		esl_fatal("%s: Error reading FM BWT.\n", "fmsearch");
-	if(fread(fm->SA, sizeof(int), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
-		esl_fatal("%s: Error reading FM SA.\n", "fmsearch");
-	if(fread(occCnts_b, (meta->alph_size) * sizeof(uint16_t), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
-		esl_fatal("%s: Error reading FM Occ_b.\n", "fmsearch");
-	if(fread(occCnts_sb, (meta->alph_size) * sizeof(uint32_t), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
-		esl_fatal("%s: Error reading FM Occ_sb.\n", "fmsearch");
 
 	/*compute the first position of each letter in the alphabet in a sorted list
 	* (with an extra value to simplify lookup of the last position for the last letter).
@@ -325,14 +327,6 @@ readFM( const char *fname, FM_METADATA *meta,  FM_DATA *fm )
 	C[meta->alph_size] *= -1;
 	C[0] = 1;
 
-
-	Cvals = NULL; 	//capture abs() for C array (so I don't have to do it for every query sequence)
-	ESL_ALLOC(Cvals, (meta->alph_size+1) * sizeof(int32_t) );
-	for(i=0; i<=meta->alph_size; i++)
-		Cvals[i] = abs(fm->C[i]);
-
-
-
 	return eslOK;
 
 ERROR:
@@ -347,7 +341,127 @@ ERROR:
 }
 
 
+/* Function:  readFMmeta()
+ * Synopsis:  Read metadata from disk for the set of FM-indexes stored in a HMMER binary file
+ *
+ * Input: file pointer to binary file
+ * Output: return filled meta struct
+ */
+int
+readFMmeta( FILE *fp )
+{
+	int status;
+	int i;
 
+	if(		fread(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->alph_size),    sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->charBits),     sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->freq_SA),      sizeof(uint32_t), 1, fp) != 1 ||
+			fread(&(meta->freq_cnt_sb),  sizeof(uint32_t), 1, fp) != 1 ||
+			fread(&(meta->freq_cnt_b),   sizeof(uint32_t), 1, fp) != 1 ||
+			fread(&(meta->SA_shift),     sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->cnt_shift_sb), sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->cnt_shift_b),  sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->block_count),  sizeof(uint16_t), 1, fp) != 1 ||
+			fread(&(meta->seq_count),    sizeof(uint32_t), 1, fp) != 1
+	)
+	  esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
+
+
+
+	ESL_ALLOC (meta->seq_data,     meta->seq_count   * sizeof(FM_SEQDATA));
+	if (meta->seq_data == NULL  )
+		esl_fatal("unable to allocate memory to store FM meta data\n");
+
+//	if(		fread(meta->block_sizes,   sizeof(uint64_t), meta->block_count, fp) != meta->block_count )
+//	  esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
+
+
+	for (i=0; i<meta->seq_count; i++) {
+		if(		fread(&(meta->seq_data[i].id),          sizeof(uint32_t),  1, fp) != 1 ||
+				fread(&(meta->seq_data[i].start),       sizeof(uint32_t),  1, fp) != 1 ||
+				fread(&(meta->seq_data[i].length),      sizeof(uint32_t),  1, fp) != 1 ||
+				fread(&(meta->seq_data[i].offset),      sizeof(uint32_t),  1, fp) != 1 ||
+				fread(&(meta->seq_data[i].name_length), sizeof(uint16_t),  1, fp) != 1
+				)
+		  esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
+
+		ESL_ALLOC (meta->seq_data[i].name, (1+meta->seq_data[i].name_length) * sizeof(char));
+
+		if( fread(meta->seq_data[i].name,  sizeof(char), meta->seq_data[i].name_length+1  , fp) !=  meta->seq_data[i].name_length+1 )
+		  esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
+
+	}
+
+	return eslOK;
+
+ERROR:
+//	if (meta->block_sizes)           free (meta->block_sizes);
+
+	if (meta->seq_data) {
+		for (i=0; i<meta->seq_count; i++)
+			free(meta->seq_data[i].name);
+		free(meta->seq_data);
+	}
+	free(meta);
+
+ 	esl_fatal("Error allocating memory in %s\n", "readFM");
+    return eslFAIL;
+}
+
+
+
+//inline
+uint32_t
+computeSequenceOffset (FM_DATA *fms, int block, int pos) {
+
+
+	uint32_t lo = fms[block].seq_offset;
+	uint32_t hi  = (block == meta->block_count-1 ? meta->seq_count : fms[block+1].seq_offset) - 1;
+	uint32_t mid;
+
+	/*  //linear scan
+	for (mid=lo+1; i<=hi; i++) {
+		if (meta->seq_data[i].offset > pos) // the position of interest belongs to the previous sequence
+			break;
+	}
+	return i-1;
+    */
+
+	//binary search, first handling edge cases
+	if (lo==hi)                           return lo;
+	if (meta->seq_data[hi].offset <= pos) return hi;
+
+    while (1) {
+   	   mid = (lo + hi + 1) / 2;  /* +1 makes mid round up, mid=0 impossible */
+	   if      (meta->seq_data[mid].offset < pos) lo = mid; /* we're too far left  */
+	   else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* we're too far right */
+	   else break;		              /* ta-da! */
+    }
+	return mid-1;
+
+}
+
+
+
+/* hit_sorter(): qsort's pawn, below */
+static int
+hit_sorter(const void *a, const void *b)
+{
+  FM_HIT *h1 = (FM_HIT*)a;
+  FM_HIT *h2 = (FM_HIT*)b;
+
+  uint32_t id1    = meta->seq_data[ h1->block ].id;
+  uint32_t id2    = meta->seq_data[ h2->block ].id;
+
+
+  if      (id1 > id2) return  1;
+  else if (id1 < id2) return -1;
+  else {
+	  if  (h1->start > h2->start) return  1;
+	  else                        return -1;
+  }
+}
 
 /* Function:  main()
  * Synopsis:  Run set of queries against an FM
@@ -363,9 +477,6 @@ main(int argc,  char *argv[]) {
 	void* tmp; // used for RALLOC calls
 	clock_t t1, t2;
 	struct tms ts1, ts2;
-	//start timer
-	t1 = times(&ts1);
-
 	char *fname_fm      = NULL;
 	char *fname_queries = NULL;
 	char *inv_alph      = NULL;
@@ -378,17 +489,21 @@ main(int argc,  char *argv[]) {
 	int miss_cnt      = 0;
 	int hit_num       = 0;
 	int hits_size     = 0;
-
+    int i;
 	int count_only    = 0;
 
-	FM_METADATA meta;
-	FM_DATA fm;
+	FM_DATA *fms;
 	FM_INTERVAL interval;
+	FILE* fp_fm = NULL;
 	FILE* fp = NULL;
 	FILE* out = NULL;
     char *outname = NULL;
 
 	ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
+
+	//start timer
+	t1 = times(&ts1);
+
 	process_commandline(argc, argv, &go, &fname_fm, &fname_queries);
 
 
@@ -409,20 +524,32 @@ main(int argc,  char *argv[]) {
 	occCallCnt = 0;
 
 
-	readFM ( fname_fm, &meta, &fm );
+	if((fp_fm = fopen(fname_fm, "rb")) == NULL)
+		esl_fatal("Cannot open file `%s': ", fname_fm);
 
-	output_header(stdout, go, fname_fm, fname_queries, &meta);
+	ESL_ALLOC (meta, sizeof(FM_METADATA));
+
+	readFMmeta( fp_fm );
+
+    //read in FM-index blocks
+    ESL_ALLOC(fms, meta->block_count * sizeof(FM_DATA) );
+	for (i=0; i<meta->block_count; i++) {
+		readFM( fp_fm, fms+i );
+	}
+
+
+	output_header(stdout, go, fname_fm, fname_queries);
 
 
 	/* initialize a few global variables, then call initGlobals
 	 * to do architecture-specific initialization
 	 */
-	maskSA       =  meta.freq_SA - 1;
-	shiftSA      =  meta.SA_shift;
-	fm_initGlobals(&meta, &fm);
+	maskSA       =  meta->freq_SA - 1;
+	shiftSA      =  meta->SA_shift;
+	fm_initGlobals(meta);
 
 
-	fm_createAlphabet(meta.alph_type, &alph, &inv_alph, &(meta.alph_size), NULL); // don't override charBits
+	fm_createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), NULL); // don't override charBits
 
 
 	fp = fopen(fname_queries,"r");
@@ -432,47 +559,73 @@ main(int argc,  char *argv[]) {
 	ESL_ALLOC(line, FM_MAX_LINE * sizeof(char));
 
 	hits_size = 200;
-	ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
+	ESL_ALLOC(hits, hits_size * sizeof(FM_HIT));
+
 
 	while(fgets(line, FM_MAX_LINE, fp) ) {
 		int qlen=0;
 		while (line[qlen] != '\0' && line[qlen] != '\n')  qlen++;
 		if (line[qlen] == '\n')  line[qlen] = '\0';
 
-		getFMRange(&meta, &fm, line, inv_alph, &interval);
+		hit_num = 0;
 
-		if (interval.lower>0 && interval.lower <= interval.upper) {
+		for (i=0; i<meta->block_count; i++) {
 
-			hit_num =  interval.upper - interval.lower + 1;
+			getFMRange(fms+i, line, inv_alph, &interval);
 
-			if (hit_num > hits_size) {
-				ESL_RALLOC(hits, tmp, hit_num * sizeof(FM_HIT));
-				hits_size = hit_num;
+			if (interval.lower>0 && interval.lower <= interval.upper) {
+
+				int new_hit_num =  interval.upper - interval.lower + 1;
+				hit_num += new_hit_num;
+
+				if (hit_num > hits_size) {
+					hits_size = 2*hit_num;
+					ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
+				}
+
+				if (!count_only)
+					getFMHits(fms+i, &interval, i, hit_num-new_hit_num, hits);
+
+			}
+		}
+
+		if (hit_num > 0) {
+			hit_cnt++;
+
+			//printf ("HIT:  %s (%d)\n", line, hit_num);
+			//for each hit, identify the sequence id and position within that sequence
+			for (i = 0; i< hit_num; i++) {
+				int block = hits[i].block;
+				int seq_offset = computeSequenceOffset( fms, block, hits[i].start);
+				int pos =  ( hits[i].start - meta->seq_data[ seq_offset ].offset) + meta->seq_data[ seq_offset ].start - 1;
+				//reuse hit variables.  Now "block" has the index into the matching sequence (in meta), and "start" has the pos within that sequence
+				hits[i].block = seq_offset;
+				hits[i].start = pos;
+//				printf ( "\t%10s (%d)\n",meta.seq_data[ seq_offset ].name, pos);
 			}
 
-			//if (!count_only)
-			//	getFMHits(&meta, &fm, &interval, hits);
+			//now sort according the the sequence_id corresponding to that seq_offset
+			qsort(hits, hit_num, sizeof(FM_HIT), hit_sorter);
 
-			hit_cnt++;
-			hit_indiv_cnt += hit_num;
+			//printf ( "\t%10s (%d)\n",meta->seq_data[ hits[0].block ].name, hits[0].start);
+		    hit_indiv_cnt++;
+			for (i = 1; i< hit_num; i++) {
+				if (meta->seq_data[ hits[i].block ].id != meta->seq_data[ hits[i-1].block ].id ||
+						hits[i].start != hits[i-1].start )
+				{
+					//printf ( "\t%10s (%d)\n",meta->seq_data[ hits[i].block ].name, hits[i].start);
+					hit_indiv_cnt++;
+				}
+			}
+		    //printf ("\n");
 
-//			printf ("%s : %d\n", line, interval.upper-interval.lower+1);
-
-
-			//PRINTOUT ( "HIT:  %s  (%d, %d)\n", line, interval.lower, interval.upper);
-			//int i;
-			//for (i = 0; i< hit_num; i++) {
-			//	int pos_fwd = meta.N - hits[i].start - qlen - 1; // flip the sequence reversal
-				//PRINTOUT ( "\t%d\n", pos_fwd);
-			//}
 		} else {
-//			printf ("no hit\n\n");
-			//PRINTOUT ( "MISS: %s\n", line);
 			miss_cnt++;
 		}
 
 
 	}
+
 
     free (hits);
     fclose(fp);
@@ -491,6 +644,8 @@ main(int argc,  char *argv[]) {
       fprintf (stderr, "occ calls: %12s\n", commaprint(occCallCnt));
       fprintf (stderr, "occ/sec:   %12s\n", commaprint(throughput));
     }
+
+    printf ("I still need to free all the FM-index data structures!!!\n !!!!!!!!!\n");
 
 	exit(eslOK);
 

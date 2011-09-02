@@ -66,7 +66,7 @@ int fm_print_m128_rev (__m128i in) {
  * Purpose:   Initialize vector masks used in SSE FMindex implementation
  */
 int
-fm_initGlobals( FM_METADATA *meta, FM_DATA *fm  ) {
+fm_initGlobals( FM_METADATA *meta ) {
 	int status;
 	int i,j;
 	int trim_chunk_count;
@@ -237,7 +237,7 @@ int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c) {
 		cnt += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
 
 
-	if ( landmark < fm->N ) {
+	if ( landmark < fm->N || landmark == -1 ) {
 
 		const uint8_t * BWT = fm->BWT;
 
