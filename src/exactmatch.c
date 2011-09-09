@@ -129,14 +129,65 @@ commaprint(unsigned long n) {
         return p;
 }
 
-/* Function:  getFMRange()
- * Synopsis:  For a given query sequence, find its interval in the FM-index
- * Purpose:   Implement Algorithm 3.6 (p17) of Firth paper (A Comparison of BWT Approaches
- *            to String Pattern Matching). All the meat is in the method of counting
- *            characters - bwt_getOccCount, which depends on compilation choices.
+/* Function:  getSARangeForward()
+ * Synopsis:  For a given query sequence, find its interval in the FM-index, using forward search
+ * Purpose:   Implement Algorithm 4 (i371) of Simpson (Bioinformatics 2010). I's the forward
+ *            search on a bi-directional BWT, as described by Lam 2009.
+ *            All the meat is in the method of counting characters - bwt_getOccCount, which
+ *            depends on compilation choices.
+ *
+ *            Note: it seems odd, but is correct, that the fm-index passed in to this function
+ *            is the backward index corresponding to the forward index into which I want to
+ *            do a forward search
  */
 int
-getFMRange( FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
+getSARangeForward(FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
+
+	uint32_t occLT_l, occLT_u, occ_l, occ_u;
+	int i=0;
+    int lower_b, upper_b;
+
+	uint8_t c = inv_alph[(int)query[0]];
+	interval->lower  = lower_b = abs(fm->C[c]);
+	interval->upper  = upper_b = abs(fm->C[c+1])-1;
+
+	while (lower_b>0 && lower_b <= upper_b) {
+		c = query[++i];
+		if (c == '\0')  // end of query - the current range defines the hits
+			break;
+
+		c = inv_alph[c];
+
+		fm_getOccCountLT (meta, fm, lower_b-1, c, &occ_l, &occLT_l);
+		//occLT_l = fm_getOccCountLT (meta, fm, lower_b-1, c);
+		//occ_l   = fm_getOccCount   (meta, fm, lower_b-1, c);
+		fm_getOccCountLT (meta, fm, upper_b, c, &occ_u, &occLT_u);
+//		occLT_u = fm_getOccCountLT (meta, fm, upper_b, c);
+//		occ_u   = fm_getOccCount   (meta, fm, upper_b, c);
+
+
+		interval->lower += (occLT_u - occLT_l);
+		interval->upper = interval->lower + (occ_u - occ_l) - 1;
+
+		lower_b = abs(fm->C[c]) + occ_l;
+		upper_b = abs(fm->C[c]) + occ_u - 1;
+
+		occCallCnt+=2;
+	}
+
+	return eslOK;
+}
+
+
+/* Function:  getSARangeReverse()
+ * Synopsis:  For a given query sequence, find its interval in the FM-index, using backward search
+ * Purpose:   Implement Algorithm 3.6 (p17) of Firth paper (A Comparison of BWT Approaches
+ *            to String Pattern Matching). This is what Simpson and Lam call "Reverse Search".
+ *            All the meat is in the method of counting characters - bwt_getOccCount, which
+ *            depends on compilation choices.
+ */
+int
+getSARangeReverse( FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
 
 	int count1, count2;
 	int i=0;
@@ -144,7 +195,7 @@ getFMRange( FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
 
 
 	uint8_t c = inv_alph[(int)query[0]];
-	interval->lower  = abs(fm->C[c]);// + (c==0?1:0);
+	interval->lower  = abs(fm->C[c]);
 	interval->upper  = abs(fm->C[c+1])-1;
 
 	while (interval->lower>0 && interval->lower <= interval->upper) {
@@ -154,7 +205,8 @@ getFMRange( FM_DATA *fm, char *query, char *inv_alph, FM_INTERVAL *interval) {
 
 		c = inv_alph[c];
 
-		//TODO: these will often overlap - might get acceleration by merging to a single redundancy-avoiding call
+		//TODO: counting in these calls will often overlap
+		  // - might get acceleration by merging to a single redundancy-avoiding call
 		count1 = fm_getOccCount (meta, fm, interval->lower-1, c);
 		count2 = fm_getOccCount (meta, fm, interval->upper, c);
 
@@ -213,7 +265,7 @@ getChar( int j, const uint8_t *B ) {
 //inline
 //#endif
 int
-getFMHits( FM_DATA *fm, FM_INTERVAL *interval, int block_id, int hit_offset, FM_HIT *hits_ptr) {
+getFMHits( FM_DATA *fm, FM_INTERVAL *interval, int block_id, int hit_offset, FM_HIT *hits_ptr, int fm_direction) {
 
 	int i, j, len = 0;
 
@@ -230,6 +282,7 @@ getFMHits( FM_DATA *fm, FM_INTERVAL *interval, int block_id, int hit_offset, FM_
 		const int tmp = j >> shiftSA;
 		hits_ptr[hit_offset + i - interval->lower].block = block_id;
 		hits_ptr[hit_offset + i - interval->lower].start = fm->SA[ tmp ] + len;
+		hits_ptr[hit_offset + i - interval->lower].direction = fm_direction;
 	}
 
 	return eslOK;
@@ -240,14 +293,15 @@ getFMHits( FM_DATA *fm, FM_INTERVAL *interval, int block_id, int hit_offset, FM_
  * Synopsis:  release the memory required to store an individual FM-index
  */
 void
-freeFM ( FM_DATA *fm)
+freeFM ( FM_DATA *fm, int freeSA)
 {
     if (fm->T)           free (fm->T);
     if (fm->BWT_mem)     free (fm->BWT_mem);
-	if (fm->SA)          free (fm->SA);
 	if (fm->C)           free (fm->C);
 	if (fm->occCnts_b)   free (fm->occCnts_b);
 	if (fm->occCnts_sb)  free (fm->occCnts_sb);
+
+	if (freeSA && fm->SA)          free (fm->SA);
 }
 
 /* Function:  readFM()
@@ -257,7 +311,7 @@ freeFM ( FM_DATA *fm)
  *            then read it in.
  */
 int
-readFM( FILE *fp, FM_DATA *fm )
+readFM( FILE *fp, FM_DATA *fm, int getAll )
 {
 	//shortcut variables
 	int *C               = NULL;
@@ -277,7 +331,6 @@ readFM( FILE *fp, FM_DATA *fm )
 	int chars_per_byte = 8/meta->charBits;
 
 
-	//first, read
 	if(fread(&(fm->N), sizeof(uint32_t), 1, fp) !=  1)
 		esl_fatal( "%s: Error reading block_length in FM index.\n", __FILE__);
 	if(fread(&(fm->term_loc), sizeof(uint32_t), 1, fp) !=  1)
@@ -292,21 +345,22 @@ readFM( FILE *fp, FM_DATA *fm )
 	num_SA_samples   = 1+floor((float)fm->N/meta->freq_SA);
 
 	// allocate space, then read the data
-    ESL_ALLOC (fm->T, compressed_bytes );
+	if (getAll) ESL_ALLOC (fm->T, compressed_bytes );
 	ESL_ALLOC (fm->BWT_mem, compressed_bytes + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
         fm->BWT = 	(uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
-	ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
+    if (getAll) ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
 	ESL_ALLOC (fm->C, 1+meta->alph_size * sizeof(uint32_t));
 	ESL_ALLOC (fm->occCnts_b,  num_freq_cnts_b *  (meta->alph_size ) * sizeof(uint16_t)); // every freq_cnt positions, store an array of ints
 	ESL_ALLOC (fm->occCnts_sb,  num_freq_cnts_sb *  (meta->alph_size ) * sizeof(uint32_t)); // every freq_cnt positions, store an array of ints
 
 
-	if(fread(fm->T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
-	  esl_fatal( "%s: Error reading T in FM index.\n", __FILE__);
+	if(getAll && fread(fm->T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+		esl_fatal( "%s: Error reading T in FM index.\n", __FILE__);
 	if(fread(fm->BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
 	  esl_fatal( "%s: Error reading BWT in FM index.\n", __FILE__);
-	if(fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
-	  esl_fatal( "%s: Error reading SA in FM index.\n", __FILE__);
+	if(getAll && fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+		esl_fatal( "%s: Error reading SA in FM index.\n", __FILE__);
+
 	if(fread(fm->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
 	  esl_fatal( "%s: Error reading occCnts_b in FM index.\n", __FILE__);
 	if(fread(fm->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
@@ -342,7 +396,7 @@ readFM( FILE *fp, FM_DATA *fm )
 	return eslOK;
 
 ERROR:
-    freeFM(fm);
+    freeFM(fm, getAll);
 	esl_fatal("Error allocating memory in %s\n", "readFM");
     return eslFAIL;
 }
@@ -360,7 +414,8 @@ readFMmeta( FILE *fp )
 	int status;
 	int i;
 
-	if(		fread(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
+	if(		fread(&(meta->fwd_only),     sizeof(uint8_t),  1, fp) != 1 ||
+			fread(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
 			fread(&(meta->alph_size),    sizeof(uint8_t),  1, fp) != 1 ||
 			fread(&(meta->charBits),     sizeof(uint8_t),  1, fp) != 1 ||
 			fread(&(meta->freq_SA),      sizeof(uint32_t), 1, fp) != 1 ||
@@ -449,23 +504,6 @@ computeSequenceOffset (FM_DATA *fms, int block, int pos) {
 
 }
 
-void
-reverse (char* str, int N)
-{
-  int end   = N-1;
-  int start = 0;
-
-  while( start<end )
-  {
-    str[start] ^= str[end];
-    str[end]   ^= str[start];
-    str[start] ^= str[end];
-
-    ++start;
-    --end;
-  }
-
-}
 
 /* hit_sorter(): qsort's pawn, below */
 static int
@@ -515,7 +553,8 @@ main(int argc,  char *argv[]) {
     int i;
 	int count_only    = 0;
 
-	FM_DATA *fms;
+	FM_DATA *fmsf;
+	FM_DATA *fmsb;
 	FM_INTERVAL interval;
 	FILE* fp_fm = NULL;
 	FILE* fp = NULL;
@@ -555,9 +594,15 @@ main(int argc,  char *argv[]) {
 	readFMmeta( fp_fm );
 
     //read in FM-index blocks
-    ESL_ALLOC(fms, meta->block_count * sizeof(FM_DATA) );
-	for (i=0; i<meta->block_count; i++) {
-		readFM( fp_fm, fms+i );
+
+	ESL_ALLOC(fmsf, meta->block_count * sizeof(FM_DATA) );
+	for (i=0; i<meta->block_count; i++)
+		readFM( fp_fm, fmsf+i, 1 );
+
+	if (!meta->fwd_only) {
+		ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
+		for (i=0; i<meta->block_count; i++)
+			readFM( fp_fm, fmsb+i, 0 );
 	}
     fclose(fp_fm);
 
@@ -590,27 +635,39 @@ main(int argc,  char *argv[]) {
 		while (line[qlen] != '\0' && line[qlen] != '\n')  qlen++;
 		if (line[qlen] == '\n')  line[qlen] = '\0';
 
-		reverse(line, qlen);
-
 		hit_num = 0;
+
 
 		for (i=0; i<meta->block_count; i++) {
 
-			getFMRange(fms+i, line, inv_alph, &interval);
-
+			getSARangeForward(fmsb+i, line, inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
 			if (interval.lower>0 && interval.lower <= interval.upper) {
-
 				int new_hit_num =  interval.upper - interval.lower + 1;
 				hit_num += new_hit_num;
-
-				if (hit_num > hits_size) {
-					hits_size = 2*hit_num;
-					ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
+				if (!count_only) {
+					if (hit_num > hits_size) {
+						hits_size = 2*hit_num;
+						ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
+					}
+					getFMHits(fmsb+i, &interval, i, hit_num-new_hit_num, hits, fm_forward);
 				}
+			}
 
-				if (!count_only)
-					getFMHits(fms+i, &interval, i, hit_num-new_hit_num, hits);
 
+			/* find reverse hits, using backward search on the forward FM*/
+			if (!meta->fwd_only) {
+				getSARangeReverse(fmsf+i, line, inv_alph, &interval);
+				if (interval.lower>0 && interval.lower <= interval.upper) {
+					int new_hit_num =  interval.upper - interval.lower + 1;
+					hit_num += new_hit_num;
+					if (!count_only) {
+						if (hit_num > hits_size) {
+							hits_size = 2*hit_num;
+							ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
+						}
+						getFMHits(fmsf+i, &interval, i, hit_num-new_hit_num, hits, fm_backward);
+					}
+				}
 			}
 		}
 
@@ -626,7 +683,7 @@ main(int argc,  char *argv[]) {
 				//for each hit, identify the sequence id and position within that sequence
 				for (i = 0; i< hit_num; i++) {
 					int block = hits[i].block;
-					int seq_offset = computeSequenceOffset( fms, block, hits[i].start);
+					int seq_offset = computeSequenceOffset( fmsf, block, hits[i].start);
 					int pos =  ( hits[i].start - meta->seq_data[ seq_offset ].offset) + meta->seq_data[ seq_offset ].start - 1;
 					//reuse hit variables.  Now "block" has the index into the matching sequence (in meta), and "start" has the pos within that sequence
 					hits[i].block = seq_offset;
@@ -655,8 +712,11 @@ main(int argc,  char *argv[]) {
 
 	}
 
-	for (i=0; i<meta->block_count; i++)
-		freeFM( fms+i );
+	for (i=0; i<meta->block_count; i++) {
+		freeFM( fmsb+i, 1 );
+		if (!meta->fwd_only)
+			freeFM( fmsf+i, 0 );
+	}
 
 	for (i=0; i<meta->seq_count; i++)
 		free (meta->seq_data[i].name);
@@ -682,8 +742,6 @@ main(int argc,  char *argv[]) {
       fprintf (stderr, "occ calls: %12s\n", commaprint(occCallCnt));
       fprintf (stderr, "occ/sec:   %12s\n", commaprint(throughput));
     }
-
-    printf ("I still need to free all the FM-index data structures!!!\n !!!!!!!!!\n");
 
 	exit(eslOK);
 

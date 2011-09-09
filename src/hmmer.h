@@ -767,6 +767,11 @@ enum fm_alphabettypes_e {
   fm_AMINO      = 2,  // 5 bit
 };
 
+enum fm_direction_e {
+  fm_forward    = 0,
+  fm_backward   = 1,
+};
+
 typedef struct fm_interval_s {
   int   lower;
   int   upper;
@@ -775,6 +780,7 @@ typedef struct fm_interval_s {
 typedef struct fm_hit_s {
   int   start;
   int   block;
+  int   direction;
 //  int   length;
 } FM_HIT;
 
@@ -790,6 +796,7 @@ typedef struct fm_seqdata_s {
 
 
 typedef struct fm_metadata_s {
+  uint8_t fwd_only;
   uint8_t alph_type;
   uint8_t alph_size;
   uint8_t charBits;
@@ -1353,6 +1360,7 @@ extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 /* fm_alphabet.c */
 extern int fm_createAlphabet (int alph_type, char **alph, char **inv_alph, uint8_t *alph_size, uint8_t *alph_bits);
+extern int fm_reverseString (char* str, int N);
 
 
 

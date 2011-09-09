@@ -53,3 +53,31 @@ ERROR:
     esl_fatal("error allocating space for alphabet\n");
     return eslFAIL;
 }
+
+
+/* Function:  fm_reverseString()
+ *
+ * Purpose:   Take as input a string and its length, and reverse the
+ *            string in place.
+ *            TODO: this file is probably not the best place for
+ *            this function.
+ * Returns:   <eslOK> on success.
+ */
+int
+fm_reverseString (char* str, int N)
+{
+  int end   = N-1;
+  int start = 0;
+
+  while( start<end )
+  {
+    str[start] ^= str[end];
+    str[end]   ^= str[start];
+    str[start] ^= str[end];
+
+    ++start;
+    --end;
+  }
+
+  return eslOK;
+}

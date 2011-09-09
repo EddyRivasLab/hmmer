@@ -341,7 +341,7 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int fm_initGlobals ( FM_METADATA *meta );
 extern int fm_destroyGlobals();
 extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
-
+extern int fm_getOccCountLT (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 /*****************************************************************
  * 4. Implementation specific initialization
@@ -475,6 +475,33 @@ typedef union {
 	} while (0)
 
 
+/* Macro for SSE operations that turns a vector of 4-bit character values into
+ * 2 vectors representing matches. Each byte in the input vector consists of
+ * a left half (4 bits) and a right half (4 bits). The 16 left-halves produce
+ * one vector, which contains all-1s for bytes in which the left half is less than
+ * the c_v character (and 0s if it doesn't), while the 16 right-halves produce
+ * the other vector, again with each byte either all-1s or all-0s.
+ *
+ * The expectation is that FM_COUNT_4BIT will be called after this, to
+ * turn these binary values into sums over a series of vectors. The macros
+ * are split up to allow one end or other to be trimmed in the case that
+ * counting is not expected to include the full vector.
+ *
+ * srli(4)+and() : capture the left 4-bit value   (need the mask because 16-bit shift leaves garbage in left-4-bit chunks)
+ * and()         : capture the right 4-bit value
+ *
+ * cmplt()x2     : test if both left and right < c.  For each, if <c , value = 11111111 (-1)
+ */
+#define FM_LT_4BIT(in_v, c_v, out1_v, out2_v) do {\
+		out1_v    = _mm_srli_epi16(in_v, 4);\
+        out2_v    = _mm_and_si128(in_v, fm_m0f);\
+		out1_v    = _mm_and_si128(out1_v, fm_m0f);\
+		\
+		out1_v    = _mm_cmplt_epi8(out1_v, c_v);\
+		out2_v    = _mm_cmplt_epi8(out2_v, c_v);\
+	} while (0)
+
+
 
 /* Macro for SSE operations to add occurrence counts to the tally vector counts_v,
  * in the 4-bits-per-character case
@@ -486,8 +513,8 @@ typedef union {
  * so subtracting the value of the byte is the same as adding 0 or 1.
  */
 #define FM_COUNT_4BIT(in1_v, in2_v, cnts_v) do {\
-		counts_v = _mm_subs_epi8(cnts_v, in1_v);\
-		counts_v = _mm_subs_epi8(cnts_v, in2_v);\
+		cnts_v = _mm_subs_epi8(cnts_v, in1_v);\
+		cnts_v = _mm_subs_epi8(cnts_v, in2_v);\
 	} while (0)
 
 

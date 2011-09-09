@@ -333,8 +333,7 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int fm_initGlobals ( FM_METADATA *meta  );
 extern int fm_destroyGlobals ( );
 extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
-
-
+extern int fm_getOccCountLT (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 
 
@@ -360,7 +359,7 @@ typedef union {
 
 
 
-/* Macro for SSE operations to turn 2-bit character values into 2-bit binary
+/* Macro for altivec operations to turn 2-bit character values into 2-bit binary
  * (00 or 01) match/mismatch values representing occurrences of a character in a
  * 4-char-per-byte packed BWT.
  *
@@ -373,7 +372,7 @@ typedef union {
  *
  * xor(in_v, c_v)        : each 2-bit value will be 00 if a match, and non-0 if a mismatch
  * and(in_v, 01010101)   : look at the right bit of each 2-bit value,
- * srli(1)+and()         : look at the left bit of each 2-bit value,
+ * sr(1)+and()         : look at the left bit of each 2-bit value,
  * or()                  : if either left bit or right bit is non-0, 01, else 00 (match is 00)
  *
  * subs()                : invert, so match is 01, mismatch is 00
@@ -391,15 +390,15 @@ typedef union {
 	} while (0)
 
 
-/*Macro for SSE operations to count bits produced by FM_MATCH_SSE_4PACKED
+/*Macro for altivec operations to count bits produced by FM_MATCH_SSE_4PACKED
  *
  * tmp_v and tmp2_v are used as temporary vectors throughout, and hold meaningless values
  * at the end
  *
  * then add up the 2-bit values:
- * srli(4)+add()         : left 4 bits shifted right, added to right 4 bits
+ * sr(4)+add()         : left 4 bits shifted right, added to right 4 bits
  *
- * srli(2)+and(00000011) : left 2 bits (value 0..2) shifted right, masked, so no other bits active
+ * sr(2)+and(00000011) : left 2 bits (value 0..2) shifted right, masked, so no other bits active
  * and(00000011)         : right 2 bits (value 0..2) masked so no other bits active
  *
  * final 2 add()s        : tack current counts on to already-tabulated counts.
@@ -418,7 +417,7 @@ typedef union {
 
 
 
-/* Macro for SSE operations that turns a vector of 4-bit character values into
+/* Macro for altivec operations that turns a vector of 4-bit character values into
  * 2 vectors representing matches. Each byte in the input vector consists of
  * a left half (4 bits) and a right half (4 bits). The 16 left-halves produce
  * one vector, which contains all-1s for bytes in which the left half matches
@@ -430,20 +429,46 @@ typedef union {
  * are split up to allow one end or other to be trimmed in the case that
  * counting is not expected to include the full vector.
  *
- * srli(4)+and() : capture the left 4-bit value   (need the mask because 16-bit shift leaves garbage in left-4-bit chunks)
+ * sr(4)+and() : capture the left 4-bit value   (need the mask because 16-bit shift leaves garbage in left-4-bit chunks)
  * and()         : capture the right 4-bit value
  *
  * cmpeq()x2     : test if both left and right == c.  For each, if ==c , value = 11111111 (-1)
  */
 #define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
 		out1_v    = vec_sr(in_v, fm_four);\
-                out2_v    = vec_and(in_v, fm_m0f);\
+        out2_v    = vec_and(in_v, fm_m0f);\
 		out1_v    = vec_and(out1_v, fm_m0f);\
 		\
 		out1_v    = (vector unsigned char)vec_cmpeq(out1_v, c_v);\
 		out2_v    = (vector unsigned char)vec_cmpeq(out2_v, c_v);\
 	} while (0)
 
+
+/* Macro for altivec operations that turns a vector of 4-bit character values into
+* 2 vectors representing matches. Each byte in the input vector consists of
+ * a left half (4 bits) and a right half (4 bits). The 16 left-halves produce
+ * one vector, which contains all-1s for bytes in which the left half is less than
+ * the c_v character (and 0s if it doesn't), while the 16 right-halves produce
+ * the other vector, again with each byte either all-1s or all-0s.
+ *
+ * The expectation is that FM_COUNT_4BIT will be called after this, to
+ * turn these binary values into sums over a series of vectors. The macros
+ * are split up to allow one end or other to be trimmed in the case that
+ * counting is not expected to include the full vector.
+ *
+ * sr(4)+and() : capture the left 4-bit value   (need the mask because 16-bit shift leaves garbage in left-4-bit chunks)
+ * and()         : capture the right 4-bit value
+ *
+ * cmpeq()x2     : test if both left and right < c.  For each, if <c , value = 11111111 (-1)
+ */
+#define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
+		out1_v    = vec_sr(in_v, fm_four);\
+		out2_v    = vec_and(in_v, fm_m0f);\
+		out1_v    = vec_and(out1_v, fm_m0f);\
+		\
+		out1_v    = (vector unsigned char)vec_cmplt(out1_v, c_v);\
+		out2_v    = (vector unsigned char)vec_cmplt(out2_v, c_v);\
+	} while (0)
 
 
 /* Macro for SSE operations to add occurrence counts to the tally vector counts_v,

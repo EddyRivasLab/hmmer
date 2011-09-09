@@ -21,7 +21,7 @@ static ESL_OPTIONS options[] = {
   { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     2 },
   { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,        "suffix array sample rate (power of 2)",                     2 },
   { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      2 },
-
+  { "--fwd_only",   eslARG_NONE,       FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "build FM-index only for forward search (not for HMMER)",    2 },
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -75,6 +75,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_seqf
   exit(1);
 }
 
+/* Function:  output_header()
+ * Synopsis:  Print details of FM-index construction
+ */
 static int
 output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
 {
@@ -90,9 +93,12 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
 }
 
 
-
+/* Function:  allocateSeqdata()
+ * Synopsis:  ensure that space is allocated for the seqdata object
+ *            in the FM-index metadata.
+ */
 int
-allocate_seqdata (FM_METADATA *meta, int namelength, int numseqs, int *allocedseqs) {
+allocateSeqdata (FM_METADATA *meta, int namelength, int numseqs, int *allocedseqs) {
     int status = eslOK;
 	if (numseqs == *allocedseqs) {
 		*allocedseqs *= 2; // we've bumped up against allocation limit, double allocation.
@@ -116,6 +122,166 @@ allocate_seqdata (FM_METADATA *meta, int namelength, int numseqs, int *allocedse
 ERROR:
 	return status;
 }
+
+
+/* Function:  buildAndWriteFMIndex()
+ * Synopsis:  Take text as input, along with several pre-allocated variables,
+ *            and produce BWT and corresponding FM-index, then write it all
+ *            to the output file.
+ *
+ *            if SAsamp == NULL, don't store/write T or SAsamp
+ */
+int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
+		uint8_t *T, uint8_t *BWT,
+		int *SA, uint32_t *SAsamp,
+		uint32_t *occCnts_sb, uint32_t *cnts_sb,
+		uint16_t *occCnts_b, uint16_t *cnts_b,
+		int N, FILE *fp
+		) {
+
+
+	int status;
+	int i,j,c,joffset;
+	int chars_per_byte = 8/meta->charBits;
+	int compressed_bytes = 	((chars_per_byte-1+N)/chars_per_byte);
+	int term_loc;
+
+	int num_freq_cnts_b  = 1+ceil((float)N/meta->freq_cnt_b);
+	int num_freq_cnts_sb = 1+ceil((float)N/meta->freq_cnt_sb);
+	int num_SA_samples   = 1+floor((float)N/meta->freq_SA);
+
+
+	uint8_t *Tcompressed;
+	if (SAsamp != NULL)
+		ESL_ALLOC (Tcompressed, compressed_bytes * sizeof(uint8_t));
+
+	// Construct the Suffix Array on text T
+	status = divsufsort(T, SA, N);
+	if ( status < 0 )
+	  esl_fatal("buildAndWriteFMIndex: Error building BWT.\n");
+
+	// Construct the BWT, SA landmarks, and FM-index
+	for (c=0; c<meta->alph_size; c++) {
+	  cnts_sb[c] = 0;
+	  cnts_b[c] = 0;
+	  FM_OCC_CNT(sb, 0, c ) = 0;
+	  FM_OCC_CNT(b, 0, c ) = 0;
+	}
+
+	BWT[0] =  SA[0]==0 ? 0 /* '$' */ : T[ SA[0]-1]-1 ; //move values down so 'a'=0...'t'=3; store 'a' in place of '$'
+
+
+    cnts_sb[BWT[0]]++;
+	cnts_b[BWT[0]]++;
+
+	//Scan through SA to build the BWT and FM index structures
+	for(j=1; j < N; ++j) {
+	  if (SA[j]==0) { //'$'
+		  term_loc = j;
+		  BWT[j] =  0; //store 'a' in place of '$'
+	  } else {
+	      BWT[j] =  T[ SA[j]-1]-1 ; //move values down so 'a'=0...'t'=3;
+	  }
+
+	  //sample the SA
+	  if (SAsamp != NULL) {
+		  if ( !(j % meta->freq_SA) )
+			  SAsamp[ j>>meta->SA_shift ] = ( SA[j] == N - 1 ? -1 : SA[j] ) ; // handle the wrap-around '$'
+	  }
+
+	  cnts_sb[BWT[j]]++;
+	  cnts_b[BWT[j]]++;
+
+	  joffset = j+1;
+	  if ( !(  joffset % meta->freq_cnt_b) ) {  // (j+1)%freq_cnt_b==0  , i.e. every freq_cnt_bth position, noting that it's a zero-based count
+
+		  for (c=0; c<meta->alph_size; c++) {
+			  FM_OCC_CNT(b, (joffset>>meta->cnt_shift_b), c ) = cnts_b[c];
+		  }
+
+		  if ( !(joffset % meta->freq_cnt_sb) ) {  // j%freq_cnt_sb==0
+			  for (c=0; c<meta->alph_size; c++) {
+				  FM_OCC_CNT(sb, (joffset>>meta->cnt_shift_sb), c ) = cnts_sb[c];
+				  cnts_b[c] = 0;
+			  }
+		  }
+	  }
+	}
+
+
+
+	//wrap up the counting;
+	for (c=0; c<meta->alph_size; c++) {
+	  FM_OCC_CNT(b, num_freq_cnts_b-1, c ) = cnts_b[c];
+	  FM_OCC_CNT(sb, num_freq_cnts_sb-1, c ) = cnts_sb[c];
+	}
+
+
+
+	// Convert BWT and T to packed versions if appropriate.
+	if (meta->alph_type == fm_DNA) {
+		 //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
+		  for(i=0; i < N-3; i+=4) {
+			                      BWT[i>>2]         = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
+			  if (SAsamp != NULL) Tcompressed[i>>2] =   T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
+		  }
+		  if (i>=N-3) {
+			                      BWT[i>>2]         =  BWT[i]<<6;
+			  if (SAsamp != NULL) Tcompressed[i>>2] =    T[i]<<6;
+		  }
+		  if (i>=N-2) {
+			                      BWT[i>>2]         =  BWT[i+1]<<4;
+			  if (SAsamp != NULL) Tcompressed[i>>2] =    T[i+1]<<4;
+		  }
+		  if (i==N-1)  {
+			                      BWT[i>>2]         =  BWT[i+2]<<2;
+			  if (SAsamp != NULL) Tcompressed[i>>2] =    T[i+2]<<2;
+		  }
+	} else if (meta->alph_type == fm_DNA_full) {
+		//2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
+		  for(i=0; i < N-1; i+=2) {
+			                      BWT[i>>1]         = BWT[i]<<4 | BWT[i+1];
+			  if (SAsamp != NULL) Tcompressed[i>>1] =   T[i]<<4 |   T[i+1];
+		  }
+		  if (i==N-1) {
+			                      BWT[i>>1]         =  BWT[i]<<4 ;
+			  if (SAsamp != NULL) Tcompressed[i>>1] =    T[i]<<4 ;
+		  }
+	}
+
+
+	// Write the FM-index meta data
+	if(fwrite(&N, sizeof(uint32_t), 1, fp) !=  1)
+		esl_fatal( "buildAndWriteFMIndex: Error writing block_length in FM index.\n");
+	if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
+		esl_fatal( "buildAndWriteFMIndex: Error writing terminal location in FM index.\n");
+	if(fwrite(&seq_offset, sizeof(uint16_t), 1, fp) !=  1)
+		esl_fatal( "buildAndWriteFMIndex: Error writing seq_offset in FM index.\n");
+
+
+	// don't write Tcompressed or SAsamp if SAsamp == NULL
+	if(SAsamp != NULL && fwrite(Tcompressed, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+	  esl_fatal( "buildAndWriteFMIndex: Error writing T in FM index.\n");
+	if(fwrite(BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+	  esl_fatal( "buildAndWriteFMIndex: Error writing BWT in FM index.\n");
+
+	if(SAsamp != NULL && fwrite(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+		esl_fatal( "buildAndWriteFMIndex: Error writing SA in FM index.\n");
+	if(fwrite(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
+	  esl_fatal( "buildAndWriteFMIndex: Error writing occCnts_b in FM index.\n");
+	if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
+	  esl_fatal( "buildAndWriteFMIndex: Error writing occCnts_sb in FM index.\n");
+
+
+	return eslOK;
+
+ERROR:
+	/* Deallocate memory. */
+	if (Tcompressed)         free(Tcompressed);
+	return eslFAIL;
+
+}
+
 
 
 /* Function:  main()
@@ -173,7 +339,7 @@ main(int argc, char *argv[]) {
 	uint64_t total_char_count = 0;
 
 	int max_block_size;
-	long joffset;
+
 
 	int numblocks = 0;
 	int numseqs;
@@ -196,6 +362,8 @@ main(int argc, char *argv[]) {
 
 
 	process_commandline(argc, argv, &go, &fname_in, &fname_out);
+
+	meta->fwd_only =  (esl_opt_IsOn(go, "--fwd_only")) ? 1 : 0;
 
 	if (esl_opt_IsOn(go, "--alph")) { alph    = esl_opt_GetString(go, "--alph") ; }
 	if ( esl_strcmp(alph, "dna")==0) {
@@ -339,7 +507,7 @@ main(int argc, char *argv[]) {
         for (i=0; i<block->count; i++) {
 
         	//start a new block, with space for the name
-        	allocate_seqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
+        	allocateSeqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
 
         	//meta data
         	meta->seq_data[numseqs].id   = block->first_seqidx + i ;
@@ -362,7 +530,7 @@ main(int argc, char *argv[]) {
         				if (meta->seq_data[numseqs].length > 0) {
         					//start a new sequence if the one I'm currently working on isn't empty
         					numseqs++;
-							allocate_seqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
+							allocateSeqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
 							//meta data
 							meta->seq_data[numseqs].id   = block->first_seqidx + i ;
 							meta->seq_data[numseqs].start = block->list[i].start + j;
@@ -392,129 +560,17 @@ main(int argc, char *argv[]) {
     	block_length++;
 
 
-    	num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
-    	num_freq_cnts_sb = 1+ceil((float)block_length/meta->freq_cnt_sb);
-    	num_SA_samples   = 1+floor((float)block_length/meta->freq_SA);
+    	//build and write FM-index for T
+    	buildAndWriteFMIndex(meta, seq_offset, T, BWT, SA, SAsamp,
+    			occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
 
-        //###########################################
-    	//     build Suffix Array, then FM-index
-    	//###########################################
-    	compressed_bytes = 	((chars_per_byte-1+block_length)/chars_per_byte);
-
-    	// Construct the Suffix Array
-    	status = divsufsort(T, SA, block_length);
-    	if ( status < 0 )
-    	  esl_fatal("%s: Error building BWT.\n", argv[0]);
-
-
-    	// Construct the BWT, SA landmarks, and FM-index
-    	for (c=0; c<meta->alph_size; c++) {
-    	  cnts_sb[c] = 0;
-    	  cnts_b[c] = 0;
-    	  FM_OCC_CNT(sb, 0, c ) = 0;
-    	  FM_OCC_CNT(b, 0, c ) = 0;
+    	if ( ! meta->fwd_only ) {
+			//build and write FM-index for reversed T
+			fm_reverseString ((char*)T, block_length-1);
+			buildAndWriteFMIndex(meta, seq_offset, T, BWT, SA, NULL,
+					occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
     	}
-
-    	BWT[0] =  SA[0]==0 ? 0 /* '$' */ : T[ SA[0]-1]-1 ; //move values down so 'a'=0...'t'=3; store 'a' in place of '$'
-
-
-        cnts_sb[BWT[0]]++;
-    	cnts_b[BWT[0]]++;
-
-    	//Scan through SA to build the BWT and FM index structures
-    	for(j=1; j < block_length; ++j) {
-    	  if (SA[j]==0) { //'$'
-    		  term_loc = j;
-    		  BWT[j] =  0; //store 'a' in place of '$'
-    	  } else {
-    	      BWT[j] =  T[ SA[j]-1]-1 ; //move values down so 'a'=0...'t'=3;
-    	  }
-
-    	  //sample the SA
-    	  if ( !(j % meta->freq_SA) )
-    		  SAsamp[ j>>meta->SA_shift ] = ( SA[j] == block_length - 1 ? -1 : SA[j] ) ; // handle the wrap-around '$'
-
-    	  cnts_sb[BWT[j]]++;
-    	  cnts_b[BWT[j]]++;
-
-    	  joffset = j+1;
-    	  if ( !(  joffset % meta->freq_cnt_b) ) {  // (j+1)%freq_cnt_b==0  , i.e. every freq_cnt_bth position, noting that it's a zero-based count
-
-    		  for (c=0; c<meta->alph_size; c++) {
-    			  FM_OCC_CNT(b, (joffset>>meta->cnt_shift_b), c ) = cnts_b[c];
-    		  }
-
-    		  if ( !(joffset % meta->freq_cnt_sb) ) {  // j%freq_cnt_sb==0
-    			  for (c=0; c<meta->alph_size; c++) {
-    				  FM_OCC_CNT(sb, (joffset>>meta->cnt_shift_sb), c ) = cnts_sb[c];
-    				  cnts_b[c] = 0;
-    			  }
-    		  }
-    	  }
-    	}
-
-
-
-    	//wrap up the counting;
-    	for (c=0; c<meta->alph_size; c++) {
-    	  FM_OCC_CNT(b, num_freq_cnts_b-1, c ) = cnts_b[c];
-    	  FM_OCC_CNT(sb, num_freq_cnts_sb-1, c ) = cnts_sb[c];
-    	}
-
-
-
-    	// Convert BWT and T to packed versions if appropriate.
-    	if (meta->alph_type == fm_DNA) {
-    		 //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
-    		  for(i=0; i < block_length-3; i+=4) {
-    			  BWT[i>>2] = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
-    			    T[i>>2] =   T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
-    		  }
-    		  if (i>=block_length-3) {
-    			  BWT[i>>2] =  BWT[i]<<6;
-    			    T[i>>2] =    T[i]<<6;
-    		  }
-    		  if (i>=block_length-2) {
-    			  BWT[i>>2] =  BWT[i+1]<<4;
-    			    T[i>>2] =    T[i+1]<<4;
-    		  }
-    		  if (i==block_length-1)  {
-    			  BWT[i>>2] =  BWT[i+2]<<2;
-    			    T[i>>2] =    T[i+2]<<2;
-    		  }
-    	} else if (meta->alph_type == fm_DNA_full) {
-    		//2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
-    		  for(i=0; i < block_length-1; i+=2) {
-    			  BWT[i>>1] = BWT[i]<<4 | BWT[i+1];
-    			    T[i>>1] =   T[i]<<4 |   T[i+1];
-    		  }
-    		  if (i==block_length-1) {
-    			  BWT[i>>1] =  BWT[i]<<4 ;
-    			    T[i>>1] =    T[i]<<4 ;
-    		  }
-    	}
-
-
-    	// Write the FM-index meta data
-    	if(fwrite(&block_length, sizeof(uint32_t), 1, fptmp) !=  1)
-    		esl_fatal( "%s: Error writing block_length in FM index.\n", argv[0]);
-    	if(fwrite(&term_loc, sizeof(uint32_t), 1, fptmp) !=  1)
-    		esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
-    	if(fwrite(&seq_offset, sizeof(uint16_t), 1, fptmp) !=  1)
-    		esl_fatal( "%s: Error writing seq_offset in FM index.\n", argv[0]);
-
-
-    	if(fwrite(T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
-    	  esl_fatal( "%s: Error writing T in FM index.\n", argv[0]);
-    	if(fwrite(BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
-    	  esl_fatal( "%s: Error writing BWT in FM index.\n", argv[0]);
-    	if(fwrite(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fptmp) != (size_t)num_SA_samples)
-    	  esl_fatal( "%s: Error writing SA in FM index.\n", argv[0]);
-    	if(fwrite(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
-    	  esl_fatal( "%s: Error writing occCnts_b in FM index.\n", argv[0]);
-    	if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
-    	  esl_fatal( "%s: Error writing occCnts_sb in FM index.\n", argv[0]);
 
     	numblocks++;
 
@@ -533,7 +589,8 @@ main(int argc, char *argv[]) {
 
 
     //write out meta data
-	if(		fwrite(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
+	if(		fwrite(&(meta->fwd_only),     sizeof(uint8_t),  1, fp) != 1 ||
+			fwrite(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
 			fwrite(&(meta->alph_size),    sizeof(uint8_t),  1, fp) != 1 ||
 			fwrite(&(meta->charBits),     sizeof(uint8_t),  1, fp) != 1 ||
 			fwrite(&(meta->freq_SA),      sizeof(uint32_t), 1, fp) != 1 ||
@@ -544,7 +601,6 @@ main(int argc, char *argv[]) {
 			fwrite(&(meta->cnt_shift_b),  sizeof(uint8_t),  1, fp) != 1 ||
 			fwrite(&(meta->block_count),  sizeof(uint16_t), 1, fp) != 1 ||
 			fwrite(&(meta->seq_count),    sizeof(uint32_t), 1, fp) != 1
-//			fwrite(meta->block_sizes,   sizeof(uint64_t), numblocks, fp) != numblocks
 	)
 	  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
 
@@ -559,58 +615,64 @@ main(int argc, char *argv[]) {
 		  esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
 	}
 
+	int namelengths = 0;
+
+	for (i=0; i<numseqs; i++)
+		namelengths += meta->seq_data[i].name_length + 1;
 
 	/* now append the FM-index data in fptmp to the desired output file, fp */
 	rewind(fptmp);
     for (i=0; i<numblocks; i++) {
 
-    	//first, read
-    	if(fread(&block_length, sizeof(uint32_t), 1, fptmp) !=  1)
-    		esl_fatal( "%s: Error reading block_length in FM index.\n", argv[0]);
-    	if(fread(&term_loc, sizeof(uint32_t), 1, fptmp) !=  1)
-    		esl_fatal( "%s: Error reading terminal location in FM index.\n", argv[0]);
-    	if(fread(&seq_offset, sizeof(uint16_t), 1, fptmp) !=  1)
-    		esl_fatal( "%s: Error reading seq_offset in FM index.\n", argv[0]);
+    	for(j=0; j< (meta->fwd_only?1:2); j++ ) { //do this once or twice, once for forward-T index, and possibly once for reversed
+			//first, read
+			if(fread(&block_length, sizeof(uint32_t), 1, fptmp) !=  1)
+				esl_fatal( "%s: Error reading block_length in FM index.\n", argv[0]);
+			if(fread(&term_loc, sizeof(uint32_t), 1, fptmp) !=  1)
+				esl_fatal( "%s: Error reading terminal location in FM index.\n", argv[0]);
+			if(fread(&seq_offset, sizeof(uint16_t), 1, fptmp) !=  1)
+				esl_fatal( "%s: Error reading seq_offset in FM index.\n", argv[0]);
+
+			compressed_bytes = 	((chars_per_byte-1+block_length)/chars_per_byte);
+			num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
+			num_freq_cnts_sb = 1+ceil((float)block_length/meta->freq_cnt_sb);
+			num_SA_samples   = 1+floor((float)block_length/meta->freq_SA);
 
 
-    	compressed_bytes = 	((chars_per_byte-1+block_length)/chars_per_byte);
-    	num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
-    	num_freq_cnts_sb = 1+ceil((float)block_length/meta->freq_cnt_sb);
-    	num_SA_samples   = 1+floor((float)block_length/meta->freq_SA);
-
-    	if(fread(T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
-    	  esl_fatal( "%s: Error reading T in FM index.\n", argv[0]);
-    	if(fread(BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
-    	  esl_fatal( "%s: Error reading BWT in FM index.\n", argv[0]);
-    	if(fread(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fptmp) != (size_t)num_SA_samples)
-    	  esl_fatal( "%s: Error reading SA in FM index.\n", argv[0]);
-    	if(fread(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
-    	  esl_fatal( "%s: Error reading occCnts_b in FM index.\n", argv[0]);
-    	if(fread(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
-    	  esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", argv[0]);
+			//j==0 test cause T and SA to be written only for forward sequence
+			if(j==0 && fread(T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+			  esl_fatal( "%s: Error reading T in FM index.\n", argv[0]);
+			if(fread(BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+			  esl_fatal( "%s: Error reading BWT in FM index.\n", argv[0]);
+			if(j==0 && fread(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fptmp) != (size_t)num_SA_samples)
+				esl_fatal( "%s: Error reading SA in FM index.\n", argv[0]);
+			if(fread(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
+			  esl_fatal( "%s: Error reading occCnts_b in FM index.\n", argv[0]);
+			if(fread(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
+			  esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", argv[0]);
 
 
 
-    	//then, write
-    	if(fwrite(&block_length, sizeof(uint32_t), 1, fp) !=  1)
-    		esl_fatal( "%s: Error writing block_length in FM index.\n", argv[0]);
-    	if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
-    		esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
-    	if(fwrite(&seq_offset, sizeof(uint16_t), 1, fp) !=  1)
-    		esl_fatal( "%s: Error writing seq_offset in FM index.\n", argv[0]);
+			//then, write
+			if(fwrite(&block_length, sizeof(uint32_t), 1, fp) !=  1)
+				esl_fatal( "%s: Error writing block_length in FM index.\n", argv[0]);
+			if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
+				esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
+			if(fwrite(&seq_offset, sizeof(uint16_t), 1, fp) !=  1)
+				esl_fatal( "%s: Error writing seq_offset in FM index.\n", argv[0]);
 
-    	if(fwrite(T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
-    	  esl_fatal( "%s: Error writing T in FM index.\n", argv[0]);
-    	if(fwrite(BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
-    	  esl_fatal( "%s: Error writing BWT in FM index.\n", argv[0]);
-    	if(fwrite(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
-    	  esl_fatal( "%s: Error writing SA in FM index.\n", argv[0]);
-    	if(fwrite(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
-    	  esl_fatal( "%s: Error writing occCnts_b in FM index.\n", argv[0]);
-    	if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
-    	  esl_fatal( "%s: Error writing occCnts_sb in FM index.\n", argv[0]);
+			if(j==0 && fwrite(T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+			  esl_fatal( "%s: Error writing T in FM index.\n", argv[0]);
+			if(fwrite(BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+			  esl_fatal( "%s: Error writing BWT in FM index.\n", argv[0]);
+			if(j==0 && fwrite(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+				esl_fatal( "%s: Error writing SA in FM index.\n", argv[0]);
+			if(fwrite(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
+			  esl_fatal( "%s: Error writing occCnts_b in FM index.\n", argv[0]);
+			if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
+			  esl_fatal( "%s: Error writing occCnts_sb in FM index.\n", argv[0]);
 
-
+    	}
     }
 
 
