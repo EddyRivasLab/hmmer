@@ -461,7 +461,7 @@ typedef union {
  *
  * cmpeq()x2     : test if both left and right < c.  For each, if <c , value = 11111111 (-1)
  */
-#define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
+#define FM_LT_4BIT(in_v, c_v, out1_v, out2_v) do {\
 		out1_v    = vec_sr(in_v, fm_four);\
 		out2_v    = vec_and(in_v, fm_m0f);\
 		out1_v    = vec_and(out1_v, fm_m0f);\
