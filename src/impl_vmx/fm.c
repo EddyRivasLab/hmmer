@@ -59,7 +59,7 @@ fm_initMiscVars( FM_MISC_VARS *misc ) {
   misc->fm_two       = esl_vmx_set_u8((int8_t) 2);         //
   misc->fm_four      = esl_vmx_set_u8((int8_t) 4);         //
 
-  if (meta->alph_type == fm_DNA) {
+  if (misc->meta->alph_type == fm_DNA) {
     misc->fm_m01 = esl_vmx_set_u8((int8_t) 0x55);   //01 01 01 01
     misc->fm_m11 = esl_vmx_set_u8((int8_t) 0x03);  //00 00 00 11
   }
@@ -102,12 +102,12 @@ fm_initMiscVars( FM_MISC_VARS *misc ) {
 
   {
     byte_vec arr;
-    arr.u8 = fm_allones_v;
+    arr.u8 = misc->fm_allones_v;
 
     for (i=trim_chunk_count-1; i>0; i--) {
       int byte_mask=0xff; //11 11 11 11
       int byte_i = (i-1)/(trim_chunk_count/16);
-      if (meta->alph_type == fm_DNA) {
+      if (misc->meta->alph_type == fm_DNA) {
         switch (i&0x03) {
           case 1:
             byte_mask = 0xc0; //11 00 00 00
@@ -133,7 +133,7 @@ fm_initMiscVars( FM_MISC_VARS *misc ) {
     }
   }
 
-  if (meta->alph_type == fm_DNA_full) {
+  if (misc->meta->alph_type == fm_DNA_full) {
     misc->fm_masks_v[16]          = misc->fm_allones_v;
     misc->fm_reverse_masks_v[16]  = misc->fm_allones_v;
 
@@ -155,9 +155,9 @@ exit(1);
   return eslOK;
 
 ERROR:
-  if (fm_chars_mem)         free(fm_chars_mem);
-  if (fm_masks_mem)         free(fm_masks_mem);
-  if (fm_reverse_masks_mem) free(fm_reverse_masks_mem);
+  if (misc->fm_chars_mem)         free(misc->fm_chars_mem);
+  if (misc->fm_masks_mem)         free(misc->fm_masks_mem);
+  if (misc->fm_reverse_masks_mem) free(misc->fm_reverse_masks_mem);
 
   esl_fatal("Error allocating memory in initGlobals\n");
   return eslFAIL;
@@ -452,7 +452,7 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
             tmp_v    = vec_and(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
             FM_COUNT_2BIT(tmp_v, tmp2_v, counts_lt.i8);
           }
-          c_v = *(fm_chars_v + c);
+          c_v = *(misc->fm_chars_v + c);
           FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
           tmp_v    = vec_and(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_eq.i8);
@@ -498,7 +498,7 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
           BWT_v = *(vector unsigned char*)(BWT+i);
           FM_LT_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
           tmp_v     = vec_and(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
-          tmp2_v    = vec_and(tmp2_v, *(fmisc->m_reverse_masks_v + (remaining_cnt+1)/2));
+          tmp2_v    = vec_and(tmp2_v, *(misc->fm_reverse_masks_v + (remaining_cnt+1)/2));
           FM_COUNT_4BIT( (vector signed char)tmp_v,  (vector signed char)tmp2_v, counts_lt.i8);
 
           FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
