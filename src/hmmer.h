@@ -778,9 +778,10 @@ typedef struct fm_interval_s {
 } FM_INTERVAL;
 
 typedef struct fm_hit_s {
-  int   start;
-  int   block;
-  int   direction;
+  int      start;
+  int      block;
+  int      direction;
+  uint32_t sortkey;
 //  int   length;
 } FM_HIT;
 

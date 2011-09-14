@@ -43,7 +43,27 @@ p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 typedef P7_GMX P7_OMX;
 
 /*****************************************************************
- * 3. Declarations of the external API.
+ * 3. FM-index
+ *****************************************************************/
+
+/* Effectively global variables, to be initialized once in fm_initGlobals(),
+ * then passed around to avoid recomputing them
+ */
+typedef struct {
+  /*suffix-array mask and offset values*/
+  int maskSA;
+  int shiftSA;
+
+  /*counter, to compute FM-index speed*/
+  int occCallCnt;
+
+  /*pointer to FM-index metadata*/
+  FM_METADATA *meta;
+
+} FM_MISC_VARS;
+
+/*****************************************************************
+ * 4. Declarations of the external API.
  *****************************************************************/
 
 /* p7_omx.c */
@@ -127,13 +147,13 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 /*fm.c */
-extern int fm_initGlobals ( FM_METADATA *meta  );
-extern int fm_destroyGlobals ( );
-extern int fm_getOccCount (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c);
-extern int fm_getOccCountLT (FM_METADATA *meta, FM_DATA *fm, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
+extern int fm_initMiscVars    (FM_MISC_VARS *misc );
+extern int fm_destroyMiscVars (FM_MISC_VARS *misc );
+extern int fm_getOccCount     (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c);
+extern int fm_getOccCountLT   (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 /*****************************************************************
- * 4. Implementation specific initialization
+ * 5. Implementation specific initialization
  *****************************************************************/
 static inline void
 impl_Init(void)
