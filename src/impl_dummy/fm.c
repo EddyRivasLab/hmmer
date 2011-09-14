@@ -35,7 +35,7 @@ fm_destroyMiscVars(FM_MISC_VARS *misc ) {
  *            just a slow (and correct) implementation
  */
 int
-int fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
+fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
 
   int i;
   FM_METADATA *meta = misc->meta;
@@ -146,7 +146,7 @@ int fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
  *            just a slow (and correct) implementation
  */
 int
-int fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
+fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
 
   if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'

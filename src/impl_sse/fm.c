@@ -2,7 +2,8 @@
 #include "impl_sse.h"
 
 
-int fm_getbits_m128 (__m128i in, char *buf, int reverse) {
+int
+fm_getbits_m128 (__m128i in, char *buf, int reverse) {
   byte_m128 new;
   new.m128 = in;
   int i,j;
@@ -22,7 +23,8 @@ int fm_getbits_m128 (__m128i in, char *buf, int reverse) {
   return eslOK;
 }
 
-int fm_print_m128 (__m128i in) {
+int
+fm_print_m128 (__m128i in) {
   char str[144];
   fm_getbits_m128(in, str, 0);
   fprintf (stderr, "%s\n", str);
@@ -30,7 +32,8 @@ int fm_print_m128 (__m128i in) {
 }
 
 
-int fm_print_m128_rev (__m128i in) {
+int
+fm_print_m128_rev (__m128i in) {
   char str[144];
   fm_getbits_m128(in, str, 1);
   fprintf (stderr, "%s\n", str);
@@ -176,7 +179,8 @@ fm_destroyMiscVars(FM_MISC_VARS *misc ) {
  *            a reasonable expectation, as spacings of 256 or more seem to give the best speed,
  *            and certainly better space-utilization.
  */
-int fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
+int
+fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
 
   int i;
   FM_METADATA *meta = misc->meta;
@@ -322,7 +326,8 @@ int fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
  *            and certainly better space-utilization.
  *
  */
-int fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
+int
+fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
   if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'
     *cntlt = 1;
