@@ -436,7 +436,7 @@ main(int argc, char *argv[]) {
 
   esl_sqfile_SetDigital(sqfp, abc);
   block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
-
+  block->complete = 0;
   max_block_size = FM_BLOCK_OVERLAP+block_size+1; // +1 for the '$'
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
