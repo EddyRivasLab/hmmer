@@ -781,8 +781,8 @@ typedef struct fm_hit_s {
   int      start;
   int      block;
   int      direction;
-  uint32_t sortkey;
-//  int   length;
+  int      length;
+  int      sortkey;
 } FM_HIT;
 
 

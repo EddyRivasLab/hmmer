@@ -6,10 +6,10 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "show brief help on version and usage",                      1 },
+  { "-h",           eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "show brief help on version and usage",                      1 },
 
-  { "--out",       eslARG_STRING,     "none", NULL, NULL,    NULL,  NULL,  NULL,          "save list of hits to file <s>  ('-' writes to stdout)",     2 },
-  { "--count_only", eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "compute just counts, not locations",                        2 },
+  { "--out",      eslARG_STRING,     "none", NULL, NULL,    NULL,  NULL,  NULL,    "save list of hits to file <s>  ('-' writes to stdout)",     2 },
+  { "--count_only", eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "compute just counts, not locations",                        2 },
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -247,7 +247,7 @@ getChar(uint8_t alph_type, int j, const uint8_t *B ) {
 //inline
 //#endif
 int
-getFMHits( FM_DATA *fm, FM_MISC_VARS *misc, FM_INTERVAL *interval, int block_id, int hit_offset, FM_HIT *hits_ptr, int fm_direction) {
+getFMHits( FM_DATA *fm, FM_MISC_VARS *misc, FM_INTERVAL *interval, int block_id, int hit_offset, int hit_length, FM_HIT *hits_ptr, int fm_direction) {
 
   int i, j, len = 0;
 
@@ -255,16 +255,23 @@ getFMHits( FM_DATA *fm, FM_MISC_VARS *misc, FM_INTERVAL *interval, int block_id,
     j = i;
     len = 0;
 
-    while ( j & misc->maskSA ) { //go until we hit a position in the full SA that was sampled during FM index construction
+    while ( j != fm->term_loc && (j & misc->maskSA)) { //go until we hit a position in the full SA that was sampled during FM index construction
       uint8_t c = getChar( misc->meta->alph_type, j, fm->BWT);
       j = fm_getOccCount (fm, misc, j-1, c);
       j += abs(fm->C[c]);
       len++;
     }
-    const int tmp = j >> misc->shiftSA;
-    hits_ptr[hit_offset + i - interval->lower].block = block_id;
-    hits_ptr[hit_offset + i - interval->lower].start = fm->SA[ tmp ] + len;
+
+
+
+    hits_ptr[hit_offset + i - interval->lower].block     = block_id;
     hits_ptr[hit_offset + i - interval->lower].direction = fm_direction;
+    hits_ptr[hit_offset + i - interval->lower].length    = hit_length;
+
+    hits_ptr[hit_offset + i - interval->lower].start     = len + (j==fm->term_loc ? 0 : fm->SA[ j >> misc->shiftSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+    if (fm_direction == fm_backward)
+      hits_ptr[hit_offset + i - interval->lower].start  +=  hit_length - 1 ;
+
   }
 
   return eslOK;
@@ -275,15 +282,16 @@ getFMHits( FM_DATA *fm, FM_MISC_VARS *misc, FM_INTERVAL *interval, int block_id,
  * Synopsis:  release the memory required to store an individual FM-index
  */
 void
-freeFM ( FM_DATA *fm, int freeSA)
+freeFM ( FM_DATA *fm, int isMainFM)
 {
-  if (fm->T)            free (fm->T);
+
   if (fm->BWT_mem)      free (fm->BWT_mem);
   if (fm->C)            free (fm->C);
   if (fm->occCnts_b)    free (fm->occCnts_b);
   if (fm->occCnts_sb)   free (fm->occCnts_sb);
 
-  if (freeSA && fm->SA) free (fm->SA);
+  if (isMainFM && fm->T)  free (fm->T);
+  if (isMainFM && fm->SA) free (fm->SA);
 }
 
 /* Function:  readFM()
@@ -396,37 +404,33 @@ readFMmeta( FILE *fp, FM_METADATA *meta)
   int status;
   int i;
 
-  if( fread(&(meta->fwd_only),     sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->alph_size),    sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->charBits),     sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->freq_SA),      sizeof(uint32_t), 1, fp) != 1 ||
-      fread(&(meta->freq_cnt_sb),  sizeof(uint32_t), 1, fp) != 1 ||
-      fread(&(meta->freq_cnt_b),   sizeof(uint32_t), 1, fp) != 1 ||
-      fread(&(meta->SA_shift),     sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->cnt_shift_sb), sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->cnt_shift_b),  sizeof(uint8_t),  1, fp) != 1 ||
-      fread(&(meta->block_count),  sizeof(uint16_t), 1, fp) != 1 ||
-      fread(&(meta->seq_count),    sizeof(uint32_t), 1, fp) != 1
+  if( fread(&(meta->fwd_only),     sizeof(meta->fwd_only),     1, fp) != 1 ||
+      fread(&(meta->alph_type),    sizeof(meta->alph_type),    1, fp) != 1 ||
+      fread(&(meta->alph_size),    sizeof(meta->alph_size),    1, fp) != 1 ||
+      fread(&(meta->charBits),     sizeof(meta->charBits),     1, fp) != 1 ||
+      fread(&(meta->freq_SA),      sizeof(meta->freq_SA),      1, fp) != 1 ||
+      fread(&(meta->freq_cnt_sb),  sizeof(meta->freq_cnt_sb),  1, fp) != 1 ||
+      fread(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, fp) != 1 ||
+      fread(&(meta->SA_shift),     sizeof(meta->SA_shift),     1, fp) != 1 ||
+      fread(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, fp) != 1 ||
+      fread(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, fp) != 1 ||
+      fread(&(meta->block_count),  sizeof(meta->block_count),  1, fp) != 1 ||
+      fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1
   )
     esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
-
 
 
   ESL_ALLOC (meta->seq_data,  meta->seq_count   * sizeof(FM_SEQDATA));
   if (meta->seq_data == NULL  )
     esl_fatal("unable to allocate memory to store FM meta data\n");
 
-//  if(    fread(misc->meta->block_sizes,   sizeof(uint64_t), misc->meta->block_count, fp) != misc->meta->block_count )
-//    esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
-
 
   for (i=0; i<meta->seq_count; i++) {
-    if( fread(&(meta->seq_data[i].id),          sizeof(uint32_t),  1, fp) != 1 ||
-        fread(&(meta->seq_data[i].start),       sizeof(uint32_t),  1, fp) != 1 ||
-        fread(&(meta->seq_data[i].length),      sizeof(uint32_t),  1, fp) != 1 ||
-        fread(&(meta->seq_data[i].offset),      sizeof(uint32_t),  1, fp) != 1 ||
-        fread(&(meta->seq_data[i].name_length), sizeof(uint16_t),  1, fp) != 1
+    if( fread(&(meta->seq_data[i].id),          sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
+        fread(&(meta->seq_data[i].start),       sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
+        fread(&(meta->seq_data[i].length),      sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
+        fread(&(meta->seq_data[i].offset),      sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
+        fread(&(meta->seq_data[i].name_length), sizeof(meta->seq_data[i].name_length), 1, fp) != 1
         )
       esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
@@ -454,7 +458,10 @@ ERROR:
 
 
 /* Function:  computeSequenceOffset()
- * Synopsis:  search in the meta->seq_data array for the sequence id corresponding to the requested position
+ * Synopsis:  Search in the meta->seq_data array for the sequence id corresponding to the
+ *            requested position. The matching entry is the one with the largest index i
+ *            such that seq_data[i].offset < pos
+ *
  *
  * Input: file pointer to binary file
  * Output: return filled meta struct
@@ -481,11 +488,11 @@ computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos) {
 
   while (1) {
     mid = (lo + hi + 1) / 2;  /* round up */
-    if      (meta->seq_data[mid].offset < pos) lo = mid; /* too far left  */
+    if      (meta->seq_data[mid].offset <= pos) lo = mid; /* too far left  */
     else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* too far right */
-    else break;                 /* found it */
+    else return mid-1;                 /* found it */
   }
-  return mid-1;
+
 
 }
 
@@ -500,8 +507,12 @@ hit_sorter(const void *a, const void *b)
   if      (h1->sortkey > h2->sortkey) return  1;
   else if (h1->sortkey < h2->sortkey) return -1;
   else {
-    if  (h1->start > h2->start) return  1;
-    else                        return -1;
+    if      (h1->direction > h2->direction) return 1;
+    else if (h1->direction < h2->direction) return -1;
+    else {
+      if  (h1->start > h2->start) return  1;
+      else                        return -1;
+    }
   }
 }
 
@@ -530,8 +541,9 @@ main(int argc,  char *argv[]) {
   int hit_indiv_cnt = 0;
   int miss_cnt      = 0;
   int hit_num       = 0;
+  int hit_num2       = 0;
   int hits_size     = 0;
-    int i;
+  int i;
   int count_only    = 0;
 
   FM_DATA *fmsf;
@@ -579,15 +591,17 @@ main(int argc,  char *argv[]) {
 
   readFMmeta( fp_fm, misc->meta);
 
-  //read in FM-index bl.ocks
+  //read in FM-index blocks
   ESL_ALLOC(fmsf, misc->meta->block_count * sizeof(FM_DATA) );
-  for (i=0; i<meta->block_count; i++)
+  for (i=0; i<meta->block_count; i++) {
     readFM( fp_fm, fmsf+i, misc->meta, 1 );
 
-  if (!meta->fwd_only) {
-    ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
-    for (i=0; i<meta->block_count; i++)
+    if (!meta->fwd_only) {
+      ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
       readFM( fp_fm, fmsb+i, misc->meta, 0 );
+      fmsb[i].SA = fmsf[i].SA;
+      fmsb[i].T = fmsf[i].T;
+    }
   }
   fclose(fp_fm);
 
@@ -622,6 +636,7 @@ main(int argc,  char *argv[]) {
 
     hit_num = 0;
 
+
     for (i=0; i<meta->block_count; i++) {
 
       getSARangeForward(fmsb+i, misc, line, inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
@@ -633,7 +648,9 @@ main(int argc,  char *argv[]) {
             hits_size = 2*hit_num;
             ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
           }
-          getFMHits(fmsb+i, misc, &interval, i, hit_num-new_hit_num, hits, fm_forward);
+          //even though I used fmsb above, use fmsf here, since we'll now do a backward trace
+          //in the FM-index to find the next sampled SA position
+          getFMHits(fmsf+i, misc, &interval, i, hit_num-new_hit_num, qlen, hits, fm_forward);
         }
       }
 
@@ -649,45 +666,84 @@ main(int argc,  char *argv[]) {
               hits_size = 2*hit_num;
               ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
             }
-            getFMHits(fmsf+i, misc, &interval, i, hit_num-new_hit_num, hits, fm_backward);
+            getFMHits(fmsf+i, misc, &interval, i, hit_num-new_hit_num, qlen, hits, fm_backward);
           }
         }
       }
     }
 
 
-    if (hit_num > 0) {
-      hit_cnt++;
 
+    if (hit_num > 0) {
       if (count_only) {
+        hit_cnt++;
         hit_indiv_cnt += hit_num;
       } else {
-        //printf ("HIT:  %s (%d)\n", line, hit_num);
-        //printf ("HIT:  %s  (%d, %d)\n", line, interval.lower, interval.upper );
+        hit_num2 = 0;
+
         //for each hit, identify the sequence id and position within that sequence
         for (i = 0; i< hit_num; i++) {
           int block = hits[i].block;
           int seq_offset = computeSequenceOffset( fmsf, meta, block, hits[i].start);
           int pos =  ( hits[i].start - meta->seq_data[ seq_offset ].offset) + meta->seq_data[ seq_offset ].start - 1;
+
+          //verify that the hit doesn't extend beyond the bounds of the target sequence
+          if (hits[i].direction == fm_forward) {
+            if (pos + hits[i].length > meta->seq_data[ seq_offset ].length ) {
+              hits[i].block  = hits[i].sortkey  = hits[i].start  = -1;  // goes into the next sequence, so it should be ignored
+              continue;
+            }
+          } else { //backward
+            if (pos - hits[i].length + 1 < 0 ) {
+              hits[i].block  = hits[i].sortkey  = hits[i].start  = -1; // goes into the previous sequence, so it should be ignored
+              continue;
+            }
+          }
+          hit_num2++; // legitimate hit
+
           //reuse hit variables.  Now "block" has the index into the matching sequence (in meta), and "start" has the pos within that sequence
           hits[i].block   = seq_offset;
           hits[i].start   = pos;
           hits[i].sortkey = meta->seq_data[ seq_offset ].id;
         }
+        if (hit_num2 > 0)
+          hit_cnt++;
+
 
         //now sort according the the sequence_id corresponding to that seq_offset
         qsort(hits, hit_num, sizeof(FM_HIT), hit_sorter);
 
-        hit_indiv_cnt++;
-        for (i = 1; i< hit_num; i++) {
-          if (meta->seq_data[ hits[i].block ].id != meta->seq_data[ hits[i-1].block ].id ||
-              hits[i].start != hits[i-1].start )
-          {
-            //printf ( "\t%10s (%d)\n",meta->seq_data[ hits[i].block ].name, hits[i].start);
-            hit_indiv_cnt++;
-          }
+        //skim past the skipped entries
+        i = 0;
+        while ( i < hit_num ) {
+          if (hits[i].block != -1 )
+            break;  //
+          i++;
         }
-        //printf ("\n");
+
+        if (i < hit_num) {
+          if (out != NULL) {
+            fprintf (out, "%s\n",line);
+            //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
+            fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"1":"0"), meta->seq_data[ hits[i].block ].name);
+          }
+          hit_indiv_cnt++;
+          i++; // skip the first one, since I'll be comparing each to the previous
+          for (  ; i< hit_num; i++) {
+            if ( //meta->seq_data[ hits[i].block ].id != meta->seq_data[ hits[i-1].block ].id ||
+                 hits[i].sortkey   != hits[i-1].sortkey ||  //sortkey is seq_data[].id
+                 hits[i].direction != hits[i-1].direction ||
+                 hits[i].start     != hits[i-1].start )
+            {
+              if (out != NULL)
+                //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
+                fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"1":"0"), meta->seq_data[ hits[i].block ].name);
+              hit_indiv_cnt++;
+            }
+          }
+          if (out != NULL)
+            fprintf (out, "\n");
+        }
       }
     } else {
       miss_cnt++;

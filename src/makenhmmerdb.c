@@ -207,8 +207,17 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
     }
   }
 
+/*
+printf("BWT (termloc: %d): \n", term_loc);
+for(j=0; j < N; ++j) {
+  printf("%d\n", BWT[j]);
+}
 
-
+printf("SA:\n");
+for(j=0; j < N; ++j) {
+  printf("%d\n", SA[j]);
+}
+*/
   //wrap up the counting;
   for (c=0; c<meta->alph_size; c++) {
     FM_OCC_CNT(b, num_freq_cnts_b-1, c ) = cnts_b[c];
@@ -225,17 +234,17 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
         if (SAsamp != NULL)
           Tcompressed[i>>2] =   T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
       }
-      if (i>=N-3) {
+      if (i <= N-1) {
         BWT[i>>2]           =  BWT[i]<<6;
         if (SAsamp != NULL)
           Tcompressed[i>>2] =    T[i]<<6;
       }
-      if (i>=N-2) {
+      if (i+1 <= N-1) {
         BWT[i>>2]           =  BWT[i+1]<<4;
         if (SAsamp != NULL)
           Tcompressed[i>>2] =    T[i+1]<<4;
       }
-      if (i==N-1)  {
+      if (i+2 <= N-1)  {
         BWT[i>>2]           =  BWT[i+2]<<2;
         if (SAsamp != NULL)
           Tcompressed[i>>2] =    T[i+2]<<2;
@@ -436,7 +445,7 @@ main(int argc, char *argv[]) {
 
   esl_sqfile_SetDigital(sqfp, abc);
   block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
-  block->complete = 0;
+  block->complete = FALSE;
   max_block_size = FM_BLOCK_OVERLAP+block_size+1; // +1 for the '$'
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
@@ -595,27 +604,28 @@ main(int argc, char *argv[]) {
 
 
     //write out meta data
-  if( fwrite(&(meta->fwd_only),     sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->alph_type),    sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->alph_size),    sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->charBits),     sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->freq_SA),      sizeof(uint32_t), 1, fp) != 1 ||
-      fwrite(&(meta->freq_cnt_sb),  sizeof(uint32_t), 1, fp) != 1 ||
-      fwrite(&(meta->freq_cnt_b),   sizeof(uint32_t), 1, fp) != 1 ||
-      fwrite(&(meta->SA_shift),     sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->cnt_shift_sb), sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->cnt_shift_b),  sizeof(uint8_t),  1, fp) != 1 ||
-      fwrite(&(meta->block_count),  sizeof(uint16_t), 1, fp) != 1 ||
-      fwrite(&(meta->seq_count),    sizeof(uint32_t), 1, fp) != 1
+  if( fwrite(&(meta->fwd_only),     sizeof(meta->fwd_only),     1, fp) != 1 ||
+      fwrite(&(meta->alph_type),    sizeof(meta->alph_type),    1, fp) != 1 ||
+      fwrite(&(meta->alph_size),    sizeof(meta->alph_size),    1, fp) != 1 ||
+      fwrite(&(meta->charBits),     sizeof(meta->charBits),     1, fp) != 1 ||
+      fwrite(&(meta->freq_SA),      sizeof(meta->freq_SA),      1, fp) != 1 ||
+      fwrite(&(meta->freq_cnt_sb),  sizeof(meta->freq_cnt_sb),  1, fp) != 1 ||
+      fwrite(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, fp) != 1 ||
+      fwrite(&(meta->SA_shift),     sizeof(meta->SA_shift),     1, fp) != 1 ||
+      fwrite(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, fp) != 1 ||
+      fwrite(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, fp) != 1 ||
+      fwrite(&(meta->block_count),  sizeof(meta->block_count),  1, fp) != 1 ||
+      fwrite(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1
   )
     esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
 
+
   for (i=0; i<numseqs; i++) {
-    if( fwrite(&(meta->seq_data[i].id),          sizeof(uint32_t),  1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].start),       sizeof(uint32_t),  1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].length),      sizeof(uint32_t),  1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].offset),      sizeof(uint32_t),  1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].name_length), sizeof(uint16_t),  1, fp) != 1 ||
+    if( fwrite(&(meta->seq_data[i].id),          sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].start),       sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].length),      sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].offset),      sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].name_length), sizeof(meta->seq_data[i].name_length), 1, fp) != 1 ||
         fwrite(meta->seq_data[i].name,           sizeof(char),    meta->seq_data[i].name_length+1  , fp) !=  meta->seq_data[i].name_length+1
     )
       esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
