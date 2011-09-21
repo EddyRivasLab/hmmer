@@ -220,6 +220,7 @@ main(int argc,  char *argv[]) {
   char *outname = NULL;
 
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
+  void *cfg_mem; //used to ensure cfg is 16-byte aligned, which matters since, for sse/vmx implementations, elements within cfg need to be aligned thusly
   FM_CFG *cfg;
   FM_METADATA *meta;
 
@@ -249,7 +250,8 @@ main(int argc,  char *argv[]) {
     esl_fatal("Cannot open file `%s': ", fname_fm);
 
 
-  ESL_ALLOC(cfg, sizeof(FM_CFG));
+  ESL_ALLOC(cfg_mem, sizeof(FM_CFG)+ 15 );
+    cfg =   (FM_CFG *) (((unsigned long int)(cfg_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
   ESL_ALLOC(cfg->meta, sizeof(FM_METADATA));
   meta = cfg->meta;
   cfg->occCallCnt = 0;
@@ -433,7 +435,7 @@ main(int argc,  char *argv[]) {
 
   fclose(fp);
   fm_destroyConfig(cfg);
-  free(cfg);
+  free(cfg_mem);
 
   // compute and print the elapsed time in millisec
   t2 = times(&ts2);

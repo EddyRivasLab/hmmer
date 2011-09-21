@@ -252,6 +252,9 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
 
 /* Effectively global variables, to be initialized once in fm_initConfig(),
  * then passed around among threads to avoid recomputing them
+ *
+ * When allocated, must be 16-byte aligned, and all _m128i elements
+ * must precede other types
  */
 typedef struct {
   /* mask arrays, and 16-byte-offsets into them */
@@ -269,6 +272,8 @@ typedef struct {
   __m128i fm_m0f;  //00 00 11 11
   __m128i fm_m01;  //01 01 01 01
   __m128i fm_m11;  //00 00 00 11
+
+  /* no non-__m128i- elements above this line */
 
   /*suffix-array mask and offset values*/
   int maskSA;

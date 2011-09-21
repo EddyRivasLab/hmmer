@@ -249,6 +249,9 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
 
 /* Effectively global variables, to be initialized once in fm_initConfig(),
  * then passed around among threads to avoid recomputing them
+ *
+ * When allocated, must be 16-byte aligned, and all vector elements
+ * must precede other types
  */
 typedef struct {
   /* mask arrays, and 16-byte-offsets into them */
@@ -269,6 +272,10 @@ typedef struct {
   vector unsigned char  fm_one;  //value of 1 in each byte, used for shifting
   vector unsigned char  fm_two;  //value of 2 in each byte, used for shifting
   vector unsigned char  fm_four; //value of 4 in each byte, used for shifting
+
+
+  /* no non-vector elements above this line */
+
 
   /*suffix-array mask and offset values*/
   int maskSA;

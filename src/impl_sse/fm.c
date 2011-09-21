@@ -527,7 +527,7 @@ fm_getOccCountLT (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq,
 
 
 
-  return cnt ;
+  return eslOK ;
 
 }
 
