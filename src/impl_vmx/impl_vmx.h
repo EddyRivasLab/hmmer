@@ -247,8 +247,8 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
  * 3. FM-index
  *****************************************************************/
 
-/* Effectively global variables, to be initialized once in fm_initGlobals(),
- * then passed around to avoid recomputing them
+/* Effectively global variables, to be initialized once in fm_initConfig(),
+ * then passed around among threads to avoid recomputing them
  */
 typedef struct {
   /* mask arrays, and 16-byte-offsets into them */
@@ -280,7 +280,7 @@ typedef struct {
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
 
-} FM_MISC_VARS;
+} FM_CFG;
 
 //used to convert from a byte array to a vec
 typedef union {
@@ -295,7 +295,7 @@ typedef union {
  *  element of the register (the last (3rd) element)
  */
 #define FM_GATHER_8BIT_COUNTS( in_v, out_v  ) do {\
-             out_v  = vec_sums(vec_sum4s(in_v, (vector signed int)misc->fm_zeros_v), (vector signed int)misc->fm_zeros_v);\
+             out_v  = vec_sums(vec_sum4s(in_v, (vector signed int)cfg->fm_zeros_v), (vector signed int)cfg->fm_zeros_v);\
   } while (0)
 
 
@@ -322,12 +322,12 @@ typedef union {
 #define FM_MATCH_2BIT(in_v, c_v, a_v, b_v, out_v) do {\
           a_v = vec_xor(in_v, c_v);\
                 \
-    b_v  = vec_and(a_v, misc->fm_m01);\
-    a_v  = vec_sr(a_v,  misc->fm_one);\
-    a_v  = vec_and(a_v, misc->fm_m01);\
+    b_v  = vec_and(a_v, cfg->fm_m01);\
+    a_v  = vec_sr(a_v,  cfg->fm_one);\
+    a_v  = vec_and(a_v, cfg->fm_m01);\
     a_v  = vec_or(a_v, b_v);\
     \
-    out_v  = vec_subs(misc->fm_m01,a_v);\
+    out_v  = vec_subs(cfg->fm_m01,a_v);\
   } while (0)
 
 
@@ -345,12 +345,12 @@ typedef union {
  * final 2 add()s        : tack current counts on to already-tabulated counts.
  */
 #define FM_COUNT_2BIT(a_v, b_v, cnts_v) do {\
-        b_v  = vec_sr(a_v, misc->fm_four);\
+        b_v  = vec_sr(a_v, cfg->fm_four);\
         a_v  = (vector unsigned char)vec_adds( (vector signed char)a_v, (vector signed char)b_v);\
         \
-        b_v  = vec_sr(a_v, misc->fm_two);\
-        a_v  = vec_and(a_v,misc->fm_m11);\
-        b_v  = vec_and(b_v,misc->fm_m11);\
+        b_v  = vec_sr(a_v, cfg->fm_two);\
+        a_v  = vec_and(a_v,cfg->fm_m11);\
+        b_v  = vec_and(b_v,cfg->fm_m11);\
         \
         cnts_v = vec_adds(cnts_v, (vector signed char)a_v);\
         cnts_v = vec_adds(cnts_v, (vector signed char)b_v);\
@@ -376,9 +376,9 @@ typedef union {
  * cmpeq()x2     : test if both left and right == c.  For each, if ==c , value = 11111111 (-1)
  */
 #define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
-    out1_v    = vec_sr(in_v, misc->fm_four);\
-    out2_v    = vec_and(in_v, misc->fm_m0f);\
-    out1_v    = vec_and(out1_v, misc->fm_m0f);\
+    out1_v    = vec_sr(in_v, cfg->fm_four);\
+    out2_v    = vec_and(in_v, cfg->fm_m0f);\
+    out1_v    = vec_and(out1_v, cfg->fm_m0f);\
     \
     out1_v    = (vector unsigned char)vec_cmpeq(out1_v, c_v);\
     out2_v    = (vector unsigned char)vec_cmpeq(out2_v, c_v);\
@@ -403,9 +403,9 @@ typedef union {
  * cmpeq()x2     : test if both left and right < c.  For each, if <c , value = 11111111 (-1)
  */
 #define FM_LT_4BIT(in_v, c_v, out1_v, out2_v) do {\
-    out1_v    = vec_sr(in_v, misc->fm_four);\
-    out2_v    = vec_and(in_v, misc->fm_m0f);\
-    out1_v    = vec_and(out1_v, misc->fm_m0f);\
+    out1_v    = vec_sr(in_v, cfg->fm_four);\
+    out2_v    = vec_and(in_v, cfg->fm_m0f);\
+    out1_v    = vec_and(out1_v, cfg->fm_m0f);\
     \
     out1_v    = (vector unsigned char)vec_cmplt(out1_v, c_v);\
     out2_v    = (vector unsigned char)vec_cmplt(out2_v, c_v);\
@@ -513,10 +513,10 @@ extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 /*fm.c */
-extern int fm_initMiscVars    (FM_MISC_VARS *misc );
-extern int fm_destroyMiscVars (FM_MISC_VARS *misc );
-extern int fm_getOccCount     (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c);
-extern int fm_getOccCountLT   (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
+extern int fm_initConfig      (FM_CFG *cfg );
+extern int fm_destroyConfig   (FM_CFG *cfg );
+extern int fm_getOccCount     (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
+extern int fm_getOccCountLT   (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 
 

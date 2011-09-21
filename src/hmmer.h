@@ -1363,6 +1363,15 @@ extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 extern int fm_createAlphabet (int alph_type, char **alph, char **inv_alph, uint8_t *alph_size, uint8_t *alph_bits);
 extern int fm_reverseString (char* str, int N);
 
+/* fm_general.c */
+extern uint32_t computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos);
+extern int readFMmeta( FILE *fp, FM_METADATA *meta);
+extern int readFM( FILE *fp, FM_DATA *fm, FM_METADATA *meta, int getAll );
+extern void freeFM ( FM_DATA *fm, int isMainFM);
+extern uint8_t getChar(uint8_t alph_type, int j, const uint8_t *B );
+extern int getSARangeReverse( FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int getSARangeForward(FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+
 
 
 /* seqmodel.c */

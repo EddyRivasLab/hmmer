@@ -2,21 +2,24 @@
 #include "impl_dummy.h"
 
 
-/* Function:  fm_initMiscVars()
+/* Function:  fm_initConfig()
  * do nothing.  This is a placeholder in the dummy implementation for
  * a function that does something in _sse and _vmx code
  */
 int
-fm_initMiscVars( FM_MISC_VARS *misc ) {
+fm_initConfig( FM_CFG *cfg ) {
+  cfg->maskSA       =  cfg->meta->freq_SA - 1;
+  cfg->shiftSA      =  cfg->meta->SA_shift;
+
   return eslOK;
 }
 
-/* Function:  fm_destroyMiscVars()
+/* Function:  fm_destroyConfig()
  * do nothing.  This is a placeholder in the dummy implementation for
  * a function that does something in _sse and _vmx code
  */
 int
-fm_destroyMiscVars(FM_MISC_VARS *misc ) {
+fm_destroyConfig(FM_CFG *cfg ) {
   return eslOK;
 }
 
@@ -35,10 +38,10 @@ fm_destroyMiscVars(FM_MISC_VARS *misc ) {
  *            just a slow (and correct) implementation
  */
 int
-fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
+fm_getOccCount (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
 
   int i;
-  FM_METADATA *meta = misc->meta;
+  FM_METADATA *meta = cfg->meta;
 
   int cnt;
   const int b_pos          = (pos+1) >> meta->cnt_shift_b; //floor(pos/b_size)   : the b count element preceding pos
@@ -60,7 +63,7 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
     cnt += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
 
 
-  if ( landmark < fm->N ) {
+  if ( landmark < fm->N || landmark == -1) {
 
     const uint8_t * BWT = fm->BWT;
 
@@ -146,7 +149,7 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
  *            just a slow (and correct) implementation
  */
 int
-fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
+fm_getOccCountLT (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
 
   if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'
@@ -155,7 +158,7 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
     *cntlt = 0;
 
   int i;
-  FM_METADATA *meta = misc->meta;
+  FM_METADATA *meta = cfg->meta;
 
   //int cnt;
   const int b_pos          = (pos+1) >> meta->cnt_shift_b; //floor(pos/b_size)   : the b count element preceding pos
@@ -187,7 +190,7 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
 
 
 
-  if ( landmark < fm->N ) {
+  if ( landmark < fm->N || landmark == -1) {
 
     const uint8_t * BWT = fm->BWT;
 

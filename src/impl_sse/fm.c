@@ -41,40 +41,43 @@ fm_print_m128_rev (__m128i in) {
 }
 
 
-/* Function:  fm_initMiscVars()
+/* Function:  fm_initConfig()
  * Purpose:   Initialize vector masks used in SSE FMindex implementation
  */
 int
-fm_initMiscVars( FM_MISC_VARS *misc ) {
+fm_initConfig( FM_CFG *cfg ) {
   int status;
   int i,j;
   int trim_chunk_count;
 
-  misc->fm_allones_v = _mm_set1_epi8(0xff);
-  misc->fm_neg128_v  = _mm_set1_epi8((int8_t) -128);
-  misc->fm_zeros_v = _mm_set1_epi8((int8_t) 0x00);      //00 00 00 00
-  misc->fm_m0f     = _mm_set1_epi8((int8_t) 0x0f);      //00 00 11 11
+  cfg->maskSA       =  cfg->meta->freq_SA - 1;
+  cfg->shiftSA      =  cfg->meta->SA_shift;
 
-  if (misc->meta->alph_type == fm_DNA) {
-    misc->fm_m01 = _mm_set1_epi8((int8_t) 0x55);   //01 01 01 01
-    misc->fm_m11 = _mm_set1_epi8((int8_t) 0x03);  //00 00 00 11
+  cfg->fm_allones_v = _mm_set1_epi8(0xff);
+  cfg->fm_neg128_v  = _mm_set1_epi8((int8_t) -128);
+  cfg->fm_zeros_v = _mm_set1_epi8((int8_t) 0x00);      //00 00 00 00
+  cfg->fm_m0f     = _mm_set1_epi8((int8_t) 0x0f);      //00 00 11 11
+
+  if (cfg->meta->alph_type == fm_DNA) {
+    cfg->fm_m01 = _mm_set1_epi8((int8_t) 0x55);   //01 01 01 01
+    cfg->fm_m11 = _mm_set1_epi8((int8_t) 0x03);  //00 00 00 11
   }
     //set up an array of vectors, one for each character in the alphabet
-  misc->fm_chars_v         = NULL;
-  ESL_ALLOC (misc->fm_chars_mem, misc->meta->alph_size * sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
-  misc->fm_chars_v =   (__m128i *) (((unsigned long int)(misc->fm_chars_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+  cfg->fm_chars_v         = NULL;
+  ESL_ALLOC (cfg->fm_chars_mem, cfg->meta->alph_size * sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
+  cfg->fm_chars_v =   (__m128i *) (((unsigned long int)(cfg->fm_chars_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
 
 
-  for (i=0; i<misc->meta->alph_size; i++) {
+  for (i=0; i<cfg->meta->alph_size; i++) {
     int8_t c = i;
-    if (misc->meta->alph_type == fm_DNA) {
+    if (cfg->meta->alph_type == fm_DNA) {
       // need 4 copies per byte
       c |= i<<2;
       c |= i<<4;
       c |= i<<6;
     } //else, just leave it on the right-most bits
 
-    misc->fm_chars_v[i] = _mm_set1_epi8(c);
+    cfg->fm_chars_v[i] = _mm_set1_epi8(c);
   }
 
   /* this is a collection of masks used to clear off the left- or right- part
@@ -82,28 +85,28 @@ fm_initMiscVars( FM_MISC_VARS *misc ) {
    * Incrementally chew off the 1s in chunks of 2 (for DNA) or 4 (for DNA_full)
    * from the right side, and stick each result into an element of a __m128 array
    */
-  if (misc->meta->alph_type == fm_DNA)
+  if (cfg->meta->alph_type == fm_DNA)
     trim_chunk_count = 64; //2-bit steps
   else //(meta->alph_type == fm_DNA_full)
     trim_chunk_count = 16; //8-bit steps
 
   //chars_per_vector = 128/meta->charBits;
-  misc->fm_masks_v         = NULL;
-  misc->fm_reverse_masks_v = NULL;
-  ESL_ALLOC (misc->fm_masks_mem, (1+trim_chunk_count) *sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
-     misc->fm_masks_v =   (__m128i *) (((unsigned long int)(misc->fm_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+  cfg->fm_masks_v         = NULL;
+  cfg->fm_reverse_masks_v = NULL;
+  ESL_ALLOC (cfg->fm_masks_mem, (1+trim_chunk_count) *sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
+     cfg->fm_masks_v =   (__m128i *) (((unsigned long int)(cfg->fm_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
 
-  ESL_ALLOC (misc->fm_reverse_masks_mem, (1+trim_chunk_count) *sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
-     misc->fm_reverse_masks_v =   (__m128i *) (((unsigned long int)(misc->fm_reverse_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+  ESL_ALLOC (cfg->fm_reverse_masks_mem, (1+trim_chunk_count) *sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
+     cfg->fm_reverse_masks_v =   (__m128i *) (((unsigned long int)(cfg->fm_reverse_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
 
   {
     byte_m128 arr;
-    arr.m128 = misc->fm_allones_v;
+    arr.m128 = cfg->fm_allones_v;
 
     for (i=trim_chunk_count-1; i>0; i--) {
       int byte_mask=0xff; //11 11 11 11
       int byte_i = (i-1)/(trim_chunk_count/16);
-      if (misc->meta->alph_type == fm_DNA) {
+      if (cfg->meta->alph_type == fm_DNA) {
         switch (i&0x03) {
           case 1:
             byte_mask = 0xc0; //11 00 00 00
@@ -123,23 +126,23 @@ fm_initMiscVars( FM_MISC_VARS *misc ) {
       for (j=byte_i+1; j<16; j++) {
         arr.bytes[j] = 0x0;
       }
-      misc->fm_masks_v[i]                           = *(__m128i*)(&(arr.m128));
-      misc->fm_reverse_masks_v[trim_chunk_count-i]  = _mm_andnot_si128(misc->fm_masks_v[i], misc->fm_allones_v );
+      cfg->fm_masks_v[i]                           = *(__m128i*)(&(arr.m128));
+      cfg->fm_reverse_masks_v[trim_chunk_count-i]  = _mm_andnot_si128(cfg->fm_masks_v[i], cfg->fm_allones_v );
 
     }
   }
 
-  if (misc->meta->alph_type == fm_DNA_full) {
-    misc->fm_masks_v[16]          = misc->fm_allones_v;
-    misc->fm_reverse_masks_v[16]  = misc->fm_allones_v;
+  if (cfg->meta->alph_type == fm_DNA_full) {
+    cfg->fm_masks_v[16]          = cfg->fm_allones_v;
+    cfg->fm_reverse_masks_v[16]  = cfg->fm_allones_v;
   }
 
   return eslOK;
 
 ERROR:
-  if (misc->fm_chars_mem)         free(misc->fm_chars_mem);
-  if (misc->fm_masks_mem)         free(misc->fm_masks_mem);
-  if (misc->fm_reverse_masks_mem) free(misc->fm_reverse_masks_mem);
+  if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
+  if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
+  if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
 
   esl_fatal("Error allocating memory in initGlobals\n");
   return eslFAIL;
@@ -147,16 +150,16 @@ ERROR:
 
 
 
-/* Function:  fm_destroyMiscVars()
+/* Function:  fm_destroyConfig()
  * Purpose:   Destroy vector masks used in SSE FMindex implementation
  */
 int
-fm_destroyMiscVars(FM_MISC_VARS *misc ) {
-  if (misc) {
-    if (misc->fm_chars_mem)         free(misc->fm_chars_mem);
-    if (misc->fm_masks_mem)         free(misc->fm_masks_mem);
-    if (misc->fm_reverse_masks_mem) free(misc->fm_reverse_masks_mem);
-    //free(misc);
+fm_destroyConfig(FM_CFG *cfg ) {
+  if (cfg) {
+    if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
+    if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
+    if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
+    //free(cfg);
   }
   return eslOK;
 }
@@ -180,10 +183,10 @@ fm_destroyMiscVars(FM_MISC_VARS *misc ) {
  *            and certainly better space-utilization.
  */
 int
-fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
+fm_getOccCount (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
 
   int i;
-  FM_METADATA *meta = misc->meta;
+  FM_METADATA *meta = cfg->meta;
 
   int cnt;
   const int b_pos          = (pos+1) >> meta->cnt_shift_b; //floor(pos/b_size)   : the b count element preceding pos
@@ -210,11 +213,11 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
     const uint8_t * BWT = fm->BWT;
 
 
-    register __m128i c_v = *(misc->fm_chars_v + c);
+    register __m128i c_v = *(cfg->fm_chars_v + c);
     register __m128i BWT_v;
     register __m128i tmp_v;
     register __m128i tmp2_v;
-    register __m128i counts_v = misc->fm_neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
+    register __m128i counts_v = cfg->fm_neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
                          // so effectively, can guarantee holding 128*16 = 2048.
                          // Since I count from left or right, whichever is closer, this means
                          // we can support an occ_b interval of up to 4096 with guarantee of
@@ -232,7 +235,7 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
         if (remaining_cnt > 0) {
           BWT_v    = *(__m128i*)(BWT+i);
                     FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                    tmp_v    = _mm_and_si128(tmp_v, *(misc->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+                    tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
 
@@ -247,7 +250,7 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
         if (remaining_cnt > 0) {
           BWT_v = *(__m128i*)(BWT+i);
                     FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                    tmp_v    = _mm_and_si128(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+                    tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
       }
@@ -264,8 +267,8 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
         if (remaining_cnt > 0) {
           BWT_v    = *(__m128i*)(BWT+i);
           FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-          tmp_v     = _mm_and_si128(tmp_v, *(misc->fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
-          tmp2_v    = _mm_and_si128(tmp2_v, *(misc->fm_masks_v + remaining_cnt/2));
+          tmp_v     = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
+          tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_masks_v + remaining_cnt/2));
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
         }
 
@@ -280,8 +283,8 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
         if (remaining_cnt > 0) {
           BWT_v = *(__m128i*)(BWT+i);
           FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-          tmp_v     = _mm_and_si128(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
-          tmp2_v    = _mm_and_si128(tmp2_v, *(misc->fm_reverse_masks_v + (remaining_cnt+1)/2));
+          tmp_v     = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
+          tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_reverse_masks_v + (remaining_cnt+1)/2));
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
         }
       }
@@ -289,7 +292,7 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
       esl_fatal("Invalid alphabet type\n");
     }
 
-    counts_v = _mm_xor_si128(counts_v, misc->fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
+    counts_v = _mm_xor_si128(counts_v, cfg->fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
     FM_GATHER_8BIT_COUNTS(counts_v,counts_v,counts_v);
 
     cnt  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v, 0) );
@@ -327,14 +330,14 @@ fm_getOccCount (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c) {
  *
  */
 int
-fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
+fm_getOccCountLT (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
   if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'
     *cntlt = 1;
   else
     *cntlt = 0;
 
-  FM_METADATA *meta = misc->meta;
+  FM_METADATA *meta = cfg->meta;
 
   int i,j;
 
@@ -376,8 +379,8 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
     register __m128i BWT_v;
     register __m128i tmp_v;
     register __m128i tmp2_v;
-    register __m128i counts_v_lt = misc->fm_neg128_v;
-    register __m128i counts_v_eq = misc->fm_neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
+    register __m128i counts_v_lt = cfg->fm_neg128_v;
+    register __m128i counts_v_eq = cfg->fm_neg128_v; // set to -128, offset to allow each 8-bit int to hold up to 255.
                          // so effectively, can guarantee holding 128*16 = 2048.
                          // Since I count from left or right, whichever is closer, this means
                          // we can support an occ_b interval of up to 4096 with guarantee of
@@ -398,11 +401,11 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
         for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
           BWT_v    = *(__m128i*)(BWT+i);
           for (j=0; j<c; j++) {
-            c_v = *(misc->fm_chars_v + j);
+            c_v = *(cfg->fm_chars_v + j);
             FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
             FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_lt);
           }
-          c_v = *(misc->fm_chars_v + c);
+          c_v = *(cfg->fm_chars_v + c);
           FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_eq);
 
@@ -412,14 +415,14 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
         if (remaining_cnt > 0) {
           BWT_v    = *(__m128i*)(BWT+i);
           for (j=0; j<c; j++) {
-            c_v = *(misc->fm_chars_v + j);
+            c_v = *(cfg->fm_chars_v + j);
             FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-            tmp_v    = _mm_and_si128(tmp_v, *(misc->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+            tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
             FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_lt);
           }
-          c_v = *(misc->fm_chars_v + c);
+          c_v = *(cfg->fm_chars_v + c);
           FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-          tmp_v    = _mm_and_si128(tmp_v, *(misc->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+          tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_eq);
 
         }
@@ -428,11 +431,11 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
         for (i=(landmark/4)-15 ; i>(pos/4);  i-=16) {
           BWT_v = *(__m128i*)(BWT+i);
           for (j=0; j<c; j++) {
-            c_v = *(misc->fm_chars_v + j);
+            c_v = *(cfg->fm_chars_v + j);
             FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
             FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_lt);
           }
-          c_v = *(misc->fm_chars_v + c);
+          c_v = *(cfg->fm_chars_v + c);
           FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_eq);
 
@@ -442,20 +445,20 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
         if (remaining_cnt > 0) {
           BWT_v = *(__m128i*)(BWT+i);
           for (j=0; j<c; j++) {
-            c_v = *(misc->fm_chars_v + j);
+            c_v = *(cfg->fm_chars_v + j);
             FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-            tmp_v    = _mm_and_si128(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+            tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
             FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_lt);
           }
-          c_v = *(misc->fm_chars_v + c);
+          c_v = *(cfg->fm_chars_v + c);
           FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-          tmp_v    = _mm_and_si128(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+          tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_eq);
         }
       }
 
     } else if ( meta->alph_type == fm_DNA_full) {
-      c_v = *(misc->fm_chars_v + c);
+      c_v = *(cfg->fm_chars_v + c);
 
       if (!up_b) { // count forward, adding
         for (i=1+floor(landmark/2.0) ; i+15<( (pos+1)/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
@@ -470,13 +473,13 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
         if (remaining_cnt > 0) {
           BWT_v    = *(__m128i*)(BWT+i);
           FM_LT_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-          tmp_v     = _mm_and_si128(tmp_v, *(misc->fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
-          tmp2_v    = _mm_and_si128(tmp2_v, *(misc->fm_masks_v + remaining_cnt/2));
+          tmp_v     = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
+          tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_masks_v + remaining_cnt/2));
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v_lt);
 
           FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-          tmp_v     = _mm_and_si128(tmp_v, *(misc->fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
-          tmp2_v    = _mm_and_si128(tmp2_v, *(misc->fm_masks_v + remaining_cnt/2));
+          tmp_v     = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + (remaining_cnt+1)/2)); // mask characters we don't want to count
+          tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_masks_v + remaining_cnt/2));
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v_eq);
 
         }
@@ -494,13 +497,13 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
         if (remaining_cnt > 0) {
           BWT_v = *(__m128i*)(BWT+i);
           FM_LT_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-          tmp_v     = _mm_and_si128(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
-          tmp2_v    = _mm_and_si128(tmp2_v, *(misc->fm_reverse_masks_v + (remaining_cnt+1)/2));
+          tmp_v     = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
+          tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_reverse_masks_v + (remaining_cnt+1)/2));
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v_lt);
 
           FM_MATCH_4BIT(BWT_v, c_v, tmp_v, tmp2_v);
-          tmp_v     = _mm_and_si128(tmp_v, *(misc->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
-          tmp2_v    = _mm_and_si128(tmp2_v, *(misc->fm_reverse_masks_v + (remaining_cnt+1)/2));
+          tmp_v     = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt/2)); // mask characters we don't want to count
+          tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_reverse_masks_v + (remaining_cnt+1)/2));
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v_eq);
 
         }
@@ -509,11 +512,11 @@ fm_getOccCountLT (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t 
       esl_fatal("Invalid alphabet type\n");
     }
 
-    counts_v_lt = _mm_xor_si128(counts_v_lt, misc->fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
+    counts_v_lt = _mm_xor_si128(counts_v_lt, cfg->fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
     FM_GATHER_8BIT_COUNTS(counts_v_lt,counts_v_lt,counts_v_lt);
     (*cntlt)  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v_lt, 0) );
 
-    counts_v_eq = _mm_xor_si128(counts_v_eq, misc->fm_neg128_v);
+    counts_v_eq = _mm_xor_si128(counts_v_eq, cfg->fm_neg128_v);
     FM_GATHER_8BIT_COUNTS(counts_v_eq,counts_v_eq,counts_v_eq);
     (*cnteq)  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v_eq, 0) );
   }

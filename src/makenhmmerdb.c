@@ -482,8 +482,9 @@ main(int argc, char *argv[]) {
         block->complete = FALSE;  //this lets ReadBlock know that it needs to append to a small bit of previously-read seqeunce
         block->list->C = FM_BLOCK_OVERLAP; // overload the ->C value, which ReadBlock uses to determine how much
                                                // overlap should be retained in the ReadWindow step
+    } else {
+        block->complete = TRUE;
     }
-
 
     status = esl_sqio_ReadBlock(sqfp, block, block_size, TRUE);
     if (status == eslEOF)
@@ -508,7 +509,6 @@ main(int argc, char *argv[]) {
 
     block->first_seqidx = sq_cnt;
     sq_cnt += block->count - (use_tmpsq ? 1 : 0);// if there's an incomplete sequence read into the block wait to count it until it's complete.
-
 
 
     /* Read dseqs from block into text element T.

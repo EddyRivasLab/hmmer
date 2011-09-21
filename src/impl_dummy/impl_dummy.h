@@ -46,8 +46,8 @@ typedef P7_GMX P7_OMX;
  * 3. FM-index
  *****************************************************************/
 
-/* Effectively global variables, to be initialized once in fm_initGlobals(),
- * then passed around to avoid recomputing them
+/* Effectively global variables, to be initialized once in fm_initConfig(),
+ * then passed around among threads to avoid recomputing them
  */
 typedef struct {
   /*suffix-array mask and offset values*/
@@ -60,7 +60,7 @@ typedef struct {
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
 
-} FM_MISC_VARS;
+} FM_CFG;
 
 /*****************************************************************
  * 4. Declarations of the external API.
@@ -147,10 +147,10 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 /*fm.c */
-extern int fm_initMiscVars    (FM_MISC_VARS *misc );
-extern int fm_destroyMiscVars (FM_MISC_VARS *misc );
-extern int fm_getOccCount     (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c);
-extern int fm_getOccCountLT   (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
+extern int fm_initConfig      (FM_CFG *cfg );
+extern int fm_destroyConfig   (FM_CFG *cfg );
+extern int fm_getOccCount     (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
+extern int fm_getOccCountLT   (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 /*****************************************************************
  * 5. Implementation specific initialization

@@ -250,8 +250,8 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
  * 3. FM-index
  *****************************************************************/
 
-/* Effectively global variables, to be initialized once in fm_initGlobals(),
- * then passed around to avoid recomputing them
+/* Effectively global variables, to be initialized once in fm_initConfig(),
+ * then passed around among threads to avoid recomputing them
  */
 typedef struct {
   /* mask arrays, and 16-byte-offsets into them */
@@ -280,7 +280,7 @@ typedef struct {
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
 
-} FM_MISC_VARS;
+} FM_CFG;
 
 
 //used to convert from a byte array to an __m128i
@@ -298,7 +298,7 @@ typedef union {
  *  the _mm_shuffle_epi32  flips the 4th int into the 0th slot
  */
 #define FM_GATHER_8BIT_COUNTS( in_v, mid_v, out_v  ) do {\
-    mid_v = _mm_sad_epu8 (in_v, misc->fm_zeros_v);\
+    mid_v = _mm_sad_epu8 (in_v, cfg->fm_zeros_v);\
     tmp_v = _mm_shuffle_epi32(mid_v, _MM_SHUFFLE(1, 1, 1, 2));\
     out_v = _mm_add_epi16(mid_v, tmp_v);\
   } while (0)
@@ -331,12 +331,12 @@ typedef union {
 #define FM_MATCH_2BIT(in_v, c_v, a_v, b_v, out_v) do {\
     a_v = _mm_xor_si128(in_v, c_v);\
     \
-    b_v = _mm_and_si128(a_v, misc->fm_m01);\
+    b_v = _mm_and_si128(a_v, cfg->fm_m01);\
     a_v  = _mm_srli_epi16(a_v, 1);\
-    a_v  = _mm_and_si128(a_v, misc->fm_m01);\
+    a_v  = _mm_and_si128(a_v, cfg->fm_m01);\
     a_v  = _mm_or_si128(a_v, b_v);\
     \
-    out_v  = _mm_subs_epi8(misc->fm_m01,a_v);\
+    out_v  = _mm_subs_epi8(cfg->fm_m01,a_v);\
   } while (0)
 
 
@@ -358,8 +358,8 @@ typedef union {
         a_v  = _mm_add_epi16(a_v, b_v);\
         \
         b_v = _mm_srli_epi16(a_v, 2);\
-        a_v  = _mm_and_si128(a_v,misc->fm_m11);\
-        b_v = _mm_and_si128(b_v,misc->fm_m11);\
+        a_v  = _mm_and_si128(a_v,cfg->fm_m11);\
+        b_v = _mm_and_si128(b_v,cfg->fm_m11);\
         \
         cnts_v = _mm_add_epi16(cnts_v, a_v);\
         cnts_v = _mm_add_epi16(cnts_v, b_v);\
@@ -386,8 +386,8 @@ typedef union {
  */
 #define FM_MATCH_4BIT(in_v, c_v, out1_v, out2_v) do {\
     out1_v    = _mm_srli_epi16(in_v, 4);\
-    out2_v    = _mm_and_si128(in_v, misc->fm_m0f);\
-    out1_v    = _mm_and_si128(out1_v, misc->fm_m0f);\
+    out2_v    = _mm_and_si128(in_v, cfg->fm_m0f);\
+    out1_v    = _mm_and_si128(out1_v, cfg->fm_m0f);\
     \
     out1_v    = _mm_cmpeq_epi8(out1_v, c_v);\
     out2_v    = _mm_cmpeq_epi8(out2_v, c_v);\
@@ -413,8 +413,8 @@ typedef union {
  */
 #define FM_LT_4BIT(in_v, c_v, out1_v, out2_v) do {\
     out1_v    = _mm_srli_epi16(in_v, 4);\
-    out2_v    = _mm_and_si128(in_v, misc->fm_m0f);\
-    out1_v    = _mm_and_si128(out1_v, misc->fm_m0f);\
+    out2_v    = _mm_and_si128(in_v, cfg->fm_m0f);\
+    out1_v    = _mm_and_si128(out1_v, cfg->fm_m0f);\
     \
     out1_v    = _mm_cmplt_epi8(out1_v, c_v);\
     out2_v    = _mm_cmplt_epi8(out2_v, c_v);\
@@ -528,10 +528,10 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 /*fm.c */
-extern int fm_initMiscVars    (FM_MISC_VARS *misc );
-extern int fm_destroyMiscVars (FM_MISC_VARS *misc );
-extern int fm_getOccCount     (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c);
-extern int fm_getOccCountLT   (FM_DATA *fm, FM_MISC_VARS *misc, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
+extern int fm_initConfig      (FM_CFG *cfg );
+extern int fm_destroyConfig   (FM_CFG *cfg );
+extern int fm_getOccCount     (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
+extern int fm_getOccCountLT   (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 /*****************************************************************
  * 5. Implementation specific initialization
